@@ -177,6 +177,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 
   private async handleResumeSession(sessionId: string): Promise<void> {
     if (!this.sessionManager.isRunning) return
+    this._view?.webview.postMessage({ type: "clear_messages" })
     const messages = await this.sessionManager.getMessages(sessionId)
     for (const m of messages) {
       this._view?.webview.postMessage({

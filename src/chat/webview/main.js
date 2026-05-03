@@ -209,6 +209,10 @@ window.addEventListener("message", (event) => {
     case "session_list":
       if (msg.sessions) showSessionPicker(msg.sessions)
       break
+    case "clear_messages":
+      state.messages = []
+      messageList.innerHTML = ""
+      break
   }
 })
 
