@@ -3,28 +3,99 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
-  <link rel="stylesheet" href="styles.css">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: https:;">
   <title>OpenCode Harness Chat</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="app">
-    <div id="session-header">
-      <button id="session-history-btn" title="Session history">&#x1F4C1; History</button>
-      <button id="new-session-btn" title="New session">+</button>
-      <div id="session-title">New Session</div>
-    </div>
-    <div id="message-list"></div>
-    <div id="input-area">
-      <div id="mention-dropdown" class="dropdown hidden"></div>
-      <div id="mode-selector">
-        <button class="mode-btn active" data-mode="normal" title="Ask before each action">Normal</button>
-        <button class="mode-btn" data-mode="plan" title="Read-only, creates plan">Plan</button>
-        <button class="mode-btn" data-mode="acceptEdits" title="Apply without asking">Auto</button>
+    <header id="chat-header">
+      <div class="header-left">
+        <svg class="oc-logo" viewBox="0 0 24 24" width="20" height="20" fill="none">
+          <path d="M3 3H9V9H3V3Z" fill="#58a6ff"/>
+          <path d="M15 3H21V9H15V3Z" fill="#3fb950"/>
+          <path d="M9 9H15V15H9V9Z" fill="#d29922"/>
+          <path d="M3 15H9V21H3V15Z" fill="#f85149"/>
+          <path d="M15 15H21V21H15V15Z" fill="#bc8cff"/>
+        </svg>
+        <span class="header-title">OpenCode</span>
       </div>
-      <textarea id="prompt-input" rows="3" placeholder="Ask OpenCode... (@file, @folder, @problems, @url, @terminal)"></textarea>
-      <button id="send-btn">Send</button>
-      <button id="abort-btn" class="hidden">Stop</button>
+      <div class="header-right">
+        <button id="history-btn" class="header-btn" title="Session History" aria-label="Session History">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+            <path d="M2 2.5A1.5 1.5 0 0 1 3.5 1h.5v1h-.5a.5.5 0 0 0-.5.5v10a.5.5 0 0 0 .5.5h.5v1h-.5A1.5 1.5 0 0 1 2 12.5v-10z"/>
+            <path d="M4 1h7.5A1.5 1.5 0 0 1 13 2.5v10a1.5 1.5 0 0 1-1.5 1.5H4V1zm3 4.5a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H7zm0 3a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H7z"/>
+          </svg>
+        </button>
+        <button id="new-chat-btn" class="header-btn" title="New Chat" aria-label="New Chat">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+            <path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="context-bar" class="hidden">
+      <div id="context-chips"></div>
+    </div>
+
+    <div id="message-list">
+      <div class="welcome-message">
+        <svg class="welcome-logo" viewBox="0 0 24 24" width="48" height="48" fill="none">
+          <path d="M3 3H9V9H3V3Z" fill="#58a6ff"/>
+          <path d="M15 3H21V9H15V3Z" fill="#3fb950"/>
+          <path d="M9 9H15V15H9V9Z" fill="#d29922"/>
+          <path d="M3 15H9V21H3V15Z" fill="#f85149"/>
+          <path d="M15 15H21V21H15V15Z" fill="#bc8cff"/>
+        </svg>
+        <h2>OpenCode Harness</h2>
+        <p>AI-powered coding agent for VS Code. Ask me anything about your codebase.</p>
+        <div class="welcome-suggestions">
+          <button class="suggestion-btn" data-prompt="Explain the current file structure">Explain the current file structure</button>
+          <button class="suggestion-btn" data-prompt="Find potential bugs in the codebase">Find potential bugs in the codebase</button>
+          <button class="suggestion-btn" data-prompt="Refactor this project to use better patterns">Refactor this project to use better patterns</button>
+          <button class="suggestion-btn" data-prompt="Generate tests for the main module">Generate tests for the main module</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="typing-indicator" class="hidden">
+      <div class="typing-dots">
+        <span></span><span></span><span></span>
+      </div>
+      <span class="typing-text" id="typing-label">Thinking...</span>
+    </div>
+
+    <div id="input-area">
+      <div id="input-toolbar">
+        <div id="mode-selector">
+          <button class="mode-btn active" data-mode="normal" title="Ask before each action">Normal</button>
+          <button class="mode-btn" data-mode="plan" title="Read-only, creates plan">Plan</button>
+          <button class="mode-btn" data-mode="acceptEdits" title="Apply without asking">Auto</button>
+        </div>
+        <div id="context-usage" class="hidden">
+          <span id="context-label">Context</span>
+          <div class="context-bar-track">
+            <div id="context-bar-fill"></div>
+          </div>
+        </div>
+      </div>
+      <div id="input-row">
+        <div id="input-wrapper">
+          <textarea id="prompt-input" rows="1" placeholder="Ask OpenCode... (@ to reference files)"></textarea>
+          <div id="mention-dropdown" class="dropdown hidden"></div>
+        </div>
+        <button id="send-btn" class="input-action-btn" title="Send" aria-label="Send">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+            <path d="M1.5 1.5L15 8 1.5 14.5V9.533L8.5 8 1.5 6.467V1.5z"/>
+          </svg>
+        </button>
+        <button id="abort-btn" class="input-action-btn hidden" title="Stop" aria-label="Stop">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+            <path d="M3 3h10v10H3V3z"/>
+          </svg>
+        </button>
+      </div>
     </div>
   </div>
   <script src="main.js"></script>
