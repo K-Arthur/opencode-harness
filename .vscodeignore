@@ -1,8 +1,12 @@
 .vscode/**
+.superpowers/**
 src/**
+!src/chat/webview/**
 node_modules/**
 .github/**
+docs/**
 .gitignore
 esbuild.js
 tsconfig.json
 **/*.map
+Requirements Document.txt

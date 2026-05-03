@@ -1,6 +1,11 @@
 {
   "name": "opencode-harness",
   "displayName": "OpenCode Harness",
+  "publisher": "opencode-harness",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USER/opencode-harness"
+  },
   "description": "Deep IDE integration for the OpenCode AI coding agent",
   "version": "0.0.1",
   "engines": { "vscode": "^1.98.0" },

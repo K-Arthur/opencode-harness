@@ -97,7 +97,13 @@ export function activate(context: vscode.ExtensionContext) {
     })
   )
 
-  const chatProvider = new ChatProvider(context, sessionManager, contextEngine)
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.insertMention", () => {
+      vscode.commands.executeCommand("opencode-harness.chat.focus")
+    })
+  )
+
+  const chatProvider = new ChatProvider(context, sessionManager, contextEngine, contextMonitor)
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("opencode-harness.chat", chatProvider, {
       webviewOptions: { retainContextWhenHidden: true },

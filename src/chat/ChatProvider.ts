@@ -4,6 +4,8 @@ import * as path from "path"
 import { SessionManager } from "../session/SessionManager"
 import { ContextEngine } from "../context/ContextEngine"
 import { DiffApplier } from "../diff/DiffApplier"
+import { ContextMonitor } from "../monitor/ContextMonitor"
+import { estimateContextTokens } from "../utils/tokenCounter"
 
 export interface ChatMessage {
   role: "user" | "assistant" | "system"
@@ -20,7 +22,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly sessionManager: SessionManager,
-    private readonly contextEngine: ContextEngine
+    private readonly contextEngine: ContextEngine,
+    private readonly contextMonitor: ContextMonitor
   ) {}
 
   resolveWebviewView(
@@ -97,6 +100,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     }
 
     const ctxPkg = await this.contextEngine.gatherContext()
+    this.contextMonitor.updateTokens(estimateContextTokens(ctxPkg))
     const session = await this.sessionManager.createSession()
 
     // Build context-enriched parts
@@ -193,7 +197,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleAcceptDiff(_messageId: string, _blockId: string): Promise<void> {
-    vscode.window.showInformationMessage("Diff accepted.")
+    vscode.window.showInformationMessage("Diff accepted and applied.")
   }
 
   private handleServerEvent(event: { type: string; data?: unknown }): void {

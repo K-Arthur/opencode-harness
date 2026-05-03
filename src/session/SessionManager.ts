@@ -41,7 +41,6 @@ export class SessionManager {
     if (this.client) return
 
     this.port = await findFreePort()
-    this._onEvent.fire({ type: "server_connected", data: { port: this.port } })
 
     const opencodePath = await this.findOpencodeBinary()
     if (!opencodePath) {
