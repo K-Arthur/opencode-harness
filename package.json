@@ -14,11 +14,18 @@
     "commands": [
       { "command": "opencode-harness.openChat", "title": "OpenCode Harness: Open Chat" },
       { "command": "opencode-harness.newSession", "title": "OpenCode Harness: New Session" },
-      { "command": "opencode-harness.toggleFocus", "title": "OpenCode Harness: Toggle Chat Focus" }
+      { "command": "opencode-harness.toggleFocus", "title": "OpenCode Harness: Toggle Chat Focus" },
+      { "command": "opencode-harness.explainCode", "title": "OpenCode Harness: Explain This Code" },
+      { "command": "opencode-harness.refactorCode", "title": "OpenCode Harness: Refactor This Code" },
+      { "command": "opencode-harness.generateTests", "title": "OpenCode Harness: Generate Tests" },
+      { "command": "opencode-harness.insertMention", "title": "OpenCode Harness: Insert @-Mention Reference" },
+      { "command": "opencode-harness.captureTerminal", "title": "OpenCode Harness: Capture Terminal Selection" },
+      { "command": "opencode-harness.rollback", "title": "OpenCode Harness: Rollback Workspace" }
     ],
     "keybindings": [
       { "command": "opencode-harness.toggleFocus", "key": "ctrl+alt+o" },
-      { "command": "opencode-harness.newSession", "key": "ctrl+alt+n" }
+      { "command": "opencode-harness.newSession", "key": "ctrl+alt+n" },
+      { "command": "opencode-harness.insertMention", "key": "alt+k", "when": "editorTextFocus" }
     ],
     "viewsContainers": {
       "activitybar": [{
@@ -29,7 +36,16 @@
     },
     "views": {
       "opencode-harness": [
-        { "id": "opencode-harness.chat", "name": "Chat" }
+        { "id": "opencode-harness.chat", "name": "Chat", "type": "webview" },
+        { "id": "opencode-harness.sessions", "name": "Sessions" },
+        { "id": "opencode-harness.skills", "name": "Skills" }
+      ]
+    },
+    "menus": {
+      "editor/context": [
+        { "command": "opencode-harness.explainCode", "group": "opencode@1", "when": "editorHasSelection" },
+        { "command": "opencode-harness.refactorCode", "group": "opencode@2", "when": "editorHasSelection" },
+        { "command": "opencode-harness.generateTests", "group": "opencode@3", "when": "editorHasSelection" }
       ]
     }
   },
