@@ -4,6 +4,7 @@ import { ContextEngine } from "./context/ContextEngine"
 import { ContextMonitor } from "./monitor/ContextMonitor"
 import { TerminalBridge } from "./terminal/TerminalBridge"
 import { CheckpointManager } from "./checkpoint/CheckpointManager"
+import { SkillManager } from "./skills/SkillManager"
 import { InlineActionProvider } from "./inline/InlineActionProvider"
 import { ChatProvider } from "./chat/ChatProvider"
 
@@ -23,6 +24,19 @@ export function activate(context: vscode.ExtensionContext) {
 
   const checkpointManager = new CheckpointManager()
   context.subscriptions.push(checkpointManager)
+
+  const skillManager = new SkillManager()
+  context.subscriptions.push(
+    vscode.window.registerTreeDataProvider("opencode-harness.skills", skillManager)
+  )
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.enableSkill", async (item: { id: string }) => {
+      if (item) await skillManager.enableSkill(item.id)
+    }),
+    vscode.commands.registerCommand("opencode-harness.disableSkill", async (item: { id: string }) => {
+      if (item) await skillManager.disableSkill(item.id)
+    })
+  )
 
   context.subscriptions.push(
     vscode.commands.registerCommand("opencode-harness.rollback", async () => {
