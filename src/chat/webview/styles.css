@@ -1,3 +1,5 @@
+/* ─── CSS Variables (Theme + VS Code) ─── */
+
 :root {
   --oc-bg: var(--vscode-sideBar-background);
   --oc-fg: var(--vscode-sideBar-foreground);
@@ -19,33 +21,28 @@
   --oc-editor-fg: var(--vscode-editor-foreground);
   --oc-editor-font: var(--vscode-editor-font-family);
   --oc-editor-font-size: var(--vscode-editor-font-size);
-  --oc-description: var(--vscode-descriptionForeground);
   --oc-badge: var(--vscode-badge-background);
   --oc-badge-fg: var(--vscode-badge-foreground);
   --oc-focus: var(--vscode-focusBorder);
+  --oc-description: var(--vscode-descriptionForeground);
+  --oc-muted: var(--vscode-descriptionForeground);
+
+  /* Custom theme vars (set by ThemeManager via inline style) */
   --oc-accent: #58a6ff;
   --oc-success: #3fb950;
   --oc-error: #f85149;
   --oc-warning: #d29922;
-  --oc-skill: #bc8cff;
-  --oc-muted: var(--vscode-descriptionForeground);
-
-  /* ─── Animation Timing Tokens ─── */
-  --oc-duration-instant: 100ms;
-  --oc-duration-fast: 150ms;
-  --oc-duration-normal: 200ms;
-  --oc-duration-slow: 300ms;
-  --oc-duration-xslow: 400ms;
-
-  /* ─── Animation Easing Tokens ─── */
-  --oc-ease-out-spring: cubic-bezier(0.16, 1, 0.3, 1);
-  --oc-ease-out: cubic-bezier(0.25, 0.1, 0.25, 1);
-  --oc-ease-in-out: cubic-bezier(0.42, 0, 0.58, 1);
-  --oc-ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
-
-  /* ─── Stagger Delays ─── */
-  --oc-stagger-delay: 50ms;
-  --oc-stagger-increment: 40ms;
+  --oc-skill-badge-bg: #0e639c;
+  --oc-skill-badge-fg: #ffffff;
+  --oc-thinking-bg: rgba(210,153,34,0.06);
+  --oc-thinking-border: #d29922;
+  --oc-syntax-comment: #6a9955;
+  --oc-syntax-keyword: #569cd6;
+  --oc-syntax-string: #ce9178;
+  --oc-syntax-number: #b5cea8;
+  --oc-syntax-function: #dcdcaa;
+  --oc-syntax-type: #4ec9b0;
+  --oc-syntax-operator: #d4d4d4;
 }
 
 /* ─── prefers-reduced-motion: wrap all animated elements ─── */
@@ -319,8 +316,8 @@ body {
 
 .message.user {
   align-self: flex-end;
-  background: var(--oc-button-bg);
-  color: var(--oc-button-fg);
+  background: var(--oc-user-msg-bg, var(--oc-button-bg));
+  color: var(--oc-user-msg-fg, var(--oc-button-fg));
   border-radius: 12px 12px 4px 12px;
   padding: 10px 14px;
 }
@@ -333,8 +330,8 @@ body {
 
 .message.system {
   align-self: center;
-  background: rgba(210, 153, 34, 0.08);
-  border: 1px solid rgba(210, 153, 34, 0.2);
+  background: var(--oc-thinking-bg, rgba(210, 153, 34, 0.06));
+  border: 1px solid var(--oc-thinking-border, rgba(210, 153, 34, 0.2));
   border-radius: 8px;
   padding: 6px 12px;
   font-size: 12px;
@@ -463,24 +460,24 @@ body {
 
 /* Syntax Highlighting */
 
-.hl-keyword { color: #569cd6; }
-.hl-string { color: #ce9178; }
-.hl-comment { color: #6a9955; }
-.hl-number { color: #b5cea8; }
-.hl-function { color: #dcdcaa; }
-.hl-type { color: #4ec9b0; }
-.hl-operator { color: #d4d4d4; }
-.hl-builtin { color: #c586c0; }
+.hl-keyword { color: var(--oc-syntax-keyword, #569cd6); }
+.hl-string { color: var(--oc-syntax-string, #ce9178); }
+.hl-comment { color: var(--oc-syntax-comment, #6a9955); }
+.hl-number { color: var(--oc-syntax-number, #b5cea8); }
+.hl-function { color: var(--oc-syntax-function, #dcdcaa); }
+.hl-type { color: var(--oc-syntax-type, #4ec9b0); }
+.hl-operator { color: var(--oc-syntax-operator, #d4d4d4); }
+.hl-builtin { color: var(--oc-accent, #58a6ff); }
 
 /* ─── THINKING BLOCK ─── */
 
 .thinking-block {
-  background: rgba(210, 153, 34, 0.06);
-  border-left: 3px solid var(--oc-warning);
+  background: var(--oc-thinking-bg, rgba(210, 153, 34, 0.06));
+  border-left: 3px solid var(--oc-thinking-border, var(--oc-warning));
   border-radius: 4px;
   margin: 6px 0;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--oc-duration-fast);
 }
 
 .thinking-block:hover {
@@ -493,7 +490,7 @@ body {
   gap: 6px;
   padding: 6px 10px;
   font-size: 12px;
-  color: var(--oc-warning);
+  color: var(--oc-thinking-border, var(--oc-warning));
   user-select: none;
 }
 
@@ -530,9 +527,9 @@ body {
   border-radius: 4px;
   font-size: 11px;
   font-family: var(--vscode-editor-font-family);
-  background: rgba(188, 140, 255, 0.12);
-  color: var(--oc-skill);
-  border: 1px solid rgba(188, 140, 255, 0.2);
+  background: var(--oc-skill-badge-bg, rgba(188, 140, 255, 0.12));
+  color: var(--oc-skill-badge-fg, #bc8cff);
+  border: 1px solid var(--oc-skill-badge-bg, rgba(188, 140, 255, 0.2));
   margin: 4px 0;
   cursor: default;
   width: fit-content;
@@ -906,10 +903,13 @@ body {
 
 #context-bar-fill {
   height: 100%;
-  background: var(--oc-accent);
   border-radius: 2px;
   transition: width var(--oc-duration-slow) var(--oc-ease-smooth);
 }
+
+#context-bar-fill.low { background: var(--oc-success, #3fb950); }
+#context-bar-fill.mid { background: var(--oc-warning, #d29922); }
+#context-bar-fill.high { background: var(--oc-error, #f85149); }
 
 /* ─── INPUT ROW ─── */
 

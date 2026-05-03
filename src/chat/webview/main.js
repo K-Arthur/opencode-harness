@@ -824,6 +824,9 @@
         case "server_status":
           handleServerStatus(msg);
           break;
+        case "theme_vars":
+          applyThemeVars(msg.vars);
+          break;
       }
     });
   }
@@ -934,6 +937,18 @@
       addMessage(errMsg);
     } else {
       hideTypingIndicator();
+    }
+  }
+
+  /* ─── THEME ─── */
+
+  function applyThemeVars(vars) {
+    if (!vars || typeof vars !== "object") return;
+    const root = document.documentElement;
+    for (const [key, val] of Object.entries(vars)) {
+      if (typeof val === "string") {
+        root.style.setProperty(key, val);
+      }
     }
   }
 

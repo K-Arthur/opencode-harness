@@ -6,6 +6,7 @@ import { ContextEngine } from "../context/ContextEngine"
 import { DiffApplier } from "../diff/DiffApplier"
 import { ContextMonitor } from "../monitor/ContextMonitor"
 import { estimateContextTokens } from "../utils/tokenCounter"
+import { ThemeManager, type ThemeVariables } from "../theme/ThemeManager"
 
 export interface ChatMessage {
   role: "user" | "assistant" | "system"
@@ -28,7 +29,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     private readonly context: vscode.ExtensionContext,
     private readonly sessionManager: SessionManager,
     private readonly contextEngine: ContextEngine,
-    private readonly contextMonitor: ContextMonitor
+    private readonly contextMonitor: ContextMonitor,
+    private readonly themeManager: ThemeManager
   ) {}
 
   resolveWebviewView(
@@ -46,6 +48,14 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     }
 
     webviewView.webview.html = this.getWebviewContent()
+
+    // Send theme variables on init
+    this.pushThemeToWebview()
+
+    // Listen for theme changes
+    this.themeManager.onThemeChanged(() => {
+      this.pushThemeToWebview()
+    })
 
     webviewView.webview.onDidReceiveMessage(async (msg: Record<string, unknown>) => {
       switch (msg.type) {
@@ -93,9 +103,26 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     const css = fs.readFileSync(cssPath, "utf8")
     const js = fs.readFileSync(jsPath, "utf8")
 
-    html = html.replace('<link rel="stylesheet" href="styles.css">', `<style>${css}</style>`)
+    // Inject theme CSS variables
+    const themeVars = this.themeManager.getThemeVariables()
+    const themeStyle = this.buildThemeStyleTag(themeVars)
+
+    html = html.replace('<link rel="stylesheet" href="styles.css">', `${themeStyle}<style>${css}</style>`)
     html = html.replace("<script src=\"main.js\"></script>", `<script>${js}</script>`)
     return html
+  }
+
+  private buildThemeStyleTag(vars: ThemeVariables): string {
+    const entries = Object.entries(vars.customVars)
+      .filter(([_, val]) => val)
+      .map(([key, val]) => `${key}: ${val};`)
+      .join("\n")
+    return `<style id="oc-theme-vars">:root {\n${entries}\n}\n/* theme-kind: ${vars.kind} */\n</style>`
+  }
+
+  private pushThemeToWebview(): void {
+    const vars = this.themeManager.getThemeVariables()
+    this.postMessage({ type: "theme_vars", vars: vars.customVars })
   }
 
   private async handleSendPrompt(text: string): Promise<void> {

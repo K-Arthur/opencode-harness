@@ -7,6 +7,7 @@ import { CheckpointManager } from "./checkpoint/CheckpointManager"
 import { SkillManager } from "./skills/SkillManager"
 import { InlineActionProvider } from "./inline/InlineActionProvider"
 import { ChatProvider } from "./chat/ChatProvider"
+import { ThemeManager } from "./theme/ThemeManager"
 
 let sessionManager: SessionManager
 
@@ -18,6 +19,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   const contextMonitor = new ContextMonitor()
   context.subscriptions.push(contextMonitor)
+
+  const themeManager = new ThemeManager()
+  context.subscriptions.push(themeManager)
 
   const terminalBridge = new TerminalBridge()
   context.subscriptions.push(terminalBridge)
@@ -103,7 +107,7 @@ export function activate(context: vscode.ExtensionContext) {
     })
   )
 
-  const chatProvider = new ChatProvider(context, sessionManager, contextEngine, contextMonitor)
+  const chatProvider = new ChatProvider(context, sessionManager, contextEngine, contextMonitor, themeManager)
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("opencode-harness.chat", chatProvider, {
       webviewOptions: { retainContextWhenHidden: true },

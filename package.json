@@ -54,6 +54,32 @@
       ]
     }
   },
+  "configuration": {
+    "title": "OpenCode",
+    "properties": {
+      "opencode.theme": {
+        "type": "object",
+        "default": { "preset": "cli-default", "overrides": {} },
+        "description": "Theme configuration for the OpenCode chat panel. Set 'preset' to one of: cli-default, light, dark, high-contrast. Add 'overrides' with specific color overrides.",
+        "properties": {
+          "preset": {
+            "type": "string",
+            "enum": ["cli-default", "light", "dark", "high-contrast"],
+            "default": "cli-default",
+            "description": "Base theme preset"
+          },
+          "overrides": {
+            "type": "object",
+            "default": {},
+            "description": "Individual color overrides for the theme (e.g. userMessageBg, toolReadColor, syntaxKeyword, etc.)",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
   "scripts": {
     "vscode:prepublish": "node esbuild.js --production",
     "build": "node esbuild.js",
