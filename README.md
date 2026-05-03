@@ -222,13 +222,50 @@ interface OpencodeTheme {
 ## Development
 
 ```bash
+# Clone and install dependencies
 git clone https://github.com/YOUR_USER/opencode-harness
 cd opencode-harness
 npm install
-npm run build
+
+# Build the extension
+npm run build          # production build via esbuild
+npm run typecheck      # TypeScript type checking
+
+# Watch mode for development
+npm run watch          # auto-rebuild on file changes
 ```
 
+### Debugging
+
 Press `F5` in VS Code to launch an Extension Development Host with the extension loaded.
+
+### Packaging
+
+Build a `.vsix` installable file:
+
+```bash
+# Install the VS Code packaging tool
+npm install -g @vscode/vsce
+
+# Package the extension
+npx @vscode/vsce package --no-dependencies --allow-missing-repository
+
+# Install the packaged extension
+code --install-extension opencode-harness-0.0.1.vsix --force
+```
+
+The `.vsix` file will be created in the project root. It contains:
+- `dist/extension.js` — the bundled extension
+- `src/chat/webview/` — chat UI (HTML, CSS, JS)
+- `package.json` — manifest and configuration
+- `README.md` — documentation
+
+### Platform Requirements
+
+- **VS Code**: 1.98.0 or higher
+- **Node.js**: 20.x or later
+- **opencode CLI**: Install from [opencode.ai](https://opencode.ai)
+- **Linux**: `libsecret` required for vsce credential store (`sudo pacman -S libsecret` on Arch, `sudo dnf install libsecret-devel` on Fedora)
 
 ## License
 
