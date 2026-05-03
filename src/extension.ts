@@ -1,6 +1,7 @@
 import * as vscode from "vscode"
 import { SessionManager } from "./session/SessionManager"
 import { ContextEngine } from "./context/ContextEngine"
+import { ContextMonitor } from "./monitor/ContextMonitor"
 import { ChatProvider } from "./chat/ChatProvider"
 
 let sessionManager: SessionManager
@@ -10,6 +11,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   const contextEngine = new ContextEngine()
   context.subscriptions.push(contextEngine)
+
+  const contextMonitor = new ContextMonitor()
+  context.subscriptions.push(contextMonitor)
 
   context.subscriptions.push(
     vscode.commands.registerCommand("opencode-harness.openChat", () => {
