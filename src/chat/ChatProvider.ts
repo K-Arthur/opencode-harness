@@ -2,6 +2,7 @@ import * as vscode from "vscode"
 import * as fs from "fs"
 import * as path from "path"
 import { SessionManager } from "../session/SessionManager"
+import { DiffApplier } from "../diff/DiffApplier"
 
 export interface ChatMessage {
   role: "user" | "assistant" | "system"
@@ -13,6 +14,7 @@ export interface ChatMessage {
 
 export class ChatProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView
+  private diffApplier = new DiffApplier()
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -87,20 +89,42 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         return
       }
     }
+
     const session = await this.sessionManager.createSession()
     const response = await this.sessionManager.sendPrompt(session.id, [
       { type: "text", text } as never,
     ])
+
+    const parts = response.parts || []
+    const textParts = parts.filter((p: unknown) => (p as { type: string }).type === "text") as { type: string; text?: string }[]
+
+    // Build content blocks: text + diffs
+    const contentBlocks: unknown[] = []
+    for (const part of parts) {
+      if ((part as { type: string }).type === "text") {
+        contentBlocks.push({ type: "text", text: (part as { text: string }).text })
+      }
+    }
+
+    // Parse code blocks and generate diffs
+    const edits = this.diffApplier.parseCodeBlocks(textParts)
+    for (const edit of edits) {
+      const diffText = await this.diffApplier.generateDiff(edit.filePath, edit.proposedContent)
+      contentBlocks.push({
+        type: "diff_block",
+        id: edit.blockId,
+        filePath: edit.filePath,
+        diffText,
+        messageId: String(response.info?.id || ""),
+      })
+    }
 
     this._view?.webview.postMessage({
       type: "message",
       message: {
         role: "assistant",
         id: response.info?.id,
-        content: (response.parts || []).map((p: unknown) => ({
-          type: "text",
-          text: (p as { text?: string }).text || JSON.stringify(p),
-        })),
+        content: contentBlocks,
         timestamp: Date.now(),
         sessionId: session.id,
       },
