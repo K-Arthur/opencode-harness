@@ -104,6 +104,19 @@ export function activate(context: vscode.ExtensionContext) {
     })
   )
 
+  context.subscriptions.push(
+    vscode.window.registerUriHandler({
+      handleUri(uri: vscode.Uri): void {
+        const params = new URLSearchParams(uri.query)
+        const prompt = params.get("prompt")
+        const sessionId = params.get("session")
+        vscode.commands.executeCommand("opencode-harness.chat.focus")
+        if (sessionId) console.log(`[OpenCode Harness] Resume session: ${sessionId}`)
+        if (prompt) console.log(`[OpenCode Harness] Pre-fill prompt: ${decodeURIComponent(prompt)}`)
+      },
+    })
+  )
+
   context.subscriptions.push({
     dispose: () => {
       sessionManager.dispose()
