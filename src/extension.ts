@@ -3,6 +3,7 @@ import { SessionManager } from "./session/SessionManager"
 import { ContextEngine } from "./context/ContextEngine"
 import { ContextMonitor } from "./monitor/ContextMonitor"
 import { TerminalBridge } from "./terminal/TerminalBridge"
+import { CheckpointManager } from "./checkpoint/CheckpointManager"
 import { InlineActionProvider } from "./inline/InlineActionProvider"
 import { ChatProvider } from "./chat/ChatProvider"
 
@@ -19,6 +20,24 @@ export function activate(context: vscode.ExtensionContext) {
 
   const terminalBridge = new TerminalBridge()
   context.subscriptions.push(terminalBridge)
+
+  const checkpointManager = new CheckpointManager()
+  context.subscriptions.push(checkpointManager)
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.rollback", async () => {
+      const sessions = await sessionManager.listSessions()
+      const allCheckpoints = await checkpointManager.listCheckpoints(sessions[0]?.id || "")
+      const items = allCheckpoints.map((c) => ({
+        label: `Checkpoint ${c.id}`,
+        description: new Date(c.timestamp).toLocaleString(),
+        detail: `${c.filesChanged.length} files changed`,
+        id: c.id,
+      }))
+      const selected = await vscode.window.showQuickPick(items, { placeHolder: "Select checkpoint to restore" })
+      if (selected) await checkpointManager.restore(selected.id)
+    })
+  )
 
   context.subscriptions.push(
     vscode.commands.registerCommand("opencode-harness.captureTerminal", async () => {
