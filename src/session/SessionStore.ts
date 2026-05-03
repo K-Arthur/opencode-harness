@@ -7,6 +7,7 @@ export interface OpenCodeSession {
   createdAt: number
   lastActiveAt: number
   model: string
+  cliSessionId?: string
   messages: ChatMessage[]
 }
 
@@ -100,6 +101,13 @@ export class SessionStore {
     session.name = name
     this.save()
     this._onSessionsChanged.fire()
+  }
+
+  updateCliSessionId(id: string, cliId: string): void {
+    const session = this.sessions.get(id)
+    if (!session) return
+    session.cliSessionId = cliId
+    this.save()
   }
 
   delete(id: string): void {

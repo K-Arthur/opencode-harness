@@ -164,7 +164,17 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 
     const ctxPkg = await this.contextEngine.gatherContext()
     this.contextMonitor.updateTokens(estimateContextTokens(ctxPkg))
-    const session = await this.sessionManager.createSession()
+    
+    const activeStoreSession = this.sessionStore.getActive()
+    let cliSessionId = activeStoreSession?.cliSessionId
+
+    if (!cliSessionId) {
+      const session = await this.sessionManager.createSession()
+      cliSessionId = session.id
+      if (activeStoreSession) {
+        this.sessionStore.updateCliSessionId(activeStoreSession.id, cliSessionId)
+      }
+    }
 
     const contextText = `<context>
 Open files: ${ctxPkg.openFiles.map(f => `${f.path} (${f.language})`).join(", ") || "none"}
@@ -178,7 +188,7 @@ Diagnostics: ${ctxPkg.diagnostics.length} files with errors or warnings
         role: "user",
         blocks: [{ type: "text", text }],
         timestamp: Date.now(),
-        sessionId: session.id,
+        sessionId: cliSessionId,
       },
     })
 
@@ -187,15 +197,33 @@ Diagnostics: ${ctxPkg.diagnostics.length} files with errors or warnings
       role: "user",
       blocks: [{ type: "text", text }],
       timestamp: Date.now(),
-      sessionId: session.id,
+      sessionId: cliSessionId,
     })
 
-    this.postMessage({ type: "stream_start", messageId: `resp-${session.id}` })
+    this.postMessage({ type: "stream_start", messageId: `resp-${cliSessionId}` })
 
-    const response = await this.sessionManager.sendPrompt(session.id, [
-      { type: "text", text: contextText } as never,
-      { type: "text", text } as never,
-    ])
+    let response: { info: any; parts: any[] };
+    try {
+      response = await this.sessionManager.sendPrompt(cliSessionId, [
+        { type: "text", text: contextText } as never,
+        { type: "text", text } as never,
+      ])
+    } catch (e: any) {
+      if (e.message && e.message.includes("not found")) {
+        // CLI lost the session (e.g., restarted), create a new one
+        const session = await this.sessionManager.createSession()
+        cliSessionId = session.id
+        if (activeStoreSession) {
+          this.sessionStore.updateCliSessionId(activeStoreSession.id, cliSessionId)
+        }
+        response = await this.sessionManager.sendPrompt(cliSessionId, [
+          { type: "text", text: contextText } as never,
+          { type: "text", text } as never,
+        ])
+      } else {
+        throw e
+      }
+    }
 
     // Track token usage for rate limit monitoring
     const msgInfo = response.info as { usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number } } | undefined
@@ -217,7 +245,7 @@ Diagnostics: ${ctxPkg.diagnostics.length} files with errors or warnings
       if ((part as { type: string }).type === "text") {
         const textContent = (part as { text: string }).text
         blocks.push({ type: "text", text: textContent })
-        this.postMessage({ type: "stream_chunk", messageId: `resp-${session.id}`, text: textContent })
+        this.postMessage({ type: "stream_chunk", messageId: `resp-${cliSessionId}`, text: textContent })
       }
     }
 
@@ -233,10 +261,10 @@ Diagnostics: ${ctxPkg.diagnostics.length} files with errors or warnings
       role: "assistant",
       blocks,
       timestamp: Date.now(),
-      sessionId: session.id,
+      sessionId: cliSessionId,
     })
 
-    this.postMessage({ type: "stream_end", messageId: `resp-${session.id}`, blocks })
+    this.postMessage({ type: "stream_end", messageId: `resp-${cliSessionId}`, blocks })
   }
 
   private postMessage(msg: Record<string, unknown>): void {

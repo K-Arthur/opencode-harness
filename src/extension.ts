@@ -133,6 +133,9 @@ export function activate(context: vscode.ExtensionContext) {
       const currentModel = modelManager.model
       const model = await modelManager.pickModel()
       if (model && model !== currentModel) {
+        if (sessionManager.isRunning) {
+          vscode.window.showWarningMessage(`Model changed to ${model}. The OpenCode CLI has been restarted. Any active response was aborted.`)
+        }
         // Trigger session restart if active
         sessionManager.setModel(model)
       }

@@ -47,11 +47,17 @@ export class SessionManager {
       throw new Error("OpenCode is not installed. Install it from https://opencode.ai, then restart the extension.")
     }
 
-    this.serverProcess = spawn(opencodePath, [
+    const args = [
       "serve",
       "--port", String(this.port),
       "--hostname", "127.0.0.1",
-    ], {
+    ]
+
+    if (this.currentModel) {
+      args.push("--model", this.currentModel)
+    }
+
+    this.serverProcess = spawn(opencodePath, args, {
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env },
     })
