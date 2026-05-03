@@ -1,0 +1,56 @@
+{
+  "name": "opencode-harness",
+  "displayName": "OpenCode Harness",
+  "description": "Deep IDE integration for the OpenCode AI coding agent",
+  "version": "0.0.1",
+  "engines": { "vscode": "^1.98.0" },
+  "categories": ["Chat", "AI"],
+  "activationEvents": [
+    "onView:opencode-harness.chat",
+    "onCommand:opencode-harness.openChat"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "opencode-harness.openChat", "title": "OpenCode Harness: Open Chat" },
+      { "command": "opencode-harness.newSession", "title": "OpenCode Harness: New Session" },
+      { "command": "opencode-harness.toggleFocus", "title": "OpenCode Harness: Toggle Chat Focus" }
+    ],
+    "keybindings": [
+      { "command": "opencode-harness.toggleFocus", "key": "ctrl+escape" },
+      { "command": "opencode-harness.newSession", "key": "ctrl+shift+escape" }
+    ],
+    "viewsContainers": {
+      "activitybar": [{
+        "id": "opencode-harness",
+        "title": "OpenCode Harness",
+        "icon": "$(sparkle)"
+      }]
+    },
+    "views": {
+      "opencode-harness": [
+        { "id": "opencode-harness.chat", "name": "Chat" }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "node esbuild.js --production",
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "lint": "eslint src --ext ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.98.0",
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0",
+    "eslint": "^9.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0"
+  },
+  "dependencies": {
+    "@opencode-ai/sdk": "latest",
+    "simple-git": "^3.27.0"
+  }
+}
