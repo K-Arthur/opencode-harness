@@ -9,10 +9,15 @@ import { estimateContextTokens } from "../utils/tokenCounter"
 
 export interface ChatMessage {
   role: "user" | "assistant" | "system"
-  content: unknown[]
+  blocks: Block[]
   timestamp: number
   sessionId: string
   id?: string
+}
+
+export interface Block {
+  type: string
+  [key: string]: unknown
 }
 
 export class ChatProvider implements vscode.WebviewViewProvider {
@@ -56,6 +61,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
           break
         case "reject_diff":
           break
+        case "accept_permission":
+          break
         case "mention_search":
           await this.handleMentionSearch(msg.query as string)
           break
@@ -87,7 +94,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     const js = fs.readFileSync(jsPath, "utf8")
 
     html = html.replace('<link rel="stylesheet" href="styles.css">', `<style>${css}</style>`)
-    html = html.replace('<script src="main.js"></script>', `<script>${js}</script>`)
+    html = html.replace("<script src=\"main.js\"></script>", `<script>${js}</script>`)
     return html
   }
 
@@ -103,42 +110,49 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     this.contextMonitor.updateTokens(estimateContextTokens(ctxPkg))
     const session = await this.sessionManager.createSession()
 
-    // Build context-enriched parts
     const contextText = `<system>Open files: ${ctxPkg.openFiles.map(f => `${f.path} (${f.language})`).join(", ") || "none"}\n` +
       `Branch: ${ctxPkg.gitStatus.branch}\nDiagnostics: ${ctxPkg.diagnostics.length} files with issues</system>`
+
+    this.postMessage({
+      type: "message",
+      message: {
+        role: "user",
+        blocks: [{ type: "text", text }],
+        timestamp: Date.now(),
+        sessionId: session.id,
+      },
+    })
+
+    this.postMessage({ type: "stream_start", messageId: `resp-${session.id}` })
 
     const response = await this.sessionManager.sendPrompt(session.id, [
       { type: "text", text: contextText } as never,
       { type: "text", text } as never,
     ])
 
-    // Build content blocks
-    const contentBlocks: unknown[] = []
     const parts = response.parts || []
+
+    const blocks: Block[] = []
     for (const part of parts) {
       if ((part as { type: string }).type === "text") {
-        contentBlocks.push({ type: "text", text: (part as { text: string }).text })
+        const textContent = (part as { text: string }).text
+        blocks.push({ type: "text", text: textContent })
+        this.postMessage({ type: "stream_chunk", messageId: `resp-${session.id}`, text: textContent })
       }
     }
 
-    // Parse code blocks for diffs
     const textParts = parts.filter((p: unknown) => (p as { type: string }).type === "text") as { text?: string }[]
     const edits = this.diffApplier.parseCodeBlocks(textParts as unknown as { type: string; text?: string }[])
     for (const edit of edits) {
       const diffText = await this.diffApplier.generateDiff(edit.filePath, edit.proposedContent)
-      contentBlocks.push({ type: "diff_block", id: edit.blockId, filePath: edit.filePath, diffText, messageId: String(response.info?.id || "") })
+      blocks.push({ type: "diff_block", id: edit.blockId, filePath: edit.filePath, diffText, messageId: String(response.info?.id || "") })
     }
 
-    this._view?.webview.postMessage({
-      type: "message",
-      message: {
-        role: "assistant",
-        id: response.info?.id,
-        content: contentBlocks,
-        timestamp: Date.now(),
-        sessionId: session.id,
-      },
-    })
+    this.postMessage({ type: "stream_end", messageId: `resp-${session.id}`, blocks })
+  }
+
+  private postMessage(msg: Record<string, unknown>): void {
+    this._view?.webview.postMessage(msg)
   }
 
   private async handleMentionSearch(query: string): Promise<void> {
@@ -167,13 +181,13 @@ export class ChatProvider implements vscode.WebviewViewProvider {
       items.push({ prefix: "@file:", display: relative, description: "File" })
     }
 
-    this._view?.webview.postMessage({ type: "mention_results", items })
+    this.postMessage({ type: "mention_results", items })
   }
 
   private async handleListSessions(): Promise<void> {
     if (!this.sessionManager.isRunning) return
     const sessions = await this.sessionManager.listSessions()
-    this._view?.webview.postMessage({
+    this.postMessage({
       type: "session_list",
       sessions: sessions.map((s) => ({ id: s.id, title: s.title, time: s.time })),
     })
@@ -181,14 +195,17 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 
   private async handleResumeSession(sessionId: string): Promise<void> {
     if (!this.sessionManager.isRunning) return
-    this._view?.webview.postMessage({ type: "clear_messages" })
+    this.postMessage({ type: "clear_messages" })
     const messages = await this.sessionManager.getMessages(sessionId)
     for (const m of messages) {
-      this._view?.webview.postMessage({
+      this.postMessage({
         type: "message",
         message: {
           role: (m.info as { role?: string })?.role || "assistant",
-          content: m.parts || [],
+          blocks: (m.parts || []).map((p: unknown) => ({
+            type: (p as { type: string }).type === "text" ? "text" : (p as { type: string }).type,
+            text: (p as { text?: string }).text || "",
+          })),
           timestamp: Date.now(),
           sessionId,
         },
@@ -202,21 +219,19 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 
   private handleServerEvent(event: { type: string; data?: unknown }): void {
     if (!this._view) return
-
     const data = event.data as Record<string, unknown> | undefined
 
     switch (event.type) {
       case "tool_start":
-        this._view.webview.postMessage({
+        this.postMessage({
           type: "message",
           message: {
             role: "system",
-            content: [{
-              type: "tool_card",
+            blocks: [{
+              type: "tool_call",
               toolType: this.mapToolType((data?.tool as string) || ""),
               toolName: data?.tool || "unknown",
               args: JSON.stringify(data?.input || {}),
-              result: null,
             }],
             timestamp: Date.now(),
             sessionId: (data?.sessionID as string) || "",
@@ -225,16 +240,15 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         break
 
       case "tool_end":
-        this._view.webview.postMessage({ type: "stream_chunk", messageId: "", text: "[Tool complete]" })
         break
 
       case "skill_load":
-        this._view.webview.postMessage({
+        this.postMessage({
           type: "message",
           message: {
             role: "system",
-            content: [{
-              type: "skill_card",
+            blocks: [{
+              type: "skill_badge",
               skillName: data?.skill || "unknown",
               description: data?.description || "",
             }],
@@ -245,11 +259,11 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         break
 
       case "thinking":
-        this._view.webview.postMessage({
+        this.postMessage({
           type: "message",
           message: {
             role: "system",
-            content: [{ type: "thinking", text: data?.text || "" }],
+            blocks: [{ type: "thinking", text: data?.text || "" }],
             timestamp: Date.now(),
             sessionId: "",
           },
