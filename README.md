@@ -104,6 +104,46 @@ Themes are merged in this order (later overrides earlier):
 2. CLI theme files
 3. Settings `overrides`
 
+## Rate Limit Monitoring
+
+OpenCode tracks your LLM provider's rate limits in real time and surfaces them in the UI.
+
+### Status Bar Indicator
+
+A status bar entry shows your remaining rate limit as a percentage:
+
+- ◔ 85% — Healthy (>50% remaining)
+- ◕ 30% — Warning (10–50% remaining)
+- ◗ 5%  — Critical (<10% remaining)
+
+Hover to see a tooltip with detailed breakdown (tokens, requests, reset time). Click to open the rate limit detail panel.
+
+### Proactive Warnings
+
+The extension warns you before you hit limits:
+- **Warning** at 10% remaining: "Low rate limit — X% tokens remaining"
+- **Critical** at 5% remaining: "Rate limit nearly exhausted. Consider reducing context size."
+- **Exhausted**: Send button is disabled, a banner shows when limits reset
+
+### Configuration
+
+```json
+{
+  "opencode.rateLimits": {
+    "openai": { "tokensPerMin": 150000, "requestsPerMin": 60 },
+    "anthropic": { "tokensPerMin": 200000, "requestsPerMin": 100 }
+  },
+  "opencode.rateLimitWarningThreshold": 0.1,
+  "opencode.rateLimitCriticalThreshold": 0.05
+}
+```
+
+### Commands
+
+| Command | Action |
+|---------|--------|
+| `OpenCode: Show Rate Limits` | Opens QuickPick with detailed limits and reset times |
+
 ## Keyboard Shortcuts
 
 | Shortcut | Action |
