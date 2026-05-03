@@ -65,6 +65,10 @@ export class ChatProvider implements vscode.WebviewViewProvider {
           break
       }
     })
+
+    this.sessionManager.onEvent((event) => {
+      this.handleServerEvent(event)
+    })
   }
 
   private getWebviewContent(): string {
@@ -187,5 +191,71 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 
   private async handleAcceptDiff(_messageId: string, _blockId: string): Promise<void> {
     vscode.window.showInformationMessage("Diff accepted.")
+  }
+
+  private handleServerEvent(event: { type: string; data?: unknown }): void {
+    if (!this._view) return
+
+    const data = event.data as Record<string, unknown> | undefined
+
+    switch (event.type) {
+      case "tool_start":
+        this._view.webview.postMessage({
+          type: "message",
+          message: {
+            role: "system",
+            content: [{
+              type: "tool_card",
+              toolType: this.mapToolType((data?.tool as string) || ""),
+              toolName: data?.tool || "unknown",
+              args: JSON.stringify(data?.input || {}),
+              result: null,
+            }],
+            timestamp: Date.now(),
+            sessionId: (data?.sessionID as string) || "",
+          },
+        })
+        break
+
+      case "tool_end":
+        this._view.webview.postMessage({ type: "stream_chunk", messageId: "", text: "[Tool complete]" })
+        break
+
+      case "skill_load":
+        this._view.webview.postMessage({
+          type: "message",
+          message: {
+            role: "system",
+            content: [{
+              type: "skill_card",
+              skillName: data?.skill || "unknown",
+              description: data?.description || "",
+            }],
+            timestamp: Date.now(),
+            sessionId: "",
+          },
+        })
+        break
+
+      case "thinking":
+        this._view.webview.postMessage({
+          type: "message",
+          message: {
+            role: "system",
+            content: [{ type: "thinking", text: data?.text || "" }],
+            timestamp: Date.now(),
+            sessionId: "",
+          },
+        })
+        break
+    }
+  }
+
+  private mapToolType(tool: string): string {
+    if (!tool) return "read"
+    const t = tool.toLowerCase()
+    if (t.includes("edit") || t.includes("write") || t.includes("create") || t.includes("apply")) return "write"
+    if (t.includes("bash") || t.includes("exec") || t.includes("run") || t.includes("command")) return "exec"
+    return "read"
   }
 }
