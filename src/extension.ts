@@ -2,6 +2,7 @@ import * as vscode from "vscode"
 import { SessionManager } from "./session/SessionManager"
 import { ContextEngine } from "./context/ContextEngine"
 import { ContextMonitor } from "./monitor/ContextMonitor"
+import { TerminalBridge } from "./terminal/TerminalBridge"
 import { InlineActionProvider } from "./inline/InlineActionProvider"
 import { ChatProvider } from "./chat/ChatProvider"
 
@@ -15,6 +16,15 @@ export function activate(context: vscode.ExtensionContext) {
 
   const contextMonitor = new ContextMonitor()
   context.subscriptions.push(contextMonitor)
+
+  const terminalBridge = new TerminalBridge()
+  context.subscriptions.push(terminalBridge)
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.captureTerminal", async () => {
+      await terminalBridge.captureTerminalSelection()
+    })
+  )
 
   const inlineProvider = new InlineActionProvider()
   for (const lang of ["typescript", "javascript", "python", "rust", "go"]) {
