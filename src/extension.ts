@@ -2,6 +2,7 @@ import * as vscode from "vscode"
 import { SessionManager } from "./session/SessionManager"
 import { ContextEngine } from "./context/ContextEngine"
 import { ContextMonitor } from "./monitor/ContextMonitor"
+import { InlineActionProvider } from "./inline/InlineActionProvider"
 import { ChatProvider } from "./chat/ChatProvider"
 
 let sessionManager: SessionManager
@@ -14,6 +15,22 @@ export function activate(context: vscode.ExtensionContext) {
 
   const contextMonitor = new ContextMonitor()
   context.subscriptions.push(contextMonitor)
+
+  const inlineProvider = new InlineActionProvider()
+  for (const lang of ["typescript", "javascript", "python", "rust", "go"]) {
+    context.subscriptions.push(
+      vscode.languages.registerCodeLensProvider({ scheme: "file", language: lang }, inlineProvider)
+    )
+  }
+
+  for (const action of ["explainCode", "refactorCode", "generateTests"]) {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(`opencode-harness.${action}`, async (uri: vscode.Uri) => {
+        const doc = await vscode.workspace.openTextDocument(uri)
+        vscode.window.showInformationMessage(`${action.replace("Code", "")} triggered for ${vscode.workspace.asRelativePath(uri)}`)
+      })
+    )
+  }
 
   context.subscriptions.push(
     vscode.commands.registerCommand("opencode-harness.openChat", () => {
