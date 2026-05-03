@@ -5,7 +5,6 @@
       "type": "npm",
       "script": "watch",
       "isBackground": true,
-      "problemMatcher": "$esbuild-watch",
       "label": "npm: watch"
     }
   ]

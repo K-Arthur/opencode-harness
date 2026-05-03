@@ -1,0 +1,176 @@
+<h2>Project Structure &amp; Development Phases</h2>
+<p class="subtitle">Scaffolding layout and 4-phase implementation roadmap</p>
+
+<div class="section">
+
+<h3>Project Layout</h3>
+<div class="mockup">
+  <div class="mockup-header">Directory Structure</div>
+  <div class="mockup-body" style="font-family: monospace; font-size: 12px; line-height: 1.6; padding: 20px; background: #0d1117; color: #c9d1d9; border-radius: 6px;">
+
+<pre style="margin: 0;">
+opencode-harness/
+├── .vscode/
+│   ├── launch.json          # Debug config (F5 → Extension Dev Host)
+│   └── tasks.json           # Build tasks
+├── src/
+│   ├── extension.ts          # Entry point: activate/deactivate
+│   ├── session/
+│   │   └── SessionManager.ts # Server lifecycle, SDK wrapper, SSE events
+│   ├── context/
+│   │   └── ContextEngine.ts  # Context gathering worker
+│   ├── chat/
+│   │   ├── ChatProvider.ts   # Webview provider (extension host side)
+│   │   └── webview/          # Webview UI (HTML/JS/CSS or Svelte)
+│   ├── checkpoint/
+│   │   └── CheckpointManager.ts  # Git worktree snapshots
+│   ├── diff/
+│   │   └── DiffApplier.ts    # Diff generation + workspace.applyEdit
+│   ├── inline/
+│   │   └── InlineActionProvider.ts  # CodeLens + context menus
+│   ├── skills/
+│   │   └── SkillManager.ts   # Skill tree view + enable/disable
+│   ├── monitor/
+│   │   └── ContextMonitor.ts # Status bar ring + token estimation
+│   ├── terminal/
+│   │   └── TerminalBridge.ts # Output channel + terminal capture
+│   └── utils/
+│       ├── portFinder.ts     # Dynamic port allocation
+│       └── tokenCounter.ts   # tiktoken-based estimation
+├── package.json              # Extension manifest + contributes
+├── tsconfig.json
+└── README.md
+</pre>
+
+  </div>
+</div>
+</div>
+
+<div class="section" style="margin-top: 20px;">
+
+<h3>Development Roadmap (8 weeks, 4 phases)</h3>
+<div class="mockup">
+  <div class="mockup-body" style="padding: 16px; background: #0d1117; border-radius: 6px;">
+
+<table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #c9d1d9;">
+  <tr style="border-bottom: 2px solid #30363d;">
+    <th style="text-align: left; padding: 10px; color: #58a6ff; width: 15%;">Phase</th>
+    <th style="text-align: left; padding: 10px; color: #58a6ff; width: 15%;">Week</th>
+    <th style="text-align: left; padding: 10px; color: #58a6ff;">Deliverables</th>
+    <th style="text-align: left; padding: 10px; color: #58a6ff; width: 20%;">Key Risk</th>
+  </tr>
+
+  <tr style="border-bottom: 1px solid #21262d;">
+    <td style="padding: 10px; color: #d29922; font-weight: bold; vertical-align: top;">Foundation</td>
+    <td style="padding: 10px; vertical-align: top;">1-2</td>
+    <td style="padding: 10px;">
+      • Project scaffolding (yo code + TypeScript)<br>
+      • SessionManager: spawn opencode serve, health check, SDK client<br>
+      • Basic output channel (raw server logs visible)<br>
+      • Extension activates/deactivates cleanly<br>
+      • Port management + auto-reconnect
+    </td>
+    <td style="padding: 10px; font-size: 11px; color: #f85149;">
+      opencode binary not found on PATH
+    </td>
+  </tr>
+
+  <tr style="border-bottom: 1px solid #21262d;">
+    <td style="padding: 10px; color: #3fb950; font-weight: bold; vertical-align: top;">Interactive</td>
+    <td style="padding: 10px; vertical-align: top;">3-4</td>
+    <td style="padding: 10px;">
+      • ChatProvider webview with message history<br>
+      • SSE event integration: tool call cards, skill usage cards<br>
+      • Streaming text display in webview<br>
+      • DiffApplier: parse AI output, show unified diff, accept/reject<br>
+      • Dev server running extension, manual testing
+    </td>
+    <td style="padding: 10px; font-size: 11px; color: #f85149;">
+      Webview postMessage latency at scale
+    </td>
+  </tr>
+
+  <tr style="border-bottom: 1px solid #21262d;">
+    <td style="padding: 10px; color: #58a6ff; font-weight: bold; vertical-align: top;">Context &amp; Control</td>
+    <td style="padding: 10px; vertical-align: top;">5-6</td>
+    <td style="padding: 10px;">
+      • ContextEngine: open tabs, diagnostics, git status, workspace tree<br>
+      • Keyboard shortcuts for all major commands<br>
+      • Status bar context monitor (ring indicator)<br>
+      • InlineActionProvider: CodeLens + context menu actions<br>
+      • TerminalBridge: output channel + terminal capture
+    </td>
+    <td style="padding: 10px; font-size: 11px; color: #f85149;">
+      Token estimation accuracy vs actual<br>
+      (tiktoken on extension side vs server)
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding: 10px; color: #bc8cff; font-weight: bold; vertical-align: top;">Advanced &amp; Polish</td>
+    <td style="padding: 10px; vertical-align: top;">7-8</td>
+    <td style="padding: 10px;">
+      • CheckpointManager: git worktree snapshots + rollback UI<br>
+      • SkillManager: tree view, enable/disable, visual indicator<br>
+      • Platform testing on Arch Linux and Fedora<br>
+      • .vsix packaging, VS Code Marketplace publishing prep<br>
+      • Performance audit: startup &lt;50ms, UI stays responsive<br>
+      • Error recovery: crash handling, session restore
+    </td>
+    <td style="padding: 10px; font-size: 11px; color: #f85149;">
+      Git worktree support on edge cases<br>
+      (detached HEAD, bare repos)
+    </td>
+  </tr>
+</table>
+
+  </div>
+</div>
+</div>
+
+<div class="section" style="margin-top: 20px;">
+  <h3>Non-Functional Requirements Summary</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="padding: 16px; background: #0d1117; border-radius: 6px;">
+
+<table style="width: 100%; border-collapse: collapse; font-size: 12px; color: #c9d1d9;">
+  <tr style="border-bottom: 1px solid #30363d;">
+    <th style="text-align: left; padding: 8px; color: #58a6ff;">Category</th>
+    <th style="text-align: left; padding: 8px; color: #58a6ff;">Requirement</th>
+    <th style="text-align: left; padding: 8px; color: #58a6ff;">Target</th>
+  </tr>
+  <tr style="border-bottom: 1px solid #21262d;">
+    <td style="padding: 8px; color: #d29922;">Startup</td>
+    <td style="padding: 8px;">Extension must not increase VS Code startup time</td>
+    <td style="padding: 8px;">&lt;50ms</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #21262d;">
+    <td style="padding: 8px; color: #d29922;">Responsiveness</td>
+    <td style="padding: 8px;">Chat input stays responsive during AI generation</td>
+    <td style="padding: 8px;">No UI thread blocking &gt;16ms</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #21262d;">
+    <td style="padding: 8px; color: #d29922;">Context estimation</td>
+    <td style="padding: 8px;">Token count for context package</td>
+    <td style="padding: 8px;">&lt;10ms computation</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #21262d;">
+    <td style="padding: 8px; color: #3fb950;">Reliability</td>
+    <td style="padding: 8px;">Graceful recovery if opencode server crashes</td>
+    <td style="padding: 8px;">Auto-restart, preserve history</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #21262d;">
+    <td style="padding: 8px; color: #3fb950;">Reliability</td>
+    <td style="padding: 8px;">All file operations are transactional</td>
+    <td style="padding: 8px;">diff → review → apply (never direct write)</td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; color: #bc8cff;">Platform</td>
+    <td style="padding: 8px;">Arch Linux + Fedora/RHEL first-class support</td>
+    <td style="padding: 8px;">Tested on both before v1.0</td>
+  </tr>
+</table>
+
+  </div>
+</div>
+</div>

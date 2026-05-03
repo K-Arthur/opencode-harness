@@ -1,0 +1,178 @@
+<h2>Interaction Sequence: User Sends a Chat Message</h2>
+<p class="subtitle">End-to-end flow from keystroke to inline diff acceptance</p>
+
+<div class="mockup">
+  <div class="mockup-header">Sequence Diagram</div>
+  <div class="mockup-body" style="font-family: monospace; font-size: 12px; line-height: 1.4; padding: 20px; background: #0d1117; color: #c9d1d9; border-radius: 6px;">
+
+<style>
+.seq { display: flex; flex-direction: column; gap: 0; font-size: 12px; }
+.seq-row { display: flex; align-items: flex-start; padding: 6px 8px; border-bottom: 1px solid #21262d; gap: 12px; }
+.seq-num { color: #484f58; min-width: 24px; text-align: right; font-size: 10px; }
+.seq-from { color: #58a6ff; min-width: 140px; font-weight: bold; }
+.seq-arrow { color: #8b949e; min-width: 50px; text-align: center; }
+.seq-to { color: #3fb950; min-width: 140px; font-weight: bold; }
+.seq-msg { color: #c9d1d9; flex: 1; }
+.seq-note { color: #6e7681; font-style: italic; font-size: 11px; margin-left: 8px; }
+.seq-phase { background: #161b22; padding: 6px 8px; color: #d29922; font-weight: bold; font-size: 11px; margin: 8px 0 4px 0; border-radius: 3px; }
+</style>
+
+<div class="seq">
+
+<div class="seq-phase">Phase 1: Context Gathering (async, non-blocking)</div>
+
+<div class="seq-row">
+  <span class="seq-num">1</span>
+  <span class="seq-from">User types in Chat</span>
+  <span class="seq-arrow">&#x2192;</span>
+  <span class="seq-to">ChatProvider</span>
+  <span class="seq-msg">Captures message text, flags as pending</span>
+</div>
+
+<div class="seq-row">
+  <span class="seq-num">2</span>
+  <span class="seq-from">ChatProvider</span>
+  <span class="seq-arrow">&#x2192;</span>
+  <span class="seq-to">ContextEngine</span>
+  <span class="seq-msg">Request context package</span>
+</div>
+
+<div class="seq-row">
+  <span class="seq-num">3</span>
+  <span class="seq-from">ContextEngine</span>
+  <span class="seq-arrow">&#x2192;</span>
+  <span class="seq-to">VS Code API</span>
+  <span class="seq-msg">Get open tabs, diagnostics, git status, workspace tree</span>
+  <span class="seq-note">(worker thread: &lt;10ms for basic, &lt;50ms with AST)</span>
+</div>
+
+<div class="seq-row">
+  <span class="seq-num">4</span>
+  <span class="seq-from">ContextEngine</span>
+  <span class="seq-arrow">&#x2192;</span>
+  <span class="seq-to">ChatProvider</span>
+  <span class="seq-msg">Returns structured ContextPackage</span>
+</div>
+
+<div class="seq-phase">Phase 2: Checkpoint + Send (transactional)</div>
+
+<div class="seq-row">
+  <span class="seq-num">5</span>
+  <span class="seq-from">ChatProvider</span>
+  <span class="seq-arrow">&#x2192;</span>
+  <span class="seq-to">CheckpointManager</span>
+  <span class="seq-msg">Take git worktree snapshot</span>
+  <span class="seq-note">Before any file writes occur</span>
+</div>
+
+<div class="seq-row">
+  <span class="seq-num">6</span>
+  <span class="seq-from">ChatProvider</span>
+  <span class="seq-arrow">&#x2192;</span>
+  <span class="seq-to">SessionManager</span>
+  <span class="seq-msg">client.session.prompt({ parts: [...], context }) </span>
+</div>
+
+<div class="seq-row">
+  <span class="seq-num">7</span>
+  <span class="seq-from">SessionManager</span>
+  <span class="seq-arrow">&#x2192;</span>
+  <span class="seq-to">openCode Server</span>
+  <span class="seq-msg">POST /session/:id/message (blocking response)</span>
+</div>
+
+<div class="seq-phase">Phase 3: Real-time Streaming (SSE events)</div>
+
+<div class="seq-row">
+  <span class="seq-num">8</span>
+  <span class="seq-from">SessionManager</span>
+  <span class="seq-arrow">&#x2192;</span>
+  <span class="seq-to">ChatProvider</span>
+  <span class="seq-msg">Emits: event.thinking, event.tool_call, event.skill_load</span>
+  <span class="seq-note">SSE events from /event stream</span>
+</div>
+
+<div class="seq-row">
+  <span class="seq-num">9</span>
+  <span class="seq-from">ChatProvider</span>
+  <span class="seq-arrow">&#x2192;</span>
+  <span class="seq-to">Webview UI</span>
+  <span class="seq-msg">Renders tool cards, skill cards, streaming text in real-time</span>
+</div>
+
+<div class="seq-row">
+  <span class="seq-num">10</span>
+  <span class="seq-from">ChatProvider</span>
+  <span class="seq-arrow">&#x2192;</span>
+  <span class="seq-to">ContextMonitor</span>
+  <span class="seq-msg">Update context usage ring (estimates from message length)</span>
+</div>
+
+<div class="seq-phase">Phase 4: Response + Code Application</div>
+
+<div class="seq-row">
+  <span class="seq-num">11</span>
+  <span class="seq-from">openCode Server</span>
+  <span class="seq-arrow">&#x2192;</span>
+  <span class="seq-to">SessionManager</span>
+  <span class="seq-msg">Response: AssistantMessage with parts[]</span>
+</div>
+
+<div class="seq-row">
+  <span class="seq-num">12</span>
+  <span class="seq-from">SessionManager</span>
+  <span class="seq-arrow">&#x2192;</span>
+  <span class="seq-to">DiffApplier</span>
+  <span class="seq-msg">Parse code blocks, generate unified diff vs current file</span>
+</div>
+
+<div class="seq-row">
+  <span class="seq-num">13</span>
+  <span class="seq-from">DiffApplier</span>
+  <span class="seq-arrow">&#x2192;</span>
+  <span class="seq-to">ChatProvider</span>
+  <span class="seq-msg">Render diff view with Accept / Reject / Edit buttons</span>
+</div>
+
+<div class="seq-row">
+  <span class="seq-num">14</span>
+  <span class="seq-from">User clicks Accept</span>
+  <span class="seq-arrow">&#x2192;</span>
+  <span class="seq-to">DiffApplier</span>
+  <span class="seq-msg">workspace.applyEdit() — native VS Code undo stack</span>
+</div>
+
+</div>
+
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>Key Design Decisions</h3>
+  <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+    <div class="card" data-choice="d1" style="min-width: 280px;">
+      <div class="card-body">
+        <h3>Worker Thread for Context</h3>
+        <p>ContextEngine runs in a Node.js worker thread. Gathering open tabs + diagnostics + git status never blocks the UI thread. Guaranteed &lt;10ms for basic mode, with AST parsing as an optional premium mode.</p>
+      </div>
+    </div>
+    <div class="card" data-choice="d2" style="min-width: 280px;">
+      <div class="card-body">
+        <h3>SSE Events, Not Polling</h3>
+        <p>Instead of polling for status, we subscribe to opencode's /event SSE stream. Every tool call, skill activation, and thinking step is pushed to us in real-time — exactly what we need for the agent visibility feature.</p>
+      </div>
+    </div>
+    <div class="card" data-choice="d3" style="min-width: 280px;">
+      <div class="card-body">
+        <h3>Git Worktrees for Rollback</h3>
+        <p>Before any AI file write, CheckpointManager creates a lightweight git worktree snapshot. Rollback is instant — just checkout the previous ref. No file copying, no diff reversal, pure git.</p>
+      </div>
+    </div>
+    <div class="card" data-choice="d4" style="min-width: 280px;">
+      <div class="card-body">
+        <h3>Diff Before Apply</h3>
+        <p>AI-suggested code is never written directly. It's compared against the current file state to produce a unified diff. User reviews and accepts; we apply via workspace.applyEdit() — fully undoable via Ctrl+Z.</p>
+      </div>
+    </div>
+  </div>
+</div>

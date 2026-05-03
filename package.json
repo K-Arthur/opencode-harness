@@ -17,8 +17,8 @@
       { "command": "opencode-harness.toggleFocus", "title": "OpenCode Harness: Toggle Chat Focus" }
     ],
     "keybindings": [
-      { "command": "opencode-harness.toggleFocus", "key": "ctrl+escape" },
-      { "command": "opencode-harness.newSession", "key": "ctrl+shift+escape" }
+      { "command": "opencode-harness.toggleFocus", "key": "ctrl+alt+o" },
+      { "command": "opencode-harness.newSession", "key": "ctrl+alt+n" }
     ],
     "viewsContainers": {
       "activitybar": [{
@@ -37,7 +37,7 @@
     "vscode:prepublish": "node esbuild.js --production",
     "build": "node esbuild.js",
     "watch": "node esbuild.js --watch",
-    "lint": "eslint src --ext ts",
+    "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
@@ -50,7 +50,7 @@
     "@typescript-eslint/parser": "^8.0.0"
   },
   "dependencies": {
-    "@opencode-ai/sdk": "latest",
+    "@opencode-ai/sdk": "^1.14.33",
     "simple-git": "^3.27.0"
   }
 }

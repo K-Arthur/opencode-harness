@@ -1,0 +1,169 @@
+<h2>Component Specifications</h2>
+<p class="subtitle">Eight core modules — each with a single responsibility and clear interface</p>
+
+<div class="section">
+
+<h3>1. SessionManager</h3>
+<div class="mockup">
+  <div class="mockup-header">Server Lifecycle + SDK Wrapper</div>
+  <div class="mockup-body" style="font-family: monospace; font-size: 11px; line-height: 1.5; padding: 16px; background: #0d1117; color: #c9d1d9; border-radius: 6px;">
+
+<pre style="color: #58a6ff; margin: 0;">
+// Exported API
+interface SessionManager {
+  // Lifecycle
+  start(): Promise&lt;void&gt;          // spawns "opencode serve", waits for health
+  stop(): Promise&lt;void&gt;           // kills server process, cleans up
+  restart(): Promise&lt;void&gt;        // stop + start, preserves session list
+  isRunning(): boolean
+
+  // Session CRUD
+  createSession(title?: string): Promise&lt;Session&gt;
+  deleteSession(id: string): Promise&lt;boolean&gt;
+  getSession(id: string): Promise&lt;Session&gt;
+  listSessions(): Promise&lt;Session[]&gt;
+
+  // Messaging
+  sendPrompt(sessionId, parts: Part[], context?: ContextPackage): Promise&lt;Message&gt;
+  sendCommand(sessionId, command: string): Promise&lt;Message&gt;
+  abortSession(sessionId): Promise&lt;boolean&gt;
+
+  // Events (SSE-backed)
+  onEvent: vscode.EventEmitter&lt;OpencodeEvent&gt;  // tool_call, skill_load, thinking, etc.
+  subscribe(): Promise&lt;void&gt;                     // connects to /event SSE stream
+}</pre>
+
+<div style="margin-top: 12px; padding: 8px; border-left: 3px solid #d29922; background: rgba(210,153,34,0.1);">
+  <span style="color: #d29922; font-weight: bold;">Port Management:</span>
+  <span style="color: #c9d1d9;">
+  Find a free port via <code>getPort()</code>, pass it to <code>opencode serve --port {n}</code>. 
+  Store port in workspace state. Auto-detect if an existing server is running on a known port.
+  </span>
+</div>
+
+  </div>
+</div>
+</div>
+
+<div class="section" style="margin-top: 20px;">
+
+<h3>2. ContextEngine</h3>
+<div class="mockup">
+  <div class="mockup-header">Intelligent Context Gathering (Worker Thread)</div>
+  <div class="mockup-body" style="font-family: monospace; font-size: 11px; line-height: 1.5; padding: 16px; background: #0d1117; color: #c9d1d9; border-radius: 6px;">
+
+<pre style="color: #3fb950; margin: 0;">
+interface ContextPackage {
+  openFiles:       { path, language, content (capped at 8k chars each) }[]
+  activeSelection: { file, startLine, endLine, text } | null
+  diagnostics:     { file, errors, warnings, hints }[]
+  workspaceTree:   { name, type: "file"|"directory", depth: 3 }[]
+  projectConfigs:  { type: "package.json"|"tsconfig"|..., content }[]
+  gitStatus:       { branch, modified, staged, recentDiff? }
+  terminalOutput:  { text } | null  // user-selected block
+}
+
+interface ContextEngine {
+  gatherContext(config?: GatherConfig): Promise&lt;ContextPackage&gt;
+  estimateTokens(pkg: ContextPackage): number  // tiktoken-based, &lt;5ms
+  onConfigChanged: vscode.Event&lt;void&gt;
+}</pre>
+
+<div style="margin-top: 12px; display: flex; gap: 8px; font-size: 10px;">
+  <div style="flex:1; padding: 8px; background: rgba(63,185,80,0.1); border-radius: 4px; border: 1px solid #3fb950;">
+    <strong style="color: #3fb950;">Basic Mode</strong>
+    <div style="color: #c9d1d9;">Open tabs + diagnostics + workspace tree. &lt;10ms, always on.</div>
+  </div>
+  <div style="flex:1; padding: 8px; background: rgba(210,153,34,0.1); border-radius: 4px; border: 1px solid #d29922;">
+    <strong style="color: #d29922;">Deep Mode</strong>
+    <div style="color: #c9d1d9;">+ AST structure, git diff, project configs. &lt;50ms, optional.</div>
+  </div>
+</div>
+
+  </div>
+</div>
+</div>
+
+<div class="section" style="margin-top: 20px;">
+
+<h3>3. ChatProvider (Webview)</h3>
+<div class="mockup">
+  <div class="mockup-header">Rich Chat UI — The Primary Interaction Point</div>
+  <div class="mockup-body" style="font-family: monospace; font-size: 11px; line-height: 1.5; padding: 16px; background: #0d1117; color: #c9d1d9; border-radius: 6px;">
+
+<pre style="color: #bc8cff; margin: 0;">
+// Webview renders VS Code-themed chat with:
+//
+// ┌──────────────────────────────────────────────────────┐
+// │ 🔧 skill:systematic-debugging              [active]  │  &lt;-- Skill Card
+// │    Debugging methodology loaded...                    │
+// ├──────────────────────────────────────────────────────┤
+// │ 📖 read_file: src/services/process.ts:712            │  &lt;-- Tool Card
+// │    + Returned 200 lines. [expand]                     │
+// ├──────────────────────────────────────────────────────┤
+// │ 💬 Assistant: I found the issue in the connectTo...  │  &lt;-- Text Block
+// ├──────────────────────────────────────────────────────┤
+// │ ┌─── diff: src/services/process.ts ────────────┐    │  &lt;-- Diff Block
+// │ │ - oldLine                                      │    │
+// │ │ + newLine                                      │    │
+// │ │ [Accept All] [Accept Line] [Reject] [Edit]    │    │
+// │ └────────────────────────────────────────────────┘    │
+// └──────────────────────────────────────────────────────┘
+
+interface ChatMessage {
+  role: "user" | "assistant" | "system"
+  content: (TextBlock | ToolCallCard | SkillCard | DiffBlock | ContextBlock)[]
+  timestamp: number
+  sessionId: string
+}
+
+// Webview uses VS Code's postMessage API to communicate with extension host
+// Renders using Svelte or vanilla JS with VS Code CSS variables for theming
+</pre>
+
+  </div>
+</div>
+</div>
+
+<div class="section" style="margin-top: 20px;">
+
+<h3>4-8. Supporting Modules</h3>
+<div class="mockup">
+  <div class="mockup-body" style="padding: 16px; background: #0d1117; border-radius: 6px;">
+
+<table style="width: 100%; border-collapse: collapse; font-size: 12px; color: #c9d1d9;">
+  <tr style="border-bottom: 1px solid #30363d;">
+    <th style="text-align: left; padding: 8px; color: #58a6ff; width: 20%;">Module</th>
+    <th style="text-align: left; padding: 8px; color: #58a6ff; width: 30%;">Responsibility</th>
+    <th style="text-align: left; padding: 8px; color: #58a6ff;">Key Interface</th>
+  </tr>
+  <tr style="border-bottom: 1px solid #21262d;">
+    <td style="padding: 8px; color: #f85149; font-weight: bold;">CheckpointManager</td>
+    <td style="padding: 8px;">Git worktree snapshots before AI writes</td>
+    <td style="padding: 8px; font-size: 11px; font-family: monospace;">snapshot() → restore() → listSnapshots()</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #21262d;">
+    <td style="padding: 8px; color: #bc8cff; font-weight: bold;">SkillManager</td>
+    <td style="padding: 8px;">List, enable/disable skills via tree view</td>
+    <td style="padding: 8px; font-size: 11px; font-family: monospace;">listSkills() → enable(id) → disable(id)</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #21262d;">
+    <td style="padding: 8px; color: #79c0ff; font-weight: bold;">InlineActionProvider</td>
+    <td style="padding: 8px;">CodeLens + context menu for selected code</td>
+    <td style="padding: 8px; font-size: 11px; font-family: monospace;">provideCodeLenses() → executeAction()</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #21262d;">
+    <td style="padding: 8px; color: #ff7b72; font-weight: bold;">ContextMonitor</td>
+    <td style="padding: 8px;">Status bar ring + token estimation alerts</td>
+    <td style="padding: 8px; font-size: 11px; font-family: monospace;">updateUsage(tokens) → statusBarItem.show()</td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; color: #7ee787; font-weight: bold;">DiffApplier</td>
+    <td style="padding: 8px;">Generates diffs, applies with workspace.applyEdit</td>
+    <td style="padding: 8px; font-size: 11px; font-family: monospace;">generateDiff() → acceptDiff() → rejectDiff()</td>
+  </tr>
+</table>
+
+  </div>
+</div>
+</div>

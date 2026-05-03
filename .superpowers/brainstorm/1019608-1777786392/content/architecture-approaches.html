@@ -1,0 +1,83 @@
+<h2>Two Integration Approaches for the VS Code Extension</h2>
+<p class="subtitle">Based on opencode's actual API surface discovered during research</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Approach A: ACP Protocol (JSON-RPC via stdio)</div>
+    <div class="mockup-body" style="font-family: monospace; font-size: 13px; line-height: 1.6; padding: 16px; background: #1a1a2e; color: #e0e0e0; border-radius: 6px;">
+      <div style="margin-bottom: 16px; border: 1px solid #4a9eff; border-radius: 4px; padding: 8px; background: rgba(74,158,255,0.1);">
+        <div style="color: #4a9eff; font-weight: bold;">VS Code Extension</div>
+        <div style="color: #888; font-size: 11px;">Webview Chat + Sidebar + Inline Actions</div>
+      </div>
+      <div style="text-align: center; margin: 8px 0; color: #888;">│</div>
+      <div style="text-align: center; margin: 4px 0; color: #ffa500; font-size: 11px;">Child Process (spawn)</div>
+      <div style="text-align: center; color: #888;">│</div>
+      <div style="margin: 8px 0; border: 1px solid #ffa500; border-radius: 4px; padding: 8px; background: rgba(255,165,0,0.1);">
+        <div style="color: #ffa500; font-weight: bold;">opencode acp</div>
+        <div style="color: #ccc; font-size: 11px;">JSON-RPC via stdio/stdout</div>
+      </div>
+      <div style="text-align: center; margin: 8px 0; color: #888;">│</div>
+      <div style="text-align: center; margin: 4px 0; color: #4caf50; font-size: 11px;">Standard ACP Protocol</div>
+      <div style="text-align: center; color: #888;">│</div>
+      <div style="margin-top: 8px; border: 1px solid #4caf50; border-radius: 4px; padding: 8px; background: rgba(76,175,80,0.1);">
+        <div style="color: #4caf50; font-weight: bold;">AI Models</div>
+        <div style="color: #ccc; font-size: 11px;">Anthropic, OpenAI, etc.</div>
+      </div>
+    </div>
+    <div style="margin-top: 12px;">
+      <div class="pros"><h4>Pros</h4><ul><li>Simple: single process, no port management</li><li>Used by Zed, JetBrains (proven pattern)</li><li>No authentication needed (local stdio)</li></ul></div>
+      <div class="pros-cons"><div class="cons"><h4>Cons</h4><ul><li>Limited to ACP's message protocol</li><li>No file search, diff, session management APIs</li><li>Harder to stream real-time events</li><li>Missing /undo, /redo commands per ACP docs</li></ul></div></div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Approach B: HTTP Server + SDK (Recommended)</div>
+    <div class="mockup-body" style="font-family: monospace; font-size: 13px; line-height: 1.6; padding: 16px; background: #1a1a2e; color: #e0e0e0; border-radius: 6px;">
+      <div style="margin-bottom: 12px; border: 1px solid #4a9eff; border-radius: 4px; padding: 8px; background: rgba(74,158,255,0.15);">
+        <div style="color: #4a9eff; font-weight: bold; font-size: 14px;">VS Code Extension</div>
+        <div style="color: #ccc; font-size: 11px;">Webview Chat + Sidebar + Inline + Status Bar</div>
+        <div style="margin-top: 8px; display: flex; gap: 8px; font-size: 10px;">
+          <div style="flex:1;border:1px solid #888;border-radius:3px;padding:4px;background:rgba(255,255,255,0.05);">
+            <div style="color:#4a9eff;">SessionManager</div><div style="color:#666;">server lifecycle + events</div>
+          </div>
+          <div style="flex:1;border:1px solid #888;border-radius:3px;padding:4px;background:rgba(255,255,255,0.05);">
+            <div style="color:#4a9eff;">ContextEngine</div><div style="color:#666;">auto-gather context</div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align: center; margin: 8px 0; color: #ffa500; font-weight: bold;">@opencode-ai/sdk</div>
+      <div style="display: flex; gap: 8px; margin: 8px 0;">
+        <div style="flex:1;border:1px solid #ffa500;border-radius:3px;padding:6px;text-align:center;background:rgba(255,165,0,0.1);color:#ffa500;font-size:10px;">REST API<br>(POST/GET)</div>
+        <div style="flex:1;border:1px solid #ff5722;border-radius:3px;padding:6px;text-align:center;background:rgba(255,87,34,0.1);color:#ff5722;font-size:10px;">SSE Events<br>(/event stream)</div>
+      </div>
+      <div style="margin: 8px 0; border: 2px solid #4caf50; border-radius: 4px; padding: 8px; background: rgba(76,175,80,0.1);">
+        <div style="color: #4caf50; font-weight: bold;">opencode serve</div>
+        <div style="color: #888; font-size: 11px;">HTTP Server :4096 — OpenAPI 3.1</div>
+        <div style="margin-top: 6px; display: flex; gap: 6px; font-size: 10px;">
+          <div style="flex:1;border:1px solid #4caf50;border-radius:2px;padding:3px;">/session</div>
+          <div style="flex:1;border:1px solid #4caf50;border-radius:2px;padding:3px;">/find</div>
+          <div style="flex:1;border:1px solid #4caf50;border-radius:2px;padding:3px;">/file</div>
+          <div style="flex:1;border:1px solid #4caf50;border-radius:2px;padding:3px;">/diff</div>
+          <div style="flex:1;border:1px solid #4caf50;border-radius:2px;padding:3px;">/event</div>
+        </div>
+      </div>
+      <div style="text-align: center; margin: 4px 0; color: #888;">│</div>
+      <div style="border:1px solid #9c27b0;border-radius:3px;padding:6px;text-align:center;background:rgba(156,39,176,0.1);color:#9c27b0;font-size:10px;">LLM Providers (Anthropic, OpenAI, local, etc.)</div>
+    </div>
+    <div style="margin-top: 12px;">
+      <div class="pros"><h4>Pros</h4><ul><li>Full API: sessions, files, diffs, search, events</li><li>SSE streaming for real-time agent visibility</li><li>Type-safe SDK (@opencode-ai/sdk)</li><li>Session management + diff endpoint built in</li><li>Same protocol the TUI uses internally</li></ul></div>
+      <div class="pros-cons"><div class="cons"><h4>Cons</h4><ul><li>Must manage server process lifecycle</li><li>Port management required</li><li>Slightly more setup code</li></ul></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>Verdict</h3>
+  <p style="background: rgba(76,175,80,0.1); border-left: 4px solid #4caf50; padding: 16px; border-radius: 4px;">
+    <strong>Approach B (HTTP Server + SDK) is the clear winner.</strong> 
+    The ACP protocol is designed for generic editor integration but the HTTP server exposes 
+    the exact APIs our extension needs: session diffs, file search, event streaming, and 
+    full session management. The SSE event stream directly enables the "agent visibility" 
+    feature (showing what tool is being called, which skill is loaded, etc.).
+  </p>
+</div>
