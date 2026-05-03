@@ -294,8 +294,9 @@
     copyBtn.textContent = "Copy";
     copyBtn.addEventListener("click", () => {
       navigator.clipboard.writeText(block.code || "").then(() => {
+        copyBtn.classList.add("copied");
         copyBtn.textContent = "Copied!";
-        setTimeout(() => { copyBtn.textContent = "Copy"; }, 2000);
+        setTimeout(() => { copyBtn.classList.remove("copied"); copyBtn.textContent = "Copy"; }, 1500);
       });
     });
     header.appendChild(copyBtn);
@@ -786,7 +787,8 @@
 
     function closeOverlay() {
       sessionPickerOpen = false;
-      overlay.remove();
+      overlay.classList.add("closing");
+      setTimeout(() => overlay.remove(), 150);
     }
   }
 

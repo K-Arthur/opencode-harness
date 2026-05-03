@@ -29,6 +29,74 @@
   --oc-warning: #d29922;
   --oc-skill: #bc8cff;
   --oc-muted: var(--vscode-descriptionForeground);
+
+  /* ─── Animation Timing Tokens ─── */
+  --oc-duration-instant: 100ms;
+  --oc-duration-fast: 150ms;
+  --oc-duration-normal: 200ms;
+  --oc-duration-slow: 300ms;
+  --oc-duration-xslow: 400ms;
+
+  /* ─── Animation Easing Tokens ─── */
+  --oc-ease-out-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --oc-ease-out: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --oc-ease-in-out: cubic-bezier(0.42, 0, 0.58, 1);
+  --oc-ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ─── Stagger Delays ─── */
+  --oc-stagger-delay: 50ms;
+  --oc-stagger-increment: 40ms;
+}
+
+/* ─── prefers-reduced-motion: wrap all animated elements ─── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .message {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .typing-dots span {
+    animation: none !important;
+    opacity: 0.6 !important;
+  }
+
+  .streaming-text::after {
+    animation: none !important;
+    content: "" !important;
+  }
+
+  .skeleton-shimmer {
+    animation: none !important;
+    background: var(--oc-editor-bg) !important;
+  }
+
+  .context-bar-fill {
+    transition: none !important;
+  }
+
+  .overlay {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+
+  .overlay-dialog {
+    animation: none !important;
+    transform: none !important;
+  }
+
+  #context-bar-fill {
+    transition: none !important;
+  }
 }
 
 * {
@@ -101,7 +169,7 @@ body {
   cursor: pointer;
   border-radius: 4px;
   opacity: 0.7;
-  transition: opacity 0.15s, background 0.15s;
+  transition: opacity var(--oc-duration-fast), background var(--oc-duration-fast);
 }
 
 .header-btn:hover {
@@ -111,6 +179,7 @@ body {
 
 .header-btn:active {
   opacity: 0.8;
+  animation: pressEffect var(--oc-duration-instant) var(--oc-ease-out);
 }
 
 /* ─── CONTEXT BAR ─── */
@@ -238,8 +307,15 @@ body {
   display: flex;
   flex-direction: column;
   max-width: 85%;
-  animation: messageFadeIn 0.3s ease-out;
+  animation: messageFadeIn var(--oc-duration-slow) var(--oc-ease-out) both;
 }
+
+.message:nth-child(1) { animation-delay: 0ms; }
+.message:nth-child(2) { animation-delay: 40ms; }
+.message:nth-child(3) { animation-delay: 80ms; }
+.message:nth-child(4) { animation-delay: 120ms; }
+.message:nth-child(5) { animation-delay: 160ms; }
+.message:nth-child(6) { animation-delay: 200ms; }
 
 .message.user {
   align-self: flex-end;
@@ -358,12 +434,21 @@ body {
   font-size: 11px;
   padding: 2px 6px;
   border-radius: 3px;
-  transition: background 0.15s;
+  transition: background var(--oc-duration-fast), color var(--oc-duration-fast);
 }
 
 .code-block-copy:hover {
   background: var(--oc-list-hover);
   color: var(--oc-fg);
+}
+
+.code-block-copy:active {
+  animation: pressEffect var(--oc-duration-instant) var(--oc-ease-out);
+}
+
+.code-block-copy.copied {
+  color: var(--oc-success);
+  transition: none;
 }
 
 .code-block-content {
@@ -432,6 +517,7 @@ body {
 
 .thinking-block.expanded .thinking-content {
   display: block;
+  animation: messageFadeIn var(--oc-duration-fast) var(--oc-ease-out) both;
 }
 
 /* ─── SKILL BADGE ─── */
@@ -450,6 +536,7 @@ body {
   margin: 4px 0;
   cursor: default;
   width: fit-content;
+  animation: badgePop var(--oc-duration-slow) var(--oc-ease-out-spring) both;
 }
 
 .skill-badge-icon {
@@ -529,22 +616,24 @@ body {
 }
 
 .tool-result {
-  display: none;
-  padding: 8px 10px;
+  max-height: 0;
+  padding: 0 10px;
   border-top: 1px solid var(--oc-border);
   font-family: var(--oc-editor-font);
   font-size: var(--oc-editor-font-size);
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 300px;
-  overflow-y: auto;
+  overflow: hidden;
   line-height: 1.4;
   color: var(--oc-editor-fg);
   background: var(--oc-editor-bg);
+  transition: max-height var(--oc-duration-slow) var(--oc-ease-smooth), padding var(--oc-duration-normal) var(--oc-ease-smooth);
 }
 
 .tool-card.expanded .tool-result {
-  display: block;
+  max-height: 300px;
+  padding: 8px 10px;
+  overflow-y: auto;
 }
 
 /* ─── DIFF BLOCK ─── */
@@ -596,7 +685,11 @@ body {
   border-radius: 4px;
   font-size: 12px;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  transition: background var(--oc-duration-fast), opacity var(--oc-duration-fast);
+}
+
+.diff-btn:active {
+  animation: pressEffect var(--oc-duration-instant) var(--oc-ease-out);
 }
 
 .diff-btn-accept {
@@ -646,7 +739,11 @@ body {
   border-radius: 4px;
   font-size: 12px;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  transition: background var(--oc-duration-fast), opacity var(--oc-duration-fast), color var(--oc-duration-fast);
+}
+
+.permission-btn:active {
+  animation: pressEffect var(--oc-duration-instant) var(--oc-ease-out);
 }
 
 .permission-btn-allow {
@@ -770,16 +867,21 @@ body {
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--oc-duration-fast), color var(--oc-duration-fast);
 }
 
 .mode-btn:hover {
   color: var(--oc-fg);
 }
 
+.mode-btn:active {
+  animation: pressEffect var(--oc-duration-instant) var(--oc-ease-out);
+}
+
 .mode-btn.active {
   background: var(--oc-button-bg);
   color: var(--oc-button-fg);
+  transition: background var(--oc-duration-normal), color var(--oc-duration-normal);
 }
 
 #context-usage {
@@ -806,7 +908,7 @@ body {
   height: 100%;
   background: var(--oc-accent);
   border-radius: 2px;
-  transition: width 0.3s;
+  transition: width var(--oc-duration-slow) var(--oc-ease-smooth);
 }
 
 /* ─── INPUT ROW ─── */
@@ -856,8 +958,12 @@ body {
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  transition: background var(--oc-duration-fast), opacity var(--oc-duration-fast);
   flex-shrink: 0;
+}
+
+.input-action-btn:active {
+  animation: pressEffect var(--oc-duration-instant) var(--oc-ease-out);
 }
 
 #send-btn {
@@ -869,9 +975,14 @@ body {
   background: var(--oc-button-hover);
 }
 
+#send-btn:active {
+  animation: pressEffect var(--oc-duration-instant) var(--oc-ease-out);
+}
+
 #send-btn:disabled {
   opacity: 0.4;
   cursor: default;
+  animation: none;
 }
 
 #abort-btn {
@@ -881,6 +992,10 @@ body {
 
 #abort-btn:hover {
   opacity: 0.85;
+}
+
+#abort-btn:active {
+  animation: pressEffect var(--oc-duration-instant) var(--oc-ease-out);
 }
 
 /* ─── MENTION DROPDOWN ─── */
@@ -955,6 +1070,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  animation: overlayFadeIn var(--oc-duration-slow) var(--oc-ease-out);
+}
+
+.overlay.closing .overlay-dialog {
+  animation: dialogSlideDown var(--oc-duration-fast) var(--oc-ease-out) both;
 }
 
 .overlay-dialog {
@@ -968,6 +1088,7 @@ body {
   display: flex;
   flex-direction: column;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  animation: dialogSlideUp var(--oc-duration-slow) var(--oc-ease-out-spring) both;
 }
 
 .overlay-title {
@@ -1047,17 +1168,82 @@ body {
   display: none !important;
 }
 
+/* ─── SKELETON SHIMMER ─── */
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--oc-editor-bg) 0%,
+    rgba(128, 128, 128, 0.08) 40%,
+    rgba(128, 128, 128, 0.15) 50%,
+    rgba(128, 128, 128, 0.08) 60%,
+    var(--oc-editor-bg) 100%
+  );
+  background-size: 200px 100%;
+  animation: skeletonShimmer 1.5s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+.skeleton-line {
+  height: 12px;
+  margin-bottom: 8px;
+  width: 100%;
+}
+
+.skeleton-line:last-child {
+  width: 65%;
+}
+
+.skeleton-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 /* ─── ANIMATIONS ─── */
 
 @keyframes messageFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes skeletonShimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dialogSlideUp {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes dialogSlideDown {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(8px) scale(0.98); }
+}
+
+@keyframes badgePop {
+  0% { transform: scale(0.85); opacity: 0; }
+  60% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pressEffect {
+  0% { transform: scale(1); }
+  40% { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+
+@keyframes shimmerBackground {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
 }
 
 /* ─── SCROLLBAR ─── */
