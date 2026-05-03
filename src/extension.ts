@@ -1,5 +1,6 @@
 import * as vscode from "vscode"
 import { SessionManager } from "./session/SessionManager"
+import { ChatProvider } from "./chat/ChatProvider"
 
 let sessionManager: SessionManager
 
@@ -28,11 +29,12 @@ export function activate(context: vscode.ExtensionContext) {
     })
   )
 
-  // ChatProvider will be registered here in Task 7
-  // const chatProvider = new ChatProvider(context, sessionManager)
-  // context.subscriptions.push(
-  //   vscode.window.registerWebviewViewProvider("opencode-harness.chat", chatProvider)
-  // )
+  const chatProvider = new ChatProvider(context, sessionManager)
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider("opencode-harness.chat", chatProvider, {
+      webviewOptions: { retainContextWhenHidden: true },
+    })
+  )
 
   context.subscriptions.push({
     dispose: () => {

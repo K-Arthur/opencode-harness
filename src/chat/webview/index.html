@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
+  <link rel="stylesheet" href="styles.css">
+  <title>OpenCode Harness Chat</title>
+</head>
+<body>
+  <div id="app">
+    <div id="session-header">
+      <button id="session-history-btn" title="Session history">&#x1F4C1; History</button>
+      <button id="new-session-btn" title="New session">+</button>
+      <div id="session-title">New Session</div>
+    </div>
+    <div id="message-list"></div>
+    <div id="input-area">
+      <div id="mention-dropdown" class="dropdown hidden"></div>
+      <div id="mode-selector">
+        <button class="mode-btn active" data-mode="normal" title="Ask before each action">Normal</button>
+        <button class="mode-btn" data-mode="plan" title="Read-only, creates plan">Plan</button>
+        <button class="mode-btn" data-mode="acceptEdits" title="Apply without asking">Auto</button>
+      </div>
+      <textarea id="prompt-input" rows="3" placeholder="Ask OpenCode... (@file, @folder, @problems, @url, @terminal)"></textarea>
+      <button id="send-btn">Send</button>
+      <button id="abort-btn" class="hidden">Stop</button>
+    </div>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>
