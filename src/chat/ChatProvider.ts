@@ -2,6 +2,7 @@ import * as vscode from "vscode"
 import * as fs from "fs"
 import * as path from "path"
 import { SessionManager } from "../session/SessionManager"
+import { ContextEngine } from "../context/ContextEngine"
 import { DiffApplier } from "../diff/DiffApplier"
 
 export interface ChatMessage {
@@ -18,7 +19,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    private readonly sessionManager: SessionManager
+    private readonly sessionManager: SessionManager,
+    private readonly contextEngine: ContextEngine
   ) {}
 
   resolveWebviewView(
@@ -89,38 +91,38 @@ export class ChatProvider implements vscode.WebviewViewProvider {
   private async handleSendPrompt(text: string): Promise<void> {
     if (!this.sessionManager.isRunning) {
       try { await this.sessionManager.start() } catch (e) {
-        vscode.window.showErrorMessage(`Failed to start opencode: ${(e as Error).message}`)
+        vscode.window.showErrorMessage(`Failed to start: ${(e as Error).message}`)
         return
       }
     }
 
+    const ctxPkg = await this.contextEngine.gatherContext()
     const session = await this.sessionManager.createSession()
+
+    // Build context-enriched parts
+    const contextText = `<system>Open files: ${ctxPkg.openFiles.map(f => `${f.path} (${f.language})`).join(", ") || "none"}\n` +
+      `Branch: ${ctxPkg.gitStatus.branch}\nDiagnostics: ${ctxPkg.diagnostics.length} files with issues</system>`
+
     const response = await this.sessionManager.sendPrompt(session.id, [
+      { type: "text", text: contextText } as never,
       { type: "text", text } as never,
     ])
 
-    const parts = response.parts || []
-    const textParts = parts.filter((p: unknown) => (p as { type: string }).type === "text") as { type: string; text?: string }[]
-
-    // Build content blocks: text + diffs
+    // Build content blocks
     const contentBlocks: unknown[] = []
+    const parts = response.parts || []
     for (const part of parts) {
       if ((part as { type: string }).type === "text") {
         contentBlocks.push({ type: "text", text: (part as { text: string }).text })
       }
     }
 
-    // Parse code blocks and generate diffs
-    const edits = this.diffApplier.parseCodeBlocks(textParts)
+    // Parse code blocks for diffs
+    const textParts = parts.filter((p: unknown) => (p as { type: string }).type === "text") as { text?: string }[]
+    const edits = this.diffApplier.parseCodeBlocks(textParts as unknown as { type: string; text?: string }[])
     for (const edit of edits) {
       const diffText = await this.diffApplier.generateDiff(edit.filePath, edit.proposedContent)
-      contentBlocks.push({
-        type: "diff_block",
-        id: edit.blockId,
-        filePath: edit.filePath,
-        diffText,
-        messageId: String(response.info?.id || ""),
-      })
+      contentBlocks.push({ type: "diff_block", id: edit.blockId, filePath: edit.filePath, diffText, messageId: String(response.info?.id || "") })
     }
 
     this._view?.webview.postMessage({

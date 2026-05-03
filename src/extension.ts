@@ -1,11 +1,15 @@
 import * as vscode from "vscode"
 import { SessionManager } from "./session/SessionManager"
+import { ContextEngine } from "./context/ContextEngine"
 import { ChatProvider } from "./chat/ChatProvider"
 
 let sessionManager: SessionManager
 
 export function activate(context: vscode.ExtensionContext) {
   sessionManager = new SessionManager()
+
+  const contextEngine = new ContextEngine()
+  context.subscriptions.push(contextEngine)
 
   context.subscriptions.push(
     vscode.commands.registerCommand("opencode-harness.openChat", () => {
@@ -29,7 +33,7 @@ export function activate(context: vscode.ExtensionContext) {
     })
   )
 
-  const chatProvider = new ChatProvider(context, sessionManager)
+  const chatProvider = new ChatProvider(context, sessionManager, contextEngine)
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("opencode-harness.chat", chatProvider, {
       webviewOptions: { retainContextWhenHidden: true },
