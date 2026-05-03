@@ -44,7 +44,7 @@ export class SessionManager {
 
     const opencodePath = await this.findOpencodeBinary()
     if (!opencodePath) {
-      throw new Error("OpenCode binary not found on PATH. Install it from https://opencode.ai")
+      throw new Error("OpenCode is not installed. Install it from https://opencode.ai, then restart the extension.")
     }
 
     this.serverProcess = spawn(opencodePath, [
@@ -123,7 +123,7 @@ export class SessionManager {
       }
       await new Promise((r) => setTimeout(r, 200))
     }
-    throw new Error("Server failed to start within timeout")
+    throw new Error("OpenCode server did not start within 5 seconds. Check your network connection and firewall settings.")
   }
 
   private subscribeToEvents(): void {

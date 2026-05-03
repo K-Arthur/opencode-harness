@@ -70,7 +70,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
       vscode.commands.registerCommand(`opencode-harness.${action}`, async (uri: vscode.Uri) => {
         const doc = await vscode.workspace.openTextDocument(uri)
-        vscode.window.showInformationMessage(`${action.replace("Code", "")} triggered for ${vscode.workspace.asRelativePath(uri)}`)
+        vscode.window.showInformationMessage(`${action.replace("Code", "")} requested for ${vscode.workspace.asRelativePath(uri)}`)
       })
     )
   }

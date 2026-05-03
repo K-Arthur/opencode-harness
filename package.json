@@ -1,12 +1,12 @@
 {
   "name": "opencode-harness",
-  "displayName": "OpenCode Harness",
+  "displayName": "OpenCode",
   "publisher": "opencode-harness",
   "repository": {
     "type": "git",
     "url": "https://github.com/YOUR_USER/opencode-harness"
   },
-  "description": "Deep IDE integration for the OpenCode AI coding agent",
+  "description": "AI coding agent for your editor — write, refactor, test, and debug with natural language commands",
   "version": "0.0.1",
   "engines": { "vscode": "^1.98.0" },
   "categories": ["Chat", "AI"],
@@ -17,15 +17,15 @@
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
-      { "command": "opencode-harness.openChat", "title": "OpenCode Harness: Open Chat" },
-      { "command": "opencode-harness.newSession", "title": "OpenCode Harness: New Session" },
-      { "command": "opencode-harness.toggleFocus", "title": "OpenCode Harness: Toggle Chat Focus" },
-      { "command": "opencode-harness.explainCode", "title": "OpenCode Harness: Explain This Code" },
-      { "command": "opencode-harness.refactorCode", "title": "OpenCode Harness: Refactor This Code" },
-      { "command": "opencode-harness.generateTests", "title": "OpenCode Harness: Generate Tests" },
-      { "command": "opencode-harness.insertMention", "title": "OpenCode Harness: Insert @-Mention Reference" },
-      { "command": "opencode-harness.captureTerminal", "title": "OpenCode Harness: Capture Terminal Selection" },
-      { "command": "opencode-harness.rollback", "title": "OpenCode Harness: Rollback Workspace" }
+      { "command": "opencode-harness.openChat", "title": "OpenCode: Open Chat" },
+      { "command": "opencode-harness.newSession", "title": "OpenCode: New Session" },
+      { "command": "opencode-harness.toggleFocus", "title": "OpenCode: Toggle Chat Focus" },
+      { "command": "opencode-harness.explainCode", "title": "OpenCode: Explain Code" },
+      { "command": "opencode-harness.refactorCode", "title": "OpenCode: Refactor Code" },
+      { "command": "opencode-harness.generateTests", "title": "OpenCode: Generate Tests" },
+      { "command": "opencode-harness.insertMention", "title": "OpenCode: Insert File Reference" },
+      { "command": "opencode-harness.captureTerminal", "title": "OpenCode: Capture Terminal Output" },
+      { "command": "opencode-harness.rollback", "title": "OpenCode: Rollback Changes" }
     ],
     "keybindings": [
       { "command": "opencode-harness.toggleFocus", "key": "ctrl+alt+o" },

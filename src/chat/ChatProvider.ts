@@ -101,7 +101,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
   private async handleSendPrompt(text: string): Promise<void> {
     if (!this.sessionManager.isRunning) {
       try { await this.sessionManager.start() } catch (e) {
-        vscode.window.showErrorMessage(`Failed to start: ${(e as Error).message}`)
+        vscode.window.showErrorMessage(`Could not start OpenCode. ${(e as Error).message} Make sure 'opencode' is installed and on your PATH.`)
         return
       }
     }
@@ -110,8 +110,11 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     this.contextMonitor.updateTokens(estimateContextTokens(ctxPkg))
     const session = await this.sessionManager.createSession()
 
-    const contextText = `<system>Open files: ${ctxPkg.openFiles.map(f => `${f.path} (${f.language})`).join(", ") || "none"}\n` +
-      `Branch: ${ctxPkg.gitStatus.branch}\nDiagnostics: ${ctxPkg.diagnostics.length} files with issues</system>`
+    const contextText = `<context>
+Open files: ${ctxPkg.openFiles.map(f => `${f.path} (${f.language})`).join(", ") || "none"}
+Git branch: ${ctxPkg.gitStatus.branch}
+Diagnostics: ${ctxPkg.diagnostics.length} files with errors or warnings
+</context>`
 
     this.postMessage({
       type: "message",

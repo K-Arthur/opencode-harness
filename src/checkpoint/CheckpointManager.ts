@@ -68,7 +68,7 @@ export class CheckpointManager {
       vscode.window.showInformationMessage(`Restored to checkpoint ${checkpointId}`)
       return true
     } catch {
-      vscode.window.showErrorMessage("Failed to restore checkpoint.")
+      vscode.window.showErrorMessage("Could not restore checkpoint. The workspace may have changed since the snapshot was created.")
       return false
     }
   }

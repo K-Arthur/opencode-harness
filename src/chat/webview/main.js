@@ -448,24 +448,22 @@
 
     const acceptBtn = document.createElement("button");
     acceptBtn.className = "diff-btn diff-btn-accept";
-    acceptBtn.textContent = "Accept";
+    acceptBtn.textContent = "Accept Changes";
     acceptBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       vscode.postMessage({ type: "accept_diff", messageId, blockId: block.id });
       acceptBtn.textContent = "Accepted";
       acceptBtn.disabled = true;
-      rejectBtn.disabled = true;
     });
     actions.appendChild(acceptBtn);
 
     const rejectBtn = document.createElement("button");
     rejectBtn.className = "diff-btn diff-btn-reject";
-    rejectBtn.textContent = "Reject";
+    rejectBtn.textContent = "Discard";
     rejectBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       vscode.postMessage({ type: "reject_diff", messageId, blockId: block.id });
-      rejectBtn.textContent = "Rejected";
-      acceptBtn.disabled = true;
+      rejectBtn.textContent = "Discarded";
       rejectBtn.disabled = true;
     });
     actions.appendChild(rejectBtn);
@@ -482,7 +480,7 @@
 
     const text = document.createElement("div");
     text.className = "permission-text";
-    text.textContent = block.text || "Allow this action?";
+    text.textContent = block.text || "Allow OpenCode to perform this action?";
     wrapper.appendChild(text);
 
     const actions = document.createElement("div");
