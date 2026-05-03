@@ -7,6 +7,7 @@ import { DiffApplier } from "../diff/DiffApplier"
 import { ContextMonitor } from "../monitor/ContextMonitor"
 import { estimateContextTokens } from "../utils/tokenCounter"
 import { ThemeManager, type ThemeVariables } from "../theme/ThemeManager"
+import { RateLimitMonitor } from "../monitor/RateLimitMonitor"
 
 export interface ChatMessage {
   role: "user" | "assistant" | "system"
@@ -30,7 +31,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     private readonly sessionManager: SessionManager,
     private readonly contextEngine: ContextEngine,
     private readonly contextMonitor: ContextMonitor,
-    private readonly themeManager: ThemeManager
+    private readonly themeManager: ThemeManager,
+    private readonly rateLimitMonitor: RateLimitMonitor
   ) {}
 
   resolveWebviewView(
@@ -55,6 +57,10 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     // Listen for theme changes
     this.themeManager.onThemeChanged(() => {
       this.pushThemeToWebview()
+    })
+
+    this.rateLimitMonitor.onWarning((msg) => {
+      vscode.window.showWarningMessage(msg)
     })
 
     webviewView.webview.onDidReceiveMessage(async (msg: Record<string, unknown>) => {
@@ -159,6 +165,19 @@ Diagnostics: ${ctxPkg.diagnostics.length} files with errors or warnings
       { type: "text", text: contextText } as never,
       { type: "text", text } as never,
     ])
+
+    // Track token usage for rate limit monitoring
+    const msgInfo = response.info as { usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number } } | undefined
+    if (msgInfo?.usage) {
+      const inputTokens = (msgInfo.usage.input_tokens || 0) + (msgInfo.usage.cache_read_input_tokens || 0)
+      const outputTokens = msgInfo.usage.output_tokens || 0
+      this.rateLimitMonitor.recordTokenUsage(inputTokens, outputTokens)
+    }
+
+    // Check if exhausted — disable input
+    if (this.rateLimitMonitor.isExhausted) {
+      this.postMessage({ type: "rate_limit_exhausted", resetAt: this.rateLimitMonitor.getState()?.resetAt?.toLocaleTimeString() })
+    }
 
     const parts = response.parts || []
 

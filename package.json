@@ -25,7 +25,8 @@
       { "command": "opencode-harness.generateTests", "title": "OpenCode: Generate Tests" },
       { "command": "opencode-harness.insertMention", "title": "OpenCode: Insert File Reference" },
       { "command": "opencode-harness.captureTerminal", "title": "OpenCode: Capture Terminal Output" },
-      { "command": "opencode-harness.rollback", "title": "OpenCode: Rollback Changes" }
+      { "command": "opencode-harness.rollback", "title": "OpenCode: Rollback Changes" },
+      { "command": "opencode-harness.showRateLimits", "title": "OpenCode: Show Rate Limits" }
     ],
     "keybindings": [
       { "command": "opencode-harness.toggleFocus", "key": "ctrl+alt+o" },
@@ -33,7 +34,7 @@
       { "command": "opencode-harness.insertMention", "key": "alt+k", "when": "editorTextFocus" }
     ],
     "viewsContainers": {
-      "activitybar": [{
+      "auxiliarybar": [{
         "id": "opencode-harness",
         "title": "OpenCode Harness",
         "icon": "$(symbol-operator)"
@@ -77,6 +78,28 @@
             }
           }
         }
+      },
+      "opencode.rateLimits": {
+        "type": "object",
+        "default": {},
+        "description": "Fallback rate limit configuration per provider. Set tokensPerMin and requestsPerMin for providers that don't return headers (e.g. openai, anthropic).",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "tokensPerMin": { "type": "number", "default": 100000, "description": "Maximum tokens per minute for this provider" },
+            "requestsPerMin": { "type": "number", "default": 50, "description": "Maximum requests per minute for this provider" }
+          }
+        }
+      },
+      "opencode.rateLimitWarningThreshold": {
+        "type": "number",
+        "default": 0.1,
+        "description": "Fraction of remaining rate limit that triggers a warning notification (0.0–1.0)"
+      },
+      "opencode.rateLimitCriticalThreshold": {
+        "type": "number",
+        "default": 0.05,
+        "description": "Fraction of remaining rate limit that triggers a critical warning (0.0–1.0)"
       }
     }
   },

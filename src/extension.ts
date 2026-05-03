@@ -8,6 +8,7 @@ import { SkillManager } from "./skills/SkillManager"
 import { InlineActionProvider } from "./inline/InlineActionProvider"
 import { ChatProvider } from "./chat/ChatProvider"
 import { ThemeManager } from "./theme/ThemeManager"
+import { RateLimitMonitor } from "./monitor/RateLimitMonitor"
 
 let sessionManager: SessionManager
 
@@ -22,6 +23,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   const themeManager = new ThemeManager()
   context.subscriptions.push(themeManager)
+
+  const rateLimitMonitor = new RateLimitMonitor()
+  context.subscriptions.push(rateLimitMonitor)
 
   const terminalBridge = new TerminalBridge()
   context.subscriptions.push(terminalBridge)
@@ -107,7 +111,13 @@ export function activate(context: vscode.ExtensionContext) {
     })
   )
 
-  const chatProvider = new ChatProvider(context, sessionManager, contextEngine, contextMonitor, themeManager)
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.showRateLimits", () => {
+      rateLimitMonitor.showDetail()
+    })
+  )
+
+  const chatProvider = new ChatProvider(context, sessionManager, contextEngine, contextMonitor, themeManager, rateLimitMonitor)
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("opencode-harness.chat", chatProvider, {
       webviewOptions: { retainContextWhenHidden: true },

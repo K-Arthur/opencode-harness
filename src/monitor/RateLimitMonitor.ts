@@ -1,0 +1,318 @@
+import * as vscode from "vscode"
+
+export interface RateLimitState {
+  provider: string
+  remainingTokens?: number
+  limitTokens?: number
+  remainingRequests?: number
+  limitRequests?: number
+  remainingInputTokens?: number
+  limitInputTokens?: number
+  remainingOutputTokens?: number
+  limitOutputTokens?: number
+  resetAt?: Date
+  lastUpdated: Date
+}
+
+export interface RateLimitAdapter {
+  name: string
+  parseFromHeaders(headers: Record<string, string>): RateLimitState | null
+}
+
+export const OPENAI_ADAPTER: RateLimitAdapter = {
+  name: "openai",
+  parseFromHeaders(headers): RateLimitState | null {
+    const remainingReqs = headers["x-ratelimit-remaining-requests"]
+    const remainingTokens = headers["x-ratelimit-remaining-tokens"]
+    const limitReqs = headers["x-ratelimit-limit-requests"]
+    const limitToks = headers["x-ratelimit-limit-tokens"]
+    const resetReqs = headers["x-ratelimit-reset-requests"]
+
+    if (!remainingReqs && !remainingTokens) return null
+
+    return {
+      provider: "openai",
+      remainingRequests: remainingReqs ? parseInt(remainingReqs, 10) : undefined,
+      limitRequests: limitReqs ? parseInt(limitReqs, 10) : undefined,
+      remainingTokens: remainingTokens ? parseInt(remainingTokens, 10) : undefined,
+      limitTokens: limitToks ? parseInt(limitToks, 10) : undefined,
+      resetAt: resetReqs ? parseDuration(resetReqs) : undefined,
+      lastUpdated: new Date(),
+    }
+  },
+}
+
+export const ANTHROPIC_ADAPTER: RateLimitAdapter = {
+  name: "anthropic",
+  parseFromHeaders(headers): RateLimitState | null {
+    const remainingReqs = headers["anthropic-ratelimit-requests-remaining"]
+    const remainingTokens = headers["anthropic-ratelimit-tokens-remaining"]
+    const limitReqs = headers["anthropic-ratelimit-requests-limit"]
+    const limitToks = headers["anthropic-ratelimit-tokens-limit"]
+    const resetReqs = headers["anthropic-ratelimit-requests-reset"]
+    const remainingInput = headers["anthropic-ratelimit-input-tokens-remaining"]
+    const remainingOutput = headers["anthropic-ratelimit-output-tokens-remaining"]
+    const limitInput = headers["anthropic-ratelimit-input-tokens-limit"]
+    const limitOutput = headers["anthropic-ratelimit-output-tokens-limit"]
+
+    if (!remainingReqs && !remainingTokens && !remainingInput) return null
+
+    return {
+      provider: "anthropic",
+      remainingRequests: remainingReqs ? parseInt(remainingReqs, 10) : undefined,
+      limitRequests: limitReqs ? parseInt(limitReqs, 10) : undefined,
+      remainingTokens: remainingTokens ? parseInt(remainingTokens, 10) : undefined,
+      limitTokens: limitToks ? parseInt(limitToks, 10) : undefined,
+      remainingInputTokens: remainingInput ? parseInt(remainingInput, 10) : undefined,
+      remainingOutputTokens: remainingOutput ? parseInt(remainingOutput, 10) : undefined,
+      limitInputTokens: limitInput ? parseInt(limitInput, 10) : undefined,
+      limitOutputTokens: limitOutput ? parseInt(limitOutput, 10) : undefined,
+      resetAt: resetReqs ? new Date(resetReqs) : undefined,
+      lastUpdated: new Date(),
+    }
+  },
+}
+
+export const GENERIC_ADAPTER: RateLimitAdapter = {
+  name: "generic",
+  parseFromHeaders(headers): RateLimitState | null {
+    const remaining = headers["ratelimit-remaining"]
+    const limit = headers["ratelimit-limit"]
+    const reset = headers["ratelimit-reset"]
+
+    if (!remaining && !limit) return null
+
+    return {
+      provider: "generic",
+      remainingRequests: remaining ? parseInt(remaining, 10) : undefined,
+      limitRequests: limit ? parseInt(limit, 10) : undefined,
+      resetAt: reset ? new Date(reset) : undefined,
+      lastUpdated: new Date(),
+    }
+  },
+}
+
+export const ADAPTERS: RateLimitAdapter[] = [
+  ANTHROPIC_ADAPTER,
+  OPENAI_ADAPTER,
+  GENERIC_ADAPTER,
+]
+
+function parseDuration(duration: string): Date {
+  const match = duration.match(/^(\d+)([smhd])$/)
+  if (!match) return new Date(Date.now() + 60000)
+  const val = parseInt(match[1], 10)
+  const unit = match[2]
+  const ms = { s: 1000, m: 60000, h: 3600000, d: 86400000 }[unit] || 60000
+  return new Date(Date.now() + val * ms)
+}
+
+export class RateLimitMonitor {
+  private _onStateChanged = new vscode.EventEmitter<RateLimitState | null>()
+  readonly onStateChanged = this._onStateChanged.event
+
+  private _onWarning = new vscode.EventEmitter<string>()
+  readonly onWarning = this._onWarning.event
+
+  private state: RateLimitState | null = null
+  private cumulativeInputTokens = 0
+  private cumulativeOutputTokens = 0
+  private lastResetTime = Date.now()
+  private warnedLowTokens = false
+  private warnedExhausted = false
+
+  private statusBarItem: vscode.StatusBarItem
+  private warningThreshold = 0.1
+  private criticalThreshold = 0.05
+  private providerLimits: Record<string, { tokensPerMin: number; requestsPerMin: number }> = {}
+
+  constructor() {
+    this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99)
+    this.statusBarItem.name = "OpenCode Rate Limit"
+    this.statusBarItem.command = "opencode-harness.showRateLimits"
+    this.loadConfig()
+
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration("opencode.rateLimits")) this.loadConfig()
+    })
+  }
+
+  private loadConfig(): void {
+    const config = vscode.workspace.getConfiguration("opencode")
+    const limits = config.get<Record<string, { tokensPerMin?: number; requestsPerMin?: number }>>("rateLimits")
+    if (limits) {
+      for (const [provider, vals] of Object.entries(limits)) {
+        this.providerLimits[provider] = {
+          tokensPerMin: vals.tokensPerMin || 100000,
+          requestsPerMin: vals.requestsPerMin || 50,
+        }
+      }
+    }
+    this.warningThreshold = config.get("rateLimitWarningThreshold", 0.1)
+    this.criticalThreshold = config.get("rateLimitCriticalThreshold", 0.05)
+  }
+
+  updateFromHeaders(headers: Record<string, string>): void {
+    for (const adapter of ADAPTERS) {
+      const parsed = adapter.parseFromHeaders(headers)
+      if (parsed) {
+        this.state = parsed
+        this.evaluate()
+        this._onStateChanged.fire(this.state)
+        this.updateStatusBar()
+        return
+      }
+    }
+  }
+
+  recordTokenUsage(inputTokens: number, outputTokens: number): void {
+    this.cumulativeInputTokens += inputTokens
+    this.cumulativeOutputTokens += outputTokens
+
+    const elapsed = (Date.now() - this.lastResetTime) / 1000
+    const windowSeconds = 60
+    if (elapsed > windowSeconds) {
+      this.cumulativeInputTokens = inputTokens
+      this.cumulativeOutputTokens = outputTokens
+      this.lastResetTime = Date.now()
+      this.warnedLowTokens = false
+      this.warnedExhausted = false
+    }
+
+    const provider = this.state?.provider || "unknown"
+    const limits = this.providerLimits[provider]
+    if (limits) {
+      const tokensPerMin = this.cumulativeInputTokens + this.cumulativeOutputTokens
+      const ratio = tokensPerMin / limits.tokensPerMin
+      this.state = {
+        ...(this.state || { provider, lastUpdated: new Date() }),
+        remainingTokens: Math.max(0, Math.round((1 - ratio) * limits.tokensPerMin)),
+        limitTokens: limits.tokensPerMin,
+        remainingRequests: Math.max(0, Math.round((1 - ratio) * limits.requestsPerMin)),
+        limitRequests: limits.requestsPerMin,
+        lastUpdated: new Date(),
+      }
+      this.evaluate()
+      this._onStateChanged.fire(this.state)
+      this.updateStatusBar()
+    }
+  }
+
+  private evaluate(): void {
+    if (!this.state) return
+
+    const tokenRatio = this.state.remainingTokens !== undefined && this.state.limitTokens
+      ? this.state.remainingTokens / this.state.limitTokens
+      : 1
+
+    if (tokenRatio <= this.criticalThreshold && !this.warnedExhausted) {
+      this.warnedExhausted = true
+      const resetStr = this.state.resetAt
+        ? ` Reset at ${this.state.resetAt.toLocaleTimeString()}.`
+        : ""
+      this._onWarning.fire(`Rate limit nearly exhausted (${Math.round(tokenRatio * 100)}% remaining).${resetStr} Consider reducing context size.`)
+    } else if (tokenRatio <= this.warningThreshold && !this.warnedLowTokens && !this.warnedExhausted) {
+      this.warnedLowTokens = true
+      this._onWarning.fire(`Low rate limit — ${Math.round(tokenRatio * 100)}% tokens remaining.`)
+    }
+  }
+
+  private updateStatusBar(): void {
+    if (!this.state) {
+      this.statusBarItem.hide()
+      return
+    }
+
+    const tokens = this.state.remainingTokens
+    const requests = this.state.remainingRequests
+    const limitT = this.state.limitTokens
+
+    if (tokens !== undefined && limitT) {
+      const pct = Math.round((tokens / limitT) * 100)
+      const icon = pct > 50 ? "\u25D4" : pct > 10 ? "\u25D5" : "\u25D7"
+      this.statusBarItem.text = `${icon} ${pct}%`
+      this.statusBarItem.tooltip = this.buildTooltip()
+      this.statusBarItem.color = pct > 50
+        ? undefined
+        : pct > 10
+          ? new vscode.ThemeColor("statusBarItem.warningForeground")
+          : new vscode.ThemeColor("statusBarItem.errorForeground")
+      this.statusBarItem.show()
+    } else if (requests !== undefined) {
+      this.statusBarItem.text = `\u23F1 ${requests} req`
+      this.statusBarItem.tooltip = this.buildTooltip()
+      this.statusBarItem.show()
+    } else {
+      this.statusBarItem.hide()
+    }
+  }
+
+  get isExhausted(): boolean {
+    if (!this.state) return false
+    if (this.state.remainingTokens !== undefined && this.state.remainingTokens <= 0) return true
+    if (this.state.remainingRequests !== undefined && this.state.remainingRequests <= 0) return true
+    return false
+  }
+
+  getState(): RateLimitState | null {
+    return this.state
+  }
+
+  showDetail(): void {
+    if (!this.state) {
+      vscode.window.showInformationMessage("No rate limit data available yet. Send a prompt to populate.")
+      return
+    }
+    const items: vscode.QuickPickItem[] = []
+    const s = this.state
+
+    items.push({ label: "Provider", description: s.provider })
+    if (s.limitTokens !== undefined && s.remainingTokens !== undefined) {
+      items.push({
+        label: "Tokens Remaining",
+        description: `${s.remainingTokens.toLocaleString()} / ${s.limitTokens.toLocaleString()}`,
+      })
+    }
+    if (s.limitRequests !== undefined && s.remainingRequests !== undefined) {
+      items.push({
+        label: "Requests Remaining",
+        description: `${s.remainingRequests} / ${s.limitRequests}`,
+      })
+    }
+    if (s.remainingInputTokens !== undefined) {
+      items.push({ label: "Input Tokens Remaining", description: s.remainingInputTokens.toLocaleString() })
+    }
+    if (s.remainingOutputTokens !== undefined) {
+      items.push({ label: "Output Tokens Remaining", description: s.remainingOutputTokens.toLocaleString() })
+    }
+    if (s.resetAt) {
+      items.push({ label: "Reset At", description: s.resetAt.toLocaleTimeString() })
+    }
+    items.push({ label: "Last Updated", description: s.lastUpdated.toLocaleTimeString() })
+
+    vscode.window.showQuickPick(items, { placeHolder: "Rate Limit Details" })
+  }
+
+  private buildTooltip(): string {
+    if (!this.state) return "No rate limit data"
+    const parts: string[] = [`Provider: ${this.state.provider}`]
+    if (this.state.remainingTokens !== undefined && this.state.limitTokens !== undefined) {
+      const pct = Math.round((this.state.remainingTokens / this.state.limitTokens) * 100)
+      parts.push(`Tokens: ${this.state.remainingTokens.toLocaleString()} / ${this.state.limitTokens.toLocaleString()} (${pct}%)`)
+    }
+    if (this.state.remainingRequests !== undefined && this.state.limitRequests !== undefined) {
+      parts.push(`Requests: ${this.state.remainingRequests} / ${this.state.limitRequests}`)
+    }
+    if (this.state.resetAt) {
+      parts.push(`Reset: ${this.state.resetAt.toLocaleTimeString()}`)
+    }
+    parts.push(`Updated: ${this.state.lastUpdated.toLocaleTimeString()}`)
+    return parts.join("\n")
+  }
+
+  dispose(): void {
+    this.statusBarItem.dispose()
+    this._onStateChanged.dispose()
+    this._onWarning.dispose()
+  }
+}

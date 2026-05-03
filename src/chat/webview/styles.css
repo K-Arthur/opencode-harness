@@ -302,8 +302,9 @@ body {
 
 .message {
   display: flex;
-  flex-direction: column;
-  max-width: 85%;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 100%;
   animation: messageFadeIn var(--oc-duration-slow) var(--oc-ease-out) both;
 }
 
@@ -311,21 +312,57 @@ body {
 .message:nth-child(2) { animation-delay: 40ms; }
 .message:nth-child(3) { animation-delay: 80ms; }
 .message:nth-child(4) { animation-delay: 120ms; }
-.message:nth-child(5) { animation-delay: 160ms; }
-.message:nth-child(6) { animation-delay: 200ms; }
 
 .message.user {
-  align-self: flex-end;
-  background: var(--oc-user-msg-bg, var(--oc-button-bg));
-  color: var(--oc-user-msg-fg, var(--oc-button-fg));
-  border-radius: 12px 12px 4px 12px;
-  padding: 10px 14px;
+  flex-direction: row-reverse;
 }
 
-.message.assistant {
-  align-self: flex-start;
-  border-radius: 12px 12px 12px 4px;
-  padding: 8px 4px;
+.message-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--oc-editor-bg);
+  border: 1px solid var(--oc-border);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.user .message-avatar {
+  background: var(--oc-button-bg);
+  color: var(--oc-button-fg);
+  border-color: transparent;
+}
+
+.message-content {
+  display: flex;
+  flex-direction: column;
+  max-width: calc(100% - 40px);
+  gap: 4px;
+}
+
+.user .message-content {
+  align-items: flex-end;
+}
+
+.message-bubble {
+  background: var(--oc-editor-bg);
+  border: 1px solid var(--oc-border);
+  border-radius: 4px 16px 16px 16px;
+  padding: 10px 14px;
+  color: var(--oc-fg);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+  width: fit-content;
+}
+
+.user .message-bubble {
+  background: var(--oc-user-msg-bg, var(--oc-button-bg));
+  color: var(--oc-user-msg-fg, var(--oc-button-fg));
+  border: none;
+  border-radius: 16px 4px 16px 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
 }
 
 .message.system {
@@ -343,23 +380,23 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   font-size: 11px;
   color: var(--oc-muted);
 }
 
 .user .message-header {
-  color: inherit;
-  opacity: 0.8;
+  flex-direction: row-reverse;
 }
 
 .message-role {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .message-timestamp {
   opacity: 0.6;
 }
+
 
 /* ─── MESSAGE BLOCKS ─── */
 
@@ -1169,6 +1206,19 @@ body {
 }
 
 /* ─── SKELETON SHIMMER ─── */
+
+.rate-limit-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin: 4px 0;
+  font-size: 12px;
+  color: var(--oc-error);
+  background: rgba(248, 81, 73, 0.08);
+  border-radius: 6px;
+  border: 1px solid rgba(248, 81, 73, 0.2);
+}
 
 .skeleton-shimmer {
   background: linear-gradient(
