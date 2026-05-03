@@ -28,6 +28,7 @@ modeButtons.forEach((btn) => {
 // Send on Enter (Shift+Enter for newline)
 promptInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
+    if (!mentionDropdown.classList.contains("hidden")) return
     e.preventDefault()
     sendMessage()
   }
@@ -228,6 +229,12 @@ function renderMentionResults(items) {
     const div = document.createElement("div")
     div.className = `dropdown-item${i === 0 ? " selected" : ""}`
     div.textContent = `${item.prefix || ""}${item.display || ""}`
+    if (item.description) {
+      const desc = document.createElement("span")
+      desc.className = "dropdown-desc"
+      desc.textContent = " \u2014 " + item.description
+      div.appendChild(desc)
+    }
     div.addEventListener("click", () => {
       const val = promptInput.value
       const cursor = promptInput.selectionStart
