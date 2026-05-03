@@ -26,10 +26,13 @@ export class ContextMonitor {
     this.statusBarItem.tooltip = `OpenCode Harness — ~${Math.round(this.currentTokens / 1000)}k / ${Math.round(this.tokenLimit / 1000)}k tokens`
     if (percentage > 90) {
       this.statusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.errorBackground")
+      this.statusBarItem.color = new vscode.ThemeColor("errorForeground")
     } else if (percentage > 75) {
       this.statusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground")
+      this.statusBarItem.color = new vscode.ThemeColor("list.warningForeground")
     } else {
       this.statusBarItem.backgroundColor = undefined
+      this.statusBarItem.color = new vscode.ThemeColor("charts.green")
     }
   }
 

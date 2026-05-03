@@ -13,7 +13,10 @@ export class SkillManager implements vscode.TreeDataProvider<{ id: string; name:
   getTreeItem(element: { id: string; name: string; description: string; enabled: boolean }): vscode.TreeItem {
     const item = new vscode.TreeItem(element.name, vscode.TreeItemCollapsibleState.None)
     item.description = element.description
-    item.iconPath = new vscode.ThemeIcon(element.enabled ? "check" : "circle-slash")
+    item.iconPath = new vscode.ThemeIcon(
+      element.enabled ? "check" : "circle-slash",
+      new vscode.ThemeColor(element.enabled ? "testing.iconPassed" : "testing.iconFailed")
+    )
     item.contextValue = element.enabled ? "enabled-skill" : "disabled-skill"
     return item
   }

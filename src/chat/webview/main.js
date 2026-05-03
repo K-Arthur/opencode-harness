@@ -1,3 +1,5 @@
+import hljs from 'highlight.js';
+
 (function () {
   "use strict";
 
@@ -333,28 +335,19 @@
   }
 
   function highlightSyntax(code, language) {
-    const escaped = code
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-
-    const kwMap = {
-      js: /\b(async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|export|extends|finally|for|function|if|import|in|instanceof|let|new|of|return|static|super|switch|this|throw|try|typeof|var|void|while|with|yield)\b/g,
-      ts: /\b(async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally|for|function|if|implements|import|in|instanceof|interface|let|new|of|package|private|protected|public|return|static|super|switch|this|throw|try|type|typeof|var|void|while|with|yield)\b/g,
-      py: /\b(and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield|True|False|None)\b/g,
-      rs: /\b(as|async|await|break|const|crate|dyn|else|enum|extern|false|fn|for|if|impl|in|let|loop|match|mod|move|mut|pub|ref|return|self|static|struct|super|trait|true|type|unsafe|use|where|while)\b/g,
-      go: /\b(break|case|chan|const|continue|default|defer|else|fallthrough|for|func|go|goto|if|import|interface|map|package|range|return|select|struct|switch|type|var)\b/g,
-      java: /\b(abstract|boolean|break|byte|case|catch|char|class|continue|default|do|double|else|enum|extends|final|finally|float|for|if|implements|import|instanceof|int|interface|long|native|new|package|private|protected|public|return|short|static|strictfp|super|switch|synchronized|this|throw|throws|transient|try|void|volatile|while)\b/g,
-    };
-
-    const keywords = kwMap[language] || /\b(function|class|import|return|const|let|var|if|else|for|while|try|catch|async|await)\b/g;
-
-    return escaped
-      .replace(/(\/\/[^\n]*)/g, '<span class="hl-comment">$1</span>')
-      .replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="hl-comment">$1</span>')
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/g, '<span class="hl-string">$1</span>')
-      .replace(keywords, '<span class="hl-keyword">$1</span>')
-      .replace(/\b(\d+\.?\d*)\b/g, '<span class="hl-number">$1</span>');
+    if (language && hljs.getLanguage(language)) {
+      try {
+        return hljs.highlight(code, { language }).value;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    // Fallback to auto-detect or plain text if language is unknown
+    try {
+      return hljs.highlightAuto(code).value;
+    } catch (e) {
+      return code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
   }
 
   /* ─── THINKING BLOCK ─── */
@@ -849,6 +842,9 @@
         case "theme_vars":
           applyThemeVars(msg.vars);
           break;
+        case "model_update":
+          updateModelIndicator(msg.model);
+          break;
         case "rate_limit_exhausted":
           handleRateLimitExhausted(msg);
           break;
@@ -989,6 +985,18 @@
       if (typeof val === "string") {
         root.style.setProperty(key, val);
       }
+    }
+  }
+
+  function updateModelIndicator(model) {
+    const indicator = document.getElementById("model-indicator");
+    if (!indicator) return;
+    if (model) {
+      const short = model.split("/").pop() || model;
+      indicator.textContent = short;
+      indicator.title = "Model: " + model;
+    } else {
+      indicator.textContent = "";
     }
   }
 

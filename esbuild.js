@@ -3,7 +3,7 @@ const esbuild = require("esbuild")
 const watch = process.argv.includes("--watch")
 const production = process.argv.includes("--production")
 
-const config = {
+const extensionConfig = {
   entryPoints: ["src/extension.ts"],
   bundle: true,
   external: ["vscode"],
@@ -16,8 +16,26 @@ const config = {
   logLevel: "info",
 }
 
+const webviewConfig = {
+  entryPoints: [{ in: "src/chat/webview/main.js", out: "chat/webview/main" }],
+  bundle: true,
+  format: "iife",
+  platform: "browser",
+  outdir: "dist",
+  sourcemap: !production,
+  minify: production,
+  treeShaking: true,
+  logLevel: "info",
+}
+
 if (watch) {
-  esbuild.context(config).then((ctx) => ctx.watch())
+  Promise.all([
+    esbuild.context(extensionConfig).then(ctx => ctx.watch()),
+    esbuild.context(webviewConfig).then(ctx => ctx.watch())
+  ])
 } else {
-  esbuild.build(config).catch(() => process.exit(1))
+  Promise.all([
+    esbuild.build(extensionConfig),
+    esbuild.build(webviewConfig)
+  ]).catch(() => process.exit(1))
 }

@@ -91,18 +91,19 @@ Set your theme in VS Code `settings.json`:
 }
 ```
 
-### CLI Theme Discovery
+### CLI Theme Parity
 
-OpenCode automatically discovers themes installed for the opencode CLI. If you have themes in any of these locations, they will be picked up as color overrides:
+OpenCode automatically discovers the active theme installed for the `opencode` CLI. It reads your `tui.json` to find the active theme name and loads the corresponding theme `.json` file from your workspace or global config. 
 
-- `~/.config/opencode/themes/*.json`
-- `~/.opencode/themes/*.json`
-- `$XDG_CONFIG_HOME/opencode/themes/*.json`
+The resolution order is:
+1. **Workspace Config**: `<project-root>/.opencode/tui.json` and `<project-root>/.opencode/themes/<theme>.json`
+2. **Global Config**: `~/.config/opencode/tui.json` and `~/.config/opencode/themes/<theme>.json` (or `$XDG_CONFIG_HOME`)
 
-Themes are merged in this order (later overrides earlier):
-1. Built-in preset
-2. CLI theme files
-3. Settings `overrides`
+Colors are merged in this order (later overrides earlier):
+1. Built-in VS Code dynamic tokens
+2. OpenCode preset (if specified)
+3. Active CLI theme file (resolved from `tui.json`)
+4. VS Code Settings `opencode.theme.overrides`
 
 ## Rate Limit Monitoring
 

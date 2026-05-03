@@ -8,8 +8,13 @@
   },
   "description": "AI coding agent for your editor — write, refactor, test, and debug with natural language commands",
   "version": "0.0.1",
-  "engines": { "vscode": "^1.98.0" },
-  "categories": ["Chat", "AI"],
+  "engines": {
+    "vscode": "^1.98.0"
+  },
+  "categories": [
+    "Chat",
+    "AI"
+  ],
   "activationEvents": [
     "onView:opencode-harness.chat",
     "onCommand:opencode-harness.openChat"
@@ -17,41 +22,117 @@
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
-      { "command": "opencode-harness.openChat", "title": "OpenCode: Open Chat" },
-      { "command": "opencode-harness.newSession", "title": "OpenCode: New Session" },
-      { "command": "opencode-harness.toggleFocus", "title": "OpenCode: Toggle Chat Focus" },
-      { "command": "opencode-harness.explainCode", "title": "OpenCode: Explain Code" },
-      { "command": "opencode-harness.refactorCode", "title": "OpenCode: Refactor Code" },
-      { "command": "opencode-harness.generateTests", "title": "OpenCode: Generate Tests" },
-      { "command": "opencode-harness.insertMention", "title": "OpenCode: Insert File Reference" },
-      { "command": "opencode-harness.captureTerminal", "title": "OpenCode: Capture Terminal Output" },
-      { "command": "opencode-harness.rollback", "title": "OpenCode: Rollback Changes" },
-      { "command": "opencode-harness.showRateLimits", "title": "OpenCode: Show Rate Limits" }
+      {
+        "command": "opencode-harness.openChat",
+        "title": "OpenCode: Open Chat"
+      },
+      {
+        "command": "opencode-harness.newSession",
+        "title": "OpenCode: New Session"
+      },
+      {
+        "command": "opencode-harness.toggleFocus",
+        "title": "OpenCode: Toggle Chat Focus"
+      },
+      {
+        "command": "opencode-harness.explainCode",
+        "title": "OpenCode: Explain Code"
+      },
+      {
+        "command": "opencode-harness.refactorCode",
+        "title": "OpenCode: Refactor Code"
+      },
+      {
+        "command": "opencode-harness.generateTests",
+        "title": "OpenCode: Generate Tests"
+      },
+      {
+        "command": "opencode-harness.insertMention",
+        "title": "OpenCode: Insert File Reference"
+      },
+      {
+        "command": "opencode-harness.captureTerminal",
+        "title": "OpenCode: Capture Terminal Output"
+      },
+      {
+        "command": "opencode-harness.rollback",
+        "title": "OpenCode: Rollback Changes"
+      },
+      {
+        "command": "opencode-harness.showRateLimits",
+        "title": "OpenCode: Show Rate Limits"
+      },
+      {
+        "command": "opencode-harness.selectModel",
+        "title": "OpenCode: Select Model"
+      },
+      {
+        "command": "opencode-harness.checkCli",
+        "title": "OpenCode: Check CLI Communication"
+      },
+      {
+        "command": "opencode-harness.listSessions",
+        "title": "OpenCode: List Sessions"
+      }
     ],
     "keybindings": [
-      { "command": "opencode-harness.toggleFocus", "key": "ctrl+alt+o" },
-      { "command": "opencode-harness.newSession", "key": "ctrl+alt+n" },
-      { "command": "opencode-harness.insertMention", "key": "alt+k", "when": "editorTextFocus" }
+      {
+        "command": "opencode-harness.toggleFocus",
+        "key": "ctrl+alt+o"
+      },
+      {
+        "command": "opencode-harness.newSession",
+        "key": "ctrl+alt+n"
+      },
+      {
+        "command": "opencode-harness.insertMention",
+        "key": "alt+k",
+        "when": "editorTextFocus"
+      }
     ],
     "viewsContainers": {
-      "auxiliarybar": [{
-        "id": "opencode-harness",
-        "title": "OpenCode Harness",
-        "icon": "$(symbol-operator)"
-      }]
+      "auxiliarybar": [
+        {
+          "id": "opencode-harness",
+          "title": "OpenCode Harness",
+          "icon": "$(symbol-operator)"
+        }
+      ]
     },
     "views": {
       "opencode-harness": [
-        { "id": "opencode-harness.chat", "name": "Chat", "type": "webview" },
-        { "id": "opencode-harness.sessions", "name": "Sessions" },
-        { "id": "opencode-harness.skills", "name": "Skills" }
+        {
+          "id": "opencode-harness.chat",
+          "name": "Chat",
+          "type": "webview"
+        },
+        {
+          "id": "opencode-harness.sessions",
+          "name": "Sessions"
+        },
+        {
+          "id": "opencode-harness.skills",
+          "name": "Skills"
+        }
       ]
     },
     "menus": {
       "editor/context": [
-        { "command": "opencode-harness.explainCode", "group": "opencode@1", "when": "editorHasSelection" },
-        { "command": "opencode-harness.refactorCode", "group": "opencode@2", "when": "editorHasSelection" },
-        { "command": "opencode-harness.generateTests", "group": "opencode@3", "when": "editorHasSelection" }
+        {
+          "command": "opencode-harness.explainCode",
+          "group": "opencode@1",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "opencode-harness.refactorCode",
+          "group": "opencode@2",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "opencode-harness.generateTests",
+          "group": "opencode@3",
+          "when": "editorHasSelection"
+        }
       ]
     }
   },
@@ -60,12 +141,20 @@
     "properties": {
       "opencode.theme": {
         "type": "object",
-        "default": { "preset": "cli-default", "overrides": {} },
+        "default": {
+          "preset": "cli-default",
+          "overrides": {}
+        },
         "description": "Theme configuration for the OpenCode chat panel. Set 'preset' to one of: cli-default, light, dark, high-contrast. Add 'overrides' with specific color overrides.",
         "properties": {
           "preset": {
             "type": "string",
-            "enum": ["cli-default", "light", "dark", "high-contrast"],
+            "enum": [
+              "cli-default",
+              "light",
+              "dark",
+              "high-contrast"
+            ],
             "default": "cli-default",
             "description": "Base theme preset"
           },
@@ -85,9 +174,22 @@
         "description": "Fallback rate limit configuration per provider. Set tokensPerMin and requestsPerMin for providers that don't return headers (e.g. openai, anthropic).",
         "additionalProperties": {
           "type": "object",
-          "properties": {
-            "tokensPerMin": { "type": "number", "default": 100000, "description": "Maximum tokens per minute for this provider" },
-            "requestsPerMin": { "type": "number", "default": 50, "description": "Maximum requests per minute for this provider" }
+    "properties": {
+      "opencode.model": {
+        "type": "string",
+        "default": "",
+        "description": "Default model ID in provider/model format (e.g. anthropic/claude-sonnet-4-20250514). Set via 'OpenCode: Select Model' command."
+      },
+            "tokensPerMin": {
+              "type": "number",
+              "default": 100000,
+              "description": "Maximum tokens per minute for this provider"
+            },
+            "requestsPerMin": {
+              "type": "number",
+              "default": 50,
+              "description": "Maximum requests per minute for this provider"
+            }
           }
         }
       },
@@ -111,16 +213,17 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/vscode": "^1.98.0",
     "@types/node": "^20.0.0",
-    "esbuild": "^0.25.0",
-    "typescript": "^5.7.0",
-    "eslint": "^9.0.0",
+    "@types/vscode": "^1.98.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
-    "@typescript-eslint/parser": "^8.0.0"
+    "@typescript-eslint/parser": "^8.0.0",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.0.0",
+    "typescript": "^5.7.0"
   },
   "dependencies": {
     "@opencode-ai/sdk": "^1.14.33",
+    "highlight.js": "^11.11.1",
     "simple-git": "^3.27.0"
   }
 }

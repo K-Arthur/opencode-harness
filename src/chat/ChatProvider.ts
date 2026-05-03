@@ -8,6 +8,8 @@ import { ContextMonitor } from "../monitor/ContextMonitor"
 import { estimateContextTokens } from "../utils/tokenCounter"
 import { ThemeManager, type ThemeVariables } from "../theme/ThemeManager"
 import { RateLimitMonitor } from "../monitor/RateLimitMonitor"
+import { ModelManager } from "../model/ModelManager"
+import { SessionStore } from "../session/SessionStore"
 
 export interface ChatMessage {
   role: "user" | "assistant" | "system"
@@ -32,7 +34,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     private readonly contextEngine: ContextEngine,
     private readonly contextMonitor: ContextMonitor,
     private readonly themeManager: ThemeManager,
-    private readonly rateLimitMonitor: RateLimitMonitor
+    private readonly rateLimitMonitor: RateLimitMonitor,
+    private readonly modelManager: ModelManager,
+    private readonly sessionStore: SessionStore
   ) {}
 
   resolveWebviewView(
@@ -53,6 +57,25 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 
     // Send theme variables on init
     this.pushThemeToWebview()
+
+    // Send model info
+    this.postMessage({ type: "model_update", model: this.modelManager.model })
+
+    // Listen for model changes
+    this.modelManager.onModelChanged((model) => {
+      this.postMessage({ type: "model_update", model })
+    })
+
+    // Listen for session changes
+    this.sessionStore.onActiveSessionChanged(() => {
+      const session = this.sessionStore.getActive()
+      if (session) {
+        this.postMessage({ type: "clear_messages" })
+        for (const msg of session.messages) {
+          this.postMessage({ type: "message", message: msg })
+        }
+      }
+    })
 
     // Listen for theme changes
     this.themeManager.onThemeChanged(() => {
@@ -103,7 +126,7 @@ export class ChatProvider implements vscode.WebviewViewProvider {
     const extRoot = this.context.extensionUri.fsPath
     const htmlPath = path.join(extRoot, "src", "chat", "webview", "index.html")
     const cssPath = path.join(extRoot, "src", "chat", "webview", "styles.css")
-    const jsPath = path.join(extRoot, "src", "chat", "webview", "main.js")
+    const jsPath = path.join(extRoot, "dist", "chat", "webview", "main.js")
 
     let html = fs.readFileSync(htmlPath, "utf8")
     const css = fs.readFileSync(cssPath, "utf8")
@@ -159,6 +182,14 @@ Diagnostics: ${ctxPkg.diagnostics.length} files with errors or warnings
       },
     })
 
+    // Save user message to session store
+    this.sessionStore.appendMessage({
+      role: "user",
+      blocks: [{ type: "text", text }],
+      timestamp: Date.now(),
+      sessionId: session.id,
+    })
+
     this.postMessage({ type: "stream_start", messageId: `resp-${session.id}` })
 
     const response = await this.sessionManager.sendPrompt(session.id, [
@@ -196,6 +227,14 @@ Diagnostics: ${ctxPkg.diagnostics.length} files with errors or warnings
       const diffText = await this.diffApplier.generateDiff(edit.filePath, edit.proposedContent)
       blocks.push({ type: "diff_block", id: edit.blockId, filePath: edit.filePath, diffText, messageId: String(response.info?.id || "") })
     }
+
+    // Save assistant response to session store
+    this.sessionStore.appendMessage({
+      role: "assistant",
+      blocks,
+      timestamp: Date.now(),
+      sessionId: session.id,
+    })
 
     this.postMessage({ type: "stream_end", messageId: `resp-${session.id}`, blocks })
   }

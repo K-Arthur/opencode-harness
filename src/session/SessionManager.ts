@@ -223,6 +223,17 @@ export class SessionManager {
     return true
   }
 
+  private currentModel = ""
+
+  async setModel(model: string): Promise<void> {
+    this.currentModel = model
+    // Model takes effect on next session creation or server restart
+    if (this.client) {
+      await this.stop()
+      await this.start()
+    }
+  }
+
   dispose(): void {
     void this.stop()
     this._onEvent.dispose()

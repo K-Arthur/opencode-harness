@@ -200,51 +200,69 @@ export class ThemeManager {
 
   private readCliThemeFiles(): OpencodeTheme {
     const home = process.env.HOME || process.env.USERPROFILE || ""
-    const configDirs = [
-      path.join(home, ".config", "opencode", "themes"),
-      path.join(home, ".opencode", "themes"),
-    ]
-    // Use XDG if available
-    if (process.env.XDG_CONFIG_HOME) {
-      configDirs.unshift(path.join(process.env.XDG_CONFIG_HOME, "opencode", "themes"))
+    const xdgConfig = process.env.XDG_CONFIG_HOME || path.join(home, ".config")
+    
+    // 1. Find potential config and theme directories
+    const tuiJsonPaths: string[] = []
+    const themeDirs: string[] = []
+
+    // Workspace level
+    const folders = vscode.workspace.workspaceFolders
+    if (folders && folders.length > 0) {
+      const workspaceConfig = path.join(folders[0].uri.fsPath, ".opencode")
+      tuiJsonPaths.push(path.join(workspaceConfig, "tui.json"))
+      themeDirs.push(path.join(workspaceConfig, "themes"))
     }
 
-    const overrides: OpencodeTheme = {}
-    for (const dir of configDirs) {
+    // Global level
+    tuiJsonPaths.push(path.join(xdgConfig, "opencode", "tui.json"))
+    tuiJsonPaths.push(path.join(home, ".opencode", "tui.json"))
+    
+    themeDirs.push(path.join(xdgConfig, "opencode", "themes"))
+    themeDirs.push(path.join(home, ".opencode", "themes"))
+
+    // 2. Resolve active theme name
+    let activeTheme = "tokyonight" // default fallback if we don't find it
+    for (const tuiPath of tuiJsonPaths) {
       try {
-        if (!fs.existsSync(dir)) continue
-        const entries = fs.readdirSync(dir)
-        for (const entry of entries) {
-          if (entry.endsWith(".json")) {
-            try {
-              const content = JSON.parse(fs.readFileSync(path.join(dir, entry), "utf8"))
-              if (content.theme) {
-                // Map opencode CLI theme format to our format
-                const t = content.theme
-                if (t.primary?.dark) overrides.accentColor = t.primary.dark
-                if (t.error?.dark) overrides.errorColor = t.error.dark
-                if (t.warning?.dark) overrides.warningColor = t.warning.dark
-                if (t.success?.dark) overrides.successColor = t.success.dark
-                if (t.text?.dark) overrides.assistantMessageFg = t.text.dark
-                if (t.background?.dark) overrides.assistantMessageBg = t.background.dark
-                if (t.diffAdded?.dark) overrides.diffAdded = t.diffAdded.dark
-                if (t.diffRemoved?.dark) overrides.diffRemoved = t.diffRemoved.dark
-                if (t.syntaxComment?.dark) overrides.syntaxComment = t.syntaxComment.dark
-                if (t.syntaxKeyword?.dark) overrides.syntaxKeyword = t.syntaxKeyword.dark
-                if (t.syntaxString?.dark) overrides.syntaxString = t.syntaxString.dark
-                if (t.syntaxNumber?.dark) overrides.syntaxNumber = t.syntaxNumber.dark
-                if (t.syntaxFunction?.dark) overrides.syntaxFunction = t.syntaxFunction.dark
-                if (t.syntaxType?.dark) overrides.syntaxType = t.syntaxType.dark
-                if (t.syntaxOperator?.dark) overrides.syntaxOperator = t.syntaxOperator.dark
-              }
-            } catch {
-              // skip invalid JSON files
-            }
+        if (fs.existsSync(tuiPath)) {
+          const content = JSON.parse(fs.readFileSync(tuiPath, "utf8"))
+          if (content.theme) {
+            activeTheme = content.theme
+            break
           }
         }
-      } catch {
-        // skip inaccessible directories
-      }
+      } catch { /* skip */ }
+    }
+
+    // 3. Find and load the active theme file
+    const overrides: OpencodeTheme = {}
+    for (const dir of themeDirs) {
+      try {
+        const themeFile = path.join(dir, `${activeTheme}.json`)
+        if (fs.existsSync(themeFile)) {
+          const content = JSON.parse(fs.readFileSync(themeFile, "utf8"))
+          if (content.theme) {
+            const t = content.theme
+            if (t.primary?.dark) overrides.accentColor = t.primary.dark
+            if (t.error?.dark) overrides.errorColor = t.error.dark
+            if (t.warning?.dark) overrides.warningColor = t.warning.dark
+            if (t.success?.dark) overrides.successColor = t.success.dark
+            if (t.text?.dark) overrides.assistantMessageFg = t.text.dark
+            if (t.background?.dark) overrides.assistantMessageBg = t.background.dark
+            if (t.diffAdded?.dark) overrides.diffAdded = t.diffAdded.dark
+            if (t.diffRemoved?.dark) overrides.diffRemoved = t.diffRemoved.dark
+            if (t.syntaxComment?.dark) overrides.syntaxComment = t.syntaxComment.dark
+            if (t.syntaxKeyword?.dark) overrides.syntaxKeyword = t.syntaxKeyword.dark
+            if (t.syntaxString?.dark) overrides.syntaxString = t.syntaxString.dark
+            if (t.syntaxNumber?.dark) overrides.syntaxNumber = t.syntaxNumber.dark
+            if (t.syntaxFunction?.dark) overrides.syntaxFunction = t.syntaxFunction.dark
+            if (t.syntaxType?.dark) overrides.syntaxType = t.syntaxType.dark
+            if (t.syntaxOperator?.dark) overrides.syntaxOperator = t.syntaxOperator.dark
+          }
+          break // Found and loaded the active theme
+        }
+      } catch { /* skip */ }
     }
     return overrides
   }
