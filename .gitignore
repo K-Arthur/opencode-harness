@@ -2,6 +2,12 @@ node_modules
 dist
 out
 *.vsix
-.opencode/
+node_modules
+dist
+out
+*.vsix
 playwright-report/
 test-results/
+.vscode-test/
+*.log
+*.tsbuildinfo

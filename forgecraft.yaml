@@ -1,0 +1,58 @@
+project:
+  name: opencode-harness
+  description: VS Code extension that integrates opencode AI coding agent into the editor with multi-tab chat interface
+  tags:
+    - UNIVERSAL
+    - LIBRARY
+  targets:
+    - opencode
+  stage: production
+  scope: complete
+  has_consumers: true
+  use_codeseeker: true
+  use_playwright: false
+  spec_file: docs/specs/2026-05-02-opencode-harness-architecture.md
+  problem_statement: >-
+    VS Code extension that integrates opencode AI coding agent into the editor with multi-tab chat interface, real-time
+    agent visibility, and deep workspace context awareness
+  primary_users: software developers, coders using VS Code
+  success_criteria: >-
+    extension loads without errors, chat interface works with multiple tabs, opencode agent integration functional,
+    tests pass
+cascade:
+  steps:
+    - step: functional_spec
+      required: true
+      rationale: >-
+        All projects require a functional specification (docs/PRD.md); it is the axiom set from which all other
+        artifacts are derived.
+      decidedAt: '2026-05-04'
+      decidedBy: scaffold
+    - step: architecture_diagrams
+      required: true
+      rationale: >-
+        Library consumers need a clear architecture overview (docs/diagrams/c4-context.md) to understand integration
+        points and module boundaries.
+      decidedAt: '2026-05-04'
+      decidedBy: scaffold
+    - step: constitution
+      required: true
+      rationale: >-
+        All projects require an architectural constitution (CLAUDE.md); it is the operative grammar that constrains
+        every AI coding session.
+      decidedAt: '2026-05-04'
+      decidedBy: scaffold
+    - step: adrs
+      required: true
+      rationale: >-
+        Library design decisions (API surface, versioning strategy, compatibility guarantees) must be recorded in
+        docs/adrs/ for consumer clarity.
+      decidedAt: '2026-05-04'
+      decidedBy: scaffold
+    - step: behavioral_contracts
+      required: true
+      rationale: >-
+        Library consumers depend on stable behavioral contracts (docs/use-cases.md); these are the triple-derivation
+        seed: implementation contract, acceptance test, and user documentation.
+      decidedAt: '2026-05-04'
+      decidedBy: scaffold
