@@ -12,8 +12,7 @@ export class InlineActionProvider implements vscode.CodeLensProvider {
     let match
     while ((match = funcRegex.exec(text)) !== null) {
       const name = match[1] || match[2]
-      const pos = document.positionAt(match.index)
-      const range = new vscode.Range(pos, pos)
+      const range = this.getSymbolRange(document, text, match.index, funcRegex.lastIndex)
       lenses.push(
         new vscode.CodeLens(range, { title: "$(comment) Explain", command: "opencode-harness.explainCode", arguments: [document.uri, range] }),
         new vscode.CodeLens(range, { title: "$(edit) Refactor", command: "opencode-harness.refactorCode", arguments: [document.uri, range] }),
@@ -23,8 +22,7 @@ export class InlineActionProvider implements vscode.CodeLensProvider {
 
     const classRegex = /(?:export\s+)?class\s+(\w+)/g
     while ((match = classRegex.exec(text)) !== null) {
-      const pos = document.positionAt(match.index)
-      const range = new vscode.Range(pos, pos)
+      const range = this.getSymbolRange(document, text, match.index, classRegex.lastIndex)
       lenses.push(
         new vscode.CodeLens(range, { title: "$(comment) Explain", command: "opencode-harness.explainCode", arguments: [document.uri, range] }),
         new vscode.CodeLens(range, { title: "$(edit) Refactor", command: "opencode-harness.refactorCode", arguments: [document.uri, range] }),
@@ -33,5 +31,27 @@ export class InlineActionProvider implements vscode.CodeLensProvider {
     }
 
     return lenses
+  }
+
+  private getSymbolRange(document: vscode.TextDocument, text: string, startOffset: number, searchFrom: number): vscode.Range {
+    const bodyStart = text.indexOf("{", searchFrom)
+    if (bodyStart === -1) {
+      const start = document.positionAt(startOffset)
+      return document.lineAt(start.line).range
+    }
+
+    let depth = 0
+    for (let i = bodyStart; i < text.length; i++) {
+      const ch = text[i]
+      if (ch === "{") depth++
+      if (ch === "}") {
+        depth--
+        if (depth === 0) {
+          return new vscode.Range(document.positionAt(startOffset), document.positionAt(i + 1))
+        }
+      }
+    }
+
+    return new vscode.Range(document.positionAt(startOffset), document.positionAt(text.length))
   }
 }

@@ -213,8 +213,8 @@ The primary interaction point is a rich webview chat panel. It must display:
 
 | Location | Component | Description |
 |----------|-----------|-------------|
-| Activity Bar (left sidebar) | OpenCode icon | Opens sessions list / main chat |
-| Primary sidebar | Chat panel | Rich webview with conversation history, tool cards, skill cards |
+| Activity Bar (left sidebar) | OpenCode activity icon | Opens the primary OpenCode chat view |
+| Primary sidebar | Chat panel | Rich webview with branded welcome state, conversation history, tool cards, skill cards |
 | Editor toolbar | Spark icon | Quick-launch chat for current file context |
 | Editor gutter | CodeLens | Inline action triggers on functions/classes |
 | Context menu | "Send to OpenCode" | Submenu for code actions |

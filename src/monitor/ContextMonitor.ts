@@ -1,10 +1,19 @@
 import * as vscode from "vscode"
 import { estimateContextTokens } from "../utils/tokenCounter"
 
+export interface ContextUsage {
+  percent: number
+  tokens: number
+  maxTokens: number
+}
+
 export class ContextMonitor {
   private statusBarItem: vscode.StatusBarItem
   private currentTokens = 0
   private tokenLimit = 100000
+  private onContextChangedEmitter = new vscode.EventEmitter<ContextUsage>()
+
+  readonly onContextChanged = this.onContextChangedEmitter.event
 
   constructor() {
     this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100)
@@ -17,6 +26,12 @@ export class ContextMonitor {
   updateTokens(tokensUsed: number): void {
     this.currentTokens = tokensUsed
     this.render()
+    const usage: ContextUsage = {
+      percent: Math.min(100, Math.round((this.currentTokens / this.tokenLimit) * 100)),
+      tokens: this.currentTokens,
+      maxTokens: this.tokenLimit,
+    }
+    this.onContextChangedEmitter.fire(usage)
   }
 
   private render(): void {
@@ -41,6 +56,7 @@ export class ContextMonitor {
   }
 
   dispose(): void {
+    this.onContextChangedEmitter.dispose()
     this.statusBarItem.dispose()
   }
 }

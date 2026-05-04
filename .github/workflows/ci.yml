@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20.x, 22.x]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify build artifacts
+        run: |
+          test -f dist/extension.js || { echo "Missing dist/extension.js"; exit 1; }
+          test -f dist/chat/webview/main.js || { echo "Missing dist/chat/webview/main.js"; exit 1; }
+          test -f dist/chat/webview/styles.css || { echo "Missing dist/chat/webview/styles.css"; exit 1; }
+          test -f dist/chat/webview/toolkit.min.js || { echo "Missing dist/chat/webview/toolkit.min.js"; exit 1; }
+          echo "All build artifacts verified"
+
+      - name: Check bundle sizes
+        run: |
+          node -e "
+          const fs = require('fs');
+          const extSize = fs.statSync('dist/extension.js').size;
+          const webSize = fs.statSync('dist/chat/webview/main.js').size;
+          console.log('Extension bundle: ' + (extSize / 1024).toFixed(1) + ' KB');
+          console.log('Webview bundle:  ' + (webSize / 1024).toFixed(1) + ' KB');
+          if (extSize > 512000) { console.error('Extension bundle exceeds 500KB limit!'); process.exit(1); }
+          if (webSize > 614400) { console.error('Webview bundle exceeds 600KB limit!'); process.exit(1); }
+          console.log('Bundle sizes within limits');
+          "
+
+      - name: Unit tests
+        run: npm run test:unit

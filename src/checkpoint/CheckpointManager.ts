@@ -1,6 +1,7 @@
 import * as vscode from "vscode"
 import * as path from "path"
 import simpleGit, { type SimpleGit } from "simple-git"
+import { log } from "../utils/outputChannel"
 
 export interface Checkpoint {
   id: string
@@ -36,7 +37,12 @@ export class CheckpointManager {
 
   async snapshot(sessionId: string, messageId: string): Promise<Checkpoint | null> {
     if (!this.git) return null
+    let originalBranch: string | undefined
     try {
+      // Save the current branch so we can return to it
+      const branchSummary = await this.git.branch()
+      originalBranch = branchSummary.current
+
       const status = await this.git.status()
       const filesChanged = [...status.modified, ...status.created, ...status.deleted, ...status.not_added]
       if (filesChanged.length === 0) return null
@@ -55,8 +61,17 @@ export class CheckpointManager {
       this.checkpoints.set(checkpointId, checkpoint)
       return checkpoint
     } catch (err) {
-      console.error("[CheckpointManager] Snapshot failed:", err)
+      log.error("Checkpoint snapshot failed", err)
       return null
+    } finally {
+      // Always return to the original branch
+      if (originalBranch && this.git) {
+        try {
+          await this.git.checkout(originalBranch)
+        } catch (restoreErr) {
+          log.error("Failed to restore original branch after checkpoint", restoreErr)
+        }
+      }
     }
   }
 

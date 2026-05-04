@@ -1,0 +1,190 @@
+/* ═══════════════════════════════════════════════════════════════
+   OpenCode Design Tokens
+   ═══════════════════════════════════════════════════════════════ */
+
+/**
+ * NOTE: Semantic colors (--oc-accent, --oc-bg, etc.) are managed by 
+ * src/theme/ThemeManager.ts to support user overrides and CLI parity.
+ * This file defines the structural foundation and fallback values.
+ */
+
+:root {
+  /* ─── Layout Shell ─── */
+  --oc-bg: var(--vscode-sideBar-background);
+  --oc-fg: var(--vscode-sideBar-foreground);
+  --oc-border: var(--vscode-sideBar-border, var(--vscode-widget-border, rgba(128, 128, 128, 0.2)));
+  
+  /* Primary Actions */
+  --oc-accent-hover: var(--vscode-button-hoverBackground);
+  --oc-accent-fg: var(--vscode-button-foreground);
+  
+  /* Secondary Actions */
+  --oc-button-secondary: var(--vscode-button-secondaryBackground, rgba(128, 128, 128, 0.1));
+  --oc-button-secondary-hover: var(--vscode-button-secondaryHoverBackground, rgba(128, 128, 128, 0.15));
+  --oc-button-secondary-fg: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+  
+  /* List & Selection */
+  --oc-list-hover: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.1));
+  --oc-list-active: var(--vscode-list-activeSelectionBackground);
+  --oc-list-active-fg: var(--vscode-list-activeSelectionForeground);
+  
+  /* Editor & Inline Elements */
+  --oc-editor-bg: var(--vscode-editor-background);
+  --oc-editor-fg: var(--vscode-editor-foreground);
+  --oc-editor-font: var(--vscode-editor-font-family, "JetBrains Mono", ui-monospace, monospace);
+  --oc-editor-font-size: var(--vscode-editor-font-size, 13px);
+  
+  /* Status & Description */
+  --oc-focus: var(--vscode-focusBorder);
+  --oc-description: var(--vscode-descriptionForeground);
+  --oc-muted: var(--vscode-disabledForeground);
+
+  /* ─── Signature Colors ─── */
+  --oc-accent-alt: #bf7af0; /* Cyber Amethyst (Branding) */
+  
+  /* Glassmorphism (Mission Control Aesthetic) */
+  --oc-glass-bg: var(--vscode-sideBar-background);
+  --oc-glass-border: var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
+  --oc-glass-blur: blur(12px);
+
+  /* ─── Spacing: 4px baseline grid ─── */
+  --space-0: 0px;
+  --space-px: 1px;
+  --space-0-5: 2px;
+  --space-1: 4px;
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-2-5: 10px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ─── Typography ─── */
+  --font-sans: var(--vscode-font-family, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  --font-mono: var(--vscode-editor-font-family, "JetBrains Mono", ui-monospace, monospace);
+
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: var(--vscode-font-size, 13px);
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 20px;
+
+  --leading-none: 1;
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+
+  /* ─── Border Radius ─── */
+  --radius-none: 0;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* ─── Shadows ─── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 12px var(--oc-accent-glow, rgba(0, 245, 255, 0.15));
+  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.5);
+  --shadow-mission: 0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--oc-glass-border);
+
+  /* ─── Animation ─── */
+  --duration-instant: 100ms;
+  --duration-fast: 200ms;
+  --duration-normal: 300ms;
+  --duration-slow: 450ms;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ─── Primary Signature Colors (injected by ThemeManager.ts) ─── */
+  /* Fallbacks ensure UI remains visible if ThemeManager fails to inject */
+  --oc-accent: var(--vscode-button-background, #0078d4);
+  --oc-accent-hover: var(--vscode-button-hoverBackground, #026ec1);
+  --oc-accent-fg: var(--vscode-button-foreground, #ffffff);
+
+  --oc-success: var(--vscode-terminal-ansiGreen, #3fb950);
+  --oc-warning: var(--vscode-editorWarning-foreground, #d29922);
+  --oc-error: var(--vscode-errorForeground, #f85149);
+  --oc-info: var(--vscode-notificationsInfoIcon-foreground, var(--vscode-button-background, #0078d4));
+
+  /* ─── Semantic Component Tints ─── */
+  --oc-accent-subtle: rgba(0, 245, 255, 0.08);
+  --oc-accent-border: rgba(0, 245, 255, 0.2);
+  --oc-accent-border-hover: rgba(0, 245, 255, 0.4);
+  --oc-accent-glow: rgba(0, 245, 255, 0.15);
+  
+  --oc-error-subtle: rgba(248, 81, 73, 0.08);
+  --oc-error-border: rgba(248, 81, 73, 0.2);
+  --oc-success-subtle: rgba(63, 185, 80, 0.08);
+  --oc-success-border: rgba(63, 185, 80, 0.2);
+  --oc-warning-subtle: rgba(210, 153, 34, 0.06);
+  --oc-warning-border: rgba(210, 153, 34, 0.2);
+
+  /* ─── Message Role Colors (injected by ThemeManager) ─── */
+  --oc-user-msg-bg: var(--vscode-input-background, rgba(128, 128, 128, 0.1));
+  --oc-assistant-msg-bg: transparent;
+  --oc-tool-bg: var(--vscode-textBlockQuote-background, rgba(128, 128, 128, 0.05));
+
+  /* ─── Syntax Highlighting (injected by ThemeManager) ─── */
+  --oc-syn-keyword: var(--vscode-symbolIcon-keywordForeground, #569cd6);
+  --oc-syn-string: var(--vscode-symbolIcon-stringForeground, #ce9178);
+  --oc-syn-comment: var(--vscode-symbolIcon-commentForeground, #6a9955);
+  --oc-syn-function: var(--vscode-symbolIcon-functionForeground, #dcdcaa);
+  --oc-syn-number: var(--vscode-symbolIcon-numberForeground, #b5cea8);
+  --oc-syn-type: var(--vscode-symbolIcon-typeParameterForeground, #4ec9b0);
+  --oc-syn-variable: var(--vscode-symbolIcon-variableForeground, #9cdcfe);
+  --oc-syn-operator: var(--vscode-symbolIcon-operatorForeground, #d4d4d4);
+
+  /* ─── Component Size Tokens ─── */
+  --size-icon-xs: 12px;
+  --size-icon-sm: 14px;
+  --size-icon-md: 16px;
+  --size-icon-lg: 20px;
+  --size-icon-xl: 24px;
+  --size-target-min: 24px;
+  --size-target-comfortable: 32px;
+  --size-target-large: 36px;
+  --size-tab-min: 80px;
+  --size-tab-max: 160px;
+
+  /* ─── Z-Index Scale ─── */
+  --z-base: 0;
+  --z-dropdown: 50;
+  --z-sticky: 100;
+  --z-modal-backdrop: 200;
+  --z-modal: 300;
+  --z-tooltip: 400;
+}
+
+/* ─── Theme Overrides ─── */
+
+.vscode-light {
+  --oc-glass-bg: rgba(255, 255, 255, 0.85);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.vscode-dark {
+  --oc-glass-bg: rgba(22, 22, 26, 0.7);
+}
+
+/* High Contrast Adjustments */
+.vscode-high-contrast {
+  --oc-glass-blur: none;
+  --oc-glass-bg: var(--vscode-sideBar-background);
+  --oc-border: var(--vscode-contrastBorder);
+}

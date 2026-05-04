@@ -88,30 +88,36 @@ export class ContextEngine {
     const folders = vscode.workspace.workspaceFolders
     if (!folders || folders.length === 0) return []
 
-    const files = await vscode.workspace.findFiles(
-      new vscode.RelativePattern(folders[0].uri, "**/*"),
-      "**/node_modules/**",
-      100
-    )
+    try {
+      // M3: Find files with a reasonable limit to avoid performance issues
+      const files = await vscode.workspace.findFiles(
+        new vscode.RelativePattern(folders[0].uri, "**/*"),
+        "**/node_modules/**",
+        100
+      )
 
-    const tree: Map<string, { name: string; type: "file" | "directory" }> = new Map()
+      const tree: Map<string, { name: string; type: "file" | "directory" }> = new Map()
 
-    for (const file of files) {
-      const relative = vscode.workspace.asRelativePath(file)
-      const parts = relative.split("/")
-      if (parts.length > depth) continue
-      for (let i = 0; i < parts.length; i++) {
-        const fullPath = parts.slice(0, i + 1).join("/")
-        if (!tree.has(fullPath)) {
-          tree.set(fullPath, {
-            name: parts[i],
-            type: i === parts.length - 1 ? "file" : "directory",
-          })
+      for (const file of files) {
+        const relative = vscode.workspace.asRelativePath(file)
+        const parts = relative.split("/")
+        if (parts.length > depth) continue
+        for (let i = 0; i < parts.length; i++) {
+          const fullPath = parts.slice(0, i + 1).join("/")
+          if (!tree.has(fullPath)) {
+            tree.set(fullPath, {
+              name: parts[i],
+              type: i === parts.length - 1 ? "file" : "directory",
+            })
+          }
         }
       }
-    }
 
-    return Array.from(tree.values())
+      return Array.from(tree.values())
+    } catch (err) {
+      console.warn("[ContextEngine] Failed to gather workspace tree", err)
+      return []
+    }
   }
 
   private async gatherProjectConfigs(): Promise<ContextPackage["projectConfigs"]> {

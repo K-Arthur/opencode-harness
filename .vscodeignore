@@ -1,12 +1,22 @@
 .vscode/**
 .superpowers/**
 src/**
-!src/chat/webview/**
+!media/**
 node_modules/**
 .github/**
 docs/**
+tests/**
+playwright-report/**
+test-results/**
 .gitignore
+AUDIT_REPORT.md
+AUDIT_FINAL_REPORT.md
+UI_AUDIT_REPORT.md
 esbuild.js
+index.html
+opencode-harness-*.vsix
+playwright.config.ts
 tsconfig.json
 **/*.map
+dist/**/*.ts
 Requirements Document.txt

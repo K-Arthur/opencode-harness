@@ -1,0 +1,12 @@
+/* ═══════════════════════════════════════════════════════════════
+   OpenCode Chat Webview Styles — Entry Point
+   ═══════════════════════════════════════════════════════════════ */
+
+@import "./tokens.css";
+@import "./base.css";
+@import "./accessibility.css";
+@import "./animations.css";
+@import "./layout.css";
+@import "./components.css";
+@import "./messages.css";
+@import "./blocks.css";

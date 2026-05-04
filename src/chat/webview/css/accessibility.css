@@ -1,0 +1,188 @@
+/* ═══════════════════════════════════════════════════════════════
+   Accessibility & Focus Management
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── Focus Visible Rings ─── */
+*:focus {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--oc-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Specific focus styles for different element types */
+button:focus-visible,
+[role="button"]:focus-visible {
+  outline-offset: 2px;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+[contenteditable]:focus-visible {
+  outline: 2px solid var(--oc-focus);
+  outline-offset: -1px;
+}
+
+.tab:focus-visible {
+  outline-offset: -2px;
+  border-radius: var(--radius-md);
+}
+
+.dropdown-item:focus-visible,
+.dropdown-item.selected {
+  outline: 2px solid var(--oc-focus);
+  outline-offset: -2px;
+}
+
+/* ─── Minimum Touch/Pointer Target Sizes ─── */
+/* WCAG 2.5.8: 24x24px minimum for pointer targets */
+
+.header-btn,
+.bottom-btn,
+.send-btn,
+.abort-btn,
+.btn-icon,
+.mode-toggle,
+.model-selector-btn,
+.input-action-btn,
+.mode-btn,
+.suggestion-btn,
+.suggestion-card,
+.code-block-copy,
+.diff-btn,
+.permission-btn,
+.tab-new,
+.tab-close,
+.overlay-close,
+.view-all-btn {
+  min-width: var(--size-target-min);
+  min-height: var(--size-target-min);
+}
+
+/* Override: larger targets for primary action buttons */
+.send-btn,
+.abort-btn,
+.header-btn {
+  min-width: var(--size-target-large);
+  min-height: var(--size-target-large);
+}
+
+/* Context chip remove: small visual (14px) with extended pseudo-element hit area */
+.context-chip-remove {
+  min-width: 14px;
+  min-height: 14px;
+  position: relative;
+}
+
+.context-chip-remove::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+
+/* ─── Reduced Motion ─── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .message,
+  .tab-content,
+  .overlay-dialog {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .typing-dots span {
+    animation: none !important;
+    opacity: 0.6 !important;
+  }
+
+  .streaming-text::after {
+    animation: none !important;
+    content: "" !important;
+  }
+
+  .skeleton-shimmer {
+    animation: none !important;
+    background: var(--oc-editor-bg) !important;
+  }
+
+  #context-bar-fill {
+    transition: none !important;
+  }
+
+  .overlay {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+}
+
+/* ─── High Contrast Mode ─── */
+@media (forced-colors: active) {
+  :root {
+    --oc-border: CanvasText;
+    --oc-focus: Highlight;
+  }
+
+  .message-bubble,
+  .code-block,
+  .tool-card,
+  .diff-block,
+  .permission-block,
+  .thinking-block,
+  .dropdown,
+  .overlay-dialog {
+    border: 1px solid CanvasText;
+  }
+
+  .user .message-bubble {
+    border: 2px solid Highlight;
+  }
+
+  .tab.active {
+    border-bottom: 3px solid Highlight;
+  }
+
+  .skill-badge,
+  .context-chip {
+    border: 1px solid CanvasText;
+  }
+
+}
+
+/* ─── Keyboard Navigation Helpers ─── */
+[tabindex="0"]:focus-visible,
+[tabindex="-1"]:focus-visible {
+  outline: 2px solid var(--oc-focus);
+  outline-offset: 2px;
+}
+
+/* Skip link for keyboard users */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: var(--space-4);
+  z-index: var(--z-tooltip);
+  padding: var(--space-2) var(--space-4);
+  background: var(--oc-button-bg);
+  color: var(--oc-button-fg);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-decoration: none;
+  transition: top var(--duration-fast) var(--ease-out);
+}
+
+.skip-link:focus {
+  top: var(--space-2);
+}

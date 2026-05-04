@@ -36,56 +36,61 @@ export interface OpencodeTheme {
 
 export type ThemePreset = "cli-default" | "light" | "dark" | "high-contrast"
 
+/**
+ * BUILT_IN_PRESETS: Modernized "Cyber-Industrial" palette.
+ * These act as fallback values when VS Code tokens aren't enough or when
+ * the user explicitly chooses a specific OpenCode look.
+ */
 const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
   "cli-default": {
-    userMessageBg: "#2d2d2d",
-    userMessageFg: "#e0e0e0",
-    assistantMessageBg: "#1e1e1e",
-    assistantMessageFg: "#c9d1d9",
-    toolCallColor: "#d19a66",
-    toolReadColor: "#58a6ff",
-    toolWriteColor: "#f85149",
-    toolExecColor: "#3fb950",
-    skillBadgeBg: "#0e639c",
-    skillBadgeFg: "#ffffff",
-    thinkingBg: "rgba(210,153,34,0.06)",
-    thinkingBorder: "#d29922",
-    warningColor: "#d29922",
-    errorColor: "#f85149",
-    successColor: "#3fb950",
-    accentColor: "#58a6ff",
-    diffAdded: "#3fb950",
-    diffRemoved: "#f85149",
-    inputBg: "#1e1e1e",
-    inputBorder: "#3c3c3c",
-    mentionBg: "#094771",
-    syntaxComment: "#6a9955",
-    syntaxKeyword: "#569cd6",
-    syntaxString: "#ce9178",
-    syntaxNumber: "#b5cea8",
-    syntaxFunction: "#dcdcaa",
-    syntaxType: "#4ec9b0",
-    syntaxOperator: "#d4d4d4",
+    userMessageBg: "var(--vscode-editor-background)",
+    userMessageFg: "var(--vscode-editor-foreground)",
+    assistantMessageBg: "rgba(30, 30, 30, 0.4)",
+    assistantMessageFg: "var(--vscode-editor-foreground)",
+    toolCallColor: "var(--vscode-symbolIcon-propertyForeground)",
+    toolReadColor: "var(--vscode-symbolIcon-variableForeground)",
+    toolWriteColor: "var(--vscode-errorForeground)",
+    toolExecColor: "var(--vscode-debugIcon-startForeground)",
+    skillBadgeBg: "var(--vscode-badge-background)",
+    skillBadgeFg: "var(--vscode-badge-foreground)",
+    thinkingBg: "rgba(210, 153, 34, 0.08)",
+    thinkingBorder: "var(--vscode-charts-yellow)",
+    warningColor: "var(--vscode-list-warningForeground)",
+    errorColor: "var(--vscode-errorForeground)",
+    successColor: "var(--vscode-charts-green)",
+    accentColor: "var(--vscode-button-background)",
+    diffAdded: "var(--vscode-diffEditor-insertedTextBackground)",
+    diffRemoved: "var(--vscode-diffEditor-removedTextBackground)",
+    inputBg: "var(--vscode-input-background)",
+    inputBorder: "var(--vscode-input-border)",
+    mentionBg: "var(--vscode-editor-selectionBackground)",
+    syntaxComment: "var(--vscode-descriptionForeground)",
+    syntaxKeyword: "var(--vscode-symbolIcon-keywordForeground)",
+    syntaxString: "var(--vscode-symbolIcon-stringForeground)",
+    syntaxNumber: "var(--vscode-symbolIcon-numberForeground)",
+    syntaxFunction: "var(--vscode-symbolIcon-functionForeground)",
+    syntaxType: "var(--vscode-symbolIcon-classForeground)",
+    syntaxOperator: "var(--vscode-symbolIcon-operatorForeground)",
   },
   light: {
-    userMessageBg: "#e8e8e8",
-    userMessageFg: "#1e1e1e",
-    assistantMessageBg: "#ffffff",
-    assistantMessageFg: "#1e1e1e",
-    toolCallColor: "#c18401",
+    userMessageBg: "#f3f3f3",
+    userMessageFg: "#333333",
+    assistantMessageBg: "rgba(255, 255, 255, 0.8)",
+    assistantMessageFg: "#24292f",
+    toolCallColor: "#953800",
     toolReadColor: "#0550ae",
     toolWriteColor: "#cf222e",
     toolExecColor: "#116329",
-    skillBadgeBg: "#8250df",
+    skillBadgeBg: "#0550ae",
     skillBadgeFg: "#ffffff",
-    thinkingBg: "rgba(210,153,34,0.08)",
+    thinkingBg: "rgba(210, 153, 34, 0.06)",
     thinkingBorder: "#bf8700",
     warningColor: "#bf8700",
     errorColor: "#cf222e",
     successColor: "#116329",
-    accentColor: "#0550ae",
-    diffAdded: "#116329",
-    diffRemoved: "#cf222e",
+    accentColor: "#0969da",
+    diffAdded: "rgba(45, 164, 78, 0.15)",
+    diffRemoved: "rgba(207, 34, 46, 0.1)",
     inputBg: "#ffffff",
     inputBorder: "#d0d7de",
     mentionBg: "#ddf4ff",
@@ -100,61 +105,61 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
   dark: {
     userMessageBg: "#2d2d2d",
     userMessageFg: "#e0e0e0",
-    assistantMessageBg: "#1e1e1e",
+    assistantMessageBg: "rgba(30, 30, 30, 0.6)",
     assistantMessageFg: "#c9d1d9",
     toolCallColor: "#d19a66",
     toolReadColor: "#58a6ff",
     toolWriteColor: "#f85149",
     toolExecColor: "#3fb950",
-    skillBadgeBg: "#0e639c",
-    skillBadgeFg: "#ffffff",
-    thinkingBg: "rgba(210,153,34,0.06)",
-    thinkingBorder: "#d29922",
-    warningColor: "#d29922",
-    errorColor: "#f85149",
-    successColor: "#3fb950",
-    accentColor: "#58a6ff",
-    diffAdded: "#3fb950",
-    diffRemoved: "#f85149",
-    inputBg: "#1e1e1e",
-    inputBorder: "#3c3c3c",
-    mentionBg: "#094771",
-    syntaxComment: "#6a9955",
-    syntaxKeyword: "#569cd6",
-    syntaxString: "#ce9178",
-    syntaxNumber: "#b5cea8",
-    syntaxFunction: "#dcdcaa",
-    syntaxType: "#4ec9b0",
-    syntaxOperator: "#d4d4d4",
+    skillBadgeBg: "#00e5ff",
+    skillBadgeFg: "#0b0e14",
+    thinkingBg: "rgba(255, 171, 0, 0.05)",
+    thinkingBorder: "#ffab00",
+    warningColor: "#ffab00",
+    errorColor: "#ff5252",
+    successColor: "#00e676",
+    accentColor: "#00e5ff",
+    diffAdded: "rgba(63, 185, 80, 0.15)",
+    diffRemoved: "rgba(248, 81, 73, 0.1)",
+    inputBg: "#161b22",
+    inputBorder: "#30363d",
+    mentionBg: "#1f6feb",
+    syntaxComment: "#8b949e",
+    syntaxKeyword: "#ff7b72",
+    syntaxString: "#a5d6ff",
+    syntaxNumber: "#d2a8ff",
+    syntaxFunction: "#d2a8ff",
+    syntaxType: "#ffa657",
+    syntaxOperator: "#79c0ff",
   },
   "high-contrast": {
     userMessageBg: "#000000",
     userMessageFg: "#ffffff",
-    assistantMessageBg: "#0a0a0a",
+    assistantMessageBg: "#000000",
     assistantMessageFg: "#ffffff",
-    toolCallColor: "#ffcc00",
-    toolReadColor: "#1aebff",
-    toolWriteColor: "#ff4444",
-    toolExecColor: "#44ff44",
-    skillBadgeBg: "#6a0dad",
-    skillBadgeFg: "#ffffff",
-    thinkingBg: "rgba(255,204,0,0.15)",
-    thinkingBorder: "#ffcc00",
-    warningColor: "#ffcc00",
-    errorColor: "#ff4444",
-    successColor: "#44ff44",
-    accentColor: "#1aebff",
-    diffAdded: "#44ff44",
-    diffRemoved: "#ff4444",
+    toolCallColor: "#ffff00",
+    toolReadColor: "#00ffff",
+    toolWriteColor: "#ff0000",
+    toolExecColor: "#00ff00",
+    skillBadgeBg: "#ffffff",
+    skillBadgeFg: "#000000",
+    thinkingBg: "rgba(255, 255, 0, 0.1)",
+    thinkingBorder: "#ffff00",
+    warningColor: "#ffff00",
+    errorColor: "#ff0000",
+    successColor: "#00ff00",
+    accentColor: "#ffff00",
+    diffAdded: "rgba(0, 255, 0, 0.2)",
+    diffRemoved: "rgba(255, 0, 0, 0.2)",
     inputBg: "#000000",
     inputBorder: "#ffffff",
-    mentionBg: "#6a0dad",
-    syntaxComment: "#b3b3b3",
-    syntaxKeyword: "#1aebff",
-    syntaxString: "#ffcc00",
-    syntaxNumber: "#44ff44",
-    syntaxFunction: "#ff88ff",
-    syntaxType: "#44ff44",
+    mentionBg: "#ffffff",
+    syntaxComment: "#ffffff",
+    syntaxKeyword: "#ffff00",
+    syntaxString: "#00ff00",
+    syntaxNumber: "#00ffff",
+    syntaxFunction: "#ff00ff",
+    syntaxType: "#00ff00",
     syntaxOperator: "#ffffff",
   },
 }
@@ -164,29 +169,42 @@ export interface ThemeVariables {
   customVars: Record<string, string>
 }
 
+const CLI_THEME_CACHE_TTL_MS = 30_000 // 30 seconds
+
 export class ThemeManager {
   private _onThemeChanged = new vscode.EventEmitter<ThemeVariables>()
+  private disposables: vscode.Disposable[] = []
   readonly onThemeChanged = this._onThemeChanged.event
 
   private currentKind: vscode.ColorThemeKind = vscode.ColorThemeKind.Dark
   private currentPreset: ThemePreset = "cli-default"
   private userOverrides: OpencodeTheme = {}
 
+  // Cache for CLI theme file reads to avoid synchronous FS calls on every render
+  private cliThemeCache: OpencodeTheme | null = null
+  private cliThemeCacheTimestamp = 0
+
   constructor() {
     this.currentKind = vscode.window.activeColorTheme.kind
     this.loadConfig()
 
-    vscode.window.onDidChangeActiveColorTheme((theme) => {
-      this.currentKind = theme.kind
-      this.emitUpdate()
-    })
-
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("opencode.theme")) {
-        this.loadConfig()
+    this.disposables.push(
+      vscode.window.onDidChangeActiveColorTheme((theme) => {
+        this.currentKind = theme.kind
+        // Invalidate CLI cache on theme change in case files changed
+        this.invalidateCliCache()
         this.emitUpdate()
-      }
-    })
+      })
+    )
+
+    this.disposables.push(
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration("opencode.theme")) {
+          this.loadConfig()
+          this.emitUpdate()
+        }
+      })
+    )
   }
 
   private loadConfig(): void {
@@ -198,15 +216,26 @@ export class ThemeManager {
     this.userOverrides = themeObj?.overrides || {}
   }
 
+  private invalidateCliCache(): void {
+    this.cliThemeCache = null
+    this.cliThemeCacheTimestamp = 0
+  }
+
   private readCliThemeFiles(): OpencodeTheme {
+    // Return cached result if still fresh
+    const now = Date.now()
+    if (this.cliThemeCache && (now - this.cliThemeCacheTimestamp) < CLI_THEME_CACHE_TTL_MS) {
+      return this.cliThemeCache
+    }
+
     const home = process.env.HOME || process.env.USERPROFILE || ""
-    const xdgConfig = process.env.XDG_CONFIG_HOME || path.join(home, ".config")
+    const isWindows = process.platform === "win32"
+    const xdgConfig = process.env.XDG_CONFIG_HOME
+      || (isWindows ? path.join(process.env.APPDATA || home, "opencode") : path.join(home, ".config"))
     
-    // 1. Find potential config and theme directories
     const tuiJsonPaths: string[] = []
     const themeDirs: string[] = []
 
-    // Workspace level
     const folders = vscode.workspace.workspaceFolders
     if (folders && folders.length > 0) {
       const workspaceConfig = path.join(folders[0].uri.fsPath, ".opencode")
@@ -214,34 +243,37 @@ export class ThemeManager {
       themeDirs.push(path.join(workspaceConfig, "themes"))
     }
 
-    // Global level
     tuiJsonPaths.push(path.join(xdgConfig, "opencode", "tui.json"))
     tuiJsonPaths.push(path.join(home, ".opencode", "tui.json"))
     
     themeDirs.push(path.join(xdgConfig, "opencode", "themes"))
     themeDirs.push(path.join(home, ".opencode", "themes"))
 
-    // 2. Resolve active theme name
-    let activeTheme = "tokyonight" // default fallback if we don't find it
+    let activeTheme = "tokyonight" 
     for (const tuiPath of tuiJsonPaths) {
       try {
         if (fs.existsSync(tuiPath)) {
-          const content = JSON.parse(fs.readFileSync(tuiPath, "utf8"))
-          if (content.theme) {
+          const raw = fs.readFileSync(tuiPath, "utf8")
+          const content = JSON.parse(raw)
+          if (content.theme && typeof content.theme === "string") {
             activeTheme = content.theme
             break
           }
         }
-      } catch { /* skip */ }
+      } catch {
+        // Malformed JSON or unreadable file — skip
+      }
     }
 
-    // 3. Find and load the active theme file
     const overrides: OpencodeTheme = {}
     for (const dir of themeDirs) {
       try {
-        const themeFile = path.join(dir, `${activeTheme}.json`)
+        // Sanitize activeTheme to prevent path traversal
+        const safeThemeName = activeTheme.replace(/[^\w.-]/g, "_")
+        const themeFile = path.join(dir, `${safeThemeName}.json`)
         if (fs.existsSync(themeFile)) {
-          const content = JSON.parse(fs.readFileSync(themeFile, "utf8"))
+          const raw = fs.readFileSync(themeFile, "utf8")
+          const content = JSON.parse(raw)
           if (content.theme) {
             const t = content.theme
             if (t.primary?.dark) overrides.accentColor = t.primary.dark
@@ -260,10 +292,15 @@ export class ThemeManager {
             if (t.syntaxType?.dark) overrides.syntaxType = t.syntaxType.dark
             if (t.syntaxOperator?.dark) overrides.syntaxOperator = t.syntaxOperator.dark
           }
-          break // Found and loaded the active theme
+          break 
         }
-      } catch { /* skip */ }
+      } catch {
+        // Malformed theme file — skip
+      }
     }
+
+    this.cliThemeCache = overrides
+    this.cliThemeCacheTimestamp = now
     return overrides
   }
 
@@ -276,38 +313,47 @@ export class ThemeManager {
     const cliOverrides = this.readCliThemeFiles()
     const merged = { ...preset, ...cliOverrides, ...this.userOverrides }
 
+    // Filter out undefined values to avoid injecting "undefined" as CSS
+    const customVars: Record<string, string> = {}
+    const mapping: [string, string | undefined][] = [
+      ["--oc-user-msg-bg", merged.userMessageBg],
+      ["--oc-user-msg-fg", merged.userMessageFg],
+      ["--oc-assistant-msg-bg", merged.assistantMessageBg],
+      ["--oc-assistant-msg-fg", merged.assistantMessageFg],
+      ["--oc-tool-call", merged.toolCallColor],
+      ["--oc-tool-read", merged.toolReadColor],
+      ["--oc-tool-write", merged.toolWriteColor],
+      ["--oc-tool-exec", merged.toolExecColor],
+      ["--oc-skill-badge-bg", merged.skillBadgeBg],
+      ["--oc-skill-badge-fg", merged.skillBadgeFg],
+      ["--oc-thinking-bg", merged.thinkingBg],
+      ["--oc-thinking-border", merged.thinkingBorder],
+      ["--oc-warning", merged.warningColor],
+      ["--oc-error", merged.errorColor],
+      ["--oc-success", merged.successColor],
+      ["--oc-accent", merged.accentColor],
+      ["--oc-diff-added", merged.diffAdded],
+      ["--oc-diff-removed", merged.diffRemoved],
+      ["--oc-input-bg", merged.inputBg],
+      ["--oc-input-border", merged.inputBorder],
+      ["--oc-mention-bg", merged.mentionBg],
+      ["--oc-syntax-comment", merged.syntaxComment],
+      ["--oc-syntax-keyword", merged.syntaxKeyword],
+      ["--oc-syntax-string", merged.syntaxString],
+      ["--oc-syntax-number", merged.syntaxNumber],
+      ["--oc-syntax-function", merged.syntaxFunction],
+      ["--oc-syntax-type", merged.syntaxType],
+      ["--oc-syntax-operator", merged.syntaxOperator],
+    ]
+    for (const [key, value] of mapping) {
+      if (value !== undefined && value !== null) {
+        customVars[key] = value
+      }
+    }
+
     return {
       kind: this.currentKind,
-      customVars: {
-        "--oc-user-msg-bg": merged.userMessageBg!,
-        "--oc-user-msg-fg": merged.userMessageFg!,
-        "--oc-assistant-msg-bg": merged.assistantMessageBg!,
-        "--oc-assistant-msg-fg": merged.assistantMessageFg!,
-        "--oc-tool-call": merged.toolCallColor!,
-        "--oc-tool-read": merged.toolReadColor!,
-        "--oc-tool-write": merged.toolWriteColor!,
-        "--oc-tool-exec": merged.toolExecColor!,
-        "--oc-skill-badge-bg": merged.skillBadgeBg!,
-        "--oc-skill-badge-fg": merged.skillBadgeFg!,
-        "--oc-thinking-bg": merged.thinkingBg!,
-        "--oc-thinking-border": merged.thinkingBorder!,
-        "--oc-warning": merged.warningColor!,
-        "--oc-error": merged.errorColor!,
-        "--oc-success": merged.successColor!,
-        "--oc-accent": merged.accentColor!,
-        "--oc-diff-added": merged.diffAdded!,
-        "--oc-diff-removed": merged.diffRemoved!,
-        "--oc-input-bg": merged.inputBg!,
-        "--oc-input-border": merged.inputBorder!,
-        "--oc-mention-bg": merged.mentionBg!,
-        "--oc-syntax-comment": merged.syntaxComment!,
-        "--oc-syntax-keyword": merged.syntaxKeyword!,
-        "--oc-syntax-string": merged.syntaxString!,
-        "--oc-syntax-number": merged.syntaxNumber!,
-        "--oc-syntax-function": merged.syntaxFunction!,
-        "--oc-syntax-type": merged.syntaxType!,
-        "--oc-syntax-operator": merged.syntaxOperator!,
-      },
+      customVars,
     }
   }
 
@@ -316,6 +362,8 @@ export class ThemeManager {
   }
 
   dispose(): void {
+    for (const d of this.disposables) d.dispose()
+    this.disposables = []
     this._onThemeChanged.dispose()
   }
 }

@@ -1,8 +1,8 @@
 # System Architecture Design — OpenCode Harness
 
-**Version:** 1.0  
-**Date:** 2026-05-02  
-**Status:** Draft
+**Version:** 2.0 (Multi-Tab Redesign)
+**Date:** 2026-05-02
+**Status:** Current
 
 ---
 
@@ -10,40 +10,56 @@
 
 ### 1.1 High-Level Architecture
 
-OpenCode Harness follows a **Client-Server model** where:
+OpenCode Harness follows a **Client-Server model** with **multi-tab worker support**:
+
 - **Server**: The opencode HTTP server (`opencode serve`), exposing a full OpenAPI 3.1 REST API + SSE event stream on a local port
 - **Client**: The VS Code extension, communicating via the official `@opencode-ai/sdk` npm package
+- **Multi-Tab**: Each tab is an independent worker (server session) with its own model, mode, and conversation history. Up to 3 concurrent streams.
 
 The extension does NOT embed or spawn the opencode CLI directly for chat. Instead, it manages the server process lifecycle and interacts through typed SDK calls.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                  VS Code Extension Host                   │
-│  ┌──────────┐ ┌───────────┐ ┌──────────────┐            │
-│  │ Chat     │ │ Context   │ │ Session      │            │
-│  │ Provider │ │ Engine    │ │ Manager      │            │
-│  │ (Webview)│ │ (Worker)  │ │ (SDK wrapper)│            │
-│  └──────────┘ └───────────┘ └──────┬───────┘            │
-│  ┌──────────┐ ┌───────────┐        │                    │
-│  │ Diff     │ │ Checkpoint│        │                    │
-│  │ Applier  │ │ Manager   │        │                    │
-│  └──────────┘ └───────────┘        │                    │
-│  ┌──────────┐ ┌───────────┐        │                    │
-│  │ Inline   │ │ Skill     │        │                    │
-│  │ Actions  │ │ Manager   │        │                    │
-│  └──────────┘ └───────────┘        │                    │
-│  ┌──────────┐ ┌───────────┐        │                    │
-│  │ Context  │ │ Terminal  │        │                    │
-│  │ Monitor  │ │ Bridge    │        │                    │
-│  └──────────┘ └───────────┘        │                    │
-└────────────────────────────────────┼────────────────────┘
-                                     │ @opencode-ai/sdk
-                                     ▼
-                         ┌───────────────────┐
-                         │ opencode serve    │
-                         │ (HTTP :4096)      │
-                         │ REST + SSE        │
-                         └───────────────────┘
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐  │
+│  │ Chat          │ │ TabManager   │ │ Session       │  │
+│  │ Provider      │◄┤ (concurrency)│ │ Store         │  │
+│  │ (orchestrator)│ └──────────────┘ │ (persistence) │  │
+│  └──────┬───────┘ ┌──────────────┐ └──────────────┘  │
+│         │           │ StreamCoord. │                    │
+│         │           │ (per-tab      │                    │
+│         │           │  streaming)   │                    │
+│         ▼           └──────┬───────┘                    │
+│  ┌──────────────┐         │                            │
+│  │ MessageRouter│◄────────┘                            │
+│  │ (webview msg  │                                      │
+│  │  routing)     │                                      │
+│  └──────┬───────┘                                      │
+│         │           ┌──────────────┐ ┌──────────────┐   │
+│         └──────────►│ DiffHandler  │ │ WebviewContent│   │
+│                     │ (diff track) │ │ (HTML/CSS)    │   │
+│                     └──────────────┘ └──────────────┘   │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐   │
+│  │ Context       │ │ Model         │ │ Rate Limit    │   │
+│  │ Engine        │ │ Manager       │ │ Monitor       │   │
+│  └──────────────┘ └──────────────┘ └──────────────┘   │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐   │
+│  │ Inline        │ │ Skill         │ │ Checkpoint    │   │
+│  │ Actions       │ │ Manager       │ │ Manager       │   │
+│  └──────────────┘ └──────────────┘ └──────────────┘   │
+│  ┌──────────────┐ ┌──────────────┐                    │
+│  │ Terminal      │ │ Theme         │                    │
+│  │ Bridge        │ │ Manager       │                    │
+│  └──────────────┘ └──────────────┘                    │
+└────────────────────────────┼────────────────────────────┘
+                             │ @opencode-ai/sdk
+                             ▼
+                 ┌───────────────────┐
+                 │ opencode serve    │
+                 │ (HTTP :4096)      │
+                 │ REST + SSE        │
+                 │ Multi-session     │
+                 └───────────────────┘
 ```
 
 ### 1.2 Design Principles
@@ -53,6 +69,8 @@ The extension does NOT embed or spawn the opencode CLI directly for chat. Instea
 3. **Non-blocking**: All intensive work (context gathering, diff generation) runs in worker threads.
 4. **Transactional writes**: Code changes are never applied directly. Diff → Review → Apply via VS Code's undoable edit API.
 5. **Graceful degradation**: Every component handles the case where opencode is unavailable.
+6. **Multi-tab concurrency**: Each tab is a lightweight wrapper around a server session. Max 3 concurrent streams.
+7. **Soft-close semantics**: Closing a tab stops the worker but preserves chat history in SessionStore.
 
 ---
 
@@ -63,14 +81,15 @@ The extension does NOT embed or spawn the opencode CLI directly for chat. Instea
 ```
 activate(context: vscode.ExtensionContext):
   1. Initialize SessionManager (does NOT start server yet)
-  2. Register ChatProvider webview
+  2. Register ChatProvider webview (with TabManager, StreamCoordinator, etc.)
   3. Register InlineActionProvider (CodeLens + context menus)
   4. Register SkillManager tree view
   5. Register ContextMonitor status bar item
   6. Register TerminalBridge output channel
-  7. Register all commands + keyboard shortcuts
-  8. Register URI handler (vscode://opencode-harness/open)
-  9. On first chat open → start opencode server
+  7. Register ModelManager status bar item
+  8. Register all commands + keyboard shortcuts (including tab shortcuts)
+  9. Register URI handler (vscode://opencode-harness/open)
+  10. On first chat open → start opencode server
 
 deactivate():
   1. Stop opencode server process
@@ -79,7 +98,7 @@ deactivate():
 ```
 
 **Key decisions:**
-- Lazy server startup: server starts when user first opens chat, not at extension activation (minimizes startup overhead).
+- Lazy server startup: server starts when user first opens chat, not at extension activation.
 - `context.subscriptions.push(...)` pattern for automatic cleanup.
 - Workspace state for persistence (chat history, server port).
 
@@ -130,22 +149,301 @@ class SessionManager {
 7. Subscribe to `/event` SSE stream
 8. Store port in workspace state
 
-**Crash recovery:**
-1. Monitor server process for `exit` event
-2. If unexpected exit: set reconnect timer (1s, 2s, 4s, 8s exponential backoff)
-3. On reconnect: restore last session ID from workspace state
-4. Emit `server:reconnected` event → ChatProvider restores state
+---
 
-**SDK error handling:**
-All SDK calls are wrapped in try/catch. Errors are classified:
-- `ConnectionError` → server unreachable, trigger reconnect
-- `SessionNotFoundError` → stale session reference
-- `PermissionRequiredError` → emit to ChatProvider for user approval
-- `TimeoutError` → model took too long, present retry option
+### 2.3 SessionStore (`src/session/SessionStore.ts`)
+
+**Responsibility:** Persistent session storage with backward-compatible migration.
+
+```
+class SessionStore {
+  private sessions: Map<string, OpenCodeSession>
+  private activeSessionId: string | null
+
+  create(name?: string, id?: string): OpenCodeSession  // id defaults to crypto.randomUUID()
+  ensure(id: string, name?: string, model?: string, mode?: string): OpenCodeSession
+  get(id: string): OpenCodeSession | undefined
+  getAll(): OpenCodeSession[]
+  delete(id: string): boolean
+  updateModel(id: string, model: string): void
+  updateMode(id: string, mode: string): void
+  setActive(id: string): void
+  getActive(): OpenCodeSession | undefined
+  setActiveModel(model: string): void
+  // ... event emitters
+}
+```
+
+**Session object:**
+```typescript
+interface OpenCodeSession {
+  id: string
+  name: string
+  createdAt: number
+  lastActiveAt: number
+  model: string           // per-session model override
+  mode: string            // "normal" | "plan" | "auto_accept"
+  messages: ChatMessage[] // full conversation history
+}
+```
+
+**Migration:** Automatically migrates from old flat format (`{ messages, currentMode, currentSessionId }`) to new multi-session format (`{ sessions, activeSessionId, nextSessionNum, globalModel }`).
 
 ---
 
-### 2.3 ContextEngine (`src/context/ContextEngine.ts`)
+### 2.4 ChatProvider (`src/chat/ChatProvider.ts`)
+
+**Responsibility:** Main webview provider — orchestrates backend modules (refactored from 617 lines to ~280 lines).
+
+**Architecture:** Delegates to focused handler modules:
+
+```
+class ChatProvider implements vscode.WebviewViewProvider {
+  private tabManager: TabManager
+  private streamCoordinator: StreamCoordinator
+  private messageRouter: MessageRouter
+  private webviewContent: WebviewContent
+
+  resolveWebviewView(webviewView, context, token): Promise<void>
+  // ... postMessage, dispose
+}
+```
+
+**PostMessage protocol (Host → Webview):**
+
+| Message Type | Payload | Purpose |
+|---------------|----------|---------|
+| `init` | `{ sessions, activeSessionId, models, activeModel, globalModel }` | Initial state sync |
+| `create_tab` | `{ sessionId, name, model, mode }` | New tab created |
+| `switch_tab` | `{ sessionId }` | Tab switched |
+| `close_tab` | `{ sessionId }` | Tab closed (worker stopped) |
+| `message` | `{ sessionId, message }` | New message received |
+| `stream_start` | `{ sessionId, messageId }` | Streaming started |
+| `stream_chunk` | `{ sessionId, messageId, chunk }` | Streaming chunk |
+| `stream_end` | `{ sessionId, messageId }` | Streaming ended |
+| `streaming_state` | `{ sessionId, isStreaming }` | Tab streaming state |
+| `token_usage` | `{ sessionId, percentage, tokens, limit }` | Token usage update |
+| `model_changed` | `{ sessionId, model }` | Model changed for tab |
+| `mode_changed` | `{ sessionId, mode }` | Mode changed for tab |
+| `task_complete` | `{ sessionId, status, message }` | Task completion banner |
+| `request_error` | `{ sessionId, error, canRetry }` | Error with retry option |
+| `diff` | `{ sessionId, messageId, blockId, diff }` | Diff block to display |
+| `server_status` | `{ status }` | Server connectivity status |
+| `sessions_list` | `{ sessions }` | Session list for picker |
+
+**PostMessage protocol (Webview → Host):**
+
+| Message Type | Payload | Purpose |
+|---------------|----------|---------|
+| `ready` | — | Webview loaded, request init |
+| `create_tab` | `{ name, model, mode }` | Create new tab |
+| `send_prompt` | `{ sessionId, text, attachments }` | Send user message |
+| `abort` | `{ sessionId }` | Abort streaming for tab |
+| `switch_tab` | `{ sessionId }` | Switch to tab |
+| `close_tab` | `{ sessionId }` | Close tab (stops worker, keeps history) |
+| `change_mode` | `{ sessionId, mode }` | Change mode for tab |
+| `set_model` | `{ sessionId, model }` | Set model for tab |
+| `accept_diff` | `{ sessionId, blockId, edits }` | Accept diff |
+| `reject_diff` | `{ sessionId, blockId }` | Reject diff |
+| `accept_permission` | `{ sessionId, permissionId, response }` | Respond to permission prompt |
+| `resume_session` | `{ sessionId }` | Resume a session from history |
+| `delete_session` | `{ sessionId }` | Delete session from history |
+| `rename_session` | `{ sessionId, name }` | Rename session |
+| `mention_search` | `{ query }` | Search for @-mention targets |
+| `mention_results` | `{ items }` | Return mention search results |
+
+---
+
+### 2.5 TabManager (`src/chat/TabManager.ts`)
+
+**Responsibility:** Per-tab state management with concurrency limits.
+
+```
+class TabManager {
+  private tabs: Map<string, TabState>
+  private activeTabId: string | null
+  private readonly MAX_CONCURRENT = 3
+
+  createTab(id: string, name?: string, model?: string, mode?: string): TabState
+  getTab(id: string): TabState | undefined
+  switchTab(id: string): void
+  closeTab(id: string): boolean  // aborts streaming, removes tab state
+  setStreaming(id: string, streaming: boolean): void
+  setModel(id: string, model: string): void
+  setMode(id: string, mode: string): void
+  getActiveTab(): TabState | undefined
+  canStartNewStream(): boolean  // checks MAX_CONCURRENT
+  getStreamingTabs(): TabState[]  // for "too many streams" warning
+  // ... event emitters
+}
+```
+
+**Tab state:**
+```typescript
+interface TabState {
+  id: string
+  name: string
+  model: string
+  mode: string
+  isStreaming: boolean
+  completionTimeout: NodeJS.Timer | null
+}
+```
+
+**Concurrency behavior:**
+- Max 3 concurrent streams (`MAX_CONCURRENT = 3`)
+- Attempting to start a 4th stream: shows warning with names of currently streaming tabs
+- `canStartNewStream()` checks count before allowing new streams
+
+---
+
+### 2.6 StreamCoordinator (`src/chat/handlers/StreamCoordinator.ts`)
+
+**Responsibility:** Per-tab streaming lifecycle management.
+
+```
+class StreamCoordinator {
+  private activeStreams: Map<string, AbortController>
+
+  async startStream(
+    sessionId: string,
+    prompt: string,
+    context: ContextPackage,
+    callbacks: StreamCallbacks
+  ): Promise<void>
+
+  async abort(sessionId: string, callbacks: StreamCallbacks): Promise<boolean>
+
+  isStreaming(sessionId: string): boolean
+  getActiveStreamCount(): number
+  abortAll(): Promise<void>
+}
+```
+
+**Stream lifecycle:**
+1. `startStream()` creates an `AbortController`, calls `sessionManager.sendPrompt()`, subscribes to SSE events
+2. Events routed to callbacks: `onChunk()`, `onComplete()`, `onError()`
+3. `abort()` calls `abortSession()` on SessionManager, cleans up controller
+4. Completion: sets up auto-refresh timer (`completionTimeout`) for session status polling
+
+---
+
+### 2.7 MessageRouter (`src/chat/handlers/MessageRouter.ts`)
+
+**Responsibility:** Route webview messages to appropriate handlers.
+
+```
+class MessageRouter {
+  constructor(
+    tabManager: TabManager,
+    streamCoordinator: StreamCoordinator,
+    sessionManager: SessionManager,
+    sessionStore: SessionStore,
+    webviewContent: WebviewContent,
+    // ... callbacks
+  ) {}
+
+  async route(msg: WebviewMessage, postMessage: PostMessage): Promise<void>
+}
+```
+
+**Routing logic:**
+- `send_prompt` → `streamCoordinator.startStream()` with context from `ContextEngine`
+- `abort` → `streamCoordinator.abort()`
+- `close_tab` → abort if streaming, then `tabManager.closeTab()`
+- `switch_tab` → `tabManager.switchTab()`, sync state
+- `change_mode` / `set_model` → update TabManager + SessionStore
+- `accept_diff` / `reject_diff` → delegate to `DiffHandler`
+
+---
+
+### 2.8 DiffHandler (`src/chat/handlers/DiffHandler.ts`)
+
+**Responsibility:** Track pending diffs and handle accept/reject actions.
+
+```
+class DiffHandler {
+  private pendingDiffs: Map<string, DiffState>  // key: blockId
+
+  async handleDiff(block: DiffBlock, sessionId: string): Promise<void>
+  async accept(blockId: string, edits?: Edit[]): Promise<boolean>
+  async reject(blockId: string): Promise<void>
+  getPendingForSession(sessionId: string): DiffState[]
+}
+```
+
+---
+
+### 2.9 WebviewContent (`src/chat/WebviewContent.ts`)
+
+**Responsibility:** Generate the HTML/CSS content for the webview panel.
+
+```
+class WebviewContent {
+  constructor(extensionUri: vscode.Uri) {}
+
+  build(webview: vscode.Webview, themeManager: ThemeManager): string
+  private buildThemeStyleTag(vars: ThemeVariables, nonce: string): string
+  private getNonce(): string
+}
+```
+
+**CSS bundling:** Uses esbuild to bundle 8 modular CSS files into `dist/chat/webview/styles.css`:
+- `tokens.css` — Design tokens (spacing, typography, colors, animation)
+- `base.css` — Reset & utilities
+- `layout.css` — Header, tab bar, input area
+- `components.css` — Buttons, chips, badges
+- `messages.css` — Message bubbles, task banners
+- `blocks.css` — Code blocks, tool cards, diffs
+- `animations.css` — Keyframes & transitions
+- `accessibility.css` — Focus rings, reduced-motion, high-contrast
+
+**Static webview assets:** `esbuild.js` copies `src/chat/webview/index.html` and `media/opencode-wordmark-dark.svg` into `dist/chat/webview/`. `WebviewContent` rewrites the wordmark image to a VS Code webview URI and allows `${webview.cspSource}` in `img-src`, so the branded welcome state works in both standalone Playwright tests and packaged VSIX installs.
+
+---
+
+### 2.10 Frontend Webview Modules (`src/chat/webview/`)
+
+**Responsibility:** Client-side logic in the webview iframe.
+
+| Module | Purpose |
+|--------|---------|
+| `main.ts` | Entry point — initializes state, wires up event listeners, handles multi-tab logic |
+| `state.ts` | `StateManager` — multi-session state with migration from old format |
+| `dom.ts` | `DOMElements` — cached references to all UI elements |
+| `renderer.ts` | `MessageRenderer` — renders message blocks (text, tool calls, diffs, task banners) |
+| `stream.ts` | `StreamHandler` — handles streaming messages with `StreamElements` interface |
+| `tabs.ts` | `TabBar` — tab bar UI, create/switch/close tabs, streaming indicators |
+| `model-dropdown.ts` | `ModelDropdown` — per-tab model picker with provider grouping |
+| `token-indicator.ts` | `TokenIndicator` — token usage pill with color-coded progress |
+| `mentions.ts` | `@-mention` autocomplete for files, folders, problems, terminals |
+| `sessions.ts` | Session picker overlay for resuming/deleting/renaming sessions |
+| `theme.ts` | Context chips and usage bar rendering |
+
+**State management (frontend):**
+```typescript
+interface AppState {
+  sessions: Record<string, TabData>  // sessionId → messages + metadata
+  activeSessionId: string | null
+  nextSessionNum: number
+  globalModel: string
+}
+
+interface TabData {
+  id: string
+  name: string
+  model: string
+  mode: string
+  messages: ChatMessage[]
+  isStreaming: boolean
+}
+```
+
+**Tab switching:** Uses `display: none` for inactive tab contents (instant switching, no re-render). Active tab gets `display: flex`.
+
+---
+
+### 2.11 ContextEngine (`src/context/ContextEngine.ts`)
 
 **Responsibility:** Gather workspace intelligence and package it for the AI. Runs in a Node.js `Worker` thread to avoid blocking the UI.
 
@@ -219,310 +517,83 @@ interface ContextPackage {
 | Basic | openFiles, diagnostics, git branch, workspaceTree | <10ms |
 | Deep | Basic + full git diff, project configs, AST structure | <50ms |
 
-**Context size management:**
-- Total context package capped at ~50KB of text
-- Files larger than 8KB are truncated with a marker: `[File truncated: 12KB shown of 45KB total]`
-- If package exceeds limit, files are prioritized: active editor > visible tabs > background tabs
-- Token count estimated via simple heuristic (4 chars ≈ 1 token), not external library (avoids dependency bloat and matches opencode's internal estimation within reasonable margin)
+---
+
+### 2.12 ModelManager (`src/model/ModelManager.ts`)
+
+**Responsibility:** Model selection, listing, and status bar indicator.
+
+```
+class ModelManager {
+  private models: ModelInfo[]
+  private statusBarItem: vscode.StatusBarItem
+
+  async fetchModels(): Promise<ModelInfo[]>
+  getModels(): ModelInfo[]
+  getModel(id: string): ModelInfo | undefined
+  setDefaultModel(model: string): void
+  getDefaultModel(): string
+  groupByProvider(): Record<string, ModelInfo[]>
+  updateStatusBar(modelId: string): void
+  // ... event emitters
+}
+```
+
+**Model info:**
+```typescript
+interface ModelInfo {
+  id: string            // e.g., "anthropic/claude-3-5-sonnet-20241022"
+  name: string          // display name
+  provider: string      // "Anthropic", "OpenAI", etc.
+  contextWindow: number  // token limit
+  supportsStreaming: boolean
+}
+```
 
 ---
 
-### 2.4 ChatProvider (`src/chat/ChatProvider.ts` + `src/chat/webview/`)
+### 2.13 Other Components
 
-**Responsibility:** Manage the webview chat panel — the primary user interaction point.
-
-**Architecture:** Two-part system following VS Code's webview pattern.
-
-**Extension host side (`ChatProvider.ts`):**
-- Implements `vscode.WebviewViewProvider`
-- Manages message routing between webview ↔ SessionManager
-- Handles `postMessage` protocol
-- Persists chat history to workspace state
-
-**Webview side (`src/chat/webview/`):**
-- Plain HTML/CSS/JS (no framework dependency, minimizes bundle size)
-- Uses VS Code CSS variables for automatic theme compatibility
-- Renders interactive message blocks: text, tool cards, skill cards, diff blocks
-- Handles @-mention autocomplete
-- Permission mode selector UI
-
-**PostMessage protocol:**
-
-```
-// Host → Webview
-{ type: "message", message: ChatMessage }
-{ type: "stream_start", messageId: string }
-{ type: "stream_chunk", messageId: string, chunk: PartBlock }
-{ type: "stream_end", messageId: string }
-{ type: "context_usage", percentage: number, tokens: number }
-{ type: "server_status", status: "idle" | "thinking" | "error" }
-{ type: "session_list", sessions: SessionSummary[] }
-
-// Webview → Host
-{ type: "send_prompt", text: string, attachments: Attachment[] }
-{ type: "accept_diff", messageId: string, blockId: string, edits?: Edit[] }
-{ type: "reject_diff", messageId: string, blockId: string }
-{ type: "accept_permission", permissionId: string, response: "allow" | "deny" }
-{ type: "change_mode", mode: "normal" | "plan" | "auto_accept" }
-{ type: "abort" }
-{ type: "resume_session", sessionId: string }
-{ type: "new_session" }
-```
-
-**Message rendering types:**
-
-| Block Type | Visual Representation |
-|-----------|----------------------|
-| TextBlock | Markdown-rendered text with syntax-highlighted code blocks |
-| ToolCallCard | Expandable card: tool name + input args (collapsed) + result (expandable). Color-coded by tool type. |
-| SkillCard | Badge with skill name + duration indicator. Expandable for activation output. |
-| ThinkingBlock | Collapsible reasoning text (default collapsed). |
-| DiffBlock | Side-by-side or unified diff with Accept All / Accept Line / Reject / Edit buttons. |
-| ContextBlock | Summary of what context was gathered (file count, diagnostic count). Collapsible. |
-| PermissionPrompt | Inline prompt: "Allow X to run Y?" with Allow Once / Allow Always / Deny buttons. |
-| PlanBlock | Markdown document opened as a VS Code document for inline commenting. |
-
-**@-mention system:**
-When user types `@` in chat input:
-1. Webview sends `{ type: "mention_search", query: string }` to host
-2. Host queries VS Code API for file matches
-3. Special prefixes trigger different sources:
-   - `@file` — fuzzy file path search
-   - `@folder` — directory search, injects all files
-   - `@problems` — injects workspace errors/warnings
-   - `@url` — fetch and convert to markdown
-   - `@terminal` — capture terminal output
-4. Results returned as `{ type: "mention_results", items: MentionItem[] }`
-5. Selected mention inserts reference text: `@src/services/auth.ts#L12-34`
-
----
-
-### 2.5 DiffApplier (`src/diff/DiffApplier.ts`)
-
+#### DiffApplier (`src/diff/DiffApplier.ts`)
 **Responsibility:** Parse AI-generated code, compute diff against current file state, present for review, apply via VS Code API.
 
-```
-class DiffApplier {
-  // Parse code blocks from message parts
-  parseCodeBlocks(parts: Part[]): ProposedEdit[]
-
-  // Generate unified diff text between original and proposed
-  generateDiff(filePath: string, proposed: string): string
-
-  // Apply accepted diff via workspace.applyEdit
-  async acceptEdit(edit: ProposedEdit): Promise<boolean>
-
-  // Calculate context-preserving partial diff for line-level accept
-  async acceptPartialEdit(edit: ProposedEdit, acceptedLines: number[]): Promise<boolean>
-
-  // Reject edit (no file change, just dismiss UI)
-  rejectEdit(edit: ProposedEdit): void
-}
-
-interface ProposedEdit {
-  filePath: string
-  originalContent: string   // snapshot of file before AI suggestion
-  proposedContent: string   // what the AI wants to write
-  messageId: string
-  blockId: string
-}
-```
-
-**Diff application flow:**
-1. AI response contains code block with language identifier and file path hint
-2. DiffApplier reads current file content from VS Code API
-3. If file path is explicit (e.g., `// src/foo.ts` in code fence), use that. Otherwise, infer from context.
-4. Compute diff using `fast-diff` library (or minimal implementation)
-5. Present diff in webview as `DiffBlock`
-6. On accept: `workspace.applyEdit()` with a `WorkspaceEdit` containing the text replacement → fully undoable via Ctrl+Z
-7. On partial accept: only specific hunks are applied
-8. On reject: dismiss the diff block, no file change
-
-**Safety:**
-- Never apply to files outside the workspace
-- Never apply if file was modified since the diff was computed (stale diff → warn user)
-- All edits go through VS Code's undo stack
-
----
-
-### 2.6 CheckpointManager (`src/checkpoint/CheckpointManager.ts`)
-
+#### CheckpointManager (`src/checkpoint/CheckpointManager.ts`)
 **Responsibility:** Create lightweight git snapshots before AI file writes, enabling instant rollback.
 
-```
-class CheckpointManager {
-  // Take a snapshot of the current workspace state
-  async snapshot(sessionId: string, messageId: string): Promise<Checkpoint>
-
-  // Restore workspace to a specific checkpoint
-  async restore(checkpointId: string, mode: "workspace_only" | "full"): Promise<boolean>
-
-  // List all checkpoints for a session
-  async listCheckpoints(sessionId: string): Promise<Checkpoint[]>
-
-  // Compare workspace with a checkpoint (return file list + diffs)
-  async compare(checkpointId: string): Promise<FileDiff[]>
-
-  // Clean up old checkpoints
-  async prune(sessionId: string): Promise<void>
-}
-
-interface Checkpoint {
-  id: string
-  sessionId: string
-  messageId: string
-  timestamp: number
-  filesChanged: string[]
-  gitRef: string        // the git ref (branch/tag/commit) for this snapshot
-}
-```
-
-**Implementation:**
-- Uses `git worktree add` to create a linked working tree from a snapshot commit
-- Worktree is created in `.opencode-harness/checkpoints/{id}/`
-- Snapshot commit is created via `git commit --allow-empty -m "checkpoint: {sessionId}:{messageId}"`
-- Rollback: `git checkout {gitRef}` in the main worktree, then `git worktree remove` the checkpoint
-- Workspace state (VS Code settings, open tabs) is NOT affected — only files
-- Checkpoints are auto-pruned after session ends (keep last 5)
-
-**Limitations:**
-- Requires the workspace to be a git repository with no uncommitted changes conflicting with rollback
-- Detached HEAD state: uncommitted changes on detached HEAD are preserved via `git stash` before rollback
-- Bare repositories: not supported (checkpoint is disabled, user warned)
-
----
-
-### 2.7 InlineActionProvider (`src/inline/InlineActionProvider.ts`)
-
+#### InlineActionProvider (`src/inline/InlineActionProvider.ts`)
 **Responsibility:** Provide CodeLens annotations and context menu actions for selected code.
 
-```
-class InlineActionProvider implements vscode.CodeLensProvider {
-  provideCodeLenses(document: vscode.TextDocument, token: vscode.CancellationToken): vscode.CodeLens[]
-  resolveCodeLens?(codeLens: vscode.CodeLens, token: vscode.CancellationToken): vscode.CodeLens
-}
-
-// Registered commands:
-// opencode-harness.explainCode
-// opencode-harness.refactorCode
-// opencode-harness.generateTests
-// opencode-harness.optimizeCode
-// opencode-harness.reviewCode
-// opencode-harness.findBugs
-```
-
-**CodeLens placement:** Functions, classes, methods, and exported constants. Lenses appear only on lines with recognizable code structures (detected via simple regex + optional Language Server Protocol symbol query).
-
-**Action execution:**
-1. User clicks CodeLens or uses context menu
-2. Selected code + file context gathered
-3. Prompt constructed: `{action}: {code}` with surrounding file context
-4. Sent to opencode via SessionManager as a new inline session
-5. Response diff shown inline in the editor (not requiring chat panel open)
-
----
-
-### 2.8 SkillManager (`src/skills/SkillManager.ts`)
-
+#### SkillManager (`src/skills/SkillManager.ts`)
 **Responsibility:** Tree view for browsing, enabling, and disabling opencode skills.
 
-```
-class SkillManager implements vscode.TreeDataProvider<SkillItem> {
-  getTreeItem(element: SkillItem): vscode.TreeItem
-  getChildren(element?: SkillItem): vscode.ProviderResult<SkillItem[]>
-
-  async refresh(): Promise<void>
-  async enableSkill(skillId: string): Promise<void>
-  async disableSkill(skillId: string): Promise<void>
-  async getSkillStatus(skillId: string): Promise<SkillStatus>
-}
-```
-
-**Tree structure:**
-```
-Skills
-├── Built-in Skills
-│   ├── brainstorming (enabled) ●
-│   ├── systematic-debugging (enabled) ●
-│   └── test-driven-development (disabled) ○
-└── Custom Skills
-    └── my-company-workflow (enabled) ●
-```
-
-**Implementation:**
-- Skill list fetched from opencode's config/skills directory
-- Enable/disable modifies `.opencode/skills/` or opencode config
-- Status bar icon shows a badge when any skill is actively loaded
-- Double-click a skill to view its source `.md` file
-
----
-
-### 2.9 ContextMonitor (`src/monitor/ContextMonitor.ts`)
-
+#### ContextMonitor (`src/monitor/ContextMonitor.ts`)
 **Responsibility:** Status bar ring indicator showing context window usage.
 
-```
-class ContextMonitor {
-  private statusBarItem: vscode.StatusBarItem
-  private currentPercentage: number
+#### RateLimitMonitor (`src/monitor/RateLimitMonitor.ts`)
+**Responsibility:** Track API rate limits and surface warnings in the UI.
 
-  updateUsage(tokensUsed: number, tokensTotal?: number): void
-  showWarning(message: string): void
-  dispose(): void
-}
-```
-
-**Status bar item rendering:**
-- Text: `◉ OC 42%` (filled circle + percentage)
-- Tooltip: `OpenCode Harness — 42,350 / 100,000 tokens`
-- Color: green (<50%), yellow (50-75%), red (>75%), flashing red (>90%)
-- Command on click: open context detail view or trigger `/compact`
-
-**Token estimation:**
-- ContextPackage text length / 4 (heuristic: ~4 chars per token for English text + code)
-- Server-side verification: query session status for actual token count when available
-- Display both when available: `42% (est.)` vs `42% (live)`
-
----
-
-### 2.10 TerminalBridge (`src/terminal/TerminalBridge.ts`)
-
+#### TerminalBridge (`src/terminal/TerminalBridge.ts`)
 **Responsibility:** Dedicated output channel for raw server logs and terminal output capture.
 
-```
-class TerminalBridge {
-  private outputChannel: vscode.OutputChannel
-
-  log(level: string, message: string): void
-  captureTerminalSelection(terminal: vscode.Terminal): Promise<string>
-  dispose(): void
-}
-```
-
-**Output channel:**
-- Named "OpenCode Harness"
-- Shows: server startup logs, SDK calls (method + path), errors, performance metrics
-- PII redaction: API keys, tokens, passwords are masked
-
-**Terminal capture:**
-- User selects text in any VS Code terminal
-- Runs command "OpenCode Harness: Capture Terminal Selection"
-- Captured text stored, available as `@terminal` mention in chat
+#### ThemeManager (`src/theme/ThemeManager.ts`)
+**Responsibility:** Resolve theme variables from presets, CLI config, and user overrides.
 
 ---
 
 ## 3. Data Flow
 
-### 3.1 User Sends a Chat Message
+### 3.1 User Sends a Chat Message (Multi-Tab)
 
 ```
-User types message
+User types message in Tab A
        │
        ▼
-ChatProvider (webview)
-       │ postMessage { type: "send_prompt" }
+ChatProvider (webview main.ts)
+       │ postMessage { type: "send_prompt", sessionId: "tab-A" }
        ▼
-ChatProvider (host)
+MessageRouter
+       │
+       ├─→ TabManager.setStreaming("tab-A", true)
        │
        ├─→ ContextEngine.gatherContext() ──→ ContextPackage
        │   (worker thread, non-blocking)
@@ -530,28 +601,75 @@ ChatProvider (host)
        ├─→ CheckpointManager.snapshot()
        │   (git worktree, before any potential writes)
        │
-       └─→ SessionManager.sendPrompt(sessionId, parts, context)
+       └─→ StreamCoordinator.startStream("tab-A", prompt, context)
               │
-              ├─→ POST /session/:id/message ──→ opencode server
+              ├─→ SessionManager.sendPrompt(sessionId, parts, context)
+              │      │
+              │      ├─→ POST /session/:id/message ──→ opencode server
+              │      │
+              │      ├─→ SSE /event stream ──→ real-time tool/skill/thinking events
+              │      │   │
+              │      │   └─→ StreamCoordinator ──→ ChatProvider (host)
+              │      │       │
+              │      │       └─→ postMessage to webview: "stream_chunk"
+              │      │           │
+              │      │           └─→ MessageRenderer (webview)
+              │      │               (render tool cards, skill cards, thinking blocks)
+              │      │
+              │      └─→ Response received (AssistantMessage with parts[])
+              │             │
+              │             ├─→ DiffApplier.parseCodeBlocks()
+              │             │   │
+              │             │   └─→ postMessage: "diff" block to webview
+              │             │       │
+              │             │       └─→ User clicks Accept → DiffApplier.acceptEdit()
+              │             │           │
+              │             │           └─→ workspace.applyEdit() → native undo stack
+              │             │
+              │             └─→ TokenIndicator.updateUsage()
               │
-              ├─→ SSE /event stream ──→ real-time tool/skill/thinking events
-              │   │
-              │   └─→ ChatProvider (host) ──→ ChatProvider (webview)
-              │       (render tool cards, skill cards, thinking blocks in real-time)
-              │
-              └─→ Response received (AssistantMessage with parts[])
+              └─→ TabManager.setStreaming("tab-A", false)
                      │
-                     ├─→ DiffApplier.parseCodeBlocks()
-                     │   │
-                     │   └─→ ChatProvider (webview): render DiffBlock
-                     │       │
-                     │       └─→ User clicks Accept → DiffApplier.acceptEdit()
-                     │           workspace.applyEdit() → native undo stack
-                     │
-                     └─→ ContextMonitor.updateUsage()
+                     └─→ postMessage: "task_complete" banner
 ```
 
-### 3.2 Inline Code Action
+### 3.2 Tab Close Semantics
+
+```
+User clicks × on Tab A
+       │
+       ▼
+TabBar (webview tabs.ts)
+       │ Removes tab from UI (display: none for content)
+       │ Calls stateManager.deleteSession("tab-A")
+       │
+       ▼
+postMessage { type: "close_tab", sessionId: "tab-A" }
+       │
+       ▼
+MessageRouter
+       │
+       ├─→ Check if tab is streaming:
+       │   └─→ YES: StreamCoordinator.abort("tab-A") → SessionManager.abortSession()
+       │
+       └─→ TabManager.closeTab("tab-A")
+              │ Removes tab state from TabManager
+              │ (SessionStore is NOT deleted — history preserved)
+              │
+              ▼
+       Webview receives confirmation
+              │ Active tab switches to another if needed
+              │ (Tab A's chat history remains in SessionStore for sidebar history)
+```
+
+**Key behaviors:**
+- ✅ Active AI work is **STOPPED** (sessionManager.abortSession())
+- ✅ Server session is **RELEASED** (server may persist to disk, but streaming stops)
+- ✅ Chat history is **PRESERVED** (remains in SessionStore)
+- ✅ Tab UI is **REMOVED** from webview
+- ✅ Other tabs are **UNAFFECTED** (server process keeps running)
+
+### 3.3 Inline Code Action
 
 ```
 User clicks CodeLens "Generate Tests" on a function
@@ -562,7 +680,7 @@ InlineActionProvider
        ├─→ ContextEngine.gatherContext({ mode: "basic" })
        │
        └─→ SessionManager.sendPrompt(inlineSession, [
-             { type: "text", text: "Generate unit tests for the following function:
+             { type: "text", text: "Generate unit tests for the following function:" },
              { type: "text", text: selectedCode }
            ])
               │
@@ -572,7 +690,7 @@ InlineActionProvider
               └─→ Accept/Reject → workspace.applyEdit()
 ```
 
-### 3.3 Server Crash Recovery
+### 3.4 Server Crash Recovery
 
 ```
 opencode server process exits unexpectedly
@@ -607,6 +725,7 @@ SessionManager detects 'exit' event
 | Runtime | Node.js 20+ | Required by VS Code extension host |
 | Language | TypeScript 5.x | Type safety, VS Code API typings |
 | Build | esbuild | Fast bundling, VS Code extension standard |
+| CSS Bundling | esbuild with CSS plugin | Bundle 8 modular CSS files into single stylesheet |
 | AI SDK | `@opencode-ai/sdk` | Official type-safe client for opencode server |
 | Webview UI | Vanilla HTML/CSS/JS | No framework dependency; VS Code CSS variables for theming |
 | Markdown rendering | `marked` (lightweight) | Render assistant text in webview |
@@ -636,15 +755,13 @@ SessionManager detects 'exit' event
     "viewsContainers": {
       "activitybar": [{
         "id": "opencode-harness",
-        "title": "OpenCode Harness",
-        "icon": "$(sparkle)"
+        "title": "OpenCode",
+        "icon": "media/opencode-activity.svg"
       }]
     },
     "views": {
       "opencode-harness": [
-        { "id": "opencode-harness.chat", "name": "Chat" },
-        { "id": "opencode-harness.sessions", "name": "Sessions" },
-        { "id": "opencode-harness.skills", "name": "Skills" }
+        { "id": "opencode-harness.chat", "name": "Chat", "type": "webview" }
       ]
     },
     "commands": [
@@ -656,12 +773,22 @@ SessionManager detects 'exit' event
       { "command": "opencode-harness.generateTests", "title": "Generate Tests" },
       { "command": "opencode-harness.insertMention", "title": "Insert @-Mention Reference" },
       { "command": "opencode-harness.captureTerminal", "title": "Capture Terminal Selection" },
-      { "command": "opencode-harness.rollback", "title": "Rollback Workspace" }
+      { "command": "opencode-harness.rollback", "title": "Rollback Workspace" },
+      { "command": "opencode-harness.selectModel", "title": "Select Model" },
+      { "command": "opencode-harness.showRateLimits", "title": "Show Rate Limits" },
+      { "command": "opencode-harness.checkCli", "title": "Check CLI Communication" },
+      { "command": "opencode-harness.listSessions", "title": "List Sessions" },
+      { "command": "opencode-harness.deleteSession", "title": "Delete Session" },
+      { "command": "opencode-harness.renameSession", "title": "Rename Session" }
     ],
     "keybindings": [
-      { "command": "opencode-harness.toggleFocus", "key": "ctrl+escape" },
-      { "command": "opencode-harness.newSession", "key": "ctrl+shift+escape" },
-      { "command": "opencode-harness.insertMention", "key": "alt+k" }
+      { "command": "opencode-harness.toggleFocus", "key": "ctrl+alt+o" },
+      { "command": "opencode-harness.newSession", "key": "ctrl+alt+n" },
+      { "command": "opencode-harness.insertMention", "key": "alt+k" },
+      { "command": "opencode-harness.newTab", "key": "ctrl+t", "when": "view == opencode-harness.chat" },
+      { "command": "opencode-harness.closeTab", "key": "ctrl+w", "when": "view == opencode-harness.chat" },
+      { "command": "opencode-harness.nextTab", "key": "ctrl+tab", "when": "view == opencode-harness.chat" },
+      { "command": "opencode-harness.prevTab", "key": "ctrl+shift+tab", "when": "view == opencode-harness.chat" }
     ],
     "menus": {
       "editor/context": [
@@ -676,7 +803,61 @@ SessionManager detects 'exit' event
 
 ---
 
-## 6. Error Handling Strategy
+## 6. Design Token System
+
+OpenCode uses a token-based design system for consistent values across the entire interface.
+
+### Spacing Scale (4px baseline)
+All padding, margins, and gaps use a consistent scale:
+- `--space-1: 4px`, `--space-2: 8px`, `--space-3: 12px`, `--space-4: 16px`, `--space-5: 20px`, `--space-6: 24px`, `--space-8: 32px`, `--space-10: 40px`, `--space-12: 48px`, `--space-16: 64px`
+
+### Typography Scale
+- `--text-xs: 11px` (labels, timestamps)
+- `--text-sm: 12px` (buttons, metadata)
+- `--text-base: 13px` (body text, matches VS Code)
+- `--text-md: 14px` (headings)
+- `--text-lg: 16px` (section titles)
+
+### Border Radius Scale
+- `--radius-sm: 3px` (small badges, tags)
+- `--radius-md: 6px` (buttons, inputs)
+- `--radius-lg: 8px` (cards, message bubbles)
+- `--radius-xl: 10px` (modals, panels)
+
+### Shadow Scale
+- `--shadow-xs: 0 1px 2px rgba(0,0,0,0.06)`
+- `--shadow-sm: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06)`
+- `--shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06)`
+- `--shadow-lg: 0 10px 15px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.05)`
+
+### Animation Tokens
+- `--duration-fast: 150ms` (button hovers, toggles)
+- `--duration-normal: 250ms` (dropdowns, panels)
+- `--duration-slow: 350ms` (message entrance)
+- `--duration-slower: 500ms` (page transitions)
+- `--ease-out: cubic-bezier(0.16, 1, 0.3, 1)` (primary easing)
+- `--ease-in-out: cubic-bezier(0.65, 0, 0.35, 1)` (symmetrical)
+
+---
+
+## 7. Accessibility
+
+OpenCode is built with accessibility as a first-class concern:
+
+| Feature | Implementation |
+|---------|-----------------|
+| **Keyboard navigation** | Full support for Tab, Enter, Escape, arrow keys, and shortcuts |
+| **Focus management** | Visible `focus-visible` rings on all interactive elements (2px solid, offset 2px) |
+| **Touch targets** | All interactive elements meet WCAG 2.5.5 minimum (24×24px) |
+| **Reduced motion** | Respects `prefers-reduced-motion` — animations become instant fades |
+| **High contrast** | `forced-colors: active` media query ensures borders and focus states are visible |
+| **ARIA roles** | Tab bar uses `tablist`/`tab`/`tabpanel`, mode selector uses `radiogroup`/`radio` |
+| **Screen reader** | Skip link, aria-labels on icon buttons, live regions for status updates |
+| **Color contrast** | All text meets WCAG 2.2 AA (4.5:1 for normal text, 3:1 for large text) |
+
+---
+
+## 8. Error Handling Strategy
 
 | Scenario | Handling |
 |----------|----------|
@@ -689,10 +870,12 @@ SessionManager detects 'exit' event
 | Git worktree creation fails | Fall back to `git stash` + manual restoration |
 | Webview postMessage size exceeded | Chunk large messages; show progress indicator |
 | Context package too large for token limit | Truncate lowest-priority files; show truncation summary |
+| Max concurrent streams (3) exceeded | Show warning with names of currently streaming tabs |
+| Tab close with active stream | Auto-abort the stream before closing tab |
 
 ---
 
-## 7. Security Considerations
+## 9. Security Considerations
 
 1. **No API key storage**: The extension never receives, stores, or transmits LLM API keys. Authentication is handled entirely by the opencode server.
 2. **Localhost only**: The opencode server binds to `127.0.0.1` only — not reachable from other machines.
@@ -703,12 +886,110 @@ SessionManager detects 'exit' event
 
 ---
 
-## 8. Testing Strategy
+## 10. Testing Strategy
 
 | Level | Scope | Tool |
 |-------|-------|------|
-| Unit | Individual modules (ContextEngine, DiffApplier, etc.) | Mocha + Chai |
+| Unit | Individual modules (ContextEngine, DiffApplier, TabManager, etc.) | Mocha + Chai |
 | Integration | SessionManager + opencode server interaction | `@vscode/test-electron` |
-| Webview | Chat UI rendering and interaction | Playwright (via `@vscode/test-webview`) |
+| Webview | Chat UI rendering and interaction (multi-tab) | Playwright (via `@vscode/test-webview`) |
 | Platform | Arch Linux + Fedora smoke tests | Manual + CI (GitHub Actions with Docker) |
 | Performance | Startup time, context gathering latency | Custom benchmarks |
+
+---
+
+## 11. Build & Development
+
+### Project Structure
+
+```
+src/
+├── chat/
+│   ├── ChatProvider.ts          # Main webview provider (orchestrator)
+│   ├── TabManager.ts            # Per-tab state & concurrency limit
+│   ├── WebviewContent.ts        # HTML/CSS injection for webview
+│   ├── handlers/
+│   │   ├── StreamCoordinator.ts # Per-tab streaming lifecycle
+│   │   ├── MessageRouter.ts     # Webview message routing
+│   │   └── DiffHandler.ts       # Diff apply/reject tracking
+│   └── webview/
+│       ├── index.html           # Webview HTML structure
+│       ├── main.ts              # Webview entry point (multi-tab)
+│       ├── state.ts             # Multi-session state management
+│       ├── dom.ts               # DOM element references
+│       ├── renderer.ts          # Message block rendering
+│       ├── stream.ts            # Streaming message handlers
+│       ├── tabs.ts              # Tab bar UI & logic
+│       ├── model-dropdown.ts    # Model picker dropdown
+│       ├── token-indicator.ts   # Token usage pill
+│       ├── mentions.ts          # @-mention autocomplete
+│       ├── sessions.ts          # Session picker overlay
+│       ├── theme.ts             # Context chips & usage bar
+│       ├── types.ts             # TypeScript interfaces
+│       └── css/
+│           ├── tokens.css       # Design tokens (spacing, type, color)
+│           ├── base.css         # Reset & utilities
+│           ├── layout.css       # Header, tab bar, input
+│           ├── components.css   # Buttons, chips, badges
+│           ├── messages.css     # Message bubbles, banners
+│           ├── blocks.css       # Code, tools, diffs
+│           ├── animations.css   # Keyframes & transitions
+│           ├── accessibility.css # Focus rings, reduced-motion
+│           └── styles.css       # Entry point (imports all)
+├── session/
+│   ├── SessionManager.ts        # opencode server lifecycle
+│   └── SessionStore.ts          # Persistent session storage
+├── context/
+│   └── ContextEngine.ts         # Workspace context gathering
+├── diff/
+│   └── DiffApplier.ts           # Diff parsing & application
+├── monitor/
+│   ├── ContextMonitor.ts        # Context usage status bar
+│   └── RateLimitMonitor.ts      # Rate limit tracking
+├── model/
+│   └── ModelManager.ts          # Model selection & status bar
+├── theme/
+│   └── ThemeManager.ts          # Theme variable resolution
+├── inline/
+│   └── InlineActionProvider.ts  # CodeLens actions
+├── skills/
+│   └── SkillManager.ts          # Skills tree view
+├── terminal/
+│   └── TerminalBridge.ts        # Terminal output capture
+├── checkpoint/
+│   └── CheckpointManager.ts     # Git snapshots
+├── utils/
+│   ├── outputChannel.ts         # Logging utility
+│   ├── tokenCounter.ts          # Token estimation
+│   └── portFinder.ts            # Free port discovery
+└── extension.ts                 # Extension entry point
+```
+
+### Build Commands
+
+```bash
+# Build the extension (production)
+npm run build
+
+# TypeScript type checking
+npm run typecheck
+
+# Watch mode for development
+npm run watch
+
+# Package as .vsix
+npx @vscode/vsce package --no-dependencies --allow-missing-repository
+```
+
+### Build Output
+
+```
+dist/
+├── extension.js              # Bundled extension (335.6kb)
+└── chat/
+    └── webview/
+        ├── main.js          # Bundled webview JS (287.0kb)
+        ├── main.js.map      # Source map
+        ├── styles.css       # Bundled CSS (42.3kb)
+        └── index.html      # Webview entry point
+```

@@ -1,4 +1,7 @@
 import * as vscode from "vscode"
+import * as path from "path"
+import * as fs from "fs"
+import { log } from "../utils/outputChannel"
 
 export interface ProposedEdit {
   filePath: string
@@ -6,6 +9,7 @@ export interface ProposedEdit {
   proposedContent: string
   messageId: string
   blockId: string
+  backupPath?: string
 }
 
 export class DiffApplier {
@@ -15,8 +19,9 @@ export class DiffApplier {
       if (part.type === "text" && part.text) {
         const blocks = this.extractCodeBlocks(part.text)
         for (const block of blocks) {
+          if (!block.path) continue
           edits.push({
-            filePath: block.path || "unknown",
+            filePath: block.path,
             originalContent: "",
             proposedContent: block.code,
             messageId: "",
@@ -30,29 +35,42 @@ export class DiffApplier {
 
   private extractCodeBlocks(text: string): { path?: string; language?: string; code: string }[] {
     const blocks: { path?: string; language?: string; code: string }[] = []
-    const regex = /```(\w+)?(?:\s+\/\/\s*([^\n]+))?\n([\s\S]*?)```/g
+    const regex = /```([^\n]*)\n([\s\S]*?)```/g
     let match
     while ((match = regex.exec(text)) !== null) {
+      const info = this.parseFenceInfo(match[1] || "")
       blocks.push({
-        language: match[1] || undefined,
-        path: match[2] || undefined,
-        code: match[3],
+        language: info.language,
+        path: info.path,
+        code: match[2],
       })
     }
     return blocks
   }
 
-  async generateDiff(filePath: string, proposedContent: string): Promise<string> {
-    const workspaceFolders = vscode.workspace.workspaceFolders
-    if (!workspaceFolders) return proposedContent
+  private parseFenceInfo(info: string): { language?: string; path?: string } {
+    const trimmed = info.trim()
+    if (!trimmed) return {}
 
-    const fullPath = filePath.startsWith("/")
-      ? filePath
-      : vscode.Uri.joinPath(workspaceFolders[0].uri, filePath).fsPath
+    const commentMatch = trimmed.match(/^(\S+)?\s*\/\/\s*(.+)$/)
+    if (commentMatch) {
+      return { language: commentMatch[1], path: commentMatch[2].trim() }
+    }
+
+    const fileMatch = trimmed.match(/^(\S+)?\s+(?:file=|filename=|path=)?(.+)$/)
+    if (fileMatch) {
+      return { language: fileMatch[1], path: fileMatch[2].trim().replace(/^["']|["']$/g, "") }
+    }
+
+    return { language: trimmed }
+  }
+
+  async generateDiff(filePath: string, proposedContent: string): Promise<string> {
+    const uri = this.resolveWorkspaceFile(filePath)
+    if (!uri) return proposedContent
 
     try {
-      const originalUri = vscode.Uri.file(fullPath)
-      const originalDoc = await vscode.workspace.openTextDocument(originalUri)
+      const originalDoc = await vscode.workspace.openTextDocument(uri)
       const originalContent = originalDoc.getText()
       return this.computeUnifiedDiff(filePath, originalContent, proposedContent)
     } catch {
@@ -88,33 +106,99 @@ export class DiffApplier {
   }
 
   async acceptEdit(edit: ProposedEdit): Promise<boolean> {
-    const workspaceFolders = vscode.workspace.workspaceFolders
-    if (!workspaceFolders) return false
-
-    const fullPath = edit.filePath.startsWith("/")
-      ? edit.filePath
-      : vscode.Uri.joinPath(workspaceFolders[0].uri, edit.filePath).fsPath
-
-    const uri = vscode.Uri.file(fullPath)
+    const uri = this.resolveWorkspaceFile(edit.filePath)
+    if (!uri) {
+      throw new Error("Diff target is outside the current workspace.")
+    }
 
     try {
+      // Create backup before applying changes
+      const originalContent = edit.originalContent || await this.readFile(uri)
+      const backupPath = this.createBackup(edit.filePath, originalContent)
+      edit.backupPath = backupPath
+      log.info(`Backup created: ${backupPath}`)
+
+      // Atomic update or create
+      try {
+        const doc = await vscode.workspace.openTextDocument(uri)
+        const wholeRange = new vscode.Range(0, 0, doc.lineCount, 0)
+        const wEdit = new vscode.WorkspaceEdit()
+        wEdit.replace(uri, wholeRange, edit.proposedContent)
+        return await vscode.workspace.applyEdit(wEdit)
+      } catch {
+        const wEdit = new vscode.WorkspaceEdit()
+        wEdit.createFile(uri, { overwrite: true, contents: Buffer.from(edit.proposedContent, "utf8") })
+        return await vscode.workspace.applyEdit(wEdit)
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      log.error(`Error applying edit to ${edit.filePath}`, err)
+
+      if (edit.backupPath) {
+        log.info(`Backup available for rollback: ${edit.backupPath}`)
+      }
+
+      throw new Error(`Failed to apply diff: ${msg}`)
+    }
+  }
+
+  async rollbackEdit(edit: ProposedEdit): Promise<boolean> {
+    if (!edit.backupPath) {
+      throw new Error("No backup available for this edit")
+    }
+
+    try {
+      const backupContent = fs.readFileSync(edit.backupPath, "utf-8")
+      const uri = this.resolveWorkspaceFile(edit.filePath)
+      if (!uri) throw new Error("Original file path no longer valid")
+
       const doc = await vscode.workspace.openTextDocument(uri)
       const wholeRange = new vscode.Range(0, 0, doc.lineCount, 0)
       const wEdit = new vscode.WorkspaceEdit()
-      wEdit.replace(uri, wholeRange, edit.proposedContent)
+      wEdit.replace(uri, wholeRange, backupContent)
       return await vscode.workspace.applyEdit(wEdit)
-    } catch {
-      const wEdit = new vscode.WorkspaceEdit()
-      wEdit.createFile(uri, { overwrite: true })
-      await vscode.workspace.applyEdit(wEdit)
-      const doc = await vscode.workspace.openTextDocument(uri)
-      const wEdit2 = new vscode.WorkspaceEdit()
-      wEdit2.insert(uri, new vscode.Position(0, 0), edit.proposedContent)
-      return await vscode.workspace.applyEdit(wEdit2)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      throw new Error(`Rollback failed: ${msg}`)
     }
+  }
+
+  private async readFile(uri: vscode.Uri): Promise<string> {
+    const doc = await vscode.workspace.openTextDocument(uri)
+    return doc.getText()
+  }
+
+  private createBackup(filePath: string, content: string): string {
+    const workspaceFolders = vscode.workspace.workspaceFolders
+    if (!workspaceFolders || workspaceFolders.length === 0) return ""
+
+    const root = workspaceFolders[0].uri.fsPath
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+    const baseName = path.basename(filePath)
+    const backupName = `${baseName}.${timestamp}.bak`
+    // Store backups in a dedicated directory to avoid polluting source directories
+    const backupDir = path.join(root, ".opencode", "backups")
+    const backupPath = path.join(backupDir, backupName)
+
+    fs.mkdirSync(backupDir, { recursive: true })
+
+    fs.writeFileSync(backupPath, content, "utf-8")
+    return backupPath
   }
 
   rejectEdit(_edit: ProposedEdit): void {
     // No-op
+  }
+
+  private resolveWorkspaceFile(filePath: string): vscode.Uri | null {
+    const workspaceFolders = vscode.workspace.workspaceFolders
+    if (!workspaceFolders || workspaceFolders.length === 0) return null
+
+    const root = workspaceFolders[0].uri.fsPath
+    const fullPath = path.resolve(root, filePath)
+    const relative = path.relative(root, fullPath)
+    if (relative.startsWith("..") || path.isAbsolute(relative)) return null
+
+    return vscode.Uri.file(fullPath)
   }
 }

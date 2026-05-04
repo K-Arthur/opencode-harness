@@ -4,20 +4,86 @@ AI coding agent for your editor — write, refactor, test, and debug with natura
 
 OpenCode brings the [opencode](https://opencode.ai) agentic coding experience directly into VS Code with a rich chat interface, real-time agent visibility, and deep workspace context awareness.
 
-![OpenCode chat panel](https://opencode.ai/_astro/screenshot.CQjBbRyJ_1dLadc.webp)
-
 ## Features
 
+- **Multi-Tab Workers** — Run multiple AI sessions concurrently. Each tab is an independent worker with its own model, mode, and conversation history. Up to 3 concurrent streams.
+- **Per-Tab Model Selection** — Each conversation can use a different AI model. Switch models without restarting the server.
+- **Token & Cost Tracking** — Real-time token usage indicator in the header with color-coded progress (green/yellow/red).
+- **Task Completion Banners** — Visual success/error/warning banners for completed operations.
 - **Rich Chat Interface** — Message bubbles, typing indicators, skill badges, and expandable tool call timelines
+- **Branded Welcome Screen** — Empty chats open on an OpenCode wordmark welcome state with workspace-oriented prompt starters
 - **Agent Visibility** — See exactly what the agent is doing in real-time (reading files, running commands, loading skills)
 - **Context-Aware** — Automatically includes open files, diagnostics, git status, and workspace structure
 - **Inline Code Actions** — CodeLens on functions for Explain, Refactor, and Generate Tests
 - **Smart Diffs** — AI-suggested code changes shown as unified diffs with Accept/Discard controls
 - **Checkpoints** — Git worktree snapshots before each AI action for instant rollback
 - **Skill Manager** — Browse, enable, and disable opencode agent skills
-- **Session History** — Searchable conversation history with resume support
+- **Session History** — Searchable conversation history with resume support in the chat surface
 - **@-Mentions** — Reference files, folders, problems, URLs, and terminal output in your prompts
 - **Permission Modes** — Normal (ask per action), Plan (review-only), Auto (apply without asking)
+
+## Multi-Tab Interface
+
+OpenCode now supports multiple concurrent AI workers through a tabbed interface:
+
+### Tab Management
+- Click **+** in the tab bar or press `Ctrl+T` to create a new worker
+- Each tab has its own conversation history, model, and mode
+- Tabs show a **streaming indicator** (pulsing dot) when actively generating
+- Close a tab with the **×** button or `Ctrl+W`
+- Closing a tab **stops the AI worker** but **preserves the chat history** for resume flows
+
+### Concurrent Stream Limit
+- Maximum **3 concurrent AI streams** at once
+- Attempting to start a 4th shows a warning with the names of currently streaming tabs
+- This prevents rate limit exhaustion and keeps the UI responsive
+
+### Per-Tab Model Selection
+- Click the **model dropdown** in the header to select a different model for the active tab
+- Models are grouped by provider (Anthropic, OpenAI, etc.)
+- Changing a model only affects the active tab — other tabs continue with their own models
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+T` | New tab |
+| `Ctrl+W` | Close active tab |
+| `Ctrl+Tab` | Next tab |
+| `Ctrl+Shift+Tab` | Previous tab |
+| `Ctrl+Alt+O` | Toggle OpenCode chat focus |
+| `Ctrl+Alt+N` | Start a new conversation |
+| `Alt+K` | Insert file reference (@-mention) |
+| `Escape` | Close dropdowns/modals |
+
+All commands are also available via the Command Palette (`Ctrl+Shift+P`).
+
+## Design System
+
+OpenCode uses a **token-based design system** for consistent spacing, typography, colors, and animations across the entire interface.
+
+### Spacing Scale (4px baseline)
+All padding, margins, and gaps use a consistent scale:
+- `--space-1: 4px`, `--space-2: 8px`, `--space-3: 12px`, `--space-4: 16px`, `--space-5: 20px`, etc.
+
+### Typography Scale
+- `--text-xs: 11px` (labels, timestamps)
+- `--text-sm: 12px` (buttons, metadata)
+- `--text-base: 13px` (body text, matches VS Code)
+- `--text-md: 14px` (headings)
+- `--text-lg: 16px` (section titles)
+
+### Border Radius Scale
+- `--radius-sm: 3px` (small badges, tags)
+- `--radius-md: 6px` (buttons, inputs)
+- `--radius-lg: 8px` (cards, message bubbles)
+- `--radius-xl: 10px` (modals, panels)
+
+### Animation Tokens
+- `--duration-fast: 150ms` (button hovers, toggles)
+- `--duration-normal: 250ms` (dropdowns, panels)
+- `--duration-slow: 350ms` (message entrance)
+- `--ease-out: cubic-bezier(0.16, 1, 0.3, 1)` (primary easing)
 
 ## Theme Customization
 
@@ -139,22 +205,6 @@ The extension warns you before you hit limits:
 }
 ```
 
-### Commands
-
-| Command | Action |
-|---------|--------|
-| `OpenCode: Show Rate Limits` | Opens QuickPick with detailed limits and reset times |
-
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+Alt+O` | Toggle OpenCode chat focus |
-| `Ctrl+Alt+N` | Start a new conversation |
-| `Alt+K` | Insert file reference (@-mention) |
-
-All commands are also available via the Command Palette (`Ctrl+Shift+P`).
-
 ## Requirements
 
 - VS Code 1.98.0 or higher
@@ -172,6 +222,10 @@ npm install -g opencode-ai
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `opencode.theme` | `{ "preset": "cli-default" }` | Theme configuration (see above) |
+| `opencode.model` | `""` | Default model ID (provider/model format) |
+| `opencode.rateLimits` | `{}` | Per-provider rate limit configuration |
+| `opencode.rateLimitWarningThreshold` | `0.1` | Fraction remaining that triggers warning |
+| `opencode.rateLimitCriticalThreshold` | `0.05` | Fraction remaining that triggers critical alert |
 
 ## Commands
 
@@ -186,38 +240,25 @@ npm install -g opencode-ai
 | `opencode-harness.insertMention` | OpenCode: Insert File Reference |
 | `opencode-harness.captureTerminal` | OpenCode: Capture Terminal Output |
 | `opencode-harness.rollback` | OpenCode: Rollback Changes |
+| `opencode-harness.selectModel` | OpenCode: Select Model |
+| `opencode-harness.showRateLimits` | OpenCode: Show Rate Limits |
+| `opencode-harness.checkCli` | OpenCode: Check CLI Communication |
+| `opencode-harness.listSessions` | OpenCode: List Sessions |
+| `opencode-harness.deleteSession` | OpenCode: Delete Session |
+| `opencode-harness.renameSession` | OpenCode: Rename Session |
 
-## TypeScript Interface
+## Architecture
 
-```typescript
-interface OpencodeTheme {
-  userMessageBg?: string
-  userMessageFg?: string
-  assistantMessageBg?: string
-  assistantMessageFg?: string
-  toolCallColor?: string
-  toolReadColor?: string
-  toolWriteColor?: string
-  toolExecColor?: string
-  skillBadgeBg?: string
-  skillBadgeFg?: string
-  thinkingBg?: string
-  thinkingBorder?: string
-  warningColor?: string
-  errorColor?: string
-  successColor?: string
-  accentColor?: string
-  diffAdded?: string
-  diffRemoved?: string
-  syntaxComment?: string
-  syntaxKeyword?: string
-  syntaxString?: string
-  syntaxNumber?: string
-  syntaxFunction?: string
-  syntaxType?: string
-  syntaxOperator?: string
-}
-```
+OpenCode follows a modular, event-driven architecture. Key design decisions:
+
+- **Multi-tab concurrency**: Each tab maps to an independent server session. A single `opencode serve` instance hosts all sessions.
+- **Design token system**: All UI values (spacing, typography, colors, animation) are CSS custom properties for consistency.
+- **Modular backend**: `ChatProvider` delegates to focused handlers (`TabManager`, `StreamCoordinator`, `MessageRouter`, `DiffHandler`).
+- **Soft tab close**: Closing a tab aborts the active stream but preserves chat history for resume flows.
+- **CSS bundling**: esbuild bundles 8 modular CSS files into a single stylesheet.
+- **Brand assets**: the Activity Bar uses `media/opencode-activity.svg`; the welcome screen uses `media/opencode-wordmark-dark.svg` copied into the webview bundle for standalone tests and packaged VSIX installs.
+
+See [`docs/specs/2026-05-02-opencode-harness-architecture.md`](docs/specs/2026-05-02-opencode-harness-architecture.md) for full system design.
 
 ## Development
 
@@ -233,6 +274,71 @@ npm run typecheck      # TypeScript type checking
 
 # Watch mode for development
 npm run watch          # auto-rebuild on file changes
+```
+
+### Project Structure
+
+```
+src/
+├── chat/
+│   ├── ChatProvider.ts          # Main webview provider (orchestrator)
+│   ├── TabManager.ts            # Per-tab state & concurrency limit
+│   ├── WebviewContent.ts        # HTML/CSS injection for webview
+│   ├── handlers/
+│   │   ├── StreamCoordinator.ts # Per-tab streaming lifecycle
+│   │   ├── MessageRouter.ts     # Webview message routing
+│   │   └── DiffHandler.ts       # Diff apply/reject tracking
+│   └── webview/
+│       ├── index.html           # Webview HTML structure
+│       ├── main.ts              # Webview entry point (multi-tab)
+│       ├── state.ts             # Multi-session state management
+│       ├── dom.ts               # DOM element references
+│       ├── renderer.ts          # Message block rendering
+│       ├── stream.ts            # Streaming message handlers
+│       ├── tabs.ts              # Tab bar UI & logic
+│       ├── model-dropdown.ts    # Model picker dropdown
+│       ├── token-indicator.ts   # Token usage pill
+│       ├── mentions.ts          # @-mention autocomplete
+│       ├── sessions.ts          # Session picker overlay
+│       ├── theme.ts             # Context chips & usage bar
+│       ├── types.ts             # TypeScript interfaces
+│       └── css/
+│           ├── tokens.css       # Design tokens (spacing, type, color)
+│           ├── base.css         # Reset & utilities
+│           ├── layout.css       # Header, tab bar, input
+│           ├── components.css   # Buttons, chips, badges
+│           ├── messages.css     # Message bubbles, banners
+│           ├── blocks.css       # Code, tools, diffs
+│           ├── animations.css   # Keyframes & transitions
+│           ├── accessibility.css # Focus rings, reduced-motion
+│           └── styles.css       # Entry point (imports all)
+├── session/
+│   ├── SessionManager.ts        # opencode server lifecycle
+│   └── SessionStore.ts          # Persistent session storage
+├── context/
+│   └── ContextEngine.ts         # Workspace context gathering
+├── diff/
+│   └── DiffApplier.ts           # Diff parsing & application
+├── monitor/
+│   ├── ContextMonitor.ts        # Context usage status bar
+│   └── RateLimitMonitor.ts      # Rate limit tracking
+├── model/
+│   └── ModelManager.ts          # Model selection & status bar
+├── theme/
+│   └── ThemeManager.ts          # Theme variable resolution
+├── inline/
+│   └── InlineActionProvider.ts  # CodeLens actions
+├── skills/
+│   └── SkillManager.ts          # Skills tree view
+├── terminal/
+│   └── TerminalBridge.ts        # Terminal output capture
+├── checkpoint/
+│   └── CheckpointManager.ts     # Git snapshots
+├── utils/
+│   ├── outputChannel.ts         # Logging utility
+│   ├── tokenCounter.ts          # Token estimation
+│   └── portFinder.ts            # Free port discovery
+└── extension.ts                 # Extension entry point
 ```
 
 ### Debugging
@@ -256,7 +362,8 @@ code --install-extension opencode-harness-0.0.1.vsix --force
 
 The `.vsix` file will be created in the project root. It contains:
 - `dist/extension.js` — the bundled extension
-- `src/chat/webview/` — chat UI (HTML, CSS, JS)
+- `dist/chat/webview/main.js` — bundled webview JS
+- `dist/chat/webview/styles.css` — bundled webview CSS
 - `package.json` — manifest and configuration
 - `README.md` — documentation
 
@@ -266,6 +373,18 @@ The `.vsix` file will be created in the project root. It contains:
 - **Node.js**: 20.x or later
 - **opencode CLI**: Install from [opencode.ai](https://opencode.ai)
 - **Linux**: `libsecret` required for vsce credential store (`sudo pacman -S libsecret` on Arch, `sudo dnf install libsecret-devel` on Fedora)
+
+## Accessibility
+
+OpenCode is built with accessibility as a first-class concern:
+
+- **Keyboard navigation**: Full support for Tab, Enter, Escape, arrow keys, and shortcuts
+- **Focus management**: Visible `focus-visible` rings on all interactive elements (2px solid, offset 2px)
+- **Touch targets**: All interactive elements meet WCAG 2.5.5 minimum (24×24px)
+- **Reduced motion**: Respects `prefers-reduced-motion` — animations become instant fades
+- **High contrast**: `forced-colors: active` media query ensures borders and focus states are visible
+- **ARIA roles**: Tab bar uses `tablist`/`tab`/`tabpanel`, mode selector uses `radiogroup`/`radio`
+- **Screen reader support**: Skip link, aria-labels on icon buttons, live regions for status updates
 
 ## License
 
