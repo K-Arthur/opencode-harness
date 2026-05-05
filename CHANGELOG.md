@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **TypeScript typecheck errors** — Fixed type incompatibilities between `src/types.ts` and `src/chat/webview/types.ts`. Unified `ChatMessage` interface (timestamp now optional, added `MessageRole` type). Fixed `ToolPartLike` and `MessageInfoLike` missing properties. Fixed import paths in `stream.ts` and `streamHandlers.ts`. Fixed `DiffChunk` vs `DiffHunk` type mismatch.
+- **Package updates** — Updated `@opencode-ai/sdk` (1.14.36→1.14.38), `@vscode/test-cli` (0.0.11→0.0.12), `eslint` (9.39.4→10.3.0), `mocha` (11.3.0→11.7.5), `typescript` (5.9.3→6.0.3).
 - **Chat history spam** — "No server commands available. Start the OpenCode server first." message no longer injected into chat history on every webview reload. The message was being shown when `command_list` arrived with an empty array (server not running), which happened on every VS Code reload. Now the message is only shown when commands actually exist.
 
 ### Changed

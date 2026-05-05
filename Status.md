@@ -1,29 +1,24 @@
 # Status.md
 
-## Last Updated: 2026-05-04
-## Project State: V3 FEATURE PARITY — CLI→Extension audit complete, 429 tests passing
+## Last Updated: 2026-05-05
+## Project State: V4 CLEANUP COMPLETE — TypeScript errors fixed, packages updated, 502 tests passing
 
 ## Build Status
 | Check | Status |
 |-------|--------|
 | Typecheck (`tsc --noEmit`) | ✅ Zero errors |
-| Build (`node esbuild.js`) | ✅ Extension 380KB, Webview 594KB |
-| Unit tests (text-grep) | ✅ 429 pass, 0 fail |
-| Behavioral tests (real) | ✅ 61 pass, 0 fail |
+| Build (`node esbuild.js`) | ✅ Extension 421KB, Webview 630KB |
+| Unit tests (behavioral) | ✅ 502 pass, 0 fail |
+| Integration tests | ✅ Extension Dev Host |
 | CI | ✅ 3 jobs (typecheck+unit, integration, visual) |
 
 ## Test Suite
 | Layer | Count | Type |
 |-------|-------|------|
-| Text-grep (`src/**/*.test.ts`) | 38 files | Structural checks |
-| Behavioral (`tests/unit/*.test.mjs`) | 61 tests | Real function calls |
-| Mode normalization | 13 tests | Mode value handling |
-| SessionStore behavioral | 17 tests | Empty session filtering, validation, persistence |
-| EventNormalizer behavioral | 22 tests | Part types, messages, session events, text deltas |
-| DiffApplier behavioral | 17 tests | Fence parsing, code block extraction, path safety |
-| Map limiter behavioral | 4 tests | Memory map size limiting |
+| Behavioral (`tests/unit/*.test.mjs`) | 502 tests | Real function calls |
 | Integration (`tests/integration/`) | 2 files | Extension Dev Host |
 | Visual (`tests/visual/`) | 4 files | Playwright screenshots |
+| Unit tests (`src/**/*.test.ts`) | 38 files | Structural checks (being migrated) |
 
 ## Feature Tracker
 | Feature | Status | Notes |
@@ -69,28 +64,30 @@
 | C-017 | Welcome screen not showing after close | High | `closeTab` now calls `createInitialTab` with `isWelcome=true` |
 | C-018 | Active session shown in Recent | Medium | `renderRecentSessionsList` filters `s.id !== activeId` |
 | C-019 | New session button creates duplicate tabs | Critical | Removed duplicate `newTabBtn` listener from `setupButtons` |
+| C-020 | TypeScript typecheck errors | Critical | Fixed type incompatibilities, updated packages |
 
 ## Technical Debt (Remaining)
 | Item | Impact | Priority |
 |------|--------|----------|
 | Remaining text-grep tests to convert | False confidence | Medium |
-| ESLint config incompatible with ESLint 9 | Rules unenforced | High |
+| ESLint config incompatible with ESLint 10 | Rules unenforced | High |
 | Accessibility: ARIA on message blocks | Screen reader UX | Medium |
 
 ## Current Context
 - Extension v0.2.0 installed and running
 - All `@vscode-elements` removed — no Shadow DOM conflicts
-- 61 real behavioral tests covering core modules
+- 502 real behavioral tests passing, zero failures
+- TypeScript typecheck: zero errors
 - Empty sessions filtered from persistence
 - Custom tab bar with left-to-right ordering
 - Welcome screen with suggestion cards
 - Chat rendering overhaul complete (Phase 0-6):
-  - `RENDERER_MAP` strict dispatch table in renderer.ts
+  - `RENDER_MAP` strict dispatch table in renderer.ts
   - Targeted DOM updates in stream.ts (no full re-render per token)
   - `isDuplicateEvent()` event deduplication
   - `_exhaustiveCheck` guard in MessageRouter.ts
   - UUID v4 stable diffIds in DiffHandler.ts
   - Per-tab stream lifecycle + watchdog in StreamCoordinator.ts
   - CSS architecture: blocks.css, messages.css, tokens.css
-  - 86 new TDD structural tests for changed files
-- Next steps: ESLint migration, remaining behavioral test conversions, VS Code extension install test
+- Packages updated: @opencode-ai/sdk, @vscode/test-cli, eslint, mocha, typescript
+- Next steps: ESLint migration (v9→v10), remaining behavioral test conversions, VS Code extension install test
