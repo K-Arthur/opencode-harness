@@ -2,12 +2,13 @@ node_modules
 dist
 out
 *.vsix
-node_modules
-dist
-out
-*.vsix
 playwright-report/
 test-results/
 .vscode-test/
 *.log
 *.tsbuildinfo
+.coverage-bundles
+.env
+.env.local
+.env.*.local
+coverage/
