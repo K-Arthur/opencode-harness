@@ -26,9 +26,8 @@ const webviewConfig = {
   outdir: "dist",
   sourcemap: !production,
   minify: production,
-  // @vscode/webview-ui-toolkit is loaded via <script> tag in index.html
-  // (toolkit.min.js) because its "sideEffects": false causes esbuild to
-  // drop the custom element registration during bundling.
+  // @vscode-elements/elements is loaded via <script> tag in index.html
+  // (bundled.js) as a pre-built bundle that auto-registers all custom elements.
   logLevel: "info",
 }
 
@@ -57,18 +56,6 @@ function copyWebviewAssets() {
     path.join("media", "opencode-wordmark-dark.svg"),
     path.join(mediaDir, "opencode-wordmark-dark.svg")
   )
-
-  // @vscode/webview-ui-toolkit — loaded via <script> tag in index.html
-  // because esbuild drops the side-effect import due to "sideEffects": false
-  // in the toolkit's package.json.
-  const toolkitSrc = path.join(
-    "node_modules", "@vscode", "webview-ui-toolkit", "dist", "toolkit.min.js"
-  )
-  if (fs.existsSync(toolkitSrc)) {
-    fs.copyFileSync(toolkitSrc, path.join(outDir, "toolkit.min.js"))
-  } else {
-    console.warn("[esbuild] WARNING: toolkit.min.js not found at", toolkitSrc)
-  }
 }
 
 if (watch) {

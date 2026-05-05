@@ -5,24 +5,54 @@ export interface ModelInfo {
   id: string
   provider: string
   displayName: string
+  contextWindow?: number
+  available?: boolean
+  unavailableReason?: string
+  supportsVariants?: boolean
 }
+
+const MODEL_CACHE_KEY = "opencode-harness.modelCache"
 
 export class ModelManager {
   private _models: ModelInfo[] = []
   private _current: string = ""
   private _onModelChanged = new vscode.EventEmitter<string>()
   private _onModelsRefreshed = new vscode.EventEmitter<void>()
-  private statusBarItem: vscode.StatusBarItem
+  private _globalState?: vscode.Memento
 
   readonly onModelChanged = this._onModelChanged.event
   readonly onModelsRefreshed = this._onModelsRefreshed.event
 
   constructor() {
-    this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100)
-    this.statusBarItem.name = "OpenCode Model"
-    this.statusBarItem.command = "opencode-harness.selectModel"
-    this.updateStatusBar()
-    this.statusBarItem.show()
+  }
+
+  /** Inject globalState for model caching. Call once after construction. */
+  setGlobalState(globalState: vscode.Memento): void {
+    this._globalState = globalState
+    this.loadCachedModels()
+  }
+
+  private loadCachedModels(): void {
+    if (!this._globalState) return
+    try {
+      const cached = this._globalState.get<ModelInfo[]>(MODEL_CACHE_KEY, [])
+      if (cached.length > 0) {
+        this._models = cached
+        this._onModelsRefreshed.fire()
+        log.info(`Loaded ${cached.length} cached models from globalState`)
+      }
+    } catch (err) {
+      log.warn("Failed to load cached models", err)
+    }
+  }
+
+  private saveCachedModels(): void {
+    if (!this._globalState) return
+    try {
+      this._globalState.update(MODEL_CACHE_KEY, this._models)
+    } catch (err) {
+      log.warn("Failed to save model cache", err)
+    }
   }
 
   get model(): string {
@@ -37,7 +67,6 @@ export class ModelManager {
     if (this._current !== modelId) {
       this._current = modelId
       this._onModelChanged.fire(modelId)
-      this.updateStatusBar()
       log.info(`Model changed to: ${modelId}`)
     }
   }
@@ -92,11 +121,13 @@ export class ModelManager {
             id: m.id,
             provider: provider.id,
             displayName: m.name || m.id,
+            supportsVariants: m.reasoning === true,
           })
         }
       }
 
       this._models = models
+      this.saveCachedModels()
       this._onModelsRefreshed.fire()
       log.info(`Refreshed models from server: ${models.length} models available`)
       return models
@@ -108,7 +139,17 @@ export class ModelManager {
   private async fetchModelsFromCli(): Promise<ModelInfo[]> {
     const { spawn } = await import("child_process")
     const config = vscode.workspace.getConfiguration("opencode")
-    const binaryPath = config.get<string>("binaryPath") || "opencode"
+    const customPath = config.get<string>("binaryPath")
+    const binaryPath = customPath || "opencode"
+
+    // Validate custom binary path (same check as CliDiagnostics)
+    if (customPath) {
+      const isSafe = /^[/\\]|[A-Za-z]:/.test(customPath) && !/[;&|`$(){}!#~<>]/.test(customPath)
+      if (!isSafe) {
+        log.warn(`Custom binary path "${customPath}" is invalid or unsafe. Falling back to PATH lookup.`)
+        return this._models
+      }
+    }
 
     return new Promise((resolve) => {
       const child = spawn(binaryPath, ["models"], {
@@ -185,13 +226,32 @@ export class ModelManager {
       return undefined
     }
 
-    const items = this._models.map((m) => ({
-      label: m.displayName,
-      description: `${m.provider}/${m.id}`,
-      detail: `${m.provider}/${m.id}` === this._current ? "● Current" : "",
-      // Store full provider/model path for the round-trip to work
-      fullId: `${m.provider}/${m.id}`,
-    }))
+    // Group by provider with separators
+    const byProvider = new Map<string, ModelInfo[]>()
+    for (const m of this._models) {
+      const list = byProvider.get(m.provider) || []
+      list.push(m)
+      byProvider.set(m.provider, list)
+    }
+
+    const items: (vscode.QuickPickItem & { fullId?: string })[] = []
+    for (const [provider, providerModels] of byProvider) {
+      items.push({
+        label: provider,
+        kind: vscode.QuickPickItemKind.Separator,
+      })
+      for (const m of providerModels) {
+        const fullId = `${m.provider}/${m.id}`
+        const isCurrent = fullId === this._current
+        const unavailableSuffix = m.available === false ? " (unavailable)" : ""
+        items.push({
+          label: m.displayName + unavailableSuffix,
+          description: isCurrent ? "● Current" : "",
+          detail: m.contextWindow ? `${m.contextWindow.toLocaleString()} tokens` : "",
+          fullId,
+        })
+      }
+    }
 
     const picked = await vscode.window.showQuickPick(items, {
       placeHolder: "Select a model",
@@ -201,22 +261,7 @@ export class ModelManager {
     return picked?.fullId
   }
 
-  private updateStatusBar(): void {
-    if (this._current) {
-      // Display just the model name, but store provider/modelId internally
-      const display = this._current.includes("/")
-        ? this._current.split("/").pop()!
-        : this._current
-      this.statusBarItem.text = `$(symbol-color) ${display}`
-      this.statusBarItem.tooltip = `OpenCode Model: ${this._current}\nClick to change`
-    } else {
-      this.statusBarItem.text = "$(symbol-color) Default Model"
-      this.statusBarItem.tooltip = "OpenCode: Using default model\nClick to select a model"
-    }
-  }
-
   dispose(): void {
-    this.statusBarItem.dispose()
     this._onModelChanged.dispose()
     this._onModelsRefreshed.dispose()
   }

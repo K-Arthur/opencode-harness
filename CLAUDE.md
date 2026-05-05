@@ -7,6 +7,19 @@
 - **Type**: VS Code extension (library/package for VS Code marketplace)
 - **Runtime**: TypeScript / Node.js with VS Code Extension API ^1.98.0
 - **Server**: Client to opencode HTTP server (localhost:4096) via @opencode-ai/sdk
+- **Version**: 0.2.0
+- **Status**: Production audit complete — typecheck clean, 356 total tests passing (61 behavioral), 0 failing, noUncheckedIndexedAccess enforced
+
+## Hardening Milestone (2026-05-04)
+- Full production-readiness audit completed: **151 issues identified across 5 phases**
+- **Critical fixes applied**: compilation errors, security holes, data corruption risks, global lock removal
+- **Type safety**: `noUncheckedIndexedAccess` enabled — fixed 40 potential undefined crashes
+- **Security**: `process.env` filtered to allowlist, `.env` in `.gitignore`, CSS injection blocked, CSP nonces cryptographically secure
+- **Concurrency**: per-tab lock replaces global `promptInFlight`, stream slot reserved synchronously
+- **All @vscode-elements replaced**: `vscode-tabs`, `vscode-button`, `vscode-tab-header`, `vscode-tab-panel`, `vscode-progress-ring` replaced with plain HTML elements — no Shadow DOM conflicts
+- **Custom tab bar**: plain HTML buttons with left-to-right ordering, active tab accent border, streaming tab pulsing dot
+- **Empty session filtering**: sessions with zero messages are not persisted to globalState
+- **61 behavioral tests**: real function-calling tests for SessionStore, EventNormalizer, DiffApplier, mode normalization, map limiting
 
 ## Non-Negotiable Rules
 

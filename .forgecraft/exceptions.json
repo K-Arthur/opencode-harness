@@ -1,0 +1,5 @@
+{
+  "version": "1",
+  "_comment": "Hook false-positive exceptions. Add entries here to prevent rediscovering the same false positive each session. Each entry: {id, hook, pattern, reason, addedAt, addedBy, adr?}",
+  "exceptions": []
+}

@@ -184,9 +184,13 @@ export class ThemeManager {
   private cliThemeCache: OpencodeTheme | null = null
   private cliThemeCacheTimestamp = 0
 
+  // File system watchers for CLI theme files
+  private fileWatchers: vscode.FileSystemWatcher[] = []
+
   constructor() {
     this.currentKind = vscode.window.activeColorTheme.kind
     this.loadConfig()
+    this.setupFileWatchers()
 
     this.disposables.push(
       vscode.window.onDidChangeActiveColorTheme((theme) => {
@@ -207,6 +211,143 @@ export class ThemeManager {
     )
   }
 
+  /**
+   * Watch tui.json and theme files for changes.
+   * When a CLI theme file changes, invalidate cache and re-emit theme update.
+   */
+  private setupFileWatchers(): void {
+    // Dispose old watchers
+    for (const watcher of this.fileWatchers) {
+      watcher.dispose()
+    }
+    this.fileWatchers = []
+
+    const folders = vscode.workspace.workspaceFolders
+    const home = process.env.HOME || process.env.USERPROFILE || ""
+    const isWindows = process.platform === "win32"
+    const xdgConfig = process.env.XDG_CONFIG_HOME
+      || (isWindows ? path.join(process.env.APPDATA || home, "opencode") : path.join(home, ".config"))
+
+    const patterns: vscode.GlobPattern[] = []
+
+    // Watch workspace tui.json
+    if (folders && folders.length > 0) {
+      patterns.push(new vscode.RelativePattern(folders[0]!, ".opencode/tui.json"))
+      patterns.push(new vscode.RelativePattern(folders[0]!, ".opencode/themes/*.json"))
+    }
+
+    // Watch global tui.json
+    patterns.push(new vscode.RelativePattern(vscode.Uri.file(path.join(xdgConfig, "opencode")), "tui.json"))
+    patterns.push(new vscode.RelativePattern(vscode.Uri.file(path.join(xdgConfig, "opencode", "themes")), "*.json"))
+    patterns.push(new vscode.RelativePattern(vscode.Uri.file(path.join(home, ".opencode")), "tui.json"))
+    patterns.push(new vscode.RelativePattern(vscode.Uri.file(path.join(home, ".opencode", "themes")), "*.json"))
+
+    for (const pattern of patterns) {
+      try {
+        const watcher = vscode.workspace.createFileSystemWatcher(pattern)
+        watcher.onDidChange(() => this.handleThemeFileChange())
+        watcher.onDidCreate(() => this.handleThemeFileChange())
+        watcher.onDidDelete(() => this.handleThemeFileChange())
+        this.fileWatchers.push(watcher)
+      } catch {
+        // Pattern may be invalid for some paths — skip silently
+      }
+    }
+  }
+
+  private handleThemeFileChange(): void {
+    this.invalidateCliCache()
+    this.emitUpdate()
+  }
+
+  /**
+   * Preview a theme by applying it live to the workspace settings.
+   */
+  async previewTheme(): Promise<void> {
+    const presets = ["cli-default", "light", "dark", "high-contrast"] as ThemePreset[]
+    const discovered = this.discoverCliThemes()
+
+    const items: (vscode.QuickPickItem & { preset?: ThemePreset; themeFile?: string })[] = []
+
+    for (const preset of presets) {
+      items.push({
+        label: preset,
+        description: "Built-in preset",
+        preset,
+      })
+    }
+
+    if (discovered.length > 0) {
+      items.push({ label: "CLI Themes", kind: vscode.QuickPickItemKind.Separator })
+      for (const theme of discovered) {
+        items.push({
+          label: theme.name,
+          description: theme.source,
+          themeFile: theme.path,
+        })
+      }
+    }
+
+    const picked = await vscode.window.showQuickPick(items, {
+      placeHolder: "Select a theme to preview",
+      title: "OpenCode Theme Preview",
+    })
+
+    if (!picked) return
+
+    const config = vscode.workspace.getConfiguration("opencode")
+    if (picked.preset) {
+      await config.update("theme", { preset: picked.preset, overrides: {} }, vscode.ConfigurationTarget.Workspace)
+    } else if (picked.themeFile) {
+      // For CLI themes, we can't easily apply the whole file, so we set the preset
+      // to cli-default and let the CLI discovery load the theme file
+      await config.update("theme", { preset: "cli-default", overrides: {} }, vscode.ConfigurationTarget.Workspace)
+    }
+  }
+
+  private discoverCliThemes(): Array<{ name: string; path: string; source: string }> {
+    const themes: Array<{ name: string; path: string; source: string }> = []
+    const home = process.env.HOME || process.env.USERPROFILE || ""
+    const isWindows = process.platform === "win32"
+    const xdgConfig = process.env.XDG_CONFIG_HOME
+      || (isWindows ? path.join(process.env.APPDATA || home, "opencode") : path.join(home, ".config"))
+
+    const workspaceThemeDir: string | null = (() => {
+      const folders = vscode.workspace.workspaceFolders
+      if (folders && folders.length > 0) {
+        return path.join(folders[0]!.uri.fsPath, ".opencode", "themes")
+      }
+      return null
+    })()
+
+    const themeDirs: Array<{ dir: string; source: string }> = []
+    if (workspaceThemeDir) {
+      themeDirs.push({ dir: workspaceThemeDir, source: "workspace" })
+    }
+    themeDirs.push({ dir: path.join(xdgConfig, "opencode", "themes"), source: "global" })
+    themeDirs.push({ dir: path.join(home, ".opencode", "themes"), source: "global" })
+
+    for (const { dir, source } of themeDirs) {
+      try {
+        if (fs.existsSync(dir)) {
+          const files = fs.readdirSync(dir)
+          for (const file of files) {
+            if (file.endsWith(".json")) {
+              themes.push({
+                name: file.replace(".json", ""),
+                path: path.join(dir, file),
+                source,
+              })
+            }
+          }
+        }
+      } catch {
+        // Ignore unreadable directories
+      }
+    }
+    return themes
+  }
+
   private loadConfig(): void {
     const config = vscode.workspace.getConfiguration("opencode")
     const themeObj = config.get<{ preset?: string; overrides?: OpencodeTheme }>("theme")
@@ -221,35 +362,32 @@ export class ThemeManager {
     this.cliThemeCacheTimestamp = 0
   }
 
-  private readCliThemeFiles(): OpencodeTheme {
-    // Return cached result if still fresh
-    const now = Date.now()
-    if (this.cliThemeCache && (now - this.cliThemeCacheTimestamp) < CLI_THEME_CACHE_TTL_MS) {
-      return this.cliThemeCache
-    }
-
+  private getCliPaths(): { tuiJsonPaths: string[]; themeDirs: string[] } {
     const home = process.env.HOME || process.env.USERPROFILE || ""
     const isWindows = process.platform === "win32"
     const xdgConfig = process.env.XDG_CONFIG_HOME
       || (isWindows ? path.join(process.env.APPDATA || home, "opencode") : path.join(home, ".config"))
-    
+
     const tuiJsonPaths: string[] = []
     const themeDirs: string[] = []
 
     const folders = vscode.workspace.workspaceFolders
     if (folders && folders.length > 0) {
-      const workspaceConfig = path.join(folders[0].uri.fsPath, ".opencode")
+      const workspaceConfig = path.join(folders[0]!.uri.fsPath, ".opencode")
       tuiJsonPaths.push(path.join(workspaceConfig, "tui.json"))
       themeDirs.push(path.join(workspaceConfig, "themes"))
     }
 
     tuiJsonPaths.push(path.join(xdgConfig, "opencode", "tui.json"))
     tuiJsonPaths.push(path.join(home, ".opencode", "tui.json"))
-    
     themeDirs.push(path.join(xdgConfig, "opencode", "themes"))
     themeDirs.push(path.join(home, ".opencode", "themes"))
 
-    let activeTheme = "tokyonight" 
+    return { tuiJsonPaths, themeDirs }
+  }
+
+  private readActiveThemeName(tuiJsonPaths: string[]): string {
+    let activeTheme = "tokyonight"
     for (const tuiPath of tuiJsonPaths) {
       try {
         if (fs.existsSync(tuiPath)) {
@@ -264,40 +402,101 @@ export class ThemeManager {
         // Malformed JSON or unreadable file — skip
       }
     }
+    return activeTheme
+  }
 
+  private readThemeFileOverrides(themeDirs: string[], activeTheme: string): OpencodeTheme {
     const overrides: OpencodeTheme = {}
+    const safeThemeName = activeTheme.replace(/[^\w.-]/g, "_")
+
     for (const dir of themeDirs) {
       try {
-        // Sanitize activeTheme to prevent path traversal
-        const safeThemeName = activeTheme.replace(/[^\w.-]/g, "_")
         const themeFile = path.join(dir, `${safeThemeName}.json`)
         if (fs.existsSync(themeFile)) {
           const raw = fs.readFileSync(themeFile, "utf8")
           const content = JSON.parse(raw)
           if (content.theme) {
-            const t = content.theme
-            if (t.primary?.dark) overrides.accentColor = t.primary.dark
-            if (t.error?.dark) overrides.errorColor = t.error.dark
-            if (t.warning?.dark) overrides.warningColor = t.warning.dark
-            if (t.success?.dark) overrides.successColor = t.success.dark
-            if (t.text?.dark) overrides.assistantMessageFg = t.text.dark
-            if (t.background?.dark) overrides.assistantMessageBg = t.background.dark
-            if (t.diffAdded?.dark) overrides.diffAdded = t.diffAdded.dark
-            if (t.diffRemoved?.dark) overrides.diffRemoved = t.diffRemoved.dark
-            if (t.syntaxComment?.dark) overrides.syntaxComment = t.syntaxComment.dark
-            if (t.syntaxKeyword?.dark) overrides.syntaxKeyword = t.syntaxKeyword.dark
-            if (t.syntaxString?.dark) overrides.syntaxString = t.syntaxString.dark
-            if (t.syntaxNumber?.dark) overrides.syntaxNumber = t.syntaxNumber.dark
-            if (t.syntaxFunction?.dark) overrides.syntaxFunction = t.syntaxFunction.dark
-            if (t.syntaxType?.dark) overrides.syntaxType = t.syntaxType.dark
-            if (t.syntaxOperator?.dark) overrides.syntaxOperator = t.syntaxOperator.dark
+            this.applyThemeContent(overrides, content.theme)
           }
-          break 
+          break
         }
       } catch {
         // Malformed theme file — skip
       }
     }
+
+    return overrides
+  }
+
+  // Static field map: override key → theme section key
+  private static readonly FIELD_MAP: Array<[keyof OpencodeTheme, string]> = [
+    ["accentColor", "primary"],
+    ["errorColor", "error"],
+    ["warningColor", "warning"],
+    ["successColor", "success"],
+    ["assistantMessageFg", "text"],
+    ["assistantMessageBg", "background"],
+    ["diffAdded", "diffAdded"],
+    ["diffRemoved", "diffRemoved"],
+    ["syntaxComment", "syntaxComment"],
+    ["syntaxKeyword", "syntaxKeyword"],
+    ["syntaxString", "syntaxString"],
+    ["syntaxNumber", "syntaxNumber"],
+    ["syntaxFunction", "syntaxFunction"],
+    ["syntaxType", "syntaxType"],
+    ["syntaxOperator", "syntaxOperator"],
+  ]
+
+  private applyThemeContent(overrides: OpencodeTheme, theme: Record<string, { dark?: string }>): void {
+    for (const [overrideKey, themeKey] of ThemeManager.FIELD_MAP) {
+      const section = theme[themeKey]
+      if (section?.dark) {
+        overrides[overrideKey] = section.dark
+      }
+    }
+  }
+
+  // Static CSS variable map: CSS variable name → merged theme property
+  private static readonly CSS_VAR_MAP: Array<[string, keyof OpencodeTheme]> = [
+    ["--oc-user-msg-bg", "userMessageBg"],
+    ["--oc-user-msg-fg", "userMessageFg"],
+    ["--oc-assistant-msg-bg", "assistantMessageBg"],
+    ["--oc-assistant-msg-fg", "assistantMessageFg"],
+    ["--oc-tool-call", "toolCallColor"],
+    ["--oc-tool-read", "toolReadColor"],
+    ["--oc-tool-write", "toolWriteColor"],
+    ["--oc-tool-exec", "toolExecColor"],
+    ["--oc-skill-badge-bg", "skillBadgeBg"],
+    ["--oc-skill-badge-fg", "skillBadgeFg"],
+    ["--oc-thinking-bg", "thinkingBg"],
+    ["--oc-thinking-border", "thinkingBorder"],
+    ["--oc-warning", "warningColor"],
+    ["--oc-error", "errorColor"],
+    ["--oc-success", "successColor"],
+    ["--oc-accent", "accentColor"],
+    ["--oc-diff-added", "diffAdded"],
+    ["--oc-diff-removed", "diffRemoved"],
+    ["--oc-input-bg", "inputBg"],
+    ["--oc-input-border", "inputBorder"],
+    ["--oc-mention-bg", "mentionBg"],
+    ["--oc-syntax-comment", "syntaxComment"],
+    ["--oc-syntax-keyword", "syntaxKeyword"],
+    ["--oc-syntax-string", "syntaxString"],
+    ["--oc-syntax-number", "syntaxNumber"],
+    ["--oc-syntax-function", "syntaxFunction"],
+    ["--oc-syntax-type", "syntaxType"],
+    ["--oc-syntax-operator", "syntaxOperator"],
+  ]
+
+  private readCliThemeFiles(): OpencodeTheme {
+    const now = Date.now()
+    if (this.cliThemeCache && (now - this.cliThemeCacheTimestamp) < CLI_THEME_CACHE_TTL_MS) {
+      return this.cliThemeCache
+    }
+
+    const { tuiJsonPaths, themeDirs } = this.getCliPaths()
+    const activeTheme = this.readActiveThemeName(tuiJsonPaths)
+    const overrides = this.readThemeFileOverrides(themeDirs, activeTheme)
 
     this.cliThemeCache = overrides
     this.cliThemeCacheTimestamp = now
@@ -315,39 +514,10 @@ export class ThemeManager {
 
     // Filter out undefined values to avoid injecting "undefined" as CSS
     const customVars: Record<string, string> = {}
-    const mapping: [string, string | undefined][] = [
-      ["--oc-user-msg-bg", merged.userMessageBg],
-      ["--oc-user-msg-fg", merged.userMessageFg],
-      ["--oc-assistant-msg-bg", merged.assistantMessageBg],
-      ["--oc-assistant-msg-fg", merged.assistantMessageFg],
-      ["--oc-tool-call", merged.toolCallColor],
-      ["--oc-tool-read", merged.toolReadColor],
-      ["--oc-tool-write", merged.toolWriteColor],
-      ["--oc-tool-exec", merged.toolExecColor],
-      ["--oc-skill-badge-bg", merged.skillBadgeBg],
-      ["--oc-skill-badge-fg", merged.skillBadgeFg],
-      ["--oc-thinking-bg", merged.thinkingBg],
-      ["--oc-thinking-border", merged.thinkingBorder],
-      ["--oc-warning", merged.warningColor],
-      ["--oc-error", merged.errorColor],
-      ["--oc-success", merged.successColor],
-      ["--oc-accent", merged.accentColor],
-      ["--oc-diff-added", merged.diffAdded],
-      ["--oc-diff-removed", merged.diffRemoved],
-      ["--oc-input-bg", merged.inputBg],
-      ["--oc-input-border", merged.inputBorder],
-      ["--oc-mention-bg", merged.mentionBg],
-      ["--oc-syntax-comment", merged.syntaxComment],
-      ["--oc-syntax-keyword", merged.syntaxKeyword],
-      ["--oc-syntax-string", merged.syntaxString],
-      ["--oc-syntax-number", merged.syntaxNumber],
-      ["--oc-syntax-function", merged.syntaxFunction],
-      ["--oc-syntax-type", merged.syntaxType],
-      ["--oc-syntax-operator", merged.syntaxOperator],
-    ]
-    for (const [key, value] of mapping) {
+    for (const [cssVar, themeKey] of ThemeManager.CSS_VAR_MAP) {
+      const value = merged[themeKey]
       if (value !== undefined && value !== null) {
-        customVars[key] = value
+        customVars[cssVar] = value
       }
     }
 
@@ -364,6 +534,10 @@ export class ThemeManager {
   dispose(): void {
     for (const d of this.disposables) d.dispose()
     this.disposables = []
+    for (const watcher of this.fileWatchers) {
+      watcher.dispose()
+    }
+    this.fileWatchers = []
     this._onThemeChanged.dispose()
   }
 }

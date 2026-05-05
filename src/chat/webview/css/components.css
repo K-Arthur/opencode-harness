@@ -57,7 +57,7 @@
   background: var(--oc-accent);
   color: var(--oc-button-fg);
   box-shadow: var(--shadow-glow);
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -96,8 +96,8 @@ textarea {
   font-size: var(--text-2xs);
   font-weight: 600;
   font-family: var(--font-mono);
-  background: var(--oc-mention-bg);
-  color: var(--oc-accent);
+  background: var(--oc-accent-subtle);
+  color: var(--color-accent);
   border: 1px solid var(--oc-accent-border);
   cursor: default;
   max-width: 200px;
@@ -124,7 +124,8 @@ textarea {
   width: fit-content;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  animation: badgePop var(--duration-slow) var(--ease-spring) both;
+  white-space: nowrap;
+  animation: badge-pop var(--duration-slow) var(--ease-spring) both;
 }
 
 .skill-badge::before {
@@ -140,36 +141,37 @@ textarea {
 
 .dropdown {
   position: absolute;
-  background: var(--oc-glass-bg);
-  backdrop-filter: var(--oc-glass-blur);
-  -webkit-backdrop-filter: var(--oc-glass-blur);
-  border: 1px solid var(--oc-glass-border);
+  background: var(--bg-secondary);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  max-height: 240px;
+  max-height: 260px;
   overflow-y: auto;
   box-shadow: var(--shadow-lg);
   z-index: var(--z-dropdown);
 }
 
 .dropdown-item {
-  padding: var(--space-2-5) var(--space-3);
+  padding: var(--space-2) var(--space-3);
   cursor: pointer;
   font-size: var(--text-sm);
   display: flex;
   align-items: center;
   gap: var(--space-2);
   transition: all var(--duration-fast);
+  border-left: 2px solid transparent;
 }
 
-.dropdown-item:hover {
-  background: var(--oc-list-hover);
-  color: var(--oc-accent);
+.dropdown-item:hover,
+.dropdown-item[aria-selected="true"] {
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--bg-secondary));
+  border-left-color: var(--color-accent);
 }
 
 .dropdown-item.selected {
   background: var(--oc-list-active);
   color: var(--oc-list-active-fg);
   font-weight: 600;
+  border-left-color: var(--color-accent);
 }
 
 .dropdown-icon {
@@ -194,6 +196,30 @@ textarea {
   color: var(--oc-muted);
   font-size: var(--text-sm);
   text-align: center;
+}
+
+/* ─── SKILL INDICATORS ─── */
+
+.skill-indicators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1-5);
+  min-height: 0;
+}
+
+.skill-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-px) var(--space-2);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  background: var(--vscode-badge-background, rgba(255,255,255,0.08));
+  color: var(--vscode-badge-foreground, #ccc);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  animation: pillFadeIn 0.2s ease-out;
+  line-height: var(--leading-tight);
 }
 
 /* ─── RATE LIMIT NOTICE ─── */
@@ -252,23 +278,49 @@ textarea {
 
 /* Focus visible states are centralized in accessibility.css */
 
-/* ─── SEND BUTTON STREAMING (Loading Spinner) ─── */
+/* ─── IMAGE ATTACH & VIEWER ─── */
 
-.send-btn.streaming .send-icon {
-  display: none;
-}
-
-.send-btn.streaming::after {
-  content: '';
+.image-attached-indicator {
   display: inline-block;
-  width: var(--size-icon-sm);
-  height: var(--size-icon-sm);
-  border: 2px solid transparent;
-  border-top-color: currentColor;
+  padding: var(--space-0-5) var(--space-2);
+  margin: var(--space-0-5) var(--space-1);
+  background: var(--vscode-badge-background, #007acc);
+  color: var(--vscode-badge-foreground, #fff);
   border-radius: var(--radius-full);
-  animation: spin 0.6s linear infinite;
+  font-size: var(--text-xs);
+  animation: fadeInOut 2s ease-in-out;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.msg-image img {
+  max-width: 400px;
+  max-height: 300px;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+}
+
+.image-viewer-full {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+}
+
+.image-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-lightbox, 500);
+  cursor: pointer;
+}
+
+.attached-image-thumb {
+  border: 1px solid var(--vscode-panel-border, #333);
+  transition: transform var(--duration-normal) var(--ease-out);
+}
+
+.attached-image-thumb:hover {
+  transform: scale(1.02);
+  border-color: var(--vscode-focusBorder, #007acc);
 }

@@ -17,6 +17,7 @@ export class TabManager {
   private tabs = new Map<string, TabState>()
   private activeTabId = ""
   private readonly MAX_CONCURRENT_STREAMS = 3
+  private readonly MAX_TABS = 20
 
   private _onTabCreated = new vscode.EventEmitter<string>()
   private _onTabClosed = new vscode.EventEmitter<string>()
@@ -28,7 +29,11 @@ export class TabManager {
   readonly onTabSwitched = this._onTabSwitched.event
   readonly onStreamingStateChanged = this._onStreamingStateChanged.event
 
-  createTab(id: string, cliSessionId?: string, model?: string, mode?: string): TabState {
+  createTab(id: string, cliSessionId?: string, model?: string, mode?: string): TabState | null {
+    if (this.tabs.size >= this.MAX_TABS) {
+      log.warn(`Tab creation blocked: max ${this.MAX_TABS} tabs reached`)
+      return null
+    }
     const tab: TabState = {
       id,
       cliSessionId,
@@ -68,7 +73,7 @@ export class TabManager {
     // If active tab was closed, switch to another
     if (this.activeTabId === id) {
       const remaining = Array.from(this.tabs.keys())
-      this.activeTabId = remaining.length > 0 ? remaining[0] : ""
+      this.activeTabId = remaining.length > 0 ? remaining[0] ?? "" : ""
       if (this.activeTabId) {
         this._onTabSwitched.fire(this.activeTabId)
       }
@@ -123,6 +128,14 @@ export class TabManager {
   setStreaming(id: string, isStreaming: boolean): boolean {
     const tab = this.tabs.get(id)
     if (!tab) return false
+    if (isStreaming && !tab.isStreaming) {
+      const streamingCount = this.getStreamingCount()
+      if (streamingCount >= this.MAX_CONCURRENT_STREAMS) {
+        const names = Array.from(this.tabs.values()).filter((t) => t.isStreaming).map((t) => `"${t.id}"`).join(", ")
+        log.warn(`Cannot set streaming — limit ${this.MAX_CONCURRENT_STREAMS} reached. Currently streaming: ${names}`)
+        return false
+      }
+    }
     tab.isStreaming = isStreaming
     tab.lastActivityTime = Date.now()
     this._onStreamingStateChanged.fire({ tabId: id, isStreaming })

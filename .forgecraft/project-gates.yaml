@@ -1,0 +1,6 @@
+version: "1"
+# Project-specific quality gates.
+# Gates you discover while working that should be enforced for this project.
+# Set generalizable: true + fill in evidence to contribute to the community registry.
+# See: https://github.com/jghiringhelli/quality-gates/issues/new?template=quality-gate-proposal.md
+gates: []

@@ -1,20 +1,40 @@
 import * as vscode from "vscode"
 import { SessionManager } from "./session/SessionManager"
 import { SessionStore } from "./session/SessionStore"
+import { SessionExporter } from "./session/SessionExporter"
 import { ContextEngine } from "./context/ContextEngine"
 import { ContextMonitor } from "./monitor/ContextMonitor"
 import { TerminalBridge } from "./terminal/TerminalBridge"
 import { CheckpointManager } from "./checkpoint/CheckpointManager"
-import { SkillManager } from "./skills/SkillManager"
 import { InlineActionProvider } from "./inline/InlineActionProvider"
+import { InlineCompletionProvider } from "./inline/InlineCompletionProvider"
 import { ChatProvider } from "./chat/ChatProvider"
 import { ThemeManager } from "./theme/ThemeManager"
 import { RateLimitMonitor } from "./monitor/RateLimitMonitor"
 import { ModelManager } from "./model/ModelManager"
 import { CliDiagnostics } from "./diagnostics/CliDiagnostics"
 import { log } from "./utils/outputChannel"
+import {
+  registerRollbackCommand,
+  registerThemePreviewCommand,
+  registerCaptureTerminalCommand,
+  registerOpenChatCommand,
+  registerNewSessionCommand,
+  registerOpenStoredSessionCommand,
+  registerToggleFocusCommand,
+  registerInsertMentionCommand,
+  registerListSessionsCommand,
+  registerDeleteSessionCommand,
+  registerRenameSessionCommand,
+  registerSelectModelCommand,
+  registerShowRateLimitsCommand,
+  registerCheckCliCommand,
+  registerExportCommand,
+} from "./commands"
 
 let sessionManager: SessionManager
+let sessionStore: SessionStore
+let chatProviderInstance: ChatProvider | undefined
 
 export function activate(context: vscode.ExtensionContext) {
   log.info("OpenCode Harness extension activating…")
@@ -23,12 +43,13 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(log.outputChannel)
 
   sessionManager = new SessionManager()
-  // C2: Don't push sessionManager to context.subscriptions — it's manually
-  // cleaned up in deactivate() to avoid double-dispose (EventEmitter crash).
+  // Restore stored port for potential reuse
+  const storedPort = context.globalState.get('opencode-server-port') as number | undefined
+  if (storedPort) {
+    sessionManager.setStoredPort(storedPort)
+  }
 
-  const contextEngine = new ContextEngine()
-  context.subscriptions.push(contextEngine)
-
+  const contextEngine = initContextEngine(context)
   const contextMonitor = new ContextMonitor()
   context.subscriptions.push(contextMonitor)
 
@@ -44,16 +65,61 @@ export function activate(context: vscode.ExtensionContext) {
   const checkpointManager = new CheckpointManager()
   context.subscriptions.push(checkpointManager)
 
-  const modelManager = new ModelManager()
-  context.subscriptions.push(modelManager)
-
-  // Auto-fetch models from CLI on startup so the picker is populated
-  modelManager.refreshModels().catch(err => log.warn("Auto-fetch models failed", err))
-
+  const modelManager = initModelManager(context, sessionManager)
   const cliDiagnostics = new CliDiagnostics()
   context.subscriptions.push(cliDiagnostics)
 
-  // ---- Connection status bar ----
+  // Connection status bar
+  const connectionStatus = initConnectionStatusBar(context, sessionManager, sessionStore, modelManager)
+
+  // Session store
+  sessionStore = new SessionStore(context.globalState)
+  if (sessionStore.count === 0) {
+    sessionStore.create("Default")
+  }
+
+  // Auto-start server so user doesn't see disconnected state after reload
+  void sessionManager.start().catch(err => log.warn("Auto-start server failed", err))
+
+  // Chat provider
+  chatProviderInstance = new ChatProvider(
+    context, sessionManager, contextEngine, contextMonitor,
+    themeManager, rateLimitMonitor, modelManager, sessionStore
+  )
+
+  registerInlineProviders(context, chatProviderInstance)
+  registerCoreCommands(context, sessionStore, sessionManager, modelManager, rateLimitMonitor, checkpointManager, cliDiagnostics, themeManager, terminalBridge)
+  registerChatProvider(context, chatProviderInstance)
+  registerUriHandler(context, chatProviderInstance)
+
+  log.info("OpenCode Harness extension activated")
+}
+
+// ---------------------------------------------------------------------------
+// Initialization helpers
+// ---------------------------------------------------------------------------
+
+function initContextEngine(context: vscode.ExtensionContext): ContextEngine {
+  const engine = new ContextEngine()
+  context.subscriptions.push(engine)
+  return engine
+}
+
+function initModelManager(context: vscode.ExtensionContext, sessionManager: SessionManager): ModelManager {
+  const manager = new ModelManager()
+  manager.setGlobalState(context.globalState)
+  context.subscriptions.push(manager)
+  // Auto-fetch models from CLI on startup so the picker is populated
+  manager.refreshModels().catch(err => log.warn("Auto-fetch models failed", err))
+  return manager
+}
+
+function initConnectionStatusBar(
+  context: vscode.ExtensionContext,
+  sessionManager: SessionManager,
+  sessionStore: SessionStore,
+  modelManager: ModelManager
+): vscode.StatusBarItem {
   const connectionStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99)
   connectionStatus.name = "OpenCode Connection"
   connectionStatus.text = "$(circle-slash) OpenCode: Disconnected"
@@ -69,6 +135,8 @@ export function activate(context: vscode.ExtensionContext) {
         connectionStatus.tooltip = `OpenCode server running on port ${sessionManager.currentPort}`
         connectionStatus.command = "opencode-harness.openChat"
         void modelManager.refreshModels(sessionManager.currentPort)
+        // Persist port for potential reuse after reload
+        context.globalState.update('opencode-server-port', sessionManager.currentPort)
         break
       case "server_disconnected":
         connectionStatus.text = "$(circle-slash) OpenCode: Disconnected"
@@ -76,6 +144,8 @@ export function activate(context: vscode.ExtensionContext) {
         connectionStatus.command = "opencode-harness.openChat"
         // Invalidate stale CLI session IDs so next prompt creates fresh server sessions
         sessionStore.invalidateAllCliSessionIds()
+        // Clear persisted port
+        context.globalState.update('opencode-server-port', undefined)
         break
       case "server_error":
         connectionStatus.text = "$(error) OpenCode: Error"
@@ -100,60 +170,13 @@ export function activate(context: vscode.ExtensionContext) {
     }
   })
 
-  // ---- Session store & tree ----
-  const sessionStore = new SessionStore(context.globalState)
-  if (sessionStore.count === 0) {
-    sessionStore.create("Default")
-  }
+  return connectionStatus
+}
 
-  // ---- Skill manager (available for future UI integration) ----
-  const skillManager = new SkillManager()
-
-  // ---- Rollback command ----
-  context.subscriptions.push(
-    vscode.commands.registerCommand("opencode-harness.rollback", async () => {
-      try {
-        const allCheckpoints = await checkpointManager.listCheckpoints(sessionStore.getActive()?.cliSessionId || sessionStore.activeId)
-        if (allCheckpoints.length === 0) {
-          vscode.window.showInformationMessage("No checkpoints are available for the active session.")
-          return
-        }
-        const items = allCheckpoints.map((c) => ({
-          label: `Checkpoint ${c.id}`,
-          description: new Date(c.timestamp).toLocaleString(),
-          detail: `${c.filesChanged.length} files changed`,
-          id: c.id,
-        }))
-        const selected = await vscode.window.showQuickPick(items, { placeHolder: "Select checkpoint to restore" })
-        if (selected) {
-          await checkpointManager.restore(selected.id)
-          vscode.window.showInformationMessage(`Restored checkpoint ${selected.id}`)
-        }
-      } catch (err) {
-        log.error("Rollback command failed", err)
-        vscode.window.showErrorMessage("Failed to restore checkpoint. Check the OpenCode output channel for details.")
-      }
-    })
-  )
-
-  // ---- Terminal capture ----
-  context.subscriptions.push(
-    vscode.commands.registerCommand("opencode-harness.captureTerminal", async () => {
-      try {
-        await terminalBridge.captureTerminalSelection()
-      } catch (err) {
-        log.error("Terminal capture command failed", err)
-        vscode.window.showErrorMessage("Failed to capture terminal output.")
-      }
-    })
-  )
-
-  // ---- Inline code actions (CodeLens) ----
+function registerInlineProviders(context: vscode.ExtensionContext, chatProvider: ChatProvider): void {
   const inlineProvider = new InlineActionProvider()
-  const chatProvider = new ChatProvider(
-    context, sessionManager, contextEngine, contextMonitor,
-    themeManager, rateLimitMonitor, modelManager, sessionStore
-  )
+  const completionProvider = new InlineCompletionProvider()
+  context.subscriptions.push(completionProvider)
 
   for (const lang of ["typescript", "javascript", "python", "rust", "go", "typescriptreact", "javascriptreact"]) {
     context.subscriptions.push(
@@ -161,6 +184,14 @@ export function activate(context: vscode.ExtensionContext) {
     )
   }
 
+  context.subscriptions.push(
+    vscode.languages.registerInlineCompletionItemProvider(
+      { pattern: "**" },
+      completionProvider,
+    )
+  )
+
+  // Inline code actions (CodeLens)
   for (const action of ["explainCode", "refactorCode", "generateTests"]) {
     context.subscriptions.push(
       vscode.commands.registerCommand(`opencode-harness.${action}`, async (uri: vscode.Uri, range?: vscode.Range) => {
@@ -180,239 +211,61 @@ export function activate(context: vscode.ExtensionContext) {
         const relativePath = vscode.workspace.asRelativePath(uri)
 
         const prompts: Record<string, string> = {
-          explainCode: `Explain the following code from ${relativePath}:\n\n\`\`\`\n${text}\n\`\`\``,
-          refactorCode: `Refactor the following code from ${relativePath}. Return only the refactored code in a code block:\n\n\`\`\`\n${text}\n\`\`\``,
-          generateTests: `Generate unit tests for the following code from ${relativePath}. Return only the test code in a code block:\n\n\`\`\`\n${text}\n\`\`\``,
+          explainCode: `Explain the following code from ${relativePath}:\n\`\`\`\n${text}\n\`\`\``,
+          refactorCode: `Refactor the following code from ${relativePath}. Return only the refactored code in a code block:\n\`\`\`\n${text}\n\`\`\``,
+          generateTests: `Generate unit tests for the following code from ${relativePath}. Return only the test code in a code block:\n\`\`\`\n${text}\n\`\`\``,
         }
 
         // Focus chat and send prompt
         await vscode.commands.executeCommand("opencode-harness.openChat")
         vscode.commands.executeCommand("workbench.view.extension.opencode-harness")
-        chatProvider.sendPromptToWebview(prompts[action])
+        chatProvider.sendPromptToWebview(prompts[action] ?? "")
         vscode.window.showInformationMessage(`${action.replace("Code", "")} requested for ${relativePath}`)
       })
     )
   }
+}
 
-  // ---- Core commands ----
-  context.subscriptions.push(
-    vscode.commands.registerCommand("opencode-harness.openChat", async () => {
-      try {
-        await vscode.commands.executeCommand("workbench.view.extension.opencode-harness")
-      } catch (err) {
-        log.error("Failed to open chat", err)
-      }
-    })
-  )
+function registerCoreCommands(
+  context: vscode.ExtensionContext,
+  sessionStore: SessionStore,
+  sessionManager: SessionManager,
+  modelManager: ModelManager,
+  rateLimitMonitor: RateLimitMonitor,
+  checkpointManager: CheckpointManager,
+  cliDiagnostics: CliDiagnostics,
+  themeManager: ThemeManager,
+  terminalBridge: TerminalBridge
+): void {
+  const sessionExporter = new SessionExporter()
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand("opencode-harness.newSession", async () => {
-      try {
-        const session = sessionStore.create()
-        log.info(`New session created: ${session.id}`)
-        vscode.window.showInformationMessage(`New session: ${session.name}`)
-      } catch (err) {
-        log.error("Failed to create new session", err)
-        vscode.window.showErrorMessage("Failed to create a new session.")
-      }
-    })
-  )
+  registerRollbackCommand(context, checkpointManager, sessionStore)
+  registerThemePreviewCommand(context, themeManager)
+  registerCaptureTerminalCommand(context, terminalBridge)
+  registerOpenChatCommand(context)
+  registerNewSessionCommand(context, sessionStore)
+  registerOpenStoredSessionCommand(context, sessionStore)
+  registerToggleFocusCommand(context)
+  registerInsertMentionCommand(context)
+  registerShowRateLimitsCommand(context, rateLimitMonitor)
+  registerSelectModelCommand(context, modelManager, sessionManager, sessionStore)
+  registerCheckCliCommand(context, sessionManager, cliDiagnostics)
+  registerListSessionsCommand(context, sessionStore)
+  registerDeleteSessionCommand(context, sessionStore)
+  registerRenameSessionCommand(context, sessionStore)
+  registerExportCommand(context, sessionExporter, sessionStore)
+}
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand("opencode-harness.openStoredSession", async (sessionId: string) => {
-      try {
-        const session = sessionStore.setActive(sessionId)
-        if (session) {
-          await vscode.commands.executeCommand("workbench.view.extension.opencode-harness")
-        } else {
-          vscode.window.showWarningMessage("That saved session could not be found.")
-        }
-      } catch (err) {
-        log.error("Failed to open stored session", err)
-        vscode.window.showErrorMessage("Failed to open stored session.")
-      }
-    })
-  )
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand("opencode-harness.toggleFocus", async () => {
-      try {
-        await vscode.commands.executeCommand("workbench.view.extension.opencode-harness")
-      } catch (err) {
-        log.error("Failed to toggle focus", err)
-      }
-    })
-  )
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand("opencode-harness.insertMention", async () => {
-      try {
-        await vscode.commands.executeCommand("opencode-harness.chat.focus")
-      } catch (err) {
-        log.error("Failed to focus chat for mention", err)
-      }
-    })
-  )
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand("opencode-harness.showRateLimits", async () => {
-      try {
-        await rateLimitMonitor.showDetail()
-      } catch (err) {
-        log.error("Failed to show rate limits", err)
-      }
-    })
-  )
-
-  // ---- Model selection ----
-  // Model changes are per-request (no server restart needed).
-  // The selected model is stored as the default for new prompts.
-  // Users can also apply the model to the current session.
-  context.subscriptions.push(
-    vscode.commands.registerCommand("opencode-harness.selectModel", async () => {
-      try {
-      // Always try to refresh models — use server if running, otherwise CLI
-      await modelManager.refreshModels(sessionManager.isRunning ? sessionManager.currentPort : undefined)
-      const currentModel = modelManager.model
-      const model = await modelManager.pickModel()
-      if (model && model !== currentModel) {
-        // model is in "provider/modelId" format from pickModel()
-        const slashIdx = model.indexOf("/")
-        const providerID = slashIdx >= 0 ? model.substring(0, slashIdx) : "unknown"
-        const modelID = slashIdx >= 0 ? model.substring(slashIdx + 1) : model
-
-        // Update global default (used for new sessions/prompts)
-        modelManager.setModel(model)
-        sessionManager.setModel(providerID, modelID)
-        log.info(`Model switched to ${providerID}/${modelID} (no server restart)`)
-
-        // Ask if user wants to apply to current session too
-        const activeSession = sessionStore.getActive()
-        if (activeSession && activeSession.model !== model) {
-          const choice = await vscode.window.showInformationMessage(
-            `Apply ${modelID} to current session "${activeSession.name}"?`,
-            "Apply to Current Session",
-            "Just Set Default",
-          )
-          if (choice === "Apply to Current Session") {
-            sessionStore.updateModel(activeSession.id, model)
-            log.info(`Model for session ${activeSession.id} updated to ${model}`)
-          }
-        }
-      }
-      } catch (err) {
-        log.error("Select model command failed", err)
-        vscode.window.showErrorMessage("Failed to select model. Check the OpenCode output channel for details.")
-      }
-    })
-  )
-
-  // ---- CLI diagnostics ----
-  context.subscriptions.push(
-    vscode.commands.registerCommand("opencode-harness.checkCli", async () => {
-      try {
-        const ok = await cliDiagnostics.check(sessionManager.isRunning ? sessionManager.currentPort : undefined)
-        if (ok) {
-          vscode.window.showInformationMessage("OpenCode CLI is working correctly.")
-        } else {
-          vscode.window.showErrorMessage("OpenCode CLI check failed. See 'OpenCode Harness' output channel for details.")
-        }
-      } catch (err) {
-        log.error("CLI diagnostics command failed", err)
-        vscode.window.showErrorMessage("Failed to run CLI diagnostics. Check the OpenCode output channel for details.")
-      }
-    })
-  )
-
-  // ---- List / switch sessions ----
-  context.subscriptions.push(
-    vscode.commands.registerCommand("opencode-harness.listSessions", async () => {
-      try {
-        const sessions = sessionStore.list()
-        if (sessions.length === 0) {
-          vscode.window.showInformationMessage("No saved sessions.")
-          return
-        }
-        const items = sessions.map((s) => ({
-          label: s.name,
-          description: `${s.messages.length} messages`,
-          detail: `${new Date(s.lastActiveAt).toLocaleDateString()} — ${s.model || "no model"}`,
-          id: s.id,
-        }))
-        const picked = await vscode.window.showQuickPick(items, { placeHolder: "Switch to session" })
-        if (picked) {
-          sessionStore.setActive(picked.id)
-          vscode.window.showInformationMessage(`Switched to: ${picked.label}`)
-        }
-      } catch (err) {
-        log.error("List sessions command failed", err)
-        vscode.window.showErrorMessage("Failed to list sessions.")
-      }
-    })
-  )
-
-  // ---- Delete session ----
-  context.subscriptions.push(
-    vscode.commands.registerCommand("opencode-harness.deleteSession", async (sessionId?: string) => {
-      try {
-        if (!sessionId) {
-          const sessions = sessionStore.list()
-          if (sessions.length === 0) {
-            vscode.window.showInformationMessage("No sessions to delete.")
-            return
-          }
-          const items = sessions.map(s => ({ label: s.name, description: `${s.messages.length} messages`, id: s.id }))
-          const picked = await vscode.window.showQuickPick(items, { placeHolder: "Select session to delete" })
-          if (!picked) return
-          sessionId = picked.id
-        }
-        const confirm = await vscode.window.showWarningMessage(
-          "Delete this session?", { modal: true }, "Delete"
-        )
-        if (confirm === "Delete") {
-          sessionStore.delete(sessionId)
-          log.info(`Session deleted: ${sessionId}`)
-        }
-      } catch (err) {
-        log.error("Delete session command failed", err)
-        vscode.window.showErrorMessage("Failed to delete session.")
-      }
-    })
-  )
-
-  // ---- Rename session ----
-  context.subscriptions.push(
-    vscode.commands.registerCommand("opencode-harness.renameSession", async (sessionId?: string) => {
-      try {
-        if (!sessionId) {
-          const active = sessionStore.getActive()
-          if (!active) return
-          sessionId = active.id
-        }
-        const newName = await vscode.window.showInputBox({
-          prompt: "Enter new session name",
-          value: sessionStore.get(sessionId)?.name,
-        })
-        if (newName) {
-          sessionStore.rename(sessionId, newName)
-          log.info(`Session renamed: ${sessionId} → ${newName}`)
-        }
-      } catch (err) {
-        log.error("Rename session command failed", err)
-        vscode.window.showErrorMessage("Failed to rename session.")
-      }
-    })
-  )
-
-  // ---- Chat webview provider ----
+function registerChatProvider(context: vscode.ExtensionContext, chatProvider: ChatProvider): void {
   context.subscriptions.push(
     chatProvider,
     vscode.window.registerWebviewViewProvider("opencode-harness.chat", chatProvider, {
       webviewOptions: { retainContextWhenHidden: true },
     })
   )
+}
 
-  // ---- URI handler ----
+function registerUriHandler(context: vscode.ExtensionContext, chatProvider: ChatProvider): void {
   context.subscriptions.push(
     vscode.window.registerUriHandler({
       handleUri(uri: vscode.Uri): void {
@@ -430,11 +283,12 @@ export function activate(context: vscode.ExtensionContext) {
       },
     })
   )
-
-  log.info("OpenCode Harness extension activated")
 }
 
 export function deactivate() {
+  if (sessionStore) {
+    sessionStore.dispose()
+  }
   if (sessionManager) {
     sessionManager.dispose()
   }

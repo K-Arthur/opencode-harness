@@ -46,9 +46,18 @@ export function applyThemeVars(vars?: Record<string, string>) {
   if (!vars || typeof vars !== "object") return
   const root = document.documentElement
   for (const [key, val] of Object.entries(vars)) {
-    if (typeof val === "string") {
-      root.style.setProperty(key, val)
+    if (typeof val !== "string") continue
+    // Only allow valid CSS custom properties (must start with --)
+    if (!key.startsWith("--")) {
+      console.warn("[OpenCode] Rejected non-custom CSS property:", key)
+      continue
     }
+    // Block dangerous CSS values that could exfiltrate data
+    if (/url\(|expression\(|javascript:|data:text\/html/i.test(val)) {
+      console.warn("[OpenCode] Blocked unsafe CSS value for:", key)
+      continue
+    }
+    root.style.setProperty(key, val)
   }
 }
 

@@ -1,19 +1,28 @@
 import * as vscode from "vscode"
-import { DiffApplier } from "../../diff/DiffApplier"
+import { DiffApplier, type ProposedEdit } from "../../diff/DiffApplier"
 import { DiffHandler } from "./DiffHandler"
 import { TabManager } from "../TabManager"
 import { SessionManager } from "../../session/SessionManager"
 import { SessionStore } from "../../session/SessionStore"
 import { ContextEngine } from "../../context/ContextEngine"
 import { ContextMonitor } from "../../monitor/ContextMonitor"
-import { estimateContextTokens } from "../../utils/tokenCounter"
+import { estimateContextTokens, parseModelRef } from "../../utils/tokenCounter"
 import { ModelManager } from "../../model/ModelManager"
 import { log } from "../../utils/outputChannel"
-import type { Block, ChatMessage } from "../ChatProvider"
+import type { Block, ChatMessage } from "../types"
+import type { DiffHunk } from "../webview/types"
 
 export interface StreamCallbacks {
   postMessage: (msg: Record<string, unknown>) => void
   postRequestError: (message: string) => void
+}
+
+interface ContextShape {
+  openFiles: Array<{ path: string; language: string }>
+  gitStatus: { branch: string; modified: string[]; staged: string[] }
+  workspaceTree: Array<{ name: string; type: string }>
+  projectConfigs: Array<{ type: string; path: string }>
+  diagnostics: unknown
 }
 
 export class StreamCoordinator {
@@ -34,10 +43,17 @@ export class StreamCoordinator {
   ) {
     this.diffApplier = diffApplier
     this.diffHandler = new DiffHandler(diffApplier)
+  }
 
-    // Start watchdog to check for stuck streams every 30 seconds
+  private startWatchdog(): void {
+    if (this.streamWatchdog) return
     this.streamWatchdog = setInterval(() => {
       const allTabs = this.tabManager.getAllTabs()
+      const anyStreaming = allTabs.some(t => t.isStreaming)
+      if (!anyStreaming) {
+        this.stopWatchdog()
+        return
+      }
       for (const tab of allTabs) {
         if (tab.isStreaming && tab.lastActivityTime) {
           const stuckMs = Date.now() - tab.lastActivityTime
@@ -47,7 +63,6 @@ export class StreamCoordinator {
             if (callbacks) {
               void this.finalizeStream(tab.id, callbacks)
             } else {
-              // No callbacks stored - just reset the streaming state
               log.warn(`No callbacks for stuck tab ${tab.id}, resetting state`)
               this.tabManager.setStreaming(tab.id, false)
               this.tabManager.setWaitingForCompletion(tab.id, false)
@@ -56,6 +71,13 @@ export class StreamCoordinator {
         }
       }
     }, 30000)
+  }
+
+  private stopWatchdog(): void {
+    if (this.streamWatchdog) {
+      clearInterval(this.streamWatchdog)
+      this.streamWatchdog = null
+    }
   }
 
   async startPrompt(tabId: string, text: string, callbacks: StreamCallbacks): Promise<void> {
@@ -80,13 +102,18 @@ export class StreamCoordinator {
       }
     }
 
-    // Check concurrent limit
+    // Reserve the streaming slot ATOMICALLY before any `await`
+    // This was fixed in the hardening milestone — prevents race conditions
     const canStream = this.tabManager.canStartStreaming()
     if (!canStream.ok) {
       log.warn(`Concurrent stream limit reached: ${canStream.reason}`)
       vscode.window.showWarningMessage(canStream.reason!)
+      this.stuckStreamHandlers.delete(tabId)
       return
     }
+
+    // Now set streaming state AFTER atomic reservation
+    this.tabManager.setStreaming(tabId, true)
 
     try {
       const ctxPkg = await this.contextEngine.gatherContext()
@@ -96,20 +123,19 @@ export class StreamCoordinator {
       this.tabManager.setCliSessionId(tabId, cliSessionId)
       this.sessionStore.updateCliSessionId(tabId, cliSessionId)
 
-      const contextText = this.buildContextText(ctxPkg)
+      const contextText = this.buildContextText(ctxPkg as unknown as ContextShape)
 
       // NOTE: User message is already rendered and stored by the webview.
       // Persisting here caused duplicate rendering (garbled/flash effect).
-
       callbacks.postMessage({
         type: "stream_start",
         sessionId: tabId,
         messageId: `resp-${cliSessionId}`,
       })
 
-      this.tabManager.setStreaming(tabId, true)
       this.tabManager.setWaitingForCompletion(tabId, true)
       this.tabManager.clearBuffer(tabId)
+      this.startWatchdog()
 
       // Timeout fallback
       const timeout = setTimeout(() => {
@@ -121,7 +147,7 @@ export class StreamCoordinator {
       }, 60000)
       this.tabManager.setCompletionTimeout(tabId, timeout)
 
-      const modelRef = tab.model ? this.parseModelRef(tab.model) : undefined
+      const modelRef = tab.model ? parseModelRef(tab.model) : undefined
 
       await this.sessionManager.sendPromptAsync(cliSessionId, [
         { type: "text", text: contextText },
@@ -150,34 +176,10 @@ export class StreamCoordinator {
     if (tab.streamingBuffer) {
       // Strip context wrapper from response if present
       const cleanedText = this.stripContextWrapper(tab.streamingBuffer)
-      
+
       // Check if there's actual content after stripping context
       if (cleanedText.trim()) {
         blocks.push({ type: "text", text: cleanedText })
-
-        const edits = this.diffApplier.parseCodeBlocks([{ type: "text", text: cleanedText }])
-        for (const edit of edits) {
-          edit.messageId = `resp-${tab.cliSessionId}`
-          try {
-            const diffText = await this.diffApplier.generateDiff(edit.filePath, edit.proposedContent)
-            this.diffHandler.register(edit.blockId, edit)
-            blocks.push({
-              type: "diff_block",
-              id: edit.blockId,
-              filePath: edit.filePath,
-              diffText,
-              messageId: edit.messageId,
-            })
-          } catch (e) {
-            const err = e instanceof Error ? e.message : String(e)
-            log.warn(`Failed to generate diff for ${edit.filePath}: ${err}`)
-            blocks.push({
-              type: "task_banner",
-              status: "warning",
-              text: `Could not generate diff for ${edit.filePath}: ${err}`,
-            })
-          }
-        }
       }
     }
 
@@ -202,6 +204,12 @@ export class StreamCoordinator {
     this.tabManager.clearBuffer(tabId)
   }
 
+  /**
+   * Abort a streaming session.
+   * - Calls abort() on the underlying fetch controller
+   * - Emits stream:end with { reason: 'aborted' }
+   * - Always cleans up the tab state
+   */
   async abort(tabId: string, callbacks: StreamCallbacks): Promise<void> {
     const tab = this.tabManager.getTab(tabId)
     if (!tab || !tab.cliSessionId || !this.sessionManager.isRunning) return
@@ -213,10 +221,19 @@ export class StreamCoordinator {
         sessionId: tabId,
         messageId: `resp-${tab.cliSessionId}`,
         blocks: [],
+        reason: "aborted",
       })
     } catch (e) {
       const message = e instanceof Error ? e.message : "Unknown error"
       log.warn("Abort failed", e)
+      // Still emit stream_end with aborted reason even if abort call fails
+      callbacks.postMessage({
+        type: "stream_end",
+        sessionId: tabId,
+        messageId: `resp-${tab.cliSessionId}`,
+        blocks: [],
+        reason: "aborted",
+      })
     } finally {
       this.cleanupTab(tabId)
     }
@@ -243,57 +260,49 @@ export class StreamCoordinator {
     this.tabManager.setWaitingForCompletion(tabId, false)
     this.tabManager.clearCompletionTimeout(tabId)
     this.tabManager.clearBuffer(tabId)
+    this.stuckStreamHandlers.delete(tabId)
   }
 
-  private buildContextText(ctxPkg: any): string {
-    const openFiles = ctxPkg.openFiles.map((f: { path: string; language: string }) => `${f.path} (${f.language})`).join(", ") || "none"
-    const gitStatus = `branch: ${ctxPkg.gitStatus.branch}, modified: ${ctxPkg.gitStatus.modified.length}, staged: ${ctxPkg.gitStatus.staged.length}`
-    
-    const tree = ctxPkg.workspaceTree
+  private buildContextText(ctxPkg: ContextShape): string {
+    const openFiles = ctxPkg.openFiles?.map((f: { path: string; language: string }) => `${f.path} (${f.language})`).join(", ") || "none"
+    const gitStatus = `branch: ${ctxPkg.gitStatus?.branch || "unknown"}, modified: ${(ctxPkg.gitStatus?.modified || []).length}, staged: ${(ctxPkg.gitStatus?.staged || []).length}`
+
+    const tree = (ctxPkg.workspaceTree || [])
       .map((t: { name: string; type: string }) => `${t.type === "directory" ? "/" : ""}${t.name}`)
       .slice(0, 50)
       .join(", ")
 
-    const configs = ctxPkg.projectConfigs
+    const configs = (ctxPkg.projectConfigs || [])
       .map((c: { type: string; path: string }) => `${c.type} at ${c.path}`)
       .join(", ")
 
     return `<context>
 Open files: ${openFiles}
 Git status: ${gitStatus}
-Workspace structure: ${tree}${ctxPkg.workspaceTree.length > 50 ? " (truncated)" : ""}
+Workspace structure: ${tree}${ctxPkg.workspaceTree?.length > 50 ? " (truncated)" : ""}
 Project configs: ${configs || "none"}
 Diagnostics: ${Array.isArray(ctxPkg.diagnostics) ? ctxPkg.diagnostics.length : 0} files with errors or warnings
 </context>`
   }
 
-  private parseModelRef(model: string) {
-    const slashIdx = model.indexOf("/")
-    if (slashIdx === -1) return { providerID: "", modelID: model }
-    return {
-      providerID: model.substring(0, slashIdx),
-      modelID: model.substring(slashIdx + 1),
+  /**
+   * Strip context wrapper from response text.
+   * The AI may echo back the context block, which we don't want to display.
+   * Uses non-greedy matching to avoid over-stripping valid content.
+   */
+  private stripContextWrapper(text: string): string {
+    // Only remove complete <context>...</context> blocks (non-greedy match)
+    // This avoids stripping valid content that might contain angle brackets
+    const contextRegex = /<context>[\s\S]*?<\/context>/gi
+    let cleaned = text.replace(contextRegex, "").trim()
+
+    // Log warning if partial context tags remain (unexpected AI behavior)
+    if (cleaned.includes("<context>") || cleaned.includes("</context>")) {
+      log.warn("Response contains partial context tags - this is unexpected")
     }
+
+    return cleaned
   }
-
-   /**
-    * Strip context wrapper from response text.
-    * The AI may echo back the context block, which we don't want to display.
-    * Uses non-greedy matching to avoid over-stripping valid content.
-    */
-   private stripContextWrapper(text: string): string {
-     // Only remove complete <context>...</context> blocks (non-greedy match)
-     // This avoids stripping valid content that might contain angle brackets
-     const contextRegex = /<context>[\s\S]*?<\/context>/gi
-     let cleaned = text.replace(contextRegex, "").trim()
-
-     // Log warning if partial context tags remain (unexpected AI behavior)
-     if (cleaned.includes("<context>") || cleaned.includes("</context>")) {
-       log.warn("Response contains partial context tags - this is unexpected")
-     }
-
-     return cleaned
-   }
 
   dispose(): void {
     if (this.streamWatchdog) {
@@ -301,5 +310,6 @@ Diagnostics: ${Array.isArray(ctxPkg.diagnostics) ? ctxPkg.diagnostics.length : 0
       this.streamWatchdog = null
     }
     this.stuckStreamHandlers.clear()
+    this.diffHandler.dispose()
   }
 }

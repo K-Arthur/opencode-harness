@@ -6,6 +6,7 @@ export type NormalizedOpencodeEventType =
   | "text_chunk"
   | "message_complete"
   | "session_status"
+  | "session_compacted"
   | "server_connected"
   | "server_disconnected"
   | "server_error"
@@ -24,43 +25,90 @@ export interface SdkEventLike {
   properties?: Record<string, unknown>
 }
 
-interface PartLike {
-  id?: string
-  type?: string
-  sessionID?: string
-  messageID?: string
-  text?: string
+export interface PartLike {
+  id?: string;
+  type?: string;
+  sessionID?: string;
+  messageID?: string;
+  text?: string;
 }
 
-interface ToolPartLike extends PartLike {
-  type: "tool"
-  callID?: string
-  tool?: string
+export interface ToolPartLike extends PartLike {
+  name?: string;
+  callID?: string;
+  tool?: string;
+  args?: unknown;
+  result?: unknown;
   state?: {
-    status?: "pending" | "running" | "completed" | "error"
-    input?: unknown
-    output?: string
-    error?: string
-  }
+    status?: string;
+    input?: unknown;
+    output?: unknown;
+    error?: string;
+  };
 }
 
-interface MessageInfoLike {
-  id?: string
-  sessionID?: string
-  role?: string
-  time?: { completed?: number }
-  finish?: string
-  error?: unknown
+export interface MessageInfoLike {
+  id?: string;
+  role?: string;
+  blocks?: unknown[];
+  timestamp?: number;
+  sessionId?: string;
+  sessionID?: string;
+  error?: string;
+  time?: {
+    completed?: number;
+  };
+}
+
+export interface NormalizerContext {
+  partTextLengths: Map<string, number>
+  partMessageIds: Map<string, string>
+  partSessionIds: Map<string, string>
+  partTypes: Map<string, string>
+  partStatusKeys: Map<string, string>
+  messageRoles: Map<string, string>
+  toolStatuses: Map<string, string>
+  seenUnknownTypes: Set<string>
+  isAssistantMessage: (messageId: string | undefined) => boolean
+  clearMessageTracking: (messageId: string) => void
+  rememberPart: (part: PartLike) => void
 }
 
 export interface SdkEventNormalizer {
-  normalize(event: SdkEventLike): NormalizedOpencodeEvent[]
+  normalize: (event: SdkEventLike) => NormalizedOpencodeEvent[]
 }
 
-// H7: Track seen unknown event types to avoid log spam
-const seenUnknownTypes = new Set<string>()
+import { EventHandler } from "./eventHandlers/types"
+import { TextPartHandler } from "./eventHandlers/TextPartHandler"
+import { ToolPartHandler } from "./eventHandlers/ToolPartHandler"
+import { DeltaHandler } from "./eventHandlers/DeltaHandler"
+import { MessageUpdateHandler } from "./eventHandlers/MessageUpdateHandler"
+import { SessionStatusHandler, SessionErrorHandler, SessionIdleHandler } from "./eventHandlers/SessionHandlers"
+import { FileEditHandler } from "./eventHandlers/FileEditHandler"
+import { PermissionHandler } from "./eventHandlers/PermissionHandler"
+import { SessionDiffHandler } from "./eventHandlers/SessionDiffHandler"
+import { SessionCompactedHandler } from "./eventHandlers/SessionCompactedHandler"
+import { FallbackHandler } from "./eventHandlers/FallbackHandler"
+
+// Static handler chain — instantiated once at module load
+const HANDLERS: EventHandler[] = [
+  new TextPartHandler(),
+  new ToolPartHandler(),
+  new DeltaHandler(),
+  new MessageUpdateHandler(),
+  new SessionStatusHandler(),
+  new SessionErrorHandler(),
+  new SessionIdleHandler(),
+  new FileEditHandler(),
+  new PermissionHandler(),
+  new SessionDiffHandler(),
+  new SessionCompactedHandler(),
+  new FallbackHandler(),
+]
 
 export function createSdkEventNormalizer(): SdkEventNormalizer {
+
+  // Shared state (used by handlers via context)
   const partTextLengths = new Map<string, number>()
   const partMessageIds = new Map<string, string>()
   const partSessionIds = new Map<string, string>()
@@ -68,9 +116,11 @@ export function createSdkEventNormalizer(): SdkEventNormalizer {
   const partStatusKeys = new Map<string, string>()
   const messageRoles = new Map<string, string>()
   const toolStatuses = new Map<string, string>()
+  const seenUnknownTypes = new Set<string>()
 
-  const isAssistantMessage = (messageId: string | undefined): boolean =>
-    Boolean(messageId && messageRoles.get(messageId) === "assistant")
+  const isAssistantMessage = (messageId: string | undefined): boolean => {
+    return Boolean(messageId && messageRoles.get(messageId) === "assistant")
+  }
 
   const clearMessageTracking = (messageId: string): void => {
     messageRoles.delete(messageId)
@@ -93,194 +143,33 @@ export function createSdkEventNormalizer(): SdkEventNormalizer {
     if (part.type) partTypes.set(part.id, part.type)
   }
 
+  const context: NormalizerContext = {
+    partTextLengths,
+    partMessageIds,
+    partSessionIds,
+    partTypes,
+    partStatusKeys,
+    messageRoles,
+    toolStatuses,
+    seenUnknownTypes,
+    isAssistantMessage,
+    clearMessageTracking,
+    rememberPart,
+  }
+
   return {
     normalize(event: SdkEventLike): NormalizedOpencodeEvent[] {
       const out: NormalizedOpencodeEvent[] = []
-      const props = event.properties
 
-      switch (event.type) {
-        case "message.part.updated": {
-          const part = (props as { part?: PartLike } | undefined)?.part
-          if (!part) break
-
-          rememberPart(part)
-
-          if (!isAssistantMessage(part.messageID)) break
-
-          if (part.type === "text") {
-            const stablePartId = part.id || `${part.sessionID || ""}:${part.messageID || ""}`
-            const previousLength = partTextLengths.get(stablePartId) || 0
-            const text = part.text ?? ""
-            const delta = typeof props?.delta === "string" ? props.delta : text.slice(previousLength)
-
-            partTextLengths.set(stablePartId, text.length)
-            if (!delta) break
-
-            out.push({
-              type: "text_chunk",
-              sessionId: part.sessionID,
-              data: { text: delta },
-            })
-          } else if (part.type === "tool") {
-            const toolPart = part as ToolPartLike
-            const statusKey = toolPart.id || toolPart.callID || `${toolPart.messageID || ""}:${toolPart.tool || ""}`
-            const status = toolPart.state?.status
-
-            if (toolPart.id) partStatusKeys.set(toolPart.id, statusKey)
-            if (status && toolStatuses.get(statusKey) === status && status !== "completed" && status !== "error") {
-              break
-            }
-            if (status) toolStatuses.set(statusKey, status)
-
-            if (status === "pending" || status === "running") {
-              out.push({
-                type: "tool_start",
-                sessionId: toolPart.sessionID,
-                data: { tool: toolPart.tool, input: toolPart.state?.input, status },
-              })
-            } else if (status === "completed" || status === "error") {
-              out.push({
-                type: "tool_end",
-                sessionId: toolPart.sessionID,
-                data: { tool: toolPart.tool, result: toolPart.state?.output ?? toolPart.state?.error ?? "" },
-              })
-            }
-          }
-          break
-        }
-
-        case "message.part.delta": {
-          const deltaProps = props as {
-            sessionID?: string
-            messageID?: string
-            partID?: string
-            delta?: string
-          } | undefined
-          const delta = deltaProps?.delta
-          if (!delta) break
-
-          const partId = deltaProps.partID
-          const messageId = deltaProps.messageID || (partId ? partMessageIds.get(partId) : undefined)
-          const sessionId = deltaProps.sessionID || (partId ? partSessionIds.get(partId) : undefined)
-          const partType = partId ? partTypes.get(partId) : undefined
-
-          if (!isAssistantMessage(messageId)) break
-          if (partType && partType !== "text") break
-
-          if (partId) {
-            partTextLengths.set(partId, (partTextLengths.get(partId) || 0) + delta.length)
-          }
-
-          out.push({
-            type: "text_chunk",
-            sessionId,
-            data: { text: delta },
-          })
-          break
-        }
-
-        case "message.updated": {
-          const msg = (props as { info?: MessageInfoLike } | undefined)?.info
-
-          if (msg?.id && msg.role) {
-            messageRoles.set(msg.id, msg.role)
-          }
-
-          if (msg?.role !== "assistant") break
-
-          if (msg.error) {
-            out.push({
-              type: "server_error",
-              sessionId: msg.sessionID,
-              data: { error: msg.error },
-            })
-            if (msg.id) clearMessageTracking(msg.id)
+      for (const handler of HANDLERS) {
+        if (handler.canHandle(event.type)) {
+          const results = handler.handle(event, context)
+          out.push(...results)
+          // For "message.part.updated", both TextPartHandler and ToolPartHandler
+          // can handle different part types - continue checking all handlers
+          if (event.type !== "message.part.updated") {
             break
           }
-
-          if (msg.time?.completed) {
-            out.push({
-              type: "message_complete",
-              sessionId: msg.sessionID,
-              data: { message: msg },
-            })
-            if (msg.id) clearMessageTracking(msg.id)
-          }
-          break
-        }
-
-        case "session.status": {
-          const data = props as { sessionID?: string; status?: unknown } | undefined
-          out.push({
-            type: "session_status",
-            sessionId: data?.sessionID,
-            data: { status: data?.status },
-          })
-          break
-        }
-
-        case "session.idle": {
-          const sessionId = (props as { sessionID?: string } | undefined)?.sessionID
-          out.push({
-            type: "session_status",
-            sessionId,
-            data: { status: { type: "idle" } },
-          })
-          break
-        }
-
-        case "session.error": {
-          const data = props as { sessionID?: string; error?: unknown } | undefined
-          out.push({
-            type: "server_error",
-            sessionId: data?.sessionID,
-            data: { error: data?.error },
-          })
-          break
-        }
-
-        case "session.diff": {
-          out.push({
-            type: "file_edited",
-            sessionId: (props as { sessionID?: string } | undefined)?.sessionID,
-            data: props,
-          })
-          break
-        }
-
-        case "file.edited": {
-          out.push({
-            type: "file_edited",
-            data: props,
-          })
-          break
-        }
-
-        case "permission.updated": {
-          out.push({
-            type: "permission_request",
-            sessionId: (props as { sessionID?: string } | undefined)?.sessionID,
-            data: props,
-          })
-          break
-        }
-
-        case "permission.replied": {
-          out.push({
-            type: "permission_replied",
-            sessionId: (props as { sessionID?: string } | undefined)?.sessionID,
-            data: props,
-          })
-          break
-        }
-
-        default: {
-          // H7: Log unknown event types (once per type) for debuggability
-          if (!seenUnknownTypes.has(event.type)) {
-            seenUnknownTypes.add(event.type)
-            console.warn(`[opencode-harness] Unhandled SDK event type: "${event.type}"`)
-          }
-          break
         }
       }
 

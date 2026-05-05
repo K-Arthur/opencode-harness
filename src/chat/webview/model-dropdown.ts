@@ -1,21 +1,17 @@
 import type { ModelInfo } from "./types"
 import type { ElementRefs } from "./dom"
+import { CHECK_SVG, GEAR_SVG } from "./icons"
 
 export interface ModelDropdownCallbacks {
   onSelect: (modelId: string) => void
   onOpen?: () => void
+  onManageModels?: () => void
 }
 
 export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCallbacks) {
   let isOpen = false
   let models: ModelInfo[] = []
   let focusedIndex = -1
-
-  // SECURITY NOTE: This dropdown uses a custom implementation instead of
-  // <vscode-dropdown> because it supports provider-based grouping (like
-  // optgroup) which the toolkit's dropdown does not support. All model names
-  // are rendered via textContent (safe, no XSS risk). The only innerHTML usage
-  // is for a hardcoded SVG checkmark icon (no user content).
 
   function getOptions(): HTMLElement[] {
     return Array.from(els.modelDropdown.querySelectorAll('[role="option"]'))
@@ -30,7 +26,6 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     focusedIndex = -1
     els.modelDropdown.classList.remove("hidden")
     els.modelSelectorBtn.setAttribute("aria-expanded", "true")
-    // Set active-descendant for screen reader tracking
     els.modelSelectorBtn.setAttribute("aria-activedescendant", "")
     callbacks.onOpen?.()
     if (models.length === 0 && els.modelDropdown.children.length === 0) {
@@ -49,14 +44,12 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     els.modelDropdown.classList.add("hidden")
     els.modelSelectorBtn.setAttribute("aria-expanded", "false")
     els.modelSelectorBtn.removeAttribute("aria-activedescendant")
-    // Clear visual focus
     const options = getOptions()
     for (const opt of options) opt.classList.remove("focused")
   }
 
   function focusOption(index: number) {
     const options = getOptions()
-    // Remove previous focus
     for (const opt of options) opt.classList.remove("focused")
     if (index < 0) index = options.length - 1
     if (index >= options.length) index = 0
@@ -72,18 +65,21 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
   function selectFocused() {
     const options = getOptions()
     if (focusedIndex >= 0 && focusedIndex < options.length) {
-      options[focusedIndex].dispatchEvent(new Event("click", { bubbles: true }))
+      const opt = options[focusedIndex]
+      if (opt) opt.dispatchEvent(new Event("click", { bubbles: true }))
     }
   }
 
   function render(modelsList: ModelInfo[], currentModel: string) {
     models = modelsList
-    // Safe: clearing container, no user content involved
     els.modelDropdown.replaceChildren()
+
+    // Filter to enabled models only
+    const enabledModels = modelsList.filter((m) => m.enabled !== false)
 
     // Group by provider
     const byProvider = new Map<string, ModelInfo[]>()
-    for (const m of modelsList) {
+    for (const m of enabledModels) {
       const list = byProvider.get(m.provider) || []
       list.push(m)
       byProvider.set(m.provider, list)
@@ -112,12 +108,10 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
         const checkmark = document.createElement("span")
         checkmark.className = "checkmark"
         checkmark.setAttribute("aria-hidden", "true")
-        // Safe: hardcoded SVG constant, no user content
-        checkmark.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/></svg>'
+        checkmark.innerHTML = CHECK_SVG
         option.appendChild(checkmark)
 
         const name = document.createElement("span")
-        // Safe: textContent escapes all HTML
         name.textContent = model.displayName
         option.appendChild(name)
 
@@ -131,6 +125,37 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
         optionIndex++
       }
     }
+
+    // Add "Manage models" option at the bottom
+    if (optionIndex > 0) {
+      const divider = document.createElement("div")
+      divider.className = "model-group-label"
+      divider.style.marginTop = "4px"
+      divider.style.borderTop = "1px solid var(--color-border)"
+      divider.style.paddingTop = "8px"
+      els.modelDropdown.appendChild(divider)
+    }
+
+    const manageOption = document.createElement("div")
+    manageOption.className = "model-option manage-models-option"
+    manageOption.setAttribute("role", "option")
+    manageOption.setAttribute("tabindex", "-1")
+
+    const manageIcon = document.createElement("span")
+    manageIcon.setAttribute("aria-hidden", "true")
+    manageIcon.innerHTML = GEAR_SVG
+    manageOption.appendChild(manageIcon)
+
+    const manageLabel = document.createElement("span")
+    manageLabel.textContent = "Manage models"
+    manageOption.appendChild(manageLabel)
+
+    manageOption.addEventListener("click", () => {
+      close()
+      callbacks.onManageModels?.()
+    })
+
+    els.modelDropdown.appendChild(manageOption)
   }
 
   function setCurrentModel(modelId: string) {
@@ -144,7 +169,6 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     toggle()
   })
 
-  // Keyboard navigation for accessibility (matches <vscode-dropdown> behavior)
   els.modelSelectorBtn.addEventListener("keydown", (e) => {
     if (!isOpen) {
       if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
@@ -184,7 +208,6 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     }
   })
 
-  // Close on outside click
   document.addEventListener("click", (e: Event) => {
     if (isOpen && !els.modelDropdown.contains(e.target as Node) && !els.modelSelectorBtn.contains(e.target as Node)) {
       close()

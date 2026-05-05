@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════
-   Animations & Keyframes
+   Animations & Keyframes — Single Source of Truth
    ═══════════════════════════════════════════════════════════════ */
 
 /* ─── Message Entrance ─── */
-@keyframes messageFadeIn {
+@keyframes message-enter {
   from {
     opacity: 0;
     transform: translateY(8px);
@@ -15,7 +15,7 @@
 }
 
 /* ─── Skeleton Shimmer ─── */
-@keyframes skeletonShimmer {
+@keyframes skeleton-shimmer {
   0% {
     background-position: -200px 0;
   }
@@ -25,16 +25,12 @@
 }
 
 /* ─── Overlay / Modal ─── */
-@keyframes overlayFadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+@keyframes overlay-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-@keyframes dialogSlideUp {
+@keyframes dialog-slide-up {
   from {
     opacity: 0;
     transform: translateY(16px) scale(0.97);
@@ -45,7 +41,7 @@
   }
 }
 
-@keyframes dialogSlideDown {
+@keyframes dialog-slide-down {
   from {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -57,7 +53,7 @@
 }
 
 /* ─── Badge Pop ─── */
-@keyframes badgePop {
+@keyframes badge-pop {
   0% {
     transform: scale(0.85);
     opacity: 0;
@@ -72,20 +68,14 @@
 }
 
 /* ─── Press Feedback ─── */
-@keyframes pressEffect {
-  0% {
-    transform: scale(1);
-  }
-  40% {
-    transform: scale(0.96);
-  }
-  100% {
-    transform: scale(1);
-  }
+@keyframes press-effect {
+  0% { transform: scale(1); }
+  40% { transform: scale(0.96); }
+  100% { transform: scale(1); }
 }
 
 /* ─── Typing Indicator ─── */
-@keyframes typingBounce {
+@keyframes typing-bounce {
   0%, 60%, 100% {
     transform: translateY(0);
     opacity: 0.4;
@@ -97,49 +87,38 @@
 }
 
 /* ─── Cursor Blink ─── */
-@keyframes cursorBlink {
-  50% {
-    opacity: 0;
-  }
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 /* ─── Shimmer Background ─── */
-@keyframes shimmerBackground {
-  0% {
-    opacity: 0.6;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.6;
-  }
+@keyframes shimmer-background {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
 }
 
 /* ─── Streaming Indicator Pulse ─── */
-@keyframes streamingPulse {
+@keyframes streaming-pulse {
   0%, 100% {
     opacity: 1;
     transform: scale(1);
   }
   50% {
-    opacity: 0.6;
-    transform: scale(0.85);
+    opacity: 0.3;
+    transform: scale(1);
   }
 }
 
 /* ─── Tab Slide Indicator ─── */
-@keyframes tabSlide {
-  from {
-    transform: translateX(var(--tab-from, 0));
-  }
-  to {
-    transform: translateX(var(--tab-to, 0));
-  }
+@keyframes tab-slide {
+  from { transform: translateX(var(--tab-from, 0)); }
+  to { transform: translateX(var(--tab-to, 0)); }
 }
 
 /* ─── Toast / Banner Slide In ─── */
-@keyframes bannerSlideIn {
+@keyframes banner-slide-in {
   from {
     opacity: 0;
     transform: translateY(-8px);
@@ -150,7 +129,7 @@
   }
 }
 
-@keyframes bannerSlideOut {
+@keyframes banner-slide-out {
   from {
     opacity: 1;
     transform: translateY(0);
@@ -158,41 +137,63 @@
   to {
     opacity: 0;
     transform: translateY(-8px);
+  }
+}
+
+@keyframes banner-fade-out {
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+    pointer-events: none;
   }
 }
 
 /* ─── Spinner / Loader ─── */
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Generic Pulse (used by tool status, status LEDs) ─── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1); }
 }
 
 /* ─── Thinking Pulse ─── */
-@keyframes thinkingPulse {
+@keyframes thinking-pulse {
   0%, 100% {
     border-left-color: var(--oc-thinking-border);
     opacity: 1;
   }
   50% {
-    border-left-color: var(--oc-accent);
+    border-left-color: var(--color-accent);
     opacity: 0.8;
   }
 }
 
+/* ─── Pill Fade In (badges, skill chips) ─── */
+@keyframes pillFadeIn {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* ─── Fade In Out (rate-limit notice, ephemeral messages) ─── */
+@keyframes fadeInOut {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 /* ─── Fade In Only (for reduced-motion) ─── */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* ─── Stagger children utility ─── */
 .stagger-children > * {
-  animation: messageFadeIn var(--duration-slow) var(--ease-out) both;
+  animation: message-enter var(--duration-slow) var(--ease-out) both;
 }
 
 .stagger-children > *:nth-child(1) { animation-delay: 0ms; }

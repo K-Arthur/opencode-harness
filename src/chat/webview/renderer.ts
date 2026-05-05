@@ -1,9 +1,23 @@
 import hljs from "highlight.js/lib/core"
 import MarkdownIt from "markdown-it"
 import DOMPurify from "dompurify"
-import type { Block, ChatMessage } from "./types"
+import type {
+  Block,
+  ChatMessage,
+  ToolCallBlock,
+  DiffBlock,
+  ThinkingBlock,
+  ErrorBlock,
+  ToolCallClass,
+  ToolCallState,
+  DiffHunk,
+  DiffLine,
+} from "./types"
 
-// Initialize markdown parser with security settings
+// ---------------------------------------------------------------------------
+// Markdown parser with security settings
+// ---------------------------------------------------------------------------
+
 const md = new MarkdownIt({
   html: false,
   linkify: true,
@@ -11,15 +25,36 @@ const md = new MarkdownIt({
   breaks: true,
 })
 
-// Configure DOMPurify for maximum XSS protection
-const PURIFY_CONFIG = {
+  // Enable plugins for rich markdown rendering
+  // NOTE: Optional plugins (abbr, deflist, footnote, task-lists) are available
+  // but not installed. Install them for enhanced markdown rendering.
+
+
+// ---------------------------------------------------------------------------
+// DOMPurify configuration — strict allowlist, no XSS surface
+// ---------------------------------------------------------------------------
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+interface PurifyConfig {
+  ALLOWED_TAGS: string[]
+  ALLOWED_ATTR: string[]
+  ALLOWED_URI_REGEXP: RegExp
+  FORBID_CONTENTS: string[]
+  FORBID_TAGS: string[]
+  SAFE_FOR_TEMPLATES: boolean
+  SAFE_FOR_XML: boolean
+}
+
+const PURIFY_CONFIG: PurifyConfig = {
   ALLOWED_TAGS: [
     "b", "i", "em", "strong", "a", "p", "br", "ul", "ol", "li",
     "code", "pre", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6",
     "hr", "img", "span", "div", "table", "thead", "tbody", "tr", "th", "td",
+    "del", "sup", "sub",
   ],
   ALLOWED_ATTR: [
     "href", "src", "alt", "title", "class", "language", "width", "height",
+    "aria-label", "role", "tabindex",
   ],
   ALLOWED_URI_REGEXP: /^(?:(?:https?|ftp):|\/)/i,
   FORBID_CONTENTS: ["script", "style", "iframe", "frame", "object", "embed"],
@@ -29,12 +64,14 @@ const PURIFY_CONFIG = {
 }
 
 function sanitizeHtml(html: string): string {
-  return DOMPurify.sanitize(html, PURIFY_CONFIG)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return DOMPurify.sanitize(html, PURIFY_CONFIG as any) as unknown as string
 }
 
-const MARKDOWN_PATTERN = /(\*\*.*?\*\*)|(\*[^*\s][^*]*\*)|(#{1,6}\s)|(`[^`]+`)|(```[\s\S]*?```)|(\[.*?\]\(.*?\))|(^\s*[-*+]\s)/m
+// ---------------------------------------------------------------------------
+// Language registration for highlight.js
+// ---------------------------------------------------------------------------
 
-// Register common languages
 import javascript from "highlight.js/lib/languages/javascript"
 import typescript from "highlight.js/lib/languages/typescript"
 import python from "highlight.js/lib/languages/python"
@@ -42,10 +79,10 @@ import rust from "highlight.js/lib/languages/rust"
 import go from "highlight.js/lib/languages/go"
 import bash from "highlight.js/lib/languages/bash"
 import json from "highlight.js/lib/languages/json"
-import css from "highlight.js/lib/languages/css"
+import cssLang from "highlight.js/lib/languages/css"
 import markdown from "highlight.js/lib/languages/markdown"
 import sql from "highlight.js/lib/languages/sql"
-import diff from "highlight.js/lib/languages/diff"
+import diffLang from "highlight.js/lib/languages/diff"
 import java from "highlight.js/lib/languages/java"
 import cpp from "highlight.js/lib/languages/cpp"
 import yaml from "highlight.js/lib/languages/yaml"
@@ -58,10 +95,10 @@ hljs.registerLanguage("rust", rust)
 hljs.registerLanguage("go", go)
 hljs.registerLanguage("bash", bash)
 hljs.registerLanguage("json", json)
-hljs.registerLanguage("css", css)
+hljs.registerLanguage("css", cssLang)
 hljs.registerLanguage("markdown", markdown)
 hljs.registerLanguage("sql", sql)
-hljs.registerLanguage("diff", diff)
+hljs.registerLanguage("diff", diffLang)
 hljs.registerLanguage("java", java)
 hljs.registerLanguage("cpp", cpp)
 hljs.registerLanguage("yaml", yaml)
@@ -73,48 +110,138 @@ hljs.registerAliases(["sh", "zsh"], { languageName: "bash" })
 hljs.registerAliases(["html", "htm"], { languageName: "xml" })
 hljs.registerAliases(["py"], { languageName: "python" })
 
-const OC_LOGO_SVG = '<svg class="oc-logo" viewBox="0 0 480 600" width="16" height="16" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M0 0h480v600H0V0zm120 120h240v360H120V120z"/></svg>'
-const USER_AVATAR_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>'
-const CHEVRON_SVG = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>'
-const GEAR_SVG = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'
+import {
+  OC_LOGO_SVG,
+  USER_AVATAR_SVG,
+  CHEVRON_RIGHT_SVG,
+  BRAIN_SVG,
+  TOOL_READ_SVG,
+  TOOL_WRITE_SVG,
+  TOOL_EXEC_SVG,
+  TOOL_META_SVG,
+  COPY_SVG,
+  CHECK_SVG,
+  SUCCESS_SVG,
+  ERROR_SVG,
+  WARNING_SVG,
+  SPINNER_SVG,
+  EDIT_SVG,
+  INSERT_SVG,
+  NEW_FILE_SVG,
+  GEAR_SVG,
+} from "./icons"
 
-export function renderMessage(msg: ChatMessage): HTMLDivElement {
+// ---------------------------------------------------------------------------
+// Type guards for discriminated block types
+// ---------------------------------------------------------------------------
+
+function isToolCallBlock(block: Block): block is ToolCallBlock {
+  return block.type === 'tool-call'
+}
+
+function isDiffBlock(block: Block): block is DiffBlock {
+  return block.type === 'diff'
+}
+
+function isThinkingBlock(block: Block): block is ThinkingBlock {
+  return block.type === 'thinking'
+}
+
+function isErrorBlock(block: Block): block is ErrorBlock {
+  return block.type === 'error'
+}
+
+// ---------------------------------------------------------------------------
+// RenderOptions — passed to each renderer
+// ---------------------------------------------------------------------------
+
+export interface RenderOptions {
+  messageId?: string
+  postMessage?: (msg: Record<string, unknown>) => void
+  mode?: string
+}
+
+// ---------------------------------------------------------------------------
+// Strict dispatch table — every block type must have a renderer
+// ---------------------------------------------------------------------------
+
+type BlockRenderer = (block: Block, opts: RenderOptions) => HTMLElement | null
+
+const RENDERER_MAP: Readonly<Record<string, BlockRenderer>> = {
+  'text': renderTextBlock,
+  'code': renderCodeBlock,
+  'thinking': renderThinkingBlock,
+  'skill_badge': renderSkillBadge,
+  'tool_call': renderToolCallBlock,
+  'tool-call': renderToolCallBlock,
+  'diff_block': renderDiffBlock,
+  'diff': renderNewDiffBlock,
+  'permission': renderPermissionBlock,
+  'task_banner': renderTaskBanner,
+  'context': renderContextBlock,
+  'error': renderErrorBlock,
+  'image': renderImageBlock,
+}
+
+// ---------------------------------------------------------------------------
+// Public: renderMessage — top-level message renderer
+// ---------------------------------------------------------------------------
+
+export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecutive?: boolean): HTMLDivElement {
   const div = document.createElement("div")
-  div.className = "message " + (msg.role || "assistant")
+  const role: string = msg.role || "assistant"
+  div.className = `message ${role}`
   if (msg.id) div.dataset.messageId = msg.id
 
-  if (msg.role !== "system") {
+  if (role !== "system" && !isConsecutive) {
     const avatar = document.createElement("div")
     avatar.className = "message-avatar"
-    avatar.innerHTML = msg.role === "user" ? USER_AVATAR_SVG : OC_LOGO_SVG
+    avatar.setAttribute("aria-hidden", "true")
+    avatar.innerHTML = role === "user" ? USER_AVATAR_SVG : OC_LOGO_SVG
     div.appendChild(avatar)
   }
 
   const contentWrapper = document.createElement("div")
   contentWrapper.className = "message-content"
 
-  if (msg.role !== "system") {
+  if (role !== "system" && !isConsecutive) {
     const header = document.createElement("div")
     header.className = "message-header"
     const roleSpan = document.createElement("span")
     roleSpan.className = "message-role"
-    roleSpan.textContent = msg.role === "user" ? "You" : "OpenCode"
+    roleSpan.textContent = role === "user" ? "You" : "OpenCode"
     header.appendChild(roleSpan)
     if (msg.timestamp) {
       const ts = document.createElement("span")
       ts.className = "message-timestamp"
-      ts.textContent = new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      ts.textContent = formatRelativeTime(msg.timestamp)
       header.appendChild(ts)
+    }
+    if (role === "user" && msg.id) {
+      const editBtn = document.createElement("button")
+      editBtn.className = "message-edit-btn"
+      editBtn.setAttribute("aria-label", "Edit message")
+      editBtn.title = "Edit message"
+      editBtn.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
+      editBtn.addEventListener("click", () => {
+        const vscode = (window as any).acquireVsCodeApi?.()
+        if (vscode) {
+          const textBlocks = (msg.blocks || []).filter((b) => b.type === "text")
+          const text = textBlocks.map((b) => b.text || "").join("\n")
+          vscode.postMessage({ type: "edit_message", messageId: msg.id, text })
+        }
+      })
+      header.appendChild(editBtn)
     }
     contentWrapper.appendChild(header)
   }
 
   const bubble = document.createElement("div")
-  bubble.className = msg.role === "system" ? "system-bubble" : "message-bubble"
+  bubble.className = role === "system" ? "system-bubble" : "message-bubble"
 
   if (msg.blocks && Array.isArray(msg.blocks)) {
     msg.blocks.forEach((block) => {
-      const el = renderBlock(block, msg.id)
+      const el = renderBlock(block, { messageId: msg.id, mode: opts?.mode, postMessage: opts?.postMessage })
       if (el) bubble.appendChild(el)
     })
   }
@@ -125,62 +252,178 @@ export function renderMessage(msg: ChatMessage): HTMLDivElement {
   return div
 }
 
-export function renderBlock(block: Block, messageId?: string): HTMLElement | null {
-  if (!block || !block.type) return null
-  switch (block.type) {
-    case "text": return renderTextBlock(block)
-    case "code": return renderCodeBlock(block)
-    case "thinking": return renderThinkingBlock(block)
-    case "skill_badge": return renderSkillBadge(block)
-    case "tool_call": return renderToolCard(block)
-    case "diff_block": return renderDiffBlock(block, messageId)
-    case "permission": return renderPermissionBlock(block)
-    case "task_banner": return renderTaskBanner(block)
-    case "context": return renderContextBlock(block)
-    default: return null
-  }
+function formatRelativeTime(timestamp: number): string {
+  const now = Date.now()
+  const diff = now - timestamp
+  const minutes = Math.floor(diff / 60000)
+  if (minutes < 1) return "just now"
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} hr ago`
+  return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 }
 
-function renderTextBlock(block: Block): HTMLDivElement {
+// ---------------------------------------------------------------------------
+// Public: renderBlock — dispatch via strict table
+// ---------------------------------------------------------------------------
+
+export function renderBlock(block: Block, opts?: RenderOptions): HTMLElement | null {
+  if (!block || !block.type) return null
+  const renderer = RENDERER_MAP[block.type]
+  if (!renderer) return null
+  return renderer(block, opts || {})
+}
+
+// ---------------------------------------------------------------------------
+// Text block — markdown with mention chip support
+// ---------------------------------------------------------------------------
+
+function renderTextBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
+  const text = block.text || ""
+  if (!text.trim()) return null
+
   const div = document.createElement("div")
   div.className = "msg-text markdown-content"
-  const text = block.text || ""
-  if (MARKDOWN_PATTERN.test(text)) {
-    div.innerHTML = sanitizeHtml(md.render(text))
+
+  // Render mentions as chips if present in text
+  const mentionPattern = /@(file|folder|url|problems|terminal):\S+/g
+  const hasMentions = mentionPattern.test(text)
+  mentionPattern.lastIndex = 0 // reset regex
+
+  if (hasMentions && block.text) {
+    const parts = block.text.split(mentionPattern)
+    mentionPattern.lastIndex = 0
+    let match: RegExpExecArray | null
+    let lastIndex = 0
+    const fragment = document.createDocumentFragment()
+    while ((match = mentionPattern.exec(block.text)) !== null) {
+      // Text before mention
+      if (match.index > lastIndex) {
+        const before = document.createTextNode(block.text.slice(lastIndex, match.index))
+        const wrapper = document.createElement("span")
+        wrapper.innerHTML = sanitizeHtml(md.render(before.textContent || ""))
+        fragment.appendChild(wrapper)
+      }
+      // Mention chip
+      const chip = document.createElement("span")
+      const mentionType = (match[1] as "file" | "folder" | "url" | "problems" | "terminal") || "file"
+      chip.className = `mention-chip mention-${mentionType}`
+      chip.dataset.kind = mentionType
+      chip.textContent = match[0]
+      fragment.appendChild(chip)
+      lastIndex = mentionPattern.lastIndex
+    }
+    // Remaining text
+    if (lastIndex < block.text.length) {
+      const remaining = document.createElement("span")
+      remaining.innerHTML = sanitizeHtml(md.render(block.text.slice(lastIndex)))
+      fragment.appendChild(remaining)
+    }
+    div.appendChild(fragment)
   } else {
-    div.textContent = text
+    // No mentions — standard markdown render
+    div.innerHTML = sanitizeHtml(md.render(text))
   }
+
   return div
 }
 
-function renderCodeBlock(block: Block): HTMLDivElement {
+// ---------------------------------------------------------------------------
+// Code block — with language badge, copy button, optional line numbers
+// ---------------------------------------------------------------------------
+
+function renderCodeBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
+  const code = block.code || ""
+  if (!code.trim()) return null
+
   const outerWrapper = document.createElement("div")
   outerWrapper.className = "code-block"
 
+  // Header: language badge + copy button
   const header = document.createElement("div")
   header.className = "code-block-header"
+
   const lang = document.createElement("span")
   lang.className = "code-block-lang"
   lang.textContent = block.language || "code"
   header.appendChild(lang)
 
+  const actions = document.createElement("div")
+  actions.className = "code-block-actions"
+
   const copyBtn = document.createElement("button")
   copyBtn.className = "code-block-copy"
-  copyBtn.innerHTML = '<span>Copy</span>'
+  copyBtn.setAttribute("aria-label", "Copy code to clipboard")
+  copyBtn.title = "Copy code"
+  copyBtn.innerHTML = COPY_SVG + '<span>Copy</span>'
   copyBtn.addEventListener("click", () => {
-    navigator.clipboard.writeText(block.code || "").then(() => {
+    navigator.clipboard.writeText(code).then(() => {
       copyBtn.classList.add("copied")
-      copyBtn.querySelector("span")!.textContent = "Copied!"
-      setTimeout(() => { copyBtn.classList.remove("copied"); copyBtn.querySelector("span")!.textContent = "Copy" }, 1500)
+      copyBtn.innerHTML = CHECK_SVG + '<span>Copied!</span>'
+      setTimeout(() => {
+        copyBtn.classList.remove("copied")
+        copyBtn.innerHTML = COPY_SVG + '<span>Copy</span>'
+      }, 1500)
     })
   })
-  header.appendChild(copyBtn)
+  actions.appendChild(copyBtn)
+
+  const insertBtn = document.createElement("button")
+  insertBtn.className = "code-block-insert"
+  insertBtn.setAttribute("aria-label", "Insert code at cursor position")
+  insertBtn.title = "Insert at Cursor"
+  insertBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg><span>Insert</span>`
+  insertBtn.addEventListener("click", () => {
+    const vscode = (window as any).acquireVsCodeApi?.()
+    if (vscode) {
+      vscode.postMessage({ type: "insert_at_cursor", code, language: block.language })
+    }
+  })
+  actions.appendChild(insertBtn)
+
+  const newFileBtn = document.createElement("button")
+  newFileBtn.className = "code-block-new-file"
+  newFileBtn.setAttribute("aria-label", "Create new file from code block")
+  newFileBtn.title = "Create New File"
+  newFileBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg><span>New File</span>`
+  newFileBtn.addEventListener("click", () => {
+    const vscode = (window as any).acquireVsCodeApi?.()
+    if (vscode) {
+      vscode.postMessage({ type: "create_file_from_code", code, language: block.language })
+    }
+  })
+  actions.appendChild(newFileBtn)
+
+  header.appendChild(actions)
   outerWrapper.appendChild(header)
 
-  const content = document.createElement("div")
-  content.className = "code-block-content"
-  content.innerHTML = sanitizeHtml(highlightSyntax(block.code || "", block.language || ""))
-  outerWrapper.appendChild(content)
+  // Content: syntax-highlighted code with optional line numbers
+  const lines = code.split("\n")
+  const showLineNums = lines.length > 5
+
+  if (showLineNums) {
+    const grid = document.createElement("div")
+    grid.className = "code-block-lines"
+    lines.forEach((line, i) => {
+      // Line number
+      const numEl = document.createElement("span")
+      numEl.className = "code-line-num"
+      numEl.textContent = String(i + 1)
+      grid.appendChild(numEl)
+      // Line content
+      const codeEl = document.createElement("span")
+      codeEl.className = "code-line-content"
+      const highlighted = highlightSyntax(line, block.language || "")
+      codeEl.innerHTML = sanitizeHtml(highlighted) || "&nbsp;"
+      grid.appendChild(codeEl)
+    })
+    outerWrapper.appendChild(grid)
+  } else {
+    const pre = document.createElement("pre")
+    pre.className = "code-block-content"
+    pre.innerHTML = sanitizeHtml(highlightSyntax(code, block.language || ""))
+    outerWrapper.appendChild(pre)
+  }
 
   return outerWrapper
 }
@@ -194,151 +437,428 @@ function highlightSyntax(code: string, language: string): string {
   }
 }
 
-function renderThinkingBlock(block: Block): HTMLDivElement {
-  const div = document.createElement("div")
-  div.className = "thinking-block"
+// ---------------------------------------------------------------------------
+// Thinking block — collapsible, default collapsed
+// ---------------------------------------------------------------------------
 
-  const header = document.createElement("div")
-  header.className = "thinking-header"
+function renderThinkingBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
+  const thinking = isThinkingBlock(block) ? block : (block as unknown as ThinkingBlock)
+  const content = thinking.content || ""
+  if (!content.trim() && !thinking.streaming) return null
+
+  const details = document.createElement("details")
+  details.className = "thinking-block"
+  details.setAttribute("aria-label", thinking.streaming ? "Thinking in progress" : "Reasoning")
+
+  const summary = document.createElement("summary")
+  summary.className = "thinking-header"
+  summary.innerHTML = BRAIN_SVG
+  const label = document.createElement("span")
+  label.textContent = thinking.streaming ? "Thinking…" : `Reasoning${thinking.tokenCount ? ` (${thinking.tokenCount} tokens)` : ""}`
+  summary.appendChild(label)
+
   const toggle = document.createElement("span")
   toggle.className = "thinking-toggle"
-  toggle.innerHTML = CHEVRON_SVG
-  header.appendChild(toggle)
+  toggle.innerHTML = CHEVRON_RIGHT_SVG
+  summary.appendChild(toggle)
 
-  const label = document.createElement("span")
-  label.textContent = "Thought Process"
-  header.appendChild(label)
-  div.appendChild(header)
+  details.appendChild(summary)
 
-  const content = document.createElement("div")
-  content.className = "thinking-content"
-  content.textContent = block.text || ""
-  div.appendChild(content)
+  const body = document.createElement("div")
+  body.className = "thinking-body"
+  if (content) {
+    body.innerHTML = sanitizeHtml(md.render(content))
+  }
+  details.appendChild(body)
 
-  div.addEventListener("click", () => {
-    div.classList.toggle("expanded")
-  })
-
-  return div
+  return details
 }
 
-function renderSkillBadge(block: Block): HTMLDivElement {
+// ---------------------------------------------------------------------------
+// Skill badge
+// ---------------------------------------------------------------------------
+
+function renderSkillBadge(block: Block, _opts: RenderOptions): HTMLElement | null {
   const badge = document.createElement("div")
   badge.className = "skill-badge"
+
   const icon = document.createElement("span")
   icon.className = "skill-icon"
   icon.innerHTML = GEAR_SVG
   badge.appendChild(icon)
+
   const name = document.createElement("span")
   const skillName = block.skillName
   name.textContent = (skillName && skillName !== "unknown" && skillName !== "") ? skillName : "system"
   badge.appendChild(name)
+
   return badge
 }
 
-function renderToolCard(block: Block): HTMLDivElement {
-  const card = document.createElement("div")
-  const toolType = block.toolType || "read"
-  const state = block.state || "running"
-  card.className = `tool-card tool-${toolType} ${state}`
+// ---------------------------------------------------------------------------
+// Tool call block — full renderer with states and classes
+// ---------------------------------------------------------------------------
 
-  const header = document.createElement("div")
-  header.className = "tool-header"
+function renderToolCallBlock(block: Block, opts: RenderOptions): HTMLElement | null {
+  const toolBlock: ToolCallBlock = isToolCallBlock(block) ? block : ({
+        type: 'tool-call',
+        id: block.id || `tool-${Date.now()}`,
+        name: block.toolName || block.name || "tool",
+        class: (block.class as ToolCallClass) || (block.toolType as ToolCallClass) || 'read',
+        state: (block.state as ToolCallState) || 'running',
+        args: block.args ? (typeof block.args === 'string' ? JSON.parse(block.args) : block.args) : undefined,
+        result: block.result,
+        durationMs: (block.durationMs as number | undefined),
+      } as ToolCallBlock)
 
+  const toolClass = toolBlock.class || 'read'
+  const toolState = toolBlock.state || 'running'
+
+  const details = document.createElement("details")
+  details.className = `tool-call tool-call--${toolClass} tool-call--${toolState}`
+  if (toolState === 'result' && toolBlock.error) {
+    details.className += ' tool-call--error'
+  }
+  details.setAttribute("aria-label", `${toolBlock.name} tool call, ${toolState} state`)
+  details.setAttribute("aria-expanded", "false")
+  // Toggle aria-expanded on toggle
+  details.addEventListener("toggle", () => {
+    details.setAttribute("aria-expanded", details.open ? "true" : "false")
+  })
+
+  // Default open for errors
+  if (toolState === 'result' && toolBlock.error) {
+    details.open = true
+  }
+
+  const summary = document.createElement("summary")
+  summary.className = "tool-header"
+  summary.setAttribute("tabindex", "0")
+  summary.setAttribute("role", "button")
+
+  // Tool icon based on class
   const icon = document.createElement("span")
   icon.className = "tool-icon"
-  if (toolType === "write") {
-    icon.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
-  } else if (toolType === "exec") {
-    icon.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>'
-  } else {
-    icon.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
+  switch (toolClass) {
+    case 'write': icon.innerHTML = TOOL_WRITE_SVG; break
+    case 'exec': icon.innerHTML = TOOL_EXEC_SVG; break
+    case 'meta': icon.innerHTML = TOOL_META_SVG; break
+    default: icon.innerHTML = TOOL_READ_SVG; break
   }
-  header.appendChild(icon)
+  summary.appendChild(icon)
 
+  // Tool name
   const name = document.createElement("span")
   name.className = "tool-name"
-  name.textContent = block.toolName || "tool"
-  header.appendChild(name)
+  name.textContent = toolBlock.name
+  summary.appendChild(name)
 
-  const args = document.createElement("span")
-  args.className = "tool-args"
-  args.textContent = block.args || ""
-  header.appendChild(args)
+  // Key argument (e.g. filename)
+  const keyArg = extractKeyArg(toolBlock.args)
+  if (keyArg) {
+    const argEl = document.createElement("span")
+    argEl.className = "tool-arg"
+    argEl.textContent = truncateMiddle(keyArg, 30)
+    argEl.title = keyArg
+    summary.appendChild(argEl)
+  }
 
-  const expand = document.createElement("span")
-  expand.className = "tool-expand-icon"
-  expand.innerHTML = CHEVRON_SVG
-  header.appendChild(expand)
+  // Status badge (text + symbol for colour-blind accessible distinction)
+  const badge = document.createElement("span")
+  badge.className = `tool-status tool-status--${toolState}`
+  if (toolState === 'pending') { badge.textContent = '○ Pending'; badge.setAttribute("aria-label", "Tool pending") }
+  else if (toolState === 'running') { badge.textContent = '◉ Running'; badge.setAttribute("aria-label", "Tool running") }
+  else if (toolBlock.error) { badge.textContent = '✗ Error'; badge.setAttribute("aria-label", "Tool error") }
+  else { badge.textContent = '✓ Done'; badge.setAttribute("aria-label", "Tool complete") }
+  summary.appendChild(badge)
 
-  card.appendChild(header)
+  // Duration
+  if (toolBlock.durationMs && toolState === 'result') {
+    const dur = document.createElement("span")
+    dur.className = "tool-duration"
+    dur.textContent = `${toolBlock.durationMs}ms`
+    summary.appendChild(dur)
+  }
 
-  const result = document.createElement("div")
-  result.className = "tool-result"
-  result.textContent = block.result || ""
-  card.appendChild(result)
+  details.appendChild(summary)
 
-  header.addEventListener("click", () => {
-    card.classList.toggle("expanded")
-  })
+  // Args panel (collapsed by default, show first 500 chars)
+  if (toolBlock.args !== undefined) {
+    const argsDiv = document.createElement("div")
+    argsDiv.className = "tool-args-panel"
+    const argsStr = typeof toolBlock.args === 'string' ? toolBlock.args : JSON.stringify(toolBlock.args, null, 2)
+    const truncated = argsStr.length > 500
+    const displayStr = truncated ? argsStr.slice(0, 500) : argsStr
+    argsDiv.innerHTML = sanitizeHtml(highlightSyntax(displayStr, 'json'))
+    if (truncated) {
+      const more = document.createElement("button")
+      more.className = "tool-show-more"
+      more.textContent = "Show more…"
+      more.addEventListener("click", () => {
+        argsDiv.innerHTML = sanitizeHtml(highlightSyntax(argsStr, 'json'))
+        more.remove()
+      })
+      argsDiv.appendChild(more)
+    }
+    details.appendChild(argsDiv)
+  }
 
-  return card
+  // Result panel
+  if (toolBlock.result !== undefined && toolState === 'result') {
+    const resultDiv = document.createElement("div")
+    resultDiv.className = toolBlock.error ? "tool-result-panel tool-result-panel--error" : "tool-result-panel"
+    const resultText = typeof toolBlock.result === 'string' ? toolBlock.result : JSON.stringify(toolBlock.result, null, 2)
+    const truncated = resultText.length > 1000
+    const displayResult = truncated ? resultText.slice(0, 1000) : resultText
+    resultDiv.textContent = displayResult
+    if (truncated) {
+      const more = document.createElement("button")
+      more.className = "tool-show-more"
+      more.textContent = "Show more…"
+      more.addEventListener("click", () => {
+        resultDiv.textContent = resultText
+        more.remove()
+      })
+      resultDiv.appendChild(more)
+    }
+    details.appendChild(resultDiv)
+  }
+
+  return details
 }
 
-export function renderDiffBlock(block: Block, messageId?: string, postMessage?: (msg: Record<string, unknown>) => void): HTMLDivElement {
-  const wrapper = document.createElement("div")
-  wrapper.className = "diff-block"
+function extractKeyArg(args: unknown): string | null {
+  if (!args || typeof args !== 'object') return null
+  const a = args as Record<string, unknown>
+  const candidates = [a.path, a.file, a.filename, a.url, a.command, a.query, a.name]
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim()) return c.trim()
+  }
+  return null
+}
 
+function truncateMiddle(str: string, maxLen: number): string {
+  if (str.length <= maxLen) return str
+  const half = Math.floor((maxLen - 1) / 2)
+  return str.slice(0, half) + '\u2026' + str.slice(str.length - half)
+}
+
+// ---------------------------------------------------------------------------
+// New diff block — table-based with line numbers, sticky action bar
+// ---------------------------------------------------------------------------
+
+function renderNewDiffBlock(block: Block, opts: RenderOptions): HTMLElement | null {
+  const diffBlock: DiffBlock = isDiffBlock(block)
+    ? block
+    : {
+        type: 'diff',
+        diffId: block.diffId || block.id || `diff-${Date.now()}`,
+        path: block.filePath || block.path || "File Change",
+        hunks: block.hunks || [],
+        state: (block.state as 'pending' | 'accepted' | 'discarded') || 'pending',
+        linesAdded: block.linesAdded || 0,
+        linesRemoved: block.linesRemoved || 0,
+      }
+
+  const wrapper = document.createElement("div")
+  wrapper.className = `diff-block diff-block--${diffBlock.state}`
+  wrapper.dataset.diffId = diffBlock.diffId
+
+  // Header: filename + stats
   const header = document.createElement("div")
   header.className = "diff-header"
+
+  const fileInfo = document.createElement("div")
+  fileInfo.className = "diff-file-info"
+
   const filePath = document.createElement("span")
   filePath.className = "diff-file-path"
-  filePath.textContent = block.filePath || "File Change"
-  header.appendChild(filePath)
+  filePath.textContent = diffBlock.path
+  fileInfo.appendChild(filePath)
+
+  const stats = document.createElement("span")
+  stats.className = "diff-stats"
+  if (diffBlock.linesAdded > 0) {
+    const added = document.createElement("span")
+    added.className = "diff-stat diff-stat--added"
+    added.textContent = `+${diffBlock.linesAdded}`
+    stats.appendChild(added)
+  }
+  if (diffBlock.linesRemoved > 0) {
+    const removed = document.createElement("span")
+    removed.className = "diff-stat diff-stat--removed"
+    removed.textContent = `-${diffBlock.linesRemoved}`
+    stats.appendChild(removed)
+  }
+  fileInfo.appendChild(stats)
+  header.appendChild(fileInfo)
   wrapper.appendChild(header)
 
-  const content = document.createElement("div")
-  content.className = "diff-content"
-  content.textContent = block.diffText || ""
-  wrapper.appendChild(content)
+  // Diff table
+  if (diffBlock.hunks.length > 0) {
+    const tableWrapper = document.createElement("div")
+    tableWrapper.className = "diff-table-wrapper"
 
-  const actions = document.createElement("div")
-  actions.className = "diff-actions"
+    const table = document.createElement("table")
+    table.className = "diff-table"
 
-  const acceptBtn = document.createElement("button")
-  acceptBtn.className = "diff-btn diff-btn-accept"
-  acceptBtn.textContent = "Accept"
-  acceptBtn.addEventListener("click", (e) => {
-    e.stopPropagation()
-    emitDiffAction(postMessage, { type: "accept_diff", messageId, blockId: block.id })
-    acceptBtn.textContent = "Applied"
-    acceptBtn.disabled = true
-    rejectBtn.disabled = true
-  })
-  actions.appendChild(acceptBtn)
+    diffBlock.hunks.forEach((hunk) => {
+      // Hunk header
+      const hunkRow = document.createElement("tr")
+      hunkRow.className = "diff-hunk-header"
+      const hunkCell = document.createElement("td")
+      hunkCell.colSpan = 4
+      hunkCell.textContent = `@@ -${hunk.oldStart},${hunk.lines.length} +${hunk.newStart},${hunk.lines.length} @@`
+      hunkRow.appendChild(hunkCell)
+      table.appendChild(hunkRow)
 
-  const rejectBtn = document.createElement("button")
-  rejectBtn.className = "diff-btn diff-btn-reject"
-  rejectBtn.textContent = "Reject"
-  rejectBtn.addEventListener("click", (e) => {
-    e.stopPropagation()
-    emitDiffAction(postMessage, { type: "reject_diff", messageId, blockId: block.id })
-    rejectBtn.textContent = "Rejected"
-    rejectBtn.disabled = true
-    acceptBtn.disabled = true
-  })
-  actions.appendChild(rejectBtn)
+      hunk.lines.forEach((line) => {
+        const row = document.createElement("tr")
+        row.className = `diff-line diff-line--${line.type}`
 
-  wrapper.appendChild(actions)
+        // Old line number
+        const oldNum = document.createElement("td")
+        oldNum.className = "diff-line-num diff-line-num--old"
+        oldNum.textContent = line.oldLine != null ? String(line.oldLine) : ""
+        row.appendChild(oldNum)
+
+        // New line number
+        const newNum = document.createElement("td")
+        newNum.className = "diff-line-num diff-line-num--new"
+        newNum.textContent = line.newLine != null ? String(line.newLine) : ""
+        row.appendChild(newNum)
+
+        // Change marker
+        const marker = document.createElement("td")
+        marker.className = "diff-line-marker"
+        marker.textContent = line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' '
+        row.appendChild(marker)
+
+        // Content
+        const content = document.createElement("td")
+        content.className = "diff-line-content"
+        content.textContent = line.content
+        row.appendChild(content)
+
+        table.appendChild(row)
+      })
+    })
+
+    tableWrapper.appendChild(table)
+    wrapper.appendChild(tableWrapper)
+  } else if (block.diffText) {
+    // Fallback: render raw diff text
+    const pre = document.createElement("pre")
+    pre.className = "diff-content"
+    pre.textContent = block.diffText
+    wrapper.appendChild(pre)
+  }
+
+  // Action bar (sticky bottom)
+  const actionBar = document.createElement("div")
+  actionBar.className = "diff-action-bar"
+
+  if (diffBlock.state === 'accepted') {
+    actionBar.innerHTML = ''
+    const chip = document.createElement("span")
+    chip.className = "diff-state-chip diff-state--accepted"
+    chip.innerHTML = SUCCESS_SVG + ' Applied'
+    actionBar.appendChild(chip)
+    wrapper.classList.add("diff-block--accepted")
+  } else if (diffBlock.state === 'discarded') {
+    actionBar.innerHTML = ''
+    const chip = document.createElement("span")
+    chip.className = "diff-state-chip diff-state--discarded"
+    chip.innerHTML = ERROR_SVG + ' Discarded'
+    actionBar.appendChild(chip)
+    wrapper.classList.add("diff-block--discarded")
+    // Auto-collapse diff on discard
+    const tableWrapper = wrapper.querySelector(".diff-table-wrapper")
+    if (tableWrapper) tableWrapper.classList.add("hidden")
+    const diffContent = wrapper.querySelector(".diff-content")
+    if (diffContent) diffContent.classList.add("hidden")
+  } else {
+    const isPlanMode = opts.mode === "plan"
+
+      if (isPlanMode) {
+        const reviewLabel = document.createElement("span")
+        reviewLabel.className = "diff-review-label"
+        reviewLabel.textContent = "Review"
+        actionBar.appendChild(reviewLabel)
+      }
+
+    const acceptBtn = document.createElement("button")
+    acceptBtn.className = isPlanMode ? "diff-btn diff-btn--approve" : "diff-btn diff-btn--accept"
+    acceptBtn.textContent = isPlanMode ? "Approve & Apply" : "Accept"
+    acceptBtn.setAttribute("aria-label", `Accept changes to ${diffBlock.path}`)
+    acceptBtn.addEventListener("click", (e) => {
+      e.stopPropagation()
+      const postMessage = opts.postMessage
+      if (postMessage) {
+        postMessage({ type: 'diff:accept', diffId: diffBlock.diffId, path: diffBlock.path })
+      }
+      actionBar.innerHTML = ''
+      const chip = document.createElement("span")
+      chip.className = "diff-state-chip diff-state--accepted"
+      chip.innerHTML = SUCCESS_SVG + ' Applied'
+      actionBar.appendChild(chip)
+      wrapper.classList.add("diff-block--accepted")
+    })
+    actionBar.appendChild(acceptBtn)
+
+    const discardBtn = document.createElement("button")
+    discardBtn.className = "diff-btn diff-btn--discard"
+    discardBtn.textContent = "Discard"
+    discardBtn.setAttribute("aria-label", `Discard changes to ${diffBlock.path}`)
+    discardBtn.addEventListener("click", (e) => {
+      e.stopPropagation()
+      const postMessage = opts.postMessage
+      if (postMessage) {
+        postMessage({ type: 'diff:discard', diffId: diffBlock.diffId })
+      }
+      actionBar.innerHTML = ''
+      const chip = document.createElement("span")
+      chip.className = "diff-state-chip diff-state--discarded"
+      chip.innerHTML = ERROR_SVG + ' Discarded'
+      actionBar.appendChild(chip)
+      wrapper.classList.add("diff-block--discarded")
+      const tableWrapper = wrapper.querySelector(".diff-table-wrapper")
+      if (tableWrapper) tableWrapper.classList.add("hidden")
+      const diffContent = wrapper.querySelector(".diff-content")
+      if (diffContent) diffContent.classList.add("hidden")
+    })
+    actionBar.appendChild(discardBtn)
+
+    const openBtn = document.createElement("button")
+    openBtn.className = "diff-btn diff-btn--open"
+    openBtn.textContent = "Open File"
+    openBtn.addEventListener("click", (e) => {
+      e.stopPropagation()
+      const postMessage = opts.postMessage
+      if (postMessage) {
+        postMessage({ type: 'diff:openFile', path: diffBlock.path })
+      }
+    })
+    actionBar.appendChild(openBtn)
+  }
+
+  wrapper.appendChild(actionBar)
   return wrapper
 }
 
-function emitDiffAction(postMessage: ((msg: Record<string, unknown>) => void) | undefined, msg: Record<string, unknown>): void {
-  if (postMessage) { postMessage(msg); return }
-  window.dispatchEvent(new CustomEvent("oc-diff-action", { detail: msg }))
+// ---------------------------------------------------------------------------
+// Legacy diff block renderer (backward compatibility)
+// ---------------------------------------------------------------------------
+
+function renderDiffBlock(block: Block, opts: RenderOptions): HTMLElement | null {
+  return renderNewDiffBlock(block, opts)
 }
 
-function renderPermissionBlock(block: Block): HTMLDivElement {
+// ---------------------------------------------------------------------------
+// Permission block
+// ---------------------------------------------------------------------------
+
+function renderPermissionBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
   const wrapper = document.createElement("div")
   wrapper.className = "permission-block"
 
@@ -352,16 +872,16 @@ function renderPermissionBlock(block: Block): HTMLDivElement {
 
   if (block.permissionId) {
     const allowBtn = document.createElement("button")
-    allowBtn.className = "permission-btn permission-btn-allow"
+    allowBtn.className = "permission-btn permission-btn--allow"
     allowBtn.textContent = "Allow"
     allowBtn.addEventListener("click", () => {
       window.dispatchEvent(new CustomEvent("oc-permission", { detail: { permissionId: block.permissionId, response: "once" } }))
       actions.replaceChildren(document.createTextNode("Allowed"))
     })
     actions.appendChild(allowBtn)
-    
+
     const denyBtn = document.createElement("button")
-    denyBtn.className = "permission-btn permission-btn-deny"
+    denyBtn.className = "permission-btn permission-btn--deny"
     denyBtn.textContent = "Deny"
     denyBtn.addEventListener("click", () => {
       window.dispatchEvent(new CustomEvent("oc-permission", { detail: { permissionId: block.permissionId, response: "reject" } }))
@@ -374,16 +894,19 @@ function renderPermissionBlock(block: Block): HTMLDivElement {
   return wrapper
 }
 
-function renderTaskBanner(block: Block): HTMLDivElement {
+// ---------------------------------------------------------------------------
+// Task banner
+// ---------------------------------------------------------------------------
+
+function renderTaskBanner(block: Block, _opts: RenderOptions): HTMLElement | null {
+  const status = (block.status as "success" | "error" | "warning") || "success"
   const wrapper = document.createElement("div")
-  const status = block.status || "success"
-  wrapper.className = "task-banner " + status
+  wrapper.className = `task-banner task-banner--${status}`
+  wrapper.setAttribute("role", status === "error" ? "alert" : "status")
 
   const icon = document.createElement("span")
   icon.className = "task-banner-icon"
-  icon.innerHTML = status === "success" 
-    ? '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/></svg>'
-    : '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"/></svg>'
+  icon.innerHTML = status === "success" ? SUCCESS_SVG : ERROR_SVG
   wrapper.appendChild(icon)
 
   const text = document.createElement("span")
@@ -393,20 +916,26 @@ function renderTaskBanner(block: Block): HTMLDivElement {
   return wrapper
 }
 
-function renderContextBlock(block: Block): HTMLDivElement {
+// ---------------------------------------------------------------------------
+// Context block
+// ---------------------------------------------------------------------------
+
+function renderContextBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
   const wrapper = document.createElement("div")
   wrapper.className = "context-block"
 
   const header = document.createElement("div")
   header.className = "context-header"
+
   const toggle = document.createElement("span")
   toggle.className = "context-toggle"
-  toggle.innerHTML = CHEVRON_SVG
+  toggle.innerHTML = CHEVRON_RIGHT_SVG
   header.appendChild(toggle)
 
   const label = document.createElement("span")
   label.textContent = "Context"
   header.appendChild(label)
+
   wrapper.appendChild(header)
 
   const content = document.createElement("div")
@@ -418,5 +947,82 @@ function renderContextBlock(block: Block): HTMLDivElement {
     wrapper.classList.toggle("expanded")
   })
 
+  return wrapper
+}
+
+// ---------------------------------------------------------------------------
+// Error block
+// ---------------------------------------------------------------------------
+
+function renderErrorBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
+  const errorBlock: ErrorBlock = isErrorBlock(block)
+    ? block
+    : ({
+        type: 'error',
+        code: (block.code as string) || 'unknown',
+        message: String(block.text ?? block.message ?? "An error occurred"),
+        detail: (block.detail as string | undefined),
+        retryable: (block.retryable as boolean) || false,
+      } as ErrorBlock)
+
+  const wrapper = document.createElement("div")
+  wrapper.className = "msg-error"
+  wrapper.setAttribute("role", "alert")
+
+  const content = document.createElement("div")
+  content.className = "error-bubble"
+
+  const header = document.createElement("div")
+  header.className = "error-header"
+  header.innerHTML = WARNING_SVG
+  const title = document.createElement("span")
+  title.textContent = `Error: ${errorBlock.code}`
+  header.appendChild(title)
+  content.appendChild(header)
+
+  const msg = document.createElement("div")
+  msg.className = "error-message"
+  msg.textContent = errorBlock.message
+  content.appendChild(msg)
+
+  if (errorBlock.detail) {
+    const detail = document.createElement("div")
+    detail.className = "error-detail"
+    detail.textContent = errorBlock.detail
+    content.appendChild(detail)
+  }
+
+  wrapper.appendChild(content)
+  return wrapper
+}
+
+function renderImageBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
+  const data = block.data as string | undefined
+  const mimeType = (block.mimeType as string) || "image/png"
+  if (!data) return null
+
+  const wrapper = document.createElement("div")
+  wrapper.className = "msg-image"
+
+    const img = document.createElement("img")
+    img.src = `data:${mimeType};base64,${data}`
+    img.alt = "Attached image"
+    img.className = "attached-image-thumb msg-image img"
+    img.style.cursor = "pointer"
+    img.loading = "lazy"
+
+  img.addEventListener("click", () => {
+      const viewer = document.createElement("div")
+        viewer.className = "image-viewer-overlay"
+        const fullImg = document.createElement("img")
+        fullImg.src = img.src
+        fullImg.className = "image-viewer-full"
+        fullImg.loading = "lazy"
+        viewer.appendChild(fullImg)
+    viewer.addEventListener("click", () => viewer.remove())
+    document.body.appendChild(viewer)
+  })
+
+  wrapper.appendChild(img)
   return wrapper
 }

@@ -84,6 +84,14 @@ export class SessionManager {
   /** Whether the manager has been disposed */
   private disposed = false
 
+  /** Previously stored port for potential reuse across reloads */
+  private storedPort?: number
+
+  /** Set a previously stored port to attempt reuse before spawning a new server */
+  setStoredPort(port?: number): void {
+    this.storedPort = port
+  }
+
   /* ---- public getters ---- */
 
   readonly onEvent = this._onEvent.event
@@ -118,6 +126,32 @@ export class SessionManager {
   }
 
   private async _start(): Promise<void> {
+    // Attempt to reuse previously stored port if server still healthy
+    if (this.storedPort) {
+      try {
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), 2000)
+        const resp = await fetch(`http://127.0.0.1:${this.storedPort}/global/health`, { signal: controller.signal })
+        clearTimeout(timer)
+        if (resp.ok) {
+          const data = await resp.json() as { healthy?: boolean }
+          if (data.healthy) {
+            log.info(`Reusing existing server on port ${this.storedPort}`)
+            this.port = this.storedPort
+            this.client = createOpencodeClient({ baseUrl: `http://127.0.0.1:${this.port}` })
+            this.reconnectAttempts = 0
+            this._onEvent.fire({ type: "server_connected", data: { port: this.port } })
+            log.info("OpenCode server connected (reused)")
+            this.subscribeToEvents()
+            await this.recoverSessions()
+            return
+          }
+        }
+      } catch (e) {
+        log.info(`Stored port ${this.storedPort} health check failed, starting new server`)
+      }
+    }
+
     this.port = await findFreePort()
 
     const opencodePath = await this.findOpencodeBinary()
@@ -129,9 +163,16 @@ export class SessionManager {
 
     log.info(`Starting opencode server on port ${this.port} (${opencodePath})`)
 
+    // Only pass essential env vars to the child process to prevent secret leakage
+    const allowedEnvVars = ["PATH", "HOME", "USERPROFILE", "APPDATA", "XDG_CONFIG_HOME", "LANG", "TERM", "SHELL", "TMPDIR", "TEMP", "TMP"]
+    const childEnv: Record<string, string> = {}
+    for (const key of allowedEnvVars) {
+      const val = process.env[key]
+      if (val) childEnv[key] = val
+    }
     this.serverProcess = spawn(opencodePath, ["serve", "--port", String(this.port), "--hostname", "127.0.0.1"], {
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
+      env: childEnv,
     })
 
     this.serverProcess.stdout?.on("data", (data: Buffer) => {
@@ -335,6 +376,7 @@ export class SessionManager {
   /* ---- session operations ---- */
 
   async createSession(title?: string): Promise<Session> {
+    if (this.disposed) throw new Error("SessionManager has been disposed")
     if (!this.client) throw new Error("Server not running")
     const resp = await this.client.session.create({ body: { title } })
     if (resp.error) throw new Error(`Failed to create session: ${JSON.stringify(resp.error)}`)
@@ -343,6 +385,7 @@ export class SessionManager {
   }
 
   async deleteSession(id: string): Promise<boolean> {
+    if (this.disposed) throw new Error("SessionManager has been disposed")
     if (!this.client) throw new Error("Server not running")
     await this.client.session.delete({ path: { id } })
     log.info(`Deleted session: ${id}`)
@@ -350,6 +393,7 @@ export class SessionManager {
   }
 
   async getSession(id: string): Promise<Session> {
+    if (this.disposed) throw new Error("SessionManager has been disposed")
     if (!this.client) throw new Error("Server not running")
     const resp = await this.client.session.get({ path: { id } })
     // C6: Check for SDK error before returning data
@@ -358,6 +402,7 @@ export class SessionManager {
   }
 
   async listSessions(): Promise<Session[]> {
+    if (this.disposed) throw new Error("SessionManager has been disposed")
     if (!this.client) throw new Error("Server not running")
     const resp = await this.client.session.list()
     // C6: Check for SDK error before returning data
@@ -375,6 +420,7 @@ export class SessionManager {
     parts: (TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput)[],
     model?: ModelRef
   ): Promise<{ info: Message; parts: Part[] }> {
+    if (this.disposed) throw new Error("SessionManager has been disposed")
     if (!this.client) throw new Error("Server not running")
 
     const modelRef = model ?? this.currentModel ?? undefined
@@ -411,6 +457,7 @@ export class SessionManager {
     parts: (TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput)[],
     model?: ModelRef
   ): Promise<void> {
+    if (this.disposed) throw new Error("SessionManager has been disposed")
     if (!this.client) throw new Error("Server not running")
 
     const modelRef = model ?? this.currentModel ?? undefined
@@ -445,9 +492,12 @@ export class SessionManager {
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
 
-        if (attempt < this.MAX_RETRIES) {
+        // Only retry network/timeout errors — not business logic failures
+        if (this.isRetryableError(err) && attempt < this.MAX_RETRIES) {
           log.warn(`Prompt attempt ${attempt + 1} failed, retrying...`, lastError)
           await this.exponentialDelay(attempt)
+        } else {
+          throw lastError
         }
       }
     }
@@ -484,17 +534,40 @@ export class SessionManager {
     await new Promise(resolve => setTimeout(resolve, delay))
   }
 
-  async sendCommand(sessionId: string, command: string): Promise<{ info: Message; parts: Part[] }> {
+  async sendCommand(sessionId: string, command: string, args?: string): Promise<{ info: Message; parts: Part[] }> {
+    if (this.disposed) throw new Error("SessionManager has been disposed")
     if (!this.client) throw new Error("Server not running")
     const resp = await this.client.session.command({
       path: { id: sessionId },
-      body: { command, arguments: "" },
+      body: { command, arguments: args ?? "" },
     })
     if (resp.error) throw new Error(`Command failed: ${JSON.stringify(resp.error)}`)
     return resp.data as { info: Message; parts: Part[] }
   }
 
+  async compactSession(sessionId: string, model?: ModelRef): Promise<boolean> {
+    if (this.disposed) throw new Error("SessionManager has been disposed")
+    if (!this.client) throw new Error("Server not running")
+    const modelRef = model ?? this.currentModel ?? undefined
+    const resp = await this.client.session.summarize({
+      path: { id: sessionId },
+      body: modelRef ? { providerID: modelRef.providerID, modelID: modelRef.modelID } : undefined,
+    })
+    if (resp.error) throw new Error(`Compaction failed: ${JSON.stringify(resp.error)}`)
+    log.info(`Session compacted: ${sessionId}`)
+    return resp.data as boolean
+  }
+
+  async listCommands(): Promise<Array<{ name: string; description?: string; template: string }>> {
+    if (this.disposed) throw new Error("SessionManager has been disposed")
+    if (!this.client) throw new Error("Server not running")
+    const resp = await this.client.command.list()
+    if (resp.error) throw new Error(`Failed to list commands: ${JSON.stringify(resp.error)}`)
+    return (resp.data as Array<{ name: string; description?: string; template: string }>) ?? []
+  }
+
   async abortSession(sessionId: string): Promise<boolean> {
+    if (this.disposed) throw new Error("SessionManager has been disposed")
     if (!this.client) throw new Error("Server not running")
     await this.client.session.abort({ path: { id: sessionId } })
     log.info(`Aborted session: ${sessionId}`)
@@ -502,6 +575,7 @@ export class SessionManager {
   }
 
   async getMessages(sessionId: string, limit?: number): Promise<{ info: unknown; parts: Part[] }[]> {
+    if (this.disposed) throw new Error("SessionManager has been disposed")
     if (!this.client) throw new Error("Server not running")
     const resp = await this.client.session.messages({
       path: { id: sessionId },
@@ -513,6 +587,7 @@ export class SessionManager {
   }
 
   async getSessionDiff(sessionId: string, messageId?: string): Promise<unknown> {
+    if (this.disposed) throw new Error("SessionManager has been disposed")
     if (!this.client) throw new Error("Server not running")
     const resp = await this.client.session.diff({
       path: { id: sessionId },
@@ -524,6 +599,7 @@ export class SessionManager {
   }
 
   async revertMessage(sessionId: string, messageId: string): Promise<boolean> {
+    if (this.disposed) throw new Error("SessionManager has been disposed")
     if (!this.client) throw new Error("Server not running")
     await this.client.session.revert({ path: { id: sessionId }, body: { messageID: messageId } })
     log.info(`Reverted message ${messageId} in session ${sessionId}`)
@@ -531,6 +607,7 @@ export class SessionManager {
   }
 
   async respondToPermission(sessionId: string, permissionId: string, response: string): Promise<void> {
+    if (this.disposed) throw new Error("SessionManager has been disposed")
     if (!this.client) throw new Error("Server not running")
     if (!sessionId) throw new Error("Permission response missing session ID")
     if (!permissionId) throw new Error("Permission response missing permission ID")
@@ -609,6 +686,7 @@ export class SessionManager {
    *     in the new server session.
    */
   async ensureSession(cliSessionId: string | undefined, title?: string): Promise<string> {
+    if (this.disposed) throw new Error("SessionManager has been disposed")
     if (!this.client) throw new Error("Server not running")
 
     // If we have an existing ID, verify it's still valid on the server

@@ -414,7 +414,7 @@
     "@types/vscode": "^1.98.0",
     "@typescript-eslint/eslint-plugin": "^8.59.2",
     "@typescript-eslint/parser": "^8.59.2",
-    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.1",
     "c8": "^11.0.0",
@@ -422,11 +422,14 @@
     "eslint": "^9.0.0",
     "husky": "^9.1.7",
     "jsdom": "^29.1.1",
-    "mocha": "^11.7.5",
+    "mocha": "^11.3.0",
     "typescript": "^5.7.0"
   },
+  "overrides": {
+    "serialize-javascript": "^7.0.0"
+  },
   "dependencies": {
-    "@opencode-ai/sdk": "^1.14.33",
+    "@opencode-ai/sdk": "^1.14.36",
     "@vscode-elements/elements": "^2.5.1",
     "dompurify": "^3.4.2",
     "highlight.js": "^11.11.1",

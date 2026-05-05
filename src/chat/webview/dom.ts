@@ -6,30 +6,43 @@ export function requireElement<T extends HTMLElement>(id: string): T {
   return element as T
 }
 
+export function optionalElement<T extends HTMLElement>(id: string): T | null {
+  const element = document.getElementById(id)
+  if (!element) {
+    console.warn(`[OpenCode] Optional element not found: ${id}`)
+    return null
+  }
+  return element as T
+}
+
 export interface ElementRefs {
   tabPanels: HTMLElement
+  tabBar: HTMLElement
   newTabBtn: HTMLElement
 
   promptInput: HTMLTextAreaElement
   sendBtn: HTMLElement
-  abortBtn: HTMLElement
   mentionDropdown: HTMLDivElement
+  slashAutocomplete: HTMLDivElement
   inputArea: HTMLDivElement
   inputWrapper: HTMLDivElement
   inputBottomBar: HTMLDivElement
   
   mentionBtn: HTMLElement
   attachBtn: HTMLElement
-  modeToggle: HTMLElement
-  modeLabel: HTMLSpanElement
+  modePlanBtn: HTMLElement
+  modeAutoBtn: HTMLElement
+  modeBuildBtn: HTMLElement
   modelSelectorBtn: HTMLElement
   modelLabel: HTMLSpanElement
-
+  variantSelectorBtn: HTMLElement
+  variantLabel: HTMLSpanElement
+  
   modelDropdown: HTMLDivElement
-  newChatBtn: HTMLElement
+  variantDropdown: HTMLDivElement
+  historyBtn: HTMLElement
   mcpBtn: HTMLElement
   settingsBtn: HTMLElement
-  viewAllSessionsBtn: HTMLElement
 
   contextBar: HTMLDivElement
   contextChips: HTMLDivElement
@@ -37,38 +50,53 @@ export interface ElementRefs {
   contextProgressBar: HTMLElement
   contextLabel: HTMLSpanElement
   
-  recentSessions: HTMLDivElement
-  recentList: HTMLDivElement
-  
+  recentSessions: HTMLDivElement | null
+
   agentStatusLed: HTMLDivElement
   agentStatusText: HTMLSpanElement
+
+  sessionModal: HTMLDivElement
+  sessionModalBody: HTMLDivElement
+  sessionModalClose: HTMLButtonElement
+
+  modelManagerPanel: HTMLDivElement
+  modelManagerSearch: HTMLInputElement
+  modelManagerList: HTMLDivElement
+  modelManagerClose: HTMLButtonElement
+  modelManagerConnect: HTMLButtonElement
+
+  welcomeView: HTMLDivElement
 }
 
 export function getElementRefs(): ElementRefs {
   return {
     tabPanels: requireElement("tab-panels"),
+    tabBar: requireElement("tab-bar"),
     newTabBtn: requireElement("new-tab-btn"),
 
     promptInput: requireElement<HTMLTextAreaElement>("prompt-input"),
     sendBtn: requireElement("send-btn"),
-    abortBtn: requireElement("abort-btn"),
     mentionDropdown: requireElement<HTMLDivElement>("mention-dropdown"),
+    slashAutocomplete: requireElement<HTMLDivElement>("slash-autocomplete"),
     inputArea: requireElement<HTMLDivElement>("input-area"),
     inputWrapper: requireElement<HTMLDivElement>("input-wrapper"),
     inputBottomBar: requireElement<HTMLDivElement>("input-bottom-bar"),
     
     mentionBtn: requireElement("mention-btn"),
     attachBtn: requireElement("attach-btn"),
-    modeToggle: requireElement("mode-toggle"),
-    modeLabel: requireElement<HTMLSpanElement>("mode-label"),
+    modePlanBtn: requireElement("mode-plan-btn"),
+    modeAutoBtn: requireElement("mode-auto-btn"),
+    modeBuildBtn: requireElement("mode-build-btn"),
     modelSelectorBtn: requireElement("model-selector-btn"),
     modelLabel: requireElement<HTMLSpanElement>("model-label"),
-
+    variantSelectorBtn: requireElement("variant-selector-btn"),
+    variantLabel: requireElement<HTMLSpanElement>("variant-label"),
+    
     modelDropdown: requireElement<HTMLDivElement>("model-dropdown-container"),
-    newChatBtn: requireElement("new-chat-btn"),
+    variantDropdown: requireElement<HTMLDivElement>("variant-dropdown-container"),
+    historyBtn: requireElement("history-btn"),
     mcpBtn: requireElement("mcp-btn"),
     settingsBtn: requireElement("settings-btn"),
-    viewAllSessionsBtn: requireElement("view-all-sessions"),
 
     contextBar: requireElement<HTMLDivElement>("context-bar"),
     contextChips: requireElement<HTMLDivElement>("context-chips"),
@@ -76,11 +104,22 @@ export function getElementRefs(): ElementRefs {
     contextProgressBar: requireElement("context-progress-bar"),
     contextLabel: requireElement<HTMLSpanElement>("context-label"),
     
-    recentSessions: requireElement<HTMLDivElement>("recent-sessions"),
-    recentList: requireElement<HTMLDivElement>("recent-list"),
+    recentSessions: optionalElement<HTMLDivElement>("recent-sessions"),
 
     agentStatusLed: requireElement<HTMLDivElement>("agent-status-led"),
     agentStatusText: requireElement<HTMLSpanElement>("agent-status-text"),
+
+    sessionModal: requireElement<HTMLDivElement>("session-modal"),
+    sessionModalBody: requireElement<HTMLDivElement>("session-modal-body"),
+    sessionModalClose: requireElement<HTMLButtonElement>("session-modal-close"),
+
+    modelManagerPanel: requireElement<HTMLDivElement>("model-manager-panel"),
+    modelManagerSearch: requireElement<HTMLInputElement>("model-manager-search"),
+    modelManagerList: requireElement<HTMLDivElement>("model-manager-list"),
+    modelManagerClose: requireElement<HTMLButtonElement>("model-manager-close"),
+    modelManagerConnect: requireElement<HTMLButtonElement>("model-manager-connect"),
+
+    welcomeView: requireElement<HTMLDivElement>("welcome-view"),
   }
 }
 
@@ -91,18 +130,13 @@ export function scrollToBottom(el: HTMLElement) {
 }
 
 export function getActiveMessageList(els: ElementRefs): HTMLDivElement | null {
-  const activeId = els.tabPanels.getAttribute("activeid") || "tab-default"
-  // The panel view ID is "view-" + tabId (without the "tab-" prefix)
-  const viewId = "view-" + activeId.replace("tab-", "")
-  const activeView = els.tabPanels.querySelector(`#${viewId}`)
-  if (!activeView) return null
-  return activeView.querySelector('.message-list')
+  const activePanel = els.tabPanels.querySelector(".tab-panel.active")
+  if (!activePanel) return null
+  return activePanel.querySelector('.message-list')
 }
 
 export function getActiveTypingIndicator(els: ElementRefs): HTMLDivElement | null {
-  const activeId = els.tabPanels.getAttribute("activeid") || "tab-default"
-  const viewId = "view-" + activeId.replace("tab-", "")
-  const activeView = els.tabPanels.querySelector(`#${viewId}`)
-  if (!activeView) return null
-  return activeView.querySelector('.typing-indicator')
+  const activePanel = els.tabPanels.querySelector(".tab-panel.active")
+  if (!activePanel) return null
+  return activePanel.querySelector('.typing-indicator')
 }

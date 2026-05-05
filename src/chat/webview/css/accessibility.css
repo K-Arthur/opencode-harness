@@ -8,9 +8,9 @@
 }
 
 *:focus-visible {
-  outline: 2px solid var(--oc-focus);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
-  border-radius: var(--radius-sm);
+  border-radius: inherit;
 }
 
 /* Specific focus styles for different element types */
@@ -19,10 +19,17 @@ button:focus-visible,
   outline-offset: 2px;
 }
 
+/* Details/summary focus (thinking blocks) */
+details[open] > summary:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+  border-radius: var(--radius-md);
+}
+
 input:focus-visible,
 textarea:focus-visible,
 [contenteditable]:focus-visible {
-  outline: 2px solid var(--oc-focus);
+  outline: 2px solid var(--color-accent);
   outline-offset: -1px;
 }
 
@@ -33,9 +40,13 @@ textarea:focus-visible,
 
 .dropdown-item:focus-visible,
 .dropdown-item.selected {
-  outline: 2px solid var(--oc-focus);
+  outline: 2px solid var(--color-accent);
   outline-offset: -2px;
 }
+
+/* Shape-specific overrides where inherit doesn't work */
+.send-btn:focus-visible { border-radius: var(--radius-md); }
+.tab-btn:focus-visible { border-radius: var(--radius-md) var(--radius-md) 0 0; }
 
 /* ─── Minimum Touch/Pointer Target Sizes ─── */
 /* WCAG 2.5.8: 24x24px minimum for pointer targets */
@@ -52,6 +63,8 @@ textarea:focus-visible,
 .suggestion-btn,
 .suggestion-card,
 .code-block-copy,
+.code-block-insert,
+.code-block-new-file,
 .diff-btn,
 .permission-btn,
 .tab-new,
@@ -72,7 +85,7 @@ textarea:focus-visible,
 
 /* Context chip remove: small visual (14px) with extended pseudo-element hit area */
 .context-chip-remove {
-  min-width: 14px;
+  min-width: var(--size-icon-xs);
   min-height: 14px;
   position: relative;
 }
@@ -109,7 +122,12 @@ textarea:focus-visible,
 
   .streaming-text::after {
     animation: none !important;
-    content: "" !important;
+    opacity: 1 !important;
+  }
+
+  .stream-cursor {
+    animation: none !important;
+    opacity: 1 !important;
   }
 
   .skeleton-shimmer {
@@ -125,6 +143,11 @@ textarea:focus-visible,
     animation: none !important;
     opacity: 1 !important;
   }
+
+  .tab-btn.streaming .tab-indicator {
+    animation: none !important;
+    opacity: 0.6 !important;
+  }
 }
 
 /* ─── High Contrast Mode ─── */
@@ -132,6 +155,21 @@ textarea:focus-visible,
   :root {
     --oc-border: CanvasText;
     --oc-focus: Highlight;
+    --oc-fg: CanvasText;
+    --oc-bg: Canvas;
+    --oc-accent: ButtonText;
+    --oc-accent-fg: ButtonFace;
+    --oc-accent-hover: ButtonText;
+    --oc-error: GrayText;
+    --oc-warning: GrayText;
+    --oc-success: ButtonText;
+    --oc-info: LinkText;
+    --oc-muted: GrayText;
+    --oc-description: GrayText;
+    --color-accent: ButtonText;
+    --color-border: ButtonText;
+    --color-muted: GrayText;
+    --color-fg: CanvasText;
   }
 
   .message-bubble,
@@ -158,12 +196,58 @@ textarea:focus-visible,
     border: 1px solid CanvasText;
   }
 
+  button,
+  [role="button"],
+  .send-btn,
+  .abort-btn,
+  .header-btn {
+    border: 1px solid ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
+  }
+
+  a,
+  .link {
+    color: LinkText;
+    text-decoration: underline;
+  }
+
+  input,
+  textarea,
+  [contenteditable] {
+    border: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .diff-added {
+    background: Canvas;
+    color: CanvasText;
+    border: 1px solid ButtonText;
+  }
+
+  .diff-removed {
+    background: Canvas;
+    color: GrayText;
+    border: 1px solid GrayText;
+  }
+
+  .modal-session-item:hover,
+  .model-option.focused,
+  .dropdown-item.selected {
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  *:focus-visible {
+    outline-color: Highlight !important;
+  }
 }
 
 /* ─── Keyboard Navigation Helpers ─── */
 [tabindex="0"]:focus-visible,
 [tabindex="-1"]:focus-visible {
-  outline: 2px solid var(--oc-focus);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 

@@ -5,30 +5,34 @@ const DEFAULT_STATE: WebviewState = {
   activeSessionId: null,
   nextSessionNum: 1,
   globalModel: "",
+  initialized: false,
 }
 
-function migrateState(old: any): WebviewState {
-  // Already migrated
-  if (old && old.sessions) return old as WebviewState
+  function migrateState(old: any): WebviewState {
+    // Already migrated
+    if (old && old.sessions) return old as WebviewState
 
-  // Old format: { messages, currentMode, currentSessionId }
-  const sessionId = old?.currentSessionId || "session-1"
-  const session: SessionState = {
-    id: sessionId,
-    name: "Session 1",
-    model: "",
-    mode: old?.currentMode || "normal",
-    messages: old?.messages || [],
-    isStreaming: false,
-  }
+    // Old format: { messages, currentMode, currentSessionId }
+    const sessionId = old?.currentSessionId || "session-1"
+    const oldMode = old?.currentMode || "normal"
+    // Migrate old "normal" mode to "build" (new naming)
+    const mode = oldMode === "normal" ? "build" : oldMode
+    const session: SessionState = {
+      id: sessionId,
+      name: "Session 1",
+      model: "",
+      mode,
+      messages: old?.messages || [],
+      isStreaming: false,
+    }
 
-  return {
-    sessions: { [sessionId]: session },
-    activeSessionId: sessionId,
-    nextSessionNum: 2,
-    globalModel: "",
+    return {
+      sessions: { [sessionId]: session },
+      activeSessionId: sessionId,
+      nextSessionNum: 2,
+      globalModel: "",
+    }
   }
-}
 
 export function createState(vscode: VsCodeApi) {
   let state: WebviewState = DEFAULT_STATE
@@ -70,13 +74,13 @@ export function createState(vscode: VsCodeApi) {
   }
 
   function createSession(name?: string, model?: string): SessionState {
-    const id = `session-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    const id = `session-${crypto.randomUUID().slice(0, 8)}`
     const sessionName = name || `Session ${state.nextSessionNum}`
     const session: SessionState = {
       id,
       name: sessionName,
       model: model || state.globalModel || "",
-      mode: "normal",
+      mode: "build",
       messages: [],
       isStreaming: false,
     }
@@ -128,7 +132,7 @@ export function createState(vscode: VsCodeApi) {
     delete state.sessions[id]
     if (state.activeSessionId === id) {
       const remaining = Object.keys(state.sessions)
-      state.activeSessionId = remaining.length > 0 ? remaining[0] : null
+      state.activeSessionId = remaining.length > 0 ? (remaining[0] ?? null) : null
     }
     save()
     return true
@@ -182,7 +186,7 @@ export function createState(vscode: VsCodeApi) {
     state.activeSessionId = activeId && state.sessions[activeId] ? activeId : null
     state.globalModel = globalModel
     if (!state.activeSessionId && Object.keys(state.sessions).length > 0) {
-      state.activeSessionId = Object.keys(state.sessions)[0]
+      state.activeSessionId = Object.keys(state.sessions)[0] ?? null
     }
     save()
   }
@@ -198,6 +202,44 @@ export function createState(vscode: VsCodeApi) {
   function setGlobalModel(model: string) {
     state.globalModel = model
     save()
+  }
+
+  function setInitialized() {
+    state.initialized = true
+    save()
+  }
+
+  function isInitialized(): boolean {
+    return state.initialized || false
+  }
+
+  function isModelDisabled(modelId: string): boolean {
+    return state.disabledModels?.includes(modelId) ?? false
+  }
+
+  function setModelDisabled(modelId: string, disabled: boolean): void {
+    if (!state.disabledModels) {
+      state.disabledModels = []
+    }
+    const idx = state.disabledModels.indexOf(modelId)
+    if (disabled && idx === -1) {
+      state.disabledModels.push(modelId)
+      save()
+    } else if (!disabled && idx !== -1) {
+      state.disabledModels.splice(idx, 1)
+      save()
+    }
+  }
+
+  function applyDisabledState(models: import("./types").ModelInfo[]): import("./types").ModelInfo[] {
+    if (!state.disabledModels || state.disabledModels.length === 0) return models
+    return models.map((m) => {
+      const fullId = `${m.provider}/${m.id}`
+      if (state.disabledModels!.includes(fullId)) {
+        return { ...m, enabled: false }
+      }
+      return m
+    })
   }
 
   return {
@@ -221,5 +263,10 @@ export function createState(vscode: VsCodeApi) {
     getSessionCount,
     setGlobalModel,
     loadSessions,
+    setInitialized,
+    isInitialized,
+    isModelDisabled,
+    setModelDisabled,
+    applyDisabledState,
   }
 }

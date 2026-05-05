@@ -101,8 +101,8 @@ export const ADAPTERS: RateLimitAdapter[] = [
 function parseDuration(duration: string): Date {
   const match = duration.match(/^(\d+)([smhd])$/)
   if (!match) return new Date(Date.now() + 60000)
-  const val = parseInt(match[1], 10)
-  const unit = match[2]
+  const val = parseInt(match[1]!, 10)
+  const unit = match[2]!
   const ms = { s: 1000, m: 60000, h: 3600000, d: 86400000 }[unit] || 60000
   return new Date(Date.now() + val * ms)
 }
@@ -113,6 +113,9 @@ export class RateLimitMonitor {
 
   private _onWarning = new vscode.EventEmitter<string>()
   readonly onWarning = this._onWarning.event
+
+  private _onReset = new vscode.EventEmitter<void>()
+  readonly onReset = this._onReset.event
 
   private state: RateLimitState | null = null
   private cumulativeInputTokens = 0
@@ -125,6 +128,10 @@ export class RateLimitMonitor {
   private warningThreshold = 0.1
   private criticalThreshold = 0.05
   private providerLimits: Record<string, { tokensPerMin: number; requestsPerMin: number }> = {}
+  private configListener: vscode.Disposable
+
+  // Countdown timer for rate limit reset
+  private countdownInterval: ReturnType<typeof setInterval> | null = null
 
   constructor() {
     this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99)
@@ -132,9 +139,42 @@ export class RateLimitMonitor {
     this.statusBarItem.command = "opencode-harness.showRateLimits"
     this.loadConfig()
 
-    vscode.workspace.onDidChangeConfiguration((e) => {
+    this.configListener = vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("opencode.rateLimits")) this.loadConfig()
     })
+  }
+
+  /**
+   * Start a real-time countdown to rate limit reset.
+   * Updates the status bar every second and fires onReset when done.
+   */
+  private startCountdown(resetAt: Date): void {
+    this.stopCountdown()
+    this.countdownInterval = setInterval(() => {
+      const remainingMs = resetAt.getTime() - Date.now()
+      if (remainingMs <= 0) {
+        this.stopCountdown()
+        this.warnedExhausted = false
+        this.warnedLowTokens = false
+        this._onReset.fire()
+        this.updateStatusBar()
+        return
+      }
+      const remainingSec = Math.ceil(remainingMs / 1000)
+      this.statusBarItem.text = `⚠ ${remainingSec}s`
+      this.statusBarItem.tooltip = `Rate limit exhausted — resets in ${remainingSec}s`
+      this.statusBarItem.show()
+    }, 1000)
+  }
+
+  /**
+   * Stop the countdown timer.
+   */
+  private stopCountdown(): void {
+    if (this.countdownInterval) {
+      clearInterval(this.countdownInterval)
+      this.countdownInterval = null
+    }
   }
 
   private loadConfig(): void {
@@ -226,9 +266,19 @@ export class RateLimitMonitor {
     const tokens = this.state.remainingTokens
     const requests = this.state.remainingRequests
     const limitT = this.state.limitTokens
+    const limitR = this.state.limitRequests
 
-    if (tokens !== undefined && limitT) {
-      const pct = Math.round((tokens / limitT) * 100)
+    // Use whichever is the binding constraint (lower percentage)
+    let pct: number | undefined
+    if (tokens !== undefined && limitT && limitT > 0) {
+      pct = Math.round((tokens / limitT) * 100)
+    }
+    if (requests !== undefined && limitR && limitR > 0) {
+      const reqPct = Math.round((requests / limitR) * 100)
+      pct = pct !== undefined ? Math.min(pct, reqPct) : reqPct
+    }
+
+    if (pct !== undefined) {
       const icon = pct > 50 ? "\u25D4" : pct > 10 ? "\u25D5" : "\u25D7"
       this.statusBarItem.text = `${icon} ${pct}%`
       this.statusBarItem.tooltip = this.buildTooltip()
@@ -238,6 +288,11 @@ export class RateLimitMonitor {
           ? new vscode.ThemeColor("statusBarItem.warningForeground")
           : new vscode.ThemeColor("statusBarItem.errorForeground")
       this.statusBarItem.show()
+
+      // Start countdown if exhausted and we have a reset time
+      if (pct <= 0 && this.state.resetAt && !this.countdownInterval) {
+        this.startCountdown(this.state.resetAt)
+      }
     } else if (requests !== undefined) {
       this.statusBarItem.text = `\u23F1 ${requests} req`
       this.statusBarItem.tooltip = this.buildTooltip()
@@ -311,8 +366,11 @@ export class RateLimitMonitor {
   }
 
   dispose(): void {
+    this.stopCountdown()
     this.statusBarItem.dispose()
     this._onStateChanged.dispose()
     this._onWarning.dispose()
+    this._onReset.dispose()
+    this.configListener.dispose()
   }
 }

@@ -7,7 +7,8 @@ import { fileURLToPath } from "node:url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, "..", "..")
-const bundlePath = path.join("/tmp", "opencode-event-normalizer.cjs")
+const bundleDir = path.join(repoRoot, ".coverage-bundles")
+const bundlePath = path.join(bundleDir, "opencode-event-normalizer.cjs")
 
 function loadNormalizer() {
   execFileSync("npx", [

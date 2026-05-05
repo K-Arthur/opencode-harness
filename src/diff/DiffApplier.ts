@@ -25,7 +25,7 @@ export class DiffApplier {
             originalContent: "",
             proposedContent: block.code,
             messageId: "",
-            blockId: `block_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+            blockId: `block_${crypto.randomUUID().slice(0, 8)}`,
           })
         }
       }
@@ -42,7 +42,7 @@ export class DiffApplier {
       blocks.push({
         language: info.language,
         path: info.path,
-        code: match[2],
+        code: match[2] ?? "",
       })
     }
     return blocks
@@ -54,12 +54,12 @@ export class DiffApplier {
 
     const commentMatch = trimmed.match(/^(\S+)?\s*\/\/\s*(.+)$/)
     if (commentMatch) {
-      return { language: commentMatch[1], path: commentMatch[2].trim() }
+      return { language: commentMatch[1] ?? undefined, path: commentMatch[2]?.trim() }
     }
 
     const fileMatch = trimmed.match(/^(\S+)?\s+(?:file=|filename=|path=)?(.+)$/)
     if (fileMatch) {
-      return { language: fileMatch[1], path: fileMatch[2].trim().replace(/^["']|["']$/g, "") }
+      return { language: fileMatch[1] ?? undefined, path: fileMatch[2]?.trim().replace(/^["']|["']$/g, "") }
     }
 
     return { language: trimmed }
@@ -172,7 +172,7 @@ export class DiffApplier {
     const workspaceFolders = vscode.workspace.workspaceFolders
     if (!workspaceFolders || workspaceFolders.length === 0) return ""
 
-    const root = workspaceFolders[0].uri.fsPath
+    const root = workspaceFolders[0]!.uri.fsPath
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
     const baseName = path.basename(filePath)
     const backupName = `${baseName}.${timestamp}.bak`
@@ -194,7 +194,7 @@ export class DiffApplier {
     const workspaceFolders = vscode.workspace.workspaceFolders
     if (!workspaceFolders || workspaceFolders.length === 0) return null
 
-    const root = workspaceFolders[0].uri.fsPath
+    const root = workspaceFolders[0]!.uri.fsPath
     const fullPath = path.resolve(root, filePath)
     const relative = path.relative(root, fullPath)
     if (relative.startsWith("..") || path.isAbsolute(relative)) return null

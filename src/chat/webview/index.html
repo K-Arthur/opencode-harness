@@ -26,168 +26,216 @@
           </div>
         </div>
         <div class="header-right">
-          <vscode-button id="new-tab-btn" appearance="icon" title="New session (Ctrl+T)" aria-label="New session">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <line x1="12" y1="5" x2="12" y2="19"/>
-              <line x1="5" y1="12" x2="19" y2="12"/>
+          <button class="icon-btn" id="history-btn" title="Session history" aria-label="Session history">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
             </svg>
-          </vscode-button>
-          <vscode-button id="mcp-btn" appearance="icon" title="Manage MCP servers" aria-label="Manage MCP servers">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          </button>
+          <button class="icon-btn" id="new-tab-btn" title="New session (Ctrl+T)" aria-label="New session">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+          </button>
+          <button class="icon-btn" id="mcp-btn" title="Manage MCP servers" aria-label="Manage MCP servers">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
               <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
               <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
               <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
             </svg>
-          </vscode-button>
-          <vscode-button id="settings-btn" appearance="icon" title="OpenCode settings" aria-label="Open settings">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          </button>
+          <button class="icon-btn" id="settings-btn" title="OpenCode settings" aria-label="Open settings">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="3"/>
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
             </svg>
-          </vscode-button>
+          </button>
         </div>
       </div>
     </header>
 
-    <vscode-panels id="tab-panels">
-      <vscode-panel-tab id="tab-default" data-tab-id="default">
-        <span class="tab-label">Default</span>
-        <span class="tab-close">&times;</span>
-      </vscode-panel-tab>
-      <vscode-panel-view id="view-default">
-        <div class="message-list custom-scrollbar" id="message-list-default" role="log" aria-label="Chat messages" aria-live="polite">
-          <div class="welcome-container">
-            <div class="welcome-header">
-              <div class="welcome-brand" aria-hidden="true">
-                <img class="welcome-wordmark" src="media/opencode-wordmark-dark.svg" alt="">
-              </div>
-              <h2>What can I do for you?</h2>
-            </div>
+    <div id="tab-container">
+      <div id="tab-bar" role="tablist" aria-label="Sessions">
+      </div>
+      <div id="tab-panels">
+      </div>
+    </div>
 
-            <div class="suggestions-grid" id="suggestions-grid">
-              <vscode-button appearance="secondary" class="suggestion-card" data-prompt="Explain the current file structure">
-                <span class="suggestion-icon">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
-                  </svg>
-                </span>
-                <span class="suggestion-text">Explain the current file structure</span>
-              </vscode-button>
-              <vscode-button appearance="secondary" class="suggestion-card" data-prompt="Find potential bugs in the codebase">
-                <span class="suggestion-icon">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="m8 2 1.88 1.88"/>
-                    <path d="M14.12 2 16 4.12"/>
-                    <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/>
-                    <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/>
-                    <path d="M12 20v-9"/>
-                    <path d="M6.53 9 4 11.27"/>
-                    <path d="M17.47 9 20 11.27"/>
-                    <path d="M2 14h2"/>
-                    <path d="M20 14h2"/>
-                    <path d="M6.53 17 4 14.73"/>
-                    <path d="M17.47 17 20 14.73"/>
-                  </svg>
-                </span>
-                <span class="suggestion-text">Find potential bugs in the codebase</span>
-              </vscode-button>
-              <vscode-button appearance="secondary" class="suggestion-card" data-prompt="Refactor this project to use better patterns">
-                <span class="suggestion-icon">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="23 4 23 10 17 10"/>
-                    <polyline points="1 20 1 14 7 14"/>
-                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-                  </svg>
-                </span>
-                <span class="suggestion-text">Refactor this project to use better patterns</span>
-              </vscode-button>
-              <vscode-button appearance="secondary" class="suggestion-card" data-prompt="Generate tests for the main module">
-                <span class="suggestion-icon">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-                    <polyline points="14 2 14 8 20 8"/>
-                    <path d="M9 15l-1-1 2-2 3 3 4-4"/>
-                  </svg>
-                </span>
-                <span class="suggestion-text">Generate tests for the main module</span>
-              </vscode-button>
-            </div>
-
-            <div class="recent-sessions" id="recent-sessions">
-              <div class="recent-header">
-                <span class="recent-label">RECENT</span>
-                <vscode-button appearance="link" id="view-all-sessions">View All</vscode-button>
-              </div>
-              <div class="recent-list" id="recent-list"></div>
-            </div>
+    <!-- Standalone welcome view — shown when no sessions exist -->
+    <div id="welcome-view" class="welcome-view">
+      <div class="welcome-container">
+        <div class="welcome-header">
+          <div class="welcome-brand" aria-hidden="true">
+            <img class="welcome-wordmark" src="media/opencode-wordmark-dark.svg" width="120" height="auto" alt="OpenCode" aria-hidden="true">
           </div>
+          <p class="welcome-tagline">Your intelligent coding assistant</p>
         </div>
-        <div class="typing-indicator hidden" id="typing-indicator-default" role="status" aria-label="OpenCode is thinking">
-          <vscode-progress-ring></vscode-progress-ring>
-          <span class="typing-text">Thinking...</span>
+        <div class="prompt-starters">
+          <button class="prompt-starter" data-prompt="Explain the current file structure">
+            <span class="prompt-starter-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+            <span class="prompt-starter-text">
+              <span class="prompt-starter-label">Explain the current file structure</span>
+              <span class="prompt-starter-desc">Get a high-level overview of how this project is organised</span>
+            </span>
+          </button>
+          <button class="prompt-starter" data-prompt="Find potential bugs in the codebase">
+            <span class="prompt-starter-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 6"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9 4 11.27"/><path d="M17.47 9 20 11.27"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M6.53 17 4 14.73"/><path d="M17.47 17 20 14.73"/></svg></span>
+            <span class="prompt-starter-text">
+              <span class="prompt-starter-label">Find potential bugs</span>
+              <span class="prompt-starter-desc">Scan the codebase for common issues and anti-patterns</span>
+            </span>
+          </button>
+          <button class="prompt-starter" data-prompt="Refactor this project to use better patterns">
+            <span class="prompt-starter-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6"/><path d="M2.5 22v-6h6"/><path d="M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg></span>
+            <span class="prompt-starter-text">
+              <span class="prompt-starter-label">Refactor to better patterns</span>
+              <span class="prompt-starter-desc">Modernise the code with cleaner architecture and idioms</span>
+            </span>
+          </button>
+          <button class="prompt-starter" data-prompt="Generate tests for the main module">
+            <span class="prompt-starter-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></svg></span>
+            <span class="prompt-starter-text">
+              <span class="prompt-starter-label">Generate tests</span>
+              <span class="prompt-starter-desc">Create unit tests for the core modules in this project</span>
+            </span>
+          </button>
         </div>
-      </vscode-panel-view>
-    </vscode-panels>
+        <p class="welcome-or-divider">or type a message below</p>
+        <div class="recent-sessions" id="welcome-recent-sessions"></div>
+      </div>
+    </div>
+
+    <div id="chat-search-bar" class="chat-search-bar hidden">
+      <input type="text" id="chat-search-input" placeholder="Search messages..." aria-label="Search messages">
+      <span id="chat-search-count" class="chat-search-count"></span>
+      <button id="chat-search-prev" class="icon-btn" title="Previous match (Shift+Enter)" aria-label="Previous match">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+      </button>
+      <button id="chat-search-next" class="icon-btn" title="Next match (Enter)" aria-label="Next match">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <button id="chat-search-close" class="icon-btn" title="Close search (Escape)" aria-label="Close search">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
+      </button>
+    </div>
 
     <div id="context-bar" class="hidden">
       <div id="context-chips"></div>
       <div id="context-usage" class="hidden">
-        <vscode-progress-bar id="context-progress-bar" min="0" max="100" value="0"></vscode-progress-bar>
+        <progress id="context-progress-bar" max="100" value="0"></progress>
         <span id="context-label" class="context-usage-label">0%</span>
       </div>
     </div>
 
     <div id="input-area">
       <div id="model-dropdown-container" class="hidden"></div>
+      <div id="variant-dropdown-container" class="hidden"></div>
       <div id="input-wrapper">
-        <textarea id="prompt-input" rows="1" placeholder="Type your task here..." aria-label="Message input"></textarea>
+        <textarea id="prompt-input" rows="1" placeholder="Ask OpenCode anything…" aria-label="Message input"></textarea>
         <div id="mention-dropdown" class="dropdown hidden"></div>
+        <div id="slash-autocomplete" class="slash-autocomplete hidden"></div>
       </div>
 
       <div id="input-bottom-bar">
         <div class="bottom-bar-left">
-          <vscode-button appearance="icon" id="mention-btn" title="Add context (@)" aria-label="Add context mention">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <button class="icon-btn" id="mention-btn" title="Add context (@)" aria-label="Add context mention">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="4"/>
               <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/>
             </svg>
-          </vscode-button>
-          <vscode-button appearance="icon" id="attach-btn" title="Attach files" aria-label="Attach files">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+          </button>
+          <button class="icon-btn" id="attach-btn" title="Attach files" aria-label="Attach files">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 7.5a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4v7a6 6 0 0 1-12 0v-4"/>
+              <path d="M12 15V7.5"/>
             </svg>
-          </vscode-button>
+          </button>
         </div>
 
         <div class="bottom-bar-right">
-          <vscode-button appearance="secondary" class="mode-toggle" id="mode-toggle" title="Toggle mode">
-            <span id="mode-label">Plan</span>
-          </vscode-button>
-          <vscode-button appearance="secondary" class="model-selector-btn" id="model-selector-btn" title="Select model" aria-haspopup="listbox" aria-expanded="false">
-            <span id="model-label">Default</span>
-            <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </vscode-button>
-          <vscode-button id="send-btn" appearance="primary" title="Send" aria-label="Send message">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <line x1="22" y1="2" x2="11" y2="13"/>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-            </svg>
-          </vscode-button>
-          <vscode-button id="abort-btn" appearance="secondary" class="hidden" title="Stop" aria-label="Stop generation">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="6" y="6" width="12" height="12" rx="2"/>
-            </svg>
-          </vscode-button>
+        <div class="mode-toggle-group" id="mode-toggle-group" role="radiogroup" aria-label="Session mode">
+                <button class="mode-btn" id="mode-plan-btn" role="radio" aria-checked="false" data-mode="plan">Plan</button>
+                <button class="mode-btn" id="mode-auto-btn" role="radio" aria-checked="false" data-mode="auto">Auto</button>
+                <button class="mode-btn active" id="mode-build-btn" role="radio" aria-checked="true" data-mode="build">Normal</button>
+              </div>
+           <button class="model-selector-btn" id="model-selector-btn" title="Select model" aria-haspopup="listbox" aria-expanded="false">
+             <span id="model-label">Default</span>
+             <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+               <path d="m6 9 6 6 6-6"/>
+             </svg>
+           </button>
+           <button class="variant-selector-btn" id="variant-selector-btn" title="Select thinking level" aria-haspopup="listbox" aria-expanded="false">
+             <span id="variant-label">Default</span>
+             <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+               <path d="m6 9 6 6 6-6"/>
+             </svg>
+           </button>
+           <button class="send-btn" id="send-btn" title="Send" aria-label="Send message">
+            <span class="send-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m5 12 7-7 7 7"/>
+                <path d="M12 5v14"/>
+              </svg>
+            </span>
+            <span class="stop-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="6" y="6" width="12" height="12" rx="2"/>
+              </svg>
+            </span>
+          </button>
         </div>
       </div>
     </div>
 
     <div id="error-boundary" class="hidden" role="alert"></div>
   </div>
-  <script src="toolkit.min.js"></script>
+
+  <!-- Model Manager Panel -->
+  <div id="model-manager-panel" class="model-manager-overlay hidden" role="dialog" aria-modal="true" aria-label="Manage models">
+    <div class="model-manager-content">
+      <div class="model-manager-header">
+        <div class="model-manager-header-text">
+          <h2>Manage models</h2>
+          <p>Customize which models appear in the model selector.</p>
+        </div>
+        <button class="model-manager-connect-btn" id="model-manager-connect" aria-label="Connect provider">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          <span>Connect provider</span>
+        </button>
+      </div>
+      <div class="model-manager-search-wrapper">
+        <svg class="model-manager-search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="m21 21-4.3-4.3"/>
+        </svg>
+        <input type="text" id="model-manager-search" class="model-manager-search" placeholder="Search models" aria-label="Search models">
+      </div>
+      <div class="model-manager-list" id="model-manager-list"></div>
+      <button class="model-manager-close" id="model-manager-close" aria-label="Close model manager">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M18 6 6 18"/>
+          <path d="M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Session History Modal -->
+  <div id="session-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Session history">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Session History</h3>
+        <button class="modal-close-btn" id="session-modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body" id="session-modal-body">
+        <div class="modal-empty">Loading sessions...</div>
+      </div>
+    </div>
+  </div>
+
   <script src="main.js"></script>
 </body>
 </html>

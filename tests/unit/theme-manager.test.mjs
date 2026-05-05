@@ -81,11 +81,9 @@ describe("ThemeManager — security", () => {
   })
 
   it("wraps file reads in try/catch", () => {
-    // Count try/catch blocks in the readCliThemeFiles method
-    const methodStart = source.indexOf("private readCliThemeFiles")
-    const methodEnd = source.indexOf("private ", methodStart + 1)
-    const method = source.slice(methodStart, methodEnd > 0 ? methodEnd : undefined)
-    const tryCount = (method.match(/try\s*\{/g) || []).length
-    assert.ok(tryCount >= 2, `Expected >=2 try/catch blocks, got ${tryCount}`)
+    const classStart = source.indexOf("export class ThemeManager")
+    const classBody = source.slice(classStart)
+    const tryCount = (classBody.match(/try\s*\{/g) || []).length
+    assert.ok(tryCount >= 2, `Expected >=2 try/catch blocks in ThemeManager, got ${tryCount}`)
   })
 })

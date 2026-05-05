@@ -10,14 +10,17 @@ OpenCode brings the [opencode](https://opencode.ai) agentic coding experience di
 - **Per-Tab Model Selection** — Each conversation can use a different AI model. Switch models without restarting the server.
 - **Token & Cost Tracking** — Real-time token usage indicator in the header with color-coded progress (green/yellow/red).
 - **Task Completion Banners** — Visual success/error/warning banners for completed operations.
-- **Rich Chat Interface** — Message bubbles, typing indicators, skill badges, and expandable tool call timelines
-- **Branded Welcome Screen** — Empty chats open on an OpenCode wordmark welcome state with workspace-oriented prompt starters
+- **Rich Chat Interface** — Premium message bubbles with tail accents, typing indicators, skill badges, and expandable tool call timelines with status pills
+- **Model Manager Panel** — Searchable model list with per-model toggle switches, provider grouping, and "Connect provider" integration
+- **Branded Welcome Screen** — OpenCode wordmark with workspace-oriented prompt starter cards featuring icon + label + description layout
 - **Agent Visibility** — See exactly what the agent is doing in real-time (reading files, running commands, loading skills)
 - **Context-Aware** — Automatically includes open files, diagnostics, git status, and workspace structure
 - **Inline Code Actions** — CodeLens on functions for Explain, Refactor, and Generate Tests
 - **Smart Diffs** — AI-suggested code changes shown as unified diffs with Accept/Discard controls
 - **Checkpoints** — Git worktree snapshots before each AI action for instant rollback
 - **Skill Manager** — Browse, enable, and disable opencode agent skills
+- **Slash Commands** — `/clear`, `/model`, `/cost`, `/new`, `/export`, `/compact`, `/continue`, `/help`
+- **Export Conversation** — Save current session as Markdown file
 - **Session History** — Searchable conversation history with resume support in the chat surface
 - **@-Mentions** — Reference files, folders, problems, URLs, and terminal output in your prompts
 - **Permission Modes** — Normal (ask per action), Plan (review-only), Auto (apply without asking)
@@ -219,13 +222,15 @@ npm install -g opencode-ai
 
 ## Extension Settings
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `opencode.theme` | `{ "preset": "cli-default" }` | Theme configuration (see above) |
-| `opencode.model` | `""` | Default model ID (provider/model format) |
-| `opencode.rateLimits` | `{}` | Per-provider rate limit configuration |
-| `opencode.rateLimitWarningThreshold` | `0.1` | Fraction remaining that triggers warning |
-| `opencode.rateLimitCriticalThreshold` | `0.05` | Fraction remaining that triggers critical alert |
+| Setting | Default | Scope | Description |
+|---------|---------|-------|-------------|
+| `opencode.binaryPath` | `""` | machine | Path to the opencode binary. If not set, the extension will search for 'opencode' in your PATH |
+| `opencode.theme` | `{ "preset": "cli-default" }` | window | Theme configuration (see Theme Customization below) |
+| `opencode.model` | `""` | window | Default model ID in provider/model format (e.g. anthropic/claude-sonnet-4-20250514) |
+| `opencode.autoCompact` | `"ask"` | window | Auto-compact behavior: `"ask"` (prompt before compacting), `"auto"` (compact without asking), `"off"` (never auto-compact) |
+| `opencode.rateLimits` | `{}` | window | Per-provider rate limit configuration (tokensPerMin, requestsPerMin) |
+| `opencode.rateLimitWarningThreshold` | `0.1` | window | Fraction of remaining rate limit that triggers a warning notification (0.0-1.0) |
+| `opencode.rateLimitCriticalThreshold` | `0.05` | window | Fraction of remaining rate limit that triggers a critical warning (0.0-1.0) |
 
 ## Commands
 
@@ -246,6 +251,7 @@ npm install -g opencode-ai
 | `opencode-harness.listSessions` | OpenCode: List Sessions |
 | `opencode-harness.deleteSession` | OpenCode: Delete Session |
 | `opencode-harness.renameSession` | OpenCode: Rename Session |
+| `opencode-harness.exportConversation` | OpenCode: Export Conversation |
 
 ## Architecture
 
@@ -297,9 +303,7 @@ src/
 │       ├── stream.ts            # Streaming message handlers
 │       ├── tabs.ts              # Tab bar UI & logic
 │       ├── model-dropdown.ts    # Model picker dropdown
-│       ├── token-indicator.ts   # Token usage pill
 │       ├── mentions.ts          # @-mention autocomplete
-│       ├── sessions.ts          # Session picker overlay
 │       ├── theme.ts             # Context chips & usage bar
 │       ├── types.ts             # TypeScript interfaces
 │       └── css/
@@ -329,7 +333,7 @@ src/
 ├── inline/
 │   └── InlineActionProvider.ts  # CodeLens actions
 ├── skills/
-│   └── SkillManager.ts          # Skills tree view
+│   └── SkillManager.ts          # Skills discovery (future use)
 ├── terminal/
 │   └── TerminalBridge.ts        # Terminal output capture
 ├── checkpoint/
@@ -345,6 +349,29 @@ src/
 
 Press `F5` in VS Code to launch an Extension Development Host with the extension loaded.
 
+### Testing
+
+```bash
+# Run all tests (behavioral + structural)
+npm run test:unit
+
+# Run integration tests (requires VS Code Extension Dev Host with Xvfb on Linux)
+npm run test:integration
+
+# Run visual regression tests (Playwright)
+npm run test:visual
+
+# Run full verification pipeline
+npm run typecheck && npm run build && npm run test:unit
+```
+
+The project has four test layers:
+
+1. **Behavioral unit tests** (`tests/unit/*.test.mjs`, **61 tests**) — real function-calling tests for SessionStore, EventNormalizer, DiffApplier, mode normalization, and map size limiting
+2. **Structural unit tests** (`src/**/*.test.ts`, **356 tests**) — text-grep source code pattern checks (being migrated to behavioral)
+3. **Integration tests** (`tests/integration/`, VS Code Extension Dev Host) — verifies activation, commands, configuration, mode switching, and webview message handling
+4. **Visual tests** (`tests/visual/`, Playwright) — screenshot-based UI regression testing
+
 ### Packaging
 
 Build a `.vsix` installable file:
@@ -357,7 +384,7 @@ npm install -g @vscode/vsce
 npx @vscode/vsce package --no-dependencies --allow-missing-repository
 
 # Install the packaged extension
-code --install-extension opencode-harness-0.0.1.vsix --force
+code --install-extension opencode-harness-*.vsix --force
 ```
 
 The `.vsix` file will be created in the project root. It contains:

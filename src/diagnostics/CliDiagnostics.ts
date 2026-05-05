@@ -3,15 +3,11 @@ import { spawn } from "child_process"
 import { log } from "../utils/outputChannel"
 
 export class CliDiagnostics {
-  private statusBarItem: vscode.StatusBarItem
   private lastCheckOk = false
   private lastPingTime = 0
   private cliPid = 0
 
   constructor() {
-    this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 102)
-    this.statusBarItem.name = "OpenCode Connection"
-    this.statusBarItem.command = "opencode-harness.checkCli"
     this.render(false, 0)
   }
 
@@ -40,7 +36,7 @@ export class CliDiagnostics {
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), 2000)
         const resp = await fetch(`http://127.0.0.1:${activePort}/global/health`, {
-          signal: controller.signal
+          signal: controller.signal,
         })
         clearTimeout(timeout)
         if (resp.ok) {
@@ -145,20 +141,11 @@ export class CliDiagnostics {
   }
 
   private render(ok: boolean, timestamp: number): void {
-    const elapsed = timestamp ? Math.round((Date.now() - timestamp) / 1000) : 0
-    if (ok) {
-      this.statusBarItem.text = `$(circle-filled) Connected`
-      this.statusBarItem.tooltip = `CLI responding (${elapsed}s since last ping)`
-      this.statusBarItem.color = new vscode.ThemeColor("terminalAnsiGreen")
-    } else {
-      this.statusBarItem.text = `$(circle-slash) Disconnected`
-      this.statusBarItem.tooltip = "Click to check CLI communication"
-      this.statusBarItem.color = new vscode.ThemeColor("terminalAnsiRed")
-    }
-    this.statusBarItem.show()
+    // Status bar item removed — connection status is shown by the main connection status bar
+    // This method is kept as a no-op for now to avoid breaking the constructor call
   }
 
   dispose(): void {
-    this.statusBarItem.dispose()
+    // No statusBarItem to dispose
   }
 }

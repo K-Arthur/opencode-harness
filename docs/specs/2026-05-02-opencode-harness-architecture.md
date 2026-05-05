@@ -1,6 +1,6 @@
 # System Architecture Design — OpenCode Harness
 
-**Version:** 2.0 (Multi-Tab Redesign)
+**Version:** 0.2.0 (Multi-Tab Redesign)
 **Date:** 2026-05-02
 **Status:** Current
 

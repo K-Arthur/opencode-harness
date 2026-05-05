@@ -1,7 +1,9 @@
 import * as vscode from "vscode"
+import * as crypto from "crypto"
 import * as fs from "fs"
 import * as path from "path"
 import { ThemeManager, type ThemeVariables } from "../theme/ThemeManager"
+import { log } from "../utils/outputChannel"
 
 export class WebviewContent {
   constructor(private readonly extensionUri: vscode.Uri) {}
@@ -24,21 +26,28 @@ export class WebviewContent {
     const srcCssPath = path.join(extRoot, "src", "chat", "webview", "css", "styles.css")
     const cssPath = fs.existsSync(distCssPath) ? distCssPath : srcCssPath
 
-    let html = fs.readFileSync(htmlPath, "utf8")
+    const nonce = this.getNonce()
+    let html: string
+    try {
+      html = fs.readFileSync(htmlPath, "utf8")
+    } catch (err) {
+      log.error("Could not read HTML template", err)
+      return this.getFallbackHtml(webview, nonce)
+    }
     let css = ""
     try {
       css = fs.readFileSync(cssPath, "utf8")
+      if (typeof css !== "string") css = ""
     } catch (err) {
       // Non-fatal: panel will render without custom styles. Logged for diagnostics.
-      console.error("[opencode-harness] Could not read CSS file:", cssPath, err)
+      log.warn("Could not read CSS file", cssPath)
     }
-    const nonce = this.getNonce()
     // CSP Security Notes:
     // - connect-src 'none': Webview↔host uses postMessage only. CLI HTTP server
     //   (127.0.0.1:PORT) runs on extension host (Node.js), NOT in the webview.
     //   If future features need direct webview→CLI SSE, change to:
     //   `connect-src http://127.0.0.1:${port}`
-    // - style-src 'unsafe-inline': Required by @vscode/webview-ui-toolkit components
+    // - style-src 'unsafe-inline': Required by @vscode-elements/elements components
     //   which use inline styles for dynamic theming.
     // - script-src 'strict-dynamic': Allows nonce-loaded scripts to dynamically
     //   load other scripts (needed for toolkit component registration).
@@ -69,15 +78,6 @@ export class WebviewContent {
       '<link rel="stylesheet" href="styles.css">',
       `${themeStyle}<style nonce="${nonce}">${css}</style>`
     )
-    // Transform toolkit.min.js script — loaded via <script> tag because
-    // esbuild drops the toolkit's side-effect import during bundling
-    const toolkitUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, "dist", "chat", "webview", "toolkit.min.js")
-    )
-    html = html.replace(
-      '<script src="toolkit.min.js"></script>',
-      `<script nonce="${nonce}" src="${toolkitUri}"></script>`
-    )
 
     html = html.replace(
       '<script src="main.js"></script>',
@@ -99,11 +99,30 @@ export class WebviewContent {
   }
 
   private getNonce(): string {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-    let nonce = ""
-    for (let i = 0; i < 32; i++) {
-      nonce += chars.charAt(Math.floor(Math.random() * chars.length))
-    }
-    return nonce
+    return crypto.randomBytes(32).toString("hex")
+  }
+
+  private getFallbackHtml(webview: vscode.Webview, nonce: string): string {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} data: https:; base-uri 'none'; form-action 'none';">
+  <style nonce="${nonce}">
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 2em; color: var(--vscode-foreground); background: var(--vscode-sideBar-background); }
+    .error-card { border: 1px solid var(--vscode-inputValidation-errorBorder, #f00); border-radius: 8px; padding: 2em; margin: 2em auto; max-width: 400px; text-align: center; }
+    h2 { margin: 0 0 0.5em; }
+    p { color: var(--vscode-descriptionForeground); }
+  </style>
+</head>
+<body>
+  <div class="error-card">
+    <h2>OpenCode UI Error</h2>
+    <p>The chat panel could not be loaded because the UI bundle is missing or corrupted.</p>
+    <p>Try rebuilding the extension with <code>npm run build</code> or reinstalling the extension.</p>
+  </div>
+</body>
+</html>`
   }
 }

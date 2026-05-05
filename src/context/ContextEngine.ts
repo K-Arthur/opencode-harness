@@ -91,7 +91,7 @@ export class ContextEngine {
     try {
       // M3: Find files with a reasonable limit to avoid performance issues
       const files = await vscode.workspace.findFiles(
-        new vscode.RelativePattern(folders[0].uri, "**/*"),
+        new vscode.RelativePattern(folders[0]!.uri, "**/*"),
         "**/node_modules/**",
         100
       )
@@ -106,7 +106,7 @@ export class ContextEngine {
           const fullPath = parts.slice(0, i + 1).join("/")
           if (!tree.has(fullPath)) {
             tree.set(fullPath, {
-              name: parts[i],
+              name: parts[i]!,
               type: i === parts.length - 1 ? "file" : "directory",
             })
           }
@@ -128,10 +128,10 @@ export class ContextEngine {
       const files = await vscode.workspace.findFiles(fileName, "**/node_modules/**", 1)
       if (files.length > 0) {
         try {
-          const doc = await vscode.workspace.openTextDocument(files[0])
+          const doc = await vscode.workspace.openTextDocument(files[0]!)
           configs.push({
             type: fileName,
-            path: vscode.workspace.asRelativePath(files[0]),
+            path: vscode.workspace.asRelativePath(files[0]!),
             content: doc.getText(),
           })
         } catch {
