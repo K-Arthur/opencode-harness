@@ -9,13 +9,14 @@
   },
   "description": "The open source coding agent — powered by OpenCode",
   "icon": "media/opencode-icon-256.png",
-  "version": "0.0.1",
+  "version": "0.2.0",
   "engines": {
     "vscode": "^1.98.0"
   },
+  "activationEvents": [],
   "categories": [
     "Chat",
-    "AI",
+    "Machine Learning",
     "Programming Languages",
     "Snippets"
   ],
@@ -105,6 +106,14 @@
       {
         "command": "opencode-harness.renameSession",
         "title": "OpenCode: Rename Session"
+      },
+      {
+        "command": "opencode-harness.exportConversation",
+        "title": "OpenCode: Export Conversation"
+      },
+      {
+        "command": "opencode-harness.previewTheme",
+        "title": "OpenCode: Preview Theme"
       }
     ],
     "keybindings": [
@@ -192,7 +201,121 @@
             "overrides": {
               "type": "object",
               "default": {},
-              "description": "Individual color overrides for the theme (e.g. userMessageBg, toolReadColor, syntaxKeyword, etc.)",
+              "description": "Individual color overrides for the theme. All CSS color values are accepted.",
+              "properties": {
+                "userMessageBg": {
+                  "type": "string",
+                  "description": "Background color for user messages"
+                },
+                "userMessageFg": {
+                  "type": "string",
+                  "description": "Text color for user messages"
+                },
+                "assistantMessageBg": {
+                  "type": "string",
+                  "description": "Background color for assistant messages"
+                },
+                "assistantMessageFg": {
+                  "type": "string",
+                  "description": "Text color for assistant messages"
+                },
+                "toolCallColor": {
+                  "type": "string",
+                  "description": "Color for tool call indicators"
+                },
+                "toolReadColor": {
+                  "type": "string",
+                  "description": "Color for read tool calls"
+                },
+                "toolWriteColor": {
+                  "type": "string",
+                  "description": "Color for write tool calls"
+                },
+                "toolExecColor": {
+                  "type": "string",
+                  "description": "Color for execute tool calls"
+                },
+                "skillBadgeBg": {
+                  "type": "string",
+                  "description": "Background color for skill badges"
+                },
+                "skillBadgeFg": {
+                  "type": "string",
+                  "description": "Text color for skill badges"
+                },
+                "thinkingBg": {
+                  "type": "string",
+                  "description": "Background color for thinking blocks"
+                },
+                "thinkingBorder": {
+                  "type": "string",
+                  "description": "Border color for thinking blocks"
+                },
+                "warningColor": {
+                  "type": "string",
+                  "description": "Color for warning messages"
+                },
+                "errorColor": {
+                  "type": "string",
+                  "description": "Color for error messages"
+                },
+                "successColor": {
+                  "type": "string",
+                  "description": "Color for success messages"
+                },
+                "accentColor": {
+                  "type": "string",
+                  "description": "Primary accent color"
+                },
+                "diffAdded": {
+                  "type": "string",
+                  "description": "Color for added diff lines"
+                },
+                "diffRemoved": {
+                  "type": "string",
+                  "description": "Color for removed diff lines"
+                },
+                "inputBg": {
+                  "type": "string",
+                  "description": "Background color for input area"
+                },
+                "inputBorder": {
+                  "type": "string",
+                  "description": "Border color for input area"
+                },
+                "mentionBg": {
+                  "type": "string",
+                  "description": "Background color for mention chips"
+                },
+                "syntaxComment": {
+                  "type": "string",
+                  "description": "Syntax highlight color for comments"
+                },
+                "syntaxKeyword": {
+                  "type": "string",
+                  "description": "Syntax highlight color for keywords"
+                },
+                "syntaxString": {
+                  "type": "string",
+                  "description": "Syntax highlight color for strings"
+                },
+                "syntaxNumber": {
+                  "type": "string",
+                  "description": "Syntax highlight color for numbers"
+                },
+                "syntaxFunction": {
+                  "type": "string",
+                  "description": "Syntax highlight color for functions"
+                },
+                "syntaxType": {
+                  "type": "string",
+                  "description": "Syntax highlight color for types"
+                },
+                "syntaxOperator": {
+                  "type": "string",
+                  "description": "Syntax highlight color for operators"
+                }
+              },
               "additionalProperties": {
                 "type": "string"
               }
@@ -237,6 +360,34 @@
           "scope": "window",
           "default": 0.05,
           "description": "Fraction of remaining rate limit that triggers a critical warning (0.0-1.0)"
+        },
+        "opencode.inlineSuggestions.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "Enable inline ghost-text completions as you type."
+        },
+        "opencode.inlineSuggestions.triggerDelay": {
+          "type": "number",
+          "default": 300,
+          "scope": "window",
+          "description": "Delay in milliseconds before triggering inline completion after typing stops."
+        },
+        "opencode.autoCompact": {
+          "type": "string",
+          "scope": "window",
+          "default": "ask",
+          "enum": [
+            "ask",
+            "auto",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Show a prompt before auto-compacting",
+            "Compact automatically without asking",
+            "Never auto-compact"
+          ],
+          "description": "Controls automatic session compaction when context usage reaches 80%"
         }
       }
     }
@@ -247,30 +398,36 @@
     "watch": "node esbuild.js --watch",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test:unit": "node --test tests/unit/*.test.mjs",
+    "test:unit": "node --test tests/unit/*.test.mjs && npx tsx --test \"src/**/*.test.ts\"",
+    "coverage": "c8 --reporter=text --include='**' --exclude='node_modules/**' --exclude='tests/**' --exclude='.git/**' --exclude='*.json' --exclude='*.md' --exclude='*.yaml' node --test tests/unit/*.test.mjs",
     "test:integration": "vscode-test",
     "test:visual": "playwright test",
     "test:visual:update": "playwright test --update-snapshots",
     "test": "npm run test:unit"
   },
   "devDependencies": {
+    "@commitlint/cli": "^20.5.3",
+    "@commitlint/config-conventional": "^20.5.3",
     "@playwright/test": "^1.49.0",
     "@types/markdown-it": "^14.1.2",
-    "@types/node": "^20.0.0",
+    "@types/node": "^22.19.17",
     "@types/vscode": "^1.98.0",
-    "@typescript-eslint/eslint-plugin": "^8.0.0",
-    "@typescript-eslint/parser": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.2",
+    "@typescript-eslint/parser": "^8.59.2",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
-    "esbuild": "^0.25.0",
+    "@vscode/vsce": "^3.9.1",
+    "c8": "^11.0.0",
+    "esbuild": "^0.28.0",
     "eslint": "^9.0.0",
+    "husky": "^9.1.7",
     "jsdom": "^29.1.1",
     "mocha": "^11.7.5",
     "typescript": "^5.7.0"
   },
   "dependencies": {
     "@opencode-ai/sdk": "^1.14.33",
-    "@vscode/webview-ui-toolkit": "^1.4.0",
+    "@vscode-elements/elements": "^2.5.1",
     "dompurify": "^3.4.2",
     "highlight.js": "^11.11.1",
     "markdown-it": "^14.1.0",
