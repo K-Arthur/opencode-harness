@@ -3,12 +3,14 @@ import { createState } from "./state"
 import { getElementRefs, scrollToBottom, getActiveMessageList } from "./dom"
 import { renderMessage } from "./renderer"
 import { setupMentions } from "./mentions"
-import { createStreamHandlers } from "./stream"
+import { createStreamHandlers, type StreamHandlers } from "./stream"
 import { createTabBar, createTabContent, switchToTab, removeTabContent } from "./tabs"
 import { setupModelDropdown } from "./model-dropdown"
+import { setVsCodeApi } from "./streamHandlers"
 import { setupModelManager } from "./model-manager"
 import { setupVariantSelector } from "./variant-selector"
 import { REMOVE_SVG } from "./icons"
+import { createPromptQueue, type PromptQueue, type QueueItem } from "./queue"
 import { updateContextChips, updateContextUsage, applyThemeVars, handleRateLimitExhausted } from "./theme"
 import { renderRecentSessions } from "./recent-sessions"
 import { createScrollAnchor, type ScrollAnchor } from "./scrollAnchor"
@@ -22,6 +24,7 @@ declare const acquireVsCodeApi: (() => {
 // Timeout handle for deferred initialization
 declare global {
   var __opencodeInitTimeout: ReturnType<typeof setTimeout> | undefined
+  var __opencodeDebug: boolean | undefined
 }
 
 // VS Code API shim for testing outside VS Code
@@ -134,27 +137,14 @@ function getVsCodeApi() {
   // Scroll anchors per tab — disposed on tab close
   const scrollAnchors = new Map<string, ScrollAnchor>()
 
+  // Per-tab prompt queues — keyed by sessionId
+  const promptQueues = new Map<string, PromptQueue>()
+
   const mention = setupMentions(
     els,
     { query: "", selectedIndex: -1, mode: "mention" as const },
     (msg) => vscode.postMessage(msg)
   )
-
-  // Slash command autocomplete
-  const SLASH_COMMANDS = [
-    { name: "/clear", description: "Clear conversation" },
-    { name: "/model", description: "Switch model", args: " {id}" },
-    { name: "/cost", description: "Show session cost" },
-    { name: "/new", description: "New session" },
-    { name: "/export", description: "Export conversation" },
-    { name: "/compact", description: "Compact session context" },
-    { name: "/continue", description: "Continue last session" },
-    { name: "/help", description: "Show available commands" },
-  ]
-
-  let slashFiltered: typeof SLASH_COMMANDS = []
-  let slashSelectedIndex = -1
-  let slashVisible = false
 
   // Mode state: "plan" or "build"
   let currentMode = "build"
@@ -171,6 +161,7 @@ function getVsCodeApi() {
   function init() {
     try {
       setupModeToggle()
+      setupModeWarning()
       setupInput()
       setupButtons()
       setupSessionModal()
@@ -180,6 +171,7 @@ function getVsCodeApi() {
       setupDiffActionListener()
       setupSearch()
       updateSendButton()
+      setVsCodeApi(vscode)
 
       // Show welcome view by default — no session created until user sends a message
       showWelcomeView()
@@ -259,18 +251,48 @@ function getVsCodeApi() {
     const body = els.sessionModalBody
     body.replaceChildren()
 
-    if (!sessions || sessions.length === 0) {
-      const empty = document.createElement("div")
-      empty.className = "modal-empty"
-      empty.textContent = "No previous sessions."
-      body.appendChild(empty)
-    } else {
+    // Tab bar: Local Sessions | Server Sessions
+    const tabBar = document.createElement("div")
+    tabBar.className = "modal-tab-bar"
+
+    const localTab = document.createElement("button")
+    localTab.className = "modal-tab active"
+    localTab.textContent = "Local Sessions"
+    localTab.setAttribute("aria-pressed", "true")
+
+    const serverTab = document.createElement("button")
+    serverTab.className = "modal-tab"
+    serverTab.textContent = "Server Sessions"
+    serverTab.setAttribute("aria-pressed", "false")
+
+    tabBar.appendChild(localTab)
+    tabBar.appendChild(serverTab)
+    body.appendChild(tabBar)
+
+    const listContainer = document.createElement("div")
+    listContainer.className = "modal-session-list"
+    body.appendChild(listContainer)
+
+    function renderLocalSessions() {
+      listContainer.replaceChildren()
+      if (!sessions || sessions.length === 0) {
+        const empty = document.createElement("div")
+        empty.className = "modal-empty"
+        empty.textContent = "No local sessions."
+        listContainer.appendChild(empty)
+        return
+      }
       for (const s of sessions) {
         const item = document.createElement("div")
         item.className = "modal-session-item"
 
         const info = document.createElement("div")
         info.className = "modal-session-info"
+
+        info.addEventListener("click", () => {
+          closeSessionModal()
+          vscode.postMessage({ type: "resume_session", sessionId: s.id })
+        })
 
         const name = document.createElement("div")
         name.className = "modal-session-name"
@@ -294,20 +316,183 @@ function getVsCodeApi() {
           item.appendChild(cost)
         }
 
-        item.addEventListener("click", () => {
-          closeSessionModal()
-          vscode.postMessage({ type: "resume_session", sessionId: s.id })
-        })
+        const actions = document.createElement("div")
+        actions.className = "modal-session-actions"
 
-        body.appendChild(item)
+        const archiveBtn = document.createElement("button")
+        archiveBtn.className = "modal-session-archive icon-btn"
+        archiveBtn.title = "Archive"
+        archiveBtn.setAttribute("aria-label", "Archive session")
+        archiveBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>'
+        archiveBtn.addEventListener("click", (e) => {
+          e.stopPropagation()
+          vscode.postMessage({ type: "archive_session", targetSessionId: s.id })
+          item.remove()
+        })
+        actions.appendChild(archiveBtn)
+
+        const deleteBtn = document.createElement("button")
+        deleteBtn.className = "modal-session-delete icon-btn"
+        deleteBtn.title = "Delete"
+        deleteBtn.setAttribute("aria-label", "Delete session")
+        deleteBtn.innerHTML = REMOVE_SVG
+        deleteBtn.addEventListener("click", (e) => {
+          e.stopPropagation()
+          vscode.postMessage({ type: "delete_session", targetSessionId: s.id })
+          item.remove()
+        })
+        actions.appendChild(deleteBtn)
+
+        item.appendChild(actions)
+        listContainer.appendChild(item)
       }
     }
 
+    function renderServerSessions() {
+      listContainer.replaceChildren()
+      const loading = document.createElement("div")
+      loading.className = "modal-empty"
+      loading.textContent = "Loading server sessions..."
+      listContainer.appendChild(loading)
+      vscode.postMessage({ type: "list_server_sessions" })
+    }
+
+    localTab.addEventListener("click", () => {
+      localTab.classList.add("active")
+      localTab.setAttribute("aria-pressed", "true")
+      serverTab.classList.remove("active")
+      serverTab.setAttribute("aria-pressed", "false")
+      renderLocalSessions()
+    })
+
+    serverTab.addEventListener("click", () => {
+      serverTab.classList.add("active")
+      serverTab.setAttribute("aria-pressed", "true")
+      localTab.classList.remove("active")
+      localTab.setAttribute("aria-pressed", "false")
+      renderServerSessions()
+    })
+
+    renderLocalSessions()
     els.sessionModal.classList.remove("hidden")
+
+    // Set up focus trap
+    sessionModalLastFocus = document.activeElement as HTMLElement | null
+    sessionModalFocusTrap = trapModalFocus(els.sessionModal)
+    document.addEventListener("keydown", sessionModalFocusTrap)
+    // Focus the first focusable element inside the modal
+    const firstBtn = els.sessionModal.querySelector<HTMLElement>("button, [href], input:not([type='hidden'])")
+    if (firstBtn) firstBtn.focus()
+  }
+
+  function renderServerSessionsInModal(serverSessions: Array<{
+    id: string; title?: string; directory?: string; parentId?: string;
+    created?: number; updated?: number; files?: number; additions?: number; deletions?: number
+  }>) {
+    const listContainer = els.sessionModalBody.querySelector(".modal-session-list")
+    if (!listContainer) return
+    listContainer.replaceChildren()
+
+    if (!serverSessions || serverSessions.length === 0) {
+      const empty = document.createElement("div")
+      empty.className = "modal-empty"
+      empty.textContent = "No server sessions."
+      listContainer.appendChild(empty)
+      return
+    }
+
+    for (const s of serverSessions) {
+      const item = document.createElement("div")
+      item.className = "modal-session-item"
+      item.dataset.serverId = s.id
+
+      const info = document.createElement("div")
+      info.className = "modal-session-info"
+
+      const name = document.createElement("div")
+      name.className = "modal-session-name"
+      const titleText = s.title || "Untitled"
+      const dirHint = s.directory ? ` (${s.directory.split("/").pop() || s.directory})` : ""
+      name.textContent = s.parentId ? `${titleText} (@subagent)` : titleText + dirHint
+      info.appendChild(name)
+
+      const meta = document.createElement("div")
+      meta.className = "modal-session-meta"
+      const parts: string[] = []
+      if (s.files != null) parts.push(`${s.files} files`)
+      if (s.additions != null) parts.push(`+${s.additions}/-${s.deletions}`)
+      if (s.created) parts.push(new Date(s.created).toLocaleDateString())
+      meta.textContent = parts.join(" · ")
+      info.appendChild(meta)
+
+      item.appendChild(info)
+
+      const actions = document.createElement("div")
+      actions.className = "modal-session-actions"
+
+      // Show server session ID for reference (truncated)
+      const idLabel = document.createElement("span")
+      idLabel.className = "modal-session-server-id"
+      idLabel.textContent = s.id.slice(0, 20) + "..."
+      actions.appendChild(idLabel)
+
+      const deleteBtn = document.createElement("button")
+      deleteBtn.className = "modal-session-delete icon-btn"
+      deleteBtn.title = "Delete from server"
+      deleteBtn.setAttribute("aria-label", "Delete server session")
+      deleteBtn.innerHTML = REMOVE_SVG
+      deleteBtn.addEventListener("click", (e) => {
+        e.stopPropagation()
+        vscode.postMessage({ type: "delete_server_session", serverSessionId: s.id })
+        item.remove()
+        if (listContainer.querySelectorAll(".modal-session-item").length === 0) {
+          listContainer.replaceChildren()
+          const empty = document.createElement("div")
+          empty.className = "modal-empty"
+          empty.textContent = "No server sessions."
+          listContainer.appendChild(empty)
+        }
+      })
+      actions.appendChild(deleteBtn)
+
+      item.appendChild(actions)
+      listContainer.appendChild(item)
+    }
+  }
+
+  // Focus trap state for session modal
+  let sessionModalFocusTrap: ((e: KeyboardEvent) => void) | null = null
+  let sessionModalLastFocus: HTMLElement | null = null
+
+  function trapModalFocus(container: HTMLElement): (e: KeyboardEvent) => void {
+    return (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return
+      const focusable = container.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+      if (focusable.length === 0) return
+      const first = focusable[0]!
+      const last = focusable[focusable.length - 1]!
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
   }
 
   function closeSessionModal() {
     els.sessionModal.classList.add("hidden")
+    if (sessionModalFocusTrap) {
+      document.removeEventListener("keydown", sessionModalFocusTrap)
+      sessionModalFocusTrap = null
+    }
+    if (sessionModalLastFocus) {
+      sessionModalLastFocus.focus({ preventScroll: true })
+      sessionModalLastFocus = null
+    }
   }
 
   /* ─── TAB MANAGEMENT ─── */
@@ -315,8 +500,12 @@ function getVsCodeApi() {
   function createNewTab(name?: string) {
     const session = stateManager.createSession(name)
     createTabUI(session.id, session.name)
-    switchToTab(els, session.id)
-    vscode.postMessage({ type: "switch_tab", sessionId: session.id })
+    
+    // If no active session, switch to the first one
+    if (!stateManager.getState().activeSessionId) {
+      switchToTab(els, session.id)
+    }
+
     updateTabBar()
     renderRecentSessionsList()
     return session
@@ -329,10 +518,19 @@ function getVsCodeApi() {
     const [view] = createTabContent(tabId, tabName)
     if (!view) return
 
-    // Insert panel at the front
-    const firstPanel = els.tabPanels.firstChild
-    if (firstPanel) {
-      els.tabPanels.insertBefore(view, firstPanel)
+    // Find insertion position based on state order
+    const order = stateManager.getState().sessionOrder
+    const targetIdx = order.indexOf(tabId)
+    
+    if (targetIdx !== -1 && targetIdx < order.length - 1) {
+      // Find the next session's panel to insert before it
+      const nextSessionId = order[targetIdx + 1]
+      const nextPanel = els.tabPanels.querySelector(`.tab-panel[data-tab-id="${nextSessionId}"]`)
+      if (nextPanel) {
+        els.tabPanels.insertBefore(view, nextPanel)
+      } else {
+        els.tabPanels.appendChild(view)
+      }
     } else {
       els.tabPanels.appendChild(view)
     }
@@ -358,6 +556,11 @@ function getVsCodeApi() {
     vscode.postMessage({ type: "switch_tab", sessionId: tabId })
     syncModeUI()
     updateTabBar()
+    // Sync model dropdown to active session's model
+    const activeSession = stateManager.getActiveSession()
+    if (activeSession?.model) {
+      modelDropdown.setCurrentModel(activeSession.model)
+    }
 
     // Scroll to bottom of active tab using anchor if available
     const anchor = scrollAnchors.get(tabId)
@@ -384,12 +587,27 @@ function getVsCodeApi() {
     removeTabContent(els, tabId)
     streamHandlers.delete(tabId)
 
+    // Clear prompt queue for this tab
+    const queue = promptQueues.get(tabId)
+    if (queue) {
+      queue.clear()
+      promptQueues.delete(tabId)
+    }
+    const queueContainer = els.inputArea.querySelector(".prompt-queue")
+    if (queueContainer) queueContainer.remove()
+
     // Dispose scroll anchor for this tab
     const anchor = scrollAnchors.get(tabId)
     if (anchor) {
       anchor.dispose()
       scrollAnchors.delete(tabId)
     }
+
+    // Remove jump-to-bottom for this tab
+    const jtb = els.tabPanels.querySelector(`.jump-to-bottom[data-tab-id="${tabId}"]`)
+    if (jtb) jtb.remove()
+    const markers = els.tabPanels.querySelector(`.scroll-markers[data-tab-id="${tabId}"]`)
+    if (markers) markers.remove()
 
     // Notify backend
     vscode.postMessage({ type: "close_tab", sessionId: tabId })
@@ -424,7 +642,8 @@ function getVsCodeApi() {
   }
 
   function getMessageList(tabId: string): HTMLDivElement | null {
-    const view = els.tabPanels.querySelector<HTMLElement>(`.tab-panel[data-tab-id="${tabId}"]`)
+    const escapedId = CSS.escape(tabId)
+    const view = els.tabPanels.querySelector<HTMLElement>(`.tab-panel[data-tab-id="${escapedId}"]`)
     return view?.querySelector<HTMLDivElement>(".message-list") || null
   }
 
@@ -435,19 +654,9 @@ function getVsCodeApi() {
 
   /* ─── STREAMING ─── */
 
-  function createStreamHandlersForTab(tabId: string) {
+  function createStreamHandlersForTab(tabId: string): StreamHandlers {
     const session = stateManager.getSession(tabId)
     if (!session) throw new Error(`No session for tab ${tabId}`)
-
-    const streamState = {
-      isStreaming: false,
-      streamingMessageId: null as string | null,
-      streamingBuffer: "",
-      streamingBlockId: null as string | null,
-      streamingToolCallId: null as string | null,
-      seenEventIds: new Set<string>(),
-      lastStreamTextEl: null as HTMLElement | null,
-    }
 
     const msgList = getMessageList(tabId)
     const typingInd = getTypingIndicator(tabId)
@@ -471,40 +680,80 @@ function getVsCodeApi() {
       stateManager.save()
     })
 
-    return {
-      ...stream,
-      showTypingIndicator: (label?: string) => {
-        if (typingInd) {
-          typingInd.classList.remove("hidden")
-          const labelEl = typingInd.querySelector(".typing-text")
-          if (labelEl) labelEl.textContent = label || "Thinking..."
-        }
-        if (msgList && scrollAnchor) scrollAnchor.scrollIfAnchored()
-      },
-      hideTypingIndicator: () => {
-        if (typingInd) typingInd.classList.add("hidden")
-      },
+    // WARNING: Class methods live on the prototype, not as own properties.
+    // Using spread (...stream) on a class instance LOSES all methods!
+    // Use Object.create + Object.assign to preserve the prototype chain.
+    return Object.assign(
+      Object.create(Object.getPrototypeOf(stream)),
+      stream,
+      {
+        showTypingIndicator: (label?: string) => {
+          if (typingInd) {
+            typingInd.classList.remove("hidden")
+            const labelEl = typingInd.querySelector(".typing-text")
+            if (labelEl) labelEl.textContent = label || "Thinking..."
+          }
+          if (msgList && scrollAnchor) scrollAnchor.scrollIfAnchored()
+        },
+        hideTypingIndicator: () => {
+          if (typingInd) typingInd.classList.add("hidden")
+        },
+      }
+    )
+  }
+
+  /* ─── MODE DROPDOWN ─── */
+
+  function updateModeDropdown(mode: string) {
+    const labels: Record<string, string> = { plan: "Plan", auto: "Auto", build: "Build" }
+    els.modeCurrentText.textContent = labels[mode] || mode
+    els.modeDropdownBtn.dataset.mode = mode
+
+    const iconSvg: string =
+      mode === "plan"
+        ? '<svg class="mode-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3v18"/><path d="M7 3v18"/><path d="M3 7.5h18"/><path d="M3 16.5h18"/><path d="M17 3a2 2 0 0 1 2 2"/><path d="M17 21a2 2 0 0 0 2-2"/><path d="M7 3a2 2 0 0 0-2 2"/><path d="M7 21a2 2 0 0 1-2-2"/></svg>'
+        : mode === "auto"
+          ? '<svg class="mode-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>'
+          : '<svg class="mode-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>'
+    const iconEl = els.modeDropdownLabel.querySelector(".mode-icon") as HTMLElement | null
+    if (iconEl) {
+      iconEl.outerHTML = iconSvg
+    }
+
+    for (const key of ["plan", "auto", "build"]) {
+      const opt = els[`modeOpt${key.charAt(0).toUpperCase() + key.slice(1)}` as keyof typeof els] as HTMLButtonElement
+      const isSelected = key === mode
+      opt.setAttribute("aria-selected", String(isSelected))
+      opt.classList.toggle("selected", isSelected)
     }
   }
 
-  /* ─── MODE TOGGLE ─── */
+  function closeModeDropdown() {
+    els.modeDropdownBtn.setAttribute("aria-expanded", "false")
+    els.modeDropdownMenu.classList.add("hidden")
+  }
 
-  function getModeButtons() {
-    return {
-      plan: els.modePlanBtn,
-      auto: els.modeAutoBtn,
-      build: els.modeBuildBtn,
+  function toggleModeDropdown() {
+    const isOpen = els.modeDropdownMenu.classList.contains("hidden")
+    if (isOpen) {
+      els.modeDropdownMenu.classList.remove("hidden")
+      els.modeDropdownBtn.setAttribute("aria-expanded", "true")
+      // Focus the active option
+      const activeOpt = els.modeDropdownMenu.querySelector('[aria-selected="true"]') as HTMLElement | null
+      if (activeOpt) activeOpt.focus()
+    } else {
+      closeModeDropdown()
     }
   }
 
   function setMode(mode: string) {
-    currentMode = mode
-    const buttons = getModeButtons()
-    for (const [key, btn] of Object.entries(buttons)) {
-      const isActive = key === mode
-      btn.classList.toggle("active", isActive)
-      btn.setAttribute("aria-checked", String(isActive))
+    if (currentMode === mode) {
+      closeModeDropdown()
+      return
     }
+    currentMode = mode
+    updateModeDropdown(mode)
+    closeModeDropdown()
 
     const active = stateManager.getActiveSession()
     if (active) {
@@ -514,101 +763,124 @@ function getVsCodeApi() {
   }
 
   function setupModeToggle() {
-    const buttons = getModeButtons()
-    for (const [mode, btn] of Object.entries(buttons)) {
-      btn.addEventListener("click", () => {
+    els.modeDropdownBtn.addEventListener("click", toggleModeDropdown)
+
+    // Keyboard navigation within the dropdown
+    els.modeDropdownBtn.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+        e.preventDefault()
+        if (els.modeDropdownMenu.classList.contains("hidden")) {
+          toggleModeDropdown()
+        }
+      }
+    })
+
+    // Option click handlers
+    const options = [els.modeOptPlan, els.modeOptAuto, els.modeOptBuild]
+    for (const opt of options) {
+      opt.addEventListener("click", () => {
+        const mode = opt.dataset.mode
+        if (!mode) return
+
         const active = stateManager.getActiveSession()
         if (active?.isStreaming) return
+
+        // Only show warning when switching from Plan mode
+        if (currentMode === "plan" && mode === "auto") {
+          showAutoModeWarning()
+          return
+        }
+
         setMode(mode)
       })
+
+      // Keyboard support for option selection
+      opt.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          opt.click()
+        }
+        if (e.key === "Escape") {
+          closeModeDropdown()
+          els.modeDropdownBtn.focus()
+        }
+        if (e.key === "ArrowDown") {
+          e.preventDefault()
+          const next = opt.nextElementSibling as HTMLElement | null
+          if (next) next.focus()
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault()
+          const prev = opt.previousElementSibling as HTMLElement | null
+          if (prev) prev.focus()
+        }
+      })
     }
+
+    // Close on outside click
+    document.addEventListener("click", (e) => {
+      const target = e.target as Node
+      if (!els.modeDropdown.contains(target)) {
+        closeModeDropdown()
+      }
+    })
   }
 
   function syncModeUI() {
     const active = stateManager.getActiveSession()
     const rawMode = active?.mode || "plan"
-    currentMode = rawMode === "normal" ? "plan" : rawMode
-    const buttons = getModeButtons()
-    for (const [key, btn] of Object.entries(buttons)) {
-      const isActive = key === currentMode
-      btn.classList.toggle("active", isActive)
-      btn.setAttribute("aria-checked", String(isActive))
-    }
-    const isStreaming = active?.isStreaming ?? false
-    for (const btn of Object.values(buttons)) {
-      (btn as HTMLButtonElement).disabled = isStreaming
-    }
+    currentMode = rawMode === "normal" ? "build" : rawMode
+    updateModeDropdown(currentMode)
+  }
+
+  /* ─── AUTO MODE WARNING ─── */
+
+  let pendingAutoMode: string | null = null
+
+  function showAutoModeWarning() {
+    pendingAutoMode = "auto"
+    els.modeWarningTitle.textContent = "Switch to Auto mode?"
+    els.modeWarningDescription.textContent =
+      "Auto mode will allow the agent to apply changes without asking. The agent will have full autonomy to read, write, and execute commands. Use with caution."
+    els.modeWarningModal.classList.remove("hidden")
+    const firstBtn = els.modeWarningModal.querySelector<HTMLElement>("button")
+    if (firstBtn) firstBtn.focus()
+  }
+
+  function closeModeWarning() {
+    els.modeWarningModal.classList.add("hidden")
+    pendingAutoMode = null
+  }
+
+  function setupModeWarning() {
+    els.modeWarningCancel.addEventListener("click", closeModeWarning)
+    els.modeWarningConfirm.addEventListener("click", () => {
+      if (pendingAutoMode) {
+        const dontShow = els.modeWarningDontShow.checked
+        if (dontShow) {
+          vscode.postMessage({ type: "update_setting", key: "skipModeWarning", value: true })
+        }
+        setMode(pendingAutoMode)
+        pendingAutoMode = null
+      }
+      els.modeWarningModal.classList.add("hidden")
+    })
+    els.modeWarningModal.addEventListener("click", (e) => {
+      if (e.target === els.modeWarningModal) closeModeWarning()
+    })
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !els.modeWarningModal.classList.contains("hidden")) {
+        closeModeWarning()
+      }
+    })
   }
 
   /* ─── INPUT ─── */
 
-  function renderSlashAutocomplete(items: typeof SLASH_COMMANDS) {
-    const el = els.slashAutocomplete
-    el.replaceChildren()
-    if (items.length === 0) {
-      el.classList.add("hidden")
-      slashVisible = false
-      return
-    }
-    const ul = document.createElement("ul")
-    ul.className = "slash-autocomplete-list"
-    for (let i = 0; i < items.length; i++) {
-      const li = document.createElement("li")
-      li.className = "slash-autocomplete-item"
-      if (i === slashSelectedIndex) li.classList.add("selected")
-      const name = document.createElement("span")
-      name.className = "slash-name"
-      name.textContent = items[i]!.name + (items[i]!.args || "")
-      li.appendChild(name)
-      const desc = document.createElement("span")
-      desc.className = "slash-desc"
-      desc.textContent = items[i]!.description
-      li.appendChild(desc)
-      li.addEventListener("click", () => selectSlashItem(i))
-      ul.appendChild(li)
-    }
-    el.appendChild(ul)
-    el.classList.remove("hidden")
-    slashVisible = true
-  }
-
-  function hideSlashAutocomplete() {
-    els.slashAutocomplete.classList.add("hidden")
-    slashVisible = false
-    slashSelectedIndex = -1
-    slashFiltered = []
-  }
-
-  function selectSlashItem(index: number) {
-    const item = slashFiltered[index]
-    if (!item) return
-    els.promptInput.value = item.name + (item.args ? item.args.replace("{id}", "") : "") + " "
-    els.promptInput.focus()
-    els.promptInput.setSelectionRange(els.promptInput.value.length, els.promptInput.value.length)
-    hideSlashAutocomplete()
-    autoResizeTextarea()
-    updateSendButton()
-  }
-
-  function updateSlashAutocomplete() {
-    const val = els.promptInput.value
-    // Only trigger if / is the very first character of the entire input (multi-line safety)
-    if (!val.startsWith("/") || val.includes("\n")) {
-      hideSlashAutocomplete()
-      return
-    }
-    const query = val.slice(1).toLowerCase()
-    slashFiltered = SLASH_COMMANDS.filter(
-      (c) => c.name.toLowerCase().includes(query) || c.description.toLowerCase().includes(query)
-    )
-    slashSelectedIndex = -1
-    renderSlashAutocomplete(slashFiltered)
-  }
-
   function setupInput() {
     els.promptInput.addEventListener("input", onInputChange)
     els.promptInput.addEventListener("keydown", onInputKeydown)
-    document.addEventListener("paste", onPaste)
+    els.promptInput.addEventListener("paste", onPaste)
     els.sendBtn.addEventListener("click", sendMessage)
     els.mentionBtn.addEventListener("click", () => {
       els.promptInput.value += "@"
@@ -654,7 +926,6 @@ function getVsCodeApi() {
   function onInputChange() {
     autoResizeTextarea()
     mention.handleTrigger()
-    updateSlashAutocomplete()
     updateSendButton()
   }
 
@@ -692,39 +963,6 @@ function getVsCodeApi() {
           const nextSession = sessions[nextIdx]
           if (nextSession) switchTab(nextSession.id)
         }
-        return
-      }
-    }
-
-    // Handle slash autocomplete keyboard navigation
-    if (slashVisible) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault()
-        slashSelectedIndex = Math.min(slashSelectedIndex + 1, slashFiltered.length - 1)
-        renderSlashAutocomplete(slashFiltered)
-        return
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault()
-        slashSelectedIndex = Math.max(slashSelectedIndex - 1, -1)
-        renderSlashAutocomplete(slashFiltered)
-        return
-      }
-      if (e.key === "Enter") {
-        e.preventDefault()
-        if (slashSelectedIndex >= 0) {
-          selectSlashItem(slashSelectedIndex)
-        } else if (slashFiltered.length === 1) {
-          selectSlashItem(0)
-        } else {
-          hideSlashAutocomplete()
-          sendMessage()
-        }
-        return
-      }
-      if (e.key === "Escape") {
-        e.preventDefault()
-        hideSlashAutocomplete()
         return
       }
     }
@@ -767,6 +1005,9 @@ function getVsCodeApi() {
             updateSendButton()
           }
         }
+        reader.onerror = () => {
+          console.error("[OpenCode] Failed to read pasted image")
+        }
         reader.readAsDataURL(blob)
         break
       }
@@ -792,6 +1033,7 @@ function getVsCodeApi() {
       const remove = document.createElement("button")
       remove.className = "attachment-chip-remove"
       remove.title = "Remove attachment"
+      remove.setAttribute("aria-label", "Remove attachment")
       remove.innerHTML = REMOVE_SVG
       remove.addEventListener("click", () => {
         pendingAttachments.splice(idx, 1)
@@ -845,11 +1087,176 @@ function getVsCodeApi() {
     return trimmed
   }
 
+  function enqueuePrompt(text: string) {
+    const active = stateManager.getActiveSession()
+    if (!active) return
+    let queue = promptQueues.get(active.id)
+    if (!queue) {
+      queue = createPromptQueue()
+      promptQueues.set(active.id, queue)
+    }
+    const atts = pendingAttachments.splice(0)
+    renderAttachmentChips()
+    queue.enqueue(text, atts)
+    els.promptInput.value = ""
+    autoResizeTextarea()
+    updateSendButton()
+    renderQueue(active.id)
+  }
+
+  function renderQueue(tabId: string) {
+    const queue = promptQueues.get(tabId)
+    const container = els.inputArea.querySelector(".prompt-queue") as HTMLElement | null
+    if (!queue || queue.getItems().length === 0) {
+      if (container) container.remove()
+      updateQueueSendButton()
+      return
+    }
+    let queueContainer = container
+    if (!queueContainer) {
+      queueContainer = document.createElement("div")
+      queueContainer.className = "prompt-queue"
+      els.inputArea.insertBefore(queueContainer, els.inputWrapper)
+    }
+    queueContainer.replaceChildren()
+    const items = queue.getItems()
+    const queuedCount = items.filter((i) => i.state === "queued").length
+
+    // Queue header with count and clear-all
+    const headerRow = document.createElement("div")
+    headerRow.className = "queue-header"
+    const countLabel = document.createElement("span")
+    countLabel.className = "queue-count"
+    countLabel.textContent = `${items.length} queued`
+    headerRow.appendChild(countLabel)
+    if (queuedCount > 1) {
+      const clearAllBtn = document.createElement("button")
+      clearAllBtn.className = "queue-clear-all"
+      clearAllBtn.textContent = "Clear all"
+      clearAllBtn.setAttribute("aria-label", `Clear ${queuedCount} queued prompts`)
+      clearAllBtn.addEventListener("click", () => {
+        for (const item of items) {
+          if (item.state === "queued") queue.remove(item.id)
+        }
+        renderQueue(tabId)
+      })
+      headerRow.appendChild(clearAllBtn)
+    }
+    queueContainer.appendChild(headerRow)
+
+    for (const item of items) {
+      const chip = document.createElement("div")
+      chip.className = `queue-chip queue-chip--${item.state}`
+      chip.dataset.queueId = item.id
+
+      const text = document.createElement("span")
+      text.className = "queue-chip-text"
+      text.textContent = item.text.length > 40 ? item.text.slice(0, 40) + "…" : item.text
+      text.title = item.text
+      chip.appendChild(text)
+
+      if (item.attachments && item.attachments.length > 0) {
+        const attBadge = document.createElement("span")
+        attBadge.className = "queue-chip-att"
+        attBadge.textContent = `+${item.attachments.length}`
+        attBadge.title = `${item.attachments.length} image attachment(s)`
+        chip.appendChild(attBadge)
+      }
+
+      const badge = document.createElement("span")
+      badge.className = "queue-chip-state"
+      const stateLabels: Record<string, string> = { queued: "Q", sending: "Sending", streaming: "Active", completed: "Done", failed: "Error" }
+      badge.textContent = stateLabels[item.state] || item.state
+      chip.appendChild(badge)
+
+      if (item.state === "queued") {
+        // Edit on click — make the text editable inline
+        text.addEventListener("click", () => {
+          const input = document.createElement("input")
+          input.className = "queue-chip-input"
+          input.type = "text"
+          input.value = item.text
+          input.setAttribute("aria-label", "Edit queued prompt")
+          chip.replaceChild(input, text)
+          input.focus()
+          input.select()
+          const save = () => {
+            const newText = input.value.trim()
+            if (newText) {
+              queue.edit(item.id, newText)
+              renderQueue(tabId)
+            }
+          }
+          input.addEventListener("blur", save)
+          input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") { e.preventDefault(); input.blur() }
+            if (e.key === "Escape") { e.preventDefault(); renderQueue(tabId) }
+          })
+        })
+
+        const removeBtn = document.createElement("button")
+        removeBtn.className = "queue-chip-remove icon-btn"
+        removeBtn.setAttribute("aria-label", "Remove queued prompt")
+        removeBtn.innerHTML = REMOVE_SVG
+        removeBtn.addEventListener("click", () => {
+          queue.remove(item.id)
+          renderQueue(tabId)
+        })
+        chip.appendChild(removeBtn)
+      }
+
+      if (item.state === "failed") {
+        const retryBtn = document.createElement("button")
+        retryBtn.className = "queue-chip-retry icon-btn"
+        retryBtn.setAttribute("aria-label", "Retry failed prompt")
+        retryBtn.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>'
+        retryBtn.addEventListener("click", () => {
+          item.state = "queued"
+          renderQueue(tabId)
+        })
+        chip.appendChild(retryBtn)
+
+        const removeBtn2 = document.createElement("button")
+        removeBtn2.className = "queue-chip-remove icon-btn"
+        removeBtn2.setAttribute("aria-label", "Remove failed prompt")
+        removeBtn2.innerHTML = REMOVE_SVG
+        removeBtn2.addEventListener("click", () => {
+          queue.remove(item.id)
+          renderQueue(tabId)
+        })
+        chip.appendChild(removeBtn2)
+      }
+
+      queueContainer.appendChild(chip)
+    }
+    updateQueueSendButton()
+  }
+
+  function updateQueueSendButton() {
+    const active = stateManager.getActiveSession()
+    if (!active) return
+    const queue = promptQueues.get(active.id)
+    const qCount = queue ? queue.getItems().filter((i) => i.state === "queued").length : 0
+    const hint = els.inputArea.querySelector(".queue-hint") as HTMLElement | null
+    if (qCount > 0) {
+      if (!hint) {
+        const div = document.createElement("div")
+        div.className = "queue-hint"
+        els.inputArea.insertBefore(div, els.inputWrapper)
+      }
+      const hintEl = els.inputArea.querySelector(".queue-hint")!
+      hintEl.textContent = `${qCount} queued — auto-sends when current response completes`
+    } else {
+      if (hint) hint.remove()
+    }
+  }
+
   function sendMessage() {
     const text = els.promptInput.value.trim()
     let active = stateManager.getActiveSession()
 
     if (active?.isStreaming) {
+      // Send button acts as stop button when streaming
       abortStream()
       return
     }
@@ -929,6 +1336,12 @@ function getVsCodeApi() {
           autoResizeTextarea()
           updateSendButton()
           return
+        case "/queue":
+          renderQueue(active.id)
+          els.promptInput.value = ""
+          autoResizeTextarea()
+          updateSendButton()
+          return
         case "/continue":
           // Delegate to extension host — resumes most recently closed session
           vscode.postMessage({ type: "execute_command", command: "/continue", sessionId: active.id })
@@ -986,12 +1399,18 @@ function getVsCodeApi() {
     if (stream) stream.showTypingIndicator("Thinking...")
     updateAgentStatus("thinking")
 
+    const sendModel = active.model || modelDropdown.getCurrentModel()
+    if (!sendModel) {
+      handleRequestError(active.id, "No model selected. Please select a model to continue.")
+      return
+    }
+
     vscode.postMessage({
       type: "send_prompt",
       text,
       sessionId: active.id,
       messageId: msgObj.id,
-      model: active.model,
+      model: sendModel,
       mode: active.mode,
       ...(attachments.length > 0 ? { attachments } : {}),
     })
@@ -1254,7 +1673,7 @@ function getVsCodeApi() {
   function showSystemMessage(sessionId: string, text: string) {
     const msg: ChatMessage = {
       role: "system",
-              id: "sys-" + crypto.randomUUID(),
+      id: "sys-" + crypto.randomUUID(),
       blocks: [{ type: "text", text }],
       timestamp: Date.now(),
       sessionId,
@@ -1271,6 +1690,72 @@ function getVsCodeApi() {
     if (trimmed.length === 0) return ""
     if (trimmed.length > 40) return trimmed.slice(0, 37).trimEnd() + "..."
     return trimmed
+  }
+
+  /* ─── JUMP-TO-BOTTOM & SCROLL MARKERS ─── */
+
+  const updateScrollMarkers = (sessionId: string) => {
+    const msgList = getMessageList(sessionId)
+    if (!msgList) return
+    const session = stateManager.getSession(sessionId)
+    if (!session) return
+
+    let markersEl = msgList.querySelector(".scroll-markers") as HTMLElement | null
+    if (!markersEl) {
+      markersEl = document.createElement("div")
+      markersEl.className = "scroll-markers"
+      markersEl.dataset.tabId = sessionId
+      msgList.appendChild(markersEl)
+    }
+
+    markersEl.replaceChildren()
+    const totalHeight = msgList.scrollHeight || 1
+    // Only show markers if there's meaningful scroll content
+    if (session.messages.length < 3) return
+
+    session.messages.forEach((m) => {
+      if (m.role !== "user" || !m.id) return
+      const msgEl = msgList.querySelector(`[data-message-id="${CSS.escape(m.id)}"]`) as HTMLElement | null
+      if (!msgEl) return
+      const offsetTop = msgEl.offsetTop
+      const ratio = Math.min(1, Math.max(0, offsetTop / totalHeight))
+      const dot = document.createElement("div")
+      dot.className = "scroll-marker-dot"
+      dot.style.top = `calc(${ratio * 100}% - 2px)`
+      const firstText = m.blocks?.find((b) => b.type === "text")
+      dot.title = (firstText?.text as string)?.slice(0, 60) || "User message"
+      dot.addEventListener("click", () => {
+        msgEl.scrollIntoView({ behavior: "smooth", block: "center" })
+        msgEl.classList.add("message-flash")
+        setTimeout(() => msgEl.classList.remove("message-flash"), 1500)
+      })
+      markersEl.appendChild(dot)
+    })
+  }
+
+  const setupJumpToBottom = (sessionId: string) => {
+    const msgList = getMessageList(sessionId)
+    if (!msgList) return
+    const existing = msgList.parentElement?.querySelector(".jump-to-bottom")
+    if (existing) existing.remove()
+    const btn = document.createElement("button")
+    btn.className = "jump-to-bottom"
+    btn.dataset.tabId = sessionId
+    btn.textContent = "↓ Latest"
+    btn.setAttribute("aria-label", "Jump to latest message")
+    const onScroll = () => {
+      const threshold = 300
+      const isNearBottom = msgList.scrollHeight - (msgList.scrollTop + msgList.clientHeight) < threshold
+      btn.classList.toggle("visible", !isNearBottom)
+    }
+    btn.addEventListener("click", () => {
+      msgList.scrollTo({ top: msgList.scrollHeight, behavior: "smooth" })
+      btn.classList.remove("visible")
+    })
+    msgList.parentElement?.appendChild(btn)
+    msgList.addEventListener("scroll", onScroll, { passive: true })
+    // Evaluate initial scroll position so the button isn't shown when already at bottom
+    onScroll()
   }
 
   function addMessage(sessionId: string, msg: ChatMessage) {
@@ -1292,10 +1777,27 @@ function getVsCodeApi() {
 
     const msgList = getMessageList(sessionId)
     if (msgList) {
+      // Avoid duplicate rendering if the message is already in the DOM (e.g. from streaming)
+      const existing = msg.id ? msgList.querySelector(`[data-message-id="${CSS.escape(msg.id)}"]`) : null
+      if (existing) {
+        // If it's a streaming placeholder, replace it with the final rendered version.
+        // This ensures the final Markdown is correctly applied and avoids double messages.
+        const el = renderMessage(msg, { mode: session.mode, postMessage: (m) => vscode.postMessage(m) })
+        existing.replaceWith(el)
+        return
+      }
+
       const welcome = msgList.querySelector(".welcome-container")
       if (welcome) welcome.remove()
 
-      const el = renderMessage(msg, { mode: session.mode })
+      const start = Date.now()
+      const el = renderMessage(msg, { mode: session.mode, postMessage: (m) => vscode.postMessage(m) })
+      const elapsed = Date.now() - start
+      if (elapsed > 50) {
+        if ((window as any).__opencodeDebug) {
+          console.debug(`[perf] renderMessage took ${elapsed}ms for ${msg.role} msg ${msg.id?.slice(0, 16)}`)
+        }
+      }
       msgList.appendChild(el)
       const anchor = scrollAnchors.get(sessionId)
       if (anchor) {
@@ -1305,6 +1807,14 @@ function getVsCodeApi() {
       }
     }
     stateManager.save()
+
+    // Set up jump-to-bottom button on first message
+    if (msgList && !msgList.querySelector(".jump-to-bottom")) {
+      setupJumpToBottom(sessionId)
+    }
+
+    // Update scroll markers after adding a new message
+    requestAnimationFrame(() => updateScrollMarkers(sessionId))
   }
 
   /* ─── PERMISSION LISTENER ─── */
@@ -1344,7 +1854,7 @@ function getVsCodeApi() {
           if (sessionId) handleStreamChunk(sessionId, msg.text as string)
           break
         case "stream_end":
-          if (sessionId) handleStreamEnd(sessionId, msg.messageId as string, msg.blocks)
+          if (sessionId) handleStreamEnd(sessionId, msg.messageId as string, msg.blocks, msg.reason as string | undefined, Boolean(msg.partial))
           break
         case "mention_results":
           mention.renderResults(msg.items)
@@ -1355,6 +1865,33 @@ function getVsCodeApi() {
             openSessionModal(sessions)
           }
           break
+        case "server_session_list":
+          {
+            const serverSessions = msg.sessions as Array<{
+              id: string; title?: string; directory?: string; parentId?: string;
+              created?: number; updated?: number; files?: number; additions?: number; deletions?: number
+            }> | undefined
+            renderServerSessionsInModal(serverSessions || [])
+          }
+          break
+        case "server_session_deleted":
+          if (typeof msg.serverSessionId === "string") {
+            const deletedItem = els.sessionModalBody.querySelector(`[data-server-id="${msg.serverSessionId}"]`)
+            if (deletedItem) {
+              deletedItem.remove()
+              if (els.sessionModalBody.querySelectorAll(".modal-session-item").length === 0) {
+                const listContainer = els.sessionModalBody.querySelector(".modal-session-list")
+                if (listContainer) {
+                  listContainer.replaceChildren()
+                  const empty = document.createElement("div")
+                  empty.className = "modal-empty"
+                  empty.textContent = "No server sessions."
+                  listContainer.appendChild(empty)
+                }
+              }
+            }
+          }
+          break
         case "resume_session_data": {
           const session = msg.session as import("./types").SessionState | undefined
           if (session) {
@@ -1363,7 +1900,13 @@ function getVsCodeApi() {
             const msgList = getMessageList(session.id)
             if (msgList) {
               msgList.replaceChildren()
-              session.messages.forEach((m) => msgList.appendChild(renderMessage(m, { mode: session.mode })))
+              // Batch DOM appends via DocumentFragment to avoid layout thrashing
+              const frag = document.createDocumentFragment()
+              for (const m of session.messages) {
+                frag.appendChild(renderMessage(m, { mode: session.mode, postMessage: (m2) => vscode.postMessage(m2) }))
+              }
+              msgList.appendChild(frag)
+              setupJumpToBottom(session.id)
             }
             switchTab(session.id)
             hideWelcomeView()
@@ -1388,20 +1931,22 @@ function getVsCodeApi() {
             updateSendButton()
           }
           break
-        case "tool_result":
+        case "stream_tool_start":
           if (sessionId) {
-            addMessage(sessionId, {
-              role: "system",
-              id: "tool-" + crypto.randomUUID(),
-              blocks: [{
-                type: "tool_call",
-                toolName: String(msg.toolName || "tool"),
-                result: typeof msg.result === "string" ? msg.result : JSON.stringify(msg.result ?? ""),
-                state: "result",
-              }],
-              timestamp: Date.now(),
-              sessionId,
-            })
+            const stream = streamHandlers.get(sessionId)
+            if (stream) {
+              const toolCall = msg.toolCall as { id: string; name: string; class?: string; args?: unknown }
+              stream.handleToolStart(toolCall)
+            }
+          }
+          break
+        case "stream_tool_end":
+          if (sessionId) {
+            const stream = streamHandlers.get(sessionId)
+            if (stream) {
+              const result = msg.result as { id: string; ok: boolean; result?: string; durationMs?: number }
+              stream.handleToolEnd(result.id, result)
+            }
           }
           break
         case "permission_request":
@@ -1435,6 +1980,19 @@ function getVsCodeApi() {
           break
         case "model_update":
           modelDropdown.setCurrentModel(msg.model as string)
+          if (msg.model) {
+            stateManager.setGlobalModel(msg.model as string)
+            const active = stateManager.getActiveSession()
+            if (active) stateManager.setSessionModel(active.id, msg.model as string)
+          }
+          break
+        case "variant_update":
+          variantSelector.setVariant(msg.variant as string)
+          if (msg.variant) {
+            stateManager.setGlobalVariant(msg.variant as string)
+            const active = stateManager.getActiveSession()
+            if (active) stateManager.setSessionVariant(active.id, msg.variant as string)
+          }
           break
         case "model_list":
           if (msg.items) {
@@ -1460,53 +2018,88 @@ function getVsCodeApi() {
             stateManager.setInitialized()
           }
 
+          // Always request models — needed on welcome page and in sessions
+          vscode.postMessage({ type: "get_models" })
+
           const sessions = (msg.sessions || []) as import("./types").SessionState[]
+          stateManager.loadSessions(sessions, msg.activeSessionId as string | null, msg.globalModel as string)
+
+          if (msg.globalModel) {
+            modelDropdown.setCurrentModel(msg.globalModel as string)
+          }
+
           if (sessions.length > 0) {
-            stateManager.loadSessions(sessions, msg.activeSessionId as string | null, msg.globalModel as string)
-
-            if (msg.globalModel) {
-              modelDropdown.setCurrentModel(msg.globalModel as string)
-            }
-            // Request models to populate names and variant support
-            vscode.postMessage({ type: "get_models" })
-
-            // Create UI for loaded sessions and hide welcome view
+            // Create tab UI for restored sessions so they are ready when selected
             sessions.forEach((s) => {
-              if (!els.tabPanels.querySelector(`.tab-panel[data-tab-id="${s.id}"]`)) {
+              const escapedId = CSS.escape(s.id)
+              if (!els.tabPanels.querySelector(`.tab-panel[data-tab-id="${escapedId}"]`)) {
                 createTabUI(s.id, s.name)
               }
             })
 
-            const activeId = stateManager.getState().activeSessionId
-            if (activeId) {
-              switchToTab(els, activeId)
-              hideWelcomeView()
-            }
-
             syncModeUI()
             updateTabBar()
-          } else {
-            // No sessions — show welcome view, don't create an empty "Default" session
-            showWelcomeView()
           }
+
+          // Always start on the welcome page so the user can see recent sessions
+          // and choose which session to resume, rather than jumping into one
+          showWelcomeView()
           break
         }
         case "rate_limit_exhausted":
           handleRateLimitExhausted(els, msg.resetAt as string)
           break
+        case "prompt_rejected":
+          if (sessionId) {
+            stateManager.setStreaming(sessionId, false)
+            updateTabBar()
+            updateSendButton()
+            const stream = streamHandlers.get(sessionId)
+            if (stream) stream.hideTypingIndicator()
+            if (sessionId === stateManager.getState().activeSessionId) {
+              updateSendButtonIcon(false)
+            }
+          }
+          break
         case "request_error":
           handleRequestError(sessionId, typeof msg.message === "string" ? msg.message : undefined)
           break
         case "diff_result":
-          handleDiffResult(msg.blockId as string, msg.ok as boolean, typeof msg.message === "string" ? msg.message : undefined)
+          handleDiffResult(msg.blockId as string, msg.ok as boolean, typeof msg.message === "string" ? msg.message : undefined, Boolean(msg.checkpointCreated))
           break
         case "cost_update":
           handleCostUpdate(msg.sessionId as string, msg.cost as number)
+          break
+        case "revert_result":
+          if (sessionId) {
+            if (msg.ok) {
+              showSystemMessage(sessionId, "Reverted changes from the selected message.")
+            } else {
+              showSystemMessage(sessionId, `Revert failed: ${msg.error || "Unknown error"}`)
+            }
+          }
           break
         case "session_renamed":
           if (typeof msg.sessionId === "string" && typeof msg.name === "string") {
             stateManager.renameSession(msg.sessionId, msg.name)
             updateTabBar()
+          }
+          break
+        case "session_deleted":
+          if (typeof msg.sessionId === "string") {
+            const escapedId = CSS.escape(msg.sessionId)
+            stateManager.deleteSession(msg.sessionId)
+            const deletedPanel = els.tabPanels.querySelector(`.tab-panel[data-tab-id="${escapedId}"]`)
+            if (deletedPanel) deletedPanel.remove()
+            const tabEl = els.tabBar.querySelector(`.tab[data-tab-id="${escapedId}"]`)
+            if (tabEl) tabEl.remove()
+            if (stateManager.getState().activeSessionId === msg.sessionId) {
+              const remaining = stateManager.getAllSessions()
+              const nextId = remaining.length > 0 ? remaining[0]?.id : null
+              if (nextId) switchTab(nextId)
+            }
+            updateTabBar()
+            if (stateManager.getAllSessions().length === 0) showWelcomeView()
           }
           break
         case "compaction_started":
@@ -1554,6 +2147,15 @@ function getVsCodeApi() {
                   }
                 }
               }
+              // Keep webview state consistent with the session store:
+              // truncate downstream messages from the in-memory state so the
+              // next send doesn't append after stale messages.
+              const msgIdx = active.messages.findIndex((m) => m.id === msg.messageId)
+              if (msgIdx !== -1) {
+                active.messages.splice(msgIdx + 1)
+    stateManager.save()
+  }
+
               els.promptInput.value = msg.text as string
               autoResizeTextarea()
               updateSendButton()
@@ -1644,42 +2246,190 @@ function getVsCodeApi() {
   }
 
   function handleStreamStart(sessionId: string, messageId?: string) {
-    const stream = streamHandlers.get(sessionId)
-    if (!stream) return
+    // Ensure tab UI exists in the DOM before processing stream
+    let msgList = getMessageList(sessionId)
+    if (!msgList) {
+      vscode.postMessage({ type: "webview_log", level: "warn", message: `handleStreamStart: No message list for ${sessionId}, creating tab UI` })
+      const session = stateManager.getSession(sessionId)
+      if (session) {
+        createTabUI(sessionId, session.name || "New Session")
+        msgList = getMessageList(sessionId)
+      }
+    }
 
-    stream.handleStreamStart(messageId)
+    const stream = streamHandlers.get(sessionId)
+    if (!stream) {
+      vscode.postMessage({ type: "webview_log", level: "warn", message: `handleStreamStart: No stream found for session ${sessionId}, creating...` })
+      const newStream = createStreamHandlersForTab(sessionId)
+      streamHandlers.set(sessionId, newStream)
+    }
+
+    const finalStream = streamHandlers.get(sessionId)
+    if (!finalStream) {
+      vscode.postMessage({ type: "webview_log", level: "error", message: `handleStreamStart: Failed to get/create stream for ${sessionId}` })
+      return
+    }
+
+    // Ensure the tab is visible (active)
+    if (stateManager.getState().activeSessionId !== sessionId) {
+      vscode.postMessage({ type: "webview_log", level: "info", message: `handleStreamStart: Switching to tab ${sessionId}` })
+      switchTab(sessionId)
+    }
+
+    vscode.postMessage({ type: "webview_log", level: "info", message: `handleStreamStart: Starting stream for ${sessionId} (msgId=${messageId})` })
+    finalStream.handleStreamStart(messageId)
     stateManager.setStreaming(sessionId, true)
     updateTabBar()
     updateAgentStatus("thinking")
     // Clear any stale "file_edited" banners when new streaming starts
-    const msgList = getMessageList(sessionId)
-    if (msgList) {
-      const staleBanners = msgList.querySelectorAll(".task-banner")
+    const activeMsgList = getMessageList(sessionId)
+    if (activeMsgList) {
+      const staleBanners = activeMsgList.querySelectorAll(".task-banner")
       staleBanners.forEach(b => {
         if (b.textContent?.includes("Edited")) b.remove()
       })
+      if (!activeMsgList.querySelector(".jump-to-bottom")) {
+        setupJumpToBottom(sessionId)
+      }
+      requestAnimationFrame(() => updateScrollMarkers(sessionId))
     }
   }
 
   function handleStreamChunk(sessionId: string, text?: string) {
-    const stream = streamHandlers.get(sessionId)
-    if (!stream) return
-    stream.handleStreamChunk(text)
+    let stream = streamHandlers.get(sessionId)
+    if (!stream) {
+      vscode.postMessage({ type: "webview_log", level: "warn", message: `handleStreamChunk: No stream found for session ${sessionId}, creating...` })
+      stream = createStreamHandlersForTab(sessionId)
+      streamHandlers.set(sessionId, stream)
+    }
+    const s = stream!
+    vscode.postMessage({
+      type: "webview_log",
+      level: "info",
+      message: `handleStreamChunk: chunk for ${sessionId} len=${text?.length || 0} streamingMessageId=${s.streamingMessageId ?? "<null>"}`,
+    })
+    s.handleStreamChunk(text)
   }
 
-  function handleStreamEnd(sessionId: string, messageId?: string, blocks?: unknown) {
-    const stream = streamHandlers.get(sessionId)
-    if (!stream) return
+  function handleStreamEnd(sessionId: string, messageId?: string, blocks?: unknown, reason?: string, partial?: boolean) {
+    try {
+      const stream = streamHandlers.get(sessionId)
+      if (!stream) {
+        vscode.postMessage({ type: "webview_log", level: "warn", message: `handleStreamEnd: No stream found for session ${sessionId}` })
+      } else {
+        vscode.postMessage({ type: "webview_log", level: "info", message: `handleStreamEnd: Ending stream for ${sessionId}` })
+        try {
+          stream.handleStreamEnd(messageId, blocks)
+        } catch (err) {
+          console.error("[OpenCode] stream.handleStreamEnd threw:", err)
+          vscode.postMessage({ type: "webview_log", level: "error", message: `handleStreamEnd: stream handler threw: ${err instanceof Error ? err.message : err}` })
+        }
+      }
 
-    stream.handleStreamEnd(messageId, blocks)
-    stateManager.setStreaming(sessionId, false)
-    updateTabBar()
-    updateAgentStatus("idle")
+      const blockList = Array.isArray(blocks) ? blocks as ChatMessage["blocks"] : []
+
+      // Always render blocks if present, even if stream handler failed.
+      // addMessage's dedup check prevents double-render if already rendered.
+      if (blockList.length > 0) {
+        const msgList = getMessageList(sessionId)
+        if (messageId && msgList) {
+          const placeholder = msgList.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement | null
+          if (placeholder) {
+            const textEl = placeholder.querySelector(".streaming-text, .msg-text") as HTMLElement | null
+            const hasContent = textEl && textEl.textContent && textEl.textContent.trim().length > 2
+            if (!hasContent) {
+              placeholder.remove()
+              vscode.postMessage({ type: "webview_log", level: "info", message: `handleStreamEnd: removed empty placeholder for ${sessionId}` })
+            }
+          }
+        }
+        addMessage(sessionId, {
+          role: "assistant",
+          id: messageId || `resp-${Date.now()}`,
+          blocks: blockList,
+          timestamp: Date.now(),
+        })
+      }
+
+      stateManager.setStreaming(sessionId, false)
+      updateTabBar()
+      updateAgentStatus("idle")
+
+    // Show user-actionable message for timeout/ttfb/error scenarios
+    if (reason === "ttfb_timeout") {
+      showSystemMessage(sessionId, "The model took too long to start responding. Please try again or select a different model.")
+    } else if (reason === "timeout") {
+      if (partial) {
+        showSystemMessage(sessionId, "Response was cut off (timeout). Partial output has been preserved. You can try again with a shorter request.")
+      } else {
+        showSystemMessage(sessionId, "Response timed out. Please try again or select a different model.")
+      }
+    } else if (reason === "error") {
+      showSystemMessage(sessionId, "An error occurred while generating the response. Please try again.")
+    } else if (reason === "aborted") {
+      // Aborted is user-initiated — no error message needed
+    }
 
     if (sessionId === stateManager.getState().activeSessionId) {
       updateSendButtonIcon(false)
       updateSendButton()
     }
+
+    // Auto-advance queue: if stream ended (not aborted), send next queued prompt
+    if (reason !== "aborted") {
+      const queue = promptQueues.get(sessionId)
+      if (queue && queue.isNextReady()) {
+        const next = queue.processNext()
+        if (next) {
+          sendQueuedPrompt(sessionId, next.text, next.attachments)
+        }
+      }
+    }
+    } catch (err) {
+      console.error("[OpenCode] handleStreamEnd top-level error:", err)
+      vscode.postMessage({ type: "webview_log", level: "error", message: `handleStreamEnd error: ${err instanceof Error ? err.message : String(err)}` })
+      // Even if everything else fails, try to show the system message
+      try { showSystemMessage(sessionId, reason === "ttfb_timeout" ? "Model took too long. Try a different model." : reason === "timeout" ? "Response timed out." : reason === "error" ? "An error occurred." : "Unexpected error.") } catch {}
+      try { stateManager.setStreaming(sessionId, false) } catch {}
+      try { updateTabBar() } catch {}
+      try { updateAgentStatus("idle") } catch {}
+    }
+  }
+
+  function sendQueuedPrompt(sessionId: string, text: string, attachments?: Array<{ data: string; mimeType: string }>) {
+    const active = stateManager.getSession(sessionId)
+    if (!active) return
+
+    const msgObj: ChatMessage = {
+      role: "user",
+      id: "user-" + crypto.randomUUID(),
+      blocks: [
+        ...(text ? [{ type: "text" as const, text }] : []),
+        ...(attachments || []).map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
+      ],
+      timestamp: Date.now(),
+      sessionId,
+    }
+
+    addMessage(sessionId, msgObj)
+    stateManager.setStreaming(sessionId, true)
+    updateTabBar()
+    updateSendButton()
+    renderQueue(sessionId)
+
+    const stream = streamHandlers.get(sessionId)
+    if (stream) stream.showTypingIndicator("Thinking...")
+    updateAgentStatus("thinking")
+
+    vscode.postMessage({
+      type: "send_prompt",
+      text,
+      sessionId,
+      messageId: msgObj.id,
+      model: active.model,
+      mode: active.mode,
+      ...(attachments && attachments.length > 0 ? { attachments } : {}),
+    })
   }
 
   function handleServerStatus(sessionId: string, status?: string) {
@@ -1716,10 +2466,16 @@ function getVsCodeApi() {
     }
   }
 
-  function handleDiffResult(blockId?: string, ok?: boolean, message?: string) {
-    // Find the block in any active session
+  function handleDiffResult(blockId?: string, ok?: boolean, message?: string, checkpointCreated?: boolean) {
     for (const [sid, stream] of streamHandlers) {
       stream.handleDiffResult(blockId, ok, message)
+    }
+    // Show checkpoint indicator when a snapshot was created during diff accept
+    if (ok && checkpointCreated) {
+      const active = stateManager.getActiveSession()
+      if (active) {
+        showSystemMessage(active.id, "Checkpoint saved — you can revert via OpenCode: Rollback Changes")
+      }
     }
   }
 
@@ -1746,5 +2502,6 @@ function getVsCodeApi() {
     vscode.postMessage({ type: "webview_ready" })
   } catch (err) {
     console.error("[OpenCode] Fatal init error:", err)
+    vscode.postMessage({ type: "webview_error", message: "Initialization failed" })
   }
 })()

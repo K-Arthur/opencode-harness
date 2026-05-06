@@ -201,4 +201,6 @@ export class DiffApplier {
 
     return vscode.Uri.file(fullPath)
   }
+
+  dispose(): void {}
 }

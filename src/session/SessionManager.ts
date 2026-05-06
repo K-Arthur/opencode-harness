@@ -12,6 +12,7 @@ import {
   type Event as SdkEvent,
 } from "@opencode-ai/sdk"
 import { spawn, type ChildProcess } from "child_process"
+import { randomUUID } from "crypto"
 import { findFreePort } from "../utils/portFinder"
 import { log } from "../utils/outputChannel"
 import { createSdkEventNormalizer, type SdkEventLike } from "./EventNormalizer"
@@ -87,9 +88,49 @@ export class SessionManager {
   /** Previously stored port for potential reuse across reloads */
   private storedPort?: number
 
+  /** Per-run server password — generated on start, never persisted */
+  private serverPassword = ""
+
   /** Set a previously stored port to attempt reuse before spawning a new server */
   setStoredPort(port?: number): void {
     this.storedPort = port
+  }
+
+  /**
+   * When set, `_start()` skips spawning a local opencode binary and connects
+   * directly to the supplied URL. Auth is applied via {@link authHeader}.
+   */
+  private remoteServerUrl: string | null = null
+  private remoteServerToken: string | null = null
+
+  /** Configure remote-attach mode. Pass null/empty to fall back to local spawn. */
+  setRemoteServer(url: string | null | undefined, token?: string | null): void {
+    const trimmed = (url ?? "").trim().replace(/\/+$/, "")
+    this.remoteServerUrl = trimmed.length > 0 ? trimmed : null
+    this.remoteServerToken = token?.trim() || null
+  }
+
+  /** True when the manager is configured to attach to a remote server. */
+  get isRemote(): boolean {
+    return this.remoteServerUrl !== null
+  }
+
+  /**
+   * Generate a cryptographically random server password.
+   * If OPENCODE_SERVER_PASSWORD is already set in the parent environment (e.g. user
+   * configured it in their shell), we respect that value rather than generating one.
+   * Used for --password flag on the server process and Bearer auth on the SDK client.
+   * Never persisted to disk — lives only in this instance's lifetime.
+   */
+  private generatePassword(): string {
+    const envPassword = process.env["OPENCODE_SERVER_PASSWORD"]
+    if (envPassword) {
+      this.serverPassword = envPassword
+      log.info("Using OPENCODE_SERVER_PASSWORD from environment")
+    } else {
+      this.serverPassword = `oc-${randomUUID()}`
+    }
+    return this.serverPassword
   }
 
   /* ---- public getters ---- */
@@ -106,6 +147,18 @@ export class SessionManager {
 
   get model(): ModelRef | null {
     return this.currentModel
+  }
+
+  /**
+   * Authorization header for the current server instance.
+   * - Remote-attach mode: Bearer token from `opencode.serverAuthToken`.
+   * - Local spawn: HTTP Basic auth derived from the generated server password.
+   * Returns undefined when no auth is required.
+   */
+  get authHeader(): string | undefined {
+    if (this.remoteServerToken) return `Bearer ${this.remoteServerToken}`
+    if (!this.serverPassword) return undefined
+    return `Basic ${Buffer.from(`opencode:${this.serverPassword}`).toString("base64")}`
   }
 
   /* ---- lifecycle ---- */
@@ -125,20 +178,102 @@ export class SessionManager {
     }
   }
 
+  private makeRemoteClient(baseUrl: string): OpencodeClient {
+    if (this.remoteServerToken) {
+      return createOpencodeClient({
+        baseUrl,
+        headers: { Authorization: `Bearer ${this.remoteServerToken}` },
+      })
+    }
+    return createOpencodeClient({ baseUrl })
+  }
+
+  private async _startRemote(): Promise<void> {
+    const baseUrl = this.remoteServerUrl!
+    log.info(`Attaching to remote opencode server at ${baseUrl}`)
+
+    // Health check the remote endpoint before declaring connected.
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 5_000)
+    try {
+      const headers: Record<string, string> = {}
+      if (this.remoteServerToken) headers["Authorization"] = `Bearer ${this.remoteServerToken}`
+      const resp = await fetch(`${baseUrl}/global/health`, {
+        signal: controller.signal,
+        headers,
+      })
+      if (!resp.ok) {
+        throw new Error(`Remote server returned HTTP ${resp.status}`)
+      }
+      const data = (await resp.json()) as { healthy?: boolean; version?: string }
+      if (!data.healthy) {
+        throw new Error("Remote server reported unhealthy")
+      }
+      log.info(`Remote opencode healthy (version ${data.version ?? "unknown"})`)
+    } finally {
+      clearTimeout(timer)
+    }
+
+    this.client = this.makeRemoteClient(baseUrl)
+    this.port = 0 // not meaningful in remote mode
+    this.reconnectAttempts = 0
+    this._onEvent.fire({ type: "server_connected", data: { port: 0, remote: true, url: baseUrl } })
+    this.subscribeToEvents()
+    await this.recoverSessions()
+  }
+
+  private makeClient(port: number): OpencodeClient {
+    const baseUrl = `http://127.0.0.1:${port}`
+    if (this.serverPassword) {
+      const basic = Buffer.from(`opencode:${this.serverPassword}`).toString("base64")
+      return createOpencodeClient({
+        baseUrl,
+        headers: { Authorization: `Basic ${basic}` },
+      })
+    }
+    return createOpencodeClient({ baseUrl })
+  }
+
   private async _start(): Promise<void> {
+    // Remote-attach mode: skip spawn, connect directly.
+    if (this.remoteServerUrl) {
+      await this._startRemote()
+      return
+    }
+    // Generate a per-run server password if not already set
+    if (!this.serverPassword) {
+      this.generatePassword()
+    }
     // Attempt to reuse previously stored port if server still healthy
     if (this.storedPort) {
       try {
+        const healthHeaders: Record<string, string> = {}
+        if (this.serverPassword) {
+          healthHeaders["Authorization"] = `Basic ${Buffer.from(`opencode:${this.serverPassword}`).toString("base64")}`
+        }
         const controller = new AbortController()
         const timer = setTimeout(() => controller.abort(), 2000)
-        const resp = await fetch(`http://127.0.0.1:${this.storedPort}/global/health`, { signal: controller.signal })
+        const resp = await fetch(`http://127.0.0.1:${this.storedPort}/global/health`, {
+          signal: controller.signal,
+          headers: healthHeaders,
+        })
         clearTimeout(timer)
         if (resp.ok) {
           const data = await resp.json() as { healthy?: boolean }
           if (data.healthy) {
-            log.info(`Reusing existing server on port ${this.storedPort}`)
             this.port = this.storedPort
-            this.client = createOpencodeClient({ baseUrl: `http://127.0.0.1:${this.port}` })
+            this.client = this.makeClient(this.port)
+
+            // Verify the password works by making an authenticated API call
+            try {
+              await this.client.session.list()
+            } catch {
+              log.info(`Stored port ${this.storedPort} auth mismatch — starting new server`)
+              this.client = null
+              this.port = 0
+              throw new Error("Auth verification failed")
+            }
+
             this.reconnectAttempts = 0
             this._onEvent.fire({ type: "server_connected", data: { port: this.port } })
             log.info("OpenCode server connected (reused)")
@@ -148,7 +283,10 @@ export class SessionManager {
           }
         }
       } catch (e) {
-        log.info(`Stored port ${this.storedPort} health check failed, starting new server`)
+        const msg = (e as Error).message
+        if (!msg.includes("Auth verification failed")) {
+          log.info(`Stored port ${this.storedPort} health check failed, starting new server`)
+        }
       }
     }
 
@@ -170,9 +308,11 @@ export class SessionManager {
       const val = process.env[key]
       if (val) childEnv[key] = val
     }
+    childEnv["OPENCODE_SERVER_PASSWORD"] = this.serverPassword
     this.serverProcess = spawn(opencodePath, ["serve", "--port", String(this.port), "--hostname", "127.0.0.1"], {
       stdio: ["ignore", "pipe", "pipe"],
       env: childEnv,
+      shell: false,
     })
 
     this.serverProcess.stdout?.on("data", (data: Buffer) => {
@@ -198,7 +338,7 @@ export class SessionManager {
 
     await this.waitForHealth()
 
-    this.client = createOpencodeClient({ baseUrl: `http://127.0.0.1:${this.port}` })
+    this.client = this.makeClient(this.port)
     this.reconnectAttempts = 0
     this._onEvent.fire({ type: "server_connected", data: { port: this.port } })
     log.info("OpenCode server connected")
@@ -290,13 +430,18 @@ export class SessionManager {
 
   private async waitForHealth(timeoutMs = 10_000): Promise<void> {
     const start = Date.now()
+    const healthHeaders: Record<string, string> = {}
+    if (this.serverPassword) {
+      const basic = Buffer.from(`opencode:${this.serverPassword}`).toString("base64")
+      healthHeaders["Authorization"] = `Basic ${basic}`
+    }
     while (Date.now() - start < timeoutMs) {
       try {
-        // M4: Per-request timeout to avoid burning all retries on one hanging fetch
         const controller = new AbortController()
         const timer = setTimeout(() => controller.abort(), 2_000)
         const resp = await fetch(`http://127.0.0.1:${this.port}/global/health`, {
           signal: controller.signal,
+          headers: healthHeaders,
         })
         clearTimeout(timer)
         if (resp.ok) {
@@ -401,6 +546,14 @@ export class SessionManager {
     return resp.data as Session
   }
 
+  async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part[] }>> {
+    if (this.disposed) throw new Error("SessionManager has been disposed")
+    if (!this.client) throw new Error("Server not running")
+    const resp = await this.client.session.messages({ path: { id } })
+    if (resp.error) throw new Error(`Failed to get session messages: ${JSON.stringify(resp.error)}`)
+    return (resp.data as Array<{ info: Message; parts: Part[] }> | undefined) ?? []
+  }
+
   async listSessions(): Promise<Session[]> {
     if (this.disposed) throw new Error("SessionManager has been disposed")
     if (!this.client) throw new Error("Server not running")
@@ -424,10 +577,14 @@ export class SessionManager {
     if (!this.client) throw new Error("Server not running")
 
     const modelRef = model ?? this.currentModel ?? undefined
-    log.info(`Sending prompt to session ${sessionId} (model=${modelRef ? `${modelRef.providerID}/${modelRef.modelID}` : "default"})`)
+    const idempotencyKey = `${sessionId}-${randomUUID()}`
+    log.info(`Sending prompt to session ${sessionId} (idempotency: ${idempotencyKey.slice(0, 16)}..., model=${modelRef ? `${modelRef.providerID}/${modelRef.modelID}` : "default"})`)
 
     const resp = await this.client.session.prompt({
       path: { id: sessionId },
+      headers: {
+        "Idempotency-Key": idempotencyKey,
+      },
       body: {
         parts,
         ...(modelRef ? { model: modelRef } : {}),
@@ -461,7 +618,9 @@ export class SessionManager {
     if (!this.client) throw new Error("Server not running")
 
     const modelRef = model ?? this.currentModel ?? undefined
-    log.info(`Sending async prompt to session ${sessionId}`)
+    // Generate a per-prompt idempotency key so the server can deduplicate retries
+    const idempotencyKey = `${sessionId}-${randomUUID()}`
+    log.info(`Sending async prompt to session ${sessionId} (idempotency: ${idempotencyKey.slice(0, 16)}...)`)
 
     let lastError: Error | null = null
 
@@ -472,6 +631,9 @@ export class SessionManager {
           body: {
             parts,
             ...(modelRef ? { model: modelRef } : {}),
+          },
+          headers: {
+            "Idempotency-Key": idempotencyKey,
           },
         })
 
@@ -517,8 +679,11 @@ export class SessionManager {
       /econnrefused/i,
       /econnreset/i,
       /etimedout/i,
+      /enotfound/i,
+      /enetunreach/i,
       /fetch failed/i,
-      /socket/i,
+      /socket hang up/i,
+      /request failed/i,
     ]
     return retryablePatterns.some(pattern => pattern.test(errorStr))
   }

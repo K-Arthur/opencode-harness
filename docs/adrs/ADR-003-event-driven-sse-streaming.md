@@ -39,6 +39,10 @@ We will use **Server-Sent Events (SSE)** for real-time agent state updates:
 - Auto-reconnect logic with exponential backoff in `StreamCoordinator`
 - Stream health checks with timeout handling
 - User-friendly error messages when stream fails
+- **TTFB vs completion timeout split** — `TTFB_TIMEOUT_MS = 30000` for first-byte detection; `CHUNK_INACTIVITY_TIMEOUT_MS = 60000` for inter-chunk silence. TTFB timer clears on first chunk; completion timer resets on every chunk.
+- **Idempotent `finalizeStream`** — `finalizingTabs` Set prevents double-run from concurrent `message_complete` + `server_status idle` events.
+- **Session-scoped error routing** — `postRequestError(message, sessionId?)` ensures multi-tab error attribution is correct. Unknown-session events fall back to the active tab.
+- **Stream state machine** — `StreamLifecycleState` enum (`idle | sending | streaming | completing | error | timeout`) with logged transitions for observability.
 
 ## Event Types
 
@@ -49,6 +53,8 @@ We will use **Server-Sent Events (SSE)** for real-time agent state updates:
 | `response` | Agent text response (display in chat) |
 | `done` | Stream complete (update UI state) |
 | `error` | Stream error (show error, offer retry) |
+| `ttfb_timeout` | No first byte within 30s (show retryable error, clear placeholder) |
+| `timeout` | No completion within 60s after last chunk (preserve partial output, show recoverable state) |
 
 ## References
 

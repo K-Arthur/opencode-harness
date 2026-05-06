@@ -18,8 +18,7 @@ OpenCode brings the [opencode](https://opencode.ai) agentic coding experience di
 - **Inline Code Actions** — CodeLens on functions for Explain, Refactor, and Generate Tests
 - **Smart Diffs** — AI-suggested code changes shown as unified diffs with Accept/Discard controls
 - **Checkpoints** — Git worktree snapshots before each AI action for instant rollback
-- **Skill Manager** — Browse, enable, and disable opencode agent skills
-- **Slash Commands** — `/clear`, `/model`, `/cost`, `/new`, `/export`, `/compact`, `/continue`, `/help`
+- **Slash Commands** — `/clear`, `/model`, `/cost`, `/new`, `/export`, `/compact`, `/continue`, `/help`, `/queue`
 - **Export Conversation** — Save current session as Markdown file
 - **Session History** — Searchable conversation history with resume support in the chat surface
 - **@-Mentions** — Reference files, folders, problems, URLs, and terminal output in your prompts
@@ -210,17 +209,218 @@ The extension warns you before you hit limits:
 
 ## Requirements
 
-- VS Code 1.98.0 or higher
-- [opencode CLI](https://opencode.ai) installed on your system
+- **VS Code** 1.98.0 or higher
+- **Node.js** 20.x or later
+- **opencode CLI** — the agent runtime (see Setup below)
+
+## Quick Start
 
 ```bash
-# Install opencode CLI
+# 1. Install the opencode CLI (agent runtime)
 curl -fsSL https://opencode.ai/install | bash
-# Or via npm
-npm install -g opencode-ai
+# Verify:
+opencode --version   # should show 1.14.x or later
+
+# 2. Clone and build the extension
+git clone https://github.com/K-Arthur/opencode-harness
+cd opencode-harness
+npm install
+
+# 3. Build
+npm run build
+
+# 4. Open in VS Code and press F5 to launch Extension Dev Host
+code .
+# In the new window, click the OpenCode icon in the Activity Bar
 ```
 
-## Extension Settings
+## Detailed Installation
+
+### Prerequisites
+
+1. **opencode CLI** — The agent backend that this extension connects to.
+
+   ```bash
+   # Official install:
+   curl -fsSL https://opencode.ai/install | bash
+
+   # Or via npm:
+   npm install -g opencode-ai
+
+   # Or via Homebrew (macOS):
+   brew install opencode-ai/tap/opencode
+
+   # Verify:
+   opencode --version
+   opencode doctor   # checks API keys, config, and connectivity
+   ```
+
+   You must also configure at least one LLM provider (see `opencode provider --help` or [opencode.ai/docs/providers](https://opencode.ai/docs/providers)).
+
+2. **VS Code 1.98+** with Node.js 20+.
+3. **Linux users:** Some setups require `libsecret` for credential storage:
+   ```bash
+   # Arch
+   sudo pacman -S libsecret
+   # Ubuntu/Debian
+   sudo apt install libsecret-1-dev
+   # Fedora
+   sudo dnf install libsecret-devel
+   ```
+
+### Install via VSIX (packaged release)
+
+```bash
+# Build the extension package
+npm install
+npm run build
+
+# Install vsce (VS Code packaging tool)
+npm install -g @vscode/vsce
+
+# Package
+npx @vscode/vsce package --no-dependencies --allow-missing-repository
+
+# Install in VS Code
+code --install-extension opencode-harness-*.vsix --force
+```
+
+### Install via VSIX (pre-built from CI)
+
+If you have a `.vsix` file (e.g. from a CI artifact):
+
+```bash
+code --install-extension path/to/opencode-harness-0.2.0.vsix --force
+```
+
+After installing, **reload the window** (`Ctrl+Shift+P` → `Developer: Reload Window`).
+
+### Run in Development Mode (F5)
+
+This is the fastest way to develop and test changes without repackaging:
+
+```bash
+npm install
+npm run build
+```
+
+Then in VS Code:
+1. Open the `opencode-harness` folder
+2. Press **F5** (or `Ctrl+Shift+D` → "Run Extension" dropdown → "Extension" launch config)
+3. A new **Extension Development Host** window opens
+4. Click the OpenCode icon in the Activity Bar (or `Ctrl+Alt+O`)
+5. Select a model from the dropdown and start chatting
+
+**After code changes**, rebuild and reload:
+
+```bash
+npm run build
+# Then in the Dev Host window: Ctrl+Shift+P → Developer: Reload Window
+```
+
+Or use watch mode for auto-rebuild:
+
+```bash
+npm run watch    # rebuilds on every save; reload the Dev Host manually
+```
+
+### Verify the Extension is Running
+
+Open the **OUTPUT** panel in VS Code (`Ctrl+Shift+U`) and select **"OpenCode Harness"** from the dropdown. You should see:
+
+```
+[INFO] OpenCode Harness extension activating…
+[INFO] Terminal bridge initialized
+[INFO] OpenCode Harness extension activated
+[INFO] Chat webview resolved
+[INFO] Starting opencode server on port XXXXX (/home/.../opencode)
+[INFO] OpenCode server healthy (version 1.14.39)
+[INFO] Subscribed to OpenCode event stream
+```
+
+If you see these logs, the extension is connected and ready.
+
+## Troubleshooting Common Issues
+
+### "No response" — model sends nothing
+
+**Check the "OpenCode Harness" output channel.** Look for:
+
+```
+[stream:session-XXXX] idle → sending {"model":""}
+```
+
+If `model` is empty (`""`), the server doesn't know which model to use. **Select a model from the dropdown** in the webview header before sending a message. If the dropdown is empty, wait for the model list to load (check the output channel for `Refreshed models from server: N models available`).
+
+If `model` shows a valid name (e.g. `"opencode/big-pickle"`), check for:
+
+```
+[WARN] TTFB timeout for tab session-XXXX — no chunk received within 30000ms
+```
+
+This means the model is configured but not responding. Verify your API keys with `opencode doctor`.
+
+### "No response" — chunks arrive but nothing renders
+
+If the output channel shows:
+
+```
+[INFO] TTFB: first chunk received for tab session-XXXX
+[INFO] [Webview] handleStreamEnd: Ending stream for session-XXXX
+```
+
+But the assistant bubble stays empty or invisible, the issue is in the webview render path. Look for diagnostic lines:
+
+```
+[INFO] [ChunkBatcher] flush #1 sessionId=XXXX len=123
+[INFO] DeltaHandler: emitted text_chunk sessionId=XXXX messageId=XXXX deltaLen=...
+[INFO] [Webview] handleStreamChunk: chunk for XXXX len=123 streamingMessageId=resp-...
+[INFO] [Webview] handleStreamEnd: removed empty placeholder for XXXX
+```
+
+- **Missing `[ChunkBatcher]` lines**: chunks are not reaching the webview. Reload the window.
+- **Missing `[Webview] handleStreamChunk` lines** but present `[ChunkBatcher]` lines: the webview's message handler is not processing `stream_chunk` events. This indicates a webview initialization problem — reload the window.
+- **Present `[Webview] handleStreamEnd: removed empty placeholder`**: The fallback renderer is active and should display the response. If you still see nothing, check the Developer Tools console (`Ctrl+Shift+I` in the Dev Host) for JavaScript errors.
+
+### "Message shows up after I click history"
+
+This was caused by the stream handler's internal `messages` array being replaced by a new array during session resume, orphaning the active streaming reference. The `addMessage` fallback in `handleStreamEnd` now handles this — if you still see this behavior, check the output channel for `handleStreamEnd: removed empty placeholder`.
+
+### "Model dropdown is empty"
+
+The extension fetches models from the opencode server on startup. If the dropdown is empty:
+1. Check the output channel — look for `Refreshed models from server: N models available`
+2. Verify the opencode CLI is installed: `opencode --version`
+3. Verify at least one provider is configured: `opencode provider list`
+4. If models load but the dropdown doesn't update, press `Ctrl+Shift+P` → `Developer: Reload Window`
+
+### TTFB timeout
+
+If every message times out:
+1. Run `opencode doctor` from the terminal — checks API keys and connectivity
+2. Try a different model from the dropdown
+3. Check the output channel for server errors (`[opencode:stderr]`)
+4. If using a custom binary path via `opencode.binaryPath`, verify the path is correct
+
+## Development
+
+```bash
+# Clone and install dependencies
+git clone https://github.com/K-Arthur/opencode-harness
+cd opencode-harness
+npm install
+
+# Build the extension
+npm run build          # bundles extension + webview via esbuild
+npm run typecheck      # TypeScript type checking (run before committing)
+
+# Watch mode for development
+npm run watch          # auto-rebuild on file changes (reload Dev Host after)
+
+# Run tests
+npm run test:unit      # behavioral + structural unit tests
+npm run test:lint      # lint with tsc --noEmit
+```
 
 | Setting | Default | Scope | Description |
 |---------|---------|-------|-------------|
@@ -289,6 +489,7 @@ src/
 ├── chat/
 │   ├── ChatProvider.ts          # Main webview provider (orchestrator)
 │   ├── TabManager.ts            # Per-tab state & concurrency limit
+│   ├── ChunkBatcher.ts          # Streaming text chunk batching (50ms flush)
 │   ├── WebviewContent.ts        # HTML/CSS injection for webview
 │   ├── handlers/
 │   │   ├── StreamCoordinator.ts # Per-tab streaming lifecycle
@@ -331,9 +532,7 @@ src/
 ├── theme/
 │   └── ThemeManager.ts          # Theme variable resolution
 ├── inline/
-│   └── InlineActionProvider.ts  # CodeLens actions
-├── skills/
-│   └── SkillManager.ts          # Skills discovery (future use)
+│   └── InlineActionProvider.ts  # CodeLens actions (Explain, Refactor, Generate Tests)
 ├── terminal/
 │   └── TerminalBridge.ts        # Terminal output capture
 ├── checkpoint/

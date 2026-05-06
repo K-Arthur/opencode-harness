@@ -16,6 +16,76 @@
   flex-direction: column;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+
+/* Virtual rendering: only layout messages near the viewport */
+.message {
+  content-visibility: auto;
+  contain-intrinsic-size: 60px;
+}
+
+/* Jump-to-bottom button */
+.jump-to-bottom {
+  position: absolute;
+  bottom: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-sticky);
+  display: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1-5) var(--space-4);
+  background: var(--oc-glass-bg, var(--bg-secondary));
+  backdrop-filter: blur(var(--oc-glass-blur, 8px));
+  -webkit-backdrop-filter: blur(var(--oc-glass-blur, 8px));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  color: var(--color-accent);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: all var(--duration-fast) var(--ease-out);
+  width: fit-content;
+  white-space: nowrap;
+}
+
+.jump-to-bottom:hover {
+  transform: translateX(-50%) scale(1.05);
+}
+
+.jump-to-bottom.visible {
+  display: inline-flex;
+}
+
+/* Scroll marker dots */
+.scroll-markers {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.scroll-marker-dot {
+  position: absolute;
+  right: 1px;
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  opacity: 0.4;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: opacity var(--duration-fast), transform var(--duration-fast);
+}
+
+.scroll-marker-dot:hover {
+  opacity: 1;
+  transform: scale(1.5);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -47,36 +117,6 @@
   margin-top: var(--space-5);
 }
 
-.message.user {
-  flex-direction: row-reverse;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════════╛
-   AVATAR
-   ═══════════════════════════════════════════════════════════════════════════════╛ */
-
-.message-avatar {
-  width: var(--size-icon-lg);
-  height: var(--size-icon-xl);
-  border-radius: var(--radius-full);
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--oc-editor-bg);
-  border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-sm);
-  font-size: var(--text-xs);
-  overflow: hidden;
-  margin-top: var(--space-1);
-}
-
-.message.user .message-avatar {
-  background: var(--color-accent);
-  color: var(--oc-accent-fg);
-  border-color: transparent;
-}
-
 /* ═══════════════════════════════════════════════════════════════════════════════╛
    MESSAGE CONTENT
    ═══════════════════════════════════════════════════════════════════════════════╛ */
@@ -84,10 +124,11 @@
 .message-content {
   display: flex;
   flex-direction: column;
-  max-width: calc(100% - 40px);
+  max-width: 100%;
   gap: var(--space-1);
   min-width: 0;
   position: relative;
+  width: 100%;
 }
 
 .message.user .message-content {
@@ -113,9 +154,21 @@
   flex-direction: row-reverse;
 }
 
+.message.assistant .message-header {
+  flex-direction: row;
+  padding-left: calc(var(--space-3) + 2px);
+}
+
 .message-role {
   font-weight: 600;
-  color: var(--color-fg);
+}
+
+.message.user .message-role {
+  color: var(--color-accent);
+}
+
+.message.assistant .message-role {
+  color: var(--oc-fg, var(--color-fg));
 }
 
 .message-timestamp {
@@ -131,7 +184,7 @@
 }
 
 .message-edit-btn {
-  display: none;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   background: transparent;
@@ -141,15 +194,17 @@
   padding: var(--space-0-5);
   border-radius: var(--radius-sm);
   opacity: 0;
-  transition: opacity var(--duration-fast);
+  visibility: hidden;
+  transition: opacity var(--duration-fast), visibility var(--duration-fast);
   min-width: var(--size-target-min);
   min-height: var(--size-target-min);
   margin-left: auto;
 }
 
-.message:hover .message-edit-btn {
-  display: flex;
+.message:hover .message-edit-btn,
+.message:focus-within .message-edit-btn {
   opacity: 0.5;
+  visibility: visible;
 }
 
 .message-edit-btn:hover {
@@ -159,24 +214,56 @@
   border-color: var(--oc-accent-border);
 }
 
+/* ─── Revert Button (assistant messages) ─── */
+.message-revert-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: var(--space-0-5);
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--duration-fast), visibility var(--duration-fast);
+  min-width: var(--size-target-min);
+  min-height: var(--size-target-min);
+  margin-left: var(--space-1);
+}
+
+.message:hover .message-revert-btn,
+.message:focus-within .message-revert-btn {
+  opacity: 0.5;
+  visibility: visible;
+}
+
+.message-revert-btn:hover {
+  opacity: 1 !important;
+  color: var(--oc-warning);
+  background: var(--oc-warning-subtle);
+  border-color: var(--oc-warning-border);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════════╛
    USER MESSAGE BUBBLE
    ═══════════════════════════════════════════════════════════════════════════════╛ */
 
 .message.user .message-bubble {
   margin-left: auto;
-  max-width: min(82%, 520px);
-  background: var(--user-message-bg, var(--oc-user-msg-bg, rgba(128, 128, 128, 0.1)));
+  max-width: min(82%, 620px);
+  background: var(--user-message-bg, var(--oc-user-msg-bg, rgba(128, 128, 128, 0.08)));
   color: var(--user-message-fg, var(--oc-fg));
-  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
+  border-radius: var(--radius-lg);
   padding: var(--space-3) var(--space-4);
   font-size: var(--text-base);
   line-height: var(--leading-relaxed);
   word-break: break-word;
   overflow-wrap: anywhere;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
   position: relative;
-  border: none;
+  border: 1px solid var(--color-border);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════╛
@@ -184,19 +271,20 @@
    ═══════════════════════════════════════════════════════════════════════════════╛ */
 
 .message.assistant .message-bubble {
-  background: transparent;
-  border: none;
+  background: var(--assistant-message-bg, rgba(128, 128, 128, 0.03));
+  border-left: 2px solid transparent;
   box-shadow: none;
-  padding: var(--space-1) 0 var(--space-4) var(--space-3);
+  padding: var(--space-2) var(--space-4) var(--space-4) var(--space-3);
   max-width: 100%;
   width: 100%;
-  border-left: 2px solid transparent;
-  border-radius: 0;
-  transition: border-left-color var(--duration-fast);
+  border-radius: var(--radius-md);
+  transition: border-color var(--duration-normal), background var(--duration-normal);
+  position: relative;
 }
 
 .message.assistant.streaming .message-bubble {
   border-left-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 5%, transparent);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════╛
@@ -469,16 +557,85 @@
 }
 
 .markdown-content strong {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .markdown-content em {
   font-style: italic;
 }
 
+.markdown-content strong em,
+.markdown-content em strong {
+  font-weight: 700;
+  font-style: italic;
+}
+
 .markdown-content del {
   text-decoration: line-through;
   color: var(--color-muted);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════╛
+   TASK LISTS (TODOS)
+   ═══════════════════════════════════════════════════════════════════════════════╛ */
+
+.contains-task-list {
+  list-style-type: none;
+  padding-left: 0.2em !important;
+  margin-bottom: 0.75em;
+}
+
+.task-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2-5);
+  margin-bottom: var(--space-1);
+}
+
+.task-list-item-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--oc-glass-bg, var(--bg-secondary));
+  cursor: default;
+  flex-shrink: 0;
+  margin-top: 4px;
+  position: relative;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.task-list-item-checkbox:checked {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  box-shadow: 0 0 8px var(--oc-accent-subtle);
+}
+
+.task-list-item-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(45deg);
+  width: 4px;
+  height: 8px;
+  border-right: 2px solid var(--oc-button-fg, #fff);
+  border-bottom: 2px solid var(--oc-button-fg, #fff);
+}
+
+.task-list-item-label {
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--color-fg);
+  flex: 1;
+}
+
+.task-list-item:has(.task-list-item-checkbox:checked) .task-list-item-label {
+  text-decoration: line-through;
+  color: var(--color-muted);
+  opacity: 0.7;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════╛
@@ -839,38 +996,6 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════╛
-   JUMP-TO-BOTTOM BUTTON
-   ═══════════════════════════════════════════════════════════════════════════════╛ */
-
-.jump-to-bottom {
-  position: sticky;
-  bottom: calc(var(--input-height, 56px) + var(--space-3));
-  margin-left: auto;
-  margin-right: auto;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1-5) var(--space-4);
-  background: var(--jump-btn-bg, var(--bg-secondary, var(--oc-list-hover)));
-  border: 1px solid var(--jump-btn-border, var(--color-border));
-  border-radius: var(--radius-full);
-  box-shadow: var(--jump-btn-shadow, var(--shadow-md));
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--color-accent);
-  cursor: pointer;
-  z-index: var(--z-sticky, 100);
-  transition: all var(--duration-fast);
-  animation: message-enter 200ms var(--ease-out) forwards;
-}
-
-.jump-to-bottom:hover {
-  background: var(--color-accent);
-  color: var(--oc-accent-fg);
-  border-color: transparent;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════════╛
    FORCED-COLORS (High Contrast Mode)
    ═══════════════════════════════════════════════════════════════════════════════╛ */
 
@@ -908,4 +1033,15 @@
   .prompt-starter {
     border-color: ButtonText !important;
   }
+}
+
+/* ─── Scroll marker flash animation ─── */
+@keyframes message-flash {
+  0%, 100% { background: transparent; }
+  50% { background: var(--oc-accent-subtle); }
+}
+
+.message-flash {
+  animation: message-flash 1.5s ease-out;
+  border-radius: var(--radius-md);
 }

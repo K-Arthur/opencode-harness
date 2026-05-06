@@ -179,4 +179,53 @@ void describe("ChatProvider.ts", () => {
   void it("has custom prompt variable resolution", () => {
     assert.ok(source.includes("resolveCustomPromptVariables("), "must have resolveCustomPromptVariables")
   })
+
+  // ---- Regression: premature stream finalization (session.idle bug) ----
+
+  void it("session_status handler must NOT call finalizeStream on idle", () => {
+    // Extract the session_status handler block from the source.
+    // It must not contain a finalizeStream() call inside it.
+    const sessionStatusIdx = source.indexOf('"session_status"')
+    assert.ok(sessionStatusIdx >= 0, "session_status handler must exist")
+
+    // Find the closing bracket of this handler (next handler entry starts a new array element)
+    const serverStatusIdx = source.indexOf('"server_status"', sessionStatusIdx)
+    assert.ok(serverStatusIdx > sessionStatusIdx, "server_status handler must follow session_status")
+
+    const sessionStatusBlock = source.slice(sessionStatusIdx, serverStatusIdx)
+    assert.ok(
+      !sessionStatusBlock.includes("finalizeStream"),
+      "session_status handler must NOT call finalizeStream — session.idle fires during " +
+      "normal lifecycle (e.g. after async prompt accept) and causes premature stream finalization"
+    )
+  })
+
+  void it("server_status handler must NOT call finalizeStream on idle", () => {
+    const serverStatusIdx = source.indexOf('"server_status"')
+    assert.ok(serverStatusIdx >= 0, "server_status handler must exist")
+
+    const permissionIdx = source.indexOf('"permission_request"', serverStatusIdx)
+    assert.ok(permissionIdx > serverStatusIdx, "permission_request handler must follow server_status")
+
+    const serverStatusBlock = source.slice(serverStatusIdx, permissionIdx)
+    assert.ok(
+      !serverStatusBlock.includes("finalizeStream"),
+      "server_status handler must NOT call finalizeStream — same reason as session_status"
+    )
+  })
+
+  void it("message_complete handler is the sole trigger for finalizeStream", () => {
+    // message_complete must call finalizeStream
+    const msgCompleteIdx = source.indexOf('"message_complete"')
+    assert.ok(msgCompleteIdx >= 0, "message_complete handler must exist")
+
+    const sessionStatusIdx = source.indexOf('"session_status"', msgCompleteIdx)
+    assert.ok(sessionStatusIdx > msgCompleteIdx, "session_status must follow message_complete")
+
+    const msgCompleteBlock = source.slice(msgCompleteIdx, sessionStatusIdx)
+    assert.ok(
+      msgCompleteBlock.includes("finalizeStream"),
+      "message_complete handler must call finalizeStream — it is the sole correct finalization trigger"
+    )
+  })
 })

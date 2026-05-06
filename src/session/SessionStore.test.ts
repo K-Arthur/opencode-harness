@@ -65,4 +65,29 @@ describe("SessionStore.ts", () => {
   it("validates rename for oversized names", () => {
     assert.ok(source.includes("80"))
   })
+
+  it("has onDidChangeSession typed event for delete/rename/active", () => {
+    assert.ok(source.includes("onDidChangeSession"), "must have typed change event")
+    assert.ok(source.includes("kind"), "event must have kind discriminator")
+    assert.ok(source.includes('kind: "deleted"'), "must emit session_deleted event")
+  })
+
+  it("has archive method that marks session as archived", () => {
+    assert.ok(source.includes("archive("), "archive method must exist")
+    assert.ok(source.includes("archived"), "OpenCodeSession must have archived field")
+  })
+
+  it("has unarchive method that restores session", () => {
+    assert.ok(source.includes("unarchive("), "unarchive method must exist")
+  })
+
+  it("has clearAll method that returns preview counts", () => {
+    assert.ok(source.includes("clearAll("), "clearAll method must exist")
+    assert.ok(source.includes("dryRun"), "must support dry-run preview mode")
+    assert.ok(source.includes("preview:"), "must return preview object with counts")
+  })
+
+  it("list filters archived sessions by default", () => {
+    assert.ok(source.includes("list("), "list method must exist")
+  })
 })

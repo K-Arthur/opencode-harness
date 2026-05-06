@@ -56,10 +56,10 @@ textarea:focus-visible,
 .send-btn,
 .abort-btn,
 .btn-icon,
-.mode-toggle,
+.mode-dropdown-btn,
+.mode-option,
 .model-selector-btn,
 .input-action-btn,
-.mode-btn,
 .suggestion-btn,
 .suggestion-card,
 .code-block-copy,
@@ -83,17 +83,17 @@ textarea:focus-visible,
   min-height: var(--size-target-large);
 }
 
-/* Context chip remove: small visual (14px) with extended pseudo-element hit area */
+/* Context chip remove: small visual with extended pseudo-element hit area */
 .context-chip-remove {
   min-width: var(--size-icon-xs);
-  min-height: 14px;
+  min-height: 18px;
   position: relative;
 }
 
 .context-chip-remove::after {
   content: "";
   position: absolute;
-  inset: -4px;
+  inset: -5px;
 }
 
 /* ─── Reduced Motion ─── */

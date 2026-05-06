@@ -3,6 +3,7 @@ import * as crypto from "crypto"
 import * as fs from "fs"
 import * as path from "path"
 import { ThemeManager, type ThemeVariables } from "../theme/ThemeManager"
+import { sanitizeCssValue } from "../utils/cssSanitizer"
 import { log } from "../utils/outputChannel"
 
 export class WebviewContent {
@@ -41,6 +42,12 @@ export class WebviewContent {
     } catch (err) {
       // Non-fatal: panel will render without custom styles. Logged for diagnostics.
       log.warn("Could not read CSS file", cssPath)
+    }
+    // VS Code webviews do not support CSS @import. The built dist/ file has
+    // imports resolved by esbuild, but when falling back to src/ CSS (dev
+    // without build), we must inline @import statements manually.
+    if (cssPath === srcCssPath && css.includes("@import")) {
+      css = this.resolveCssImports(css, path.dirname(cssPath))
     }
     // CSP Security Notes:
     // - connect-src 'none': Webview↔host uses postMessage only. CLI HTTP server
@@ -90,10 +97,46 @@ export class WebviewContent {
     return html
   }
 
+  /**
+   * Resolve CSS @import "./file.css" statements by inlining the referenced files.
+   * VS Code webviews do not support CSS @import, so we must resolve them at
+   * serve-time when falling back to the source CSS (dev without build).
+   * Only resolves simple @import "./..." and @import "..." (no url(), no media queries).
+   * Max recursion depth of 3 to prevent infinite loops.
+   */
+  private resolveCssImports(css: string, baseDir: string, depth = 0): string {
+    if (depth > 3) return css
+    const importRegex = /@import\s+(?:"([^"]+)"|'([^']+)')\s*;/g
+    let resolved = css
+    let match: RegExpExecArray | null
+    while ((match = importRegex.exec(css)) !== null) {
+      const importPath = match[1] || match[2] || ""
+      if (!importPath || importPath.startsWith("http://") || importPath.startsWith("https://")) continue
+      const fullPath = path.resolve(baseDir, importPath)
+      try {
+        const imported = fs.readFileSync(fullPath, "utf8")
+        const nested = this.resolveCssImports(imported, path.dirname(fullPath), depth + 1)
+        resolved = resolved.replace(match[0], nested)
+      } catch {
+        log.warn(`Could not resolve CSS import: ${importPath} from ${baseDir}`)
+      }
+    }
+    return resolved
+  }
+
+  private sanitizeCssValue(value: string): string | null {
+    const result = sanitizeCssValue(value)
+    if (result === null && value.trim()) {
+      log.warn(`Blocked CSS value: "${value.trim().substring(0, 60)}"`)
+    }
+    return result
+  }
+
   private buildThemeStyleTag(vars: ThemeVariables, nonce: string): string {
     const entries = Object.entries(vars.customVars)
       .filter(([, val]) => val)
-      .map(([key, val]) => `${key}: ${val};`)
+      .filter(([, val]) => this.sanitizeCssValue(val) !== null)
+      .map(([key, val]) => `${key}: ${this.sanitizeCssValue(val)};`)
       .join("\n")
     return `<style nonce="${nonce}" id="oc-theme-vars">:root {\n${entries}\n}\n/* theme-kind: ${vars.kind} */</style>`
   }
@@ -125,4 +168,6 @@ export class WebviewContent {
 </body>
 </html>`
   }
+
+  dispose(): void {}
 }

@@ -126,7 +126,18 @@ describe("renderer.ts", () => {
 
   it("user_message_has_edit_button", () => {
     assert.ok(source.includes("message-edit-btn"), "must have edit button on user messages")
-    assert.ok(source.includes('vscode.postMessage({ type: "edit_message"' ), "must post edit_message")
+    assert.ok(source.includes('type: "edit_message"'), "must post edit_message via postMessage callback")
+  })
+
+  it("edit_button_uses_cached_vscode_api", () => {
+    assert.ok(source.includes("opts?.postMessage") || source.includes("RenderOptions"),
+      "edit button must pass postMessage through RenderOptions or use a cached reference")
+  })
+
+  it("assistant_message_has_revert_button", () => {
+    assert.ok(source.includes("message-revert-btn"), "must have revert button on assistant messages")
+    assert.ok(source.includes('type: "revert_message"'), "must post revert_message")
+    assert.ok(source.includes('"Revert code changes from this message"'), "must have descriptive title")
   })
 
   it("code_block_has_insert_and_new_file_buttons", () => {

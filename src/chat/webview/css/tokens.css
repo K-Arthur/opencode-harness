@@ -76,8 +76,14 @@
   --space-16: 64px;
 
   /* ─── Typography ─── */
-  --font-sans: var(--vscode-font-family, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
-  --font-mono: var(--vscode-editor-font-family, "JetBrains Mono", ui-monospace, monospace);
+  /* Fonts: Prefer VS Code's configured font family, then fall back to system fonts.
+     "Inter" and "JetBrains Mono" are named as preferred fallbacks but will only
+     render if the user has them installed locally — there are no @font-face rules
+     because VS Code's CSP (font-src: cspSource) prohibits CDN font loading.
+     Developers who want custom fonts should configure them in VS Code settings
+     (editor.fontFamily, terminal.integrated.fontFamily). */
+  --font-sans: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif);
+  --font-mono: var(--vscode-editor-font-family, ui-monospace, "SF Mono", "Cascadia Code", "Consolas", monospace);
 
   --text-2xs: 10px;
   --text-xs: 11px;
@@ -129,6 +135,7 @@
   --oc-success: var(--vscode-terminal-ansiGreen, #3fb950);
   --oc-warning: var(--vscode-editorWarning-foreground, #d29922);
   --oc-error: var(--vscode-errorForeground, #f85149);
+  --oc-error-action: #c7362e;
   --oc-info: var(--vscode-notificationsInfoIcon-foreground, var(--vscode-button-background, #0078d4));
 
   /* ─── Unified colour aliases ─── */

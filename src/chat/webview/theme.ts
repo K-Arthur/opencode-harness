@@ -18,6 +18,7 @@ export function updateContextChips(els: ElementRefs, chips?: ContextChip[]) {
       const rem = document.createElement("button")
       rem.className = "context-chip-remove"
       rem.textContent = "\u00D7"
+      rem.setAttribute("aria-label", "Remove context chip")
       rem.addEventListener("click", () => {
         el.remove()
         if (els.contextChips.children.length === 0) {

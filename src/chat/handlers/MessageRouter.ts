@@ -184,4 +184,6 @@ export class MessageRouter {
     }))
     context.postMessage({ type: "model_list", items: models, model: this.modelManager.model })
   }
+
+  dispose(): void {}
 }

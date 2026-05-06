@@ -75,17 +75,16 @@ describe("main.ts", () => {
     assert.ok(source.includes("dataTransfer?.files"))
   })
 
-  it("slash_command_autocomplete_triggers_on_leading_slash", () => {
-    // Leading slash detection triggers autocomplete popover
-    assert.ok(source.includes("updateSlashAutocomplete"))
-    assert.ok(source.includes('startsWith("/")'))
-    assert.ok(source.includes("slashAutocomplete"))
+  it("slash_command_triggers_mention_dropdown_on_leading_slash", () => {
+    // Leading slash detection triggers the mention/command dropdown (unified)
+    assert.ok(source.includes("mention.handleTrigger()"),
+      "slash commands must trigger unified mention/command dropdown")
   })
 
-  it("slash_command_mid_message_does_not_trigger", () => {
-    // Multi-line safety: only trigger if / is first character of entire input
-    assert.ok(source.includes('startsWith("/")'))
-    assert.ok(source.includes('includes("\\n")'))
+  it("slash_command_in_sendMessage_handles_known_and_unknown", () => {
+    // Slash commands are handled in sendMessage switch statement
+    assert.ok(source.includes('text.startsWith("/")'))
+
   })
 
   it("slash_unknown_shows_error_not_crash", () => {

@@ -112,18 +112,22 @@ export interface SessionState {
   id: string
   name: string
   model: string
+  variant?: string
   mode: string
   messages: ChatMessage[]
   isStreaming: boolean
   cost?: number
   tokenUsage?: { prompt: number; completion: number; total: number }
+  lastActiveAt?: number
 }
 
 export interface WebviewState {
   sessions: Record<string, SessionState>
+  sessionOrder: string[]
   activeSessionId: string | null
   nextSessionNum: number
   globalModel: string
+  globalVariant?: string
   initialized?: boolean
   disabledModels?: string[]
 }

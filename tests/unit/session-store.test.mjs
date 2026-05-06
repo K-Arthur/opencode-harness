@@ -129,7 +129,7 @@ describe("SessionStore — session accessors", () => {
   })
 
   it("provides list sorted by lastActiveAt descending", () => {
-    assert.ok(source.includes("list():"), "list method must exist")
+    assert.ok(source.includes("list("), "list method must exist")
     assert.ok(source.includes("lastActiveAt"), "must sort by lastActiveAt")
     assert.ok(source.includes("sort("), "must sort results")
   })
@@ -225,5 +225,12 @@ describe("SessionStore — event emitters", () => {
   it("defines onActiveSessionChanged event", () => {
     assert.ok(source.includes("_onActiveSessionChanged"), "active emitter must exist")
     assert.ok(source.includes("onActiveSessionChanged"), "active event accessor must exist")
+  })
+
+  it("truncateMessages removes downstream messages from store", () => {
+    assert.ok(source.includes("session.messages.splice(keepUpToIndex)"),
+      "truncateMessages must splice messages array at the given index")
+    assert.ok(source.includes("truncateMessages("),
+      "must expose truncateMessages method for edit message support")
   })
 })

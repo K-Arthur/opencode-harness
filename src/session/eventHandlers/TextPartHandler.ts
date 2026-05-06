@@ -14,7 +14,13 @@ export class TextPartHandler implements EventHandler {
 
     context.rememberPart(part)
 
-    if (!context.isAssistantMessage(part.messageID)) return out
+    if (!context.isAssistantMessage(part.messageID)) {
+      const role = part.messageID ? context.messageRoles.get(part.messageID) : undefined
+      if (!role) {
+        console.warn(`[opencode-harness] TextPartHandler: messageId=${part.messageID} has NO role registered — text may be dropped prematurely`)
+      }
+      return out
+    }
 
     if (part.type === "text") {
       const stablePartId = part.id || `${part.sessionID || ""}:${part.messageID || ""}`

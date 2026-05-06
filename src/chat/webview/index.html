@@ -21,20 +21,15 @@
             <div id="agent-status-led" class="status-led idle"></div>
           </div>
           <div class="header-info">
-            <span class="header-title">OpenCode</span>
-            <span id="agent-status-text" class="status-text" aria-live="polite" aria-atomic="true">SYSTEM READY</span>
+            <h1 class="header-title">OpenCode</h1>
+            <span id="agent-status-text" class="status-text" aria-live="polite">SYSTEM READY</span>
           </div>
         </div>
-        <div class="header-right">
+        <div class="header-actions">
           <button class="icon-btn" id="history-btn" title="Session history" aria-label="Session history">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="10"/>
               <polyline points="12 6 12 12 16 14"/>
-            </svg>
-          </button>
-          <button class="icon-btn" id="new-tab-btn" title="New session (Ctrl+T)" aria-label="New session">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 5v14M5 12h14"/>
             </svg>
           </button>
           <button class="icon-btn" id="mcp-btn" title="Manage MCP servers" aria-label="Manage MCP servers">
@@ -154,23 +149,55 @@
         </div>
 
         <div class="bottom-bar-right">
-        <div class="mode-toggle-group" id="mode-toggle-group" role="radiogroup" aria-label="Session mode">
-                <button class="mode-btn" id="mode-plan-btn" role="radio" aria-checked="false" data-mode="plan">Plan</button>
-                <button class="mode-btn" id="mode-auto-btn" role="radio" aria-checked="false" data-mode="auto">Auto</button>
-                <button class="mode-btn active" id="mode-build-btn" role="radio" aria-checked="true" data-mode="build">Normal</button>
-              </div>
-           <button class="model-selector-btn" id="model-selector-btn" title="Select model" aria-haspopup="listbox" aria-expanded="false">
-             <span id="model-label">Default</span>
-             <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-               <path d="m6 9 6 6 6-6"/>
-             </svg>
-           </button>
-           <button class="variant-selector-btn" id="variant-selector-btn" title="Select thinking level" aria-haspopup="listbox" aria-expanded="false">
-             <span id="variant-label">Default</span>
-             <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-               <path d="m6 9 6 6 6-6"/>
-             </svg>
-           </button>
+        <div class="mode-dropdown" id="mode-dropdown" role="radiogroup">
+            <button class="mode-dropdown-btn" id="mode-dropdown-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Select session mode">
+              <span class="mode-dropdown-label" id="mode-dropdown-label">
+                <svg class="mode-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                <span id="mode-current-text">Build</span>
+              </span>
+              <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6"/>
+              </svg>
+            </button>
+            <div class="mode-dropdown-menu hidden" id="mode-dropdown-menu" role="listbox" aria-label="Session mode">
+              <button class="mode-option mode-option--plan" id="mode-opt-plan" role="option" aria-selected="false" data-mode="plan">
+                <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3v18"/><path d="M7 3v18"/><path d="M3 7.5h18"/><path d="M3 16.5h18"/><path d="M17 3a2 2 0 0 1 2 2"/><path d="M17 21a2 2 0 0 0 2-2"/><path d="M7 3a2 2 0 0 0-2 2"/><path d="M7 21a2 2 0 0 1-2-2"/></svg>
+                <span class="mode-option-label">
+                  <span class="mode-option-name">Plan</span>
+                  <span class="mode-option-desc">Review changes before applying</span>
+                </span>
+                <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <button class="mode-option mode-option--auto" id="mode-opt-auto" role="option" aria-selected="false" data-mode="auto">
+                <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span class="mode-option-label">
+                  <span class="mode-option-name">Auto</span>
+                  <span class="mode-option-desc">Agent applies all changes autonomously</span>
+                </span>
+                <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <button class="mode-option mode-option--build" id="mode-opt-build" role="option" aria-selected="false" data-mode="build">
+                <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                <span class="mode-option-label">
+                  <span class="mode-option-name">Build</span>
+                  <span class="mode-option-desc">Full agent read/write/execute access</span>
+                </span>
+                <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+            </div>
+          </div>
+           <button class="model-selector-btn" id="model-selector-btn" title="Select model" aria-label="Select model" aria-haspopup="listbox" aria-expanded="false">
+              <span id="model-label">Default</span>
+              <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6"/>
+              </svg>
+            </button>
+            <button class="variant-selector-btn" id="variant-selector-btn" title="Select thinking level" aria-label="Select thinking level" aria-haspopup="listbox" aria-expanded="false">
+              <span id="variant-label">Default</span>
+              <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6"/>
+              </svg>
+            </button>
            <button class="send-btn" id="send-btn" title="Send" aria-label="Send message">
             <span class="send-icon">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -199,12 +226,20 @@
           <h2>Manage models</h2>
           <p>Customize which models appear in the model selector.</p>
         </div>
-        <button class="model-manager-connect-btn" id="model-manager-connect" aria-label="Connect provider">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 5v14M5 12h14"/>
-          </svg>
-          <span>Connect provider</span>
-        </button>
+        <div class="model-manager-header-actions">
+          <button class="model-manager-connect-btn" id="model-manager-connect" aria-label="Connect provider">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            <span>Connect provider</span>
+          </button>
+          <button class="model-manager-close" id="model-manager-close" aria-label="Close model manager">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18"/>
+              <path d="M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
       </div>
       <div class="model-manager-search-wrapper">
         <svg class="model-manager-search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -214,12 +249,6 @@
         <input type="text" id="model-manager-search" class="model-manager-search" placeholder="Search models" aria-label="Search models">
       </div>
       <div class="model-manager-list" id="model-manager-list"></div>
-      <button class="model-manager-close" id="model-manager-close" aria-label="Close model manager">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M18 6 6 18"/>
-          <path d="M6 6l12 12"/>
-        </svg>
-      </button>
     </div>
   </div>
 
@@ -232,6 +261,27 @@
       </div>
       <div class="modal-body" id="session-modal-body">
         <div class="modal-empty">Loading sessions...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mode Transition Warning Modal -->
+  <div id="mode-warning-modal" class="modal-overlay hidden" role="alertdialog" aria-modal="true" aria-label="Mode change warning">
+    <div class="modal-content mode-warning-content">
+      <div class="modal-header">
+        <span id="mode-warning-title">Switch mode?</span>
+        <button class="modal-close-btn" id="mode-warning-close" aria-label="Cancel">&times;</button>
+      </div>
+      <p id="mode-warning-description" class="mode-warning-description"></p>
+      <div class="mode-warning-actions">
+        <label class="mode-warning-dont-show">
+          <input type="checkbox" id="mode-warning-dont-show">
+          <span>Don't show again</span>
+        </label>
+        <div class="mode-warning-buttons">
+          <button class="settings-btn-secondary" id="mode-warning-cancel">Cancel</button>
+          <button class="settings-btn-primary" id="mode-warning-confirm">Switch Mode</button>
+        </div>
       </div>
     </div>
   </div>

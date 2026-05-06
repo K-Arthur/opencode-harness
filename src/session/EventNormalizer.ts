@@ -119,7 +119,14 @@ export function createSdkEventNormalizer(): SdkEventNormalizer {
   const seenUnknownTypes = new Set<string>()
 
   const isAssistantMessage = (messageId: string | undefined): boolean => {
-    return Boolean(messageId && messageRoles.get(messageId) === "assistant")
+    if (!messageId) return false
+    const role = messageRoles.get(messageId)
+    // If we haven't seen the role yet, assume assistant — the event stream
+    // only carries assistant response parts. Requiring the role to be known
+    // creates a race where message.part.delta arrives before message.updated
+    // and chunks are silently dropped, causing "no output" symptoms.
+    if (!role) return true
+    return role === "assistant"
   }
 
   const clearMessageTracking = (messageId: string): void => {

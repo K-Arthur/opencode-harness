@@ -16,6 +16,8 @@ scripts/**
 playwright-report/**
 test-results/**
 .gitignore
+.env*
+package-lock.json
 .clinerules
 .windsurfrules
 .windsurfrules.windsurfrules.bak
@@ -35,7 +37,6 @@ tsconfig.json
 **/*.map
 dist/**/*.ts
 Requirements Document.txt
-src/chat/webview/sessions.ts
 commitlint.config.js
 forgecraft.yaml
 forgecraft.yaml.bak

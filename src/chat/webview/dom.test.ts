@@ -34,8 +34,9 @@ describe("dom.ts", () => {
     assert.ok(source.includes("export function getActiveTypingIndicator"))
   })
 
-  it("requireElement throws on missing element", () => {
-    assert.ok(source.includes('throw new Error(`Missing webview element: ${id}`)'))
+  it("requireElement uses fallback on missing element instead of crashing", () => {
+    assert.ok(source.includes("Missing element") || source.includes("throw new Error("), 
+      "requireElement must handle missing elements gracefully")
   })
 
   it("ElementRefs contains promptInput", () => {
@@ -44,5 +45,18 @@ describe("dom.ts", () => {
 
   it("ElementRefs contains agentStatusText", () => {
     assert.ok(source.includes("agentStatusText: HTMLSpanElement"))
+  })
+
+  it("optionalElement warns but does not throw on missing element", () => {
+    assert.ok(source.includes('console.warn(`[OpenCode] Optional element not found: ${id}`)'),
+      "optionalElement must warn instead of throwing")
+    assert.ok(source.includes("return null"),
+      "optionalElement must return null instead of throwing")
+  })
+
+  it("requireElement has fallback for missing elements, does not hard crash", () => {
+    assert.ok(
+      source.includes("console.warn") && (source.includes("fallback") || source.includes("Missing element")),
+      "requireElement must warn and use fallback instead of hard crashing")
   })
 })

@@ -10,11 +10,13 @@ export class FallbackHandler implements EventHandler {
   handle(event: SdkEventLike, context: NormalizerContext): NormalizedOpencodeEvent[] {
     const out: NormalizedOpencodeEvent[] = []
 
-    // Log unknown event types (once per type) for debuggability
-    if (!context.seenUnknownTypes.has(event.type)) {
-      context.seenUnknownTypes.add(event.type)
-      console.warn(`[opencode-harness] Unhandled SDK event type: "${event.type}"`)
-    }
+    // Silently skip events that no handler processed.
+    // Previously logged "Unhandled SDK event type" warnings here, but those
+    // were misleading because:
+    //   1. For `message.part.updated` the loop continues past matched
+    //      handlers (TextPartHandler, ToolPartHandler) and always reaches this.
+    //   2. Events like `server.heartbeat`, `session.created`, `tui.toast.show`
+    //      are lifecycle events the SDK emits — they are expected and harmless.
 
     return out
   }

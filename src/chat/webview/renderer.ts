@@ -1,5 +1,6 @@
 import hljs from "highlight.js/lib/core"
 import MarkdownIt from "markdown-it"
+import taskLists from "markdown-it-task-lists"
 import DOMPurify from "dompurify"
 import type {
   Block,
@@ -18,12 +19,16 @@ import type {
 // Markdown parser with security settings
 // ---------------------------------------------------------------------------
 
+export function renderMarkdown(text: string): string {
+  return md.render(text)
+}
+
 const md = new MarkdownIt({
   html: false,
   linkify: true,
   typographer: true,
   breaks: true,
-})
+}).use(taskLists, { label: true, labelAfter: true })
 
   // Enable plugins for rich markdown rendering
   // NOTE: Optional plugins (abbr, deflist, footnote, task-lists) are available
@@ -50,11 +55,12 @@ const PURIFY_CONFIG: PurifyConfig = {
     "b", "i", "em", "strong", "a", "p", "br", "ul", "ol", "li",
     "code", "pre", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6",
     "hr", "img", "span", "div", "table", "thead", "tbody", "tr", "th", "td",
-    "del", "sup", "sub",
+    "del", "sup", "sub", "input", "label"
   ],
   ALLOWED_ATTR: [
     "href", "src", "alt", "title", "class", "language", "width", "height",
-    "aria-label", "role", "tabindex",
+    "aria-label", "role", "tabindex", "data-kind", "data-tab-id", "data-message-id",
+    "data-block-id", "data-code", "data-lang", "type", "checked", "disabled", "id", "for"
   ],
   ALLOWED_URI_REGEXP: /^(?:(?:https?|ftp):|\/)/i,
   FORBID_CONTENTS: ["script", "style", "iframe", "frame", "object", "embed"],
@@ -63,7 +69,7 @@ const PURIFY_CONFIG: PurifyConfig = {
   SAFE_FOR_XML: true,
 }
 
-function sanitizeHtml(html: string): string {
+export function sanitizeHtml(html: string): string {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return DOMPurify.sanitize(html, PURIFY_CONFIG as any) as unknown as string
 }
@@ -111,8 +117,6 @@ hljs.registerAliases(["html", "htm"], { languageName: "xml" })
 hljs.registerAliases(["py"], { languageName: "python" })
 
 import {
-  OC_LOGO_SVG,
-  USER_AVATAR_SVG,
   CHEVRON_RIGHT_SVG,
   BRAIN_SVG,
   TOOL_READ_SVG,
@@ -192,14 +196,7 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
   const role: string = msg.role || "assistant"
   div.className = `message ${role}`
   if (msg.id) div.dataset.messageId = msg.id
-
-  if (role !== "system" && !isConsecutive) {
-    const avatar = document.createElement("div")
-    avatar.className = "message-avatar"
-    avatar.setAttribute("aria-hidden", "true")
-    avatar.innerHTML = role === "user" ? USER_AVATAR_SVG : OC_LOGO_SVG
-    div.appendChild(avatar)
-  }
+  if (role) div.dataset.role = role
 
   const contentWrapper = document.createElement("div")
   contentWrapper.className = "message-content"
@@ -224,14 +221,28 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
       editBtn.title = "Edit message"
       editBtn.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
       editBtn.addEventListener("click", () => {
-        const vscode = (window as any).acquireVsCodeApi?.()
-        if (vscode) {
-          const textBlocks = (msg.blocks || []).filter((b) => b.type === "text")
-          const text = textBlocks.map((b) => b.text || "").join("\n")
-          vscode.postMessage({ type: "edit_message", messageId: msg.id, text })
+        const textBlocks = (msg.blocks || []).filter((b) => b.type === "text")
+        const text = textBlocks.map((b) => b.text || "").join("\n")
+        const pm = opts?.postMessage
+        if (pm) {
+          pm({ type: "edit_message", messageId: msg.id, text, sessionId: msg.sessionId })
         }
       })
       header.appendChild(editBtn)
+    }
+    if (role === "assistant" && msg.id) {
+      const revertBtn = document.createElement("button")
+      revertBtn.className = "message-revert-btn"
+      revertBtn.setAttribute("aria-label", "Revert message changes")
+      revertBtn.title = "Revert code changes from this message"
+      revertBtn.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>'
+      revertBtn.addEventListener("click", () => {
+        const pm = opts?.postMessage
+        if (pm) {
+          pm({ type: "revert_message", messageId: msg.id, sessionId: msg.sessionId })
+        }
+      })
+      header.appendChild(revertBtn)
     }
     contentWrapper.appendChild(header)
   }
@@ -286,38 +297,37 @@ function renderTextBlock(block: Block, _opts: RenderOptions): HTMLElement | null
   div.className = "msg-text markdown-content"
 
   // Render mentions as chips if present in text
-  const mentionPattern = /@(file|folder|url|problems|terminal):\S+/g
+  const mentionPattern = /(@(file|folder|url|problems|terminal):\S+)/g
   const hasMentions = mentionPattern.test(text)
-  mentionPattern.lastIndex = 0 // reset regex
 
   if (hasMentions && block.text) {
     const parts = block.text.split(mentionPattern)
-    mentionPattern.lastIndex = 0
-    let match: RegExpExecArray | null
-    let lastIndex = 0
     const fragment = document.createDocumentFragment()
-    while ((match = mentionPattern.exec(block.text)) !== null) {
-      // Text before mention
-      if (match.index > lastIndex) {
-        const before = document.createTextNode(block.text.slice(lastIndex, match.index))
-        const wrapper = document.createElement("span")
-        wrapper.innerHTML = sanitizeHtml(md.render(before.textContent || ""))
-        fragment.appendChild(wrapper)
+    
+    // With capturing groups, split() returns [text, fullMatch, type, text, fullMatch, type, ...]
+    // But our regex has TWO capturing groups: 1 for full match, 1 for the type.
+    // So split returns [text, @file:/foo, file, text, ...]
+    // Parts array length will be 1 + (number of matches * 3)
+    
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]
+      if (!part) continue
+
+      if (i % 3 === 0) {
+        // Plain text part
+        const span = document.createElement("span")
+        span.innerHTML = sanitizeHtml(md.renderInline(part))
+        fragment.appendChild(span)
+      } else if (i % 3 === 1) {
+        // Full mention match (@file:/foo)
+        const type = parts[i+1] || "file"
+        const chip = document.createElement("span")
+        chip.className = "context-chip"
+        chip.dataset.kind = type
+        chip.textContent = part
+        fragment.appendChild(chip)
+        i++ // Skip the 'type' part since we consumed it
       }
-      // Mention chip
-      const chip = document.createElement("span")
-      const mentionType = (match[1] as "file" | "folder" | "url" | "problems" | "terminal") || "file"
-      chip.className = `mention-chip mention-${mentionType}`
-      chip.dataset.kind = mentionType
-      chip.textContent = match[0]
-      fragment.appendChild(chip)
-      lastIndex = mentionPattern.lastIndex
-    }
-    // Remaining text
-    if (lastIndex < block.text.length) {
-      const remaining = document.createElement("span")
-      remaining.innerHTML = sanitizeHtml(md.render(block.text.slice(lastIndex)))
-      fragment.appendChild(remaining)
     }
     div.appendChild(fragment)
   } else {
@@ -516,6 +526,7 @@ function renderToolCallBlock(block: Block, opts: RenderOptions): HTMLElement | n
 
   const details = document.createElement("details")
   details.className = `tool-call tool-call--${toolClass} tool-call--${toolState}`
+  details.dataset.blockId = toolBlock.id
   if (toolState === 'result' && toolBlock.error) {
     details.className += ' tool-call--error'
   }

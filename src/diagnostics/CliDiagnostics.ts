@@ -121,12 +121,18 @@ export class CliDiagnostics {
     const binaryPath = this.resolveBinaryPath()
 
     return new Promise((resolve) => {
+      const allowedEnvVars = ["PATH", "HOME", "USERPROFILE", "APPDATA", "XDG_CONFIG_HOME", "LANG", "TERM", "SHELL", "TMPDIR", "TEMP", "TMP"]
+      const childEnv: Record<string, string> = {}
+      for (const key of allowedEnvVars) {
+        const val = process.env[key]
+        if (val) childEnv[key] = val
+      }
       const proc = spawn(binaryPath, args, {
         timeout: timeoutMs,
         // Don't spawn a shell — prevents shell injection
         shell: false,
-        // Restrict environment to current process env
-        env: process.env,
+        // Restrict environment to allowlist to prevent secret leakage
+        env: childEnv,
       })
       let out = ""
       let err = ""

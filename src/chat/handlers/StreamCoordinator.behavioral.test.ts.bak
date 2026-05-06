@@ -1,0 +1,491 @@
+/**
+ * StreamCoordinator — Behavioral Tests
+ *
+ * Tests actual runtime behavior through mocked dependencies.
+ * Covers: prompt lifecycle, streaming, timeouts, abort, tab cleanup,
+ * unknown session handling, and edge cases.
+ */
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { StreamCoordinator, type StreamCallbacks } from "./StreamCoordinator"
+import { TabManager, type TabState } from "../TabManager"
+import type { DiffApplier } from "../../diff/DiffApplier"
+
+// ---------------------------------------------------------------------------
+// Mock factories — minimal stubs satisfying constructor signatures
+// ---------------------------------------------------------------------------
+
+function createMockSessionManager() {
+  return {
+    isRunning: true,
+    start: vi.fn().mockResolvedValue(undefined),
+    ensureSession: vi.fn().mockResolvedValue("sess-123"),
+    sendPromptAsync: vi.fn().mockResolvedValue(undefined),
+    abortSession: vi.fn().mockResolvedValue(undefined),
+  }
+}
+
+function createMockSessionStore() {
+  return {
+    updateCliSessionId: vi.fn(),
+    appendMessage: vi.fn(),
+  }
+}
+
+function createMockContextEngine() {
+  return {
+    gatherContext: vi.fn().mockResolvedValue({
+      openFiles: [],
+      gitStatus: { branch: "main", modified: [], staged: [] },
+      workspaceTree: [],
+      projectConfigs: [],
+      diagnostics: [],
+    }),
+  }
+}
+
+function createMockContextMonitor() {
+  return { updateTokens: vi.fn() }
+}
+
+function createMockModelManager() {
+  return {}
+}
+
+function createMockDiffApplier(): DiffApplier {
+  return {
+    applyProposedEdit: vi.fn().mockResolvedValue(true),
+    rejectProposedEdit: vi.fn(),
+    dispose: vi.fn(),
+  } as unknown as DiffApplier
+}
+
+function createMockCallbacks(): StreamCallbacks & {
+  messages: Record<string, unknown>[]
+  errors: string[]
+} {
+  const messages: Record<string, unknown>[] = []
+  const errors: string[] = []
+  return {
+    messages,
+    errors,
+    postMessage: vi.fn((msg: Record<string, unknown>) => {
+      messages.push(msg)
+    }),
+    postRequestError: vi.fn((message: string) => {
+      errors.push(message)
+    }),
+  }
+}
+
+/** Returns a truthy timestamp for comparison in tests. */
+function recentTimestamp(): number {
+  return Date.now() - 1000
+}
+
+// ---------------------------------------------------------------------------
+// Helper — creates a fully-wired StreamCoordinator with mocked deps
+// ---------------------------------------------------------------------------
+
+function createTestHarness() {
+  const sessionManager = createMockSessionManager()
+  const sessionStore = createMockSessionStore()
+  const contextEngine = createMockContextEngine()
+  const contextMonitor = createMockContextMonitor()
+  const modelManager = createMockModelManager()
+  const tabManager = new TabManager()
+  const diffApplier = createMockDiffApplier()
+
+  const coordinator = new StreamCoordinator(
+    sessionManager as unknown as import("../../session/SessionManager").SessionManager,
+    sessionStore as unknown as import("../../session/SessionStore").SessionStore,
+    contextEngine as unknown as import("../../context/ContextEngine").ContextEngine,
+    contextMonitor as unknown as import("../../monitor/ContextMonitor").ContextMonitor,
+    modelManager as unknown as import("../../model/ModelManager").ModelManager,
+    tabManager,
+    diffApplier,
+  )
+
+  return {
+    coordinator,
+    sessionManager,
+    sessionStore,
+    contextEngine,
+    contextMonitor,
+    tabManager,
+    diffApplier,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe("StreamCoordinator — behavioral", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  // -------------------------------------------------------------------------
+  // 1. Prompt send creates a tab-bound stream_start before stream chunks
+  // -------------------------------------------------------------------------
+  describe("prompt send lifecycle", () => {
+    it("emits stream_start with correct sessionId and messageId before chunks arrive", async () => {
+      const { coordinator, tabManager } = createTestHarness()
+      const tab = tabManager.createTab("tab-1", "sess-123")!
+      const callbacks = createMockCallbacks()
+
+      await coordinator.startPrompt("tab-1", "Hello", callbacks)
+
+      // Find the stream_start message
+      const startMsg = callbacks.messages.find(
+        (m) => m.type === "stream_start",
+      )
+      expect(startMsg).toBeDefined()
+      expect(startMsg!.sessionId).toBe("tab-1")
+      expect(startMsg!.messageId).toBe("resp-sess-123")
+    })
+
+    it("sets streaming state to true on the tab", async () => {
+      const { coordinator, tabManager } = createTestHarness()
+      tabManager.createTab("tab-1", "sess-123")
+      const callbacks = createMockCallbacks()
+
+      await coordinator.startPrompt("tab-1", "Hello", callbacks)
+
+      const tab = tabManager.getTab("tab-1")
+      expect(tab!.isStreaming).toBe(true)
+    })
+
+    it("sets waitingForCompletion to true on the tab", async () => {
+      const { coordinator, tabManager } = createTestHarness()
+      tabManager.createTab("tab-1", "sess-123")
+      const callbacks = createMockCallbacks()
+
+      await coordinator.startPrompt("tab-1", "Hello", callbacks)
+
+      const tab = tabManager.getTab("tab-1")
+      expect(tab!.waitingForCompletion).toBe(true)
+    })
+
+    it("calls sendPromptAsync with user text", async () => {
+      const { coordinator, tabManager, sessionManager } = createTestHarness()
+      tabManager.createTab("tab-1", "sess-123")
+      const callbacks = createMockCallbacks()
+
+      await coordinator.startPrompt("tab-1", "What is 2+2?", callbacks)
+
+      expect(sessionManager.sendPromptAsync).toHaveBeenCalled()
+      const callArgs = sessionManager.sendPromptAsync.mock.calls[0]!
+      // Second argument is the parts array; last part should contain user text
+      const parts = callArgs[1] as Array<{ type: string; text: string }>
+      const userPart = parts.find((p) => p.text === "What is 2+2?")
+      expect(userPart).toBeDefined()
+    })
+
+    it("reports error when server is not running and start fails", async () => {
+      const { coordinator, tabManager, sessionManager } = createTestHarness()
+      sessionManager.isRunning = false
+      sessionManager.start.mockRejectedValue(new Error("Server unreachable"))
+      tabManager.createTab("tab-1", "sess-123")
+      const callbacks = createMockCallbacks()
+
+      await coordinator.startPrompt("tab-1", "Hello", callbacks)
+
+      expect(callbacks.postRequestError).toHaveBeenCalledWith(
+        "Server unreachable",
+      )
+      // Tab should not be stuck in streaming state
+      const tab = tabManager.getTab("tab-1")
+      expect(tab!.isStreaming).toBe(false)
+    })
+
+    it("reports error when tab does not exist", async () => {
+      const { coordinator } = createTestHarness()
+      const callbacks = createMockCallbacks()
+
+      await coordinator.startPrompt("nonexistent-tab", "Hello", callbacks)
+
+      expect(callbacks.postRequestError).toHaveBeenCalledWith("Tab not found")
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // 2. Stream event for a known server session updates the correct tab
+  // -------------------------------------------------------------------------
+  describe("appendChunk — routing stream data", () => {
+    it("appends text to the correct tab buffer", () => {
+      const { coordinator, tabManager } = createTestHarness()
+      tabManager.createTab("tab-1", "sess-123")
+      const callbacks = createMockCallbacks()
+
+      coordinator.appendChunk("tab-1", "Hello ", callbacks)
+      coordinator.appendChunk("tab-1", "world", callbacks)
+
+      const tab = tabManager.getTab("tab-1")
+      expect(tab!.streamingBuffer).toBe("Hello world")
+    })
+
+    it("emits stream_chunk messages with correct sessionId and text", () => {
+      const { coordinator, tabManager } = createTestHarness()
+      tabManager.createTab("tab-1", "sess-123")
+      const callbacks = createMockCallbacks()
+
+      coordinator.appendChunk("tab-1", "chunk1", callbacks)
+      coordinator.appendChunk("tab-1", "chunk2", callbacks)
+
+      const chunkMessages = callbacks.messages.filter(
+        (m) => m.type === "stream_chunk",
+      )
+      expect(chunkMessages).toHaveLength(2)
+      expect(chunkMessages[0]).toEqual({
+        type: "stream_chunk",
+        sessionId: "tab-1",
+        text: "chunk1",
+      })
+      expect(chunkMessages[1]).toEqual({
+        type: "stream_chunk",
+        sessionId: "tab-1",
+        text: "chunk2",
+      })
+    })
+
+    it("clears TTFB timeout on first chunk", () => {
+      const { coordinator, tabManager } = createTestHarness()
+      tabManager.createTab("tab-1", "sess-123")
+      const callbacks = createMockCallbacks()
+
+      // Simulate that a TTFB timeout was set (it would be via startPrompt,
+      // but we can verify by checking that appendChunk doesn't throw)
+      coordinator.appendChunk("tab-1", "first", callbacks)
+
+      // After first chunk, buffer should have content
+      const tab = tabManager.getTab("tab-1")
+      expect(tab!.streamingBuffer).toBe("first")
+    })
+
+    it("resets completion timeout on each chunk", () => {
+      const { coordinator, tabManager } = createTestHarness()
+      tabManager.createTab("tab-1", "sess-123")
+      const callbacks = createMockCallbacks()
+
+      coordinator.appendChunk("tab-1", "a", callbacks)
+
+      // Advance time less than the completion timeout (60s)
+      vi.advanceTimersByTime(30000)
+
+      coordinator.appendChunk("tab-1", "b", callbacks)
+
+      // Advance another 30s — total 60s since first chunk but reset after second
+      vi.advanceTimersByTime(30000)
+
+      // Should NOT have emitted a timeout because the timeout was reset
+      const timeoutMsgs = callbacks.messages.filter(
+        (m) => m.type === "stream_end" && m.reason === "timeout",
+      )
+      expect(timeoutMsgs).toHaveLength(0)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // 3. Timeout before first byte produces retryable error UI
+  // -------------------------------------------------------------------------
+  describe("TTFB timeout", () => {
+    it("emits stream_end with reason ttfb_timeout when no chunk arrives within 30s", async () => {
+      const { coordinator, tabManager } = createTestHarness()
+      tabManager.createTab("tab-1", "sess-123")
+      const callbacks = createMockCallbacks()
+
+      await coordinator.startPrompt("tab-1", "Hello", callbacks)
+
+      // Advance past TTFB_TIMEOUT_MS (30s)
+      vi.advanceTimersByTime(30001)
+
+      const endMsg = callbacks.messages.find(
+        (m) => m.type === "stream_end" && m.reason === "ttfb_timeout",
+      )
+      expect(endMsg).toBeDefined()
+      expect(endMsg!.partial).toBe(false)
+    })
+
+    it("clears streaming state after TTFB timeout", async () => {
+      const { coordinator, tabManager } = createTestHarness()
+      tabManager.createTab("tab-1", "sess-123")
+      const callbacks = createMockCallbacks()
+
+      await coordinator.startPrompt("tab-1", "Hello", callbacks)
+      vi.advanceTimersByTime(30001)
+
+      const tab = tabManager.getTab("tab-1")
+      expect(tab!.isStreaming).toBe(false)
+      expect(tab!.waitingForCompletion).toBe(false)
+    })
+
+    it("does NOT fire TTFB timeout if first chunk arrives in time", async () => {
+      const { coordinator, tabManager } = createTestHarness()
+      tabManager.createTab("tab-1", "sess-123")
+      const callbacks = createMockCallbacks()
+
+      await coordinator.startPrompt("tab-1", "Hello", callbacks)
+
+      // Chunk arrives at 10s
+      vi.advanceTimersByTime(10000)
+      coordinator.appendChunk("tab-1", "data", callbacks)
+
+      // Advance well past 30s TTFB
+      vi.advanceTimersByTime(25000)
+
+      const ttfbEnd = callbacks.messages.find(
+        (m) => m.type === "stream_end" && m.reason === "ttfb_timeout",
+      )
+      expect(ttfbEnd).toBeUndefined()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // 4. Timeout after partial tokens preserves partial output
+  // -------------------------------------------------------------------------
+  describe("Completion timeout with partial output", () => {
+    it("emits stream_end with reason timeout and partial: true after 60s", async () => {
+      const { coordinator, tabManager } = createTestHarness()
+      tabManager.createTab("tab-1", "sess-123")
+      const callbacks = createMockCallbacks()
+
+      await coordinator.startPrompt("tab-1", "Hello", callbacks)
+
+      // Receive some chunks, then stream goes silent
+      coordinator.appendChunk("tab-1", "Partial response ", callbacks)
+      coordinator.appendChunk("tab-1", "data here", callbacks)
+
+      // Advance past completion timeout (60s from last chunk)
+      vi.advanceTimersByTime(60001)
+
+      const endMsg = callbacks.messages.find(
+        (m) => m.type === "stream_end" && m.reason === "timeout",
+      )
+      expect(endMsg).toBeDefined()
+      expect(endMsg!.partial).toBe(true)
+      // Should include the partial text as blocks
+      const blocks = endMsg!.blocks as Array<{ type: string; text: string }>
+      expect(blocks.length).toBeGreaterThan(0)
+      expect(blocks[0]!.text).toContain("Partial response data here")
+    })
+
+    it("persists partial output to session store on timeout", async () => {
+      const { coordinator, tabManager, sessionStore } = createTestHarness()
+      tabManager.createTab("tab-1", "sess-123")
+      const callbacks = createMockCallbacks()
+
+      await coordinator.startPrompt("tab-1", "Hello", callbacks)
+      coordinator.appendChunk("tab-1", "Some output", callbacks)
+
+      vi.advanceTimersByTime(60001)
+
+      // resetCompletionTimeout calls finalizeStream which appends message
+      // The 60s timeout calls finalizeStream which stores the message
+      expect(sessionStore.appendMessage).toHaveBeenCalled()
+    })
+
+    it("clears streaming state after completion timeout", async () => {
+      const { coordinator, tabManager } = createTestHarness()
+      tabManager.createTab("tab-1", "sess-123")
+      const callbacks = createMockCallbacks()
+
+      await coordinator.startPrompt("tab-1", "Hello", callbacks)
+      coordinator.appendChunk("tab-1", "data", callbacks)
+
+      vi.advanceTimersByTime(60001)
+
+      const tab = tabManager.getTab("tab-1")
+      expect(tab!.isStreaming).toBe(false)
+      expect(tab!.waitingForCompletion).toBe(false)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // 5. Unknown session event is logged and ignored without crashing
+  // -------------------------------------------------------------------------
+  describe("unknown / unmapped session handling", () => {
+    it("appendChunk for nonexistent tab does not crash", () => {
+      const { coordinator } = createTestHarness()
+      const callbacks = createMockCallbacks()
+
+      // Should not throw
+      expect(() => {
+        coordinator.appendChunk("ghost-tab", "data", callbacks)
+      }).not.toThrow()
+    })
+
+    it("finalizeStream for tab not waiting does nothing", async () => {
+      const { coordinator, tabManager } = createTestHarness()
+      tabManager.createTab("tab-1", "sess-123")
+      const callbacks = createMockCallbacks()
+
+      // Tab exists but is not waiting for completion
+      await coordinator.finalizeStream("tab-1", callbacks)
+
+      // No stream_end emitted because waitingForCompletion is false
+      const endMsg = callbacks.messages.find((m) => m.type === "stream_end")
+      expect(endMsg).toBeUndefined()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // 6. Closing a tab aborts the stream and clears in-flight state
+  // -------------------------------------------------------------------------
+  describe("abort — stream cancellation", () => {
+    it("calls abortSession on the session manager", async () => {
+      const { coordinator, tabManager, sessionManager } = createTestHarness()
+      tabManager.createTab("tab-1", "sess-123")
+      const callbacks = createMockCallbacks()
+
+      await coordinator.abort("tab-1", callbacks)
+
+      expect(sessionManager.abortSession).toHaveBeenCalledWith("sess-123")
+    })
+
+    it("emits stream_end with reason aborted", async () => {
+      const { coordinator, tabManager } = createTestHarness()
+      tabManager.createTab("tab-1", "sess-123")
+      const callbacks = createMockCallbacks()
+
+      await coordinator.abort("tab-1", callbacks)
+
+      const endMsg = callbacks.messages.find(
+        (m) => m.type === "stream_end" && m.reason === "aborted",
+      )
+      expect(endMsg).toBeDefined()
+      expect(endMsg!.sessionId).toBe("tab-1")
+    })
+
+    it("clears all streaming state after abort", async () => {
+      const { coordinator, tabManager } = createTestHarness()
+      tabManager.createTab("tab-1", "sess-123")
+      tabManager.setStreaming("tab-1", true)
+      tabManager.setWaitingForCompletion("tab-1", true)
+      const callbacks = createMockCallbacks()
+
+      await coordinator.abort("tab-1", callbacks)
+
+      const tab = tabManager.getTab("tab-1")
+      expect(tab!.isStreaming).toBe(false)
+      expect(tab!.waitingForCompletion).toBe(false)
+      expect(tab!.streamingBuffer).toBe("")
+    })
+
+    it("emits aborted even if abortSession throws", async () => {
+      const { coordinator, tabManager, sessionManager } = createTestHarness()
+      tabManager.createTab("tab-1", "sess-123")
+      sessionManager.abortSession.mockRejectedValue(new Error("Network error"))
+      const callbacks = createMockCallbacks()
+
+      await coordinator.abort("tab-1", callbacks)
+
+      const abortedMessages = callbacks.messages.filter(
+        (m) => m.type === "stream_end" && m.reason === "aborted",
+      )
+      // Should emit aborted twice: once in try, once in catch
+      expect(ab

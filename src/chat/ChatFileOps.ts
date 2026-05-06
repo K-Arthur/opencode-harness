@@ -42,4 +42,6 @@ export class ChatFileOps {
     }
     return map[language?.toLowerCase()] || `.${language || "txt"}`
   }
+
+  dispose(): void {}
 }

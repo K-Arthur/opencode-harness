@@ -44,8 +44,8 @@ The extension does NOT embed or spawn the opencode CLI directly for chat. Instea
 │  │ Engine        │ │ Manager       │ │ Monitor       │   │
 │  └──────────────┘ └──────────────┘ └──────────────┘   │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐   │
-│  │ Inline        │ │ Skill         │ │ Checkpoint    │   │
-│  │ Actions       │ │ Manager       │ │ Manager       │   │
+│  │ Inline        │ │ ChunkBatcher  │ │ Checkpoint    │   │
+│  │ Actions       │ │ (stream buf)  │ │ Manager       │   │
 │  └──────────────┘ └──────────────┘ └──────────────┘   │
 │  ┌──────────────┐ ┌──────────────┐                    │
 │  │ Terminal      │ │ Theme         │                    │
@@ -83,13 +83,12 @@ activate(context: vscode.ExtensionContext):
   1. Initialize SessionManager (does NOT start server yet)
   2. Register ChatProvider webview (with TabManager, StreamCoordinator, etc.)
   3. Register InlineActionProvider (CodeLens + context menus)
-  4. Register SkillManager tree view
-  5. Register ContextMonitor status bar item
-  6. Register TerminalBridge output channel
-  7. Register ModelManager status bar item
-  8. Register all commands + keyboard shortcuts (including tab shortcuts)
-  9. Register URI handler (vscode://opencode-harness/open)
-  10. On first chat open → start opencode server
+  4. Register ContextMonitor status bar item
+  5. Register TerminalBridge output channel
+  6. Register ModelManager status bar item
+  7. Register all commands + keyboard shortcuts (including tab shortcuts)
+  8. Register URI handler (vscode://opencode-harness/open)
+  9. On first chat open → start opencode server
 
 deactivate():
   1. Stop opencode server process
@@ -415,7 +414,7 @@ class WebviewContent {
 | `stream.ts` | `StreamHandler` — handles streaming messages with `StreamElements` interface |
 | `tabs.ts` | `TabBar` — tab bar UI, create/switch/close tabs, streaming indicators |
 | `model-dropdown.ts` | `ModelDropdown` — per-tab model picker with provider grouping |
-| `token-indicator.ts` | `TokenIndicator` — token usage pill with color-coded progress |
+| `theme.ts` | Context chips and usage bar rendering |
 | `mentions.ts` | `@-mention` autocomplete for files, folders, problems, terminals |
 | `sessions.ts` | Session picker overlay for resuming/deleting/renaming sessions |
 | `theme.ts` | Context chips and usage bar rendering |
@@ -563,8 +562,11 @@ interface ModelInfo {
 #### InlineActionProvider (`src/inline/InlineActionProvider.ts`)
 **Responsibility:** Provide CodeLens annotations and context menu actions for selected code.
 
-#### SkillManager (`src/skills/SkillManager.ts`)
-**Responsibility:** Tree view for browsing, enabling, and disabling opencode skills.
+#### ChunkBatcher (`src/chat/ChunkBatcher.ts`)
+**Responsibility:** Buffers streaming text chunks and flushes every 50ms to reduce postMessage overhead.
+
+#### SessionExporter (`src/session/SessionExporter.ts`)
+**Responsibility:** Export session conversations as Markdown files.
 
 #### ContextMonitor (`src/monitor/ContextMonitor.ts`)
 **Responsibility:** Status bar ring indicator showing context window usage.
@@ -907,6 +909,7 @@ src/
 ├── chat/
 │   ├── ChatProvider.ts          # Main webview provider (orchestrator)
 │   ├── TabManager.ts            # Per-tab state & concurrency limit
+│   ├── ChunkBatcher.ts          # Streaming text chunk batching (50ms flush)
 │   ├── WebviewContent.ts        # HTML/CSS injection for webview
 │   ├── handlers/
 │   │   ├── StreamCoordinator.ts # Per-tab streaming lifecycle
@@ -938,7 +941,8 @@ src/
 │           └── styles.css       # Entry point (imports all)
 ├── session/
 │   ├── SessionManager.ts        # opencode server lifecycle
-│   └── SessionStore.ts          # Persistent session storage
+│   ├── SessionStore.ts          # Persistent session storage
+│   └── SessionExporter.ts       # Markdown export of sessions
 ├── context/
 │   └── ContextEngine.ts         # Workspace context gathering
 ├── diff/
@@ -952,8 +956,6 @@ src/
 │   └── ThemeManager.ts          # Theme variable resolution
 ├── inline/
 │   └── InlineActionProvider.ts  # CodeLens actions
-├── skills/
-│   └── SkillManager.ts          # Skills tree view
 ├── terminal/
 │   └── TerminalBridge.ts        # Terminal output capture
 ├── checkpoint/

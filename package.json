@@ -114,6 +114,22 @@
       {
         "command": "opencode-harness.previewTheme",
         "title": "OpenCode: Preview Theme"
+      },
+      {
+        "command": "opencode-harness.clearTestSessions",
+        "title": "OpenCode: Clear Test Sessions"
+      },
+      {
+        "command": "opencode-harness.continueLastSession",
+        "title": "OpenCode: Continue Last Session"
+      },
+      {
+        "command": "opencode-harness.chooseHistorySession",
+        "title": "OpenCode: Choose History Session…"
+      },
+      {
+        "command": "opencode-harness.attachRemote",
+        "title": "OpenCode: Attach to Remote Server…"
       }
     ],
     "keybindings": [
@@ -177,6 +193,18 @@
           "default": "",
           "scope": "machine",
           "description": "Path to the opencode binary. If not set, the extension will search for 'opencode' in your PATH."
+        },
+        "opencode.serverUrl": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "When set, attach to a remote opencode server at this URL instead of spawning a local one (e.g. http://host:4096). Leave blank for local spawn."
+        },
+        "opencode.serverAuthToken": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Optional bearer token sent with requests to the remote opencode server. Only used when 'opencode.serverUrl' is set."
         },
         "opencode.theme": {
           "type": "object",
@@ -388,6 +416,12 @@
             "Never auto-compact"
           ],
           "description": "Controls automatic session compaction when context usage reaches 80%"
+        },
+        "opencode.debugLogging": {
+          "type": "boolean",
+          "scope": "window",
+          "default": false,
+          "description": "Enable verbose debug logging to the OpenCode Harness output channel"
         }
       }
     }
@@ -420,6 +454,7 @@
     "c8": "^11.0.0",
     "esbuild": "^0.28.0",
     "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "jsdom": "^29.1.1",
     "mocha": "^11.3.0",
@@ -434,6 +469,7 @@
     "dompurify": "^3.4.2",
     "highlight.js": "^11.11.1",
     "markdown-it": "^14.1.0",
+    "markdown-it-task-lists": "^2.1.1",
     "simple-git": "^3.27.0"
   }
 }

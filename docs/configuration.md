@@ -96,6 +96,12 @@ All settings are under the `opencode.*` namespace and can be configured in VS Co
 - **Scope**: `window`
 - **Description**: Fraction of remaining rate limit that triggers a critical warning (0.0–1.0). Default 0.05 = critical alert at 5% remaining.
 
+### `opencode.debugLogging`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Scope**: `window`
+- **Description**: Enable verbose debug logging to the OpenCode Harness output channel. When enabled, `debug()` level messages are emitted alongside info/warn/error output. All log messages are scrubbed of sensitive patterns (API keys, tokens, passwords) regardless of this setting.
+
 ---
 
 ## Environment Variables

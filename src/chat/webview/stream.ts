@@ -92,6 +92,10 @@ class StreamSession implements StreamHandlers {
       streamingToolCallId: null,
       seenEventIds: new Set<string>(),
       lastStreamTextEl: null,
+      currentBlockEl: null,
+      currentBlockBuffer: "",
+      currentBlockIndex: -1,
+      rafPending: false,
     }
     this.els = { messageList, typingIndicator, typingLabel, scrollAnchor }
     this.messages = messages
@@ -113,7 +117,7 @@ class StreamSession implements StreamHandlers {
   }
 
   handleStreamToken(text?: string): void {
-    handleStreamToken(this.state, this.els, text)
+    handleStreamToken(this.state, this.els, this.messages, text)
   }
 
   handleStreamChunk(text?: string): void {

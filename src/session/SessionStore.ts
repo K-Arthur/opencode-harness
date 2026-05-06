@@ -1,6 +1,15 @@
 import * as vscode from "vscode"
 import { type ChatMessage } from "../types"
 import { log } from "../utils/outputChannel"
+import {
+  migrateLocalIdsToServerIds as migrateLocalIdsToServerIdsPure,
+  mergeServerSessions as mergeServerSessionsPure,
+  promotePendingServerLink as promotePendingServerLinkPure,
+  type MigratableSession,
+  type ServerSessionSnapshot,
+  type ImportResult,
+  type MigrationResult,
+} from "./sessionMigration"
 
 export interface OpenCodeSession {
   id: string
@@ -10,9 +19,43 @@ export interface OpenCodeSession {
   model: string
   mode: string
   cliSessionId?: string
+  /** True when the local session was created offline and has not yet been linked to a server session. */
+  pendingServerLink?: boolean
+  /** True when the session was imported from the server and its messages have not yet been backfilled. */
+  needsBackfill?: boolean
+  archived?: boolean
   messages: ChatMessage[]
   cost: number
   tokenUsage: { prompt: number; completion: number; total: number }
+}
+
+export interface CreateSessionOptions {
+  /** Pre-resolved server session id. When set, used as the local map key. */
+  id?: string
+  /** Pre-resolved server session id to record on the entry (defaults to `id`). */
+  cliSessionId?: string
+  /** Mark the session as needing a server link on next connect. */
+  pendingServerLink?: boolean
+}
+
+export type ServerSessionForImport = ServerSessionSnapshot
+
+export interface SessionChangeEvent {
+  kind: "deleted" | "renamed" | "active_changed" | "archived" | "unarchived"
+  sessionId: string
+  name?: string
+}
+
+export interface ClearSessionsPreview {
+  empty: number
+  testNamed: number
+  orphanedExtensionOnly: number
+  orphanedServerOnly: number
+  archived: number
+  corrupted: number
+  totalRemovable: number
+  retainedReal: number
+  backupPath?: string
 }
 
 const STORAGE_KEY = "opencode-harness.sessions"
@@ -28,6 +71,13 @@ export class SessionStore {
 
   private _onActiveSessionChanged = new vscode.EventEmitter<string>()
   readonly onActiveSessionChanged = this._onActiveSessionChanged.event
+
+  private _onDidChangeSession = new vscode.EventEmitter<SessionChangeEvent>()
+  readonly onDidChangeSession = this._onDidChangeSession.event
+
+  private _onSessionCreated = new vscode.EventEmitter<string>()
+  /** Fires after a brand-new session is created (not on import or migration). */
+  readonly onSessionCreated = this._onSessionCreated.event
 
   constructor(private readonly globalState: vscode.Memento) {
     this.load()
@@ -54,13 +104,20 @@ export class SessionStore {
       if (typeof sess.model !== "string") sess.model = ""
       if (typeof sess.cost !== "number") sess.cost = 0
       if (typeof sess.tokenUsage !== "object") sess.tokenUsage = { prompt: 0, completion: 0, total: 0 }
-      // Skip sessions with no messages unless they're the active session
+      // Skip sessions with no messages — empty sessions serve no purpose
+      // on restore (they were never interacted with). Imported server
+      // sessions and pending-link sessions are exempt: they are intentionally
+      // empty until backfill or first prompt.
       const msgCount = Array.isArray(sess.messages) ? sess.messages.length : 0
-      if (msgCount === 0 && id !== this.activeSessionId) {
+      const exempt = sess.needsBackfill === true || sess.pendingServerLink === true
+      if (msgCount === 0 && !exempt) {
+        log.info(`Skipping empty session on load: ${id}`)
         continue
       }
       this.sessions.set(id, sess as unknown as OpenCodeSession)
     }
+    // Run the one-shot id-unification migration on load. Idempotent.
+    this.migrateLocalIdsToServerIds()
     this.pruneStaleSessions()
   }
 
@@ -79,8 +136,10 @@ export class SessionStore {
     try {
       const obj: Record<string, OpenCodeSession> = {}
       for (const [id, sess] of this.sessions) {
-        // Only persist sessions that have actual messages
-        if (sess.messages.length > 0 || id === this.activeSessionId) {
+        // Persist sessions with messages, the active session, sessions awaiting
+        // server backfill, and offline-created sessions awaiting promotion.
+        const exempt = sess.needsBackfill === true || sess.pendingServerLink === true
+        if (sess.messages.length > 0 || id === this.activeSessionId || exempt) {
           obj[id] = sess
         }
       }
@@ -95,7 +154,8 @@ export class SessionStore {
     const ONE_HOUR = 60 * 60 * 1000
     const staleIds: string[] = []
     for (const [id, sess] of this.sessions) {
-      if (sess.messages.length === 0 && (now - sess.lastActiveAt) > ONE_HOUR && id !== this.activeSessionId) {
+      const exempt = sess.needsBackfill === true || sess.pendingServerLink === true
+      if (sess.messages.length === 0 && (now - sess.lastActiveAt) > ONE_HOUR && id !== this.activeSessionId && !exempt) {
         staleIds.push(id)
       }
     }
@@ -105,19 +165,161 @@ export class SessionStore {
       }
       log.info(`Pruned ${staleIds.length} stale empty sessions`)
     }
-    while (this.sessions.size > SessionStore.MAX_SESSIONS) {
+    if (this.sessions.size > SessionStore.MAX_SESSIONS) {
       const sorted = Array.from(this.sessions.values()).sort((a, b) => a.lastActiveAt - b.lastActiveAt)
-      const oldest = sorted[0]
-      if (oldest && oldest.id !== this.activeSessionId) {
-        this.sessions.delete(oldest.id)
-      } else {
-        break
+      for (const oldest of sorted) {
+        if (this.sessions.size <= SessionStore.MAX_SESSIONS) break
+        if (oldest.id !== this.activeSessionId) {
+          this.sessions.delete(oldest.id)
+        }
       }
     }
   }
 
-  create(name?: string, id?: string): OpenCodeSession {
-    const sessionId = id || crypto.randomUUID()
+  private fireChangeEvent(event: SessionChangeEvent): void {
+    this._onDidChangeSession.fire(event)
+  }
+
+  archive(id: string): boolean {
+    const session = this.sessions.get(id)
+    if (!session) return false
+    session.archived = true
+    session.lastActiveAt = Date.now()
+    this.save()
+    this._onSessionsChanged.fire()
+    this.fireChangeEvent({ kind: "archived", sessionId: id })
+    return true
+  }
+
+  unarchive(id: string): boolean {
+    const session = this.sessions.get(id)
+    if (!session) return false
+    session.archived = false
+    session.lastActiveAt = Date.now()
+    this.save()
+    this._onSessionsChanged.fire()
+    this.fireChangeEvent({ kind: "unarchived", sessionId: id })
+    return true
+  }
+
+  /**
+   * Preview or execute clearing of test/empty sessions.
+   * dryRun=true returns counts without deleting.
+   * Never deletes active streaming sessions.
+   * Creates a JSON backup of removed sessions before deletion.
+   */
+  clearAll(dryRun: boolean, streamingIds?: Set<string>): ClearSessionsPreview {
+    const preview: ClearSessionsPreview = {
+      empty: 0,
+      testNamed: 0,
+      orphanedExtensionOnly: 0,
+      orphanedServerOnly: 0,
+      archived: 0,
+      corrupted: 0,
+      totalRemovable: 0,
+      retainedReal: 0,
+    }
+
+    const activeStreaming = streamingIds || new Set<string>()
+    const removed: Array<{ id: string; name: string; messages: number }> = []
+
+    for (const [id, sess] of this.sessions) {
+      if (activeStreaming.has(id)) {
+        preview.retainedReal++
+        continue
+      }
+
+      // Check for corrupted entries (missing required fields)
+      const isCorrupted = typeof sess.name !== "string" || typeof sess.createdAt !== "number"
+      if (isCorrupted) {
+        preview.corrupted++
+        preview.totalRemovable++
+        if (!dryRun) {
+          removed.push({ id, name: sess.name || "(corrupted)", messages: sess.messages?.length || 0 })
+          this.sessions.delete(id)
+        }
+        continue
+      }
+
+      const isEmpty = sess.messages.length === 0
+      const isTestNamed = !isEmpty && (sess.name === "Default" || sess.name.startsWith("Session ") || sess.name.startsWith("New session") || sess.name.startsWith("Tab session"))
+      const isOrphaned = !sess.cliSessionId
+      const isArchived = sess.archived === true
+
+      if (isArchived) {
+        preview.archived++
+        preview.totalRemovable++
+        if (!dryRun) {
+          removed.push({ id, name: sess.name, messages: sess.messages.length })
+          this.sessions.delete(id)
+        }
+      } else if (isEmpty) {
+        preview.empty++
+        preview.totalRemovable++
+        if (!dryRun) {
+          removed.push({ id, name: sess.name, messages: 0 })
+          this.sessions.delete(id)
+        }
+      } else if (isTestNamed) {
+        preview.testNamed++
+        preview.totalRemovable++
+        if (!dryRun) {
+          removed.push({ id, name: sess.name, messages: sess.messages.length })
+          this.sessions.delete(id)
+        }
+      } else if (isOrphaned) {
+        preview.orphanedExtensionOnly++
+        preview.totalRemovable++
+        if (!dryRun) {
+          removed.push({ id, name: sess.name, messages: sess.messages.length })
+          this.sessions.delete(id)
+        }
+      } else {
+        preview.retainedReal++
+      }
+    }
+
+    if (!dryRun) {
+      // Create a JSON backup log of removed sessions
+      if (removed.length > 0) {
+        try {
+          const backupEntry = JSON.stringify({
+            timestamp: Date.now(),
+            removed,
+            preview,
+          })
+          log.info(`Session cleanup backup: ${backupEntry}`)
+        } catch (err) {
+          log.warn("Failed to create cleanup backup log", err)
+        }
+      }
+
+      if (this.activeSessionId && !this.sessions.has(this.activeSessionId)) {
+        this.activeSessionId = ""
+        const remaining = this.list()
+        if (remaining.length > 0) {
+          this.setActive(remaining[0]!.id)
+        }
+      }
+      this.save()
+      log.info(`Cleared ${preview.totalRemovable} session(s) (empty=${preview.empty}, test=${preview.testNamed}, archived=${preview.archived}, corrupted=${preview.corrupted}, orphaned=${preview.orphanedExtensionOnly})`)
+    }
+
+    return preview
+  }
+
+  /** Alias — returns list of unarchived sessions sorted by lastActiveAt desc. */
+  listActive(): OpenCodeSession[] {
+    return Array.from(this.sessions.values())
+      .filter((s) => !s.archived)
+      .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+  }
+
+  create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
+    // Backwards compat: legacy callers passed (name, id: string).
+    const options: CreateSessionOptions = typeof opts === "string" ? { id: opts } : (opts ?? {})
+    const sessionId = options.id || crypto.randomUUID()
+    const cliSessionId = options.cliSessionId ?? options.id
     const now = Date.now()
     const session: OpenCodeSession = {
       id: sessionId,
@@ -130,12 +332,91 @@ export class SessionStore {
       cost: 0,
       tokenUsage: { prompt: 0, completion: 0, total: 0 },
     }
+    if (cliSessionId) session.cliSessionId = cliSessionId
+    if (options.pendingServerLink) session.pendingServerLink = true
     this.sessions.set(sessionId, session)
     this.activeSessionId = sessionId
     this.save()
     this._onSessionsChanged.fire()
     this._onActiveSessionChanged.fire(sessionId)
+    this._onSessionCreated.fire(sessionId)
     return session
+  }
+
+  /**
+   * Import server-side session snapshots that the extension does not already
+   * know about. Returns counts of newly imported and skipped (already-known)
+   * entries. Imported entries are marked `needsBackfill: true` so the caller
+   * can lazily fetch full message history on first activation.
+   *
+   * Idempotent.
+   */
+  importServerSessions(serverSessions: readonly ServerSessionForImport[]): ImportResult {
+    const result = mergeServerSessionsPure(this.sessions as unknown as Map<string, MigratableSession>, serverSessions)
+    if (result.imported > 0) {
+      this.save()
+      this._onSessionsChanged.fire()
+      log.info(`Imported ${result.imported} server session(s) (skipped ${result.skipped} already-known)`)
+    }
+    return result
+  }
+
+  /**
+   * One-shot migrator: rekey local sessions whose `cliSessionId` is set so
+   * that the map key matches the server-issued ID. Idempotent.
+   */
+  migrateLocalIdsToServerIds(): MigrationResult {
+    const result = migrateLocalIdsToServerIdsPure(this.sessions as unknown as Map<string, MigratableSession>)
+    if (result.rekeyed > 0) {
+      // If the active session was rekeyed, follow it.
+      const active = this.sessions.get(this.activeSessionId)
+      if (!active) {
+        // The active id may have been rekeyed; find the entry whose new id replaced it.
+        for (const [newId, sess] of this.sessions) {
+          if (sess.cliSessionId === this.activeSessionId) {
+            this.activeSessionId = newId
+            break
+          }
+        }
+      }
+      this.save()
+      this._onSessionsChanged.fire()
+      log.info(`Migrated ${result.rekeyed} local session id(s) to server ids`)
+    }
+    return result
+  }
+
+  /**
+   * Promote a pendingServerLink session to be keyed by a real server id.
+   * Returns false when source is missing or target id is already in use.
+   */
+  promotePendingServerLink(fromId: string, serverId: string): boolean {
+    const ok = promotePendingServerLinkPure(this.sessions as unknown as Map<string, MigratableSession>, fromId, serverId)
+    if (ok) {
+      if (this.activeSessionId === fromId) {
+        this.activeSessionId = serverId
+        this._onActiveSessionChanged.fire(serverId)
+      }
+      this.save()
+      this._onSessionsChanged.fire()
+      log.info(`Promoted pendingServerLink ${fromId} → ${serverId}`)
+    }
+    return ok
+  }
+
+  /**
+   * Replace the message list of an imported session and clear `needsBackfill`.
+   * Used after fetching full history from the server for a session that was
+   * imported via `importServerSessions`.
+   */
+  applyBackfilledMessages(id: string, messages: ChatMessage[]): boolean {
+    const session = this.sessions.get(id)
+    if (!session) return false
+    session.messages = messages
+    delete session.needsBackfill
+    this.save()
+    this._onSessionsChanged.fire()
+    return true
   }
 
   ensure(id: string, name?: string, model?: string, mode?: string): OpenCodeSession {
@@ -173,8 +454,10 @@ export class SessionStore {
     return this.sessions.get(id)
   }
 
-  list(): OpenCodeSession[] {
-    return Array.from(this.sessions.values()).sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+  list(includeArchived = false): OpenCodeSession[] {
+    return Array.from(this.sessions.values())
+      .filter((s) => includeArchived || !s.archived)
+      .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   }
 
   setActive(id: string): OpenCodeSession | undefined {
@@ -182,6 +465,7 @@ export class SessionStore {
     if (session) {
       this.activeSessionId = id
       this._onActiveSessionChanged.fire(id)
+      this.fireChangeEvent({ kind: "active_changed", sessionId: id })
     }
     return session
   }
@@ -252,6 +536,7 @@ export class SessionStore {
     session.name = name.trim()
     this.save()
     this._onSessionsChanged.fire()
+    this.fireChangeEvent({ kind: "renamed", sessionId: id, name: name.trim() })
     return true
   }
 
@@ -322,12 +607,15 @@ export class SessionStore {
     }
     this.save()
     this._onSessionsChanged.fire()
+    this.fireChangeEvent({ kind: "deleted", sessionId: id })
   }
 
   dispose(): void {
     this.flush()
     this._onSessionsChanged.dispose()
     this._onActiveSessionChanged.dispose()
+    this._onDidChangeSession.dispose()
+    this._onSessionCreated.dispose()
   }
 
   truncateMessages(id: string, keepUpToIndex: number): number {

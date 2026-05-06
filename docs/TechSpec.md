@@ -55,8 +55,9 @@ OpenCode Harness is a VS Code extension that integrates the opencode AI coding a
 - **Framework**: VS Code Extension API (^1.98.0)
 - **SDK**: @opencode-ai/sdk (official opencode SDK)
 - **UI**: Webview (HTML/CSS/TypeScript embedded in VS Code extension)
-- **Testing**: Playwright (E2E), ts-jest (unit)
+- **Testing**: Playwright (E2E), Node.js built-in test runner (unit + behavioral), Mocha (integration via vscode-test)
 - **Build**: esbuild, npm
+- **Password/security**: Auto-generated `OPENCODE_SERVER_PASSWORD` per session, Bearer token auth via SDK client headers, environment allowlist for child processes
 
 ### Data Flow
 1. User opens chat panel → Extension activates ChatProvider with TabManager
@@ -135,10 +136,9 @@ The following features were audited against the opencode CLI and enhanced for th
 - **20-checkpoint cap**: Oldest checkpoints are pruned per session when the cap is exceeded.
 - **Pre-action snapshot**: `snapshotBeforeAction` creates a checkpoint before any write tool call.
 
-### Inline Suggestions (Feature 9)
-- **InlineCompletionProvider**: Registered for all file patterns (`**`); shows ghost-text completions as the user types.
-- **Configurable**: `opencode.inlineSuggestions.enabled` (boolean, default `true`) and `opencode.inlineSuggestions.triggerDelay` (number, default `300`ms).
-- **Debounced**: CancellationToken-aware; prefix (up to 2000 chars before cursor) + suffix context sent for completion.
+### Inline CodeLens Actions (Feature 9)
+- **InlineActionProvider**: CodeLens annotations on functions/classes for Explain, Refactor, Generate Tests.
+- No ghost-text completion support (extension uses CodeLens only).
 
 ### Image & Multimodal (Feature 10)
 - **Clipboard paste**: Webview listens for `paste` events; detects image clipboard data, encodes to base64 via `FileReader`.
@@ -154,10 +154,12 @@ The following features were audited against the opencode CLI and enhanced for th
 - **Insert at Cursor**: Sends `insert_at_cursor` message → `handleInsertAtCursor` replaces active editor selections with code.
 - **Create New File**: Sends `create_file_from_code` → `showSaveDialog` → `workspace.fs.writeFile` → opens document.
 
-### Message Editing (Feature 13)
+### Message Editing & Revert (Feature 13 — Enhanced)
 - **Edit button**: Only on user messages, visible on hover; posts `edit_message` with message ID and text.
-- **Downstream clearing**: `SessionStore.truncateMessages()` removes all messages after the edited one.
+- **Downstream clearing**: `SessionStore.truncateMessages()` removes all messages after the edited one; webview state also truncates via `.splice()` to stay consistent.
 - **In-place editing**: `edit_message_prefill` loads original text into input, clears downstream UI elements.
+- **Revert button**: Assistant messages have a revert button (undo icon) that calls `sessionManager.revertMessage()`.
+- **Checkpoint indicator**: `diff_result` carries `checkpointCreated` flag; webview shows "Checkpoint saved" message.
 
 ### Search in Conversation (Feature 14)
 - **Ctrl+F**: Opens a hidden search bar with input, prev/next, close buttons, and match count.
@@ -176,16 +178,51 @@ The following features were audited against the opencode CLI and enhanced for th
 - **Integration**: Custom prompts merged into slash command autocomplete and `command_list`.
 
 ### Slash Commands (Feature 5 — Enhanced)
-- **8 built-in commands**: `/clear`, `/model`, `/cost`, `/new`, `/export`, `/compact`, `/continue`, `/help`.
-- **Autocomplete popover**: Triggered on `/` as first character only; multi-line safe; filters as user types; Enter/Escape keyboard nav.
+- **9 built-in commands**: `/clear`, `/model`, `/cost`, `/new`, `/export`, `/compact`, `/continue`, `/queue`, `/help`.
+- **Single source of truth**: `LOCAL_COMMANDS` in `mentions.ts` — duplicate `SLASH_COMMANDS` array removed from `main.ts`.
+- **SVG icons**: All command icons use SVG constants from `icons.ts` (COMMAND_SVG, BRAIN_SVG, CODE_SVG, etc.) instead of emoji codepoints.
+- **Server commands use `GEAR_SVG`**: `updateServerCommands` uses the production gear icon.
+- **Autocomplete popover**: Triggered on `/` as first character only via unified mention dropdown; Enter/Escape keyboard nav.
 - **Custom commands**: Prompt files from Feature 16 appear alongside built-in commands.
-- **Server handlers**: `/clear` truncates messages + creates new CLI session; `/cost` fetches from server; `/continue` resumes most recent closed session; `/help` renders markdown table.
+- **Server handlers**: `/clear` truncates messages + creates new CLI session; `/cost` fetches from server; `/continue` resumes most recent closed session; `/queue` shows queue status; `/help` renders markdown table.
 
 ### Permission Modes (Feature 6 — Enhanced)
 - **3 modes**: Plan (review before apply), Auto (apply without asking), Normal (ask per action).
 - **Mode selector**: Button group in webview header; disabled during streaming; updates immediately.
 - **Plan mode enforcement**: Diffs show "Review" label; accept button becomes "Approve & Apply".
 - **Auto mode warning**: One-time confirmation with "Don't show again" persisted to `globalState`.
+
+### Prompt Queue (Feature 17 — New)
+- **Per-tab queue**: Each tab gets its own `PromptQueue` instance. Items auto-advance on `stream_end` (unless aborted).
+- **Queue states**: `queued → sending → streaming → completed | failed`
+- **Image attachment support**: `QueueItem` includes `attachments: Attachment[]`; queued prompts preserve pasted images.
+- **Queue UI**: Chips with state badges, click-to-edit on queued items, retry on failed items, clear-all button when >1 queued.
+- **Slash command**: `/queue` shows queue status; `LOCAL_COMMANDS` includes `/queue` with MCP_SVG icon.
+- **Tab-close cleanup**: Queue cleared and DOM container removed on tab close.
+- **Not persisted**: In-memory only — webview reload clears queue (intentional).
+
+### Scroll Markers & Jump-to-Bottom (Feature 18 — New)
+- **Scroll markers**: Positioned `.scroll-marker-dot` elements in the message list scrollbar gutter for user messages; click-to-jump with `scrollIntoView()` and flash animation.
+- **Jump-to-bottom button**: Sticky `.jump-to-bottom` button (text: "↓ Latest") appears when user scrolls >300px from bottom; click scrolls smoothly to latest message.
+- **Wired lifecycle**: Jump button created on first message, stream start, session resume, and tab switch.
+- **Virtual rendering**: `.message` elements use `content-visibility: auto; contain-intrinsic-size: 60px` for zero-cost off-screen rendering.
+- **rAF batching**: `handleStreamToken` batches DOM `textContent` updates via `requestAnimationFrame` to avoid per-token layout thrashing.
+- **DocumentFragment**: `resume_session_data` builds message list via `DocumentFragment` instead of per-message `appendChild`.
+
+### Server Security (Feature 19 — New)
+- **Auto-generated password**: Every server start generates a cryptographically random password (`oc-{uuid}`), passed as `--password` flag + `OPENCODE_SERVER_PASSWORD` env var to the server process.
+- **Bearer auth**: All SDK client requests include `Authorization: Bearer {password}` header via `createOpencodeClient({ headers })`.
+- **Idempotency keys**: Every `sendPromptAsync` and `sendPrompt` call includes `Idempotency-Key: {sessionId}-{uuid}` header to prevent duplicate processing on retry.
+- **Narrowed retry policy**: `isRetryableError` uses targeted patterns (`econnrefused`, `econnreset`, `enotfound`, `enetunreach`, `socket hang up`) instead of broad `/socket/i`.
+- **Stored-port auth verification**: Port reuse now verifies authentication via SDK API call before reconnecting.
+- **User-configured password respected**: `OPENCODE_SERVER_PASSWORD` in parent environment is used instead of generating one.
+
+### Session Lifecycle (Feature 20 — Enhanced)
+- **Archive/unarchive**: Sessions can be archived (hidden from default `list()`) and unarchived. `list(includeArchived)` controls visibility.
+- **`onDidChangeSession` typed events**: `SessionChangeEvent` with `kind` discriminator (`deleted`, `renamed`, `active_changed`, `archived`, `unarchived`).
+- **Cross-layer delete**: Deleting an extension session also calls `sessionManager.deleteSession(cliSessionId)`.
+- **`clearAll()` with dry-run**: Returns per-category counts (empty, test-named, orphaned, archived, corrupted); produces JSON backup log before deletion.
+- **Resume re-attaches server session**: `handleResumeSession` is async and calls `ensureSession(cliSessionId)`.
 
 ### Session Export (Feature 4 — Enhanced)
 - **Markdown format**: Header (title, date range, model, message count, cost); messages with timestamps and role; tool calls in `<details>`; diffs in fenced ` ```diff` blocks.
@@ -242,6 +279,15 @@ The following features were audited against the opencode CLI and enhanced for th
                    └───────────────────┘
 ```
 
+### Streaming Hardening (P02-fix)
+- **TTFB vs completion timeout split**: `TTFB_TIMEOUT_MS = 30000` (first byte) and `CHUNK_INACTIVITY_TIMEOUT_MS = 60000` (inter-chunk silence). TTFB timer is cleared on first chunk; completion timer resets on every chunk.
+- **Idempotent `finalizeStream`**: `finalizingTabs` Set guards against concurrent calls from `message_complete` + `server_status idle`, preventing duplicate message persistence and DOM corruption.
+- **Stream lifecycle state machine**: `StreamLifecycleState` enum (`idle | sending | streaming | completing | error | timeout`) with `setStreamState()` logging transitions for observability.
+- **Session-scoped error routing**: `postRequestError(message, sessionId?)` includes `sessionId` so the webview routes errors to the correct tab. Unknown-session `server_error` falls back to the active tab instead of being silently dropped.
+- **Optimistic state reset**: When `canStartStreaming()` rejects (concurrency limit), a `prompt_rejected` message is sent to the webview so it clears the optimistic `isStreaming = true` state and re-enables the send button.
+- **Empty placeholder cleanup**: On early error (e.g. `sendPromptAsync` throws before first chunk), `stream_end` with `reason: "error"` is emitted, and the webview's `handleStreamError` removes the empty assistant DOM element and message object.
+- **EventNormalizer role race fix**: `isAssistantMessage` no longer requires the role to be known before emitting chunks. If `message.part.delta` or `message.part.updated` arrives before `message.updated` sets the role, the chunk is now emitted instead of being silently dropped. The SSE stream only carries assistant response parts, so assuming unknown message IDs are assistant is safe.
+
 ### Component Inventory (Post-Parity Audit)
 
 | Component | File | Purpose |
@@ -251,7 +297,7 @@ The following features were audited against the opencode CLI and enhanced for th
 | `SessionStore` | `src/session/SessionStore.ts` | Persistent session storage in VS Code globalState |
 | `SessionManager` | `src/session/SessionManager.ts` | opencode server lifecycle, SDK client, session CRUD |
 | `SessionExporter` | `src/session/SessionExporter.ts` | Markdown export of session conversations |
-| `StreamCoordinator` | `src/chat/handlers/StreamCoordinator.ts` | Per-tab SSE streaming with watchdog |
+| `StreamCoordinator` | `src/chat/handlers/StreamCoordinator.ts` | Per-tab SSE streaming with watchdog, TTFB/completion timeout split, idempotent finalize guard, stream state machine |
 | `MessageRouter` | `src/chat/handlers/MessageRouter.ts` | Webview-to-handler message dispatch |
 | `DiffHandler` | `src/chat/handlers/DiffHandler.ts` | Diff tracking, accept/reject lifecycle |
 | `ContextEngine` | `src/context/ContextEngine.ts` | Workspace context gathering (files, git, diagnostics) |
@@ -261,9 +307,9 @@ The following features were audited against the opencode CLI and enhanced for th
 | `CheckpointManager` | `src/checkpoint/CheckpointManager.ts` | Git worktree snapshots, rollback |
 | `ThemeManager` | `src/theme/ThemeManager.ts` | Theme presets, CLI theme files, CSS variable injection |
 | `PromptManager` | `src/prompts/PromptManager.ts` | Custom slash commands from `.opencode/prompts/*.md` |
-| `InlineCompletionProvider` | `src/inline/InlineCompletionProvider.ts` | Ghost-text tab completions |
 | `InlineActionProvider` | `src/inline/InlineActionProvider.ts` | CodeLens actions (Explain, Refactor, Generate Tests) |
-| `SkillManager` | `src/skills/SkillManager.ts` | Skill loading and execution |
+| `ChunkBatcher` | `src/chat/ChunkBatcher.ts` | Streaming text chunk batching (50ms flush) |
+| `SessionExporter` | `src/session/SessionExporter.ts` | Markdown export of session conversations |
 | `TerminalBridge` | `src/terminal/TerminalBridge.ts` | Terminal output capture |
 | `CliDiagnostics` | `src/diagnostics/CliDiagnostics.ts` | opencode CLI health checks |
 | `DiffApplier` | `src/diff/DiffApplier.ts` | Code block extraction, path resolution, undoable edits |

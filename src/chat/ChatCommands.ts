@@ -120,4 +120,6 @@ export class ChatCommands {
       },
     })
   }
+
+  dispose(): void {}
 }

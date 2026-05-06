@@ -24,7 +24,7 @@ const webviewConfig = {
   format: "iife",
   platform: "browser",
   outdir: "dist",
-  sourcemap: !production,
+  sourcemap: false,
   minify: production,
   // @vscode-elements/elements is loaded via <script> tag in index.html
   // (bundled.js) as a pre-built bundle that auto-registers all custom elements.

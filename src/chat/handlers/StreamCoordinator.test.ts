@@ -10,8 +10,8 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(source.includes("export interface StreamCallbacks"), "StreamCallbacks must be exported")
     assert.ok(source.includes("postMessage: (msg: Record<string, unknown>) => void"),
       "StreamCallbacks must have postMessage")
-    assert.ok(source.includes("postRequestError: (message: string) => void"),
-      "StreamCallbacks must have postRequestError")
+    assert.ok(source.includes("postRequestError: (message: string, sessionId?: string) => void"),
+      "StreamCallbacks must have postRequestError with optional sessionId")
   })
 
   it("exports StreamCoordinator class", () => {
@@ -39,6 +39,18 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(source.includes("this.contextEngine.gatherContext()"), "must gather context")
     assert.ok(source.includes("this.sessionManager.ensureSession("), "must ensure session")
     assert.ok(source.includes("this.tabManager.setStreaming(tabId, true)"), "must set streaming state")
+  })
+
+  it("sends plain prompts as a single user text part without implicit context", () => {
+    assert.match(
+      source,
+      /sendPromptAsync\(\s*cliSessionId,\s*\[\s*\{\s*type:\s*"text",\s*text\s*\}\s*\],\s*modelRef\s*\)/s,
+      "startPrompt must call sendPromptAsync with only the user's text; hidden context changes model behavior versus the CLI"
+    )
+    assert.ok(
+      !source.includes("text: contextText"),
+      "startPrompt must not prepend generated context as a text part"
+    )
   })
 
   it("has finalizeStream method", () => {
@@ -73,11 +85,10 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(source.includes("this.diffHandler"), "getDiffHandler must return this.diffHandler")
   })
 
-  it("has cleanupTab and buildContextText private methods", () => {
+  it("has cleanupTab and no implicit context builder in the prompt path", () => {
     assert.ok(source.includes("private cleanupTab("), "cleanupTab must exist")
-    assert.ok(source.includes("private buildContextText("), "buildContextText must exist")
-    assert.ok(source.includes("Open files:"), "buildContextText must include open files")
-    assert.ok(source.includes("Git status:"), "buildContextText must include git status")
+    assert.ok(!source.includes("private buildContextText("), "implicit context builder must not be used for prompt payloads")
+    assert.ok(source.includes("private refreshContextTokenEstimate("), "token estimation may refresh separately from prompt sending")
   })
 
   it("has dispose method", () => {
@@ -131,6 +142,69 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(
       source.includes("this.tabManager.setStreaming(tabId, false)"),
       "finalizeStream must clear streaming state"
+    )
+  })
+
+  it("has TTFB_TIMEOUT_MS = 30000 for first-byte timeout", () => {
+    assert.ok(source.includes("TTFB_TIMEOUT_MS"), "TTFB_TIMEOUT_MS constant must exist")
+    assert.ok(source.includes("30000"), "TTFB_TIMEOUT_MS must be 30000 (30s)")
+  })
+
+  it("has firstChunkReceived flag on TabState-compatible stream tracking", () => {
+    assert.ok(
+      source.includes("clearTtfbTimeout("),
+      "must have clearTtfbTimeout method"
+    )
+    assert.ok(
+      source.includes("ttfbTimeout"),
+      "must track TTFB timeout reference"
+    )
+  })
+
+  it("sends stream_end before 60s timeout fires", () => {
+    assert.ok(
+      source.includes("60000"),
+      "completion timeout must be 60000ms (60s)"
+    )
+    assert.ok(
+      source.includes("tabManager.setCompletionTimeout(tabId, timeout)"),
+      "must set completion timeout after starting prompt"
+    )
+  })
+
+  // ── SLC-03 fix: completion timeout resets on each chunk ──────────────
+  it("resets completion timeout on each chunk via resetCompletionTimeout", () => {
+    assert.ok(
+      source.includes("resetCompletionTimeout(tabId: string, callbacks: StreamCallbacks)"),
+      "must have resetCompletionTimeout method that takes tabId and callbacks"
+    )
+    assert.ok(
+      source.includes("this.resetCompletionTimeout(tabId, callbacks)"),
+      "appendChunk must call resetCompletionTimeout to keep alive streams"
+    )
+    assert.ok(
+      source.includes("tabManager.clearCompletionTimeout(tabId)"),
+      "resetCompletionTimeout must clear the old timeout before setting a new one"
+    )
+  })
+
+  // ── SLC-03 fix: completion timeout preserves partial output ──────────
+  it("completion timeout handler preserves partial output and shows recoverable state", () => {
+    assert.ok(
+      source.includes("reason: \"timeout\""),
+      "completion timeout must emit stream_end with reason: timeout"
+    )
+    assert.ok(
+      source.includes("partial: true"),
+      "timeout stream_end must include partial: true flag for recoverable UI state"
+    )
+  })
+
+  // ── TTFB timeout preserves partial tokens ────────────────────────────
+  it("TTFB timeout preserves any partial tokens received", () => {
+    assert.ok(
+      source.includes("reason: \"ttfb_timeout\""),
+      "TTFB timeout must emit stream_end with reason: ttfb_timeout"
     )
   })
 })

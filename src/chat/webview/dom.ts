@@ -1,7 +1,13 @@
 export function requireElement<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id)
   if (!element) {
-    throw new Error(`Missing webview element: ${id}`)
+    // Log the missing element but return a shim to prevent a hard crash.
+    // The global error boundary in main.ts will still catch any subsequent errors.
+    console.warn(`[OpenCode] Missing element: ${id} — using fallback`)
+    // Return a minimal div as fallback so downstream code doesn't crash
+    const fallback = document.createElement("div") as unknown as T
+    fallback.id = id
+    return fallback
   }
   return element as T
 }
@@ -30,9 +36,15 @@ export interface ElementRefs {
   
   mentionBtn: HTMLElement
   attachBtn: HTMLElement
-  modePlanBtn: HTMLElement
-  modeAutoBtn: HTMLElement
-  modeBuildBtn: HTMLElement
+  modeDropdown: HTMLDivElement
+  modeDropdownBtn: HTMLButtonElement
+  modeDropdownMenu: HTMLDivElement
+  modeDropdownLabel: HTMLSpanElement
+  modeCurrentText: HTMLSpanElement
+  modeIndicator: HTMLSpanElement
+  modeOptPlan: HTMLButtonElement
+  modeOptAuto: HTMLButtonElement
+  modeOptBuild: HTMLButtonElement
   modelSelectorBtn: HTMLElement
   modelLabel: HTMLSpanElement
   variantSelectorBtn: HTMLElement
@@ -65,6 +77,13 @@ export interface ElementRefs {
   modelManagerClose: HTMLButtonElement
   modelManagerConnect: HTMLButtonElement
 
+  modeWarningModal: HTMLDivElement
+  modeWarningTitle: HTMLSpanElement
+  modeWarningDescription: HTMLParagraphElement
+  modeWarningDontShow: HTMLInputElement
+  modeWarningCancel: HTMLButtonElement
+  modeWarningConfirm: HTMLButtonElement
+
   welcomeView: HTMLDivElement
 }
 
@@ -84,9 +103,15 @@ export function getElementRefs(): ElementRefs {
     
     mentionBtn: requireElement("mention-btn"),
     attachBtn: requireElement("attach-btn"),
-    modePlanBtn: requireElement("mode-plan-btn"),
-    modeAutoBtn: requireElement("mode-auto-btn"),
-    modeBuildBtn: requireElement("mode-build-btn"),
+    modeDropdown: requireElement<HTMLDivElement>("mode-dropdown"),
+    modeDropdownBtn: requireElement<HTMLButtonElement>("mode-dropdown-btn"),
+    modeDropdownMenu: requireElement<HTMLDivElement>("mode-dropdown-menu"),
+    modeDropdownLabel: requireElement<HTMLSpanElement>("mode-dropdown-label"),
+    modeCurrentText: requireElement<HTMLSpanElement>("mode-current-text"),
+    modeIndicator: requireElement<HTMLSpanElement>("mode-indicator"),
+    modeOptPlan: requireElement<HTMLButtonElement>("mode-opt-plan"),
+    modeOptAuto: requireElement<HTMLButtonElement>("mode-opt-auto"),
+    modeOptBuild: requireElement<HTMLButtonElement>("mode-opt-build"),
     modelSelectorBtn: requireElement("model-selector-btn"),
     modelLabel: requireElement<HTMLSpanElement>("model-label"),
     variantSelectorBtn: requireElement("variant-selector-btn"),
@@ -104,7 +129,7 @@ export function getElementRefs(): ElementRefs {
     contextProgressBar: requireElement("context-progress-bar"),
     contextLabel: requireElement<HTMLSpanElement>("context-label"),
     
-    recentSessions: optionalElement<HTMLDivElement>("recent-sessions"),
+    recentSessions: optionalElement<HTMLDivElement>("welcome-recent-sessions"),
 
     agentStatusLed: requireElement<HTMLDivElement>("agent-status-led"),
     agentStatusText: requireElement<HTMLSpanElement>("agent-status-text"),
@@ -118,6 +143,13 @@ export function getElementRefs(): ElementRefs {
     modelManagerList: requireElement<HTMLDivElement>("model-manager-list"),
     modelManagerClose: requireElement<HTMLButtonElement>("model-manager-close"),
     modelManagerConnect: requireElement<HTMLButtonElement>("model-manager-connect"),
+
+    modeWarningModal: requireElement<HTMLDivElement>("mode-warning-modal"),
+    modeWarningTitle: requireElement<HTMLSpanElement>("mode-warning-title"),
+    modeWarningDescription: requireElement<HTMLParagraphElement>("mode-warning-description"),
+    modeWarningDontShow: requireElement<HTMLInputElement>("mode-warning-dont-show"),
+    modeWarningCancel: requireElement<HTMLButtonElement>("mode-warning-cancel"),
+    modeWarningConfirm: requireElement<HTMLButtonElement>("mode-warning-confirm"),
 
     welcomeView: requireElement<HTMLDivElement>("welcome-view"),
   }

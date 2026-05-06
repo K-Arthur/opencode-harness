@@ -55,7 +55,7 @@ test("normalizes the live OpenCode assistant stream without user echo or fake sk
 
   assert.deepEqual(normalized.map((event) => event.type), ["text_chunk", "message_complete"])
   assert.equal(normalized[0].sessionId, sessionID)
-  assert.deepEqual(normalized[0].data, { text: "OK" })
+  assert.deepEqual(normalized[0].data, { text: "OK", messageId: assistantID })
   assert.equal(normalized[1].sessionId, sessionID)
 })
 

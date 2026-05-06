@@ -149,6 +149,47 @@ describe("EventNormalizer — behavioral", () => {
     assert.equal(events.length, 0)
   })
 
+  it("emits text_chunk even when message.part.delta arrives before message.updated (role race)", () => {
+    // This is the critical race condition: the server may send part deltas
+    // before the message.updated event that sets the role. If we require
+    // the role to be known, chunks are silently dropped and the user sees
+    // "no output of any sort".
+    const events = normalizer.normalize({
+      type: "message.part.delta",
+      properties: { sessionID: "s-race", messageID: "m-race", partID: "p-race", delta: "Hello before role" },
+    })
+    assert.equal(events.length, 1)
+    assert.equal(events[0]!.type, "text_chunk")
+    assert.equal((events[0]!.data as { text?: string }).text, "Hello before role")
+  })
+
+  it("emits text_chunk for message.part.updated before role is known", () => {
+    const events = normalizer.normalize({
+      type: "message.part.updated",
+      properties: {
+        part: { id: "p-race2", messageID: "m-race2", sessionID: "s-race2", type: "text", text: "Hello" },
+        delta: "Hello",
+      },
+    })
+    assert.equal(events.length, 1)
+    assert.equal(events[0]!.type, "text_chunk")
+    assert.equal((events[0]!.data as { text?: string }).text, "Hello")
+  })
+
+  it("still drops chunks for messages explicitly marked as non-assistant", () => {
+    // First mark the message as a user message
+    normalizer.normalize({
+      type: "message.updated",
+      properties: { info: { id: "m-user", role: "user", sessionID: "s-user" } },
+    })
+    // Then send a part delta for it
+    const events = normalizer.normalize({
+      type: "message.part.delta",
+      properties: { sessionID: "s-user", messageID: "m-user", partID: "p-user", delta: "should not appear" },
+    })
+    assert.equal(events.length, 0)
+  })
+
   it("emits tool_start on tool part pending", () => {
     markAssistant("m10", "s20")
     const events = normalizer.normalize({

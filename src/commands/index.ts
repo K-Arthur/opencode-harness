@@ -9,6 +9,10 @@ export {
   registerListSessionsCommand,
   registerDeleteSessionCommand,
   registerRenameSessionCommand,
+  registerClearTestSessionsCommand,
+  registerContinueLastSessionCommand,
+  registerChooseHistorySessionCommand,
+  registerAttachRemoteCommand,
 } from "./session"
 export { registerSelectModelCommand } from "./model"
 export { registerShowRateLimitsCommand, registerCheckCliCommand } from "./misc"

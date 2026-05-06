@@ -74,84 +74,68 @@ export function createTabBar(els: ElementRefs, callbacks: TabCallbacks) {
   })
 
   function renderTabs(tabs: Array<{ id: string; name: string; isStreaming?: boolean }>, activeId: string) {
-    const existingIds = new Set(Array.from(els.tabBar.children).map((c) => (c as HTMLElement).dataset.tabId))
-    const newIds = new Set(tabs.map((t) => t.id))
+    const tabContainer = els.tabBar
+    const newTabBtnId = "tab-bar-new-btn"
+    
+    // Clear and re-render to ensure perfect order based on sessionOrder
+    // We keep existing buttons to preserve event listeners if needed, but here we use delegation
+    // so clearing is safer for order.
+    tabContainer.innerHTML = ""
 
-    // Remove tabs that no longer exist
-    Array.from(els.tabBar.children).forEach((child) => {
-      const btn = child as HTMLElement
-      if (btn.dataset.tabId && !newIds.has(btn.dataset.tabId)) {
-        btn.remove()
-      }
-    })
-
-    // Remove panels that no longer exist
-    Array.from(els.tabPanels.children).forEach((child) => {
-      const panel = child as HTMLElement
-      if (panel.dataset.tabId && !newIds.has(panel.dataset.tabId)) {
-        panel.remove()
-      }
-    })
-
-    // Add/update tabs - newest/active first (leftmost)
-    for (let i = tabs.length - 1; i >= 0; i--) {
-      const tab = tabs[i]!
-      const existing = els.tabBar.querySelector(`.tab-btn[data-tab-id="${tab.id}"]`) as HTMLElement | null
-      if (!existing) {
-        const btn = document.createElement("button")
-        btn.className = "tab-btn"
-        btn.setAttribute("role", "tab")
-        btn.dataset.tabId = tab.id
-        btn.setAttribute("aria-selected", tab.id === activeId ? "true" : "false")
-        btn.setAttribute("tabindex", tab.id === activeId ? "0" : "-1")
-
-        const indicator = document.createElement("span")
-        indicator.className = "tab-indicator"
-        btn.appendChild(indicator)
-
-        const label = document.createElement("span")
-        label.className = "tab-label"
-        label.textContent = tab.name
-        label.title = tab.name
-        btn.appendChild(label)
-
-        const close = document.createElement("span")
-        close.className = "tab-close"
-        close.setAttribute("aria-label", `Close ${tab.name}`)
-        close.textContent = "\u00D7"
-        btn.appendChild(close)
-
-        els.tabBar.insertBefore(btn, els.tabBar.firstChild)
-      }
-    }
-
-    // Update active state
-    Array.from(els.tabBar.children).forEach((child) => {
-      const btn = child as HTMLElement
-      const id = btn.dataset.tabId
-      const isActive = id === activeId
-      btn.classList.toggle("active", isActive)
+    tabs.forEach((tab) => {
+      const btn = document.createElement("button")
+      const isActive = tab.id === activeId
+      
+      btn.className = `tab-btn ${isActive ? "active" : ""} ${tab.isStreaming ? "streaming" : ""}`
+      btn.setAttribute("role", "tab")
+      btn.dataset.tabId = tab.id
+      btn.id = `tab-${tab.id}`
       btn.setAttribute("aria-selected", String(isActive))
+      btn.setAttribute("aria-controls", `panel-${tab.id}`)
       btn.setAttribute("tabindex", isActive ? "0" : "-1")
 
-      const tabData = tabs.find((t) => t.id === id)
-      const indicator = btn.querySelector(".tab-indicator")
-      if (indicator) {
-        indicator.className = "tab-indicator"
-        if (tabData?.isStreaming) {
-          btn.classList.add("streaming")
-          indicator.classList.add("tab-indicator--streaming")
-        } else {
-          btn.classList.remove("streaming")
-        }
-      }
+      const indicator = document.createElement("span")
+      indicator.className = `tab-indicator ${tab.isStreaming ? "tab-indicator--streaming" : ""}`
+      btn.appendChild(indicator)
+
+      const label = document.createElement("span")
+      label.className = "tab-label"
+      label.textContent = tab.name
+      label.title = tab.name
+      btn.appendChild(label)
+
+      const close = document.createElement("span")
+      close.className = "tab-close"
+      close.setAttribute("aria-label", `Close ${tab.name}`)
+      close.textContent = "\u00D7"
+      btn.appendChild(close)
+
+      tabContainer.appendChild(btn)
     })
 
-    // Show active panel, hide others
+    // Add Integrated New Tab Button
+    const newBtn = document.createElement("button")
+    newBtn.id = newTabBtnId
+    newBtn.className = "tab-new-integrated"
+    newBtn.title = "New session"
+    newBtn.setAttribute("aria-label", "New session")
+    newBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>'
+    newBtn.onclick = (e) => {
+      e.stopPropagation()
+      callbacks.onNew()
+    }
+    tabContainer.appendChild(newBtn)
+
+    // Sync panels visibility and remove orphan panels
+    const sessionIds = new Set(tabs.map(t => t.id))
     Array.from(els.tabPanels.children).forEach((child) => {
       const panel = child as HTMLElement
       const id = panel.dataset.tabId
-      panel.classList.toggle("active", id === activeId)
+      if (id && !sessionIds.has(id)) {
+        panel.remove()
+      } else {
+        panel.classList.toggle("active", id === activeId)
+      }
     })
   }
 
@@ -162,6 +146,9 @@ export function createTabContent(tabId: string, tabName: string): HTMLElement[] 
   const view = document.createElement("div")
   view.className = "tab-panel"
   view.dataset.tabId = tabId
+  view.setAttribute("role", "tabpanel")
+  view.id = `panel-${tabId}`
+  view.setAttribute("aria-labelledby", `tab-${tabId}`)
 
   const messageList = document.createElement("div")
   messageList.className = "message-list custom-scrollbar"

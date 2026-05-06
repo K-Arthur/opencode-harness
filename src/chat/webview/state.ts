@@ -2,9 +2,11 @@ import type { WebviewState, SessionState, ChatMessage, VsCodeApi } from "./types
 
 const DEFAULT_STATE: WebviewState = {
   sessions: {},
+  sessionOrder: [],
   activeSessionId: null,
   nextSessionNum: 1,
   globalModel: "",
+  globalVariant: "",
   initialized: false,
 }
 
@@ -28,6 +30,7 @@ const DEFAULT_STATE: WebviewState = {
 
     return {
       sessions: { [sessionId]: session },
+      sessionOrder: [sessionId],
       activeSessionId: sessionId,
       nextSessionNum: 2,
       globalModel: "",
@@ -86,7 +89,15 @@ export function createState(vscode: VsCodeApi) {
     }
     state.sessions[id] = session
     state.nextSessionNum++
-    state.activeSessionId = id
+
+    // Insert new session to the right of the active one
+    if (state.activeSessionId && state.sessionOrder.includes(state.activeSessionId)) {
+      const idx = state.sessionOrder.indexOf(state.activeSessionId)
+      state.sessionOrder.splice(idx + 1, 0, id)
+    } else {
+      state.sessionOrder.push(id)
+    }
+
     save()
     return session
   }
@@ -97,13 +108,20 @@ export function createState(vscode: VsCodeApi) {
       existing.name = session.name || existing.name
       existing.model = session.model || existing.model
       existing.mode = session.mode || existing.mode
-      existing.messages = session.messages || existing.messages
+      // Mutate messages in-place to preserve stream handler's array reference
+      if (session.messages && session.messages !== existing.messages) {
+        existing.messages.length = 0
+        existing.messages.push(...session.messages)
+      }
       existing.isStreaming = session.isStreaming
       state.activeSessionId = session.id
       save()
       return existing
     }
     state.sessions[session.id] = session
+    if (!state.sessionOrder.includes(session.id)) {
+      state.sessionOrder.push(session.id)
+    }
     state.activeSessionId = session.id
     save()
     return session
@@ -130,9 +148,12 @@ export function createState(vscode: VsCodeApi) {
   function deleteSession(id: string): boolean {
     if (!state.sessions[id]) return false
     delete state.sessions[id]
+    const orderIdx = state.sessionOrder.indexOf(id)
+    if (orderIdx !== -1) {
+      state.sessionOrder.splice(orderIdx, 1)
+    }
     if (state.activeSessionId === id) {
-      const remaining = Object.keys(state.sessions)
-      state.activeSessionId = remaining.length > 0 ? (remaining[0] ?? null) : null
+      state.activeSessionId = state.sessionOrder.length > 0 ? (state.sessionOrder[0] ?? null) : null
     }
     save()
     return true
@@ -179,20 +200,53 @@ export function createState(vscode: VsCodeApi) {
   }
 
   function loadSessions(sessions: SessionState[], activeId: string | null, globalModel: string) {
+    const oldSessions = { ...state.sessions }
     state.sessions = {}
+
+    // Load new sessions from host
     sessions.forEach((s) => {
-      state.sessions[s.id] = { ...s, isStreaming: false }
+      const existing = oldSessions[s.id]
+      state.sessions[s.id] = {
+        ...s,
+        // Preserve existing messages array reference so active stream handlers
+        // don't get orphaned. Without this, any mid-stream handler pointing to
+        // the old array loses its data on the next state save.
+        messages: existing ? existing.messages : s.messages,
+        // Preserve local isStreaming flag if session exists
+        isStreaming: existing ? existing.isStreaming : false
+      }
     })
-    state.activeSessionId = activeId && state.sessions[activeId] ? activeId : null
+
+    // Preserve any local-only sessions that are currently streaming
+    Object.values(oldSessions).forEach(s => {
+      if (s.isStreaming && !state.sessions[s.id]) {
+        state.sessions[s.id] = s
+      }
+    })
+
+    // Update session order
+    const sessionIds = sessions.map(s => s.id)
+    // Remove IDs that are no longer present
+    state.sessionOrder = state.sessionOrder.filter(id => sessionIds.includes(id))
+    // Add new IDs that are not in the order yet
+    sessionIds.forEach(id => {
+      if (!state.sessionOrder.includes(id)) {
+        state.sessionOrder.push(id)
+      }
+    })
+
+    state.activeSessionId = activeId && state.sessions[activeId] ? activeId : state.activeSessionId
     state.globalModel = globalModel
-    if (!state.activeSessionId && Object.keys(state.sessions).length > 0) {
-      state.activeSessionId = Object.keys(state.sessions)[0] ?? null
+    if (!state.activeSessionId && state.sessionOrder.length > 0) {
+      state.activeSessionId = state.sessionOrder[0] ?? null
     }
     save()
   }
 
   function getAllSessions(): SessionState[] {
-    return Object.values(state.sessions)
+    return state.sessionOrder
+      .map(id => state.sessions[id])
+      .filter((s): s is SessionState => s !== undefined)
   }
 
   function getSessionCount(): number {
@@ -202,6 +256,23 @@ export function createState(vscode: VsCodeApi) {
   function setGlobalModel(model: string) {
     state.globalModel = model
     save()
+  }
+
+  function setSessionVariant(id: string, variant: string): boolean {
+    const session = state.sessions[id]
+    if (!session) return false
+    session.variant = variant
+    save()
+    return true
+  }
+
+  function setGlobalVariant(variant: string) {
+    state.globalVariant = variant
+    save()
+  }
+
+  function getGlobalVariant(): string {
+    return state.globalVariant || ""
   }
 
   function setInitialized() {
@@ -262,6 +333,9 @@ export function createState(vscode: VsCodeApi) {
     getAllSessions,
     getSessionCount,
     setGlobalModel,
+    setGlobalVariant,
+    getGlobalVariant,
+    setSessionVariant,
     loadSessions,
     setInitialized,
     isInitialized,

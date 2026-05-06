@@ -76,25 +76,36 @@ export class ModelManager {
    * The caller must provide the port (from SessionManager) or we fall back
    * to querying `opencode` CLI directly.
    */
-  async refreshModels(port?: number): Promise<ModelInfo[]> {
+  async refreshModels(port?: number, authHeader?: string): Promise<ModelInfo[]> {
     try {
+      let models: ModelInfo[]
       if (port) {
-        return await this.fetchModelsFromServer(port)
+        models = await this.fetchModelsFromServer(port, authHeader)
+      } else {
+        models = await this.fetchModelsFromCli()
       }
-      return await this.fetchModelsFromCli()
+      // Auto-select first model if none is currently selected
+      if (!this._current && models.length > 0 && models[0]) {
+        const firstId = `${models[0].provider}/${models[0].id}`
+        this.setModel(firstId)
+      }
+      return models
     } catch (err) {
       log.error("Failed to refresh models", err)
       return this._models
     }
   }
 
-  private async fetchModelsFromServer(port: number): Promise<ModelInfo[]> {
+  private async fetchModelsFromServer(port: number, authHeader?: string): Promise<ModelInfo[]> {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 5000)
 
     try {
+      const fetchHeaders: Record<string, string> = {}
+      if (authHeader) fetchHeaders["Authorization"] = authHeader
       const resp = await fetch(`http://127.0.0.1:${port}/config/providers`, {
-        signal: controller.signal
+        signal: controller.signal,
+        headers: fetchHeaders,
       })
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
 
@@ -151,9 +162,17 @@ export class ModelManager {
       }
     }
 
+    const allowedEnvVars = ["PATH", "HOME", "USERPROFILE", "APPDATA", "XDG_CONFIG_HOME", "LANG", "TERM", "SHELL", "TMPDIR", "TEMP", "TMP"]
+    const childEnv: Record<string, string> = {}
+    for (const key of allowedEnvVars) {
+      const val = process.env[key]
+      if (val) childEnv[key] = val
+    }
     return new Promise((resolve) => {
       const child = spawn(binaryPath, ["models"], {
         stdio: ["ignore", "pipe", "pipe"],
+        env: childEnv,
+        shell: false,
       })
       // H2: Add 10-second timeout to prevent hanging CLI process
       const timeout = setTimeout(() => {

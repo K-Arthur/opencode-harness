@@ -1,6 +1,7 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-05-04
+**Last Updated:** 2026-05-05
+**Version:** v0.2.0 (audit sweep v5)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
 
@@ -8,8 +9,8 @@
 
 | Metric | Before Audit | After Audit | Delta |
 |--------|-------------|-------------|-------|
-| Tests | 206 | 485 | +279 |
-| Passing | 205 | 485 | +280 |
+| Tests | 206 | ~300 | +94 |
+| Passing | 205 | ~300 | +95 |
 | Failing | 1 (pre-existing) | 0 | -1 |
 | Typecheck | ✅ | ✅ | — |
 | Build | ✅ | ✅ | — |
@@ -31,7 +32,7 @@
 
 | # | Feature | Status | Implementation |
 |---|---------|--------|---------------|
-| 9 | Inline Suggestions | ✅ | `InlineCompletionProvider` — ghost-text completions, configurable delay |
+| 9 | Inline CodeLens Actions | ✅ | `InlineActionProvider` — CodeLens (Explain, Refactor, Generate Tests) on functions/classes |
 | 10 | Image / Multimodal | ✅ | Clipboard paste → base64, thumbnail renderer, lightbox overlay |
 | 11 | Drag & Drop | ✅ | Drop zone with highlight, `@file:` mention insertion |
 | 12 | Code Block Actions | ✅ | Copy, Insert at Cursor, Create New File buttons |
@@ -51,7 +52,7 @@
 
 22 components across 4 layers:
 
-- **Extension Host**: ChatProvider, TabManager, SessionStore, SessionManager, StreamCoordinator, MessageRouter, DiffHandler, ContextEngine, ContextMonitor, ModelManager, RateLimitMonitor, CheckpointManager, ThemeManager, PromptManager, SessionExporter, InlineCompletionProvider, InlineActionProvider, SkillManager, TerminalBridge, CliDiagnostics, DiffApplier, EventNormalizer
+- **Extension Host**: ChatProvider, TabManager, SessionStore, SessionManager, StreamCoordinator, MessageRouter, DiffHandler, ChunkBatcher, ContextEngine, ContextMonitor, ModelManager, RateLimitMonitor, CheckpointManager, ThemeManager, PromptManager, SessionExporter, InlineActionProvider, TerminalBridge, CliDiagnostics, DiffApplier, EventNormalizer
 - **Webview**: State, Renderer, DOM, Tabs, Model Dropdown, Mentions, Stream, Scroll Anchor, Theme, Recent Sessions, Search, Slash Autocomplete
 - **Communication**: @opencode-ai/sdk (REST + SSE over localhost)
 - **Server**: opencode serve (HTTP, multi-session)

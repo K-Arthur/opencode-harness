@@ -64,4 +64,29 @@ void describe("WebviewContent.ts", () => {
   void it("includes webview URI resolution for extension resources", () => {
     assert.ok(source.includes("webview.asWebviewUri("), "must resolve URIs for webview")
   })
+
+  void it("has private sanitizeCssValue method that delegates to utility", () => {
+    assert.ok(source.includes("sanitizeCssValue"), "must have sanitizeCssValue method")
+    assert.ok(source.includes("import { sanitizeCssValue } from"), "must import sanitizeCssValue from utility")
+    assert.ok(source.includes("Blocked CSS value"), "must log blocked values")
+  })
+
+  void it("resolves CSS @import statements when reading source CSS (fallback path)", () => {
+    // esbuild resolves @import at build time into dist/styles.css, but when
+    // falling back to src/chat/webview/css/styles.css (dev without build),
+    // WebviewContent must resolve @imports by inlining the imported files.
+    assert.ok(
+      source.includes("resolveCssImports"),
+      "WebviewContent must resolve @import via resolveCssImports method"
+    )
+    assert.ok(
+      source.includes("distCssPath") && source.includes("srcCssPath"),
+      "must check both dist and src CSS paths"
+    )
+  })
+
+  void it("includes font-src in CSP for webview resource origin", () => {
+    assert.ok(source.includes("font-src"), "CSP must have font-src directive")
+    assert.ok(source.includes("cspSource"), "font-src must use webview.cspSource")
+  })
 })

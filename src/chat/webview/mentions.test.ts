@@ -45,4 +45,12 @@ describe("mentions.ts", () => {
   it("returns { handleTrigger, handleKeydown, renderResults, updateServerCommands }", () => {
     assert.ok(source.includes("handleTrigger, handleKeydown, renderResults, updateServerCommands"))
   })
+
+  it("command icons use SVG constants from icons.ts, not emoji codepoints", () => {
+    // LOCAL_COMMANDS should reference SVG constants imported from icons.ts
+    assert.ok(source.includes("COMMAND_SVG"), "clear must use COMMAND_SVG")
+    assert.ok(source.includes("BRAIN_SVG"), "model must use BRAIN_SVG")
+    assert.ok(source.includes("CODE_SVG"), "help must use CODE_SVG")
+    assert.ok(source.includes("import"), "must import SVG constants")
+  })
 })

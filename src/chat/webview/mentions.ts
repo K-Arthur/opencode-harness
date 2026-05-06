@@ -1,16 +1,34 @@
 import type { MentionItem } from "./types"
 import type { ElementRefs } from "./dom"
+import {
+  COMMAND_SVG, BRAIN_SVG, MCP_SVG, PLUS_SVG,
+  SHARE_SVG, REFRESH_SVG, PLAY_SVG, HISTORY_SVG, CODE_SVG, GEAR_SVG,
+} from "./icons"
+
+const COMMAND_ICONS: Record<string, string> = {
+  clear: COMMAND_SVG,
+  model: BRAIN_SVG,
+  cost: MCP_SVG,
+  new: PLUS_SVG,
+  export: SHARE_SVG,
+  compact: REFRESH_SVG,
+  continue: PLAY_SVG,
+  commands: HISTORY_SVG,
+  queue: MCP_SVG,
+  help: CODE_SVG,
+}
 
 const LOCAL_COMMANDS: MentionItem[] = [
-  { prefix: "/", display: "clear", description: "Clear conversation", icon: "\uD83E\uDDF9" },
-  { prefix: "/", display: "model", description: "Switch model", icon: "\uD83E\uDDE0" },
-  { prefix: "/", display: "cost", description: "Show session cost", icon: "\uD83D\uDCB0" },
-  { prefix: "/", display: "new", description: "New session", icon: "\u2795" },
-  { prefix: "/", display: "export", description: "Export conversation", icon: "\uD83D\uDCE4" },
-  { prefix: "/", display: "compact", description: "Compact session context", icon: "\uD83D\uDD04" },
-  { prefix: "/", display: "continue", description: "Resend last prompt", icon: "\u23ED" },
-  { prefix: "/", display: "commands", description: "List server commands", icon: "\uD83D\uDCCB" },
-  { prefix: "/", display: "help", description: "Show help", icon: "\u2753" },
+  { prefix: "/", display: "clear", description: "Clear conversation", icon: COMMAND_SVG },
+  { prefix: "/", display: "model", description: "Switch model", icon: BRAIN_SVG },
+  { prefix: "/", display: "cost", description: "Show session cost", icon: MCP_SVG },
+  { prefix: "/", display: "new", description: "New session", icon: PLUS_SVG },
+  { prefix: "/", display: "export", description: "Export conversation", icon: SHARE_SVG },
+  { prefix: "/", display: "compact", description: "Compact session context", icon: REFRESH_SVG },
+  { prefix: "/", display: "continue", description: "Resend last prompt", icon: PLAY_SVG },
+  { prefix: "/", display: "queue", description: "Show queued prompts", icon: MCP_SVG },
+  { prefix: "/", display: "commands", description: "List server commands", icon: HISTORY_SVG },
+  { prefix: "/", display: "help", description: "Show help", icon: CODE_SVG },
 ]
 
 export interface MentionState {
@@ -67,7 +85,13 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
       div.className = "dropdown-item" + (i === 0 ? " selected" : "")
       const icon = document.createElement("span")
       icon.className = "dropdown-icon"
-      icon.textContent = item.icon || "\u2699"
+      // Use innerHTML for SVG icon strings, textContent for emoji fallbacks
+      const iconStr = item.icon || ""
+      if (iconStr.includes("<svg")) {
+        icon.innerHTML = iconStr
+      } else {
+        icon.textContent = iconStr || "\u2699"
+      }
       div.appendChild(icon)
       const label = document.createElement("span")
       label.className = "dropdown-label"
@@ -101,7 +125,7 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
       prefix: "/",
       display: c.name,
       description: c.description || "Server command",
-      icon: "\u2699",
+      icon: GEAR_SVG,
     }))
   }
 
@@ -161,7 +185,12 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
       div.className = "dropdown-item" + (i === 0 ? " selected" : "")
       const icon = document.createElement("span")
       icon.className = "dropdown-icon"
-      icon.textContent = item.icon || "\uD83D\uDCC4"
+      const iconStr = item.icon || ""
+      if (iconStr.includes("<svg")) {
+        icon.innerHTML = iconStr
+      } else {
+        icon.textContent = iconStr || "\uD83D\uDCC4"
+      }
       div.appendChild(icon)
       const label = document.createElement("span")
       label.className = "dropdown-label"

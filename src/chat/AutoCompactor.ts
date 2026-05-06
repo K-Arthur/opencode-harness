@@ -106,4 +106,6 @@ export class AutoCompactor {
       callbacks.postRequestError(message)
     }
   }
+
+  dispose(): void {}
 }

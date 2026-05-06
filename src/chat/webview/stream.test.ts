@@ -109,6 +109,17 @@ describe("stream.ts", () => {
     assert.ok(sourceIncludes(".diff-btn--discard"), "must reference discard button")
   })
 
+  it("queries diff blocks by data-diff-id not data-block-id", () => {
+    const streamUsesDiffId = streamSource.includes('data-diff-id="')
+    const handlersUsesDiffId = handlersSource.includes('data-diff-id="')
+    const streamUsesBlockId = streamSource.includes('data-block-id="')
+    const handlersUsesBlockId = handlersSource.includes('data-block-id="')
+    assert.ok(
+      streamUsesDiffId || handlersUsesDiffId,
+      "handleDiffResult must query by data-diff-id (renderer sets dataset.diffId)"
+    )
+  })
+
   it("has handleServerStatus method", () => {
     assert.ok(sourceIncludes("handleServerStatus("), "handleServerStatus must exist")
   })

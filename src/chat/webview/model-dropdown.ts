@@ -77,9 +77,15 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     // Filter to enabled models only
     const enabledModels = modelsList.filter((m) => m.enabled !== false)
 
+    // Sort: by provider alphabetically, then by displayName alphabetically
+    const sortedModels = [...enabledModels].sort((a, b) => {
+      const pc = a.provider.localeCompare(b.provider)
+      return pc !== 0 ? pc : a.displayName.localeCompare(b.displayName)
+    })
+
     // Group by provider
     const byProvider = new Map<string, ModelInfo[]>()
-    for (const m of enabledModels) {
+    for (const m of sortedModels) {
       const list = byProvider.get(m.provider) || []
       list.push(m)
       byProvider.set(m.provider, list)
@@ -158,10 +164,17 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     els.modelDropdown.appendChild(manageOption)
   }
 
+  let _currentModel = ""
+
   function setCurrentModel(modelId: string) {
+    _currentModel = modelId
     const short = modelId.includes("/") ? modelId.split("/").pop()! : modelId
     els.modelLabel.textContent = short || "Default"
     els.modelSelectorBtn.title = `Model: ${modelId || "Default"}`
+  }
+
+  function getCurrentModel(): string {
+    return _currentModel
   }
 
   els.modelSelectorBtn.addEventListener("click", (e) => {
@@ -214,5 +227,5 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     }
   })
 
-  return { open, close, render, setCurrentModel }
+  return { open, close, render, setCurrentModel, getCurrentModel }
 }
