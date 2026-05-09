@@ -61,4 +61,21 @@ describe("RateLimitMonitor.ts", () => {
   it("uses min of tokens and requests for status bar", () => {
     assert.ok(source.includes("Math.min") && source.includes("remainingTokens") && source.includes("remainingRequests"))
   })
+
+  it("can estimate provider fallback quota from observed token usage", () => {
+    assert.match(
+      source,
+      /recordTokenUsage\(\s*inputTokens:\s*number,\s*outputTokens:\s*number,\s*provider\??:\s*string/,
+      "recordTokenUsage must accept a provider so fallback limits are not stuck on unknown"
+    )
+    assert.ok(
+      source.includes("this.providerLimits[provider]"),
+      "recordTokenUsage must use the selected provider's configured fallback limits"
+    )
+  })
+
+  it("exposes serializable quota state for webview rendering", () => {
+    assert.ok(source.includes("getSerializableState("), "must expose Date-safe state for webview messages")
+    assert.ok(source.includes("toISOString()"), "resetAt must serialize as a string")
+  })
 })

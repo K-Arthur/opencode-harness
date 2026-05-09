@@ -87,7 +87,81 @@ describe("SessionStore.ts", () => {
     assert.ok(source.includes("preview:"), "must return preview object with counts")
   })
 
+  it("has empty-session cleanup helpers for unused tab clutter", () => {
+    assert.ok(source.includes("deleteIfEmpty("), "must delete an opened-but-unused session on close")
+    assert.ok(source.includes("pruneEmptySessions("), "must expose periodic empty-session pruning")
+    assert.ok(source.includes("emptySessionTtlMinutes"), "cleanup must read the configurable empty-session TTL")
+  })
+
+  it("does not persist active empty sessions unless they need server recovery", () => {
+    const idx = source.indexOf("async flush(")
+    assert.ok(idx >= 0, "flush method must exist")
+    const block = source.slice(idx, source.indexOf("private pruneStaleSessions", idx))
+    assert.ok(
+      !block.includes("id === this.activeSessionId"),
+      "flush must not persist active empty sessions just because they are active"
+    )
+    assert.ok(block.includes("sess.messages.length > 0") && block.includes("exempt"))
+  })
+
   it("list filters archived sessions by default", () => {
     assert.ok(source.includes("list("), "list method must exist")
+  })
+
+  // ── importOneServerSession: import a single server session on demand ──────
+  // When the user clicks a server session in the unified modal that has no
+  // local counterpart, the extension must be able to create a local entry for
+  // it so handleResumeSession can backfill and open it.
+
+  it("has importOneServerSession method", () => {
+    assert.ok(
+      source.includes("importOneServerSession("),
+      "SessionStore must have importOneServerSession method"
+    )
+  })
+
+  it("importOneServerSession creates session with needsBackfill:true", () => {
+    assert.ok(
+      source.includes("needsBackfill: true") || source.includes("needsBackfill:true"),
+      "importOneServerSession must mark the session as needsBackfill:true"
+    )
+    assert.ok(
+      source.includes("importOneServerSession"),
+      "importOneServerSession must be implemented"
+    )
+  })
+
+  it("importOneServerSession stores cliSessionId from the server session id", () => {
+    const idx = source.indexOf("importOneServerSession(")
+    assert.ok(idx >= 0, "importOneServerSession must exist")
+    const block = source.slice(idx, idx + 800)
+    assert.ok(
+      block.includes("cliSessionId"),
+      "importOneServerSession must set cliSessionId on the new session entry"
+    )
+  })
+
+  it("importOneServerSession uses server directory as workspacePath not current vscode workspace", () => {
+    const idx = source.indexOf("importOneServerSession(")
+    assert.ok(idx >= 0)
+    const block = source.slice(idx, idx + 800)
+    assert.ok(
+      block.includes("workspacePath"),
+      "importOneServerSession must set workspacePath from the server session directory"
+    )
+    assert.ok(
+      !block.includes("vscode.workspace.workspaceFolders"),
+      "importOneServerSession must NOT read vscode.workspace.workspaceFolders — it should use the provided directory arg"
+    )
+  })
+
+  it("importOneServerSession returns existing session when cliSessionId already imported", () => {
+    const idx = source.indexOf("importOneServerSession(")
+    assert.ok(idx >= 0)
+    const block = source.slice(idx, idx + 800)
+    assert.ok(
+      block.includes("cliSessionId") && (block.includes("find(") || block.includes("existing")),
+      "importOneServerSession must check for an existing session with the same cliSessionId and return it"
+    )
   })
 })

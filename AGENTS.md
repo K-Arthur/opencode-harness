@@ -12,6 +12,12 @@ Always use jCodemunch-MCP tools for code navigation. Never fall back to Read, Gr
 - decorator-aware queries → `search_symbols(decorator="X")` to find symbols with a specific decorator (e.g. `@property`, `@route`); combine with set-difference to find symbols *lacking* a decorator (e.g. "which endpoints lack CSRF protection?")
 - string, comment, config value → `search_text` (supports regex, `context_lines`)
 - database columns (dbt/SQLMesh) → `search_columns`
+- theme-related symbols → `search_symbols(query="theme")` to find ThemeManager, previewTheme, BUILT_IN_PRESETS, CSS_VAR_MAP, etc.
+- CSS variable mapping → ThemeManager.CSS_VAR_MAP maps OpencodeTheme properties to CSS vars consumed by `tokens.css` and `blocks.css`. Variable names must match exactly (e.g. `--oc-syn-keyword` not `--oc-syntax-keyword`, `--tool-read-color` not `--oc-tool-read`). Canvas-level vars (`--oc-bg`, `--oc-fg`, `--oc-editor-bg`, `--oc-editor-fg`, `--oc-glass-bg`, `--bg-primary`, `--oc-border`, `--oc-muted`, `--oc-description`) map to `panelBg`/`panelFg`/`editorBg`/`editorFg`/`borderColor`/`mutedFg` — these override the `tokens.css` defaults that point to `var(--vscode-sideBar-background)`.
+- theme presets only style the chat webview — they must NOT contribute VS Code workbench themes or call `workbench.action.setTheme`
+- `cli-default` preset uses `var(--vscode-*)` references for canvas colors; other presets (`light`, `dark`, `high-contrast`) use explicit hex values
+- `FIELD_MAP` maps CLI theme fields to OpencodeTheme properties: `background` → `panelBg`, `text` → `panelFg`, `backgroundPanel` → `editorBg`, `textMuted` → `mutedFg`, `border` → `borderColor`
+- `applyThemeContent()` reads `dark`/`light` variant from CLI theme files based on VS Code's current `ColorThemeKind`
 
 **Reading code:**
 - before opening any file → `get_file_outline` first

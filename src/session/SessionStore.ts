@@ -17,6 +17,7 @@ export interface OpenCodeSession {
   createdAt: number
   lastActiveAt: number
   model: string
+  variant?: string
   mode: string
   cliSessionId?: string
   /** True when the local session was created offline and has not yet been linked to a server session. */
@@ -27,6 +28,8 @@ export interface OpenCodeSession {
   messages: ChatMessage[]
   cost: number
   tokenUsage: { prompt: number; completion: number; total: number }
+  changedFiles?: string[]
+  workspacePath?: string
 }
 
 export interface CreateSessionOptions {
@@ -64,8 +67,10 @@ export class SessionStore {
   private sessions: Map<string, OpenCodeSession> = new Map()
   private activeSessionId = ""
   private saveTimer: ReturnType<typeof setTimeout> | null = null
+  private emptySessionCleanupTimer: ReturnType<typeof setInterval> | null = null
   private static readonly SAVE_DEBOUNCE_MS = 500
   private static readonly MAX_SESSIONS = 50
+  private static readonly ONE_HOUR = 60 * 60 * 1000
   private _onSessionsChanged = new vscode.EventEmitter<void>()
   readonly onSessionsChanged = this._onSessionsChanged.event
 
@@ -81,6 +86,7 @@ export class SessionStore {
 
   constructor(private readonly globalState: vscode.Memento) {
     this.load()
+    this.startEmptySessionCleanup()
   }
 
   private isValidSession(sess: Record<string, unknown>): boolean {
@@ -136,10 +142,12 @@ export class SessionStore {
     try {
       const obj: Record<string, OpenCodeSession> = {}
       for (const [id, sess] of this.sessions) {
-        // Persist sessions with messages, the active session, sessions awaiting
-        // server backfill, and offline-created sessions awaiting promotion.
+        // Persist sessions with messages, sessions awaiting server backfill,
+        // and offline-created sessions awaiting promotion. Empty active tabs
+        // are intentionally transient so an unused "New session" click does
+        // not survive reload and clutter history.
         const exempt = sess.needsBackfill === true || sess.pendingServerLink === true
-        if (sess.messages.length > 0 || id === this.activeSessionId || exempt) {
+        if (sess.messages.length > 0 || exempt) {
           obj[id] = sess
         }
       }
@@ -150,12 +158,47 @@ export class SessionStore {
   }
 
   private pruneStaleSessions(): void {
+    this.pruneEmptySessions()
+    if (this.sessions.size <= SessionStore.MAX_SESSIONS) return
+    const sorted = Array.from(this.sessions.values()).sort((a, b) => a.lastActiveAt - b.lastActiveAt)
+    for (const oldest of sorted) {
+      if (this.sessions.size <= SessionStore.MAX_SESSIONS) break
+      if (oldest.id !== this.activeSessionId) {
+        this.sessions.delete(oldest.id)
+      }
+    }
+  }
+
+  private getEmptySessionTtlMinutes(): number {
+    const defaultMinutes = SessionStore.ONE_HOUR / 60 / 1000
+    const configured = vscode.workspace.getConfiguration("opencode").get<number>("sessions.emptySessionTtlMinutes", defaultMinutes)
+    return Math.max(1, Number.isFinite(configured) ? configured : defaultMinutes)
+  }
+
+  private getCleanupIntervalMinutes(): number {
+    const configured = vscode.workspace.getConfiguration("opencode").get<number>("sessions.cleanupIntervalMinutes", 15)
+    return Math.max(1, Number.isFinite(configured) ? configured : 15)
+  }
+
+  private startEmptySessionCleanup(): void {
+    const intervalMs = this.getCleanupIntervalMinutes() * 60 * 1000
+    this.emptySessionCleanupTimer = setInterval(() => {
+      const removed = this.pruneEmptySessions()
+      if (removed > 0) {
+        this.save()
+        this._onSessionsChanged.fire()
+      }
+    }, intervalMs)
+    this.emptySessionCleanupTimer.unref?.()
+  }
+
+  pruneEmptySessions(ttlMinutes = this.getEmptySessionTtlMinutes()): number {
     const now = Date.now()
-    const ONE_HOUR = 60 * 60 * 1000
+    const ttlMs = Math.max(1, ttlMinutes) * 60 * 1000
     const staleIds: string[] = []
     for (const [id, sess] of this.sessions) {
       const exempt = sess.needsBackfill === true || sess.pendingServerLink === true
-      if (sess.messages.length === 0 && (now - sess.lastActiveAt) > ONE_HOUR && id !== this.activeSessionId && !exempt) {
+      if (sess.messages.length === 0 && (now - sess.lastActiveAt) > ttlMs && id !== this.activeSessionId && !exempt) {
         staleIds.push(id)
       }
     }
@@ -165,15 +208,16 @@ export class SessionStore {
       }
       log.info(`Pruned ${staleIds.length} stale empty sessions`)
     }
-    if (this.sessions.size > SessionStore.MAX_SESSIONS) {
-      const sorted = Array.from(this.sessions.values()).sort((a, b) => a.lastActiveAt - b.lastActiveAt)
-      for (const oldest of sorted) {
-        if (this.sessions.size <= SessionStore.MAX_SESSIONS) break
-        if (oldest.id !== this.activeSessionId) {
-          this.sessions.delete(oldest.id)
-        }
-      }
-    }
+    return staleIds.length
+  }
+
+  deleteIfEmpty(id: string): boolean {
+    const session = this.sessions.get(id)
+    if (!session) return false
+    const exempt = session.needsBackfill === true || session.pendingServerLink === true
+    if (session.messages.length > 0 || exempt) return false
+    this.delete(id)
+    return true
   }
 
   private fireChangeEvent(event: SessionChangeEvent): void {
@@ -323,7 +367,9 @@ export class SessionStore {
     const now = Date.now()
     const session: OpenCodeSession = {
       id: sessionId,
-      name: name || `Session ${this.sessions.size + 1}`,
+      // Empty until the user sends a message — display layer renders
+      // "Untitled session" until autoTitleFromMessages derives a real one.
+      name: name?.trim() || "",
       createdAt: now,
       lastActiveAt: now,
       model: "",
@@ -334,6 +380,12 @@ export class SessionStore {
     }
     if (cliSessionId) session.cliSessionId = cliSessionId
     if (options.pendingServerLink) session.pendingServerLink = true
+    // Stamp the current workspace so the session shows up in this project's
+    // picker on subsequent reloads (mirrors opencode CLI's directory scoping).
+    const folders = vscode.workspace.workspaceFolders
+    if (folders && folders.length > 0) {
+      session.workspacePath = folders[0]!.uri.fsPath
+    }
     this.sessions.set(sessionId, session)
     this.activeSessionId = sessionId
     this.save()
@@ -353,12 +405,67 @@ export class SessionStore {
    */
   importServerSessions(serverSessions: readonly ServerSessionForImport[]): ImportResult {
     const result = mergeServerSessionsPure(this.sessions as unknown as Map<string, MigratableSession>, serverSessions)
-    if (result.imported > 0) {
+
+    // Prune orphaned imported sessions: any local entry that was previously
+    // imported (`needsBackfill`) but is no longer present in the server's
+    // top-level session list is either deleted server-side or was a subagent
+    // session imported before the filter existed. Either way, it should not
+    // linger in the picker.
+    const visibleServerIds = new Set(serverSessions.map((s) => s.id))
+    let pruned = 0
+    for (const [id, sess] of this.sessions) {
+      if (sess.needsBackfill === true && !visibleServerIds.has(id)) {
+        this.sessions.delete(id)
+        pruned++
+      }
+    }
+
+    if (result.imported > 0 || pruned > 0) {
       this.save()
       this._onSessionsChanged.fire()
-      log.info(`Imported ${result.imported} server session(s) (skipped ${result.skipped} already-known)`)
+      log.info(`Imported ${result.imported} server session(s), pruned ${pruned} orphan(s), skipped ${result.skipped} already-known`)
     }
     return result
+  }
+
+  /**
+   * Import a single server session on demand — used when the user clicks a
+   * server session in the unified modal that has no local counterpart yet.
+   *
+   * Returns the existing local session if one with the same `cliSessionId`
+   * already exists (idempotent). Otherwise creates a new local entry marked
+   * `needsBackfill: true` so `handleResumeSession` will fetch the transcript.
+   *
+   * Unlike `create()`, this method uses the server session's `directory` as
+   * `workspacePath` rather than the current VS Code workspace folder — the
+   * session belongs to that project and should be scoped to it.
+   */
+  importOneServerSession(serverId: string, title?: string, directory?: string): OpenCodeSession {
+    // Prefer an existing entry keyed by the server id or whose cliSessionId matches.
+    const existing =
+      this.sessions.get(serverId) ??
+      Array.from(this.sessions.values()).find((s) => s.cliSessionId === serverId)
+    if (existing) return existing
+
+    const now = Date.now()
+    const session: OpenCodeSession = {
+      id: serverId,
+      name: title?.trim() || "",
+      createdAt: now,
+      lastActiveAt: now,
+      model: "",
+      mode: "build",
+      messages: [],
+      cost: 0,
+      tokenUsage: { prompt: 0, completion: 0, total: 0 },
+      cliSessionId: serverId,
+      needsBackfill: true,
+      workspacePath: directory,
+    }
+    this.sessions.set(serverId, session)
+    this.save()
+    this._onSessionsChanged.fire()
+    return session
   }
 
   /**
@@ -422,9 +529,11 @@ export class SessionStore {
   ensure(id: string, name?: string, model?: string, mode?: string): OpenCodeSession {
     const existing = this.sessions.get(id)
     if (existing) {
-      if (name !== undefined && existing.name !== name) existing.name = name
+      // Only overwrite name with a non-empty value — passing "" means the
+      // caller has no real title to set, not "clear the title".
+      if (typeof name === "string" && name.trim() && existing.name !== name) existing.name = name
       if (model !== undefined && existing.model !== model) existing.model = model
-      if (mode !== undefined && existing.mode !== mode) existing.mode = mode === "normal" ? "plan" : mode
+      if (mode !== undefined && existing.mode !== mode) existing.mode = mode === "normal" ? "build" : mode
       existing.lastActiveAt = Date.now()
       this.save()
       this._onSessionsChanged.fire()
@@ -436,7 +545,7 @@ export class SessionStore {
     // but these fields weren't set yet. Single follow-up save is needed.
     let needsSave = false
     if (model !== undefined) { session.model = model; needsSave = true }
-    if (mode !== undefined) { session.mode = mode === "normal" ? "plan" : (mode || "plan"); needsSave = true }
+    if (mode !== undefined) { session.mode = mode === "normal" ? "build" : (mode || "build"); needsSave = true }
     if (needsSave) this.save()
     return session
   }
@@ -476,8 +585,10 @@ export class SessionStore {
     session.messages.push(msg)
     session.lastActiveAt = Date.now()
 
-    // Auto-generate title from first user message if still generic
-    if (msg.role === "user" && (session.name === "Default" || session.name.startsWith("Session "))) {
+    // Auto-generate title from first user message when no real title exists.
+    // Treat empty / "Default" / "Session XXX" all as auto-generated.
+    const isAutoName = !session.name || session.name === "Default" || session.name.startsWith("Session ")
+    if (msg.role === "user" && isAutoName) {
       const textBlock = msg.blocks.find((b) => b.type === "text")
       const text = typeof textBlock?.text === "string" ? textBlock.text : ""
       const generated = this.generateTitleFromMessage(text)
@@ -488,6 +599,46 @@ export class SessionStore {
 
     this.save()
     this._onSessionsChanged.fire()
+  }
+
+  /**
+   * Public-facing display name for a session. Empty/auto-generated names
+   * fall back to "Untitled session" so we never leak internals like
+   * "Session owSyH" into the UI.
+   */
+  static displayName(session: { name?: string }): string {
+    const raw = (session?.name || "").trim()
+    if (!raw) return "Untitled session"
+    if (/^Session [A-Za-z0-9]{1,8}$/.test(raw) || /^Session \d+$/.test(raw)) {
+      return "Untitled session"
+    }
+    return raw
+  }
+
+  /**
+   * Promote an empty / auto-generated name to one derived from the first
+   * user message, mirroring opencode's server-side titling. Returns true
+   * when the name was changed.
+   */
+  autoTitleFromMessages(id: string): boolean {
+    const session = this.sessions.get(id)
+    if (!session) return false
+    const current = (session.name || "").trim()
+    const isAuto =
+      current === "" ||
+      /^Session [A-Za-z0-9]{1,8}$/.test(current) ||
+      /^Session \d+$/.test(current)
+    if (!isAuto) return false
+    const firstUser = session.messages.find((m) => m.role === "user")
+    if (!firstUser) return false
+    const textBlock = firstUser.blocks.find((b) => b.type === "text")
+    const text = typeof textBlock?.text === "string" ? textBlock.text : ""
+    const generated = this.generateTitleFromMessage(text)
+    if (!generated) return false
+    session.name = generated
+    this.save()
+    this._onSessionsChanged.fire()
+    return true
   }
 
   /**
@@ -546,17 +697,38 @@ export class SessionStore {
   }
 
   updateCliSessionId(id: string, cliId: string): void {
+    // Validate: prevent duplicate cliSessionId across sessions (one-to-one mapping)
+    for (const [otherId, otherSess] of this.sessions) {
+      if (otherId !== id && otherSess.cliSessionId === cliId) {
+        log.warn(`Duplicate cliSessionId ${cliId} detected on sessions ${otherId} and ${id} - clearing old mapping`)
+        otherSess.cliSessionId = undefined
+      }
+    }
     const session = this.sessions.get(id)
     if (!session) return
     session.cliSessionId = cliId
     this.save()
   }
 
+  /**
+   * Get all sessions as an array
+   */
+  getAllSessions(): OpenCodeSession[] {
+    return Array.from(this.sessions.values())
+  }
+  
   /** Update the model associated with a specific session. */
   updateModel(id: string, model: string): void {
     const session = this.sessions.get(id)
     if (!session) return
     session.model = model
+    this.save()
+  }
+
+  updateVariant(id: string, variant: string): void {
+    const session = this.sessions.get(id)
+    if (!session) return
+    session.variant = variant
     this.save()
   }
 
@@ -581,6 +753,58 @@ export class SessionStore {
     session.tokenUsage = usage
     session.lastActiveAt = Date.now()
     this.save()
+  }
+
+  /** 
+   * Track changed files for a session
+   */
+  addChangedFile(id: string, filePath: string): void {
+    const session = this.sessions.get(id)
+    if (!session) return
+    if (!session.changedFiles) session.changedFiles = []
+    if (!session.changedFiles.includes(filePath)) {
+      session.changedFiles.push(filePath)
+      this.save()
+    }
+  }
+
+  /** 
+   * Get changed files for a session
+   */
+  getChangedFiles(id: string): string[] {
+    const session = this.sessions.get(id)
+    return session?.changedFiles || []
+  }
+
+  /** 
+   * Clear changed files tracking
+   */
+  clearChangedFiles(id: string): void {
+    const session = this.sessions.get(id)
+    if (session) {
+      session.changedFiles = []
+      this.save()
+    }
+  }
+
+  /** 
+   * Get sessions filtered by workspace folder
+   */
+  getSessionsByWorkspace(workspacePath?: string): OpenCodeSession[] {
+    const all = this.list()
+    if (!workspacePath) return all
+    return all.filter(s => s.workspacePath === workspacePath)
+  }
+
+  /**
+   * Set workspace path for a session
+   */
+  setWorkspacePath(id: string, workspacePath: string): void {
+    const session = this.sessions.get(id)
+    if (session) {
+      session.workspacePath = workspacePath
+      this.save()
+    }
   }
 
   /**
@@ -616,6 +840,10 @@ export class SessionStore {
     this._onActiveSessionChanged.dispose()
     this._onDidChangeSession.dispose()
     this._onSessionCreated.dispose()
+    if (this.emptySessionCleanupTimer) {
+      clearInterval(this.emptySessionCleanupTimer)
+      this.emptySessionCleanupTimer = null
+    }
   }
 
   truncateMessages(id: string, keepUpToIndex: number): number {

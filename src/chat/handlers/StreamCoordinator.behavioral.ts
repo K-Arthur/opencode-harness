@@ -64,6 +64,10 @@ function createMockContextMonitor() {
   return { updateTokens: mockFn() }
 }
 
+function createMockRateLimitMonitor() {
+  return { recordTokenUsage: mockFn() }
+}
+
 function createMockModelManager() {
   return {}
 }
@@ -110,6 +114,7 @@ function createTestHarness() {
   const contextMonitor = createMockContextMonitor()
   const modelManager = createMockModelManager()
   const tabManager = new TabManager()
+  const rateLimitMonitor = createMockRateLimitMonitor()
   const diffApplier = createMockDiffApplier()
 
   const coordinator = new StreamCoordinator(
@@ -119,10 +124,11 @@ function createTestHarness() {
     contextMonitor as unknown as import("../../monitor/ContextMonitor").ContextMonitor,
     modelManager as unknown as import("../../model/ModelManager").ModelManager,
     tabManager,
+    rateLimitMonitor as unknown as import("../../monitor/RateLimitMonitor").RateLimitMonitor,
     diffApplier,
   )
 
-  return { coordinator, sessionManager, sessionStore, contextEngine, contextMonitor, tabManager, diffApplier }
+  return { coordinator, sessionManager, sessionStore, contextEngine, contextMonitor, rateLimitMonitor, tabManager, diffApplier }
 }
 
 // ---------------------------------------------------------------------------

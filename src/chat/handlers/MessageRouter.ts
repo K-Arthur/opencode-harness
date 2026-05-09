@@ -1,5 +1,6 @@
 import * as vscode from "vscode"
 import { SessionManager } from "../../session/SessionManager"
+import { SessionStore } from "../../session/SessionStore"
 import { ModelManager } from "../../model/ModelManager"
 import { log } from "../../utils/outputChannel"
 
@@ -50,6 +51,9 @@ type KnownSseEventType =
   | "compaction"
 
 export class MessageRouter {
+  private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+  private pendingMentionResolve: (() => void) | null = null
+
   constructor(
     private readonly sessionManager: SessionManager,
     private readonly modelManager: ModelManager
@@ -123,9 +127,27 @@ export class MessageRouter {
   }
 
   async handleMentionSearch(query: string, context: RouteContext): Promise<void> {
+    if (this.searchDebounceTimer) {
+      clearTimeout(this.searchDebounceTimer)
+      this.pendingMentionResolve?.()
+    }
+
+    return new Promise((resolve) => {
+      this.pendingMentionResolve = resolve
+      this.searchDebounceTimer = setTimeout(async () => {
+        this.searchDebounceTimer = null
+        this.pendingMentionResolve = null
+        await this.executeMentionSearch(query, context)
+        resolve()
+      }, 300)
+    })
+  }
+
+  private async executeMentionSearch(query: string, context: RouteContext): Promise<void> {
     const items: { prefix: string; display: string; description: string }[] = []
     const lower = query.toLowerCase()
 
+    // Handle special mention types
     if ("file".startsWith(lower) || query.startsWith("file")) {
       items.push({ prefix: "@file:", display: "file", description: "Reference a file" })
     }
@@ -142,24 +164,63 @@ export class MessageRouter {
       items.push({ prefix: "@terminal:", display: "terminal", description: "Capture terminal output" })
     }
 
-    const files = await vscode.workspace.findFiles(`**/*${query}*`, "**/node_modules/**", 5)
-    for (const file of files) {
-      const relative = vscode.workspace.asRelativePath(file)
-      items.push({ prefix: "@file:", display: relative, description: "File" })
+    // Build proper glob pattern for path-aware search
+    // If query contains path separator, search for path; otherwise match filename
+    let glob: string
+    const trimmedQuery = query.replace(/^@/, '')
+
+    if (query.includes("/")) {
+      // Path-based search: match files under the specified path prefix
+      glob = `**/${query}*`
+    } else if (trimmedQuery.length > 0) {
+      // Filename-based search
+      glob = `**/*${trimmedQuery}*`
+    } else {
+      // Empty query - show common files (limit to avoid performance issues)
+      glob = `**/*`
+    }
+
+    try {
+      const files = await vscode.workspace.findFiles(glob, "**/node_modules/**", 50)
+
+      for (const file of files) {
+        const relative = vscode.workspace.asRelativePath(file)
+        if (!relative) continue
+
+        // Filter by actual path match if query contains path separators
+        if (trimmedQuery.includes('/')) {
+          if (!relative.toLowerCase().includes(trimmedQuery.toLowerCase())) continue
+        }
+
+        items.push({ prefix: "@file:", display: relative, description: "File" })
+      }
+    } catch (err) {
+      log.warn("Mention file search failed", err)
     }
 
     context.postMessage({ type: "mention_results", items })
   }
 
   async handleListSessions(sessionStore: any, context: RouteContext): Promise<void> {
+    // Match opencode CLI: only surface sessions belonging to the current
+    // workspace. Sessions whose workspace is unknown (created before we
+    // started capturing it) are kept so they remain reachable.
+    const folders = vscode.workspace.workspaceFolders
+    const currentDir = folders && folders.length > 0 ? folders[0]!.uri.fsPath : undefined
+    const all = sessionStore.list().filter((s: any) => {
+      if (!currentDir) return true
+      if (!s.workspacePath) return true
+      return s.workspacePath === currentDir
+    })
     context.postMessage({
       type: "session_list",
-      sessions: sessionStore.list().map((s: any) => ({
+      sessions: all.map((s: any) => ({
         id: s.id,
-        title: s.name,
+        title: SessionStore.displayName(s),
         time: s.lastActiveAt,
         messageCount: s.messages.length,
         cost: s.cost || 0,
+        workspacePath: s.workspacePath,
       })),
     })
   }

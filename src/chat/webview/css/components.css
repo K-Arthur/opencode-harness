@@ -1,6 +1,98 @@
-/* ═══════════════════════════════════════════════════════════════
-   Components: Buttons, Inputs, Chips, Badges, Dropdowns
-   ═══════════════════════════════════════════════════════════════ */
+/* ─── TURN NAVIGATION (Phase 4.1) ─── */
+
+.turn-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  background: var(--oc-editor-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.turn-nav select {
+  flex: 1;
+  background: var(--oc-editor-bg);
+  color: var(--oc-fg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.turn-nav select option {
+  background: var(--oc-editor-bg);
+  color: var(--oc-fg);
+}
+
+/* ─── DISPLAY TOGGLES (Phase 4.2) ─── */
+
+.display-toggles {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  background: var(--oc-editor-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+body.hide-text .msg-text { display: none; }
+body.hide-tools .tool-call { display: none; }
+body.hide-diffs .diff-block { display: none; }
+body.hide-errors .msg-error { display: none; }
+body.hide-errors .tool-result-panel--error { display: none; }
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.toggle-label input[type="checkbox"] {
+  cursor: pointer;
+}
+
+/* ─── MESSAGE TURN GROUPING ─── */
+
+.message.turn-start {
+  border-left: 3px solid var(--oc-accent);
+  padding-left: var(--space-2);
+}
+
+.turn-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  margin: var(--space-1) 0;
+  background: var(--oc-list-hover);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+.turn-summary:hover {
+  background: var(--oc-list-active, rgba(128, 128, 128, 0.1));
+}
+
+.turn-summary-tools {
+  display: inline-flex;
+  gap: var(--space-1);
+}
+
+.turn-badge {
+  display: inline-block;
+  padding: 0 var(--space-1);
+  background: var(--vscode-badge-background, #c41230);
+  color: var(--vscode-badge-foreground, #ffffff);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 600;
+}
 
 /* ─── BUTTONS ─── */
 
@@ -188,61 +280,91 @@ textarea {
 
 .dropdown {
   position: absolute;
-  background: var(--bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--oc-editor-bg) 94%, var(--oc-panel-bg));
+  border: 1px solid var(--oc-border);
+  border-radius: var(--radius-md);
   max-height: 260px;
   overflow-y: auto;
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
   z-index: var(--z-dropdown);
+  padding: var(--space-1);
 }
 
 .dropdown-item {
-  padding: var(--space-2) var(--space-3);
+  min-height: 40px;
+  padding: var(--space-2);
   cursor: pointer;
   font-size: var(--text-sm);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-2);
-  transition: all var(--duration-fast);
-  border-left: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
+  border: 1px solid transparent;
+  color: var(--oc-fg);
 }
 
 .dropdown-item:hover,
 .dropdown-item[aria-selected="true"] {
-  background: color-mix(in srgb, var(--color-accent) 12%, var(--bg-secondary));
-  border-left-color: var(--color-accent);
+  background: var(--oc-list-hover);
+  border-color: var(--oc-accent-border);
 }
 
 .dropdown-item.selected {
-  background: var(--oc-list-active);
-  color: var(--oc-list-active-fg);
-  font-weight: 600;
-  border-left-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  color: var(--oc-fg);
+  border-color: var(--oc-accent-border);
 }
 
 .dropdown-icon {
-  font-size: var(--text-md);
-  width: var(--size-icon-lg);
-  text-align: center;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-accent);
+  background: var(--oc-accent-subtle);
+  border: 1px solid var(--oc-accent-border);
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 
+.dropdown-icon svg {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+}
+
+.dropdown-content {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
 .dropdown-label {
-  font-weight: 500;
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  color: var(--oc-fg);
 }
 
 .dropdown-desc {
   color: var(--oc-muted);
   font-size: var(--text-xs);
-  margin-left: auto;
+  line-height: var(--leading-tight);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dropdown-empty {
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-2);
   color: var(--oc-muted);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   text-align: center;
+}
+
+.command-item .dropdown-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
 }
 
 /* ─── SKILL INDICATORS ─── */
@@ -324,20 +446,163 @@ textarea {
   transition: transform var(--duration-fast) var(--ease-out);
 }
 
-/* Focus visible states are centralized in accessibility.css */
+  /* Focus visible states are centralized in accessibility.css */
 
-/* ─── IMAGE ATTACH & VIEWER ─── */
+  .form-group {
+    margin-bottom: var(--space-3);
+  }
 
-.image-attached-indicator {
-  display: inline-block;
-  padding: var(--space-0-5) var(--space-2);
-  margin: var(--space-0-5) var(--space-1);
-  background: var(--vscode-badge-background, #007acc);
-  color: var(--vscode-badge-foreground, #fff);
-  border-radius: var(--radius-full);
-  font-size: var(--text-xs);
-  animation: fadeInOut 2s ease-in-out;
-}
+  .form-group label {
+    display: block;
+    margin-bottom: var(--space-1);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-fg);
+  }
+
+  .form-group input[type="text"],
+  .form-group textarea {
+    width: 100%;
+    padding: var(--space-1-5);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--oc-editor-bg);
+    color: var(--oc-fg);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    transition: border-color var(--duration-fast) var(--ease-out);
+  }
+
+  .form-group input[type="text"]:focus,
+  .form-group textarea:focus {
+    outline: none;
+    border-color: var(--oc-accent);
+  }
+
+  .form-group textarea {
+    resize: vertical;
+    min-height: 60px;
+  }
+
+  .form-actions {
+    display: flex;
+    gap: var(--space-2);
+    justify-content: flex-end;
+    margin-top: var(--space-4);
+  }
+
+  .mcp-config-empty {
+    padding: var(--space-8);
+    text-align: center;
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+  }
+
+  .mcp-config-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+
+  .mcp-config-row:hover {
+    background: var(--oc-list-hover, rgba(255, 255, 255, 0.05));
+  }
+
+  .mcp-config-row.disabled {
+    opacity: 0.65;
+    filter: grayscale(0.4);
+    background: color-mix(in srgb, var(--oc-bg) 95%, var(--oc-fg));
+  }
+
+  .mcp-config-row-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex: 1;
+    min-width: 0;
+  }
+
+  .mcp-config-row-name {
+    font-weight: 600;
+    font-size: var(--text-sm);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mcp-config-row-status {
+    font-size: var(--text-xs);
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  .mcp-config-row-status.connected {
+    background: var(--oc-success-subtle, rgba(38, 162, 105, 0.15));
+    color: var(--oc-success, #2ea043);
+  }
+
+  .mcp-config-row-status.disconnected {
+    background: var(--oc-error-subtle, rgba(248, 81, 73, 0.15));
+    color: var(--oc-error, #f85149);
+  }
+
+  .mcp-config-row-status.error {
+    background: var(--oc-warning-subtle, rgba(210, 153, 34, 0.15));
+    color: var(--oc-warning, #d29922);
+  }
+
+  .mcp-config-row-status.disabled {
+    background: var(--oc-muted-subtle, rgba(128, 128, 128, 0.1));
+    color: var(--oc-muted, #999);
+    border: 1px solid rgba(128, 128, 128, 0.2);
+  }
+
+  .mcp-config-row-tools {
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+    margin-left: var(--space-2);
+  }
+
+  .mcp-config-row-actions {
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  .mcp-config-row-edit,
+  .mcp-config-row-toggle,
+  .mcp-config-row-remove {
+    padding: var(--space-1) var(--space-2);
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease-out);
+  }
+
+  .mcp-config-row-edit {
+    background: var(--oc-button-secondary);
+    color: var(--oc-button-secondary-fg);
+  }
+
+  .mcp-config-row-toggle.enable {
+    background: var(--oc-success-subtle, rgba(38, 162, 105, 0.15));
+    color: var(--oc-success, #2ea043);
+  }
+
+  .mcp-config-row-toggle.disable {
+    background: var(--oc-error-subtle, rgba(248, 81, 73, 0.15));
+    color: var(--oc-error, #f85149);
+  }
+
+  .mcp-config-row-remove {
+    background: var(--oc-error-subtle, rgba(248, 81, 73, 0.15));
+    color: var(--oc-error, #f85149);
+  }
 
 .msg-image img {
   max-width: 400px;
@@ -364,11 +629,11 @@ textarea {
 }
 
 .attached-image-thumb {
-  border: 1px solid var(--vscode-panel-border, #333);
+  border: 1px solid var(--color-border);
   transition: transform var(--duration-normal) var(--ease-out);
 }
 
 .attached-image-thumb:hover {
   transform: scale(1.02);
-  border-color: var(--vscode-focusBorder, #007acc);
+  border-color: var(--oc-accent);
 }

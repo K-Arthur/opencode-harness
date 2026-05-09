@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════════════════════ */
 
 /* ─── Focus Visible Rings ─── */
-*:focus {
+*:focus:not(:focus-visible) {
   outline: none;
 }
 

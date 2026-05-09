@@ -97,12 +97,21 @@ test.describe('Webview host contract', () => {
   })
 
   test('system tool messages do not mark an active stream as finished', async ({ page }) => {
-    await page.locator('#prompt-input').fill('hello')
-    await page.locator('#send-btn').click()
+    await dispatchHostMessage(page, {
+      type: 'init_state',
+      sessions: [{
+        id: 'session-1',
+        name: 'Session 1',
+        model: '',
+        mode: 'build',
+        isStreaming: false,
+        messages: [],
+      }],
+      activeSessionId: 'session-1',
+      globalModel: '',
+    })
 
-    const send = (await postedMessages(page)).find((m) => m.type === 'send_prompt')
-    expect(send?.sessionId).toEqual(expect.any(String))
-    const sessionId = send!.sessionId as string
+    const sessionId = 'session-1'
 
     await dispatchHostMessage(page, {
       type: 'stream_start',
@@ -119,7 +128,8 @@ test.describe('Webview host contract', () => {
     })
 
     await page.locator('#prompt-input').fill('second prompt while first is running')
-    await expect(page.locator('#send-btn')).toBeDisabled()
+    await expect(page.locator('#send-btn')).toHaveAttribute('aria-label', 'Stop generation')
+    await expect(page.locator('#send-btn')).toHaveClass(/stopping/)
   })
 
   test('diff accept and reject actions are wired back to the host', async ({ page }) => {
@@ -136,10 +146,14 @@ test.describe('Webview host contract', () => {
           role: 'assistant',
           sessionId: 'session-1',
           blocks: [{
-            type: 'diff_block',
-            id: 'diff-1',
-            filePath: 'src/example.ts',
+            type: 'diff',
+            diffId: 'diff-1',
+            path: 'src/example.ts',
             diffText: '+hello',
+            state: 'pending',
+            hunks: [],
+            linesAdded: 1,
+            linesRemoved: 0,
           }],
         }],
       }],
@@ -147,9 +161,9 @@ test.describe('Webview host contract', () => {
       globalModel: '',
     })
 
-    await page.locator('.diff-btn-accept').click()
+    await page.locator('.diff-btn--accept').click()
     await expect.poll(async () => postedMessages(page)).toContainEqual(
-      expect.objectContaining({ type: 'accept_diff', blockId: 'diff-1' })
+      expect.objectContaining({ type: 'diff:accept', diffId: 'diff-1' })
     )
   })
 })

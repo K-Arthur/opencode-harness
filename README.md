@@ -6,6 +6,7 @@ OpenCode brings the [opencode](https://opencode.ai) agentic coding experience di
 
 ## Features
 
+### Core Features
 - **Multi-Tab Workers** — Run multiple AI sessions concurrently. Each tab is an independent worker with its own model, mode, and conversation history. Up to 3 concurrent streams.
 - **Per-Tab Model Selection** — Each conversation can use a different AI model. Switch models without restarting the server.
 - **Token & Cost Tracking** — Real-time token usage indicator in the header with color-coded progress (green/yellow/red).
@@ -21,8 +22,36 @@ OpenCode brings the [opencode](https://opencode.ai) agentic coding experience di
 - **Slash Commands** — `/clear`, `/model`, `/cost`, `/new`, `/export`, `/compact`, `/continue`, `/help`, `/queue`
 - **Export Conversation** — Save current session as Markdown file
 - **Session History** — Searchable conversation history with resume support in the chat surface
-- **@-Mentions** — Reference files, folders, problems, URLs, and terminal output in your prompts
+- **@-Mentions** — Reference files, folders, problems, URLs, and terminal output in your prompts, including path-aware file search such as `@src/util`
+- **Secure Context Attachments** — Add files or editor selections from VS Code context menus with sensitive-file and prompt-injection warnings
 - **Permission Modes** — Normal (ask per action), Plan (review-only), Auto (apply without asking)
+
+### Phase 1: MCP Server Management
+- **MCP Server Manager** — Add, update, remove, and toggle MCP servers directly from the chat interface
+- **MCP Config Panel** — Modal overlay following model-manager pattern for managing Model Context Protocol servers
+- **Server Status Tracking** — Visual indicators for connected/disconnected/error states
+- **Secure Storage** — MCP server configs stored in VS Code settings (`opencode.mcpServers`)
+
+### Phase 2: Diff & Stop Command
+- **Side-by-Side Diff Viewer** — Compare AI-suggested changes with current file using `vscode.diff` command
+- **Stop Command** — Abort active AI sessions with keyboard shortcuts (`Escape`, `Ctrl+Shift+Escape`)
+- **Fast Diff Algorithm** — Uses `fast-diff` library for O(n) diff computation (replacing naive O(n*m) algorithm)
+
+### Phase 3: SQLite Fallback
+- **Session Database Reader** — Read session data directly from SQLite database as fallback when CLI server is not running
+- **Python3 Subprocess** — Uses Python3 for SQLite access (no native node-sqlite3 dependency)
+
+### Phase 4: Turn Summaries & Display Toggles
+- **Turn Navigation** — Navigate between conversation turns with Previous/Next buttons and dropdown selector
+- **Turn Summaries** — Automatic grouping of user+assistant exchanges into collapsible turns
+- **Display Toggles** — Show/hide text blocks, tool calls, diffs, and error messages
+- **Snippet Preview** — Quick snippet preview for each turn in the navigation dropdown
+
+### Phase 5: Color-Coded Quota Bar
+- **Progress Bar Visualization** — Compact webview bar plus VS Code status bar text for known quota percentages
+- **Color-Coded Status** — Green (>50%), Yellow (10-50%), Red (<10%) with theme color integration
+- **Real-Time Updates** — Webview/status bar updates with remaining tokens/requests when available, or observed tokens/cost when a provider exposes usage but not quota
+- **Proactive Warnings** — Configurable thresholds for warning (10%) and critical (5%) notifications
 
 ## Multi-Tab Interface
 
@@ -56,9 +85,20 @@ OpenCode now supports multiple concurrent AI workers through a tabbed interface:
 | `Ctrl+Alt+O` | Toggle OpenCode chat focus |
 | `Ctrl+Alt+N` | Start a new conversation |
 | `Alt+K` | Insert file reference (@-mention) |
-| `Escape` | Close dropdowns/modals |
+| `Escape` | Close dropdowns/modals, stop active AI session |
+| `Ctrl+Shift+Escape` | Stop active AI session |
+| `Ctrl+F` | Search within conversation |
+| `Ctrl+Shift+F` | Global search |
 
 All commands are also available via the Command Palette (`Ctrl+Shift+P`).
+
+## Context Attachments
+
+- Right-click a file in Explorer and choose **OpenCode: Add File to Session** to send its contents into the active chat.
+- Select code in an editor and choose **OpenCode: Add Selection to Session** to send the selected range with file path, line numbers, and language.
+- File attachments warn before sending sensitive paths such as `.env`, credentials, private keys, and files containing common prompt-injection phrases.
+- Image attachments larger than 10 MB are rejected before they reach the chat.
+- Open-file context is budgeted by estimated tokens, not raw character count, and truncated with an inline marker when the configured context limit is reached.
 
 ## Design System
 
@@ -95,10 +135,12 @@ OpenCode supports a flexible theme system that mirrors the [opencode CLI theme s
 
 | Preset | Description |
 |--------|-------------|
-| `cli-default` | Matches the default opencode terminal theme (dark) |
-| `light` | Light theme with high-contrast text |
+| `cli-default` | Adapts to your current VS Code editor colors |
+| `light` | Light theme optimized for readability |
 | `dark` | Dark theme optimized for code |
-| `high-contrast` | Maximum contrast for accessibility |
+| `high-contrast` | Maximum contrast for accessibility (WCAG AAA) |
+
+The `cli-default` and `high-contrast` presets now use VS Code theme tokens for shell/canvas colors so the webview follows the active editor theme instead of forcing a separate workbench theme.
 
 ### Configuration
 
@@ -116,6 +158,17 @@ Set your theme in VS Code `settings.json`:
 ### Available Override Properties
 
 #### UI Colors
+- `primaryColor` — OpenCode CLI primary color
+- `secondaryColor` — OpenCode CLI secondary color
+- `panelBg` — Chat panel background
+- `panelFg` — Chat panel text color
+- `editorBg` — Code block / editor area background
+- `editorFg` — Code block / editor area text color
+- `elementBg` — Secondary panel/element background
+- `borderColor` — Panel and section borders
+- `borderActive` — Active/focused border
+- `borderSubtle` — Subtle separator border
+- `mutedFg` — Secondary/muted text color
 - `userMessageBg` — User message bubble background
 - `userMessageFg` — User message text color
 - `assistantMessageBg` — Assistant message bubble background
@@ -129,10 +182,21 @@ Set your theme in VS Code `settings.json`:
 - `thinkingBorder` — Thinking block left border
 - `accentColor` — Primary accent color
 - `errorColor` — Error/destructive actions
+- `infoColor` — Informational accents
 - `successColor` — Success indicators
 - `warningColor` — Warning indicators
 - `diffAdded` — Diff added lines color
 - `diffRemoved` — Diff removed lines color
+- `diffContext`, `diffHunkHeader`, `diffHighlightAdded`, `diffHighlightRemoved`
+- `diffAddedBg`, `diffRemovedBg`, `diffContextBg`, `diffLineNumber`
+- `diffAddedLineNumberBg`, `diffRemovedLineNumberBg`
+- `inputBg` — Input area background
+- `inputBorder` — Input area border
+- `mentionBg` — @mention highlight background
+- `markdownText`, `markdownHeading`, `markdownLink`, `markdownLinkText`
+- `markdownCode`, `markdownCodeBlock`, `markdownBlockQuote`, `markdownEmph`
+- `markdownStrong`, `markdownHorizontalRule`, `markdownListItem`, `markdownListEnumeration`
+- `markdownImage`, `markdownImageText`
 
 #### Syntax Highlighting Colors
 - `syntaxComment` — Code comments
@@ -140,8 +204,10 @@ Set your theme in VS Code `settings.json`:
 - `syntaxString` — String literals
 - `syntaxNumber` — Numeric literals
 - `syntaxFunction` — Function names
+- `syntaxVariable` — Variables and identifiers
 - `syntaxType` — Type annotations
 - `syntaxOperator` — Operators
+- `syntaxPunctuation` — Punctuation tokens
 
 ### Example: Custom Theme
 
@@ -173,19 +239,62 @@ Colors are merged in this order (later overrides earlier):
 3. Active CLI theme file (resolved from `tui.json`)
 4. VS Code Settings `opencode.theme.overrides`
 
+### Theme Preview (Chat Panel Only)
+
+Click the **theme preview button** in the OpenCode chat settings menu to open the theme picker:
+
+1. **Built-in Presets** — Apply OpenCode presets (cli-default, light, dark, high-contrast) to the chat panel
+2. **CLI Themes** — Discover and preview themes from your CLI configuration
+
+Theme changes only affect the OpenCode chat panel — your VS Code editor theme is never modified. Settings are saved globally so they work without a workspace folder.
+
+### Personalized Theme Customizer
+
+Use **Settings → Customize theme** in the OpenCode chat header to open a webview modal for the common overrides: preset, accent, panel foreground/background, input border, Markdown heading, and added-diff background. The modal writes `opencode.theme` workspace settings and immediately refreshes webview CSS variables.
+
+#### Architecture
+
+The theme system uses CSS custom properties injected into the webview:
+- `--oc-accent`, `--oc-error`, `--oc-success`, `--oc-warning` — Semantic colors
+- `--oc-syn-keyword`, `--oc-syn-string`, `--oc-syn-comment`, etc. — Syntax highlighting
+- `--tool-read-color`, `--tool-write-color`, `--tool-exec-color` — Tool call accents
+
+All CSS variables are defined in `src/chat/webview/css/tokens.css` with VS Code token fallbacks. ThemeManager overrides are injected via `applyThemeVars()` which sanitizes values (blocks `url()`, `expression()`, `javascript:`).
+
+#### Using VS Code Command Palette
+
+You can also use the Command Palette (`Ctrl+Shift+P`) and search for:
+- `OpenCode: Preview Theme` — Open the theme preview picker
+
 ## Rate Limit Monitoring
 
-OpenCode tracks your LLM provider's rate limits in real time and surfaces them in the UI.
+OpenCode Harness surfaces provider quota data in the webview status strip and the VS Code status bar.
 
-### Status Bar Indicator
+### Webview Quota Bar
 
-A status bar entry shows your remaining rate limit as a percentage:
+The chat status strip shows a compact quota bar when the provider exposes remaining/limit data or when you configure fallback limits:
 
-- ◔ 85% — Healthy (>50% remaining)
-- ◕ 30% — Warning (10–50% remaining)
-- ◗ 5%  — Critical (<10% remaining)
+- Green: >50% remaining
+- Yellow: 10-50% remaining
+- Red: <10% remaining
 
-Hover to see a tooltip with detailed breakdown (tokens, requests, reset time). Click to open the rate limit detail panel.
+When exact quota data is unavailable, the bar switches to an observed-usage mode and shows tokens/cost from completed assistant responses instead of pretending to know a remaining allowance.
+
+### Provider Accuracy
+
+Different providers expose different quota signals. Header adapters parse OpenAI, Anthropic, and generic `ratelimit-*` headers when those headers are available. If the OpenCode SDK response path only exposes assistant `tokens`/`cost`, the extension records observed usage and can estimate a per-minute quota only when `opencode.rateLimits` includes the selected provider.
+
+OpenCode Zen uses the provider id `opencode` and currently works like any other OpenCode provider. Zen is pay-as-you-go, supports auto-reload, and can have monthly workspace/member limits; those billing limits are not exposed through the prompt token metadata, so the extension does not infer remaining Zen balance/monthly budget unless the server exposes quota headers or you configure fallback limits.
+
+### VS Code Status Bar Indicator
+
+A status bar entry mirrors the known remaining percentage:
+
+- ◔ 85% — Healthy
+- ◕ 30% — Warning
+- ◗ 5% — Critical
+
+Hover to see a tooltip with detailed breakdown. Click to open the rate limit detail panel.
 
 ### Proactive Warnings
 
@@ -200,7 +309,8 @@ The extension warns you before you hit limits:
 {
   "opencode.rateLimits": {
     "openai": { "tokensPerMin": 150000, "requestsPerMin": 60 },
-    "anthropic": { "tokensPerMin": 200000, "requestsPerMin": 100 }
+    "anthropic": { "tokensPerMin": 200000, "requestsPerMin": 100 },
+    "opencode": { "tokensPerMin": 100000, "requestsPerMin": 50 }
   },
   "opencode.rateLimitWarningThreshold": 0.1,
   "opencode.rateLimitCriticalThreshold": 0.05
@@ -426,8 +536,12 @@ npm run test:lint      # lint with tsc --noEmit
 |---------|---------|-------|-------------|
 | `opencode.binaryPath` | `""` | machine | Path to the opencode binary. If not set, the extension will search for 'opencode' in your PATH |
 | `opencode.theme` | `{ "preset": "cli-default" }` | window | Theme configuration (see Theme Customization below) |
+| `opencode.mcpServers` | `{}` | window | Legacy fallback MCP server map for stdio/HTTP/SSE entries when OpenCode config does not define the server |
 | `opencode.model` | `""` | window | Default model ID in provider/model format (e.g. anthropic/claude-sonnet-4-20250514) |
 | `opencode.autoCompact` | `"ask"` | window | Auto-compact behavior: `"ask"` (prompt before compacting), `"auto"` (compact without asking), `"off"` (never auto-compact) |
+| `opencode.sessions.emptySessionTtlMinutes` | `60` | window | Prune completely empty inactive sessions after this many minutes |
+| `opencode.sessions.cleanupIntervalMinutes` | `15` | window | Interval for periodic empty-session pruning |
+| `opencode.sessions.restoreOpenTabs` | `true` | window | Restore previously open non-empty tabs in the same workspace on reload |
 | `opencode.rateLimits` | `{}` | window | Per-provider rate limit configuration (tokensPerMin, requestsPerMin) |
 | `opencode.rateLimitWarningThreshold` | `0.1` | window | Fraction of remaining rate limit that triggers a warning notification (0.0-1.0) |
 | `opencode.rateLimitCriticalThreshold` | `0.05` | window | Fraction of remaining rate limit that triggers a critical warning (0.0-1.0) |

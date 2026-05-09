@@ -1,5 +1,6 @@
 export type NormalizedOpencodeEventType =
   | "tool_start"
+  | "tool_update"
   | "tool_end"
   | "skill_load"
   | "thinking"
@@ -68,6 +69,9 @@ export interface NormalizerContext {
   partStatusKeys: Map<string, string>
   messageRoles: Map<string, string>
   toolStatuses: Map<string, string>
+  toolInputs: Map<string, string>
+  toolOutputs: Map<string, string>
+  toolStartedIds: Set<string>
   seenUnknownTypes: Set<string>
   isAssistantMessage: (messageId: string | undefined) => boolean
   clearMessageTracking: (messageId: string) => void
@@ -116,6 +120,9 @@ export function createSdkEventNormalizer(): SdkEventNormalizer {
   const partStatusKeys = new Map<string, string>()
   const messageRoles = new Map<string, string>()
   const toolStatuses = new Map<string, string>()
+  const toolInputs = new Map<string, string>()
+  const toolOutputs = new Map<string, string>()
+  const toolStartedIds = new Set<string>()
   const seenUnknownTypes = new Set<string>()
 
   const isAssistantMessage = (messageId: string | undefined): boolean => {
@@ -140,6 +147,9 @@ export function createSdkEventNormalizer(): SdkEventNormalizer {
       partTextLengths.delete(partId)
       partStatusKeys.delete(partId)
       toolStatuses.delete(statusKey)
+      toolInputs.delete(statusKey)
+      toolOutputs.delete(statusKey)
+      toolStartedIds.delete(statusKey)
     }
   }
 
@@ -158,6 +168,9 @@ export function createSdkEventNormalizer(): SdkEventNormalizer {
     partStatusKeys,
     messageRoles,
     toolStatuses,
+    toolInputs,
+    toolOutputs,
+    toolStartedIds,
     seenUnknownTypes,
     isAssistantMessage,
     clearMessageTracking,

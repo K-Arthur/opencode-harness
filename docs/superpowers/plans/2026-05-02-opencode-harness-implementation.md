@@ -782,9 +782,9 @@ File: `src/chat/webview/index.html`
     <div id="input-area">
       <div id="mention-dropdown" class="dropdown hidden"></div>
       <div id="mode-selector">
-        <button class="mode-btn active" data-mode="normal" title="Normal: ask before each action">Normal</button>
-        <button class="mode-btn" data-mode="plan" title="Plan: read-only, creates plan for review">Plan</button>
-        <button class="mode-btn" data-mode="acceptEdits" title="Auto-accept: apply changes without asking">Auto</button>
+        <button class="mode-btn active" data-mode="build" title="Build: ask before each action">Build</button>
+        <button class="mode-btn" data-mode="plan" title="Plan: read-only, disables file edits via tools: { file_edit: false }">Plan</button>
+        <button class="mode-btn" data-mode="auto" title="Auto: apply changes without asking">Auto</button>
       </div>
       <textarea id="prompt-input" rows="3" placeholder="Ask OpenCode..."></textarea>
       <button id="send-btn">Send</button>

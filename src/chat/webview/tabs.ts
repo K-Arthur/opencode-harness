@@ -100,13 +100,14 @@ export function createTabBar(els: ElementRefs, callbacks: TabCallbacks) {
 
       const label = document.createElement("span")
       label.className = "tab-label"
-      label.textContent = tab.name
-      label.title = tab.name
+      const displayName = tab.name || "Untitled session"
+      label.textContent = displayName
+      label.title = displayName
       btn.appendChild(label)
 
       const close = document.createElement("span")
       close.className = "tab-close"
-      close.setAttribute("aria-label", `Close ${tab.name}`)
+      close.setAttribute("aria-label", `Close ${displayName}`)
       close.textContent = "\u00D7"
       btn.appendChild(close)
 

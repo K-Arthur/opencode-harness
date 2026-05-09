@@ -49,6 +49,8 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     if (slashMatch) {
       state.mode = "command"
       state.query = slashMatch[1]!
+      els.mentionDropdown.classList.add("command-mode")
+      els.mentionDropdown.classList.remove("mention-mode")
       els.mentionDropdown.classList.remove("hidden")
       const allCommands = [...LOCAL_COMMANDS, ...serverCommands]
       const filtered = allCommands.filter(c =>
@@ -62,9 +64,12 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     if (atMatch) {
       state.mode = "mention"
       state.query = atMatch[1]!
+      els.mentionDropdown.classList.add("mention-mode")
+      els.mentionDropdown.classList.remove("command-mode")
       els.mentionDropdown.classList.remove("hidden")
       postMessage({ type: "mention_search", query: state.query })
     } else {
+      els.mentionDropdown.classList.remove("command-mode", "mention-mode")
       els.mentionDropdown.classList.add("hidden")
     }
   }
@@ -82,7 +87,11 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     state.selectedIndex = 0
     commands.forEach((item, i) => {
       const div = document.createElement("div")
-      div.className = "dropdown-item" + (i === 0 ? " selected" : "")
+      div.className = "dropdown-item command-item" + (i === 0 ? " selected" : "")
+      div.setAttribute("role", "option")
+      div.setAttribute("aria-selected", String(i === 0))
+      div.tabIndex = -1
+      div.dataset.command = item.display || ""
       const icon = document.createElement("span")
       icon.className = "dropdown-icon"
       // Use innerHTML for SVG icon strings, textContent for emoji fallbacks
@@ -93,16 +102,19 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
         icon.textContent = iconStr || "\u2699"
       }
       div.appendChild(icon)
+      const content = document.createElement("span")
+      content.className = "dropdown-content"
       const label = document.createElement("span")
       label.className = "dropdown-label"
       label.textContent = `/${item.display || ""}`
-      div.appendChild(label)
+      content.appendChild(label)
       if (item.description) {
         const desc = document.createElement("span")
         desc.className = "dropdown-desc"
-        desc.textContent = "\u2014 " + item.description
-        div.appendChild(desc)
+        desc.textContent = item.description
+        content.appendChild(desc)
       }
+      div.appendChild(content)
       div.addEventListener("click", () => insertCommand(item))
       els.mentionDropdown.appendChild(div)
     })
@@ -139,17 +151,29 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     }
     if (e.key === "ArrowDown") {
       e.preventDefault()
-      items.forEach((i) => i.classList.remove("selected"))
+      items.forEach((i) => {
+        i.classList.remove("selected")
+        i.setAttribute("aria-selected", "false")
+      })
       state.selectedIndex = (state.selectedIndex + 1) % items.length
       const selected = items[state.selectedIndex]
-      if (selected) selected.classList.add("selected")
+      if (selected) {
+        selected.classList.add("selected")
+        selected.setAttribute("aria-selected", "true")
+      }
       if (selected) ensureVisible(selected, els.mentionDropdown)
     } else if (e.key === "ArrowUp") {
       e.preventDefault()
-      items.forEach((i) => i.classList.remove("selected"))
+      items.forEach((i) => {
+        i.classList.remove("selected")
+        i.setAttribute("aria-selected", "false")
+      })
       state.selectedIndex = state.selectedIndex <= 0 ? items.length - 1 : state.selectedIndex - 1
       const selectedUp = items[state.selectedIndex]
-      if (selectedUp) selectedUp.classList.add("selected")
+      if (selectedUp) {
+        selectedUp.classList.add("selected")
+        selectedUp.setAttribute("aria-selected", "true")
+      }
       if (selectedUp) ensureVisible(selectedUp, els.mentionDropdown)
     } else if (e.key === "Enter" && state.selectedIndex >= 0) {
       e.preventDefault()
@@ -183,6 +207,9 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     items.forEach((item, i) => {
       const div = document.createElement("div")
       div.className = "dropdown-item" + (i === 0 ? " selected" : "")
+      div.setAttribute("role", "option")
+      div.setAttribute("aria-selected", String(i === 0))
+      div.tabIndex = -1
       const icon = document.createElement("span")
       icon.className = "dropdown-icon"
       const iconStr = item.icon || ""
@@ -192,16 +219,19 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
         icon.textContent = iconStr || "\uD83D\uDCC4"
       }
       div.appendChild(icon)
+      const content = document.createElement("span")
+      content.className = "dropdown-content"
       const label = document.createElement("span")
       label.className = "dropdown-label"
       label.textContent = item.display || ""
-      div.appendChild(label)
+      content.appendChild(label)
       if (item.description) {
         const desc = document.createElement("span")
         desc.className = "dropdown-desc"
-        desc.textContent = "\u2014 " + item.description
-        div.appendChild(desc)
+        desc.textContent = item.description
+        content.appendChild(desc)
       }
+      div.appendChild(content)
       div.addEventListener("click", () => insertMention(item))
       els.mentionDropdown.appendChild(div)
     })

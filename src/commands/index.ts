@@ -13,7 +13,10 @@ export {
   registerContinueLastSessionCommand,
   registerChooseHistorySessionCommand,
   registerAttachRemoteCommand,
+  registerAddFileToSessionCommand,
+  registerAddSelectionToSessionCommand,
 } from "./session"
 export { registerSelectModelCommand } from "./model"
 export { registerShowRateLimitsCommand, registerCheckCliCommand } from "./misc"
 export { registerExportCommand } from "./export"
+export { registerStopCommand } from "./misc"

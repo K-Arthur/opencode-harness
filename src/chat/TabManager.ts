@@ -1,5 +1,6 @@
 import * as vscode from "vscode"
 import { log } from "../utils/outputChannel"
+import { Block } from "./types"
 
 export interface TabState {
   id: string
@@ -11,10 +12,15 @@ export interface TabState {
   model: string
   mode: string
   lastActivityTime: number  // Timestamp of last activity for watchdog
+  blocksBuffer: Block[]
 }
+
+const OPEN_TABS_STORAGE_KEY = "opencode-harness.openTabs"
+const ACTIVE_TAB_STORAGE_KEY = "opencode-harness.activeTab"
 
 export class TabManager {
   private tabs = new Map<string, TabState>()
+  private cliSessionIndex = new Map<string, TabState>()
   private activeTabId = ""
   private readonly MAX_CONCURRENT_STREAMS = 3
   private readonly MAX_TABS = 20
@@ -28,6 +34,37 @@ export class TabManager {
   readonly onTabClosed = this._onTabClosed.event
   readonly onTabSwitched = this._onTabSwitched.event
   readonly onStreamingStateChanged = this._onStreamingStateChanged.event
+
+  /**
+   * Tab IDs persisted from the previous session, in order. Populated by the
+   * constructor and frozen at that moment — adding/closing tabs at runtime
+   * mutates the underlying storage but does NOT change this list, so callers
+   * can use it to "restore exactly what was open".
+   */
+  private readonly restoredTabIds: readonly string[]
+  private readonly restoredActiveId: string
+
+  constructor(private readonly storage?: vscode.Memento) {
+    const saved = storage?.get<string[]>(OPEN_TABS_STORAGE_KEY, []) ?? []
+    this.restoredTabIds = Object.freeze(saved.filter((id) => typeof id === "string" && id.length > 0).slice(0, this.MAX_TABS))
+    this.restoredActiveId = storage?.get<string>(ACTIVE_TAB_STORAGE_KEY, "") ?? ""
+  }
+
+  /** Tab IDs that were open the last time the extension ran. Read-only snapshot. */
+  getRestoredTabIds(): readonly string[] {
+    return this.restoredTabIds
+  }
+
+  /** Active tab ID at the time the extension last shut down. */
+  getRestoredActiveId(): string {
+    return this.restoredActiveId
+  }
+
+  private persist(): void {
+    if (!this.storage) return
+    void this.storage.update(OPEN_TABS_STORAGE_KEY, Array.from(this.tabs.keys()))
+    void this.storage.update(ACTIVE_TAB_STORAGE_KEY, this.activeTabId)
+  }
 
   createTab(id: string, cliSessionId?: string, model?: string, mode?: string): TabState | null {
     if (this.tabs.size >= this.MAX_TABS) {
@@ -44,9 +81,12 @@ export class TabManager {
       model: model || "",
       mode: mode || "normal",
       lastActivityTime: Date.now(),
+      blocksBuffer: [],
     }
     this.tabs.set(id, tab)
+    if (cliSessionId) this.cliSessionIndex.set(cliSessionId, tab)
     this.activeTabId = id
+    this.persist()
     this._onTabCreated.fire(id)
     log.info(`Tab created: ${id} (session: ${cliSessionId || "pending"})`)
     return tab
@@ -66,6 +106,8 @@ export class TabManager {
       tab.completionTimeout = null
     }
 
+    if (tab.cliSessionId) this.cliSessionIndex.delete(tab.cliSessionId)
+
     this.tabs.delete(id)
     this._onTabClosed.fire(id)
     log.info(`Tab closed: ${id}`)
@@ -78,6 +120,7 @@ export class TabManager {
         this._onTabSwitched.fire(this.activeTabId)
       }
     }
+    this.persist()
 
     return true
   }
@@ -85,12 +128,17 @@ export class TabManager {
   switchTab(id: string): boolean {
     if (!this.tabs.has(id)) return false
     this.activeTabId = id
+    this.persist()
     this._onTabSwitched.fire(id)
     return true
   }
 
   getTab(id: string): TabState | undefined {
     return this.tabs.get(id)
+  }
+
+  getTabByCliSessionId(cliSessionId: string): TabState | undefined {
+    return this.cliSessionIndex.get(cliSessionId)
   }
 
   getActiveTab(): TabState | undefined {
@@ -159,7 +207,9 @@ export class TabManager {
   setCliSessionId(id: string, cliSessionId: string): boolean {
     const tab = this.tabs.get(id)
     if (!tab) return false
+    if (tab.cliSessionId) this.cliSessionIndex.delete(tab.cliSessionId)
     tab.cliSessionId = cliSessionId
+    this.cliSessionIndex.set(cliSessionId, tab)
     return true
   }
 
@@ -203,6 +253,21 @@ export class TabManager {
     return true
   }
 
+  appendToBlocksBuffer(id: string, block: Block): boolean {
+    const tab = this.tabs.get(id)
+    if (!tab) return false
+    tab.blocksBuffer.push(block)
+    tab.lastActivityTime = Date.now()
+    return true
+  }
+
+  clearBlocksBuffer(id: string): boolean {
+    const tab = this.tabs.get(id)
+    if (!tab) return false
+    tab.blocksBuffer = []
+    return true
+  }
+
   dispose(): void {
     for (const tab of this.tabs.values()) {
       if (tab.completionTimeout) {
@@ -210,6 +275,7 @@ export class TabManager {
       }
     }
     this.tabs.clear()
+    this.cliSessionIndex.clear()
     this._onTabCreated.dispose()
     this._onTabClosed.dispose()
     this._onTabSwitched.dispose()

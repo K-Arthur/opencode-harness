@@ -77,8 +77,13 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     // Filter to enabled models only
     const enabledModels = modelsList.filter((m) => m.enabled !== false)
 
-    // Sort: by provider alphabetically, then by displayName alphabetically
+    // Sort: favorites and recently used models first, then provider/name.
     const sortedModels = [...enabledModels].sort((a, b) => {
+      const fav = Number(Boolean(b.favorite)) - Number(Boolean(a.favorite))
+      if (fav !== 0) return fav
+      const ar = typeof a.recentRank === "number" ? a.recentRank : Number.POSITIVE_INFINITY
+      const br = typeof b.recentRank === "number" ? b.recentRank : Number.POSITIVE_INFINITY
+      if (ar !== br) return ar - br
       const pc = a.provider.localeCompare(b.provider)
       return pc !== 0 ? pc : a.displayName.localeCompare(b.displayName)
     })
@@ -118,8 +123,16 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
         option.appendChild(checkmark)
 
         const name = document.createElement("span")
+        name.className = "model-option-name"
         name.textContent = model.displayName
         option.appendChild(name)
+
+        if (model.favorite || typeof model.recentRank === "number") {
+          const meta = document.createElement("span")
+          meta.className = "model-option-meta"
+          meta.textContent = model.favorite ? "Favorite" : "Recent"
+          option.appendChild(meta)
+        }
 
         option.addEventListener("click", () => {
           callbacks.onSelect(fullId)

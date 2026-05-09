@@ -9,6 +9,9 @@ export interface NormalizerContext {
   partStatusKeys: Map<string, string>
   messageRoles: Map<string, string>
   toolStatuses: Map<string, string>
+  toolInputs: Map<string, string>
+  toolOutputs: Map<string, string>
+  toolStartedIds: Set<string>
   seenUnknownTypes: Set<string>
 
   // Helper functions

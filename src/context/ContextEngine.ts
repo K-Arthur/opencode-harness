@@ -1,7 +1,9 @@
 import * as vscode from "vscode"
+import { estimateTokens } from "../utils/tokenCounter"
 
 export interface GatherConfig {
   mode: "basic" | "deep"
+  maxTokens?: number // Max tokens for open files (default 50000)
 }
 
 export interface ContextPackage {
@@ -25,7 +27,7 @@ export class ContextEngine {
 
   async gatherContext(config: GatherConfig = { mode: "basic" }): Promise<ContextPackage> {
     const [openFiles, diagnostics, workspaceTree, projectConfigs, gitStatus] = await Promise.all([
-      this.gatherOpenFiles(),
+      this.gatherOpenFiles(config.maxTokens),
       this.gatherDiagnostics(),
       this.gatherWorkspaceTree(),
       this.gatherProjectConfigs(),
@@ -35,9 +37,10 @@ export class ContextEngine {
     return { openFiles, diagnostics, workspaceTree, projectConfigs, gitStatus }
   }
 
-  private async gatherOpenFiles(): Promise<ContextPackage["openFiles"]> {
+  private async gatherOpenFiles(maxTokens = 50_000): Promise<ContextPackage["openFiles"]> {
     const result: ContextPackage["openFiles"] = []
     const tabs = vscode.window.tabGroups.all.flatMap((g) => g.tabs)
+    let usedTokens = 0
 
     for (const tab of tabs) {
       if (tab.input && typeof tab.input === "object" && "uri" in tab.input) {
@@ -45,8 +48,21 @@ export class ContextEngine {
         try {
           const doc = await vscode.workspace.openTextDocument(uri)
           let content = doc.getText()
-          if (content.length > 8192) {
-            content = content.slice(0, 8192) + `\n[File truncated: remaining ${content.length - 8192} chars hidden]`
+          const contentTokens = estimateTokens(content)
+
+          // Token-based truncation instead of character-based
+          if (usedTokens + contentTokens > maxTokens) {
+            const remainingTokens = maxTokens - usedTokens
+            if (remainingTokens <= 0) {
+              content = `[File skipped: would exceed token limit of ${maxTokens}]`
+            } else {
+              // Estimate characters from remaining tokens (rough 4 chars per token)
+              const maxChars = remainingTokens * 4
+              content = content.slice(0, maxChars) + `\n[File truncated: remaining ${contentTokens - remainingTokens} tokens hidden]`
+              usedTokens += remainingTokens
+            }
+          } else {
+            usedTokens += contentTokens
           }
 
           const editor = vscode.window.activeTextEditor

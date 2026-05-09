@@ -40,3 +40,18 @@ export function registerCheckCliCommand(
     })
   )
 }
+
+export function registerStopCommand(
+  context: vscode.ExtensionContext,
+  chatProvider: { abortCurrentSession: () => Promise<void> }
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.stop", async () => {
+      try {
+        await chatProvider.abortCurrentSession()
+      } catch (err) {
+        log.error("Stop command failed", err)
+      }
+    })
+  )
+}

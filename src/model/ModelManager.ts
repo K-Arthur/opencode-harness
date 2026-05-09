@@ -98,7 +98,7 @@ export class ModelManager {
 
   private async fetchModelsFromServer(port: number, authHeader?: string): Promise<ModelInfo[]> {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 5000)
+    const timeout = setTimeout(() => controller.abort(), 15_000)
 
     try {
       const fetchHeaders: Record<string, string> = {}
@@ -125,14 +125,19 @@ export class ModelManager {
           : Object.entries(provider.models || {}).map(([id, model]: [string, any]) => ({
               id: model.id || id,
               name: model.name,
+              reasoning: model.capabilities?.reasoning === true || model.reasoning === true,
             }))
 
         for (const m of providerModels) {
+          const reasoning = m.reasoning === true || 
+                            (m.name && (m.name.includes("Thinking") || m.name.includes("Reasoning") || m.name.includes("O1"))) ||
+                            (m.id && (m.id.includes("thinking") || m.id.includes("reasoning") || m.id.includes("o1")))
+          
           models.push({
             id: m.id,
             provider: provider.id,
             displayName: m.name || m.id,
-            supportsVariants: m.reasoning === true,
+            supportsVariants: !!reasoning,
           })
         }
       }

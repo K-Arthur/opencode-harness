@@ -2,7 +2,7 @@
 export class ChunkBatcher {
   private buffer = new Map<string, string>()
   private flushTimer: ReturnType<typeof setTimeout> | null = null
-  private static readonly FLUSH_MS = 50
+  private static readonly FLUSH_MS = 75
   private flushCount = 0
 
   constructor(

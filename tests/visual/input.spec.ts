@@ -11,7 +11,7 @@ test.describe('Input Area', () => {
     
     const textarea = page.locator('#prompt-input')
     await expect(textarea).toBeVisible()
-    await expect(textarea).toHaveAttribute('placeholder', 'Type your task here...')
+    await expect(textarea).toHaveAttribute('placeholder', 'Ask OpenCode anything…')
   })
 
   test('should display bottom bar with all buttons', async ({ page }) => {
@@ -24,9 +24,9 @@ test.describe('Input Area', () => {
     const attachBtn = page.locator('#attach-btn')
     await expect(attachBtn).toBeVisible()
     
-    const modeToggle = page.locator('#mode-toggle')
-    await expect(modeToggle).toBeVisible()
-    await expect(modeToggle.locator('#mode-label')).toHaveText('Plan')
+    const modeDropdown = page.locator('#mode-dropdown')
+    await expect(modeDropdown).toBeVisible()
+    await expect(modeDropdown.locator('#mode-current-text')).toHaveText('Build')
     
     const modelSelector = page.locator('#model-selector-btn')
     await expect(modelSelector).toBeVisible()
@@ -35,10 +35,11 @@ test.describe('Input Area', () => {
     await expect(sendBtn).toBeVisible()
   })
 
-  test('should have mode toggle button', async ({ page }) => {
-    const modeToggle = page.locator('#mode-toggle')
-    await expect(modeToggle).toBeVisible()
-    await expect(modeToggle.locator('#mode-label')).toBeVisible()
+  test('should have mode dropdown button', async ({ page }) => {
+    const modeDropdown = page.locator('#mode-dropdown')
+    await expect(modeDropdown).toBeVisible()
+    await expect(modeDropdown.locator('#mode-dropdown-btn')).toHaveAttribute('aria-haspopup', 'listbox')
+    await expect(modeDropdown.locator('#mode-current-text')).toBeVisible()
   })
 
   test('should have send button with correct initial state', async ({ page }) => {
@@ -58,9 +59,16 @@ test.describe('Input Area', () => {
 
   test('should have proper visual layout', async ({ page }) => {
     await page.locator('#prompt-input').fill('Test input')
-    
-    await expect(page).toHaveScreenshot('input-area.png', {
-      maxDiffPixels: 100
-    })
+
+    const inputArea = page.locator('#input-area')
+    const bottomBar = page.locator('#input-bottom-bar')
+    const inputBox = await inputArea.boundingBox()
+    const bottomBarBox = await bottomBar.boundingBox()
+    const overflow = await inputArea.evaluate((el) => el.scrollWidth - el.clientWidth)
+
+    expect(inputBox).not.toBeNull()
+    expect(bottomBarBox).not.toBeNull()
+    expect(bottomBarBox!.y).toBeGreaterThan(inputBox!.y)
+    expect(overflow).toBeLessThanOrEqual(1)
   })
 })

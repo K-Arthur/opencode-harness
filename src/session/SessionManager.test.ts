@@ -81,4 +81,33 @@ describe("SessionManager.ts", () => {
     assert.ok(source.includes("this.startPromise = this._start()"), "must assign _start() to startPromise")
     assert.ok(source.includes("this.startPromise = null"), "must clear startPromise after completion")
   })
+
+  it("validates remote server URL before enabling remote attach", () => {
+    assert.ok(source.includes("validateServerUrl"), "must use shared URL validation")
+    assert.ok(source.includes("Remote server URL warning"), "must log non-fatal URL warnings")
+    assert.ok(source.includes("Invalid remote server URL"), "must reject invalid remote URLs")
+  })
+
+  // ── CLI session sharing ────────────────────────────────────────────────────
+
+  it("spawned server inherits data-dir env vars so CLI and extension share sessions", () => {
+    assert.ok(
+      source.includes("OPENCODE_DATA_DIR"),
+      "OPENCODE_DATA_DIR must be in allowedEnvVars so extension server uses same storage as CLI"
+    )
+    assert.ok(
+      source.includes("XDG_DATA_HOME"),
+      "XDG_DATA_HOME must be in allowedEnvVars so extension server uses same storage as CLI"
+    )
+  })
+
+  it("recoverSessions shows all workspaces, not just current", () => {
+    const idx = source.indexOf("private async recoverSessions(")
+    assert.ok(idx >= 0, "recoverSessions must exist")
+    const block = source.slice(idx, idx + 400)
+    assert.ok(
+      !block.includes("isInCurrentWorkspace"),
+      "recoverSessions must NOT filter by isInCurrentWorkspace (all workspace sessions should be recoverable)"
+    )
+  })
 })

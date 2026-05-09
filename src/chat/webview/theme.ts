@@ -9,8 +9,9 @@ export function updateContextChips(els: ElementRefs, chips?: ContextChip[]) {
   }
   els.contextBar.classList.remove("hidden")
   chips.forEach((chip) => {
-    const el = document.createElement("span")
-    el.className = "context-chip"
+	    const el = document.createElement("span")
+	    el.className = "context-chip"
+	    if (chip.kind) el.dataset.kind = chip.kind
     const label = document.createElement("span")
     label.textContent = chip.label || ""
     el.appendChild(label)

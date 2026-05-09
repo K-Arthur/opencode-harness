@@ -181,7 +181,7 @@ interface OpenCodeSession {
   createdAt: number
   lastActiveAt: number
   model: string           // per-session model override
-  mode: string            // "normal" | "plan" | "auto_accept"
+  mode: string            // Extension UI mode: "build" | "plan" | "auto" (mapped to server tools config)
   messages: ChatMessage[] // full conversation history
 }
 ```
@@ -279,11 +279,11 @@ class TabManager {
 
 **Tab state:**
 ```typescript
-interface TabState {
+ interface TabState {
   id: string
   name: string
   model: string
-  mode: string
+  mode: string            // Extension UI mode: "build" | "plan" | "auto" (mapped to server tools config)
   isStreaming: boolean
   completionTimeout: NodeJS.Timer | null
 }
@@ -781,7 +781,9 @@ SessionManager detects 'exit' event
       { "command": "opencode-harness.checkCli", "title": "Check CLI Communication" },
       { "command": "opencode-harness.listSessions", "title": "List Sessions" },
       { "command": "opencode-harness.deleteSession", "title": "Delete Session" },
-      { "command": "opencode-harness.renameSession", "title": "Rename Session" }
+      { "command": "opencode-harness.renameSession", "title": "Rename Session" },
+      { "command": "opencode-harness.addFileToSession", "title": "Add File to Session" },
+      { "command": "opencode-harness.addSelectionToSession", "title": "Add Selection to Session" }
     ],
     "keybindings": [
       { "command": "opencode-harness.toggleFocus", "key": "ctrl+alt+o" },
@@ -796,7 +798,11 @@ SessionManager detects 'exit' event
       "editor/context": [
         { "command": "opencode-harness.explainCode", "group": "opencode" },
         { "command": "opencode-harness.refactorCode", "group": "opencode" },
-        { "command": "opencode-harness.generateTests", "group": "opencode" }
+        { "command": "opencode-harness.generateTests", "group": "opencode" },
+        { "command": "opencode-harness.addSelectionToSession", "group": "opencode@4", "when": "editorHasSelection" }
+      ],
+      "explorer/context": [
+        { "command": "opencode-harness.addFileToSession", "group": "opencode@1", "when": "resourceScheme == file" }
       ]
     }
   }
@@ -872,6 +878,9 @@ OpenCode is built with accessibility as a first-class concern:
 | Git worktree creation fails | Fall back to `git stash` + manual restoration |
 | Webview postMessage size exceeded | Chunk large messages; show progress indicator |
 | Context package too large for token limit | Truncate lowest-priority files; show truncation summary |
+| Sensitive file or prompt-injection content attached | Warn before sending; allow attach all, review selected files, or cancel |
+| Remote server URL invalid | Reject before enabling remote attach |
+| Remote server URL is non-HTTPS outside localhost | Allow but warn in logs |
 | Max concurrent streams (3) exceeded | Show warning with names of currently streaming tabs |
 | Tab close with active stream | Auto-abort the stream before closing tab |
 
@@ -884,7 +893,9 @@ OpenCode is built with accessibility as a first-class concern:
 3. **Dynamic port**: Random high port (49152-65535), stored only in VS Code's secure workspace state.
 4. **Workspace trust**: In Restricted Mode, the extension disables all file-writing operations and terminal command execution.
 5. **PII redaction**: Output channel masks API keys, tokens, and passwords.
-6. **No telemetry by default**: Any data collection requires explicit opt-in.
+6. **Context attachment guardrails**: Sensitive paths and common prompt-injection strings are detected before files are added to chat.
+7. **Remote URL validation**: Invalid remote server URLs are rejected and non-HTTPS remote URLs warn unless they are local.
+8. **No telemetry by default**: Any data collection requires explicit opt-in.
 
 ---
 

@@ -56,7 +56,7 @@ The primary interaction point is a rich webview chat panel. It must display:
 | FR-CHAT-04 | Render **thinking/planning blocks**: collapsible reasoning text from the model |
 | FR-CHAT-05 | Render **inline diff previews**: for code suggestions, present a unified diff with per-line accept/reject controls |
 | FR-CHAT-06 | Support **@-mention system**: typing `@` triggers fuzzy file/path completion. Support `@file`, `@folder`, `@problems`, `@url`, `@terminal` |
-| FR-CHAT-07 | Support **permission mode selector**: normal (ask per action), plan (read-only with markdown plan review), auto-accept (skip approval) |
+| FR-CHAT-07 | Support **permission mode selector**: build (ask per action), plan (read-only with markdown plan review, disables file edits via `tools: { file_edit: false }`), auto (skip approval, auto-apply changes) |
 | FR-CHAT-08 | Support **multi-line input** via Shift+Enter, single-line submit via Enter |
 | FR-CHAT-09 | Support **session history**: searchable list of past conversations, resume with full context |
 | FR-CHAT-10 | Support **multiple parallel sessions** via separate editor tabs or windows |

@@ -264,7 +264,7 @@ describe("Regression: Performance & Scroll", () => {
 
   it("jump-to-bottom button exists", () => {
     assert.ok(files.mainTs.includes("jump-to-bottom"), "must have jump-to-bottom button")
-    assert.ok(files.mainTs.includes("updateScrollMarkers"), "must have scroll markers")
+    assert.ok(files.mainTs.includes("scroll-markers"), "must have scroll markers")
   })
 
   it("perf logging is gated behind debug flag", () => {

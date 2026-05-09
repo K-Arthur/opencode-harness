@@ -13,7 +13,16 @@
   "engines": {
     "vscode": "^1.98.0"
   },
-  "activationEvents": [],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true,
+      "description": "Requires workspace access to read and modify files"
+    }
+  },
+  "activationEvents": [
+    "onView:opencode-harness.chat",
+    "onCommand:opencode-harness.openChat"
+  ],
   "categories": [
     "Chat",
     "Machine Learning",
@@ -130,6 +139,18 @@
       {
         "command": "opencode-harness.attachRemote",
         "title": "OpenCode: Attach to Remote Server…"
+      },
+      {
+        "command": "opencode-harness.addFileToSession",
+        "title": "OpenCode: Add File to Session"
+      },
+      {
+        "command": "opencode-harness.addSelectionToSession",
+        "title": "OpenCode: Add Selection to Session"
+      },
+      {
+        "command": "opencode-harness.stop",
+        "title": "OpenCode: Stop"
       }
     ],
     "keybindings": [
@@ -145,6 +166,16 @@
         "command": "opencode-harness.insertMention",
         "key": "alt+k",
         "when": "editorTextFocus"
+      },
+      {
+        "command": "opencode-harness.stop",
+        "key": "escape",
+        "when": "focusedView == 'opencode-harness.chat'"
+      },
+      {
+        "command": "opencode-harness.stop",
+        "key": "ctrl+shift+escape",
+        "when": "focusedView == 'opencode-harness.chat'"
       }
     ],
     "viewsContainers": {
@@ -182,6 +213,18 @@
           "command": "opencode-harness.generateTests",
           "group": "opencode@3",
           "when": "editorHasSelection"
+        },
+        {
+          "command": "opencode-harness.addSelectionToSession",
+          "group": "opencode@4",
+          "when": "editorHasSelection"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "opencode-harness.addFileToSession",
+          "group": "opencode@1",
+          "when": "resourceScheme == file"
         }
       ]
     },
@@ -205,6 +248,53 @@
           "default": "",
           "scope": "machine",
           "description": "Optional bearer token sent with requests to the remote opencode server. Only used when 'opencode.serverUrl' is set."
+        },
+        "opencode.mcpServers": {
+          "type": "object",
+          "default": {},
+          "scope": "window",
+          "description": "Legacy fallback MCP server map. OpenCode config files remain the primary source; entries here are used only when no server with the same name exists in opencode.json.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["stdio", "http", "sse"],
+                "description": "MCP transport type."
+              },
+              "command": {
+                "type": "string",
+                "description": "Command for stdio MCP servers."
+              },
+              "args": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Command arguments for stdio MCP servers."
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": { "type": "string" },
+                "description": "Environment variables for stdio MCP servers."
+              },
+              "url": {
+                "type": "string",
+                "description": "URL for HTTP or SSE MCP servers."
+              },
+              "headers": {
+                "type": "object",
+                "additionalProperties": { "type": "string" },
+                "description": "Request headers for remote MCP servers."
+              },
+              "disabled": {
+                "type": "boolean",
+                "description": "Disable this MCP server."
+              },
+              "enabled": {
+                "type": "boolean",
+                "description": "Enable this MCP server."
+              }
+            }
+          }
         },
         "opencode.theme": {
           "type": "object",
@@ -342,6 +432,134 @@
                 "syntaxOperator": {
                   "type": "string",
                   "description": "Syntax highlight color for operators"
+                },
+                "primaryColor": {
+                  "type": "string",
+                  "description": "OpenCode CLI primary color"
+                },
+                "secondaryColor": {
+                  "type": "string",
+                  "description": "OpenCode CLI secondary color"
+                },
+                "infoColor": {
+                  "type": "string",
+                  "description": "OpenCode CLI info color"
+                },
+                "elementBg": {
+                  "type": "string",
+                  "description": "Background color for lower-emphasis UI elements"
+                },
+                "borderActive": {
+                  "type": "string",
+                  "description": "Active border color"
+                },
+                "borderSubtle": {
+                  "type": "string",
+                  "description": "Subtle border color"
+                },
+                "diffContext": {
+                  "type": "string",
+                  "description": "Diff context text color"
+                },
+                "diffHunkHeader": {
+                  "type": "string",
+                  "description": "Diff hunk header color"
+                },
+                "diffHighlightAdded": {
+                  "type": "string",
+                  "description": "Diff inline added highlight"
+                },
+                "diffHighlightRemoved": {
+                  "type": "string",
+                  "description": "Diff inline removed highlight"
+                },
+                "diffAddedBg": {
+                  "type": "string",
+                  "description": "Diff added line background"
+                },
+                "diffRemovedBg": {
+                  "type": "string",
+                  "description": "Diff removed line background"
+                },
+                "diffContextBg": {
+                  "type": "string",
+                  "description": "Diff context line background"
+                },
+                "diffLineNumber": {
+                  "type": "string",
+                  "description": "Diff line number color"
+                },
+                "diffAddedLineNumberBg": {
+                  "type": "string",
+                  "description": "Diff added line number background"
+                },
+                "diffRemovedLineNumberBg": {
+                  "type": "string",
+                  "description": "Diff removed line number background"
+                },
+                "markdownText": {
+                  "type": "string",
+                  "description": "Markdown body text color"
+                },
+                "markdownHeading": {
+                  "type": "string",
+                  "description": "Markdown heading color"
+                },
+                "markdownLink": {
+                  "type": "string",
+                  "description": "Markdown link color"
+                },
+                "markdownLinkText": {
+                  "type": "string",
+                  "description": "Markdown link text color"
+                },
+                "markdownCode": {
+                  "type": "string",
+                  "description": "Markdown inline code color"
+                },
+                "markdownBlockQuote": {
+                  "type": "string",
+                  "description": "Markdown blockquote color"
+                },
+                "markdownEmph": {
+                  "type": "string",
+                  "description": "Markdown emphasis color"
+                },
+                "markdownStrong": {
+                  "type": "string",
+                  "description": "Markdown strong text color"
+                },
+                "markdownHorizontalRule": {
+                  "type": "string",
+                  "description": "Markdown horizontal rule color"
+                },
+                "markdownListItem": {
+                  "type": "string",
+                  "description": "Markdown list item color"
+                },
+                "markdownListEnumeration": {
+                  "type": "string",
+                  "description": "Markdown list marker color"
+                },
+                "markdownImage": {
+                  "type": "string",
+                  "description": "Markdown image color"
+                },
+                "markdownImageText": {
+                  "type": "string",
+                  "description": "Markdown image text color"
+                },
+                "markdownCodeBlock": {
+                  "type": "string",
+                  "description": "Markdown fenced code color"
+                },
+                "syntaxVariable": {
+                  "type": "string",
+                  "description": "Syntax highlight color for variables"
+                },
+                "syntaxPunctuation": {
+                  "type": "string",
+                  "description": "Syntax highlight color for punctuation"
                 }
               },
               "additionalProperties": {
@@ -417,6 +635,26 @@
           ],
           "description": "Controls automatic session compaction when context usage reaches 80%"
         },
+        "opencode.sessions.emptySessionTtlMinutes": {
+          "type": "number",
+          "scope": "window",
+          "default": 60,
+          "minimum": 1,
+          "description": "Deletes completely empty, inactive sessions after this many minutes."
+        },
+        "opencode.sessions.cleanupIntervalMinutes": {
+          "type": "number",
+          "scope": "window",
+          "default": 15,
+          "minimum": 1,
+          "description": "How often the extension prunes completely empty sessions."
+        },
+        "opencode.sessions.restoreOpenTabs": {
+          "type": "boolean",
+          "scope": "window",
+          "default": true,
+          "description": "Restore chat tabs that were open in this workspace when VS Code last exited."
+        },
         "opencode.debugLogging": {
           "type": "boolean",
           "scope": "window",
@@ -467,6 +705,7 @@
     "@opencode-ai/sdk": "^1.14.36",
     "@vscode-elements/elements": "^2.5.1",
     "dompurify": "^3.4.2",
+    "fast-diff": "^1.3.0",
     "highlight.js": "^11.11.1",
     "markdown-it": "^14.1.0",
     "markdown-it-task-lists": "^2.1.1",

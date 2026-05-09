@@ -30,6 +30,13 @@ describe("ContextEngine.ts", () => {
     assert.ok(source.includes("private async gatherOpenFiles("))
   })
 
+  it("uses token-based truncation for open files", () => {
+    assert.ok(source.includes("estimateTokens"), "must estimate token usage")
+    assert.ok(source.includes("maxTokens = 50_000"), "must have a token budget")
+    assert.ok(source.includes("usedTokens"), "must accumulate token usage across open files")
+    assert.ok(source.includes("[File truncated:"), "must annotate truncated open files")
+  })
+
   it("has gatherDiagnostics private method", () => {
     assert.ok(source.includes("private gatherDiagnostics("))
   })

@@ -3,6 +3,7 @@ import { SessionManager } from "./session/SessionManager"
 import { SessionStore } from "./session/SessionStore"
 import { SessionExporter } from "./session/SessionExporter"
 import { ContextEngine } from "./context/ContextEngine"
+import { ContextFileProvider } from "./context/ContextFileProvider"
 import { ContextMonitor } from "./monitor/ContextMonitor"
 import { TerminalBridge } from "./terminal/TerminalBridge"
 import { CheckpointManager } from "./checkpoint/CheckpointManager"
@@ -13,6 +14,7 @@ import { ThemeManager } from "./theme/ThemeManager"
 import { RateLimitMonitor } from "./monitor/RateLimitMonitor"
 import { ModelManager } from "./model/ModelManager"
 import { CliDiagnostics } from "./diagnostics/CliDiagnostics"
+import { McpServerManager } from "./mcp/McpServerManager"
 import { log } from "./utils/outputChannel"
 import {
   registerRollbackCommand,
@@ -30,10 +32,13 @@ import {
   registerContinueLastSessionCommand,
   registerChooseHistorySessionCommand,
   registerAttachRemoteCommand,
+  registerAddFileToSessionCommand,
+  registerAddSelectionToSessionCommand,
   registerSelectModelCommand,
   registerShowRateLimitsCommand,
   registerCheckCliCommand,
   registerExportCommand,
+  registerStopCommand,
 } from "./commands"
 
 let sessionManager: SessionManager
@@ -86,6 +91,13 @@ export function activate(context: vscode.ExtensionContext) {
     const cliDiagnostics = new CliDiagnostics()
     context.subscriptions.push(cliDiagnostics)
 
+    const mcpServerManager = new McpServerManager(context)
+    context.subscriptions.push(mcpServerManager)
+
+    // Context file provider for viewing session context files
+    const contextFileProvider = new ContextFileProvider()
+    context.subscriptions.push(contextFileProvider)
+
     // Session store — don't create a default session on start, let the welcome
     // page guide the user through their first interaction.
     sessionStore = new SessionStore(context.globalState)
@@ -107,15 +119,34 @@ export function activate(context: vscode.ExtensionContext) {
     // Auto-start server so user doesn't see disconnected state after reload
     void sessionManager.start().catch(err => log.warn("Auto-start server failed", err))
 
+    // When a workspace folder is added after the server already started in ~/,
+    // offer to restart the server in the new project directory.
+    context.subscriptions.push(
+      vscode.workspace.onDidChangeWorkspaceFolders(async (e) => {
+        if (e.added.length === 0 || !sessionManager.isRunning) return
+        const newDir = e.added[0]?.uri.fsPath
+        if (!newDir) return
+        const choice = await vscode.window.showInformationMessage(
+          `Workspace opened: ${newDir.split("/").pop() ?? newDir}. Restart OpenCode server to use this workspace?`,
+          "Restart Server",
+          "Keep Current"
+        )
+        if (choice === "Restart Server") {
+          await sessionManager.stop()
+          await sessionManager.start()
+        }
+      })
+    )
+
     // Chat provider
     chatProviderInstance = new ChatProvider(
       context, sessionManager, contextEngine, contextMonitor,
       themeManager, rateLimitMonitor, modelManager, sessionStore,
-      checkpointManager
+      checkpointManager, mcpServerManager
     )
 
     registerInlineProviders(context, chatProviderInstance)
-    registerCoreCommands(context, sessionStore, sessionManager, modelManager, rateLimitMonitor, checkpointManager, cliDiagnostics, themeManager, terminalBridge)
+    registerCoreCommands(context, sessionStore, sessionManager, modelManager, rateLimitMonitor, checkpointManager, cliDiagnostics, themeManager, terminalBridge, chatProviderInstance)
     registerChatProvider(context, chatProviderInstance)
     registerUriHandler(context, chatProviderInstance)
 
@@ -193,8 +224,17 @@ function initConnectionStatusBar(
       case "sessions_recovered": {
         // Server reported its persisted sessions on connect. Import any that
         // the extension does not yet know about so CLI-created sessions
-        // surface in the picker (ADR-007).
-        const data = event.data as { sessions: Array<{ id: string; title?: string; time?: { updated?: number; created?: number } }> } | undefined
+        // surface in the picker (ADR-007). The SessionManager has already
+        // filtered out subagents and other-workspace sessions.
+        const data = event.data as {
+          sessions: Array<{
+            id: string
+            title?: string
+            time?: { updated?: number; created?: number }
+            parentID?: string
+            directory?: string
+          }>
+        } | undefined
         if (data?.sessions) {
           const result = sessionStore.importServerSessions(data.sessions)
           log.info(`Session recovery: ${result.imported} imported, ${result.skipped} already known (total server: ${data.sessions.length})`)
@@ -274,7 +314,8 @@ function registerCoreCommands(
   checkpointManager: CheckpointManager,
   cliDiagnostics: CliDiagnostics,
   themeManager: ThemeManager,
-  terminalBridge: TerminalBridge
+  terminalBridge: TerminalBridge,
+  chatProvider: ChatProvider
 ): void {
   const sessionExporter = new SessionExporter()
 
@@ -297,6 +338,9 @@ function registerCoreCommands(
   registerChooseHistorySessionCommand(context, sessionStore, sessionManager)
   registerAttachRemoteCommand(context, sessionManager)
   registerExportCommand(context, sessionExporter, sessionStore)
+  registerAddFileToSessionCommand(context, chatProvider)
+  registerAddSelectionToSessionCommand(context, chatProvider)
+  registerStopCommand(context, chatProvider)
 }
 
 function registerChatProvider(context: vscode.ExtensionContext, chatProvider: ChatProvider): void {

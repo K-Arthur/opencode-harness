@@ -15,6 +15,7 @@ import { spawn, type ChildProcess } from "child_process"
 import { randomUUID } from "crypto"
 import { findFreePort } from "../utils/portFinder"
 import { log } from "../utils/outputChannel"
+import { validateServerUrl } from "../utils/security"
 import { createSdkEventNormalizer, type SdkEventLike } from "./EventNormalizer"
 
 /* ------------------------------------------------------------------ */
@@ -62,6 +63,12 @@ export interface ModelRef {
   modelID: string
 }
 
+export interface PromptOptions {
+  model?: ModelRef
+  tools?: Record<string, boolean>
+  variant?: string
+}
+
 /* ------------------------------------------------------------------ */
 /*  SessionManager                                                     */
 /* ------------------------------------------------------------------ */
@@ -74,6 +81,12 @@ export class SessionManager {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private reconnectAttempts = 0
   private eventStreamController: AbortController | null = null
+  private eventReconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private eventReconnectAttempts = 0
+  private lastRawEventAt = 0
+  private lastNormalizedEventAt = 0
+  private lastRawEventType = ""
+  private lastNormalizedEventType = ""
   private readonly eventNormalizer = createSdkEventNormalizer()
 
   /** Current model selection – sent per-prompt via the SDK. */
@@ -106,6 +119,17 @@ export class SessionManager {
   /** Configure remote-attach mode. Pass null/empty to fall back to local spawn. */
   setRemoteServer(url: string | null | undefined, token?: string | null): void {
     const trimmed = (url ?? "").trim().replace(/\/+$/, "")
+
+    if (trimmed.length > 0) {
+      const validation = validateServerUrl(trimmed)
+      if (!validation.valid) {
+        throw new Error(`Invalid remote server URL: ${validation.warning ?? trimmed}`)
+      }
+      if (validation.warning) {
+        log.warn(`Remote server URL warning: ${validation.warning}`)
+      }
+    }
+
     this.remoteServerUrl = trimmed.length > 0 ? trimmed : null
     this.remoteServerToken = token?.trim() || null
   }
@@ -301,8 +325,24 @@ export class SessionManager {
 
     log.info(`Starting opencode server on port ${this.port} (${opencodePath})`)
 
+    // Determine working directory - use workspace folder if available
+    let cwd: string | undefined
+    const folders = vscode.workspace.workspaceFolders
+    if (folders && folders.length > 0) {
+      cwd = folders[0]!.uri.fsPath
+      log.info(`Starting opencode server in workspace: ${cwd}`)
+    } else {
+      cwd = process.cwd()
+      log.info(`No workspace folder; using cwd: ${cwd}`)
+    }
+
     // Only pass essential env vars to the child process to prevent secret leakage
-    const allowedEnvVars = ["PATH", "HOME", "USERPROFILE", "APPDATA", "XDG_CONFIG_HOME", "LANG", "TERM", "SHELL", "TMPDIR", "TEMP", "TMP"]
+    const allowedEnvVars = [
+      "PATH", "HOME", "USERPROFILE", "APPDATA",
+      "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_DATA_DIRS",
+      "OPENCODE_DATA_DIR",
+      "LANG", "TERM", "SHELL", "TMPDIR", "TEMP", "TMP",
+    ]
     const childEnv: Record<string, string> = {}
     for (const key of allowedEnvVars) {
       const val = process.env[key]
@@ -313,6 +353,7 @@ export class SessionManager {
       stdio: ["ignore", "pipe", "pipe"],
       env: childEnv,
       shell: false,
+      cwd,
     })
 
     this.serverProcess.stdout?.on("data", (data: Buffer) => {
@@ -390,6 +431,11 @@ export class SessionManager {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
+    if (this.eventReconnectTimer) {
+      clearTimeout(this.eventReconnectTimer)
+      this.eventReconnectTimer = null
+    }
+    this.eventStreamController?.abort()
     this._onEvent.dispose()
     // We can't await stop() in a synchronous dispose(), but we can fire it off
     this.stop().catch(err => log.error("Error during SessionManager disposal", err))
@@ -471,24 +517,36 @@ export class SessionManager {
       this.eventStreamController.abort()
     }
     this.eventStreamController = new AbortController()
+    const controller = this.eventStreamController
 
     this.client.event
       .subscribe()
       .then((events) => {
         void (async () => {
           try {
+            this.eventReconnectAttempts = 0
+            log.info("OpenCode event stream opened")
             for await (const event of events.stream) {
+              if (controller.signal.aborted) return
+              this.lastRawEventAt = Date.now()
+              this.lastRawEventType = event.type
               this.handleSdkEvent(event)
+            }
+            if (!controller.signal.aborted && !this.disposed) {
+              log.warn(`Event stream closed (last raw=${this.lastRawEventType || "none"})`)
+              this.scheduleEventStreamReconnect()
             }
           } catch (err) {
             // Stream ended or aborted – that's fine for abort, log others
-            if (this.eventStreamController?.signal.aborted) return
+            if (controller.signal.aborted) return
             log.warn("Event stream ended unexpectedly", err)
+            this.scheduleEventStreamReconnect()
           }
         })()
       })
       .catch((err: Error) => {
         log.error("Event subscription failed", err)
+        this.scheduleEventStreamReconnect()
       })
 
     log.info("Subscribed to OpenCode event stream")
@@ -496,8 +554,25 @@ export class SessionManager {
 
   private handleSdkEvent(event: SdkEvent): void {
     for (const normalized of this.eventNormalizer.normalize(event as unknown as SdkEventLike)) {
+      this.lastNormalizedEventAt = Date.now()
+      this.lastNormalizedEventType = normalized.type
       this._onEvent.fire(normalized)
     }
+  }
+
+  private scheduleEventStreamReconnect(): void {
+    if (this.disposed || !this.client || this.eventReconnectTimer) return
+    const attempt = this.eventReconnectAttempts++
+    const delay = Math.min(1000 * Math.pow(2, attempt), 30000)
+    const rawAge = this.lastRawEventAt ? `${Date.now() - this.lastRawEventAt}ms ago` : "never"
+    const normalizedAge = this.lastNormalizedEventAt ? `${Date.now() - this.lastNormalizedEventAt}ms ago` : "never"
+    log.warn(`Reconnecting OpenCode event stream in ${delay}ms (attempt ${attempt + 1}; last raw=${this.lastRawEventType || "none"} ${rawAge}; last normalized=${this.lastNormalizedEventType || "none"} ${normalizedAge})`)
+    this.eventReconnectTimer = setTimeout(() => {
+      this.eventReconnectTimer = null
+      if (this.disposed || !this.client) return
+      this.subscribeToEvents()
+      this._onEvent.fire({ type: "event_stream_reconnected" })
+    }, delay)
   }
 
   /* ---- reconnect ---- */
@@ -571,14 +646,15 @@ export class SessionManager {
   async sendPrompt(
     sessionId: string,
     parts: (TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput)[],
-    model?: ModelRef
+    options?: PromptOptions
   ): Promise<{ info: Message; parts: Part[] }> {
     if (this.disposed) throw new Error("SessionManager has been disposed")
     if (!this.client) throw new Error("Server not running")
 
-    const modelRef = model ?? this.currentModel ?? undefined
+    const modelRef = options?.model ?? this.currentModel ?? undefined
+    const variant = options?.variant
     const idempotencyKey = `${sessionId}-${randomUUID()}`
-    log.info(`Sending prompt to session ${sessionId} (idempotency: ${idempotencyKey.slice(0, 16)}..., model=${modelRef ? `${modelRef.providerID}/${modelRef.modelID}` : "default"})`)
+    log.info(`Sending prompt to session ${sessionId} (idempotency: ${idempotencyKey.slice(0, 16)}..., model=${modelRef ? `${modelRef.providerID}/${modelRef.modelID}` : "default"}, variant=${variant ?? "none"}, tools=${JSON.stringify(options?.tools ?? {})})`)
 
     const resp = await this.client.session.prompt({
       path: { id: sessionId },
@@ -588,6 +664,8 @@ export class SessionManager {
       body: {
         parts,
         ...(modelRef ? { model: modelRef } : {}),
+        ...(variant ? { variant } : {}),
+        ...(options?.tools ? { tools: options.tools } : {}),
       },
     })
 
@@ -612,15 +690,16 @@ export class SessionManager {
   async sendPromptAsync(
     sessionId: string,
     parts: (TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput)[],
-    model?: ModelRef
+    options?: PromptOptions
   ): Promise<void> {
     if (this.disposed) throw new Error("SessionManager has been disposed")
     if (!this.client) throw new Error("Server not running")
 
-    const modelRef = model ?? this.currentModel ?? undefined
+    const modelRef = options?.model ?? this.currentModel ?? undefined
+    const variant = options?.variant
     // Generate a per-prompt idempotency key so the server can deduplicate retries
     const idempotencyKey = `${sessionId}-${randomUUID()}`
-    log.info(`Sending async prompt to session ${sessionId} (idempotency: ${idempotencyKey.slice(0, 16)}...)`)
+    log.info(`Sending async prompt to session ${sessionId} (idempotency: ${idempotencyKey.slice(0, 16)}..., model=${modelRef ? `${modelRef.providerID}/${modelRef.modelID}` : "default"}, variant=${variant ?? "none"}, tools=${JSON.stringify(options?.tools ?? {})})`)
 
     let lastError: Error | null = null
 
@@ -631,6 +710,8 @@ export class SessionManager {
           body: {
             parts,
             ...(modelRef ? { model: modelRef } : {}),
+            ...(variant ? { variant } : {}),
+            ...(options?.tools ? { tools: options.tools } : {}),
           },
           headers: {
             "Idempotency-Key": idempotencyKey,
@@ -811,11 +892,37 @@ export class SessionManager {
    * to disk. Fire a `sessions_recovered` event so the SessionStore can
    * re-attach local sessions to their server-side counterparts.
    */
+  /**
+   * Resolve the workspace directory the extension is running against. Used to
+   * scope session listings to the current project, matching opencode CLI
+   * behavior. Returns undefined when no folder is open or in remote-attach
+   * mode (the remote server may report paths from a different mount point
+   * that we cannot meaningfully compare).
+   */
+  private currentWorkspaceDir(): string | undefined {
+    if (this.isRemote) return undefined
+    const folders = vscode.workspace.workspaceFolders
+    if (!folders || folders.length === 0) return undefined
+    return folders[0]!.uri.fsPath
+  }
+
+  /** True when `dir` matches the current workspace folder, or when scoping is disabled. */
+  isInCurrentWorkspace(dir?: string): boolean {
+    const workspace = this.currentWorkspaceDir()
+    if (!workspace) return true
+    if (!dir) return false
+    return dir === workspace
+  }
+
   private async recoverSessions(): Promise<void> {
     if (!this.client) return
     try {
-      const serverSessions = await this.listSessions()
-      log.info(`Server has ${serverSessions.length} persisted session(s)`)
+      const allServerSessions = await this.listSessions()
+      // Filter out only subagent (child) sessions. We intentionally show sessions
+      // from all workspaces so CLI-created sessions surface in the unified modal.
+      const serverSessions = allServerSessions.filter((s) => !s.parentID)
+      const dropped = allServerSessions.length - serverSessions.length
+      log.info(`Server has ${serverSessions.length} session(s) (${dropped} hidden: subagents only)`)
       this._onEvent.fire({
         type: "sessions_recovered",
         data: { sessions: serverSessions },

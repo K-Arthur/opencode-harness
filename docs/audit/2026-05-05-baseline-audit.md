@@ -122,20 +122,16 @@
 
 #### ISSUE CMD-01: Two clashing slash command implementations
 - **Symptom:** `/` triggers two competing UI surfaces.
-- **Root cause:** There are **three layers** of slash command handling:
-  1. **Webview autocomplete** (`src/chat/webview/main.ts` ~line 476): Static `SLASH_COMMANDS` array, renders `<ul class="slash-autocomplete-list">`.
-  2. **Webview dispatch** (`src/chat/webview/main.ts` `sendMessage()`): Switch/case that postMessages back to extension.
-  3. **Extension-side** (`src/chat/ChatCommands.ts`): Server-discovered commands via mentions/skills system.
-  - The mentions system (`src/chat/webview/mentions.ts`) provides a **separate** autocomplete dropdown (`#mention-dropdown`) for server-side commands accessed via `@`.
-  - Both fire on `/` input, potentially conflicting.
-- **Risk:** HIGH — confused UX, commands may not dispatch correctly.
+- **Status:** Resolved. `LOCAL_COMMANDS` in `src/chat/webview/mentions.ts` is the single source of truth for local slash suggestions, and server/custom commands are merged into the same `#mention-dropdown` surface.
+- **Current behavior:** Local commands are handled by `ChatProvider.handleLocalSlashCommand`; custom prompt files resolve next; OpenCode server commands are forwarded without the leading slash.
+- **Risk:** LOW — remaining risk is visual regression only; behavior is covered by source tests and command routing checks.
 - **Reproduction:** Type `/` in chat input.
 - **Files likely touched:** `src/chat/webview/main.ts`, `src/chat/webview/mentions.ts`, `src/chat/ChatCommands.ts`
 
 #### ISSUE CMD-02: Slash command icons use emojis
 - **Symptom:** Special slash-command icons should use proper SVG/icons, not emojis.
-- **Root cause:** The static `SLASH_COMMANDS` array in `main.ts` likely uses emoji strings for icons.
-- **Risk:** LOW — cosmetic but unprofessional.
+- **Status:** Resolved. Slash command icons use SVG constants from `src/chat/webview/icons.ts`; server-discovered commands use `GEAR_SVG`.
+- **Risk:** LOW — command dropdown styling now follows current theme tokens, compact spacing, and structured icon/content rows.
 - **Files likely touched:** `src/chat/webview/main.ts`
 
 ### 2.5 UI & Rendering

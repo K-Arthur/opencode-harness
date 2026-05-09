@@ -80,6 +80,15 @@ describe("MessageRouter.ts", () => {
     )
   })
 
+  it("debounces mention searches and uses path-aware globbing", () => {
+    assert.ok(source.includes("searchDebounceTimer"), "must keep a mention search debounce timer")
+    assert.ok(source.includes("executeMentionSearch"), "must isolate the actual search implementation")
+    assert.ok(source.includes("clearTimeout(this.searchDebounceTimer"), "must cancel stale search timers")
+    assert.ok(source.includes('query.includes("/")'), "must detect path-like mention queries")
+    assert.ok(source.includes("**/${query}*"), "must build path-aware glob patterns")
+    assert.ok(source.includes(", 50)"), "must request enough file results for useful autocomplete")
+  })
+
   it("has routeSseEvent method for SDK events", () => {
     assert.ok(
       source.includes("routeSseEvent("),

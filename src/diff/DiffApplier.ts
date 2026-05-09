@@ -1,6 +1,7 @@
 import * as vscode from "vscode"
 import * as path from "path"
 import * as fs from "fs"
+import fastDiff from "fast-diff"
 import { log } from "../utils/outputChannel"
 
 export interface ProposedEdit {
@@ -80,28 +81,39 @@ export class DiffApplier {
 
   private computeUnifiedDiff(filePath: string, original: string, proposed: string): string {
     if (original === proposed) return "(no changes)"
-    const originalLines = original.split("\n")
-    const proposedLines = proposed.split("\n")
-    const result: string[] = []
 
-    let i = 0
-    let j = 0
-    while (i < originalLines.length || j < proposedLines.length) {
-      if (i < originalLines.length && j < proposedLines.length && originalLines[i] === proposedLines[j]) {
-        result.push(`  ${originalLines[i]}`)
-        i++
-        j++
-      } else {
-        if (i < originalLines.length) {
-          result.push(`- ${originalLines[i]}`)
-          i++
-        }
-        if (j < proposedLines.length) {
-          result.push(`+ ${proposedLines[j]}`)
-          j++
-        }
+    const diffs = fastDiff(original, proposed)
+    const result: string[] = []
+    let lineBuffer = ""
+    let currentType: number | null = null
+
+    const flushLine = () => {
+      if (lineBuffer === "" || currentType === null) return
+      if (currentType === fastDiff.EQUAL) {
+        result.push(`  ${lineBuffer}`)
+      } else if (currentType === fastDiff.DELETE) {
+        result.push(`- ${lineBuffer}`)
+      } else if (currentType === fastDiff.INSERT) {
+        result.push(`+ ${lineBuffer}`)
       }
+      lineBuffer = ""
     }
+
+    for (const [type, text] of diffs) {
+      if (currentType !== null && currentType !== type) {
+        flushLine()
+      }
+      currentType = type
+
+      const parts = text.split("\n")
+      for (let i = 0; i < parts.length - 1; i++) {
+        lineBuffer += parts[i]
+        flushLine()
+      }
+      lineBuffer += parts[parts.length - 1]
+    }
+
+    flushLine()
     return result.join("\n")
   }
 
@@ -203,4 +215,33 @@ export class DiffApplier {
   }
 
   dispose(): void {}
+
+  async showSideBySideDiff(filePath: string, proposedContent: string, title?: string): Promise<void> {
+    const uri = this.resolveWorkspaceFile(filePath)
+    if (!uri) {
+      throw new Error("Diff target is outside the current workspace.")
+    }
+
+    const originalDoc = await vscode.workspace.openTextDocument(uri)
+    const originalContent = originalDoc.getText()
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+    const baseName = path.basename(filePath)
+    const leftUri = vscode.Uri.parse(`untitled:${baseName}.original.${timestamp}`)
+    const rightUri = vscode.Uri.parse(`untitled:${baseName}.proposed.${timestamp}`)
+
+    await vscode.workspace.openTextDocument(leftUri).then(doc => {
+      const edit = new vscode.WorkspaceEdit()
+      edit.insert(leftUri, new vscode.Position(0, 0), originalContent)
+      return vscode.workspace.applyEdit(edit)
+    })
+
+    await vscode.workspace.openTextDocument(rightUri).then(doc => {
+      const edit = new vscode.WorkspaceEdit()
+      edit.insert(rightUri, new vscode.Position(0, 0), proposedContent)
+      return vscode.workspace.applyEdit(edit)
+    })
+
+    await vscode.commands.executeCommand("vscode.diff", leftUri, rightUri, title || `Diff: ${filePath}`)
+  }
 }

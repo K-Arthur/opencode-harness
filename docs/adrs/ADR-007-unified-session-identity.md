@@ -49,6 +49,7 @@ A new configuration setting `opencode.serverUrl` (string, machine scope, default
 - `SessionManager._start()` skips spawn entirely, parses the URL, and points the SDK at it.
 - Health probe runs against `<serverUrl>/global/health`.
 - Optional `opencode.serverAuthToken` (string, machine scope, default `""`) is sent as `Authorization: Bearer <token>`. The token is read at start time only and not persisted in tab state.
+- `opencode.serverUrl` is validated before remote attach. Invalid URLs fail fast; non-HTTPS remote URLs warn unless they target localhost or loopback.
 - On any server-side disconnect, the standard reconnect logic applies but does **not** fall back to local spawn — the user explicitly chose remote.
 
 Local spawn remains the default. There is no automatic discovery.
@@ -85,7 +86,7 @@ Existing `newSession` and `openStoredSession` remain.
 **Negative:**
 - One-shot migration touches existing users' globalState. Mitigated by: only rekeying when `cliSessionId` is set and unique; logging every rewrite; preserving original entries if migration fails.
 - Backfilling messages from the server on import has latency cost (one HTTP call per imported session). Mitigated by: lazy backfill on first activation, not on import.
-- Remote attach exposes a new auth surface. Mitigated by: token read from `machine`-scoped config, never persisted in session state, `https://` URLs warned-only (not enforced — local-network use is common).
+- Remote attach exposes a new auth surface. Mitigated by: URL validation, token read from `machine`-scoped config, token never persisted in session state, and `https://` warnings for non-local remote URLs.
 
 **Neutral:**
 - `SessionStore.create()` signature gains an optional pre-resolved server ID. Existing call sites without a server ID still work but produce `pendingServerLink: true` entries.

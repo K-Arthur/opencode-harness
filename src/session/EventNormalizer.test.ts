@@ -209,6 +209,65 @@ describe("EventNormalizer — behavioral", () => {
     assert.equal(events.length, 1)
     assert.equal(events[0]!.type, "tool_start")
     assert.equal((events[0]!.data as { tool?: string }).tool, "Bash")
+    assert.equal((events[0]!.data as { id?: string }).id, "t1")
+  })
+
+  it("keeps one stable tool id through pending, running, and completed states", () => {
+    const n = createSdkEventNormalizer()
+    n.normalize({
+      type: "message.updated",
+      properties: { info: { id: "m-tool-life", role: "assistant", sessionID: "s-tool-life" } },
+    })
+
+    const pending = n.normalize({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "tool-part-1",
+          callID: "call-1",
+          messageID: "m-tool-life",
+          sessionID: "s-tool-life",
+          type: "tool",
+          tool: "read",
+          state: { status: "pending" },
+        },
+      },
+    })
+    const running = n.normalize({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "tool-part-1",
+          callID: "call-1",
+          messageID: "m-tool-life",
+          sessionID: "s-tool-life",
+          type: "tool",
+          tool: "read",
+          state: { status: "running", input: {} },
+        },
+      },
+    })
+    const completed = n.normalize({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "tool-part-1",
+          callID: "call-1",
+          messageID: "m-tool-life",
+          sessionID: "s-tool-life",
+          type: "tool",
+          tool: "read",
+          state: { status: "completed", input: {}, output: "done" },
+        },
+      },
+    })
+
+    assert.deepEqual(pending.map(e => e.type), ["tool_start"])
+    assert.deepEqual(running.map(e => e.type), ["tool_update"])
+    assert.deepEqual(completed.map(e => e.type), ["tool_end"])
+    assert.equal((pending[0]!.data as { id?: string }).id, "tool-part-1")
+    assert.equal((running[0]!.data as { id?: string }).id, "tool-part-1")
+    assert.equal((completed[0]!.data as { id?: string }).id, "tool-part-1")
   })
 
   it("deduplicates part deltas via partTextLengths tracking", () => {

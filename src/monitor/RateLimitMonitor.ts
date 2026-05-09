@@ -10,8 +10,17 @@ export interface RateLimitState {
   limitInputTokens?: number
   remainingOutputTokens?: number
   limitOutputTokens?: number
+  usedInputTokens?: number
+  usedOutputTokens?: number
+  usedTokens?: number
+  usedCost?: number
   resetAt?: Date
   lastUpdated: Date
+}
+
+export interface SerializableRateLimitState extends Omit<RateLimitState, "resetAt" | "lastUpdated"> {
+  resetAt?: string
+  lastUpdated: string
 }
 
 export interface RateLimitAdapter {
@@ -120,7 +129,9 @@ export class RateLimitMonitor {
   private state: RateLimitState | null = null
   private cumulativeInputTokens = 0
   private cumulativeOutputTokens = 0
+  private cumulativeCost = 0
   private lastResetTime = Date.now()
+  private cumulativeProvider = ""
   private warnedLowTokens = false
   private warnedExhausted = false
 
@@ -180,6 +191,7 @@ export class RateLimitMonitor {
   private loadConfig(): void {
     const config = vscode.workspace.getConfiguration("opencode")
     const limits = config.get<Record<string, { tokensPerMin?: number; requestsPerMin?: number }>>("rateLimits")
+    this.providerLimits = {}
     if (limits) {
       for (const [provider, vals] of Object.entries(limits)) {
         this.providerLimits[provider] = {
@@ -205,37 +217,60 @@ export class RateLimitMonitor {
     }
   }
 
-  recordTokenUsage(inputTokens: number, outputTokens: number): void {
+  recordTokenUsage(inputTokens: number, outputTokens: number, provider?: string, cost?: number): void {
+    const resolvedProvider = provider || this.state?.provider || "unknown"
+    if (this.cumulativeProvider && this.cumulativeProvider !== resolvedProvider) {
+      this.cumulativeInputTokens = 0
+      this.cumulativeOutputTokens = 0
+      this.cumulativeCost = 0
+      this.lastResetTime = Date.now()
+      this.warnedLowTokens = false
+      this.warnedExhausted = false
+    }
+    this.cumulativeProvider = resolvedProvider
     this.cumulativeInputTokens += inputTokens
     this.cumulativeOutputTokens += outputTokens
+    if (typeof cost === "number" && Number.isFinite(cost)) {
+      this.cumulativeCost += cost
+    }
 
     const elapsed = (Date.now() - this.lastResetTime) / 1000
     const windowSeconds = 60
     if (elapsed > windowSeconds) {
       this.cumulativeInputTokens = inputTokens
       this.cumulativeOutputTokens = outputTokens
+      this.cumulativeCost = typeof cost === "number" && Number.isFinite(cost) ? cost : 0
       this.lastResetTime = Date.now()
       this.warnedLowTokens = false
       this.warnedExhausted = false
     }
 
-    const provider = this.state?.provider || "unknown"
-    const limits = this.providerLimits[provider]
+    const limits = this.providerLimits[resolvedProvider]
+    const usedTokens = this.cumulativeInputTokens + this.cumulativeOutputTokens
+    const baseState: RateLimitState = {
+      ...(this.state || { provider: resolvedProvider, lastUpdated: new Date() }),
+      provider: resolvedProvider,
+      usedInputTokens: this.cumulativeInputTokens,
+      usedOutputTokens: this.cumulativeOutputTokens,
+      usedTokens,
+      usedCost: this.cumulativeCost || undefined,
+      lastUpdated: new Date(),
+    }
     if (limits) {
-      const tokensPerMin = this.cumulativeInputTokens + this.cumulativeOutputTokens
-      const ratio = tokensPerMin / limits.tokensPerMin
+      const ratio = usedTokens / limits.tokensPerMin
       this.state = {
-        ...(this.state || { provider, lastUpdated: new Date() }),
+        ...baseState,
         remainingTokens: Math.max(0, Math.round((1 - ratio) * limits.tokensPerMin)),
         limitTokens: limits.tokensPerMin,
         remainingRequests: Math.max(0, Math.round((1 - ratio) * limits.requestsPerMin)),
         limitRequests: limits.requestsPerMin,
-        lastUpdated: new Date(),
       }
-      this.evaluate()
-      this._onStateChanged.fire(this.state)
-      this.updateStatusBar()
+    } else {
+      this.state = baseState
     }
+    this.evaluate()
+    this._onStateChanged.fire(this.state)
+    this.updateStatusBar()
   }
 
   private evaluate(): void {
@@ -270,17 +305,26 @@ export class RateLimitMonitor {
 
     // Use whichever is the binding constraint (lower percentage)
     let pct: number | undefined
+    let constraintType: "tokens" | "requests" | undefined
     if (tokens !== undefined && limitT && limitT > 0) {
       pct = Math.round((tokens / limitT) * 100)
+      constraintType = "tokens"
     }
     if (requests !== undefined && limitR && limitR > 0) {
       const reqPct = Math.round((requests / limitR) * 100)
-      pct = pct !== undefined ? Math.min(pct, reqPct) : reqPct
+      if (pct === undefined || reqPct < pct) {
+        pct = reqPct
+        constraintType = "requests"
+      }
     }
 
     if (pct !== undefined) {
+      // Color-coded progress bar visualization
+      const progressBar = this.buildProgressBar(pct)
       const icon = pct > 50 ? "\u25D4" : pct > 10 ? "\u25D5" : "\u25D7"
-      this.statusBarItem.text = `${icon} ${pct}%`
+      const label = constraintType === "requests" ? `${pct}% req` : `${pct}%`
+      
+      this.statusBarItem.text = `${icon}${progressBar} ${label}`
       this.statusBarItem.tooltip = this.buildTooltip()
       this.statusBarItem.color = pct > 50
         ? undefined
@@ -297,8 +341,38 @@ export class RateLimitMonitor {
       this.statusBarItem.text = `\u23F1 ${requests} req`
       this.statusBarItem.tooltip = this.buildTooltip()
       this.statusBarItem.show()
+    } else if (this.state.usedTokens !== undefined) {
+      this.statusBarItem.text = `$(pulse) ${this.formatCompactNumber(this.state.usedTokens)} tok used`
+      this.statusBarItem.tooltip = this.buildTooltip()
+      this.statusBarItem.color = undefined
+      this.statusBarItem.show()
     } else {
       this.statusBarItem.hide()
+    }
+  }
+
+  private formatCompactNumber(value: number): string {
+    return new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(value)
+  }
+
+  /**
+   * Build a text-based progress bar for the status bar.
+   * Uses Unicode block characters for visual representation.
+   */
+  private buildProgressBar(pct: number): string {
+    const barLength = 10
+    const filled = Math.max(0, Math.min(barLength, Math.round((pct / 100) * barLength)))
+    const empty = barLength - filled
+    
+    // Use different block characters based on percentage for better visualization
+    if (pct <= 0) {
+      return "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588" // Full block (red)
+    } else if (pct <= 10) {
+      return "\u2588".repeat(filled) + "\u2591".repeat(empty) // Heavy + light
+    } else if (pct <= 50) {
+      return "\u2588".repeat(filled) + "\u2592".repeat(empty) // Heavy + medium
+    } else {
+      return "\u2588".repeat(filled) + "\u2593".repeat(empty) // Heavy + dark
     }
   }
 
@@ -311,6 +385,15 @@ export class RateLimitMonitor {
 
   getState(): RateLimitState | null {
     return this.state
+  }
+
+  getSerializableState(): SerializableRateLimitState | null {
+    if (!this.state) return null
+    return {
+      ...this.state,
+      resetAt: this.state.resetAt?.toISOString(),
+      lastUpdated: this.state.lastUpdated.toISOString(),
+    }
   }
 
   showDetail(): void {
@@ -357,6 +440,12 @@ export class RateLimitMonitor {
     }
     if (this.state.remainingRequests !== undefined && this.state.limitRequests !== undefined) {
       parts.push(`Requests: ${this.state.remainingRequests} / ${this.state.limitRequests}`)
+    }
+    if (this.state.usedTokens !== undefined) {
+      parts.push(`Observed this window: ${this.state.usedTokens.toLocaleString()} tokens`)
+    }
+    if (this.state.usedCost !== undefined) {
+      parts.push(`Observed cost: $${this.state.usedCost.toFixed(4)}`)
     }
     if (this.state.resetAt) {
       parts.push(`Reset: ${this.state.resetAt.toLocaleTimeString()}`)

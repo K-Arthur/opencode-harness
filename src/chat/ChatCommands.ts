@@ -93,6 +93,37 @@ export class ChatCommands {
     }
   }
 
+  /** /diagnose:generation: Check generation tracking state */
+  diagnoseGeneration(): void {
+    log.info("=== GENERATION DIAGNOSTIC ===")
+    
+    const tabs = this.tabManager.getAllTabs()
+    tabs.forEach(t => {
+      log.info(`Tab ${t.id}:`)
+      log.info(`  streaming=${t.isStreaming}, waitingForCompletion=${t.waitingForCompletion}`)
+      log.info(`  cliSessionId=${t.cliSessionId || "none"}`)
+      log.info(`  streamingBuffer length=${t.streamingBuffer?.length || 0}`)
+      log.info(`  blocksBuffer count=${t.blocksBuffer?.length || 0}`)
+      if (t.blocksBuffer && t.blocksBuffer.length > 0) {
+        log.info(`  blocksBuffer types: ${t.blocksBuffer.map((b: any) => b.type).join(", ")}`)
+      }
+    })
+    
+    // Check session store
+    const sessions = this.sessionStore.list()
+    log.info(`SessionStore: ${sessions.length} sessions`)
+    sessions.forEach(s => {
+      const msgs = s.messages
+      log.info(`  Session ${s.id}: ${msgs.length} messages`)
+      msgs.forEach((m: any) => {
+        log.info(`    - ${m.role}: ${m.blocks?.length || 0} blocks`)
+      })
+    })
+    
+    log.info("=== END GENERATION DIAGNOSTIC ===")
+    vscode.window.showInformationMessage("Generation diagnostics complete - check output channel")
+  }
+
   /** /help: send command list as system-message with markdown table */
   help(sessionId: string, postMessage: (msg: Record<string, unknown>) => void): void {
     const table = [

@@ -3,11 +3,78 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 
+const { JSDOM } = require("jsdom") as { JSDOM: any }
+
 const streamSource = readFileSync(path.join(__dirname, "stream.ts"), "utf8")
 const handlersSource = readFileSync(path.join(__dirname, "streamHandlers.ts"), "utf8")
 
 function sourceIncludes(str: string): boolean {
   return streamSource.includes(str) || handlersSource.includes(str)
+}
+
+function installDom(): () => void {
+  const dom = new JSDOM(
+    '<!doctype html><div id="message-list"></div><div id="typing-indicator"></div><span id="typing-label"></span>',
+    { url: "https://opencode-harness.test" },
+  )
+  const g = globalThis as any
+  const previous = {
+    window: g.window,
+    document: g.document,
+    HTMLElement: g.HTMLElement,
+    Node: g.Node,
+    requestAnimationFrame: g.requestAnimationFrame,
+    cancelAnimationFrame: g.cancelAnimationFrame,
+  }
+
+  g.window = dom.window
+  g.document = dom.window.document
+  g.HTMLElement = dom.window.HTMLElement
+  g.Node = dom.window.Node
+  g.requestAnimationFrame = (callback: FrameRequestCallback) => {
+    callback(0)
+    return 1
+  }
+  g.cancelAnimationFrame = () => {}
+
+  return () => {
+    Object.assign(g, previous)
+    dom.window.close()
+  }
+}
+
+function createHarness() {
+  const messageList = document.getElementById("message-list") as HTMLDivElement
+  const typingIndicator = document.getElementById("typing-indicator") as HTMLDivElement
+  const typingLabel = document.getElementById("typing-label") as HTMLSpanElement
+
+  return {
+    messages: [] as any[],
+    state: {
+      isStreaming: false,
+      streamingMessageId: null,
+      streamingBuffer: "",
+      streamingBlockId: null,
+      streamingToolCallId: null,
+      seenEventIds: new Set<string>(),
+      lastStreamTextEl: null,
+      currentBlockEl: null,
+      currentBlockBuffer: "",
+      currentBlockIndex: -1,
+      rafPending: false,
+      renderQueue: null,
+      chunkSeq: 0,
+    },
+    els: {
+      messageList,
+      typingIndicator,
+      typingLabel,
+      scrollAnchor: {
+        anchor() {},
+        scrollIfAnchored() {},
+      },
+    },
+  }
 }
 
 describe("stream.ts", () => {
@@ -141,5 +208,66 @@ describe("stream.ts", () => {
     handlers.forEach(h => {
       assert.ok(sourceIncludes(h), `Missing handler ${h} in source`)
     })
+  })
+
+  // ── Real-time tool-call deduplication. The server may emit multiple
+  // tool_start events for the same id (e.g. SDK part replays during reconnect).
+  // Without dedup, the bubble shows the same tool card twice.
+  it("handleToolStart skips when a tool with the same id already exists in the message", () => {
+    const fnIdx = handlersSource.indexOf("export function handleToolStart")
+    assert.ok(fnIdx >= 0, "handleToolStart must exist")
+    const blockEnd = handlersSource.indexOf("export function handleToolUpdate", fnIdx)
+    const block = handlersSource.slice(fnIdx, blockEnd > fnIdx ? blockEnd : fnIdx + 2000)
+    assert.ok(
+      /msgObj\??\.blocks\.find(?:Index)?\(/.test(block) && /tool-call/.test(block) && /toolCall\.id/.test(block),
+      "handleToolStart must check for existing tool-call block with the same id and skip duplicates"
+    )
+  })
+
+  it("recovers late text chunks after stream_end clears the active stream id", async () => {
+    const restore = installDom()
+    try {
+      const { handleStreamStart, handleStreamEnd, handleStreamChunk } = await import("./streamHandlers")
+      const harness = createHarness()
+      const saveState = () => {}
+      let lateSaveCount = 0
+
+      handleStreamStart(harness.state, harness.els as any, harness.messages, "resp-late")
+      handleStreamEnd(harness.state, harness.els as any, harness.messages, saveState, "resp-late", [])
+      assert.equal(harness.state.streamingMessageId, null)
+
+      handleStreamChunk(harness.state, harness.els as any, harness.messages, "Late answer", () => {
+        lateSaveCount++
+      })
+
+      const assistant = harness.messages.find((message) => message.id === "resp-late")
+      const textBlock = assistant?.blocks.find((block: any) => block.type === "text")
+      assert.equal(textBlock?.text, "Late answer")
+      assert.match(harness.els.messageList.textContent || "", /Late answer/)
+      assert.equal(lateSaveCount, 1)
+    } finally {
+      restore()
+    }
+  })
+
+  it("marks unresolved tool calls complete when the stream finishes normally", async () => {
+    const restore = installDom()
+    try {
+      const { handleStreamStart, handleStreamEnd } = await import("./streamHandlers")
+      const harness = createHarness()
+      const saveState = () => {}
+
+      handleStreamStart(harness.state, harness.els as any, harness.messages, "resp-tools")
+      handleStreamEnd(harness.state, harness.els as any, harness.messages, saveState, "resp-tools", [
+        { type: "tool-call", id: "tool-1", name: "context7_query-docs", state: "running", args: {} },
+        { type: "text", text: "Done with the answer." },
+      ])
+
+      const assistant = harness.messages.find((message) => message.id === "resp-tools")
+      const tool = assistant?.blocks.find((block: any) => block.type === "tool-call")
+      assert.equal(tool?.state, "result")
+    } finally {
+      restore()
+    }
   })
 })

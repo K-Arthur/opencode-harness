@@ -29,20 +29,34 @@ describe("renderer.ts", () => {
   })
 
   it("renders_user_message_with_mention_chips", () => {
-    assert.ok(source.includes("mention-chip"), "must render mention chips")
-    assert.ok(source.includes("chip.dataset.kind = mentionType"), "must set data-kind on mention chips")
+    assert.ok(source.includes("context-chip"), "must render mention chips")
+    assert.ok(source.includes("chip.dataset.kind = type"), "must set data-kind on mention chips")
     assert.ok(source.includes("mentionPattern"), "must have mention pattern detection")
   })
 
-  it("instantiates_markdown_it", () => {
-    assert.ok(source.includes("const md = new MarkdownIt({"), "must create MarkdownIt instance")
-  })
+	  it("instantiates_markdown_it", () => {
+	    assert.ok(source.includes("const md = new MarkdownIt({"), "must create MarkdownIt instance")
+	  })
+
+	  it("normalizes chunk-sensitive markdown without forcing hard line breaks", () => {
+	    assert.ok(source.includes("export function normalizeMarkdownText"), "must normalize markdown before rendering")
+	    assert.ok(source.includes("breaks: false"), "soft line breaks should use standard Markdown semantics")
+	    assert.ok(source.includes("highlight:"), "markdown fenced code should use syntax highlighting")
+	  })
 
   it("sanitizes_xss_with_dompurify", () => {
     assert.ok(source.includes("function sanitizeHtml"), "must call sanitizeHtml")
     assert.ok(source.includes("DOMPurify.sanitize"), "must use DOMPurify")
     assert.ok(source.includes("FORBID_TAGS"), "must forbid dangerous tags")
     assert.ok(source.includes("FORBID_CONTENTS"), "must forbid dangerous content")
+  })
+
+  it("hardens_external_markdown_links", () => {
+    assert.ok(source.includes("md.renderer.rules.link_open"), "must override markdown link rendering")
+    assert.ok(source.includes('"target"'), "sanitizer must allow target attr")
+    assert.ok(source.includes('"rel"'), "sanitizer must allow rel attr")
+    assert.ok(source.includes('token.attrSet("target", "_blank")'), "external links must open outside the webview")
+    assert.ok(source.includes('token.attrSet("rel", "noopener noreferrer")'), "external links must be isolated from opener access")
   })
 
   it("renders_tool_call_with_dynamic_states", () => {
@@ -102,12 +116,21 @@ describe("renderer.ts", () => {
 
   it("has SVG constants for icons", () => {
     assert.ok(source.includes('from "./icons"') || source.includes('from "./icons"'), "must import icons from icons.ts")
-    assert.ok(source.includes("OC_LOGO_SVG"), "must have logo icon")
-    assert.ok(source.includes("USER_AVATAR_SVG"), "must have avatar icon")
+    // Only check icons actually used in renderer.ts
     assert.ok(source.includes("BRAIN_SVG"), "must have brain icon for thinking")
     assert.ok(source.includes("TOOL_READ_SVG"), "must have tool read icon")
     assert.ok(source.includes("TOOL_WRITE_SVG"), "must have tool write icon")
     assert.ok(source.includes("TOOL_EXEC_SVG"), "must have tool exec icon")
+    assert.ok(source.includes("TOOL_META_SVG"), "must have tool meta icon")
+    assert.ok(source.includes("COPY_SVG"), "must have copy icon")
+    assert.ok(source.includes("CHECK_SVG"), "must have check icon")
+    assert.ok(source.includes("ERROR_SVG"), "must have error icon")
+    assert.ok(source.includes("WARNING_SVG"), "must have warning icon")
+    assert.ok(source.includes("SPINNER_SVG"), "must have spinner icon")
+    assert.ok(source.includes("EDIT_SVG"), "must have edit icon")
+    assert.ok(source.includes("INSERT_SVG"), "must have insert icon")
+    assert.ok(source.includes("NEW_FILE_SVG"), "must have new file icon")
+    assert.ok(source.includes("CHEVRON_RIGHT_SVG"), "must have chevron icon")
   })
 
   it("tool_call_renderer_uses_class_specific_icons", () => {

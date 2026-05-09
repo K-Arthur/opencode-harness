@@ -25,6 +25,8 @@ OpenCode Harness is a VS Code extension that deeply integrates the opencode AI c
 - **US-009**: As a developer, I want each tab to maintain its own conversation history so that I can switch between tasks
 - **US-010**: As a developer, I want closing a tab to stop the worker but preserve history so that I can resume later
 - **US-011**: As a developer, I want model selection per tab so that I can use different models for different tasks
+- **US-012**: As a developer, I want a navigation timeline so that I can quickly jump to specific points in a long conversation
+- **US-013**: As a developer, I want my session history to be resilient to server-side lag so that I don't lose responses during finalization
 
 ## Requirements
 ### Functional Requirements

@@ -169,19 +169,39 @@
   --diff-added-fg: #4caf50;
   --diff-removed-bg: color-mix(in srgb, #f44336 12%, transparent);
   --diff-removed-fg: #f44336;
-  --diff-context-color: var(--oc-muted);
-  --diff-hunk-bg: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  --diff-context-color: var(--oc-diff-context, var(--oc-muted));
+  --diff-hunk-bg: var(--oc-diff-context-bg, color-mix(in srgb, var(--color-accent) 8%, transparent));
+  --diff-hunk-fg: var(--oc-diff-hunk-header, var(--color-muted));
+  --diff-line-number-fg: var(--oc-diff-line-number, var(--color-muted));
+  --diff-added-bg: var(--oc-diff-added-bg, color-mix(in srgb, #4caf50 12%, transparent));
+  --diff-removed-bg: var(--oc-diff-removed-bg, color-mix(in srgb, #f44336 12%, transparent));
+  --diff-added-fg: var(--oc-diff-added, #4caf50);
+  --diff-removed-fg: var(--oc-diff-removed, #f44336);
   --bg-code: var(--vscode-textCodeBlock-background, rgba(0,0,0,0.2));
 
+  /* ─── Markdown Colours (OpenCode CLI theme parity) ─── */
+  --markdown-text: var(--oc-markdown-text, var(--color-fg));
+  --markdown-heading: var(--oc-markdown-heading, var(--color-fg));
+  --markdown-link: var(--oc-markdown-link, var(--color-accent));
+  --markdown-link-text: var(--oc-markdown-link-text, var(--markdown-link));
+  --markdown-code: var(--oc-markdown-code, var(--color-accent));
+  --markdown-code-block: var(--oc-markdown-code-block, var(--oc-editor-fg));
+  --markdown-blockquote: var(--oc-markdown-blockquote, var(--color-muted));
+  --markdown-emph: var(--oc-markdown-emph, var(--markdown-text));
+  --markdown-strong: var(--oc-markdown-strong, var(--markdown-text));
+  --markdown-hr: var(--oc-markdown-hr, var(--color-border));
+  --markdown-list-item: var(--oc-markdown-list-item, var(--markdown-text));
+  --markdown-list-enumeration: var(--oc-markdown-list-enumeration, var(--color-muted));
+
   /* ─── Background Layers ─── */
-  --bg-primary: var(--vscode-sideBar-background, var(--oc-bg));
-  --bg-secondary: color-mix(in srgb, var(--bg-primary) 92%, white);
-  --bg-tertiary: color-mix(in srgb, var(--bg-primary) 84%, white);
+  --bg-primary: var(--oc-bg);
+  --bg-secondary: color-mix(in srgb, var(--oc-bg) 96%, var(--oc-fg));
+  --bg-tertiary: color-mix(in srgb, var(--oc-bg) 90%, var(--oc-fg));
 
   /* ─── Borders & Text ─── */
-  --color-border: var(--vscode-panel-border, var(--oc-border));
-  --color-muted: var(--vscode-descriptionForeground, var(--oc-muted));
-  --color-fg: var(--vscode-editor-foreground, var(--oc-fg));
+  --color-border: var(--oc-border);
+  --color-muted: var(--oc-muted);
+  --color-fg: var(--oc-fg);
 
   /* ─── Jump-to-Bottom Button ─── */
   --jump-btn-bg: var(--bg-secondary);
@@ -211,6 +231,7 @@
   --oc-syn-type: var(--vscode-symbolIcon-typeParameterForeground, #4ec9b0);
   --oc-syn-variable: var(--vscode-symbolIcon-variableForeground, #9cdcfe);
   --oc-syn-operator: var(--vscode-symbolIcon-operatorForeground, #d4d4d4);
+  --oc-syn-punctuation: var(--vscode-editor-foreground, #d4d4d4);
 
   /* ─── Component Size Tokens ─── */
   --size-icon-xs: 12px;
@@ -252,25 +273,79 @@
 :root {
   --code-line-num-width: 2.5rem;
   --message-list-bottom-pad: 140px;
+
+  /* ─── Modal Specific Tokens ─── */
+  --modal-width-sm: 320px;
+  --modal-width-md: 480px;
+  --modal-width-lg: 640px;
+  --modal-max-height: 80vh;
+  --modal-bg: var(--oc-glass-bg);
+  --modal-border: var(--oc-glass-border);
+  --modal-shadow: var(--shadow-xl);
 }
 
 /* ─── Theme Overrides ─── */
 
 .vscode-light {
   --oc-glass-bg: rgba(255, 255, 255, 0.85);
+
+  /* Shadows: reduce opacity for light backgrounds */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.18);
+  --shadow-mission: 0 10px 30px -10px rgba(0, 0, 0, 0.15), 0 0 0 1px var(--oc-glass-border);
+  --jump-btn-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+  /* Message bubbles: light-appropriate backgrounds instead of dark-themed values
+     that ThemeManager may inject into :root for dark themes. Declaring on body
+     (via .vscode-light) ensures descendants inherit the light value, overriding
+     any stale dark :root declaration from ThemeManager. */
+  --user-message-bg: var(--vscode-input-background, rgba(0, 0, 0, 0.05));
+  --user-message-fg: var(--oc-fg);
+  --oc-user-msg-bg: var(--vscode-input-background, rgba(0, 0, 0, 0.05));
+  --assistant-message-bg: transparent;
+  --oc-assistant-msg-bg: transparent;
+
+  /* Code block and tool call backgrounds */
+  --bg-code: var(--vscode-textCodeBlock-background, rgba(0, 0, 0, 0.06));
+  --oc-tool-bg: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.04));
+
+  /* Diff colours: lower opacity looks right on white */
+  --diff-added-bg: color-mix(in srgb, #4caf50 10%, transparent);
+  --diff-removed-bg: color-mix(in srgb, #f44336 10%, transparent);
 }
 
 .vscode-dark {
   --oc-glass-bg: rgba(22, 22, 26, 0.7);
 }
 
-/* High Contrast Adjustments */
+/* High Contrast Adjustments — dark (black bg / white text / yellow accents) */
 .vscode-high-contrast {
   --oc-glass-blur: none;
-  --oc-glass-bg: var(--vscode-sideBar-background);
-  --oc-border: var(--vscode-contrastBorder);
+  --oc-glass-bg: #000000;
+  --oc-bg: #000000;
+  --oc-fg: #ffffff;
+  --oc-border: #ffff00;
+  --oc-accent: #ffff00;
+  --oc-user-msg-bg: #1a1a1a;
+  --oc-user-msg-fg: #ffffff;
+  --oc-assistant-msg-bg: transparent;
+  --oc-assistant-msg-fg: #ffffff;
+}
+
+/* High Contrast Light — white bg / black text / red+blue accents */
+.vscode-high-contrast-light {
+  --oc-glass-blur: none;
+  --oc-glass-bg: #ffffff;
+  --oc-bg: #ffffff;
+  --oc-fg: #000000;
+  --oc-border: #cc0000;
+  --oc-accent: #0000cc;
+  --oc-user-msg-bg: #f0f0f0;
+  --oc-user-msg-fg: #000000;
+  --oc-assistant-msg-bg: transparent;
+  --oc-assistant-msg-fg: #000000;
 }
 
 /* forced-colors mode — uses system color keywords for accessibility */

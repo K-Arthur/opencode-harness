@@ -202,3 +202,13 @@
 .stagger-children > *:nth-child(4) { animation-delay: 120ms; }
 .stagger-children > *:nth-child(5) { animation-delay: 160ms; }
 .stagger-children > *:nth-child(6) { animation-delay: 200ms; }
+
+/* ─── Message Navigation Flash ─── */
+@keyframes message-flash {
+  0% { background-color: var(--oc-accent-subtle); box-shadow: 0 0 0 4px var(--oc-accent-subtle); }
+  100% { background-color: transparent; box-shadow: 0 0 0 0 transparent; }
+}
+
+.message-flash {
+  animation: message-flash 1.5s var(--ease-out);
+}

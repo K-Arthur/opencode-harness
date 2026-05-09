@@ -47,6 +47,12 @@ describe("dom.ts", () => {
     assert.ok(source.includes("agentStatusText: HTMLSpanElement"))
   })
 
+  it("ElementRefs contains quota bar elements", () => {
+    assert.ok(source.includes("quotaBar:"), "must expose quota bar container")
+    assert.ok(source.includes("quotaProgressBar:"), "must expose quota progress")
+    assert.ok(source.includes("quotaLabel:"), "must expose quota label")
+  })
+
   it("optionalElement warns but does not throw on missing element", () => {
     assert.ok(source.includes('console.warn(`[OpenCode] Optional element not found: ${id}`)'),
       "optionalElement must warn instead of throwing")

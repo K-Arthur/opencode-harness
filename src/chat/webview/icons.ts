@@ -9,12 +9,6 @@ const SVG = (content: string, size = 16, fill = "none") =>
 const SVG_FILL = (content: string, size = 16) =>
   `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="currentColor" stroke="none" aria-hidden="true">${content}</svg>`
 
-// ─── Brand / Identity ───
-export const OC_LOGO_SVG = `<svg class="oc-logo" viewBox="0 0 480 600" width="20" height="20" fill="none" stroke="currentColor" stroke-width="48" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="60" y="60" width="360" height="480" rx="24"/><rect x="180" y="180" width="120" height="240" rx="12"/></svg>`
-
-// ─── Avatars ───
-export const USER_AVATAR_SVG = SVG(`<circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.5-6 8-6s8 2 8 6"/>`, 16)
-
 // ─── Header Toolbar ───
 export const HISTORY_SVG = SVG(`<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`, 16)
 export const NEW_TAB_SVG = SVG(`<path d="M12 5v14M5 12h14"/>`, 16)
@@ -63,7 +57,7 @@ export const BRAIN_SVG = SVG(`<path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v0a2.5 2.5 0 0
 export const SUCCESS_SVG = SVG_FILL(`<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>`, 16)
 export const ERROR_SVG = SVG_FILL(`<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>`, 16)
 export const WARNING_SVG = SVG(`<path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4"/><path d="M12 17h.01"/>`, 16)
-export const SPINNER_SVG = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`
+export const SPINNER_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="premium-spinner"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="32"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></circle><circle cx="12" cy="12" r="4" opacity="0.5"><animate attributeName="r" values="3;5;3" dur="2s" repeatCount="indefinite"/></circle></svg>`
 
 // ─── Expand / Collapse ───
 export const CHEVRON_RIGHT_SVG = SVG(`<path d="m9 18 6-6-6-6"/>`, 12)

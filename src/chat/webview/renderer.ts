@@ -2,6 +2,24 @@ import hljs from "highlight.js/lib/core"
 import MarkdownIt from "markdown-it"
 import taskLists from "markdown-it-task-lists"
 import DOMPurify from "dompurify"
+import {
+  BRAIN_SVG,
+  TOOL_READ_SVG,
+  TOOL_WRITE_SVG,
+  TOOL_EXEC_SVG,
+  TOOL_META_SVG,
+  WARNING_SVG,
+  CHEVRON_RIGHT_SVG,
+  COPY_SVG,
+  CHECK_SVG,
+  SUCCESS_SVG,
+  ERROR_SVG,
+  SPINNER_SVG,
+  EDIT_SVG,
+  INSERT_SVG,
+  NEW_FILE_SVG,
+  GEAR_SVG,
+} from "./icons"
 import type {
   Block,
   ChatMessage,
@@ -19,20 +37,57 @@ import type {
 // Markdown parser with security settings
 // ---------------------------------------------------------------------------
 
+export function normalizeMarkdownText(text: string): string {
+  return text
+    .replace(/\r\n?/g, "\n")
+    .replace(/^(\s*(?:\d+\.|[-*+]))\s*\n{2,}(?=\S)/gm, "$1 ")
+    .replace(/^(#{1,6})([^\s#])/gm, "$1 $2")
+    .replace(/\n{3,}/g, "\n\n")
+}
+
 export function renderMarkdown(text: string): string {
-  return md.render(text)
+  return md.render(normalizeMarkdownText(text))
 }
 
 const md = new MarkdownIt({
   html: false,
   linkify: true,
-  typographer: true,
-  breaks: true,
-}).use(taskLists, { label: true, labelAfter: true })
+  typographer: false,
+  breaks: false,
+  highlight: (str, lang) => highlightSyntax(str, normalizeMarkdownLanguage(lang)),
+}).use(taskLists, { label: false })
 
-  // Enable plugins for rich markdown rendering
-  // NOTE: Optional plugins (abbr, deflist, footnote, task-lists) are available
-  // but not installed. Install them for enhanced markdown rendering.
+function normalizeMarkdownLanguage(language: string): string {
+  const normalized = language.trim().toLowerCase()
+  if (normalized === "tsx" || normalized === "jsx") return "typescript"
+  if (normalized === "shell" || normalized === "sh" || normalized === "zsh") return "bash"
+  if (normalized === "yml") return "yaml"
+  if (normalized === "html") return "xml"
+  return normalized
+}
+
+const defaultLinkOpen = md.renderer.rules.link_open || ((tokens, idx, options, _env, self) =>
+  self.renderToken(tokens, idx, options))
+
+md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
+  const token = tokens[idx]
+  if (!token) {
+    return defaultLinkOpen(tokens, idx, options, env, self)
+  }
+
+  const href = token.attrGet("href") ?? ""
+
+  if (/^(https?|ftp):/i.test(href)) {
+    token.attrSet("target", "_blank")
+    token.attrSet("rel", "noopener noreferrer")
+  }
+
+  return defaultLinkOpen(tokens, idx, options, env, self)
+}
+
+// Enable plugins for rich markdown rendering
+// NOTE: Optional plugins (abbr, deflist, footnote, task-lists) are available
+// but not installed. Install them for enhanced markdown rendering.
 
 
 // ---------------------------------------------------------------------------
@@ -58,7 +113,7 @@ const PURIFY_CONFIG: PurifyConfig = {
     "del", "sup", "sub", "input", "label"
   ],
   ALLOWED_ATTR: [
-    "href", "src", "alt", "title", "class", "language", "width", "height",
+    "href", "src", "alt", "title", "target", "rel", "class", "language", "width", "height",
     "aria-label", "role", "tabindex", "data-kind", "data-tab-id", "data-message-id",
     "data-block-id", "data-code", "data-lang", "type", "checked", "disabled", "id", "for"
   ],
@@ -116,24 +171,6 @@ hljs.registerAliases(["sh", "zsh"], { languageName: "bash" })
 hljs.registerAliases(["html", "htm"], { languageName: "xml" })
 hljs.registerAliases(["py"], { languageName: "python" })
 
-import {
-  CHEVRON_RIGHT_SVG,
-  BRAIN_SVG,
-  TOOL_READ_SVG,
-  TOOL_WRITE_SVG,
-  TOOL_EXEC_SVG,
-  TOOL_META_SVG,
-  COPY_SVG,
-  CHECK_SVG,
-  SUCCESS_SVG,
-  ERROR_SVG,
-  WARNING_SVG,
-  SPINNER_SVG,
-  EDIT_SVG,
-  INSERT_SVG,
-  NEW_FILE_SVG,
-  GEAR_SVG,
-} from "./icons"
 
 // ---------------------------------------------------------------------------
 // Type guards for discriminated block types
@@ -186,6 +223,7 @@ const RENDERER_MAP: Readonly<Record<string, BlockRenderer>> = {
   'error': renderErrorBlock,
   'image': renderImageBlock,
 }
+
 
 // ---------------------------------------------------------------------------
 // Public: renderMessage — top-level message renderer
@@ -251,10 +289,18 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
   bubble.className = role === "system" ? "system-bubble" : "message-bubble"
 
   if (msg.blocks && Array.isArray(msg.blocks)) {
-    msg.blocks.forEach((block) => {
-      const el = renderBlock(block, { messageId: msg.id, mode: opts?.mode, postMessage: opts?.postMessage })
-      if (el) bubble.appendChild(el)
-    })
+    const groups = groupConsecutiveToolCalls(msg.blocks)
+    for (const group of groups) {
+      const firstBlock = group[0]
+      if (!firstBlock) continue
+      if (group.length === 1 || !isToolCallBlock(firstBlock)) {
+        const el = renderBlock(firstBlock, { messageId: msg.id, mode: opts?.mode, postMessage: opts?.postMessage })
+        if (el) bubble.appendChild(el)
+      } else {
+        const groupEl = renderToolGroup(group, { messageId: msg.id, mode: opts?.mode, postMessage: opts?.postMessage })
+        if (groupEl) bubble.appendChild(groupEl)
+      }
+    }
   }
 
   contentWrapper.appendChild(bubble)
@@ -303,12 +349,12 @@ function renderTextBlock(block: Block, _opts: RenderOptions): HTMLElement | null
   if (hasMentions && block.text) {
     const parts = block.text.split(mentionPattern)
     const fragment = document.createDocumentFragment()
-    
+
     // With capturing groups, split() returns [text, fullMatch, type, text, fullMatch, type, ...]
     // But our regex has TWO capturing groups: 1 for full match, 1 for the type.
     // So split returns [text, @file:/foo, file, text, ...]
     // Parts array length will be 1 + (number of matches * 3)
-    
+
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i]
       if (!part) continue
@@ -316,7 +362,7 @@ function renderTextBlock(block: Block, _opts: RenderOptions): HTMLElement | null
       if (i % 3 === 0) {
         // Plain text part
         const span = document.createElement("span")
-        span.innerHTML = sanitizeHtml(md.renderInline(part))
+        span.innerHTML = sanitizeHtml(md.renderInline(normalizeMarkdownText(part), { label: false }))
         fragment.appendChild(span)
       } else if (i % 3 === 1) {
         // Full mention match (@file:/foo)
@@ -332,7 +378,7 @@ function renderTextBlock(block: Block, _opts: RenderOptions): HTMLElement | null
     div.appendChild(fragment)
   } else {
     // No mentions — standard markdown render
-    div.innerHTML = sanitizeHtml(md.render(text))
+    div.innerHTML = sanitizeHtml(renderMarkdown(text))
   }
 
   return div
@@ -438,7 +484,7 @@ function renderCodeBlock(block: Block, _opts: RenderOptions): HTMLElement | null
   return outerWrapper
 }
 
-function highlightSyntax(code: string, language: string): string {
+export function highlightSyntax(code: string, language: string): string {
   if (language && hljs.getLanguage(language)) {
     try { return hljs.highlight(code, { language }).value } catch {}
   }
@@ -448,8 +494,66 @@ function highlightSyntax(code: string, language: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Thinking block — collapsible, default collapsed
+// Turn grouping — Phase 4.1: Group user+assistant exchanges into collapsible turns
 // ---------------------------------------------------------------------------
+
+export interface TurnSummary {
+  turnId: string
+  userMessageId: string
+  assistantMessageId: string
+  snippet: string
+  toolCount: number
+  patchCount: number
+  timestamp: number
+}
+
+export function groupMessagesIntoTurns(messages: import("./types").ChatMessage[]): TurnSummary[] {
+  const turns: TurnSummary[] = []
+  let currentTurn: TurnSummary | null = null
+
+  for (const msg of messages) {
+    if (msg.role === "user") {
+      if (currentTurn) turns.push(currentTurn)
+      currentTurn = {
+        turnId: `turn-${msg.id || crypto.randomUUID()}`,
+        userMessageId: msg.id || "",
+        assistantMessageId: "",
+        snippet: extractSnippet(msg),
+        toolCount: 0,
+        patchCount: 0,
+        timestamp: msg.timestamp || Date.now(),
+      }
+    } else if (msg.role === "assistant") {
+      if (currentTurn) {
+        currentTurn.assistantMessageId = msg.id || ""
+        // Count tool calls and diffs in this assistant message
+        const blocks = msg.blocks || []
+        currentTurn.toolCount = blocks.filter(b => b.type === "tool-call" || b.type === "tool_call").length
+        currentTurn.patchCount = blocks.filter(b => b.type === "diff" || b.type === "diff_block").length
+        if (!currentTurn.snippet || currentTurn.snippet === "...") {
+          currentTurn.snippet = extractSnippet(msg)
+        }
+      }
+    }
+  }
+
+  if (currentTurn) turns.push(currentTurn)
+  return turns
+}
+
+function extractSnippet(msg: import("./types").ChatMessage): string {
+  const blocks = msg.blocks || []
+  for (const b of blocks) {
+    if (b.type === "text" && b.text) {
+      const text = b.text.trim().replace(/\n/g, " ")
+      if (text.length > 0) return text.slice(0, 80) + (text.length > 80 ? "..." : "")
+    }
+    if (b.type === "tool-call" || b.type === "tool_call") {
+      return `Used ${b.name || b.toolName || 'tool'}`
+    }
+  }
+  return msg.role === "user" ? "Sent a message" : "Thinking..."
+}
 
 function renderThinkingBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
   const thinking = isThinkingBlock(block) ? block : (block as unknown as ThinkingBlock)
@@ -464,8 +568,15 @@ function renderThinkingBlock(block: Block, _opts: RenderOptions): HTMLElement | 
   summary.className = "thinking-header"
   summary.innerHTML = BRAIN_SVG
   const label = document.createElement("span")
-  label.textContent = thinking.streaming ? "Thinking…" : `Reasoning${thinking.tokenCount ? ` (${thinking.tokenCount} tokens)` : ""}`
+  label.className = "thinking-label"
+  label.textContent = thinking.streaming ? "Thinking" : `Reasoning${thinking.tokenCount ? ` (${thinking.tokenCount} tokens)` : ""}`
   summary.appendChild(label)
+
+  if (thinking.streaming) {
+    const loader = document.createElement("span")
+    loader.className = "thinking-pulse"
+    summary.appendChild(loader)
+  }
 
   const toggle = document.createElement("span")
   toggle.className = "thinking-toggle"
@@ -499,7 +610,10 @@ function renderSkillBadge(block: Block, _opts: RenderOptions): HTMLElement | nul
 
   const name = document.createElement("span")
   const skillName = block.skillName
-  name.textContent = (skillName && skillName !== "unknown" && skillName !== "") ? skillName : "system"
+  if (!skillName || skillName === "unknown" || skillName === "") {
+    return null // Don't render empty skill tags
+  }
+  name.textContent = skillName
   badge.appendChild(name)
 
   return badge
@@ -546,6 +660,16 @@ function renderToolCallBlock(block: Block, opts: RenderOptions): HTMLElement | n
   summary.className = "tool-header"
   summary.setAttribute("tabindex", "0")
   summary.setAttribute("role", "button")
+  summary.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault()
+      details.open = !details.open
+      details.setAttribute("aria-expanded", details.open ? "true" : "false")
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Home" || event.key === "End") {
+      event.preventDefault()
+      focusAdjacentToolSummary(summary, event.key)
+    }
+  })
 
   // Tool icon based on class
   const icon = document.createElement("span")
@@ -577,18 +701,52 @@ function renderToolCallBlock(block: Block, opts: RenderOptions): HTMLElement | n
   // Status badge (text + symbol for colour-blind accessible distinction)
   const badge = document.createElement("span")
   badge.className = `tool-status tool-status--${toolState}`
-  if (toolState === 'pending') { badge.textContent = '○ Pending'; badge.setAttribute("aria-label", "Tool pending") }
-  else if (toolState === 'running') { badge.textContent = '◉ Running'; badge.setAttribute("aria-label", "Tool running") }
-  else if (toolBlock.error) { badge.textContent = '✗ Error'; badge.setAttribute("aria-label", "Tool error") }
-  else { badge.textContent = '✓ Done'; badge.setAttribute("aria-label", "Tool complete") }
+  if (toolState === 'pending') {
+    badge.textContent = '○ Pending'
+    badge.setAttribute("aria-label", "Tool pending")
+  } else if (toolState === 'running') {
+    badge.textContent = '◉ Running'
+    badge.setAttribute("aria-label", "Tool running")
+  } else if (toolState === 'stale') {
+    badge.textContent = 'Stale'
+    badge.setAttribute("aria-label", "Tool completion unconfirmed")
+  } else if (toolBlock.error || toolState === 'error') {
+    badge.textContent = '✗ Error'
+    badge.setAttribute("aria-label", "Tool error")
+  } else if (toolState === 'completed' || toolState === 'result') {
+    badge.textContent = '✓ Done'
+    badge.setAttribute("aria-label", "Tool complete")
+  } else {
+    badge.textContent = '✓ Done'
+  }
   summary.appendChild(badge)
 
   // Duration
-  if (toolBlock.durationMs && toolState === 'result') {
+  if (toolBlock.durationMs && (toolState === 'result' || toolState === 'completed')) {
     const dur = document.createElement("span")
     dur.className = "tool-duration"
-    dur.textContent = `${toolBlock.durationMs}ms`
+    dur.textContent = toolBlock.durationMs >= 1000
+      ? `${(toolBlock.durationMs / 1000).toFixed(1)}s`
+      : `${toolBlock.durationMs}ms`
     summary.appendChild(dur)
+  } else if (toolState === 'running' || toolState === 'pending') {
+    const elapsed = document.createElement("span")
+    elapsed.className = "tool-elapsed"
+    elapsed.dataset.startTime = String(Date.now())
+    elapsed.textContent = "0s"
+    summary.appendChild(elapsed)
+  }
+
+  // Output size on completion
+  if (toolBlock.result && (toolState === 'result' || toolState === 'completed')) {
+    const resultStr = typeof toolBlock.result === 'string' ? toolBlock.result : JSON.stringify(toolBlock.result)
+    const size = document.createElement("span")
+    size.className = "tool-output-size"
+    const lines = resultStr.split('\n').length
+    const chars = resultStr.length
+    size.textContent = chars >= 1024 ? `${(chars / 1024).toFixed(1)}KB` : `${chars} chars`
+    size.title = `${lines} lines, ${chars} characters`
+    summary.appendChild(size)
   }
 
   details.appendChild(summary)
@@ -615,19 +773,27 @@ function renderToolCallBlock(block: Block, opts: RenderOptions): HTMLElement | n
   }
 
   // Result panel
-  if (toolBlock.result !== undefined && toolState === 'result') {
+  if (toolBlock.result !== undefined && (toolState === 'result' || toolState === 'completed' || toolState === 'stale')) {
     const resultDiv = document.createElement("div")
     resultDiv.className = toolBlock.error ? "tool-result-panel tool-result-panel--error" : "tool-result-panel"
     const resultText = typeof toolBlock.result === 'string' ? toolBlock.result : JSON.stringify(toolBlock.result, null, 2)
-    const truncated = resultText.length > 1000
-    const displayResult = truncated ? resultText.slice(0, 1000) : resultText
-    resultDiv.textContent = displayResult
+    const lines = resultText.split("\n")
+    const truncated = resultText.length > 2000 || lines.length > 40
+    const displayResult = truncated ? lines.slice(0, 40).join("\n").slice(0, 2000) : resultText
+    const meta = document.createElement("div")
+    meta.className = "tool-result-meta"
+    meta.textContent = `${formatOutputSize(resultText.length)}${lines.length > 1 ? `, ${lines.length} lines` : ""}`
+    resultDiv.appendChild(meta)
+    const body = document.createElement("pre")
+    body.className = "tool-result-body"
+    body.textContent = displayResult
+    resultDiv.appendChild(body)
     if (truncated) {
       const more = document.createElement("button")
       more.className = "tool-show-more"
-      more.textContent = "Show more…"
+      more.textContent = "Show full"
       more.addEventListener("click", () => {
-        resultDiv.textContent = resultText
+        body.textContent = resultText
         more.remove()
       })
       resultDiv.appendChild(more)
@@ -648,10 +814,124 @@ function extractKeyArg(args: unknown): string | null {
   return null
 }
 
+function groupConsecutiveToolCalls(blocks: Block[]): Block[][] {
+  const groups: Block[][] = []
+  let currentGroup: Block[] = []
+  let lastToolName: string | null = null
+
+  for (const block of blocks) {
+    const isTool = block.type === "tool-call" || block.type === "tool_call"
+    const toolName = isTool ? (block as any).name || (block as any).toolName || "tool" : ""
+
+    if (isTool && toolName === lastToolName && currentGroup.length > 0) {
+      currentGroup.push(block)
+    } else {
+      if (currentGroup.length > 0) groups.push(currentGroup)
+      currentGroup = isTool ? [block] : [block]
+      lastToolName = isTool ? toolName : null
+      if (!isTool) { groups.push([block]); currentGroup = [] }
+    }
+  }
+  if (currentGroup.length > 0) groups.push(currentGroup)
+  return groups
+}
+
+function renderToolGroup(blocks: Block[], opts: RenderOptions): HTMLElement | null {
+  if (blocks.length === 0) return null
+
+  const firstTool = blocks[0]!
+  const tc = isToolCallBlock(firstTool) ? firstTool : null
+  const toolClass = tc?.class || 'read'
+  const toolName = tc?.name || 'tool'
+
+  const group = document.createElement("details")
+  group.className = `tool-call tool-group tool-call--${toolClass}`
+  group.dataset.blockId = `group-${tc?.id || Date.now()}`
+
+  const summary = document.createElement("summary")
+  summary.className = "tool-header"
+  summary.setAttribute("tabindex", "0")
+  summary.setAttribute("role", "button")
+  summary.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault()
+      group.open = !group.open
+    }
+  })
+
+  const icon = document.createElement("span")
+  icon.className = "tool-icon"
+  switch (toolClass) {
+    case 'write': icon.innerHTML = TOOL_WRITE_SVG; break
+    case 'exec': icon.innerHTML = TOOL_EXEC_SVG; break
+    case 'meta': icon.innerHTML = TOOL_META_SVG; break
+    default: icon.innerHTML = TOOL_READ_SVG; break
+  }
+  summary.appendChild(icon)
+
+  const name = document.createElement("span")
+  name.className = "tool-name"
+  name.textContent = toolName
+  summary.appendChild(name)
+
+  const count = document.createElement("span")
+  count.className = "tool-group-count"
+  count.textContent = `${blocks.length} calls`
+  summary.appendChild(count)
+
+  const completed = blocks.filter(b => {
+    const s = (b as any).state
+    return s === 'result' || s === 'completed'
+  }).length
+  const badge = document.createElement("span")
+  badge.className = "tool-status"
+  if (completed === blocks.length) {
+    badge.textContent = '✓ Done'
+  } else if (completed > 0) {
+    badge.textContent = `◉ ${completed}/${blocks.length}`
+  } else {
+    badge.textContent = '◉ Running'
+  }
+  summary.appendChild(badge)
+
+  group.appendChild(summary)
+
+  const children = document.createElement("div")
+  children.className = "tool-group-children"
+  for (const block of blocks) {
+    const el = renderToolCallBlock(block, opts)
+    if (el) {
+      el.classList.add("tool-group-child")
+      children.appendChild(el)
+    }
+  }
+  group.appendChild(children)
+
+  return group
+}
+
 function truncateMiddle(str: string, maxLen: number): string {
   if (str.length <= maxLen) return str
   const half = Math.floor((maxLen - 1) / 2)
   return str.slice(0, half) + '\u2026' + str.slice(str.length - half)
+}
+
+function formatOutputSize(chars: number): string {
+  if (chars < 1000) return `${chars} chars`
+  return `${(chars / 1000).toFixed(chars < 10000 ? 1 : 0)}k chars`
+}
+
+function focusAdjacentToolSummary(current: HTMLElement, key: string): void {
+  const summaries = Array.from(document.querySelectorAll<HTMLElement>(".tool-header"))
+  if (summaries.length === 0) return
+  const index = summaries.indexOf(current)
+  if (index < 0) return
+  const nextIndex =
+    key === "Home" ? 0 :
+    key === "End" ? summaries.length - 1 :
+    key === "ArrowUp" ? Math.max(0, index - 1) :
+    Math.min(summaries.length - 1, index + 1)
+  summaries[nextIndex]?.focus()
 }
 
 // ---------------------------------------------------------------------------

@@ -54,6 +54,7 @@ export interface ElementRefs {
   variantDropdown: HTMLDivElement
   historyBtn: HTMLElement
   mcpBtn: HTMLElement
+  timelineToggleBtn: HTMLElement
   settingsBtn: HTMLElement
 
   contextBar: HTMLDivElement
@@ -62,7 +63,8 @@ export interface ElementRefs {
   contextProgressBar: HTMLElement
   contextLabel: HTMLSpanElement
   
-  recentSessions: HTMLDivElement | null
+  welcomeRecentSessions: HTMLDivElement | null
+  welcomeModelCtx: HTMLSpanElement | null
 
   agentStatusLed: HTMLDivElement
   agentStatusText: HTMLSpanElement
@@ -85,6 +87,65 @@ export interface ElementRefs {
   modeWarningConfirm: HTMLButtonElement
 
   welcomeView: HTMLDivElement
+
+  mcpConfigPanel: HTMLDivElement
+  mcpConfigList: HTMLDivElement
+  mcpConfigAdd: HTMLButtonElement
+  mcpConfigClose: HTMLButtonElement
+  mcpConfigForm: HTMLDivElement
+  mcpConfigFormTitle: HTMLHeadingElement
+  mcpConfigName: HTMLInputElement
+  mcpConfigCommand: HTMLInputElement
+  mcpConfigArgs: HTMLTextAreaElement
+  mcpConfigEnv: HTMLTextAreaElement
+  mcpConfigDisabled: HTMLInputElement
+  mcpConfigSave: HTMLButtonElement
+  mcpConfigCancel: HTMLButtonElement
+
+  // Display toggles (Phase 4.2)
+  displayToggles: HTMLElement
+  toggleText: HTMLInputElement
+  toggleTools: HTMLInputElement
+  toggleDiffs: HTMLInputElement
+  toggleErrors: HTMLInputElement
+
+  // Settings overflow menu
+  settingsMenu: HTMLElement
+  themeCustomizerBtn: HTMLElement
+  themeCustomizerPanel: HTMLDivElement
+  themeCustomizerClose: HTMLButtonElement
+  themePresetCards: HTMLDivElement
+  themeCliSearch: HTMLInputElement
+  themeCliList: HTMLDivElement
+  themePreviewSwatch: HTMLDivElement
+  themeCustomizerReset: HTMLButtonElement
+  themeCustomizerSave: HTMLButtonElement
+
+  // Status strip (below tab bar)
+  statusStrip: HTMLElement
+  statusModel: HTMLSpanElement
+  statusCost: HTMLSpanElement
+  statusTokens: HTMLSpanElement
+  quotaBar: HTMLDivElement
+  quotaProgressBar: HTMLDivElement
+  quotaLabel: HTMLSpanElement
+  quotaDetail: HTMLSpanElement
+
+  // Welcome context elements
+  welcomeWorkspaceName: HTMLSpanElement
+  welcomeModelName: HTMLSpanElement
+  welcomeContinueBtn: HTMLButtonElement | null
+  welcomeNewBtn: HTMLButtonElement
+
+  // Token/cost display (Phase 5 — hidden outside header, kept for compatibility)
+  tokenDisplay: HTMLElement | null
+  costDisplay: HTMLElement | null
+
+  // File change tracking (Phase 5)
+  changedFilesList: HTMLElement | null
+
+  // Checkpoint/undo panel (Phase 5)
+  checkpointPanel: HTMLElement | null
 }
 
 export function getElementRefs(): ElementRefs {
@@ -121,6 +182,7 @@ export function getElementRefs(): ElementRefs {
     variantDropdown: requireElement<HTMLDivElement>("variant-dropdown-container"),
     historyBtn: requireElement("history-btn"),
     mcpBtn: requireElement("mcp-btn"),
+    timelineToggleBtn: requireElement("timeline-toggle-btn"),
     settingsBtn: requireElement("settings-btn"),
 
     contextBar: requireElement<HTMLDivElement>("context-bar"),
@@ -129,7 +191,8 @@ export function getElementRefs(): ElementRefs {
     contextProgressBar: requireElement("context-progress-bar"),
     contextLabel: requireElement<HTMLSpanElement>("context-label"),
     
-    recentSessions: optionalElement<HTMLDivElement>("welcome-recent-sessions"),
+    welcomeRecentSessions: optionalElement<HTMLDivElement>("welcome-recent-sessions"),
+    welcomeModelCtx: optionalElement<HTMLSpanElement>("welcome-model-ctx"),
 
     agentStatusLed: requireElement<HTMLDivElement>("agent-status-led"),
     agentStatusText: requireElement<HTMLSpanElement>("agent-status-text"),
@@ -152,6 +215,65 @@ export function getElementRefs(): ElementRefs {
     modeWarningConfirm: requireElement<HTMLButtonElement>("mode-warning-confirm"),
 
     welcomeView: requireElement<HTMLDivElement>("welcome-view"),
+
+    mcpConfigPanel: requireElement<HTMLDivElement>("mcp-config-panel"),
+    mcpConfigList: requireElement<HTMLDivElement>("mcp-config-list"),
+    mcpConfigAdd: requireElement<HTMLButtonElement>("mcp-config-add"),
+    mcpConfigClose: requireElement<HTMLButtonElement>("mcp-config-close"),
+    mcpConfigForm: requireElement<HTMLDivElement>("mcp-config-form"),
+    mcpConfigFormTitle: requireElement<HTMLHeadingElement>("mcp-config-form-title"),
+    mcpConfigName: requireElement<HTMLInputElement>("mcp-config-name"),
+    mcpConfigCommand: requireElement<HTMLInputElement>("mcp-config-command"),
+    mcpConfigArgs: requireElement<HTMLTextAreaElement>("mcp-config-args"),
+    mcpConfigEnv: requireElement<HTMLTextAreaElement>("mcp-config-env"),
+    mcpConfigDisabled: requireElement<HTMLInputElement>("mcp-config-disabled"),
+    mcpConfigSave: requireElement<HTMLButtonElement>("mcp-config-save"),
+    mcpConfigCancel: requireElement<HTMLButtonElement>("mcp-config-cancel"),
+
+    // Display toggles (Phase 4.2)
+    displayToggles: requireElement("display-toggles"),
+    toggleText: requireElement<HTMLInputElement>("toggle-text"),
+    toggleTools: requireElement<HTMLInputElement>("toggle-tools"),
+    toggleDiffs: requireElement<HTMLInputElement>("toggle-diffs"),
+    toggleErrors: requireElement<HTMLInputElement>("toggle-errors"),
+
+    // Settings overflow menu
+    settingsMenu: requireElement("settings-menu"),
+    themeCustomizerBtn: requireElement("theme-customizer-btn"),
+    themeCustomizerPanel: requireElement<HTMLDivElement>("theme-customizer-panel"),
+    themeCustomizerClose: requireElement<HTMLButtonElement>("theme-customizer-close"),
+    themePresetCards: requireElement<HTMLDivElement>("theme-preset-cards"),
+    themeCliSearch: requireElement<HTMLInputElement>("theme-cli-search"),
+    themeCliList: requireElement<HTMLDivElement>("theme-cli-list"),
+    themePreviewSwatch: requireElement<HTMLDivElement>("theme-preview-swatch"),
+    themeCustomizerReset: requireElement<HTMLButtonElement>("theme-customizer-reset"),
+    themeCustomizerSave: requireElement<HTMLButtonElement>("theme-customizer-save"),
+
+    // Status strip (below tab bar)
+    statusStrip: requireElement("status-strip"),
+    statusModel: requireElement<HTMLSpanElement>("status-model"),
+    statusCost: requireElement<HTMLSpanElement>("status-cost"),
+    statusTokens: requireElement<HTMLSpanElement>("status-tokens"),
+    quotaBar: requireElement<HTMLDivElement>("quota-bar"),
+    quotaProgressBar: requireElement<HTMLDivElement>("quota-progress-bar"),
+    quotaLabel: requireElement<HTMLSpanElement>("quota-label"),
+    quotaDetail: requireElement<HTMLSpanElement>("quota-detail"),
+
+    // Welcome context elements
+    welcomeWorkspaceName: requireElement<HTMLSpanElement>("welcome-workspace-name"),
+    welcomeModelName: requireElement<HTMLSpanElement>("welcome-model-name"),
+    welcomeContinueBtn: optionalElement<HTMLButtonElement>("welcome-continue-btn"),
+    welcomeNewBtn: requireElement<HTMLButtonElement>("welcome-new-btn"),
+
+    // Token/cost display (Phase 5 — hidden outside header, kept for compatibility)
+    tokenDisplay: optionalElement("token-display"),
+    costDisplay: optionalElement("cost-display"),
+
+    // File change tracking (Phase 5)
+    changedFilesList: optionalElement("changed-files-list"),
+
+    // Checkpoint/undo panel (Phase 5)
+    checkpointPanel: optionalElement("checkpoint-panel"),
   }
 }
 

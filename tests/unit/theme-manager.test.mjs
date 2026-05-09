@@ -57,16 +57,156 @@ describe("ThemeManager — built-in presets", () => {
 })
 
 describe("ThemeManager — variable mapping", () => {
-  it("maps all 28 theme properties to CSS custom properties", () => {
-    const mappingPairs = source.match(/\["--oc-[^"]+"/g)
+  it("maps all theme properties to CSS custom properties", () => {
+    const mappingPairs = source.match(/\["--[a-z]+-[^"]+",/g)
     assert.ok(mappingPairs, "No CSS variable mappings found")
-    assert.ok(mappingPairs.length >= 28, `Expected >=28 mappings, got ${mappingPairs.length}`)
+    assert.ok(mappingPairs.length >= 41, `Expected >=41 mappings, got ${mappingPairs.length}`)
   })
 
   it("filters out undefined values", () => {
     assert.ok(
       source.includes("value !== undefined && value !== null"),
       "Undefined value filtering missing"
+    )
+  })
+})
+
+describe("ThemeManager — canvas/shell properties", () => {
+  const canvasProps = ["panelBg", "panelFg", "editorBg", "editorFg", "borderColor", "mutedFg"]
+
+  it("OpencodeTheme interface includes canvas properties", () => {
+    for (const prop of canvasProps) {
+      assert.ok(
+        source.includes(`${prop}?:`),
+        `Missing canvas property "${prop}" in OpencodeTheme interface`
+      )
+    }
+  })
+
+  it("CSS_VAR_MAP includes canvas background variables", () => {
+    const canvasVars = [
+      "--oc-bg", "--oc-fg",
+      "--oc-editor-bg", "--oc-editor-fg",
+      "--oc-glass-bg", "--bg-primary",
+      "--oc-border", "--oc-muted", "--oc-description",
+    ]
+    for (const v of canvasVars) {
+      assert.ok(
+        source.includes(`["${v}",`),
+        `Missing CSS variable mapping for "${v}" in CSS_VAR_MAP`
+      )
+    }
+  })
+
+  function extractPreset(name) {
+    const quoted = name.includes("-") ? `"${name}"` : name
+    const re = new RegExp(`${quoted}:\\s*\\{`, "g")
+    const match = re.exec(source)
+    if (!match) return null
+    let depth = 0
+    let start = match.index + match[0].length - 1
+    for (let i = start; i < source.length; i++) {
+      if (source[i] === "{") depth++
+      if (source[i] === "}") depth--
+      if (depth === 0) return source.slice(match.index, i + 1)
+    }
+    return null
+  }
+
+  it("light preset defines canvas background colors (not var(--vscode-*))", () => {
+    const lightSection = extractPreset("light")
+    assert.ok(lightSection, "light preset not found")
+    assert.ok(lightSection.includes("panelBg:"), "panelBg missing from light preset")
+    assert.ok(
+      !lightSection.includes("panelBg: \"var(--vscode-"),
+      "light preset panelBg must be a concrete color, not a VS Code variable reference"
+    )
+    assert.ok(lightSection.includes("panelFg:"), "panelFg missing from light preset")
+  })
+
+  it("dark preset defines canvas background colors (not var(--vscode-*))", () => {
+    const darkSection = extractPreset("dark")
+    assert.ok(darkSection, "dark preset not found")
+    assert.ok(darkSection.includes("panelBg:"), "panelBg missing from dark preset")
+    assert.ok(darkSection.includes("panelFg:"), "panelFg missing from dark preset")
+  })
+
+  it("cli-default preset uses VS Code variable references for canvas colors", () => {
+    const cliSection = extractPreset("cli-default")
+    assert.ok(cliSection, "cli-default preset not found")
+    assert.ok(cliSection.includes("panelBg:"), "panelBg missing from cli-default preset")
+    assert.ok(
+      cliSection.includes("panelBg: \"var(--vscode-"),
+      "cli-default preset panelBg must use VS Code variable reference"
+    )
+  })
+
+  it("high-contrast preset defines maximum contrast canvas colors", () => {
+    const hcSection = extractPreset("high-contrast")
+    assert.ok(hcSection, "high-contrast preset not found")
+    assert.ok(hcSection.includes("panelBg:"), "panelBg missing from high-contrast preset")
+    assert.ok(hcSection.includes("panelFg:"), "panelFg missing from high-contrast preset")
+  })
+})
+
+describe("ThemeManager — CLI theme field mapping", () => {
+  const cliThemeFields = [
+    "primary", "secondary", "accent", "error", "warning", "success", "info",
+    "text", "textMuted", "background", "backgroundPanel", "backgroundElement",
+    "border", "borderActive", "borderSubtle",
+    "diffAdded", "diffRemoved", "diffContext", "diffHunkHeader",
+    "diffHighlightAdded", "diffHighlightRemoved", "diffAddedBg", "diffRemovedBg",
+    "diffContextBg", "diffLineNumber", "diffAddedLineNumberBg", "diffRemovedLineNumberBg",
+    "markdownText", "markdownHeading", "markdownLink", "markdownLinkText",
+    "markdownCode", "markdownBlockQuote", "markdownEmph", "markdownStrong",
+    "markdownHorizontalRule", "markdownListItem", "markdownListEnumeration",
+    "markdownImage", "markdownImageText", "markdownCodeBlock",
+    "syntaxComment", "syntaxKeyword", "syntaxFunction", "syntaxVariable",
+    "syntaxString", "syntaxNumber", "syntaxType", "syntaxOperator", "syntaxPunctuation",
+  ]
+
+  it("FIELD_MAP covers the documented OpenCode CLI theme fields", () => {
+    for (const field of cliThemeFields) {
+      assert.ok(source.includes(`"${field}"`), `FIELD_MAP must map CLI theme field ${field}`)
+    }
+  })
+
+  it("CSS_VAR_MAP exposes CLI markdown and diff fields to the webview", () => {
+    for (const cssVar of [
+      "--oc-markdown-heading",
+      "--oc-markdown-link",
+      "--oc-markdown-code",
+      "--oc-diff-context",
+      "--oc-diff-hunk-header",
+      "--oc-diff-added-bg",
+      "--oc-diff-removed-bg",
+      "--oc-syn-variable",
+      "--oc-syn-punctuation",
+    ]) {
+      assert.ok(source.includes(`["${cssVar}",`), `missing CSS variable mapping for ${cssVar}`)
+    }
+  })
+
+  it("FIELD_MAP maps CLI background to panelBg (not assistantMessageBg)", () => {
+    assert.ok(
+      source.includes('["panelBg", "background"]') ||
+        source.includes('["panelBg", "background"]'),
+      "FIELD_MAP must map panelBg to CLI 'background' property"
+    )
+    assert.ok(
+      !source.includes('["assistantMessageBg", "background"]'),
+      "FIELD_MAP must NOT map assistantMessageBg to CLI 'background'"
+    )
+  })
+
+  it("FIELD_MAP maps CLI text to panelFg (not assistantMessageFg)", () => {
+    assert.ok(
+      source.includes('["panelFg", "text"]'),
+      "FIELD_MAP must map panelFg to CLI 'text' property"
+    )
+    assert.ok(
+      !source.includes('["assistantMessageFg", "text"]'),
+      "FIELD_MAP must NOT map assistantMessageFg to CLI 'text'"
     )
   })
 })

@@ -7,7 +7,7 @@ export type MessageRole = "user" | "assistant" | "system"
 // ---------------------------------------------------------------------------
 
 export type ToolCallClass = 'read' | 'write' | 'exec' | 'error' | 'meta'
-export type ToolCallState = 'pending' | 'running' | 'result'
+export type ToolCallState = 'pending' | 'running' | 'result' | 'error' | 'completed' | 'stale'
 
 export interface ToolCallBlock {
   [key: string]: unknown
@@ -118,6 +118,7 @@ export interface SessionState {
   isStreaming: boolean
   cost?: number
   tokenUsage?: { prompt: number; completion: number; total: number }
+  changedFiles?: string[]
   lastActiveAt?: number
 }
 
@@ -130,6 +131,15 @@ export interface WebviewState {
   globalVariant?: string
   initialized?: boolean
   disabledModels?: string[]
+  favoriteModels?: string[]
+  recentModels?: string[]
+  displayPrefs?: {
+    text: boolean
+    tools: boolean
+    diffs: boolean
+    errors: boolean
+  }
+  isTimelineVisible?: boolean
 }
 
 export interface MentionItem {
@@ -149,6 +159,7 @@ export interface SessionSummary {
 
 export interface ContextChip {
   label?: string
+  kind?: string
   removable?: boolean
   onRemove?: () => void
 }
@@ -187,6 +198,8 @@ export interface ModelInfo {
   displayName: string
   enabled?: boolean
   supportsVariants?: boolean
+  favorite?: boolean
+  recentRank?: number
 }
 
 export interface TabInfo {

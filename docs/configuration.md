@@ -26,7 +26,8 @@ All settings are under the `opencode.*` namespace and can be configured in VS Co
 - **Description**: Theme configuration for the OpenCode chat panel.
 - **Properties**:
   - `preset` (string): Base theme preset — one of `"cli-default"`, `"light"`, `"dark"`, `"high-contrast"`
-  - `overrides` (object): Individual CSS color overrides (see Theme Customization in README)
+  - `overrides` (object): Individual CSS color overrides. The schema includes OpenCode CLI-style fields for primary/secondary/accent colors, panel/editor backgrounds, borders, semantic colors, syntax colors, diff colors, and Markdown colors.
+- **UI**: The chat header settings menu includes **Customize theme**, a webview modal for common overrides. The QuickPick preview remains available for presets and discovered CLI themes.
 - **Example**:
   ```json
   {
@@ -52,6 +53,45 @@ All settings are under the `opencode.*` namespace and can be configured in VS Co
   }
   ```
 
+## OpenCode MCP Configuration
+
+MCP servers are now read from OpenCode config files first, not only from VS Code settings.
+The extension checks these locations, later entries overlaying earlier ones by server name:
+
+1. `OPENCODE_CONFIG`, when set.
+2. `$XDG_CONFIG_HOME/opencode/opencode.json`, or `~/.config/opencode/opencode.json`.
+3. Workspace `opencode.json`.
+4. Workspace `.opencode/opencode.json`.
+
+The MCP modal reads and writes the primary OpenCode config file. If the file does not exist,
+opening MCP settings creates:
+
+```json
+{
+  "mcp": {}
+}
+```
+
+Legacy `opencode.mcpServers` VS Code settings are still loaded as a fallback for older
+installations, but OpenCode config entries take precedence.
+
+### `opencode.mcpServers`
+- **Type**: `object`
+- **Default**: `{}`
+- **Scope**: `window`
+- **Description**: Legacy fallback MCP server map. Each entry may describe a stdio, HTTP, or SSE server.
+- **Per-server properties**:
+  | Property | Type | Description |
+  |----------|------|-------------|
+  | `type` | `"stdio" \| "http" \| "sse"` | Transport type |
+  | `command` | `string` | Stdio command |
+  | `args` | `string[]` | Stdio command arguments |
+  | `env` | `object` | Stdio environment variables |
+  | `url` | `string` | HTTP/SSE endpoint |
+  | `headers` | `object` | Remote request headers |
+  | `disabled` | `boolean` | Disable this server |
+  | `enabled` | `boolean` | Enable this server; `false` is treated like `disabled: true` |
+
 ### `opencode.autoCompact`
 - **Type**: `string`
 - **Default**: `"ask"`
@@ -64,11 +104,29 @@ All settings are under the `opencode.*` namespace and can be configured in VS Co
   | `"off"` | Never auto-compact |
 - **Description**: Controls automatic session compaction when context usage reaches 80%.
 
+### `opencode.sessions.emptySessionTtlMinutes`
+- **Type**: `number`
+- **Default**: `60`
+- **Scope**: `window`
+- **Description**: Completely empty inactive sessions are removed after this many minutes. Sessions waiting for server backfill or server-link promotion are exempt.
+
+### `opencode.sessions.cleanupIntervalMinutes`
+- **Type**: `number`
+- **Default**: `15`
+- **Scope**: `window`
+- **Description**: How often the extension prunes completely empty sessions.
+
+### `opencode.sessions.restoreOpenTabs`
+- **Type**: `boolean`
+- **Default**: `true`
+- **Scope**: `window`
+- **Description**: Restores previously open, non-empty tabs for the current workspace when the webview is recreated.
+
 ### `opencode.rateLimits`
 - **Type**: `object`
 - **Default**: `{}`
 - **Scope**: `window`
-- **Description**: Fallback rate limit configuration per provider. Used for providers that don't return rate limit headers (e.g., OpenAI, Anthropic).
+- **Description**: Fallback per-minute quota configuration by provider id. Used when the provider/server does not expose remaining/limit headers. OpenCode Zen uses provider id `opencode`; because Zen is pay-as-you-go with optional monthly limits, the extension only shows exact remaining quota when headers are available, otherwise it shows observed token/cost usage or this configured fallback estimate.
 - **Properties per provider**:
   | Property | Type | Default | Description |
   |-----------|------|---------|-------------|
@@ -79,7 +137,8 @@ All settings are under the `opencode.*` namespace and can be configured in VS Co
   {
     "opencode.rateLimits": {
       "openai": { "tokensPerMin": 150000, "requestsPerMin": 60 },
-      "anthropic": { "tokensPerMin": 200000, "requestsPerMin": 100 }
+      "anthropic": { "tokensPerMin": 200000, "requestsPerMin": 100 },
+      "opencode": { "tokensPerMin": 100000, "requestsPerMin": 50 }
     }
   }
   ```
@@ -157,6 +216,11 @@ The OpenCode server is spawned automatically by `SessionManager` with these defa
 The server inherits the extension's environment with these filtered variables:
 - Passed through: `PATH`, `HOME`, `LANG`, and other safe variables
 - Filtered out: API keys and sensitive credentials (security measure)
+
+### Remote Server URLs
+When `opencode.serverUrl` is set, `SessionManager` validates the URL before enabling remote attach.
+Invalid URLs are rejected. Non-HTTPS remote URLs are allowed for local-network workflows, but they emit
+a warning unless the host is localhost or a loopback address.
 
 ---
 

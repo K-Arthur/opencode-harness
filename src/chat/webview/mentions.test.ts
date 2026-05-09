@@ -53,4 +53,11 @@ describe("mentions.ts", () => {
     assert.ok(source.includes("CODE_SVG"), "help must use CODE_SVG")
     assert.ok(source.includes("import"), "must import SVG constants")
   })
+
+  it("renders slash commands with structured command rows", () => {
+    assert.ok(source.includes("command-mode"), "slash dropdown must get command-mode styling")
+    assert.ok(source.includes("command-item"), "slash commands must use command-item rows")
+    assert.ok(source.includes("dropdown-content"), "rows must group label and description")
+    assert.ok(source.includes("aria-selected"), "keyboard selection state must be exposed")
+  })
 })

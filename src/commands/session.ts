@@ -1,7 +1,11 @@
 import * as vscode from "vscode"
+import { ChatProvider } from "../chat/ChatProvider"
 import { SessionStore } from "../session/SessionStore"
 import { SessionManager } from "../session/SessionManager"
+import { SessionDbReader } from "../session/SessionDbReader"
+import { sdkMessagesToChatMessages } from "../session/sdkMessageConverter"
 import { log } from "../utils/outputChannel"
+import { checkFileSecurity, sanitizeForPrompt } from "../utils/security"
 
 export function registerOpenChatCommand(
   context: vscode.ExtensionContext
@@ -97,7 +101,7 @@ export function registerListSessionsCommand(
           return
         }
         const items = sessions.map((s) => ({
-          label: s.name,
+          label: SessionStore.displayName(s),
           description: `${s.messages.length} messages`,
           detail: `${new Date(s.lastActiveAt).toLocaleDateString()} — ${s.model || "no model"}`,
           id: s.id,
@@ -128,7 +132,7 @@ export function registerDeleteSessionCommand(
             vscode.window.showInformationMessage("No sessions to delete.")
             return
           }
-          const items = sessions.map(s => ({ label: s.name, description: `${s.messages.length} messages`, id: s.id }))
+          const items = sessions.map(s => ({ label: SessionStore.displayName(s), description: `${s.messages.length} messages`, id: s.id }))
           const picked = await vscode.window.showQuickPick(items, { placeHolder: "Select session to delete" })
           if (!picked) return
           sessionId = picked.id
@@ -255,6 +259,110 @@ export function registerContinueLastSessionCommand(
   )
 }
 
+export function registerAddFileToSessionCommand(
+  context: vscode.ExtensionContext,
+  chatProvider: ChatProvider
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "opencode-harness.addFileToSession",
+      async (uri: vscode.Uri) => {
+        try {
+          let targetUri = uri
+
+          // If no URI provided, show file picker
+          if (!targetUri) {
+            const files = await vscode.window.showOpenDialog({
+              canSelectFiles: true,
+              canSelectFolders: false,
+              canSelectMany: false,
+              openLabel: "Add to Session",
+              title: "Add File to OpenCode Session",
+            })
+
+            if (!files || files.length === 0) return
+            targetUri = files[0]!
+          }
+
+          const content = await vscode.workspace.fs.readFile(targetUri)
+          const text = Buffer.from(content).toString('utf8')
+          const relativePath = vscode.workspace.asRelativePath(targetUri)
+          const security = await checkFileSecurity(targetUri)
+          if (security.isSensitive || security.hasInjectionRisk) {
+            const proceed = await vscode.window.showWarningMessage(
+              `File "${relativePath}" may contain secrets or prompt-injection text. Add anyway?`,
+              { modal: true },
+              "Add File",
+              "Skip"
+            )
+            if (proceed !== "Add File") return
+          }
+
+          // Warn about large files
+          if (text.length > 50000) {
+            const proceed = await vscode.window.showWarningMessage(
+              `File "${relativePath}" is ${(text.length / 1024).toFixed(1)}KB. Add anyway?`,
+              { modal: true },
+              "Add File",
+              "Skip"
+            )
+            if (proceed !== "Add File") return
+          }
+
+          // Send to chat with file reference and content
+          const prompt = `@file:${relativePath}\n${sanitizeForPrompt(text.slice(0, 10000), relativePath)}`
+          chatProvider.sendPromptToWebview(prompt, false)
+
+          vscode.window.showInformationMessage(`Added "${relativePath}" to session`)
+        } catch (err) {
+          log.error("Add file to session failed", err)
+          vscode.window.showErrorMessage("Failed to add file to session.")
+        }
+      }
+    )
+  )
+}
+
+export function registerAddSelectionToSessionCommand(
+  context: vscode.ExtensionContext,
+  chatProvider: ChatProvider
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "opencode-harness.addSelectionToSession",
+      async (uri: vscode.Uri) => {
+        try {
+          const editor = vscode.window.activeTextEditor
+          if (!editor) {
+            vscode.window.showWarningMessage("No active editor with selection.")
+            return
+          }
+
+          const selection = editor.selection
+          if (selection.isEmpty) {
+            vscode.window.showWarningMessage("No text selected. Please select some code first.")
+            return
+          }
+
+          const selectedText = editor.document.getText(selection)
+          const relativePath = vscode.workspace.asRelativePath(editor.document.uri)
+          const startLine = selection.start.line + 1
+          const endLine = selection.end.line + 1
+
+          // Send to chat with selection reference
+          const prompt = `From \`${relativePath}\` (lines ${startLine}-${endLine}):\n\`\`\`${editor.document.languageId}\n${sanitizeForPrompt(selectedText, relativePath)}\n\`\`\``
+          chatProvider.sendPromptToWebview(prompt, false)
+
+          vscode.window.showInformationMessage(`Added selection from "${relativePath}" to session`)
+        } catch (err) {
+          log.error("Add selection to session failed", err)
+          vscode.window.showErrorMessage("Failed to add selection to session.")
+        }
+      }
+    )
+  )
+}
+
 export function registerChooseHistorySessionCommand(
   context: vscode.ExtensionContext,
   sessionStore: SessionStore,
@@ -264,14 +372,42 @@ export function registerChooseHistorySessionCommand(
     vscode.commands.registerCommand("opencode-harness.chooseHistorySession", async () => {
       try {
         // Gather local sessions + any server sessions we don't already know about.
+        // Match opencode CLI: scope to the current workspace and hide subagents.
         const local = new Map(sessionStore.list(true).map((s) => [s.id, s] as const))
-        let serverSessions: Array<{ id: string; title?: string; time?: { updated?: number; created?: number } }> = []
+        let serverSessions: Array<{
+          id: string
+          title?: string
+          time?: { updated?: number; created?: number }
+          parentID?: string
+          directory?: string
+        }> = []
         if (sessionManager.isRunning) {
           try {
             const list = await sessionManager.listSessions()
-            serverSessions = list as typeof serverSessions
+            serverSessions = list
+              .filter((s) => !s.parentID && sessionManager.isInCurrentWorkspace(s.directory))
           } catch (err) {
             log.warn("Could not list server sessions for history picker", err)
+          }
+        } else {
+          // Fallback: read directly from the OpenCode SQLite database when
+          // the CLI server is not running. Read-only, no mutation.
+          try {
+            const dbReader = new SessionDbReader()
+            if (await dbReader.isAvailable()) {
+              const dbSessions = await dbReader.listSessions()
+              serverSessions = dbSessions.map((s) => ({
+                id: s.id,
+                title: s.name,
+                time: { updated: s.lastActiveAt, created: s.createdAt },
+                directory: undefined,
+              }))
+              if (dbSessions.length > 0) {
+                log.info(`SessionDbReader fallback returned ${dbSessions.length} session(s) from ${dbReader.getDbPath()}`)
+              }
+            }
+          } catch (err) {
+            log.warn("SessionDbReader fallback failed", err)
           }
         }
 
@@ -280,9 +416,18 @@ export function registerChooseHistorySessionCommand(
           sessionStore.importServerSessions(serverSessions)
         }
 
-        const all = sessionStore.list(true)
+        // Match opencode CLI: limit picker to sessions belonging to the
+        // current workspace. The stored entry remembers which directory it
+        // came from (set during importServerSessions / first prompt).
+        const folders = vscode.workspace.workspaceFolders
+        const currentDir = folders && folders.length > 0 ? folders[0]!.uri.fsPath : undefined
+        const all = sessionStore.list(true).filter((s) => {
+          if (!currentDir) return true
+          if (!s.workspacePath) return true // unknown workspace — keep, do not hide silently
+          return s.workspacePath === currentDir
+        })
         if (all.length === 0) {
-          vscode.window.showInformationMessage("No sessions available.")
+          vscode.window.showInformationMessage("No sessions for this workspace.")
           return
         }
 
@@ -290,7 +435,7 @@ export function registerChooseHistorySessionCommand(
           const messageCount = s.messages.length
           const tag = s.needsBackfill ? " [server]" : local.has(s.id) ? "" : " [new]"
           return {
-            label: `${s.name}${tag}`,
+            label: `${SessionStore.displayName(s)}${tag}`,
             description: `${messageCount} message${messageCount === 1 ? "" : "s"}`,
             detail: `${new Date(s.lastActiveAt).toLocaleString()} — ${s.model || "no model"}`,
             id: s.id,
@@ -311,8 +456,9 @@ export function registerChooseHistorySessionCommand(
             { location: vscode.ProgressLocation.Notification, title: `Loading session "${picked.label}"…` },
             async () => {
               try {
-                const messages = await sessionManager.getMessages(picked.id)
-                sessionStore.applyBackfilledMessages(picked.id, messages as never)
+                const rows = await sessionManager.getSessionMessages(picked.id)
+                const chatMessages = sdkMessagesToChatMessages(rows)
+                sessionStore.applyBackfilledMessages(picked.id, chatMessages)
               } catch (err) {
                 log.warn(`Backfill failed for ${picked.id}`, err)
               }

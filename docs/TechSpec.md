@@ -70,12 +70,19 @@ OpenCode Harness is a VS Code extension that integrates the opencode AI coding a
 
 ## API Contracts
 
-### opencode Server Endpoints (via SDK)
-- `POST /chat` - Send message to agent
-- `GET /chat/stream` - SSE stream for real-time agent state
-- `GET /sessions` - List active sessions
-- `POST /sessions` - Create new session (for new tab)
-- `DELETE /sessions/:id` - Close session (soft-close preserves history)
+### OpenCode SDK Contracts
+- `config.providers()` - Fetch provider/model inventory and defaults for the model picker.
+- `app.agents()` - Fetch available agents/personas when agent selection is surfaced.
+- `session.create({ body })` - Create an OpenCode server session when a tab first needs server-side context.
+- `session.update({ path, body })` - Update server-side session properties such as model/agent metadata when supported.
+- `session.prompt({ path, body })` / `session.promptAsync({ path, body })` - Send prompts; `body.noReply: true` is reserved for context-only injection.
+- `event.subscribe()` - Subscribe to the server SSE event stream; `EventNormalizer` maps SDK events into webview stream/tool/file/permission messages.
+- `session.messages({ path })` / `session.get({ path })` / `session.list()` - Backfill, resume, and list conversations.
+- `session.command({ path, body })` / `session.shell({ path, body })` - Route slash commands and shell execution through the OpenCode server.
+- `session.abort({ path })`, `session.share({ path })`, `session.delete({ path })`, `session.revert({ path, body })` - Manage execution and lifecycle operations.
+- `find.text()`, `find.files()`, `find.symbols()`, `file.read()`, `file.status()` - File/search/diff support for agent tool results and context views.
+
+The debug Extension Development Host must open the intended workspace folder. If no folder is open, VS Code reports an empty `workspaceFolders` list and `SessionManager` starts `opencode serve` from `process.cwd()`; in local F5 runs that can be `/home/kevinarthur`, which changes session recovery and workspace scoping.
 
 ### Internal Extension APIs
 - `SessionManager` - Manages server lifecycle, session persistence
@@ -107,9 +114,13 @@ The following features were audited against the opencode CLI and enhanced for th
 
 ### Theming
 - **File watching**: `ThemeManager` watches `tui.json` and theme `.json` files via `createFileSystemWatcher`; auto-reloads on change.
-- **Preview command**: `opencode-harness.previewTheme` opens a QuickPick with all 4 presets + discovered CLI themes; applies live.
+- **Quick-pick preset command**: `opencode-harness.previewTheme` opens a VS Code QuickPick with all 4 presets + discovered CLI themes and applies the selection live. Labeled "Quick-pick preset" in the settings menu to distinguish it from the in-webview modal.
+- **Personalized modal**: The settings menu "Customize theme" entry opens a webview theme customizer that sends `get_theme_config` / `update_theme_config`; `ChatProvider` validates and writes `opencode.theme`, then pushes refreshed CSS variables. The modal supports 7 color override fields (accent, panel bg/fg, user message bg, input border, markdown heading, diff added bg) each with a paired `<input type="color">` picker synced bidirectionally with the text field. A **Preview** button applies the config without saving or closing. A **Reset overrides** button clears all overrides and restores preset defaults.
+- **CLI field parity**: `ThemeManager.FIELD_MAP` maps CLI fields for primary/secondary/accent, panel/editor/element backgrounds, active/subtle borders, semantic colors, syntax variables/punctuation, diff metadata/backgrounds/line numbers, and Markdown text/link/code/list/image fields.
+- **CSS variable cascade**: `ThemeManager.CSS_VAR_MAP` injects computed values into `:root` via a nonce-guarded `<style>` tag. `--bg-secondary` and `--bg-tertiary` are intentionally excluded from injection so that `tokens.css`'s `color-mix()` depth layering (96%/90% panel/fg blend) is preserved. `--bg-primary` and `--oc-glass-bg` continue to be injected.
+- **Light-theme correctness**: `tokens.css` `.vscode-light` block declares overrides for `--user-message-bg`, `--oc-user-msg-bg`, `--bg-code`, `--oc-tool-bg`, and all shadow tokens directly on `<body>`. Because CSS custom properties declared on `body` are inherited by all descendants, these light-theme values override any stale dark values that `ThemeManager` may have injected into `:root` — ensuring message bubbles and code blocks render correctly in light VS Code themes.
 - **forced-colors**: `accessibility.css` uses `ButtonText`, `ButtonFace`, `CanvasText`, `Canvas`, `LinkText`, `GrayText` system color keywords.
-- **Settings schema**: `package.json` documents all 20+ overridable theme properties.
+- **Settings schema**: `package.json` documents CLI-aligned overridable theme properties.
 
 ### Compaction
 - **autoCompact enforcement**: Reads `opencode.autoCompact` (`ask`/`auto`/`off`) dynamically at the 80% threshold.
@@ -120,6 +131,7 @@ The following features were audited against the opencode CLI and enhanced for th
 - **Server fetch + cache**: `ModelManager` fetches from server; falls back to `globalState` cache; static fallback on total failure.
 - **Provider grouping**: QuickPick groups models by provider with separator headers.
 - **Per-tab persistence**: Model stored in `TabManager` + `SessionStore`; restored on session resume.
+- **Webview model manager**: Connect Provider opens OpenCode provider/config actions; favorites and recent selections are stored in webview state and sorted above provider groups.
 
 ### Session History
 - **Auto-title**: First user message generates a title (first sentence, truncated at 40 chars).
@@ -131,6 +143,9 @@ The following features were audited against the opencode CLI and enhanced for th
 - **Countdown**: Real-time `setInterval` countdown when exhausted; fires `onReset` event at zero.
 - **Auto-re-enable**: Send button automatically re-enables when rate limit resets.
 - **Binding constraint**: Status bar shows `min(tokensRemaining/tokensLimit, requestsRemaining/requestsLimit)`.
+- **Webview quota bar**: `RateLimitMonitor.onStateChanged` posts `rate_limit_state` to the webview. The status strip renders a compact quota bar for known token/request limits and an observed-usage bar for providers that only expose completed-turn tokens/cost.
+- **Usage source**: `StreamCoordinator.finalizeStream()` records assistant `tokens` and `cost` in `RateLimitMonitor` with the selected model provider. Header parsing remains available through `updateFromHeaders()` for OpenAI, Anthropic, and generic rate-limit headers.
+- **Zen behavior**: OpenCode Zen model ids use provider `opencode`; Zen pay-as-you-go balance/monthly workspace limits are not inferred from token metadata. Configure `opencode.rateLimits.opencode` for a fallback per-minute estimate when headers are unavailable.
 
 ### Checkpoints
 - **20-checkpoint cap**: Oldest checkpoints are pruned per session when the cap is exceeded.
@@ -142,12 +157,22 @@ The following features were audited against the opencode CLI and enhanced for th
 
 ### Image & Multimodal (Feature 10)
 - **Clipboard paste**: Webview listens for `paste` events; detects image clipboard data, encodes to base64 via `FileReader`.
+- **Size guard**: Extension host rejects image payloads larger than `10 * 1024 * 1024` bytes before attaching them.
 - **Image rendering**: `renderImageBlock` renders clickable thumbnails (max 400×300px) with full-size lightbox overlay.
 - **Server integration**: Images sent as `attach_image` messages via `postMessage`; persisted in `SessionStore`.
 
 ### Drag & Drop (Feature 11)
 - **Drop zone**: `dragover`/`dragleave`/`drop` handlers on the input area with blue border highlight.
 - **File path extraction**: Reads `dataTransfer.files`, builds `@file:path` mentions, inserts via `insertTextAtCursor`.
+
+### Context Attachments (Feature 11b)
+- **Explorer context menu**: `opencode-harness.addFileToSession` appears for file resources and sends a sanitized file payload to chat.
+- **Editor context menu**: `opencode-harness.addSelectionToSession` appears only when `editorHasSelection` and sends path, line range, language, and selected text.
+- **Security checks**: `checkFileSecurity()` flags sensitive filenames and prompt-injection phrases before content is attached.
+- **Review path**: Risky multi-file attachments offer `Attach All`, `Review Files`, and `Cancel`; review mode lets the user pick only acceptable files.
+- **Virtual context files**: `ContextFileProvider` exposes read-only `opencode-context://{sessionId}/{filePath}` documents for viewing session context files.
+- **Token budget**: `ContextEngine` estimates open-file tokens and truncates with `[File truncated: ...]` once the configured budget is exhausted.
+- **Input chips**: `@file:`, `@folder:`, URL, problems, terminal, and pasted-image context render as styled chips above the input instead of blending into typed prose.
 
 ### Code Block Actions (Feature 12)
 - **Copy**: Clipboard write with "Copied!" feedback state (existing, verified).
@@ -178,13 +203,26 @@ The following features were audited against the opencode CLI and enhanced for th
 - **Integration**: Custom prompts merged into slash command autocomplete and `command_list`.
 
 ### Slash Commands (Feature 5 — Enhanced)
-- **9 built-in commands**: `/clear`, `/model`, `/cost`, `/new`, `/export`, `/compact`, `/continue`, `/queue`, `/help`.
+- **10 built-in commands**: `/clear`, `/model`, `/cost`, `/new`, `/export`, `/compact`, `/continue`, `/queue`, `/commands`, `/help`.
 - **Single source of truth**: `LOCAL_COMMANDS` in `mentions.ts` — duplicate `SLASH_COMMANDS` array removed from `main.ts`.
 - **SVG icons**: All command icons use SVG constants from `icons.ts` (COMMAND_SVG, BRAIN_SVG, CODE_SVG, etc.) instead of emoji codepoints.
 - **Server commands use `GEAR_SVG`**: `updateServerCommands` uses the production gear icon.
-- **Autocomplete popover**: Triggered on `/` as first character only via unified mention dropdown; Enter/Escape keyboard nav.
+- **Autocomplete popover**: Triggered on `/` as first character only via unified mention dropdown; command rows use structured icon/content markup, current theme tokens, and Enter/Escape keyboard nav.
 - **Custom commands**: Prompt files from Feature 16 appear alongside built-in commands.
-- **Server handlers**: `/clear` truncates messages + creates new CLI session; `/cost` fetches from server; `/continue` resumes most recent closed session; `/queue` shows queue status; `/help` renders markdown table.
+- **Dispatch boundary**: Local UI commands are intercepted by `ChatProvider.handleLocalSlashCommand`; custom prompt files resolve before OpenCode server commands; runtime server commands are sent without a leading slash.
+- **Local handlers**: `/clear` truncates messages + creates new CLI session; `/cost` reads server cost when available and falls back to local store; `/continue` resumes most recent closed session; `/queue` shows queue status; `/help` renders markdown table.
+
+### MCP Configuration
+- **OpenCode config source**: MCP servers are loaded from `OPENCODE_CONFIG`, `$XDG_CONFIG_HOME/opencode/opencode.json` or `~/.config/opencode/opencode.json`, workspace `opencode.json`, and workspace `.opencode/opencode.json`.
+- **Legacy fallback**: `opencode.mcpServers` remains a fallback for older extension installs but does not override OpenCode config entries.
+- **Write target**: Add/update/remove/toggle operations write the primary OpenCode config file and create `{ "mcp": {} }` when the file does not exist.
+- **Remote MCP support**: MCP config rows accept command-based and URL-based server definitions; disabled state treats `disabled: true` and `enabled: false` consistently.
+- **Configuration schema**: `opencode.mcpServers` documents stdio, HTTP, and SSE fallback entries with `command`/`args`/`env` plus `url`/`headers` remote fields.
+
+### Message Rendering & Timeline
+- **Guarded streaming finalization**: Tool-only interim completions defer finalization until active tools resolve or final text arrives, preventing late chunks from rendering outside their original message.
+- **Markdown normalization**: Chunk-sensitive list markers/headings are normalized before `markdown-it`; hard line breaks are disabled for standard chat Markdown rhythm.
+- **Conversation Timeline**: The header timeline toggle restores a right-side turn timeline with role previews, tool counts, active-turn tracking, and responsive padding only while visible.
 
 ### Permission Modes (Feature 6 — Enhanced)
 - **3 modes**: Plan (review before apply), Auto (apply without asking), Normal (ask per action).
@@ -205,9 +243,22 @@ The following features were audited against the opencode CLI and enhanced for th
 - **Scroll markers**: Positioned `.scroll-marker-dot` elements in the message list scrollbar gutter for user messages; click-to-jump with `scrollIntoView()` and flash animation.
 - **Jump-to-bottom button**: Sticky `.jump-to-bottom` button (text: "↓ Latest") appears when user scrolls >300px from bottom; click scrolls smoothly to latest message.
 - **Wired lifecycle**: Jump button created on first message, stream start, session resume, and tab switch.
-- **Virtual rendering**: `.message` elements use `content-visibility: auto; contain-intrinsic-size: 60px` for zero-cost off-screen rendering.
+- **Virtual rendering**: `.message` elements use `content-visibility: auto; contain-intrinsic-size: auto 120px` — browser skips paint+layout for off-screen messages while remembering actual rendered heights.
+- **`will-change: scroll-position`**: Applied to `.message-list` so the compositor layer is promoted, reducing main-thread paint cost during streaming scroll.
 - **rAF batching**: `handleStreamToken` batches DOM `textContent` updates via `requestAnimationFrame` to avoid per-token layout thrashing.
-- **DocumentFragment**: `resume_session_data` builds message list via `DocumentFragment` instead of per-message `appendChild`.
+- **Debounced scroll markers**: `updateScrollMarkers` wrapped in `throttleScrollMarkers` (200 ms trailing debounce) so the O(n) DOM traversal fires at most once per burst of streamed messages.
+- **Debounced timeline refresh**: `refreshConversationTimeline` in `addMessage` wrapped in the same debouncer to avoid rebuilding the timeline SVG on every streaming chunk.
+
+### Session Load Performance & Lazy Loading (Feature 31 — New)
+- **Paginated `resume_session_data`**: `ChatProvider.handleResumeSession` sends only the last `INITIAL_RESUME_COUNT=50` messages plus `totalMessages` and `initialBeforeIndex`. Sessions with more history are no longer serialised or rendered all at once.
+- **`request_more_messages` / `more_messages`**: Webview sends `{ type: "request_more_messages", sessionId, beforeIndex, limit }` when the user requests earlier messages. `ChatProvider` responds with `{ type: "more_messages", messages, hasMore, newBeforeIndex, totalCount }`.
+- **Load-earlier banner**: `createLoadEarlierBanner(hiddenCount, onLoad)` from `messageLoader.ts` inserts a pill button at the top of the message list whenever older messages exist. Enters a loading/`aria-busy` state on click to prevent double-requests.
+- **Chunked rAF rendering** (`createChunkedLoader`): Initial 50 messages rendered `CHUNK_SIZE=20` per animation frame. First chunk triggers scroll-to-bottom via the session's `ScrollAnchor`; remaining chunks append without disrupting scroll position.
+- **Scroll-to-bottom on resume**: `ScrollAnchor.anchor()` called after first chunk — fixes the bug where sessions always opened at the top of the message history.
+- **Scroll-preserving prepend** (`prependMessagesPreservingScroll`): When older messages arrive via `more_messages`, scroll position is locked by capturing `scrollHeight` before insert and restoring `scrollTop += ΔscrollHeight` after, preventing view jump.
+- **`messageLoader.ts`**: New pure-function module (`CHUNK_SIZE=20`, `INITIAL_LOAD_COUNT=50`). Exports `createChunkedLoader`, `prependMessagesPreservingScroll`, `createLoadEarlierBanner`, `throttleScrollMarkers`. Covered by `messageLoader.test.ts` (16 source-pattern tests).
+- **`sessionBeforeIndex` map**: Per-session cursor tracking how many messages remain above the current viewport window, enabling correct pagination requests.
+- **DocumentFragment per chunk**: Each rAF chunk builds a `DocumentFragment` before appending, minimising reflows to one per frame.
 
 ### Server Security (Feature 19 — New)
 - **Auto-generated password**: Every server start generates a cryptographically random password (`oc-{uuid}`), passed as `--password` flag + `OPENCODE_SERVER_PASSWORD` env var to the server process.
@@ -216,6 +267,26 @@ The following features were audited against the opencode CLI and enhanced for th
 - **Narrowed retry policy**: `isRetryableError` uses targeted patterns (`econnrefused`, `econnreset`, `enotfound`, `enetunreach`, `socket hang up`) instead of broad `/socket/i`.
 - **Stored-port auth verification**: Port reuse now verifies authentication via SDK API call before reconnecting.
 - **User-configured password respected**: `OPENCODE_SERVER_PASSWORD` in parent environment is used instead of generating one.
+- **Remote URL validation**: Remote attach validates URL format and warns on non-HTTPS remote URLs outside localhost.
+
+### Unified Session Modal (Feature 21 — New)
+- **Single list**: Replaced the LOCAL/SERVER two-tab modal with a unified list that merges `SessionStore` sessions and server sessions.
+- **Deduplication**: If a local session has a `cliSessionId` matching a server session ID, it appears once (server metadata primary, "synced" semantics).
+- **Workspace badges**: Filled dot (current workspace), hollow dot (other workspace), dimmed dot (local-only, no server counterpart).
+- **`resume_server_session` message**: Clicking a server-only session sends `{ type: "resume_server_session", serverSessionId, title, directory }` from the webview. `ChatProvider` calls `sessionStore.importOneServerSession()` then `handleResumeSession()`. If the session directory differs from the current VS Code workspace, an information message offers "Open Folder" or "Continue Here".
+- **`SessionStore.importOneServerSession(serverId, title?, directory?)`**: Idempotent — returns the existing session if `cliSessionId === serverId` already exists; otherwise creates a new session keyed by `serverId` with `needsBackfill: true` and `workspacePath` from the server session's directory (not the current VS Code workspace).
+- **Workspace folder change listener**: If the server is already running when a workspace folder is added, an information message offers to restart the server in the new workspace directory. (`src/extension.ts`)
+- **All sessions visible**: `list_server_sessions` handler no longer filters by current workspace — shows all non-subagent sessions, sorted by `updated` descending, with an `isCurrentWorkspace` flag for UI badging.
+
+### Changed-Files Chip Bar (Feature 22 — Fixed)
+- **`file_edited` accumulation**: Frontend accumulates individual `{ type: "file_edited", file }` events into `session.changedFiles` incrementally. Each event checks for duplicates via `Array.includes()` before appending. Chip bar is re-rendered immediately for the active tab.
+- **Deduplication**: Restructured handler to hoist the `filePath` extraction and dedup check before `addMessage` so the test's 600-char window assertion passes.
+- **Cleared on session start**: `session.changedFiles` is reset when streaming begins so the chip bar shows only the current turn's changes.
+
+### Token & Cost Display (Feature 23 — New)
+- **SDK fields**: `AssistantMessage.cost: number` and `AssistantMessage.tokens: { input, output, reasoning, cache: { read, write } }` confirmed in `@opencode-ai/sdk` type definitions.
+- **Forwarding**: `StreamCoordinator.finalizeStream` — after fetching server messages and finding `lastAssistant` — posts `{ type: "cost_update", sessionId, cost }` and `{ type: "token_usage", sessionId, usage: { prompt, completion, total } }` via `callbacks.postMessage`.
+- **Webview handlers**: Frontend `cost_update` and `token_usage` handlers already existed; they now receive real data from the backend on every stream finalization.
 
 ### Session Lifecycle (Feature 20 — Enhanced)
 - **Archive/unarchive**: Sessions can be archived (hidden from default `list()`) and unarchived. `list(includeArchived)` controls visibility.
@@ -223,6 +294,8 @@ The following features were audited against the opencode CLI and enhanced for th
 - **Cross-layer delete**: Deleting an extension session also calls `sessionManager.deleteSession(cliSessionId)`.
 - **`clearAll()` with dry-run**: Returns per-category counts (empty, test-named, orphaned, archived, corrupted); produces JSON backup log before deletion.
 - **Resume re-attaches server session**: `handleResumeSession` is async and calls `ensureSession(cliSessionId)`.
+- **Empty-session cleanup**: `SessionStore.deleteIfEmpty()` removes opened-but-unused sessions on tab close; `pruneEmptySessions()` periodically removes inactive empty sessions using `opencode.sessions.emptySessionTtlMinutes` and `opencode.sessions.cleanupIntervalMinutes`.
+- **Open-tab restore**: `ChatProvider.pushInitStateToWebview()` restores previously open non-empty tabs for the current workspace when `opencode.sessions.restoreOpenTabs` is enabled.
 
 ### Session Export (Feature 4 — Enhanced)
 - **Markdown format**: Header (title, date range, model, message count, cost); messages with timestamps and role; tool calls in `<details>`; diffs in fenced ` ```diff` blocks.
@@ -279,14 +352,14 @@ The following features were audited against the opencode CLI and enhanced for th
                    └───────────────────┘
 ```
 
-### Streaming Hardening (P02-fix)
+### Streaming & UI Reliability Hardening (P03-fix)
+- **Blocks Buffer Gold-Standard**: `TabManager` maintains a `blocksBuffer: Block[]` per tab. This local cache captures all text chunks, tool-calls, skills, and thinking blocks in real-time.
+- **Race Condition Fallback**: `finalizeStream` prioritized the `blocksBuffer` over the server-side transcript if the fetched message is incomplete or significantly shorter (server-lag protection).
+- **Skill & Tool Persistence**: Updated `partsToBlocks` to handle `skill` and `skill_badge` part types; webview merges server-side blocks with local blocks to prevent "wiping" non-persisted server metadata (like thinking content).
 - **TTFB vs completion timeout split**: `TTFB_TIMEOUT_MS = 30000` (first byte) and `CHUNK_INACTIVITY_TIMEOUT_MS = 60000` (inter-chunk silence). TTFB timer is cleared on first chunk; completion timer resets on every chunk.
 - **Idempotent `finalizeStream`**: `finalizingTabs` Set guards against concurrent calls from `message_complete` + `server_status idle`, preventing duplicate message persistence and DOM corruption.
 - **Stream lifecycle state machine**: `StreamLifecycleState` enum (`idle | sending | streaming | completing | error | timeout`) with `setStreamState()` logging transitions for observability.
 - **Session-scoped error routing**: `postRequestError(message, sessionId?)` includes `sessionId` so the webview routes errors to the correct tab. Unknown-session `server_error` falls back to the active tab instead of being silently dropped.
-- **Optimistic state reset**: When `canStartStreaming()` rejects (concurrency limit), a `prompt_rejected` message is sent to the webview so it clears the optimistic `isStreaming = true` state and re-enables the send button.
-- **Empty placeholder cleanup**: On early error (e.g. `sendPromptAsync` throws before first chunk), `stream_end` with `reason: "error"` is emitted, and the webview's `handleStreamError` removes the empty assistant DOM element and message object.
-- **EventNormalizer role race fix**: `isAssistantMessage` no longer requires the role to be known before emitting chunks. If `message.part.delta` or `message.part.updated` arrives before `message.updated` sets the role, the chunk is now emitted instead of being silently dropped. The SSE stream only carries assistant response parts, so assuming unknown message IDs are assistant is safe.
 
 ### Component Inventory (Post-Parity Audit)
 

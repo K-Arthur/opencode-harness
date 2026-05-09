@@ -10,11 +10,10 @@ describe("state.ts", () => {
     assert.ok(source.includes("export function createState"))
   })
 
-  it("defines DEFAULT_STATE with sessions, activeSessionId, nextSessionNum, globalModel, initialized", () => {
+  it("defines DEFAULT_STATE with sessions, activeSessionId, globalModel, initialized", () => {
     assert.ok(source.includes("DEFAULT_STATE"))
     assert.ok(source.includes("sessions: {}"))
     assert.ok(source.includes("activeSessionId: null"))
-    assert.ok(source.includes("nextSessionNum: 1"))
     assert.ok(source.includes("globalModel"))
     assert.ok(source.includes("initialized"))
   })
@@ -50,13 +49,20 @@ describe("state.ts", () => {
     const methods = [
       "getState", "save", "flush", "restore", "clear",
       "createSession", "ensureSession", "getSession", "getActiveSession",
-      "setActiveSession", "deleteSession", "renameSession",
-      "setSessionModel", "setSessionMode", "setStreaming", "appendMessage",
-      "getAllSessions", "getSessionCount", "setGlobalModel",
-      "loadSessions", "setInitialized", "isInitialized",
-    ]
+	      "setActiveSession", "deleteSession", "renameSession",
+	      "setSessionModel", "setSessionMode", "setStreaming", "appendMessage",
+	      "getAllSessions", "getSessionCount", "setGlobalModel",
+	      "loadSessions", "setInitialized", "isInitialized",
+	      "toggleModelFavorite", "touchRecentModel", "applyModelState",
+	    ]
     methods.forEach(m => {
       assert.ok(source.includes(m), `Missing method ${m} in return object`)
-    })
-  })
+	  })
+
+	  it("tracks model favorites and recents for selector sorting", () => {
+	    assert.ok(source.includes("favoriteModels"), "must persist favorite models")
+	    assert.ok(source.includes("recentModels"), "must persist recent models")
+	    assert.ok(source.includes("recentRank"), "must annotate models with recent rank")
+	  })
+	})
 })

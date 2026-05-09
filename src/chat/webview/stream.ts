@@ -25,6 +25,7 @@ import {
   hideTypingIndicator,
   stripContextFromText,
   reRenderMessage,
+  handleSkillIndicator,
 } from "./streamHandlers"
 
 // Re-export for backward compatibility with tests
@@ -38,9 +39,10 @@ export interface StreamHandlers {
   handleStreamEnd: (messageId?: string, blocks?: unknown) => void
   handleStreamError: (error: { code: string; message: string; detail?: string; retryable?: boolean }) => void
   handleRequestError: (message?: string) => void
-  handleToolStart: (toolCall: { id: string; name: string; class?: string; args?: unknown }) => void
-  handleToolUpdate: (toolId: string, update: { state?: ToolCallState; result?: string; error?: string }) => void
-  handleToolEnd: (toolId: string, result: { ok: boolean; result?: string; durationMs?: number }) => void
+  handleToolStart: (toolCall: { id: string; name: string; class?: string; args?: unknown; state?: ToolCallState }) => void
+  handleToolUpdate: (toolId: string, update: { state?: ToolCallState; result?: string; error?: string; args?: unknown }) => void
+  handleToolEnd: (toolId: string, result: { ok: boolean; result?: string; durationMs?: number; stale?: boolean }) => void
+  handleSkillIndicator: (skillName: string) => void
   handleDiff: (diff: { diffId: string; path: string; hunks: DiffHunk[]; linesAdded: number; linesRemoved: number }) => void
   handleDiffResult: (blockId?: string, ok?: boolean, message?: string) => void
   handleServerStatus: (status?: string) => void
@@ -96,6 +98,8 @@ class StreamSession implements StreamHandlers {
       currentBlockBuffer: "",
       currentBlockIndex: -1,
       rafPending: false,
+      renderQueue: null,
+      chunkSeq: 0,
     }
     this.els = { messageList, typingIndicator, typingLabel, scrollAnchor }
     this.messages = messages
@@ -121,7 +125,7 @@ class StreamSession implements StreamHandlers {
   }
 
   handleStreamChunk(text?: string): void {
-    handleStreamChunk(this.state, this.els, this.messages, text)
+    handleStreamChunk(this.state, this.els, this.messages, text, this.saveState)
   }
 
   handleStreamEnd(messageId?: string, blocks?: unknown): void {
@@ -139,16 +143,21 @@ class StreamSession implements StreamHandlers {
     this.callbacks?.onStreamingChange?.(false)
   }
 
-  handleToolStart(toolCall: { id: string; name: string; class?: string; args?: unknown }): void {
+  handleToolStart(toolCall: { id: string; name: string; class?: string; args?: unknown; state?: ToolCallState }): void {
     handleToolStart(this.state, this.els, this.messages, toolCall)
   }
 
-  handleToolUpdate(toolId: string, update: { state?: ToolCallState; result?: string; error?: string }): void {
+  handleToolUpdate(toolId: string, update: { state?: ToolCallState; result?: string; error?: string; args?: unknown }): void {
     handleToolUpdate(this.els, toolId, update)
   }
 
-  handleToolEnd(toolId: string, result: { ok: boolean; result?: string; durationMs?: number }): void {
+  handleToolEnd(toolId: string, result: { ok: boolean; result?: string; durationMs?: number; stale?: boolean }): void {
     handleToolEnd(this.els, toolId, result)
+    if (this.state.streamingToolCallId === toolId) this.state.streamingToolCallId = null
+  }
+
+  handleSkillIndicator(skillName: string): void {
+    handleSkillIndicator(this.state, this.els, this.messages, skillName)
   }
 
   handleDiff(diff: { diffId: string; path: string; hunks: DiffHunk[]; linesAdded: number; linesRemoved: number }): void {

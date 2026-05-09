@@ -8,43 +8,91 @@ const DEFAULT_STATE: WebviewState = {
   globalModel: "",
   globalVariant: "",
   initialized: false,
+  isTimelineVisible: false,
+  disabledModels: [],
+  favoriteModels: [],
+  recentModels: [],
 }
 
-  function migrateState(old: any): WebviewState {
-    // Already migrated
-    if (old && old.sessions) return old as WebviewState
+function withDefaults(candidate: Partial<WebviewState>): WebviewState {
+  return {
+    ...DEFAULT_STATE,
+    ...candidate,
+    sessions: candidate.sessions || {},
+    sessionOrder: candidate.sessionOrder || [],
+    disabledModels: candidate.disabledModels || [],
+    favoriteModels: candidate.favoriteModels || [],
+    recentModels: candidate.recentModels || [],
+    displayPrefs: candidate.displayPrefs,
+  }
+}
 
-    // Old format: { messages, currentMode, currentSessionId }
-    const sessionId = old?.currentSessionId || "session-1"
-    const oldMode = old?.currentMode || "normal"
-    // Migrate old "normal" mode to "build" (new naming)
-    const mode = oldMode === "normal" ? "build" : oldMode
-    const session: SessionState = {
-      id: sessionId,
-      name: "Session 1",
-      model: "",
-      mode,
-      messages: old?.messages || [],
-      isStreaming: false,
-    }
+function migrateState(old: any): WebviewState {
+  // Already migrated
+  if (old && old.sessions) return withDefaults(old as Partial<WebviewState>)
 
-    return {
-      sessions: { [sessionId]: session },
-      sessionOrder: [sessionId],
-      activeSessionId: sessionId,
-      nextSessionNum: 2,
-      globalModel: "",
-    }
+  // Old format: { messages, currentMode, currentSessionId }
+  const sessionId = old?.currentSessionId || "session-1"
+  const oldMode = old?.currentMode || "normal"
+  // Migrate old "normal" mode to "build" (new naming)
+  const mode = oldMode === "normal" ? "build" : oldMode
+  const session: SessionState = {
+    id: sessionId,
+    name: "Session 1",
+    model: "",
+    mode,
+    messages: old?.messages || [],
+    isStreaming: false,
   }
 
+  return withDefaults({
+    sessions: { [sessionId]: session },
+    sessionOrder: [sessionId],
+    activeSessionId: sessionId,
+    nextSessionNum: 2,
+    globalModel: "",
+  })
+}
+
 export function createState(vscode: VsCodeApi) {
-  let state: WebviewState = DEFAULT_STATE
+  let state: WebviewState = withDefaults({})
   let saveTimer: ReturnType<typeof setTimeout> | null = null
-  const SAVE_DEBOUNCE_MS = 300 // Debounce state saves
+  const SAVE_DEBOUNCE_MS = 300
+  const MAX_STATE_BYTES = 2 * 1024 * 1024
+  const MAX_MESSAGES_PER_SESSION = 200
+
+  function pruneOversizedState(): void {
+    try {
+      const size = JSON.stringify(state).length
+      if (size <= MAX_STATE_BYTES) return
+
+      const sessionsByAge = state.sessionOrder
+        .map(id => state.sessions[id])
+        .filter((s): s is SessionState => !!s && !s.isStreaming)
+        .sort((a, b) => (a.lastActiveAt || 0) - (b.lastActiveAt || 0))
+
+      for (const session of sessionsByAge) {
+        if (session.messages.length > MAX_MESSAGES_PER_SESSION) {
+          session.messages = session.messages.slice(-MAX_MESSAGES_PER_SESSION)
+        }
+        if (JSON.stringify(state).length <= MAX_STATE_BYTES) return
+      }
+
+      for (const session of sessionsByAge) {
+        if (session.messages.length > 50) {
+          session.messages = session.messages.slice(-50)
+        }
+        if (JSON.stringify(state).length <= MAX_STATE_BYTES) return
+      }
+    } catch {
+      // If pruning fails, save anyway — better a large save than data loss
+    }
+  }
 
   function save() {
     if (saveTimer) clearTimeout(saveTimer)
     saveTimer = setTimeout(() => {
+      pruneOversizedState()
       vscode.setState(state)
       saveTimer = null
     }, SAVE_DEBOUNCE_MS)
@@ -56,6 +104,7 @@ export function createState(vscode: VsCodeApi) {
       clearTimeout(saveTimer)
       saveTimer = null
     }
+    pruneOversizedState()
     vscode.setState(state)
   }
 
@@ -69,7 +118,7 @@ export function createState(vscode: VsCodeApi) {
   }
 
   function clear() {
-    state = { ...DEFAULT_STATE }
+    state = withDefaults({})
   }
 
   function getState(): WebviewState {
@@ -78,17 +127,15 @@ export function createState(vscode: VsCodeApi) {
 
   function createSession(name?: string, model?: string): SessionState {
     const id = `session-${crypto.randomUUID().slice(0, 8)}`
-    const sessionName = name || `Session ${state.nextSessionNum}`
     const session: SessionState = {
       id,
-      name: sessionName,
+      name: name || "",
       model: model || state.globalModel || "",
       mode: "build",
       messages: [],
       isStreaming: false,
     }
     state.sessions[id] = session
-    state.nextSessionNum++
 
     // Insert new session to the right of the active one
     if (state.activeSessionId && state.sessionOrder.includes(state.activeSessionId)) {
@@ -171,6 +218,7 @@ export function createState(vscode: VsCodeApi) {
     const session = state.sessions[id]
     if (!session) return false
     session.model = model
+    touchRecentModel(model)
     save()
     return true
   }
@@ -255,6 +303,7 @@ export function createState(vscode: VsCodeApi) {
 
   function setGlobalModel(model: string) {
     state.globalModel = model
+    touchRecentModel(model)
     save()
   }
 
@@ -284,6 +333,15 @@ export function createState(vscode: VsCodeApi) {
     return state.initialized || false
   }
 
+  function setTimelineVisible(visible: boolean) {
+    state.isTimelineVisible = visible
+    save()
+  }
+
+  function isTimelineVisible(): boolean {
+    return state.isTimelineVisible || false
+  }
+
   function isModelDisabled(modelId: string): boolean {
     return state.disabledModels?.includes(modelId) ?? false
   }
@@ -302,15 +360,57 @@ export function createState(vscode: VsCodeApi) {
     }
   }
 
-  function applyDisabledState(models: import("./types").ModelInfo[]): import("./types").ModelInfo[] {
-    if (!state.disabledModels || state.disabledModels.length === 0) return models
+  function toggleModelFavorite(modelId: string): boolean {
+    if (!state.favoriteModels) state.favoriteModels = []
+    const idx = state.favoriteModels.indexOf(modelId)
+    if (idx >= 0) {
+      state.favoriteModels.splice(idx, 1)
+      save()
+      return false
+    }
+    state.favoriteModels.unshift(modelId)
+    save()
+    return true
+  }
+
+  function isModelFavorite(modelId: string): boolean {
+    return state.favoriteModels?.includes(modelId) ?? false
+  }
+
+  function touchRecentModel(modelId: string): void {
+    if (!modelId) return
+    if (!state.recentModels) state.recentModels = []
+    const idx = state.recentModels.indexOf(modelId)
+    if (idx >= 0) state.recentModels.splice(idx, 1)
+    state.recentModels.unshift(modelId)
+    state.recentModels.splice(10)
+  }
+
+  function getModelPreferences(): { favoriteModels: string[]; recentModels: string[] } {
+    return {
+      favoriteModels: [...(state.favoriteModels || [])],
+      recentModels: [...(state.recentModels || [])],
+    }
+  }
+
+  function applyModelState(models: import("./types").ModelInfo[]): import("./types").ModelInfo[] {
+    const disabled = new Set(state.disabledModels || [])
+    const favorites = new Set(state.favoriteModels || [])
+    const recent = state.recentModels || []
     return models.map((m) => {
       const fullId = `${m.provider}/${m.id}`
-      if (state.disabledModels!.includes(fullId)) {
-        return { ...m, enabled: false }
+      const recentRank = recent.indexOf(fullId)
+      return {
+        ...m,
+        enabled: disabled.has(fullId) ? false : m.enabled,
+        favorite: favorites.has(fullId),
+        recentRank: recentRank >= 0 ? recentRank : undefined,
       }
-      return m
     })
+  }
+
+  function applyDisabledState(models: import("./types").ModelInfo[]): import("./types").ModelInfo[] {
+    return applyModelState(models)
   }
 
   return {
@@ -341,6 +441,28 @@ export function createState(vscode: VsCodeApi) {
     isInitialized,
     isModelDisabled,
     setModelDisabled,
+    toggleModelFavorite,
+    isModelFavorite,
+    touchRecentModel,
+    getModelPreferences,
+    applyModelState,
     applyDisabledState,
+    setTimelineVisible,
+    isTimelineVisible,
+    addChangedFile(id: string, filePath: string) {
+      const session = state.sessions[id]
+      if (!session) return
+      if (!session.changedFiles) session.changedFiles = []
+      if (!session.changedFiles.includes(filePath)) {
+        session.changedFiles.push(filePath)
+        save()
+      }
+    },
+    updateTokenUsage(id: string, usage: { prompt: number; completion: number; total: number }) {
+      const session = state.sessions[id]
+      if (!session) return
+      session.tokenUsage = usage
+      save()
+    }
   }
 }
