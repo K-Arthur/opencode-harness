@@ -1,5 +1,5 @@
 export interface SdkEventNormalizer {
-  normalize: (event: import("./eventHandlers/types").SdkEventLike) => import("./eventHandlers/types").NormalizedOpencodeEvent[]
+  normalize: (event: SdkEventLike) => NormalizedOpencodeEvent[]
 }
 
 import { EventHandler, NormalizedOpencodeEvent, SdkEventLike, PartLike, NormalizerContext } from "./eventHandlers/types"
