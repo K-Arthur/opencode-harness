@@ -4,7 +4,7 @@ import { SessionManager } from "../session/SessionManager"
 import { SessionStore } from "../session/SessionStore"
 import { ContextEngine } from "../context/ContextEngine"
 import { ContextMonitor } from "../monitor/ContextMonitor"
-import { ThemeManager, type OpencodeTheme, type ThemePreset } from "../theme/ThemeManager"
+import { ThemeManager } from "../theme/ThemeManager"
 import { RateLimitMonitor } from "../monitor/RateLimitMonitor"
 import { ModelManager } from "../model/ModelManager"
 import { CheckpointManager } from "../checkpoint/CheckpointManager"
@@ -24,6 +24,8 @@ import { AutoCompactor } from "./AutoCompactor"
 import { ChatFileOps } from "./ChatFileOps"
 import { ChunkBatcher } from "./ChunkBatcher"
 import { McpServerManager } from "../mcp/McpServerManager"
+import { ThemeController } from "./ThemeController"
+import { StatePushService } from "./StatePushService"
 
 export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   private _view?: vscode.WebviewView
@@ -39,8 +41,10 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private pendingPrompt?: { text: string; autoSend: boolean }
   private pendingOpenSessionId?: string
   private chatCommands: ChatCommands
-  private autoCompactor: AutoCompactor
+private autoCompactor: AutoCompactor
   private fileOps = new ChatFileOps()
+  private themeController: ThemeController
+  private statePush: StatePushService
   private restoredTabsHydrated = false
 
   /** H3: Queue of messages buffered before webview was ready */
@@ -79,6 +83,12 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     this.messageRouter = new MessageRouter(sessionManager, modelManager)
     this.chatCommands = new ChatCommands(sessionStore, sessionManager, this.tabManager, this.streamCoordinator)
     this.autoCompactor = new AutoCompactor(sessionManager, sessionStore, contextMonitor, this.tabManager)
+    this.themeController = new ThemeController(themeManager, (msg) => this.postMessage(msg))
+    this.statePush = new StatePushService({
+      postMessage: (msg) => this.postMessage(msg),
+      tabManager: this.tabManager,
+      sessionStore: this.sessionStore,
+    })
 
     // Subscribe to session store changes to keep webview and server in sync
     this.sessionStore.onDidChangeSession((change) => {
@@ -150,7 +160,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
           this.contextMonitor.setTokenLimit(override > 0 ? override : ctxWindow)
         }
       }),
-      this.themeManager.onThemeChanged(() => this.pushThemeToWebview()),
+      this.themeManager.onThemeChanged(() => this.themeController.pushThemeToWebview()),
       this.rateLimitMonitor.onStateChanged(() => this.pushRateLimitStateToWebview()),
       this.rateLimitMonitor.onReset(() => this.pushRateLimitStateToWebview()),
       this.rateLimitMonitor.onWarning((msg) => vscode.window.showWarningMessage(msg)),
@@ -609,10 +619,10 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       }
     }],
     ["get_theme_config", () => {
-      this.pushThemeConfigToWebview()
+      this.themeController.pushThemeConfigToWebview()
     }],
     ["update_theme_config", async (msg: Record<string, unknown>) => {
-      await this.handleUpdateThemeConfig(msg.theme)
+      await this.themeController.handleUpdateThemeConfig(msg.theme)
     }],
     ["list_cli_themes", () => {
       const themes = this.themeManager.discoverCliThemes()
@@ -653,7 +663,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         return
       }
     }
-    if (msg.type === "update_theme_config" && !this.isValidThemeConfigPayload(msg.theme)) {
+    if (msg.type === "update_theme_config" && !this.themeController.isValidThemeConfigPayload(msg.theme)) {
       log.warn("Rejected invalid theme config payload")
       return
     }
@@ -884,50 +894,36 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     })
   }
 
-  private async handleExecuteCommand(sessionId?: string, command?: string, args?: string): Promise<void> {
-    if (!sessionId || !command) return
-
-    const rawCommand = command.trim()
-    const commandName = rawCommand.replace(/^\//, "").toLowerCase()
-
-    if (await this.handleLocalSlashCommand(sessionId, commandName)) {
-      return
-    }
-
-    // Check if this is a custom prompt command
-    const customPrompt = this.promptManager.getPrompt(commandName)
-    if (customPrompt) {
-      const resolved = await this.resolveCustomPromptVariables(commandName)
-      if (resolved) {
-        this.sendPromptToWebview(resolved, true)
+  private parseCommandResult(result: unknown, sessionId: string): Block[] {
+    const blocks: Block[] = []
+    const parts = (result as { parts?: unknown[] }).parts || []
+    for (const part of parts) {
+      const p = part as { type?: string; text?: string; tool?: string; state?: { output?: string; error?: string } }
+      if (p.type === "text" && p.text) {
+        blocks.push({ type: "text", text: p.text })
+      } else if (p.type === "tool") {
+        blocks.push({
+          type: "tool_call",
+          toolName: p.tool || "unknown",
+          result: p.state?.output ?? p.state?.error ?? "",
+          state: p.state?.error ? "error" : "completed",
+        })
       }
-      return
     }
+    return blocks
+  }
 
-    const tab = this.tabManager.getTab(sessionId)
-    if (!tab?.cliSessionId || !this.sessionManager.isRunning) {
-      this.postRequestError("Cannot execute command: server not running or session not linked", sessionId)
-      return
-    }
-
+  private async executeRemoteCommand(
+    tab: NonNullable<ReturnType<TabManager["getTab"]>>,
+    sessionId: string,
+    commandName: string,
+    args?: string
+  ): Promise<void> {
     try {
       const modelRef = tab.model ? parseModelRef(tab.model) : undefined
-      const result = await this.sessionManager.sendCommand(tab.cliSessionId, commandName, args)
+      const result = await this.sessionManager.sendCommand(tab.cliSessionId!, commandName, args)
 
-      const blocks: Block[] = []
-      for (const part of result.parts) {
-        const p = part as { type?: string; text?: string; tool?: string; state?: { output?: string; error?: string } }
-        if (p.type === "text" && p.text) {
-          blocks.push({ type: "text", text: p.text })
-        } else if (p.type === "tool") {
-          blocks.push({
-            type: "tool_call",
-            toolName: p.tool || "unknown",
-            result: p.state?.output ?? p.state?.error ?? "",
-            state: p.state?.error ? "error" : "completed",
-          })
-        }
-      }
+      const blocks = this.parseCommandResult(result, sessionId)
 
       if (blocks.length > 0) {
         const assistantMsg: ChatMessage = {
@@ -950,6 +946,34 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       log.error("Command execution failed", err)
       this.postRequestError(message, sessionId)
     }
+  }
+
+  private async handleExecuteCommand(sessionId?: string, command?: string, args?: string): Promise<void> {
+    if (!sessionId || !command) return
+
+    const rawCommand = command.trim()
+    const commandName = rawCommand.replace(/^\//, "").toLowerCase()
+
+    if (await this.handleLocalSlashCommand(sessionId, commandName)) {
+      return
+    }
+
+    const customPrompt = this.promptManager.getPrompt(commandName)
+    if (customPrompt) {
+      const resolved = await this.resolveCustomPromptVariables(commandName)
+      if (resolved) {
+        this.sendPromptToWebview(resolved, true)
+      }
+      return
+    }
+
+    const tab = this.tabManager.getTab(sessionId)
+    if (!tab?.cliSessionId || !this.sessionManager.isRunning) {
+      this.postRequestError("Cannot execute command: server not running or session not linked", sessionId)
+      return
+    }
+
+    await this.executeRemoteCommand(tab, sessionId, commandName, args)
   }
 
   private async handleLocalSlashCommand(sessionId: string, commandName: string): Promise<boolean> {
@@ -1274,84 +1298,25 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     }
   }
 
-  private pushThemeToWebview(): void {
-    const vars = this.themeManager.getThemeVariables()
-    this.postMessage({ type: "theme_vars", vars: vars.customVars })
-  }
-
   private pushModelToWebview(model?: string): void {
-    this.postMessage({ type: "model_update", model: model || this.modelManager.model })
+    this.statePush.pushModelToWebview(model || this.modelManager.model)
   }
 
   private pushModelListToWebview(): void {
     this.messageRouter.getModelList({
-      postMessage: (m) => this.postMessage(m),
-      postRequestError: (m) => this.postRequestError(m),
+      postMessage: (m) => this.statePush.postMessage(m),
+      postRequestError: (m) => this.statePush.postRequestError(m),
     })
   }
 
   private pushMcpServersToWebview(): void {
     this.mcpServerManager.refresh()
     const servers = this.mcpServerManager.getServers()
-    this.postMessage({ type: "mcp_servers", servers })
+    this.statePush.pushMcpServersToWebview(servers)
   }
 
   private pushRateLimitStateToWebview(): void {
-    this.postMessage({
-      type: "rate_limit_state",
-      state: this.rateLimitMonitor.getSerializableState(),
-    })
-  }
-
-  private pushThemeConfigToWebview(): void {
-    this.postMessage({
-      type: "theme_config",
-      theme: this.getThemeConfig(),
-    })
-  }
-
-  private getThemeConfig(): { preset: ThemePreset; overrides: OpencodeTheme } {
-    const configTheme = vscode.workspace.getConfiguration("opencode").get<{ preset?: string; overrides?: OpencodeTheme }>("theme")
-    return this.normalizeThemeConfig(configTheme)
-  }
-
-  private async handleUpdateThemeConfig(theme: unknown): Promise<void> {
-    const nextTheme = this.normalizeThemeConfig(theme)
-    const target = vscode.workspace.workspaceFolders ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global
-    await vscode.workspace.getConfiguration("opencode").update("theme", nextTheme, target)
-    this.themeManager.emitUpdate()
-    this.pushThemeToWebview()
-    this.pushThemeConfigToWebview()
-  }
-
-  private isValidThemeConfigPayload(theme: unknown): boolean {
-    if (!theme || typeof theme !== "object" || Array.isArray(theme)) return false
-    const candidate = theme as { preset?: unknown; overrides?: unknown }
-    if (candidate.preset !== undefined && typeof candidate.preset !== "string") return false
-    if (candidate.overrides !== undefined && (typeof candidate.overrides !== "object" || candidate.overrides === null || Array.isArray(candidate.overrides))) return false
-    if (candidate.overrides && Object.entries(candidate.overrides as Record<string, unknown>).some(([key, value]) =>
-      key.length > 64 || typeof value !== "string" || value.length > 200
-    )) return false
-    return true
-  }
-
-  private normalizeThemeConfig(theme: unknown): { preset: ThemePreset; overrides: OpencodeTheme } {
-    const validPresets = new Set<ThemePreset>(["cli-default", "light", "dark", "high-contrast", "high-contrast-dark", "high-contrast-light"])
-    const source = theme && typeof theme === "object" && !Array.isArray(theme)
-      ? theme as { preset?: unknown; overrides?: unknown }
-      : {}
-    const preset = typeof source.preset === "string" && validPresets.has(source.preset as ThemePreset)
-      ? source.preset as ThemePreset
-      : "cli-default"
-    const overrides: Record<string, string> = {}
-    if (source.overrides && typeof source.overrides === "object" && !Array.isArray(source.overrides)) {
-      for (const [key, value] of Object.entries(source.overrides as Record<string, unknown>)) {
-        if (/^[A-Za-z][A-Za-z0-9]*$/.test(key) && typeof value === "string" && value.trim()) {
-          overrides[key] = value.trim()
-        }
-      }
-    }
-    return { preset, overrides: overrides as OpencodeTheme }
+    this.statePush.pushRateLimitStateToWebview(this.rateLimitMonitor.getSerializableState())
   }
 
   private pushInitStateToWebview(): void {
@@ -1447,8 +1412,8 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     this.pushInitStateToWebview()
     this.pushModelToWebview()
     this.pushModelListToWebview()
-    this.pushThemeToWebview()
-    this.pushThemeConfigToWebview()
+    this.themeController.pushThemeToWebview()
+    this.themeController.pushThemeConfigToWebview()
     this.pushRateLimitStateToWebview()
     this.pushCommandListToWebview()
     if (this.pendingPrompt) {
@@ -1477,13 +1442,13 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
   private pushCommandListToWebview(): void {
     const customCommands = this.promptManager.getPromptCommands()
     if (!this.sessionManager.isRunning) {
-      this.postMessage({ type: "command_list", commands: customCommands })
+      this.statePush.pushCommandListToWebview(customCommands)
       return
     }
     this.sessionManager.listCommands().then((commands) => {
-      this.postMessage({ type: "command_list", commands: [...customCommands, ...commands] })
+      this.statePush.pushCommandListToWebview([...customCommands, ...commands])
     }).catch(() => {
-      this.postMessage({ type: "command_list", commands: customCommands })
+      this.statePush.pushCommandListToWebview(customCommands)
     })
   }
 
@@ -1520,11 +1485,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
   }
 
   private postRequestError(message: string, sessionId?: string): void {
-    this.postMessage({
-      type: "request_error",
-      sessionId,
-      message: this.toUserErrorMessage(message),
-    })
+    this.statePush.postRequestError(this.toUserErrorMessage(message), sessionId)
   }
 
   private toUserErrorMessage(message: string): string {

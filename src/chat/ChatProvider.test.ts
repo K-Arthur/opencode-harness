@@ -89,7 +89,7 @@ void describe("ChatProvider.ts", () => {
     assert.ok(source.includes("handleLocalSlashCommand("), "must check local slash commands first")
     assert.ok(source.includes("case \"cost\""), "must handle /cost locally")
     assert.ok(source.includes("case \"clear\""), "must handle /clear locally")
-    assert.ok(source.includes("sendCommand(tab.cliSessionId, commandName"), "server commands must be sent without a leading slash")
+    assert.ok(source.includes("sendCommand(tab.cliSessionId!, commandName"), "server commands must be sent without a leading slash")
   })
 
   void it("contains toUserErrorMessage with common error patterns", () => {
@@ -447,6 +447,7 @@ void it("set_model handler persists to modelManager even without sessionId", () 
 
 void it("pushes rate-limit state to the webview for the quota bar", () => {
   assert.ok(source.includes("rateLimitMonitor.onStateChanged"), "must subscribe to rate-limit state changes")
-  assert.ok(source.includes('type: "rate_limit_state"'), "must post rate_limit_state messages")
+  const statePushSource = readFileSync(resolve(__dirname, "StatePushService.ts"), "utf8")
+  assert.ok(statePushSource.includes('type: "rate_limit_state"'), "must post rate_limit_state messages")
   assert.ok(source.includes("getSerializableState"), "must serialize rate-limit state before posting")
 })
