@@ -16,7 +16,8 @@ import { randomUUID } from "crypto"
 import { findFreePort } from "../utils/portFinder"
 import { log } from "../utils/outputChannel"
 import { validateServerUrl } from "../utils/security"
-import { createSdkEventNormalizer, type SdkEventLike } from "./EventNormalizer"
+import { createSdkEventNormalizer } from "./EventNormalizer"
+import type { SdkEventLike } from "./types"
 import { SseEventParser, type SseParseResult } from "./sseParser"
 
 /* ------------------------------------------------------------------ */
