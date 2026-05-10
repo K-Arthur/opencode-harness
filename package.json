@@ -259,7 +259,11 @@
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["stdio", "http", "sse"],
+                "enum": [
+                  "stdio",
+                  "http",
+                  "sse"
+                ],
                 "description": "MCP transport type."
               },
               "command": {
@@ -268,12 +272,16 @@
               },
               "args": {
                 "type": "array",
-                "items": { "type": "string" },
+                "items": {
+                  "type": "string"
+                },
                 "description": "Command arguments for stdio MCP servers."
               },
               "env": {
                 "type": "object",
-                "additionalProperties": { "type": "string" },
+                "additionalProperties": {
+                  "type": "string"
+                },
                 "description": "Environment variables for stdio MCP servers."
               },
               "url": {
@@ -282,7 +290,9 @@
               },
               "headers": {
                 "type": "object",
-                "additionalProperties": { "type": "string" },
+                "additionalProperties": {
+                  "type": "string"
+                },
                 "description": "Request headers for remote MCP servers."
               },
               "disabled": {
@@ -702,7 +712,7 @@
     "serialize-javascript": "^7.0.0"
   },
   "dependencies": {
-    "@opencode-ai/sdk": "^1.14.36",
+    "@opencode-ai/sdk": "^1.14.46",
     "@vscode-elements/elements": "^2.5.1",
     "dompurify": "^3.4.2",
     "fast-diff": "^1.3.0",

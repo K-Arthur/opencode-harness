@@ -33,14 +33,31 @@ export function updateContextChips(els: ElementRefs, chips?: ContextChip[]) {
   })
 }
 
-export function updateContextUsage(els: ElementRefs, usage?: { tokens?: number; total?: number; percentage?: number }) {
-  if (usage && (usage.total ?? 0) > 0) {
-    els.contextUsage.classList.remove("hidden")
-    const pct = Math.min(100, Math.round(((usage.tokens ?? 0) / usage.total!) * 100))
-    els.contextProgressBar.setAttribute("value", String(pct))
-    els.contextLabel.textContent = usage.percentage != null ? usage.percentage + "%" : pct + "%"
+export function updateContextUsage(contextMonitorEl: HTMLElement, usage?: { percent: number; tokens: number; maxTokens: number; breakdown?: { system: number; history: number; workspace: number } }) {
+  if (usage && usage.maxTokens > 0) {
+    contextMonitorEl.classList.remove("hidden")
+    const progressFill = contextMonitorEl.querySelector(".context-progress-fill") as HTMLElement
+    const contextText = contextMonitorEl.querySelector(".context-text") as HTMLElement
+    
+    if (progressFill) {
+      progressFill.style.width = `${usage.percent}%`
+      // Update color based on percent
+      progressFill.classList.remove("context-warning", "context-critical")
+      if (usage.percent >= 95) {
+        progressFill.classList.add("context-critical")
+      } else if (usage.percent >= 80) {
+        progressFill.classList.add("context-warning")
+      }
+    }
+    
+    if (contextText) {
+      contextText.textContent = `Context: ${usage.tokens.toLocaleString()} / ${usage.maxTokens.toLocaleString()}`
+      if (usage.breakdown) {
+        contextText.title = `System: ${usage.breakdown.system.toLocaleString()} tok\nHistory: ${usage.breakdown.history.toLocaleString()} tok\nWorkspace: ${usage.breakdown.workspace.toLocaleString()} tok`
+      }
+    }
   } else {
-    els.contextUsage.classList.add("hidden")
+    contextMonitorEl.classList.add("hidden")
   }
 }
 

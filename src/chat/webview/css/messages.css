@@ -349,6 +349,17 @@
   color: var(--oc-fg, var(--color-fg));
 }
 
+.message-token-badge {
+  font-size: var(--text-2xs);
+  color: var(--color-muted);
+  background: var(--oc-list-hover);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  opacity: 0.6;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
 .message-timestamp {
   opacity: 0;
   transition: opacity var(--duration-fast);
@@ -1384,12 +1395,13 @@
 
 /* ─── Scroll marker flash animation ─── */
 @keyframes message-flash {
-  0%, 100% { background: transparent; }
+  0% { background-color: var(--oc-accent-subtle); box-shadow: 0 0 0 4px var(--oc-accent-subtle); }
   50% { background: var(--oc-accent-subtle); }
+  100% { background-color: transparent; box-shadow: 0 0 0 0 transparent; }
 }
 
 .message-flash {
-  animation: message-flash 1.5s ease-out;
+  animation: message-flash 1.5s var(--ease-out);
   border-radius: var(--radius-md);
 }
 

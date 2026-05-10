@@ -158,6 +158,23 @@ export function createTabContent(tabId: string, tabName: string): HTMLElement[] 
   messageList.setAttribute("aria-live", "polite")
 
   view.appendChild(messageList)
+  const contextMonitor = document.createElement("div")
+  contextMonitor.className = "context-monitor hidden"
+  contextMonitor.setAttribute("aria-label", "Context usage")
+  
+  const progressBar = document.createElement("div")
+  progressBar.className = "context-progress-bar"
+  const progressFill = document.createElement("div")
+  progressFill.className = "context-progress-fill"
+  progressBar.appendChild(progressFill)
+  
+  const contextText = document.createElement("span")
+  contextText.className = "context-text"
+  
+  contextMonitor.appendChild(progressBar)
+  contextMonitor.appendChild(contextText)
+  
+  view.appendChild(contextMonitor)
 
   const typingIndicator = document.createElement("div")
   typingIndicator.className = "typing-indicator hidden"

@@ -637,3 +637,49 @@ textarea {
   transform: scale(1.02);
   border-color: var(--oc-accent);
 }
+
+/* ─── Context Monitor ─── */
+.context-monitor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: var(--oc-glass-bg, rgba(128, 128, 128, 0.05));
+  backdrop-filter: blur(var(--oc-glass-blur, 8px));
+  -webkit-backdrop-filter: blur(var(--oc-glass-blur, 8px));
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+.context-monitor.hidden {
+  display: none;
+}
+
+.context-progress-bar {
+  height: 4px;
+  background: var(--oc-list-hover, rgba(128, 128, 128, 0.1));
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.context-progress-fill {
+  height: 100%;
+  background: var(--color-accent, #007acc);
+  width: 0%;
+  transition: width var(--duration-normal) var(--ease-out), background-color var(--duration-normal);
+}
+
+.context-progress-fill.context-warning {
+  background: var(--oc-warning, #d29922);
+}
+
+.context-progress-fill.context-critical {
+  background: var(--oc-error, #f85149);
+}
+
+.context-text {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}

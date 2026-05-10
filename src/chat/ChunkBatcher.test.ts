@@ -55,4 +55,20 @@ void describe("ChunkBatcher", () => {
     assert.equal(received.length, 1)
     assert.equal(received[0]!.text, "pending")
   })
+
+  void it("forwards messageId from add() to flushed delegate", () => {
+    batcher.add("s1", "hello", "msg_abc")
+    batcher.add("s1", " world", "msg_abc")
+    batcher.flush()
+    assert.equal(received.length, 1)
+    assert.equal(received[0]!.messageId, "msg_abc")
+    assert.equal(received[0]!.text, "hello world")
+  })
+
+  void it("uses latest messageId per session when it changes mid-batch", () => {
+    batcher.add("s1", "a", "msg_old")
+    batcher.add("s1", "b", "msg_new")
+    batcher.flush()
+    assert.equal(received[0]!.messageId, "msg_new")
+  })
 })

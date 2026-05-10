@@ -32,9 +32,9 @@ export class AutoCompactor {
     const autoCompact = this.contextMonitor.getAutoCompactSetting()
     if (autoCompact === "off") return
 
-    const now = Date.now()
+const now = Date.now()
     if (now < this.snoozeUntil) return
-    const currentTokens = this.contextMonitor["currentTokens"] || 0
+    const currentTokens = this.contextMonitor.tokensUsed
     if (currentTokens > 0 && currentTokens < this.snoozeTokens + (this.snoozeTokens * 0.05)) return
 
     const doCompact = () => {
@@ -62,8 +62,8 @@ export class AutoCompactor {
     if (autoCompact === "auto") {
       doCompact()
     } else {
-      const usage = this.contextMonitor["currentTokens"] || 0
-      const limit = this.contextMonitor["tokenLimit"] || 100000
+      const usage = this.contextMonitor.tokensUsed
+      const limit = this.contextMonitor.limit
       const pct = Math.round((usage / limit) * 100)
       callbacks.postMessage({
         type: "compact_banner",
@@ -82,8 +82,8 @@ export class AutoCompactor {
       this.compactNow(sessionId, callbacks)
       this.snoozeUntil = 0
     } else if (action === "remind_later") {
-      this.snoozeUntil = Date.now() + 10 * 60 * 1000
-      const currentTokens = (this.contextMonitor as any)["currentTokens"] || 0
+this.snoozeUntil = Date.now() + 10 * 60 * 1000
+      const currentTokens = this.contextMonitor.tokensUsed
       this.snoozeTokens = currentTokens
       callbacks.postMessage({ type: "compact_banner_dismissed", sessionId })
     }

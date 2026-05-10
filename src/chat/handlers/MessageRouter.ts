@@ -246,5 +246,11 @@ export class MessageRouter {
     context.postMessage({ type: "model_list", items: models, model: this.modelManager.model })
   }
 
-  dispose(): void {}
+  dispose(): void {
+    if (this.searchDebounceTimer) {
+      clearTimeout(this.searchDebounceTimer)
+      this.searchDebounceTimer = null
+    }
+    this.pendingMentionResolve = null
+  }
 }

@@ -31,3 +31,19 @@ export function estimateContextTokens(pkg: { openFiles: { content: string; path:
 
   return total
 }
+
+export function estimateMessageTokens(msg: { blocks?: any[] }): number {
+  let total = 0
+  if (!msg.blocks) return 0
+  for (const block of msg.blocks) {
+    if (block.type === "text" && block.text) {
+      total += estimateTokens(block.text)
+    } else if (block.type === "image" && block.data) {
+      total += 1000 // Arbitrary estimate for image tokens
+    } else if (block.type === "tool-call" || block.type === "tool_call") {
+      total += estimateTokens(JSON.stringify(block.args || {}))
+      if (block.result) total += estimateTokens(block.result)
+    }
+  }
+  return total
+}

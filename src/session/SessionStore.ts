@@ -161,11 +161,15 @@ export class SessionStore {
     this.pruneEmptySessions()
     if (this.sessions.size <= SessionStore.MAX_SESSIONS) return
     const sorted = Array.from(this.sessions.values()).sort((a, b) => a.lastActiveAt - b.lastActiveAt)
+    const beforePrune = this.sessions.size
     for (const oldest of sorted) {
       if (this.sessions.size <= SessionStore.MAX_SESSIONS) break
       if (oldest.id !== this.activeSessionId) {
         this.sessions.delete(oldest.id)
       }
+    }
+    if (this.sessions.size < beforePrune) {
+      this.save()
     }
   }
 

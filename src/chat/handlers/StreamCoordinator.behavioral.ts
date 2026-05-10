@@ -38,6 +38,8 @@ function createMockSessionManager() {
     ensureSession: mockFn(() => Promise.resolve("sess-123")),
     sendPromptAsync: mockFn(() => Promise.resolve()),
     abortSession: mockFn(() => Promise.resolve()),
+    eventStreamStatus: { state: "connected", reconnectAttempts: 0 },
+    waitForEventStreamReady: mockFn(() => Promise.resolve(true)),
   }
 }
 
@@ -231,7 +233,7 @@ describe("StreamCoordinator — behavioral", () => {
       assert.strictEqual(tab.streamingBuffer, "Hello world")
     })
 
-    it("emits stream_chunk messages with correct sessionId and text", () => {
+    it("accumulates text in tab buffer for batched chunk emission", () => {
       const { coordinator, tabManager } = createTestHarness()
       tabManager.createTab("tab-1", "sess-123")
       const callbacks = createMockCallbacks()
@@ -239,10 +241,14 @@ describe("StreamCoordinator — behavioral", () => {
       coordinator.appendChunk("tab-1", "chunk1", callbacks)
       coordinator.appendChunk("tab-1", "chunk2", callbacks)
 
+      // Tab buffer accumulates synchronously
+      const tab = tabManager.getTab("tab-1")
+      assert.strictEqual(tab?.streamingBuffer, "chunk1chunk2")
+
+      // stream_chunk messages are emitted synchronously now
+      // (removed double-batching — ChatProvider.chunkBatcher handles debouncing)
       const chunkMessages = callbacks.messages.filter((m) => m.type === "stream_chunk")
       assert.strictEqual(chunkMessages.length, 2)
-      assert.deepStrictEqual(chunkMessages[0], { type: "stream_chunk", sessionId: "tab-1", text: "chunk1" })
-      assert.deepStrictEqual(chunkMessages[1], { type: "stream_chunk", sessionId: "tab-1", text: "chunk2" })
     })
   })
 

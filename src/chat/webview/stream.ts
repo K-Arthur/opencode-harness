@@ -35,7 +35,7 @@ export { stripContextFromText, reRenderMessage }
 export interface StreamHandlers {
   handleStreamStart: (messageId?: string) => void
   handleStreamToken: (text?: string) => void
-  handleStreamChunk: (text?: string) => void
+  handleStreamChunk: (text?: string, messageId?: string) => void
   handleStreamEnd: (messageId?: string, blocks?: unknown) => void
   handleStreamError: (error: { code: string; message: string; detail?: string; retryable?: boolean }) => void
   handleRequestError: (message?: string) => void
@@ -51,6 +51,8 @@ export interface StreamHandlers {
   clearMessages: () => void
   readonly isStreaming: boolean
   readonly streamingMessageId: string | null
+  readonly chunkSeq: number
+  forceRerender(text: string): void
 }
 
 export function createStreamHandlers(
@@ -115,6 +117,16 @@ class StreamSession implements StreamHandlers {
     return this.state.streamingMessageId
   }
 
+  get chunkSeq(): number {
+    return this.state.chunkSeq
+  }
+
+  forceRerender(text: string): void {
+    this.state.currentBlockBuffer = text
+    const textEl = this.state.currentBlockEl || this.state.lastStreamTextEl
+    if (textEl) textEl.textContent = stripContextFromText(text)
+  }
+
   handleStreamStart(messageId?: string): void {
     handleStreamStart(this.state, this.els, this.messages, messageId)
     this.callbacks?.onStreamingChange?.(true)
@@ -124,8 +136,8 @@ class StreamSession implements StreamHandlers {
     handleStreamToken(this.state, this.els, this.messages, text)
   }
 
-  handleStreamChunk(text?: string): void {
-    handleStreamChunk(this.state, this.els, this.messages, text, this.saveState)
+  handleStreamChunk(text?: string, messageId?: string): void {
+    handleStreamChunk(this.state, this.els, this.messages, text, this.saveState, messageId)
   }
 
   handleStreamEnd(messageId?: string, blocks?: unknown): void {

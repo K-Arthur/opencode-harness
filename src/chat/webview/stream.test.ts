@@ -270,4 +270,25 @@ describe("stream.ts", () => {
       restore()
     }
   })
+
+  it("finalizes using the active stream bubble when stream_end id changes", async () => {
+    const restore = installDom()
+    try {
+      const { handleStreamStart, handleStreamEnd } = await import("./streamHandlers")
+      const harness = createHarness()
+      const saveState = () => {}
+
+      handleStreamStart(harness.state, harness.els as any, harness.messages, "resp-session-id")
+      handleStreamEnd(harness.state, harness.els as any, harness.messages, saveState, "msg-server-id", [
+        { type: "text", text: "Final server text" },
+      ])
+
+      const assistant = harness.messages.find((message) => message.id === "resp-session-id")
+      const textBlock = assistant?.blocks.find((block: any) => block.type === "text")
+      assert.equal(textBlock?.text, "Final server text")
+      assert.match(harness.els.messageList.textContent || "", /Final server text/)
+    } finally {
+      restore()
+    }
+  })
 })

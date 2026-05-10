@@ -25,11 +25,6 @@ export class DeltaHandler implements EventHandler {
 
     const isAssistant = context.isAssistantMessage(messageId)
     if (!isAssistant) {
-      console.warn(`[opencode-harness] DeltaHandler: DROPPING delta for messageId=${messageId} sessionId=${sessionId} — role check failed (known roles: ${Array.from(context.messageRoles.entries()).map(([k, v]) => `${k}=${v}`).join(",") || "none"})`)
-      const role = messageId ? context.messageRoles.get(messageId) : undefined
-      if (!role) {
-        console.warn(`[opencode-harness] DeltaHandler: messageId=${messageId} has NO role registered. message.updated may not have arrived yet, or sessionID=${sessionId} may be mismatched.`)
-      }
       return out
     }
     if (partType && partType !== "text") return out
@@ -44,7 +39,6 @@ export class DeltaHandler implements EventHandler {
       data: { text: delta, messageId },
     })
 
-    console.info(`[opencode-harness] DeltaHandler: emitted text_chunk sessionId=${sessionId} messageId=${messageId} deltaLen=${delta.length} preview=${JSON.stringify(delta.slice(0, 60))}`)
     return out
   }
 }

@@ -106,6 +106,7 @@ export interface ChatMessage {
   blocks: Block[]
   timestamp?: number
   sessionId?: string
+  tokenCount?: number
 }
 
 export interface SessionState {
@@ -117,7 +118,7 @@ export interface SessionState {
   messages: ChatMessage[]
   isStreaming: boolean
   cost?: number
-  tokenUsage?: { prompt: number; completion: number; total: number }
+  tokenUsage?: TokenUsage
   changedFiles?: string[]
   lastActiveAt?: number
 }
@@ -164,10 +165,34 @@ export interface ContextChip {
   onRemove?: () => void
 }
 
+export interface TokenBreakdown {
+  input: number
+  output: number
+  reasoning: number
+  cacheRead: number
+  cacheWrite: number
+}
+
+export interface TokenUsage {
+  prompt: number
+  completion: number
+  total: number
+  reasoning?: number
+  cacheRead?: number
+  cacheWrite?: number
+}
+
+export interface ContextBreakdown {
+  system: number
+  history: number
+  workspace: number
+}
+
 export interface ContextUsage {
   tokens: number
   total: number
   percentage?: number
+  breakdown?: ContextBreakdown
 }
 
 export interface HostMessage {

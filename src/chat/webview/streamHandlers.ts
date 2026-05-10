@@ -32,14 +32,6 @@ function mergeStreamText(existing: string, chunk: string): string {
   return stripContextFromText(existing + chunk)
 }
 
-function findRecoverableAssistantMessage(messages: ChatMessage[]): ChatMessage | undefined {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i]
-    if (!message) continue
-    if (message.role === "assistant" && message.id) return message
-  }
-  return undefined
-}
 
 function appendTextToMessage(message: ChatMessage, text: string): void {
   const textBlock = message.blocks.find((block) => block.type === "text") as (Block & { text?: string }) | undefined
@@ -60,6 +52,31 @@ function finishUnresolvedToolCalls(blocks: Block[]): void {
       blocks[i] = { ...tool, state: "result" } as unknown as Block
     }
   }
+}
+
+function ensureRenderedTextFallback(messageId: string, msgObj: ChatMessage, els: StreamElements): void {
+  const text = (msgObj.blocks || [])
+    .filter((block) => block.type === "text" && typeof block.text === "string" && block.text.trim().length > 0)
+    .map((block) => block.text)
+    .join("\n")
+
+  if (!text.trim()) return
+
+  const bubble = els.messageList.querySelector(`[data-message-id="${messageId}"] .message-bubble`) as HTMLElement | null
+  if (!bubble) return
+
+  const existingText = bubble.querySelector(".msg-text") as HTMLElement | null
+  if (existingText) {
+    if (!existingText.textContent?.trim()) {
+      existingText.textContent = text
+    }
+    return
+  }
+
+  const fallback = document.createElement("div")
+  fallback.className = "msg-text markdown-content"
+  fallback.textContent = text
+  bubble.appendChild(fallback)
 }
 
 export interface StreamState {
@@ -86,7 +103,9 @@ function webviewLog(msg: string, level: "info" | "warn" | "error" = "info") {
   if (_vscode) {
     _vscode.postMessage({ type: "webview_log", level, message: msg })
   }
-  console[level](`[Webview] ${msg}`)
+  if (level === "error") console.error(`[Webview] ${msg}`)
+  else if (level === "warn") console.warn(`[Webview] ${msg}`)
+  else console.info(`[Webview] ${msg}`)
 }
 
 export interface StreamElements {
@@ -224,24 +243,43 @@ export function handleStreamToken(
   messages: ChatMessage[],
   text?: string,
   saveState?: () => void,
+  messageId?: string,
 ): void {
-  const id = state.streamingMessageId
+  let id = state.streamingMessageId
   if (!id) {
-    const recovered = findRecoverableAssistantMessage(messages)
-    if (!recovered?.id) {
-      webviewLog(`handleStreamToken: dropping chunk len=${text?.length || 0} — no streamingMessageId`, "warn")
+    if (messageId) {
+      // Extension forwarded the real server messageId — re-anchor the stream
+      const targetMsg = messages.find(m => m.id === messageId)
+      if (targetMsg) {
+        state.streamingMessageId = messageId
+        state.isStreaming = true
+        id = messageId
+      } else {
+        // Placeholder was cleared (likely by handleStreamError). Restart the stream
+        // with a fresh bubble bound to the real server messageId so chunks render.
+        webviewLog(`handleStreamToken: restarting stream for messageId=${messageId} (recovered after error)`, "warn")
+        state.isStreaming = false
+        handleStreamStart(state, els, messages, messageId)
+        id = state.streamingMessageId
+        if (!id) return
+      }
+    } else {
+      // No server messageId: only recover to the very last message if it's an assistant
+      const lastMsg = messages[messages.length - 1]
+      if (!lastMsg || lastMsg.role !== "assistant" || !lastMsg.id) {
+        webviewLog(`handleStreamToken: dropping chunk len=${text?.length || 0} — no streamingMessageId`, "warn")
+        return
+      }
+      webviewLog(
+        `handleStreamToken: recovering late chunk len=${text?.length || 0} into ${lastMsg.id}`,
+        "warn",
+      )
+      appendTextToMessage(lastMsg, text || "")
+      reRenderMessage(lastMsg.id, els, messages)
+      els.scrollAnchor.scrollIfAnchored()
+      saveState?.()
       return
     }
-
-    webviewLog(
-      `handleStreamToken: recovering late chunk len=${text?.length || 0} into ${recovered.id}`,
-      "warn",
-    )
-    appendTextToMessage(recovered, text || "")
-    reRenderMessage(recovered.id, els, messages)
-    els.scrollAnchor.scrollIfAnchored()
-    saveState?.()
-    return
   }
 
   const chunk = text || ""
@@ -527,10 +565,9 @@ export function handleStreamChunk(
   messages: ChatMessage[],
   text?: string,
   saveState?: () => void,
+  messageId?: string,
 ): void {
-  handleStreamToken(state, els, messages, text, saveState)
-  // Process any complete events that may have buffered
-  processBufferedEvents(state, els, messages)
+  handleStreamToken(state, els, messages, text, saveState, messageId)
 }
 
 export function handleSkillIndicator(
@@ -560,17 +597,6 @@ export function handleSkillIndicator(
   els.scrollAnchor.scrollIfAnchored()
 }
 
-let eventBuffer = ""
-
-function processBufferedEvents(
-  state: StreamState,
-  els: StreamElements,
-  messages: ChatMessage[]
-): void {
-  // Placeholder for SSE event processing if needed
-  // The original handleStreamChunk only called handleStreamToken
-}
-
 export function handleStreamEnd(
   state: StreamState,
   els: StreamElements,
@@ -592,21 +618,6 @@ export function handleStreamEnd(
 
   const blockList = Array.isArray(blocks) ? blocks as Block[] : []
   finishUnresolvedToolCalls(blockList)
-  
-  webviewLog(
-    `handleStreamEnd id=${id} blocks=${blockList.length} bufferLen=${state.streamingBuffer.length} bufferPreview=${JSON.stringify(state.streamingBuffer.slice(0, 80))}`,
-  )
-  
-  // DIAGNOSTIC: Log the actual blocks being received
-  const blockSummary = blockList.map(b => ({ 
-    type: b.type, 
-    id: (b as any).id, 
-    state: (b as any).state 
-  }))
-  webviewLog(
-    `handleStreamEnd: FINAL blocks for ${id}: ${JSON.stringify(blockSummary)}`,
-    "info"
-  )
 
   // Force-sync any pending rAF update immediately so the DOM reflects the final buffer
   state.rafPending = false
@@ -621,29 +632,25 @@ export function handleStreamEnd(
   const streamId = state.streamingMessageId
   const lookupId = streamId && streamId !== id ? streamId : id
 
-  const textEl = state.lastStreamTextEl || document.getElementById(`stream-text-${lookupId}`)
-
   if (blockList.length === 0) {
     const msgObj = messages.find((m) => m.id === id) || messages.find((m) => m.id === lookupId)
-    
+
     if (msgObj && msgObj.blocks.length > 0) {
       // We have real-time blocks, just finalize them
-      // Ensure all text blocks are rendered as markdown now
       finishUnresolvedToolCalls(msgObj.blocks)
-      reRenderMessage(id, els, messages)
+      const renderId = msgObj.id || lookupId
+      reRenderMessage(renderId, els, messages)
+      ensureRenderedTextFallback(renderId, msgObj, els)
     } else {
       // Truly empty response
       const noticeText = "(no response — model returned no text content)"
       webviewLog(`handleStreamEnd: empty response for ${id}`, "warn")
       if (msgObj) {
         msgObj.blocks = [{ type: "text", text: noticeText } as unknown as Block]
-      }
-      const placeholderEl = (els.messageList.querySelector(`[data-message-id="${id}"]`) ||
-        els.messageList.querySelector(`[data-message-id="${lookupId}"]`)) as HTMLElement | null
-      const emptyTextEl = placeholderEl?.querySelector(`#stream-text-${lookupId}`) as HTMLElement | null
-      if (emptyTextEl) {
-        emptyTextEl.textContent = noticeText
-        emptyTextEl.classList.add("msg-text--empty-notice")
+        const renderId = msgObj.id || lookupId
+        reRenderMessage(renderId, els, messages)
+        const bubble = els.messageList.querySelector(`[data-message-id="${renderId}"] .msg-text`) as HTMLElement | null
+        bubble?.classList.add("msg-text--empty-notice")
       }
     }
     if (msgObj) finishUnresolvedToolCalls(msgObj.blocks)
@@ -652,7 +659,7 @@ export function handleStreamEnd(
     return
   }
 
-  const msgObj = messages.find((m) => m.id === id)
+  const msgObj = messages.find((m) => m.id === id) || messages.find((m) => m.id === lookupId)
   if (msgObj) {
     // Merge server blocks into existing real-time blocks rather than replacing.
     // The real-time stream accumulates all block types (thinking, tool-calls, text, etc.)
@@ -684,7 +691,6 @@ export function handleStreamEnd(
 
         if (existingIdx >= 0) {
           // Preserve existing result/error if the incoming block is "pending" or missing results
-          const existing = msgObj.blocks[existingIdx] as ToolCallBlock
           if (sbtc.state === "result" || sbtc.result || sbtc.error) {
             msgObj.blocks[existingIdx] = sbtc
           } else {
@@ -703,7 +709,9 @@ export function handleStreamEnd(
       }
     }
     finishUnresolvedToolCalls(msgObj.blocks)
-    reRenderMessage(id, els, messages)
+    const renderId = msgObj.id || lookupId
+    reRenderMessage(renderId, els, messages)
+    ensureRenderedTextFallback(renderId, msgObj, els)
   } else {
     webviewLog(`handleStreamEnd: message obj not found for id=${id}`, "warn")
   }
@@ -858,6 +866,9 @@ function resetStreamState(state: StreamState): void {
   state.streamingBlockId = null
   state.streamingToolCallId = null
   state.lastStreamTextEl = null
+  state.currentBlockEl = null
+  state.currentBlockBuffer = ""
+  state.currentBlockIndex = -1
   state.rafPending = false
   state.chunkSeq = 0
 }

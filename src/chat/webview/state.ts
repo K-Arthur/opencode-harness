@@ -54,6 +54,15 @@ function migrateState(old: any): WebviewState {
   })
 }
 
+function generateId(): string {
+  const chars = "0123456789abcdef"
+  let result = ""
+  for (let i = 0; i < 8; i++) {
+    result += chars[Math.floor(Math.random() * 16)]
+  }
+  return result
+}
+
 export function createState(vscode: VsCodeApi) {
   let state: WebviewState = withDefaults({})
   let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -126,7 +135,7 @@ export function createState(vscode: VsCodeApi) {
   }
 
   function createSession(name?: string, model?: string): SessionState {
-    const id = `session-${crypto.randomUUID().slice(0, 8)}`
+    const id = `session-${generateId()}`
     const session: SessionState = {
       id,
       name: name || "",
@@ -265,27 +274,41 @@ export function createState(vscode: VsCodeApi) {
       }
     })
 
-    // Preserve any local-only sessions that are currently streaming
+    // Preserve any local-only sessions that the host didn't include but that
+    // we still need: those currently streaming, those with persisted messages
+    // (might be a stale init_state), or the active one (avoid dangling activeSessionId).
+    // Empty, non-active, non-streaming sessions are dropped — they're either
+    // deleted upstream or genuinely empty placeholders we can safely lose.
     Object.values(oldSessions).forEach(s => {
-      if (s.isStreaming && !state.sessions[s.id]) {
+      if (state.sessions[s.id]) return
+      const isActive = state.activeSessionId === s.id
+      if (s.isStreaming || s.messages.length > 0 || isActive) {
         state.sessions[s.id] = s
       }
     })
 
-    // Update session order
-    const sessionIds = sessions.map(s => s.id)
-    // Remove IDs that are no longer present
-    state.sessionOrder = state.sessionOrder.filter(id => sessionIds.includes(id))
-    // Add new IDs that are not in the order yet
-    sessionIds.forEach(id => {
+    // Update session order: union of new sessions + preserved local sessions
+    const sessionIds = new Set(Object.keys(state.sessions))
+    state.sessionOrder = state.sessionOrder.filter(id => sessionIds.has(id))
+    sessions.forEach(s => {
+      if (!state.sessionOrder.includes(s.id)) {
+        state.sessionOrder.push(s.id)
+      }
+    })
+    // Add any preserved local sessions that weren't already in the order
+    for (const id of sessionIds) {
       if (!state.sessionOrder.includes(id)) {
         state.sessionOrder.push(id)
       }
-    })
+    }
 
     state.activeSessionId = activeId && state.sessions[activeId] ? activeId : state.activeSessionId
     state.globalModel = globalModel
     if (!state.activeSessionId && state.sessionOrder.length > 0) {
+      state.activeSessionId = state.sessionOrder[0] ?? null
+    }
+    // Validate the active session actually exists in our session map
+    if (state.activeSessionId && !state.sessions[state.activeSessionId]) {
       state.activeSessionId = state.sessionOrder[0] ?? null
     }
     save()

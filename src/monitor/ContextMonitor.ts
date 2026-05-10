@@ -1,18 +1,33 @@
 import * as vscode from "vscode"
-import { estimateContextTokens } from "../utils/tokenCounter"
 
 export interface ContextUsage {
   percent: number
   tokens: number
   maxTokens: number
+  sessionId?: string
+  breakdown?: {
+    system: number
+    history: number
+    workspace: number
+  }
 }
 
 export class ContextMonitor {
-  private currentTokens = 0
+private currentTokens = 0
   private tokenLimit = 100000
   private onContextChangedEmitter = new vscode.EventEmitter<ContextUsage>()
 
   readonly onContextChanged = this.onContextChangedEmitter.event
+
+  /** Public accessor for current token usage, used by AutoCompactor */
+  get tokensUsed(): number {
+    return this.currentTokens
+  }
+
+  /** Public accessor for the active limit, used by AutoCompactor */
+  get limit(): number {
+    return this.tokenLimit
+  }
 
   constructor() {
   }
@@ -38,12 +53,14 @@ export class ContextMonitor {
     return "ask"
   }
 
-  updateTokens(tokensUsed: number): void {
+  updateTokens(tokensUsed: number, sessionId?: string, breakdown?: { system: number; history: number; workspace: number }): void {
     this.currentTokens = tokensUsed
     const usage: ContextUsage = {
       percent: Math.min(100, Math.round((this.currentTokens / this.tokenLimit) * 100)),
       tokens: this.currentTokens,
       maxTokens: this.tokenLimit,
+      sessionId,
+      breakdown,
     }
     this.onContextChangedEmitter.fire(usage)
   }

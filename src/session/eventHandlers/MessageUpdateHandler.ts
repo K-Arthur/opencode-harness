@@ -20,7 +20,7 @@ export class MessageUpdateHandler implements EventHandler {
     if (msg.error) {
       out.push({
         type: "server_error",
-        sessionId: msg.sessionId,
+        sessionId: msg.sessionID ?? msg.sessionId,
         data: { error: msg.error },
       })
       if (msg.id) context.clearMessageTracking(msg.id)
@@ -30,7 +30,7 @@ export class MessageUpdateHandler implements EventHandler {
     if (msg.time?.completed) {
       out.push({
         type: "message_complete",
-        sessionId: msg.sessionID,
+        sessionId: msg.sessionID ?? msg.sessionId,
         data: { message: msg },
       })
       if (msg.id) context.clearMessageTracking(msg.id)

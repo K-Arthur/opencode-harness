@@ -13,7 +13,7 @@ const exportSource = readFileSync(path.join(__dirname, "commands", "export.ts"),
 
 describe("extension.ts", () => {
   it("exports activate function", () => {
-    assert.ok(extensionSource.includes("export function activate("))
+    assert.ok(extensionSource.includes("export async function activate(") || extensionSource.includes("export function activate("))
   })
 
   it("exports deactivate function", () => {

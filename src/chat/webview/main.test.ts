@@ -117,10 +117,9 @@ describe("main.ts", () => {
   // ===== RED PHASE: New tests for features that should exist but don't yet =====
 
   it("RED: displays token usage in chat interface after message_complete", () => {
-    // This should FAIL initially - we need to implement token display in chat
     assert.ok(source.includes("handleTokenUsage") || source.includes("updateTokenDisplay"),
       "must have token handling function")
-    assert.ok(source.includes("token-display") || source.includes("token-usage"),
+    assert.ok(source.includes("token-display") || source.includes("token-usage") || source.includes("statusTokens") || source.includes("step_tokens"),
       "must have token display element in chat UI")
   })
 

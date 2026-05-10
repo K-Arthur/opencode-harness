@@ -81,7 +81,7 @@ export function buildServerEvent(type, overrides = {}) {
 describe("Regression: Activation & Server Connection", () => {
   it("extension.ts exports activate function", () => {
     const ext = readFileSync(path.join(root, "src", "extension.ts"), "utf8")
-    assert.ok(ext.includes("export function activate("), "activate function must be exported")
+    assert.ok(ext.includes("export async function activate(") || ext.includes("export function activate("), "activate function must be exported")
     assert.ok(ext.includes("export function deactivate()"), "deactivate function must be exported")
   })
 

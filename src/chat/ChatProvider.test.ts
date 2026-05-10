@@ -25,7 +25,6 @@ void describe("ChatProvider.ts", () => {
     assert.ok(source.includes("private async handleWebviewMessage("), "must have handleWebviewMessage")
     assert.ok(source.includes("private handleServerEvent("), "must have handleServerEvent")
     assert.ok(source.includes("private postMessage("), "must have postMessage")
-    assert.ok(source.includes("private flushChunkBuffer("), "must have flushChunkBuffer")
     assert.ok(source.includes("private postRequestError("), "must have postRequestError")
   })
 

@@ -1,5 +1,5 @@
 import * as vscode from "vscode"
-import { DiffApplier, type ProposedEdit } from "../../diff/DiffApplier"
+import { DiffApplier } from "../../diff/DiffApplier"
 import { DiffHandler } from "./DiffHandler"
 import { TabManager } from "../TabManager"
 import { SessionManager } from "../../session/SessionManager"
@@ -7,11 +7,10 @@ import { SessionStore } from "../../session/SessionStore"
 import { ContextEngine } from "../../context/ContextEngine"
 import { ContextMonitor } from "../../monitor/ContextMonitor"
 import { RateLimitMonitor } from "../../monitor/RateLimitMonitor"
-import { estimateContextTokens, parseModelRef } from "../../utils/tokenCounter"
+import { estimateContextTokens, parseModelRef, estimateTokens } from "../../utils/tokenCounter"
 import { ModelManager } from "../../model/ModelManager"
 import { log } from "../../utils/outputChannel"
 import type { Block, ChatMessage } from "../types"
-import type { DiffHunk } from "../webview/types"
 
 export interface StreamCallbacks {
   postMessage: (msg: Record<string, unknown>) => void
@@ -25,23 +24,20 @@ export type StreamLifecycleState = "idle" | "sending" | "streaming" | "completin
 
 export class StreamCoordinator {
   private diffHandler: DiffHandler
-  private readonly diffApplier: DiffApplier
-  /** Watchdog interval for stuck streams (no activity for 90 seconds) */
-  private readonly STREAM_STUCK_MS = 90000
+  /** Watchdog interval for streams with no server activity across all channels. */
+  private readonly STREAM_STUCK_MS = 600000
   /** Time-to-first-byte timeout: no chunk received within 45s */
   readonly TTFB_TIMEOUT_MS = 45000
-  /** Inter-chunk inactivity timeout: no chunk for 90s after first byte */
-  readonly CHUNK_INACTIVITY_TIMEOUT_MS = 90000
   /** Short grace window for terminal status to be followed by late tool_end events */
-  readonly TOOL_FINALIZE_GRACE_MS = 2000
-  /** Hard cap for truly interrupted long-running turns */
-  readonly HARD_STREAM_TIMEOUT_MS = 600000
+  readonly TOOL_FINALIZE_GRACE_MS = 30000
   private streamWatchdog: ReturnType<typeof setInterval> | null = null
   private stuckStreamHandlers: Map<string, StreamCallbacks> = new Map()
   private ttfbTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
   private pendingToolGraceTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
   /** Tabs currently in the process of finalizing — guards against double-finalize */
   private finalizingTabs = new Set<string>()
+  /** Tabs whose stream was explicitly aborted — finalizeStream must not emit its own stream_end */
+  private abortedTabs = new Set<string>()
   /** Per-tab stream lifecycle state for observability */
   private streamStates = new Map<string, StreamLifecycleState>()
   /** Per-tab active message ID — detects when the server starts a new assistant message mid-stream */
@@ -52,12 +48,6 @@ export class StreamCoordinator {
   private activeToolCallIds = new Map<string, Set<string>>()
   /** Last activity per pending tool, used when reconciling stale terminal states. */
   private toolActivityAt = new Map<string, Map<string, number>>()
-  /** Per-tab chunk batching buffer for reducing webview message traffic */
-  private chunkBuffers = new Map<string, string>()
-  /** Per-tab chunk flush timers */
-  private chunkFlushTimers = new Map<string, ReturnType<typeof setTimeout>>()
-  /** Chunk batch flush interval (ms) */
-  private readonly CHUNK_BATCH_MS = 50
   /** Per-tab heartbeat sequence counters */
   private heartbeatSeqs = new Map<string, number>()
   /** Per-tab last acked heartbeat seq */
@@ -66,8 +56,8 @@ export class StreamCoordinator {
   private heartbeatAckedChunkSeqs = new Map<string, number>()
   /** Per-tab heartbeat interval timers */
   private heartbeatTimers = new Map<string, ReturnType<typeof setInterval>>()
-  /** Per-tab hard stream timeout timers */
-  private hardStreamTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  /** Per-tab last force_rerender seq sent — prevents spamming the webview when acks fall behind */
+  private lastForceRerenderSeqs = new Map<string, number>()
 
   constructor(
     private readonly sessionManager: SessionManager,
@@ -79,7 +69,6 @@ export class StreamCoordinator {
     private readonly rateLimitMonitor: RateLimitMonitor,
     diffApplier: DiffApplier
   ) {
-    this.diffApplier = diffApplier
     this.diffHandler = new DiffHandler(diffApplier)
   }
 
@@ -88,6 +77,19 @@ export class StreamCoordinator {
     this.streamStates.set(tabId, state)
     const ctxStr = context ? ` ${JSON.stringify(context)}` : ""
     log.info(`[stream:${tabId}] ${previous} → ${state}${ctxStr}`)
+  }
+
+  private createStreamMessageId(tabId: string, cliSessionId?: string): string {
+    const base = (cliSessionId || tabId).replace(/[^A-Za-z0-9_-]/g, "_")
+    return `resp-${base}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  }
+
+  private ensureStreamMessageId(tabId: string, cliSessionId?: string): string {
+    const existing = this.activeMessageIds.get(tabId)
+    if (existing) return existing
+    const messageId = this.createStreamMessageId(tabId, cliSessionId)
+    this.activeMessageIds.set(tabId, messageId)
+    return messageId
   }
 
   private startWatchdog(): void {
@@ -103,10 +105,19 @@ export class StreamCoordinator {
         if (tab.isStreaming && tab.lastActivityTime) {
           const stuckMs = Date.now() - tab.lastActivityTime
           if (stuckMs > this.STREAM_STUCK_MS) {
-            log.warn(`Watchdog: Stream for tab ${tab.id} stuck for ${Math.round(stuckMs / 1000)}s, finalizing`)
+            log.warn(`Watchdog: Stream for tab ${tab.id} stuck for ${Math.round(stuckMs / 1000)}s, ending as hard_timeout`)
             const callbacks = this.stuckStreamHandlers.get(tab.id)
             if (callbacks) {
-              void this.finalizeStream(tab.id, callbacks).catch(err => log.error("Watchdog finalize failed", err))
+              callbacks.postMessage({
+                type: "stream_end",
+                sessionId: tab.id,
+                messageId: this.ensureStreamMessageId(tab.id, tab.cliSessionId),
+                blocks: [...tab.blocksBuffer],
+                reason: "hard_timeout",
+                partial: true,
+                retryable: true,
+              })
+              this.cleanupTab(tab.id)
             } else {
               log.warn(`No callbacks for stuck tab ${tab.id}, resetting state`)
               this.tabManager.setStreaming(tab.id, false)
@@ -122,6 +133,14 @@ export class StreamCoordinator {
     if (this.streamWatchdog) {
       clearInterval(this.streamWatchdog)
       this.streamWatchdog = null
+    }
+  }
+
+  /** Stop the watchdog if no tabs are currently streaming (prevents unnecessary polling) */
+  private stopWatchdogIfNoStreams(): void {
+    const allTabs = this.tabManager.getAllTabs()
+    if (!allTabs.some(t => t.isStreaming)) {
+      this.stopWatchdog()
     }
   }
 
@@ -205,7 +224,7 @@ export class StreamCoordinator {
 
     const timeout = setTimeout(() => {
       this.pendingToolGraceTimeouts.delete(tabId)
-      void this.finishStalePendingToolCalls(tabId, callbacks)
+      void this.markUnresolvedPendingToolCalls(tabId, callbacks)
         .then(() => this.maybeFinalizeStream(tabId, callbacks, "status"))
         .catch(err => log.error("Pending tool grace finalization failed", err))
     }, this.TOOL_FINALIZE_GRACE_MS)
@@ -261,41 +280,22 @@ export class StreamCoordinator {
     return partMessageId ? `${partMessageId}:${tool}` : undefined
   }
 
-  private async finishStalePendingToolCalls(tabId: string, callbacks: StreamCallbacks): Promise<void> {
+  private async markUnresolvedPendingToolCalls(tabId: string, callbacks: StreamCallbacks): Promise<void> {
     await this.reconcilePendingToolCallsFromServer(tabId, callbacks)
 
     const pending = this.activeToolCallIds.get(tabId)
     if (!pending || pending.size === 0) return
 
     const ids = Array.from(pending)
-    log.warn(`Marking ${ids.length} pending tool call(s) stale for ${tabId} after terminal server status`)
+    log.warn(`Marking ${ids.length} pending tool call(s) unresolved for ${tabId} after terminal server status`)
     for (const toolId of ids) {
-      this.postToolEnd(tabId, {
-        id: toolId,
-        ok: true,
-        result: "Tool did not emit a completion event before the server became idle.",
-        stale: true,
-      }, callbacks)
+      callbacks.postMessage({
+        type: "stream_tool_unresolved",
+        sessionId: tabId,
+        toolCallId: toolId,
+        message: "Tool did not emit a completion event before the server became idle.",
+      })
     }
-  }
-
-  /**
-   * Reset the chunk-inactivity timeout. If no further chunks arrive within
-   * CHUNK_INACTIVITY_TIMEOUT_MS, finalize the stream — this is the catch-all
-   * fallback that fires when the server stops emitting chunks but never sends
-   * an explicit message_complete or idle status (releasing the streaming-state
-   * lock so the user can switch modes again).
-   */
-  private resetCompletionTimeout(tabId: string, callbacks: StreamCallbacks): void {
-    this.tabManager.clearCompletionTimeout(tabId)
-    const timeout = setTimeout(() => {
-      const t = this.tabManager.getTab(tabId)
-      if (t?.waitingForCompletion) {
-        log.warn(`Chunk inactivity timeout for tab ${tabId} after ${this.CHUNK_INACTIVITY_TIMEOUT_MS}ms — checking finalization`)
-        void this.maybeFinalizeStream(tabId, callbacks, "status").catch(err => log.error("Inactivity finalize failed", err))
-      }
-    }, this.CHUNK_INACTIVITY_TIMEOUT_MS)
-    this.tabManager.setCompletionTimeout(tabId, timeout)
   }
 
   async startPrompt(tabId: string, text: string, callbacks: StreamCallbacks, variant?: string): Promise<void> {
@@ -345,18 +345,31 @@ export class StreamCoordinator {
     this.setStreamState(tabId, "sending", { model: tab.model, sessionId: tab.cliSessionId })
 
     try {
-      this.refreshContextTokenEstimate()
+      this.refreshContextTokenEstimate(tabId)
 
       const cliSessionId = await this.sessionManager.ensureSession(tab.cliSessionId, `Tab ${tabId.slice(0, 8)}`)
       this.tabManager.setCliSessionId(tabId, cliSessionId)
       this.sessionStore.updateCliSessionId(tabId, cliSessionId)
+      const streamMessageId = this.createStreamMessageId(tabId, cliSessionId)
+      this.activeMessageIds.set(tabId, streamMessageId)
+
+      const eventStreamReady = await this.sessionManager.waitForEventStreamReady(5_000)
+      if (!eventStreamReady) {
+        const status = this.sessionManager.eventStreamStatus
+        if (status.state === "failed" || !this.sessionManager.isRunning) {
+          throw new Error(`OpenCode event stream is ${status.state}; cannot send a prompt until extension communication is connected.`)
+        }
+        // Still reconnecting — proceed optimistically. The server processes prompts
+        // independently of the event stream. The TTFB timeout detects if events never arrive.
+        log.warn(`Event stream not ready (${status.state}) after 5s — proceeding; TTFB timeout active (${this.TTFB_TIMEOUT_MS}ms)`)
+      }
 
       // NOTE: User message is already rendered and stored by the webview.
       // Persisting here caused duplicate rendering (garbled/flash effect).
       callbacks.postMessage({
         type: "stream_start",
         sessionId: tabId,
-        messageId: `resp-${cliSessionId}`,
+        messageId: streamMessageId,
       })
 
       this.tabManager.setWaitingForCompletion(tabId, true)
@@ -367,43 +380,39 @@ export class StreamCoordinator {
       const ttfbTimeout = setTimeout(() => {
         const t = this.tabManager.getTab(tabId)
         if (t?.isStreaming && t.waitingForCompletion) {
-          log.warn(`TTFB timeout for tab ${tabId} — no chunk received within ${this.TTFB_TIMEOUT_MS}ms`)
-          this.setStreamState(tabId, "timeout", { sessionId: t.cliSessionId })
+          const eventStreamStatus = this.sessionManager.eventStreamStatus
+          const eventStreamDisconnected = eventStreamStatus.state !== "connected"
+          const reason = eventStreamDisconnected ? "event_stream_disconnected" : "ttfb_timeout"
+          log.warn(`TTFB timeout for tab ${tabId} — no chunk received within ${this.TTFB_TIMEOUT_MS}ms (eventStream=${eventStreamStatus.state}, lastRaw=${eventStreamStatus.lastRawEventType || "none"})`)
+          this.setStreamState(tabId, "timeout", { sessionId: t.cliSessionId, eventStream: eventStreamStatus.state })
           callbacks.postMessage({
             type: "stream_end",
             sessionId: tabId,
-            messageId: `resp-${t.cliSessionId}`,
+            messageId: this.ensureStreamMessageId(tabId, t.cliSessionId),
             blocks: [],
-            reason: "ttfb_timeout",
+            reason,
             partial: false,
             retryable: true,
           })
+          if (eventStreamDisconnected) {
+            callbacks.postRequestError("OpenCode event stream disconnected before any response events arrived.", tabId)
+          }
           this.cleanupTab(tabId)
         }
       }, this.TTFB_TIMEOUT_MS)
       this.ttfbTimeouts.set(tabId, ttfbTimeout)
 
-      // Completion timeout fallback — fires if the full 60s window elapses with no completion
-      const timeout = setTimeout(() => {
-        const t = this.tabManager.getTab(tabId)
-        if (t?.waitingForCompletion) {
-          log.warn(`Message completion timeout for tab ${tabId}`)
-          void this.finalizeStream(tabId, callbacks).catch(err => log.error("Timeout finalize failed", err))
-        }
-      }, 45000)
-      this.tabManager.setCompletionTimeout(tabId, timeout)
-
       const modelRef = tab.model ? parseModelRef(tab.model) : undefined
 
       // Pass tools configuration to server based on mode
-      // Plan mode: disable file_edit to prevent edits (server uses tools field)
-      // Build/Auto modes: enable file_edit (default behavior)
-      const tools = tab.mode === "plan" ? { file_edit: false } : undefined
+      // Plan mode: disable file_edit AND bash to prevent edits and shell execution (server uses tools field)
+      // Build/Auto modes: enable all tools (default behavior)
+      const tools = tab.mode === "plan" ? { file_edit: false, bash: false } : undefined
 
       await this.sessionManager.sendPromptAsync(cliSessionId, [{ type: "text", text }], { model: modelRef, tools, variant })
 
       this.startHeartbeat(tabId, callbacks)
-      this.startHardWatchdog(tabId, callbacks)
+      // startWatchdog is the single hard safety net and is driven by server activity.
     } catch (e) {
       const message = e instanceof Error ? e.message : "Unknown error"
       log.error("Prompt failed", e)
@@ -412,7 +421,7 @@ export class StreamCoordinator {
       callbacks.postMessage({
         type: "stream_end",
         sessionId: tabId,
-        messageId: `resp-${tab.cliSessionId || tabId}`,
+        messageId: this.ensureStreamMessageId(tabId, tab.cliSessionId || tabId),
         blocks: [],
         reason: "error",
       })
@@ -425,6 +434,15 @@ export class StreamCoordinator {
     const tab = this.tabManager.getTab(tabId)
     if (!tab || !tab.waitingForCompletion) return
 
+    // Coordination guard: an explicit abort owns stream_end emission.
+    // Without this, an in-flight server message_complete that arrives during
+    // abort() would race and deliver a second stream_end (one with reason=
+    // "aborted" from abort, one without from finalize).
+    if (this.abortedTabs.has(tabId)) {
+      log.info(`finalizeStream skipped for ${tabId} — abort owns stream_end`)
+      return
+    }
+
     // Idempotency guard: prevent double-finalize from concurrent events
     if (this.finalizingTabs.has(tabId)) {
       log.info(`finalizeStream skipped for ${tabId} — already finalizing`)
@@ -434,6 +452,7 @@ export class StreamCoordinator {
 
     try {
       this.setStreamState(tabId, "completing", { sessionId: tab.cliSessionId })
+      const streamMessageId = this.ensureStreamMessageId(tabId, tab.cliSessionId || tabId)
 
       // Clear TTFB timeout if still active
       this.clearTtfbTimeout(tabId)
@@ -445,22 +464,50 @@ export class StreamCoordinator {
       this.tabManager.setWaitingForCompletion(tabId, false)
 
       let blocks: Block[] = []
+      let sdkTokenTotal: number | undefined
 
       try {
         // Fetch the definitive complete message list from the server to ensure all tool blocks and text are present.
+        // Bounded by FINAL_FETCH_TIMEOUT_MS so a slow / hung server cannot wedge finalize indefinitely
+        // (which would block `finalizingTabs` and prevent any further finalize for this tab).
+        // On timeout we fall through to the live blocksBuffer/streamingBuffer fallback below.
         if (tab.cliSessionId) {
-          const messages = await this.sessionManager.getSessionMessages(tab.cliSessionId)
+          const FINAL_FETCH_TIMEOUT_MS = 10_000
+          let timeoutHandle: ReturnType<typeof setTimeout> | null = null
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            timeoutHandle = setTimeout(
+              () => reject(new Error(`getSessionMessages timed out after ${FINAL_FETCH_TIMEOUT_MS}ms`)),
+              FINAL_FETCH_TIMEOUT_MS
+            )
+          })
+          let messages
+          try {
+            messages = await Promise.race([
+              this.sessionManager.getSessionMessages(tab.cliSessionId),
+              timeoutPromise,
+            ])
+          } finally {
+            if (timeoutHandle) clearTimeout(timeoutHandle)
+          }
           const lastAssistant = [...messages].reverse().find(message => message.info.role === "assistant")
           if (lastAssistant) {
             blocks = this.partsToBlocks(lastAssistant.parts)
-            const info = lastAssistant.info as { cost?: number; tokens?: { input?: number; output?: number } }
+            const info = lastAssistant.info as { cost?: number; tokens?: { input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } } }
             if (typeof info.cost === "number") {
               callbacks.postMessage({ type: "cost_update", sessionId: tabId, cost: info.cost })
             }
             if (info.tokens) {
               const input = info.tokens.input ?? 0
               const output = info.tokens.output ?? 0
-              callbacks.postMessage({ type: "token_usage", sessionId: tabId, usage: { prompt: input, completion: output, total: input + output } })
+              const reasoning = info.tokens.reasoning ?? 0
+              const cacheRead = info.tokens.cache?.read ?? 0
+              const cacheWrite = info.tokens.cache?.write ?? 0
+              sdkTokenTotal = input + output
+              callbacks.postMessage({
+                type: "token_usage",
+                sessionId: tabId,
+                usage: { prompt: input, completion: output, total: input + output, reasoning, cacheRead, cacheWrite },
+              })
               const selectedModel = tab.model || this.modelManager.model
               const provider = parseModelRef(selectedModel).providerID || parseModelRef(this.modelManager.model).providerID || undefined
               this.rateLimitMonitor.recordTokenUsage(input, output, provider, info.cost)
@@ -505,8 +552,7 @@ export class StreamCoordinator {
         blocks = mergedBlocks
       }
 
-      // DIAGNOSTIC LOGGING: Log what we're about to send
-      log.info(`finalizeStream: FINAL blocks for ${tabId}: ${JSON.stringify(blocks.map(b => ({ type: b.type, id: (b as any).id, state: (b as any).state })))}`)
+      log.debug(`finalizeStream: ${blocks.length} block(s) for ${tabId}`)
 
       // Fallback if both are empty
       if (blocks.length === 0 && tab.streamingBuffer) {
@@ -521,22 +567,32 @@ export class StreamCoordinator {
 
       if (blocks.length > 0) {
         const assistantMsg: ChatMessage = {
+          id: streamMessageId,
           role: "assistant",
           blocks,
           timestamp: Date.now(),
           sessionId: tabId,
+          tokenCount: sdkTokenTotal,
         }
         this.sessionStore.appendMessage(tabId, assistantMsg)
       }
 
-      callbacks.postMessage({
-        type: "stream_end",
-        sessionId: tabId,
-        messageId: `resp-${tab.cliSessionId}`,
-        blocks,
-      })
+      // Re-check abort coordination after the await on getSessionMessages —
+      // the abort path may have completed while we were waiting and already
+      // posted its own stream_end (with reason: "aborted"). Suppress ours.
+      if (this.abortedTabs.has(tabId)) {
+        log.info(`finalizeStream suppressing stream_end for ${tabId} — abort raced ahead`)
+      } else {
+        callbacks.postMessage({
+          type: "stream_end",
+          sessionId: tabId,
+          messageId: streamMessageId,
+          blocks,
+        })
+      }
 
       this.tabManager.setStreaming(tabId, false)
+      this.stopWatchdogIfNoStreams()
       this.tabManager.clearBuffer(tabId)
       this.tabManager.clearBlocksBuffer(tabId)
       this.toolCallCounts.delete(tabId)
@@ -545,13 +601,6 @@ export class StreamCoordinator {
       this.clearPendingToolGraceTimeout(tabId)
       this.activeMessageIds.delete(tabId)
       this.stopHeartbeat(tabId)
-      this.clearHardWatchdog(tabId)
-      this.chunkBuffers.delete(tabId)
-      const flushTimer = this.chunkFlushTimers.get(tabId)
-      if (flushTimer) {
-        clearTimeout(flushTimer)
-        this.chunkFlushTimers.delete(tabId)
-      }
       this.setStreamState(tabId, "idle", { sessionId: tab.cliSessionId })
     } finally {
       this.finalizingTabs.delete(tabId)
@@ -569,8 +618,6 @@ export class StreamCoordinator {
       log.info(`maybeFinalizeStream: deferred for ${tabId} on ${trigger}: ${deferReason}`)
       if (deferReason.includes("tool call")) {
         this.resetPendingToolGraceTimeout(tabId, callbacks)
-      } else {
-        this.resetCompletionTimeout(tabId, callbacks)
       }
       return false
     }
@@ -601,50 +648,46 @@ export class StreamCoordinator {
    * - Calls abort() on the underlying fetch controller
    * - Emits stream:end with { reason: 'aborted' }
    * - Always cleans up the tab state
+   *
+   * Coordinates with finalizeStream via `abortedTabs` so that if a server
+   * `message_complete` event arrives mid-abort (or finalize is already in
+   * flight), only one stream_end is delivered to the webview — the abort one.
    */
   async abort(tabId: string, callbacks: StreamCallbacks): Promise<void> {
     const tab = this.tabManager.getTab(tabId)
     if (!tab || !tab.cliSessionId || !this.sessionManager.isRunning) return
 
+    // Mark first so any in-flight finalizeStream that resumes after our await
+    // sees the flag and skips emitting its own stream_end.
+    this.abortedTabs.add(tabId)
+
     try {
+      const streamMessageId = this.ensureStreamMessageId(tabId, tab.cliSessionId || tabId)
       await this.sessionManager.abortSession(tab.cliSessionId)
       callbacks.postMessage({
         type: "stream_end",
         sessionId: tabId,
-        messageId: `resp-${tab.cliSessionId}`,
+        messageId: streamMessageId,
         blocks: [],
         reason: "aborted",
       })
     } catch (e) {
       const message = e instanceof Error ? e.message : "Unknown error"
-      log.warn("Abort failed", e)
+      log.warn(`Abort failed for tab ${tabId}: ${message}`, e)
       // Still emit stream_end with aborted reason even if abort call fails
       callbacks.postMessage({
         type: "stream_end",
         sessionId: tabId,
-        messageId: `resp-${tab.cliSessionId}`,
+        messageId: this.ensureStreamMessageId(tabId, tab.cliSessionId || tabId),
         blocks: [],
         reason: "aborted",
       })
     } finally {
       this.cleanupTab(tabId)
+      // Keep abortedTabs entry for one tick so a finalize already past its
+      // guard but not yet at postMessage still sees the flag, then drop it.
+      setTimeout(() => this.abortedTabs.delete(tabId), 0)
     }
-  }
-
-  private flushChunkBuffer(tabId: string, cbs: StreamCallbacks): void {
-    const buf = this.chunkBuffers.get(tabId)
-    this.chunkBuffers.delete(tabId)
-    const timer = this.chunkFlushTimers.get(tabId)
-    if (timer) {
-      clearTimeout(timer)
-      this.chunkFlushTimers.delete(tabId)
-    }
-    if (!buf) return
-    cbs.postMessage({
-      type: "stream_chunk",
-      sessionId: tabId,
-      text: buf,
-    })
   }
 
   private startHeartbeat(tabId: string, callbacks: StreamCallbacks): void {
@@ -665,14 +708,21 @@ export class StreamCoordinator {
         seq,
       })
       const ackedSeq = this.heartbeatAckedSeqs.get(tabId) || 0
-      if (seq - ackedSeq > 2) {
-        log.warn(`Heartbeat: tab ${tabId} missed ${seq - ackedSeq} pings, sending force_rerender`)
+      // Only send force_rerender once per "missed-ack window" — re-arm when acks catch up.
+      // Previously this would fire every 5s indefinitely if the webview ever stopped acking,
+      // saturating the message channel and worsening recovery.
+      const lastRerenderSeq = this.lastForceRerenderSeqs.get(tabId) || 0
+      if (seq - ackedSeq > 2 && seq > lastRerenderSeq) {
+        log.warn(`Heartbeat: tab ${tabId} missed ${seq - ackedSeq} pings, sending force_rerender (seq=${seq})`)
         const fullText = tab.streamingBuffer || ""
         callbacks.postMessage({
           type: "force_rerender",
           sessionId: tabId,
           text: fullText,
         })
+        this.lastForceRerenderSeqs.set(tabId, seq)
+      } else if (seq - ackedSeq <= 2) {
+        this.lastForceRerenderSeqs.set(tabId, 0)
       }
     }, 5000)
     this.heartbeatTimers.set(tabId, timer)
@@ -687,6 +737,7 @@ export class StreamCoordinator {
     this.heartbeatSeqs.delete(tabId)
     this.heartbeatAckedSeqs.delete(tabId)
     this.heartbeatAckedChunkSeqs.delete(tabId)
+    this.lastForceRerenderSeqs.delete(tabId)
   }
 
   handleStreamAck(tabId: string, seq: number, lastRenderedChunkSeq?: number): void {
@@ -694,6 +745,26 @@ export class StreamCoordinator {
     if (lastRenderedChunkSeq !== undefined) {
       this.heartbeatAckedChunkSeqs.set(tabId, lastRenderedChunkSeq)
     }
+  }
+
+  replayLiveStreamToWebview(tabId: string, callbacks: StreamCallbacks): void {
+    const tab = this.tabManager.getTab(tabId)
+    if (!tab || !tab.isStreaming) return
+
+    const messageId = this.ensureStreamMessageId(tabId, tab.cliSessionId || tabId)
+    log.info(`replayLiveStreamToWebview: replaying live state for ${tabId} (${tab.streamingBuffer.length} chars, ${tab.blocksBuffer.length} blocks)`)
+
+    this.stuckStreamHandlers.set(tabId, callbacks)
+    callbacks.postMessage({
+      type: "stream_start",
+      sessionId: tabId,
+      messageId,
+      resumed: {
+        existingText: tab.streamingBuffer,
+        existingBlocks: [...tab.blocksBuffer],
+        messageId,
+      },
+    })
   }
 
   async reconcileAfterReconnect(tabId: string, callbacks: StreamCallbacks): Promise<void> {
@@ -709,12 +780,17 @@ export class StreamCoordinator {
       const lastAssistant = [...messages].reverse().find(m => m.info.role === "assistant")
       if (lastAssistant) {
         const blocks = this.partsToBlocks(lastAssistant.parts)
-        callbacks.postMessage({
-          type: "force_rerender",
-          sessionId: tabId,
-          blocks,
-          text: tab.streamingBuffer || "",
-        })
+        this.tabManager.clearBlocksBuffer(tabId)
+        this.tabManager.clearBuffer(tabId)
+        for (const block of blocks) {
+          this.tabManager.appendToBlocksBuffer(tabId, block)
+        }
+        const text = this.blocksToText(blocks)
+        if (text) this.tabManager.appendToBuffer(tabId, text)
+
+        const info = lastAssistant.info as { id?: string }
+        if (info.id && !this.activeMessageIds.has(tabId)) this.activeMessageIds.set(tabId, info.id)
+        this.replayLiveStreamToWebview(tabId, callbacks)
       }
     } catch (err) {
       log.warn(`reconcileAfterReconnect failed for ${tabId}`, err)
@@ -745,35 +821,6 @@ export class StreamCoordinator {
     await this.startPrompt(tabId, retryPrompt, callbacks)
   }
 
-  private startHardWatchdog(tabId: string, callbacks: StreamCallbacks): void {
-    this.clearHardWatchdog(tabId)
-    const timer = setTimeout(() => {
-      const tab = this.tabManager.getTab(tabId)
-      if (!tab?.isStreaming) return
-      log.error(`Hard stream timeout for tab ${tabId} after ${this.HARD_STREAM_TIMEOUT_MS}ms — marking interrupted`)
-      this.setStreamState(tabId, "timeout", { sessionId: tab.cliSessionId })
-      callbacks.postMessage({
-        type: "stream_end",
-        sessionId: tabId,
-        messageId: `resp-${tab.cliSessionId}`,
-        blocks: [],
-        reason: "hard_timeout",
-        partial: true,
-        retryable: true,
-      })
-      this.cleanupTab(tabId)
-    }, this.HARD_STREAM_TIMEOUT_MS)
-    this.hardStreamTimers.set(tabId, timer)
-  }
-
-  private clearHardWatchdog(tabId: string): void {
-    const timer = this.hardStreamTimers.get(tabId)
-    if (timer) {
-      clearTimeout(timer)
-      this.hardStreamTimers.delete(tabId)
-    }
-  }
-
   appendChunk(tabId: string, text: string, callbacks?: StreamCallbacks, messageId?: string): void {
     // Clear TTFB timeout on first chunk — the model has started responding
     if (this.ttfbTimeouts.has(tabId)) {
@@ -782,6 +829,7 @@ export class StreamCoordinator {
     }
 
     this.tabManager.appendToBuffer(tabId, text)
+    this.tabManager.touchActivity(tabId)
 
     const tab = this.tabManager.getTab(tabId)
     if (!tab) return
@@ -793,39 +841,27 @@ export class StreamCoordinator {
       tab.blocksBuffer.push({ type: "text", text })
     }
 
-    // The server may emit multiple messages per prompt (e.g. text → tool calls → text).
-    // Track the active server messageId for observability/logging only — DO NOT synthesize
-    // stream_end / stream_start for the webview, since that splits the visual bubble in half
-    // and leaves text/tool blocks orphaned outside the streaming bubble. The webview already
-    // accumulates all blocks of a turn into a single bubble; finalizeStream is the sole
-    // trigger for closing it.
+    // Keep the webview anchored to one UI message id for the whole turn. OpenCode
+    // can emit multiple assistant message ids for text → tool → text phases, and
+    // a bare resp-${sessionId} id is reused across turns. Either case makes DOM
+    // queries hit the wrong bubble.
     const cbs = callbacks || this.stuckStreamHandlers.get(tabId)
     if (messageId) {
-      const prevId = this.activeMessageIds.get(tabId)
-      if (prevId && prevId !== messageId) {
-        log.info(`appendChunk: server messageId changed for tab ${tabId}: ${prevId} → ${messageId} (continuing in same bubble)`)
+      const uiMessageId = this.activeMessageIds.get(tabId)
+      if (!uiMessageId) {
+        this.activeMessageIds.set(tabId, messageId)
+      } else if (uiMessageId !== messageId) {
+        log.info(`appendChunk: server messageId ${messageId} for tab ${tabId} renders in active bubble ${uiMessageId}`)
       }
-      this.activeMessageIds.set(tabId, messageId)
     }
+    const uiMessageId = this.activeMessageIds.get(tabId) ?? messageId
 
     if (tab.isStreaming) {
       this.setStreamState(tabId, "streaming", { sessionId: tab.cliSessionId })
     }
 
-    // Reset the completion timeout on each chunk to prevent the timeout from
-    // firing while the model is still actively streaming data.
-    if (cbs) this.resetCompletionTimeout(tabId, cbs)
-
-    log.info(`appendChunk -> webview tab=${tabId} len=${text.length} messageId=${messageId || "none"} preview=${JSON.stringify(text.slice(0, 60))}`)
     if (cbs) {
-      const existing = this.chunkBuffers.get(tabId) || ""
-      this.chunkBuffers.set(tabId, existing + text)
-      if (!this.chunkFlushTimers.has(tabId)) {
-        const timer = setTimeout(() => {
-          this.flushChunkBuffer(tabId, cbs)
-        }, this.CHUNK_BATCH_MS)
-        this.chunkFlushTimers.set(tabId, timer)
-      }
+      cbs.postMessage({ type: "stream_chunk", sessionId: tabId, text, messageId: uiMessageId })
     }
   }
 
@@ -837,13 +873,12 @@ export class StreamCoordinator {
 
     const tab = this.tabManager.getTab(tabId)
     if (!tab) return
+    this.tabManager.touchActivity(tabId)
 
     if (tab.isStreaming) {
       if (!tab.waitingForCompletion) return
       this.setStreamState(tabId, "streaming", { sessionId: tab.cliSessionId })
     }
-
-    this.resetCompletionTimeout(tabId, callbacks)
 
     const stableId = toolCall.id || this.getStableToolId(tabId)
     const pending = this.getOrCreatePendingToolIds(tabId)
@@ -901,8 +936,7 @@ export class StreamCoordinator {
   appendToolUpdate(tabId: string, toolCall: { id?: string; name: string; class?: string; args?: unknown; state?: string }, callbacks: StreamCallbacks): void {
     const tab = this.tabManager.getTab(tabId)
     if (!tab) return
-
-    this.resetCompletionTimeout(tabId, callbacks)
+    this.tabManager.touchActivity(tabId)
 
     const toolId = toolCall.id || this.getLastPendingToolId(tabId)
     if (!toolId) return
@@ -932,8 +966,8 @@ export class StreamCoordinator {
   appendToolEnd(tabId: string, result: ToolEndResult, callbacks: StreamCallbacks): void {
     const tab = this.tabManager.getTab(tabId)
     if (!tab) return
+    this.tabManager.touchActivity(tabId)
 
-    this.resetCompletionTimeout(tabId, callbacks)
     this.postToolEnd(tabId, result, callbacks)
   }
 
@@ -941,9 +975,10 @@ export class StreamCoordinator {
     return this.diffHandler
   }
 
-  private cleanupTab(tabId: string): void {
+private cleanupTab(tabId: string): void {
     this.clearTtfbTimeout(tabId)
     this.tabManager.setStreaming(tabId, false)
+    this.stopWatchdogIfNoStreams()
     this.tabManager.setWaitingForCompletion(tabId, false)
     this.tabManager.clearCompletionTimeout(tabId)
     this.tabManager.clearBuffer(tabId)
@@ -954,21 +989,39 @@ export class StreamCoordinator {
     this.clearPendingToolGraceTimeout(tabId)
     this.activeMessageIds.delete(tabId)
     this.stopHeartbeat(tabId)
-    this.clearHardWatchdog(tabId)
-    const cbs = this.stuckStreamHandlers.get(tabId)
-    if (cbs) this.flushChunkBuffer(tabId, cbs)
-    this.chunkBuffers.delete(tabId)
-    const flushTimer = this.chunkFlushTimers.get(tabId)
-    if (flushTimer) {
-      clearTimeout(flushTimer)
-      this.chunkFlushTimers.delete(tabId)
-    }
   }
 
-  private refreshContextTokenEstimate(): void {
+  private refreshContextTokenEstimate(tabId: string): void {
+    const session = this.sessionStore.get(tabId)
+    const historyTokens = session ? session.messages.reduce((acc, msg) => acc + this.estimateMessageTokens(msg), 0) : 0
+    const systemTokens = 500 // Arbitrary or estimated base for system prompt
+
     void this.contextEngine.gatherContext()
-      .then(ctxPkg => this.contextMonitor.updateTokens(estimateContextTokens(ctxPkg)))
+      .then(ctxPkg => {
+        const workspaceTokens = estimateContextTokens(ctxPkg)
+        const total = historyTokens + systemTokens + workspaceTokens
+        this.contextMonitor.updateTokens(total, tabId, {
+          system: systemTokens,
+          history: historyTokens,
+          workspace: workspaceTokens
+        })
+      })
       .catch(err => log.warn("Failed to refresh context token estimate", err))
+  }
+
+  private estimateMessageTokens(msg: ChatMessage): number {
+    let total = 0
+    for (const block of msg.blocks) {
+      if (block.type === "text" && block.text) {
+        total += estimateTokens(block.text as string)
+      } else if (block.type === "image" && block.data) {
+        total += 1000 // Arbitrary estimate for image tokens
+      } else if (block.type === "tool-call") {
+        total += estimateTokens(JSON.stringify(block.args || {}))
+        if (block.result) total += estimateTokens(block.result as string)
+      }
+    }
+    return total
   }
 
   private partsToBlocks(parts: readonly unknown[]): Block[] {
@@ -1005,6 +1058,13 @@ export class StreamCoordinator {
       }
     }
     return blocks
+  }
+
+  private blocksToText(blocks: readonly Block[]): string {
+    return blocks
+      .filter((block): block is Block & { type: "text"; text: string } => block.type === "text" && typeof (block as { text?: unknown }).text === "string")
+      .map(block => block.text)
+      .join("")
   }
 
   private toolClass(toolName: string): "read" | "write" | "exec" | "meta" {
@@ -1048,19 +1108,25 @@ export class StreamCoordinator {
       clearTimeout(timer)
     }
     this.ttfbTimeouts.clear()
-    for (const timer of this.hardStreamTimers.values()) {
+    for (const timer of this.pendingToolGraceTimeouts.values()) {
       clearTimeout(timer)
     }
-    this.hardStreamTimers.clear()
+    this.pendingToolGraceTimeouts.clear()
     for (const timer of this.heartbeatTimers.values()) {
       clearInterval(timer)
     }
     this.heartbeatTimers.clear()
-    for (const timer of this.chunkFlushTimers.values()) {
-      clearTimeout(timer)
-    }
-    this.chunkFlushTimers.clear()
-    this.chunkBuffers.clear()
+    this.finalizingTabs.clear()
+    this.abortedTabs.clear()
+    this.streamStates.clear()
+    this.activeMessageIds.clear()
+    this.toolCallCounts.clear()
+    this.activeToolCallIds.clear()
+    this.toolActivityAt.clear()
+    this.heartbeatSeqs.clear()
+    this.heartbeatAckedSeqs.clear()
+    this.heartbeatAckedChunkSeqs.clear()
+    this.lastForceRerenderSeqs.clear()
     this.diffHandler.dispose()
   }
 }

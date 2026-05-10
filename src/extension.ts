@@ -45,7 +45,7 @@ let sessionManager: SessionManager
 let sessionStore: SessionStore
 let chatProviderInstance: ChatProvider | undefined
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   try {
     log.info("OpenCode Harness extension activating…")
 
@@ -57,10 +57,11 @@ export function activate(context: vscode.ExtensionContext) {
     // Expose output channel for other modules
     context.subscriptions.push(log.outputChannel)
 
-    sessionManager = new SessionManager()
+sessionManager = new SessionManager()
     // Apply remote-attach config if set; otherwise restore stored port for local-spawn reuse
     const remoteUrl = vscode.workspace.getConfiguration("opencode").get<string>("serverUrl") || ""
-    const remoteToken = vscode.workspace.getConfiguration("opencode").get<string>("serverAuthToken") || ""
+    // Read auth token from SecretStorage (secure) with fallback to settings (legacy)
+    const remoteToken = await resolveAuthToken(context)
     if (remoteUrl.trim().length > 0) {
       sessionManager.setRemoteServer(remoteUrl, remoteToken)
       log.info(`Remote-attach mode enabled: ${remoteUrl.trim()}`)
@@ -168,6 +169,27 @@ export function activate(context: vscode.ExtensionContext) {
 // Initialization helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Resolve the remote server auth token from SecretStorage (preferred) with
+ * fallback to the legacy settings.json entry. Migrates found settings values
+ * to secrets for future use.
+ */
+async function resolveAuthToken(context: vscode.ExtensionContext): Promise<string> {
+  // Try SecretStorage first (post-migration)
+  const secretsToken = await context.secrets.get("opencode-harness.serverAuthToken")
+  if (secretsToken) return secretsToken
+
+  // Fallback: read from legacy settings.json
+  const legacyToken = vscode.workspace.getConfiguration("opencode").get<string>("serverAuthToken") || ""
+  if (legacyToken) {
+    // Migrate to SecretStorage and clear legacy setting
+    await context.secrets.store("opencode-harness.serverAuthToken", legacyToken)
+    await vscode.workspace.getConfiguration("opencode").update("serverAuthToken", undefined, vscode.ConfigurationTarget.Global)
+    log.info("Migrated serverAuthToken from settings.json to SecretStorage")
+  }
+  return legacyToken
+}
+
 function initContextEngine(context: vscode.ExtensionContext): ContextEngine {
   const engine = new ContextEngine()
   context.subscriptions.push(engine)
@@ -197,7 +219,7 @@ function initConnectionStatusBar(
   connectionStatus.show()
   context.subscriptions.push(connectionStatus)
 
-  sessionManager.onEvent((event) => {
+  sessionManager.subscribe("extension/connectionStatus", (event) => {
     switch (event.type) {
       case "server_connected":
         connectionStatus.text = "$(check-all) OpenCode: Connected"

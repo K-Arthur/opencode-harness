@@ -24,6 +24,7 @@ describe("EventNormalizer — behavioral", () => {
     assert.equal(events.length, 1)
     assert.equal(events[0]!.type, "text_chunk")
     assert.equal((events[0]!.data as { text?: string }).text, "Hello")
+    assert.equal((events[0]!.data as { messageId?: string }).messageId, "m1")
     assert.equal(events[0]!.sessionId, "s1")
   })
 
@@ -64,7 +65,48 @@ describe("EventNormalizer — behavioral", () => {
     })
     assert.equal(events.length, 1)
     assert.equal(events[0]!.type, "server_error")
+    assert.equal(events[0]!.sessionId, "s5")
     assert.equal((events[0]!.data as { error?: string }).error, "Rate limit exceeded")
+  })
+
+  it("normalizes message.updated completion with either session id casing", () => {
+    const events = normalizer.normalize({
+      type: "message.updated",
+      properties: {
+        info: {
+          id: "m-lower-session",
+          role: "assistant",
+          sessionId: "s-lower-session",
+          time: { completed: Date.now() },
+        },
+      },
+    })
+    assert.equal(events.length, 1)
+    assert.equal(events[0]!.type, "message_complete")
+    assert.equal(events[0]!.sessionId, "s-lower-session")
+  })
+
+  it("does not console-log per text delta", () => {
+    const isolated = createSdkEventNormalizer()
+    const originalInfo = console.info
+    const originalWarn = console.warn
+    const infos: unknown[] = []
+    const warns: unknown[] = []
+    console.info = (...args: unknown[]) => { infos.push(args) }
+    console.warn = (...args: unknown[]) => { warns.push(args) }
+
+    try {
+      isolated.normalize({
+        type: "message.part.delta",
+        properties: { sessionID: "s-quiet", messageID: "m-quiet", partID: "p-quiet", delta: "quiet text" },
+      })
+    } finally {
+      console.info = originalInfo
+      console.warn = originalWarn
+    }
+
+    assert.equal(infos.length, 0)
+    assert.equal(warns.length, 0)
   })
 
   it("normalizes session.status to session_status", () => {
@@ -142,6 +184,26 @@ describe("EventNormalizer — behavioral", () => {
     })
     assert.equal(events.length, 1)
     assert.equal(events[0]!.type, "permission_replied")
+  })
+
+  it("normalizes step-finish part to step_finish", () => {
+    const events = normalizer.normalize({
+      type: "message.part.updated",
+      properties: {
+        type: "step-finish",
+        sessionID: "s-step",
+        tokens: { input: 200, output: 150, reasoning: 30, cache: { read: 40, write: 10 } },
+        cost: 0.002,
+      },
+    })
+    assert.equal(events.length, 1)
+    assert.equal(events[0]!.type, "step_finish")
+    assert.equal(events[0]!.sessionId, "s-step")
+    const data = events[0]!.data as { tokens: { input: number; output: number; cacheRead: number }; cost: number }
+    assert.equal(data.tokens.input, 200)
+    assert.equal(data.tokens.output, 150)
+    assert.equal(data.tokens.cacheRead, 40)
+    assert.equal(data.cost, 0.002)
   })
 
   it("returns empty array for unknown event types", () => {

@@ -18,10 +18,10 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(source.includes("export class StreamCoordinator"), "StreamCoordinator class must be exported")
   })
 
-  it("has a DiffHandler instance and diffApplier", () => {
+  it("has a DiffHandler instance constructed from the injected diffApplier", () => {
     assert.ok(source.includes("private diffHandler: DiffHandler"), "must have diffHandler field")
-    assert.ok(source.includes("private readonly diffApplier: DiffApplier"), "must have diffApplier field")
-    assert.ok(source.includes("this.diffHandler = new DiffHandler(diffApplier)"), "must create DiffHandler")
+    assert.ok(source.includes("diffApplier: DiffApplier"), "constructor must accept a DiffApplier")
+    assert.ok(source.includes("this.diffHandler = new DiffHandler(diffApplier)"), "must create DiffHandler from the injected applier")
   })
 
   it("has stream watchdog with STREAM_STUCK_MS constant", () => {
@@ -112,14 +112,22 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(source.includes("this.stuckStreamHandlers.clear()"), "dispose must clear stuck handlers")
   })
 
-  it("emits stream_end on unexpected close via watchdog", () => {
+  it("emits partial hard_timeout stream_end when the watchdog detects a stuck stream", () => {
+    const watchdogIdx = source.indexOf("private startWatchdog(")
+    assert.ok(watchdogIdx >= 0, "startWatchdog must exist")
+    const blockEnd = source.indexOf("\n  private stopWatchdog(", watchdogIdx)
+    const block = source.slice(watchdogIdx, blockEnd > watchdogIdx ? blockEnd : watchdogIdx + 2500)
     assert.ok(
-      source.includes("finalizeStream(tab.id, callbacks)"),
-      "watchdog must call finalizeStream on stuck tab"
+      block.includes("STREAM_STUCK_MS"),
+      "watchdog must compare against STREAM_STUCK_MS"
     )
     assert.ok(
-      source.includes("STREAM_STUCK_MS"),
-      "must have stream stuck timeout constant"
+      /reason:\s*"hard_timeout"/.test(block),
+      "watchdog must emit stream_end with reason: hard_timeout"
+    )
+    assert.ok(
+      block.includes("partial: true"),
+      "hard_timeout stream_end must mark the message as partial"
     )
   })
 
@@ -186,72 +194,66 @@ describe("StreamCoordinator.ts", () => {
     )
   })
 
-  it("sends stream_end via completion timeout", () => {
+  it("does not install a chunk-inactivity timer that races server events", () => {
     assert.ok(
-      source.includes("CHUNK_INACTIVITY_TIMEOUT_MS") || source.includes("setTimeout"),
-      "completion timeout must be defined"
+      !source.includes("CHUNK_INACTIVITY_TIMEOUT_MS"),
+      "CHUNK_INACTIVITY_TIMEOUT_MS must not exist"
     )
     assert.ok(
-      source.includes("tabManager.setCompletionTimeout(tabId, timeout)"),
-      "must set completion timeout after starting prompt"
-    )
-  })
-
-  // ── SLC-03 fix: completion timeout resets on each chunk ──────────────
-  it("resets completion timeout on each chunk via resetCompletionTimeout", () => {
-    assert.ok(
-      source.includes("resetCompletionTimeout(tabId: string, callbacks: StreamCallbacks)"),
-      "must have resetCompletionTimeout method that takes tabId and callbacks"
-    )
-    assert.ok(
-      source.includes("this.resetCompletionTimeout(tabId, callbacks)"),
-      "appendChunk must call resetCompletionTimeout to keep alive streams"
-    )
-    assert.ok(
-      source.includes("tabManager.clearCompletionTimeout(tabId)"),
-      "resetCompletionTimeout must clear the old timeout before setting a new one"
+      !/private\s+resetCompletionTimeout\s*\(/.test(source),
+      "resetCompletionTimeout must not exist"
     )
   })
 
-  // ── Chunk-inactivity timeout invokes finalizeStream so the stream is
-  // closed via the canonical path (releases isStreaming, runs full block
-  // assembly from the session, unlocks mode switching).
-  it("chunk-inactivity timeout finalizes via maybeFinalizeStream rather than emitting partial output", () => {
-    const resetIdx = source.indexOf("private resetCompletionTimeout(")
-    assert.ok(resetIdx >= 0, "resetCompletionTimeout must exist")
-    const blockEnd = source.indexOf("\n  async ", resetIdx)
-    const block = source.slice(resetIdx, blockEnd > resetIdx ? blockEnd : resetIdx + 1500)
+  // ── Server-driven activity tracking ───────────────────────────────────
+  it("updates server activity on chunks and tool events instead of resetting a chunk timer", () => {
     assert.ok(
-      /this\.(finalizeStream|maybeFinalizeStream)\(tabId,?\s*callbacks/.test(block),
-      "chunk-inactivity timeout must call finalizeStream or maybeFinalizeStream(tabId, callbacks...) to close the stream cleanly"
+      source.includes("this.tabManager.touchActivity(tabId)"),
+      "server-driven entry points must update tab activity"
     )
     assert.ok(
-      block.includes("waitingForCompletion"),
-      "finalize must be gated on waitingForCompletion to avoid spurious finalization"
+      !source.includes("resetCompletionTimeout"),
+      "chunks must not reset a completion timeout"
     )
   })
 
-  // ── TTFB timeout preserves partial tokens ────────────────────────────
-  it("TTFB timeout preserves any partial tokens received", () => {
+  // ── Event-stream aware TTFB ───────────────────────────────────────────
+  it("TTFB timeout distinguishes event stream disconnects from model first-byte timeout", () => {
+    const ttfbIdx = source.indexOf("const ttfbTimeout = setTimeout(")
+    assert.ok(ttfbIdx >= 0, "TTFB timeout must exist")
+    const blockEnd = source.indexOf("\n      this.ttfbTimeouts.set", ttfbIdx)
+    const block = source.slice(ttfbIdx, blockEnd > ttfbIdx ? blockEnd : ttfbIdx + 2000)
     assert.ok(
-      source.includes("reason: \"ttfb_timeout\""),
-      "TTFB timeout must emit stream_end with reason: ttfb_timeout"
+      block.includes("event_stream_disconnected"),
+      "TTFB timeout must report event_stream_disconnected when transport is down"
+    )
+    assert.ok(
+      block.includes("ttfb_timeout"),
+      "TTFB timeout must still report ttfb_timeout when transport is connected"
+    )
+  })
+
+  // ── TTFB timeout preserves transport-specific reason ──────────────────
+  it("TTFB timeout emits a stream_end reason for both model and transport paths", () => {
+    assert.ok(
+      source.includes("reason,"),
+      "TTFB timeout must pass the computed reason into stream_end"
     )
   })
 })
 
-  // ── Mode via tools field: plan mode disables file_edit ──────────
-  it("plan mode disables file_edit via tools field", () => {
+  // ── Mode via tools field: plan mode disables file_edit and bash ──
+  it("plan mode disables file_edit and bash via tools field", () => {
     assert.ok(
-      source.includes('file_edit: false'),
-      "plan mode must set tools: { file_edit: false } in prompt body"
+      source.includes('file_edit: false') && source.includes('bash: false'),
+      "plan mode must set tools: { file_edit: false, bash: false } in prompt body"
     )
   })
 
   it("non-plan modes use undefined tools (default enable)", () => {
     assert.ok(
-      source.includes("? { file_edit: false } : undefined"),
-      "non-plan modes must pass undefined tools (server default enables file_edit)"
+      source.includes("? { file_edit: false, bash: false } : undefined"),
+      "non-plan modes must pass undefined tools (server default enables all tools)"
     )
   })
 
@@ -264,30 +266,30 @@ describe("StreamCoordinator.ts", () => {
 
   it("defaults to undefined tools when no mode is set", () => {
     assert.ok(
-      source.includes("? { file_edit: false } : undefined"),
+      source.includes("? { file_edit: false, bash: false } : undefined"),
       "must default to undefined tools when tab.mode is not 'plan'"
     )
   })
 
   it("defaults to undefined tools when no mode is set", () => {
     assert.ok(
-      source.includes('? { file_edit: false } : undefined'),
+      source.includes('? { file_edit: false, bash: false } : undefined'),
       "must set tools to undefined for non-plan modes"
     )
   })
 
-  // ── Mode via tools field: plan mode disables file_edit ──────────
-  it("plan mode disables file_edit via tools field", () => {
+  // ── Mode via tools field: plan mode disables file_edit and bash ──
+  it("plan mode disables file_edit and bash via tools field", () => {
     assert.ok(
-      source.includes("tab.mode === ") && source.includes("file_edit: false"),
-      "plan mode must set tools: { file_edit: false } in prompt body"
+      source.includes("tab.mode === ") && source.includes("file_edit: false") && source.includes("bash: false"),
+      "plan mode must set tools: { file_edit: false, bash: false } in prompt body"
     )
   })
 
   it("non-plan modes use undefined tools (default enable)", () => {
     assert.ok(
-      source.includes("? { file_edit: false } : undefined"),
-      "build/auto modes must pass undefined tools (server default enables file_edit)"
+      source.includes("? { file_edit: false, bash: false } : undefined"),
+      "build/auto modes must pass undefined tools (server default enables all tools)"
     )
   })
 
@@ -392,23 +394,18 @@ describe("StreamCoordinator.ts", () => {
     )
   })
 
-  // ── Inactivity-based finalize fallback. The status-based fallback only
-  // fires on rawStatus === "idle"; if the server emits a different terminal
-  // status (or none), the tab stays isStreaming=true and the mode selector
-  // stays locked. A chunk-inactivity timer ensures we always finalize.
-  it("has chunk-inactivity finalization fallback gated on waitingForCompletion", () => {
-    // The completion timeout in resetCompletionTimeout already calls finalizeStream
-    // when waitingForCompletion is true. Verify it's wired to the public CHUNK_INACTIVITY_TIMEOUT_MS.
-    const resetIdx = source.indexOf("private resetCompletionTimeout(")
-    assert.ok(resetIdx >= 0, "resetCompletionTimeout must exist")
-    const blockEnd = source.indexOf("\n  async ", resetIdx)
-    const block = source.slice(resetIdx, blockEnd > resetIdx ? blockEnd : resetIdx + 1500)
+  // ── Event-stream readiness gates prompt send so the UI can observe output.
+  it("blocks prompt send until the event stream is ready", () => {
+    const startIdx = source.indexOf("async startPrompt(")
+    assert.ok(startIdx >= 0, "startPrompt must exist")
+    const blockEnd = source.indexOf("\n  async finalizeStream", startIdx)
+    const block = source.slice(startIdx, blockEnd > startIdx ? blockEnd : startIdx + 4000)
     assert.ok(
-      /this\.CHUNK_INACTIVITY_TIMEOUT_MS|this\.finalizeStream/.test(block),
-      "resetCompletionTimeout must use CHUNK_INACTIVITY_TIMEOUT_MS or invoke finalizeStream"
+      block.includes("waitForEventStreamReady"),
+      "startPrompt must wait for the event stream before sendPromptAsync"
     )
     assert.ok(
-      block.includes("waitingForCompletion"),
-      "inactivity timer must check waitingForCompletion before firing"
+      block.includes("cannot send a prompt until extension communication is connected"),
+      "transport readiness failure must produce a transport-specific error"
     )
   })

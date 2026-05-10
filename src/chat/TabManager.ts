@@ -66,10 +66,14 @@ export class TabManager {
     void this.storage.update(ACTIVE_TAB_STORAGE_KEY, this.activeTabId)
   }
 
-  createTab(id: string, cliSessionId?: string, model?: string, mode?: string): TabState | null {
+  createTab(id: string, cliSessionId?: string, model?: string, mode?: string, options?: { setActive?: boolean }): TabState | null {
     if (this.tabs.size >= this.MAX_TABS) {
       log.warn(`Tab creation blocked: max ${this.MAX_TABS} tabs reached`)
       return null
+    }
+    if (this.tabs.has(id)) {
+      log.warn(`Tab with ID ${id} already exists — returning existing tab`)
+      return this.tabs.get(id)!
     }
     const tab: TabState = {
       id,
@@ -85,7 +89,7 @@ export class TabManager {
     }
     this.tabs.set(id, tab)
     if (cliSessionId) this.cliSessionIndex.set(cliSessionId, tab)
-    this.activeTabId = id
+    if (options?.setActive !== false) this.activeTabId = id
     this.persist()
     this._onTabCreated.fire(id)
     log.info(`Tab created: ${id} (session: ${cliSessionId || "pending"})`)
@@ -265,6 +269,13 @@ export class TabManager {
     const tab = this.tabs.get(id)
     if (!tab) return false
     tab.blocksBuffer = []
+    return true
+  }
+
+  touchActivity(id: string): boolean {
+    const tab = this.tabs.get(id)
+    if (!tab) return false
+    tab.lastActivityTime = Date.now()
     return true
   }
 

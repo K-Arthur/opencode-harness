@@ -6,6 +6,7 @@ export interface ChatMessage {
   blocks: Block[]
   timestamp?: number
   sessionId?: string
+  tokenCount?: number
 }
 
 export interface Block {

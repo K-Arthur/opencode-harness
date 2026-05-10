@@ -1,5 +1,9 @@
 name: CI
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [master, main]
@@ -58,7 +62,10 @@ jobs:
         run: node scripts/check-architecture.mjs
 
       - name: Lint (ESLint)
-        run: npx eslint src/ || echo "ESLint not fully configured yet"
+        run: npx eslint src/
+
+      - name: Security audit
+        run: npm audit --audit-level=high || echo "Vulnerabilities found — review npm audit output above"
 
   integration:
     runs-on: ubuntu-latest

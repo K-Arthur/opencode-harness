@@ -31,9 +31,10 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(source.includes("abort("), "StreamCoordinator must have abort method")
   })
 
-  it("has TTBF and chunk inactivity timeouts", () => {
+  it("has TTFB and transport-aware stream watchdog timeouts", () => {
     assert.ok(source.includes("TTFB_TIMEOUT_MS"), "Must have TTFB timeout")
-    assert.ok(source.includes("CHUNK_INACTIVITY_TIMEOUT_MS"), "Must have chunk inactivity timeout")
+    assert.ok(source.includes("STREAM_STUCK_MS"), "Must have stream stuck watchdog")
+    assert.ok(!source.includes("CHUNK_INACTIVITY_TIMEOUT_MS"), "Must not revive chunk inactivity timeout")
   })
 
   it("has streamStates map for lifecycle tracking", () => {

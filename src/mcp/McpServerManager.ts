@@ -75,12 +75,28 @@ export class McpServerManager {
     return this.servers.get(name)
   }
 
-  async addServer(name: string, config: McpServerConfig): Promise<void> {
+async addServer(name: string, config: McpServerConfig): Promise<void> {
+    // Validate command field for safety: must be a non-empty string, reject shell metacharacters
+    if (!config.command || typeof config.command !== "string" || config.command.trim().length === 0) {
+      throw new Error("MCP server command must be a non-empty string")
+    }
+    const dangerous = /[;&|`$(){}!#~<>]/
+    if (dangerous.test(config.command)) {
+      throw new Error(`MCP server command "${config.command}" contains shell metacharacters and was rejected`)
+    }
     const servers = this.getAllServerConfigs()
     servers[name] = config
     await this.saveServers(servers)
+this.loadServers()
+      log.info(`MCP server added: ${name}`)
+  }
+
+  async removeServer(name: string): Promise<void> {
+    const servers = this.getAllServerConfigs()
+    delete servers[name]
+    await this.saveServers(servers)
     this.loadServers()
-    log.info(`MCP server added: ${name}`)
+    log.info(`MCP server removed: ${name}`)
   }
 
   async updateServer(name: string, config: Partial<McpServerConfig>): Promise<void> {
@@ -91,14 +107,6 @@ export class McpServerManager {
     await this.saveServers(servers)
     this.loadServers()
     log.info(`MCP server updated: ${name}`)
-  }
-
-  async removeServer(name: string): Promise<void> {
-    const servers = this.getAllServerConfigs()
-    delete servers[name]
-    await this.saveServers(servers)
-    this.loadServers()
-    log.info(`MCP server removed: ${name}`)
   }
 
   async toggleServer(name: string, disabled: boolean): Promise<void> {

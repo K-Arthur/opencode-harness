@@ -15,17 +15,18 @@ describe("StreamCoordinator timeout hardening", () => {
     assert.ok(/readonly TTFB_TIMEOUT_MS = \d+/.test(coordinatorSource), "TTFB_TIMEOUT_MS must be defined")
   })
 
-  it("has separate CHUNK_INACTIVITY_TIMEOUT_MS constant", () => {
-    assert.ok(/readonly CHUNK_INACTIVITY_TIMEOUT_MS = \d+/.test(coordinatorSource), "CHUNK_INACTIVITY_TIMEOUT_MS must be defined")
+  it("does not restore the removed chunk-inactivity timeout", () => {
+    assert.ok(!coordinatorSource.includes("CHUNK_INACTIVITY_TIMEOUT_MS"), "chunk inactivity timeout must stay removed")
+    assert.ok(!coordinatorSource.includes("resetCompletionTimeout"), "per-chunk completion timeout must stay removed")
   })
 
-  it("TTFB timeout is shorter than chunk-inactivity timeout", () => {
+  it("uses STREAM_STUCK_MS as the single inactivity hard cap", () => {
     const ttfbMatch = coordinatorSource.match(/TTFB_TIMEOUT_MS = (\d+)/)
-    const chunkMatch = coordinatorSource.match(/CHUNK_INACTIVITY_TIMEOUT_MS = (\d+)/)
-    assert.ok(ttfbMatch && chunkMatch, "both timeouts must be defined")
+    const stuckMatch = coordinatorSource.match(/STREAM_STUCK_MS = (\d+)/)
+    assert.ok(ttfbMatch && stuckMatch, "TTFB and stuck watchdog timeouts must be defined")
     assert.ok(
-      Number(ttfbMatch[1]) < Number(chunkMatch[1]),
-      `TTFB (${ttfbMatch[1]}ms) must be shorter than chunk inactivity (${chunkMatch[1]}ms)`
+      Number(stuckMatch[1]) >= 600000,
+      `STREAM_STUCK_MS (${stuckMatch[1]}ms) must allow long-running tool calls`
     )
   })
 
@@ -34,9 +35,9 @@ describe("StreamCoordinator timeout hardening", () => {
     assert.ok(coordinatorSource.includes("if (this.ttfbTimeouts.has(tabId))"), "must check ttfbTimeouts before clearing")
   })
 
-  it("resets chunk inactivity timeout on every received chunk", () => {
-    assert.ok(coordinatorSource.includes("resetCompletionTimeout(tabId, callbacks)"), "must reset completion timeout")
-    assert.ok(coordinatorSource.includes("this.tabManager.clearCompletionTimeout(tabId)"), "must clear old timeout before reset")
+  it("updates watchdog activity instead of resetting a chunk timer on every chunk", () => {
+    assert.ok(coordinatorSource.includes("this.tabManager.touchActivity(tabId)"), "chunks must update server activity")
+    assert.ok(!coordinatorSource.includes("Chunk inactivity timeout"), "must not log chunk inactivity finalization")
   })
 })
 
@@ -46,19 +47,16 @@ describe("StreamCoordinator error handling", () => {
     assert.ok(coordinatorSource.includes("callbacks.postMessage({\n        type: \"stream_end\""), "must post stream_end before postRequestError")
   })
 
-  it("posts stream_end with reason=ttfb_timeout when first byte never arrives", () => {
-    assert.ok(coordinatorSource.includes('reason: "ttfb_timeout"'), "must post stream_end with ttfb_timeout reason")
+  it("posts stream_end with retryable TTFB or transport timeout when first byte never arrives", () => {
+    assert.ok(coordinatorSource.includes('"event_stream_disconnected"'), "must distinguish transport disconnect from model TTFB")
+    assert.ok(coordinatorSource.includes('"ttfb_timeout"'), "must still preserve model TTFB reason when transport is connected")
     assert.ok(coordinatorSource.includes("retryable: true"), "ttfb_timeout must be retryable")
   })
 
-  it("chunk inactivity timeout finalizes via finalizeStream (canonical close)", () => {
-    // Switched from synthetic stream_end (partial:true / reason:timeout) to a real
-    // finalizeStream call so the stream releases tab.isStreaming and unlocks the mode
-    // selector. Final blocks are assembled from the session via partsToBlocks.
-    assert.ok(
-      /resetCompletionTimeout[\s\S]*?finalizeStream\(tabId,\s*callbacks\)/.test(coordinatorSource),
-      "resetCompletionTimeout must invoke finalizeStream when waitingForCompletion is true"
-    )
+  it("server terminal events and watchdog replace chunk inactivity finalization", () => {
+    assert.ok(coordinatorSource.includes("maybeFinalizeStream"), "server events must drive normal finalization")
+    assert.ok(coordinatorSource.includes('reason: "hard_timeout"'), "watchdog must emit hard_timeout for total silence")
+    assert.ok(!coordinatorSource.includes("resetCompletionTimeout"), "chunk inactivity finalization must stay removed")
   })
 
   it("prevents finalizeStream from running twice", () => {

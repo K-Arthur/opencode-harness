@@ -1,4 +1,5 @@
 import * as vscode from "vscode"
+import * as path from "path"
 import { log } from "./outputChannel"
 
 // Sensitive file patterns that should trigger warnings
@@ -45,7 +46,7 @@ export interface SecurityCheckResult {
  * Check if a file is potentially sensitive based on its filename/path
  */
 export function isSensitiveFile(uri: vscode.Uri): boolean {
-  const fileName = uri.fsPath.split('/').pop() || ''
+  const fileName = path.basename(uri.fsPath)
   return SENSITIVE_FILE_PATTERNS.some(pattern => pattern.test(fileName))
 }
 
@@ -70,7 +71,7 @@ export async function checkFileSecurity(uri: vscode.Uri): Promise<SecurityCheckR
   }
 
   // Check filename patterns
-  const fileName = uri.fsPath.split('/').pop() || ''
+  const fileName = path.basename(uri.fsPath)
   for (const pattern of SENSITIVE_FILE_PATTERNS) {
     if (pattern.test(fileName)) {
       result.isSensitive = true

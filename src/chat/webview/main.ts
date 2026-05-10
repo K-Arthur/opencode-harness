@@ -6,7 +6,7 @@ import { setupMentions } from "./mentions"
 import { createStreamHandlers, type StreamHandlers } from "./stream"
 import { createTabBar, createTabContent, switchToTab, removeTabContent } from "./tabs"
 import { setupModelDropdown } from "./model-dropdown"
-import { setVsCodeApi, stripContextFromText, setupToolKeyboardNav } from "./streamHandlers"
+import { setVsCodeApi, setupToolKeyboardNav } from "./streamHandlers"
 import { setupModelManager } from "./model-manager"
 import { setupVariantSelector } from "./variant-selector"
 import { setupMcpConfig } from "./mcp-config"
@@ -61,15 +61,18 @@ function getVsCodeApi() {
     console.error("[OpenCode] Unhandled promise rejection:", event.reason)
   })
 
-  // Flush state when page becomes hidden (tab switch, minimize, etc.)
+// Flush state when page becomes hidden (tab switch, minimize, etc.)
+  // Using a reference that gets populated once stateManager is created
+  let _stateManagerRef: ReturnType<typeof createState> | null = null
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") {
-      stateManager.flush()
+    if (document.visibilityState === "hidden" && _stateManagerRef) {
+      _stateManagerRef.flush()
     }
   })
 
   const vscode = getVsCodeApi()
   const stateManager = createState(vscode)
+  _stateManagerRef = stateManager
   const els = getElementRefs()
 
   // Core UI modules
@@ -218,6 +221,14 @@ function getVsCodeApi() {
       clearInterval(toolElapsedTimer)
       toolElapsedTimer = null
     }
+  }
+
+  /** Log from webview back to extension host output channel */
+  function webviewLog(msg: string, level: "info" | "warn" | "error" = "info") {
+    vscode.postMessage({ type: "webview_log", level, message: msg })
+    if (level === "error") console.error(`[Webview] ${msg}`)
+    else if (level === "warn") console.warn(`[Webview] ${msg}`)
+    else console.info(`[Webview] ${msg}`)
   }
 
   function init() {
@@ -631,11 +642,11 @@ function getVsCodeApi() {
   function createNewTab(name?: string) {
     const session = stateManager.createSession(name)
     createTabUI(session.id, session.name)
-    
-    // If no active session, switch to the first one
-    if (!stateManager.getState().activeSessionId) {
-      switchToTab(els, session.id)
-    }
+
+    // Always switch to the newly created tab — it's the user's current focus
+    stateManager.setActiveSession(session.id)
+    switchToTab(els, session.id)
+    hideWelcomeView()
 
     updateTabBar()
     renderRecentSessionsList()
@@ -646,13 +657,27 @@ function getVsCodeApi() {
     // Check if content already exists
     if (els.tabPanels.querySelector(`.tab-panel[data-tab-id="${tabId}"]`)) return
 
+    // Ensure the session exists in state — defensive guard so the tab is
+    // always backed by valid state regardless of how it was triggered.
+    let session = stateManager.getSession(tabId)
+    if (!session) {
+      session = stateManager.ensureSession({
+        id: tabId,
+        name: tabName || "New Session",
+        model: stateManager.getState().globalModel || "",
+        mode: "build",
+        messages: [],
+        isStreaming: false,
+      })
+    }
+
     const [view] = createTabContent(tabId, tabName)
     if (!view) return
 
     // Find insertion position based on state order
     const order = stateManager.getState().sessionOrder
     const targetIdx = order.indexOf(tabId)
-    
+
     if (targetIdx !== -1 && targetIdx < order.length - 1) {
       // Find the next session's panel to insert before it
       const nextSessionId = order[targetIdx + 1]
@@ -666,25 +691,25 @@ function getVsCodeApi() {
       els.tabPanels.appendChild(view)
     }
 
-    // Create stream handler for this tab
-    const session = stateManager.getSession(tabId)
-    if (session) {
-      const stream = createStreamHandlersForTab(tabId)
-      streamHandlers.set(tabId, stream)
-      vscode.postMessage({
-        type: "create_tab",
-        sessionId: tabId,
-        name: session.name,
-        model: session.model,
-        mode: session.mode,
-      })
-    }
+    // Create stream handler for this tab — always, since we guaranteed session above
+    const stream = createStreamHandlersForTab(tabId)
+    streamHandlers.set(tabId, stream)
+    vscode.postMessage({
+      type: "create_tab",
+      sessionId: tabId,
+      name: session.name,
+      model: session.model,
+      mode: session.mode,
+    })
   }
 
-  function switchTab(tabId: string) {
+  function switchTab(tabId: string, notifyHost = true) {
     if (!stateManager.setActiveSession(tabId)) return
     switchToTab(els, tabId)
-    vscode.postMessage({ type: "switch_tab", sessionId: tabId })
+    hideWelcomeView()
+    if (notifyHost) {
+      vscode.postMessage({ type: "switch_tab", sessionId: tabId })
+    }
     syncModeUI()
     updateTabBar()
     // Sync model dropdown to active session's model
@@ -1177,6 +1202,7 @@ function getVsCodeApi() {
         }
         reader.onerror = () => {
           console.error("[OpenCode] Failed to read pasted image")
+          webviewLog("Failed to read pasted image. The file may be corrupted or too large.", "error")
         }
         reader.readAsDataURL(blob)
         break
@@ -1486,14 +1512,32 @@ function getVsCodeApi() {
       // Create a new session lazily, named from the first message
       const title = generateTitle(text) || "New Chat"
       active = createNewTab(title)
-      hideWelcomeView()
     }
 
-    // Ensure tab UI exists for this session
+    // Always hide welcome on send — the user has chosen to start chatting.
+    // Without this, an active session restored from persisted webview state
+    // (but filtered out of init_state for having 0 messages) would leave the
+    // welcome screen covering the chat panel.
+    hideWelcomeView()
+
+    // Check concurrent streaming limit BEFORE mutating state
+    const streamingCount = stateManager.getAllSessions().filter((s) => s.isStreaming).length
+    if (streamingCount >= 3) {
+      const streamingNames = stateManager.getAllSessions()
+        .filter((s) => s.isStreaming)
+        .map((s) => `"${s.name}"`)
+        .join(", ")
+      handleRequestError(active.id, `Maximum 3 concurrent streams reached. Currently streaming: ${streamingNames}`)
+      return
+    }
+
+    // Ensure tab UI exists for this session, and switch to it
     if (!els.tabPanels.querySelector(`.tab-panel[data-tab-id="${active.id}"]`)) {
       createTabUI(active.id, active.name)
       switchToTab(els, active.id)
       updateTabBar()
+    } else if (stateManager.getState().activeSessionId !== active.id) {
+      switchTab(active.id)
     }
 
     // Handle slash commands
@@ -1592,17 +1636,7 @@ function getVsCodeApi() {
       }
     }
 
-    // Check concurrent streaming limit
-    const streamingCount = stateManager.getAllSessions().filter((s) => s.isStreaming).length
-    if (streamingCount >= 3) {
-      const streamingNames = stateManager.getAllSessions()
-        .filter((s) => s.isStreaming)
-        .map((s) => `"${s.name}"`)
-        .join(", ")
-      handleRequestError(active.id, `Maximum 3 concurrent streams reached. Currently streaming: ${streamingNames}`)
-      return
-    }
-
+    // Post slash-commands: not a slash command, proceed with normal send
     els.promptInput.value = ""
     autoResizeTextarea()
     updateSendButton()
@@ -1959,7 +1993,7 @@ function getVsCodeApi() {
   /* ─── WELCOME ─── */
 
   function setupWelcomeSuggestions() {
-    document.addEventListener("click", (e) => {
+    els.welcomeView.addEventListener("click", (e) => {
       const target = e.target as HTMLElement
       const card = target.closest(".suggestion-card") as HTMLButtonElement
       if (card && card.dataset.prompt) {
@@ -2276,8 +2310,27 @@ function getVsCodeApi() {
   }
 
   function addMessage(sessionId: string, msg: ChatMessage) {
-    const session = stateManager.getSession(sessionId)
-    if (!session) return
+    // Auto-create the session locally if the extension is referring to one
+    // we haven't seen yet (e.g. it was filtered from init_state for being empty,
+    // or stream events arrived before init_state finished).
+    let session = stateManager.getSession(sessionId)
+    if (!session) {
+      session = stateManager.ensureSession({
+        id: sessionId,
+        name: "New Session",
+        model: stateManager.getState().globalModel || "",
+        mode: "build",
+        messages: [],
+        isStreaming: false,
+      })
+      if (!els.tabPanels.querySelector(`.tab-panel[data-tab-id="${CSS.escape(sessionId)}"]`)) {
+        createTabUI(sessionId, session.name)
+      }
+      updateTabBar()
+    }
+
+    // Any message arriving means we're past the welcome state.
+    hideWelcomeView()
 
     session.messages.push(msg)
 
@@ -2364,25 +2417,38 @@ function getVsCodeApi() {
 
     const messageHandlers = new Map<string, MsgHandler>([
       ["message", (msg) => { if (msg.message) handleHostMessage(msg.message) }],
-      ["stream_start", (_msg, sid) => { if (sid) handleStreamStart(sid, _msg.messageId as string) }],
-      ["stream_chunk", (_msg, sid) => { if (sid) handleStreamChunk(sid, _msg.text as string) }],
+      ["stream_start", (_msg, sid) => {
+        if (!sid) return
+        handleStreamStart(sid, _msg.messageId as string)
+        const resumed = _msg.resumed as { existingText?: string; messageId?: string } | undefined
+        if (resumed?.existingText) {
+          const stream = streamHandlers.get(sid)
+          stream?.forceRerender(resumed.existingText)
+        }
+      }],
+      ["stream_chunk", (_msg, sid) => { if (sid) handleStreamChunk(sid, _msg.text as string, _msg.messageId as string | undefined) }],
       ["stream_end", (_msg, sid) => { if (sid) handleStreamEnd(sid, _msg.messageId as string, _msg.blocks, _msg.reason as string | undefined, Boolean(_msg.partial)) }],
-      ["stream_ping", (_msg, sid) => {
+["stream_ping", (_msg, sid) => {
         if (sid) {
           const stream = streamHandlers.get(sid)
           const seq = Number(_msg.seq || 0)
-          const lastChunkSeq = stream ? (stream as any).state?.chunkSeq ?? 0 : 0
+          const lastChunkSeq = stream?.chunkSeq ?? 0
           vscode.postMessage({ type: "stream_ack", sessionId: sid, seq, lastRenderedChunkSeq: lastChunkSeq })
         }
       }],
       ["force_rerender", (_msg, sid) => {
         if (sid && typeof _msg.text === "string") {
           const stream = streamHandlers.get(sid)
-          if (stream && (stream as any).state) {
-            const state = (stream as any).state
-            state.currentBlockBuffer = _msg.text
-            const textEl = state.currentBlockEl || state.lastStreamTextEl
-            if (textEl) textEl.textContent = stripContextFromText(_msg.text)
+          if (stream) {
+            stream.forceRerender(_msg.text as string)
+          }
+        }
+      }],
+      ["force_rerender", (_msg, sid) => {
+        if (sid && typeof _msg.text === "string") {
+          const stream = streamHandlers.get(sid)
+          if (stream) {
+            stream.forceRerender(_msg.text as string)
           }
         }
       }],
@@ -2520,7 +2586,9 @@ function getVsCodeApi() {
       }],
       ["clear_messages", (_msg, sid) => { handleClearMessages(sid) }],
       ["context_usage", (msg) => {
-        updateContextUsage(els, { tokens: msg.tokens as number, total: msg.maxTokens as number, percentage: msg.percent as number })
+        const activeId = stateManager.getState().activeSessionId
+        const tabPanel = activeId ? els.tabPanels.querySelector<HTMLElement>(`.tab-panel[data-tab-id="${CSS.escape(activeId)}"] .context-monitor`) : null
+        if (tabPanel) updateContextUsage(tabPanel, { percent: msg.percent as number, tokens: msg.tokens as number, maxTokens: msg.maxTokens as number })
       }],
       ["server_status", (msg, sid) => { if (sid) handleServerStatus(sid, msg.status as string) }],
       ["streaming_state", (msg, sid) => {
@@ -2539,6 +2607,10 @@ function getVsCodeApi() {
           updateTabBar()
           updateSendButton()
         }
+      }],
+      ["active_session_changed", (_msg, sid) => {
+        if (!sid || !stateManager.getSession(sid)) return
+        switchTab(sid, false)
       }],
       ["stream_tool_start", (msg, sid) => {
         if (sid) {
@@ -2571,14 +2643,6 @@ function getVsCodeApi() {
             stream.handleToolEnd(result.id, result)
           }
         }
-      }],
-      ["stream_ping", (msg, sid) => {
-        vscode.postMessage({ type: "stream_ack", sessionId: sid, seq: msg.seq })
-      }],
-      ["force_rerender", (_msg, sid) => {
-        if (!sid) return
-        const stream = streamHandlers.get(sid)
-        stream?.handleStreamChunk("")
       }],
       ["permission_request", (_msg, sid) => {
         if (sid) {
@@ -2671,20 +2735,34 @@ function getVsCodeApi() {
           modelDropdown.setCurrentModel(msg.globalModel as string)
         }
 
-        if (sessions.length > 0) {
-          sessions.forEach((s) => {
+        // Create tab UI for every session in our state (post-merge), not just
+        // those that came in this init_state. loadSessions preserves locally-
+        // known sessions, so we may have more than init_state sent.
+        const allSessions = stateManager.getAllSessions()
+        if (allSessions.length > 0) {
+          allSessions.forEach((s) => {
             const escapedId = CSS.escape(s.id)
             if (!els.tabPanels.querySelector(`.tab-panel[data-tab-id="${escapedId}"]`)) {
               createTabUI(s.id, s.name)
             }
           })
-
           syncModeUI()
           updateTabBar()
         }
 
-        if (msg.activeSessionId && sessions.some((s) => s.id === msg.activeSessionId)) {
-          switchTab(msg.activeSessionId as string)
+        // Decide what to display:
+        // 1. If init_state's active session is known → switch + hide welcome
+        // 2. Else if our merged state has an active session → switch to it
+        // 3. Else if we have ANY session → switch to the first one
+        // 4. Otherwise → show welcome
+        const stateActive = stateManager.getState().activeSessionId
+        const targetActive =
+          (msg.activeSessionId && stateManager.getSession(msg.activeSessionId as string)) ? msg.activeSessionId as string :
+          (stateActive && stateManager.getSession(stateActive)) ? stateActive :
+          (allSessions.length > 0 ? allSessions[0]!.id : null)
+
+        if (targetActive) {
+          switchTab(targetActive, false)
         } else {
           showWelcomeView()
         }
@@ -2748,18 +2826,26 @@ function getVsCodeApi() {
         if (typeof msg.sessionId === "string") {
           disposeVirtualList(msg.sessionId)
           const escapedId = CSS.escape(msg.sessionId)
+          const wasActive = stateManager.getState().activeSessionId === msg.sessionId
           stateManager.deleteSession(msg.sessionId)
+          streamHandlers.delete(msg.sessionId)
           const deletedPanel = els.tabPanels.querySelector(`.tab-panel[data-tab-id="${escapedId}"]`)
           if (deletedPanel) deletedPanel.remove()
           const tabEl = els.tabBar.querySelector(`.tab[data-tab-id="${escapedId}"]`)
           if (tabEl) tabEl.remove()
-          if (stateManager.getState().activeSessionId === msg.sessionId) {
-            const remaining = stateManager.getAllSessions()
+          const remaining = stateManager.getAllSessions()
+          if (wasActive) {
             const nextId = remaining.length > 0 ? remaining[0]?.id : null
-            if (nextId) switchTab(nextId)
+            if (nextId) {
+              switchTab(nextId)
+            }
           }
           updateTabBar()
-          if (stateManager.getAllSessions().length === 0) showWelcomeView()
+          if (remaining.length === 0) {
+            showWelcomeView()
+          } else {
+            hideWelcomeView()
+          }
         }
       }],
       ["compaction_started", (_msg, sid) => {
@@ -2775,6 +2861,7 @@ function getVsCodeApi() {
       ["command_list", (msg) => {
         const commands = (msg.commands || []) as Array<{ name: string; description?: string; template: string }>
         mention.updateServerCommands(commands)
+        if (msg.showInChat !== true) return
         const active = stateManager.getActiveSession()
         if (active && commands.length > 0) {
           const lines = commands.map(c => `/${c.name} \u2014 ${c.description || c.template}`).join("\n")
@@ -2845,6 +2932,16 @@ function getVsCodeApi() {
       const sessionId = (msg.message?.sessionId || msg.sessionId) as string | undefined
       const handler = messageHandlers.get(msg.type)
       if (handler) handler(msg, sessionId)
+    })
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        vscode.postMessage({ type: "request_state_sync" })
+      }
+    })
+
+    window.addEventListener("focus", () => {
+      vscode.postMessage({ type: "request_state_sync" })
     })
   }
 
@@ -3010,10 +3107,10 @@ function getVsCodeApi() {
 
 	  /* ─── DISPLAY TOGGLES (Phase 4.2) ─── */
 
-  function loadDisplayPrefs(): { text: boolean; tools: boolean; diffs: boolean; errors: boolean } {
+function loadDisplayPrefs(): { text: boolean; tools: boolean; diffs: boolean; errors: boolean } {
     try {
-      const state = vscode.getState() as WebviewState | undefined
-      const prefs = state?.displayPrefs
+      const webState = stateManager.getState()
+      const prefs = webState?.displayPrefs
       return {
         text: prefs?.text !== false,
         tools: prefs?.tools !== false,
@@ -3026,9 +3123,10 @@ function getVsCodeApi() {
   }
 
   function saveDisplayPrefs(prefs: { text: boolean; tools: boolean; diffs: boolean; errors: boolean }) {
-    try {
-      const state = (vscode.getState() as WebviewState) || {}
-      vscode.setState({ ...state, displayPrefs: prefs })
+try {
+      const webState = stateManager.getState()
+      webState.displayPrefs = prefs
+      stateManager.save()
     } catch {
       /* webview state may be unavailable; fail silently */
     }
@@ -3149,15 +3247,29 @@ function getVsCodeApi() {
   }
 
   function handleStreamStart(sessionId: string, messageId?: string) {
+    // Ensure the session exists in webview state. The extension can start a
+    // stream for a session the webview doesn't yet know about — e.g. when the
+    // session was filtered out of init_state because it had no persisted
+    // messages, or when the user submitted a prompt before init_state arrived.
+    let session = stateManager.getSession(sessionId)
+    if (!session) {
+      vscode.postMessage({ type: "webview_log", level: "warn", message: `handleStreamStart: Session ${sessionId} not in state, ensuring it` })
+      session = stateManager.ensureSession({
+        id: sessionId,
+        name: "New Session",
+        model: stateManager.getState().globalModel || "",
+        mode: "build",
+        messages: [],
+        isStreaming: false,
+      })
+    }
+
     // Ensure tab UI exists in the DOM before processing stream
     let msgList = getMessageList(sessionId)
     if (!msgList) {
       vscode.postMessage({ type: "webview_log", level: "warn", message: `handleStreamStart: No message list for ${sessionId}, creating tab UI` })
-      const session = stateManager.getSession(sessionId)
-      if (session) {
-        createTabUI(sessionId, session.name || "New Session")
-        msgList = getMessageList(sessionId)
-      }
+      createTabUI(sessionId, session.name || "New Session")
+      msgList = getMessageList(sessionId)
     }
 
     const stream = streamHandlers.get(sessionId)
@@ -3173,11 +3285,13 @@ function getVsCodeApi() {
       return
     }
 
-    // Ensure the tab is visible (active)
+    // Ensure the tab is visible (active) and welcome screen is hidden
     if (stateManager.getState().activeSessionId !== sessionId) {
       vscode.postMessage({ type: "webview_log", level: "info", message: `handleStreamStart: Switching to tab ${sessionId}` })
       switchTab(sessionId)
     }
+    hideWelcomeView()
+    updateTabBar()
 
     vscode.postMessage({ type: "webview_log", level: "info", message: `handleStreamStart: Starting stream for ${sessionId} (msgId=${messageId})` })
     finalStream.handleStreamStart(messageId)
@@ -3202,7 +3316,28 @@ function getVsCodeApi() {
   }
 
   let chunkLogCounter = 0
-  function handleStreamChunk(sessionId: string, text?: string) {
+  function handleStreamChunk(sessionId: string, text?: string, messageId?: string) {
+    // Defensive: if a chunk arrives for a session we haven't bootstrapped yet
+    // (race with init_state, or session filtered from init_state), bootstrap
+    // everything now so the chunk renders into a visible bubble.
+    if (!stateManager.getSession(sessionId)) {
+      stateManager.ensureSession({
+        id: sessionId,
+        name: "New Session",
+        model: stateManager.getState().globalModel || "",
+        mode: "build",
+        messages: [],
+        isStreaming: false,
+      })
+    }
+    if (!els.tabPanels.querySelector(`.tab-panel[data-tab-id="${CSS.escape(sessionId)}"]`)) {
+      const sess = stateManager.getSession(sessionId)
+      if (sess) {
+        createTabUI(sessionId, sess.name)
+        updateTabBar()
+        hideWelcomeView()
+      }
+    }
     let stream = streamHandlers.get(sessionId)
     if (!stream) {
       vscode.postMessage({ type: "webview_log", level: "warn", message: `handleStreamChunk: No stream found for session ${sessionId}, creating...` })
@@ -3218,7 +3353,7 @@ function getVsCodeApi() {
         message: `handleStreamChunk: chunk #${chunkLogCounter} for ${sessionId} len=${text?.length || 0} streamingMessageId=${s.streamingMessageId ?? "<null>"}`,
       })
     }
-    s.handleStreamChunk(text)
+    s.handleStreamChunk(text, messageId)
   }
 
   function handleStreamEnd(sessionId: string, messageId?: string, blocks?: unknown, reason?: string, partial?: boolean) {
@@ -3227,7 +3362,6 @@ function getVsCodeApi() {
       if (!stream) {
         vscode.postMessage({ type: "webview_log", level: "warn", message: `handleStreamEnd: No stream found for session ${sessionId}` })
       } else {
-        vscode.postMessage({ type: "webview_log", level: "info", message: `handleStreamEnd: Ending stream for ${sessionId}` })
         try {
           stream.handleStreamEnd(messageId, blocks)
         } catch (err) {
@@ -3238,8 +3372,6 @@ function getVsCodeApi() {
 
       const blockList = Array.isArray(blocks) ? blocks as ChatMessage["blocks"] : []
 
-      // Always render blocks if present, even if stream handler failed.
-      // addMessage's dedup check prevents double-render if already rendered.
       if (blockList.length > 0) {
         const msgList = getMessageList(sessionId)
         if (messageId && msgList) {
@@ -3267,47 +3399,44 @@ function getVsCodeApi() {
       updateModeSelectorState()
       updateAgentStatus("idle")
 
-    // Show user-actionable message for timeout/ttfb/error scenarios
-    if (reason === "ttfb_timeout") {
-      showSystemMessage(sessionId, "The model took too long to start responding. Please try again or select a different model.", true)
-    } else if (reason === "timeout") {
-      if (partial) {
-        showSystemMessage(sessionId, "Response was cut off (timeout). Partial output has been preserved.", true)
-      } else {
-        showSystemMessage(sessionId, "Response timed out. Please try again or select a different model.", true)
+      if (reason === "ttfb_timeout") {
+        showSystemMessage(sessionId, "The model took too long to start responding. Please try again or select a different model.", true)
+      } else if (reason === "timeout") {
+        if (partial) {
+          showSystemMessage(sessionId, "Response was cut off (timeout). Partial output has been preserved.", true)
+        } else {
+          showSystemMessage(sessionId, "Response timed out. Please try again or select a different model.", true)
+        }
+      } else if (reason === "hard_timeout") {
+        showSystemMessage(sessionId, "Stream interrupted after extended run. Partial output preserved.", true)
+      } else if (reason === "error") {
+        showSystemMessage(sessionId, "An error occurred while generating the response. Please try again.", true)
+      } else if (reason === "aborted") {
+        // Aborted is user-initiated — no error message needed
       }
-    } else if (reason === "hard_timeout") {
-      showSystemMessage(sessionId, "Stream interrupted after extended run. Partial output preserved.", true)
-    } else if (reason === "error") {
-      showSystemMessage(sessionId, "An error occurred while generating the response. Please try again.", true)
-    } else if (reason === "aborted") {
-      // Aborted is user-initiated — no error message needed
-    }
 
-    if (sessionId === stateManager.getState().activeSessionId) {
-      updateSendButtonIcon(false)
-      updateSendButton()
-    }
+      if (sessionId === stateManager.getState().activeSessionId) {
+        updateSendButtonIcon(false)
+        updateSendButton()
+      }
 
-    // Auto-advance queue: if stream ended (not aborted), send next queued prompt
-    if (reason !== "aborted") {
-      const queue = promptQueues.get(sessionId)
-      if (queue && queue.isNextReady()) {
-        const next = queue.processNext()
-        if (next) {
-          sendQueuedPrompt(sessionId, next.text, next.attachments)
+      if (reason !== "aborted") {
+        const queue = promptQueues.get(sessionId)
+        if (queue && queue.isNextReady()) {
+          const next = queue.processNext()
+          if (next) {
+            sendQueuedPrompt(sessionId, next.text, next.attachments)
+          }
         }
       }
-    }
     } catch (err) {
       console.error("[OpenCode] handleStreamEnd top-level error:", err)
       vscode.postMessage({ type: "webview_log", level: "error", message: `handleStreamEnd error: ${err instanceof Error ? err.message : String(err)}` })
-      // Even if everything else fails, try to show the system message
-      try { showSystemMessage(sessionId, reason === "ttfb_timeout" ? "Model took too long. Try a different model." : reason === "timeout" ? "Response timed out." : reason === "error" ? "An error occurred." : "Unexpected error.") } catch {}
       try { stateManager.setStreaming(sessionId, false) } catch {}
       try { updateTabBar() } catch {}
       try { updateModeSelectorState() } catch {}
       try { updateAgentStatus("idle") } catch {}
+      try { showSystemMessage(sessionId, reason === "ttfb_timeout" ? "Model took too long. Try a different model." : reason === "timeout" ? "Response timed out." : reason === "error" ? "An error occurred." : "Unexpected error.") } catch {}
     }
   }
 
@@ -3503,18 +3632,17 @@ function getVsCodeApi() {
   }
 
   const fileEditBatcher = new (class FileEditBatcher {
-    private pending = new Map<string, { files: Set<string>; timer: ReturnType<typeof setTimeout> }>()
+    private pending = new Map<string, { files: Set<string>; timer: ReturnType<typeof setTimeout> | null }>()
     private readonly FLUSH_MS = 500
 
     add(sessionId: string, filePath: string) {
       let entry = this.pending.get(sessionId)
       if (!entry) {
-        entry = { files: new Set<string>(), timer: setTimeout(() => {}, 0) as ReturnType<typeof setTimeout> }
-        clearTimeout(entry.timer)
+        entry = { files: new Set<string>(), timer: null }
         this.pending.set(sessionId, entry)
       }
       entry.files.add(filePath)
-      clearTimeout(entry.timer)
+      if (entry.timer !== null) clearTimeout(entry.timer)
       entry.timer = setTimeout(() => this.flush(sessionId), this.FLUSH_MS)
     }
 
@@ -3537,7 +3665,9 @@ function getVsCodeApi() {
     }
 
     cancelAll() {
-      for (const entry of this.pending.values()) clearTimeout(entry.timer)
+      for (const entry of this.pending.values()) {
+        if (entry.timer !== null) clearTimeout(entry.timer)
+      }
       this.pending.clear()
     }
   })()
@@ -3553,13 +3683,14 @@ function getVsCodeApi() {
     }
   }
 
-  function undoMessage(messageId: string) {
+function undoMessage(messageId: string) {
     const sessionId = stateManager.getState().activeSessionId
     if (sessionId) {
       vscode.postMessage({ type: "revert_message", messageId, sessionId })
     }
   }
 
+  // Stubs for workspace-based session browsing (used by extension host)
   function getSessionsByWorkspace(workspacePath: string) {
     return stateManager.getAllSessions().filter(s => (s as any).workspacePath === workspacePath)
   }
@@ -3646,11 +3777,19 @@ function getVsCodeApi() {
 
   /* ─── START ─── */
 
-  try {
-    init()
-    vscode.postMessage({ type: "webview_ready" })
-  } catch (err) {
-    console.error("[OpenCode] Fatal init error:", err)
-    vscode.postMessage({ type: "webview_error", message: "Initialization failed" })
+function boot() {
+    try {
+      init()
+      vscode.postMessage({ type: "webview_ready" })
+    } catch (err) {
+      console.error("[OpenCode] Fatal init error:", err)
+      vscode.postMessage({ type: "webview_error", message: "Initialization failed" })
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot)
+  } else {
+    boot()
   }
 })()

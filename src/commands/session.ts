@@ -141,7 +141,7 @@ export function registerDeleteSessionCommand(
         const session = sessionStore.get(sessionId)
         if (session && session.messages.length > 0) {
           const lastMsg = session.messages[session.messages.length - 1]
-          const isStreaming = lastMsg && lastMsg.role === "assistant" && !lastMsg.blocks.some(b => b.type === "text" && b.text)
+          const isStreaming = lastMsg && lastMsg.role === "assistant" && !lastMsg.blocks?.some(b => b.type === "text" && b.text)
           if (isStreaming) {
             const abortFirst = await vscode.window.showWarningMessage(
               "This session is currently streaming. Abort the stream before deleting?",
@@ -516,7 +516,14 @@ export function registerAttachRemoteCommand(
         }
 
         await config.update("serverUrl", trimmed, vscode.ConfigurationTarget.Global)
-        await config.update("serverAuthToken", token ?? "", vscode.ConfigurationTarget.Global)
+        // Store auth token securely via SecretStorage instead of plaintext settings.json
+        if (token) {
+          await context.secrets.store("opencode-harness.serverAuthToken", token)
+        } else {
+          await context.secrets.delete("opencode-harness.serverAuthToken")
+        }
+        await config.update("serverAuthToken", "", vscode.ConfigurationTarget.Global)
+        // Clean up any previously stored token in settings
 
         sessionManager.setRemoteServer(trimmed.length > 0 ? trimmed : null, token ?? null)
 

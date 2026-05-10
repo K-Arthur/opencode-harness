@@ -110,4 +110,129 @@ describe("SessionManager.ts", () => {
       "recoverSessions must NOT filter by isInCurrentWorkspace (all workspace sessions should be recoverable)"
     )
   })
+
+  // ── Event stream transport ──────────────────────────────────────────────
+
+  it("defines MAX_EVENT_STREAM_RECONNECT_ATTEMPTS constant", () => {
+    assert.ok(
+      source.includes("MAX_EVENT_STREAM_RECONNECT_ATTEMPTS = 10"),
+      "must cap event stream reconnect attempts at 10"
+    )
+  })
+
+  it("transitions to 'failed' lifecycle state when max reconnect attempts reached", () => {
+    const reconnect = source.indexOf("private scheduleEventStreamReconnect(")
+    assert.ok(reconnect >= 0, "scheduleEventStreamReconnect must exist")
+    const block = source.slice(reconnect, reconnect + 700)
+    assert.ok(
+      block.includes("this.eventReconnectAttempts >= this.MAX_EVENT_STREAM_RECONNECT_ATTEMPTS"),
+      "must check max attempts before scheduling reconnect"
+    )
+    assert.ok(
+      block.includes('this.setEventStreamState("failed")'),
+      "must set state to 'failed' when max attempts exhausted"
+    )
+    assert.ok(
+      block.includes('type: "server_error"'),
+      "must fire server_error before entering failed state"
+    )
+    assert.ok(
+      block.includes("max reconnect attempts reached"),
+      "server_error must indicate max reconnect attempts reached"
+    )
+  })
+
+  it("resolves event stream waiters with false when entering 'failed' or 'disconnected' state", () => {
+    assert.ok(
+      source.includes('state === "failed" || state === "disconnected"'),
+      "must resolve waiters with false on failed or disconnected"
+    )
+    assert.ok(
+      source.includes("this.eventStreamReadyWaiters.forEach"),
+      "must notify all waiters"
+    )
+  })
+
+  it("resets normalizer on reconnect to avoid stale deduplication", () => {
+    const markConnected = source.indexOf("private markEventStreamConnected(")
+    assert.ok(markConnected >= 0, "markEventStreamConnected must exist")
+    const block = source.slice(markConnected, markConnected + 500)
+    assert.ok(
+      block.includes("this.eventNormalizer = createSdkEventNormalizer()"),
+      "must reassign normalizer on reconnect to clear stale dedup state"
+    )
+  })
+
+  /**
+   * Pattern for source-text assertions: extract a method's full body by
+   * anchoring on its declaration and slicing through the start of the next
+   * sibling. Prefer this over `source.slice(idx, idx + N)` — fixed character
+   * windows silently fail when the method grows.
+   *
+   * Other tests in this codebase still use `idx + N` slicing; migrate them
+   * to a similar helper opportunistically when assertions break or the
+   * method body grows.
+   */
+  const extractRunEventStreamBody = (): string => {
+    const start = source.indexOf("private async runEventStream(")
+    assert.ok(start >= 0, "runEventStream must exist")
+    const after = source.slice(start + 1)
+    const nextMethodMatch = after.match(/\n  (?:private |async |get |dispose\(|protected )/)
+    const end = nextMethodMatch && typeof nextMethodMatch.index === "number"
+      ? start + 1 + nextMethodMatch.index
+      : source.length
+    return source.slice(start, end)
+  }
+
+  it("applies connection timeout to the event stream fetch", () => {
+    const block = extractRunEventStreamBody()
+    assert.ok(
+      block.includes("connectTimeout"),
+      "must set a connection timeout on the fetch"
+    )
+    assert.ok(
+      block.includes("clearTimeout(connectTimeout)"),
+      "must clear connection timeout after fetch completes"
+    )
+  })
+
+  it("surfaces specific connection timeout error instead of silent abort", () => {
+    const block = extractRunEventStreamBody()
+    assert.ok(
+      block.includes("connectionTimedOut"),
+      "must track connection timeout with a flag"
+    )
+    assert.ok(
+      block.includes('"OpenCode event stream connection timed out after 30s"'),
+      "must log specific timeout message"
+    )
+    assert.ok(
+      block.includes('this.scheduleEventStreamReconnect("connection_timeout")'),
+      "must schedule reconnect with connection_timeout reason"
+    )
+  })
+
+  it("preserves user-initiated abort distinction without reconnect attempt", () => {
+    const block = extractRunEventStreamBody()
+    assert.ok(
+      block.includes("if (controller.signal.aborted) return"),
+      "user abort must return without scheduling reconnect"
+    )
+    assert.ok(
+      block.includes('generation !== this.eventStreamGeneration || this.disposed'),
+      "stale generation must return without scheduling reconnect"
+    )
+  })
+
+  it("aborts the event stream when reads idle for too long (server stall protection)", () => {
+    const block = extractRunEventStreamBody()
+    assert.ok(
+      block.includes("idleTimedOut"),
+      "must track an idle/stall flag for the read loop"
+    )
+    assert.ok(
+      block.includes("idle_timeout"),
+      "must reconnect with idle_timeout reason when reads stall"
+    )
+  })
 })

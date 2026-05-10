@@ -76,11 +76,11 @@ describe("SessionStore — session lifecycle", () => {
     assert.ok(method.includes("_onSessionsChanged.fire"), "must emit after delete")
   })
 
-  it("dispose flushes and cleans up emitters", () => {
+it("dispose flushes and cleans up emitters", () => {
     const methodStart = source.indexOf("dispose(): void")
-    const methodEnd = methodStart + 120
+    const methodEnd = methodStart + 500
     const method = source.slice(methodStart, methodEnd)
-    assert.ok(method.includes("this.flush()"), "must flush before dispose")
+    assert.ok(method.includes("void this.flush()") || method.includes("this.flush()"), "must flush before dispose")
     assert.ok(method.includes("_onSessionsChanged.dispose()"), "must dispose sessions emitter")
     assert.ok(method.includes("_onActiveSessionChanged.dispose()"), "must dispose active emitter")
   })

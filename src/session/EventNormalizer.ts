@@ -14,6 +14,7 @@ export type NormalizedOpencodeEventType =
   | "file_edited"
   | "permission_request"
   | "permission_replied"
+  | "step_finish"
 
 export interface NormalizedOpencodeEvent {
   type: NormalizedOpencodeEventType | string
@@ -92,7 +93,9 @@ import { FileEditHandler } from "./eventHandlers/FileEditHandler"
 import { PermissionHandler } from "./eventHandlers/PermissionHandler"
 import { SessionDiffHandler } from "./eventHandlers/SessionDiffHandler"
 import { SessionCompactedHandler } from "./eventHandlers/SessionCompactedHandler"
+import { StepFinishHandler } from "./eventHandlers/StepFinishHandler"
 import { FallbackHandler } from "./eventHandlers/FallbackHandler"
+import { ServerConnectedHandler } from "./eventHandlers/ServerConnectedHandler"
 
 // Static handler chain — instantiated once at module load
 const HANDLERS: EventHandler[] = [
@@ -107,6 +110,8 @@ const HANDLERS: EventHandler[] = [
   new PermissionHandler(),
   new SessionDiffHandler(),
   new SessionCompactedHandler(),
+  new StepFinishHandler(),
+  new ServerConnectedHandler(),
   new FallbackHandler(),
 ]
 

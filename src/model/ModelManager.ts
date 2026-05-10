@@ -6,6 +6,7 @@ export interface ModelInfo {
   provider: string
   displayName: string
   contextWindow?: number
+  outputLimit?: number
   available?: boolean
   unavailableReason?: string
   supportsVariants?: boolean
@@ -61,6 +62,13 @@ export class ModelManager {
 
   get models(): ModelInfo[] {
     return this._models
+  }
+
+  getContextWindow(modelId?: string): number | undefined {
+    const target = modelId || this._current
+    if (!target) return undefined
+    const info = this._models.find(m => `${m.provider}/${m.id}` === target)
+    return info?.contextWindow
   }
 
   setModel(modelId: string): void {
@@ -137,15 +145,20 @@ export class ModelManager {
             id: m.id,
             provider: provider.id,
             displayName: m.name || m.id,
+            contextWindow: m.limit?.context || undefined,
+            outputLimit: m.limit?.output || undefined,
             supportsVariants: !!reasoning,
           })
         }
       }
 
+      const prevCount = this._models.length
       this._models = models
       this.saveCachedModels()
       this._onModelsRefreshed.fire()
-      log.info(`Refreshed models from server: ${models.length} models available`)
+      if (models.length !== prevCount) {
+        log.info(`Refreshed models from server: ${models.length} models available`)
+      }
       return models
     } finally {
       clearTimeout(timeout)

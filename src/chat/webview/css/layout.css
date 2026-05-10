@@ -709,19 +709,8 @@
   transition: background var(--duration-fast);
 }
 
-.mode-opt.icon-btn:hover {
-  background: var(--oc-list-hover);
-  color: var(--oc-fg);
-}
-
 .icon-btn.active-feedback {
   animation: active-pop var(--duration-fast) var(--ease-spring);
-}
-
-@keyframes active-pop {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.1); background: var(--oc-accent-subtle); }
-  100% { transform: scale(1); }
 }
 
 .icon-btn svg {

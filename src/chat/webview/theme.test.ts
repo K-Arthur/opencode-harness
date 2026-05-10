@@ -41,7 +41,8 @@ describe("theme.ts", () => {
   })
 
   it("shows context usage percentage", () => {
-    assert.ok(source.includes("contextLabel.textContent"))
-    assert.ok(source.includes("pct"))
+    assert.ok(source.includes(".context-text"))
+    assert.ok(source.includes("usage.percent"))
+    assert.ok(source.includes(".context-progress-fill"))
   })
 })

@@ -32,6 +32,7 @@ import type {
   DiffHunk,
   DiffLine,
 } from "./types"
+import { estimateMessageTokens } from "../../utils/tokenCounter"
 
 // ---------------------------------------------------------------------------
 // Markdown parser with security settings
@@ -246,6 +247,16 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
     roleSpan.className = "message-role"
     roleSpan.textContent = role === "user" ? "You" : "OpenCode"
     header.appendChild(roleSpan)
+
+    const messageTokens = msg.tokenCount ?? estimateMessageTokens(msg)
+    if (messageTokens > 0) {
+      const tokenBadge = document.createElement("span")
+      tokenBadge.className = "message-token-badge"
+      tokenBadge.textContent = `${messageTokens.toLocaleString()} tok`
+      tokenBadge.title = msg.tokenCount ? `SDK-reported tokens for this message` : "Estimated tokens for this message"
+      header.appendChild(tokenBadge)
+    }
+
     if (msg.timestamp) {
       const ts = document.createElement("span")
       ts.className = "message-timestamp"
@@ -620,6 +631,18 @@ function renderSkillBadge(block: Block, _opts: RenderOptions): HTMLElement | nul
 }
 
 // ---------------------------------------------------------------------------
+// Safe JSON parse with fallback
+// ---------------------------------------------------------------------------
+
+function safeJsonParse(value: string): unknown {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return value
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Tool call block — full renderer with states and classes
 // ---------------------------------------------------------------------------
 
@@ -630,7 +653,7 @@ function renderToolCallBlock(block: Block, opts: RenderOptions): HTMLElement | n
         name: block.toolName || block.name || "tool",
         class: (block.class as ToolCallClass) || (block.toolType as ToolCallClass) || 'read',
         state: (block.state as ToolCallState) || 'running',
-        args: block.args ? (typeof block.args === 'string' ? JSON.parse(block.args) : block.args) : undefined,
+        args: block.args ? (typeof block.args === 'string' ? safeJsonParse(block.args) : block.args) : undefined,
         result: block.result,
         durationMs: (block.durationMs as number | undefined),
       } as ToolCallBlock)
@@ -721,8 +744,9 @@ function renderToolCallBlock(block: Block, opts: RenderOptions): HTMLElement | n
   }
   summary.appendChild(badge)
 
-  // Duration
-  if (toolBlock.durationMs && (toolState === 'result' || toolState === 'completed')) {
+  // Duration — show for any terminal state (result, completed, error, stale)
+  const isTerminal = toolState === 'result' || toolState === 'completed' || toolState === 'error' || toolState === 'stale'
+  if (toolBlock.durationMs && isTerminal) {
     const dur = document.createElement("span")
     dur.className = "tool-duration"
     dur.textContent = toolBlock.durationMs >= 1000
@@ -772,11 +796,15 @@ function renderToolCallBlock(block: Block, opts: RenderOptions): HTMLElement | n
     details.appendChild(argsDiv)
   }
 
-  // Result panel
-  if (toolBlock.result !== undefined && (toolState === 'result' || toolState === 'completed' || toolState === 'stale')) {
+  // Result/error panel — render for any terminal state. If only `error` is set
+  // (no `result`), surface the error text so the user sees the failure detail.
+  const hasOutput = toolBlock.result !== undefined || (toolBlock.error !== undefined && toolBlock.error !== "")
+  if (hasOutput && (toolState === 'result' || toolState === 'completed' || toolState === 'stale' || toolState === 'error')) {
+    const isErrorPanel = !!toolBlock.error || toolState === 'error'
     const resultDiv = document.createElement("div")
-    resultDiv.className = toolBlock.error ? "tool-result-panel tool-result-panel--error" : "tool-result-panel"
-    const resultText = typeof toolBlock.result === 'string' ? toolBlock.result : JSON.stringify(toolBlock.result, null, 2)
+    resultDiv.className = isErrorPanel ? "tool-result-panel tool-result-panel--error" : "tool-result-panel"
+    const rawOutput = toolBlock.result !== undefined ? toolBlock.result : toolBlock.error
+    const resultText = typeof rawOutput === 'string' ? rawOutput : JSON.stringify(rawOutput, null, 2)
     const lines = resultText.split("\n")
     const truncated = resultText.length > 2000 || lines.length > 40
     const displayResult = truncated ? lines.slice(0, 40).join("\n").slice(0, 2000) : resultText
@@ -994,12 +1022,14 @@ function renderNewDiffBlock(block: Block, opts: RenderOptions): HTMLElement | nu
     table.className = "diff-table"
 
     diffBlock.hunks.forEach((hunk) => {
-      // Hunk header
+      // Hunk header — unified-diff line counts: old = removed+context, new = added+context
+      const oldCount = hunk.lines.filter((l) => l.type === "removed" || l.type === "context").length
+      const newCount = hunk.lines.filter((l) => l.type === "added" || l.type === "context").length
       const hunkRow = document.createElement("tr")
       hunkRow.className = "diff-hunk-header"
       const hunkCell = document.createElement("td")
       hunkCell.colSpan = 4
-      hunkCell.textContent = `@@ -${hunk.oldStart},${hunk.lines.length} +${hunk.newStart},${hunk.lines.length} @@`
+      hunkCell.textContent = `@@ -${hunk.oldStart},${oldCount} +${hunk.newStart},${newCount} @@`
       hunkRow.appendChild(hunkCell)
       table.appendChild(hunkRow)
 

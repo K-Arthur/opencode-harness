@@ -41,6 +41,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private chatCommands: ChatCommands
   private autoCompactor: AutoCompactor
   private fileOps = new ChatFileOps()
+  private restoredTabsHydrated = false
 
   /** H3: Queue of messages buffered before webview was ready */
   private earlyMessageQueue: Record<string, unknown>[] = []
@@ -53,10 +54,6 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     (msg) => { this._view?.webview.postMessage(msg) },
     (msg) => log.info(msg),
   )
-  private streamHeartbeatTimer: ReturnType<typeof setInterval> | null = null
-  private streamHeartbeatSeq = 0
-  private lastStreamAckAt = Date.now()
-  private lastStreamAckSeq = 0
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -111,7 +108,9 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     _token: vscode.CancellationToken
   ): void {
     // H16: Dispose old disposables from previous webview resolve to prevent memory leak
-    for (const d of this.disposables) d.dispose()
+    for (const d of this.disposables) {
+      try { d.dispose() } catch { /* individual dispose failure should not block others */ }
+    }
     this.disposables = []
 
     // Clear any pending chunk buffer and timer from previous webview instance
@@ -135,18 +134,30 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
 
     // Subscriptions
     this.disposables.push(
-      this.modelManager.onModelChanged((model) => this.pushModelToWebview(model)),
-      this.modelManager.onModelsRefreshed(() => this.pushModelListToWebview()),
+      this.modelManager.onModelChanged((model) => {
+        this.pushModelToWebview(model)
+        const ctxWindow = this.modelManager.getContextWindow(model)
+        if (ctxWindow) {
+          const override = vscode.workspace.getConfiguration("opencode").get<number>("contextWindowOverride", 0)
+          this.contextMonitor.setTokenLimit(override > 0 ? override : ctxWindow)
+        }
+      }),
+      this.modelManager.onModelsRefreshed(() => {
+        this.pushModelListToWebview()
+        const ctxWindow = this.modelManager.getContextWindow()
+        if (ctxWindow) {
+          const override = vscode.workspace.getConfiguration("opencode").get<number>("contextWindowOverride", 0)
+          this.contextMonitor.setTokenLimit(override > 0 ? override : ctxWindow)
+        }
+      }),
       this.themeManager.onThemeChanged(() => this.pushThemeToWebview()),
       this.rateLimitMonitor.onStateChanged(() => this.pushRateLimitStateToWebview()),
       this.rateLimitMonitor.onReset(() => this.pushRateLimitStateToWebview()),
       this.rateLimitMonitor.onWarning((msg) => vscode.window.showWarningMessage(msg)),
       this.sessionStore.onActiveSessionChanged(() => this.syncActiveSession()),
-      this.sessionManager.onEvent((event) => this.handleServerEvent(event)),
-      this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
+      this.sessionManager.subscribe("ChatProvider/handleServerEvent", (event) => this.handleServerEvent(event)),
+this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         this.postMessage({ type: "streaming_state", sessionId: tabId, isStreaming })
-        if (isStreaming) this.startStreamHeartbeat()
-        else if (!this.tabManager.getAllTabs().some(t => t.isStreaming)) this.stopStreamHeartbeat()
       }),
       this.contextMonitor.onContextChanged?.((usage) => {
         this.postMessage({
@@ -154,6 +165,8 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
           percent: usage.percent,
           tokens: usage.tokens,
           maxTokens: usage.maxTokens,
+          sessionId: usage.sessionId,
+          breakdown: usage.breakdown,
         })
         if (usage.percent >= 80) {
           this.autoCompactor.tryCompactIfNeeded({
@@ -164,14 +177,23 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       })
     )
 
+    this.disposables.push(
+      webviewView.onDidChangeVisibility(() => {
+        if (!webviewView.visible || !this.webviewReady) return
+        this.pushVisibleStateToWebview()
+      })
+    )
+
     // Webview message handler
-    webviewView.webview.onDidReceiveMessage(async (msg: Record<string, unknown>) => {
-      try {
-        await this.handleWebviewMessage(msg)
-      } catch (err) {
-        log.error("Error handling webview message", err)
-      }
-    })
+    this.disposables.push(
+      webviewView.webview.onDidReceiveMessage(async (msg: Record<string, unknown>) => {
+        try {
+          await this.handleWebviewMessage(msg)
+        } catch (err) {
+          log.error("Error handling webview message", err)
+        }
+      })
+    )
 
     webviewView.onDidDispose(() => {
       this._view = undefined
@@ -205,7 +227,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     "add_mcp_server", "update_mcp_server", "remove_mcp_server", "toggle_mcp_server", "get_mcp_servers",
     "show_diff", "list_checkpoints", "restore_checkpoint",
     "preview_theme", "get_theme_config", "update_theme_config", "list_cli_themes",
-    "request_more_messages", "stream_ack", "retry_stream",
+    "request_more_messages", "stream_ack", "retry_stream", "request_state_sync",
   ])
 
   // ---------------------------------------------------------------------------
@@ -240,17 +262,18 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
           const model = (msg.model as string | undefined) || this.modelManager.model
           if (!model) { throw new Error("No model selected. Please select a model and try again.") }
           this.ensureLocalTab(sessionId, msg.name as string | undefined, model, msg.mode as string | undefined)
+          const variant = typeof msg.variant === "string" ? msg.variant : undefined
+          await this.streamCoordinator.startPrompt(sessionId, msg.text as string || "[image]", {
+            postMessage: (m) => this.postMessage(m),
+            postRequestError: (m) => this.postRequestError(m),
+          }, variant)
+          // Persist user message only after model validation and stream start succeed
           const userMessageId = (msg.messageId as string) || `user-${crypto.randomUUID()}`
           const attachments = Array.isArray(msg.attachments) ? msg.attachments as Array<{ data: string; mimeType: string }> : []
           const textBlocks: Block[] = msg.text ? [{ type: "text", text: msg.text }] : []
           const imageBlocks: Block[] = attachments.map((a) => ({ type: "image", data: a.data, mimeType: a.mimeType }))
           const userMsg: ChatMessage = { role: "user", id: userMessageId, blocks: [...textBlocks, ...imageBlocks], timestamp: Date.now(), sessionId }
           this.sessionStore.appendMessage(sessionId, userMsg)
-          const variant = typeof msg.variant === "string" ? msg.variant : undefined
-          await this.streamCoordinator.startPrompt(sessionId, msg.text as string || "[image]", {
-            postMessage: (m) => this.postMessage(m),
-            postRequestError: (m) => this.postRequestError(m),
-          }, variant)
         } catch (err) {
           log.error("send_prompt failed", err)
           this.postRequestError(err instanceof Error ? err.message : "Failed to send prompt")
@@ -290,14 +313,6 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     ["webview_log", (msg: Record<string, unknown>) => {
       const lvl = msg.level === "warn" ? "warn" : msg.level === "error" ? "error" : "info"
       log[lvl](`[Webview] ${msg.message}`)
-    }],
-    ["stream_ack", (msg: Record<string, unknown>) => {
-      this.lastStreamAckAt = Date.now()
-      this.lastStreamAckSeq = Number(msg.seq || this.lastStreamAckSeq)
-      const sid = msg.sessionId as string | undefined
-      if (sid) {
-        this.streamCoordinator.handleStreamAck(sid, Number(msg.seq || 0), msg.lastRenderedChunkSeq != null ? Number(msg.lastRenderedChunkSeq) : undefined)
-      }
     }],
     ["retry_stream", (_: Record<string, unknown>, sessionId?: string) => {
       if (sessionId) {
@@ -343,11 +358,15 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       this.pushAllStateToWebview()
       for (const q of this.earlyMessageQueue) this.postMessage(q)
       this.earlyMessageQueue = []
+      this.replayLiveStreamsToWebview()
       if (this.pendingOpenSessionId) {
         const sessionId = this.pendingOpenSessionId
         this.pendingOpenSessionId = undefined
         await this.handleResumeSession(sessionId)
       }
+    }],
+    ["request_state_sync", () => {
+      this.pushVisibleStateToWebview()
     }],
     ["open_settings", async () => { await this.openOpenCodeConfigOrSettings() }],
     ["connect_provider", async () => { await this.handleConnectProvider() }],
@@ -959,15 +978,15 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     try {
       const customCommands = this.promptManager.getPromptCommands()
       if (!this.sessionManager.isRunning) {
-        this.postMessage({ type: "command_list", commands: customCommands })
+        this.postMessage({ type: "command_list", commands: customCommands, showInChat: true })
         return
       }
       const commands = await this.sessionManager.listCommands()
-      this.postMessage({ type: "command_list", commands: [...customCommands, ...commands] })
+      this.postMessage({ type: "command_list", commands: [...customCommands, ...commands], showInChat: true })
     } catch (err) {
       log.warn("Failed to list commands", err)
       const customCommands = this.promptManager.getPromptCommands()
-      this.postMessage({ type: "command_list", commands: customCommands })
+      this.postMessage({ type: "command_list", commands: customCommands, showInChat: true })
     }
   }
 
@@ -1116,6 +1135,18 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       this.postMessage({ type: "message", sessionId: tabId, message: { role: "system", blocks: [{ type: "thinking", text: data?.text || "" }], timestamp: Date.now(), sessionId: tabId } })
     }],
     ["session_compacted", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => { log.info(`Session compacted for ${tabId}`); this.postMessage({ type: "session_compacted", sessionId: tabId }) }],
+    ["step_finish", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {
+      const data = event.data as { tokens?: { input?: number; output?: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }; cost?: number } | undefined
+      if (data?.tokens) {
+        const t = data.tokens
+        this.postMessage({
+          type: "step_tokens",
+          sessionId: tabId,
+          tokens: { input: t.input ?? 0, output: t.output ?? 0, reasoning: t.reasoning ?? 0, cacheRead: t.cacheRead ?? 0, cacheWrite: t.cacheWrite ?? 0 },
+          cost: data.cost ?? 0,
+        })
+      }
+    }],
     ["server_error", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean }) => {
       const data = event.data as { error?: unknown } | undefined
       const errorMsg = this.errorValueToMessage(data?.error ?? event.data ?? "Server error")
@@ -1126,14 +1157,17 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
         this.tabManager.setWaitingForCompletion(tab.id, false)
         this.tabManager.clearCompletionTimeout(tab.id)
       } else {
-        // Route to active tab so the user sees the error instead of silent drop
+        // Route to active tab only if it's actually streaming
         const activeTab = this.tabManager.getActiveTab()
-        if (activeTab) {
+        if (activeTab && activeTab.isStreaming) {
           log.warn(`server_error for unknown session ${event.sessionId || tabId} — routing to active tab ${activeTab.id}`)
           this.postRequestError(errorMsg, activeTab.id)
           this.tabManager.setStreaming(activeTab.id, false)
           this.tabManager.setWaitingForCompletion(activeTab.id, false)
           this.tabManager.clearCompletionTimeout(activeTab.id)
+        } else if (activeTab) {
+          log.warn(`server_error for unknown session ${event.sessionId || tabId} — active tab ${activeTab.id} is not streaming, skipping state reset`)
+          this.postRequestError(errorMsg, activeTab.id)
         } else {
           log.warn(`server_error for unknown session ${event.sessionId || tabId} — no active tab, dropping`)
         }
@@ -1171,30 +1205,27 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       return
     }
 
-    log.debug(`Incoming server event: ${event.type} (sessionId: ${event.sessionId})`)
-
-    // Resolve tab by cliSessionId first (O(1) via index)
-    let tab = event.sessionId ? this.tabManager.getTabByCliSessionId(event.sessionId) : undefined
-    let tabId = tab?.id
-
-    // Fallback: for non-session-status events, try active tab or any streaming tab
-    if (!tab && event.sessionId) {
-      if (event.type === "server_error" || event.type === "text_chunk" || event.type === "message_complete" || event.type === "tool_start" || event.type === "tool_end") {
-        tab = this.tabManager.getActiveTab() || Array.from(this.tabManager.getAllTabs()).find((t) => t.isStreaming)
-        if (tab) {
-          tabId = tab.id
-          log.warn(`No tab matched cliSessionId "${event.sessionId}" for event "${event.type}". Falling back to tab "${tab.id}".`)
-        }
-      }
+    // text_chunk fires per-delta — too noisy to log every one. State events still log.
+    const isHighFrequency = event.type === "text_chunk"
+    if (!isHighFrequency) {
+      log.debug(`Incoming server event: ${event.type} (sessionId: ${event.sessionId})`)
     }
+
+    // Resolve tab by cliSessionId first (O(1) via index), then by local tab id.
+    let tab = event.sessionId ? this.tabManager.getTabByCliSessionId(event.sessionId) : undefined
+    if (!tab && event.sessionId) {
+      tab = this.tabManager.getTab(event.sessionId)
+    }
+    let tabId = tab?.id
 
     // CRITICAL: Ensure we use the mapped tabId, not the raw CLI sessionId, when calling handlers
     // as handlers expect the local webview sessionId.
     const targetTabId = tabId || event.sessionId || ""
-    
+
     if (!tab && event.sessionId && event.type !== "session_status" && event.type !== "server_connected") {
-      log.warn(`Routing server event ${event.type} (cliSession: ${event.sessionId}) to raw/fallback ID: ${targetTabId}`)
-    } else if (tab) {
+      log.warn(`Dropping server event ${event.type} for unknown cliSessionId "${event.sessionId}" to avoid routing it to the wrong tab`)
+      return
+    } else if (tab && !isHighFrequency) {
       log.debug(`Routed server event ${event.type} to tab: ${tab.id}`)
     }
 
@@ -1237,13 +1268,9 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
   }
 
   private syncActiveSession(): void {
-    // The webview manages its own tab content and switching.
-    // Don't clear/re-render all messages — that causes a disruptive flash.
-    // Only notify the webview of the active session change so it can
-    // switch tabs if needed.
     const session = this.sessionStore.getActive()
     if (session && this._view) {
-      this.postMessage({ type: "streaming_state", sessionId: session.id, isStreaming: false })
+      this.postMessage({ type: "active_session_changed", sessionId: session.id })
     }
   }
 
@@ -1333,19 +1360,37 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
 
     // Restore the exact set of tabs the user had open, in their original
     // order. The persisted list lives in globalState (TabManager.persist).
-    const restoredIds = restoreOpenTabs ? this.tabManager.getRestoredTabIds() : []
-    const restoredActiveId = restoreOpenTabs ? this.tabManager.getRestoredActiveId() : ""
+    // Treat it as a startup import only. Runtime state syncs must not revive a
+    // tab the user already closed in this extension session.
+    const shouldHydrateRestoredTabs = restoreOpenTabs && !this.restoredTabsHydrated
+    const restoredIds = shouldHydrateRestoredTabs ? this.tabManager.getRestoredTabIds() : []
+    const restoredActiveId = shouldHydrateRestoredTabs ? this.tabManager.getRestoredActiveId() : ""
 
     const restorable: import("../session/SessionStore").OpenCodeSession[] = []
     const seen = new Set<string>()
     for (const id of restoredIds) {
       if (seen.has(id)) continue
       const s = this.sessionStore.get(id)
-      // Skip tabs whose underlying session is gone, archived, or empty —
-      // restoring those would render a blank pane the user can't act on.
-      if (!s || s.archived || s.messages.length === 0 || !this.isSessionInCurrentWorkspace(s)) continue
+      // Skip tabs whose underlying session is gone, archived, or in a different
+      // workspace — restoring those would render a blank pane the user can't act on.
+      // Empty sessions (messages.length === 0) ARE included now: they may be a
+      // freshly-created tab the user is about to use, and excluding them caused
+      // the welcome screen to cover an active streaming session.
+      if (!s || s.archived || !this.isSessionInCurrentWorkspace(s)) continue
       restorable.push(s)
       seen.add(id)
+    }
+
+    // Always include any tab currently open in TabManager (extension-side source
+    // of truth) even if it's not in restoredIds — this can happen if a tab was
+    // created after the last persist (e.g. during this session's bootstrap).
+    for (const tab of this.tabManager.getAllTabs()) {
+      if (seen.has(tab.id)) continue
+      const s = this.sessionStore.get(tab.id) || (tab.cliSessionId ? this.sessionStore.get(tab.cliSessionId) : undefined)
+      if (s && !s.archived && this.isSessionInCurrentWorkspace(s)) {
+        restorable.push(s)
+        seen.add(s.id)
+      }
     }
 
     const storeActive = this.sessionStore.getActive()
@@ -1369,12 +1414,15 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     }
 
     const sessionsToSend = restorable.map((s) => ({
+      ...(() => {
+        const tab = this.tabManager.getTab(s.id)
+        return { isStreaming: tab?.isStreaming ?? false }
+      })(),
       id: s.id,
       name: SessionStore.displayName(s),
       model: s.model,
       mode: s.mode || "build",
       messages: s.messages.slice(-MAX_MESSAGES_PER_TAB),
-      isStreaming: false,
       cost: s.cost || 0,
       totalMessages: s.messages.length,
     }))
@@ -1387,6 +1435,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       globalModel: this.modelManager.model || "",
       workspaceName,
     })
+    this.restoredTabsHydrated = true
   }
 
   private isSessionInCurrentWorkspace(session: import("../session/SessionStore").OpenCodeSession): boolean {
@@ -1408,6 +1457,23 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     }
   }
 
+  private pushVisibleStateToWebview(): void {
+    this.chunkBatcher.flush()
+    this.pushAllStateToWebview()
+    this.replayLiveStreamsToWebview()
+  }
+
+  private replayLiveStreamsToWebview(): void {
+    if (!this._view || !this.webviewReady) return
+    for (const tab of this.tabManager.getAllTabs()) {
+      if (!tab.isStreaming) continue
+      this.streamCoordinator.replayLiveStreamToWebview(tab.id, {
+        postMessage: (m) => this.postMessage(m),
+        postRequestError: (m) => this.postRequestError(m, tab.id),
+      })
+    }
+  }
+
   private pushCommandListToWebview(): void {
     const customCommands = this.promptManager.getPromptCommands()
     if (!this.sessionManager.isRunning) {
@@ -1419,32 +1485,6 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     }).catch(() => {
       this.postMessage({ type: "command_list", commands: customCommands })
     })
-  }
-
-  private startStreamHeartbeat(): void {
-    if (this.streamHeartbeatTimer) return
-    this.lastStreamAckAt = Date.now()
-    this.streamHeartbeatTimer = setInterval(() => {
-      const streamingTabs = this.tabManager.getAllTabs().filter(t => t.isStreaming)
-      if (streamingTabs.length === 0) {
-        this.stopStreamHeartbeat()
-        return
-      }
-      for (const tab of streamingTabs) {
-        const seq = ++this.streamHeartbeatSeq
-        this.postMessage({ type: "stream_ping", sessionId: tab.id, seq })
-        if (Date.now() - this.lastStreamAckAt > 10000) {
-          log.warn(`Webview heartbeat stalled during stream ${tab.id}; requesting forced rerender (last ack seq=${this.lastStreamAckSeq})`)
-          this.postMessage({ type: "force_rerender", sessionId: tab.id, seq })
-        }
-      }
-    }, 5000)
-  }
-
-  private stopStreamHeartbeat(): void {
-    if (!this.streamHeartbeatTimer) return
-    clearInterval(this.streamHeartbeatTimer)
-    this.streamHeartbeatTimer = null
   }
 
   private postMessage(msg: Record<string, unknown>): void {
@@ -1461,7 +1501,8 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
 
     // R2: Batch stream_chunk messages — accumulate text per session and flush every 50ms
     if (msg.type === "stream_chunk" && typeof msg.sessionId === "string" && typeof msg.text === "string") {
-      this.chunkBatcher.add(msg.sessionId, msg.text)
+      const messageId = typeof msg.messageId === "string" ? msg.messageId : undefined
+      this.chunkBatcher.add(msg.sessionId, msg.text, messageId)
       return
     }
 
@@ -1476,11 +1517,6 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     if (msg.type === "stream_end") {
       this.notifyTurnComplete()
     }
-  }
-
-  /** R2: Flush buffered text chunks to the webview as a single message per session */
-  private flushChunkBuffer(): void {
-    this.chunkBatcher.flush()
   }
 
   private postRequestError(message: string, sessionId?: string): void {
@@ -1646,7 +1682,6 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
   }
 
   dispose(): void {
-    this.stopStreamHeartbeat()
     this.chunkBatcher.dispose()
     for (const d of this.disposables) d.dispose()
     this.disposables = []
