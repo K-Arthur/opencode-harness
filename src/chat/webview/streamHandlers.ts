@@ -1,9 +1,12 @@
+import { log } from "../../utils/outputChannel"
 import type { Block, ChatMessage, ToolCallBlock, DiffBlock, ErrorBlock, ToolCallState, DiffHunk } from "./types"
 import type { SdkMessageEvent, DiffChunk } from "../../types"
-import { renderMessage, renderBlock, renderMarkdown, sanitizeHtml, highlightSyntax } from "./renderer"
+import { renderMessage } from "./messageRenderer"
+import { renderBlock, renderMarkdown, sanitizeHtml, highlightSyntax } from "./renderer"
 import type { ScrollAnchor } from "./scrollAnchor"
 import { CHECK_SVG, SUCCESS_SVG, SPINNER_SVG } from "./icons"
 import { RenderQueue } from "./renderQueue"
+import { handleStreamEnd as handleStreamEndImpl } from "./streamEndHandler"
 
 export function stripContextFromText(text: string): string {
   const contextRegex = /<context>[\s\S]*?<\/context>/gi
@@ -42,7 +45,7 @@ function appendTextToMessage(message: ChatMessage, text: string): void {
   message.blocks.push({ type: "text", text: stripContextFromText(text) } as unknown as Block)
 }
 
-function finishUnresolvedToolCalls(blocks: Block[]): void {
+export function finishUnresolvedToolCalls(blocks: Block[]): void {
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i]
     if (!block) continue
@@ -54,29 +57,26 @@ function finishUnresolvedToolCalls(blocks: Block[]): void {
   }
 }
 
-function ensureRenderedTextFallback(messageId: string, msgObj: ChatMessage, els: StreamElements): void {
-  const text = (msgObj.blocks || [])
-    .filter((block) => block.type === "text" && typeof block.text === "string" && block.text.trim().length > 0)
-    .map((block) => block.text)
-    .join("\n")
+export function reRenderMessage(
+  messageId: string,
+  els: StreamElements,
+  messages: ChatMessage[]
+): void {
+  const msgObj = messages.find((m) => m.id === messageId)
+  if (!msgObj) return
 
-  if (!text.trim()) return
+  const oldEl = els.messageList.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement | null
 
-  const bubble = els.messageList.querySelector(`[data-message-id="${messageId}"] .message-bubble`) as HTMLElement | null
-  if (!bubble) return
+  const idx = messages.indexOf(msgObj)
+  const prevMsg = idx > 0 ? messages[idx - 1] : null
+  const isConsecutive = prevMsg?.role === msgObj.role
 
-  const existingText = bubble.querySelector(".msg-text") as HTMLElement | null
-  if (existingText) {
-    if (!existingText.textContent?.trim()) {
-      existingText.textContent = text
-    }
-    return
+  const newEl = renderMessage(msgObj, undefined, isConsecutive)
+  if (oldEl) {
+    oldEl.replaceWith(newEl)
+  } else {
+    els.messageList.appendChild(newEl)
   }
-
-  const fallback = document.createElement("div")
-  fallback.className = "msg-text markdown-content"
-  fallback.textContent = text
-  bubble.appendChild(fallback)
 }
 
 export interface StreamState {
@@ -95,7 +95,6 @@ export interface StreamState {
   chunkSeq: number
 }
 
-// For logging back to extension host
 let _vscode: any = null
 export function setVsCodeApi(api: any) { _vscode = api }
 
@@ -175,14 +174,12 @@ export function handleStreamStart(
   }
   messages.push(streamMsg)
 
-  // Use renderMessage for consistency (handles headers, roles, etc.)
   const el = renderMessage(streamMsg, undefined, isConsecutive)
   el.classList.add("assistant", "streaming")
   if (state.streamingMessageId) el.dataset.messageId = state.streamingMessageId
 
   const bubble = el.querySelector(".message-bubble") as HTMLElement
   if (bubble) {
-    // Initialize with a single streaming text block
     const textEl = document.createElement("div")
     textEl.className = "msg-text streaming-text"
     textEl.id = `stream-text-${state.streamingMessageId}`
@@ -190,7 +187,6 @@ export function handleStreamStart(
     state.lastStreamTextEl = textEl
     state.currentBlockEl = textEl
 
-    // Sync with message object
     streamMsg.blocks.push({ type: "text", text: "" } as unknown as Block)
     state.currentBlockIndex = 0
   }
@@ -248,15 +244,12 @@ export function handleStreamToken(
   let id = state.streamingMessageId
   if (!id) {
     if (messageId) {
-      // Extension forwarded the real server messageId — re-anchor the stream
       const targetMsg = messages.find(m => m.id === messageId)
       if (targetMsg) {
         state.streamingMessageId = messageId
         state.isStreaming = true
         id = messageId
       } else {
-        // Placeholder was cleared (likely by handleStreamError). Restart the stream
-        // with a fresh bubble bound to the real server messageId so chunks render.
         webviewLog(`handleStreamToken: restarting stream for messageId=${messageId} (recovered after error)`, "warn")
         state.isStreaming = false
         handleStreamStart(state, els, messages, messageId)
@@ -264,7 +257,6 @@ export function handleStreamToken(
         if (!id) return
       }
     } else {
-      // No server messageId: only recover to the very last message if it's an assistant
       const lastMsg = messages[messages.length - 1]
       if (!lastMsg || lastMsg.role !== "assistant" || !lastMsg.id) {
         webviewLog(`handleStreamToken: dropping chunk len=${text?.length || 0} — no streamingMessageId`, "warn")
@@ -366,16 +358,12 @@ export function handleToolStart(
   if (!id) return
 
   const msgObj = messages.find((m) => m.id === id)
-  // Real-time dedup: if a tool-call block with this id already exists on the message,
-  // the server sent a duplicate tool_start (SDK part replay / reconnect). Skip the second
-  // card to avoid the "tool rendered twice" symptom.
   const existing = msgObj?.blocks.findIndex(
     (b) => b.type === "tool-call" && (b as ToolCallBlock).id === toolCall.id
   ) ?? -1
   if (existing >= 0) {
     state.streamingToolCallId = toolCall.id
     webviewLog(`handleToolStart: updating existing tool_start id=${toolCall.id}`)
-    // Update existing tool block with potential new args
     const block = msgObj!.blocks[existing] as ToolCallBlock
     block.args = toolCall.args
     handleToolUpdate(els, toolCall.id, { args: toolCall.args })
@@ -419,14 +407,13 @@ export function handleToolUpdate(
 
   if (update.state) {
     toolEl.className = toolEl.className.replace(/tool-call--(?:pending|running|result|completed|error|stale)/g, `tool-call--${update.state}`)
-    // Update badge text if it exists
     const badge = toolEl.querySelector(".tool-status")
     if (badge) {
-      if (update.state === 'pending') badge.textContent = '○ Pending'
-      else if (update.state === 'running') badge.textContent = '◉ Running'
+      if (update.state === 'pending') badge.textContent = '\u25cb Pending'
+      else if (update.state === 'running') badge.textContent = '\u25c9 Running'
       else if (update.state === 'stale') badge.textContent = 'Stale'
-      else if (update.error || update.state === 'error') badge.textContent = '✗ Error'
-      else if (update.state === 'completed' || update.state === 'result') badge.textContent = '✓ Done'
+      else if (update.error || update.state === 'error') badge.textContent = '\u2717 Error'
+      else if (update.state === 'completed' || update.state === 'result') badge.textContent = '\u2713 Done'
     }
   }
 
@@ -435,13 +422,11 @@ export function handleToolUpdate(
     if (!argsPanel) {
       argsPanel = document.createElement("div")
       argsPanel.className = "tool-args-panel"
-      // Insert after summary but before result
       const summary = toolEl.querySelector("summary")
       if (summary) summary.after(argsPanel)
       else toolEl.prepend(argsPanel)
     }
     const argsStr = typeof update.args === 'string' ? update.args : JSON.stringify(update.args, null, 2)
-    // Avoid heavy re-render if text is identical
     if (argsPanel.dataset.lastArgs !== argsStr) {
       const truncated = argsStr.length > 500
       const displayStr = truncated ? argsStr.slice(0, 500) : argsStr
@@ -450,7 +435,7 @@ export function handleToolUpdate(
       if (truncated) {
         const more = document.createElement("button")
         more.className = "tool-show-more"
-        more.textContent = "Show more…"
+        more.textContent = "Show more\u2026"
         more.addEventListener("click", () => {
           argsPanel!.innerHTML = sanitizeHtml(highlightSyntax(argsStr, 'json'))
           more.remove()
@@ -498,7 +483,7 @@ export function handleToolEnd(
   
   const badge = toolEl.querySelector(".tool-status")
   if (badge) {
-    badge.textContent = result.stale ? 'Stale' : result.ok ? '✓ Done' : '✗ Error'
+    badge.textContent = result.stale ? 'Stale' : result.ok ? '\u2713 Done' : '\u2717 Error'
   }
 
   if (result.durationMs) {
@@ -605,119 +590,7 @@ export function handleStreamEnd(
   messageId?: string,
   blocks?: unknown
 ): void {
-  state.isStreaming = false
-  hideTypingIndicator(els)
-
-  const id = messageId || state.streamingMessageId
-  if (!id) {
-    webviewLog("handleStreamEnd: no messageId — no stream to end", "warn")
-    resetStreamState(state)
-    saveState()
-    return
-  }
-
-  const blockList = Array.isArray(blocks) ? blocks as Block[] : []
-  finishUnresolvedToolCalls(blockList)
-
-  // Force-sync any pending rAF update immediately so the DOM reflects the final buffer
-  state.rafPending = false
-  if (state.renderQueue) {
-    state.renderQueue.forceFlush()
-  }
-
-  // The stream_end messageId may differ from state.streamingMessageId:
-  //   - Initial stream_start uses the SESSION ID (ses_...) as the messageId
-  //   - Subsequent transitions use the MESSAGE ID (msg_...)
-  // Try state.streamingMessageId as fallback for both DOM and message lookups.
-  const streamId = state.streamingMessageId
-  const lookupId = streamId && streamId !== id ? streamId : id
-
-  if (blockList.length === 0) {
-    const msgObj = messages.find((m) => m.id === id) || messages.find((m) => m.id === lookupId)
-
-    if (msgObj && msgObj.blocks.length > 0) {
-      // We have real-time blocks, just finalize them
-      finishUnresolvedToolCalls(msgObj.blocks)
-      const renderId = msgObj.id || lookupId
-      reRenderMessage(renderId, els, messages)
-      ensureRenderedTextFallback(renderId, msgObj, els)
-    } else {
-      // Truly empty response
-      const noticeText = "(no response — model returned no text content)"
-      webviewLog(`handleStreamEnd: empty response for ${id}`, "warn")
-      if (msgObj) {
-        msgObj.blocks = [{ type: "text", text: noticeText } as unknown as Block]
-        const renderId = msgObj.id || lookupId
-        reRenderMessage(renderId, els, messages)
-        const bubble = els.messageList.querySelector(`[data-message-id="${renderId}"] .msg-text`) as HTMLElement | null
-        bubble?.classList.add("msg-text--empty-notice")
-      }
-    }
-    if (msgObj) finishUnresolvedToolCalls(msgObj.blocks)
-    resetStreamState(state)
-    saveState()
-    return
-  }
-
-  const msgObj = messages.find((m) => m.id === id) || messages.find((m) => m.id === lookupId)
-  if (msgObj) {
-    // Merge server blocks into existing real-time blocks rather than replacing.
-    // The real-time stream accumulates all block types (thinking, tool-calls, text, etc.)
-    // but finalizeStream's partsToBlocks only emits text + tool — overwriting would lose
-    // thinking blocks, permission requests, and other non-text/tool content.
-    //
-    // Strategy: update text content from server blocks, add tool-calls the real-time
-    // stream might have missed, but preserve everything else.
-    const existingTextIdx = msgObj.blocks.findIndex((b) => b.type === "text")
-    for (const sb of blockList) {
-      if (sb.type === "text") {
-        if (existingTextIdx >= 0) {
-          msgObj.blocks[existingTextIdx] = sb
-        } else {
-          msgObj.blocks.push(sb)
-        }
-      } else if (sb.type === "tool-call") {
-        const sbtc = sb as ToolCallBlock
-        // H16: Improved deduplication. Try matching by ID first, then fallback to name + args
-        // to catch cases where server-generated IDs differ from real-time IDs.
-        const existingIdx = msgObj.blocks.findIndex((b) => {
-          if (b.type !== "tool-call") return false
-          const tc = b as ToolCallBlock
-          if (tc.id === sbtc.id) return true
-          // Fallback: match by name and arguments (stringified for deep comparison)
-          return tc.name === sbtc.name && 
-                 JSON.stringify(tc.args) === JSON.stringify(sbtc.args)
-        })
-
-        if (existingIdx >= 0) {
-          // Preserve existing result/error if the incoming block is "pending" or missing results
-          if (sbtc.state === "result" || sbtc.result || sbtc.error) {
-            msgObj.blocks[existingIdx] = sbtc
-          } else {
-            // Incoming is likely a "pending" fetch that we already have results for
-            webviewLog(`Deduplication: preserved results for tool ${sbtc.name}`)
-          }
-        } else {
-          msgObj.blocks.push(sbtc as unknown as Block)
-        }
-      } else if (sb.type === "skill_badge") {
-        // Skill badges are small indicators, deduplicate by name
-        const exists = msgObj.blocks.some(b => b.type === "skill_badge" && b.skillName === sb.skillName)
-        if (!exists) {
-          msgObj.blocks.push(sb)
-        }
-      }
-    }
-    finishUnresolvedToolCalls(msgObj.blocks)
-    const renderId = msgObj.id || lookupId
-    reRenderMessage(renderId, els, messages)
-    ensureRenderedTextFallback(renderId, msgObj, els)
-  } else {
-    webviewLog(`handleStreamEnd: message obj not found for id=${id}`, "warn")
-  }
-
-  resetStreamState(state)
-  saveState()
+  handleStreamEndImpl(state, els, messages, saveState, messageId, blocks)
 }
 
 export function handleStreamError(
@@ -730,12 +603,10 @@ export function handleStreamError(
   state.isStreaming = false
   hideTypingIndicator(els)
 
-  // Remove empty assistant placeholder if it exists (e.g. stream_start was sent but no chunks arrived)
   const id = state.streamingMessageId
   if (id) {
     const emptyEl = els.messageList.querySelector(`[data-message-id="${id}"]`) as HTMLElement | null
     if (emptyEl) {
-      // Only remove if the placeholder has no meaningful content
       const bubble = emptyEl.querySelector(".message-bubble")
       const hasContent = bubble && bubble.textContent && bubble.textContent.trim().length > 0
       if (!hasContent) {
@@ -746,7 +617,7 @@ export function handleStreamError(
     }
   }
   resetStreamState(state)
-  state.rafPending = false // Ensure raf is reset
+  state.rafPending = false
 
   const errBlock: ErrorBlock = {
     type: 'error',
@@ -855,7 +726,7 @@ export function clearMessages(
   saveState()
 }
 
-function resetStreamState(state: StreamState): void {
+export function resetStreamState(state: StreamState): void {
   if (state.renderQueue) {
     state.renderQueue.forceFlush()
     state.renderQueue.destroy()
@@ -912,26 +783,3 @@ export function setupToolKeyboardNav(): () => void {
 }
 
 export { renderBlock as _renderBlock }
-
-export function reRenderMessage(
-  messageId: string,
-  els: StreamElements,
-  messages: ChatMessage[]
-): void {
-  const msgObj = messages.find((m) => m.id === messageId)
-  if (!msgObj) return
-
-  const oldEl = els.messageList.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement | null
-
-  // Determine if this message is consecutive to hide header
-  const idx = messages.indexOf(msgObj)
-  const prevMsg = idx > 0 ? messages[idx - 1] : null
-  const isConsecutive = prevMsg?.role === msgObj.role
-
-  const newEl = renderMessage(msgObj, undefined, isConsecutive)
-  if (oldEl) {
-    oldEl.replaceWith(newEl)
-  } else {
-    els.messageList.appendChild(newEl)
-  }
-}

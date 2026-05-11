@@ -7,13 +7,14 @@ import { fileURLToPath } from "node:url"
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const mainSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "main.ts"), "utf8")
 const rendererSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "renderer.ts"), "utf8")
+const messageRendererSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "messageRenderer.ts"), "utf8")
 const messagesCss = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "css", "messages.css"), "utf8")
 
 describe("Scroll markers and navigation", () => {
   it("messages have stable role data attribute for marker targeting", () => {
-    assert.ok(rendererSource.includes("dataset.role"),
+    assert.ok(messageRendererSource.includes("dataset.role"),
       "renderMessage must set dataset.role for marker targeting")
-    assert.ok(rendererSource.includes("dataset.messageId"),
+    assert.ok(messageRendererSource.includes("dataset.messageId"),
       "renderMessage must set dataset.messageId for stable message identity")
   })
 

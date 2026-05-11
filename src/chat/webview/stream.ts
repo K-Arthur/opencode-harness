@@ -1,6 +1,6 @@
 import type { ChatMessage } from "../../types"
 import type { ScrollAnchor } from "./scrollAnchor"
-import { renderMessage } from "./renderer"
+import { renderMessage } from "./messageRenderer"
 import type { SdkMessageEvent } from "../../types"
 import type { DiffHunk, ToolCallState } from "./types"
 

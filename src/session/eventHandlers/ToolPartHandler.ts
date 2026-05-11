@@ -1,5 +1,4 @@
-import { SdkEventLike, NormalizedOpencodeEvent, PartLike, ToolPartLike } from "../EventNormalizer"
-import { NormalizerContext, EventHandler } from "./types"
+import { SdkEventLike, NormalizedOpencodeEvent, PartLike, ToolPartLike, NormalizerContext, EventHandler } from "./types"
 
 export class ToolPartHandler implements EventHandler {
   canHandle(eventType: string): boolean {

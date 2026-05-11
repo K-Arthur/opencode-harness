@@ -4,10 +4,12 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 
 const source = readFileSync(path.join(__dirname, "renderer.ts"), "utf8")
+const toolCallRendererSource = readFileSync(path.join(__dirname, "toolCallRenderer.ts"), "utf8")
+const messageRendererSource = readFileSync(path.join(__dirname, "messageRenderer.ts"), "utf8")
 
 describe("renderer.ts", () => {
   it("exports renderMessage", () => {
-    assert.ok(source.includes("export function renderMessage"))
+    assert.ok(messageRendererSource.includes("export function renderMessage"))
   })
 
   it("exports renderBlock", () => {
@@ -21,8 +23,8 @@ describe("renderer.ts", () => {
     assert.ok(source.includes("'error': renderErrorBlock"), "must map error type")
   })
 
-  it("has type guards for discriminated blocks", () => {
-    assert.ok(source.includes("function isToolCallBlock"), "must have isToolCallBlock type guard")
+it("has type guards for discriminated blocks", () => {
+    assert.ok(source.includes("function isToolCallBlock") || source.includes('export { isToolCallBlock }'), "must have isToolCallBlock type guard")
     assert.ok(source.includes("function isDiffBlock"), "must have isDiffBlock type guard")
     assert.ok(source.includes("function isThinkingBlock"), "must have isThinkingBlock type guard")
     assert.ok(source.includes("function isErrorBlock"), "must have isErrorBlock type guard")
@@ -59,11 +61,11 @@ describe("renderer.ts", () => {
     assert.ok(source.includes('token.attrSet("rel", "noopener noreferrer")'), "external links must be isolated from opener access")
   })
 
-  it("renders_tool_call_with_dynamic_states", () => {
-    assert.ok(source.includes("tool-call--${toolState}"), "must use dynamic tool state class")
-    assert.ok(source.includes("tool-call--error"), "must support error state")
-    assert.ok(source.includes("aria-label"), "must have aria-label")
-    assert.ok(source.includes("tool-status--${toolState}"), "must have dynamic status badge")
+it("renders_tool_call_with_dynamic_states", () => {
+    assert.ok(source.includes("tool-call--${toolState}") || toolCallRendererSource.includes("tool-call--${toolState}"), "must use dynamic tool state class")
+    assert.ok(source.includes("tool-call--error") || toolCallRendererSource.includes("tool-call--error"), "must support error state")
+    assert.ok(source.includes("aria-label") || toolCallRendererSource.includes("aria-label"), "must have aria-label")
+    assert.ok(source.includes("tool-status--${toolState}") || toolCallRendererSource.includes("tool-status--${toolState}"), "must have dynamic status badge")
   })
 
   it("renders_diff_block_with_table", () => {
@@ -114,31 +116,30 @@ describe("renderer.ts", () => {
     })
   })
 
-  it("has SVG constants for icons", () => {
-    assert.ok(source.includes('from "./icons"') || source.includes('from "./icons"'), "must import icons from icons.ts")
-    // Only check icons actually used in renderer.ts
-    assert.ok(source.includes("BRAIN_SVG"), "must have brain icon for thinking")
-    assert.ok(source.includes("TOOL_READ_SVG"), "must have tool read icon")
-    assert.ok(source.includes("TOOL_WRITE_SVG"), "must have tool write icon")
-    assert.ok(source.includes("TOOL_EXEC_SVG"), "must have tool exec icon")
-    assert.ok(source.includes("TOOL_META_SVG"), "must have tool meta icon")
-    assert.ok(source.includes("COPY_SVG"), "must have copy icon")
-    assert.ok(source.includes("CHECK_SVG"), "must have check icon")
-    assert.ok(source.includes("ERROR_SVG"), "must have error icon")
-    assert.ok(source.includes("WARNING_SVG"), "must have warning icon")
-    assert.ok(source.includes("SPINNER_SVG"), "must have spinner icon")
-    assert.ok(source.includes("EDIT_SVG"), "must have edit icon")
-    assert.ok(source.includes("INSERT_SVG"), "must have insert icon")
-    assert.ok(source.includes("NEW_FILE_SVG"), "must have new file icon")
-    assert.ok(source.includes("CHEVRON_RIGHT_SVG"), "must have chevron icon")
+it("has SVG constants for icons", () => {
+    assert.ok(source.includes('from "./icons"') || toolCallRendererSource.includes('from "./icons"'), "must import icons from icons.ts")
+    assert.ok(source.includes("BRAIN_SVG") || toolCallRendererSource.includes("BRAIN_SVG"), "must have brain icon for thinking")
+    assert.ok(source.includes("TOOL_READ_SVG") || toolCallRendererSource.includes("TOOL_READ_SVG"), "must have tool read icon")
+    assert.ok(source.includes("TOOL_WRITE_SVG") || toolCallRendererSource.includes("TOOL_WRITE_SVG"), "must have tool write icon")
+    assert.ok(source.includes("TOOL_EXEC_SVG") || toolCallRendererSource.includes("TOOL_EXEC_SVG"), "must have tool exec icon")
+    assert.ok(source.includes("TOOL_META_SVG") || toolCallRendererSource.includes("TOOL_META_SVG"), "must have tool meta icon")
+    assert.ok(source.includes("COPY_SVG") || toolCallRendererSource.includes("COPY_SVG"), "must have copy icon")
+    assert.ok(source.includes("CHECK_SVG") || toolCallRendererSource.includes("CHECK_SVG"), "must have check icon")
+    assert.ok(source.includes("ERROR_SVG") || toolCallRendererSource.includes("ERROR_SVG"), "must have error icon")
+    assert.ok(source.includes("WARNING_SVG") || toolCallRendererSource.includes("WARNING_SVG"), "must have warning icon")
+    assert.ok(source.includes("SPINNER_SVG") || toolCallRendererSource.includes("SPINNER_SVG") || toolCallRendererSource.includes("SPINNER_SVG"), "must have spinner icon")
+    assert.ok(source.includes("EDIT_SVG") || toolCallRendererSource.includes("EDIT_SVG"), "must have edit icon")
+    assert.ok(source.includes("INSERT_SVG") || toolCallRendererSource.includes("INSERT_SVG"), "must have insert icon")
+    assert.ok(source.includes("NEW_FILE_SVG") || toolCallRendererSource.includes("NEW_FILE_SVG"), "must have new file icon")
+    assert.ok(source.includes("CHEVRON_RIGHT_SVG") || toolCallRendererSource.includes("CHEVRON_RIGHT_SVG"), "must have chevron icon")
   })
 
-  it("tool_call_renderer_uses_class_specific_icons", () => {
-    assert.ok(source.includes("switch (toolClass)"), "must switch on tool class")
-    assert.ok(source.includes("TOOL_WRITE_SVG"), "must handle write class")
-    assert.ok(source.includes("TOOL_EXEC_SVG"), "must handle exec class")
-    assert.ok(source.includes("TOOL_META_SVG"), "must handle meta class")
-    assert.ok(source.includes("TOOL_READ_SVG"), "default must use read icon")
+it("tool_call_renderer_uses_class_specific_icons", () => {
+    assert.ok(source.includes("switch (toolClass)") || toolCallRendererSource.includes("switch (toolClass)"), "must switch on tool class")
+    assert.ok(source.includes("TOOL_WRITE_SVG") || toolCallRendererSource.includes("TOOL_WRITE_SVG"), "must handle write class")
+    assert.ok(source.includes("TOOL_EXEC_SVG") || toolCallRendererSource.includes("TOOL_EXEC_SVG"), "must handle exec class")
+    assert.ok(source.includes("TOOL_META_SVG") || toolCallRendererSource.includes("TOOL_META_SVG"), "must handle meta class")
+    assert.ok(source.includes("TOOL_READ_SVG") || toolCallRendererSource.includes("TOOL_READ_SVG"), "default must use read icon")
   })
 
   it("code_block_has_copy_button_and_line_numbers", () => {
@@ -148,8 +149,8 @@ describe("renderer.ts", () => {
   })
 
   it("user_message_has_edit_button", () => {
-    assert.ok(source.includes("message-edit-btn"), "must have edit button on user messages")
-    assert.ok(source.includes('type: "edit_message"'), "must post edit_message via postMessage callback")
+    assert.ok(source.includes("message-edit-btn") || messageRendererSource.includes("message-edit-btn"), "must have edit button on user messages")
+    assert.ok(source.includes('type: "edit_message"') || messageRendererSource.includes('type: "edit_message"'), "must post edit_message via postMessage callback")
   })
 
   it("edit_button_uses_cached_vscode_api", () => {
@@ -158,9 +159,9 @@ describe("renderer.ts", () => {
   })
 
   it("assistant_message_has_revert_button", () => {
-    assert.ok(source.includes("message-revert-btn"), "must have revert button on assistant messages")
-    assert.ok(source.includes('type: "revert_message"'), "must post revert_message")
-    assert.ok(source.includes('"Revert code changes from this message"'), "must have descriptive title")
+    assert.ok(source.includes("message-revert-btn") || messageRendererSource.includes("message-revert-btn"), "must have revert button on assistant messages")
+    assert.ok(source.includes('type: "revert_message"') || messageRendererSource.includes('type: "revert_message"'), "must post revert_message")
+    assert.ok(source.includes('"Revert code changes from this message"') || messageRendererSource.includes('"Revert code changes from this message"'), "must have descriptive title")
   })
 
   it("code_block_has_insert_and_new_file_buttons", () => {

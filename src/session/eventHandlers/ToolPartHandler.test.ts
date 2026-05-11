@@ -1,7 +1,7 @@
 import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
 import { ToolPartHandler } from "./ToolPartHandler"
-import type { SdkEventLike, PartLike, ToolPartLike, NormalizerContext } from "../EventNormalizer"
+import type { SdkEventLike, PartLike, ToolPartLike, NormalizerContext } from "./types"
 
 function makeContext(): NormalizerContext {
   return {
@@ -235,5 +235,59 @@ describe("ToolPartHandler", () => {
       tool: "grep",
     })
     assert.equal(stableIdFrom(withNeither), "msg-1:grep")
+  })
+
+  it("returns empty when event has no properties", () => {
+    const event = { type: "message.part.updated" } as SdkEventLike
+    const results = handler.handle(event, ctx)
+    assert.equal(results.length, 0)
+  })
+
+  it("handles toolPart without state gracefully", () => {
+    const toolPart = makeToolPart({
+      state: undefined as unknown as ToolPartLike["state"],
+    })
+    const event = makeEvent(toolPart)
+    const results = handler.handle(event, ctx)
+    assert.equal(results.length, 0)
+  })
+
+  it("emits tool_update when input changes mid-stream with same status", () => {
+    const toolPart = makeToolPart({
+      state: { status: "running", input: { file: "a.ts" } },
+    })
+    handler.handle(makeEvent(toolPart), ctx)
+
+    const sameStatusNewInput = makeToolPart({
+      state: { status: "running", input: { file: "b.ts" } },
+    })
+    const results = handler.handle(makeEvent(sameStatusNewInput), ctx)
+    assert.equal(results.length, 1)
+    assert.equal(results[0]?.type, "tool_update")
+  })
+
+  it("does not emit duplicate tool_end for identical completed event", () => {
+    const toolPart = makeToolPart({ state: { status: "pending" } })
+    handler.handle(makeEvent(toolPart), ctx)
+
+    const done = { ...toolPart, state: { status: "completed", output: "v1" } }
+    handler.handle(makeEvent(done), ctx)
+
+    const sameDone = { ...done }
+    const results = handler.handle(makeEvent(sameDone), ctx)
+    assert.equal(results.length, 0)
+  })
+
+  it("handles toolPart lacking both id and callID", () => {
+    const toolPart = makeToolPart({
+      id: undefined,
+      callID: undefined,
+      state: { status: "pending", input: { x: 1 } },
+    })
+    const results = first(handler.handle(makeEvent(toolPart), ctx))
+    assert.ok(results)
+    assert.equal(results.type, "tool_start")
+    assert.equal(results.data.id, "msg_xyz:read")
+    assert.equal(results.data.tool, "read")
   })
 })

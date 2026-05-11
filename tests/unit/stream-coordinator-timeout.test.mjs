@@ -6,7 +6,9 @@ import { fileURLToPath } from "node:url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const coordinatorSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "handlers", "StreamCoordinator.ts"), "utf8")
+const finalizerSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "handlers", "StreamFinalizerService.ts"), "utf8")
 const providerSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "ChatProvider.ts"), "utf8")
+const eventRouterSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "WebviewEventRouter.ts"), "utf8")
 const streamHandlersSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "streamHandlers.ts"), "utf8")
 const mainSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "main.ts"), "utf8")
 
@@ -61,9 +63,9 @@ describe("StreamCoordinator error handling", () => {
 
   it("prevents finalizeStream from running twice", () => {
     assert.ok(coordinatorSource.includes("finalizingTabs = new Set<string>()"), "must track finalizing tabs")
-    assert.ok(coordinatorSource.includes("if (this.finalizingTabs.has(tabId))"), "must guard against double finalize")
-    assert.ok(coordinatorSource.includes("this.finalizingTabs.add(tabId)"), "must add tab to finalizing set")
-    assert.ok(coordinatorSource.includes("this.finalizingTabs.delete(tabId)"), "must remove tab from finalizing set")
+    assert.ok(finalizerSource.includes("this.deps.finalizingTabs.has(tabId)"), "must guard against double finalize")
+    assert.ok(finalizerSource.includes("this.deps.finalizingTabs.add(tabId)"), "must add tab to finalizing set")
+    assert.ok(finalizerSource.includes("this.deps.finalizingTabs.delete(tabId)"), "must remove tab from finalizing set")
   })
 
   it("cleans up assistant placeholder on early error", () => {
@@ -84,13 +86,13 @@ describe("ChatProvider event routing", () => {
   })
 
   it("prevents double finalizeStream from message_complete + idle", () => {
-    assert.ok(coordinatorSource.includes("finalizingTabs"), "must use finalizingTabs guard")
+    assert.ok(finalizerSource.includes("finalizingTabs") || coordinatorSource.includes("finalizingTabs"), "must use finalizingTabs guard")
   })
 })
 
 describe("Tab streaming lifecycle", () => {
   it("closing a tab aborts stream and clears in-flight state", () => {
-    assert.ok(providerSource.includes("if (tab?.isStreaming) void this.streamCoordinator.abort("), "close_tab must abort stream")
+    assert.ok(providerSource.includes("if (tab?.isStreaming) void this.streamCoordinator.abort(") || eventRouterSource.includes("if (tab?.isStreaming) void this.opts.streamCoordinator.abort("), "close_tab must abort stream")
     assert.ok(coordinatorSource.includes("clearTtfbTimeout(tabId)"), "cleanup must clear TTFB timeout")
   })
 

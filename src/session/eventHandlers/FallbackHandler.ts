@@ -1,5 +1,4 @@
-import { SdkEventLike, NormalizedOpencodeEvent } from "../EventNormalizer"
-import { NormalizerContext, EventHandler } from "./types"
+import { SdkEventLike, NormalizedOpencodeEvent, NormalizerContext, EventHandler } from "./types"
 
 export class FallbackHandler implements EventHandler {
   canHandle(eventType: string): boolean {

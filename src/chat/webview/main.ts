@@ -1,7 +1,9 @@
+import { log } from "../../utils/outputChannel"
 import type { ChatMessage, HostMessage, MentionItem, SessionSummary, ModelInfo, WebviewState, ContextChip, ToolCallState } from "./types"
 import { createState } from "./state"
 import { getElementRefs, scrollToBottom, getActiveMessageList } from "./dom"
-import { renderMessage, groupMessagesIntoTurns } from "./renderer"
+import { renderMessage } from "./messageRenderer"
+import { groupMessagesIntoTurns } from "./renderer"
 import { setupMentions } from "./mentions"
 import { createStreamHandlers, type StreamHandlers } from "./stream"
 import { createTabBar, createTabContent, switchToTab, removeTabContent } from "./tabs"
@@ -15,6 +17,7 @@ import { REMOVE_SVG } from "./icons"
 import { createPromptQueue, type PromptQueue, type QueueItem } from "./queue"
 import { updateContextChips, updateContextUsage, applyThemeVars, handleRateLimitExhausted } from "./theme"
 import { renderRecentSessions } from "./recent-sessions"
+import { renderUnifiedSessionList, setUnifiedServerSessions, setUnifiedLocalSessions } from "./sessionListRenderer"
 import { createScrollAnchor, type ScrollAnchor } from "./scrollAnchor"
 import { createChunkedLoader, prependMessagesPreservingScroll, createLoadEarlierBanner, throttleScrollMarkers } from "./messageLoader"
 import { createVirtualList, getVirtualList, disposeVirtualList } from "./virtualList"
@@ -49,7 +52,7 @@ function getVsCodeApi() {
 
   // Global error boundary - prevent white screen crashes
   window.addEventListener("error", (event) => {
-    console.error("[OpenCode] Unhandled error:", event.error || event.message)
+    log.error("Unhandled error:", event.error || event.message)
     const errorDiv = document.getElementById("error-boundary")
     if (errorDiv) {
       errorDiv.style.display = "block"
@@ -58,7 +61,7 @@ function getVsCodeApi() {
   })
 
   window.addEventListener("unhandledrejection", (event) => {
-    console.error("[OpenCode] Unhandled promise rejection:", event.reason)
+    log.error("Unhandled promise rejection:", event.reason)
   })
 
 // Flush state when page becomes hidden (tab switch, minimize, etc.)
@@ -258,7 +261,7 @@ function getVsCodeApi() {
       const initTimeout = setTimeout(() => {
         // If we haven't received init_state after 3 seconds, just show welcome
         if (!stateManager.getState().activeSessionId) {
-          console.warn("[OpenCode] No init_state received, showing welcome view")
+          log.warn("No init_state received, showing welcome view")
           showWelcomeView()
         }
       }, 3000)
@@ -266,7 +269,7 @@ function getVsCodeApi() {
       // Store timeout so we can clear it when init_state is received
       window.__opencodeInitTimeout = initTimeout
     } catch (err) {
-      console.error("[OpenCode] Initialization error:", err)
+      log.error("Initialization error:", err)
       const errorDiv = document.createElement("div")
       errorDiv.className = "error-boundary"
       errorDiv.textContent = "Failed to initialize. Please reload."
@@ -368,17 +371,11 @@ function getVsCodeApi() {
 
   // State for the unified session modal — holds server sessions once they arrive
   // so renderUnifiedSessionList can merge local + server in one pass.
-  type ServerSessionEntry = {
-    id: string; title?: string; directory?: string; parentId?: string;
-    created?: number; updated?: number; files?: number; additions?: number;
-    deletions?: number; isCurrentWorkspace?: boolean
-  }
-  let _unifiedServerSessions: ServerSessionEntry[] | null = null
   let _unifiedLocalSessions: Array<{ id: string; cliSessionId?: string; title?: string; messageCount?: number; cost?: number; time?: number }> = []
 
   function openSessionModal(sessions: Array<{ id: string; cliSessionId?: string; title?: string; messageCount?: number; cost?: number; time?: number }>) {
     _unifiedLocalSessions = sessions
-    _unifiedServerSessions = null
+    setUnifiedServerSessions(null)
 
     const body = els.sessionModalBody
     body.replaceChildren()
@@ -411,195 +408,6 @@ function getVsCodeApi() {
     document.addEventListener("keydown", sessionModalFocusTrap)
     const firstBtn = els.sessionModal.querySelector<HTMLElement>("button, [href], input:not([type='hidden'])")
     if (firstBtn) firstBtn.focus()
-  }
-
-  /**
-   * Render the unified session list inside the open modal.
-   * Merges _unifiedLocalSessions and _unifiedServerSessions:
-   * - Server session with matching local cliSessionId → "synced" (shown once)
-   * - Server-only (no local counterpart) → "remote" badge
-   * - Local-only (no cliSessionId or server not loaded) → shown with local data
-   */
-  function renderUnifiedSessionList() {
-    const listContainer = els.sessionModalBody.querySelector<HTMLElement>(".modal-session-list")
-    if (!listContainer) return
-    listContainer.replaceChildren()
-
-    // Build a map of server sessions keyed by their ID for O(1) lookup
-    const serverById = new Map<string, ServerSessionEntry>()
-    if (_unifiedServerSessions) {
-      for (const s of _unifiedServerSessions) serverById.set(s.id, s)
-    }
-
-    // Track which server sessions have been claimed by a local entry
-    const claimedServerIds = new Set<string>()
-
-    // Build unified items list
-    const items: Array<{
-      type: "synced" | "local" | "remote"
-      localId?: string
-      serverId?: string
-      title: string
-      directory?: string
-      isCurrentWorkspace?: boolean
-      messageCount?: number
-      time?: number
-      cost?: number
-      files?: number
-    }> = []
-
-    // Walk local sessions — match against server sessions by cliSessionId
-    for (const local of _unifiedLocalSessions) {
-      const server = local.cliSessionId ? serverById.get(local.cliSessionId) : undefined
-      if (server) {
-        claimedServerIds.add(server.id)
-        items.push({
-          type: "synced",
-          localId: local.id,
-          serverId: server.id,
-          title: local.title || server.title || "Untitled",
-          directory: server.directory,
-          isCurrentWorkspace: server.isCurrentWorkspace,
-          messageCount: local.messageCount,
-          time: local.time ?? server.updated,
-          cost: local.cost,
-          files: server.files,
-        })
-      } else {
-        items.push({
-          type: "local",
-          localId: local.id,
-          title: local.title || "Untitled",
-          messageCount: local.messageCount,
-          time: local.time,
-          cost: local.cost,
-        })
-      }
-    }
-
-    // Add server-only sessions (not claimed by any local entry)
-    if (_unifiedServerSessions) {
-      for (const server of _unifiedServerSessions) {
-        if (!claimedServerIds.has(server.id)) {
-          items.push({
-            type: "remote",
-            serverId: server.id,
-            title: server.title || "Untitled",
-            directory: server.directory,
-            isCurrentWorkspace: server.isCurrentWorkspace,
-            time: server.updated,
-            files: server.files,
-          })
-        }
-      }
-    }
-
-    if (items.length === 0) {
-      const empty = document.createElement("div")
-      empty.className = "modal-empty"
-      empty.textContent = _unifiedServerSessions === null ? "Loading sessions…" : "No sessions."
-      listContainer.appendChild(empty)
-      return
-    }
-
-    // Sort by recency
-    items.sort((a, b) => (b.time ?? 0) - (a.time ?? 0))
-
-    for (const item of items) {
-      const row = document.createElement("button")
-      row.className = "modal-session-item"
-      row.setAttribute("role", "option")
-      row.setAttribute("aria-label", `Open session: ${item.title}`)
-      if (item.serverId) row.dataset.serverId = item.serverId
-
-      // Workspace badge
-      const badge = document.createElement("span")
-      badge.className = `session-workspace-badge ${item.type === "local" ? "local" : item.isCurrentWorkspace !== false ? "current" : "other"}`
-      badge.setAttribute("aria-hidden", "true")
-      row.appendChild(badge)
-
-      const info = document.createElement("div")
-      info.className = "modal-session-info"
-
-      const nameEl = document.createElement("div")
-      nameEl.className = "modal-session-name"
-      nameEl.textContent = item.title
-      info.appendChild(nameEl)
-
-      const meta = document.createElement("div")
-      meta.className = "modal-session-meta"
-      const parts: string[] = []
-      if (item.directory) parts.push(item.directory.split("/").pop() || item.directory)
-      if (item.messageCount != null && item.messageCount > 0) parts.push(`${item.messageCount} msgs`)
-      if (item.files != null && item.files > 0) parts.push(`${item.files} files`)
-      if (item.time) parts.push(new Date(item.time).toLocaleDateString())
-      meta.textContent = parts.join(" · ")
-      info.appendChild(meta)
-
-      row.appendChild(info)
-
-      if (item.cost && item.cost > 0) {
-        const costEl = document.createElement("span")
-        costEl.className = "modal-session-cost"
-        costEl.textContent = `$${item.cost.toFixed(2)}`
-        row.appendChild(costEl)
-      }
-
-      const actions = document.createElement("div")
-      actions.className = "modal-session-actions"
-
-      // Click the row to open the session
-      row.addEventListener("click", (e) => {
-        // Don't open if clicking an action button
-        if ((e.target as HTMLElement).closest(".modal-session-actions")) return
-        closeSessionModal()
-        if (item.type === "remote" && item.serverId) {
-          vscode.postMessage({
-            type: "resume_server_session",
-            serverSessionId: item.serverId,
-            title: item.title,
-            directory: item.directory,
-          })
-        } else if (item.localId) {
-          vscode.postMessage({ type: "resume_session", sessionId: item.localId })
-        }
-      })
-
-      // Archive button (local sessions only)
-      if (item.localId) {
-        const archiveBtn = document.createElement("button")
-        archiveBtn.className = "modal-session-archive icon-btn"
-        archiveBtn.title = "Archive"
-        archiveBtn.setAttribute("aria-label", "Archive session")
-        archiveBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>'
-        archiveBtn.addEventListener("click", (e) => {
-          e.stopPropagation()
-          vscode.postMessage({ type: "archive_session", targetSessionId: item.localId })
-          row.remove()
-        })
-        actions.appendChild(archiveBtn)
-      }
-
-      // Delete button
-      const deleteBtn = document.createElement("button")
-      deleteBtn.className = "modal-session-delete icon-btn"
-      deleteBtn.setAttribute("aria-label", item.type === "local" ? "Delete session" : "Delete server session")
-      deleteBtn.title = item.type === "local" ? "Delete" : "Delete from server"
-      deleteBtn.innerHTML = REMOVE_SVG
-      deleteBtn.addEventListener("click", (e) => {
-        e.stopPropagation()
-        if (item.serverId) {
-          vscode.postMessage({ type: "delete_server_session", serverSessionId: item.serverId })
-        } else if (item.localId) {
-          vscode.postMessage({ type: "delete_session", targetSessionId: item.localId })
-        }
-        row.remove()
-      })
-      actions.appendChild(deleteBtn)
-
-      row.appendChild(actions)
-      listContainer.appendChild(row)
-    }
   }
 
   // Focus trap state for session modal
@@ -1201,7 +1009,7 @@ function getVsCodeApi() {
           }
         }
         reader.onerror = () => {
-          console.error("[OpenCode] Failed to read pasted image")
+          log.error("Failed to read pasted image")
           webviewLog("Failed to read pasted image. The file may be corrupted or too large.", "error")
         }
         reader.readAsDataURL(blob)
@@ -2463,7 +2271,7 @@ function getVsCodeApi() {
           created?: number; updated?: number; files?: number; additions?: number; deletions?: number;
           isCurrentWorkspace?: boolean
         }> | undefined
-        _unifiedServerSessions = serverSessions ?? []
+        setUnifiedServerSessions(serverSessions ?? [])
         if (!els.sessionModal.classList.contains("hidden")) {
           renderUnifiedSessionList()
         }
@@ -3365,7 +3173,7 @@ try {
         try {
           stream.handleStreamEnd(messageId, blocks)
         } catch (err) {
-          console.error("[OpenCode] stream.handleStreamEnd threw:", err)
+          log.error("stream.handleStreamEnd threw:", err)
           vscode.postMessage({ type: "webview_log", level: "error", message: `handleStreamEnd: stream handler threw: ${err instanceof Error ? err.message : err}` })
         }
       }
@@ -3430,7 +3238,7 @@ try {
         }
       }
     } catch (err) {
-      console.error("[OpenCode] handleStreamEnd top-level error:", err)
+      log.error("handleStreamEnd top-level error:", err)
       vscode.postMessage({ type: "webview_log", level: "error", message: `handleStreamEnd error: ${err instanceof Error ? err.message : String(err)}` })
       try { stateManager.setStreaming(sessionId, false) } catch {}
       try { updateTabBar() } catch {}
@@ -3782,7 +3590,7 @@ function boot() {
       init()
       vscode.postMessage({ type: "webview_ready" })
     } catch (err) {
-      console.error("[OpenCode] Fatal init error:", err)
+      log.error("Fatal init error:", err)
       vscode.postMessage({ type: "webview_error", message: "Initialization failed" })
     }
   }

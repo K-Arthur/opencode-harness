@@ -13,16 +13,19 @@ const files = {
   sessionStore: readFileSync(path.join(root, "src", "session", "SessionStore.ts"), "utf8"),
   sessionManager: readFileSync(path.join(root, "src", "session", "SessionManager.ts"), "utf8"),
   chatProvider: readFileSync(path.join(root, "src", "chat", "ChatProvider.ts"), "utf8"),
+  webviewEventRouter: readFileSync(path.join(root, "src", "chat", "WebviewEventRouter.ts"), "utf8"),
   chatCommands: readFileSync(path.join(root, "src", "chat", "ChatCommands.ts"), "utf8"),
   streamCoordinator: readFileSync(path.join(root, "src", "chat", "handlers", "StreamCoordinator.ts"), "utf8"),
   tabManager: readFileSync(path.join(root, "src", "chat", "TabManager.ts"), "utf8"),
   mainTs: readFileSync(path.join(root, "src", "chat", "webview", "main.ts"), "utf8"),
   renderer: readFileSync(path.join(root, "src", "chat", "webview", "renderer.ts"), "utf8"),
+  messageRenderer: readFileSync(path.join(root, "src", "chat", "webview", "messageRenderer.ts"), "utf8"),
   streamHandlers: readFileSync(path.join(root, "src", "chat", "webview", "streamHandlers.ts"), "utf8"),
   mentions: readFileSync(path.join(root, "src", "chat", "webview", "mentions.ts"), "utf8"),
   outputChannel: readFileSync(path.join(root, "src", "utils", "outputChannel.ts"), "utf8"),
   diffApplier: readFileSync(path.join(root, "src", "diff", "DiffApplier.ts"), "utf8"),
   diffHandler: readFileSync(path.join(root, "src", "chat", "handlers", "DiffHandler.ts"), "utf8"),
+  sessionLifecycle: readFileSync(path.join(root, "src", "chat", "SessionLifecycleService.ts"), "utf8"),
   checkpoint: readFileSync(path.join(root, "src", "checkpoint", "CheckpointManager.ts"), "utf8"),
   indexHtml: readFileSync(path.join(root, "src", "chat", "webview", "index.html"), "utf8"),
   tokensCss: readFileSync(path.join(root, "src", "chat", "webview", "css", "tokens.css"), "utf8"),
@@ -101,9 +104,9 @@ describe("Regression: Activation & Server Connection", () => {
 
 describe("Regression: Send Prompt & Streamed Response", () => {
   it("send_prompt handler creates user message and persists", () => {
-    assert.ok(files.chatProvider.includes('"send_prompt"'),
+    assert.ok(files.chatProvider.includes('"send_prompt"') || files.webviewEventRouter.includes('"send_prompt"'),
       "send_prompt handler must exist in webviewHandlers")
-    assert.ok(files.chatProvider.includes("appendMessage(sessionId, userMsg)"),
+    assert.ok(files.chatProvider.includes("appendMessage(sessionId, userMsg)") || files.webviewEventRouter.includes("appendMessage(sessionId, userMsg)"),
       "must persist user message via appendMessage")
   })
 
@@ -146,7 +149,7 @@ describe("Regression: Session Persistence & Resume", () => {
   })
 
   it("resume_session_data re-attaches to existing server session", () => {
-    assert.ok(files.chatProvider.includes("sessionManager.ensureSession("),
+    assert.ok(files.chatProvider.includes("sessionManager.ensureSession(") || files.sessionLifecycle.includes("sessionManager.ensureSession("),
       "resume must re-attach server session via ensureSession")
   })
 })
@@ -184,8 +187,8 @@ describe("Regression: Context & References", () => {
 
 describe("Regression: Edit Message", () => {
   it("edit button posts edit_message with messageId and text", () => {
-    assert.ok(files.renderer.includes('type: "edit_message"'), "edit button must post edit_message")
-    assert.ok(files.renderer.includes("messageId: msg.id"), "must include messageId")
+    assert.ok(files.renderer.includes('type: "edit_message"') || files.messageRenderer.includes('type: "edit_message"'), "edit button must post edit_message")
+    assert.ok(files.renderer.includes("messageId: msg.id") || files.messageRenderer.includes("messageId: msg.id"), "must include messageId")
   })
 
   it("edit truncates downstream messages from store and webview state", () => {
@@ -194,14 +197,14 @@ describe("Regression: Edit Message", () => {
   })
 
   it("revert button on assistant messages", () => {
-    assert.ok(files.renderer.includes("message-revert-btn"), "must have revert button")
-    assert.ok(files.renderer.includes('type: "revert_message"'), "must post revert_message")
+    assert.ok(files.renderer.includes("message-revert-btn") || files.messageRenderer.includes("message-revert-btn"), "must have revert button")
+    assert.ok(files.renderer.includes('type: "revert_message"') || files.messageRenderer.includes('type: "revert_message"'), "must post revert_message")
   })
 })
 
 describe("Regression: Diff Accept & Checkpoint", () => {
   it("accept_diff creates checkpoint before applying", () => {
-    assert.ok(files.chatProvider.includes("snapshotBeforeAction"),
+    assert.ok(files.chatProvider.includes("snapshotBeforeAction") || files.sessionLifecycle.includes("snapshotBeforeAction"),
       "must create checkpoint before diff apply")
   })
 
@@ -213,7 +216,7 @@ describe("Regression: Diff Accept & Checkpoint", () => {
   })
 
   it("diff_result carries checkpointCreated flag to webview", () => {
-    assert.ok(files.chatProvider.includes("checkpointCreated"),
+    assert.ok(files.chatProvider.includes("checkpointCreated") || files.sessionLifecycle.includes("checkpointCreated"),
       "must send checkpointCreated flag with diff_result")
     assert.ok(files.mainTs.includes("checkpointCreated"),
       "webview must handle checkpointCreated flag")

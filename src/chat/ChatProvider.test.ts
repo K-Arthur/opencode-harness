@@ -5,6 +5,9 @@ import { resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const source = readFileSync(resolve(__dirname, "ChatProvider.ts"), "utf8")
+const lifecycleSource = readFileSync(resolve(__dirname, "SessionLifecycleService.ts"), "utf8")
+const commandExecSource = readFileSync(resolve(__dirname, "CommandExecutionService.ts"), "utf8")
+const eventRouterSource = readFileSync(resolve(__dirname, "WebviewEventRouter.ts"), "utf8")
 
 void describe("ChatProvider.ts", () => {
   void it("exports ChatProvider class with correct interfaces", () => {
@@ -29,22 +32,22 @@ void describe("ChatProvider.ts", () => {
   })
 
   void it("contains VALID_WEBVIEW_TYPES static set with known message types", () => {
-    assert.ok(source.includes("static readonly VALID_WEBVIEW_TYPES"), "VALID_WEBVIEW_TYPES must exist")
-    assert.ok(source.includes("send_prompt"), "must include send_prompt")
-    assert.ok(source.includes("accept_diff"), "must include accept_diff")
-    assert.ok(source.includes("reject_diff"), "must include reject_diff")
-    assert.ok(source.includes("webview_ready"), "must include webview_ready")
+    assert.ok(source.includes("static readonly VALID_WEBVIEW_TYPES") || eventRouterSource.includes("static readonly VALID_WEBVIEW_TYPES"), "VALID_WEBVIEW_TYPES must exist")
+    assert.ok(source.includes("send_prompt") || eventRouterSource.includes("send_prompt"), "must include send_prompt")
+    assert.ok(source.includes("accept_diff") || eventRouterSource.includes("accept_diff"), "must include accept_diff")
+    assert.ok(source.includes("reject_diff") || eventRouterSource.includes("reject_diff"), "must include reject_diff")
+    assert.ok(source.includes("webview_ready") || eventRouterSource.includes("webview_ready"), "must include webview_ready")
   })
 
   void it("contains chunk batching and prompt-in-flight guards", () => {
-    assert.ok(source.includes("promptsInFlight = new Set"), "promptInFlight guard must exist")
+    assert.ok(source.includes("promptsInFlight = new Set") || eventRouterSource.includes("promptsInFlight = new Set"), "promptInFlight guard must exist")
     assert.ok(source.includes("private chunkBatcher = new ChunkBatcher"), "chunkBatcher must exist")
     assert.ok(source.includes("import { ChunkBatcher } from"), "ChunkBatcher must be imported")
-    assert.ok(source.includes("private earlyMessageQueue"), "earlyMessageQueue must exist")
+    assert.ok(source.includes("private earlyMessageQueue") || eventRouterSource.includes("earlyMessageQueue"), "earlyMessageQueue must exist")
   })
 
   void it("imports ChatMessage and Block from ./types", () => {
-    assert.ok(source.includes("import { ChatMessage, Block } from \"./types\""), "must import ChatMessage from types")
+    assert.ok(source.includes("import { ChatMessage } from \"./types\"") || source.includes("import { ChatMessage, Block } from \"./types\""), "must import ChatMessage from types")
   })
 
   void it("imports and uses MessageRouter for model and permission routing", () => {
@@ -67,10 +70,10 @@ void describe("ChatProvider.ts", () => {
   })
 
   void it("contains message validation guards for send_prompt and mention_search", () => {
-    assert.ok(source.includes('msg.type === "send_prompt"'), "must handle send_prompt")
-    assert.ok(source.includes('msg.type === "mention_search"'), "must handle mention_search")
-    assert.ok(source.includes("text.length > 50000"), "must reject oversized prompts")
-    assert.ok(source.includes("query.length > 500"), "must reject oversized mention queries")
+    assert.ok(source.includes('msg.type === "send_prompt"') || eventRouterSource.includes('msg.type === "send_prompt"'), "must handle send_prompt")
+    assert.ok(source.includes('msg.type === "mention_search"') || eventRouterSource.includes('msg.type === "mention_search"'), "must handle mention_search")
+    assert.ok(source.includes("text.length > 50000") || eventRouterSource.includes("text.length > 50000"), "must reject oversized prompts")
+    assert.ok(source.includes("query.length > 500") || eventRouterSource.includes("query.length > 500"), "must reject oversized mention queries")
   })
 
   void it("delegates auto compaction to AutoCompactor", () => {
@@ -79,17 +82,17 @@ void describe("ChatProvider.ts", () => {
   })
 
   void it("delegates slash commands to ChatCommands", () => {
-    assert.ok(source.includes("chatCommands.clear("), "must delegate clear to ChatCommands")
-    assert.ok(source.includes("chatCommands.cost("), "must delegate cost to ChatCommands")
-    assert.ok(source.includes("chatCommands.continue("), "must delegate continue to ChatCommands")
-    assert.ok(source.includes("chatCommands.help("), "must delegate help to ChatCommands")
+    assert.ok(source.includes("chatCommands.clear(") || commandExecSource.includes("chatCommands.clear("), "must delegate clear to ChatCommands")
+    assert.ok(source.includes("chatCommands.cost(") || commandExecSource.includes("chatCommands.cost("), "must delegate cost to ChatCommands")
+    assert.ok(source.includes("chatCommands.continue(") || commandExecSource.includes("chatCommands.continue("), "must delegate continue to ChatCommands")
+    assert.ok(source.includes("chatCommands.help(") || commandExecSource.includes("chatCommands.help("), "must delegate help to ChatCommands")
   })
 
   void it("routes local slash commands before server commands", () => {
-    assert.ok(source.includes("handleLocalSlashCommand("), "must check local slash commands first")
-    assert.ok(source.includes("case \"cost\""), "must handle /cost locally")
-    assert.ok(source.includes("case \"clear\""), "must handle /clear locally")
-    assert.ok(source.includes("sendCommand(tab.cliSessionId!, commandName"), "server commands must be sent without a leading slash")
+    assert.ok(source.includes("handleLocalSlashCommand(") || commandExecSource.includes("handleLocalSlashCommand("), "must check local slash commands first")
+    assert.ok(source.includes("case \"cost\"") || commandExecSource.includes("case \"cost\""), "must handle /cost locally")
+    assert.ok(source.includes("case \"clear\"") || commandExecSource.includes("case \"clear\""), "must handle /clear locally")
+    assert.ok(source.includes("sendCommand(tab.cliSessionId!, commandName") || commandExecSource.includes("sendCommand(tab.cliSessionId!, commandName"), "server commands must be sent without a leading slash")
   })
 
   void it("contains toUserErrorMessage with common error patterns", () => {
@@ -99,31 +102,31 @@ void describe("ChatProvider.ts", () => {
   })
 
   void it("contains edit_message handler for message editing", () => {
-    assert.ok(source.includes('"edit_message"'), "must include edit_message in VALID_WEBVIEW_TYPES")
+    assert.ok(source.includes('"edit_message"') || eventRouterSource.includes('"edit_message"'), "must include edit_message in VALID_WEBVIEW_TYPES")
     assert.ok(source.includes("handleEditMessage("), "must have handleEditMessage method")
     assert.ok(source.includes("edit_message_prefill"), "must send edit_message_prefill to webview")
   })
 
   void it("handles_image_paste_with_base64_encoding", () => {
-    assert.ok(source.includes('"attach_image"'), "VALID_WEBVIEW_TYPES must include attach_image")
-    assert.ok(source.includes("attach_image"), "handleWebviewMessage must have attach_image case")
+    assert.ok(source.includes('"attach_image"') || eventRouterSource.includes('"attach_image"'), "VALID_WEBVIEW_TYPES must include attach_image")
+    assert.ok(source.includes("attach_image") || eventRouterSource.includes("attach_image"), "handleWebviewMessage must have attach_image case")
     assert.ok(source.includes("handleAttachImage("), "must have handleAttachImage method")
-    assert.ok(source.includes('type: "image"'), "must create image block type")
-    assert.ok(source.includes("data"), "must pass base64 data to image block")
-    assert.ok(source.includes("mimeType"), "must pass mimeType to image block")
+    assert.ok(source.includes('type: "image"') || eventRouterSource.includes('type: "image"'), "must create image block type")
+    assert.ok(source.includes("data") || eventRouterSource.includes("data"), "must pass base64 data to image block")
+    assert.ok(source.includes("mimeType") || eventRouterSource.includes("mimeType"), "must pass mimeType to image block")
   })
 
   void it("handles_image_file_attachment", () => {
     assert.ok(source.includes("handleAttachImage"), "handleAttachImage method must exist")
-    assert.ok(source.includes("appendMessage"), "must persist image message via appendMessage")
+    assert.ok(source.includes("appendMessage") || eventRouterSource.includes("appendMessage"), "must persist image message via appendMessage")
     assert.ok(source.includes('type: "message"'), "must send message to webview with image")
   })
 
   void it("guards file and image attachments with security checks", () => {
-    assert.ok(source.includes("checkFileSecurity"), "must check attached files for sensitive or risky content")
-    assert.ok(source.includes('"Attach All"'), "must allow explicit override for risky file attachments")
-    assert.ok(source.includes('"Review Files"'), "must allow reviewing risky file attachments")
-    assert.ok(source.includes("10 * 1024 * 1024"), "must reject images larger than 10MB")
+    assert.ok(source.includes("checkFileSecurity") || lifecycleSource.includes("checkFileSecurity"), "must check attached files for sensitive or risky content")
+    assert.ok(source.includes('"Attach All"') || lifecycleSource.includes('"Attach All"'), "must allow explicit override for risky file attachments")
+    assert.ok(source.includes('"Review Files"') || lifecycleSource.includes('"Review Files"'), "must allow reviewing risky file attachments")
+    assert.ok(source.includes("10 * 1024 * 1024") || lifecycleSource.includes("10 * 1024 * 1024"), "must reject images larger than 10MB")
   })
 
   void it("contains mapToolType for type categorization", () => {
@@ -142,7 +145,7 @@ void describe("ChatProvider.ts", () => {
   void it("auto_mode_shows_one_time_confirmation", () => {
     assert.ok(source.includes("showAutoModeConfirmation"), "must have showAutoModeConfirmation method")
     assert.ok(source.includes("Auto mode will apply all changes without asking"), "must show auto mode warning")
-    assert.ok(source.includes('"auto"'), "must handle auto mode")
+    assert.ok(source.includes('"auto"') || eventRouterSource.includes('"auto"'), "must handle auto mode")
     assert.ok(source.includes("hasAutoModeConfirmed"), "must have hasAutoModeConfirmed check")
   })
 
@@ -190,7 +193,7 @@ void describe("ChatProvider.ts", () => {
   })
 
   void it("has custom prompt variable resolution", () => {
-    assert.ok(source.includes("resolveCustomPromptVariables("), "must have resolveCustomPromptVariables")
+    assert.ok(source.includes("resolveCustomPromptVariables(") || commandExecSource.includes("resolveCustomPromptVariables("), "must have resolveCustomPromptVariables")
   })
 
   // ---- Regression: premature stream finalization (session.idle bug) ----
@@ -245,8 +248,8 @@ void describe("ChatProvider.ts", () => {
   })
 
   void it("handles connect_provider from the model manager modal", () => {
-    assert.ok(source.includes('"connect_provider"'), "VALID_WEBVIEW_TYPES must include connect_provider")
-    assert.ok(source.includes('["connect_provider"'), "webviewHandlers must handle connect_provider")
+    assert.ok(source.includes('"connect_provider"') || eventRouterSource.includes('"connect_provider"'), "VALID_WEBVIEW_TYPES must include connect_provider")
+    assert.ok(source.includes('["connect_provider"') || eventRouterSource.includes('["connect_provider"'), "webviewHandlers must handle connect_provider")
     assert.ok(source.includes("handleConnectProvider"), "must route provider connection actions through a handler")
   })
 
@@ -262,8 +265,10 @@ void describe("ChatProvider.ts", () => {
 
   void it("close_tab deletes opened-but-unused empty sessions from SessionStore", () => {
     const idx = source.indexOf('["close_tab"')
-    assert.ok(idx >= 0, "close_tab handler must exist")
-    const block = source.slice(idx, source.indexOf('["switch_tab"', idx))
+    assert.ok(idx >= 0 || eventRouterSource.indexOf('["close_tab"') >= 0, "close_tab handler must exist")
+    const src = idx >= 0 ? source : eventRouterSource
+    const actualIdx = src.indexOf('["close_tab"')
+    const block = src.slice(actualIdx, src.indexOf('["switch_tab"', actualIdx))
     assert.ok(block.includes("deleteIfEmpty"), "close_tab must call sessionStore.deleteIfEmpty for empty sessions")
     assert.ok(block.includes("closeTab(sessionId)"), "close_tab must still close the visual tab")
   })
@@ -277,10 +282,10 @@ void describe("ChatProvider.ts", () => {
   })
 
   void it("handles personalized theme customizer messages", () => {
-    assert.ok(source.includes('"get_theme_config"'), "VALID_WEBVIEW_TYPES must include get_theme_config")
-    assert.ok(source.includes('"update_theme_config"'), "VALID_WEBVIEW_TYPES must include update_theme_config")
-    assert.ok(source.includes("pushThemeConfigToWebview"), "must send current theme config to the webview")
-    assert.ok(source.includes("handleUpdateThemeConfig"), "must persist customized theme config")
+    assert.ok(source.includes('"get_theme_config"') || eventRouterSource.includes('"get_theme_config"'), "VALID_WEBVIEW_TYPES must include get_theme_config")
+    assert.ok(source.includes('"update_theme_config"') || eventRouterSource.includes('"update_theme_config"'), "VALID_WEBVIEW_TYPES must include update_theme_config")
+    assert.ok(source.includes("pushThemeConfigToWebview") || lifecycleSource.includes("pushThemeConfigToWebview"), "must send current theme config to the webview")
+    assert.ok(source.includes("handleUpdateThemeConfig") || eventRouterSource.includes("handleUpdateThemeConfig"), "must persist customized theme config")
   })
 })
 
@@ -289,12 +294,16 @@ void describe("ChatProvider.ts", () => {
 // The handler must use msg.mode directly. Plan-mode tool-disabling is done
 // in StreamCoordinator.startPrompt, not here.
 
+function findChangeModeBlock(src: string): string {
+  const changeIdx = src.indexOf('["change_mode"')
+  const setModelIdx = src.indexOf('["set_model"', changeIdx)
+  return src.slice(changeIdx, setModelIdx)
+}
+
 void it("change_mode handler reads mode from msg.mode", () => {
   const changeIdx = source.indexOf('["change_mode"')
-  assert.ok(changeIdx >= 0, "change_mode handler must exist")
-  const setModelIdx = source.indexOf('["set_model"', changeIdx)
-  assert.ok(setModelIdx > changeIdx, "set_model must follow change_mode")
-  const block = source.slice(changeIdx, setModelIdx)
+  assert.ok(changeIdx >= 0 || eventRouterSource.indexOf('["change_mode"') >= 0, "change_mode handler must exist")
+  const block = findChangeModeBlock(changeIdx >= 0 ? source : eventRouterSource)
   assert.ok(
     /msg\.mode\s+as\s+string/.test(block),
     "change_mode handler must read mode from msg.mode (the webview sends mode, not tools)"
@@ -306,9 +315,7 @@ void it("change_mode handler reads mode from msg.mode", () => {
 })
 
 void it("change_mode passes msg.mode to tabManager.setMode and sessionStore.updateMode", () => {
-  const changeIdx = source.indexOf('["change_mode"')
-  const setModelIdx = source.indexOf('["set_model"', changeIdx)
-  const block = source.slice(changeIdx, setModelIdx)
+  const block = findChangeModeBlock(source.indexOf('["change_mode"') >= 0 ? source : eventRouterSource)
   assert.ok(
     /tabManager\.setMode\(sessionId,\s*mode\)/.test(block),
     "must call tabManager.setMode(sessionId, mode)"
@@ -320,9 +327,7 @@ void it("change_mode passes msg.mode to tabManager.setMode and sessionStore.upda
 })
 
 void it("change_mode triggers auto-mode confirmation when mode is auto", () => {
-  const changeIdx = source.indexOf('["change_mode"')
-  const setModelIdx = source.indexOf('["set_model"', changeIdx)
-  const block = source.slice(changeIdx, setModelIdx)
+  const block = findChangeModeBlock(source.indexOf('["change_mode"') >= 0 ? source : eventRouterSource)
   assert.ok(
     /mode\s*===\s*"auto"/.test(block) && block.includes("hasAutoModeConfirmed"),
     "auto mode must reach the confirmation check (block.mode === 'auto' branch must be reachable)"
@@ -334,14 +339,22 @@ void it("change_mode triggers auto-mode confirmation when mode is auto", () => {
 // The handler must forward ok=false to the webview when restore returns false
 // instead of always sending ok:true.
 
+function findRestoreCheckpointBlock(src: string): string {
+  const idx = src.indexOf('["restore_checkpoint"')
+  const nextHandlerIdx = src.indexOf('["delete_server_session"', idx)
+  return src.slice(idx, nextHandlerIdx > idx ? nextHandlerIdx : idx + 800)
+}
+
 void it("restore_checkpoint handler checks boolean return from checkpointManager.restore", () => {
   const idx = source.indexOf('["restore_checkpoint"')
-  assert.ok(idx >= 0, "restore_checkpoint handler must exist in webviewHandlers")
-  const nextHandlerIdx = source.indexOf('["delete_server_session"', idx)
-  const block = source.slice(idx, nextHandlerIdx > idx ? nextHandlerIdx : idx + 800)
+  assert.ok(idx >= 0 || eventRouterSource.indexOf('["restore_checkpoint"') >= 0, "restore_checkpoint handler must exist in webviewHandlers")
+  const block = findRestoreCheckpointBlock(idx >= 0 ? source : eventRouterSource)
+  const lifecycleBlock = lifecycleSource
   assert.ok(
     /const\s+ok\s*=\s*await\s+this\.checkpointManager\.restore/.test(block) ||
-    /ok\s*=\s*await\s+this\.checkpointManager\.restore/.test(block),
+    /ok\s*=\s*await\s+this\.checkpointManager\.restore/.test(block) ||
+    /const\s+ok\s*=\s*await\s+this\.opts\.checkpointManager\.restore/.test(block) ||
+    /ok\s*=\s*await\s+this\.opts\.checkpointManager\.restore/.test(block),
     "handler must capture the boolean return: const ok = await this.checkpointManager.restore(...)"
   )
   assert.ok(
@@ -351,9 +364,7 @@ void it("restore_checkpoint handler checks boolean return from checkpointManager
 })
 
 void it("restore_checkpoint does not hard-code ok:true — uses the captured boolean", () => {
-  const idx = source.indexOf('["restore_checkpoint"')
-  const nextHandlerIdx = source.indexOf('["delete_server_session"', idx)
-  const block = source.slice(idx, nextHandlerIdx > idx ? nextHandlerIdx : idx + 800)
+  const block = findRestoreCheckpointBlock(source.indexOf('["restore_checkpoint"') >= 0 ? source : eventRouterSource)
   assert.ok(
     !block.includes("ok: true"),
     "handler must not hard-code ok: true — it must use the captured boolean from restore()"
@@ -365,24 +376,28 @@ void it("restore_checkpoint does not hard-code ok:true — uses the captured boo
 // The backend must handle resume_server_session, create a local session entry
 // via sessionStore.importOneServerSession, and call handleResumeSession.
 
+function findResumeServerSessionBlock(src: string): string {
+  const idx = src.indexOf('["resume_server_session"')
+  return idx >= 0 ? src.slice(idx, idx + 1500) : ""
+}
+
 void it("resume_server_session is in VALID_WEBVIEW_TYPES", () => {
   assert.ok(
-    source.includes('"resume_server_session"'),
+    source.includes('"resume_server_session"') || eventRouterSource.includes('"resume_server_session"'),
     "VALID_WEBVIEW_TYPES must include resume_server_session"
   )
 })
 
 void it("resume_server_session handler exists in webviewHandlers", () => {
   assert.ok(
-    source.includes('["resume_server_session"'),
+    source.includes('["resume_server_session"') || eventRouterSource.includes('["resume_server_session"'),
     "webviewHandlers must have a resume_server_session entry"
   )
 })
 
 void it("resume_server_session calls importOneServerSession on sessionStore", () => {
-  const idx = source.indexOf('["resume_server_session"')
-  assert.ok(idx >= 0, "resume_server_session handler must exist")
-  const block = source.slice(idx, idx + 1200)
+  const block = findResumeServerSessionBlock(source.indexOf('["resume_server_session"') >= 0 ? source : eventRouterSource)
+  assert.ok(block.includes("resume_server_session"), "resume_server_session handler must exist")
   assert.ok(
     block.includes("importOneServerSession"),
     "handler must call sessionStore.importOneServerSession to create/find the local session"
@@ -390,9 +405,8 @@ void it("resume_server_session calls importOneServerSession on sessionStore", ()
 })
 
 void it("resume_server_session calls handleResumeSession with the local session id", () => {
-  const idx = source.indexOf('["resume_server_session"')
-  assert.ok(idx >= 0)
-  const block = source.slice(idx, idx + 1200)
+  const block = findResumeServerSessionBlock(source.indexOf('["resume_server_session"') >= 0 ? source : eventRouterSource)
+  assert.ok(block.includes("resume_server_session"), "resume_server_session handler must exist")
   assert.ok(
     block.includes("handleResumeSession"),
     "handler must call handleResumeSession to load the session into a tab"
@@ -400,11 +414,10 @@ void it("resume_server_session calls handleResumeSession with the local session 
 })
 
 void it("resume_server_session offers to open the workspace folder when directory differs", () => {
-  const idx = source.indexOf('["resume_server_session"')
-  assert.ok(idx >= 0)
-  const block = source.slice(idx, idx + 1500)
+  const block = findResumeServerSessionBlock(source.indexOf('["resume_server_session"') >= 0 ? source : eventRouterSource)
+  assert.ok(block.includes("resume_server_session"), "resume_server_session handler must exist")
   assert.ok(
-    block.includes("vscode.openFolder") || block.includes("openFolder"),
+    block.includes("vscode.openFolder") || block.includes("openFolder") || block.includes("showOpenFolderDialog") || source.includes("showOpenFolderDialog"),
     "handler must offer to open the session's workspace folder when it differs from the current one"
   )
 })
@@ -413,10 +426,14 @@ void it("resume_server_session offers to open the workspace folder when director
 // Filtering by workspace was preventing users from seeing their CLI sessions
 // from other projects. All non-subagent sessions must be returned.
 
+function findListServerSessionsBlock(src: string): string {
+  const idx = src.indexOf('["list_server_sessions"')
+  return idx >= 0 ? src.slice(idx, idx + 1500) : ""
+}
+
 void it("list_server_sessions does not filter by isInCurrentWorkspace", () => {
-  const idx = source.indexOf('["list_server_sessions"')
-  assert.ok(idx >= 0, "list_server_sessions handler must exist")
-  const block = source.slice(idx, idx + 1500)
+  const block = findListServerSessionsBlock(source.indexOf('["list_server_sessions"') >= 0 ? source : eventRouterSource)
+  assert.ok(block.includes("list_server_sessions"), "list_server_sessions handler must exist")
   assert.ok(
     !block.includes("isInCurrentWorkspace"),
     "list_server_sessions must NOT filter by isInCurrentWorkspace — all sessions must be shown"
@@ -424,9 +441,8 @@ void it("list_server_sessions does not filter by isInCurrentWorkspace", () => {
 })
 
 void it("list_server_sessions includes isCurrentWorkspace flag in each mapped session", () => {
-  const idx = source.indexOf('["list_server_sessions"')
-  assert.ok(idx >= 0)
-  const block = source.slice(idx, idx + 1500)
+  const block = findListServerSessionsBlock(source.indexOf('["list_server_sessions"') >= 0 ? source : eventRouterSource)
+  assert.ok(block.includes("list_server_sessions"), "list_server_sessions handler must exist")
   assert.ok(
     block.includes("isCurrentWorkspace"),
     "each mapped session must include isCurrentWorkspace flag for the UI to badge other-workspace sessions"
@@ -436,9 +452,10 @@ void it("list_server_sessions includes isCurrentWorkspace flag in each mapped se
 // ── model selector on welcome screen ────────────────────────────────────────
 
 void it("set_model handler persists to modelManager even without sessionId", () => {
-  const idx = source.indexOf('["set_model"')
+  const src = source.indexOf('["set_model"') >= 0 ? source : eventRouterSource
+  const idx = src.indexOf('["set_model"')
   assert.ok(idx >= 0, "set_model handler must exist")
-  const block = source.slice(idx, idx + 300)
+  const block = src.slice(idx, idx + 300)
   assert.ok(
     block.includes("modelManager.setModel("),
     "set_model must call modelManager.setModel so global model is updated even when no session is active"

@@ -1,3 +1,4 @@
+import { log } from "../../utils/outputChannel"
 import type { ContextChip, ContextUsage } from "./types"
 import type { ElementRefs } from "./dom"
 
@@ -68,12 +69,12 @@ export function applyThemeVars(vars?: Record<string, string>) {
     if (typeof val !== "string") continue
     // Only allow valid CSS custom properties (must start with --)
     if (!key.startsWith("--")) {
-      console.warn("[OpenCode] Rejected non-custom CSS property:", key)
+      log.warn("[OpenCode] Rejected non-custom CSS property:", key)
       continue
     }
     // Block dangerous CSS values that could exfiltrate data
     if (/url\(|expression\(|javascript:|data:text\/html/i.test(val)) {
-      console.warn("[OpenCode] Blocked unsafe CSS value for:", key)
+      log.warn("[OpenCode] Blocked unsafe CSS value for:", key)
       continue
     }
     root.style.setProperty(key, val)

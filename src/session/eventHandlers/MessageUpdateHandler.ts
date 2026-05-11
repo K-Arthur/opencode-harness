@@ -1,5 +1,4 @@
-import { SdkEventLike, NormalizedOpencodeEvent, MessageInfoLike } from "../EventNormalizer"
-import { NormalizerContext, EventHandler } from "./types"
+import { SdkEventLike, NormalizedOpencodeEvent, MessageInfoLike, NormalizerContext, EventHandler } from "./types"
 
 export class MessageUpdateHandler implements EventHandler {
   canHandle(eventType: string): boolean {

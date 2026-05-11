@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 
 const source = readFileSync(path.join(__dirname, "main.ts"), "utf8")
+const sessionListRendererSource = readFileSync(path.join(__dirname, "sessionListRenderer.ts"), "utf8")
 
 describe("main.ts", () => {
   // Existing tests
@@ -175,16 +176,23 @@ describe("main.ts", () => {
     )
   })
 
-  it("unified modal: server session items send resume_server_session on click", () => {
+it("unified modal: server session items send resume_server_session on click", () => {
     assert.ok(
-      source.includes("resume_server_session"),
+      source.includes("resume_server_session") || sessionListRendererSource.includes("resume_server_session"),
       "must send resume_server_session message when a server session is clicked"
     )
   })
 
   it("unified modal: session items show isCurrentWorkspace badge", () => {
     assert.ok(
-      source.includes("isCurrentWorkspace") || source.includes("workspace-badge"),
+      source.includes("isCurrentWorkspace") || source.includes("workspace-badge") || sessionListRendererSource.includes("isCurrentWorkspace") || sessionListRendererSource.includes("workspace-badge"),
+      "session items must indicate whether they belong to the current workspace"
+    )
+  })
+
+  it("unified modal: session items show isCurrentWorkspace badge", () => {
+    assert.ok(
+      source.includes("isCurrentWorkspace") || source.includes("workspace-badge") || sessionListRendererSource.includes("isCurrentWorkspace") || sessionListRendererSource.includes("workspace-badge"),
       "session items must indicate whether they belong to the current workspace"
     )
   })

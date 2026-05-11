@@ -1,3 +1,4 @@
+import { log } from "../utils/outputChannel"
 import * as vscode from "vscode"
 import { estimateTokens } from "../utils/tokenCounter"
 
@@ -131,7 +132,7 @@ export class ContextEngine {
 
       return Array.from(tree.values())
     } catch (err) {
-      console.warn("[ContextEngine] Failed to gather workspace tree", err)
+      log.warn("[ContextEngine] Failed to gather workspace tree", err)
       return []
     }
   }

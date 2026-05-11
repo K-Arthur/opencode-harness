@@ -1,7 +1,7 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { StepFinishHandler } from "./StepFinishHandler"
-import type { SdkEventLike } from "../EventNormalizer"
+import type { SdkEventLike } from "./types"
 import type { NormalizerContext } from "./types"
 
 function createMockContext(): NormalizerContext {

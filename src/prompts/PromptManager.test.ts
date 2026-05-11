@@ -60,12 +60,13 @@ describe("PromptManager.ts", () => {
   })
 
   it("supports selection, file, language, clipboard variables", () => {
-    // Variable collection is in ChatProvider.resolveCustomPromptVariables
+    // Variable collection is in ChatProvider or CommandExecutionService (extracted)
     const chatProviderSource = readFileSync(resolve(__dirname, "..", "chat", "ChatProvider.ts"), "utf8")
-    assert.ok(chatProviderSource.includes("selection:"), "must collect selection variable")
-    assert.ok(chatProviderSource.includes("file:"), "must collect file variable")
-    assert.ok(chatProviderSource.includes("language:"), "must collect language variable")
-    assert.ok(chatProviderSource.includes("clipboard"), "must collect clipboard variable")
+    const commandExecSource = readFileSync(resolve(__dirname, "..", "chat", "CommandExecutionService.ts"), "utf8")
+    assert.ok(chatProviderSource.includes("selection:") || commandExecSource.includes("selection:"), "must collect selection variable")
+    assert.ok(chatProviderSource.includes("file:") || commandExecSource.includes("file:"), "must collect file variable")
+    assert.ok(chatProviderSource.includes("language:") || commandExecSource.includes("language:"), "must collect language variable")
+    assert.ok(chatProviderSource.includes("clipboard") || commandExecSource.includes("clipboard"), "must collect clipboard variable")
   })
 
   it("has watchPrompts method", () => {

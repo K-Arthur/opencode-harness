@@ -11,19 +11,21 @@ import { estimateContextTokens, parseModelRef, estimateTokens } from "../../util
 import { ModelManager } from "../../model/ModelManager"
 import { log } from "../../utils/outputChannel"
 import type { Block, ChatMessage } from "../types"
+import { StreamFinalizerService } from "./StreamFinalizerService"
 
 export interface StreamCallbacks {
   postMessage: (msg: Record<string, unknown>) => void
   postRequestError: (message: string, sessionId?: string) => void
 }
 
-type ToolEndResult = { id: string; ok: boolean; result?: string; durationMs?: number; stale?: boolean }
+export type ToolEndResult = { id: string; ok: boolean; result?: string; durationMs?: number; stale?: boolean }
 
 /** Explicit lifecycle states for a streaming session */
 export type StreamLifecycleState = "idle" | "sending" | "streaming" | "completing" | "error" | "timeout"
 
 export class StreamCoordinator {
   private diffHandler: DiffHandler
+  private finalizerService: StreamFinalizerService
   /** Watchdog interval for streams with no server activity across all channels. */
   private readonly STREAM_STUCK_MS = 600000
   /** Time-to-first-byte timeout: no chunk received within 45s */
@@ -70,6 +72,26 @@ export class StreamCoordinator {
     diffApplier: DiffApplier
   ) {
     this.diffHandler = new DiffHandler(diffApplier)
+    this.finalizerService = new StreamFinalizerService({
+      streamStates: this.streamStates,
+      finalizingTabs: this.finalizingTabs,
+      abortedTabs: this.abortedTabs,
+      activeMessageIds: this.activeMessageIds,
+      activeToolCallIds: this.activeToolCallIds,
+      toolCallCounts: this.toolCallCounts,
+      toolActivityAt: this.toolActivityAt,
+      pendingToolGraceTimeouts: this.pendingToolGraceTimeouts,
+      stuckStreamHandlers: this.stuckStreamHandlers,
+      ttfbTimeouts: this.ttfbTimeouts,
+      tabManager: this.tabManager,
+      stopWatchdogIfNoStreams: () => this.stopWatchdogIfNoStreams(),
+      stopHeartbeat: (id) => this.stopHeartbeat(id),
+      setStreamState: (id, state, ctx) => this.setStreamState(id, state, ctx),
+      ensureStreamMessageId: (id, cliSessionId) => this.ensureStreamMessageId(id, cliSessionId),
+      fetchFinalBlocks: (id, cliSessionId, cbs) => this.fetchFinalBlocks(id, cliSessionId, cbs),
+      mergeFinalBlocks: (id, blocks) => this.mergeFinalBlocks(id, blocks),
+      storeAssistantMessage: (id, msgId, blocks, tokenTotal) => this.storeAssistantMessage(id, msgId, blocks, tokenTotal),
+    })
   }
 
   private setStreamState(tabId: string, state: StreamLifecycleState, context?: Record<string, unknown>): void {
@@ -430,181 +452,121 @@ export class StreamCoordinator {
     }
   }
 
-  async finalizeStream(tabId: string, callbacks: StreamCallbacks): Promise<void> {
-    const tab = this.tabManager.getTab(tabId)
-    if (!tab || !tab.waitingForCompletion) return
+  private async fetchFinalBlocks(
+    tabId: string,
+    cliSessionId: string | undefined,
+    callbacks: StreamCallbacks
+  ): Promise<{ blocks: Block[]; sdkTokenTotal: number | undefined }> {
+    let blocks: Block[] = []
+    let sdkTokenTotal: number | undefined
 
-    // Coordination guard: an explicit abort owns stream_end emission.
-    // Without this, an in-flight server message_complete that arrives during
-    // abort() would race and deliver a second stream_end (one with reason=
-    // "aborted" from abort, one without from finalize).
-    if (this.abortedTabs.has(tabId)) {
-      log.info(`finalizeStream skipped for ${tabId} — abort owns stream_end`)
-      return
-    }
+    if (!cliSessionId) return { blocks, sdkTokenTotal }
 
-    // Idempotency guard: prevent double-finalize from concurrent events
-    if (this.finalizingTabs.has(tabId)) {
-      log.info(`finalizeStream skipped for ${tabId} — already finalizing`)
-      return
-    }
-    this.finalizingTabs.add(tabId)
+    const FINAL_FETCH_TIMEOUT_MS = 10_000
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(
+        () => reject(new Error(`getSessionMessages timed out after ${FINAL_FETCH_TIMEOUT_MS}ms`)),
+        FINAL_FETCH_TIMEOUT_MS
+      )
+    })
 
     try {
-      this.setStreamState(tabId, "completing", { sessionId: tab.cliSessionId })
-      const streamMessageId = this.ensureStreamMessageId(tabId, tab.cliSessionId || tabId)
-
-      // Clear TTFB timeout if still active
-      this.clearTtfbTimeout(tabId)
-
-      // Clear stored callbacks for watchdog
-      this.stuckStreamHandlers.delete(tabId)
-
-      this.tabManager.clearCompletionTimeout(tabId)
-      this.tabManager.setWaitingForCompletion(tabId, false)
-
-      let blocks: Block[] = []
-      let sdkTokenTotal: number | undefined
-
-      try {
-        // Fetch the definitive complete message list from the server to ensure all tool blocks and text are present.
-        // Bounded by FINAL_FETCH_TIMEOUT_MS so a slow / hung server cannot wedge finalize indefinitely
-        // (which would block `finalizingTabs` and prevent any further finalize for this tab).
-        // On timeout we fall through to the live blocksBuffer/streamingBuffer fallback below.
-        if (tab.cliSessionId) {
-          const FINAL_FETCH_TIMEOUT_MS = 10_000
-          let timeoutHandle: ReturnType<typeof setTimeout> | null = null
-          const timeoutPromise = new Promise<never>((_, reject) => {
-            timeoutHandle = setTimeout(
-              () => reject(new Error(`getSessionMessages timed out after ${FINAL_FETCH_TIMEOUT_MS}ms`)),
-              FINAL_FETCH_TIMEOUT_MS
-            )
+      const messages = await Promise.race([
+        this.sessionManager.getSessionMessages(cliSessionId),
+        timeoutPromise,
+      ])
+      const lastAssistant = [...messages].reverse().find(message => message.info.role === "assistant")
+      if (lastAssistant) {
+        blocks = this.partsToBlocks(lastAssistant.parts)
+        const info = lastAssistant.info as { cost?: number; tokens?: { input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } } }
+        if (typeof info.cost === "number") {
+          callbacks.postMessage({ type: "cost_update", sessionId: tabId, cost: info.cost })
+        }
+        if (info.tokens) {
+          const input = info.tokens.input ?? 0
+          const output = info.tokens.output ?? 0
+          const reasoning = info.tokens.reasoning ?? 0
+          const cacheRead = info.tokens.cache?.read ?? 0
+          const cacheWrite = info.tokens.cache?.write ?? 0
+          sdkTokenTotal = input + output
+          callbacks.postMessage({
+            type: "token_usage",
+            sessionId: tabId,
+            usage: { prompt: input, completion: output, total: input + output, reasoning, cacheRead, cacheWrite },
           })
-          let messages
-          try {
-            messages = await Promise.race([
-              this.sessionManager.getSessionMessages(tab.cliSessionId),
-              timeoutPromise,
-            ])
-          } finally {
-            if (timeoutHandle) clearTimeout(timeoutHandle)
-          }
-          const lastAssistant = [...messages].reverse().find(message => message.info.role === "assistant")
-          if (lastAssistant) {
-            blocks = this.partsToBlocks(lastAssistant.parts)
-            const info = lastAssistant.info as { cost?: number; tokens?: { input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } } }
-            if (typeof info.cost === "number") {
-              callbacks.postMessage({ type: "cost_update", sessionId: tabId, cost: info.cost })
-            }
-            if (info.tokens) {
-              const input = info.tokens.input ?? 0
-              const output = info.tokens.output ?? 0
-              const reasoning = info.tokens.reasoning ?? 0
-              const cacheRead = info.tokens.cache?.read ?? 0
-              const cacheWrite = info.tokens.cache?.write ?? 0
-              sdkTokenTotal = input + output
-              callbacks.postMessage({
-                type: "token_usage",
-                sessionId: tabId,
-                usage: { prompt: input, completion: output, total: input + output, reasoning, cacheRead, cacheWrite },
-              })
-              const selectedModel = tab.model || this.modelManager.model
-              const provider = parseModelRef(selectedModel).providerID || parseModelRef(this.modelManager.model).providerID || undefined
-              this.rateLimitMonitor.recordTokenUsage(input, output, provider, info.cost)
-            }
-          }
-        }
-      } catch (err) {
-        log.warn(`Failed to fetch final session for ${tabId}, falling back to buffer`, err)
-      }
-
-      // MERGE/FALLBACK: Build the definitive block list with proper deduplication.
-      // Priority: live blocksBuffer (has real-time tool/skill/thought blocks) > server blocks > streamingBuffer.
-      // We MUST use blocksBuffer as the primary source if it contains more than just text blocks,
-      // because it accumulates ALL block types during streaming (text, tools, skills, thinking).
-      const hasNonTextBlocks = tab.blocksBuffer.some(b => b.type !== "text")
-
-      if (tab.blocksBuffer.length > 0 && (hasNonTextBlocks || blocks.length === 0)) {
-        log.info(`finalizeStream: Using live blocksBuffer for ${tabId} (${tab.blocksBuffer.length} blocks, hasNonText: ${hasNonTextBlocks})`)
-
-        // Start with the live buffer (has all real-time blocks)
-        const mergedBlocks = [...tab.blocksBuffer]
-
-        // Merge server blocks: add any text content that the live buffer might have missed
-        if (blocks.length > 0) {
-          for (const serverBlock of blocks) {
-            const exists = mergedBlocks.some(b =>
-              b.type === serverBlock.type &&
-              (b as any).id === (serverBlock as any).id
-            )
-            if (!exists && serverBlock.type === "text") {
-              // Server may have the final complete text - use it to replace any partial text blocks
-              const existingTextIdx = mergedBlocks.findIndex(b => b.type === "text")
-              if (existingTextIdx >= 0) {
-                mergedBlocks[existingTextIdx] = serverBlock
-              } else {
-                mergedBlocks.push(serverBlock)
-              }
-            }
-          }
-        }
-
-        blocks = mergedBlocks
-      }
-
-      log.debug(`finalizeStream: ${blocks.length} block(s) for ${tabId}`)
-
-      // Fallback if both are empty
-      if (blocks.length === 0 && tab.streamingBuffer) {
-        // Strip context wrapper from response if present
-        const cleanedText = this.stripContextWrapper(tab.streamingBuffer)
-
-        // Check if there's actual content after stripping context
-        if (cleanedText.trim()) {
-          blocks.push({ type: "text", text: cleanedText })
+          const tab = this.tabManager.getTab(tabId)
+          const selectedModel = tab?.model || this.modelManager.model
+          const provider = parseModelRef(selectedModel).providerID || parseModelRef(this.modelManager.model).providerID || undefined
+          this.rateLimitMonitor.recordTokenUsage(input, output, provider, info.cost)
         }
       }
-
-      if (blocks.length > 0) {
-        const assistantMsg: ChatMessage = {
-          id: streamMessageId,
-          role: "assistant",
-          blocks,
-          timestamp: Date.now(),
-          sessionId: tabId,
-          tokenCount: sdkTokenTotal,
-        }
-        this.sessionStore.appendMessage(tabId, assistantMsg)
-      }
-
-      // Re-check abort coordination after the await on getSessionMessages —
-      // the abort path may have completed while we were waiting and already
-      // posted its own stream_end (with reason: "aborted"). Suppress ours.
-      if (this.abortedTabs.has(tabId)) {
-        log.info(`finalizeStream suppressing stream_end for ${tabId} — abort raced ahead`)
-      } else {
-        callbacks.postMessage({
-          type: "stream_end",
-          sessionId: tabId,
-          messageId: streamMessageId,
-          blocks,
-        })
-      }
-
-      this.tabManager.setStreaming(tabId, false)
-      this.stopWatchdogIfNoStreams()
-      this.tabManager.clearBuffer(tabId)
-      this.tabManager.clearBlocksBuffer(tabId)
-      this.toolCallCounts.delete(tabId)
-      this.activeToolCallIds.delete(tabId)
-      this.toolActivityAt.delete(tabId)
-      this.clearPendingToolGraceTimeout(tabId)
-      this.activeMessageIds.delete(tabId)
-      this.stopHeartbeat(tabId)
-      this.setStreamState(tabId, "idle", { sessionId: tab.cliSessionId })
+    } catch (err) {
+      log.warn(`Failed to fetch final session for ${tabId}, falling back to buffer`, err)
     } finally {
-      this.finalizingTabs.delete(tabId)
+      if (timeoutHandle) clearTimeout(timeoutHandle)
     }
+
+    return { blocks, sdkTokenTotal }
+  }
+
+  private mergeFinalBlocks(tabId: string, serverBlocks: Block[]): Block[] {
+    const tab = this.tabManager.getTab(tabId)
+    if (!tab) return serverBlocks
+
+    const hasNonTextBlocks = tab.blocksBuffer.some(b => b.type !== "text")
+    if (tab.blocksBuffer.length > 0 && (hasNonTextBlocks || serverBlocks.length === 0)) {
+      log.info(`finalizeStream: Using live blocksBuffer for ${tabId} (${tab.blocksBuffer.length} blocks, hasNonText: ${hasNonTextBlocks})`)
+
+      const mergedBlocks = [...tab.blocksBuffer]
+      for (const serverBlock of serverBlocks) {
+        const exists = mergedBlocks.some(b =>
+          b.type === serverBlock.type &&
+          (b as any).id === (serverBlock as any).id
+        )
+        if (!exists && serverBlock.type === "text") {
+          const existingTextIdx = mergedBlocks.findIndex(b => b.type === "text")
+          if (existingTextIdx >= 0) {
+            mergedBlocks[existingTextIdx] = serverBlock
+          } else {
+            mergedBlocks.push(serverBlock)
+          }
+        }
+      }
+      return mergedBlocks
+    }
+
+    if (serverBlocks.length === 0 && tab.streamingBuffer) {
+      const cleanedText = this.stripContextWrapper(tab.streamingBuffer)
+      if (cleanedText.trim()) {
+        return [{ type: "text", text: cleanedText }]
+      }
+    }
+
+    return serverBlocks
+  }
+
+  private storeAssistantMessage(
+    tabId: string,
+    streamMessageId: string,
+    blocks: Block[],
+    sdkTokenTotal: number | undefined
+  ): void {
+    if (blocks.length === 0) return
+
+    const assistantMsg: ChatMessage = {
+      id: streamMessageId,
+      role: "assistant",
+      blocks,
+      timestamp: Date.now(),
+      sessionId: tabId,
+      tokenCount: sdkTokenTotal,
+    }
+    this.sessionStore.appendMessage(tabId, assistantMsg)
+  }
+
+  async finalizeStream(tabId: string, callbacks: StreamCallbacks): Promise<void> {
+    return this.finalizerService.finalizeStream(tabId, callbacks)
   }
 
   async maybeFinalizeStream(tabId: string, callbacks: StreamCallbacks, trigger: "message_complete" | "status"): Promise<boolean> {

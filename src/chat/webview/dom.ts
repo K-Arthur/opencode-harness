@@ -1,9 +1,11 @@
+import { log } from "../../utils/outputChannel"
+
 export function requireElement<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id)
   if (!element) {
     // Log the missing element but return a shim to prevent a hard crash.
     // The global error boundary in main.ts will still catch any subsequent errors.
-    console.warn(`[OpenCode] Missing element: ${id} — using fallback`)
+    log.warn(`Missing element: ${id} — using fallback`)
     // Return a minimal div as fallback so downstream code doesn't crash
     const fallback = document.createElement("div") as unknown as T
     fallback.id = id
@@ -15,7 +17,7 @@ export function requireElement<T extends HTMLElement>(id: string): T {
 export function optionalElement<T extends HTMLElement>(id: string): T | null {
   const element = document.getElementById(id)
   if (!element) {
-    console.warn(`[OpenCode] Optional element not found: ${id}`)
+    log.warn(`Optional element not found: ${id}`)
     return null
   }
   return element as T
