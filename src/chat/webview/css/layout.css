@@ -897,6 +897,111 @@
   transform: rotate(180deg);
 }
 
+/* ─── INSTRUCTIONS GEAR BUTTON & EDITOR ─── */
+
+.instructions-gear-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.instructions-gear-btn:hover,
+.instructions-gear-btn[aria-expanded="true"] {
+  opacity: 1;
+  background: var(--vscode-toolbar-hoverBackground, rgba(127,127,127,0.1));
+}
+
+.instructions-gear-btn[aria-expanded="true"] {
+  color: var(--vscode-focusBorder, #007acc);
+}
+
+.instructions-editor {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  width: 320px;
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, rgba(127,127,127,0.3));
+  border-radius: 6px;
+  padding: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.instructions-editor.hidden {
+  display: none;
+}
+
+.instructions-editor-label {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.instructions-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, rgba(127,127,127,0.3));
+  border-radius: 3px;
+  padding: 6px;
+  font-size: 12px;
+  font-family: var(--vscode-font-family);
+  resize: vertical;
+}
+
+.instructions-textarea:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  border-color: var(--vscode-focusBorder);
+}
+
+.instructions-editor-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.instructions-save-btn,
+.instructions-cancel-btn {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  border: 1px solid var(--vscode-button-border, transparent);
+}
+
+.instructions-save-btn {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.instructions-save-btn:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.instructions-cancel-btn {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+.instructions-cancel-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
 /* ─── SEND BUTTON ─── */
 
 .send-btn {

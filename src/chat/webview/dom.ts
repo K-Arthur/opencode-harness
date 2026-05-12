@@ -53,7 +53,12 @@ export interface ElementRefs {
   modelLabel: HTMLSpanElement
   variantSelectorBtn: HTMLElement
   variantLabel: HTMLSpanElement
-  
+  instructionsGearBtn: HTMLButtonElement
+  instructionsEditor: HTMLDivElement
+  instructionsTextarea: HTMLTextAreaElement
+  instructionsSaveBtn: HTMLButtonElement
+  instructionsCancelBtn: HTMLButtonElement
+
   modelDropdown: HTMLDivElement
   variantDropdown: HTMLDivElement
   historyBtn: HTMLElement
@@ -181,7 +186,12 @@ export function getElementRefs(): ElementRefs {
     modelLabel: requireElement<HTMLSpanElement>("model-label"),
     variantSelectorBtn: requireElement("variant-selector-btn"),
     variantLabel: requireElement<HTMLSpanElement>("variant-label"),
-    
+    instructionsGearBtn: requireElement<HTMLButtonElement>("instructions-gear-btn"),
+    instructionsEditor: requireElement<HTMLDivElement>("instructions-editor"),
+    instructionsTextarea: requireElement<HTMLTextAreaElement>("instructions-textarea"),
+    instructionsSaveBtn: requireElement<HTMLButtonElement>("instructions-save-btn"),
+    instructionsCancelBtn: requireElement<HTMLButtonElement>("instructions-cancel-btn"),
+
     modelDropdown: requireElement<HTMLDivElement>("model-dropdown-container"),
     variantDropdown: requireElement<HTMLDivElement>("variant-dropdown-container"),
     historyBtn: requireElement("history-btn"),

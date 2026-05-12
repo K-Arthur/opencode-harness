@@ -72,6 +72,20 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
       })
       header.appendChild(revertBtn)
     }
+    if (msg.id && opts?.turnIndex !== undefined) {
+      const forkBtn = document.createElement("button")
+      forkBtn.className = "message-fork-btn"
+      forkBtn.setAttribute("aria-label", "Fork conversation from here")
+      forkBtn.title = `Fork conversation from turn ${opts.turnIndex + 1}`
+      forkBtn.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>'
+      forkBtn.addEventListener("click", () => {
+        const pm = opts?.postMessage
+        if (pm) {
+          pm({ type: "fork_session", sessionId: opts.sessionId ?? msg.sessionId, turnIndex: opts.turnIndex })
+        }
+      })
+      header.appendChild(forkBtn)
+    }
     contentWrapper.appendChild(header)
   }
 

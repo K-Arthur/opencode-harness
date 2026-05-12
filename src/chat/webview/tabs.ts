@@ -118,11 +118,11 @@ export function createTabBar(els: ElementRefs, callbacks: TabCallbacks) {
       tabContainer.appendChild(btn)
     })
 
-    if (streamCapacity?.isFull) {
+    if (streamCapacity && streamCapacity.activeStreams > 0) {
       const streamLimit = document.createElement("span")
-      streamLimit.className = "tab-stream-limit"
-      streamLimit.textContent = `${streamCapacity.activeStreams}/${streamCapacity.maxStreams} streams`
-      streamLimit.title = streamCapacity.reason || `${streamCapacity.activeStreams} streams active`
+      streamLimit.className = `tab-stream-limit${streamCapacity.isFull ? " tab-stream-limit--full" : ""}`
+      streamLimit.textContent = `${streamCapacity.activeStreams}/${streamCapacity.maxStreams} streaming`
+      streamLimit.title = streamCapacity.reason || `${streamCapacity.activeStreams} active stream(s)`
       streamLimit.setAttribute("role", "status")
       streamLimit.setAttribute("aria-label", streamLimit.title)
       tabContainer.appendChild(streamLimit)

@@ -297,4 +297,85 @@ it("unified modal: server session items send resume_server_session on click", ()
     assert.ok(source.includes("updateQuotaBar"), "must render quota bar state")
     assert.ok(source.includes('"rate_limit_state"'), "must listen for rate_limit_state host messages")
   })
+
+  // ── Feature 7: Paste & Drag-Drop parity — RED phase ─────────────────────
+
+  it("paste_rejects_images_exceeding_10mb_size_limit", () => {
+    // Pasted images larger than 10 MB must be rejected with a visible error;
+    // they must not be silently loaded into pendingAttachments.
+    const MAX = 10 * 1024 * 1024
+    assert.ok(
+      source.includes(String(MAX)) || source.includes("10 * 1024 * 1024") || source.includes("MAX_ATTACHMENT_BYTES"),
+      "onPaste must enforce a 10 MB size cap on pasted images"
+    )
+  })
+
+  it("drop_handler_routes_image_files_to_attachment_chips_not_file_mentions", () => {
+    // When the user drops a PNG/JPG/WEBP/GIF onto the input area the file must
+    // become an image attachment (pendingAttachments) — not an @file: mention.
+    // Only non-image files should become @file: mentions.
+    const dropIdx = source.indexOf('addEventListener("drop"')
+    assert.ok(dropIdx >= 0, "drop listener must exist")
+    const dropBlock = source.slice(dropIdx, dropIdx + 800)
+    // Drop handler must branch on image MIME (via ALLOWED_IMAGE_MIMES or direct type check)
+    // and call the shared attachImageBlob helper (which pushes to pendingAttachments)
+    assert.ok(
+      (dropBlock.includes("ALLOWED_IMAGE_MIMES") || dropBlock.includes("image/")) &&
+      (dropBlock.includes("attachImageBlob") || dropBlock.includes("pendingAttachments")),
+      "drop handler must detect image files and route them to attachment chips via attachImageBlob or pendingAttachments"
+    )
+  })
+
+  it("paste_and_drop_enforce_image_mime_allowlist", () => {
+    // Only png, jpeg, webp, and gif must be accepted as image attachments.
+    // Other image/* subtypes (e.g. image/tiff, image/bmp) should be rejected.
+    assert.ok(
+      source.includes("image/png") && source.includes("image/jpeg") && source.includes("image/webp"),
+      "must validate against an explicit MIME allowlist (png, jpeg, webp, gif)"
+    )
+  })
+
+  // ── Feature 4: Stream limit UX — RED phase ────────────────────────────────
+
+  it("stream_limit_aria_label_includes_streaming_session_names", () => {
+    // When stream limit is reached the aria-label and title on the send button
+    // must include the names of the currently streaming sessions, not just the
+    // static tooltip string, so screen readers and sighted users know which
+    // tabs to stop.
+    const idx = source.indexOf("function updateSendButtonIcon(")
+    assert.ok(idx >= 0, "updateSendButtonIcon must exist")
+    const fnEnd = source.indexOf("\n  function ", idx + 1)
+    const block = fnEnd > idx ? source.slice(idx, fnEnd) : source.slice(idx, idx + 600)
+    assert.ok(
+      block.includes("streamingNames") || block.includes("streamCapacity.streamingNames"),
+      "updateSendButtonIcon must include streaming session names in the tooltip when at limit"
+    )
+  })
+
+  it("stream_limit_send_blocked_shows_which_tabs_are_streaming", () => {
+    // The error shown when the user tries to send despite being at the stream
+    // cap must name the streaming tabs (the streamingNames from capacity state),
+    // not just emit the static STREAM_LIMIT_TOOLTIP.
+    const idx = source.indexOf("handleRequestError(active?.id")
+    assert.ok(idx >= 0, "stream-limit handleRequestError call must exist")
+    const block = source.slice(idx, idx + 300)
+    assert.ok(
+      block.includes("streamingNames"),
+      "request error on stream-limit must include streamingNames in the detail"
+    )
+  })
+
+  it("stream_counter_badge_shows_active_count_not_only_when_full", () => {
+    // The stream counter in the tab bar should read "N/3 streaming" whenever
+    // N > 0, not just when N === 3.  This lets users see at a glance how many
+    // slots are in use before hitting the cap.
+    const tabsSource = readFileSync(path.join(__dirname, "tabs.ts"), "utf8")
+    const idx = tabsSource.indexOf("streamCapacity")
+    assert.ok(idx >= 0, "tabs.ts renderTabs must accept streamCapacity")
+    // Counter must gate on activeStreams > 0, not only isFull
+    assert.ok(
+      tabsSource.includes("activeStreams > 0"),
+      "stream counter must be rendered when activeStreams > 0 — not only when isFull"
+    )
+  })
 })

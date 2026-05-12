@@ -164,4 +164,61 @@ describe("SessionStore.ts", () => {
       "importOneServerSession must check for an existing session with the same cliSessionId and return it"
     )
   })
+
+  // ── Feature 6: Thread Branching ───────────────────────────────────────────
+
+  it("OpenCodeSession_has_parentSessionId_field", () => {
+    assert.ok(
+      source.includes("parentSessionId?:"),
+      "OpenCodeSession must have optional parentSessionId to record the fork relationship"
+    )
+  })
+
+  it("OpenCodeSession_has_forkedAtTurn_field", () => {
+    assert.ok(
+      source.includes("forkedAtTurn?:"),
+      "OpenCodeSession must have optional forkedAtTurn to record which turn was the fork point"
+    )
+  })
+
+  it("has_forkSession_method", () => {
+    assert.ok(
+      source.includes("forkSession("),
+      "SessionStore must expose forkSession(sourceId, atTurn) to create a forked copy"
+    )
+  })
+
+  it("forkSession_copies_messages_up_to_atTurn", () => {
+    const idx = source.indexOf("forkSession(")
+    assert.ok(idx >= 0, "forkSession must exist")
+    const block = source.slice(idx, idx + 1200)
+    assert.ok(
+      block.includes(".slice(0,") || block.includes(".slice(0, "),
+      "forkSession must slice the source messages up to (and including) atTurn"
+    )
+  })
+
+  it("forkSession_sets_parentSessionId_and_forkedAtTurn", () => {
+    const idx = source.indexOf("forkSession(")
+    assert.ok(idx >= 0, "forkSession must exist")
+    const block = source.slice(idx, idx + 1200)
+    assert.ok(
+      block.includes("parentSessionId"),
+      "forkSession must set parentSessionId on the new session"
+    )
+    assert.ok(
+      block.includes("forkedAtTurn"),
+      "forkSession must set forkedAtTurn on the new session"
+    )
+  })
+
+  it("forkSession_returns_undefined_for_unknown_source", () => {
+    const idx = source.indexOf("forkSession(")
+    assert.ok(idx >= 0, "forkSession must exist")
+    const block = source.slice(idx, idx + 1200)
+    assert.ok(
+      block.includes("return") && (block.includes("undefined") || block.includes("return\n")),
+      "forkSession must return undefined when the source session does not exist"
+    )
+  })
 })

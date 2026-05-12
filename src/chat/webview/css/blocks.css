@@ -804,6 +804,55 @@
   color: var(--diff-hunk-fg, var(--color-muted));
 }
 
+.diff-hunk-actions {
+  text-align: right;
+  white-space: nowrap;
+  padding: 0 4px;
+}
+
+.diff-hunk-btn {
+  font-size: 11px;
+  padding: 1px 5px;
+  margin-left: 3px;
+  border-radius: 3px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: transparent;
+  opacity: 0.7;
+}
+
+.diff-hunk-btn:hover {
+  opacity: 1;
+}
+
+.diff-hunk-btn--accept {
+  color: var(--oc-success, #3fb950);
+  border-color: var(--oc-success, #3fb950);
+}
+
+.diff-hunk-btn--accept:hover {
+  background: rgba(63,185,80,0.15);
+}
+
+.diff-hunk-btn--reject {
+  color: var(--oc-error, #f85149);
+  border-color: var(--oc-error, #f85149);
+}
+
+.diff-hunk-btn--reject:hover {
+  background: rgba(248,81,73,0.15);
+}
+
+.diff-hunk--accepted .diff-hunk-accepted-chip {
+  color: var(--oc-success, #3fb950);
+  font-size: 11px;
+}
+
+.diff-hunk--rejected .diff-hunk-rejected-chip {
+  color: var(--oc-error, #f85149);
+  font-size: 11px;
+}
+
 /* Diff review label (plan mode) */
 .diff-review-label {
   font-weight: 600;

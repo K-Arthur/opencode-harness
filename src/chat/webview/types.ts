@@ -23,9 +23,11 @@ export interface ToolCallBlock {
 }
 
 export interface DiffHunk {
+  id: string
   oldStart: number
   newStart: number
   lines: DiffLine[]
+  state: 'pending' | 'accepted' | 'rejected'
 }
 
 export interface DiffLine {
@@ -121,6 +123,7 @@ export interface SessionState {
   tokenUsage?: TokenUsage
   changedFiles?: string[]
   lastActiveAt?: number
+  instructions?: string
 }
 
 export interface WebviewState {

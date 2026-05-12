@@ -78,6 +78,7 @@ export class WebviewEventRouter {
     "show_diff", "list_checkpoints", "restore_checkpoint",
     "preview_theme", "get_theme_config", "update_theme_config", "list_cli_themes",
     "request_more_messages", "stream_ack", "retry_stream", "request_state_sync",
+    "set_instructions", "fork_session", "accept_hunk", "reject_hunk",
   ])
 
   private readonly webviewHandlers: Map<string, (msg: Record<string, unknown>, sessionId?: string) => void | Promise<void>> = new Map([
@@ -150,6 +151,36 @@ export class WebviewEventRouter {
         this.opts.ensureLocalTab(sessionId)
         this.opts.sessionStore.updateVariant(sessionId, msg.variant as string)
       }
+    }],
+    ["set_instructions", (msg: Record<string, unknown>, sessionId?: string) => {
+      if (sessionId && typeof msg.instructions === "string") {
+        this.opts.ensureLocalTab(sessionId)
+        this.opts.tabManager.setInstructions(sessionId, msg.instructions)
+      }
+    }],
+    ["accept_hunk", async (msg: Record<string, unknown>, sessionId?: string) => {
+      const path = typeof msg.path === "string" ? msg.path : undefined
+      const hunkId = typeof msg.hunkId === "string" ? msg.hunkId : undefined
+      const hunk = msg.hunk as { id: string; hunkId: string; oldStart: number; oldCount: number; lines: Array<{ type: 'added' | 'removed' | 'context'; content: string }> } | undefined
+      if (!path || !hunkId || !hunk) return
+      const ok = await this.opts.diffApplier.applyHunks(path, [hunk], new Set([hunkId]))
+      this.opts.postMessage({ type: "hunk_result", hunkId, ok, diffId: msg.diffId, sessionId })
+    }],
+    ["reject_hunk", (msg: Record<string, unknown>) => {
+      const hunkId = typeof msg.hunkId === "string" ? msg.hunkId : undefined
+      if (hunkId) {
+        this.opts.postMessage({ type: "hunk_result", hunkId, ok: true, rejected: true, diffId: msg.diffId })
+      }
+    }],
+    ["fork_session", (msg: Record<string, unknown>, sessionId?: string) => {
+      const sourceId = sessionId ?? (typeof msg.sessionId === "string" ? msg.sessionId : undefined)
+      const turnIndex = typeof msg.turnIndex === "number" ? msg.turnIndex : undefined
+      if (!sourceId || turnIndex === undefined) return
+      const forked = this.opts.sessionStore.forkSession(sourceId, turnIndex)
+      if (!forked) return
+      this.opts.ensureLocalTab(forked.id, forked.name, forked.model, forked.mode)
+      this.opts.tabManager.switchTab(forked.id)
+      this.opts.postMessage({ type: "fork_created", sessionId: forked.id, name: forked.name, parentSessionId: sourceId, forkedAtTurn: turnIndex })
     }],
     ["abort", async (_: Record<string, unknown>, sessionId?: string) => {
       if (sessionId) await this.opts.streamCoordinator.abort(sessionId, { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) })

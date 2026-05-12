@@ -233,6 +233,9 @@ private autoCompactor: AutoCompactor
 this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         this.postMessage({ type: "streaming_state", sessionId: tabId, isStreaming })
       }),
+      this.tabManager.onInstructionsChanged(({ tabId, instructions }) => {
+        this.postMessage({ type: "instructions_changed", sessionId: tabId, instructions })
+      }),
       this.contextMonitor.onContextChanged?.((usage) => {
         this.postMessage({
           type: "context_usage",
@@ -735,7 +738,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     const sessionsToSend = restorable.map((s) => ({
       ...(() => {
         const tab = this.tabManager.getTab(s.id)
-        return { isStreaming: tab?.isStreaming ?? false }
+        return { isStreaming: tab?.isStreaming ?? false, instructions: tab?.instructions }
       })(),
       id: s.id,
       name: SessionStore.displayName(s),

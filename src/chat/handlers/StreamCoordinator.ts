@@ -58,6 +58,8 @@ export class StreamCoordinator {
   private heartbeatAckedChunkSeqs = new Map<string, number>()
   /** Per-tab heartbeat interval timers */
   private heartbeatTimers = new Map<string, ReturnType<typeof setInterval>>()
+  /** CLI session IDs that have already received per-tab instructions — prevents re-injection on follow-up turns */
+  private injectedInstructionsSessions = new Set<string>()
   /** Per-tab last force_rerender seq sent — prevents spamming the webview when acks fall behind */
   private lastForceRerenderSeqs = new Map<string, number>()
 
@@ -431,7 +433,15 @@ export class StreamCoordinator {
       // Build/Auto modes: enable all tools (default behavior)
       const tools = tab.mode === "plan" ? { file_edit: false, bash: false } : undefined
 
-      await this.sessionManager.sendPromptAsync(cliSessionId, [{ type: "text", text }], { model: modelRef, tools, variant })
+      // Inject per-tab instructions as a prepended text part on the first turn only
+      const parts: Array<{ type: "text"; text: string }> = []
+      if (tab.instructions && !this.injectedInstructionsSessions.has(cliSessionId)) {
+        parts.push({ type: "text", text: tab.instructions })
+        this.injectedInstructionsSessions.add(cliSessionId)
+      }
+      parts.push({ type: "text", text })
+
+      await this.sessionManager.sendPromptAsync(cliSessionId, parts, { model: modelRef, tools, variant })
 
       this.startHeartbeat(tabId, callbacks)
       // startWatchdog is the single hard safety net and is driven by server activity.
@@ -951,6 +961,8 @@ private cleanupTab(tabId: string): void {
     this.clearPendingToolGraceTimeout(tabId)
     this.activeMessageIds.delete(tabId)
     this.stopHeartbeat(tabId)
+    const cliSessionId = this.tabManager.getTab(tabId)?.cliSessionId
+    if (cliSessionId) this.injectedInstructionsSessions.delete(cliSessionId)
   }
 
   private refreshContextTokenEstimate(tabId: string): void {

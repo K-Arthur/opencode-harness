@@ -86,4 +86,29 @@ void describe("TabManager.ts", () => {
     assert.ok(source.includes("this._onTabSwitched.fire"), "closeTab must fire onTabSwitched")
     assert.ok(source.includes("clearTimeout(tab.completionTimeout)"), "closeTab must clear completion timeout")
   })
+
+  // ── Feature 5: Per-tab instructions — RED phase ──────────────────────────
+
+  void it("TabState_has_optional_instructions_field", () => {
+    // Each tab may carry custom system instructions that are injected once
+    // at session start. Must be optional so existing tabs are unaffected.
+    assert.ok(
+      source.includes("instructions?: string"),
+      "TabState must have an optional instructions field"
+    )
+  })
+
+  void it("has_setInstructions_method", () => {
+    assert.ok(
+      source.includes("setInstructions("),
+      "TabManager must expose setInstructions(id, instructions) to update a tab's instructions"
+    )
+  })
+
+  void it("setInstructions_fires_onInstructionsChanged_event", () => {
+    assert.ok(
+      source.includes("_onInstructionsChanged") && source.includes("onInstructionsChanged"),
+      "setInstructions must fire an onInstructionsChanged event so consumers can react"
+    )
+  })
 })

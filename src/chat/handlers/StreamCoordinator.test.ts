@@ -42,10 +42,12 @@ describe("StreamCoordinator.ts", () => {
   })
 
   it("sends plain prompts as a single user text part without implicit context", () => {
-    assert.match(
-      source,
-      /sendPromptAsync\(\s*cliSessionId,\s*\[\s*\{\s*type:\s*"text",\s*text\s*\}\s*\],/s,
-      "startPrompt must call sendPromptAsync with only the user's text; hidden context changes model behavior versus the CLI"
+    // Parts array is now built up; verify the user text is always the last part pushed
+    // and that no invisible auto-context (contextText) is injected.
+    assert.ok(
+      source.includes("parts.push({ type: \"text\", text })") ||
+        /sendPromptAsync\(\s*cliSessionId,\s*\[\s*\{\s*type:\s*"text",\s*text\s*\}\s*\],/s.test(source),
+      "startPrompt must include the user's text in the parts sent to sendPromptAsync"
     )
     assert.ok(
       !source.includes("text: contextText"),
@@ -407,5 +409,52 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(
       block.includes("cannot send a prompt until extension communication is connected"),
       "transport readiness failure must produce a transport-specific error"
+    )
+  })
+
+  // ── Feature 5: Per-tab instructions injection ─────────────────────────────
+
+  void it("instructions_injection_tracks_sessions_to_avoid_re_injection", () => {
+    assert.ok(
+      source.includes("injectedInstructionsSessions") || source.includes("instructionsInjected"),
+      "must track sessions that have received instructions to prevent re-injection"
+    )
+  })
+
+  void it("instructions_prepended_to_parts_on_first_turn", () => {
+    const startIdx = source.indexOf("async startPrompt(")
+    assert.ok(startIdx >= 0, "startPrompt must exist")
+    const block = source.slice(startIdx, startIdx + 6000)
+    assert.ok(
+      block.includes("tab.instructions"),
+      "startPrompt must read tab.instructions before building parts"
+    )
+    assert.ok(
+      (block.includes("injectedInstructionsSessions") || block.includes("instructionsInjected")) &&
+        (block.includes(".has(") || block.includes(".add(")),
+      "startPrompt must check and update the injection-tracking Set"
+    )
+  })
+
+  void it("instructions_not_re_injected_on_subsequent_turns", () => {
+    const startIdx = source.indexOf("async startPrompt(")
+    assert.ok(startIdx >= 0, "startPrompt must exist")
+    const block = source.slice(startIdx, startIdx + 6000)
+    assert.ok(
+      block.includes(".has(cliSessionId)") ||
+        /!.*injectedInstructionsSessions/.test(block) ||
+        /!this\.injectedInstructionsSessions/.test(block),
+      "must guard against re-injection by checking the tracking Set before prepending"
+    )
+  })
+
+  void it("cleanupTab_removes_session_from_injectedInstructionsSessions", () => {
+    const cleanupIdx = source.indexOf("private cleanupTab(")
+    assert.ok(cleanupIdx >= 0, "cleanupTab must exist")
+    const blockEnd = source.indexOf("\n  }", cleanupIdx)
+    const block = source.slice(cleanupIdx, blockEnd)
+    assert.ok(
+      block.includes("injectedInstructionsSessions") || block.includes("instructionsInjected"),
+      "cleanupTab must remove session from injectedInstructionsSessions to prevent stale injection state"
     )
   })

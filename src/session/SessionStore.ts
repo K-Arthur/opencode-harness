@@ -39,6 +39,10 @@ export interface OpenCodeSession {
   tokenUsage: { prompt: number; completion: number; total: number }
   changedFiles?: string[]
   workspacePath?: string
+  /** ID of the session this was forked from, if any. */
+  parentSessionId?: string
+  /** Index of the last turn included in the fork (0-based). */
+  forkedAtTurn?: number
 }
 
 export interface CreateSessionOptions {
@@ -831,6 +835,38 @@ validateSessionName(name: string): string | null {
     this.save()
     this._onSessionsChanged.fire()
     return clone
+  }
+
+  /**
+   * Fork a session at a specific turn index. The new session contains messages
+   * [0..atTurn] (inclusive) from the source, is marked with `parentSessionId`
+   * and `forkedAtTurn`, and starts as the active session.
+   * Returns `undefined` if the source session does not exist.
+   */
+  forkSession(sourceId: string, atTurn: number): OpenCodeSession | undefined {
+    const source = this.sessions.get(sourceId)
+    if (!source) return undefined
+    const clampedTurn = Math.min(Math.max(atTurn, 0), source.messages.length - 1)
+    const forked: OpenCodeSession = {
+      ...JSON.parse(JSON.stringify(source)),
+      id: crypto.randomUUID(),
+      name: `${source.name} (Fork from Turn ${clampedTurn + 1})`,
+      createdAt: Date.now(),
+      lastActiveAt: Date.now(),
+      messages: source.messages.slice(0, clampedTurn + 1),
+      cliSessionId: undefined,
+      pendingServerLink: true,
+      parentSessionId: sourceId,
+      forkedAtTurn: clampedTurn,
+      cost: 0,
+      tokenUsage: { prompt: 0, completion: 0, total: 0 },
+    }
+    this.sessions.set(forked.id, forked)
+    this.activeSessionId = forked.id
+    this.save()
+    this._onSessionsChanged.fire()
+    this._onSessionCreated.fire(forked.id)
+    return forked
   }
 
   get activeId(): string {

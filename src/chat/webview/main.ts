@@ -840,6 +840,65 @@ function getVsCodeApi() {
     updateModeSelectorState()
   }
 
+  /* ─── PER-TAB INSTRUCTIONS (GEAR) ─── */
+
+  function setupInstructionsEditor() {
+    let saveDebounce: ReturnType<typeof setTimeout> | null = null
+
+    function openEditor() {
+      const active = stateManager.getActiveSession()
+      els.instructionsTextarea.value = active?.instructions ?? ""
+      els.instructionsEditor.classList.remove("hidden")
+      els.instructionsGearBtn.setAttribute("aria-expanded", "true")
+      els.instructionsTextarea.focus()
+    }
+
+    function closeEditor() {
+      els.instructionsEditor.classList.add("hidden")
+      els.instructionsGearBtn.setAttribute("aria-expanded", "false")
+      if (saveDebounce) { clearTimeout(saveDebounce); saveDebounce = null }
+    }
+
+    function saveInstructions() {
+      const active = stateManager.getActiveSession()
+      if (!active) return
+      const text = els.instructionsTextarea.value
+      active.instructions = text
+      stateManager.save()
+      vscode.postMessage({ type: "set_instructions", sessionId: active.id, instructions: text })
+      closeEditor()
+    }
+
+    els.instructionsGearBtn.addEventListener("click", (e) => {
+      e.stopPropagation()
+      if (els.instructionsEditor.classList.contains("hidden")) {
+        openEditor()
+      } else {
+        closeEditor()
+      }
+    })
+
+    els.instructionsSaveBtn.addEventListener("click", saveInstructions)
+    els.instructionsCancelBtn.addEventListener("click", closeEditor)
+
+    els.instructionsTextarea.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        saveInstructions()
+      }
+      if (e.key === "Escape") closeEditor()
+    })
+
+    document.addEventListener("click", (e) => {
+      const target = e.target as Node
+      if (!els.instructionsEditor.contains(target) && !els.instructionsGearBtn.contains(target)) {
+        closeEditor()
+      }
+    })
+  }
+
+  setupInstructionsEditor()
+
   /* ─── AUTO MODE WARNING ─── */
 
   let pendingAutoMode: string | null = null
@@ -919,13 +978,17 @@ function getVsCodeApi() {
       els.inputArea.classList.remove("drag-over")
       const files = e.dataTransfer?.files
       if (files && files.length > 0) {
-        const mentions = Array.from(files)
-          .map((f) => {
-            const relPath = (f as any).webkitRelativePath || f.name
-            return `@file:${relPath}`
-          })
-          .join(" ")
-        insertTextAtCursor(mentions)
+        const fileMentions: string[] = []
+        for (const f of Array.from(files)) {
+          if (ALLOWED_IMAGE_MIMES.includes(f.type as typeof ALLOWED_IMAGE_MIMES[number])) {
+            // Image files become attachment chips, not @file: mentions
+            attachImageBlob(f)
+          } else {
+            const relPath = (f as { webkitRelativePath?: string }).webkitRelativePath || f.name
+            fileMentions.push(`@file:${relPath}`)
+          }
+        }
+        if (fileMentions.length > 0) insertTextAtCursor(fileMentions.join(" "))
       }
     })
   }
@@ -986,6 +1049,34 @@ function getVsCodeApi() {
     }
   }
 
+  const ALLOWED_IMAGE_MIMES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const
+  const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+
+  function attachImageBlob(blob: Blob): void {
+    if (blob.size > MAX_ATTACHMENT_BYTES) {
+      webviewLog(`Image too large (${(blob.size / (1024 * 1024)).toFixed(1)} MB) — limit is 10 MB.`, "error")
+      vscode.postMessage({ type: "show_error", message: "Image attachment exceeds 10 MB limit." })
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      if (!result) return
+      const base64Match = result.match(/^data:(image\/[\w.+-]+);base64,(.+)$/)
+      if (base64Match && base64Match[1] && base64Match[2]) {
+        pendingAttachments.push({ data: base64Match[2], mimeType: base64Match[1] })
+        renderAttachmentChips()
+        updatePromptContextChips()
+        updateSendButton()
+      }
+    }
+    reader.onerror = () => {
+      log.error("Failed to read image")
+      webviewLog("Failed to read image. The file may be corrupted or too large.", "error")
+    }
+    reader.readAsDataURL(blob)
+  }
+
   function onPaste(e: ClipboardEvent) {
     const items = e.clipboardData?.items
     if (!items) return
@@ -995,30 +1086,10 @@ function getVsCodeApi() {
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
-      if (item && item.type.startsWith("image/")) {
+      if (item && ALLOWED_IMAGE_MIMES.includes(item.type as typeof ALLOWED_IMAGE_MIMES[number])) {
         e.preventDefault()
         const blob = item.getAsFile()
-        if (!blob) continue
-        const reader = new FileReader()
-        reader.onload = () => {
-          const result = reader.result as string
-          if (!result) return
-          const base64Match = result.match(/^data:(image\/\w+);base64,(.+)$/)
-          if (base64Match && base64Match[1] && base64Match[2]) {
-            pendingAttachments.push({
-              data: base64Match[2],
-              mimeType: base64Match[1],
-            })
-	            renderAttachmentChips()
-	            updatePromptContextChips()
-	            updateSendButton()
-          }
-        }
-        reader.onerror = () => {
-          log.error("Failed to read pasted image")
-          webviewLog("Failed to read pasted image. The file may be corrupted or too large.", "error")
-        }
-        reader.readAsDataURL(blob)
+        if (blob) attachImageBlob(blob)
         break
       }
     }
@@ -1159,8 +1230,11 @@ function getVsCodeApi() {
     } else if (streamCapacity.isFull) {
       els.sendBtn?.classList.remove("stopping")
       els.sendBtn?.classList.add("stream-limit-blocked")
-      els.sendBtn?.setAttribute("aria-label", STREAM_LIMIT_TOOLTIP)
-      els.sendBtn?.setAttribute("title", STREAM_LIMIT_TOOLTIP)
+      const limitLabel = streamCapacity.streamingNames
+        ? `3 streams active (${streamCapacity.streamingNames}) — stop one to continue`
+        : STREAM_LIMIT_TOOLTIP
+      els.sendBtn?.setAttribute("aria-label", limitLabel)
+      els.sendBtn?.setAttribute("title", limitLabel)
     } else {
       els.sendBtn?.classList.remove("stopping")
       els.sendBtn?.classList.remove("stream-limit-blocked")
@@ -1385,8 +1459,11 @@ function getVsCodeApi() {
     const streamCapacity = getStreamCapacityState()
     if (streamCapacity.isFull) {
       updateSendButton()
-      const detail = streamCapacity.streamingNames ? ` Currently streaming: ${streamCapacity.streamingNames}` : ""
-      handleRequestError(active?.id, `${STREAM_LIMIT_TOOLTIP}.${detail}`)
+      handleRequestError(active?.id,
+        streamCapacity.streamingNames
+          ? `${STREAM_LIMIT_TOOLTIP}. Currently streaming: ${streamCapacity.streamingNames}. Stop one to continue.`
+          : `${STREAM_LIMIT_TOOLTIP}. Stop a streaming tab to free a slot.`
+      )
       return
     }
 
@@ -2365,11 +2442,11 @@ function getVsCodeApi() {
               msgList.appendChild(banner)
             }
 
-            const renderOpts = { mode: session.mode, postMessage: (m2: Record<string, unknown>) => vscode.postMessage(m2) }
+            const renderOpts = { mode: session.mode, sessionId: session.id, postMessage: (m2: Record<string, unknown>) => vscode.postMessage(m2) }
             const loader = createChunkedLoader({
               container: msgList,
               messages: session.messages,
-              renderFn: (m) => renderMessage(m, renderOpts),
+              renderFn: (m) => renderMessage(m, { ...renderOpts, turnIndex: session.messages.indexOf(m) }),
               onChunkDone: (rendered, total) => {
                 if (rendered === Math.min(total, 20)) {
                   const anchor = scrollAnchors.get(session.id)
@@ -2415,9 +2492,9 @@ function getVsCodeApi() {
         if (!msgList) return
 
         const session = stateManager.getSession(sid)
-        const renderOpts = { mode: session?.mode ?? "build", postMessage: (m2: Record<string, unknown>) => vscode.postMessage(m2) }
+        const renderOpts = { mode: session?.mode ?? "build", sessionId: sid, postMessage: (m2: Record<string, unknown>) => vscode.postMessage(m2) }
 
-        const elements = moreMsgs.map((m) => renderMessage(m, renderOpts))
+        const elements = moreMsgs.map((m) => renderMessage(m, { ...renderOpts, turnIndex: session?.messages.indexOf(m) }))
 
         const oldBanner = msgList.querySelector<HTMLElement>(".load-earlier-banner")
         if (oldBanner) oldBanner.remove()
@@ -2448,6 +2525,29 @@ function getVsCodeApi() {
         if (tabPanel) updateContextUsage(tabPanel, { percent: msg.percent as number, tokens: msg.tokens as number, maxTokens: msg.maxTokens as number })
       }],
       ["server_status", (msg, sid) => { if (sid) handleServerStatus(sid, msg.status as string) }],
+      ["instructions_changed", (msg, sid) => {
+        if (sid) {
+          const sess = stateManager.getSession(sid)
+          if (sess) {
+            sess.instructions = typeof msg.instructions === "string" ? msg.instructions : undefined
+            stateManager.save()
+          }
+        }
+      }],
+      ["fork_created", (msg) => {
+        const forkId = typeof msg.sessionId === "string" ? msg.sessionId : undefined
+        const name = typeof msg.name === "string" ? msg.name : "Fork"
+        const model = stateManager.getState().globalModel
+        if (!forkId) return
+        if (!stateManager.getSession(forkId)) {
+          stateManager.ensureSession({ id: forkId, name, model, mode: "build", messages: [], isStreaming: false })
+        }
+        createTabUI(forkId, name)
+        stateManager.setActiveSession(forkId)
+        switchToTab(els, forkId)
+        hideWelcomeView()
+        updateTabBar()
+      }],
       ["streaming_state", (msg, sid) => {
         if (sid) {
           stateManager.setStreaming(sid, Boolean(msg.isStreaming))

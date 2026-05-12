@@ -192,6 +192,8 @@ export interface RenderOptions {
   messageId?: string
   postMessage?: (msg: Record<string, unknown>) => void
   mode?: string
+  turnIndex?: number
+  sessionId?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -598,16 +600,58 @@ function renderNewDiffBlock(block: Block, opts: RenderOptions): HTMLElement | nu
     const table = document.createElement("table")
     table.className = "diff-table"
 
-    diffBlock.hunks.forEach((hunk) => {
+    diffBlock.hunks.forEach((hunk, hunkIndex) => {
       // Hunk header — unified-diff line counts: old = removed+context, new = added+context
       const oldCount = hunk.lines.filter((l) => l.type === "removed" || l.type === "context").length
       const newCount = hunk.lines.filter((l) => l.type === "added" || l.type === "context").length
+      const hunkId = hunk.id || `${diffBlock.diffId}:${hunkIndex}`
+      const hunkState = hunk.state || "pending"
       const hunkRow = document.createElement("tr")
-      hunkRow.className = "diff-hunk-header"
+      hunkRow.className = `diff-hunk-header diff-hunk--${hunkState}`
+      hunkRow.dataset.hunkId = hunkId
       const hunkCell = document.createElement("td")
-      hunkCell.colSpan = 4
+      hunkCell.colSpan = 3
       hunkCell.textContent = `@@ -${hunk.oldStart},${oldCount} +${hunk.newStart},${newCount} @@`
       hunkRow.appendChild(hunkCell)
+
+      // Per-hunk action buttons (only in pending state and when block is pending)
+      const hunkActCell = document.createElement("td")
+      hunkActCell.className = "diff-hunk-actions"
+      if (diffBlock.state === "pending" && hunkState === "pending") {
+        const acceptHunk = document.createElement("button")
+        acceptHunk.className = "diff-hunk-btn diff-hunk-btn--accept"
+        acceptHunk.textContent = "✓"
+        acceptHunk.title = "Accept this hunk"
+        acceptHunk.addEventListener("click", (e) => {
+          e.stopPropagation()
+          opts.postMessage?.({
+            type: "accept_hunk",
+            diffId: diffBlock.diffId,
+            hunkId,
+            path: diffBlock.path,
+            hunk: { id: hunkId, hunkId, oldStart: hunk.oldStart, oldCount, lines: hunk.lines },
+          })
+          hunkRow.classList.replace(`diff-hunk--${hunkState}`, "diff-hunk--accepted")
+        })
+        const rejectHunk = document.createElement("button")
+        rejectHunk.className = "diff-hunk-btn diff-hunk-btn--reject"
+        rejectHunk.textContent = "✗"
+        rejectHunk.title = "Reject this hunk"
+        rejectHunk.addEventListener("click", (e) => {
+          e.stopPropagation()
+          opts.postMessage?.({ type: "reject_hunk", diffId: diffBlock.diffId, hunkId, path: diffBlock.path })
+          hunkRow.classList.replace(`diff-hunk--${hunkState}`, "diff-hunk--rejected")
+        })
+        hunkActCell.appendChild(acceptHunk)
+        hunkActCell.appendChild(rejectHunk)
+      } else if (hunkState === "accepted") {
+        hunkActCell.textContent = "✓"
+        hunkActCell.className += " diff-hunk-accepted-chip"
+      } else if (hunkState === "rejected") {
+        hunkActCell.textContent = "✗"
+        hunkActCell.className += " diff-hunk-rejected-chip"
+      }
+      hunkRow.appendChild(hunkActCell)
       table.appendChild(hunkRow)
 
       hunk.lines.forEach((line) => {

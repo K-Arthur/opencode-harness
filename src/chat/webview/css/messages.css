@@ -427,6 +427,37 @@
   border-color: var(--oc-warning-border);
 }
 
+.message-fork-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: var(--space-0-5);
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--duration-fast), visibility var(--duration-fast);
+  min-width: var(--size-target-min);
+  min-height: var(--size-target-min);
+  margin-left: var(--space-1);
+}
+
+.message:hover .message-fork-btn,
+.message:focus-within .message-fork-btn {
+  opacity: 0.5;
+  visibility: visible;
+}
+
+.message-fork-btn:hover {
+  opacity: 1 !important;
+  color: var(--vscode-focusBorder, #007acc);
+  background: var(--oc-info-subtle, rgba(0,122,204,0.1));
+  border-color: var(--oc-info-border, rgba(0,122,204,0.3));
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════════╛
    USER MESSAGE BUBBLE
    ═══════════════════════════════════════════════════════════════════════════════╛ */

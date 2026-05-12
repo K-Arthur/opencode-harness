@@ -9,6 +9,8 @@ import { TerminalBridge } from "./terminal/TerminalBridge"
 import { CheckpointManager } from "./checkpoint/CheckpointManager"
 import { InlineActionProvider } from "./inline/InlineActionProvider"
 import { InlineCompletionProvider } from "./inline/InlineCompletionProvider"
+import { runQuickChat } from "./inline/QuickChatCommand"
+import { AgentGazeService } from "./decorations/AgentGazeService"
 import { ChatProvider } from "./chat/ChatProvider"
 import { ThemeManager } from "./theme/ThemeManager"
 import { RateLimitMonitor } from "./monitor/RateLimitMonitor"
@@ -151,6 +153,9 @@ sessionManager = new SessionManager()
     registerChatProvider(context, chatProviderInstance)
     registerUriHandler(context, chatProviderInstance)
 
+    const agentGaze = new AgentGazeService(sessionManager)
+    context.subscriptions.push(agentGaze)
+
     log.info("OpenCode Harness extension activated")
   } catch (err) {
     log.error("Extension activation failed", err)
@@ -285,6 +290,11 @@ function registerInlineProviders(context: vscode.ExtensionContext, chatProvider:
       { pattern: "**" },
       completionProvider,
     )
+  )
+
+  // Quick Chat — Ctrl+I captures a prompt with implicit file/selection context
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.quickChat", () => runQuickChat(chatProvider))
   )
 
   // Inline code actions (CodeLens)

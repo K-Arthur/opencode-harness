@@ -151,9 +151,18 @@
       {
         "command": "opencode-harness.stop",
         "title": "OpenCode: Stop"
+      },
+      {
+        "command": "opencode-harness.quickChat",
+        "title": "OpenCode: Quick Chat"
       }
     ],
     "keybindings": [
+      {
+        "command": "opencode-harness.quickChat",
+        "key": "ctrl+i",
+        "when": "editorTextFocus"
+      },
       {
         "command": "opencode-harness.toggleFocus",
         "key": "ctrl+alt+o"

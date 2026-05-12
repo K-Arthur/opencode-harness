@@ -13,6 +13,7 @@ export interface TabState {
   mode: string
   lastActivityTime: number  // Timestamp of last activity for watchdog
   blocksBuffer: Block[]
+  instructions?: string
 }
 
 const OPEN_TABS_STORAGE_KEY = "opencode-harness.openTabs"
@@ -29,11 +30,13 @@ export class TabManager {
   private _onTabClosed = new vscode.EventEmitter<string>()
   private _onTabSwitched = new vscode.EventEmitter<string>()
   private _onStreamingStateChanged = new vscode.EventEmitter<{ tabId: string; isStreaming: boolean }>()
+  private _onInstructionsChanged = new vscode.EventEmitter<{ tabId: string; instructions: string }>()
 
   readonly onTabCreated = this._onTabCreated.event
   readonly onTabClosed = this._onTabClosed.event
   readonly onTabSwitched = this._onTabSwitched.event
   readonly onStreamingStateChanged = this._onStreamingStateChanged.event
+  readonly onInstructionsChanged = this._onInstructionsChanged.event
 
   /**
    * Tab IDs persisted from the previous session, in order. Populated by the
@@ -212,6 +215,14 @@ export class TabManager {
     return true
   }
 
+  setInstructions(id: string, instructions: string): boolean {
+    const tab = this.tabs.get(id)
+    if (!tab) return false
+    tab.instructions = instructions
+    this._onInstructionsChanged.fire({ tabId: id, instructions })
+    return true
+  }
+
   setCliSessionId(id: string, cliSessionId: string): boolean {
     const tab = this.tabs.get(id)
     if (!tab) return false
@@ -295,5 +306,6 @@ export class TabManager {
     this._onTabClosed.dispose()
     this._onTabSwitched.dispose()
     this._onStreamingStateChanged.dispose()
+    this._onInstructionsChanged.dispose()
   }
 }

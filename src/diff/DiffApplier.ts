@@ -244,4 +244,91 @@ export class DiffApplier {
 
     await vscode.commands.executeCommand("vscode.diff", leftUri, rightUri, title || `Diff: ${filePath}`)
   }
+
+  /** Parse a unified diff string into an array of hunk descriptors. Pure function — no I/O. */
+  parseUnifiedDiff(diffText: string): Array<{ oldStart: number; oldCount: number; newStart: number; newCount: number; lines: Array<{ type: 'added' | 'removed' | 'context'; content: string }> }> {
+    const hunks: Array<{ oldStart: number; oldCount: number; newStart: number; newCount: number; lines: Array<{ type: 'added' | 'removed' | 'context'; content: string }> }> = []
+    const hunkHeaderRe = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/
+    let current: (typeof hunks)[number] | null = null
+
+    for (const raw of diffText.split("\n")) {
+      const m = hunkHeaderRe.exec(raw)
+      if (m) {
+        if (current) hunks.push(current)
+        current = {
+          oldStart: parseInt(m[1]!, 10),
+          oldCount: parseInt(m[2] ?? "1", 10),
+          newStart: parseInt(m[3]!, 10),
+          newCount: parseInt(m[4] ?? "1", 10),
+          lines: [],
+        }
+        continue
+      }
+      if (!current) continue
+      if (raw.startsWith("+")) {
+        current.lines.push({ type: "added", content: raw.slice(1) })
+      } else if (raw.startsWith("-")) {
+        current.lines.push({ type: "removed", content: raw.slice(1) })
+      } else if (raw.startsWith(" ")) {
+        current.lines.push({ type: "context", content: raw.slice(1) })
+      }
+    }
+    if (current) hunks.push(current)
+    return hunks
+  }
+
+  /**
+   * Apply a subset of hunks (those with `hunkId` present in `acceptedHunkIds`) to `filePath`
+   * using a single atomic `WorkspaceEdit`. All edits share one undo step.
+   *
+   * Returns `true` on success. Returns `false` with a logged warning if the file cannot be opened.
+   */
+  async applyHunks(
+    filePath: string,
+    hunks: Array<{ hunkId: string; id: string; oldStart: number; oldCount: number; lines: Array<{ type: 'added' | 'removed' | 'context'; content: string }> }>,
+    acceptedHunkIds: Set<string>
+  ): Promise<boolean> {
+    const uri = this.resolveWorkspaceFile(filePath)
+    if (!uri) {
+      log.warn(`applyHunks: ${filePath} is outside the current workspace`)
+      return false
+    }
+
+    let doc: vscode.TextDocument
+    try {
+      doc = await vscode.workspace.openTextDocument(uri)
+    } catch {
+      log.warn(`applyHunks: could not open ${filePath}`)
+      return false
+    }
+
+    const wEdit = new vscode.WorkspaceEdit()
+
+    for (const hunk of hunks) {
+      const id = hunk.id ?? hunk.hunkId
+      if (!acceptedHunkIds.has(id)) continue
+
+      // Build the replacement text from accepted (non-removed) lines
+      const lines = hunk.lines
+      const removedCount = lines.filter(l => l.type === "removed").length
+      const contextLines = lines.filter(l => l.type === "context")
+
+      // Replacement text: context + added lines (removed lines disappear)
+      const replacement = lines
+        .filter(l => l.type !== "removed")
+        .map(l => l.content)
+        .join("\n")
+
+      const startLine = hunk.oldStart - 1
+      const endLine = startLine + removedCount + contextLines.length
+
+      const startPos = new vscode.Position(startLine, 0)
+      const endPos = doc.lineAt(Math.min(endLine - 1, doc.lineCount - 1)).range.end
+      const rangeToReplace = new vscode.Range(startPos, endPos)
+
+      wEdit.replace(uri, rangeToReplace, replacement)
+    }
+
+    return vscode.workspace.applyEdit(wEdit)
+  }
 }
