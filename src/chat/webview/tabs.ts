@@ -73,7 +73,11 @@ export function createTabBar(els: ElementRefs, callbacks: TabCallbacks) {
     }
   })
 
-  function renderTabs(tabs: Array<{ id: string; name: string; isStreaming?: boolean }>, activeId: string) {
+  function renderTabs(
+    tabs: Array<{ id: string; name: string; isStreaming?: boolean }>,
+    activeId: string,
+    streamCapacity?: { activeStreams: number; maxStreams: number; isFull: boolean; reason?: string }
+  ) {
     const tabContainer = els.tabBar
     const newTabBtnId = "tab-bar-new-btn"
     
@@ -113,6 +117,16 @@ export function createTabBar(els: ElementRefs, callbacks: TabCallbacks) {
 
       tabContainer.appendChild(btn)
     })
+
+    if (streamCapacity?.isFull) {
+      const streamLimit = document.createElement("span")
+      streamLimit.className = "tab-stream-limit"
+      streamLimit.textContent = `${streamCapacity.activeStreams}/${streamCapacity.maxStreams} streams`
+      streamLimit.title = streamCapacity.reason || `${streamCapacity.activeStreams} streams active`
+      streamLimit.setAttribute("role", "status")
+      streamLimit.setAttribute("aria-label", streamLimit.title)
+      tabContainer.appendChild(streamLimit)
+    }
 
     // Add Integrated New Tab Button
     const newBtn = document.createElement("button")

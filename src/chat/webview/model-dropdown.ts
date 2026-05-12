@@ -8,6 +8,112 @@ export interface ModelDropdownCallbacks {
   onManageModels?: () => void
 }
 
+function sortModels(models: ModelInfo[]): ModelInfo[] {
+  return [...models].sort((a, b) => {
+    const fav = Number(Boolean(b.favorite)) - Number(Boolean(a.favorite))
+    if (fav !== 0) return fav
+    const ar = typeof a.recentRank === "number" ? a.recentRank : Number.POSITIVE_INFINITY
+    const br = typeof b.recentRank === "number" ? b.recentRank : Number.POSITIVE_INFINITY
+    if (ar !== br) return ar - br
+    const pc = a.provider.localeCompare(b.provider)
+    return pc !== 0 ? pc : a.displayName.localeCompare(b.displayName)
+  })
+}
+
+function groupByProvider(models: ModelInfo[]): Map<string, ModelInfo[]> {
+  const byProvider = new Map<string, ModelInfo[]>()
+  for (const m of models) {
+    const list = byProvider.get(m.provider) || []
+    list.push(m)
+    byProvider.set(m.provider, list)
+  }
+  return byProvider
+}
+
+function createProviderGroupLabel(provider: string): HTMLDivElement {
+  const label = document.createElement("div")
+  label.className = "model-group-label"
+  label.setAttribute("role", "group")
+  label.setAttribute("aria-label", provider)
+  label.textContent = provider
+  return label
+}
+
+function createModelOption(
+  model: ModelInfo,
+  index: number,
+  currentModel: string,
+  callbacks: ModelDropdownCallbacks,
+  closeDropdown: () => void,
+  focusBtn: () => void,
+): HTMLDivElement {
+  const fullId = `${model.provider}/${model.id}`
+  const isSelected = fullId === currentModel
+
+  const option = document.createElement("div")
+  option.className = "model-option" + (isSelected ? " selected" : "")
+  option.id = `model-option-${index}`
+  option.setAttribute("role", "option")
+  option.setAttribute("aria-selected", isSelected ? "true" : "false")
+  option.setAttribute("tabindex", "-1")
+
+  const checkmark = document.createElement("span")
+  checkmark.className = "checkmark"
+  checkmark.setAttribute("aria-hidden", "true")
+  checkmark.innerHTML = CHECK_SVG
+  option.appendChild(checkmark)
+
+  const name = document.createElement("span")
+  name.className = "model-option-name"
+  name.textContent = model.displayName
+  option.appendChild(name)
+
+  if (model.favorite || typeof model.recentRank === "number") {
+    const meta = document.createElement("span")
+    meta.className = "model-option-meta"
+    meta.textContent = model.favorite ? "Favorite" : "Recent"
+    option.appendChild(meta)
+  }
+
+  option.addEventListener("click", () => {
+    callbacks.onSelect(fullId)
+    closeDropdown()
+    focusBtn()
+  })
+  return option
+}
+
+function createDivider(): HTMLDivElement {
+  const divider = document.createElement("div")
+  divider.className = "model-group-label"
+  divider.style.marginTop = "4px"
+  divider.style.borderTop = "1px solid var(--color-border)"
+  divider.style.paddingTop = "8px"
+  return divider
+}
+
+function createManageModelsOption(callbacks: ModelDropdownCallbacks, closeDropdown: () => void): HTMLDivElement {
+  const manageOption = document.createElement("div")
+  manageOption.className = "model-option manage-models-option"
+  manageOption.setAttribute("role", "option")
+  manageOption.setAttribute("tabindex", "-1")
+
+  const manageIcon = document.createElement("span")
+  manageIcon.setAttribute("aria-hidden", "true")
+  manageIcon.innerHTML = GEAR_SVG
+  manageOption.appendChild(manageIcon)
+
+  const manageLabel = document.createElement("span")
+  manageLabel.textContent = "Manage models"
+  manageOption.appendChild(manageLabel)
+
+  manageOption.addEventListener("click", () => {
+    closeDropdown()
+    callbacks.onManageModels?.()
+  })
+  return manageOption
+}
+
 export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCallbacks) {
   let isOpen = false
   let models: ModelInfo[] = []
@@ -74,107 +180,23 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     models = modelsList
     els.modelDropdown.replaceChildren()
 
-    // Filter to enabled models only
     const enabledModels = modelsList.filter((m) => m.enabled !== false)
-
-    // Sort: favorites and recently used models first, then provider/name.
-    const sortedModels = [...enabledModels].sort((a, b) => {
-      const fav = Number(Boolean(b.favorite)) - Number(Boolean(a.favorite))
-      if (fav !== 0) return fav
-      const ar = typeof a.recentRank === "number" ? a.recentRank : Number.POSITIVE_INFINITY
-      const br = typeof b.recentRank === "number" ? b.recentRank : Number.POSITIVE_INFINITY
-      if (ar !== br) return ar - br
-      const pc = a.provider.localeCompare(b.provider)
-      return pc !== 0 ? pc : a.displayName.localeCompare(b.displayName)
-    })
-
-    // Group by provider
-    const byProvider = new Map<string, ModelInfo[]>()
-    for (const m of sortedModels) {
-      const list = byProvider.get(m.provider) || []
-      list.push(m)
-      byProvider.set(m.provider, list)
-    }
+    const sortedModels = sortModels(enabledModels)
+    const byProvider = groupByProvider(sortedModels)
 
     let optionIndex = 0
     for (const [provider, providerModels] of byProvider) {
-      const groupLabel = document.createElement("div")
-      groupLabel.className = "model-group-label"
-      groupLabel.setAttribute("role", "group")
-      groupLabel.setAttribute("aria-label", provider)
-      groupLabel.textContent = provider
-      els.modelDropdown.appendChild(groupLabel)
-
+      els.modelDropdown.appendChild(createProviderGroupLabel(provider))
       for (const model of providerModels) {
-        const fullId = `${model.provider}/${model.id}`
-        const isSelected = fullId === currentModel
-
-        const option = document.createElement("div")
-        option.className = "model-option" + (isSelected ? " selected" : "")
-        option.id = `model-option-${optionIndex}`
-        option.setAttribute("role", "option")
-        option.setAttribute("aria-selected", isSelected ? "true" : "false")
-        option.setAttribute("tabindex", "-1")
-
-        const checkmark = document.createElement("span")
-        checkmark.className = "checkmark"
-        checkmark.setAttribute("aria-hidden", "true")
-        checkmark.innerHTML = CHECK_SVG
-        option.appendChild(checkmark)
-
-        const name = document.createElement("span")
-        name.className = "model-option-name"
-        name.textContent = model.displayName
-        option.appendChild(name)
-
-        if (model.favorite || typeof model.recentRank === "number") {
-          const meta = document.createElement("span")
-          meta.className = "model-option-meta"
-          meta.textContent = model.favorite ? "Favorite" : "Recent"
-          option.appendChild(meta)
-        }
-
-        option.addEventListener("click", () => {
-          callbacks.onSelect(fullId)
-          close()
-          els.modelSelectorBtn.focus()
-        })
-
-        els.modelDropdown.appendChild(option)
+        els.modelDropdown.appendChild(createModelOption(model, optionIndex, currentModel, callbacks, close, () => els.modelSelectorBtn.focus()))
         optionIndex++
       }
     }
 
-    // Add "Manage models" option at the bottom
     if (optionIndex > 0) {
-      const divider = document.createElement("div")
-      divider.className = "model-group-label"
-      divider.style.marginTop = "4px"
-      divider.style.borderTop = "1px solid var(--color-border)"
-      divider.style.paddingTop = "8px"
-      els.modelDropdown.appendChild(divider)
+      els.modelDropdown.appendChild(createDivider())
     }
-
-    const manageOption = document.createElement("div")
-    manageOption.className = "model-option manage-models-option"
-    manageOption.setAttribute("role", "option")
-    manageOption.setAttribute("tabindex", "-1")
-
-    const manageIcon = document.createElement("span")
-    manageIcon.setAttribute("aria-hidden", "true")
-    manageIcon.innerHTML = GEAR_SVG
-    manageOption.appendChild(manageIcon)
-
-    const manageLabel = document.createElement("span")
-    manageLabel.textContent = "Manage models"
-    manageOption.appendChild(manageLabel)
-
-    manageOption.addEventListener("click", () => {
-      close()
-      callbacks.onManageModels?.()
-    })
-
-    els.modelDropdown.appendChild(manageOption)
+    els.modelDropdown.appendChild(createManageModelsOption(callbacks, close))
   }
 
   let _currentModel = ""

@@ -1,6 +1,7 @@
-import { log } from "../../utils/outputChannel"
 import type { ContextChip, ContextUsage } from "./types"
 import type { ElementRefs } from "./dom"
+
+const warnTheme = (...args: unknown[]) => console.warn("[opencode-harness]", ...args)
 
 export function updateContextChips(els: ElementRefs, chips?: ContextChip[]) {
   els.contextChips.innerHTML = ""
@@ -69,12 +70,12 @@ export function applyThemeVars(vars?: Record<string, string>) {
     if (typeof val !== "string") continue
     // Only allow valid CSS custom properties (must start with --)
     if (!key.startsWith("--")) {
-      log.warn("[OpenCode] Rejected non-custom CSS property:", key)
+      warnTheme("[OpenCode] Rejected non-custom CSS property:", key)
       continue
     }
     // Block dangerous CSS values that could exfiltrate data
     if (/url\(|expression\(|javascript:|data:text\/html/i.test(val)) {
-      log.warn("[OpenCode] Blocked unsafe CSS value for:", key)
+      warnTheme("[OpenCode] Blocked unsafe CSS value for:", key)
       continue
     }
     root.style.setProperty(key, val)

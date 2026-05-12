@@ -19,6 +19,7 @@ void describe("sanitizeCssValue", () => {
     assert.equal(sanitizeCssValue("url(http://evil.com)"), null)
     assert.equal(sanitizeCssValue("url(/)"), null)
     assert.equal(sanitizeCssValue("URL(http://evil.com)"), null)
+    assert.equal(sanitizeCssValue("url (http://evil.com)"), null)
   })
 
   void it("blocks expression() injection", () => {
@@ -39,6 +40,7 @@ void describe("sanitizeCssValue", () => {
 
   void it("blocks semicolons that break declaration boundaries", () => {
     assert.equal(sanitizeCssValue("red; background: url(http://evil.com)"), null)
+    assert.equal(sanitizeCssValue("color;"), null)
   })
 
   void it("blocks curly braces that break declaration boundaries", () => {

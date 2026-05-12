@@ -173,9 +173,9 @@ describe("SessionManager.ts", () => {
    * to a similar helper opportunistically when assertions break or the
    * method body grows.
    */
-  const extractRunEventStreamBody = (): string => {
-    const start = source.indexOf("private async runEventStream(")
-    assert.ok(start >= 0, "runEventStream must exist")
+  const extractMethod = (methodName: string): string => {
+    const start = source.indexOf(`private ${methodName}(`)
+    if (start < 0) return ""
     const after = source.slice(start + 1)
     const nextMethodMatch = after.match(/\n  (?:private |async |get |dispose\(|protected )/)
     const end = nextMethodMatch && typeof nextMethodMatch.index === "number"
@@ -183,6 +183,9 @@ describe("SessionManager.ts", () => {
       : source.length
     return source.slice(start, end)
   }
+
+  const extractRunEventStreamBody = (): string => extractMethod("async runEventStream")
+  const extractHandleError = (): string => extractMethod("handleEventStreamError")
 
   it("applies connection timeout to the event stream fetch", () => {
     const block = extractRunEventStreamBody()
@@ -197,7 +200,7 @@ describe("SessionManager.ts", () => {
   })
 
   it("surfaces specific connection timeout error instead of silent abort", () => {
-    const block = extractRunEventStreamBody()
+    const block = extractHandleError()
     assert.ok(
       block.includes("connectionTimedOut"),
       "must track connection timeout with a flag"
@@ -213,25 +216,34 @@ describe("SessionManager.ts", () => {
   })
 
   it("preserves user-initiated abort distinction without reconnect attempt", () => {
-    const block = extractRunEventStreamBody()
+    const block = extractHandleError()
     assert.ok(
       block.includes("if (controller.signal.aborted) return"),
       "user abort must return without scheduling reconnect"
     )
     assert.ok(
-      block.includes('generation !== this.eventStreamGeneration || this.disposed'),
+      block.includes("generation !== this.eventStreamGeneration || this.disposed"),
       "stale generation must return without scheduling reconnect"
     )
   })
 
   it("aborts the event stream when reads idle for too long (server stall protection)", () => {
-    const block = extractRunEventStreamBody()
+    const runEventBlock = extractRunEventStreamBody()
     assert.ok(
-      block.includes("idleTimedOut"),
-      "must track an idle/stall flag for the read loop"
+      runEventBlock.includes("IdleWatchdog"),
+      "must use IdleWatchdog for stall detection"
     )
     assert.ok(
-      block.includes("idle_timeout"),
+      runEventBlock.includes('timeoutMs: 90_000'),
+      "must have 90s idle timeout"
+    )
+    const errorBlock = extractHandleError()
+    assert.ok(
+      errorBlock.includes("idleWatchdog.timedOut"),
+      "must check idle watchdog on stream failure"
+    )
+    assert.ok(
+      errorBlock.includes("idle_timeout"),
       "must reconnect with idle_timeout reason when reads stall"
     )
   })

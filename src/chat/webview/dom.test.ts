@@ -54,7 +54,7 @@ describe("dom.ts", () => {
   })
 
   it("optionalElement warns but does not throw on missing element", () => {
-    assert.ok(source.includes('log.warn(`Optional element not found: ${id}`)'),
+    assert.ok(source.includes('warnElement(`Optional element not found: ${id}`)'),
       "optionalElement must warn instead of throwing")
     assert.ok(source.includes("return null"),
       "optionalElement must return null instead of throwing")
@@ -62,7 +62,7 @@ describe("dom.ts", () => {
 
   it("requireElement has fallback for missing elements, does not hard crash", () => {
     assert.ok(
-      source.includes("log.warn") && (source.includes("fallback") || source.includes("Missing element")),
+      source.includes("warnElement") && (source.includes("fallback") || source.includes("Missing element")),
       "requireElement must warn and use fallback instead of hard crashing")
   })
 })

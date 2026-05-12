@@ -1,4 +1,3 @@
-import { log } from "../../utils/outputChannel"
 import type { Block, ChatMessage, ToolCallBlock, DiffBlock, ErrorBlock, ToolCallState, DiffHunk } from "./types"
 import type { SdkMessageEvent, DiffChunk } from "../../types"
 import { renderMessage } from "./messageRenderer"

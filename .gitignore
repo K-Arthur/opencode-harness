@@ -12,3 +12,4 @@ test-results/
 .env.local
 .env.*.local
 coverage/
+reports/

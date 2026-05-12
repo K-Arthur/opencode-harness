@@ -1,11 +1,13 @@
-import { log } from "../../utils/outputChannel"
+function warnElement(message: string): void {
+  console.warn(`[opencode-harness] ${message}`)
+}
 
 export function requireElement<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id)
   if (!element) {
     // Log the missing element but return a shim to prevent a hard crash.
     // The global error boundary in main.ts will still catch any subsequent errors.
-    log.warn(`Missing element: ${id} — using fallback`)
+    warnElement(`Missing element: ${id} — using fallback`)
     // Return a minimal div as fallback so downstream code doesn't crash
     const fallback = document.createElement("div") as unknown as T
     fallback.id = id
@@ -17,7 +19,7 @@ export function requireElement<T extends HTMLElement>(id: string): T {
 export function optionalElement<T extends HTMLElement>(id: string): T | null {
   const element = document.getElementById(id)
   if (!element) {
-    log.warn(`Optional element not found: ${id}`)
+    warnElement(`Optional element not found: ${id}`)
     return null
   }
   return element as T

@@ -12,8 +12,9 @@ import { WebviewContent } from "./WebviewContent"
 import { TabManager } from "./TabManager"
 import { StreamCoordinator } from "./handlers/StreamCoordinator"
 import { PromptManager, PromptCommand } from "../prompts/PromptManager"
-import { log } from "../utils/outputChannel"
+import { toUserErrorMessage as toUserErrorMessagePure, errorValueToMessage as errorValueToMessagePure, mapToolType as mapToolTypePure, isSessionInCurrentWorkspace as isSessionInCurrentWorkspacePure } from "./chatUtils"
 import { ChatMessage } from "./types"
+import { log } from "../utils/outputChannel"
 import { MessageRouter } from "./handlers/MessageRouter"
 import { ChatCommands } from "./ChatCommands"
 import { AutoCompactor } from "./AutoCompactor"
@@ -664,6 +665,26 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
 
     const restorable: import("../session/SessionStore").OpenCodeSession[] = []
     const seen = new Set<string>()
+    const aliasToSessionId = new Map<string, string>()
+    const markRestorableSession = (
+      session: import("../session/SessionStore").OpenCodeSession,
+      ...aliases: Array<string | undefined>
+    ): void => {
+      const canonicalId = session.id
+      const ids = [canonicalId, session.cliSessionId, ...aliases].filter((id): id is string => Boolean(id))
+      for (const id of ids) {
+        seen.add(id)
+        aliasToSessionId.set(id, canonicalId)
+      }
+    }
+    const hasSeenRestorableSession = (
+      session: import("../session/SessionStore").OpenCodeSession,
+      ...aliases: Array<string | undefined>
+    ): boolean => {
+      const ids = [session.id, session.cliSessionId, ...aliases].filter((id): id is string => Boolean(id))
+      return ids.some((id) => seen.has(id))
+    }
+
     for (const id of restoredIds) {
       if (seen.has(id)) continue
       const s = this.sessionStore.get(id)
@@ -673,8 +694,9 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       // freshly-created tab the user is about to use, and excluding them caused
       // the welcome screen to cover an active streaming session.
       if (!s || s.archived || !this.isSessionInCurrentWorkspace(s)) continue
+      if (hasSeenRestorableSession(s, id)) continue
       restorable.push(s)
-      seen.add(id)
+      markRestorableSession(s, id)
     }
 
     // Always include any tab currently open in TabManager (extension-side source
@@ -684,15 +706,16 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       if (seen.has(tab.id)) continue
       const s = this.sessionStore.get(tab.id) || (tab.cliSessionId ? this.sessionStore.get(tab.cliSessionId) : undefined)
       if (s && !s.archived && this.isSessionInCurrentWorkspace(s)) {
+        if (hasSeenRestorableSession(s, tab.id, tab.cliSessionId)) continue
         restorable.push(s)
-        seen.add(s.id)
+        markRestorableSession(s, tab.id, tab.cliSessionId)
       }
     }
 
     const storeActive = this.sessionStore.getActive()
-    if (storeActive && !seen.has(storeActive.id) && !storeActive.archived && this.isSessionInCurrentWorkspace(storeActive)) {
+    if (storeActive && !hasSeenRestorableSession(storeActive) && !storeActive.archived && this.isSessionInCurrentWorkspace(storeActive)) {
       restorable.push(storeActive)
-      seen.add(storeActive.id)
+      markRestorableSession(storeActive)
     }
 
     // Decide which tab should be focused: prefer the previously-active tab
@@ -700,7 +723,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     // (e.g. one created since last shutdown), otherwise the first restored.
     let activeId: string | null = null
     if (restoredActiveId && seen.has(restoredActiveId)) {
-      activeId = restoredActiveId
+      activeId = aliasToSessionId.get(restoredActiveId) ?? restoredActiveId
     } else {
       if (storeActive && seen.has(storeActive.id)) {
         activeId = storeActive.id
@@ -734,9 +757,9 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     this.restoredTabsHydrated = true
   }
 
-  private isSessionInCurrentWorkspace(session: import("../session/SessionStore").OpenCodeSession): boolean {
+private isSessionInCurrentWorkspace(session: import("../session/SessionStore").OpenCodeSession): boolean {
     const currentWorkspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
-    return !currentWorkspace || !session.workspacePath || session.workspacePath === currentWorkspace
+    return isSessionInCurrentWorkspacePure(session.workspacePath, currentWorkspace)
   }
 
   private pushAllStateToWebview(): void {
@@ -819,49 +842,16 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     this.statePush.postRequestError(this.toUserErrorMessage(message), sessionId)
   }
 
-  private toUserErrorMessage(message: string): string {
-    const commandFailedJson = message.match(/Command failed:\s*(\{.*\})/s)
-    if (commandFailedJson?.[1]) {
-      try {
-        const parsed = JSON.parse(commandFailedJson[1]) as { data?: { message?: string }; message?: string }
-        const nested = parsed.data?.message || parsed.message
-        if (nested) return this.toUserErrorMessage(nested)
-      } catch {
-        // Fall through to pattern matching below.
-      }
-    }
-    const commandError = message.match(/Command not found:\s*"\/?([^"]+)"/i)
-    if (commandError?.[1]) {
-      return `Slash command "/${commandError[1]}" is not available in this session. Type /help for local commands or /commands for server commands.`
-    }
-    if (/server not running/i.test(message)) return "OpenCode is not connected. Try again after the server starts."
-    if (/not installed|not found/i.test(message)) return message
-    if (/timeout|did not start/i.test(message)) return "OpenCode took too long to respond. Check the output logs and try again."
-    return message || "The request failed. Check the OpenCode output logs for details."
+private toUserErrorMessage(message: string): string {
+    return toUserErrorMessagePure(message)
   }
 
   private errorValueToMessage(value: unknown): string {
-    if (value instanceof Error) return value.message
-    if (typeof value === "string") return value
-    if (value && typeof value === "object") {
-      const data = value as { message?: unknown; name?: unknown; data?: { message?: unknown } }
-      if (typeof data.data?.message === "string") return data.data.message
-      if (typeof data.message === "string") return data.message
-      try {
-        return JSON.stringify(value)
-      } catch {
-        return String(value)
-      }
-    }
-    return String(value || "Server error")
+    return errorValueToMessagePure(value)
   }
 
   private mapToolType(tool: string): string {
-    if (!tool) return "read"
-    const t = tool.toLowerCase()
-    if (t.includes("edit") || t.includes("write") || t.includes("create") || t.includes("apply")) return "write"
-    if (t.includes("bash") || t.includes("exec") || t.includes("run") || t.includes("command")) return "exec"
-    return "read"
+    return mapToolTypePure(tool)
   }
 
   private async handleInsertAtCursor(code: string, _language: string): Promise<void> {

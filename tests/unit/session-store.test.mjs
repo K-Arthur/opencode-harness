@@ -56,7 +56,7 @@ describe("SessionStore — session lifecycle", () => {
   })
 
   it("create sets activeSessionId to new session", () => {
-    assert.ok(source.includes("this.activeSessionId = sessionId"), "must set as active")
+    assert.ok(source.includes("this.activeSessionId = session.id"), "must set as active")
   })
 
   it("create triggers onSessionsChanged event", () => {

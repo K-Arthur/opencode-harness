@@ -5,6 +5,7 @@ import { resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const source = readFileSync(resolve(__dirname, "ChatProvider.ts"), "utf8")
+const utilsSource = readFileSync(resolve(__dirname, "chatUtils.ts"), "utf8")
 const lifecycleSource = readFileSync(resolve(__dirname, "SessionLifecycleService.ts"), "utf8")
 const commandExecSource = readFileSync(resolve(__dirname, "CommandExecutionService.ts"), "utf8")
 const eventRouterSource = readFileSync(resolve(__dirname, "WebviewEventRouter.ts"), "utf8")
@@ -97,8 +98,8 @@ void describe("ChatProvider.ts", () => {
 
   void it("contains toUserErrorMessage with common error patterns", () => {
     assert.ok(source.includes("private toUserErrorMessage("), "must have toUserErrorMessage")
-    assert.ok(source.includes("server not running"), "must handle server not running errors")
-    assert.ok(source.includes("timeout|did not start"), "must handle timeout errors")
+    assert.ok(source.includes("server not running") || utilsSource.includes("server not running"), "must handle server not running errors")
+    assert.ok(source.includes("timeout|did not start") || utilsSource.includes("timeout|did not start"), "must handle timeout errors")
   })
 
   void it("contains edit_message handler for message editing", () => {
@@ -131,9 +132,9 @@ void describe("ChatProvider.ts", () => {
 
   void it("contains mapToolType for type categorization", () => {
     assert.ok(source.includes("private mapToolType("), "must have mapToolType")
-    assert.ok(source.includes('return "write"'), "must classify write tools")
-    assert.ok(source.includes('return "exec"'), "must classify exec tools")
-    assert.ok(source.includes('return "read"'), "must classify read tools")
+    assert.ok(source.includes('return "write"') || utilsSource.includes('return "write"'), "must classify write tools")
+    assert.ok(source.includes('return "exec"') || utilsSource.includes('return "exec"'), "must classify exec tools")
+    assert.ok(source.includes('return "read"') || utilsSource.includes('return "read"'), "must classify read tools")
   })
 
   void it("stream_end_triggers_notification_when_webview_not_visible", () => {
@@ -279,6 +280,15 @@ void describe("ChatProvider.ts", () => {
     const block = source.slice(idx, source.indexOf("private pushAllStateToWebview", idx))
     assert.ok(block.includes("isSessionInCurrentWorkspace"), "restored tabs must be filtered by workspace")
     assert.ok(block.includes("restoreOpenTabs"), "restoring open tabs must be guarded by the configuration setting")
+  })
+
+  void it("pushInitStateToWebview de-dupes restored tab aliases that point at the same CLI session", () => {
+    const idx = source.indexOf("private pushInitStateToWebview(")
+    assert.ok(idx >= 0, "pushInitStateToWebview must exist")
+    const block = source.slice(idx, source.indexOf("private pushAllStateToWebview", idx))
+    assert.ok(block.includes("markRestorableSession"), "restored sessions must be marked through a single alias-aware helper")
+    assert.ok(block.includes("aliasToSessionId"), "restored active tab aliases must resolve to canonical session ids")
+    assert.ok(block.includes("tab.cliSessionId"), "open tabs must be de-duped by CLI session id as well as local tab id")
   })
 
   void it("handles personalized theme customizer messages", () => {

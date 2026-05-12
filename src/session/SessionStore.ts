@@ -2,6 +2,15 @@ import * as vscode from "vscode"
 import { type ChatMessage } from "../types"
 import { log } from "../utils/outputChannel"
 import {
+  buildSession,
+  isValidSession as isValidSessionPure,
+  isAutoSessionName,
+  sessionDisplayName as sessionDisplayNamePure,
+  validateSessionName as validateSessionNamePure,
+  generateTitleFromMessage as generateTitleFromMessagePure,
+  type SessionData,
+} from "./sessionUtils"
+import {
   migrateLocalIdsToServerIds as migrateLocalIdsToServerIdsPure,
   mergeServerSessions as mergeServerSessionsPure,
   promotePendingServerLink as promotePendingServerLinkPure,
@@ -90,12 +99,7 @@ export class SessionStore {
   }
 
   private isValidSession(sess: Record<string, unknown>): boolean {
-    return (
-      typeof sess.id === "string" &&
-      typeof sess.name === "string" &&
-      typeof sess.createdAt === "number" &&
-      Array.isArray(sess.messages)
-    )
+    return isValidSessionPure(sess)
   }
 
   private load(): void {
@@ -363,39 +367,22 @@ export class SessionStore {
       .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   }
 
-  create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
-    // Backwards compat: legacy callers passed (name, id: string).
+create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
     const options: CreateSessionOptions = typeof opts === "string" ? { id: opts } : (opts ?? {})
-    const sessionId = options.id || crypto.randomUUID()
-    const cliSessionId = options.cliSessionId ?? options.id
-    const now = Date.now()
-    const session: OpenCodeSession = {
-      id: sessionId,
-      // Empty until the user sends a message — display layer renders
-      // "Untitled session" until autoTitleFromMessages derives a real one.
-      name: name?.trim() || "",
-      createdAt: now,
-      lastActiveAt: now,
-      model: "",
-      mode: "build",
-      messages: [],
-      cost: 0,
-      tokenUsage: { prompt: 0, completion: 0, total: 0 },
-    }
-    if (cliSessionId) session.cliSessionId = cliSessionId
-    if (options.pendingServerLink) session.pendingServerLink = true
+    const data: SessionData = buildSession({ name, ...options })
+    const session: OpenCodeSession = data as unknown as OpenCodeSession
     // Stamp the current workspace so the session shows up in this project's
     // picker on subsequent reloads (mirrors opencode CLI's directory scoping).
     const folders = vscode.workspace.workspaceFolders
     if (folders && folders.length > 0) {
       session.workspacePath = folders[0]!.uri.fsPath
     }
-    this.sessions.set(sessionId, session)
-    this.activeSessionId = sessionId
+    this.sessions.set(session.id, session)
+    this.activeSessionId = session.id
     this.save()
     this._onSessionsChanged.fire()
-    this._onActiveSessionChanged.fire(sessionId)
-    this._onSessionCreated.fire(sessionId)
+    this._onActiveSessionChanged.fire(session.id)
+    this._onSessionCreated.fire(session.id)
     return session
   }
 
@@ -590,8 +577,7 @@ export class SessionStore {
     session.lastActiveAt = Date.now()
 
     // Auto-generate title from first user message when no real title exists.
-    // Treat empty / "Default" / "Session XXX" all as auto-generated.
-    const isAutoName = !session.name || session.name === "Default" || session.name.startsWith("Session ")
+    const isAutoName = isAutoSessionName(session.name)
     if (msg.role === "user" && isAutoName) {
       const textBlock = msg.blocks.find((b) => b.type === "text")
       const text = typeof textBlock?.text === "string" ? textBlock.text : ""
@@ -611,12 +597,7 @@ export class SessionStore {
    * "Session owSyH" into the UI.
    */
   static displayName(session: { name?: string }): string {
-    const raw = (session?.name || "").trim()
-    if (!raw) return "Untitled session"
-    if (/^Session [A-Za-z0-9]{1,8}$/.test(raw) || /^Session \d+$/.test(raw)) {
-      return "Untitled session"
-    }
-    return raw
+    return sessionDisplayNamePure(session)
   }
 
   /**
@@ -627,12 +608,7 @@ export class SessionStore {
   autoTitleFromMessages(id: string): boolean {
     const session = this.sessions.get(id)
     if (!session) return false
-    const current = (session.name || "").trim()
-    const isAuto =
-      current === "" ||
-      /^Session [A-Za-z0-9]{1,8}$/.test(current) ||
-      /^Session \d+$/.test(current)
-    if (!isAuto) return false
+    if (!isAutoSessionName(session.name)) return false
     const firstUser = session.messages.find((m) => m.role === "user")
     if (!firstUser) return false
     const textBlock = firstUser.blocks.find((b) => b.type === "text")
@@ -649,35 +625,16 @@ export class SessionStore {
    * Generate a session title from the first user message.
    * Uses the first sentence truncated at 40 chars.
    */
-  generateTitleFromMessage(text: string): string {
-    if (!text || !text.trim()) return ""
-    // Take first sentence (up to first period, question mark, or exclamation)
-    const firstSentence = text.split(/[.!?\n]/)[0] || text
-    const trimmed = firstSentence.trim()
-    if (trimmed.length === 0) return ""
-    // Truncate at 40 chars with ellipsis
-    if (trimmed.length > 40) {
-      return trimmed.slice(0, 37).trimEnd() + "..."
-    }
-    return trimmed
+generateTitleFromMessage(text: string): string {
+    return generateTitleFromMessagePure(text)
   }
 
   /**
    * Validate a session rename.
    * Returns an error message if invalid, or null if valid.
    */
-  validateSessionName(name: string): string | null {
-    const trimmed = name.trim()
-    if (trimmed.length === 0) {
-      return "Session name cannot be empty."
-    }
-    if (trimmed.length > 80) {
-      return "Session name must be 80 characters or fewer."
-    }
-    if (/[\\/:*?"<>|]/.test(trimmed)) {
-      return "Session name cannot contain path separator characters."
-    }
-    return null
+validateSessionName(name: string): string | null {
+    return validateSessionNamePure(name)
   }
 
   updateName(id: string, name: string): boolean {

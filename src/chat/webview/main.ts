@@ -1,4 +1,3 @@
-import { log } from "../../utils/outputChannel"
 import type { ChatMessage, HostMessage, MentionItem, SessionSummary, ModelInfo, WebviewState, ContextChip, ToolCallState } from "./types"
 import { createState } from "./state"
 import { getElementRefs, scrollToBottom, getActiveMessageList } from "./dom"
@@ -27,6 +26,11 @@ declare const acquireVsCodeApi: (() => {
   getState(): import("./types").WebviewState | undefined
   setState(state: import("./types").WebviewState): void
 }) | undefined
+
+const log = {
+  warn: (...args: unknown[]) => console.warn("[opencode-harness]", ...args),
+  error: (...args: unknown[]) => console.error("[opencode-harness]", ...args),
+}
 
 // Timeout handle for deferred initialization
 declare global {
@@ -170,6 +174,8 @@ function getVsCodeApi() {
   // Streaming state per session
   const streamHandlers = new Map<string, ReturnType<typeof createStreamHandlers>>()
   let streamChunkLogCount = 0
+  const MAX_CONCURRENT_STREAMS = 3
+  const STREAM_LIMIT_TOOLTIP = "3 streams active — wait or stop another tab first"
 
   // Scroll anchors per tab — disposed on tab close
   const scrollAnchors = new Map<string, ScrollAnchor>()
@@ -471,7 +477,7 @@ function getVsCodeApi() {
     if (!session) {
       session = stateManager.ensureSession({
         id: tabId,
-        name: tabName || "New Session",
+        name: tabName || "",
         model: stateManager.getState().globalModel || "",
         mode: "build",
         messages: [],
@@ -619,7 +625,7 @@ function getVsCodeApi() {
       model: s.model,
       isStreaming: s.isStreaming,
     }))
-    tabBar.renderTabs(tabs, activeId)
+    tabBar.renderTabs(tabs, activeId, getStreamCapacityState())
   }
 
   function getMessageList(tabId: string): HTMLDivElement | null {
@@ -1106,26 +1112,58 @@ function getVsCodeApi() {
     el.style.height = Math.min(el.scrollHeight, 200) + "px"
   }
 
+  function getSessionDisplayName(session: { name?: string; id?: string }): string {
+    return session.name?.trim() || "Untitled session"
+  }
+
+  function getStreamCapacityState() {
+    const streamingSessions = stateManager.getAllSessions().filter((s) => s.isStreaming)
+    const activeStreams = streamingSessions.length
+    const maxStreams = MAX_CONCURRENT_STREAMS
+    const isFull = activeStreams >= maxStreams
+    const streamingNames = streamingSessions
+      .map((s) => `"${getSessionDisplayName(s)}"`)
+      .join(", ")
+    return {
+      activeStreams,
+      maxStreams,
+      isFull,
+      streamingNames,
+      reason: isFull ? STREAM_LIMIT_TOOLTIP : "",
+    }
+  }
+
   function updateSendButton() {
     const hasText = els.promptInput.value.trim().length > 0
     const hasAttachments = pendingAttachments.length > 0
     const active = stateManager.getActiveSession()
     const isStreaming = active?.isStreaming || false
+    const streamCapacity = getStreamCapacityState()
+    const blockedByStreamLimit = !isStreaming && streamCapacity.isFull
+    const canSubmit = isStreaming || ((hasText || hasAttachments) && !blockedByStreamLimit)
     // Button remains enabled during streaming so it can be used as a stop button
-    ;(els.sendBtn as HTMLButtonElement).disabled = !hasText && !hasAttachments && !isStreaming
-    updateSendButtonIcon(isStreaming)
+    ;(els.sendBtn as HTMLButtonElement).disabled = !canSubmit
+    els.sendBtn?.classList.toggle("stream-limit-blocked", blockedByStreamLimit)
+    updateSendButtonIcon(isStreaming, streamCapacity)
     updateModeSelectorState()
   }
 
-  function updateSendButtonIcon(isStreaming?: boolean) {
+  function updateSendButtonIcon(isStreaming?: boolean, streamCapacity = getStreamCapacityState()) {
     const active = stateManager.getActiveSession()
     const streaming = isStreaming ?? active?.isStreaming ?? false
     if (streaming) {
       els.sendBtn?.classList.add("stopping")
+      els.sendBtn?.classList.remove("stream-limit-blocked")
       els.sendBtn?.setAttribute("aria-label", "Stop generation")
       els.sendBtn?.setAttribute("title", "Stop generation")
+    } else if (streamCapacity.isFull) {
+      els.sendBtn?.classList.remove("stopping")
+      els.sendBtn?.classList.add("stream-limit-blocked")
+      els.sendBtn?.setAttribute("aria-label", STREAM_LIMIT_TOOLTIP)
+      els.sendBtn?.setAttribute("title", STREAM_LIMIT_TOOLTIP)
     } else {
       els.sendBtn?.classList.remove("stopping")
+      els.sendBtn?.classList.remove("stream-limit-blocked")
       els.sendBtn?.setAttribute("aria-label", "Send message")
       els.sendBtn?.setAttribute("title", "Send (Ctrl+Enter)")
     }
@@ -1138,6 +1176,21 @@ function getVsCodeApi() {
     if (trimmed.length === 0) return ""
     if (trimmed.length > 40) return trimmed.slice(0, 37).trimEnd() + "..."
     return trimmed
+  }
+
+  function isAutoSessionName(name?: string): boolean {
+    const raw = (name || "").trim()
+    return (
+      !raw ||
+      raw === "Default" ||
+      raw === "New Chat" ||
+      raw === "New Session" ||
+      raw === "Untitled session" ||
+      /^Session [A-Za-z0-9]{1,8}$/.test(raw) ||
+      /^Session \d+$/.test(raw) ||
+      /^New session\b/i.test(raw) ||
+      /^Tab session\b/i.test(raw)
+    )
   }
 
   function enqueuePrompt(text: string) {
@@ -1317,8 +1370,8 @@ function getVsCodeApi() {
     if (!text && pendingAttachments.length === 0) return
 
     if (!active) {
-      // Create a new session lazily, named from the first message
-      const title = generateTitle(text) || "New Chat"
+      // Create a new session lazily; the first user message promotes the title.
+      const title = generateTitle(text)
       active = createNewTab(title)
     }
 
@@ -1329,13 +1382,11 @@ function getVsCodeApi() {
     hideWelcomeView()
 
     // Check concurrent streaming limit BEFORE mutating state
-    const streamingCount = stateManager.getAllSessions().filter((s) => s.isStreaming).length
-    if (streamingCount >= 3) {
-      const streamingNames = stateManager.getAllSessions()
-        .filter((s) => s.isStreaming)
-        .map((s) => `"${s.name}"`)
-        .join(", ")
-      handleRequestError(active.id, `Maximum 3 concurrent streams reached. Currently streaming: ${streamingNames}`)
+    const streamCapacity = getStreamCapacityState()
+    if (streamCapacity.isFull) {
+      updateSendButton()
+      const detail = streamCapacity.streamingNames ? ` Currently streaming: ${streamCapacity.streamingNames}` : ""
+      handleRequestError(active?.id, `${STREAM_LIMIT_TOOLTIP}.${detail}`)
       return
     }
 
@@ -2084,9 +2135,7 @@ function getVsCodeApi() {
       const firstText = m.blocks?.find((b) => b.type === "text")
       dot.title = (firstText?.text as string)?.slice(0, 60) || "User message"
       dot.addEventListener("click", () => {
-        msgEl.scrollIntoView({ behavior: "smooth", block: "center" })
-        msgEl.classList.add("message-flash")
-        setTimeout(() => msgEl.classList.remove("message-flash"), 1500)
+        scrollMessageToTop(msgList, msgEl)
       })
       markersEl.appendChild(dot)
     })
@@ -2125,7 +2174,7 @@ function getVsCodeApi() {
     if (!session) {
       session = stateManager.ensureSession({
         id: sessionId,
-        name: "New Session",
+        name: "",
         model: stateManager.getState().globalModel || "",
         mode: "build",
         messages: [],
@@ -2143,7 +2192,7 @@ function getVsCodeApi() {
     session.messages.push(msg)
 
     // Auto-generate title from first user message
-    if (msg.role === "user" && (session.name === "Default" || session.name.startsWith("Session "))) {
+    if (msg.role === "user" && isAutoSessionName(session.name)) {
       const generated = generateTitleFromBlocks(msg.blocks)
       if (generated) {
         session.name = generated
@@ -2757,14 +2806,20 @@ function getVsCodeApi() {
   // #turn-nav (prev/next/select) removed — the conversation timeline sidebar
   // is the single navigation aid. scrollToTurn is still used by the timeline.
 
+  function scrollMessageToTop(msgList: HTMLElement, target: HTMLElement) {
+    msgList.scrollTo({ top: Math.max(0, target.offsetTop), behavior: "smooth" })
+    target.classList.add("message-flash")
+    setTimeout(() => target.classList.remove("message-flash"), 1500)
+    target.setAttribute("tabindex", "-1")
+    target.focus({ preventScroll: true })
+  }
+
   function scrollToTurn(messageId: string) {
     const msgList = getActiveMessageList(els)
     if (!msgList) return
     const target = msgList.querySelector(`[data-message-id="${CSS.escape(messageId)}"]`) as HTMLElement | null
     if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "start" })
-      target.setAttribute("tabindex", "-1")
-      target.focus()
+      scrollMessageToTop(msgList, target)
     }
   }
 
@@ -3164,6 +3219,52 @@ try {
     s.handleStreamChunk(text, messageId)
   }
 
+  function showStreamEndReasonMessage(sessionId: string, reason?: string, partial?: boolean) {
+    if (reason === "ttfb_timeout") {
+      showSystemMessage(sessionId, "The model took too long to start responding. Please try again or select a different model.", true)
+    } else if (reason === "timeout") {
+      showSystemMessage(sessionId, partial
+        ? "Response was cut off (timeout). Partial output has been preserved."
+        : "Response timed out. Please try again or select a different model.", true)
+    } else if (reason === "hard_timeout") {
+      showSystemMessage(sessionId, "Stream interrupted after extended run. Partial output preserved.", true)
+    } else if (reason === "error") {
+      showSystemMessage(sessionId, "An error occurred while generating the response. Please try again.", true)
+    }
+  }
+
+  function processQueueIfReady(sessionId: string, reason?: string) {
+    if (reason === "aborted") return
+    const queue = promptQueues.get(sessionId)
+    if (queue && queue.isNextReady()) {
+      const next = queue.processNext()
+      if (next) {
+        sendQueuedPrompt(sessionId, next.text, next.attachments)
+      }
+    }
+  }
+
+  function processStreamEndBlocks(sessionId: string, messageId?: string, blocks?: unknown) {
+    const blockList = Array.isArray(blocks) ? blocks as ChatMessage["blocks"] : []
+    if (blockList.length === 0) return
+
+    const msgList = getMessageList(sessionId)
+    if (messageId && msgList) {
+      const placeholder = msgList.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement | null
+      if (placeholder) {
+        const textEl = placeholder.querySelector(".streaming-text, .msg-text") as HTMLElement | null
+        const hasContent = textEl && textEl.textContent && textEl.textContent.trim().length > 2
+        if (!hasContent) placeholder.remove()
+      }
+    }
+    addMessage(sessionId, {
+      role: "assistant",
+      id: messageId || `resp-${Date.now()}`,
+      blocks: blockList,
+      timestamp: Date.now(),
+    })
+  }
+
   function handleStreamEnd(sessionId: string, messageId?: string, blocks?: unknown, reason?: string, partial?: boolean) {
     try {
       const stream = streamHandlers.get(sessionId)
@@ -3178,28 +3279,7 @@ try {
         }
       }
 
-      const blockList = Array.isArray(blocks) ? blocks as ChatMessage["blocks"] : []
-
-      if (blockList.length > 0) {
-        const msgList = getMessageList(sessionId)
-        if (messageId && msgList) {
-          const placeholder = msgList.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement | null
-          if (placeholder) {
-            const textEl = placeholder.querySelector(".streaming-text, .msg-text") as HTMLElement | null
-            const hasContent = textEl && textEl.textContent && textEl.textContent.trim().length > 2
-            if (!hasContent) {
-              placeholder.remove()
-              vscode.postMessage({ type: "webview_log", level: "info", message: `handleStreamEnd: removed empty placeholder for ${sessionId}` })
-            }
-          }
-        }
-        addMessage(sessionId, {
-          role: "assistant",
-          id: messageId || `resp-${Date.now()}`,
-          blocks: blockList,
-          timestamp: Date.now(),
-        })
-      }
+      processStreamEndBlocks(sessionId, messageId, blocks)
 
       stateManager.setStreaming(sessionId, false)
       stopToolElapsedTimer()
@@ -3207,36 +3287,14 @@ try {
       updateModeSelectorState()
       updateAgentStatus("idle")
 
-      if (reason === "ttfb_timeout") {
-        showSystemMessage(sessionId, "The model took too long to start responding. Please try again or select a different model.", true)
-      } else if (reason === "timeout") {
-        if (partial) {
-          showSystemMessage(sessionId, "Response was cut off (timeout). Partial output has been preserved.", true)
-        } else {
-          showSystemMessage(sessionId, "Response timed out. Please try again or select a different model.", true)
-        }
-      } else if (reason === "hard_timeout") {
-        showSystemMessage(sessionId, "Stream interrupted after extended run. Partial output preserved.", true)
-      } else if (reason === "error") {
-        showSystemMessage(sessionId, "An error occurred while generating the response. Please try again.", true)
-      } else if (reason === "aborted") {
-        // Aborted is user-initiated — no error message needed
-      }
+      showStreamEndReasonMessage(sessionId, reason, partial)
 
       if (sessionId === stateManager.getState().activeSessionId) {
         updateSendButtonIcon(false)
         updateSendButton()
       }
 
-      if (reason !== "aborted") {
-        const queue = promptQueues.get(sessionId)
-        if (queue && queue.isNextReady()) {
-          const next = queue.processNext()
-          if (next) {
-            sendQueuedPrompt(sessionId, next.text, next.attachments)
-          }
-        }
-      }
+      processQueueIfReady(sessionId, reason)
     } catch (err) {
       log.error("handleStreamEnd top-level error:", err)
       vscode.postMessage({ type: "webview_log", level: "error", message: `handleStreamEnd error: ${err instanceof Error ? err.message : String(err)}` })
@@ -3244,7 +3302,11 @@ try {
       try { updateTabBar() } catch {}
       try { updateModeSelectorState() } catch {}
       try { updateAgentStatus("idle") } catch {}
-      try { showSystemMessage(sessionId, reason === "ttfb_timeout" ? "Model took too long. Try a different model." : reason === "timeout" ? "Response timed out." : reason === "error" ? "An error occurred." : "Unexpected error.") } catch {}
+      const msg = reason === "ttfb_timeout" ? "Model took too long. Try a different model."
+        : reason === "timeout" ? "Response timed out."
+        : reason === "error" ? "An error occurred."
+        : "Unexpected error."
+      try { showSystemMessage(sessionId, msg) } catch {}
     }
   }
 

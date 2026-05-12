@@ -50,6 +50,14 @@ void describe("TabManager.ts", () => {
     assert.ok(source.includes("clearCompletionTimeout("), "must have clearCompletionTimeout")
   })
 
+  void it("createTab reuses an existing tab for the same CLI session id", () => {
+    const idx = source.indexOf("createTab(")
+    assert.ok(idx >= 0, "createTab must exist")
+    const block = source.slice(idx, source.indexOf("closeTab(", idx))
+    assert.ok(block.includes("this.cliSessionIndex.has(cliSessionId)"), "createTab must check CLI session aliases")
+    assert.ok(block.includes("this.cliSessionIndex.get(cliSessionId)"), "createTab must return the existing CLI-backed tab")
+  })
+
   void it("has buffer management methods", () => {
     assert.ok(source.includes("appendToBuffer("), "must have appendToBuffer")
     assert.ok(source.includes("clearBuffer("), "must have clearBuffer")

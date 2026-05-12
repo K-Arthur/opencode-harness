@@ -19,6 +19,7 @@ import { validateServerUrl } from "../utils/security"
 import { createSdkEventNormalizer } from "./EventNormalizer"
 import type { SdkEventLike } from "./types"
 import { SseEventParser, type SseParseResult } from "./sseParser"
+import { IdleWatchdog } from "./IdleWatchdog"
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -633,7 +634,6 @@ export class SessionManager {
     const headers: Record<string, string> = { Accept: "text/event-stream" }
     if (this.authHeader) headers["Authorization"] = this.authHeader
 
-    // Connection timeout — abort controller if fetch doesn't complete within 30s
     let connectionTimedOut = false
     const connectTimeout = setTimeout(() => {
       if (!controller.signal.aborted) {
@@ -642,29 +642,12 @@ export class SessionManager {
       }
     }, 30_000)
 
-    // Idle/stall watchdog — once connected, abort the stream if no bytes arrive
-    // within IDLE_TIMEOUT_MS. OpenCode sends heartbeat comments + frequent
-    // events; a long silence almost always means a half-open TCP connection
-    // (proxy timeout, server crash, network partition). Without this, the
-    // reader hangs forever and prompts time out via the per-tab TTFB instead.
-    const IDLE_TIMEOUT_MS = 90_000
-    let idleTimedOut = false
-    let idleTimer: ReturnType<typeof setTimeout> | null = null
-    const armIdleTimer = (): void => {
-      if (idleTimer) clearTimeout(idleTimer)
-      idleTimer = setTimeout(() => {
-        if (!controller.signal.aborted) {
-          idleTimedOut = true
-          controller.abort()
-        }
-      }, IDLE_TIMEOUT_MS)
-    }
-    const clearIdleTimer = (): void => {
-      if (idleTimer) {
-        clearTimeout(idleTimer)
-        idleTimer = null
-      }
-    }
+    const idleWatchdog = new IdleWatchdog({
+      timeoutMs: 90_000,
+      onTimeout: () => {
+        if (!controller.signal.aborted) controller.abort()
+      },
+    })
 
     try {
       const resp = await fetch(this.eventStreamUrl(baseUrl), {
@@ -687,26 +670,7 @@ export class SessionManager {
       }
 
       this.markEventStreamConnected(generation)
-      armIdleTimer()
-
-      const reader = resp.body.getReader()
-      const decoder = new TextDecoder()
-      try {
-        while (true) {
-          const { value, done } = await reader.read()
-          if (done) break
-          if (generation !== this.eventStreamGeneration || controller.signal.aborted) return
-          if (!value) continue
-          armIdleTimer() // bytes received — reset idle window
-          this.consumeSseParseResult(parser.push(decoder.decode(value, { stream: true })))
-        }
-
-        this.consumeSseParseResult(parser.push(decoder.decode()))
-        this.consumeSseParseResult(parser.flush())
-      } finally {
-        reader.releaseLock()
-        clearIdleTimer()
-      }
+      await this.readEventStream(resp.body.getReader(), parser, idleWatchdog, controller, generation)
 
       if (generation === this.eventStreamGeneration && !controller.signal.aborted && !this.disposed) {
         log.warn(`OpenCode event stream closed (last raw=${this.lastRawEventType || "none"})`)
@@ -714,40 +678,70 @@ export class SessionManager {
       }
     } catch (err) {
       clearTimeout(connectTimeout)
-      clearIdleTimer()
+      this.handleEventStreamError(err, generation, connectionTimedOut, idleWatchdog, controller)
+    }
+  }
 
-      // Stale call from a previous generation — ignore
-      if (generation !== this.eventStreamGeneration || this.disposed) return
-
-      // Connection timeout — surface specific error and schedule reconnect
-      if (connectionTimedOut) {
-        log.warn("OpenCode event stream connection timed out after 30s")
-        this._onEvent.fire({
-          type: "server_error",
-          data: { error: "OpenCode event stream connection timed out after 30s" },
-        })
-        this.scheduleEventStreamReconnect("connection_timeout")
-        return
+  private async readEventStream(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    parser: SseEventParser,
+    idleWatchdog: IdleWatchdog,
+    controller: AbortController,
+    generation: number,
+  ): Promise<void> {
+    const decoder = new TextDecoder()
+    idleWatchdog.arm()
+    try {
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        if (generation !== this.eventStreamGeneration || controller.signal.aborted) return
+        if (!value) continue
+        idleWatchdog.arm()
+        this.consumeSseParseResult(parser.push(decoder.decode(value, { stream: true })))
       }
+      this.consumeSseParseResult(parser.push(decoder.decode()))
+      this.consumeSseParseResult(parser.flush())
+    } finally {
+      reader.releaseLock()
+      idleWatchdog.clear()
+    }
+  }
 
-      // Idle stall (server stopped sending bytes) — log + reconnect, don't error to user
-      if (idleTimedOut) {
-        log.warn(`OpenCode event stream idle for ${IDLE_TIMEOUT_MS}ms — reconnecting`)
-        this.scheduleEventStreamReconnect("idle_timeout")
-        return
-      }
+  private handleEventStreamError(
+    err: unknown,
+    generation: number,
+    connectionTimedOut: boolean,
+    idleWatchdog: IdleWatchdog,
+    controller: AbortController,
+  ): void {
+    if (generation !== this.eventStreamGeneration || this.disposed) return
 
-      // User-initiated abort (new stream generation) — no error to surface
-      if (controller.signal.aborted) return
-
-      const message = err instanceof Error ? err.message : String(err)
-      log.warn(`OpenCode event stream failed: ${message}`)
+    if (connectionTimedOut) {
+      log.warn("OpenCode event stream connection timed out after 30s")
       this._onEvent.fire({
         type: "server_error",
-        data: { error: `OpenCode event stream failed: ${message}` },
+        data: { error: "OpenCode event stream connection timed out after 30s" },
       })
-      this.scheduleEventStreamReconnect(message)
+      this.scheduleEventStreamReconnect("connection_timeout")
+      return
     }
+
+    if (idleWatchdog.timedOut) {
+      log.warn("OpenCode event stream idle for 90000ms — reconnecting")
+      this.scheduleEventStreamReconnect("idle_timeout")
+      return
+    }
+
+    if (controller.signal.aborted) return
+
+    const message = err instanceof Error ? err.message : String(err)
+    log.warn(`OpenCode event stream failed: ${message}`)
+    this._onEvent.fire({
+      type: "server_error",
+      data: { error: `OpenCode event stream failed: ${message}` },
+    })
+    this.scheduleEventStreamReconnect(message)
   }
 
   private consumeSseParseResult(result: SseParseResult): void {

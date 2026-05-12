@@ -5,6 +5,7 @@ import path from "node:path"
 
 const source = readFileSync(path.join(__dirname, "main.ts"), "utf8")
 const sessionListRendererSource = readFileSync(path.join(__dirname, "sessionListRenderer.ts"), "utf8")
+const messagesCss = readFileSync(path.join(__dirname, "css", "messages.css"), "utf8")
 
 describe("main.ts", () => {
   // Existing tests
@@ -43,7 +44,8 @@ describe("main.ts", () => {
   })
 
   it("has concurrent streaming limit of 3", () => {
-    assert.ok(source.includes(">= 3"))
+    assert.ok(source.includes("MAX_CONCURRENT_STREAMS = 3"))
+    assert.ok(source.includes("activeStreams >= maxStreams"))
   })
 
   it("init_state checks for .tab-panel not vscode-tab-panel", () => {
@@ -96,6 +98,31 @@ describe("main.ts", () => {
     assert.ok(source.includes("updateModeSelectorState"), "must have updateModeSelectorState function")
     assert.ok(source.includes("classList.toggle('disabled'"), "must toggle disabled class")
     assert.ok(source.includes("btn.disabled = isStreaming"), "must disable buttons during streaming")
+  })
+
+  it("disables send with a clear tooltip when the global stream cap is full", () => {
+    const idx = source.indexOf("function updateSendButton()")
+    assert.ok(idx >= 0, "updateSendButton must exist")
+    const block = source.slice(idx, source.indexOf("function updateSendButtonIcon", idx))
+    assert.ok(block.includes("getStreamCapacityState"), "send button must inspect global stream capacity")
+    assert.ok(block.includes("stream-limit-blocked"), "send button must expose a blocked visual state")
+    assert.ok(source.includes("3 streams active — wait or stop another tab first"), "must explain the stream cap in the tooltip")
+  })
+
+  it("timeline jumps use exact message-list scroll positioning", () => {
+    assert.ok(source.includes("function scrollMessageToTop("), "must have exact scroll helper")
+    const idx = source.indexOf("function scrollToTurn(")
+    assert.ok(idx >= 0, "scrollToTurn must exist")
+    const block = source.slice(idx, source.indexOf("/* ─── CONVERSATION TIMELINE", idx))
+    assert.ok(block.includes("scrollMessageToTop(msgList, target)"), "timeline jumps must use the message list scroller directly")
+    assert.ok(!block.includes("scrollIntoView"), "timeline jumps must not rely on scrollIntoView/focus side effects")
+  })
+
+  it("does not virtualize chat messages because it destabilizes trackpad scrolling", () => {
+    assert.ok(
+      !/\.message\s*\{[^}]*content-visibility:\s*auto/s.test(messagesCss),
+      "message bubbles must stay fully painted while scrolling/streaming"
+    )
   })
 
   it("plan_mode_replaces_accept_with_approve_and_apply", () => {

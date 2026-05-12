@@ -67,13 +67,17 @@ export class TabManager {
   }
 
   createTab(id: string, cliSessionId?: string, model?: string, mode?: string, options?: { setActive?: boolean }): TabState | null {
-    if (this.tabs.size >= this.MAX_TABS) {
-      log.warn(`Tab creation blocked: max ${this.MAX_TABS} tabs reached`)
-      return null
-    }
     if (this.tabs.has(id)) {
       log.warn(`Tab with ID ${id} already exists — returning existing tab`)
       return this.tabs.get(id)!
+    }
+    if (cliSessionId && this.cliSessionIndex.has(cliSessionId)) {
+      log.warn(`Tab for CLI session ${cliSessionId} already exists — returning existing tab`)
+      return this.cliSessionIndex.get(cliSessionId)!
+    }
+    if (this.tabs.size >= this.MAX_TABS) {
+      log.warn(`Tab creation blocked: max ${this.MAX_TABS} tabs reached`)
+      return null
     }
     const tab: TabState = {
       id,

@@ -63,7 +63,7 @@ describe("SessionStore.ts", () => {
   })
 
   it("validates rename for oversized names", () => {
-    assert.ok(source.includes("80"))
+    assert.ok(source.includes("validateSessionName"))
   })
 
   it("has onDidChangeSession typed event for delete/rename/active", () => {

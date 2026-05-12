@@ -31,9 +31,14 @@ describe("Stream timeout frontend feedback", () => {
   })
 
   it("aborted stream_end does not show error message", () => {
-    assert.ok(mainSource.includes('reason === "aborted"'),
-      "must handle aborted reason differently (no system message)")
-    assert.ok(mainSource.includes("no error message needed"),
-      "should not show error for user-initiated abort")
+    assert.ok(mainSource.includes('showStreamEndReasonMessage'),
+      "must use showStreamEndReasonMessage for reason handling")
+    // "aborted" is intentionally not handled in showStreamEndReasonMessage —
+    // the function only checks ttfb_timeout, timeout, hard_timeout, and error,
+    // so aborted naturally falls through without showing any system message.
+    const fnStart = mainSource.indexOf("showStreamEndReasonMessage")
+    const fnBlock = mainSource.slice(fnStart, fnStart + 600)
+    assert.equal(fnBlock.includes('"aborted"'), false,
+      "should not show system message for user-initiated abort")
   })
 })

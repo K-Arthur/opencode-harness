@@ -29,14 +29,6 @@
   padding-right: 152px;
 }
 
-/* Virtual rendering: skip layout+paint for off-screen messages.
-   contain-intrinsic-size gives the browser a placeholder height so
-   scrollHeight stays stable even when messages are skipped. */
-.message {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 120px; /* 'auto' remembers actual size after first paint */
-}
-
 /* ═══════════════════════════════════════════════════════════════════════════════╛
    LOAD-EARLIER BANNER
    Shown at the top of a session when only the most-recent messages are rendered.
