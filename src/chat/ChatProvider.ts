@@ -585,6 +585,11 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         }
       }
     }],
+    ["sessions_recovered", () => {
+      log.info("sessions_recovered: re-pushing init state with recovered sessions")
+      this.restoredTabsHydrated = false
+      this.pushInitStateToWebview()
+    }],
   ])
 
   private handleServerEvent(event: { type: string; sessionId?: string; data?: unknown }): void {

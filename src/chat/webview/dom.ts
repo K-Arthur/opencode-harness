@@ -61,6 +61,7 @@ export interface ElementRefs {
 
   modelDropdown: HTMLDivElement
   variantDropdown: HTMLDivElement
+  backBtn: HTMLElement
   historyBtn: HTMLElement
   mcpBtn: HTMLElement
   timelineToggleBtn: HTMLElement
@@ -194,6 +195,7 @@ export function getElementRefs(): ElementRefs {
 
     modelDropdown: requireElement<HTMLDivElement>("model-dropdown-container"),
     variantDropdown: requireElement<HTMLDivElement>("variant-dropdown-container"),
+    backBtn: requireElement("back-btn"),
     historyBtn: requireElement("history-btn"),
     mcpBtn: requireElement("mcp-btn"),
     timelineToggleBtn: requireElement("timeline-toggle-btn"),

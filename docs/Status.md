@@ -1,16 +1,16 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-05-07
-**Version:** v0.2.5 (Streaming reliability hardening: tool dedup, adaptive render queue, heartbeat, reconnection, tool grouping)
+**Last Updated:** 2026-05-12
+**Version:** v0.2.6 (UI polish: back button, modal focus traps, keyboard nav, theme undo state)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
 
 ## Test Summary
 
-| Metric | v0.2.4 | v0.2.5 | Delta |
+| Metric | v0.2.5 | v0.2.6 | Delta |
 |--------|--------|--------|-------|
-| Tests | 702 | 724 | +22 |
-| Passing | 701 | 723 | +22 |
+| Tests | 702 | 894 | +192 |
+| Passing | 701 | 893 | +192 |
 | Failing | 0 | 0 | — |
 | Skipped | 1 | 1 | — |
 | Typecheck | ✅ | ✅ | — |
@@ -56,6 +56,10 @@
 | 29 | Theme Customizer + CLI Theme Parity | ✅ | Webview modal with color pickers + Preview button; 7 override fields incl. user message bg; `--bg-secondary`/`--bg-tertiary` removed from CSS_VAR_MAP to preserve `color-mix()` depth; `.vscode-light` body overrides fix light-theme bubble rendering |
 | 30 | Empty Session Cleanup + Restore | ✅ | Empty unused sessions are transient, pruned periodically, deleted on close, and non-empty open tabs restore per workspace when enabled |
 | 31 | Session Load Performance + Scroll Fixes | ✅ | `resume_session_data` truncated to last 50 msgs + `request_more_messages` pagination; chunked rAF rendering (`CHUNK_SIZE=20`); load-earlier banner; scroll-to-bottom after load; debounced scroll markers + timeline refresh; `content-visibility: auto; contain-intrinsic-size: auto 120px` on messages; `will-change: scroll-position` on message list |
+| 32 | Back Button + Modal Focus Traps | ✅ | Back button in header when any modal is open; Tab/Shift+Tab focus cycling within all modals; return-focus-to-trigger on close |
+| 33 | Settings Menu Keyboard Nav | ✅ | ArrowUp/Down, Home, End, Escape navigation |
+| 34 | Theme Customizer Undo State | ✅ | Save/reset push theme state onto undo stack |
+| 35 | Session Recovery Re-push | ✅ | `sessions_recovered` event triggers `pushInitStateToWebview` |
 
 ## Deferred (P2 — High Effort / Niche)
 

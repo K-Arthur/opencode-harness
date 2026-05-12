@@ -108,6 +108,7 @@ function getVsCodeApi() {
     onManageModels: () => {
       modelManager.open()
       vscode.postMessage({ type: "get_models" })
+      updateBackBtnVisibility()
     },
   })
 
@@ -253,10 +254,11 @@ function getVsCodeApi() {
       setupMessageListener()
       setupPermissionListener()
       setupDiffActionListener()
-	      setupSearch()
-	      setupTimelineToggle()
+      setupSearch()
+ 	      setupTimelineToggle()
       setupDisplayToggles()
       setupToolKeyboardNav()
+      setupSettingsMenuKeyboardNav()
       updateSendButton()
       setVsCodeApi(vscode)
 
@@ -302,6 +304,7 @@ function getVsCodeApi() {
     els.welcomeModelCtx?.addEventListener("click", () => {
       modelManager.open()
       vscode.postMessage({ type: "get_models" })
+      updateBackBtnVisibility()
     })
     els.welcomeContinueBtn?.addEventListener("click", () => {
       const mostRecent = stateManager.getAllSessions()
@@ -407,6 +410,7 @@ function getVsCodeApi() {
     renderUnifiedSessionList()
 
     els.sessionModal.classList.remove("hidden")
+    updateBackBtnVisibility()
 
     // Focus trap
     sessionModalLastFocus = document.activeElement as HTMLElement | null
@@ -449,6 +453,7 @@ function getVsCodeApi() {
       sessionModalLastFocus.focus({ preventScroll: true })
       sessionModalLastFocus = null
     }
+    updateBackBtnVisibility()
   }
 
   /* ─── TAB MANAGEMENT ─── */
@@ -903,19 +908,38 @@ function getVsCodeApi() {
 
   let pendingAutoMode: string | null = null
 
+  // Undo stack for theme customizer
+  const undoRedo: Array<{ themePreset: string; themeOverrides: Record<string, string> }> = []
+
+  let modeWarningFocusTrap: ((e: KeyboardEvent) => void) | null = null
+  let modeWarningLastFocus: HTMLElement | null = null
+
   function showAutoModeWarning() {
     pendingAutoMode = "auto"
     els.modeWarningTitle.textContent = "Switch to Auto mode?"
     els.modeWarningDescription.textContent =
       "Auto mode will allow the agent to apply changes without asking. The agent will have full autonomy to read, write, and execute commands. Use with caution."
     els.modeWarningModal.classList.remove("hidden")
+    updateBackBtnVisibility()
+    modeWarningLastFocus = document.activeElement as HTMLElement | null
+    modeWarningFocusTrap = trapModalFocus(els.modeWarningModal)
+    document.addEventListener("keydown", modeWarningFocusTrap)
     const firstBtn = els.modeWarningModal.querySelector<HTMLElement>("button")
     if (firstBtn) firstBtn.focus()
   }
 
   function closeModeWarning() {
     els.modeWarningModal.classList.add("hidden")
+    if (modeWarningFocusTrap) {
+      document.removeEventListener("keydown", modeWarningFocusTrap)
+      modeWarningFocusTrap = null
+    }
+    if (modeWarningLastFocus) {
+      modeWarningLastFocus.focus({ preventScroll: true })
+      modeWarningLastFocus = null
+    }
     pendingAutoMode = null
+    updateBackBtnVisibility()
   }
 
   function setupModeWarning() {
@@ -1716,6 +1740,57 @@ function getVsCodeApi() {
     els.settingsBtn.setAttribute("aria-expanded", "false")
   }
 
+  function isAnyModalOpen(): boolean {
+    return !els.modelManagerPanel.classList.contains("hidden")
+      || !els.themeCustomizerPanel.classList.contains("hidden")
+      || !els.modeWarningModal.classList.contains("hidden")
+      || !els.mcpConfigPanel.classList.contains("hidden")
+      || !els.sessionModal.classList.contains("hidden")
+  }
+
+  function closeCurrentModal() {
+    if (!els.modelManagerPanel.classList.contains("hidden")) {
+      modelManager.close()
+    } else if (!els.themeCustomizerPanel.classList.contains("hidden")) {
+      closeThemeCustomizer()
+    } else if (!els.modeWarningModal.classList.contains("hidden")) {
+      closeModeWarning()
+    } else if (!els.mcpConfigPanel.classList.contains("hidden")) {
+      mcpConfig.close()
+    } else if (!els.sessionModal.classList.contains("hidden")) {
+      closeSessionModal()
+    }
+  }
+
+  function updateBackBtnVisibility() {
+    els.backBtn.style.display = isAnyModalOpen() ? "" : "none"
+  }
+
+  function setupSettingsMenuKeyboardNav() {
+    const items = els.settingsMenu.querySelectorAll<HTMLElement>("button, [role='menuitem']")
+    const firstItem = items[0]
+    const lastItem = items[items.length - 1]
+    els.settingsMenu.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        closeSettingsMenu()
+        els.settingsBtn.focus()
+        return
+      }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault()
+        const current = document.activeElement
+        const idx = Array.from(items).indexOf(current as HTMLElement)
+        if (idx === -1) { firstItem?.focus(); return }
+        const next = e.key === "ArrowDown"
+          ? items[Math.min(idx + 1, items.length - 1)]
+          : items[Math.max(idx - 1, 0)]
+        next?.focus()
+      }
+      if (e.key === "Home") { e.preventDefault(); firstItem?.focus() }
+      if (e.key === "End") { e.preventDefault(); lastItem?.focus() }
+    })
+  }
+
   type ThemeCustomizerConfig = {
     preset?: string
     overrides?: Record<string, string>
@@ -1811,11 +1886,19 @@ function getVsCodeApi() {
     })
 
     els.themeCustomizerSave.addEventListener("click", () => {
+      undoRedo.push({
+        themePreset: activePreset,
+        themeOverrides: collectThemeCustomizerConfig().overrides ?? {},
+      })
       vscode.postMessage({ type: "update_theme_config", theme: collectThemeCustomizerConfig() })
       closeThemeCustomizer()
     })
 
     els.themeCustomizerReset.addEventListener("click", () => {
+      undoRedo.push({
+        themePreset: activePreset,
+        themeOverrides: collectThemeCustomizerConfig().overrides ?? {},
+      })
       getThemeFields().forEach((f) => { f.input.value = "" })
       syncAllColorPickers()
       updatePreviewSwatch()
@@ -1893,15 +1976,30 @@ function getVsCodeApi() {
     set(overrides.syntaxString, "--oc-syn-string")
   }
 
+  let themeCustomizerFocusTrap: ((e: KeyboardEvent) => void) | null = null
+  let themeCustomizerLastFocus: HTMLElement | null = null
+
   function openThemeCustomizer() {
     els.themeCustomizerPanel.classList.remove("hidden")
+    updateBackBtnVisibility()
     vscode.postMessage({ type: "get_theme_config" })
+    themeCustomizerLastFocus = document.activeElement as HTMLElement | null
+    themeCustomizerFocusTrap = trapModalFocus(els.themeCustomizerPanel)
+    document.addEventListener("keydown", themeCustomizerFocusTrap)
     els.themePresetCards.querySelector<HTMLButtonElement>("[data-preset]")?.focus()
   }
 
   function closeThemeCustomizer() {
     els.themeCustomizerPanel.classList.add("hidden")
-    els.themeCustomizerBtn.focus()
+    if (themeCustomizerFocusTrap) {
+      document.removeEventListener("keydown", themeCustomizerFocusTrap)
+      themeCustomizerFocusTrap = null
+    }
+    if (themeCustomizerLastFocus) {
+      themeCustomizerLastFocus.focus({ preventScroll: true })
+      themeCustomizerLastFocus = null
+    }
+    updateBackBtnVisibility()
   }
 
   function collectThemeCustomizerConfig(): ThemeCustomizerConfig {

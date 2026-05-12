@@ -478,3 +478,29 @@ void it("pushes rate-limit state to the webview for the quota bar", () => {
   assert.ok(statePushSource.includes('type: "rate_limit_state"'), "must post rate_limit_state messages")
   assert.ok(source.includes("getSerializableState"), "must serialize rate-limit state before posting")
 })
+
+// ── sessions_recovered: server session recovery after startup ────────────────
+// After the server recovers persisted sessions, the webview must be told to
+// re-render with the now-populated session list. The handler lives in
+// serverEventHandlers and resets restoredTabsHydrated so the next
+// pushInitStateToWebview re-reads persisted tab IDs from globalState.
+
+void it("sessions_recovered handler exists in serverEventHandlers", () => {
+  assert.ok(source.includes('["sessions_recovered"'), "serverEventHandlers must have a sessions_recovered entry")
+})
+
+void it("sessions_recovered resets restoredTabsHydrated and calls pushInitStateToWebview", () => {
+  const handlerIdx = source.indexOf('["sessions_recovered"')
+  assert.ok(handlerIdx >= 0, "sessions_recovered handler must exist")
+  const handleServerIdx = source.indexOf("private handleServerEvent(", handlerIdx)
+  assert.ok(handleServerIdx > handlerIdx, "handleServerEvent must follow sessions_recovered handler")
+  const block = source.slice(handlerIdx, handleServerIdx)
+  assert.ok(
+    block.includes("restoredTabsHydrated = false"),
+    "must reset restoredTabsHydrated so the next pushInitStateToWebview re-reads persisted tab IDs"
+  )
+  assert.ok(
+    block.includes("pushInitStateToWebview()"),
+    "must call pushInitStateToWebview to re-push init_state with recovered sessions"
+  )
+})

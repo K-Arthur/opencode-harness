@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Back button and modal focus management** — A back button appears in the header when any modal is open (model manager, theme customizer, mode warning, MCP config, session modal). All modals now have proper focus trapping (Tab/Shift+Tab cycle within) with return-focus-to-trigger-element on close. (`src/chat/webview/index.html`, `src/chat/webview/dom.ts`, `src/chat/webview/main.ts`)
+- **Settings menu keyboard navigation** — ArrowUp/Down, Home, End, and Escape navigation within the settings overflow menu. (`src/chat/webview/main.ts`)
+- **Theme customizer undo/redo snapshots** — Save and reset actions push the current theme state onto an undo stack for potential undo/redo support. (`src/chat/webview/main.ts`)
+- **`sessions_recovered` event handling** — `ChatProvider` re-pushes init state to the webview when session recovery completes, ensuring the webview reflects all restored sessions. (`src/chat/ChatProvider.ts`)
+
+### Added
 - **True High Contrast presets (`high-contrast-dark` / `high-contrast-light`)** — Replaced the fake HC preset (which was structurally identical to `cli-default`) with two fully hardcoded presets: black/white/yellow for dark HC and white/black/red-blue for light HC. Auto-resolved from `vscode.window.activeColorTheme.kind` via the new `resolveEffectivePreset()` method. Users with existing `opencode.theme.preset = "high-contrast"` settings keep working via the alias. (`src/theme/ThemeManager.ts`)
 - **Adaptive RenderQueue** — New `RenderQueue` class buffers streaming text chunks and flushes via `requestAnimationFrame` (primary) with a 50ms `setTimeout` fallback for hidden webview contexts where rAF pauses. Prevents per-chunk DOM writes from causing layout thrashing during high-token-rate streams. (`src/chat/webview/renderQueue.ts`)
 - **Webview heartbeat (`stream_ping`/`stream_ack`)** — Extension host sends a sequenced ping every 5s during active streams; webview replies with `stream_ack` including the last rendered chunk sequence. If 2+ pings are missed, `force_rerender` is sent with the full accumulated text snapshot. (`src/chat/handlers/StreamCoordinator.ts`, `src/chat/ChatProvider.ts`, `src/chat/webview/main.ts`)
