@@ -71,6 +71,8 @@ export interface ElementRefs {
   contextUsage: HTMLDivElement
   contextProgressBar: HTMLElement
   contextLabel: HTMLSpanElement
+  contextUsagePanel: HTMLElement
+  closeContextUsageBtn: HTMLButtonElement
   
   welcomeRecentSessions: HTMLDivElement | null
   welcomeModelCtx: HTMLSpanElement | null
@@ -204,6 +206,8 @@ export function getElementRefs(): ElementRefs {
     contextUsage: requireElement<HTMLDivElement>("context-usage"),
     contextProgressBar: requireElement("context-progress-bar"),
     contextLabel: requireElement<HTMLSpanElement>("context-label"),
+    contextUsagePanel: requireElement("context-usage-panel"),
+    closeContextUsageBtn: requireElement<HTMLButtonElement>("close-context-usage-btn"),
     
     welcomeRecentSessions: optionalElement<HTMLDivElement>("welcome-recent-sessions"),
     welcomeModelCtx: optionalElement<HTMLSpanElement>("welcome-model-ctx"),

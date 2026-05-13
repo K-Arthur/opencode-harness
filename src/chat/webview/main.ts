@@ -15,8 +15,9 @@ import type { McpServerInfo } from "../../mcp/McpServerManager"
 import { REMOVE_SVG } from "./icons"
 import { createPromptQueue, type PromptQueue, type QueueItem } from "./queue"
 import { updateContextChips, updateContextUsage, applyThemeVars, handleRateLimitExhausted } from "./theme"
+import { setupContextUsagePanel, setContextUsagePanel } from "./context-usage-panel"
 import { renderRecentSessions } from "./recent-sessions"
-import { renderUnifiedSessionList, setUnifiedServerSessions, setUnifiedLocalSessions } from "./sessionListRenderer"
+import { renderUnifiedSessionList, setSessionListPostMessage, setUnifiedServerSessions, setUnifiedLocalSessions } from "./sessionListRenderer"
 import { createScrollAnchor, type ScrollAnchor } from "./scrollAnchor"
 import { createChunkedLoader, prependMessagesPreservingScroll, createLoadEarlierBanner, throttleScrollMarkers } from "./messageLoader"
 import { createVirtualList, getVirtualList, disposeVirtualList } from "./virtualList"
@@ -248,18 +249,20 @@ function getVsCodeApi() {
       setupButtons()
       setupThemeCustomizer()
       setupSessionModal()
+      setupContextUsagePanel()
       setupWelcomeSuggestions()
       setupWelcomeActions()
       setupMessageListener()
       setupPermissionListener()
       setupDiffActionListener()
       setupSearch()
- 	      setupTimelineToggle()
+      setupTimelineToggle()
       setupDisplayToggles()
       setupToolKeyboardNav()
       setupSettingsMenuKeyboardNav()
       updateSendButton()
       setVsCodeApi(vscode)
+      setSessionListPostMessage((msg) => vscode.postMessage(msg as Record<string, unknown>))
 
       // Show welcome view by default — no session created until user sends a message
       showWelcomeView()
@@ -316,6 +319,49 @@ function getVsCodeApi() {
         vscode.postMessage({ type: "resume_session", sessionId: mostRecent.id })
       }
     })
+
+    // Search toggle handler
+    const searchToggle = document.getElementById("welcome-search-toggle") as HTMLButtonElement | null
+    const searchInput = document.getElementById("welcome-search-input") as HTMLInputElement | null
+    if (searchToggle && searchInput) {
+      searchToggle.addEventListener("click", () => {
+        const isHidden = searchInput.classList.contains("hidden")
+        if (isHidden) {
+          searchInput.classList.remove("hidden")
+          searchToggle.setAttribute("aria-expanded", "true")
+        } else {
+          searchInput.classList.add("hidden")
+          searchToggle.setAttribute("aria-expanded", "false")
+        }
+      })
+    }
+
+    // Settings toggle handler
+    const settingsToggle = document.getElementById("settings-toggle") as HTMLButtonElement | null
+    const settingsPanel = document.getElementById("settings-panel") as HTMLElement | null
+    if (settingsToggle && settingsPanel) {
+      settingsToggle.addEventListener("click", () => {
+        const isHidden = settingsPanel.classList.contains("hidden")
+        if (isHidden) {
+          settingsPanel.classList.remove("hidden")
+          settingsToggle.setAttribute("aria-expanded", "true")
+        } else {
+          settingsPanel.classList.add("hidden")
+          settingsToggle.setAttribute("aria-expanded", "false")
+        }
+      })
+    }
+
+    // Time-based greeting
+    const greetingEl = document.getElementById("welcome-greeting") as HTMLElement | null
+    if (greetingEl) {
+      const hour = new Date().getHours()
+      let greeting = "Good morning"
+      if (hour >= 12 && hour < 18) greeting = "Good afternoon"
+      else if (hour >= 18) greeting = "Good evening"
+      greetingEl.textContent = greeting
+      greetingEl.style.display = "block"
+    }
   }
 
   function renderWelcomeContext() {
@@ -373,6 +419,15 @@ function getVsCodeApi() {
       if (e.key === "Escape" && !els.sessionModal.classList.contains("hidden")) {
         closeSessionModal()
       }
+    })
+  }
+
+  function setupContextUsagePanel() {
+    setContextUsagePanel(els.contextUsagePanel)
+    
+    // Close button
+    els.closeContextUsageBtn.addEventListener("click", () => {
+      els.contextUsagePanel.classList.add("hidden")
     })
   }
 
