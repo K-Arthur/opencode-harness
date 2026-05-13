@@ -1,49 +1,21 @@
 import { test, expect, type Page } from '@playwright/test'
-
-declare global {
-  interface Window {
-    __vscodeMessages: Record<string, unknown>[]
-    __vscodeState: unknown
-    acquireVsCodeApi: () => {
-      postMessage(message: Record<string, unknown>): void
-      getState(): unknown
-      setState(state: unknown): void
-    }
-  }
-}
-
-async function installVsCodeApi(page: Page) {
-  await page.addInitScript(() => {
-    window.__vscodeMessages = []
-    window.__vscodeState = undefined
-    window.acquireVsCodeApi = () => ({
-      postMessage(message: Record<string, unknown>) {
-        window.__vscodeMessages.push(JSON.parse(JSON.stringify(message)))
-      },
-      getState() {
-        return window.__vscodeState
-      },
-      setState(state: unknown) {
-        window.__vscodeState = JSON.parse(JSON.stringify(state))
-      },
-    })
-  })
-}
-
-async function postedMessages(page: Page) {
-  return page.evaluate(() => window.__vscodeMessages)
-}
-
-async function dispatchHostMessage(page: Page, message: Record<string, unknown>) {
-  await page.evaluate((msg) => {
-    window.dispatchEvent(new MessageEvent('message', { data: msg }))
-  }, message)
-}
+import {
+  installVsCodeApi,
+  postedMessages,
+  dispatchHostMessage,
+  expectNoWebviewErrors,
+  captureErrors,
+  expectNoBrowserErrors,
+} from './webviewTestHarness'
 
 test.describe('Webview host contract', () => {
   test.beforeEach(async ({ page }) => {
     await installVsCodeApi(page)
     await page.goto('/')
+  })
+
+  test.afterEach(async ({ page }) => {
+    await expectNoWebviewErrors(page)
   })
 
   test('announces readiness so the host can push initial state', async ({ page }) => {

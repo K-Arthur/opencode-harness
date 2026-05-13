@@ -160,6 +160,12 @@
   animation: thinking-pulse 3s ease-in-out infinite;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .thinking-block:not([open]) {
+    animation: none;
+  }
+}
+
 .thinking-block:hover {
   background: var(--oc-warning-subtle);
   border-left-color: var(--color-accent);

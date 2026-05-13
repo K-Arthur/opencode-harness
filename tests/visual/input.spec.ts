@@ -1,8 +1,14 @@
 import { test, expect } from '@playwright/test'
+import { installVsCodeApi, expectNoWebviewErrors } from './webviewTestHarness'
 
 test.describe('Input Area', () => {
   test.beforeEach(async ({ page }) => {
+    await installVsCodeApi(page)
     await page.goto('/')
+  })
+
+  test.afterEach(async ({ page }) => {
+    await expectNoWebviewErrors(page)
   })
 
   test('should display input area with textarea', async ({ page }) => {

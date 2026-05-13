@@ -1,12 +1,6 @@
 import { getElementRefs } from "./dom"
 import { REMOVE_SVG } from "./icons"
 
-declare const acquireVsCodeApi: (() => {
-  postMessage: (msg: unknown) => void
-  getState: () => unknown
-  setState: (state: unknown) => void
-}) | undefined
-
 export type ServerSessionEntry = {
   id: string; title?: string; directory?: string; parentId?: string;
   created?: number; updated?: number; files?: number; additions?: number;
@@ -17,6 +11,11 @@ type LocalSessionEntry = { id: string; cliSessionId?: string; title?: string; me
 
 let _unifiedServerSessions: ServerSessionEntry[] | null = null
 let _unifiedLocalSessions: LocalSessionEntry[] = []
+let _postMessage: (msg: unknown) => void = () => {}
+
+export function setSessionListPostMessage(postMessage: (msg: unknown) => void) {
+  _postMessage = postMessage
+}
 
 export function setUnifiedServerSessions(sessions: ServerSessionEntry[] | null) {
   _unifiedServerSessions = sessions
@@ -106,21 +105,20 @@ function createSessionRowActions(
 ): HTMLDivElement {
   const actions = document.createElement("div")
   actions.className = "modal-session-actions"
-  const _vscode = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : { postMessage: () => {} }
 
   row.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest(".modal-session-actions")) return
     const els = getElementRefs()
     els.sessionModal.classList.add("hidden")
     if (item.type === "remote" && item.serverId) {
-      _vscode.postMessage({
+      _postMessage({
         type: "resume_server_session",
         serverSessionId: item.serverId,
         title: item.title,
         directory: item.directory,
       })
     } else if (item.localId) {
-      _vscode.postMessage({ type: "resume_session", sessionId: item.localId })
+      _postMessage({ type: "resume_session", sessionId: item.localId })
     }
   })
 
@@ -132,7 +130,7 @@ function createSessionRowActions(
     archiveBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>'
     archiveBtn.addEventListener("click", (e) => {
       e.stopPropagation()
-      _vscode.postMessage({ type: "archive_session", targetSessionId: item.localId })
+      _postMessage({ type: "archive_session", targetSessionId: item.localId })
       row.remove()
     })
     actions.appendChild(archiveBtn)
@@ -146,9 +144,9 @@ function createSessionRowActions(
   deleteBtn.addEventListener("click", (e) => {
     e.stopPropagation()
     if (item.serverId) {
-      _vscode.postMessage({ type: "delete_server_session", serverSessionId: item.serverId })
+      _postMessage({ type: "delete_server_session", serverSessionId: item.serverId })
     } else if (item.localId) {
-      _vscode.postMessage({ type: "delete_session", targetSessionId: item.localId })
+      _postMessage({ type: "delete_session", targetSessionId: item.localId })
     }
     row.remove()
   })

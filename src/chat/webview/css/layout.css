@@ -360,8 +360,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--size-icon-sm);
-  height: var(--size-icon-sm);
+  width: var(--size-target-comfortable);
+  height: var(--size-target-comfortable);
   border-radius: var(--radius-sm);
   font-size: var(--text-md);
   line-height: 1;
@@ -369,8 +369,14 @@
   transition: opacity var(--duration-fast), background var(--duration-fast), color var(--duration-fast);
   color: var(--color-muted);
   margin-left: var(--space-0-5);
-  min-width: var(--size-icon-sm);
-  min-height: var(--size-icon-sm);
+  min-width: var(--size-target-min);
+  min-height: var(--size-target-min);
+  padding: 0;
+}
+
+.tab-btn .tab-close svg {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
 }
 
 .tab-btn:hover .tab-close,
@@ -899,31 +905,10 @@
 
 /* ─── INSTRUCTIONS GEAR BUTTON & EDITOR ─── */
 
-.instructions-gear-btn {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid var(--vscode-input-border, transparent);
-  border-radius: 4px;
-  background: transparent;
-  color: var(--vscode-foreground);
-  cursor: pointer;
-  opacity: 0.7;
-  transition: opacity 0.15s;
-  flex-shrink: 0;
-}
-
-.instructions-gear-btn:hover,
 .instructions-gear-btn[aria-expanded="true"] {
+  color: var(--color-accent);
+  background: var(--oc-accent-subtle);
   opacity: 1;
-  background: var(--vscode-toolbar-hoverBackground, rgba(127,127,127,0.1));
-}
-
-.instructions-gear-btn[aria-expanded="true"] {
-  color: var(--vscode-focusBorder, #007acc);
 }
 
 .instructions-editor {
@@ -931,15 +916,17 @@
   bottom: calc(100% + 8px);
   right: 0;
   width: 320px;
-  background: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border, rgba(127,127,127,0.3));
-  border-radius: 6px;
-  padding: 10px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-  z-index: 100;
+  background: var(--oc-glass-bg);
+  backdrop-filter: var(--oc-glass-blur);
+  -webkit-backdrop-filter: var(--oc-glass-blur);
+  border: 1px solid var(--oc-glass-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-mission);
+  z-index: var(--z-dropdown, 100);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .instructions-editor.hidden {
@@ -947,59 +934,34 @@
 }
 
 .instructions-editor-label {
-  font-size: 11px;
-  color: var(--vscode-descriptionForeground);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  font-weight: 500;
 }
 
 .instructions-textarea {
   width: 100%;
   box-sizing: border-box;
-  background: var(--vscode-input-background);
-  color: var(--vscode-input-foreground);
-  border: 1px solid var(--vscode-input-border, rgba(127,127,127,0.3));
-  border-radius: 3px;
-  padding: 6px;
-  font-size: 12px;
-  font-family: var(--vscode-font-family);
+  background: var(--oc-editor-bg);
+  color: var(--oc-fg);
+  border: 1px solid var(--oc-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+  font-size: var(--text-sm);
+  font-family: inherit;
   resize: vertical;
+  transition: border-color var(--duration-fast) var(--ease-out);
 }
 
 .instructions-textarea:focus {
-  outline: 1px solid var(--vscode-focusBorder);
-  border-color: var(--vscode-focusBorder);
+  outline: none;
+  border-color: var(--oc-accent);
 }
 
 .instructions-editor-actions {
   display: flex;
-  gap: 6px;
+  gap: var(--space-2);
   justify-content: flex-end;
-}
-
-.instructions-save-btn,
-.instructions-cancel-btn {
-  font-size: 11px;
-  padding: 3px 10px;
-  border-radius: 3px;
-  cursor: pointer;
-  border: 1px solid var(--vscode-button-border, transparent);
-}
-
-.instructions-save-btn {
-  background: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
-}
-
-.instructions-save-btn:hover {
-  background: var(--vscode-button-hoverBackground);
-}
-
-.instructions-cancel-btn {
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
-}
-
-.instructions-cancel-btn:hover {
-  background: var(--vscode-button-secondaryHoverBackground);
 }
 
 /* ─── SEND BUTTON ─── */

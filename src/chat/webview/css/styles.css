@@ -1,12 +1,17 @@
 /* ═══════════════════════════════════════════════════════════════
-   OpenCode Chat Webview Styles — Entry Point
+   OpenCode Webview Styles
    ═══════════════════════════════════════════════════════════════ */
 
-@import "./tokens.css";
-@import "./base.css";
-@import "./accessibility.css";
-@import "./animations.css";
-@import "./layout.css";
-@import "./components.css";
-@import "./messages.css";
+@import url("./tokens.css");
+@import url("./base.css");
+@import url("./layout.css");
+@import url("./components.css");
+@import url("./messages.css");
+@import url("./messages-responsive.css");
+@import url("./welcome.css");
+@import url("./blocks.css");
+@import url("./animations.css");
+@import url("./accessibility.css");
+@import url("./queue-panel.css");
+@import url("./context-usage.css");
 @import "./blocks.css";

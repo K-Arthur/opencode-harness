@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { installVsCodeApi, expectNoWebviewErrors } from './webviewTestHarness'
 
 async function mountMessageList(page: Page) {
   await page.evaluate(() => {
@@ -17,10 +18,15 @@ async function mountMessageList(page: Page) {
   })
 }
 
-test.describe('Messages', () => {
+test.describe('Chat Messages', () => {
   test.beforeEach(async ({ page }) => {
+    await installVsCodeApi(page)
     await page.goto('/')
     await mountMessageList(page)
+  })
+
+  test.afterEach(async ({ page }) => {
+    await expectNoWebviewErrors(page)
   })
 
   test('should display user message correctly', async ({ page }) => {
@@ -123,5 +129,170 @@ test.describe('Messages', () => {
     expect(assistantBox).not.toBeNull()
     expect(assistantBox!.y).toBeGreaterThan(userBox!.y + userBox!.height)
     expect(overflow).toBeLessThanOrEqual(1)
+  })
+
+  test.describe('Responsive Design', () => {
+    test('should display correctly at narrow width (280px)', async ({ page }) => {
+      await page.setViewportSize({ width: 280, height: 600 })
+      
+      await page.evaluate(() => {
+        const msgList = document.querySelector('.message-list')
+        if (!msgList) return
+        
+        const userMsg = document.createElement('div')
+        userMsg.className = 'message user'
+        userMsg.innerHTML = `
+          <div class="message-content">
+            <div class="message-header"><span class="message-role">You</span></div>
+            <div class="message-bubble"><div class="msg-text">Hello</div></div>
+          </div>
+        `
+        msgList.appendChild(userMsg)
+      })
+      
+      const messageList = page.locator('.message-list')
+      await expect(messageList).toBeVisible()
+      
+      const userBubble = page.locator('.message.user .message-bubble').first()
+      await expect(userBubble).toBeVisible()
+      
+      // Verify no horizontal scroll
+      const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
+      const clientWidth = await page.evaluate(() => document.body.clientWidth)
+      expect(scrollWidth).toBe(clientWidth)
+    })
+
+    test('should display correctly at medium width (400px)', async ({ page }) => {
+      await page.setViewportSize({ width: 400, height: 600 })
+      
+      await page.evaluate(() => {
+        const msgList = document.querySelector('.message-list')
+        if (!msgList) return
+        
+        const userMsg = document.createElement('div')
+        userMsg.className = 'message user'
+        userMsg.innerHTML = `
+          <div class="message-content">
+            <div class="message-header"><span class="message-role">You</span></div>
+            <div class="message-bubble"><div class="msg-text">Hello</div></div>
+          </div>
+        `
+        msgList.appendChild(userMsg)
+      })
+      
+      const messageList = page.locator('.message-list')
+      await expect(messageList).toBeVisible()
+      
+      const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
+      const clientWidth = await page.evaluate(() => document.body.clientWidth)
+      expect(scrollWidth).toBe(clientWidth)
+    })
+
+    test('should display correctly at wide width (600px)', async ({ page }) => {
+      await page.setViewportSize({ width: 600, height: 600 })
+      
+      await page.evaluate(() => {
+        const msgList = document.querySelector('.message-list')
+        if (!msgList) return
+        
+        const userMsg = document.createElement('div')
+        userMsg.className = 'message user'
+        userMsg.innerHTML = `
+          <div class="message-content">
+            <div class="message-header"><span class="message-role">You</span></div>
+            <div class="message-bubble"><div class="msg-text">Hello</div></div>
+          </div>
+        `
+        msgList.appendChild(userMsg)
+      })
+      
+      const messageList = page.locator('.message-list')
+      await expect(messageList).toBeVisible()
+      
+      const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
+      const clientWidth = await page.evaluate(() => document.body.clientWidth)
+      expect(scrollWidth).toBe(clientWidth)
+    })
+
+    test('should have no horizontal scroll at any width', async ({ page }) => {
+      await page.evaluate(() => {
+        const msgList = document.querySelector('.message-list')
+        if (!msgList) return
+        
+        const userMsg = document.createElement('div')
+        userMsg.className = 'message user'
+        userMsg.innerHTML = `
+          <div class="message-content">
+            <div class="message-header"><span class="message-role">You</span></div>
+            <div class="message-bubble"><div class="msg-text">Hello</div></div>
+          </div>
+        `
+        msgList.appendChild(userMsg)
+      })
+      
+      const widths = [280, 320, 400, 500, 600, 800, 1000]
+      
+      for (const width of widths) {
+        await page.setViewportSize({ width, height: 600 })
+        const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
+        const clientWidth = await page.evaluate(() => document.body.clientWidth)
+        expect(scrollWidth).toBe(clientWidth)
+      }
+    })
+
+    test('should adapt message bubble width based on viewport', async ({ page }) => {
+      await page.evaluate(() => {
+        const msgList = document.querySelector('.message-list')
+        if (!msgList) return
+        
+        const userMsg = document.createElement('div')
+        userMsg.className = 'message user'
+        userMsg.innerHTML = `
+          <div class="message-content">
+            <div class="message-header"><span class="message-role">You</span></div>
+            <div class="message-bubble"><div class="msg-text">Hello</div></div>
+          </div>
+        `
+        msgList.appendChild(userMsg)
+      })
+      
+      const userBubble = page.locator('.message.user .message-bubble').first()
+      
+      await page.setViewportSize({ width: 280, height: 600 })
+      const narrowWidth = await userBubble.evaluate((el: HTMLElement) => el.offsetWidth)
+      
+      await page.setViewportSize({ width: 600, height: 600 })
+      const wideWidth = await userBubble.evaluate((el: HTMLElement) => el.offsetWidth)
+      
+      expect(wideWidth).toBeGreaterThan(narrowWidth)
+    })
+
+    test('should hide token badge on narrow viewports', async ({ page }) => {
+      await page.evaluate(() => {
+        const msgList = document.querySelector('.message-list')
+        if (!msgList) return
+        
+        const userMsg = document.createElement('div')
+        userMsg.className = 'message user'
+        userMsg.innerHTML = `
+          <div class="message-content">
+            <div class="message-header">
+              <span class="message-role">You</span>
+              <span class="message-token-badge">1.2k</span>
+            </div>
+            <div class="message-bubble"><div class="msg-text">Hello</div></div>
+          </div>
+        `
+        msgList.appendChild(userMsg)
+      })
+      
+      const tokenBadge = page.locator('.message-token-badge').first()
+      
+      await page.setViewportSize({ width: 280, height: 600 })
+      await expect(tokenBadge).not.toBeVisible()
+      
+      await page.setViewportSize({ width: 600, height: 600 })
+      await expect(tokenBadge).toBeVisible()
+    })
   })
 })

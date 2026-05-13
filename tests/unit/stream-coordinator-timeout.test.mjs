@@ -109,7 +109,9 @@ describe("Stream state machine", () => {
   })
 
   it("logs state transitions with context (tabId, sessionId, modelId)", () => {
-    assert.ok(coordinatorSource.includes("log.info(`[stream:"), "must log state transitions with tabId")
+    assert.ok(coordinatorSource.includes("log.stream(`Stream state changed`"), "must log state transitions through structured stream logging")
+    assert.ok(coordinatorSource.includes("{ tabId, previous, next: state, ...context }"), "must include tabId and transition context")
+    assert.ok(coordinatorSource.includes("modelId: tab.model"), "must include modelId in transition context")
   })
 })
 

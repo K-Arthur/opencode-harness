@@ -1,6 +1,15 @@
 import { test, expect } from '@playwright/test'
+import { installVsCodeApi, expectNoWebviewErrors } from './webviewTestHarness'
 
 test.describe('Welcome Screen', () => {
+  test.beforeEach(async ({ page }) => {
+    await installVsCodeApi(page)
+  })
+
+  test.afterEach(async ({ page }) => {
+    await expectNoWebviewErrors(page)
+  })
+
   test('should display welcome screen with wordmark and heading', async ({ page }) => {
     await page.goto('/')
     
@@ -53,5 +62,151 @@ test.describe('Welcome Screen', () => {
     expect(startersBox!.y).toBeGreaterThan(welcomeBox!.y)
     expect(inputBox!.y).toBeGreaterThan(startersBox!.y)
     expect(overflow).toBeLessThanOrEqual(1)
+  })
+
+  test.describe('Responsive Design', () => {
+    test('should display correctly at narrow width (280px)', async ({ page }) => {
+      await page.goto('/')
+      await page.setViewportSize({ width: 280, height: 600 })
+      
+      const welcomeContainer = page.locator('.welcome-container')
+      await expect(welcomeContainer).toBeVisible()
+      
+      const wordmark = page.locator('.welcome-wordmark')
+      await expect(wordmark).toBeVisible()
+      
+      const greeting = page.locator('#welcome-greeting')
+      await expect(greeting).toBeVisible()
+      
+      // Verify no horizontal scroll
+      const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
+      const clientWidth = await page.evaluate(() => document.body.clientWidth)
+      expect(scrollWidth).toBe(clientWidth)
+    })
+
+    test('should display correctly at medium width (400px)', async ({ page }) => {
+      await page.goto('/')
+      await page.setViewportSize({ width: 400, height: 600 })
+      
+      const welcomeContainer = page.locator('.welcome-container')
+      await expect(welcomeContainer).toBeVisible()
+      
+      const wordmark = page.locator('.welcome-wordmark')
+      await expect(wordmark).toBeVisible()
+      
+      const greeting = page.locator('#welcome-greeting')
+      await expect(greeting).toBeVisible()
+      
+      // Verify no horizontal scroll
+      const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
+      const clientWidth = await page.evaluate(() => document.body.clientWidth)
+      expect(scrollWidth).toBe(clientWidth)
+    })
+
+    test('should display correctly at wide width (600px)', async ({ page }) => {
+      await page.goto('/')
+      await page.setViewportSize({ width: 600, height: 600 })
+      
+      const welcomeContainer = page.locator('.welcome-container')
+      await expect(welcomeContainer).toBeVisible()
+      
+      const wordmark = page.locator('.welcome-wordmark')
+      await expect(wordmark).toBeVisible()
+      
+      const greeting = page.locator('#welcome-greeting')
+      await expect(greeting).toBeVisible()
+      
+      const keyboardHint = page.locator('#keyboard-hint')
+      await expect(keyboardHint).toBeVisible()
+      
+      // Verify no horizontal scroll
+      const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
+      const clientWidth = await page.evaluate(() => document.body.clientWidth)
+      expect(scrollWidth).toBe(clientWidth)
+    })
+
+    test('should have no horizontal scroll at any width', async ({ page }) => {
+      await page.goto('/')
+      const widths = [280, 320, 400, 500, 600, 800, 1000]
+      
+      for (const width of widths) {
+        await page.setViewportSize({ width, height: 600 })
+        const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
+        const clientWidth = await page.evaluate(() => document.body.clientWidth)
+        expect(scrollWidth).toBe(clientWidth)
+      }
+    })
+
+    test('should collapse non-essential elements on short height', async ({ page }) => {
+      await page.goto('/')
+      await page.setViewportSize({ width: 400, height: 300 })
+      
+      const welcomeContainer = page.locator('.welcome-container')
+      await expect(welcomeContainer).toHaveClass(/welcome-short/)
+      
+      // Tagline should be hidden on short height
+      const tagline = page.locator('.welcome-tagline')
+      await expect(tagline).not.toBeVisible()
+      
+      // Keyboard hint should be hidden on short height
+      const keyboardHint = page.locator('#keyboard-hint')
+      await expect(keyboardHint).not.toBeVisible()
+    })
+
+    test('search toggle should expand input', async ({ page }) => {
+      await page.goto('/')
+      await page.setViewportSize({ width: 400, height: 600 })
+      
+      const toggle = page.locator('#welcome-search-toggle')
+      const input = page.locator('#welcome-search-input')
+      
+      await expect(input).toHaveClass(/hidden/)
+      
+      await toggle.click()
+      await expect(input).not.toHaveClass(/hidden/)
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    })
+
+    test('quick settings toggle should expand panel', async ({ page }) => {
+      await page.goto('/')
+      await page.setViewportSize({ width: 400, height: 600 })
+      
+      const toggle = page.locator('#settings-toggle')
+      const panel = page.locator('#settings-panel')
+      
+      await expect(panel).toHaveClass(/hidden/)
+      
+      await toggle.click()
+      await expect(panel).not.toHaveClass(/hidden/)
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    })
+
+    test('time-based greeting should display correctly', async ({ page }) => {
+      await page.goto('/')
+      
+      const greeting = page.locator('#welcome-greeting')
+      await expect(greeting).toBeVisible()
+      const text = await greeting.textContent()
+      expect(text).toMatch(/Good (morning|afternoon|evening)/)
+    })
+
+    test('should have proper ARIA attributes for accessibility', async ({ page }) => {
+      await page.goto('/')
+      
+      const welcomeView = page.locator('#welcome-view')
+      await expect(welcomeView).toHaveAttribute('role', 'region')
+      await expect(welcomeView).toHaveAttribute('aria-label', 'OpenCode welcome')
+      
+      const searchToggle = page.locator('#welcome-search-toggle')
+      await expect(searchToggle).toHaveAttribute('aria-expanded')
+      await expect(searchToggle).toHaveAttribute('aria-controls', 'welcome-search-input')
+      
+      const settingsToggle = page.locator('#settings-toggle')
+      await expect(settingsToggle).toHaveAttribute('aria-expanded')
+      await expect(settingsToggle).toHaveAttribute('aria-controls', 'settings-panel')
+      
+      const promptStartersSection = page.locator('.prompt-starters-section')
+      await expect(promptStartersSection).toHaveAttribute('aria-label', 'Suggested prompts')
+    })
   })
 })
