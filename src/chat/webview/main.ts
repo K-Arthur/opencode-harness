@@ -378,12 +378,8 @@ function getVsCodeApi() {
     })
   }
 
-  // State for the unified session modal — holds server sessions once they arrive
-  // so renderUnifiedSessionList can merge local + server in one pass.
-  let _unifiedLocalSessions: Array<{ id: string; cliSessionId?: string; title?: string; messageCount?: number; cost?: number; time?: number }> = []
-
   function openSessionModal(sessions: Array<{ id: string; cliSessionId?: string; title?: string; messageCount?: number; cost?: number; time?: number }>) {
-    _unifiedLocalSessions = sessions
+    setUnifiedLocalSessions(sessions)
     setUnifiedServerSessions(null)
 
     const body = els.sessionModalBody
@@ -2488,6 +2484,13 @@ function getVsCodeApi() {
       ["session_list", (msg) => {
         const sessions = (msg.sessions || []) as SessionSummary[]
         openSessionModal(sessions)
+      }],
+      ["session_list_update", (msg) => {
+        const sessions = (msg.sessions || []) as SessionSummary[]
+        setUnifiedLocalSessions(sessions)
+        if (!els.sessionModal.classList.contains("hidden")) {
+          vscode.postMessage({ type: "list_server_sessions" })
+        }
       }],
       ["server_session_list", (msg) => {
         const serverSessions = msg.sessions as Array<{

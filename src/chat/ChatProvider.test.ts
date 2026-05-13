@@ -504,3 +504,25 @@ void it("sessions_recovered resets restoredTabsHydrated and calls pushInitStateT
     "must call pushInitStateToWebview to re-push init_state with recovered sessions"
   )
 })
+
+void it("sessions_recovered sends session_list_update (not session_list) to refresh webview modal data", () => {
+  const handlerIdx = source.indexOf('["sessions_recovered"')
+  assert.ok(handlerIdx >= 0, "sessions_recovered handler must exist")
+  const handleServerIdx = source.indexOf("private handleServerEvent(", handlerIdx)
+  assert.ok(handleServerIdx > handlerIdx, "handleServerEvent must follow sessions_recovered handler")
+  const block = source.slice(handlerIdx, handleServerIdx)
+  // Must use session_list_update so the webview refreshes cached data
+  // WITHOUT opening the modal (which would be a jarring side-effect).
+  assert.ok(
+    block.includes('type: "session_list_update"'),
+    "must send session_list_update to silently refresh webview session data cache"
+  )
+  assert.ok(
+    !block.includes('type: "session_list"'),
+    "must NOT send session_list (which opens the modal)"
+  )
+  assert.ok(
+    block.includes("this.sessionStore.list()"),
+    "must get current session list from store to build the update"
+  )
+})

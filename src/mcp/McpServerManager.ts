@@ -4,6 +4,92 @@ import * as path from "path"
 import * as vscode from "vscode"
 import { log } from "../utils/outputChannel"
 
+/**
+ * Condition that determines when an MCP server's tools should be available.
+ * All specified conditions must match for the server to be active.
+ */
+export interface McpServerWhenCondition {
+  /**
+   * Provider IDs to match against (e.g. ["anthropic", "google", "openai"])
+   * Matches the providerID portion of modelRef (e.g. "anthropic" from "anthropic/claude-sonnet-4")
+   */
+  provider?: string[]
+  /**
+   * Model ID patterns to match against.
+   * Supports glob patterns: "*" matches any characters, "?" matches a single character.
+   * Examples: ["claude-*-vision", "gemini-*", "gpt-4*"]
+   * Matches the modelID portion of modelRef (e.g. "claude-sonnet-4" from "anthropic/claude-sonnet-4")
+   */
+  model?: string[]
+}
+
+/**
+ * Helper to convert an array of glob-style patterns to a RegExp.
+ * Supports simple glob patterns: "*" becomes ".*", "?" becomes ".".
+ * Other regex special characters are escaped.
+ * If patterns is empty or undefined, always matches.
+ *
+ * @example
+ * patternsToRegex(["claude-*-vision", "gemini-*"])
+ * // → /^(?:claude-.*-vision|gemini-.*)$/i
+ */
+function patternsToRegex(patterns: string[] | undefined): RegExp | null {
+  if (!patterns || patterns.length === 0) return null
+
+  const escapeRegex = (s: string): string =>
+    s
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&") // escape real regex chars first
+      .replace(/\\\*/g, ".*") // unescaped * (now \\*) becomes .*
+      .replace(/\\\?/g, ".") // unescaped ? (now \\?) becomes .
+
+  const joined = patterns.map(escapeRegex).join("|")
+  return new RegExp(`^(?:${joined})$`, "i")
+}
+
+/**
+ * Check if a string matches any of the given glob-style patterns.
+ * If patterns is empty/undefined, returns true (no filter = always match).
+ */
+function matchesPatterns(value: string, patterns: string[] | undefined): boolean {
+  const regex = patternsToRegex(patterns)
+  if (!regex) return true
+  return regex.test(value)
+}
+
+/**
+ * Check whether an MCP server should be enabled for a given model.
+ * Evaluates the server's `when` condition against the current model's provider and ID.
+ *
+ * @param config - The MCP server configuration (may include a `when` condition)
+ * @param modelProviderID - The current model's provider ID (e.g. "anthropic")
+ * @param modelID - The current model's ID (e.g. "claude-sonnet-4")
+ * @returns true if the server should be enabled for this model
+ */
+function isEnabledForModel(
+  config: McpServerConfig,
+  modelProviderID: string,
+  modelID: string,
+): boolean {
+  const condition = config.when
+  if (!condition) return true // no condition = always available
+
+  // Check provider match (if specified)
+  if (condition.provider && condition.provider.length > 0) {
+    if (!condition.provider.includes(modelProviderID)) {
+      return false
+    }
+  }
+
+  // Check model pattern match (if specified)
+  if (condition.model && condition.model.length > 0) {
+    if (!matchesPatterns(modelID, condition.model)) {
+      return false
+    }
+  }
+
+  return true
+}
+
 export interface McpServerConfig {
   type?: string
   command?: string
@@ -13,6 +99,25 @@ export interface McpServerConfig {
   enabled?: boolean
   url?: string
   headers?: Record<string, string>
+  /**
+   * Condition that determines when this server's tools should be available.
+   * If undefined, the server is always available (subject to disabled/enabled).
+   *
+   * Example opencode.json:
+   * {
+   *   "mcp": {
+   *     "vision-server": {
+   *       "type": "remote",
+   *       "url": "https://mcp.example.com",
+   *       "when": {
+   *         "provider": ["anthropic", "google"],
+   *         "model": ["*vision*", "gemini-*"]
+   *       }
+   *     }
+   *   }
+   * }
+   */
+  when?: McpServerWhenCondition
   [key: string]: unknown
 }
 
@@ -119,6 +224,83 @@ this.loadServers()
       info.status = status
       if (tools) info.tools = tools
     }
+  }
+
+  /**
+   * Check if a specific MCP server should be enabled for the given model.
+   */
+  isServerEnabledForModel(
+    serverName: string,
+    modelProviderID: string,
+    modelID: string,
+  ): boolean {
+    const info = this.servers.get(serverName)
+    if (!info) return false
+    return isEnabledForModel(info.config, modelProviderID, modelID)
+  }
+
+  /**
+   * Get a filtered map of tools that should be available for the given model.
+   * Takes the current tools map and disables any tools that come from MCP servers
+   * whose `when` conditions don't match the current model.
+   *
+   * @param modelProviderID - The current model's provider ID (e.g. "anthropic")
+   * @param modelID - The current model's ID (e.g. "claude-sonnet-4")
+   * @param allTools - The current tools map (tool name → enabled/disabled)
+   * @returns A new tools map with non-matching server tools disabled
+   */
+  getFilteredTools(
+    modelProviderID: string,
+    modelID: string,
+    allTools: Record<string, boolean>,
+  ): Record<string, boolean> {
+    const result: Record<string, boolean> = {}
+
+    // Determine which servers are enabled for this model
+    const disabledServers = new Set<string>()
+    for (const [name] of this.servers) {
+      if (!this.isServerEnabledForModel(name, modelProviderID, modelID)) {
+        disabledServers.add(name)
+      }
+    }
+
+    // Copy all tool settings but disable tools from non-matching servers
+    // MCP tools are typically prefixed with "serverName_" by the opencode server
+    for (const [toolName, enabled] of Object.entries(allTools)) {
+      let toolEnabled = enabled
+      if (toolEnabled) {
+        // Only check prefix if the tool is currently enabled
+        for (const serverName of disabledServers) {
+          const prefix = serverName.replace(/[^a-zA-Z0-9_-]/g, "_") + "_"
+          if (toolName === serverName || toolName.startsWith(prefix)) {
+            toolEnabled = false
+            break
+          }
+        }
+      }
+      result[toolName] = toolEnabled
+    }
+
+    return result
+  }
+
+  /**
+   * Get a list of all MCP servers, annotated with whether they're enabled
+   * for the current model (based on their `when` condition).
+   * Useful for UI display.
+   */
+  getServersForModel(
+    modelProviderID: string,
+    modelID: string,
+  ): Array<McpServerInfo & { enabledForModel: boolean }> {
+    return Array.from(this.servers.values()).map((info) => ({
+      ...info,
+      enabledForModel: this.isServerEnabledForModel(
+        info.name,
+        modelProviderID,
+        modelID,
+      ),
+    }))
   }
 
   private getAllServerConfigs(): Record<string, McpServerConfig> {

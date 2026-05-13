@@ -589,6 +589,24 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       log.info("sessions_recovered: re-pushing init state with recovered sessions")
       this.restoredTabsHydrated = false
       this.pushInitStateToWebview()
+      // Signal the webview to refresh its Session History modal so
+      // newly-imported CLI sessions appear without the user having to
+      // close and re-open the modal, and without opening the modal
+      // (session_list_update silently refreshes the cache, unlike
+      // session_list which calls openSessionModal).
+      const all = this.sessionStore.list()
+      this.postMessage({
+        type: "session_list_update",
+        sessions: all.map((s: any) => ({
+          id: s.id,
+          cliSessionId: s.cliSessionId,
+          title: SessionStore.displayName(s),
+          time: s.lastActiveAt,
+          messageCount: s.messages.length,
+          cost: s.cost || 0,
+          workspacePath: s.workspacePath,
+        })),
+      })
     }],
   ])
 
@@ -820,7 +838,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     // H3: Buffer messages if webview isn't ready yet.
     // Allow init_state, theme_vars, model_update, and model_list through
     // so the webview is fully initialized on first load.
-    const passthrough = ["init_state", "theme_vars", "theme_config", "rate_limit_state", "model_update", "model_list", "webview_ready"]
+    const passthrough = ["init_state", "theme_vars", "theme_config", "rate_limit_state", "model_update", "model_list", "webview_ready", "session_list_update"]
     if (!this.eventRouter.webviewReady && !passthrough.includes(msg.type as string)) {
       this.eventRouter.earlyMessageQueue.push(msg)
       return

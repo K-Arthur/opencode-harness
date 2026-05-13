@@ -20,6 +20,7 @@ import { createSdkEventNormalizer } from "./EventNormalizer"
 import type { SdkEventLike } from "./types"
 import { SseEventParser, type SseParseResult } from "./sseParser"
 import { IdleWatchdog } from "./IdleWatchdog"
+import { McpServerManager } from "../mcp/McpServerManager"
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -118,6 +119,9 @@ export class SessionManager {
   /** Running count of SSE frames that had non-data fields but no `data:` line — observability metric for SSE keep-alive misconfig. Reset on reconnect (when normalizer is reset). */
   private droppedNonDataFrameCount = 0
 
+  /** MCP server manager for conditional tool routing */
+  private mcpServerManager: McpServerManager | null = null
+
   /** Current model selection – sent per-prompt via the SDK. */
   private currentModel: ModelRef | null = null
 
@@ -132,6 +136,10 @@ export class SessionManager {
 
   /** Per-run server password — generated on start, never persisted */
   private serverPassword = ""
+
+  constructor(mcpServerManager?: McpServerManager) {
+    this.mcpServerManager = mcpServerManager ?? null
+  }
 
   /** Set a previously stored port to attempt reuse before spawning a new server */
   setStoredPort(port?: number): void {
@@ -1018,6 +1026,23 @@ async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part
    * The model is set **per-prompt** (not as a CLI flag), which allows
    * switching models without restarting the server.
    */
+  /**
+   * Filter tools based on the current model's MCP server `when` conditions.
+   */
+  private filterToolsForModel(
+    tools: Record<string, boolean> | undefined,
+    modelRef: ModelRef | null | undefined
+  ): Record<string, boolean> | undefined {
+    if (!tools || !this.mcpServerManager || !modelRef) {
+      return tools
+    }
+    return this.mcpServerManager.getFilteredTools(
+      modelRef.providerID,
+      modelRef.modelID,
+      tools
+    )
+  }
+
   async sendPrompt(
     sessionId: string,
     parts: (TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput)[],
@@ -1028,8 +1053,9 @@ async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part
 
     const modelRef = options?.model ?? this.currentModel ?? undefined
     const variant = options?.variant
+    const filteredTools = this.filterToolsForModel(options?.tools, modelRef)
     const idempotencyKey = `${sessionId}-${randomUUID()}`
-    log.info(`Sending prompt to session ${sessionId} (idempotency: ${idempotencyKey.slice(0, 16)}..., model=${modelRef ? `${modelRef.providerID}/${modelRef.modelID}` : "default"}, variant=${variant ?? "none"}, tools=${JSON.stringify(options?.tools ?? {})})`)
+    log.info(`Sending prompt to session ${sessionId} (idempotency: ${idempotencyKey.slice(0, 16)}..., model=${modelRef ? `${modelRef.providerID}/${modelRef.modelID}` : "default"}, variant=${variant ?? "none"}, tools=${JSON.stringify(options?.tools ?? {})}, filteredTools=${JSON.stringify(filteredTools ?? {})})`)
 
     const resp = await this.client.session.prompt({
       path: { id: sessionId },
@@ -1040,7 +1066,7 @@ async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part
         parts,
         ...(modelRef ? { model: modelRef } : {}),
         ...(variant ? { variant } : {}),
-        ...(options?.tools ? { tools: options.tools } : {}),
+        ...(filteredTools ? { tools: filteredTools } : {}),
       },
     })
 
@@ -1072,9 +1098,10 @@ async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part
 
     const modelRef = options?.model ?? this.currentModel ?? undefined
     const variant = options?.variant
+    const filteredTools = this.filterToolsForModel(options?.tools, modelRef)
     // Generate a per-prompt idempotency key so the server can deduplicate retries
     const idempotencyKey = `${sessionId}-${randomUUID()}`
-    log.info(`Sending async prompt to session ${sessionId} (idempotency: ${idempotencyKey.slice(0, 16)}..., model=${modelRef ? `${modelRef.providerID}/${modelRef.modelID}` : "default"}, variant=${variant ?? "none"}, tools=${JSON.stringify(options?.tools ?? {})}, eventStream=${this.eventStreamState}, lastRaw=${this.lastRawEventType || "none"})`)
+    log.info(`Sending async prompt to session ${sessionId} (idempotency: ${idempotencyKey.slice(0, 16)}..., model=${modelRef ? `${modelRef.providerID}/${modelRef.modelID}` : "default"}, variant=${variant ?? "none"}, tools=${JSON.stringify(options?.tools ?? {})}, filteredTools=${JSON.stringify(filteredTools ?? {})}, eventStream=${this.eventStreamState}, lastRaw=${this.lastRawEventType || "none"})`)
 
     let lastError: Error | null = null
 
@@ -1086,7 +1113,7 @@ async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part
             parts,
             ...(modelRef ? { model: modelRef } : {}),
             ...(variant ? { variant } : {}),
-            ...(options?.tools ? { tools: options.tools } : {}),
+            ...(filteredTools ? { tools: filteredTools } : {}),
           },
           headers: {
             "Idempotency-Key": idempotencyKey,

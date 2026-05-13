@@ -21,7 +21,7 @@ describe("extension.ts", () => {
   })
 
   it("creates SessionManager", () => {
-    assert.ok(extensionSource.includes("new SessionManager()"))
+    assert.ok(extensionSource.includes("new SessionManager"))
   })
 
   it("creates ContextEngine", () => {

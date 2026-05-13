@@ -202,20 +202,16 @@ export class MessageRouter {
   }
 
   async handleListSessions(sessionStore: any, context: RouteContext): Promise<void> {
-    // Match opencode CLI: only surface sessions belonging to the current
-    // workspace. Sessions whose workspace is unknown (created before we
-    // started capturing it) are kept so they remain reachable.
-    const folders = vscode.workspace.workspaceFolders
-    const currentDir = folders && folders.length > 0 ? folders[0]!.uri.fsPath : undefined
-    const all = sessionStore.list().filter((s: any) => {
-      if (!currentDir) return true
-      if (!s.workspacePath) return true
-      return s.workspacePath === currentDir
-    })
+    // Return all non-archived sessions so CLI-created sessions from any
+    // workspace surface in the unified Session History modal. The webview
+    // badges cross-workspace sessions via the separate server_session_list
+    // path, and deduplicates by cliSessionId.
+    const all = sessionStore.list()
     context.postMessage({
       type: "session_list",
       sessions: all.map((s: any) => ({
         id: s.id,
+        cliSessionId: s.cliSessionId,
         title: SessionStore.displayName(s),
         time: s.lastActiveAt,
         messageCount: s.messages.length,

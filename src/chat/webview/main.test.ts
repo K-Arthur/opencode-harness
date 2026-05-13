@@ -203,6 +203,34 @@ describe("main.ts", () => {
     )
   })
 
+  it("unified modal: openSessionModal passes local sessions to renderer via setUnifiedLocalSessions", () => {
+    const idx = source.indexOf("function openSessionModal(")
+    assert.ok(idx >= 0, "openSessionModal must exist")
+    const block = source.slice(idx, idx + 300)
+    assert.ok(
+      block.includes("setUnifiedLocalSessions(sessions)"),
+      "openSessionModal must call setUnifiedLocalSessions to pass local sessions to the renderer"
+    )
+    assert.ok(
+      !block.includes("_unifiedLocalSessions = sessions"),
+      "openSessionModal must NOT directly assign to module-level _unifiedLocalSessions in main.ts — must use setUnifiedLocalSessions() from sessionListRenderer.ts"
+    )
+  })
+
+  it("session_list_update handler uses setUnifiedLocalSessions, not direct assignment", () => {
+    const idx = source.indexOf('"session_list_update"')
+    assert.ok(idx >= 0, "session_list_update handler must exist")
+    const block = source.slice(idx, idx + 200)
+    assert.ok(
+      block.includes("setUnifiedLocalSessions(sessions)"),
+      "session_list_update must call setUnifiedLocalSessions to pass local sessions to the renderer"
+    )
+    assert.ok(
+      !block.includes("_unifiedLocalSessions"),
+      "session_list_update must NOT reference _unifiedLocalSessions directly — must use setUnifiedLocalSessions so sessionListRenderer.ts can read them in buildUnifiedSessionItems"
+    )
+  })
+
 it("unified modal: server session items send resume_server_session on click", () => {
     assert.ok(
       source.includes("resume_server_session") || sessionListRendererSource.includes("resume_server_session"),

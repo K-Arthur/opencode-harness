@@ -59,7 +59,11 @@ export async function activate(context: vscode.ExtensionContext) {
     // Expose output channel for other modules
     context.subscriptions.push(log.outputChannel)
 
-sessionManager = new SessionManager()
+    // Create McpServerManager first - it's needed for SessionManager's conditional tool routing
+    const mcpServerManager = new McpServerManager(context)
+    context.subscriptions.push(mcpServerManager)
+
+sessionManager = new SessionManager(mcpServerManager)
     // Apply remote-attach config if set; otherwise restore stored port for local-spawn reuse
     const remoteUrl = vscode.workspace.getConfiguration("opencode").get<string>("serverUrl") || ""
     // Read auth token from SecretStorage (secure) with fallback to settings (legacy)
@@ -93,9 +97,6 @@ sessionManager = new SessionManager()
     const modelManager = initModelManager(context, sessionManager)
     const cliDiagnostics = new CliDiagnostics()
     context.subscriptions.push(cliDiagnostics)
-
-    const mcpServerManager = new McpServerManager(context)
-    context.subscriptions.push(mcpServerManager)
 
     // Context file provider for viewing session context files
     const contextFileProvider = new ContextFileProvider()

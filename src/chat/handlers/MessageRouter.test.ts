@@ -130,3 +130,50 @@ describe("MessageRouter.ts", () => {
     )
   })
 })
+
+function findHandleListSessionsBlock(src: string): string {
+  const idx = src.indexOf("async handleListSessions(sessionStore: any, context: RouteContext)")
+  if (idx < 0) return ""
+  // Slice from method signature to the next method or end of class
+  const nextMethod = src.indexOf("async handleAcceptPermission(", idx)
+  return nextMethod > idx ? src.slice(idx, nextMethod) : src.slice(idx)
+}
+
+describe("handleListSessions — cross-workspace CLI sessions", () => {
+  const block = findHandleListSessionsBlock(source)
+
+  void it("passes all sessions through sessionStore.list() without workspace filter", () => {
+    assert.ok(block.includes("sessionStore.list()"),
+      "must call sessionStore.list() to get all sessions")
+    assert.ok(
+      !block.includes(".filter("),
+      "must NOT filter by workspacePath — CLI sessions from other directories must surface in the unified modal"
+    )
+    assert.ok(
+      !block.includes("workspacePath === currentDir"),
+      "must NOT compare workspacePath against currentDir — that drops CLI sessions from other workspaces"
+    )
+  })
+
+  void it("propagates cliSessionId in mapped output so the webview can deduplicate against server entries", () => {
+    assert.ok(block.includes("cliSessionId"),
+      "mapped output must include cliSessionId for synced/remote deduplication in buildUnifiedSessionItems")
+    assert.ok(block.includes("s.cliSessionId"),
+      "cliSessionId must be read from the source session object")
+  })
+
+  void it("still includes workspacePath in mapped output (regression)", () => {
+    assert.ok(block.includes("workspacePath: s.workspacePath"),
+      "workspacePath must remain in mapped output for the webview to badge cross-workspace sessions")
+    assert.ok(block.includes("workspacePath"),
+      "workspacePath property must be included in the session_list message")
+  })
+
+  void it("still includes id, title, time, messageCount, cost (regression)", () => {
+    assert.ok(block.includes("id: s.id"), "must include session id")
+    assert.ok(block.includes("title:"), "must include title")
+    assert.ok(block.includes("time: s.lastActiveAt"), "must include lastActiveAt as time")
+    assert.ok(block.includes("messageCount: s.messages.length"), "must include message count")
+    assert.ok(block.includes("cost: s.cost || 0"), "must include cost")
+  })
+})
