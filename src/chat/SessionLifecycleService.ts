@@ -78,10 +78,12 @@ export class SessionLifecycleService {
         const messages = sdkMessagesToChatMessages(rows)
         if (messages.length > 0) {
           this.opts.sessionStore.applyBackfilledMessages(session.id, messages)
+          this.opts.sessionStore.autoTitleFromMessages(session.id)
         } else {
+          // Backfill returned 0 rows - close tab as session is empty on server
           this.opts.sessionStore.applyBackfilledMessages(session.id, [])
+          this.opts.tabManager.closeTab(session.id)
         }
-        this.opts.sessionStore.autoTitleFromMessages(session.id)
       } catch (err) {
         log.warn(`Backfill on resume failed for ${session.id}`, err)
       }

@@ -1,0 +1,277 @@
+/* ═══════════════════════════════════════════════════════════════
+   Chat Message View - Responsive Design with Container Queries
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── Container Query Setup ─── */
+
+.message-list {
+  container-type: inline-size;
+  container-name: message-view;
+}
+
+/* ─── Message Bubbles ─── */
+
+.message.user .message-bubble {
+  max-width: clamp(200px, 80cqw, 600px);
+  width: auto;
+}
+
+.message.assistant .message-bubble {
+  max-width: clamp(280px, 90cqw, 840px);
+  width: 100%;
+}
+
+/* ─── Message Headers ─── */
+
+.message-header {
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.message-timestamp,
+.message-token-badge {
+  font-size: clamp(10px, 2cqw, 12px);
+}
+
+/* ─── Action Buttons ─── */
+
+.message-edit-btn,
+.message-revert-btn,
+.message-fork-btn {
+  min-width: var(--size-target-comfortable);
+  min-height: var(--size-target-comfortable);
+}
+
+/* ─── Container Query Breakpoints ─── */
+
+/* Narrow (280px - 399px) */
+@container message-view (max-width: 399px) {
+  .message.user .message-bubble {
+    max-width: 95%;
+    margin-right: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .message.assistant .message-bubble {
+    max-width: 100%;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .message-header {
+    font-size: var(--text-3xs);
+  }
+
+  .message-token-badge {
+    display: none;
+  }
+
+  .message-edit-btn,
+  .message-revert-btn,
+  .message-fork-btn {
+    padding: var(--space-1);
+    min-width: var(--size-target-min);
+  }
+
+  /* Collapse code block actions */
+  .code-block-actions {
+    position: absolute;
+    top: var(--space-1);
+    right: var(--space-1);
+    background: var(--oc-editor-bg);
+    border-radius: var(--radius-sm);
+    padding: var(--space-0-5);
+    opacity: 0;
+    transition: opacity var(--duration-fast);
+  }
+
+  .code-block:hover .code-block-actions {
+    opacity: 1;
+  }
+
+  /* Compact tool cards */
+  .tool-card {
+    padding: var(--space-2);
+  }
+
+  .tool-card .tool-args {
+    display: none;
+  }
+
+  .tool-card .tool-result {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+}
+
+/* Medium (400px - 599px) */
+@container message-view (min-width: 400px) and (max-width: 599px) {
+  .message.user .message-bubble {
+    max-width: 85%;
+  }
+
+  .message.assistant .message-bubble {
+    max-width: 95%;
+  }
+
+  .code-block-actions {
+    flex-wrap: wrap;
+  }
+
+  .tool-card .tool-args {
+    max-height: 100px;
+    overflow-y: auto;
+  }
+}
+
+/* Wide (600px - 899px) */
+@container message-view (min-width: 600px) and (max-width: 899px) {
+  .message.user .message-bubble {
+    max-width: 75%;
+  }
+
+  .message.assistant .message-bubble {
+    max-width: 90%;
+  }
+
+  /* Full code block actions visible */
+  .code-block-actions {
+    flex-wrap: nowrap;
+  }
+
+  .tool-card .tool-args {
+    max-height: none;
+  }
+}
+
+/* Extra Wide (900px+) */
+@container message-view (min-width: 900px) {
+  .message.user .message-bubble {
+    max-width: 70%;
+  }
+
+  .message.assistant .message-bubble {
+    max-width: 85%;
+  }
+}
+
+/* ─── Timeline Awareness ─── */
+
+@container message-view (min-width: 400px) {
+  .message-list.timeline-visible .message.assistant .message-bubble {
+    max-width: calc(90cqw - 152px);
+  }
+}
+
+/* ─── Code Blocks ─── */
+
+.code-block {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.code-block-content {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+@container message-view (max-width: 399px) {
+  .code-block-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  .code-block-lang {
+    font-size: var(--text-2xs);
+  }
+
+  .code-block-lines {
+    font-size: var(--text-xs);
+  }
+}
+
+/* ─── Tool Cards ─── */
+
+.tool-card {
+  max-width: 100%;
+}
+
+.tool-card .tool-result {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+@container message-view (max-width: 399px) {
+  .tool-card .tool-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  .tool-card .tool-name {
+    font-size: var(--text-sm);
+  }
+
+  .tool-card .tool-expand-icon {
+    display: none;
+  }
+}
+
+/* ─── System Messages ─── */
+
+.message.system .system-bubble {
+  max-width: clamp(200px, 90cqw, 90%);
+}
+
+@container message-view (max-width: 399px) {
+  .message.system .system-bubble {
+    padding: var(--space-1-5) var(--space-3);
+    font-size: var(--text-xs);
+  }
+}
+
+/* ─── Load Earlier Banner ─── */
+
+.load-earlier-banner {
+  width: 100%;
+}
+
+.load-earlier-btn {
+  font-size: clamp(11px, 3cqw, 12px);
+  padding: clamp(4px, 1cqw, 5px) clamp(10px, 3cqw, 14px);
+}
+
+/* ─── Jump to Bottom Button ─── */
+
+.jump-to-bottom {
+  width: clamp(120px, 40cqw, fit-content);
+  padding: var(--space-1-5) clamp(12px, 3cqw, var(--space-4));
+}
+
+@container message-view (max-width: 399px) {
+  .jump-to-bottom {
+    font-size: var(--text-2xs);
+    padding: var(--space-1) var(--space-3);
+  }
+}
+
+/* ─── Animations & Reduced Motion ─── */
+
+@media (prefers-reduced-motion: reduce) {
+  .message-edit-btn,
+  .message-revert-btn,
+  .message-fork-btn,
+  .code-block-actions,
+  .tool-card .tool-expand-icon {
+    transition: none;
+  }
+}
+
+/* ─── Forced Colors Mode ─── */
+
+@media (forced-colors: active) {
+  .message.user .message-bubble,
+  .message.assistant .message-bubble {
+    border: 1px solid ButtonText;
+  }
+}

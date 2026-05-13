@@ -8,6 +8,7 @@ import { RateLimitMonitor } from "../monitor/RateLimitMonitor"
 import { ModelManager } from "../model/ModelManager"
 import { CheckpointManager } from "../checkpoint/CheckpointManager"
 import { DiffApplier } from "../diff/DiffApplier"
+import { sdkMessagesToChatMessages } from "../session/sdkMessageConverter"
 import { WebviewContent } from "./WebviewContent"
 import { TabManager } from "./TabManager"
 import { StreamCoordinator } from "./handlers/StreamCoordinator"
@@ -585,30 +586,64 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         }
       }
     }],
-    ["sessions_recovered", () => {
+    ["sessions_recovered", async () => {
       log.info("sessions_recovered: re-pushing init state with recovered sessions")
       this.restoredTabsHydrated = false
-      this.pushInitStateToWebview()
-      // Signal the webview to refresh its Session History modal so
-      // newly-imported CLI sessions appear without the user having to
-      // close and re-open the modal, and without opening the modal
-      // (session_list_update silently refreshes the cache, unlike
-      // session_list which calls openSessionModal).
       const all = this.sessionStore.list()
-      this.postMessage({
-        type: "session_list_update",
-        sessions: all.map((s: any) => ({
-          id: s.id,
-          cliSessionId: s.cliSessionId,
-          title: SessionStore.displayName(s),
-          time: s.lastActiveAt,
-          messageCount: s.messages.length,
-          cost: s.cost || 0,
-          workspacePath: s.workspacePath,
-        })),
-      })
+      this.pushInitStateToWebview()
+      this.postSessionListUpdate(all)
+
+      if (await this.backfillRecoveredSessions(all)) {
+        this.restoredTabsHydrated = false
+        this.pushInitStateToWebview()
+        this.postSessionListUpdate(this.sessionStore.list())
+      }
     }],
   ])
+
+  private async backfillRecoveredSessions(sessions: import("../session/SessionStore").OpenCodeSession[]): Promise<boolean> {
+    const sessionsNeedingBackfill = sessions
+      .filter((s) => s.needsBackfill === true && s.cliSessionId && s.messages.length === 0)
+      .slice(0, 10)
+
+    let didBackfill = false
+    if (sessionsNeedingBackfill.length > 0) {
+      log.info(`[sessions_recovered] Auto-backfilling ${sessionsNeedingBackfill.length} recent sessions`)
+    }
+
+    for (const session of sessionsNeedingBackfill) {
+      try {
+        if (!session.cliSessionId) continue
+        const rows = await this.sessionManager.getSessionMessages(session.cliSessionId)
+        const messages = sdkMessagesToChatMessages(rows)
+        this.sessionStore.applyBackfilledMessages(session.id, messages)
+        if (messages.length > 0) {
+          this.sessionStore.autoTitleFromMessages(session.id)
+          log.info(`[sessions_recovered] Backfilled ${messages.length} messages for session ${session.id}`)
+        }
+        didBackfill = true
+      } catch (err) {
+        log.warn(`[sessions_recovered] Backfill failed for ${session.id}`, err)
+      }
+    }
+
+    return didBackfill
+  }
+
+  private postSessionListUpdate(sessions: import("../session/SessionStore").OpenCodeSession[]): void {
+    this.postMessage({
+      type: "session_list_update",
+      sessions: sessions.map((s) => ({
+        id: s.id,
+        cliSessionId: s.cliSessionId,
+        title: SessionStore.displayName(s),
+        time: s.lastActiveAt,
+        messageCount: s.messages.length,
+        cost: s.cost || 0,
+        workspacePath: s.workspacePath,
+      })),
+    })
+  }
 
   private handleServerEvent(event: { type: string; sessionId?: string; data?: unknown }): void {
     if (!this._view) {
