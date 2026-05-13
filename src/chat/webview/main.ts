@@ -108,7 +108,6 @@ function getVsCodeApi() {
     onManageModels: () => {
       modelManager.open()
       vscode.postMessage({ type: "get_models" })
-      updateBackBtnVisibility()
     },
   })
 
@@ -304,7 +303,6 @@ function getVsCodeApi() {
     els.welcomeModelCtx?.addEventListener("click", () => {
       modelManager.open()
       vscode.postMessage({ type: "get_models" })
-      updateBackBtnVisibility()
     })
     els.welcomeContinueBtn?.addEventListener("click", () => {
       const mostRecent = stateManager.getAllSessions()
@@ -406,7 +404,6 @@ function getVsCodeApi() {
     renderUnifiedSessionList()
 
     els.sessionModal.classList.remove("hidden")
-    updateBackBtnVisibility()
 
     // Focus trap
     sessionModalLastFocus = document.activeElement as HTMLElement | null
@@ -449,7 +446,6 @@ function getVsCodeApi() {
       sessionModalLastFocus.focus({ preventScroll: true })
       sessionModalLastFocus = null
     }
-    updateBackBtnVisibility()
   }
 
   /* ─── TAB MANAGEMENT ─── */
@@ -916,7 +912,6 @@ function getVsCodeApi() {
     els.modeWarningDescription.textContent =
       "Auto mode will allow the agent to apply changes without asking. The agent will have full autonomy to read, write, and execute commands. Use with caution."
     els.modeWarningModal.classList.remove("hidden")
-    updateBackBtnVisibility()
     modeWarningLastFocus = document.activeElement as HTMLElement | null
     modeWarningFocusTrap = trapModalFocus(els.modeWarningModal)
     document.addEventListener("keydown", modeWarningFocusTrap)
@@ -935,7 +930,6 @@ function getVsCodeApi() {
       modeWarningLastFocus = null
     }
     pendingAutoMode = null
-    updateBackBtnVisibility()
   }
 
   function setupModeWarning() {
@@ -1736,14 +1730,6 @@ function getVsCodeApi() {
     els.settingsBtn.setAttribute("aria-expanded", "false")
   }
 
-  function isAnyModalOpen(): boolean {
-    return !els.modelManagerPanel.classList.contains("hidden")
-      || !els.themeCustomizerPanel.classList.contains("hidden")
-      || !els.modeWarningModal.classList.contains("hidden")
-      || !els.mcpConfigPanel.classList.contains("hidden")
-      || !els.sessionModal.classList.contains("hidden")
-  }
-
   function closeCurrentModal() {
     if (!els.modelManagerPanel.classList.contains("hidden")) {
       modelManager.close()
@@ -1756,10 +1742,6 @@ function getVsCodeApi() {
     } else if (!els.sessionModal.classList.contains("hidden")) {
       closeSessionModal()
     }
-  }
-
-  function updateBackBtnVisibility() {
-    els.backBtn.style.display = isAnyModalOpen() ? "" : "none"
   }
 
   function setupSettingsMenuKeyboardNav() {
@@ -1977,7 +1959,6 @@ function getVsCodeApi() {
 
   function openThemeCustomizer() {
     els.themeCustomizerPanel.classList.remove("hidden")
-    updateBackBtnVisibility()
     vscode.postMessage({ type: "get_theme_config" })
     themeCustomizerLastFocus = document.activeElement as HTMLElement | null
     themeCustomizerFocusTrap = trapModalFocus(els.themeCustomizerPanel)
@@ -1995,7 +1976,6 @@ function getVsCodeApi() {
       themeCustomizerLastFocus.focus({ preventScroll: true })
       themeCustomizerLastFocus = null
     }
-    updateBackBtnVisibility()
   }
 
   function collectThemeCustomizerConfig(): ThemeCustomizerConfig {
