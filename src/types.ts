@@ -26,3 +26,17 @@ export interface DiffChunk {
   newLines: number
   lines: string[]
 }
+
+export interface Attachment {
+  data: string
+  mimeType: string
+}
+
+export interface SteerPrompt {
+  id: string
+  text: string
+  attachments: Attachment[]
+  mode: 'interrupt' | 'append' | 'queue'
+  timestamp: number
+  sessionId: string
+}

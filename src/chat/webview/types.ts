@@ -46,6 +46,7 @@ export interface DiffBlock {
   state: 'pending' | 'accepted' | 'discarded'
   linesAdded: number
   linesRemoved: number
+  revertable?: boolean
 }
 
 export interface ThinkingBlock {
@@ -124,6 +125,44 @@ export interface SessionState {
   changedFiles?: string[]
   lastActiveAt?: number
   instructions?: string
+  revertHistory?: RevertEntry[]
+  subagentActivities?: SubagentActivity[]
+}
+
+export interface RevertEntry {
+  diffId: string
+  messageId: string
+  path: string
+  timestamp: number
+}
+
+export interface Todo {
+  id: string
+  content: string
+  status: 'pending' | 'in-progress' | 'completed'
+  createdAt: number
+}
+
+export interface FileChange {
+  path: string
+  added: number
+  removed: number
+}
+
+export interface SkillInfo {
+  id: string
+  name: string
+  description?: string
+  category?: string
+  enabled: boolean
+}
+
+export interface SubagentActivity {
+  id: string
+  name: string
+  status: 'running' | 'completed' | 'failed'
+  output?: string
+  progress?: number
 }
 
 export interface WebviewState {
@@ -142,8 +181,11 @@ export interface WebviewState {
     tools: boolean
     diffs: boolean
     errors: boolean
+    diffWrapEnabled?: boolean
+    thinkingVisible?: boolean
   }
   isTimelineVisible?: boolean
+  skills?: Record<string, SkillInfo>
 }
 
 export interface MentionItem {
@@ -235,4 +277,18 @@ export interface TabInfo {
   name: string
   model?: string
   isStreaming: boolean
+}
+
+export interface Attachment {
+  data: string
+  mimeType: string
+}
+
+export interface SteerPrompt {
+  id: string
+  text: string
+  attachments: Attachment[]
+  mode: 'interrupt' | 'append' | 'queue'
+  timestamp: number
+  sessionId: string
 }

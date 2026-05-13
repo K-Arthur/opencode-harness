@@ -55,16 +55,33 @@ describe("StreamCoordinator.ts", () => {
     )
   })
 
-	  it("has finalizeStream method", () => {
-	    assert.ok(
-	      source.includes("async finalizeStream(tabId: string, callbacks: StreamCallbacks)"),
-	      "finalizeStream must exist"
-	    )
-	    assert.ok(source.includes('type: "stream_end"'), "must post stream_end message")
-	    assert.ok(source.includes("this.stripContextWrapper("), "must strip context wrapper")
-	  })
+  it("has finalizeStream method", () => {
+    assert.ok(
+      source.includes("async finalizeStream(tabId: string, callbacks: StreamCallbacks)"),
+      "finalizeStream must exist"
+    )
+    assert.ok(source.includes('type: "stream_end"'), "must post stream_end message")
+    assert.ok(source.includes("this.stripContextWrapper("), "must strip context wrapper")
+  })
 
-	  it("has guarded finalization for multi-message tool turns", () => {
+  it("has appendCallbacks map for steer prompt append mode", () => {
+    assert.ok(source.includes("appendCallbacks"), "must have appendCallbacks field")
+    assert.ok(source.includes("Map<string, (() => Promise<void>)[]>"), "appendCallbacks must be a Map of callback arrays")
+  })
+
+  it("has registerAppendCallback method", () => {
+    assert.ok(source.includes("registerAppendCallback("), "must have registerAppendCallback method")
+    assert.ok(source.includes("tabId: string"), "registerAppendCallback must accept tabId")
+    assert.ok(source.includes("callback: () => Promise<void>"), "registerAppendCallback must accept callback")
+  })
+
+  it("executes append callbacks in finalizeStream", () => {
+    assert.ok(source.includes("finalizeStream("), "must have finalizeStream method")
+    assert.ok(source.includes("appendCallbacks.get(tabId)"), "finalizeStream must get callbacks for tab")
+    assert.ok(source.includes("appendCallbacks.delete(tabId)"), "finalizeStream must delete callbacks after execution")
+  })
+
+  it("has guarded finalization for multi-message tool turns", () => {
 	    assert.ok(
 	      source.includes("async maybeFinalizeStream(tabId: string, callbacks: StreamCallbacks"),
 	      "maybeFinalizeStream must exist"

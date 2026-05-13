@@ -185,6 +185,86 @@ export function isErrorBlock(block: Block): block is ErrorBlock {
 }
 
 // ---------------------------------------------------------------------------
+// Revert confirmation dialog
+// ---------------------------------------------------------------------------
+
+function showRevertConfirmation(diffId: string, path: string, postMessage?: (msg: Record<string, unknown>) => void): void {
+  // Validate required parameters
+  if (!diffId || !path) {
+    console.warn("Cannot show revert confirmation: missing diffId or path")
+    return
+  }
+
+  // Remove existing modal if present
+  const existingModal = document.getElementById('revert-modal')
+  if (existingModal) {
+    existingModal.remove()
+  }
+
+  // Create modal
+  const modal = document.createElement('div')
+  modal.id = 'revert-modal'
+  modal.className = 'revert-modal'
+  modal.setAttribute('role', 'dialog')
+  modal.setAttribute('aria-modal', 'true')
+  modal.setAttribute('aria-labelledby', 'revert-modal-title')
+
+  modal.innerHTML = `
+    <div class="revert-modal-content">
+      <h2 id="revert-modal-title" class="revert-modal-title">Revert Changes?</h2>
+      <p class="revert-modal-text">
+        This will revert all changes to <strong>${escapeHtml(path)}</strong>. 
+        This action cannot be undone.
+      </p>
+      <div class="revert-modal-actions">
+        <button class="revert-modal-btn revert-modal-btn--cancel" id="revert-cancel">Cancel</button>
+        <button class="revert-modal-btn revert-modal-btn--confirm" id="revert-confirm">Revert Changes</button>
+      </div>
+    </div>
+  `
+
+  document.body.appendChild(modal)
+
+  // Focus management
+  const cancelBtn = modal.querySelector('#revert-cancel') as HTMLButtonElement
+  const confirmBtn = modal.querySelector('#revert-confirm') as HTMLButtonElement
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", () => {
+      modal.remove()
+    })
+  }
+
+  if (confirmBtn) {
+    confirmBtn.addEventListener("click", () => {
+      modal.remove()
+      if (postMessage) {
+        postMessage({ type: 'revert_diff', diffId, path })
+      }
+    })
+  }
+
+  // Close on Escape key
+  const handleEscape = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      modal.remove()
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }
+  document.addEventListener('keydown', handleEscape)
+
+  // Focus cancel button
+  if (cancelBtn) cancelBtn.focus()
+}
+
+// Helper to escape HTML to prevent XSS
+function escapeHtml(text: string): string {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+// ---------------------------------------------------------------------------
 // RenderOptions — passed to each renderer
 // ---------------------------------------------------------------------------
 
@@ -562,7 +642,7 @@ function renderNewDiffBlock(block: Block, opts: RenderOptions): HTMLElement | nu
   wrapper.className = `diff-block diff-block--${diffBlock.state}`
   wrapper.dataset.diffId = diffBlock.diffId
 
-  // Header: filename + stats
+  // Header: filename + stats + wrap toggle
   const header = document.createElement("div")
   header.className = "diff-header"
 
@@ -589,7 +669,52 @@ function renderNewDiffBlock(block: Block, opts: RenderOptions): HTMLElement | nu
     stats.appendChild(removed)
   }
   fileInfo.appendChild(stats)
+
+  // Wrap toggle button
+  const wrapToggle = document.createElement("button")
+  wrapToggle.className = "diff-wrap-toggle"
+  wrapToggle.setAttribute("aria-label", "Toggle line wrapping")
+  wrapToggle.title = "Toggle line wrapping"
+  wrapToggle.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg><span>Wrap</span>`
+  wrapToggle.addEventListener("click", () => {
+    const tableWrapper = wrapper.querySelector(".diff-table-wrapper")
+    if (!tableWrapper) {
+      return
+    }
+    
+    const isWrapped = tableWrapper.classList.toggle("diff-table-wrapper--wrapped")
+    wrapToggle.classList.toggle("active", isWrapped)
+    
+    // Store preference in webview state with error handling
+    const vscode = (window as any).acquireVsCodeApi?.()
+    if (vscode) {
+      try {
+        const state = vscode.getState()
+        if (state?.displayPrefs) {
+          state.displayPrefs.diffWrapEnabled = isWrapped
+          vscode.setState(state)
+        }
+      } catch (error) {
+        console.warn("Failed to persist diff wrap preference:", error)
+      }
+    }
+  })
+
+  // Check initial state from webview state with error handling
+  const vscode = (window as any).acquireVsCodeApi?.()
+  if (vscode) {
+    try {
+      const state = vscode.getState()
+      if (state?.displayPrefs?.diffWrapEnabled) {
+        wrapToggle.classList.add("active")
+      }
+    } catch (error) {
+      console.warn("Failed to load diff wrap preference:", error)
+    }
+  }
+
   header.appendChild(fileInfo)
+  header.appendChild(wrapToggle)
   wrapper.appendChild(header)
 
   // Diff table
@@ -706,6 +831,24 @@ function renderNewDiffBlock(block: Block, opts: RenderOptions): HTMLElement | nu
     chip.className = "diff-state-chip diff-state--accepted"
     chip.innerHTML = SUCCESS_SVG + ' Applied'
     actionBar.appendChild(chip)
+    
+    // Add revert button if diff is revertable
+    if (diffBlock.revertable) {
+      const revertBtn = document.createElement("button")
+      revertBtn.className = "diff-btn diff-btn--revert"
+      revertBtn.textContent = "Revert"
+      revertBtn.setAttribute("aria-label", `Revert changes to ${diffBlock.path}`)
+      revertBtn.addEventListener("click", (e) => {
+        e.stopPropagation()
+        if (!diffBlock.diffId || !diffBlock.path) {
+          console.warn("Cannot show revert confirmation: missing diffId or path")
+          return
+        }
+        showRevertConfirmation(diffBlock.diffId, diffBlock.path, opts.postMessage)
+      })
+      actionBar.appendChild(revertBtn)
+    }
+    
     wrapper.classList.add("diff-block--accepted")
   } else if (diffBlock.state === 'discarded') {
     actionBar.innerHTML = ''

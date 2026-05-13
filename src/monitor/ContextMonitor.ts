@@ -80,12 +80,13 @@ private currentTokens = 0
   private tokenLimit = 100000
   private onContextChangedEmitter = new SimpleEventEmitter<ContextUsage>()
   private usageHistory: ContextUsageHistory[] = []
-  private readonly HISTORY_RETENTION_DAYS = 30
+  private historyRetentionDays = 30
   private readonly MAX_HISTORY_ENTRIES = 1000
   private providerPricing: Map<string, ProviderPricing> = new Map()
   private currentProvider: string = "anthropic"
   private currentModelId?: string
   private onHistoryUpdatedEmitter = new SimpleEventEmitter<void>()
+  private trackingEnabled = true
 
   readonly onContextChanged = this.onContextChangedEmitter.event
   readonly onHistoryUpdated = this.onHistoryUpdatedEmitter.event
@@ -102,6 +103,19 @@ private currentTokens = 0
 
   constructor() {
     this.initializeProviderPricing()
+    this.loadSettings()
+  }
+
+  /**
+   * Load user settings for context tracking.
+   */
+  private loadSettings(): void {
+    const vscode = getVsCodeApi()
+    if (!vscode) return
+
+    const config = vscode.workspace.getConfiguration("opencode")
+    this.trackingEnabled = config.get<boolean>("contextTrackingEnabled", true)
+    this.historyRetentionDays = config.get<number>("contextRetentionDays", 30)
   }
 
   private initializeProviderPricing(): void {
@@ -179,10 +193,36 @@ private currentTokens = 0
       cost,
     }
     this.onContextChangedEmitter.fire(usage)
-
     if (sessionId !== undefined && breakdown) {
       this.trackUsage(sessionId, this.currentTokens, breakdown, cost)
     }
+  }
+
+  /**
+   * Update queue and steer token counts separately.
+   * Called when the prompt queue changes.
+   */
+  updateQueueTokens(queueTokens: number, steerTokens: number, sessionId?: string): void {
+    // Edge case: Clamp negative values to zero
+    const safeQueueTokens = Math.max(0, queueTokens)
+    const safeSteerTokens = Math.max(0, steerTokens)
+    
+    // This will be called by the queue when items are added/removed
+    // The breakdown will be merged with the current context usage
+    const usage: ContextUsage = {
+      percent: Math.min(100, Math.round((this.currentTokens / this.tokenLimit) * 100)),
+      tokens: this.currentTokens,
+      maxTokens: this.tokenLimit,
+      sessionId,
+      breakdown: {
+        system: 0, // Will be filled by the main updateTokens
+        history: 0,
+        workspace: 0,
+        queued: safeQueueTokens,
+        steer: safeSteerTokens,
+      },
+    }
+    this.onContextChangedEmitter.fire(usage)
   }
 
   showWarning(message: string): void {
@@ -204,6 +244,8 @@ private currentTokens = 0
   }
 
   private trackUsage(sessionId: string, tokens: number, breakdown: { system: number; history: number; workspace: number; queued?: number; steer?: number }, cost: number): void {
+    if (!this.trackingEnabled) return
+
     const entry: ContextUsageHistory = {
       sessionId,
       timestamp: Date.now(),
@@ -226,7 +268,7 @@ private currentTokens = 0
   }
 
   private pruneOldEntries(): void {
-    const cutoffTime = Date.now() - (this.HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000)
+    const cutoffTime = Date.now() - (this.historyRetentionDays * 24 * 60 * 60 * 1000)
     this.usageHistory = this.usageHistory.filter(entry => entry.timestamp > cutoffTime)
 
     if (this.usageHistory.length > this.MAX_HISTORY_ENTRIES) {
@@ -302,6 +344,37 @@ private currentTokens = 0
     const willOverflow = predictedTokens > this.tokenLimit
 
     return { predictedTokens, predictedCost, willOverflow }
+  }
+
+  /**
+   * Set the history retention period in days.
+   */
+  setHistoryRetentionDays(days: number): void {
+    if (days > 0 && days !== this.historyRetentionDays) {
+      this.historyRetentionDays = days
+      this.pruneOldEntries()
+    }
+  }
+
+  /**
+   * Enable or disable context tracking.
+   */
+  setTrackingEnabled(enabled: boolean): void {
+    this.trackingEnabled = enabled
+  }
+
+  /**
+   * Get current tracking status.
+   */
+  isTrackingEnabled(): boolean {
+    return this.trackingEnabled
+  }
+
+  /**
+   * Get current retention period in days.
+   */
+  getHistoryRetentionDays(): number {
+    return this.historyRetentionDays
   }
 
   dispose(): void {

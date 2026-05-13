@@ -64,6 +64,7 @@ export interface ElementRefs {
   historyBtn: HTMLElement
   mcpBtn: HTMLElement
   timelineToggleBtn: HTMLElement
+  thinkingToggleBtn: HTMLElement
   settingsBtn: HTMLElement
 
   contextBar: HTMLDivElement
@@ -73,6 +74,15 @@ export interface ElementRefs {
   contextLabel: HTMLSpanElement
   contextUsagePanel: HTMLElement
   closeContextUsageBtn: HTMLButtonElement
+  contextMonitorPanel: HTMLDivElement | null
+  contextMonitorClose: HTMLButtonElement | null
+  contextMonitorHistoryGraph: HTMLDivElement | null
+  contextMonitorCostDisplay: HTMLDivElement | null
+  contextMonitorSuggestionsPanel: HTMLDivElement | null
+  
+  promptStashPanel: HTMLDivElement | null
+  promptStashClose: HTMLButtonElement | null
+  promptStashList: HTMLDivElement | null
   
   welcomeRecentSessions: HTMLDivElement | null
   welcomeModelCtx: HTMLSpanElement | null
@@ -157,6 +167,23 @@ export interface ElementRefs {
 
   // Checkpoint/undo panel (Phase 5)
   checkpointPanel: HTMLElement | null
+  checkpointToggleBtn: HTMLElement
+  todosPanel: HTMLElement
+  closeTodosBtn: HTMLElement
+  todosList: HTMLElement
+  todoAddForm: HTMLFormElement
+  todoAddInput: HTMLInputElement
+  changedFilesPanelList: HTMLElement
+  todosToggleBtn: HTMLElement
+  skillsBtn: HTMLElement
+  skillsModal: HTMLElement
+  skillsModalCloseBtn: HTMLElement
+  skillsSearchInput: HTMLInputElement
+  skillsFilter: HTMLElement
+  skillsList: HTMLElement
+  subagentPanel: HTMLElement
+  closeSubagentBtn: HTMLElement
+  subagentList: HTMLElement
 }
 
 export function getElementRefs(): ElementRefs {
@@ -199,6 +226,7 @@ export function getElementRefs(): ElementRefs {
     historyBtn: requireElement("history-btn"),
     mcpBtn: requireElement("mcp-btn"),
     timelineToggleBtn: requireElement("timeline-toggle-btn"),
+    thinkingToggleBtn: requireElement("thinking-toggle-btn"),
     settingsBtn: requireElement("settings-btn"),
 
     contextBar: requireElement<HTMLDivElement>("context-bar"),
@@ -208,6 +236,15 @@ export function getElementRefs(): ElementRefs {
     contextLabel: requireElement<HTMLSpanElement>("context-label"),
     contextUsagePanel: requireElement("context-usage-panel"),
     closeContextUsageBtn: requireElement<HTMLButtonElement>("close-context-usage-btn"),
+    contextMonitorPanel: optionalElement<HTMLDivElement>("context-monitor-panel"),
+    contextMonitorClose: optionalElement<HTMLButtonElement>("context-monitor-close"),
+    contextMonitorHistoryGraph: optionalElement<HTMLDivElement>("context-monitor-history-graph"),
+    contextMonitorCostDisplay: optionalElement<HTMLDivElement>("context-monitor-cost-display"),
+    contextMonitorSuggestionsPanel: optionalElement<HTMLDivElement>("context-monitor-suggestions-panel"),
+    
+    promptStashPanel: optionalElement<HTMLDivElement>("prompt-stash-panel"),
+    promptStashClose: optionalElement<HTMLButtonElement>("prompt-stash-close"),
+    promptStashList: optionalElement<HTMLDivElement>("prompt-stash-list"),
     
     welcomeRecentSessions: optionalElement<HTMLDivElement>("welcome-recent-sessions"),
     welcomeModelCtx: optionalElement<HTMLSpanElement>("welcome-model-ctx"),
@@ -288,10 +325,27 @@ export function getElementRefs(): ElementRefs {
     costDisplay: optionalElement("cost-display"),
 
     // File change tracking (Phase 5)
-    changedFilesList: optionalElement("changed-files-list"),
+    changedFilesList: document.getElementById("changed-files-list"),
 
     // Checkpoint/undo panel (Phase 5)
-    checkpointPanel: optionalElement("checkpoint-panel"),
+    checkpointPanel: document.getElementById("checkpoint-panel"),
+    checkpointToggleBtn: requireElement("checkpoint-toggle-btn"),
+    todosPanel: requireElement("todos-panel"),
+    closeTodosBtn: requireElement("close-todos-btn"),
+    todosList: requireElement("todos-list"),
+    todoAddForm: requireElement<HTMLFormElement>("todo-add-form"),
+    todoAddInput: requireElement<HTMLInputElement>("todo-add-input"),
+    changedFilesPanelList: requireElement("changed-files-panel-list"),
+    todosToggleBtn: requireElement("todos-toggle-btn"),
+    skillsBtn: requireElement("skills-btn"),
+    skillsModal: requireElement("skills-modal"),
+    skillsModalCloseBtn: requireElement("skills-modal-close-btn"),
+    skillsSearchInput: requireElement<HTMLInputElement>("skills-search-input"),
+    skillsFilter: requireElement("skills-filter"),
+    skillsList: requireElement("skills-list"),
+    subagentPanel: requireElement("subagent-panel"),
+    closeSubagentBtn: requireElement("close-subagent-btn"),
+    subagentList: requireElement("subagent-list"),
   }
 }
 
@@ -311,4 +365,35 @@ export function getActiveTypingIndicator(els: ElementRefs): HTMLDivElement | nul
   const activePanel = els.tabPanels.querySelector(".tab-panel.active")
   if (!activePanel) return null
   return activePanel.querySelector('.typing-indicator')
+}
+
+/**
+ * Toggle all thinking blocks in the active panel to show or hide them
+ */
+export function toggleAllThinkingBlocks(visible: boolean): void {
+  const activePanel = document.querySelector('.tab-panel.active')
+  if (!activePanel) {
+    return
+  }
+
+  const thinkingBlocks = activePanel.querySelectorAll('.thinking-block')
+  if (thinkingBlocks.length === 0) {
+    return
+  }
+
+  thinkingBlocks.forEach((block) => {
+    if (visible) {
+      block.classList.remove('thinking-block--collapsed')
+      // If the block was not open, open it
+      if (!block.hasAttribute('open')) {
+        block.setAttribute('open', '')
+      }
+    } else {
+      block.classList.add('thinking-block--collapsed')
+      // If the block was open, close it
+      if (block.hasAttribute('open')) {
+        block.removeAttribute('open')
+      }
+    }
+  })
 }

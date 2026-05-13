@@ -35,28 +35,43 @@ export function updateContextChips(els: ElementRefs, chips?: ContextChip[]) {
   })
 }
 
-export function updateContextUsage(contextMonitorEl: HTMLElement, usage?: { percent: number; tokens: number; maxTokens: number; breakdown?: { system: number; history: number; workspace: number } }) {
+export function updateContextUsage(contextMonitorEl: HTMLElement, usage?: { percent: number; tokens: number; maxTokens: number; breakdown?: { system: number; history: number; workspace: number; queued?: number; steer?: number }; cost?: number }) {
   if (usage && usage.maxTokens > 0) {
     contextMonitorEl.classList.remove("hidden")
     const progressFill = contextMonitorEl.querySelector(".context-progress-fill") as HTMLElement
     const contextText = contextMonitorEl.querySelector(".context-text") as HTMLElement
+    const costText = contextMonitorEl.querySelector(".context-cost") as HTMLElement
     
     if (progressFill) {
       progressFill.style.width = `${usage.percent}%`
       // Update color based on percent
-      progressFill.classList.remove("context-warning", "context-critical")
+      progressFill.classList.remove("context-warning", "context-critical", "context-good")
       if (usage.percent >= 95) {
         progressFill.classList.add("context-critical")
       } else if (usage.percent >= 80) {
         progressFill.classList.add("context-warning")
+      } else if (usage.percent >= 50) {
+        progressFill.classList.add("context-good")
       }
     }
     
     if (contextText) {
-      contextText.textContent = `Context: ${usage.tokens.toLocaleString()} / ${usage.maxTokens.toLocaleString()}`
+      contextText.textContent = `${usage.percent}% (${usage.tokens.toLocaleString()} / ${usage.maxTokens.toLocaleString()})`
       if (usage.breakdown) {
-        contextText.title = `System: ${usage.breakdown.system.toLocaleString()} tok\nHistory: ${usage.breakdown.history.toLocaleString()} tok\nWorkspace: ${usage.breakdown.workspace.toLocaleString()} tok`
+        const breakdownText = [
+          `System: ${usage.breakdown.system.toLocaleString()} tok`,
+          `History: ${usage.breakdown.history.toLocaleString()} tok`,
+          `Workspace: ${usage.breakdown.workspace.toLocaleString()} tok`,
+        ]
+        if (usage.breakdown.queued) breakdownText.push(`Queued: ${usage.breakdown.queued.toLocaleString()} tok`)
+        if (usage.breakdown.steer) breakdownText.push(`Steer: ${usage.breakdown.steer.toLocaleString()} tok`)
+        contextText.title = breakdownText.join("\n")
       }
+    }
+
+    if (costText && usage.cost !== undefined) {
+      costText.textContent = `$${usage.cost.toFixed(4)}`
+      costText.title = `Estimated cost for current context: $${usage.cost.toFixed(4)}`
     }
   } else {
     contextMonitorEl.classList.add("hidden")

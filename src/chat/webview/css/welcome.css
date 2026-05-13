@@ -69,9 +69,11 @@
 }
 
 .welcome-greeting {
-  font-size: clamp(14px, 4cqw, 18px);
-  font-weight: 700;
-  color: var(--oc-fg);
+  font-size: clamp(18px, 5cqw, 24px);
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--oc-accent, #00e5ff), var(--vscode-button-background, #0969da));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   margin: 0 0 var(--space-1) 0;
   line-height: var(--leading-tight);
 }
@@ -96,8 +98,9 @@
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
-  background: var(--oc-editor-bg);
-  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--oc-editor-bg) 80%, transparent);
+  backdrop-filter: blur(8px);
+  border: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
   border-radius: var(--radius-lg);
   color: var(--color-muted);
   cursor: pointer;
@@ -105,6 +108,7 @@
   min-height: var(--size-target-comfortable);
   font-family: inherit;
   font-size: var(--text-sm);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 .welcome-search-toggle:hover {
@@ -534,21 +538,24 @@
   box-sizing: border-box;
   text-align: left;
   padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-border);
+  border: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
   border-radius: var(--radius-lg);
-  background: var(--bg-secondary);
+  background: color-mix(in srgb, var(--bg-secondary) 80%, transparent);
+  backdrop-filter: blur(8px);
   cursor: pointer;
-  transition: border-color var(--duration-fast), background var(--duration-fast), transform var(--duration-fast);
+  transition: all var(--duration-normal) var(--ease-spring);
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
   min-height: var(--size-target-large);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
 .prompt-starter:hover {
-  border-color: color-mix(in srgb, var(--color-accent) 50%, var(--color-border));
-  background: color-mix(in srgb, var(--color-accent) 6%, var(--bg-secondary));
-  transform: translateY(-1px);
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--bg-secondary));
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
 .prompt-starter:active {

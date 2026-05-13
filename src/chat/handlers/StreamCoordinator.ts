@@ -62,6 +62,8 @@ export class StreamCoordinator {
   private injectedInstructionsSessions = new Set<string>()
   /** Per-tab last force_rerender seq sent — prevents spamming the webview when acks fall behind */
   private lastForceRerenderSeqs = new Map<string, number>()
+  /** Per-tab append callbacks for steer prompts — executed after stream_end */
+  private appendCallbacks = new Map<string, (() => Promise<void>)[]>()
 
   constructor(
     private readonly sessionManager: SessionManager,
@@ -576,7 +578,32 @@ export class StreamCoordinator {
   }
 
   async finalizeStream(tabId: string, callbacks: StreamCallbacks): Promise<void> {
-    return this.finalizerService.finalizeStream(tabId, callbacks)
+    await this.finalizerService.finalizeStream(tabId, callbacks)
+    
+    // Execute append callbacks after stream finalization
+    const callbacksToExecute = this.appendCallbacks.get(tabId)
+    if (callbacksToExecute && callbacksToExecute.length > 0) {
+      log.info(`Executing ${callbacksToExecute.length} append callback(s) for ${tabId}`)
+      for (const callback of callbacksToExecute) {
+        try {
+          await callback()
+        } catch (err) {
+          log.error(`Append callback failed for ${tabId}`, err)
+        }
+      }
+      this.appendCallbacks.delete(tabId)
+    }
+  }
+
+  /**
+   * Register a callback to execute after the current stream completes.
+   * Used by steer prompts in "append" mode.
+   */
+  registerAppendCallback(tabId: string, callback: () => Promise<void>): void {
+    const existing = this.appendCallbacks.get(tabId) || []
+    existing.push(callback)
+    this.appendCallbacks.set(tabId, existing)
+    log.info(`Registered append callback for ${tabId} (total: ${existing.length})`)
   }
 
   async maybeFinalizeStream(tabId: string, callbacks: StreamCallbacks, trigger: "message_complete" | "status"): Promise<boolean> {

@@ -3,6 +3,7 @@ import { SessionManager } from "../session/SessionManager"
 import { SessionStore } from "../session/SessionStore"
 import { ContextEngine } from "../context/ContextEngine"
 import { ContextMonitor } from "../monitor/ContextMonitor"
+import { UsageAnalytics } from "../monitor/UsageAnalytics"
 import { ThemeManager } from "../theme/ThemeManager"
 import { RateLimitMonitor } from "../monitor/RateLimitMonitor"
 import { ModelManager } from "../model/ModelManager"
@@ -13,6 +14,8 @@ import { WebviewContent } from "./WebviewContent"
 import { TabManager } from "./TabManager"
 import { StreamCoordinator } from "./handlers/StreamCoordinator"
 import { PromptManager, PromptCommand } from "../prompts/PromptManager"
+import { PromptStashManager } from "../prompts/PromptStashManager"
+import { ProviderConfigManager } from "../model/ProviderConfigManager"
 import { toUserErrorMessage as toUserErrorMessagePure, errorValueToMessage as errorValueToMessagePure, mapToolType as mapToolTypePure, isSessionInCurrentWorkspace as isSessionInCurrentWorkspacePure } from "./chatUtils"
 import { ChatMessage } from "./types"
 import { log } from "../utils/outputChannel"
@@ -27,6 +30,7 @@ import { StatePushService } from "./StatePushService"
 import { SessionLifecycleService } from "./SessionLifecycleService"
 import { CommandExecutionService } from "./CommandExecutionService"
 import { WebviewEventRouter } from "./WebviewEventRouter"
+import { SteerPromptHandler } from "./handlers/SteerPromptHandler"
 
 export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   private _view?: vscode.WebviewView
@@ -50,6 +54,10 @@ private autoCompactor: AutoCompactor
   private commandExec: CommandExecutionService
   private eventRouter: WebviewEventRouter
   private restoredTabsHydrated = false
+  private usageAnalytics: UsageAnalytics
+  private steerPromptHandler: SteerPromptHandler
+  private promptStashManager: PromptStashManager
+  private providerConfigManager: ProviderConfigManager
 
   
 
@@ -83,6 +91,16 @@ private autoCompactor: AutoCompactor
     this.messageRouter = new MessageRouter(sessionManager, modelManager)
     this.chatCommands = new ChatCommands(sessionStore, sessionManager, this.tabManager, this.streamCoordinator)
     this.autoCompactor = new AutoCompactor(sessionManager, sessionStore, contextMonitor, this.tabManager)
+    this.usageAnalytics = new UsageAnalytics()
+    this.usageAnalytics.setHistory(contextMonitor.getHistory())
+    this.promptStashManager = new PromptStashManager({ context })
+    this.providerConfigManager = new ProviderConfigManager({ context })
+    this.modelManager.setProviderConfigManager(this.providerConfigManager)
+    this.steerPromptHandler = new SteerPromptHandler(
+      this.streamCoordinator,
+      this.sessionStore,
+      this.sessionManager
+    )
     this.themeController = new ThemeController(themeManager, (msg) => this.postMessage(msg))
     this.statePush = new StatePushService({
       postMessage: (msg) => this.postMessage(msg),
@@ -135,6 +153,9 @@ private autoCompactor: AutoCompactor
       themeController: this.themeController,
       promptManager: this.promptManager,
       fileOps: this.fileOps,
+      contextMonitor: this.contextMonitor,
+      usageAnalytics: this.usageAnalytics,
+      steerPromptHandler: this.steerPromptHandler,
       postMessage: (msg) => this.postMessage(msg),
       postRequestError: (message, sessionId) => this.postRequestError(message, sessionId),
       showWarningMessage: (message, options, ...items) => vscode.window.showWarningMessage(message, options, ...items),
@@ -152,6 +173,16 @@ private autoCompactor: AutoCompactor
       showAutoModeConfirmation: (sid) => this.showAutoModeConfirmation(sid),
       replayLiveStreamsToWebview: () => this.replayLiveStreamsToWebview(),
       exportChat: () => { void vscode.commands.executeCommand("opencode-harness.exportConversation") },
+      exportChatJson: () => { void vscode.commands.executeCommand("opencode-harness.exportConversationJson") },
+      exportChatText: () => { void vscode.commands.executeCommand("opencode-harness.exportConversationText") },
+      copyChat: () => { void vscode.commands.executeCommand("opencode-harness.copyConversation") },
+      stashPrompt: (name, content, isGlobal) => { this.handleStashPrompt(name, content, isGlobal) },
+      listStashes: () => { this.handleListStashes() },
+      deleteStash: (id) => { this.handleDeleteStash(id) },
+      addProvider: (name, apiKey, baseUrl) => { this.handleAddProvider(name, apiKey, baseUrl) },
+      listProviders: () => { this.handleListProviders() },
+      updateProvider: (id, updates) => { this.handleUpdateProvider(id, updates) },
+      deleteProvider: (id) => { this.handleDeleteProvider(id) },
       showOpenFolderDialog: (dir) => { void vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(dir)) },
     })
 
@@ -945,6 +976,98 @@ private toUserErrorMessage(message: string): string {
       messageId,
       text,
     })
+  }
+
+  private async handleStashPrompt(name: string, content: string, isGlobal: boolean): Promise<void> {
+    try {
+      const active = this.tabManager.getActiveTab()
+      if (isGlobal) {
+        await this.promptStashManager.stashGlobal(name, content)
+      } else if (active) {
+        await this.promptStashManager.stashForSession(name, content, active.cliSessionId || active.id)
+      }
+      this.postMessage({ type: "stash_success", name })
+    } catch (err) {
+      log.error("Stash prompt failed", err)
+      this.postMessage({ type: "stash_error", error: "Failed to stash prompt" })
+    }
+  }
+
+  private handleListStashes(): void {
+    try {
+      const active = this.tabManager.getActiveTab()
+      const stashes = active
+        ? this.promptStashManager.getSessionStashes(active.cliSessionId || active.id)
+        : this.promptStashManager.getGlobalStashes()
+      this.postMessage({ type: "stash_list", stashes })
+    } catch (err) {
+      log.error("List stashes failed", err)
+      this.postMessage({ type: "stash_error", error: "Failed to list stashes" })
+    }
+  }
+
+  private async handleDeleteStash(id: string): Promise<void> {
+    try {
+      await this.promptStashManager.deleteStash(id)
+      this.postMessage({ type: "stash_deleted", id })
+    } catch (err) {
+      log.error("Delete stash failed", err)
+      this.postMessage({ type: "stash_error", error: "Failed to delete stash" })
+    }
+  }
+
+  private async handleAddProvider(name: string, apiKey: string, baseUrl?: string): Promise<void> {
+    try {
+      const id = await this.providerConfigManager.upsertConfig({
+        name,
+        apiKey,
+        baseUrl,
+        enabled: true,
+        models: [],
+      })
+      this.postMessage({ type: "provider_added", id, name })
+    } catch (err) {
+      log.error("Add provider failed", err)
+      this.postMessage({ type: "provider_error", error: "Failed to add provider" })
+    }
+  }
+
+  private handleListProviders(): void {
+    try {
+      const providers = this.providerConfigManager.getAllConfigs()
+      this.postMessage({ type: "provider_list", providers })
+    } catch (err) {
+      log.error("List providers failed", err)
+      this.postMessage({ type: "provider_error", error: "Failed to list providers" })
+    }
+  }
+
+  private async handleUpdateProvider(id: string, updates: Record<string, unknown>): Promise<void> {
+    try {
+      const config = this.providerConfigManager.getConfig(id)
+      if (!config) {
+        this.postMessage({ type: "provider_error", error: "Provider not found" })
+        return
+      }
+      await this.providerConfigManager.upsertConfig({
+        ...config,
+        ...updates,
+      } as unknown as Omit<import("../model/ProviderConfigManager").ProviderConfig, "id">)
+      this.postMessage({ type: "provider_updated", id })
+    } catch (err) {
+      log.error("Update provider failed", err)
+      this.postMessage({ type: "provider_error", error: "Failed to update provider" })
+    }
+  }
+
+  private async handleDeleteProvider(id: string): Promise<void> {
+    try {
+      await this.providerConfigManager.deleteConfig(id)
+      this.postMessage({ type: "provider_deleted", id })
+    } catch (err) {
+      log.error("Delete provider failed", err)
+      this.postMessage({ type: "provider_error", error: "Failed to delete provider" })
+    }
   }
 
   private async handleCompactBannerAction(sessionId: string | undefined, action: string): Promise<void> {

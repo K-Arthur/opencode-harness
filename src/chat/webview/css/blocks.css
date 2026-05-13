@@ -156,6 +156,22 @@
   transition: background var(--duration-fast), border-color var(--duration-fast);
 }
 
+/* Smooth transition for thinking block expand/collapse */
+.thinking-block > .thinking-body {
+  transition: max-height var(--duration-normal) var(--ease-smooth), opacity var(--duration-normal) var(--ease-smooth);
+  max-height: 2000px;
+  opacity: 1;
+  overflow: hidden;
+}
+
+/* Collapsed state for global hide thinking */
+.thinking-block--collapsed > .thinking-body {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
 .thinking-block:not([open]) {
   animation: thinking-pulse 3s ease-in-out infinite;
 }
@@ -765,6 +781,16 @@
   overflow-y: auto;
 }
 
+/* Wrapped diff mode - enables line wrapping */
+.diff-table-wrapper--wrapped {
+  overflow-x: hidden;
+}
+
+.diff-table-wrapper--wrapped .diff-table td {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .diff-table {
   width: 100%;
   table-layout: fixed;
@@ -778,6 +804,39 @@
   line-height: var(--leading-tight);
   vertical-align: top;
   white-space: pre;
+}
+
+/* Diff wrap toggle button */
+.diff-wrap-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: var(--text-2xs);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast),
+    border-color var(--duration-fast);
+  min-height: var(--size-target-min);
+  min-width: var(--size-target-min);
+  white-space: nowrap;
+}
+
+.diff-wrap-toggle:hover {
+  background: var(--oc-accent-subtle);
+  color: var(--color-accent);
+  border-color: var(--oc-accent-border);
+}
+
+.diff-wrap-toggle.active {
+  color: var(--color-accent);
+  border-color: var(--oc-accent-border);
 }
 
 .diff-line-num {
@@ -939,6 +998,93 @@
 .diff-btn--open:hover {
   background: var(--oc-list-hover);
   color: var(--color-fg);
+}
+
+.diff-btn--revert {
+  background: transparent;
+  color: var(--oc-warning);
+  border: 1px solid color-mix(in srgb, var(--oc-warning) 40%, transparent);
+}
+
+.diff-btn--revert:hover {
+  background: var(--oc-warning-subtle);
+  border-color: var(--oc-warning);
+}
+
+/* Revert confirmation modal */
+.revert-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal, 1000);
+  padding: var(--space-4);
+}
+
+.revert-modal.hidden {
+  display: none;
+}
+
+.revert-modal-content {
+  background: var(--oc-editor-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  max-width: 400px;
+  width: 100%;
+  box-shadow: var(--shadow-lg);
+}
+
+.revert-modal-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-fg);
+  margin-bottom: var(--space-2);
+}
+
+.revert-modal-text {
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+  margin-bottom: var(--space-4);
+  line-height: var(--leading-normal);
+}
+
+.revert-modal-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.revert-modal-btn {
+  padding: var(--space-1-5) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  min-height: 32px;
+}
+
+.revert-modal-btn--confirm {
+  background: var(--oc-warning);
+  color: var(--oc-warning-fg);
+  border: none;
+}
+
+.revert-modal-btn--confirm:hover {
+  background: color-mix(in srgb, var(--oc-warning) 80%, black);
+}
+
+.revert-modal-btn--cancel {
+  background: var(--oc-button-secondary);
+  color: var(--oc-button-secondary-fg);
+  border: 1px solid var(--oc-glass-border);
+}
+
+.revert-modal-btn--cancel:hover {
+  background: var(--oc-button-secondary-hover);
 }
 
 /* Fallback diff content (plain text) */

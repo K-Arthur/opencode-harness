@@ -1,5 +1,6 @@
 import type { ModelInfo } from "./types"
 import type { ElementRefs } from "./dom"
+import type { ProviderConfig } from "../../model/ProviderConfigManager"
 
 export interface ModelManagerCallbacks {
   onToggleModel: (modelId: string, enabled: boolean) => void
@@ -20,10 +21,14 @@ export interface ModelManagerHandlers {
   getEnabledModels: () => ModelInfo[]
   getAllModels: () => ModelInfo[]
   isOpen: () => boolean
+  setProviders: (providers: ProviderConfig[]) => void
+  addProvider: (name: string, apiKey: string, baseUrl?: string) => void
+  deleteProvider: (id: string) => void
 }
 
 export function setupModelManager(els: ElementRefs, callbacks: ModelManagerCallbacks): ModelManagerHandlers {
   let models: ModelInfo[] = []
+  let providers: ProviderConfig[] = []
   let searchQuery = ""
   let isOpen = false
 
@@ -247,5 +252,25 @@ export function setupModelManager(els: ElementRefs, callbacks: ModelManagerCallb
     getEnabledModels,
     getAllModels,
     isOpen: () => isOpen,
+    setProviders: (newProviders: ProviderConfig[]) => {
+      providers = newProviders
+      render()
+    },
+    addProvider: (name: string, apiKey: string, baseUrl?: string) => {
+      const provider: ProviderConfig = {
+        id: `provider_${Date.now()}`,
+        name,
+        apiKey,
+        baseUrl,
+        enabled: true,
+        models: [],
+      }
+      providers.push(provider)
+      render()
+    },
+    deleteProvider: (id: string) => {
+      providers = providers.filter((p) => p.id !== id)
+      render()
+    },
   }
 }

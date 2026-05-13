@@ -1,4 +1,4 @@
-import type * as vscode from "vscode"
+import * as vscode from "vscode"
 import * as os from "node:os"
 import * as path from "node:path"
 import { type OpenCodeSession } from "./SessionStore"
@@ -287,5 +287,22 @@ export class SessionExporter {
   private truncate(text: string, maxLen: number): string {
     if (text.length <= maxLen) return text
     return text.slice(0, maxLen) + "\n... (truncated)"
+  }
+
+  /**
+   * Copy content to clipboard.
+   */
+  async copyToClipboard(content: string): Promise<void> {
+    if (!content || content.trim().length === 0) {
+      await vscode.window.showWarningMessage("No content to copy")
+      return
+    }
+    try {
+      await vscode.env.clipboard.writeText(content)
+      await vscode.window.showInformationMessage("Content copied to clipboard")
+    } catch (error) {
+      await vscode.window.showErrorMessage(`Failed to copy to clipboard: ${(error as Error).message}`)
+      throw error
+    }
   }
 }

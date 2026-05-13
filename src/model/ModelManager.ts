@@ -1,5 +1,6 @@
 import * as vscode from "vscode"
 import { log } from "../utils/outputChannel"
+import { ProviderConfigManager } from "./ProviderConfigManager"
 
 export interface ModelInfo {
   id: string
@@ -20,6 +21,7 @@ export class ModelManager {
   private _onModelChanged = new vscode.EventEmitter<string>()
   private _onModelsRefreshed = new vscode.EventEmitter<void>()
   private _globalState?: vscode.Memento
+  private providerConfigManager?: ProviderConfigManager
 
   readonly onModelChanged = this._onModelChanged.event
   readonly onModelsRefreshed = this._onModelsRefreshed.event
@@ -31,6 +33,25 @@ export class ModelManager {
   setGlobalState(globalState: vscode.Memento): void {
     this._globalState = globalState
     this.loadCachedModels()
+  }
+
+  /** Inject provider config manager. Call once after construction. */
+  setProviderConfigManager(providerConfigManager: ProviderConfigManager): void {
+    this.providerConfigManager = providerConfigManager
+  }
+
+  /**
+   * Get API key for a provider from configured provider settings.
+   */
+  getProviderApiKey(providerId: string): string | undefined {
+    return this.providerConfigManager?.getApiKey(providerId)
+  }
+
+  /**
+   * Get base URL for a provider from configured provider settings.
+   */
+  getProviderBaseUrl(providerId: string): string | undefined {
+    return this.providerConfigManager?.getBaseUrl(providerId)
   }
 
   private loadCachedModels(): void {

@@ -153,6 +153,19 @@ test.describe('Welcome Screen', () => {
       await expect(keyboardHint).not.toBeVisible()
     })
 
+    test('should display correctly at bottom panel short height (1200px x 250px)', async ({ page }) => {
+      await page.goto('/')
+      await page.setViewportSize({ width: 1200, height: 250 })
+      
+      const welcomeContainer = page.locator('.welcome-container')
+      await expect(welcomeContainer).toBeVisible()
+      
+      // Verify no horizontal scroll
+      const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
+      const clientWidth = await page.evaluate(() => document.body.clientWidth)
+      expect(scrollWidth).toBe(clientWidth)
+    })
+
     test('search toggle should expand input', async ({ page }) => {
       await page.goto('/')
       await page.setViewportSize({ width: 400, height: 600 })

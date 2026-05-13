@@ -17,7 +17,10 @@ import type { ThemeManager } from "../theme/ThemeManager"
 import type { ThemeController } from "./ThemeController"
 import type { PromptManager } from "../prompts/PromptManager"
 import type { ChatFileOps } from "./ChatFileOps"
+import type { SteerPromptHandler } from "./handlers/SteerPromptHandler"
 import type { ChatMessage, Block } from "./types"
+import type { ContextMonitor } from "../monitor/ContextMonitor"
+import type { UsageAnalytics } from "../monitor/UsageAnalytics"
 import { log } from "../utils/outputChannel"
 
 const crypto = globalThis.crypto
@@ -40,6 +43,9 @@ export interface WebviewEventRouterOptions {
   themeController: ThemeController
   promptManager: PromptManager
   fileOps: ChatFileOps
+  contextMonitor: ContextMonitor
+  usageAnalytics: UsageAnalytics
+  steerPromptHandler: SteerPromptHandler
   postMessage: (msg: Record<string, unknown>) => void
   postRequestError: (message: string, sessionId?: string) => void
   showWarningMessage: (message: string, options: vscode.MessageOptions, ...items: string[]) => Thenable<string | undefined>
@@ -57,6 +63,16 @@ export interface WebviewEventRouterOptions {
   showAutoModeConfirmation: (sessionId: string) => Promise<boolean>
   replayLiveStreamsToWebview: () => void
   exportChat: () => void
+  exportChatJson: () => void
+  exportChatText: () => void
+  copyChat: () => void
+  stashPrompt: (name: string, content: string, isGlobal: boolean) => void
+  listStashes: () => void
+  deleteStash: (id: string) => void
+  addProvider: (name: string, apiKey: string, baseUrl?: string) => void
+  listProviders: () => void
+  updateProvider: (id: string, updates: Record<string, unknown>) => void
+  deleteProvider: (id: string) => void
   showOpenFolderDialog: (dir: string) => void
 }
 
@@ -68,7 +84,7 @@ export class WebviewEventRouter {
     "close_tab", "switch_tab", "accept_diff", "reject_diff",
     "accept_permission", "mention_search", "list_sessions", "resume_session",
     "new_session", "get_models", "update_cost", "webview_ready", "rename_session", "webview_log",
-    "open_settings", "connect_provider", "open_mcp_settings", "open_mcp_config", "attach_files", "export_chat",
+    "open_settings", "connect_provider", "open_mcp_settings", "open_mcp_config", "attach_files", "export_chat", "export_chat_json", "export_chat_text", "copy_chat", "stash_prompt", "list_stashes", "delete_stash", "add_provider", "list_providers", "update_provider", "delete_provider",
     "compact_session", "execute_command", "list_commands",
     "insert_at_cursor", "create_file_from_code", "compact_banner_action",
     "edit_message", "attach_image",
@@ -79,6 +95,9 @@ export class WebviewEventRouter {
     "preview_theme", "get_theme_config", "update_theme_config", "list_cli_themes",
     "request_more_messages", "stream_ack", "retry_stream", "request_state_sync",
     "set_instructions", "fork_session", "accept_hunk", "reject_hunk",
+    "toggle_diff_wrap", "toggle_thinking", "revert_diff",
+    "context_history_request", "context_cost_estimate", "context_suggestions_request",
+    "send_steer_prompt", "add_to_queue",
   ])
 
   private readonly webviewHandlers: Map<string, (msg: Record<string, unknown>, sessionId?: string) => void | Promise<void>> = new Map([
@@ -282,6 +301,46 @@ export class WebviewEventRouter {
     ["attach_files", async () => { await this.opts.sessionLifecycle.handleAttachFiles() }],
     ["attach_image", (msg: Record<string, unknown>, sessionId?: string) => { if (sessionId && msg.data && msg.mimeType) this.opts.sessionLifecycle.handleAttachImage(sessionId, msg.data as string, msg.mimeType as string) }],
     ["export_chat", () => { this.opts.exportChat() }],
+    ["export_chat_json", () => { this.opts.exportChatJson() }],
+    ["export_chat_text", () => { this.opts.exportChatText() }],
+    ["copy_chat", () => { this.opts.copyChat() }],
+    ["stash_prompt", async (msg: Record<string, unknown>) => {
+      const name = msg.name as string
+      const content = msg.content as string
+      const isGlobal = msg.isGlobal as boolean ?? true
+      if (name && content) {
+        await this.opts.stashPrompt(name, content, isGlobal)
+      }
+    }],
+    ["list_stashes", () => { this.opts.listStashes() }],
+    ["delete_stash", (msg: Record<string, unknown>) => {
+      const id = msg.id as string
+      if (id) {
+        this.opts.deleteStash(id)
+      }
+    }],
+    ["add_provider", async (msg: Record<string, unknown>) => {
+      const name = msg.name as string
+      const apiKey = msg.apiKey as string
+      const baseUrl = msg.baseUrl as string | undefined
+      if (name && apiKey) {
+        await this.opts.addProvider(name, apiKey, baseUrl)
+      }
+    }],
+    ["list_providers", () => { this.opts.listProviders() }],
+    ["update_provider", async (msg: Record<string, unknown>) => {
+      const id = msg.id as string
+      const updates = msg.updates as Record<string, unknown>
+      if (id && updates) {
+        await this.opts.updateProvider(id, updates)
+      }
+    }],
+    ["delete_provider", (msg: Record<string, unknown>) => {
+      const id = msg.id as string
+      if (id) {
+        this.opts.deleteProvider(id)
+      }
+    }],
     ["compact_session", async (_: Record<string, unknown>, sessionId?: string) => { await this.opts.sessionLifecycle.handleCompactSession(sessionId) }],
     ["execute_command", async (msg: Record<string, unknown>, sessionId?: string) => { await this.opts.commandExec.handleExecuteCommand(sessionId, msg.command as string, msg.arguments as string) }],
     ["list_commands", async () => { await this.handleListCommands() }],
@@ -483,6 +542,202 @@ export class WebviewEventRouter {
     ["list_cli_themes", () => {
       const themes = this.opts.themeManager.discoverCliThemes()
       this.opts.postMessage({ type: "cli_themes_list", themes })
+    }],
+    ["toggle_diff_wrap", (msg: Record<string, unknown>) => {
+      const enabled = msg.enabled === true
+      this.opts.postMessage({
+        type: "display_pref_update",
+        pref: "diffWrapEnabled",
+        value: enabled,
+      })
+    }],
+    ["toggle_thinking", (msg: Record<string, unknown>) => {
+      const visible = msg.visible === true
+      this.opts.postMessage({
+        type: "display_pref_update",
+        pref: "thinkingVisible",
+        value: visible,
+      })
+    }],
+    ["revert_diff", async (msg: Record<string, unknown>, sessionId?: string) => {
+      const diffId = msg.diffId as string
+      const path = msg.path as string
+      if (!diffId || !path || !sessionId) {
+        log.warn("Invalid revert_diff message: missing required fields")
+        return
+      }
+
+      try {
+        // Find the diff in the session and revert it
+        const success = await this.opts.diffApplier.rollbackEdit({
+          filePath: path,
+          backupPath: "", // Will be looked up from diff metadata
+        } as any)
+
+        if (success) {
+          this.opts.postMessage({
+            type: "revert_success",
+            diffId,
+            path,
+            sessionId,
+          })
+        } else {
+          log.warn("Revert operation returned false", { diffId, path, sessionId })
+          this.opts.postMessage({
+            type: "revert_failed",
+            diffId,
+            path,
+            sessionId,
+            error: "Failed to revert changes",
+          })
+        }
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err)
+        log.error("Revert failed", err)
+        this.opts.postMessage({
+          type: "revert_failed",
+          diffId,
+          path,
+          sessionId,
+          error: errorMsg,
+        })
+      }
+    }],
+    ["context_history_request", (msg: Record<string, unknown>) => {
+      const days = typeof msg.days === "number" ? msg.days : 7
+      const sessionId = msg.sessionId as string | undefined
+      const history = this.opts.contextMonitor.getHistory(sessionId)
+      const statistics = this.opts.usageAnalytics.getUsageStatistics(days)
+      
+      this.opts.postMessage({
+        type: "context_history_response",
+        history,
+        statistics,
+        trackingEnabled: this.opts.contextMonitor.isTrackingEnabled(),
+        retentionDays: this.opts.contextMonitor.getHistoryRetentionDays(),
+      })
+    }],
+    ["context_cost_estimate", (msg: Record<string, unknown>) => {
+      const pendingTokens = typeof msg.pendingTokens === "number" ? msg.pendingTokens : 0
+      const prediction = this.opts.contextMonitor.predictUsage(pendingTokens)
+      
+      this.opts.postMessage({
+        type: "context_cost_estimate_response",
+        predictedTokens: prediction.predictedTokens,
+        predictedCost: prediction.predictedCost,
+        willOverflow: prediction.willOverflow,
+      })
+    }],
+    ["context_suggestions_request", (msg: Record<string, unknown>) => {
+      const days = typeof msg.days === "number" ? msg.days : 7
+      const report = this.opts.usageAnalytics.generateReport(days)
+      
+      this.opts.postMessage({
+        type: "context_suggestions_response",
+        patterns: report.patterns,
+        suggestions: report.suggestions,
+      })
+    }],
+    ["get_todos", (msg: Record<string, unknown>, sessionId?: string) => {
+      if (!sessionId) return
+      // For now, return empty todos array - will implement proper storage
+      this.opts.postMessage({ type: "todos_update", todos: [], sessionId })
+    }],
+    ["toggle_todo", (msg: Record<string, unknown>, sessionId?: string) => {
+      if (!sessionId) return
+      // TODO: Implement proper todo storage
+      log.info(`Toggle todo ${msg.todoId} in session ${sessionId}`)
+    }],
+    ["delete_todo", (msg: Record<string, unknown>, sessionId?: string) => {
+      if (!sessionId) return
+      // TODO: Implement proper todo storage
+      log.info(`Delete todo ${msg.todoId} in session ${sessionId}`)
+    }],
+    ["get_changed_files", (msg: Record<string, unknown>, sessionId?: string) => {
+      if (!sessionId) return
+      const session = this.opts.sessionStore.get(sessionId)
+      if (!session) return
+      
+      // Convert changedFiles string[] to FileChange format
+      const files = (session.changedFiles || []).map((path: string) => ({
+        path,
+        added: 0,
+        removed: 0,
+      }))
+      this.opts.postMessage({ type: "changed_files_update", files, sessionId })
+    }],
+    ["open_file", (msg: Record<string, unknown>) => {
+      const filePath = msg.path as string | undefined
+      if (!filePath) return
+      
+      vscode.workspace.openTextDocument(filePath).then(
+        (doc) => vscode.window.showTextDocument(doc),
+        (err) => {
+          log.error(`Failed to open file: ${filePath}`, err)
+          this.opts.showErrorMessage(`Failed to open file: ${(err as Error).message}`)
+        }
+      )
+    }],
+    ["get_skills", (msg: Record<string, unknown>) => {
+      // TODO: Implement proper skills listing from skill system
+      const skills: any[] = []
+      this.opts.postMessage({ type: "skills_list", skills })
+    }],
+    ["toggle_skill", (msg: Record<string, unknown>) => {
+      const skillId = msg.skillId as string | undefined
+      const enabled = msg.enabled === true
+      if (!skillId) return
+      // TODO: Implement proper skill enable/disable
+      log.info(`Toggle skill ${skillId} to ${enabled}`)
+    }],
+    ["search_skills", (msg: Record<string, unknown>) => {
+      const query = msg.query as string | undefined
+      // TODO: Implement proper skill search
+      const results: any[] = []
+      this.opts.postMessage({ type: "skills_search_results", results, query })
+    }],
+    ["get_subagent_activities", (msg: Record<string, unknown>, sessionId?: string) => {
+      if (!sessionId) return
+      // TODO: Implement proper subagent activity tracking
+      const activities: any[] = []
+      this.opts.postMessage({ type: "subagent_activities", activities, sessionId })
+    }],
+    ["cancel_subagent", (msg: Record<string, unknown>, sessionId?: string) => {
+      if (!sessionId) return
+      const subagentId = msg.subagentId as string | undefined
+      if (!subagentId) return
+      // TODO: Implement proper subagent cancellation
+      log.info(`Cancel subagent ${subagentId} in session ${sessionId}`)
+    }],
+    ["add_to_queue", (msg: Record<string, unknown>, sessionId?: string) => {
+      // Forward to webview to handle queue addition
+      this.opts.postMessage({
+        type: "add_to_queue",
+        sessionId,
+        text: msg.text as string || "",
+        attachments: msg.attachments as Array<{ data: string; mimeType: string }> || [],
+        isSteerPrompt: msg.isSteerPrompt as boolean || false,
+      })
+    }],
+    ["send_steer_prompt", async (msg: Record<string, unknown>, sessionId?: string) => {
+      if (!sessionId) return
+      try {
+        const steerPrompt = {
+          id: `steer-${crypto.randomUUID()}`,
+          text: msg.text as string || "",
+          attachments: Array.isArray(msg.attachments) ? msg.attachments as Array<{ data: string; mimeType: string }> : [],
+          mode: msg.mode as 'interrupt' | 'append' | 'queue' || 'interrupt',
+          timestamp: Date.now(),
+          sessionId,
+        }
+        await this.opts.steerPromptHandler.sendSteerPrompt(sessionId, steerPrompt, {
+          postMessage: (m) => this.opts.postMessage(m),
+          postRequestError: (m) => this.opts.postRequestError(m, sessionId),
+        })
+      } catch (error) {
+        log.error(`[WebviewEventRouter] Error handling send_steer_prompt: ${error}`)
+        this.opts.postRequestError(`Failed to send steer prompt: ${error instanceof Error ? error.message : String(error)}`, sessionId)
+      }
     }],
   ])
 

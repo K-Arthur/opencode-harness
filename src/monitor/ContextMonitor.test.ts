@@ -51,4 +51,15 @@ describe("ContextMonitor.ts", () => {
   it("has getAutoCompactSetting method", () => {
     assert.ok(source.includes("getAutoCompactSetting("))
   })
+
+  it("has updateQueueTokens method", () => {
+    assert.ok(source.includes("updateQueueTokens("), "must have updateQueueTokens method")
+    assert.ok(source.includes("queueTokens: number"), "updateQueueTokens must accept queueTokens")
+    assert.ok(source.includes("steerTokens: number"), "updateQueueTokens must accept steerTokens")
+  })
+
+  it("ContextUsage breakdown includes queued and steer fields", () => {
+    assert.ok(source.includes("queued: number"), "breakdown must have queued field")
+    assert.ok(source.includes("steer: number"), "breakdown must have steer field")
+  })
 })

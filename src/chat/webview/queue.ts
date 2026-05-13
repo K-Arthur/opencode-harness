@@ -12,6 +12,9 @@ export interface QueueItem {
   state: QueueItemState
   createdAt: number
   error?: string
+  position: number
+  isSteerPrompt?: boolean
+  estimatedTokens?: number
 }
 
 export interface QueueNextResult {
@@ -28,6 +31,14 @@ export interface PromptQueue {
   isNextReady: () => boolean
   clear: () => void
   getActiveCount: () => number
+  reorder: (fromIndex: number, toIndex: number) => boolean
+  moveToFront: (id: string) => boolean
+  moveToBack: (id: string) => boolean
+  getEstimatedTokens: (id: string) => number
+  getTotalEstimatedTokens: () => number
+  markAsSteer: (id: string) => boolean
+  persist: () => QueueItem[]
+  restore: (items: QueueItem[]) => void
 }
 
 export function createPromptQueue(): PromptQueue {
@@ -46,9 +57,77 @@ export function createPromptQueue(): PromptQueue {
       attachments: attachments || [],
       state: "queued",
       createdAt: Date.now(),
+      position: items.length,
+      estimatedTokens: estimateTextTokens(trimmed),
     }
     items.push(item)
     return item
+  }
+
+  function reorder(fromIndex: number, toIndex: number): boolean {
+    if (fromIndex < 0 || fromIndex >= items.length || toIndex < 0 || toIndex >= items.length) {
+      return false
+    }
+    const moved = items[fromIndex]
+    if (!moved) return false
+    items.splice(fromIndex, 1)
+    items.splice(toIndex, 0, moved)
+    // Update positions
+    items.forEach((item, idx) => item.position = idx)
+    return true
+  }
+
+  function moveToFront(id: string): boolean {
+    const idx = items.findIndex(i => i.id === id)
+    if (idx === -1 || idx === 0) return false
+    const moved = items[idx]
+    if (!moved) return false
+    items.splice(idx, 1)
+    items.unshift(moved)
+    items.forEach((item, idx) => item.position = idx)
+    return true
+  }
+
+  function moveToBack(id: string): boolean {
+    const idx = items.findIndex(i => i.id === id)
+    if (idx === -1 || idx === items.length - 1) return false
+    const moved = items[idx]
+    if (!moved) return false
+    items.splice(idx, 1)
+    items.push(moved)
+    items.forEach((item, idx) => item.position = idx)
+    return true
+  }
+
+  function getEstimatedTokens(id: string): number {
+    const item = items.find(i => i.id === id)
+    return item?.estimatedTokens || 0
+  }
+
+  function getTotalEstimatedTokens(): number {
+    return items.reduce((sum, item) => sum + (item.estimatedTokens || 0), 0)
+  }
+
+  function markAsSteer(id: string): boolean {
+    const item = items.find(i => i.id === id)
+    if (!item) return false
+    item.isSteerPrompt = true
+    return true
+  }
+
+  function persist(): QueueItem[] {
+    return items.slice()
+  }
+
+  function restore(savedItems: QueueItem[]): void {
+    items.length = 0
+    items.push(...savedItems)
+  }
+
+  // Simple token estimation (rough approximation)
+  function estimateTextTokens(text: string): number {
+    // Approximate: 1 token ≈ 4 characters for English text
+    return Math.ceil(text.length / 4)
   }
 
   function remove(id: string): boolean {
@@ -88,5 +167,22 @@ export function createPromptQueue(): PromptQueue {
     return items.filter((i) => i.state === "sending" || i.state === "streaming").length
   }
 
-  return { getItems, enqueue, remove, edit, processNext, isNextReady, clear, getActiveCount }
+  return { 
+    getItems, 
+    enqueue, 
+    remove, 
+    edit, 
+    processNext, 
+    isNextReady, 
+    clear, 
+    getActiveCount,
+    reorder,
+    moveToFront,
+    moveToBack,
+    getEstimatedTokens,
+    getTotalEstimatedTokens,
+    markAsSteer,
+    persist,
+    restore
+  }
 }

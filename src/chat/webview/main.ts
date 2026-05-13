@@ -1,6 +1,6 @@
 import type { ChatMessage, HostMessage, MentionItem, SessionSummary, ModelInfo, WebviewState, ContextChip, ToolCallState } from "./types"
 import { createState } from "./state"
-import { getElementRefs, scrollToBottom, getActiveMessageList } from "./dom"
+import { getElementRefs, scrollToBottom, getActiveMessageList, toggleAllThinkingBlocks } from "./dom"
 import { renderMessage } from "./messageRenderer"
 import { groupMessagesIntoTurns } from "./renderer"
 import { setupMentions } from "./mentions"
@@ -16,11 +16,16 @@ import { REMOVE_SVG } from "./icons"
 import { createPromptQueue, type PromptQueue, type QueueItem } from "./queue"
 import { updateContextChips, updateContextUsage, applyThemeVars, handleRateLimitExhausted } from "./theme"
 import { setupContextUsagePanel, setContextUsagePanel } from "./context-usage-panel"
+import { setupContextMonitor } from "./context-monitor"
+import { setupPromptStash } from "./prompt-stash"
 import { renderRecentSessions } from "./recent-sessions"
 import { renderUnifiedSessionList, setSessionListPostMessage, setUnifiedServerSessions, setUnifiedLocalSessions } from "./sessionListRenderer"
 import { createScrollAnchor, type ScrollAnchor } from "./scrollAnchor"
 import { createChunkedLoader, prependMessagesPreservingScroll, createLoadEarlierBanner, throttleScrollMarkers } from "./messageLoader"
 import { createVirtualList, getVirtualList, disposeVirtualList } from "./virtualList"
+import { setupTodosPanel } from "./todos-panel"
+import { setupSkillsModal } from "./skills-modal"
+import { setupSubagentPanel } from "./subagent-panel"
 
 declare const acquireVsCodeApi: (() => {
   postMessage(message: Record<string, unknown>): void
@@ -85,6 +90,11 @@ function getVsCodeApi() {
 
   // Core UI modules
   let modelManager: ReturnType<typeof setupModelManager>
+  
+  // Panel APIs
+  let todosPanelApi: any = null
+  let skillsModalApi: any = null
+  let subagentPanelApi: any = null
 
   const modelDropdown = setupModelDropdown(els, {
     onOpen: () => {
@@ -250,6 +260,23 @@ function getVsCodeApi() {
       setupThemeCustomizer()
       setupSessionModal()
       setupContextUsagePanel()
+      setupContextMonitor(els, (msg) => vscode.postMessage(msg as Record<string, unknown>))
+      setupPromptStash(els, (msg) => vscode.postMessage(msg as Record<string, unknown>))
+      
+      // Setup panels
+      todosPanelApi = setupTodosPanel(els, {
+        onToggleTodo: (todoId: string) => vscode.postMessage({ type: "toggle_todo", todoId }),
+        onDeleteTodo: (todoId: string) => vscode.postMessage({ type: "delete_todo", todoId }),
+        onOpenFile: (filePath: string) => vscode.postMessage({ type: "open_file", path: filePath }),
+      })
+      skillsModalApi = setupSkillsModal(els, {
+        onToggleSkill: (skillId: string, enabled: boolean) => vscode.postMessage({ type: "toggle_skill", skillId, enabled }),
+        onSearchSkills: (query: string) => vscode.postMessage({ type: "search_skills", query }),
+      })
+      subagentPanelApi = setupSubagentPanel(els, {
+        onCancelSubagent: (subagentId: string) => vscode.postMessage({ type: "cancel_subagent", subagentId }),
+      })
+      
       setupWelcomeSuggestions()
       setupWelcomeActions()
       setupMessageListener()
@@ -257,6 +284,7 @@ function getVsCodeApi() {
       setupDiffActionListener()
       setupSearch()
       setupTimelineToggle()
+      setupThinkingToggle()
       setupDisplayToggles()
       setupToolKeyboardNav()
       setupSettingsMenuKeyboardNav()
@@ -322,18 +350,28 @@ function getVsCodeApi() {
 
     // Search toggle handler
     const searchToggle = document.getElementById("welcome-search-toggle") as HTMLButtonElement | null
-    const searchInput = document.getElementById("welcome-search-input") as HTMLInputElement | null
-    if (searchToggle && searchInput) {
+    const searchWrapper = document.getElementById("welcome-search-input") as HTMLDivElement | null
+    if (searchToggle && searchWrapper) {
       searchToggle.addEventListener("click", () => {
-        const isHidden = searchInput.classList.contains("hidden")
+        const isHidden = searchWrapper.classList.contains("hidden")
         if (isHidden) {
-          searchInput.classList.remove("hidden")
+          searchWrapper.classList.remove("hidden")
           searchToggle.setAttribute("aria-expanded", "true")
+          const input = searchWrapper.querySelector("input")
+          if (input) input.focus()
         } else {
-          searchInput.classList.add("hidden")
+          searchWrapper.classList.add("hidden")
           searchToggle.setAttribute("aria-expanded", "false")
         }
       })
+      
+      const input = searchWrapper.querySelector("input")
+      if (input) {
+        input.addEventListener("input", (e) => {
+          const query = (e.target as HTMLInputElement).value
+          renderRecentSessionsList(query)
+        })
+      }
     }
 
     // Settings toggle handler
@@ -378,16 +416,26 @@ function getVsCodeApi() {
 
   /* ─── RECENT SESSIONS ─── */
 
-  function renderRecentSessionsList() {
+  function renderRecentSessionsList(filterQuery: string = "") {
     const activeId = stateManager.getState().activeSessionId
-    const sessions = stateManager.getAllSessions()
+    const allValidSessions = stateManager.getAllSessions()
       .filter((s) => s.id !== activeId && s.messages.length > 0)
+
+    const recentContainer = document.getElementById("welcome-recent-sessions") as HTMLDivElement | null
+    if (!recentContainer) return
+
+    if (allValidSessions.length === 0) {
+      recentContainer.style.display = "none"
+      return
+    }
+
+    const filteredSessions = allValidSessions
+      .filter((s) => !filterQuery || (s.name || "").toLowerCase().includes(filterQuery.toLowerCase()))
       .sort((a, b) => {
         const tA = a.messages[a.messages.length - 1]?.timestamp ?? 0
         const tB = b.messages[b.messages.length - 1]?.timestamp ?? 0
         return tB - tA
       })
-      .slice(0, 3)
       .map((s) => ({
         id: s.id,
         title: s.name,
@@ -396,15 +444,14 @@ function getVsCodeApi() {
         cost: s.cost || 0,
       }))
 
-    const recentContainer = document.getElementById("welcome-recent-sessions") as HTMLDivElement | null
-    if (!recentContainer) return
     renderRecentSessions(
-      sessions,
+      filteredSessions,
       recentContainer,
       () => vscode.postMessage({ type: "list_sessions" }),
       (sessionId) => {
         vscode.postMessage({ type: "resume_session", sessionId })
-      }
+      },
+      !!filterQuery
     )
   }
 
@@ -1023,6 +1070,23 @@ function getVsCodeApi() {
       mention.handleTrigger()
     })
 
+    // Steer input handlers
+    const steerInputSection = document.getElementById("steer-input-section") as HTMLElement
+    const steerInput = document.getElementById("steer-input") as HTMLTextAreaElement
+    const sendSteerBtn = document.getElementById("send-steer-btn") as HTMLButtonElement
+    const cancelSteerBtn = document.getElementById("cancel-steer-btn") as HTMLButtonElement
+
+    if (sendSteerBtn) {
+      sendSteerBtn.addEventListener("click", sendSteerPrompt)
+    }
+
+    if (cancelSteerBtn) {
+      cancelSteerBtn.addEventListener("click", () => {
+        steerInputSection?.classList.add("hidden")
+        if (steerInput) steerInput.value = ""
+      })
+    }
+
     // Add keyboard shortcut hint
     els.sendBtn?.setAttribute("title", "Send (Ctrl+Enter)")
 
@@ -1500,6 +1564,41 @@ function getVsCodeApi() {
     }
   }
 
+  function sendSteerPrompt() {
+    const steerInput = document.getElementById("steer-input") as HTMLTextAreaElement
+    const steerInputSection = document.getElementById("steer-input-section") as HTMLElement
+    const active = stateManager.getActiveSession()
+    
+    if (!active || !steerInput) return
+
+    const text = steerInput.value.trim()
+    if (!text) return
+
+    // Get selected mode
+    const modeInputs = document.querySelectorAll('input[name="steer-mode"]')
+    let selectedMode: 'interrupt' | 'append' | 'queue' = 'interrupt'
+    for (let i = 0; i < modeInputs.length; i++) {
+      const input = modeInputs[i] as HTMLInputElement
+      if (input.checked) {
+        selectedMode = input.value as 'interrupt' | 'append' | 'queue'
+        break
+      }
+    }
+
+    // Send steer prompt message
+    vscode.postMessage({
+      type: "send_steer_prompt",
+      sessionId: active.id,
+      text,
+      mode: selectedMode,
+      attachments: pendingAttachments,
+    })
+
+    // Clear and hide steer input
+    steerInput.value = ""
+    steerInputSection?.classList.add("hidden")
+  }
+
   function sendMessage() {
     const text = els.promptInput.value.trim()
     let active = stateManager.getActiveSession()
@@ -1599,6 +1698,44 @@ function getVsCodeApi() {
           return
         case "/export":
           vscode.postMessage({ type: "export_chat" })
+          els.promptInput.value = ""
+          autoResizeTextarea()
+          updateSendButton()
+          return
+        case "/export-md":
+          vscode.postMessage({ type: "export_chat" })
+          els.promptInput.value = ""
+          autoResizeTextarea()
+          updateSendButton()
+          return
+        case "/export-json":
+          vscode.postMessage({ type: "export_chat_json" })
+          els.promptInput.value = ""
+          autoResizeTextarea()
+          updateSendButton()
+          return
+        case "/export-text":
+          vscode.postMessage({ type: "export_chat_text" })
+          els.promptInput.value = ""
+          autoResizeTextarea()
+          updateSendButton()
+          return
+        case "/copy":
+          vscode.postMessage({ type: "copy_chat" })
+          els.promptInput.value = ""
+          autoResizeTextarea()
+          updateSendButton()
+          return
+        case "/stash":
+          const currentInput = els.promptInput.value
+          const stashName = commandArgs[0] || "Stash"
+          vscode.postMessage({ type: "stash_prompt", name: stashName, content: currentInput.replace("/stash", "").trim(), isGlobal: true })
+          els.promptInput.value = ""
+          autoResizeTextarea()
+          updateSendButton()
+          return
+        case "/stashes":
+          vscode.postMessage({ type: "list_stashes" })
           els.promptInput.value = ""
           autoResizeTextarea()
           updateSendButton()
@@ -2687,6 +2824,17 @@ function getVsCodeApi() {
       ["streaming_state", (msg, sid) => {
         if (sid) {
           stateManager.setStreaming(sid, Boolean(msg.isStreaming))
+          
+          // Show/hide steer input section based on streaming state
+          const steerInputSection = document.getElementById("steer-input-section") as HTMLElement
+          if (steerInputSection) {
+            if (msg.isStreaming) {
+              steerInputSection.classList.remove("hidden")
+            } else {
+              steerInputSection.classList.add("hidden")
+            }
+          }
+          
           if (!msg.isStreaming) {
             const sess = stateManager.getSession(sid)
             if (sess) {
@@ -2736,6 +2884,25 @@ function getVsCodeApi() {
             stream.handleToolEnd(result.id, result)
           }
         }
+      }],
+      ["add_to_queue", (msg, sid) => {
+        if (!sid) return
+        const text = msg.text as string || ""
+        const attachments = msg.attachments as Array<{ data: string; mimeType: string }> || []
+        const isSteerPrompt = msg.isSteerPrompt as boolean || false
+        
+        // Get the queue for this session
+        const queue = promptQueues.get(sid)
+        if (!queue) return
+        
+        // Add to queue
+        const queueItem = queue.enqueue(text, attachments)
+        if (queueItem && isSteerPrompt) {
+          queue.markAsSteer(queueItem.id)
+        }
+        
+        // Render queue UI
+        renderQueue(sid)
       }],
       ["permission_request", (_msg, sid) => {
         if (sid) {
@@ -3016,6 +3183,31 @@ function getVsCodeApi() {
           mcpConfig.setServers(msg.servers as McpServerInfo[])
         }
       }],
+      ["todos_update", (msg) => {
+        if (todosPanelApi && todosPanelApi.renderTodos) {
+          todosPanelApi.renderTodos(msg.todos || [])
+        }
+      }],
+      ["changed_files_update", (msg) => {
+        if (todosPanelApi && todosPanelApi.renderChangedFiles) {
+          todosPanelApi.renderChangedFiles(msg.files || [])
+        }
+      }],
+      ["skills_list", (msg) => {
+        if (skillsModalApi && skillsModalApi.renderSkills) {
+          skillsModalApi.renderSkills(msg.skills || [])
+        }
+      }],
+      ["skills_search_results", (msg) => {
+        if (skillsModalApi && skillsModalApi.renderSearchResults) {
+          skillsModalApi.renderSearchResults(msg.results || [])
+        }
+      }],
+      ["subagent_activities", (msg) => {
+        if (subagentPanelApi && subagentPanelApi.renderActivities) {
+          subagentPanelApi.renderActivities(msg.activities || [])
+        }
+      }],
     ])
 
     window.addEventListener("message", (event) => {
@@ -3070,6 +3262,41 @@ function getVsCodeApi() {
 	    })
 	    applyTimelineVisibility()
 	  }
+
+	  function setupThinkingToggle() {
+	    const state = stateManager.getState()
+	    const thinkingVisible = state.displayPrefs?.thinkingVisible ?? true
+	    els.thinkingToggleBtn.setAttribute("aria-pressed", String(thinkingVisible))
+	    els.thinkingToggleBtn.classList.toggle("active", thinkingVisible)
+	    
+	    els.thinkingToggleBtn.addEventListener("click", () => {
+	      const currentState = stateManager.getState()
+	      const newVisible = !(currentState.displayPrefs?.thinkingVisible ?? true)
+	      const updatedState: WebviewState = {
+        ...currentState,
+        displayPrefs: {
+          text: currentState.displayPrefs?.text ?? true,
+          tools: currentState.displayPrefs?.tools ?? true,
+          diffs: currentState.displayPrefs?.diffs ?? true,
+          errors: currentState.displayPrefs?.errors ?? true,
+          diffWrapEnabled: currentState.displayPrefs?.diffWrapEnabled ?? false,
+          thinkingVisible: newVisible,
+        },
+      }
+      vscode.setState(updatedState)
+      els.thinkingToggleBtn.setAttribute("aria-pressed", String(newVisible))
+      els.thinkingToggleBtn.classList.toggle("active", newVisible)
+      toggleAllThinkingBlocks(newVisible)
+    })
+
+    // Keyboard shortcut: Ctrl/Cmd+T
+    document.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "t") {
+        e.preventDefault()
+        els.thinkingToggleBtn.click()
+      }
+    })
+  }
 
 	  function applyTimelineVisibility(sessionId?: string) {
 	    const targetId = sessionId || stateManager.getState().activeSessionId || undefined

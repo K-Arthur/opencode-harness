@@ -37,9 +37,26 @@
               <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
             </svg>
           </button>
+          <button class="icon-btn" id="todos-toggle-btn" title="Toggle todos panel" aria-label="Toggle todos panel" aria-pressed="false" aria-controls="todos-panel">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+            </svg>
+          </button>
           <button class="icon-btn" id="timeline-toggle-btn" title="Toggle conversation timeline" aria-label="Toggle conversation timeline" aria-pressed="false">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+            </svg>
+          </button>
+          <button class="icon-btn" id="thinking-toggle-btn" title="Toggle thinking blocks" aria-label="Toggle thinking blocks" aria-pressed="false">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2z"/>
+              <path d="M12 16v-4"/>
+              <path d="M12 8h.01"/>
+            </svg>
+          </button>
+          <button class="icon-btn" id="skills-btn" title="Manage skills" aria-label="Manage skills" aria-haspopup="dialog" aria-controls="skills-modal">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
             </svg>
           </button>
           <button class="icon-btn" id="settings-btn" title="More options" aria-label="More options" aria-haspopup="menu" aria-controls="settings-menu" aria-expanded="false">
@@ -51,6 +68,32 @@
         </div>
       </div>
     </header>
+
+    <!-- Skills management modal -->
+    <div id="skills-modal" class="skills-modal hidden" role="dialog" aria-label="Manage skills" aria-modal="true">
+      <div class="skills-modal-content">
+        <div class="skills-modal-header">
+          <h2 class="skills-modal-title">Manage Skills</h2>
+          <button class="skills-modal-close-btn" id="skills-modal-close-btn" aria-label="Close skills modal">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div class="skills-modal-search">
+          <input type="text" class="skills-modal-search-input" id="skills-search-input" placeholder="Search skills..." aria-label="Search skills">
+        </div>
+        <div class="skills-modal-filter" id="skills-filter">
+          <button class="skills-modal-filter-btn active" data-category="all">All</button>
+          <button class="skills-modal-filter-btn" data-category="coding">Coding</button>
+          <button class="skills-modal-filter-btn" data-category="analysis">Analysis</button>
+          <button class="skills-modal-filter-btn" data-category="debugging">Debugging</button>
+        </div>
+        <div class="skills-modal-list" id="skills-list">
+          <!-- Skills will be rendered dynamically -->
+        </div>
+      </div>
+    </div>
 
     <!-- Settings overflow menu (anchored to #settings-btn) -->
     <div id="settings-menu" class="settings-menu hidden" role="menu" aria-label="More options">
@@ -97,6 +140,43 @@
       </div>
       <div id="changed-files-list" class="changed-files-list hidden" aria-label="Changed files"></div>
       <div id="checkpoint-panel" class="checkpoint-panel hidden" aria-label="Checkpoints"></div>
+      <div id="todos-panel" class="todos-panel hidden" aria-label="Todos and changed files">
+        <div class="todos-panel-header">
+          <h2 class="todos-panel-title">Todos & Files</h2>
+          <button class="icon-btn" id="close-todos-btn" title="Close panel" aria-label="Close todos panel">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div class="todos-panel-content">
+          <div class="todos-section">
+            <h3 class="todos-section-title">Todos</h3>
+            <div id="todos-list"></div>
+            <form class="todo-add-form" id="todo-add-form">
+              <input type="text" class="todo-add-input" id="todo-add-input" placeholder="Add a new todo..." aria-label="New todo">
+              <button type="submit" class="todo-add-btn">Add</button>
+            </form>
+          </div>
+          <div class="todos-section">
+            <h3 class="todos-section-title">Changed Files</h3>
+            <div id="changed-files-panel-list"></div>
+          </div>
+        </div>
+      </div>
+      <div id="subagent-panel" class="subagent-panel hidden" aria-label="Subagent activity">
+        <div class="subagent-panel-header">
+          <h2 class="subagent-panel-title">Subagent Activity</h2>
+          <button class="icon-btn" id="close-subagent-btn" title="Close panel" aria-label="Close subagent panel">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div class="subagent-panel-content" id="subagent-list">
+          <!-- Subagent activities will be rendered dynamically -->
+        </div>
+      </div>
       <div id="context-usage-panel" class="context-usage-panel hidden" aria-label="Context usage">
         <div class="context-usage-header">
           <h3>Context Usage</h3>
@@ -136,7 +216,29 @@
           <div class="welcome-brand" aria-hidden="true">
             <img class="welcome-wordmark" src="media/opencode-wordmark-dark.svg" width="120" height="auto" alt="OpenCode" aria-hidden="true">
           </div>
+          <h2 id="welcome-greeting" class="welcome-greeting">Welcome</h2>
           <p class="welcome-tagline">Your intelligent coding assistant</p>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="welcome-search-wrapper">
+          <button id="welcome-search-toggle" class="welcome-search-toggle" aria-expanded="false">
+            <span class="search-icon">🔍</span>
+            <span class="search-label">Search sessions...</span>
+          </button>
+          <div id="welcome-search-input" class="welcome-search-input hidden">
+            <input type="text" placeholder="Search sessions..." aria-label="Search sessions">
+          </div>
+        </div>
+
+        <!-- Quick Settings -->
+        <div class="welcome-quick-settings">
+          <button id="settings-toggle" class="settings-toggle" aria-expanded="false">
+            <span>Quick Settings</span>
+          </button>
+          <div id="settings-panel" class="settings-panel hidden">
+            <p>Settings panel content</p>
+          </div>
         </div>
 
         <!-- Workspace + model context row -->
@@ -225,12 +327,93 @@
       <div id="context-usage" class="hidden">
         <progress id="context-progress-bar" max="100" value="0"></progress>
         <span id="context-label" class="context-usage-label">0%</span>
+        <span id="context-cost" class="context-cost" title="Estimated cost"></span>
+      </div>
+    </div>
+
+    <!-- Context Monitor Panel -->
+    <div id="context-monitor-panel" class="panel hidden" role="dialog" aria-modal="true" aria-label="Context Usage Monitor">
+      <div class="panel-header">
+        <h2>Context Usage</h2>
+        <button id="context-monitor-close" class="icon-btn" aria-label="Close context monitor">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6 6 18"/>
+            <path d="M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="panel-body">
+        <div class="context-monitor-section">
+          <h3>Usage History (7 days)</h3>
+          <div id="context-monitor-history-graph" class="context-history-graph"></div>
+        </div>
+        <div class="context-monitor-section">
+          <h3>Cost Summary</h3>
+          <div id="context-monitor-cost-display" class="cost-display"></div>
+        </div>
+        <div class="context-monitor-section">
+          <h3>Optimization Suggestions</h3>
+          <div id="context-monitor-suggestions-panel" class="suggestions-panel"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="prompt-stash-panel" class="prompt-stash-panel hidden">
+      <div class="panel-header">
+        <h2>Prompt Stash</h2>
+        <button id="prompt-stash-close" class="panel-close-btn" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="panel-body">
+        <div id="prompt-stash-list" class="prompt-stash-list"></div>
       </div>
     </div>
 
     <div id="input-area">
       <div id="model-dropdown-container" class="hidden"></div>
       <div id="variant-dropdown-container" class="hidden"></div>
+      
+      <!-- Steer input section - shown during streaming -->
+      <div id="steer-input-section" class="steer-input-section hidden">
+        <div class="steer-input-header">
+          <span class="steer-badge">Steer</span>
+          <span class="steer-hint">Interrupt and guide the current response</span>
+        </div>
+        <div id="steer-input-wrapper">
+          <textarea id="steer-input" rows="1" placeholder="Correct, redirect, or add context..." aria-label="Steer prompt input"></textarea>
+        </div>
+        <div class="steer-mode-selector">
+          <label class="steer-mode-option">
+            <input type="radio" name="steer-mode" value="interrupt" checked>
+            <span>Interrupt</span>
+          </label>
+          <label class="steer-mode-option">
+            <input type="radio" name="steer-mode" value="append">
+            <span>Append</span>
+          </label>
+          <label class="steer-mode-option">
+            <input type="radio" name="steer-mode" value="queue">
+            <span>Queue</span>
+          </label>
+        </div>
+        <div class="steer-actions">
+          <button class="steer-btn primary" id="send-steer-btn" aria-label="Send steer prompt">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+            Send
+          </button>
+          <button class="steer-btn secondary" id="cancel-steer-btn" aria-label="Cancel steer">
+            Cancel
+          </button>
+        </div>
+      </div>
+
       <div id="input-wrapper">
         <textarea id="prompt-input" rows="1" placeholder="Ask OpenCode anything…" aria-label="Message input"></textarea>
         <div id="mention-dropdown" class="dropdown hidden"></div>
