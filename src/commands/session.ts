@@ -106,7 +106,7 @@ export function registerListSessionsCommand(
           detail: `${new Date(s.lastActiveAt).toLocaleDateString()} — ${s.model || "no model"}`,
           id: s.id,
         }))
-        const picked = await vscode.window.showQuickPick(items, { placeHolder: "Switch to session" })
+        const picked = await vscode.window.showQuickPick(items, { placeHolder: "Choose a session to switch to" })
         if (picked) {
           sessionStore.setActive(picked.id)
           vscode.window.showInformationMessage(`Switched to: ${picked.label}`)
@@ -133,7 +133,7 @@ export function registerDeleteSessionCommand(
             return
           }
           const items = sessions.map(s => ({ label: SessionStore.displayName(s), description: `${s.messages.length} messages`, id: s.id }))
-          const picked = await vscode.window.showQuickPick(items, { placeHolder: "Select session to delete" })
+          const picked = await vscode.window.showQuickPick(items, { placeHolder: "Choose a session to delete" })
           if (!picked) return
           sessionId = picked.id
         }
@@ -444,7 +444,7 @@ export function registerChooseHistorySessionCommand(
         })
 
         const picked = await vscode.window.showQuickPick(items, {
-          placeHolder: "Select a session to open",
+          placeHolder: "Choose a session to open",
           matchOnDescription: true,
           matchOnDetail: true,
         })

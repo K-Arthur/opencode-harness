@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -v \"^$\")",
+      "Read(//home/kevinarthur/.agents/skills/**)",
+      "Read(//home/kevinarthur/.agents/**)",
+      "Read(//home/kevinarthur/**)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); skills=d['skills']; first5=list\\(skills.items\\(\\)\\)[:5]; [print\\(k, json.dumps\\(v, indent=2\\)\\) for k,v in first5]\")"
+    ]
+  }
+}

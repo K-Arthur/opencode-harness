@@ -1,8 +1,46 @@
 # OpenCode
 
+[![GitHub stars](https://img.shields.io/github/stars/K-Arthur/opencode-harness?style=social)](https://github.com/K-Arthur/opencode-harness/stargazers)
+
+**Write code faster, debug smarter, and ship with confidence using AI—without leaving your editor.**
+
+OpenCode brings the power of the open-source AI coding agent directly into VS Code. Unlike terminal-based tools, this extension provides a rich, integrated interface that keeps you in the flow while giving you full control over how AI assists your development workflow.
+
 AI coding agent for your editor — write, refactor, test, and debug with natural language commands.
 
 OpenCode brings the [opencode](https://opencode.ai) agentic coding experience directly into VS Code with a rich chat interface, real-time agent visibility, and deep workspace context awareness.
+
+## Why OpenCode?
+
+### Unlike Terminal-Based Tools
+OpenCode provides a rich, integrated interface directly in VS Code. No context switching between your editor and terminal—stay in the flow while AI assists your coding.
+
+### Unlike Proprietary Solutions
+OpenCode is fully open-source with no vendor lock-in. Use any AI model from any provider, customize everything, and maintain full control over your data.
+
+### Unlike Basic Extensions
+OpenCode includes advanced features like cost tracking, theme customization, granular permission modes, and checkpoint/rollback—capabilities usually reserved for enterprise tools.
+
+### Key Differentiators
+- **Multi-Model Support:** Use Claude, GPT, Gemini, or 75+ other providers
+- **Cost Tracking:** Monitor your AI usage and optimize spending
+- **Theme Customization:** Match your editor's look or choose from presets
+- **Permission Modes:** Choose how much autonomy the AI has (Plan, Auto, Build)
+- **Privacy-First:** Your code stays local, no data storage
+- **Open Source:** Fully transparent, customizable, and free
+
+## Compare with Alternatives
+
+| Feature | OpenCode | GitHub Copilot | Claude Code | Continue |
+|---------|----------|----------------|-------------|----------|
+| **Open Source** | ✅ Yes | ❌ No | ❌ No | ✅ Yes |
+| **Multi-Model Support** | ✅ 75+ providers | ❌ GitHub only | ❌ Claude only | ✅ Multiple |
+| **Cost Tracking** | ✅ Built-in | ❌ No | ❌ No | ❌ No |
+| **Theme Customization** | ✅ Full control | ❌ No | ❌ No | ❌ No |
+| **Permission Modes** | ✅ Plan/Auto/Build | ⚠️ Limited | ⚠️ Limited | ❌ No |
+| **Privacy-First** | ✅ No code storage | ⚠️ Data sent to GitHub | ⚠️ Data sent to Anthropic | ⚠️ Varies |
+| **VS Code Integration** | ✅ Native | ✅ Native | ✅ Native | ✅ Native |
+| **Free to Use** | ✅ Yes (pay for API) | ❌ Subscription | ❌ Subscription | ✅ Yes (pay for API) |
 
 ## Features
 
@@ -322,6 +360,63 @@ The extension warns you before you hit limits:
 - **VS Code** 1.98.0 or higher
 - **Node.js** 20.x or later
 - **opencode CLI** — the agent runtime (see Setup below)
+
+## Frequently Asked Questions
+
+### What is OpenCode for VS Code?
+OpenCode for VS Code is an extension that integrates the open-source AI coding agent directly into your editor. It provides a rich chat interface, multi-model support, cost tracking, and advanced features like theme customization and permission modes.
+
+### How does OpenCode differ from GitHub Copilot?
+OpenCode is open-source, supports multiple AI models (not just GitHub's), includes cost tracking, and offers granular permission controls. GitHub Copilot is a proprietary solution tied to GitHub's infrastructure.
+
+### Can I use OpenCode with my existing API keys?
+Yes! OpenCode supports 75+ AI providers including Anthropic (Claude), OpenAI (GPT), Google (Gemini), and many others. Simply configure your API key in the settings.
+
+### Is OpenCode free to use?
+Yes, OpenCode is free and open-source. You pay only for the AI provider API usage. OpenCode itself has no subscription or licensing fees.
+
+### How do I install OpenCode in VS Code?
+1. Open VS Code Extensions view (Ctrl+Shift+X)
+2. Search for "OpenCode"
+3. Click Install
+4. Configure your API key in settings
+5. Open the OpenCode panel and start coding
+
+### What AI models does OpenCode support?
+OpenCode supports Claude (Anthropic), GPT (OpenAI), Gemini (Google), and 75+ other providers through Models.dev. You can switch between models at any time.
+
+### Is my code private?
+Yes. OpenCode does not store your code or context data. Your code is processed by the AI provider you configure according to their privacy policy. OpenCode itself has zero-knowledge of your code.
+
+### What are the permission modes?
+- **Plan Mode:** Review all changes before applying (safe for exploration)
+- **Auto Mode:** Agent applies changes automatically (faster but less control)
+- **Build Mode:** Full agent access to read, write, and execute (use with caution)
+
+## AI Safety & Limitations
+
+OpenCode uses AI models to assist with coding tasks. Please note:
+
+### Limitations
+- **Review All Code:** Always review AI-generated code before committing
+- **Hallucinations:** AI may generate incorrect or nonsensical code
+- **Context Limits:** AI has limited context window, may miss relevant code
+- **Security:** Never share sensitive credentials or secrets in conversations
+- **Bias:** AI may reflect biases in training data
+
+### Best Practices
+- Use Plan mode for exploratory work and learning
+- Review changes in Auto mode before applying
+- Use Build mode only in trusted environments with version control
+- Always test AI-generated code before deployment
+- Keep sensitive data (API keys, secrets) out of conversations
+- Use checkpoints to save your work before major changes
+
+### Safety Features
+- **Checkpoints:** Save your work before AI makes changes
+- **Rollback:** Revert to any checkpoint instantly
+- **Permission Modes:** Control how much autonomy the AI has
+- **Cost Tracking:** Monitor and limit your AI usage
 
 ## Quick Start
 
@@ -729,3 +824,58 @@ OpenCode is built with accessibility as a first-class concern:
 ## License
 
 MIT
+
+---
+
+## About the Developer
+
+OpenCode VS Code Extension is developed by [Kevin Arthur](https://kevinarthur.design), a product designer and developer specializing in developer tools and AI-powered applications. With expertise in UX design, technical architecture, and open-source development, Kevin brings a user-centric approach to AI coding tools.
+
+**Portfolio:** [kevinarthur.design](https://kevinarthur.design)  
+**Contact:** [hello@kevinarthur.design](mailto:hello@kevinarthur.design)  
+**GitHub:** [@K-Arthur](https://github.com/K-Arthur)
+
+---
+
+**Product Copy & UX Optimization by Kevin Arthur**
+
+This comprehensive product copy and UX optimization was designed and implemented by [Kevin Arthur](https://kevinarthur.design), a product designer and developer specializing in developer tools and AI-powered applications.
+
+[Portfolio](https://kevinarthur.design) | [Contact](mailto:hello@kevinarthur.design) | [GitHub](https://github.com/K-Arthur)
+
+---
+
+## Community
+
+### What Developers Say
+
+*"OpenCode has transformed how I approach debugging. The integrated interface keeps me in the flow while the AI handles the tedious work."* — [Your Name], Full-Stack Developer
+
+*"The theme customization and cost tracking features are game-changers. I can finally use AI coding tools without breaking the bank."* — [Your Name], Senior Developer
+
+*"The permission modes give me the control I need. I use Plan mode for exploration and Auto mode for trusted codebases."* — [Your Name], Tech Lead
+
+**[Share your experience](https://github.com/K-Arthur/opencode-harness/issues/new)**
+
+---
+
+### Used By
+
+OpenCode is used by developers at:
+
+- [Your Company/Organization] — [Use case]
+- [Your Company/Organization] — [Use case]
+- [Your Company/Organization] — [Use case]
+
+**[Add your organization](https://github.com/K-Arthur/opencode-harness/pulls)**
+
+---
+
+### Community Metrics
+
+- 🌟 **GitHub Stars** stars on GitHub
+- 📦 **VS Code Installs** installations (coming soon to marketplace)
+- 💬 **Active Users** monthly active users
+- 🤝 **Contributors** contributors
+
+[Join the community](https://github.com/K-Arthur/opencode-harness)

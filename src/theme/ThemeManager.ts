@@ -444,7 +444,7 @@ export class ThemeManager {
     }
 
     const picked = await vscode.window.showQuickPick(items, {
-      placeHolder: "Select a chat panel theme",
+      placeHolder: "Choose a chat panel theme",
       title: "OpenCode Theme Preview (chat panel only)",
     })
 

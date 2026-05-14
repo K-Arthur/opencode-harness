@@ -49,6 +49,37 @@ void describe("ThemeController.ts", () => {
     assert.ok(source.includes("\"light\""))
     assert.ok(source.includes("\"dark\""))
     assert.ok(source.includes("\"high-contrast\""))
-    assert.ok(source.includes("overrides[key] = value.trim()"))
+    assert.ok(source.includes("isValidColorValue(trimmed)"))
+  })
+
+  void it("isValidColorValue validates hex format", () => {
+    assert.ok(source.includes("isValidColorValue"))
+    assert.ok(source.includes("/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/"))
+  })
+
+  void it("isValidColorValue validates rgba format", () => {
+    assert.ok(source.includes("/^rgba?\\(\\s*\\d+\\s*,\\s*\\d+\\s*,\\s*\\d+\\s*(,\\s*[\\d.]+\\s*)?\\)$/"))
+  })
+
+  void it("isValidColorValue allows CSS variable references", () => {
+    assert.ok(source.includes("/^var\\(--[\\w-]+\\)$/"))
+  })
+
+  void it("isValidColorValue allows transparent keyword", () => {
+    assert.ok(source.includes('trimmed === "transparent"'))
+  })
+
+  void it("handleUpdateThemeConfig has error handling", () => {
+    assert.ok(source.includes("try {"))
+    assert.ok(source.includes("catch (error)"))
+    assert.ok(source.includes("log.error"))
+  })
+
+  void it("handleUpdateThemeConfig sends error message on failure", () => {
+    assert.ok(source.includes('type: "theme_config_error"'))
+  })
+
+  void it("normalizeThemeConfig filters empty values", () => {
+    assert.ok(source.includes("if (trimmed && isValidColorValue(trimmed))"))
   })
 })

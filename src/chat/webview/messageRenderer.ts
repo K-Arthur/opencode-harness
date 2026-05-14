@@ -19,7 +19,8 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
   const contentWrapper = document.createElement("div")
   contentWrapper.className = "message-content"
 
-  if (role !== "system" && !isConsecutive) {
+  // Only show header if not consecutive AND not a re-render (opts?.skipHeader indicates re-render)
+  if (role !== "system" && !isConsecutive && !opts?.skipHeader) {
     const header = document.createElement("div")
     header.className = "message-header"
     const roleSpan = document.createElement("span")

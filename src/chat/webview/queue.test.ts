@@ -7,7 +7,7 @@ const source = readFileSync(resolve(__dirname, "queue.ts"), "utf8")
 
 describe("queue.ts enhancements", () => {
   it("has position field in QueueItem interface", () => {
-    assert.ok(source.includes("position?: number"), "QueueItem must have position field")
+    assert.ok(/position\??: number/.test(source), "QueueItem must have position field")
   })
 
   it("has isSteerPrompt field in QueueItem interface", () => {
@@ -102,6 +102,6 @@ describe("queue.ts enhancements", () => {
     assert.ok(source.includes("getTotalEstimatedTokens,"), "getTotalEstimatedTokens must be exported")
     assert.ok(source.includes("markAsSteer,"), "markAsSteer must be exported")
     assert.ok(source.includes("persist,"), "persist must be exported")
-    assert.ok(source.includes("restore,"), "restore must be exported")
+    assert.ok(/\brestore\b/.test(source.slice(source.lastIndexOf("return {"))), "restore must be exported")
   })
 })

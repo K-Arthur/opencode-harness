@@ -12,14 +12,14 @@ export function registerPromptCommands(
         if (!name) {
           name = await vscode.window.showInputBox({
             prompt: "Enter a name for the stash:",
-            placeHolder: "My Stash",
+            placeHolder: "Stash name (e.g., Code Review, Bug Fix)",
           })
           if (!name) return
         }
 
         const content = await vscode.window.showInputBox({
           prompt: "Enter the prompt content to stash:",
-          placeHolder: "Your prompt here...",
+          placeHolder: "Your prompt text (e.g., Always write tests first)",
         })
         if (!content) return
 
@@ -49,7 +49,7 @@ export function registerPromptCommands(
         }))
 
         const selected = await vscode.window.showQuickPick(items, {
-          placeHolder: "Select a stashed prompt",
+          placeHolder: "Choose a stashed prompt",
         })
 
         if (selected) {
@@ -59,7 +59,7 @@ export function registerPromptCommands(
               { label: "Copy to clipboard", description: "Copy prompt to clipboard" },
               { label: "Delete", description: "Delete this stash" },
             ],
-            { placeHolder: "What would you like to do?" }
+            { placeHolder: "Choose an action" }
           )
 
           if (action?.label === "Insert to input") {

@@ -274,6 +274,7 @@ export interface RenderOptions {
   mode?: string
   turnIndex?: number
   sessionId?: string
+  skipHeader?: boolean
 }
 
 // ---------------------------------------------------------------------------

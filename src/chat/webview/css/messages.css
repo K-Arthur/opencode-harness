@@ -10,12 +10,12 @@
   flex: 1;
   overflow-y: auto;
   overflow-anchor: none;
-  padding: var(--space-4) var(--space-3); /* Balanced horizontal for extension view */
+  padding: var(--space-3) var(--space-2); /* Reduced padding for tighter layout */
   padding-bottom: var(--message-list-bottom-pad, 160px);
   padding-right: 0; /* Clear space for timeline when visible */
   display: flex;
   flex-direction: column;
-  gap: var(--space-4); /* Reduced gap for better density */
+  gap: var(--space-1); /* Reduced gap for better density */
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   position: relative;
@@ -37,7 +37,7 @@
 .load-earlier-banner {
   display: flex;
   justify-content: center;
-  padding: var(--space-2) 0 var(--space-3);
+  padding: var(--space-1) 0 var(--space-2);
   /* Keep the banner outside the content-visibility skip region */
   content-visibility: visible;
 }
@@ -45,16 +45,16 @@
 .load-earlier-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 14px;
-  border-radius: 999px;
+  gap: var(--space-1-5);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
   border: 1px solid var(--vscode-button-border, transparent);
   background: var(--vscode-button-secondaryBackground, var(--vscode-editorWidget-background));
   color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
-  font-size: 0.75rem;
+  font-size: var(--text-2xs);
   font-family: inherit;
   cursor: pointer;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--duration-fast) var(--ease-out);
 }
 
 .load-earlier-btn:hover:not(:disabled) {
@@ -135,7 +135,7 @@
 }
 
 .timeline-header {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 800;
   text-transform: uppercase;
   color: var(--color-muted);
@@ -148,7 +148,7 @@
 .timeline-item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0-5);
   padding: var(--space-1-5) var(--space-2);
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -177,7 +177,7 @@
 }
 
 .timeline-item-role {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 700;
@@ -215,7 +215,7 @@
 }
 
 .timeline-item-preview {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--color-fg);
   white-space: nowrap;
   overflow: hidden;
@@ -271,7 +271,7 @@
 .message {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-3);
+  gap: var(--space-1-5);
   max-width: 100%;
   animation: message-enter var(--duration-normal) var(--ease-out) forwards;
   word-break: break-word;
@@ -279,12 +279,12 @@
 }
 
 .message + .message {
-  margin-top: var(--space-4);
+  margin-top: var(--space-1);
 }
 
 .message.user + .message.assistant,
 .message.assistant + .message.user {
-  margin-top: var(--space-8);
+  margin-top: var(--space-2);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════╛
@@ -295,7 +295,7 @@
   display: flex;
   flex-direction: column;
   max-width: 100%;
-  gap: var(--space-1);
+  gap: var(--space-0-5);
   min-width: 0;
   position: relative;
   width: 100%;
@@ -312,8 +312,8 @@
 .message-header {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-1);
+  gap: var(--space-1);
+  margin-bottom: var(--space-0-5);
   font-size: var(--text-2xs);
   color: var(--color-muted);
   text-transform: uppercase;
@@ -326,7 +326,7 @@
 
 .message.assistant .message-header {
   flex-direction: row;
-  padding-left: calc(var(--space-3) + 2px);
+  padding-left: var(--space-3);
 }
 
 .message-role {
@@ -345,7 +345,7 @@
   font-size: var(--text-2xs);
   color: var(--color-muted);
   background: var(--oc-list-hover);
-  padding: 1px 5px;
+  padding: var(--space-0-5) var(--space-1-5);
   border-radius: var(--radius-sm);
   opacity: 0.6;
   font-weight: 500;
@@ -468,7 +468,7 @@
   background: var(--user-message-bg, var(--oc-user-msg-bg, rgba(128,128,128,0.08)));
   color: var(--user-message-fg, var(--oc-fg));
   border-radius: var(--radius-xl);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
   word-break: break-word;
@@ -485,9 +485,9 @@
 
 .message.assistant .message-bubble {
   background: var(--assistant-message-bg, rgba(128, 128, 128, 0.03));
-  border-left: 3px solid transparent;
+  border-left: var(--border-width-thick) solid transparent;
   box-shadow: none;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
   line-height: var(--leading-relaxed);
   width: 100%;
   border-radius: var(--radius-lg);
@@ -514,14 +514,14 @@
   background: var(--oc-thinking-bg, color-mix(in srgb, var(--oc-warning) 6%, var(--oc-bg, var(--oc-editor-bg))));
   border: 1px solid var(--oc-thinking-border, var(--oc-warning-border, rgba(210,153,34,0.2)));
   border-radius: var(--radius-lg);
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-1-5) var(--space-2);
   font-size: var(--text-sm);
   color: var(--color-muted);
   max-width: 90%;
   font-family: var(--font-mono);
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
   text-align: center;
   justify-content: center;
 }
@@ -530,7 +530,7 @@
 .message.system .system-bubble::after {
   content: '';
   flex: 1;
-  height: 1px;
+  height: var(--border-width-thin);
   background: var(--color-border);
   min-width: var(--space-4);
 }
@@ -544,7 +544,7 @@
   padding: var(--space-px) var(--space-2);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  margin-top: var(--space-2);
+  margin-top: var(--space-1);
   font-family: var(--font-sans);
 }
 
@@ -557,12 +557,12 @@
    ═══════════════════════════════════════════════════════════════════════════════╛ */
 
 .msg-error {
-  border-left: 3px solid var(--color-error, #e07070);
+  border-left: var(--border-width-thick) solid var(--color-error, #e07070);
   background: color-mix(in srgb, var(--color-error, #e07070) 8%, var(--bg-primary, var(--oc-bg, var(--oc-editor-bg))));
   color: var(--color-fg);
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
-  padding: var(--space-3);
-  margin: var(--space-2) 0;
+  padding: var(--space-1-5);
+  margin: var(--space-1) 0;
   word-break: break-word;
   overflow-wrap: anywhere;
 }
@@ -570,13 +570,13 @@
 .msg-error .error-bubble {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 
 .msg-error .error-header {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
   font-weight: 600;
   font-size: var(--text-sm);
   color: var(--color-error, #e07070);

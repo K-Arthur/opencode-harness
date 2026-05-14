@@ -15,6 +15,7 @@ import { SessionCompactedHandler } from "./eventHandlers/SessionCompactedHandler
 import { StepFinishHandler } from "./eventHandlers/StepFinishHandler"
 import { FallbackHandler } from "./eventHandlers/FallbackHandler"
 import { ServerConnectedHandler } from "./eventHandlers/ServerConnectedHandler"
+import { TodoUpdatedHandler } from "./eventHandlers/TodoUpdatedHandler"
 
 const HANDLERS: EventHandler[] = [
   new TextPartHandler(),
@@ -30,6 +31,7 @@ const HANDLERS: EventHandler[] = [
   new SessionCompactedHandler(),
   new StepFinishHandler(),
   new ServerConnectedHandler(),
+  new TodoUpdatedHandler(),
   new FallbackHandler(),
 ]
 

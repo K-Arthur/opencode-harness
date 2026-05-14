@@ -66,11 +66,8 @@ export function reRenderMessage(
 
   const oldEl = els.messageList.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement | null
 
-  const idx = messages.indexOf(msgObj)
-  const prevMsg = idx > 0 ? messages[idx - 1] : null
-  const isConsecutive = prevMsg?.role === msgObj.role
-
-  const newEl = renderMessage(msgObj, undefined, isConsecutive)
+  // When re-rendering an existing message, skip the header to avoid re-adding it
+  const newEl = renderMessage(msgObj, { skipHeader: !!oldEl }, false)
   if (oldEl) {
     oldEl.replaceWith(newEl)
   } else {

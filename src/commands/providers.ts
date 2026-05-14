@@ -11,20 +11,20 @@ export function registerProviderCommands(
       try {
         const name = await vscode.window.showInputBox({
           prompt: "Enter provider name:",
-          placeHolder: "e.g., Anthropic, OpenAI",
+          placeHolder: "Provider name (e.g., Anthropic, OpenAI)",
         })
         if (!name) return
 
         const apiKey = await vscode.window.showInputBox({
           prompt: "Enter API key:",
-          placeHolder: "sk-...",
+          placeHolder: "Your API key",
           password: true,
         })
         if (!apiKey) return
 
         const baseUrl = await vscode.window.showInputBox({
           prompt: "Enter base URL (optional):",
-          placeHolder: "https://api.example.com",
+          placeHolder: "API base URL (optional)",
         })
 
         const id = await providerConfigManager.upsertConfig({
@@ -59,7 +59,7 @@ export function registerProviderCommands(
         }))
 
         const selected = await vscode.window.showQuickPick(items, {
-          placeHolder: "Select a provider",
+          placeHolder: "Choose a provider to manage",
         })
 
         if (selected) {
@@ -69,13 +69,13 @@ export function registerProviderCommands(
               { label: "Toggle", description: "Enable or disable provider" },
               { label: "Delete", description: "Delete provider configuration" },
             ],
-            { placeHolder: "What would you like to do?" }
+            { placeHolder: "Choose an action" }
           )
 
           if (action?.label === "Edit") {
             const apiKey = await vscode.window.showInputBox({
               prompt: "Enter new API key:",
-              placeHolder: "sk-...",
+              placeHolder: "Your API key",
               password: true,
             })
             if (apiKey) {

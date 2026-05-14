@@ -98,6 +98,10 @@ export class WebviewEventRouter {
     "toggle_diff_wrap", "toggle_thinking", "revert_diff",
     "context_history_request", "context_cost_estimate", "context_suggestions_request",
     "send_steer_prompt", "add_to_queue",
+    "get_todos", "toggle_todo", "delete_todo",
+    "get_skills", "toggle_skill", "search_skills",
+    "get_changed_files", "open_file",
+    "get_subagent_activities", "cancel_subagent",
   ])
 
   private readonly webviewHandlers: Map<string, (msg: Record<string, unknown>, sessionId?: string) => void | Promise<void>> = new Map([
@@ -638,20 +642,35 @@ export class WebviewEventRouter {
         suggestions: report.suggestions,
       })
     }],
-    ["get_todos", (msg: Record<string, unknown>, sessionId?: string) => {
+    ["get_todos", async (_: Record<string, unknown>, sessionId?: string) => {
       if (!sessionId) return
-      // For now, return empty todos array - will implement proper storage
-      this.opts.postMessage({ type: "todos_update", todos: [], sessionId })
+      const session = this.opts.sessionStore.get(sessionId)
+      const cliSessionId = session?.cliSessionId
+      if (!cliSessionId || !this.opts.sessionManager.isRunning) {
+        this.opts.postMessage({ type: "todos_update", todos: [], sessionId })
+        return
+      }
+      try {
+        const raw = await this.opts.sessionManager.getSessionTodos(cliSessionId)
+        const todos = raw.map((t) => ({
+          id: t.id,
+          content: t.content,
+          status: t.status === "in_progress" ? "in-progress" : t.status,
+          createdAt: 0,
+        }))
+        this.opts.postMessage({ type: "todos_update", todos, sessionId })
+      } catch (err) {
+        log.error("Failed to fetch todos", err)
+        this.opts.postMessage({ type: "todos_update", todos: [], sessionId })
+      }
     }],
-    ["toggle_todo", (msg: Record<string, unknown>, sessionId?: string) => {
+    ["toggle_todo", (_: Record<string, unknown>, sessionId?: string) => {
+      // Server-managed todos are read-only; the AI agent controls their state.
       if (!sessionId) return
-      // TODO: Implement proper todo storage
-      log.info(`Toggle todo ${msg.todoId} in session ${sessionId}`)
     }],
-    ["delete_todo", (msg: Record<string, unknown>, sessionId?: string) => {
+    ["delete_todo", (_: Record<string, unknown>, sessionId?: string) => {
+      // Server-managed todos are read-only; the AI agent controls their state.
       if (!sessionId) return
-      // TODO: Implement proper todo storage
-      log.info(`Delete todo ${msg.todoId} in session ${sessionId}`)
     }],
     ["get_changed_files", (msg: Record<string, unknown>, sessionId?: string) => {
       if (!sessionId) return
@@ -678,23 +697,30 @@ export class WebviewEventRouter {
         }
       )
     }],
-    ["get_skills", (msg: Record<string, unknown>) => {
-      // TODO: Implement proper skills listing from skill system
-      const skills: any[] = []
-      this.opts.postMessage({ type: "skills_list", skills })
+    ["get_skills", async (_: Record<string, unknown>) => {
+      try {
+        const all = await this.resolveAllSkills()
+        this.opts.postMessage({ type: "skills_list", skills: all })
+      } catch (err) {
+        log.error("Failed to list skills", err)
+        this.opts.postMessage({ type: "skills_list", skills: [] })
+      }
     }],
-    ["toggle_skill", (msg: Record<string, unknown>) => {
-      const skillId = msg.skillId as string | undefined
-      const enabled = msg.enabled === true
-      if (!skillId) return
-      // TODO: Implement proper skill enable/disable
-      log.info(`Toggle skill ${skillId} to ${enabled}`)
+    ["toggle_skill", (_: Record<string, unknown>) => {
+      // Agent enable/disable is not supported by the opencode server API.
     }],
-    ["search_skills", (msg: Record<string, unknown>) => {
-      const query = msg.query as string | undefined
-      // TODO: Implement proper skill search
-      const results: any[] = []
-      this.opts.postMessage({ type: "skills_search_results", results, query })
+    ["search_skills", async (msg: Record<string, unknown>) => {
+      const query = (msg.query as string | undefined)?.toLowerCase() || ""
+      try {
+        const all = await this.resolveAllSkills()
+        const results = query
+          ? all.filter((s) => s.name.toLowerCase().includes(query) || s.description.toLowerCase().includes(query))
+          : all
+        this.opts.postMessage({ type: "skills_search_results", results, query })
+      } catch (err) {
+        log.error("Failed to search skills", err)
+        this.opts.postMessage({ type: "skills_search_results", results: [], query })
+      }
     }],
     ["get_subagent_activities", (msg: Record<string, unknown>, sessionId?: string) => {
       if (!sessionId) return
@@ -823,5 +849,39 @@ export class WebviewEventRouter {
       log.warn("Failed to list commands", err)
       this.opts.statePush.pushCommandListToWebview(customCommands)
     }
+  }
+
+  private async resolveAllSkills(): Promise<Array<{ id: string; name: string; description: string; category: string; enabled: boolean }>> {
+    const seen = new Set<string>()
+    const skills: Array<{ id: string; name: string; description: string; category: string; enabled: boolean }> = []
+
+    // API agents (server-managed, only when server is up)
+    if (this.opts.sessionManager.isRunning) {
+      try {
+        const directory = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+        const agents = await this.opts.sessionManager.listAgents(directory)
+        for (const a of agents) {
+          if (seen.has(a.name)) continue
+          seen.add(a.name)
+          skills.push({ id: a.name, name: a.name, description: a.description || "", category: a.builtIn ? "built-in" : "custom", enabled: true })
+        }
+      } catch (err) {
+        log.warn("Failed to list agents from server", err)
+      }
+    }
+
+    // Local ~/.agents/skills — always available, independent of server
+    try {
+      const local = await this.opts.sessionManager.scanLocalSkills()
+      for (const s of local) {
+        if (seen.has(s.name)) continue
+        seen.add(s.name)
+        skills.push({ id: s.id, name: s.name, description: s.description, category: s.category, enabled: true })
+      }
+    } catch (err) {
+      log.warn("Failed to scan local skills", err)
+    }
+
+    return skills
   }
 }

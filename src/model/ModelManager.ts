@@ -312,7 +312,7 @@ export class ModelManager {
     }
 
     const picked = await vscode.window.showQuickPick(items, {
-      placeHolder: "Select a model",
+      placeHolder: "Choose an AI model for this session",
       title: "OpenCode Model Selection",
     })
 

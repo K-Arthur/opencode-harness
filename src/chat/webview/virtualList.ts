@@ -49,7 +49,7 @@ export class VirtualMessageList {
 
           const vEntry = this.entries.get(msgId)
           if (vEntry && vEntry.detached && entry.isIntersecting) {
-            this.restoreMessage(msgId)
+            this.restoreOne(msgId)
           }
         }
 
@@ -145,7 +145,7 @@ export class VirtualMessageList {
     el.replaceWith(placeholder)
   }
 
-  private restoreMessage(msgId: string): void {
+  private restoreOne(msgId: string): void {
     const entry = this.entries.get(msgId)
     if (!entry || !entry.detached) return
 
@@ -153,7 +153,7 @@ export class VirtualMessageList {
     if (!msgData) return
 
     const session = this.getSession()
-    const opts = session ? { mode: session.mode, postMessage: (m: Record<string, unknown>) => {} } : undefined
+    const opts = session ? { mode: session.mode, postMessage: (m: Record<string, unknown>) => {}, skipHeader: true } : undefined
 
     const newEl = this.renderMessage(msgData, opts)
     entry.placeholder.replaceWith(newEl)
@@ -169,7 +169,7 @@ export class VirtualMessageList {
         if (!msgData) continue
 
         const session = this.getSession()
-        const opts = session ? { mode: session.mode, postMessage: (m: Record<string, unknown>) => {} } : undefined
+        const opts = session ? { mode: session.mode, postMessage: (m: Record<string, unknown>) => {}, skipHeader: true } : undefined
         const newEl = this.renderMessage(msgData, opts)
         entry.placeholder.replaceWith(newEl)
         this.observer?.observe(newEl)

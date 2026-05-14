@@ -219,8 +219,8 @@ function initConnectionStatusBar(
 ): vscode.StatusBarItem {
   const connectionStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99)
   connectionStatus.name = "OpenCode Connection"
-  connectionStatus.text = "$(circle-slash) OpenCode: Disconnected"
-  connectionStatus.tooltip = "OpenCode is not running. Click to start."
+  connectionStatus.text = "$(circle-slash) OpenCode: Not connected"
+  connectionStatus.tooltip = "OpenCode server is not running. Click to start."
   connectionStatus.command = "opencode-harness.openChat"
   connectionStatus.show()
   context.subscriptions.push(connectionStatus)
@@ -236,7 +236,7 @@ function initConnectionStatusBar(
         context.globalState.update('opencode-server-port', sessionManager.currentPort)
         break
       case "server_disconnected":
-        connectionStatus.text = "$(circle-slash) OpenCode: Disconnected"
+        connectionStatus.text = "$(circle-slash) OpenCode: Not connected"
         connectionStatus.tooltip = "OpenCode server is not running. Click to retry."
         connectionStatus.command = "opencode-harness.openChat"
         // Invalidate stale CLI session IDs so next prompt creates fresh server sessions
@@ -245,8 +245,8 @@ function initConnectionStatusBar(
         context.globalState.update('opencode-server-port', undefined)
         break
       case "server_error":
-        connectionStatus.text = "$(error) OpenCode: Error"
-        connectionStatus.tooltip = "OpenCode encountered an error. Check output channel."
+        connectionStatus.text = "$(error) OpenCode: Connection error"
+        connectionStatus.tooltip = "OpenCode encountered an error. Check output channel for details."
         connectionStatus.command = "opencode-harness.openChat"
         break
       case "sessions_recovered": {

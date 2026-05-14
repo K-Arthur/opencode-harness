@@ -254,6 +254,11 @@ body.hide-errors .tool-result-panel--error { display: none; }
   margin-top: 2px;
 }
 
+.todo-checkbox:focus-visible {
+  outline: 2px solid var(--oc-accent);
+  outline-offset: 2px;
+}
+
 .todo-checkbox--checked {
   background: var(--oc-accent);
   border-color: var(--oc-accent);
@@ -513,6 +518,11 @@ body.hide-errors .tool-result-panel--error { display: none; }
   flex-shrink: 0;
   margin-top: 2px;
   transition: all var(--duration-fast);
+}
+
+.skill-item-toggle:focus-visible {
+  outline: 2px solid var(--oc-accent);
+  outline-offset: 2px;
 }
 
 .skill-item-toggle.checked {

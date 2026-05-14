@@ -13,3 +13,4 @@ test-results/
 .env.*.local
 coverage/
 reports/
+.windsurf

@@ -24,7 +24,7 @@ export function registerRollbackCommand(
           detail: `${c.filesChanged.length} files changed`,
           id: c.id,
         }))
-        const selected = await vscode.window.showQuickPick(items, { placeHolder: "Select checkpoint to restore" })
+        const selected = await vscode.window.showQuickPick(items, { placeHolder: "Choose a checkpoint to restore" })
         if (selected) {
           await checkpointManager.restore(selected.id)
           vscode.window.showInformationMessage(`Restored checkpoint ${selected.id}`)

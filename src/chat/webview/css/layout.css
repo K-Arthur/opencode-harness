@@ -178,6 +178,11 @@
   opacity: 0.9;
 }
 
+.checkpoint-restore-btn:focus-visible {
+  outline: 2px solid var(--oc-accent);
+  outline-offset: 2px;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -547,6 +552,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-0-5);
+  position: relative; /* anchor for .instructions-editor absolute popover */
 }
 
 .bottom-bar-right {
@@ -914,7 +920,7 @@
 .instructions-editor {
   position: absolute;
   bottom: calc(100% + 8px);
-  right: 0;
+  left: 0;
   width: 320px;
   background: var(--oc-glass-bg);
   backdrop-filter: var(--oc-glass-blur);
@@ -954,14 +960,75 @@
 }
 
 .instructions-textarea:focus {
-  outline: none;
+  outline: 2px solid transparent; /* visible in forced-colors via border-color fallback */
   border-color: var(--oc-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--oc-accent) 25%, transparent);
+}
+@media (forced-colors: active) {
+  .instructions-textarea:focus {
+    outline: 2px solid ButtonText;
+  }
 }
 
 .instructions-editor-actions {
   display: flex;
   gap: var(--space-2);
   justify-content: flex-end;
+}
+
+.instructions-save-btn,
+.instructions-cancel-btn {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  border: 1px solid transparent;
+}
+
+.instructions-save-btn {
+  background: var(--color-accent);
+  color: var(--oc-accent-fg);
+  border-color: var(--color-accent);
+}
+
+.instructions-save-btn:hover {
+  filter: brightness(1.1);
+}
+
+.instructions-save-btn:focus-visible {
+  outline: 2px solid var(--oc-focus);
+  outline-offset: 2px;
+}
+
+.instructions-cancel-btn {
+  background: transparent;
+  color: var(--color-muted);
+  border-color: var(--oc-border);
+}
+
+.instructions-cancel-btn:hover {
+  background: var(--oc-list-hover);
+  color: var(--oc-fg);
+}
+
+.instructions-cancel-btn:focus-visible {
+  outline: 2px solid var(--oc-focus);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .instructions-save-btn {
+    forced-color-adjust: none;
+    background: ButtonText;
+    color: ButtonFace;
+    border-color: ButtonText;
+  }
+  .instructions-cancel-btn {
+    border-color: ButtonText;
+    color: ButtonText;
+  }
 }
 
 /* ─── SEND BUTTON ─── */
@@ -2224,6 +2291,23 @@ button.modal-session-item:focus {
   transition: all var(--duration-fast);
 }
 
+.model-manager-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
 .model-manager-close:hover {
   background: var(--oc-list-hover);
   color: var(--color-fg);
@@ -2254,9 +2338,15 @@ button.modal-session-item:focus {
 }
 
 .theme-field label {
+  display: block;
   color: var(--color-fg);
   font-size: var(--text-sm);
   font-weight: 600;
+  line-height: var(--leading-tight);
+}
+
+.theme-field label span {
+  display: inline-block;
 }
 
 .theme-field input,
@@ -2319,14 +2409,15 @@ button.modal-session-item:focus {
 }
 
 .theme-color-picker {
-  width: 36px;
-  min-width: 36px;
-  height: var(--size-target-comfortable);
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--oc-editor-bg);
-  padding: 2px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
+  background: transparent;
+  padding: 0;
   flex-shrink: 0;
 }
 
@@ -2338,9 +2429,142 @@ button.modal-session-item:focus {
 /* Ensure text inputs inside .theme-color-row don't get the full-width rule */
 .theme-field .theme-color-row input[type="text"] {
   width: auto;
+  min-height: var(--size-target-comfortable);
 }
 
 /* ─── Theme Customizer — New consolidated modal ─── */
+
+/* Visually hidden class for accessibility */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.theme-customizer-content {
+  max-width: min(720px, 94vw);
+  max-height: min(85vh, 700px);
+}
+
+/* Responsive breakpoints for different viewport widths */
+@media (max-width: 640px) {
+  .theme-customizer-content {
+    max-width: 100vw;
+    max-height: 100vh;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+  
+  .model-manager-overlay {
+    padding: 0;
+  }
+  
+  .model-manager-content {
+    border-radius: 0;
+  }
+  
+  .theme-preset-card-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-2);
+  }
+  
+  .theme-customizer-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+  
+  .theme-color-row {
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+  
+  .theme-color-picker {
+    width: 100%;
+    height: 44px;
+  }
+  
+  .theme-color-row input[type="text"] {
+    width: 100%;
+  }
+  
+  .theme-customizer-actions {
+    flex-direction: column;
+  }
+  
+  .theme-customizer-actions button {
+    width: 100%;
+    min-height: 44px;
+  }
+}
+
+/* Responsive breakpoints for different viewport heights */
+@media (max-height: 600px) {
+  .model-manager-content {
+    max-height: 100vh;
+  }
+  
+  .model-manager-header {
+    padding: var(--space-3) var(--space-4) var(--space-2);
+  }
+  
+  .model-manager-header-text h2 {
+    font-size: var(--text-base);
+  }
+  
+  .model-manager-header-text p {
+    font-size: var(--text-xs);
+  }
+  
+  .theme-customizer-body {
+    padding: 0 var(--space-4) var(--space-2);
+    gap: var(--space-3);
+  }
+  
+  .theme-preset-card-grid {
+    gap: var(--space-2);
+  }
+  
+  .theme-section-collapsible > summary {
+    padding: var(--space-2) 0;
+  }
+  
+  .theme-customizer-grid {
+    gap: var(--space-2);
+  }
+  
+  .theme-preview-panel {
+    display: none;
+  }
+}
+
+/* Ensure touch targets meet minimum 44x44px for mobile */
+@media (hover: none) and (pointer: coarse) {
+  .theme-preset-card {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  .theme-color-picker {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  
+  .model-manager-close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  
+  .theme-customizer-actions button {
+    min-height: 44px;
+  }
+}
 
 .theme-customizer-body {
   display: flex;
@@ -2356,10 +2580,17 @@ button.modal-session-item:focus {
 .theme-preset-card-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-2);
+  gap: var(--space-3);
+  border: none;
+  padding: 0;
+  margin: 0;
 }
 
-@media (max-width: 480px) {
+.theme-preset-card-grid legend {
+  display: none;
+}
+
+@media (max-width: 500px) {
   .theme-preset-card-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
@@ -2367,15 +2598,15 @@ button.modal-session-item:focus {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  gap: var(--space-2);
+  padding: var(--space-3);
   background: var(--oc-editor-bg);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  font-size: var(--text-xs);
-  color: var(--color-fg);
-  transition: border-color var(--duration-fast), background var(--duration-fast);
+  transition: all var(--duration-fast);
+  min-height: 80px;
+  min-width: 80px;
 }
 
 .theme-preset-card:hover {
@@ -2516,8 +2747,12 @@ button.modal-session-item:focus {
 }
 
 .theme-section-collapsible > .theme-customizer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
   padding: var(--space-3);
   border-top: 1px solid var(--color-border);
+  animation: fadeIn var(--duration-fast) var(--ease-out);
 }
 
 /* Live preview swatch */

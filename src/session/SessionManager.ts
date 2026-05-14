@@ -13,6 +13,9 @@ import {
 } from "@opencode-ai/sdk"
 import { spawn, type ChildProcess } from "child_process"
 import { randomUUID } from "crypto"
+import * as os from "os"
+import * as fsPromises from "fs/promises"
+import * as path from "path"
 import { findFreePort } from "../utils/portFinder"
 import { log } from "../utils/outputChannel"
 import { validateServerUrl } from "../utils/security"
@@ -88,6 +91,20 @@ export interface EventStreamStatus {
   lastRawEventType?: string
   lastRawEventAt?: number
   reconnectAttempts: number
+}
+
+function parseSkillFrontmatter(content: string): { name?: string; description?: string } {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content)
+  if (!match || !match[1]) return {}
+  const result: Record<string, string> = {}
+  for (const line of match[1].split(/\r?\n/)) {
+    const colon = line.indexOf(":")
+    if (colon === -1) continue
+    const key = line.slice(0, colon).trim()
+    const val = line.slice(colon + 1).trim().replace(/^["']|["']$/g, "")
+    result[key] = val
+  }
+  return result
 }
 
 /* ------------------------------------------------------------------ */
@@ -1274,6 +1291,108 @@ async getMessages(sessionId: string, limit?: number): Promise<{ info: unknown; p
     if (response === "always") return "always"
     if (response === "reject" || response === "deny") return "reject"
     return "once"
+  }
+
+  async scanLocalSkills(): Promise<Array<{ id: string; name: string; description: string; category: string }>> {
+    const seen = new Set<string>()
+    const results: Array<{ id: string; name: string; description: string; category: string }> = []
+
+    async function readSkillMd(
+      mdPath: string,
+      skillId: string,
+      category: string
+    ): Promise<{ id: string; name: string; description: string; category: string }> {
+      let name = skillId
+      let description = ""
+      try {
+        const content = await fsPromises.readFile(mdPath, "utf8")
+        const fm = parseSkillFrontmatter(content)
+        name = fm.name || skillId
+        description = fm.description || ""
+      } catch { /* unreadable skill, use defaults */ }
+      return { id: skillId, name, description, category }
+    }
+
+    // 1. User skills — base dir comes from $CODEX_HOME or ~/.agents
+    const agentsBase = process.env["CODEX_HOME"] ?? path.join(os.homedir(), ".agents")
+    const userSkillsDir = path.join(agentsBase, "skills")
+    const lockPath = path.join(agentsBase, ".skill-lock.json")
+
+    // Try lock file first (fast path — includes category/pluginName metadata)
+    let lockHandled = false
+    try {
+      const raw = await fsPromises.readFile(lockPath, "utf8")
+      const lock = JSON.parse(raw) as { skills: Record<string, { pluginName?: string }> }
+      const entries = await Promise.all(
+        Object.entries(lock.skills).map(([skillId, meta]) => {
+          const mdPath = path.join(userSkillsDir, skillId, "SKILL.md")
+          return readSkillMd(mdPath, skillId, meta.pluginName ?? "skills")
+        })
+      )
+      for (const entry of entries) {
+        if (!seen.has(entry.id)) { seen.add(entry.id); results.push(entry) }
+      }
+      lockHandled = true
+    } catch { /* no lock file — fall through to directory scan */ }
+
+    // Fallback: scan the skills directory directly when there's no lock file
+    if (!lockHandled) {
+      try {
+        const dirs = await fsPromises.readdir(userSkillsDir, { withFileTypes: true })
+        const entries = await Promise.all(
+          dirs
+            .filter((d) => d.isDirectory())
+            .map((d) => readSkillMd(path.join(userSkillsDir, d.name, "SKILL.md"), d.name, "skills"))
+        )
+        for (const entry of entries) {
+          if (!seen.has(entry.id)) { seen.add(entry.id); results.push(entry) }
+        }
+      } catch { /* no skills dir */ }
+    }
+
+    // 2. Plugin skills — ~/.cache/plugins/*/skills/
+    const pluginsDir = path.join(os.homedir(), ".cache", "plugins")
+    try {
+      const pluginDirs = await fsPromises.readdir(pluginsDir, { withFileTypes: true })
+      await Promise.all(
+        pluginDirs
+          .filter((d) => d.isDirectory())
+          .map(async (pluginDir) => {
+            const pluginSkillsDir = path.join(pluginsDir, pluginDir.name, "skills")
+            try {
+              const skillDirs = await fsPromises.readdir(pluginSkillsDir, { withFileTypes: true })
+              const entries = await Promise.all(
+                skillDirs
+                  .filter((d) => d.isDirectory())
+                  .map((d) =>
+                    readSkillMd(
+                      path.join(pluginSkillsDir, d.name, "SKILL.md"),
+                      d.name,
+                      pluginDir.name
+                    )
+                  )
+              )
+              for (const entry of entries) {
+                if (!seen.has(entry.id)) { seen.add(entry.id); results.push(entry) }
+              }
+            } catch { /* no skills subdir for this plugin */ }
+          })
+      )
+    } catch { /* no plugins dir */ }
+
+    return results
+  }
+
+  async getSessionTodos(id: string): Promise<Array<{ id: string; content: string; status: string; priority: string }>> {
+    const resp = await this.client!.session.todo({ path: { id } })
+    this.assertResponseSize(resp.data, "getSessionTodos")
+    return (resp.data ?? []) as Array<{ id: string; content: string; status: string; priority: string }>
+  }
+
+  async listAgents(directory?: string): Promise<Array<{ name: string; description?: string; mode: string; builtIn: boolean }>> {
+    const resp = await this.client!.app.agents(directory ? { query: { directory } } : undefined)
+    this.assertResponseSize(resp.data, "listAgents")
+    return (resp.data ?? []) as Array<{ name: string; description?: string; mode: string; builtIn: boolean }>
   }
 
   /* ---- model management ---- */

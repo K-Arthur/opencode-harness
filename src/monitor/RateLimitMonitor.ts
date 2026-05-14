@@ -428,7 +428,7 @@ export class RateLimitMonitor {
     }
     items.push({ label: "Last Updated", description: s.lastUpdated.toLocaleTimeString() })
 
-    vscode.window.showQuickPick(items, { placeHolder: "Rate Limit Details" })
+    vscode.window.showQuickPick(items, { placeHolder: "View your rate limit status" })
   }
 
   private buildTooltip(): string {

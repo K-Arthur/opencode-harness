@@ -17,8 +17,12 @@ describe("recent-sessions.ts", () => {
     assert.ok(source.includes("onResume"))
   })
 
-  it("hides container when sessions are empty", () => {
-    assert.ok(source.includes('container.style.display = "none"'))
+  it("renders an empty-state message when sessions are empty", () => {
+    // The current implementation keeps the container visible and shows an
+    // informative "No recent sessions" message instead of hiding the panel —
+    // hiding it silently was confusing UX.
+    assert.ok(source.includes("sessions.length === 0"), "must branch on empty sessions list")
+    assert.ok(source.includes("recent-empty-message"), "must render empty-state element")
   })
 
   it("creates View All button", () => {
@@ -37,7 +41,11 @@ describe("recent-sessions.ts", () => {
     assert.ok(source.includes("messageCount"))
   })
 
-  it("formats date with toLocaleDateString", () => {
-    assert.ok(source.includes("toLocaleDateString"))
+  it("formats session time with a relative-time helper", () => {
+    // Implementation uses a relative-time helper (e.g. "5m ago", "2d ago")
+    // rather than toLocaleDateString — relative time is the more readable
+    // format for a "recent sessions" list.
+    assert.ok(source.includes("getRelativeTime"), "must use getRelativeTime helper")
+    assert.ok(source.includes("ago"), "must render relative-time suffix")
   })
 })

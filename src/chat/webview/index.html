@@ -22,7 +22,7 @@
           </div>
           <div class="header-info">
             <h1 class="header-title">OpenCode</h1>
-            <span id="agent-status-text" class="status-text" aria-live="polite">SYSTEM READY</span>
+            <span id="agent-status-text" class="status-text" aria-live="polite" aria-atomic="true">SYSTEM READY</span>
           </div>
         </div>
         <div class="header-actions">
@@ -55,8 +55,10 @@
             </svg>
           </button>
           <button class="icon-btn" id="skills-btn" title="Manage skills" aria-label="Manage skills" aria-haspopup="dialog" aria-controls="skills-modal">
+            <!-- Sparkles — conveys AI/agent capabilities -->
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.582a.5.5 0 0 1 0 .962L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
+              <path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/>
             </svg>
           </button>
           <button class="icon-btn" id="settings-btn" title="More options" aria-label="More options" aria-haspopup="menu" aria-controls="settings-menu" aria-expanded="false">
@@ -83,11 +85,9 @@
         <div class="skills-modal-search">
           <input type="text" class="skills-modal-search-input" id="skills-search-input" placeholder="Search skills..." aria-label="Search skills">
         </div>
-        <div class="skills-modal-filter" id="skills-filter">
-          <button class="skills-modal-filter-btn active" data-category="all">All</button>
-          <button class="skills-modal-filter-btn" data-category="coding">Coding</button>
-          <button class="skills-modal-filter-btn" data-category="analysis">Analysis</button>
-          <button class="skills-modal-filter-btn" data-category="debugging">Debugging</button>
+        <div class="skills-modal-filter" id="skills-filter" role="group" aria-label="Filter skills by category">
+          <button class="skills-modal-filter-btn active" data-category="all" aria-pressed="true">All</button>
+          <!-- Category buttons are populated dynamically from actual skill data -->
         </div>
         <div class="skills-modal-list" id="skills-list">
           <!-- Skills will be rendered dynamically -->
@@ -139,8 +139,8 @@
         </div>
       </div>
       <div id="changed-files-list" class="changed-files-list hidden" aria-label="Changed files"></div>
-      <div id="checkpoint-panel" class="checkpoint-panel hidden" aria-label="Checkpoints"></div>
-      <div id="todos-panel" class="todos-panel hidden" aria-label="Todos and changed files">
+      <div id="checkpoint-panel" class="checkpoint-panel hidden" role="list" aria-label="Checkpoints" aria-live="polite"></div>
+      <div id="todos-panel" class="todos-panel hidden" role="region" aria-label="Todos and changed files">
         <div class="todos-panel-header">
           <h2 class="todos-panel-title">Todos & Files</h2>
           <button class="icon-btn" id="close-todos-btn" title="Close panel" aria-label="Close todos panel">
@@ -154,7 +154,7 @@
             <h3 class="todos-section-title">Todos</h3>
             <div id="todos-list"></div>
             <form class="todo-add-form" id="todo-add-form">
-              <input type="text" class="todo-add-input" id="todo-add-input" placeholder="Add a new todo..." aria-label="New todo">
+              <input type="text" class="todo-add-input" id="todo-add-input" placeholder="Add a task or reminder..." aria-label="New todo">
               <button type="submit" class="todo-add-btn">Add</button>
             </form>
           </div>
@@ -216,8 +216,9 @@
           <div class="welcome-brand" aria-hidden="true">
             <img class="welcome-wordmark" src="media/opencode-wordmark-dark.svg" width="120" height="auto" alt="OpenCode" aria-hidden="true">
           </div>
-          <h2 id="welcome-greeting" class="welcome-greeting">Welcome</h2>
-          <p class="welcome-tagline">Your intelligent coding assistant</p>
+          <div class="welcome-title">
+          <h1 class="welcome-heading">OpenCode</h1>
+          <p class="welcome-tagline">AI-powered coding assistant integrated into your editor</p>
         </div>
 
         <!-- Search Bar -->
@@ -227,7 +228,7 @@
             <span class="search-label">Search sessions...</span>
           </button>
           <div id="welcome-search-input" class="welcome-search-input hidden">
-            <input type="text" placeholder="Search sessions..." aria-label="Search sessions">
+            <input type="text" placeholder="Search your conversation history..." aria-label="Search sessions">
           </div>
         </div>
 
@@ -309,7 +310,7 @@
     </div>
 
     <div id="chat-search-bar" class="chat-search-bar hidden">
-      <input type="text" id="chat-search-input" placeholder="Search messages..." aria-label="Search messages">
+      <input type="text" id="chat-search-input" placeholder="Search messages in this session..." aria-label="Search messages">
       <span id="chat-search-count" class="chat-search-count"></span>
       <button id="chat-search-prev" class="icon-btn" title="Previous match (Shift+Enter)" aria-label="Previous match">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
@@ -384,7 +385,7 @@
           <span class="steer-hint">Interrupt and guide the current response</span>
         </div>
         <div id="steer-input-wrapper">
-          <textarea id="steer-input" rows="1" placeholder="Correct, redirect, or add context..." aria-label="Steer prompt input"></textarea>
+          <textarea id="steer-input" rows="1" placeholder="Guide the AI: correct errors, change direction, or add context..." aria-label="Steer prompt input"></textarea>
         </div>
         <div class="steer-mode-selector">
           <label class="steer-mode-option">
@@ -415,9 +416,9 @@
       </div>
 
       <div id="input-wrapper">
-        <textarea id="prompt-input" rows="1" placeholder="Ask OpenCode anything…" aria-label="Message input"></textarea>
-        <div id="mention-dropdown" class="dropdown hidden"></div>
-        <div id="slash-autocomplete" class="slash-autocomplete hidden"></div>
+        <textarea id="prompt-input" rows="1" placeholder="Ask OpenCode a question about your code…" aria-label="Message input" aria-controls="mention-dropdown slash-autocomplete" autocomplete="off" spellcheck="true"></textarea>
+        <div id="mention-dropdown" class="dropdown hidden" role="listbox" aria-label="File mentions"></div>
+        <div id="slash-autocomplete" class="slash-autocomplete hidden" role="listbox" aria-label="Slash commands"></div>
       </div>
 
       <div id="input-bottom-bar">
@@ -434,6 +435,18 @@
               <path d="M12 15V7.5"/>
             </svg>
           </button>
+          <button class="instructions-gear-btn icon-btn" id="instructions-gear-btn" title="Custom instructions for this tab" aria-label="Edit tab instructions" aria-expanded="false">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+          <div class="instructions-editor hidden" id="instructions-editor"
+               role="dialog" aria-modal="true" aria-labelledby="instructions-editor-label">
+            <label class="instructions-editor-label" id="instructions-editor-label" for="instructions-textarea">Custom instructions (injected once at session start)</label>
+            <textarea class="instructions-textarea" id="instructions-textarea" rows="4" placeholder="E.g. Always write tests first. Use TypeScript strict mode."></textarea>
+            <div class="instructions-editor-actions">
+              <button class="instructions-save-btn" id="instructions-save-btn" aria-label="Save custom instructions (Ctrl+Enter)">Save</button>
+              <button class="instructions-cancel-btn" id="instructions-cancel-btn" aria-label="Discard and close">Cancel</button>
+            </div>
+          </div>
         </div>
 
         <div class="bottom-bar-right">
@@ -452,7 +465,7 @@
                 <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3v18"/><path d="M7 3v18"/><path d="M3 7.5h18"/><path d="M3 16.5h18"/><path d="M17 3a2 2 0 0 1 2 2"/><path d="M17 21a2 2 0 0 0 2-2"/><path d="M7 3a2 2 0 0 0-2 2"/><path d="M7 21a2 2 0 0 1-2-2"/></svg>
                 <span class="mode-option-label">
                   <span class="mode-option-name">Plan</span>
-                  <span class="mode-option-desc">Review changes before applying</span>
+                  <span class="mode-option-desc">Review changes before applying (safest for exploration)</span>
                 </span>
                 <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
@@ -460,7 +473,7 @@
                 <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                 <span class="mode-option-label">
                   <span class="mode-option-name">Auto</span>
-                  <span class="mode-option-desc">Agent applies all changes autonomously</span>
+                  <span class="mode-option-desc">Agent applies changes automatically (review recommended)</span>
                 </span>
                 <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
@@ -468,7 +481,7 @@
                 <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
                 <span class="mode-option-label">
                   <span class="mode-option-name">Build</span>
-                  <span class="mode-option-desc">Full agent read/write/execute access</span>
+                  <span class="mode-option-desc">Full agent access including execute commands (use with caution)</span>
                 </span>
                 <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
@@ -486,17 +499,6 @@
                 <path d="m6 9 6 6 6-6"/>
               </svg>
             </button>
-           <button class="instructions-gear-btn" id="instructions-gear-btn" title="Custom instructions for this tab" aria-label="Edit tab instructions" aria-expanded="false">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            </button>
-            <div class="instructions-editor hidden" id="instructions-editor">
-              <label class="instructions-editor-label" for="instructions-textarea">Custom instructions (injected once at session start)</label>
-              <textarea class="instructions-textarea" id="instructions-textarea" rows="4" placeholder="E.g. Always write tests first. Use TypeScript strict mode."></textarea>
-              <div class="instructions-editor-actions">
-                <button class="instructions-save-btn" id="instructions-save-btn">Save</button>
-                <button class="instructions-cancel-btn" id="instructions-cancel-btn">Cancel</button>
-              </div>
-            </div>
            <button class="send-btn" id="send-btn" title="Send" aria-label="Send message">
             <span class="send-icon">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -605,15 +607,15 @@
   </div>
 
   <!-- Theme Customizer Panel -->
-  <div id="theme-customizer-panel" class="model-manager-overlay hidden" role="dialog" aria-modal="true" aria-label="Customize OpenCode theme">
+  <div id="theme-customizer-panel" class="model-manager-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="theme-customizer-title" aria-describedby="theme-customizer-desc">
     <div class="model-manager-content theme-customizer-content">
       <div class="model-manager-header">
         <div class="model-manager-header-text">
-          <h2>Customize theme</h2>
-          <p>Choose a preset or CLI theme, then override individual colors.</p>
+          <h2 id="theme-customizer-title">Customize theme</h2>
+          <p id="theme-customizer-desc">Choose a preset or CLI theme, then override individual colors.</p>
         </div>
         <div class="model-manager-header-actions">
-          <button class="model-manager-close" id="theme-customizer-close" aria-label="Close theme customizer">
+          <button class="model-manager-close" id="theme-customizer-close" aria-label="Close theme customizer" type="button">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M18 6 6 18"/><path d="M6 6l12 12"/>
             </svg>
@@ -623,40 +625,41 @@
 
       <div class="theme-customizer-body">
         <!-- Preset cards -->
-        <div id="theme-preset-cards" class="theme-preset-card-grid" role="radiogroup" aria-label="Base theme preset">
-          <button class="theme-preset-card" data-preset="cli-default" aria-pressed="true" role="radio">
-            <div class="theme-preset-swatch">
+        <fieldset id="theme-preset-cards" class="theme-preset-card-grid">
+          <legend class="visually-hidden">Base theme preset</legend>
+          <button class="theme-preset-card" data-preset="cli-default" aria-pressed="true" type="button">
+            <div class="theme-preset-swatch" aria-hidden="true">
               <span class="theme-preset-swatch-sq" style="background:var(--vscode-sideBar-background,#1e1e1e)"></span>
               <span class="theme-preset-swatch-sq" style="background:var(--vscode-sideBar-foreground,#cccccc)"></span>
               <span class="theme-preset-swatch-sq" style="background:var(--vscode-button-background,#0969da)"></span>
             </div>
             <span>CLI Default</span>
           </button>
-          <button class="theme-preset-card" data-preset="light" aria-pressed="false" role="radio">
-            <div class="theme-preset-swatch">
+          <button class="theme-preset-card" data-preset="light" aria-pressed="false" type="button">
+            <div class="theme-preset-swatch" aria-hidden="true">
               <span class="theme-preset-swatch-sq" style="background:#ffffff"></span>
               <span class="theme-preset-swatch-sq" style="background:#24292f"></span>
               <span class="theme-preset-swatch-sq" style="background:#0969da"></span>
             </div>
             <span>Light</span>
           </button>
-          <button class="theme-preset-card" data-preset="dark" aria-pressed="false" role="radio">
-            <div class="theme-preset-swatch">
+          <button class="theme-preset-card" data-preset="dark" aria-pressed="false" type="button">
+            <div class="theme-preset-swatch" aria-hidden="true">
               <span class="theme-preset-swatch-sq" style="background:#1e1e2e"></span>
               <span class="theme-preset-swatch-sq" style="background:#c9d1d9"></span>
               <span class="theme-preset-swatch-sq" style="background:#00e5ff"></span>
             </div>
             <span>Dark</span>
           </button>
-          <button class="theme-preset-card" data-preset="high-contrast" aria-pressed="false" role="radio">
-            <div class="theme-preset-swatch">
+          <button class="theme-preset-card" data-preset="high-contrast" aria-pressed="false" type="button">
+            <div class="theme-preset-swatch" aria-hidden="true">
               <span class="theme-preset-swatch-sq" style="background:#000000"></span>
               <span class="theme-preset-swatch-sq" style="background:#ffffff"></span>
               <span class="theme-preset-swatch-sq" style="background:#ffff00"></span>
             </div>
             <span>High Contrast</span>
           </button>
-        </div>
+        </fieldset>
 
         <!-- CLI theme search -->
         <div class="theme-cli-section">
@@ -843,8 +846,8 @@
       </div>
 
       <div class="theme-customizer-actions">
-        <button class="btn btn-secondary" id="theme-customizer-reset">Reset overrides</button>
-        <button class="btn btn-primary" id="theme-customizer-save">Save theme</button>
+        <button class="btn btn-secondary" id="theme-customizer-reset" type="button">Reset overrides</button>
+        <button class="btn btn-primary" id="theme-customizer-save" type="button">Save theme</button>
       </div>
     </div>
   </div>

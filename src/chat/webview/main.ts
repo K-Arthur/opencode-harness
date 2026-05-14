@@ -944,6 +944,13 @@ function getVsCodeApi() {
   function setupInstructionsEditor() {
     let saveDebounce: ReturnType<typeof setTimeout> | null = null
 
+    // Focus-trap: all focusable elements inside the editor
+    function getFocusables(): HTMLElement[] {
+      return Array.from(
+        els.instructionsEditor.querySelectorAll<HTMLElement>("textarea, button:not([disabled])")
+      )
+    }
+
     function openEditor() {
       const active = stateManager.getActiveSession()
       els.instructionsTextarea.value = active?.instructions ?? ""
@@ -956,6 +963,8 @@ function getVsCodeApi() {
       els.instructionsEditor.classList.add("hidden")
       els.instructionsGearBtn.setAttribute("aria-expanded", "false")
       if (saveDebounce) { clearTimeout(saveDebounce); saveDebounce = null }
+      // Return focus to the trigger button so keyboard users aren't stranded
+      els.instructionsGearBtn.focus()
     }
 
     function saveInstructions() {
@@ -980,18 +989,34 @@ function getVsCodeApi() {
     els.instructionsSaveBtn.addEventListener("click", saveInstructions)
     els.instructionsCancelBtn.addEventListener("click", closeEditor)
 
-    els.instructionsTextarea.addEventListener("keydown", (e) => {
+    els.instructionsEditor.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault()
         saveInstructions()
+        return
       }
-      if (e.key === "Escape") closeEditor()
+      if (e.key === "Escape") {
+        closeEditor()
+        return
+      }
+      // Focus trap: wrap Tab/Shift+Tab within the dialog
+      if (e.key === "Tab") {
+        const focusables = getFocusables()
+        if (focusables.length === 0) return
+        const first = focusables[0]!
+        const last = focusables[focusables.length - 1]!
+        if (e.shiftKey) {
+          if (document.activeElement === first) { e.preventDefault(); last.focus() }
+        } else {
+          if (document.activeElement === last) { e.preventDefault(); first.focus() }
+        }
+      }
     })
 
     document.addEventListener("click", (e) => {
       const target = e.target as Node
       if (!els.instructionsEditor.contains(target) && !els.instructionsGearBtn.contains(target)) {
-        closeEditor()
+        if (!els.instructionsEditor.classList.contains("hidden")) closeEditor()
       }
     })
   }
@@ -1003,7 +1028,20 @@ function getVsCodeApi() {
   let pendingAutoMode: string | null = null
 
   // Undo stack for theme customizer
-  const undoRedo: Array<{ themePreset: string; themeOverrides: Record<string, string> }> = []
+  let undoRedo: Array<{ themePreset: string; themeOverrides: Record<string, string> }> = []
+  const UNDO_REDO_MAX_SIZE = 50
+
+  function pushUndoRedo(state: { themePreset: string; themeOverrides: Record<string, string> }): void {
+    undoRedo.push(state)
+    // Limit stack size to prevent memory issues
+    if (undoRedo.length > UNDO_REDO_MAX_SIZE) {
+      undoRedo.shift()
+    }
+  }
+
+  function undoRedoPush(state: { themePreset: string; themeOverrides: Record<string, string> }): void {
+    pushUndoRedo(state)
+  }
 
   let modeWarningFocusTrap: ((e: KeyboardEvent) => void) | null = null
   let modeWarningLastFocus: HTMLElement | null = null
@@ -1889,7 +1927,7 @@ function getVsCodeApi() {
       }
     })
 
-    // Toggle checkpoint panel
+    // Toggle checkpoint panel — request fresh list whenever opening
     const checkpointToggle = document.getElementById("checkpoint-toggle-btn")
     checkpointToggle?.addEventListener("click", () => {
       const panel = els.checkpointPanel
@@ -1897,19 +1935,45 @@ function getVsCodeApi() {
       const showing = !panel.classList.contains("hidden")
       panel.classList.toggle("hidden", showing)
       checkpointToggle.setAttribute("aria-pressed", String(!showing))
+      if (!showing) {
+        // Opening: request the latest checkpoint list from backend
+        const sessionId = stateManager.getState().activeSessionId
+        if (sessionId) vscode.postMessage({ type: "list_checkpoints", sessionId })
+      }
+    })
+
+    // Toggle todos panel — request fresh data whenever opening
+    els.todosToggleBtn?.addEventListener("click", () => {
+      const panel = els.todosPanel
+      const showing = !panel.classList.contains("hidden")
+      panel.classList.toggle("hidden", showing)
+      els.todosToggleBtn.setAttribute("aria-pressed", String(!showing))
+      if (!showing) {
+        const sessionId = stateManager.getState().activeSessionId
+        if (sessionId) {
+          vscode.postMessage({ type: "get_todos", sessionId })
+          vscode.postMessage({ type: "get_changed_files", sessionId })
+        }
+        // Focus the close button inside the panel so keyboard users land somewhere useful
+        const closeBtn = panel.querySelector<HTMLElement>("#close-todos-btn")
+        closeBtn?.focus()
+      } else {
+        els.todosToggleBtn.focus()
+      }
+    })
+
+    // Skills button — open modal and fetch agents from server
+    els.skillsBtn?.addEventListener("click", () => {
+      if (skillsModalApi) {
+        skillsModalApi.open()
+        vscode.postMessage({ type: "get_skills" })
+      }
     })
 
     // Toggle changed files list
     const filesToggle = document.getElementById("files-toggle-btn")
     filesToggle?.addEventListener("click", () => {
       els.changedFilesList?.classList.toggle("hidden")
-      // Request checkpoint list when showing panel
-      if (!els.changedFilesList?.classList.contains("hidden")) {
-        const sessionId = stateManager.getState().activeSessionId
-        if (sessionId) {
-          vscode.postMessage({ type: "list_checkpoints", sessionId })
-        }
-      }
     })
 
     els.attachBtn?.addEventListener("click", () => {
@@ -2010,7 +2074,7 @@ function getVsCodeApi() {
       getThemeFields().forEach((f) => { f.input.value = "" })
       syncAllColorPickers()
       updatePreviewSwatch()
-      vscode.postMessage({ type: "update_theme_config", theme: { preset, overrides: {} } })
+      vscode.postMessage({ type: "update_theme_config", theme: { preset: activePreset, overrides: {} } })
     })
 
     // CLI theme search — request list on first focus
@@ -2046,17 +2110,21 @@ function getVsCodeApi() {
     els.themeCustomizerPanel.addEventListener("change", (event) => {
       const textInput = event.target as HTMLInputElement
       if (textInput.type !== "text" || !textInput.id) return
-      const picker = els.themeCustomizerPanel.querySelector<HTMLInputElement>(
-        `input[type="color"][data-target="${textInput.id}"]`
-      )
-      if (picker && /^#[0-9a-fA-F]{6}$/.test(textInput.value.trim())) {
-        picker.value = textInput.value.trim()
+      const value = textInput.value.trim()
+      // Validate color format before syncing to color picker
+      if (/^#([0-9a-fA-F]{6})$/.test(value)) {
+        const picker = els.themeCustomizerPanel.querySelector<HTMLInputElement>(
+          `input[type="color"][data-target="${textInput.id}"]`
+        )
+        if (picker) {
+          picker.value = value
+        }
       }
       updatePreviewSwatch()
     })
 
     els.themeCustomizerSave.addEventListener("click", () => {
-      undoRedo.push({
+      undoRedoPush({
         themePreset: activePreset,
         themeOverrides: collectThemeCustomizerConfig().overrides ?? {},
       })
@@ -2065,7 +2133,7 @@ function getVsCodeApi() {
     })
 
     els.themeCustomizerReset.addEventListener("click", () => {
-      undoRedo.push({
+      undoRedoPush({
         themePreset: activePreset,
         themeOverrides: collectThemeCustomizerConfig().overrides ?? {},
       })
@@ -2174,9 +2242,26 @@ function getVsCodeApi() {
     const overrides: Record<string, string> = {}
     getThemeFields().forEach(({ input, key }) => {
       const value = input.value.trim()
-      if (value) overrides[key] = value
+      // Validate color format before including in overrides
+      if (value && isValidColorFormat(value)) {
+        overrides[key] = value
+      }
     })
     return { preset: activePreset, overrides }
+  }
+
+  function isValidColorFormat(value: string): boolean {
+    if (!value) return false
+    const trimmed = value.trim()
+    // Allow CSS variable references
+    if (/^var\(--[\w-]+\)$/.test(trimmed)) return true
+    // Allow transparent keyword
+    if (trimmed === "transparent") return true
+    // Validate hex format (#RGB or #RRGGBB)
+    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(trimmed)) return true
+    // Validate rgba/rgb format
+    if (/^rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*(,\s*[\d.]+\s*)?\)$/.test(trimmed)) return true
+    return false
   }
 
   function applyThemeCustomizerConfig(theme: ThemeCustomizerConfig | undefined) {
@@ -2552,7 +2637,7 @@ function getVsCodeApi() {
       if (existing) {
         // If it's a streaming placeholder, replace it with the final rendered version.
         // This ensures the final Markdown is correctly applied and avoids double messages.
-        const el = renderMessage(msg, { mode: session.mode, postMessage: (m) => vscode.postMessage(m) })
+        const el = renderMessage(msg, { mode: session.mode, postMessage: (m) => vscode.postMessage(m), skipHeader: true })
         existing.replaceWith(el)
         return
       }
@@ -2561,7 +2646,9 @@ function getVsCodeApi() {
       if (welcome) welcome.remove()
 
       const start = Date.now()
-      const el = renderMessage(msg, { mode: session.mode, postMessage: (m) => vscode.postMessage(m) })
+      const lastMsg = session.messages.length > 1 ? session.messages[session.messages.length - 2] : null
+      const isConsecutive = lastMsg?.role === msg.role
+      const el = renderMessage(msg, { mode: session.mode, postMessage: (m) => vscode.postMessage(m) }, isConsecutive)
       const elapsed = Date.now() - start
       if (elapsed > 50) {
         if ((window as any).__opencodeDebug) {
@@ -2719,7 +2806,11 @@ function getVsCodeApi() {
             const loader = createChunkedLoader({
               container: msgList,
               messages: session.messages,
-              renderFn: (m) => renderMessage(m, { ...renderOpts, turnIndex: session.messages.indexOf(m) }),
+              renderFn: (m) => {
+                const index = session.messages.indexOf(m)
+                const isConsecutive = index > 0 && session.messages[index - 1]?.role === m.role
+                return renderMessage(m, { ...renderOpts, turnIndex: index }, isConsecutive)
+              },
               onChunkDone: (rendered, total) => {
                 if (rendered === Math.min(total, 20)) {
                   const anchor = scrollAnchors.get(session.id)
@@ -2767,7 +2858,10 @@ function getVsCodeApi() {
         const session = stateManager.getSession(sid)
         const renderOpts = { mode: session?.mode ?? "build", sessionId: sid, postMessage: (m2: Record<string, unknown>) => vscode.postMessage(m2) }
 
-        const elements = moreMsgs.map((m) => renderMessage(m, { ...renderOpts, turnIndex: session?.messages.indexOf(m) }))
+        const elements = moreMsgs.map((m, index) => {
+          const isConsecutive = index > 0 && moreMsgs[index - 1]?.role === m.role
+          return renderMessage(m, { ...renderOpts, turnIndex: session?.messages.indexOf(m) }, isConsecutive)
+        })
 
         const oldBanner = msgList.querySelector<HTMLElement>(".load-earlier-banner")
         if (oldBanner) oldBanner.remove()
@@ -2938,6 +3032,12 @@ function getVsCodeApi() {
       }],
       ["theme_vars", (msg) => { applyThemeVars(msg.vars) }],
       ["theme_config", (msg) => { applyThemeCustomizerConfig(msg.theme as ThemeCustomizerConfig | undefined) }],
+      ["theme_config_error", (msg) => { 
+        const error = msg.error as string | undefined
+        console.error(`[opencode-harness] Theme config error: ${error || "Unknown error"}`)
+        // Show error to user - could add a toast notification here
+        alert(`Failed to save theme: ${error || "Unknown error"}`)
+      }],
       ["cli_themes_list", (msg) => { populateCliList(msg.themes as Array<{ name: string; source: string }>) }],
       ["rate_limit_state", (msg) => { handleRateLimitState(msg.state as RateLimitWebviewState | null | undefined) }],
       ["model_update", (msg) => {
@@ -3002,8 +3102,62 @@ function getVsCodeApi() {
         if (allSessions.length > 0) {
           allSessions.forEach((s) => {
             const escapedId = CSS.escape(s.id)
-            if (!els.tabPanels.querySelector(`.tab-panel[data-tab-id="${escapedId}"]`)) {
+            const panelExists = !!els.tabPanels.querySelector(`.tab-panel[data-tab-id="${escapedId}"]`)
+            if (!panelExists) {
               createTabUI(s.id, s.name)
+            }
+            // Render persisted messages into the tab's message list. Without
+            // this, restored tabs come up as empty shells until the user picks
+            // them from history (which routes through resume_session_data).
+            // We re-render whenever init_state arrives so the message list
+            // reflects the freshest state from the extension host.
+            const msgList = getMessageList(s.id)
+            if (msgList && s.messages.length > 0) {
+              msgList.replaceChildren()
+              const renderOpts = {
+                mode: s.mode,
+                sessionId: s.id,
+                postMessage: (m: Record<string, unknown>) => vscode.postMessage(m),
+              }
+              const loader = createChunkedLoader({
+                container: msgList,
+                messages: s.messages,
+                renderFn: (m) => {
+                  const index = s.messages.indexOf(m)
+                  const isConsecutive = index > 0 && s.messages[index - 1]?.role === m.role
+                  return renderMessage(m, { ...renderOpts, turnIndex: index }, isConsecutive)
+                },
+                onChunkDone: (rendered, total) => {
+                  if (rendered === Math.min(total, 20)) {
+                    const anchor = scrollAnchors.get(s.id)
+                    if (anchor) anchor.anchor()
+                    else scrollToBottom(msgList)
+                  }
+                },
+                onAllDone: () => {
+                  setupJumpToBottom(s.id)
+                  debouncedUpdateScrollMarkers(s.id)
+                  refreshConversationTimeline(s.id)
+                },
+              })
+              loader.start()
+
+              if (!scrollAnchors.get(s.id)) {
+                const typingInd = msgList.parentElement?.querySelector(".typing-indicator") as HTMLElement | undefined
+                const anchor = createScrollAnchor(msgList, typingInd)
+                scrollAnchors.set(s.id, anchor)
+              }
+
+              if (!getVirtualList(s.id)) {
+                const vl = createVirtualList(
+                  s.id,
+                  msgList,
+                  (id: string) => s.messages.find((m: ChatMessage) => m.id === id),
+                  () => stateManager.getSession(s.id),
+                  (m: ChatMessage, opts: any) => renderMessage(m, opts),
+                )
+                vl.start()
+              }
             }
           })
           syncModeUI()
@@ -4063,11 +4217,14 @@ function undoMessage(messageId: string) {
     const panel = els.checkpointPanel
     if (!panel) return
     panel.innerHTML = ""
+    const toggleBtn = els.checkpointToggleBtn
     if (checkpoints.length === 0) {
       panel.classList.add("hidden")
+      toggleBtn?.setAttribute("aria-pressed", "false")
       return
     }
     panel.classList.remove("hidden")
+    toggleBtn?.setAttribute("aria-pressed", "true")
     for (const cp of checkpoints) {
       const item = document.createElement("div")
       item.className = "checkpoint-item"

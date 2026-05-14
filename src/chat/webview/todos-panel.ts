@@ -9,7 +9,7 @@ export interface TodosPanelOptions {
 export function setupTodosPanel(els: any, options: TodosPanelOptions) {
   const todosPanel = els.todosPanel
   const todosList = els.todosList
-  const changedFilesList = els.changedFilesList
+  const changedFilesList = els.changedFilesPanelList
   const closeBtn = els.closeTodosBtn
 
   if (!todosPanel || !todosList || !changedFilesList || !closeBtn) {
@@ -64,14 +64,17 @@ function renderTodosList(container: HTMLElement, todos: Todo[], options: TodosPa
     item.className = `todo-item todo-item--${todo.status}`
     item.dataset.todoId = todo.id
 
-    // Checkbox
-    const checkbox = document.createElement("input")
-    checkbox.type = "checkbox"
-    checkbox.checked = todo.status === "completed"
-    checkbox.className = "todo-checkbox"
-    checkbox.setAttribute("aria-label", `Mark todo as ${todo.status === "completed" ? "incomplete" : "complete"}`)
-    checkbox.addEventListener("change", () => {
-      options.onToggleTodo(todo.id)
+    // Checkbox (custom div to match CSS; todos are server-managed)
+    const isCompleted = todo.status === "completed"
+    const checkbox = document.createElement("div")
+    checkbox.className = `todo-checkbox${isCompleted ? " todo-checkbox--checked" : ""}`
+    checkbox.setAttribute("role", "checkbox")
+    checkbox.setAttribute("aria-checked", String(isCompleted))
+    checkbox.setAttribute("aria-label", `Todo: ${todo.content}`)
+    checkbox.setAttribute("tabindex", "0")
+    checkbox.addEventListener("click", () => { options.onToggleTodo(todo.id) })
+    checkbox.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === " " || e.key === "Enter") { e.preventDefault(); options.onToggleTodo(todo.id) }
     })
 
     // Content

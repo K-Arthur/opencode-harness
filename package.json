@@ -1,13 +1,13 @@
 {
   "name": "opencode-harness",
-  "displayName": "OpenCode",
+  "displayName": "OpenCode - AI Coding Assistant for VS Code",
   "publisher": "kevinoarthur",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/K-Arthur/opencode-harness"
   },
-  "description": "The open source coding agent — powered by OpenCode",
+  "description": "AI-powered coding assistant integrated into VS Code. Chat, refactor, debug, and write code with the OpenCode agent while staying in your editor. Supports multiple AI models (Claude, GPT, Gemini), custom themes, cost tracking, and granular permission controls.",
   "icon": "media/opencode-icon-256.png",
   "version": "0.2.0",
   "engines": {
@@ -20,22 +20,32 @@
     }
   },
   "categories": [
-    "Chat",
-    "Machine Learning",
-    "Programming Languages",
-    "Snippets"
+    "Other",
+    "Programming Languages"
   ],
   "keywords": [
     "opencode",
     "ai",
-    "coding-agent",
-    "chat",
-    "llm",
+    "coding",
     "assistant",
-    "copilot"
+    "vscode",
+    "vs-code",
+    "chat",
+    "refactor",
+    "debug",
+    "llm",
+    "anthropic",
+    "claude",
+    "openai",
+    "gpt",
+    "gemini",
+    "model",
+    "cost-tracking",
+    "theme",
+    "privacy"
   ],
   "galleryBanner": {
-    "color": "#1e1e2e",
+    "color": "#007acc",
     "theme": "dark"
   },
   "bugs": {
@@ -86,19 +96,19 @@
       },
       {
         "command": "opencode-harness.showRateLimits",
-        "title": "OpenCode: Show Rate Limits"
+        "title": "OpenCode: View Rate Limits"
       },
       {
         "command": "opencode-harness.selectModel",
-        "title": "OpenCode: Select Model"
+        "title": "OpenCode: Choose Model"
       },
       {
         "command": "opencode-harness.checkCli",
-        "title": "OpenCode: Check CLI Communication"
+        "title": "OpenCode: Test CLI Connection"
       },
       {
         "command": "opencode-harness.listSessions",
-        "title": "OpenCode: List Sessions"
+        "title": "OpenCode: View Sessions"
       },
       {
         "command": "opencode-harness.openStoredSession",
@@ -130,11 +140,11 @@
       },
       {
         "command": "opencode-harness.chooseHistorySession",
-        "title": "OpenCode: Choose History Session…"
+        "title": "OpenCode: Open Past Session"
       },
       {
         "command": "opencode-harness.attachRemote",
-        "title": "OpenCode: Attach to Remote Server…"
+        "title": "OpenCode: Connect to Remote Server"
       },
       {
         "command": "opencode-harness.addFileToSession",

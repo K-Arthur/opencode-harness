@@ -47,6 +47,10 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private pendingOpenSessionId?: string
   private chatCommands: ChatCommands
 private autoCompactor: AutoCompactor
+  // EC7: Track in-progress backfills to prevent concurrent requests
+  private backfillInProgress = new Set<string>()
+  private backfillRetryTimer?: NodeJS.Timeout
+  private readonly BACKFILL_RETRY_DELAYS_MS = [1500, 4000]
   private fileOps = new ChatFileOps()
   private themeController: ThemeController
   private statePush: StatePushService
@@ -133,6 +137,12 @@ private autoCompactor: AutoCompactor
       postMessage: (msg) => this.postMessage(msg),
       postRequestError: (message, sessionId) => this.postRequestError(message, sessionId),
       sendPromptToWebview: (text, autoSend) => this.sendPromptToWebview(text, autoSend),
+    })
+
+    // Hook into tab creation to backfill tabs that need it
+    this.tabManager.onTabCreated((tabId) => {
+      log.info(`[tab_created] Tab created: ${tabId}, checking if backfill needed`)
+      this.backfillTabIfNeeded(tabId).catch(err => log.error(`Failed to backfill tab ${tabId} on creation`, err))
     })
 
     this.eventRouter = new WebviewEventRouter({
@@ -544,6 +554,10 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       this.postMessage({ type: "permission_request", sessionId: tabId, permissionId: data?.id, title: data?.title || `Allow ${data?.type || "action"}?` })
     }],
     ["permission_replied", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => { log.info(`Permission response for ${tabId}`) }],
+    ["todo_updated", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {
+      const data = event.data as { todos?: unknown[] } | undefined
+      this.postMessage({ type: "todos_update", sessionId: tabId, todos: data?.todos ?? [] })
+    }],
     ["file_edited", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean }) => {
       if (!tab?.isStreaming) return
       const data = event.data as { file?: string; files?: string[] } | undefined
@@ -632,10 +646,21 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     }],
   ])
 
-  private async backfillRecoveredSessions(sessions: import("../session/SessionStore").OpenCodeSession[]): Promise<boolean> {
+  private async backfillRecoveredSessions(sessions: import("../session/SessionStore").OpenCodeSession[], isRetry: boolean = false): Promise<boolean> {
     const sessionsNeedingBackfill = sessions
       .filter((s) => s.needsBackfill === true && s.cliSessionId && s.messages.length === 0)
       .slice(0, 10)
+
+    // Log why other tabs weren't backfilled
+    const tabs = this.tabManager.getAllTabs()
+    for (const tab of tabs) {
+      const s = this.sessionStore.get(tab.id)
+      if (s && s.cliSessionId && !sessionsNeedingBackfill.some((sb) => sb.id === s.id)) {
+        log.info(`[sessions_recovered] Tab ${tab.id} not backfilled: needsBackfill=${s.needsBackfill}, messages.length=${s.messages.length}`)
+      } else if (s && !s.cliSessionId) {
+        log.info(`[sessions_recovered] Tab ${tab.id} has no cliSessionId`)
+      }
+    }
 
     let didBackfill = false
     if (sessionsNeedingBackfill.length > 0) {
@@ -643,22 +668,124 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     }
 
     for (const session of sessionsNeedingBackfill) {
+      // EC7: Skip if backfill is already in progress for this session
+      if (this.backfillInProgress.has(session.id)) {
+        log.info(`[sessions_recovered] Skipping backfill for ${session.id} because backfill is already in progress`)
+        continue
+      }
+
+      this.backfillInProgress.add(session.id)
       try {
         if (!session.cliSessionId) continue
         const rows = await this.sessionManager.getSessionMessages(session.cliSessionId)
         const messages = sdkMessagesToChatMessages(rows)
-        this.sessionStore.applyBackfilledMessages(session.id, messages)
         if (messages.length > 0) {
+          this.sessionStore.applyBackfilledMessages(session.id, messages)
           this.sessionStore.autoTitleFromMessages(session.id)
           log.info(`[sessions_recovered] Backfilled ${messages.length} messages for session ${session.id}`)
+          didBackfill = true
+        } else {
+          // Empty response at startup is almost always the opencode server
+          // still lazy-loading messages from disk, not a truly empty session.
+          // Leave needsBackfill=true so the bounded retry (or a later
+          // tab_created) can try again. Do NOT close the tab.
+          log.info(`[sessions_recovered] Empty response for ${session.id}; leaving needsBackfill set for retry`)
         }
-        didBackfill = true
       } catch (err) {
         log.warn(`[sessions_recovered] Backfill failed for ${session.id}`, err)
+      } finally {
+        this.backfillInProgress.delete(session.id)
       }
     }
 
+    const stillPending = this.sessionStore
+      .list()
+      .filter((s) => s.needsBackfill === true && !!s.cliSessionId && s.messages.length === 0)
+    if (stillPending.length > 0 && !isRetry) {
+      this.scheduleBackfillRetry(0)
+    }
+
     return didBackfill
+  }
+
+  private scheduleBackfillRetry(attempt: number): void {
+    if (attempt >= this.BACKFILL_RETRY_DELAYS_MS.length) return
+    if (this.backfillRetryTimer) clearTimeout(this.backfillRetryTimer)
+
+    const delay = this.BACKFILL_RETRY_DELAYS_MS[attempt]!
+    this.backfillRetryTimer = setTimeout(async () => {
+      this.backfillRetryTimer = undefined
+      const all = this.sessionStore.list()
+      const stillPending = all.filter(
+        (s) => s.needsBackfill === true && !!s.cliSessionId && s.messages.length === 0
+      )
+      if (stillPending.length === 0) return
+
+      log.info(`[sessions_recovered] Retry attempt ${attempt + 1} for ${stillPending.length} session(s)`)
+      try {
+        const changed = await this.backfillRecoveredSessions(all, true)
+        if (changed) {
+          this.restoredTabsHydrated = false
+          this.pushInitStateToWebview()
+          this.postSessionListUpdate(this.sessionStore.list())
+        }
+      } catch (err) {
+        log.warn(`[sessions_recovered] Retry attempt ${attempt + 1} failed`, err)
+      }
+
+      const stillStillPending = this.sessionStore
+        .list()
+        .filter((s) => s.needsBackfill === true && !!s.cliSessionId && s.messages.length === 0)
+      if (stillStillPending.length > 0) this.scheduleBackfillRetry(attempt + 1)
+    }, delay)
+  }
+
+  private async backfillTabIfNeeded(tabId: string): Promise<void> {
+    const session = this.sessionStore.get(tabId)
+    // Backfill if: has cliSessionId, has no local messages, and server is running
+    // Note: We don't check needsBackfill flag here because a session might have
+    // empty messages with needsBackfill=false (e.g., imported session that
+    // was never backfilled). We should still attempt backfill for empty sessions.
+    if (!session || !session.cliSessionId || session.messages.length > 0) {
+      return
+    }
+
+    // EC7: Prevent concurrent backfill requests for the same session
+    if (this.backfillInProgress.has(tabId)) {
+      log.info(`[tab_created] Skipping backfill for ${tabId} because backfill is already in progress`)
+      return
+    }
+
+    // EC4: Avoid backfill if session is currently streaming
+    const tab = this.tabManager.getTab(tabId)
+    if (tab?.isStreaming) {
+      log.info(`[tab_created] Skipping backfill for ${tabId} because it is currently streaming`)
+      return
+    }
+
+    this.backfillInProgress.add(tabId)
+    try {
+      const rows = await this.sessionManager.getSessionMessages(session.cliSessionId)
+      const messages = sdkMessagesToChatMessages(rows)
+      if (messages.length > 0) {
+        this.sessionStore.applyBackfilledMessages(session.id, messages)
+        this.sessionStore.autoTitleFromMessages(session.id)
+        log.info(`[tab_created] Backfilled ${messages.length} messages for session ${session.id}`)
+        // Re-push init state to update webview with backfilled messages
+        this.restoredTabsHydrated = false
+        this.pushInitStateToWebview()
+      } else {
+        // Empty response — most likely the server has not finished loading
+        // messages from disk. Preserve needsBackfill so the retry timer (or a
+        // later user interaction) can try again. Do NOT close the tab.
+        log.info(`[tab_created] Empty response for ${session.id}; leaving needsBackfill set for retry`)
+      }
+    } catch (err) {
+      // EC5: Handle session deletion or other errors gracefully
+      log.warn(`[tab_created] Backfill failed for ${session.id}`, err)
+    } finally {
+      this.backfillInProgress.delete(tabId)
+    }
   }
 
   private postSessionListUpdate(sessions: import("../session/SessionStore").OpenCodeSession[]): void {
@@ -1138,6 +1265,10 @@ private toUserErrorMessage(message: string): string {
   }
 
   dispose(): void {
+    if (this.backfillRetryTimer) {
+      clearTimeout(this.backfillRetryTimer)
+      this.backfillRetryTimer = undefined
+    }
     this.chunkBatcher.dispose()
     for (const d of this.disposables) d.dispose()
     this.disposables = []
