@@ -67,7 +67,7 @@
 }
 
 .status-text {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   font-family: var(--font-mono);
   color: var(--oc-muted);
@@ -79,7 +79,7 @@
 /* ─── TOKEN/COST DISPLAY ─── */
 
 .cost-display {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   font-family: var(--font-mono);
   color: var(--oc-accent);
@@ -90,7 +90,7 @@
 }
 
 .token-display {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 500;
   font-family: var(--font-mono);
   color: var(--oc-muted);
@@ -119,8 +119,8 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  padding: 2px var(--space-2);
-  font-size: 11px;
+  padding: var(--space-0-5) var(--space-2);
+  font-size: var(--text-xs);
   font-family: var(--font-mono);
   background: var(--oc-bg-secondary);
   border: 1px solid var(--oc-glass-border);
@@ -154,7 +154,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-1) var(--space-2);
-  font-size: 12px;
+  font-size: var(--text-xs);
   border-radius: var(--radius-sm);
   background: var(--oc-bg-secondary);
   border: 1px solid var(--oc-glass-border);
@@ -165,8 +165,8 @@
 }
 
 .checkpoint-restore-btn {
-  font-size: 11px;
-  padding: 2px var(--space-2);
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
   background: var(--oc-accent);
   color: var(--oc-bg);
   border: none;
@@ -502,6 +502,22 @@
 #input-area.drag-over {
   border-color: var(--color-accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 20%, transparent);
+}
+
+/* Steering mode indicators */
+#input-area.steer-interrupt {
+  border-color: #f85149;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #f85149 15%, transparent);
+}
+
+#input-area.steer-append {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #3b82f6 15%, transparent);
+}
+
+#input-area.steer-queue {
+  border-color: #10b981;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #10b981 15%, transparent);
 }
 
 #input-wrapper {
@@ -1342,9 +1358,9 @@
   background: transparent;
   border: none;
   color: var(--color-muted);
-  font-size: 24px;
+  font-size: var(--text-2xl);
   cursor: pointer;
-  width: 32px;
+  width: var(--size-target-comfortable);
   height: 32px;
   display: flex;
   align-items: center;
@@ -1576,8 +1592,8 @@
 }
 
 .modal-workspace-badge {
-  font-size: 10px;
-  padding: 1px var(--space-1-5);
+  font-size: var(--text-2xs);
+  padding: var(--space-0-5) var(--space-1-5);
   background: var(--oc-accent-subtle);
   color: var(--color-accent);
   border-radius: var(--radius-sm);
@@ -1789,9 +1805,9 @@ button.modal-session-item:focus {
 .attachment-chip::after {
   content: "📎";
   position: absolute;
-  top: 2px;
-  left: 2px;
-  font-size: 10px;
+  top: var(--space-0-5);
+  left: var(--space-0-5);
+  font-size: var(--text-2xs);
   opacity: 0;
   transition: opacity var(--duration-fast);
 }
@@ -1817,7 +1833,7 @@ button.modal-session-item:focus {
   opacity: 0;
   transition: opacity var(--duration-fast), transform var(--duration-fast);
   z-index: 1;
-  font-size: 12px;
+  font-size: var(--text-xs);
   line-height: 1;
 }
 

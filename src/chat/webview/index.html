@@ -191,6 +191,136 @@
       </div>
       <div id="tab-panels">
       </div>
+
+      <div id="input-area">
+      <div id="model-dropdown-container" class="hidden"></div>
+      <div id="variant-dropdown-container" class="hidden"></div>
+
+      <div id="input-wrapper">
+        <textarea id="prompt-input" rows="1" placeholder="Ask OpenCode a question about your code…" aria-label="Message input" aria-controls="mention-dropdown slash-autocomplete" autocomplete="off" spellcheck="true"></textarea>
+        <div id="mention-dropdown" class="dropdown hidden" role="listbox" aria-label="File mentions"></div>
+        <div id="slash-autocomplete" class="slash-autocomplete hidden" role="listbox" aria-label="Slash commands"></div>
+      </div>
+
+      <div id="input-bottom-bar">
+        <div class="bottom-bar-left">
+          <button class="icon-btn" id="mention-btn" title="Add context (@)" aria-label="Add context mention">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/>
+            </svg>
+          </button>
+          <button class="icon-btn" id="attach-btn" title="Attach files" aria-label="Attach files">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 7.5a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4v7a6 6 0 0 1-12 0v-4"/>
+              <path d="M12 15V7.5"/>
+            </svg>
+          </button>
+          <button class="instructions-gear-btn icon-btn" id="instructions-gear-btn" title="Custom instructions for this tab" aria-label="Edit tab instructions" aria-expanded="false">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+          <div class="instructions-editor hidden" id="instructions-editor"
+               role="dialog" aria-modal="true" aria-labelledby="instructions-editor-label">
+            <label class="instructions-editor-label" id="instructions-editor-label" for="instructions-textarea">Custom instructions (injected once at session start)</label>
+            <textarea class="instructions-textarea" id="instructions-textarea" rows="4" placeholder="E.g. Always write tests first. Use TypeScript strict mode."></textarea>
+            <div class="instructions-editor-actions">
+              <button class="instructions-save-btn" id="instructions-save-btn" aria-label="Save custom instructions (Ctrl+Enter)">Save</button>
+              <button class="instructions-cancel-btn" id="instructions-cancel-btn" aria-label="Discard and close">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="bottom-bar-right">
+        <div class="mode-dropdown" id="mode-dropdown" role="radiogroup">
+            <button class="mode-dropdown-btn" id="mode-dropdown-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Select session mode">
+              <span class="mode-dropdown-label" id="mode-dropdown-label">
+                <svg class="mode-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3L6.91 6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                <span id="mode-current-text">Build</span>
+              </span>
+              <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6"/>
+              </svg>
+            </button>
+            <div class="mode-dropdown-menu hidden" id="mode-dropdown-menu" role="listbox" aria-label="Session mode">
+              <button class="mode-option mode-option--plan" id="mode-opt-plan" role="option" aria-selected="false" data-mode="plan">
+                <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3v18"/><path d="M7 3v18"/><path d="M3 7.5h18"/><path d="M3 16.5h18"/><path d="M17 3a2 2 0 0 1 2 2"/><path d="M17 21a2 2 0 0 0 2-2"/><path d="M7 3a2 2 0 0 0-2 2"/><path d="M7 21a2 2 0 0 1-2-2"/></svg>
+                <span class="mode-option-label">
+                  <span class="mode-option-name">Plan</span>
+                  <span class="mode-option-desc">Review changes before applying (safest for exploration)</span>
+                </span>
+                <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <button class="mode-option mode-option--auto" id="mode-opt-auto" role="option" aria-selected="false" data-mode="auto">
+                <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span class="mode-option-label">
+                  <span class="mode-option-name">Auto</span>
+                  <span class="mode-option-desc">Agent applies changes automatically (review recommended)</span>
+                </span>
+                <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <button class="mode-option mode-option--build" id="mode-opt-build" role="option" aria-selected="false" data-mode="build">
+                <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3L6.91 6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                <span class="mode-option-label">
+                  <span class="mode-option-name">Build</span>
+                  <span class="mode-option-desc">Full agent access including execute commands (use with caution)</span>
+                </span>
+                <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+            </div>
+          </div>
+           <button class="model-selector-btn" id="model-selector-btn" title="Select model" aria-label="Select model" aria-haspopup="listbox" aria-expanded="false">
+              <span id="model-label">Default</span>
+              <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6"/>
+              </svg>
+            </button>
+            <button class="variant-selector-btn hidden" id="variant-selector-btn" title="Select thinking level" aria-label="Select thinking level" aria-haspopup="listbox" aria-expanded="false">
+              <span class="variant-label-text" id="variant-label">Default</span>
+              <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6"/>
+              </svg>
+            </button>
+            <div class="steer-mode-selector hidden" id="steer-mode-selector" role="radiogroup" aria-label="Steering mode">
+              <button class="steer-mode-btn active" id="steer-mode-interrupt" data-mode="interrupt" title="Interrupt current response (Ctrl+1)" aria-label="Interrupt mode" aria-pressed="true">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="16"/>
+                  <line x1="8" y1="12" x2="16" y2="12"/>
+                </svg>
+              </button>
+              <button class="steer-mode-btn" id="steer-mode-append" data-mode="append" title="Append after current response (Ctrl+2)" aria-label="Append mode" aria-pressed="false">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 5v14"/>
+                  <path d="M5 12h14"/>
+                </svg>
+              </button>
+              <button class="steer-mode-btn" id="steer-mode-queue" data-mode="queue" title="Queue for later (Ctrl+3)" aria-label="Queue mode" aria-pressed="false">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="8" y1="6" x2="21" y2="6"/>
+                  <line x1="8" y1="12" x2="21" y2="12"/>
+                  <line x1="8" y1="18" x2="21" y2="18"/>
+                  <line x1="3" y1="6" x2="3.01" y2="6"/>
+                  <line x1="3" y1="12" x2="3.01" y2="12"/>
+                  <line x1="3" y1="18" x2="3.01" y2="18"/>
+                </svg>
+              </button>
+            </div>
+           <button class="send-btn" id="send-btn" title="Send" aria-label="Send message">
+            <span class="send-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m5 12 7-7 7 7"/>
+                <path d="M12 5v14"/>
+              </svg>
+            </span>
+            <span class="stop-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="6" y="6" width="12" height="12" rx="2"/>
+              </svg>
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
     </div>
 
     <!-- Display toggles (Phase 4.2) -->
@@ -217,7 +347,7 @@
             <img class="welcome-wordmark" src="media/opencode-wordmark-dark.svg" width="120" height="auto" alt="OpenCode" aria-hidden="true">
           </div>
           <div class="welcome-title">
-          <h1 class="welcome-heading">OpenCode</h1>
+          <h1 id="welcome-greeting" class="welcome-greeting">OpenCode</h1>
           <p class="welcome-tagline">AI-powered coding assistant integrated into your editor</p>
         </div>
 
@@ -238,7 +368,7 @@
             <span>Quick Settings</span>
           </button>
           <div id="settings-panel" class="settings-panel hidden">
-            <p>Settings panel content</p>
+            <div id="quick-settings-content"></div>
           </div>
         </div>
 
@@ -371,148 +501,6 @@
       </div>
       <div class="panel-body">
         <div id="prompt-stash-list" class="prompt-stash-list"></div>
-      </div>
-    </div>
-
-    <div id="input-area">
-      <div id="model-dropdown-container" class="hidden"></div>
-      <div id="variant-dropdown-container" class="hidden"></div>
-      
-      <!-- Steer input section - shown during streaming -->
-      <div id="steer-input-section" class="steer-input-section hidden">
-        <div class="steer-input-header">
-          <span class="steer-badge">Steer</span>
-          <span class="steer-hint">Interrupt and guide the current response</span>
-        </div>
-        <div id="steer-input-wrapper">
-          <textarea id="steer-input" rows="1" placeholder="Guide the AI: correct errors, change direction, or add context..." aria-label="Steer prompt input"></textarea>
-        </div>
-        <div class="steer-mode-selector">
-          <label class="steer-mode-option">
-            <input type="radio" name="steer-mode" value="interrupt" checked>
-            <span>Interrupt</span>
-          </label>
-          <label class="steer-mode-option">
-            <input type="radio" name="steer-mode" value="append">
-            <span>Append</span>
-          </label>
-          <label class="steer-mode-option">
-            <input type="radio" name="steer-mode" value="queue">
-            <span>Queue</span>
-          </label>
-        </div>
-        <div class="steer-actions">
-          <button class="steer-btn primary" id="send-steer-btn" aria-label="Send steer prompt">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13"/>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-            </svg>
-            Send
-          </button>
-          <button class="steer-btn secondary" id="cancel-steer-btn" aria-label="Cancel steer">
-            Cancel
-          </button>
-        </div>
-      </div>
-
-      <div id="input-wrapper">
-        <textarea id="prompt-input" rows="1" placeholder="Ask OpenCode a question about your code…" aria-label="Message input" aria-controls="mention-dropdown slash-autocomplete" autocomplete="off" spellcheck="true"></textarea>
-        <div id="mention-dropdown" class="dropdown hidden" role="listbox" aria-label="File mentions"></div>
-        <div id="slash-autocomplete" class="slash-autocomplete hidden" role="listbox" aria-label="Slash commands"></div>
-      </div>
-
-      <div id="input-bottom-bar">
-        <div class="bottom-bar-left">
-          <button class="icon-btn" id="mention-btn" title="Add context (@)" aria-label="Add context mention">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="4"/>
-              <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/>
-            </svg>
-          </button>
-          <button class="icon-btn" id="attach-btn" title="Attach files" aria-label="Attach files">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M6 7.5a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4v7a6 6 0 0 1-12 0v-4"/>
-              <path d="M12 15V7.5"/>
-            </svg>
-          </button>
-          <button class="instructions-gear-btn icon-btn" id="instructions-gear-btn" title="Custom instructions for this tab" aria-label="Edit tab instructions" aria-expanded="false">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          </button>
-          <div class="instructions-editor hidden" id="instructions-editor"
-               role="dialog" aria-modal="true" aria-labelledby="instructions-editor-label">
-            <label class="instructions-editor-label" id="instructions-editor-label" for="instructions-textarea">Custom instructions (injected once at session start)</label>
-            <textarea class="instructions-textarea" id="instructions-textarea" rows="4" placeholder="E.g. Always write tests first. Use TypeScript strict mode."></textarea>
-            <div class="instructions-editor-actions">
-              <button class="instructions-save-btn" id="instructions-save-btn" aria-label="Save custom instructions (Ctrl+Enter)">Save</button>
-              <button class="instructions-cancel-btn" id="instructions-cancel-btn" aria-label="Discard and close">Cancel</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="bottom-bar-right">
-        <div class="mode-dropdown" id="mode-dropdown" role="radiogroup">
-            <button class="mode-dropdown-btn" id="mode-dropdown-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Select session mode">
-              <span class="mode-dropdown-label" id="mode-dropdown-label">
-                <svg class="mode-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-                <span id="mode-current-text">Build</span>
-              </span>
-              <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="m6 9 6 6 6-6"/>
-              </svg>
-            </button>
-            <div class="mode-dropdown-menu hidden" id="mode-dropdown-menu" role="listbox" aria-label="Session mode">
-              <button class="mode-option mode-option--plan" id="mode-opt-plan" role="option" aria-selected="false" data-mode="plan">
-                <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3v18"/><path d="M7 3v18"/><path d="M3 7.5h18"/><path d="M3 16.5h18"/><path d="M17 3a2 2 0 0 1 2 2"/><path d="M17 21a2 2 0 0 0 2-2"/><path d="M7 3a2 2 0 0 0-2 2"/><path d="M7 21a2 2 0 0 1-2-2"/></svg>
-                <span class="mode-option-label">
-                  <span class="mode-option-name">Plan</span>
-                  <span class="mode-option-desc">Review changes before applying (safest for exploration)</span>
-                </span>
-                <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-              </button>
-              <button class="mode-option mode-option--auto" id="mode-opt-auto" role="option" aria-selected="false" data-mode="auto">
-                <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                <span class="mode-option-label">
-                  <span class="mode-option-name">Auto</span>
-                  <span class="mode-option-desc">Agent applies changes automatically (review recommended)</span>
-                </span>
-                <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-              </button>
-              <button class="mode-option mode-option--build" id="mode-opt-build" role="option" aria-selected="false" data-mode="build">
-                <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-                <span class="mode-option-label">
-                  <span class="mode-option-name">Build</span>
-                  <span class="mode-option-desc">Full agent access including execute commands (use with caution)</span>
-                </span>
-                <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-              </button>
-            </div>
-          </div>
-           <button class="model-selector-btn" id="model-selector-btn" title="Select model" aria-label="Select model" aria-haspopup="listbox" aria-expanded="false">
-              <span id="model-label">Default</span>
-              <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="m6 9 6 6 6-6"/>
-              </svg>
-            </button>
-            <button class="variant-selector-btn hidden" id="variant-selector-btn" title="Select thinking level" aria-label="Select thinking level" aria-haspopup="listbox" aria-expanded="false">
-              <span class="variant-label-text" id="variant-label">Default</span>
-              <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="m6 9 6 6 6-6"/>
-              </svg>
-            </button>
-           <button class="send-btn" id="send-btn" title="Send" aria-label="Send message">
-            <span class="send-icon">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="m5 12 7-7 7 7"/>
-                <path d="M12 5v14"/>
-              </svg>
-            </span>
-            <span class="stop-icon">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="6" y="6" width="12" height="12" rx="2"/>
-              </svg>
-            </span>
-          </button>
-        </div>
       </div>
     </div>
 

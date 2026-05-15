@@ -25,6 +25,7 @@ import type {
   ErrorBlock,
   DiffHunk,
   DiffLine,
+  ToolCollapseConfig,
 } from "./types"
 
 // ---------------------------------------------------------------------------
@@ -275,6 +276,7 @@ export interface RenderOptions {
   turnIndex?: number
   sessionId?: string
   skipHeader?: boolean
+  collapseConfig?: ToolCollapseConfig
 }
 
 // ---------------------------------------------------------------------------
@@ -552,7 +554,7 @@ function extractSnippet(msg: import("./types").ChatMessage): string {
   return msg.role === "user" ? "Sent a message" : "Thinking..."
 }
 
-function renderThinkingBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
+function renderThinkingBlock(block: Block, opts: RenderOptions): HTMLElement | null {
   const thinking = isThinkingBlock(block) ? block : (block as unknown as ThinkingBlock)
   const content = thinking.content || ""
   if (!content.trim() && !thinking.streaming) return null
@@ -560,6 +562,12 @@ function renderThinkingBlock(block: Block, _opts: RenderOptions): HTMLElement | 
   const details = document.createElement("details")
   details.className = "thinking-block"
   details.setAttribute("aria-label", thinking.streaming ? "Thinking in progress" : "Reasoning")
+  
+  // Collapse by default for cleaner UI (similar to tool calls)
+  const config = opts?.collapseConfig
+  if (config?.defaultCollapsed && !thinking.streaming) {
+    details.open = false
+  }
 
   const summary = document.createElement("summary")
   summary.className = "thinking-header"

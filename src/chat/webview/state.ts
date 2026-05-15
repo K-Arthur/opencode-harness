@@ -1,4 +1,12 @@
-import type { WebviewState, SessionState, ChatMessage, VsCodeApi } from "./types"
+import type { WebviewState, SessionState, ChatMessage, VsCodeApi, ToolCollapseConfig } from "./types"
+
+const DEFAULT_TOOL_COLLAPSE_CONFIG: ToolCollapseConfig = {
+  groupBy: 'consecutive',
+  defaultCollapsed: true,
+  collapseThreshold: 2,
+  showTypeBreakdown: true,
+  compactMode: false
+}
 
 const DEFAULT_STATE: WebviewState = {
   sessions: {},
@@ -12,6 +20,7 @@ const DEFAULT_STATE: WebviewState = {
   disabledModels: [],
   favoriteModels: [],
   recentModels: [],
+  toolCollapseConfig: DEFAULT_TOOL_COLLAPSE_CONFIG,
 }
 
 function withDefaults(candidate: Partial<WebviewState>): WebviewState {
@@ -24,6 +33,7 @@ function withDefaults(candidate: Partial<WebviewState>): WebviewState {
     favoriteModels: candidate.favoriteModels || [],
     recentModels: candidate.recentModels || [],
     displayPrefs: candidate.displayPrefs,
+    toolCollapseConfig: candidate.toolCollapseConfig || DEFAULT_TOOL_COLLAPSE_CONFIG,
   }
 }
 

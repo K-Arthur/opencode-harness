@@ -26,6 +26,7 @@ import { createVirtualList, getVirtualList, disposeVirtualList } from "./virtual
 import { setupTodosPanel } from "./todos-panel"
 import { setupSkillsModal } from "./skills-modal"
 import { setupSubagentPanel } from "./subagent-panel"
+import { setupQuickSettings } from "./quick-settings"
 
 declare const acquireVsCodeApi: (() => {
   postMessage(message: Record<string, unknown>): void
@@ -213,6 +214,35 @@ function getVsCodeApi() {
   // Mode state: "plan" or "build"
   let currentMode = "build"
 
+  // Steering mode state: "interrupt", "append", or "queue"
+  let currentSteerMode: 'interrupt' | 'append' | 'queue' = 'interrupt'
+
+  function setSteerMode(mode: 'interrupt' | 'append' | 'queue') {
+    currentSteerMode = mode
+
+    // Update UI to reflect selected mode
+    const interruptBtn = document.getElementById("steer-mode-interrupt") as HTMLButtonElement
+    const appendBtn = document.getElementById("steer-mode-append") as HTMLButtonElement
+    const queueBtn = document.getElementById("steer-mode-queue") as HTMLButtonElement
+
+    if (interruptBtn) {
+      interruptBtn.classList.toggle("active", mode === "interrupt")
+      interruptBtn.setAttribute("aria-pressed", String(mode === "interrupt"))
+    }
+    if (appendBtn) {
+      appendBtn.classList.toggle("active", mode === "append")
+      appendBtn.setAttribute("aria-pressed", String(mode === "append"))
+    }
+    if (queueBtn) {
+      queueBtn.classList.toggle("active", mode === "queue")
+      queueBtn.setAttribute("aria-pressed", String(mode === "queue"))
+    }
+
+    // Update input area border color to indicate steering mode
+    els.inputArea.classList.remove("steer-interrupt", "steer-append", "steer-queue")
+    els.inputArea.classList.add(`steer-${mode}`)
+  }
+
   // Pending image attachments queued for next send
   interface PendingAttachment {
     data: string
@@ -279,6 +309,7 @@ function getVsCodeApi() {
       
       setupWelcomeSuggestions()
       setupWelcomeActions()
+      setupWelcomeQuickSettings()
       setupMessageListener()
       setupPermissionListener()
       setupDiffActionListener()
@@ -349,23 +380,23 @@ function getVsCodeApi() {
     })
 
     // Search toggle handler
-    const searchToggle = document.getElementById("welcome-search-toggle") as HTMLButtonElement | null
-    const searchWrapper = document.getElementById("welcome-search-input") as HTMLDivElement | null
-    if (searchToggle && searchWrapper) {
+    if (els.welcomeSearchToggle && els.welcomeSearchInput) {
+      const searchToggle = els.welcomeSearchToggle
+      const searchInput = els.welcomeSearchInput
       searchToggle.addEventListener("click", () => {
-        const isHidden = searchWrapper.classList.contains("hidden")
+        const isHidden = searchInput.classList.contains("hidden")
         if (isHidden) {
-          searchWrapper.classList.remove("hidden")
+          searchInput.classList.remove("hidden")
           searchToggle.setAttribute("aria-expanded", "true")
-          const input = searchWrapper.querySelector("input")
+          const input = searchInput.querySelector("input")
           if (input) input.focus()
         } else {
-          searchWrapper.classList.add("hidden")
+          searchInput.classList.add("hidden")
           searchToggle.setAttribute("aria-expanded", "false")
         }
       })
       
-      const input = searchWrapper.querySelector("input")
+      const input = searchInput.querySelector("input")
       if (input) {
         input.addEventListener("input", (e) => {
           const query = (e.target as HTMLInputElement).value
@@ -375,9 +406,9 @@ function getVsCodeApi() {
     }
 
     // Settings toggle handler
-    const settingsToggle = document.getElementById("settings-toggle") as HTMLButtonElement | null
-    const settingsPanel = document.getElementById("settings-panel") as HTMLElement | null
-    if (settingsToggle && settingsPanel) {
+    if (els.settingsToggle && els.settingsPanel) {
+      const settingsToggle = els.settingsToggle
+      const settingsPanel = els.settingsPanel
       settingsToggle.addEventListener("click", () => {
         const isHidden = settingsPanel.classList.contains("hidden")
         if (isHidden) {
@@ -1108,21 +1139,20 @@ function getVsCodeApi() {
       mention.handleTrigger()
     })
 
-    // Steer input handlers
-    const steerInputSection = document.getElementById("steer-input-section") as HTMLElement
-    const steerInput = document.getElementById("steer-input") as HTMLTextAreaElement
-    const sendSteerBtn = document.getElementById("send-steer-btn") as HTMLButtonElement
-    const cancelSteerBtn = document.getElementById("cancel-steer-btn") as HTMLButtonElement
+    // Steering mode selector handlers
+    const steerModeSelector = document.getElementById("steer-mode-selector") as HTMLElement
+    const interruptBtn = document.getElementById("steer-mode-interrupt") as HTMLButtonElement
+    const appendBtn = document.getElementById("steer-mode-append") as HTMLButtonElement
+    const queueBtn = document.getElementById("steer-mode-queue") as HTMLButtonElement
 
-    if (sendSteerBtn) {
-      sendSteerBtn.addEventListener("click", sendSteerPrompt)
+    if (interruptBtn) {
+      interruptBtn.addEventListener("click", () => setSteerMode("interrupt"))
     }
-
-    if (cancelSteerBtn) {
-      cancelSteerBtn.addEventListener("click", () => {
-        steerInputSection?.classList.add("hidden")
-        if (steerInput) steerInput.value = ""
-      })
+    if (appendBtn) {
+      appendBtn.addEventListener("click", () => setSteerMode("append"))
+    }
+    if (queueBtn) {
+      queueBtn.addEventListener("click", () => setSteerMode("queue"))
     }
 
     // Add keyboard shortcut hint
@@ -1176,7 +1206,13 @@ function getVsCodeApi() {
     if (e.ctrlKey || e.metaKey) {
       if (e.key === "Enter") {
         e.preventDefault()
-        sendMessage()
+        const active = stateManager.getActiveSession()
+        // When streaming, Ctrl+Enter sends as steer prompt
+        if (active?.isStreaming) {
+          sendSteerPrompt()
+        } else {
+          sendMessage()
+        }
         // Visual feedback for shortcut
         els.sendBtn?.classList.add("active-feedback")
         setTimeout(() => els.sendBtn?.classList.remove("active-feedback"), 200)
@@ -1207,6 +1243,22 @@ function getVsCodeApi() {
         }
         return
       }
+      // Steering mode shortcuts (only when streaming)
+      if (e.key === "1") {
+        e.preventDefault()
+        setSteerMode("interrupt")
+        return
+      }
+      if (e.key === "2") {
+        e.preventDefault()
+        setSteerMode("append")
+        return
+      }
+      if (e.key === "3") {
+        e.preventDefault()
+        setSteerMode("queue")
+        return
+      }
     }
 
     if (!els.mentionDropdown.classList.contains("hidden")) {
@@ -1216,7 +1268,13 @@ function getVsCodeApi() {
 
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
-      sendMessage()
+      const active = stateManager.getActiveSession()
+      // When streaming, Enter sends as steer prompt
+      if (active?.isStreaming) {
+        sendSteerPrompt()
+      } else {
+        sendMessage()
+      }
     }
   }
 
@@ -1603,38 +1661,28 @@ function getVsCodeApi() {
   }
 
   function sendSteerPrompt() {
-    const steerInput = document.getElementById("steer-input") as HTMLTextAreaElement
-    const steerInputSection = document.getElementById("steer-input-section") as HTMLElement
     const active = stateManager.getActiveSession()
-    
-    if (!active || !steerInput) return
 
-    const text = steerInput.value.trim()
-    if (!text) return
+    if (!active) return
 
-    // Get selected mode
-    const modeInputs = document.querySelectorAll('input[name="steer-mode"]')
-    let selectedMode: 'interrupt' | 'append' | 'queue' = 'interrupt'
-    for (let i = 0; i < modeInputs.length; i++) {
-      const input = modeInputs[i] as HTMLInputElement
-      if (input.checked) {
-        selectedMode = input.value as 'interrupt' | 'append' | 'queue'
-        break
-      }
-    }
+    const text = els.promptInput.value.trim()
+    if (!text && pendingAttachments.length === 0) return
 
-    // Send steer prompt message
+    // Send steer prompt message with current mode
     vscode.postMessage({
       type: "send_steer_prompt",
       sessionId: active.id,
       text,
-      mode: selectedMode,
+      mode: currentSteerMode,
       attachments: pendingAttachments,
     })
 
-    // Clear and hide steer input
-    steerInput.value = ""
-    steerInputSection?.classList.add("hidden")
+    // Clear input and attachments
+    els.promptInput.value = ""
+    pendingAttachments = []
+    renderAttachmentChips()
+    autoResizeTextarea()
+    updateSendButton()
   }
 
   function sendMessage() {
@@ -1642,8 +1690,13 @@ function getVsCodeApi() {
     let active = stateManager.getActiveSession()
 
     if (active?.isStreaming) {
-      // Send button acts as stop button when streaming
-      abortStream()
+      // When streaming and there's text, send as steer prompt
+      if (text || pendingAttachments.length > 0) {
+        sendSteerPrompt()
+      } else {
+        // Send button acts as stop button when streaming and no text
+        abortStream()
+      }
       return
     }
 
@@ -2282,13 +2335,39 @@ function getVsCodeApi() {
   function setupWelcomeSuggestions() {
     els.welcomeView.addEventListener("click", (e) => {
       const target = e.target as HTMLElement
-      const card = target.closest(".suggestion-card") as HTMLButtonElement
+      const card = target.closest(".prompt-starter") as HTMLButtonElement
       if (card && card.dataset.prompt) {
         els.promptInput.value = card.dataset.prompt
         autoResizeTextarea()
         updateSendButton()
         els.promptInput.focus()
       }
+    })
+  }
+
+  function setupWelcomeQuickSettings() {
+    const currentState = stateManager.getState()
+    const currentMode = "build" // Default mode since WebviewState doesn't have mode property
+    
+    setupQuickSettings({
+      container: els.quickSettingsContent,
+      settings: [
+        {
+          id: "mode",
+          type: "dropdown",
+          label: "Session Mode",
+          description: "Controls how OpenCode applies changes to your code",
+          currentValue: currentMode,
+          options: [
+            { label: "Plan", value: "plan" },
+            { label: "Auto", value: "auto" },
+            { label: "Build", value: "build" }
+          ],
+          onChange: (value: string) => {
+            vscode.postMessage({ type: "set_mode", mode: value })
+          }
+        }
+      ]
     })
   }
 
@@ -2919,14 +2998,26 @@ function getVsCodeApi() {
         if (sid) {
           stateManager.setStreaming(sid, Boolean(msg.isStreaming))
           
-          // Show/hide steer input section based on streaming state
-          const steerInputSection = document.getElementById("steer-input-section") as HTMLElement
-          if (steerInputSection) {
+          // Show/hide steering mode selector based on streaming state
+          const steerModeSelector = document.getElementById("steer-mode-selector") as HTMLElement
+          if (steerModeSelector) {
             if (msg.isStreaming) {
-              steerInputSection.classList.remove("hidden")
+              steerModeSelector.classList.remove("hidden")
             } else {
-              steerInputSection.classList.add("hidden")
+              steerModeSelector.classList.add("hidden")
             }
+          }
+
+          // Update placeholder text based on streaming state
+          if (msg.isStreaming) {
+            els.promptInput.placeholder = "Guide the AI: correct errors, change direction, or add context…"
+          } else {
+            els.promptInput.placeholder = "Ask OpenCode a question about your code…"
+          }
+
+          // Remove steering mode classes from input area when not streaming
+          if (!msg.isStreaming) {
+            els.inputArea.classList.remove("steer-interrupt", "steer-append", "steer-queue")
           }
           
           if (!msg.isStreaming) {

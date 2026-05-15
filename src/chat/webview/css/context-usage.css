@@ -172,56 +172,6 @@
   flex-wrap: wrap;
 }
 
-/* Button styles (reuse existing) */
-.btn {
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition: background-color 0.2s, border-color 0.2s;
-}
-
-.btn-primary {
-  background: var(--oc-fg);
-  color: var(--oc-panel-bg);
-}
-
-.btn-primary:hover {
-  background: var(--oc-fg);
-  opacity: 0.9;
-}
-
-.btn-secondary {
-  background: var(--oc-muted);
-  color: var(--oc-panel-fg);
-  border: 1px solid var(--oc-border);
-}
-
-.btn-secondary:hover {
-  background: var(--oc-muted);
-  opacity: 0.9;
-}
-
-/* Icon button styles (reuse existing) */
-.icon-btn {
-  background: transparent;
-  border: none;
-  color: var(--oc-fg);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.2s;
-}
-
-.icon-btn:hover {
-  background-color: var(--oc-muted);
-}
-
 /* Text muted utility */
 .text-muted {
   color: var(--oc-muted);

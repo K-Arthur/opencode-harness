@@ -17,7 +17,7 @@ async function mountThinkingBlock(page: Page, collapsed: boolean = false) {
     host.appendChild(list)
 
     const thinkingBlock = document.createElement('details')
-    thinkingBlock.className = `thinking-block ${isCollapsed ? 'thinking-block--collapsed' : ''}`
+    thinkingBlock.className = 'thinking-block'
     thinkingBlock.open = !isCollapsed
     thinkingBlock.innerHTML = `
       <summary class="thinking-header">
@@ -57,17 +57,17 @@ test.describe('Global Show/Hide Thinking Toggle', () => {
     const thinkingBody = page.locator('.thinking-body')
 
     // Initial state - thinking should be visible
-    await expect(thinkingBlock).not.toHaveClass(/thinking-block--collapsed/)
+    await expect(thinkingBlock).toHaveAttribute('open', '')
     await expect(thinkingBody).toBeVisible()
 
     // Click to hide thinking
     await toggleBtn.click()
-    await expect(thinkingBlock).toHaveClass(/thinking-block--collapsed/)
+    await expect(thinkingBlock).not.toHaveAttribute('open')
     await expect(thinkingBody).not.toBeVisible()
 
     // Click to show thinking
     await toggleBtn.click()
-    await expect(thinkingBlock).not.toHaveClass(/thinking-block--collapsed/)
+    await expect(thinkingBlock).toHaveAttribute('open', '')
     await expect(thinkingBody).toBeVisible()
   })
 
@@ -124,17 +124,17 @@ test.describe('Global Show/Hide Thinking Toggle', () => {
 
     // All blocks should be visible initially
     await expect(thinkingBlocks).toHaveCount(4) // 1 initial + 3 new
-    await expect(thinkingBlocks.nth(0)).not.toHaveClass(/thinking-block--collapsed/)
-    await expect(thinkingBlocks.nth(1)).not.toHaveClass(/thinking-block--collapsed/)
-    await expect(thinkingBlocks.nth(2)).not.toHaveClass(/thinking-block--collapsed/)
-    await expect(thinkingBlocks.nth(3)).not.toHaveClass(/thinking-block--collapsed/)
+    await expect(thinkingBlocks.nth(0)).toHaveAttribute('open', '')
+    await expect(thinkingBlocks.nth(1)).toHaveAttribute('open', '')
+    await expect(thinkingBlocks.nth(2)).toHaveAttribute('open', '')
+    await expect(thinkingBlocks.nth(3)).toHaveAttribute('open', '')
 
     // Toggle to hide
     await toggleBtn.click()
-    await expect(thinkingBlocks.nth(0)).toHaveClass(/thinking-block--collapsed/)
-    await expect(thinkingBlocks.nth(1)).toHaveClass(/thinking-block--collapsed/)
-    await expect(thinkingBlocks.nth(2)).toHaveClass(/thinking-block--collapsed/)
-    await expect(thinkingBlocks.nth(3)).toHaveClass(/thinking-block--collapsed/)
+    await expect(thinkingBlocks.nth(0)).not.toHaveAttribute('open')
+    await expect(thinkingBlocks.nth(1)).not.toHaveAttribute('open')
+    await expect(thinkingBlocks.nth(2)).not.toHaveAttribute('open')
+    await expect(thinkingBlocks.nth(3)).not.toHaveAttribute('open')
   })
 
   test('should respect individual block open state when expanding', async ({ page }) => {

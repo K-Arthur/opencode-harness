@@ -86,6 +86,10 @@ export interface ElementRefs {
   
   welcomeRecentSessions: HTMLDivElement | null
   welcomeModelCtx: HTMLSpanElement | null
+  welcomeSearchToggle: HTMLButtonElement | null
+  welcomeSearchInput: HTMLDivElement | null
+  settingsToggle: HTMLButtonElement | null
+  settingsPanel: HTMLElement | null
 
   agentStatusLed: HTMLDivElement
   agentStatusText: HTMLSpanElement
@@ -108,6 +112,7 @@ export interface ElementRefs {
   modeWarningConfirm: HTMLButtonElement
 
   welcomeView: HTMLDivElement
+  quickSettingsContent: HTMLDivElement
 
   mcpConfigPanel: HTMLDivElement
   mcpConfigList: HTMLDivElement
@@ -248,6 +253,10 @@ export function getElementRefs(): ElementRefs {
     
     welcomeRecentSessions: optionalElement<HTMLDivElement>("welcome-recent-sessions"),
     welcomeModelCtx: optionalElement<HTMLSpanElement>("welcome-model-ctx"),
+    welcomeSearchToggle: optionalElement<HTMLButtonElement>("welcome-search-toggle"),
+    welcomeSearchInput: optionalElement<HTMLDivElement>("welcome-search-input"),
+    settingsToggle: optionalElement<HTMLButtonElement>("settings-toggle"),
+    settingsPanel: optionalElement<HTMLElement>("settings-panel"),
 
     agentStatusLed: requireElement<HTMLDivElement>("agent-status-led"),
     agentStatusText: requireElement<HTMLSpanElement>("agent-status-text"),
@@ -270,6 +279,7 @@ export function getElementRefs(): ElementRefs {
     modeWarningConfirm: requireElement<HTMLButtonElement>("mode-warning-confirm"),
 
     welcomeView: requireElement<HTMLDivElement>("welcome-view"),
+    quickSettingsContent: requireElement<HTMLDivElement>("quick-settings-content"),
 
     mcpConfigPanel: requireElement<HTMLDivElement>("mcp-config-panel"),
     mcpConfigList: requireElement<HTMLDivElement>("mcp-config-list"),
@@ -369,6 +379,7 @@ export function getActiveTypingIndicator(els: ElementRefs): HTMLDivElement | nul
 
 /**
  * Toggle all thinking blocks in the active panel to show or hide them
+ * Simplified to use only native <details> open attribute
  */
 export function toggleAllThinkingBlocks(visible: boolean): void {
   const activePanel = document.querySelector('.tab-panel.active')
@@ -376,24 +387,16 @@ export function toggleAllThinkingBlocks(visible: boolean): void {
     return
   }
 
-  const thinkingBlocks = activePanel.querySelectorAll('.thinking-block')
+  const thinkingBlocks = activePanel.querySelectorAll<HTMLDetailsElement>('.thinking-block')
   if (thinkingBlocks.length === 0) {
     return
   }
 
   thinkingBlocks.forEach((block) => {
     if (visible) {
-      block.classList.remove('thinking-block--collapsed')
-      // If the block was not open, open it
-      if (!block.hasAttribute('open')) {
-        block.setAttribute('open', '')
-      }
+      block.open = true
     } else {
-      block.classList.add('thinking-block--collapsed')
-      // If the block was open, close it
-      if (block.hasAttribute('open')) {
-        block.removeAttribute('open')
-      }
+      block.open = false
     }
   })
 }

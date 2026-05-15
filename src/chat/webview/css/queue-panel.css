@@ -4,9 +4,9 @@
 .queue-badge {
   background: var(--oc-fg);
   color: var(--oc-panel-bg);
-  font-size: 0.75rem;
-  padding: 2px 8px;
-  border-radius: 12px;
+  font-size: var(--text-xs);
+  padding: var(--space-0-5) var(--space-2);
+  border-radius: var(--radius-full);
   font-weight: 600;
   min-width: 20px;
   text-align: center;
@@ -128,7 +128,7 @@
 }
 
 .queue-item-text-preview {
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   color: var(--oc-editor-fg);
   white-space: nowrap;
   overflow: hidden;
@@ -137,16 +137,16 @@
 }
 
 .queue-item-state {
-  font-size: 0.7rem;
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-size: var(--text-2xs);
+  padding: var(--space-0-5) var(--space-1-5);
+  border-radius: var(--radius-sm);
   text-transform: uppercase;
   background: var(--oc-muted);
   color: var(--oc-panel-fg);
 }
 
 .queue-item-tokens {
-  font-size: 0.75rem;
+  font-size: var(--text-2xs);
   color: var(--oc-muted);
   font-family: var(--font-mono);
 }
@@ -161,63 +161,8 @@
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 0.75rem;
+  padding: var(--space-0-5) var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-2xs);
   font-weight: 500;
-}
-
-/* Icon button styles (reuse existing) */
-.icon-btn {
-  background: transparent;
-  border: none;
-  color: var(--oc-fg);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.2s;
-}
-
-.icon-btn:hover:not(:disabled) {
-  background-color: var(--oc-muted);
-}
-
-.icon-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* Button styles (reuse existing) */
-.btn {
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition: background-color 0.2s, border-color 0.2s;
-}
-
-.btn-primary {
-  background: var(--oc-fg);
-  color: var(--oc-panel-bg);
-}
-
-.btn-primary:hover {
-  background: var(--oc-fg);
-  opacity: 0.9;
-}
-
-.btn-secondary {
-  background: var(--oc-muted);
-  color: var(--oc-panel-fg);
-  border: 1px solid var(--oc-border);
-}
-
-.btn-secondary:hover {
-  background: var(--oc-muted);
-  opacity: 0.9;
 }

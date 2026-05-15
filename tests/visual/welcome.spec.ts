@@ -192,6 +192,14 @@ test.describe('Welcome Screen', () => {
       await toggle.click()
       await expect(panel).not.toHaveClass(/hidden/)
       await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+      
+      // Verify quick settings content is rendered
+      const quickSettingsContent = page.locator('#quick-settings-content')
+      await expect(quickSettingsContent).toBeVisible()
+      
+      // Verify mode selector is rendered
+      const modeSelect = page.locator('#quick-setting-mode')
+      await expect(modeSelect).toBeVisible()
     })
 
     test('time-based greeting should display correctly', async ({ page }) => {

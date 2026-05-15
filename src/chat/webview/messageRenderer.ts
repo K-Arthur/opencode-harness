@@ -1,4 +1,4 @@
-import type { Block, ChatMessage } from "./types"
+import type { Block, ChatMessage, ToolCollapseConfig } from "./types"
 import {
   isToolCallBlock,
   groupConsecutiveToolCalls,
@@ -7,6 +7,9 @@ import {
   formatRelativeTime,
   RenderOptions,
 } from "./renderer"
+import {
+  createToolCollapseControls,
+} from "./toolCallRenderer"
 import { estimateMessageTokens } from "../../utils/tokenCounter"
 
 export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecutive?: boolean): HTMLDivElement {
@@ -93,16 +96,70 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
   const bubble = document.createElement("div")
   bubble.className = role === "system" ? "system-bubble" : "message-bubble"
 
+  // Add collapse controls if there are tool calls
+  const config = opts?.collapseConfig || {
+    groupBy: 'consecutive',
+    defaultCollapsed: true,
+    collapseThreshold: 2,
+    showTypeBreakdown: true,
+    compactMode: false
+  }
+  
+  const hasToolCalls = msg.blocks?.some(b => b.type === "tool-call" || b.type === "tool_call")
+  if (hasToolCalls && role === "assistant" && !isConsecutive) {
+    const toolControlsContainer = document.createElement("div")
+    toolControlsContainer.className = "message-tool-controls"
+    createToolCollapseControls(
+      toolControlsContainer,
+      () => {
+        // Collapse all tool calls in this message
+        bubble.querySelectorAll<HTMLDetailsElement>("details.tool-call, details.tool-group").forEach(el => {
+          el.open = false
+        })
+      },
+      () => {
+        // Expand all tool calls in this message
+        bubble.querySelectorAll<HTMLDetailsElement>("details.tool-call, details.tool-group").forEach(el => {
+          el.open = true
+        })
+      },
+      () => {
+        // Toggle compact mode
+        config.compactMode = !config.compactMode
+        const newConfig = { ...config, compactMode: config.compactMode }
+        if (opts?.postMessage) {
+          opts.postMessage({ type: "update_collapse_config", config: newConfig })
+        }
+        // Re-render message with new config
+        bubble.querySelectorAll<HTMLElement>(".tool-group").forEach(el => {
+          el.classList.toggle("tool-group--compact", config.compactMode)
+        })
+      },
+      config.compactMode
+    )
+    contentWrapper.appendChild(toolControlsContainer)
+  }
+
   if (msg.blocks && Array.isArray(msg.blocks)) {
-    const groups = groupConsecutiveToolCalls(msg.blocks)
+    const groups = groupConsecutiveToolCalls(msg.blocks, config.groupBy)
     for (const group of groups) {
       const firstBlock = group[0]
       if (!firstBlock) continue
       if (group.length === 1 || !isToolCallBlock(firstBlock)) {
-        const el = renderBlock(firstBlock, { messageId: msg.id, mode: opts?.mode, postMessage: opts?.postMessage })
+        const el = renderBlock(firstBlock, { 
+          messageId: msg.id, 
+          mode: opts?.mode, 
+          postMessage: opts?.postMessage,
+          collapseConfig: config
+        })
         if (el) bubble.appendChild(el)
       } else {
-        const groupEl = renderToolGroup(group, { messageId: msg.id, mode: opts?.mode, postMessage: opts?.postMessage })
+        const groupEl = renderToolGroup(group, { 
+          messageId: msg.id, 
+          mode: opts?.mode, 
+          postMessage: opts?.postMessage,
+          collapseConfig: config
+        })
         if (groupEl) bubble.appendChild(groupEl)
       }
     }

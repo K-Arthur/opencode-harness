@@ -72,6 +72,7 @@
   font-size: clamp(18px, 5cqw, 24px);
   font-weight: 800;
   background: linear-gradient(135deg, var(--oc-accent, #00e5ff), var(--vscode-button-background, #0969da));
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin: 0 0 var(--space-1) 0;
@@ -278,6 +279,47 @@
   display: none;
 }
 
+/* ─── Quick Settings Items ─── */
+
+.quick-setting-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.quick-setting-label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--oc-fg);
+}
+
+.quick-setting-description {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  margin: 0;
+}
+
+.quick-setting-select {
+  padding: var(--space-1-5) var(--space-2);
+  background: var(--oc-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--oc-fg);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.quick-setting-select:hover {
+  border-color: var(--oc-accent-border);
+}
+
+.quick-setting-select:focus {
+  outline: 2px solid var(--vscode-focusBorder, var(--color-accent));
+  outline-offset: 2px;
+}
+
 /* ─── Action Buttons ─── */
 
 .welcome-actions {
@@ -356,7 +398,7 @@
 .hint-key {
   font-family: var(--font-mono);
   font-weight: 600;
-  padding: 2px 6px;
+  padding: var(--space-0-5) var(--space-1-5);
   background: var(--oc-accent);
   color: var(--oc-accent-fg);
   border-radius: var(--radius-sm);

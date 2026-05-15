@@ -9,6 +9,14 @@ export type MessageRole = "user" | "assistant" | "system"
 export type ToolCallClass = 'read' | 'write' | 'exec' | 'error' | 'meta'
 export type ToolCallState = 'pending' | 'running' | 'result' | 'error' | 'completed' | 'stale'
 
+export interface ToolCollapseConfig {
+  groupBy: 'consecutive' | 'name' | 'type'
+  defaultCollapsed: boolean
+  collapseThreshold: number
+  showTypeBreakdown: boolean
+  compactMode: boolean
+}
+
 export interface ToolCallBlock {
   [key: string]: unknown
   type: 'tool-call'
@@ -186,6 +194,7 @@ export interface WebviewState {
   }
   isTimelineVisible?: boolean
   skills?: Record<string, SkillInfo>
+  toolCollapseConfig?: ToolCollapseConfig
 }
 
 export interface MentionItem {

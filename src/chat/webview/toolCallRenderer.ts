@@ -12,6 +12,7 @@ export interface RenderOptions {
   messageId?: string
   postMessage?: (msg: Record<string, unknown>) => void
   mode?: string
+  collapseConfig?: import("./types").ToolCollapseConfig
 }
 
 export function isToolCallBlock(block: Block): block is ToolCallBlock {
@@ -254,22 +255,47 @@ export function extractKeyArg(args: unknown): string | null {
   return null
 }
 
-export function groupConsecutiveToolCalls(blocks: Block[]): Block[][] {
+export function groupConsecutiveToolCalls(blocks: Block[], groupBy: 'consecutive' | 'name' | 'type' = 'consecutive'): Block[][] {
   const groups: Block[][] = []
   let currentGroup: Block[] = []
   let lastToolName: string | null = null
+  let lastToolClass: ToolCallClass | null = null
 
   for (const block of blocks) {
     const isTool = block.type === "tool-call" || block.type === "tool_call"
     const toolName = isTool ? (block as any).name || (block as any).toolName || "tool" : ""
+    const toolClass = isTool ? ((block as any).class as ToolCallClass) || 'read' : null
 
-    if (isTool && toolName === lastToolName && currentGroup.length > 0) {
+    // Edge case: Non-tool blocks always break groups
+    if (!isTool) {
+      if (currentGroup.length > 0) groups.push(currentGroup)
+      groups.push([block])
+      currentGroup = []
+      lastToolName = null
+      lastToolClass = null
+      continue
+    }
+
+    // Group based on specified mode
+    let shouldGroup = false
+    if (groupBy === 'consecutive') {
+      // Group all consecutive tool calls regardless of name/type
+      shouldGroup = currentGroup.length > 0
+    } else if (groupBy === 'name') {
+      // Group by tool name (original behavior)
+      shouldGroup = toolName === lastToolName && currentGroup.length > 0
+    } else if (groupBy === 'type') {
+      // Group by tool class (read, write, exec, meta)
+      shouldGroup = toolClass === lastToolClass && currentGroup.length > 0
+    }
+
+    if (shouldGroup) {
       currentGroup.push(block)
     } else {
       if (currentGroup.length > 0) groups.push(currentGroup)
-      currentGroup = isTool ? [block] : [block]
-      lastToolName = isTool ? toolName : null
-      if (!isTool) { groups.push([block]); currentGroup = [] }
+      currentGroup = [block]
+      lastToolName = toolName
+      lastToolClass = toolClass
     }
   }
   if (currentGroup.length > 0) groups.push(currentGroup)
@@ -279,14 +305,32 @@ export function groupConsecutiveToolCalls(blocks: Block[]): Block[][] {
 export function renderToolGroup(blocks: Block[], opts: RenderOptions): HTMLElement | null {
   if (blocks.length === 0) return null
 
+  const config = opts.collapseConfig || {
+    groupBy: 'consecutive',
+    defaultCollapsed: true,
+    collapseThreshold: 2,
+    showTypeBreakdown: true,
+    compactMode: false
+  }
+
   const firstTool = blocks[0]!
   const tc = isToolCallBlock(firstTool) ? firstTool : null
   const toolClass = tc?.class || 'read'
   const toolName = tc?.name || 'tool'
 
+  // Edge case: Auto-expand if any tool in group has error state
+  const hasError = blocks.some(b => {
+    const s = (b as any).state
+    return s === 'error' || (b as any).error
+  })
+
+  // Edge case: Collapse by default for groups with 2+ tools, unless error
+  const shouldCollapse = config.defaultCollapsed && !hasError && blocks.length >= config.collapseThreshold
+
   const group = document.createElement("details")
-  group.className = `tool-call tool-group tool-call--${toolClass}`
+  group.className = `tool-call tool-group tool-call--${toolClass}${config.compactMode ? ' tool-group--compact' : ''}`
   group.dataset.blockId = `group-${tc?.id || Date.now()}`
+  group.open = !shouldCollapse
 
   const summary = document.createElement("summary")
   summary.className = "tool-header"
@@ -314,9 +358,25 @@ export function renderToolGroup(blocks: Block[], opts: RenderOptions): HTMLEleme
   name.textContent = toolName
   summary.appendChild(name)
 
+  // Add type breakdown if enabled
+  if (config.showTypeBreakdown && blocks.length > 1) {
+    const typeCounts: Record<string, number> = {}
+    blocks.forEach(b => {
+      const cls = (b as any).class || 'read'
+      typeCounts[cls] = (typeCounts[cls] || 0) + 1
+    })
+    const breakdown = Object.entries(typeCounts)
+      .map(([type, count]) => `${count} ${type}`)
+      .join(', ')
+    const breakdownEl = document.createElement("span")
+    breakdownEl.className = "tool-group-breakdown"
+    breakdownEl.textContent = `(${breakdown})`
+    summary.appendChild(breakdownEl)
+  }
+
   const count = document.createElement("span")
   count.className = "tool-group-count"
-  count.textContent = `${blocks.length} calls`
+  count.textContent = `${blocks.length} call${blocks.length > 1 ? 's' : ''}`
   summary.appendChild(count)
 
   const completed = blocks.filter(b => {
@@ -325,7 +385,9 @@ export function renderToolGroup(blocks: Block[], opts: RenderOptions): HTMLEleme
   }).length
   const badge = document.createElement("span")
   badge.className = "tool-status"
-  if (completed === blocks.length) {
+  if (hasError) {
+    badge.textContent = '\u2717 Error'
+  } else if (completed === blocks.length) {
     badge.textContent = '\u2713 Done'
   } else if (completed > 0) {
     badge.textContent = `\u25c9 ${completed}/${blocks.length}`
@@ -348,6 +410,41 @@ export function renderToolGroup(blocks: Block[], opts: RenderOptions): HTMLEleme
   group.appendChild(children)
 
   return group
+}
+
+export function createToolCollapseControls(
+  container: HTMLElement,
+  onCollapseAll: () => void,
+  onExpandAll: () => void,
+  onToggleCompact: () => void,
+  isCompact: boolean
+): void {
+  const controls = document.createElement("div")
+  controls.className = "tool-collapse-controls"
+
+  const collapseAllBtn = document.createElement("button")
+  collapseAllBtn.className = "tool-collapse-btn"
+  collapseAllBtn.textContent = "Collapse All"
+  collapseAllBtn.setAttribute("aria-label", "Collapse all tool calls")
+  collapseAllBtn.addEventListener("click", onCollapseAll)
+  controls.appendChild(collapseAllBtn)
+
+  const expandAllBtn = document.createElement("button")
+  expandAllBtn.className = "tool-collapse-btn"
+  expandAllBtn.textContent = "Expand All"
+  expandAllBtn.setAttribute("aria-label", "Expand all tool calls")
+  expandAllBtn.addEventListener("click", onExpandAll)
+  controls.appendChild(expandAllBtn)
+
+  const compactBtn = document.createElement("button")
+  compactBtn.className = "tool-collapse-btn tool-collapse-btn--compact"
+  compactBtn.textContent = isCompact ? "Standard" : "Compact"
+  compactBtn.setAttribute("aria-label", isCompact ? "Switch to standard view" : "Switch to compact view")
+  compactBtn.setAttribute("aria-pressed", String(isCompact))
+  compactBtn.addEventListener("click", onToggleCompact)
+  controls.appendChild(compactBtn)
+
+  container.appendChild(controls)
 }
 
 export function truncateMiddle(str: string, maxLen: number): string {
