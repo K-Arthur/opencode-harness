@@ -39,6 +39,8 @@ export class NetworkMonitor {
   private networkChangeCallbacks: NetworkChangeCallback[] = [];
   private checkInterval?: number;
   private isMonitoring = false;
+  private _boundHandleOnline: () => void = () => {};
+  private _boundHandleOffline: () => void = () => {};
 
   constructor(config: NetworkMonitorConfig = {}) {
     this.config = {
@@ -59,8 +61,10 @@ export class NetworkMonitor {
 
     // Listen for browser online/offline events
     if (typeof window !== 'undefined') {
-      window.addEventListener('online', () => this.handleOnline());
-      window.addEventListener('offline', () => this.handleOffline());
+      this._boundHandleOnline = this.handleOnline.bind(this)
+      this._boundHandleOffline = this.handleOffline.bind(this)
+      window.addEventListener('online', this._boundHandleOnline);
+      window.addEventListener('offline', this._boundHandleOffline);
     }
   }
 
@@ -423,6 +427,10 @@ export class NetworkMonitor {
     this.stopMonitoring();
     this.networkChangeCallbacks = [];
     this.clearQueue();
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', this._boundHandleOnline);
+      window.removeEventListener('offline', this._boundHandleOffline);
+    }
   }
 }
 

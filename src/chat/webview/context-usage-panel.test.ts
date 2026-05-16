@@ -24,17 +24,15 @@ describe("context usage panel", () => {
   })
 
   it("clears stale cost display when usage becomes unavailable", async () => {
-    const { setupContextUsagePanel } = await import("./context-usage-panel")
+    const { setupContextUsagePanel, handleContextUsageMessage } = await import("./context-usage-panel")
     setupContextUsagePanel()
 
-    window.dispatchEvent(new window.MessageEvent("message", {
-      data: {
-        type: "context_usage",
-        tokens: 0,
-        maxTokens: 200_000,
-        percent: 0,
-      },
-    }))
+    handleContextUsageMessage({
+      type: "context_usage",
+      tokens: 0,
+      maxTokens: 200_000,
+      percent: 0,
+    })
 
     const bar = document.getElementById("context-usage-bar")
     const cost = document.getElementById("context-usage-cost")
@@ -45,27 +43,25 @@ describe("context usage panel", () => {
   })
 
   it("does not render NaN or Infinity widths for an empty breakdown", async () => {
-    const { setupContextUsagePanel, setContextUsagePanel } = await import("./context-usage-panel")
+    const { setupContextUsagePanel, setContextUsagePanel, handleContextUsageMessage } = await import("./context-usage-panel")
     const panel = document.getElementById("panel")
     assert.ok(panel)
     setContextUsagePanel(panel)
     setupContextUsagePanel()
 
-    window.dispatchEvent(new window.MessageEvent("message", {
-      data: {
-        type: "context_usage",
-        tokens: 10,
-        maxTokens: 200_000,
-        percent: 0.005,
-        breakdown: {
-          system: 0,
-          history: 0,
-          workspace: 0,
-          queued: 0,
-          steer: 0,
-        },
+    handleContextUsageMessage({
+      type: "context_usage",
+      tokens: 10,
+      maxTokens: 200_000,
+      percent: 0.005,
+      breakdown: {
+        system: 0,
+        history: 0,
+        workspace: 0,
+        queued: 0,
+        steer: 0,
       },
-    }))
+    })
 
     const html = panel.querySelector(".context-breakdown-section")?.innerHTML ?? ""
     assert.ok(!html.includes("NaN"))

@@ -15,6 +15,7 @@ import {
   ModelTier,
   ExecutionPattern,
 } from './types.js';
+import type { OutcomeTracker } from './OutcomeTracker.js';
 import type { Spec } from './SpecService.js';
 
 // ─── Rule Definitions ───────────────────────────────────────────────────────
@@ -91,6 +92,32 @@ export const METHODOLOGY_RULES: MethodologyRule[] = [
     recommendedTier: 'S',
     promptStrategy: 'plan-then-execute',
     executionPattern: 'hybrid',
+  },
+
+  // ── Greenfield complex generation (bmad-full) ─────────────────────────
+  {
+    when: {
+      taskTypes: ['generate', 'architect'],
+      minComplexity: 0.7,
+      minFileScope: 0.6,
+    },
+    methodology: 'bmad-full',
+    recommendedTier: 'S',
+    promptStrategy: 'plan-then-execute',
+    executionPattern: 'parallel',
+  },
+
+  // ── Refactoring with existing spec (spec-anchored) ────────────────────
+  {
+    when: {
+      taskTypes: ['refactor'],
+      minComplexity: 0.4,
+      maxComplexity: 0.7,
+    },
+    methodology: 'spec-anchored',
+    recommendedTier: 'A',
+    promptStrategy: 'hierarchical-cot',
+    executionPattern: 'sequential',
   },
 
   // ── Medium complexity generation (spec-first) ─────────────────────────
@@ -262,31 +289,42 @@ export const PROMPT_TEMPLATES: Record<PromptStrategy, {
 
 export class MethodologyCatalog {
   private rules: MethodologyRule[];
+  private outcomeTracker: OutcomeTracker | null = null;
 
   constructor(rules: MethodologyRule[] = METHODOLOGY_RULES) {
     this.rules = rules;
   }
 
+  setOutcomeTracker(tracker: OutcomeTracker): void {
+    this.outcomeTracker = tracker;
+  }
+
   /**
    * Select the best methodology for a given task classification.
    * Returns the first matching rule (rules are ordered by specificity).
+   * Applies adaptive confidence adjustment based on historical outcomes.
    */
   select(classification: TaskClassification): MethodologySelection {
     for (const rule of this.rules) {
       if (this.matchesRule(rule, classification)) {
-        const overallComplexity = this.calculateOverallComplexity(classification);
+        let confidence = this.calculateConfidence(rule, classification);
+
+        if (this.outcomeTracker) {
+          confidence += this.outcomeTracker.getConfidenceAdjustment(rule.methodology, classification.type);
+          confidence = Math.max(0.1, Math.min(1.0, confidence));
+        }
+
         return {
           methodology: rule.methodology,
           promptStrategy: rule.promptStrategy,
           executionPattern: rule.executionPattern,
           recommendedTier: rule.recommendedTier,
-          confidence: this.calculateConfidence(rule, classification),
+          confidence,
           matchedRule: rule,
         };
       }
     }
 
-    // Fallback (should not reach here if default rule exists)
     return {
       methodology: 'spec-first',
       promptStrategy: 'hierarchical-cot',

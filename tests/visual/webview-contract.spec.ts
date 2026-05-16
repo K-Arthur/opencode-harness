@@ -135,7 +135,7 @@ test.describe('Webview host contract', () => {
 
     await page.locator('.diff-btn--accept').click()
     await expect.poll(async () => postedMessages(page)).toContainEqual(
-      expect.objectContaining({ type: 'diff:accept', diffId: 'diff-1' })
+      expect.objectContaining({ type: 'accept_diff', diffId: 'diff-1' })
     )
   })
 })

@@ -20,6 +20,8 @@ OpenCode Harness is a VS Code extension that deeply integrates the opencode AI c
 - **US-006**: As a developer, I want inline actions (CodeLens + context menus) so that I can trigger agent actions from within my code
 - **US-007**: As a developer, I want to manage skills through a tree view so that I can enable/disable agent capabilities
 - **US-008**: As a developer, I want terminal integration so that I can see agent output in a dedicated channel
+- **US-009**: As a developer, I want proactive context optimization suggestions so that I can avoid context overflow and reduce costs
+- **US-010**: As a developer, I want to see skill performance metrics so that I can identify which skills are most effective for my workflows
 
 ### Session Management
 - **US-009**: As a developer, I want each tab to maintain its own conversation history so that I can switch between tasks
@@ -36,12 +38,14 @@ OpenCode Harness is a VS Code extension that deeply integrates the opencode AI c
 - **FR-004**: Extension must route webview messages through MessageRouter to appropriate handlers
 - **FR-005**: Extension must handle diff generation and presentation for code changes (transactional writes only)
 - **FR-006**: Extension must provide inline actions via CodeLens and context menus
-- **FR-007**: Extension must register SkillManager tree view for skill management
-- **FR-008**: Extension must register ContextMonitor and ModelManager status bar items
-- **FR-009**: Extension must handle URI scheme `vscode://opencode-harness/open` for deep linking
-- **FR-010**: Extension must gracefully degrade when opencode server is unavailable
-- **FR-011**: Extension must support keyboard shortcuts for tab management
-- **FR-012**: Extension must persist chat history to workspace state
+- **FR-007**: Extension must provide proactive context optimization suggestions when usage is high
+- **FR-008**: Extension must register SkillManager tree view for skill management
+- **FR-009**: Extension must register ContextMonitor and ModelManager status bar items
+- **FR-010**: Extension must track and display skill performance metrics (usage count, effectiveness score)
+- **FR-011**: Extension must handle URI scheme `vscode://opencode-harness/open` for deep linking
+- **FR-012**: Extension must gracefully degrade when opencode server is unavailable
+- **FR-013**: Extension must support keyboard shortcuts for tab management
+- **FR-014**: Extension must persist chat history to workspace state
 
 ### Non-Functional Requirements
 [Generated from active tags: UNIVERSAL, LIBRARY]

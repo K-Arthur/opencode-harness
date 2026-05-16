@@ -948,7 +948,7 @@ function renderNewDiffBlock(block: Block, opts: RenderOptions): HTMLElement | nu
       e.stopPropagation()
       const postMessage = opts.postMessage
       if (postMessage) {
-        postMessage({ type: 'diff:accept', diffId: diffBlock.diffId, path: diffBlock.path })
+        postMessage({ type: 'accept_diff', diffId: diffBlock.diffId, path: diffBlock.path })
       }
       actionBar.innerHTML = ''
       const chip = document.createElement("span")
@@ -967,7 +967,7 @@ function renderNewDiffBlock(block: Block, opts: RenderOptions): HTMLElement | nu
       e.stopPropagation()
       const postMessage = opts.postMessage
       if (postMessage) {
-        postMessage({ type: 'diff:discard', diffId: diffBlock.diffId })
+        postMessage({ type: 'reject_diff', diffId: diffBlock.diffId })
       }
       actionBar.innerHTML = ''
       const chip = document.createElement("span")

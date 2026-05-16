@@ -32,8 +32,10 @@ OpenCode Harness is a VS Code extension that integrates the opencode AI coding a
 │  │ Engine        │ │ Manager       │ │ Monitor       │   │
 │  └──────────────┘ └──────────────┘ └──────────────┘   │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐   │
-│  │ Inline        │ │ Skill         │ │ Checkpoint    │   │
-│  │ Actions       │ │ Manager       │ │ Manager       │   │
+│  │ Context       │ │ Skill         │ │ Checkpoint    │   │
+│  │ Monitor       │ │ Manager       │ │ Manager       │   │
+│  │ (optimization│ │ (performance  │ │              │   │
+│  │  suggestions)│ │  tracking)    │ │              │   │
 │  └──────────────┘ └──────────────┘ └──────────────┘   │
 │  ┌──────────────┐ ┌──────────────┐                    │
 │  │ Terminal      │ │ Theme         │                    │
@@ -90,6 +92,8 @@ The debug Extension Development Host must open the intended workspace folder. If
 - `StreamCoordinator` - Manages per-tab SSE streams
 - `MessageRouter` - Routes webview messages to handlers
 - `DiffHandler` - Tracks and presents code diffs
+- `ContextMonitor` - Tracks context usage and provides optimization suggestions
+- `SkillManager` - Manages skill enablement and performance tracking
 
 ## Security & Compliance
 - Extension does NOT handle API keys directly (opencode server manages auth)

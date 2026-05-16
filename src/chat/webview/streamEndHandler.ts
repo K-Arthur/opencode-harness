@@ -1,12 +1,6 @@
 import type { Block, ChatMessage } from "./types"
 import type { StreamState, StreamElements } from "./streamHandlers"
-import { hideTypingIndicator, finishUnresolvedToolCalls, reRenderMessage, resetStreamState } from "./streamHandlers"
-
-declare const acquireVsCodeApi: (() => {
-  postMessage: (msg: unknown) => void
-  getState: () => unknown
-  setState: (state: unknown) => void
-}) | undefined
+import { hideTypingIndicator, finishUnresolvedToolCalls, reRenderMessage, resetStreamState, webviewLog } from "./streamHandlers"
 
 function ensureRenderedTextFallback(messageId: string, msgObj: ChatMessage, els: StreamElements): void {
   const text = (msgObj.blocks || [])
@@ -61,13 +55,13 @@ function handleEmptyStreamEnd(
     webviewLog(`handleStreamEnd: empty response for ${id}`, "warn")
     if (msgObj) {
       msgObj.blocks = [{ type: "text", text: noticeText } as unknown as Block]
+      finishUnresolvedToolCalls(msgObj.blocks)
       const renderId = msgObj.id || lookupId
       reRenderMessage(renderId, els, messages)
       const bubble = els.messageList.querySelector(`[data-message-id="${renderId}"] .msg-text`) as HTMLElement | null
       bubble?.classList.add("msg-text--empty-notice")
     }
   }
-  if (msgObj) finishUnresolvedToolCalls(msgObj.blocks)
 }
 
 function mergeServerBlocks(msgObj: ChatMessage, blockList: Block[]): void {
@@ -103,14 +97,6 @@ function mergeServerBlocks(msgObj: ChatMessage, blockList: Block[]): void {
       }
     }
   }
-}
-
-function webviewLog(msg: string, level?: string) {
-  const _vscode = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : { postMessage: () => {} }
-  _vscode.postMessage({ type: "webview_log", level, message: msg })
-  if (level === "error") console.error(`[Webview] ${msg}`)
-  else if (level === "warn") console.warn(`[Webview] ${msg}`)
-  else console.info(`[Webview] ${msg}`)
 }
 
 export function handleStreamEnd(

@@ -207,19 +207,131 @@ export interface ModelExecutor {
   }>;
 }
 
+// ─── Advisory Result (no model calls) ────────────────────────────────────────
+
+export interface AdvisoryResult {
+  recommendedModel: string;
+  recommendedTier: ModelTier;
+  reasoning: string;
+  fallbackChain: Array<{ modelId: string; tier: ModelTier; reason: string }>;
+  estimatedCostPer1kTokens: number;
+}
+
+// ─── Cascade Router ─────────────────────────────────────────────────────────
+
 export class CascadeRouter {
   private config: CascadeRouterConfig;
-  private executor: ModelExecutor;
+  private executor: ModelExecutor | null;
   private evaluator: QualityEvaluator;
   private auditLog: AuditEntry[] = [];
 
   constructor(
     config: Partial<CascadeRouterConfig>,
-    executor: ModelExecutor
+    executor?: ModelExecutor
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
-    this.executor = executor;
+    this.executor = executor ?? null;
     this.evaluator = new QualityEvaluator();
+  }
+
+  /**
+   * Advisory-only model recommendation — no model calls made.
+   * Returns the best model for the task based on capabilities and cost,
+   * along with a fallback chain for the CLI to try if quality is insufficient.
+   */
+  recommendModel(
+    task: TaskClassification,
+    methodology: MethodologyId,
+    selection: { recommendedTier: ModelTier },
+    modelProfiles: ModelProfile[],
+    modelTiers: Record<ModelTier, string[]>
+  ): AdvisoryResult {
+    const chain = this.buildRecommendationChain(task, modelProfiles, modelTiers);
+    const tierOrder: ModelTier[] = ['S', 'A', 'B', 'C'];
+    const startTier = selection.recommendedTier;
+    const startIdx = tierOrder.indexOf(startTier);
+
+    let recommendedModel = chain.length > 0 ? chain[0]!.modelId : '';
+    let recommendedTier = startTier;
+    let reasoning = `Task type "${task.type}" with methodology "${methodology}" suggests tier ${startTier}.`;
+
+    for (const entry of chain) {
+      if (tierOrder.indexOf(entry.tier) >= startIdx) {
+        recommendedModel = entry.modelId;
+        recommendedTier = entry.tier;
+        reasoning = `Task "${task.type}" recommends tier ${startTier}. Selected ${entry.modelId} (tier ${entry.tier}) based on capability matching.`;
+        break;
+      }
+    }
+
+    if (task.modalities.needsVision) {
+      reasoning += ' Vision capability required — models without vision excluded.';
+    }
+
+    if (task.constraints.speedPreferred) {
+      for (const entry of chain) {
+        const profile = modelProfiles.find(p => p.id === entry.modelId);
+        if (profile && profile.performance.tokensPerSecond > 100) {
+          recommendedModel = entry.modelId;
+          recommendedTier = entry.tier;
+          reasoning += ' Speed-preferred constraint applied — selected faster model.';
+          break;
+        }
+      }
+    }
+
+    const profile = modelProfiles.find(p => p.id === recommendedModel);
+    const estimatedCostPer1kTokens = profile
+      ? (profile.performance.costPerInputToken + profile.performance.costPerOutputToken) * 1000
+      : 0;
+
+    this.logAudit({
+      traceId: this.generateTraceId(),
+      timestamp: new Date(),
+      intent: `${task.type}:${methodology}`,
+      methodology,
+      model: recommendedModel,
+      planHash: '',
+      status: 'success',
+      quality: 0,
+      cost: 0,
+      tokens: 0,
+      duration: 0,
+      escalations: 0,
+    });
+
+    return {
+      recommendedModel,
+      recommendedTier,
+      reasoning,
+      fallbackChain: chain.slice(0, this.config.maxEscalations + 1),
+      estimatedCostPer1kTokens,
+    };
+  }
+
+  private buildRecommendationChain(
+    task: TaskClassification,
+    modelProfiles: ModelProfile[],
+    modelTiers: Record<ModelTier, string[]>
+  ): Array<{ modelId: string; tier: ModelTier; reason: string }> {
+    const tierOrder: ModelTier[] = ['B', 'A', 'S'];
+    const chain: Array<{ modelId: string; tier: ModelTier; reason: string }> = [];
+
+    for (const tier of tierOrder) {
+      const models = modelTiers[tier] || [];
+      for (const modelId of models) {
+        const profile = modelProfiles.find(p => p.id === modelId);
+        if (!profile) continue;
+        if (task.modalities.needsVision && profile.capabilities.vision < 0.5) continue;
+        chain.push({
+          modelId,
+          tier,
+          reason: `Tier ${tier} — ${profile.name} (capability: ${((profile.capabilities.reasoning + profile.capabilities.coding) / 2 * 100).toFixed(0)}%)`,
+        });
+      }
+    }
+
+    return chain;
   }
 
   /**
@@ -240,6 +352,9 @@ export class CascadeRouter {
     modelProfiles: ModelProfile[],
     modelTiers: Record<ModelTier, string[]>
   ): Promise<RouterResult> {
+    if (!this.executor) {
+      throw new Error('CascadeRouter.route() requires a ModelExecutor. Use recommendModel() for advisory mode.');
+    }
     const traceId = this.generateTraceId();
     const startTime = Date.now();
 

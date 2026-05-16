@@ -91,7 +91,13 @@ test("normalizes session and permission lifecycle events", () => {
     "permission_request",
     "permission_replied",
   ])
-  assert.deepEqual(normalized[0].data, { status: { type: "busy" } })
+  // session.status now includes errorContext from sessionStatusMapper
+  assert.equal(normalized[0].data.status.type, "busy")
+  assert.ok(normalized[0].data.errorContext)
+  assert.equal(normalized[0].data.errorContext.code, "UNKNOWN_STATUS")
+  assert.equal(normalized[0].data.errorContext.category, "system")
+  assert.equal(normalized[0].data.errorContext.severity, "low")
+  assert.equal(normalized[0].data.errorContext.retryable, true)
   assert.deepEqual(normalized[1].data, { status: { type: "idle" } })
   assert.equal(normalized[2].sessionId, sessionID)
   assert.equal(normalized[3].sessionId, sessionID)

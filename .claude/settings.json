@@ -12,7 +12,8 @@
       "WebFetch(domain:opencode.ai)",
       "Bash(awk '/# fail|^# tests|^# pass/{print NR\": \"$0}' /tmp/claude-1000/-home-kevinarthur-PersonalProjects-opencode-harness/137d9669-76dc-4007-80d2-6a790fb79718/tasks/bk7fuabpy.output)",
       "Bash(npm install *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(grep -n \"innerHTML.*\\\\$\\\\|suggestion.title\\\\|suggestion.description\\\\|breakdown.date\" /home/kevinarthur/PersonalProjects/opencode-harness/src/chat/webview/context-usage-panel.ts)"
     ]
   }
 }

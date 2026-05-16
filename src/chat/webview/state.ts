@@ -65,12 +65,9 @@ function migrateState(old: any): WebviewState {
 }
 
 function generateId(): string {
-  const chars = "0123456789abcdef"
-  let result = ""
-  for (let i = 0; i < 8; i++) {
-    result += chars[Math.floor(Math.random() * 16)]
-  }
-  return result
+  return (typeof crypto !== "undefined" && crypto.randomUUID)
+    ? crypto.randomUUID().slice(0, 8)
+    : (() => { const chars = "0123456789abcdef"; let r = ""; for (let i = 0; i < 8; i++) r += chars[Math.floor(Math.random() * 16)]; return r })()
 }
 
 export function createState(vscode: VsCodeApi) {
@@ -80,9 +77,22 @@ export function createState(vscode: VsCodeApi) {
   const MAX_STATE_BYTES = 2 * 1024 * 1024
   const MAX_MESSAGES_PER_SESSION = 200
 
-  function pruneOversizedState(): void {
+  let lastKnownSize = 0
+  let pruneScheduled = false
+
+  function schedulePrune(): void {
+    if (pruneScheduled) return
+    pruneScheduled = true
+    setTimeout(() => {
+      pruneScheduled = false
+      doPrune()
+    }, 5000)
+  }
+
+  function doPrune(): void {
     try {
       const size = JSON.stringify(state).length
+      lastKnownSize = size
       if (size <= MAX_STATE_BYTES) return
 
       const sessionsByAge = state.sessionOrder
@@ -108,6 +118,13 @@ export function createState(vscode: VsCodeApi) {
     }
   }
 
+  function pruneOversizedState(): void {
+    if (lastKnownSize > 0 && lastKnownSize <= MAX_STATE_BYTES * 0.8) {
+      return
+    }
+    schedulePrune()
+  }
+
   function save() {
     if (saveTimer) clearTimeout(saveTimer)
     saveTimer = setTimeout(() => {
@@ -123,7 +140,7 @@ export function createState(vscode: VsCodeApi) {
       clearTimeout(saveTimer)
       saveTimer = null
     }
-    pruneOversizedState()
+    doPrune()
     vscode.setState(state)
   }
 
@@ -273,16 +290,27 @@ export function createState(vscode: VsCodeApi) {
     // Load new sessions from host
     sessions.forEach((s) => {
       const existing = oldSessions[s.id]
-      state.sessions[s.id] = {
-        ...s,
-        // Preserve existing messages array reference so active stream handlers
-        // don't get orphaned. Without this, any mid-stream handler pointing to
-        // the old array loses its data on the next state save.
-        messages: existing ? existing.messages : s.messages,
-        // Preserve local isStreaming flag if session exists
-        isStreaming: existing ? existing.isStreaming : false,
-        tokenUsage: s.tokenUsage ?? existing?.tokenUsage,
-        cost: typeof s.cost === "number" && s.cost > 0 ? s.cost : existing?.cost ?? s.cost,
+      if (existing && existing.isStreaming) {
+        state.sessions[s.id] = {
+          ...s,
+          messages: existing.messages,
+          isStreaming: existing.isStreaming,
+          tokenUsage: s.tokenUsage ?? existing?.tokenUsage,
+          cost: typeof s.cost === "number" && s.cost > 0 ? s.cost : existing?.cost ?? s.cost,
+        }
+      } else if (existing) {
+        state.sessions[s.id] = {
+          ...s,
+          messages: existing.messages !== s.messages ? (() => { existing.messages.length = 0; existing.messages.push(...s.messages); return existing.messages })() : s.messages,
+          isStreaming: existing.isStreaming,
+          tokenUsage: s.tokenUsage ?? existing?.tokenUsage,
+          cost: typeof s.cost === "number" && s.cost > 0 ? s.cost : existing?.cost ?? s.cost,
+        }
+      } else {
+        state.sessions[s.id] = {
+          ...s,
+          isStreaming: false,
+        }
       }
     })
 

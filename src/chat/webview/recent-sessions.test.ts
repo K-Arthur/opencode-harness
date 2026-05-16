@@ -48,4 +48,29 @@ describe("recent-sessions.ts", () => {
     assert.ok(source.includes("getRelativeTime"), "must use getRelativeTime helper")
     assert.ok(source.includes("ago"), "must render relative-time suffix")
   })
+
+  it("shows 'No matching sessions' when isFiltered=true and list is empty", () => {
+    assert.ok(source.includes("No matching sessions"), "must distinguish filtered-empty from unfiltered-empty")
+    assert.ok(source.includes("No recent sessions"), "must show default empty message for unfiltered")
+  })
+
+  it("limits unfiltered display to 3 sessions", () => {
+    assert.ok(source.includes("isFiltered ? 10 : 3"), "must slice to 3 when not filtering")
+  })
+
+  it("shows up to 10 sessions when isFiltered=true", () => {
+    assert.ok(source.includes("isFiltered ? 10 : 3"), "must expand limit to 10 when filtering")
+  })
+
+  it("uses isFiltered parameter to drive limit and empty message", () => {
+    assert.ok(source.includes("isFiltered"), "isFiltered must be used in the function body")
+  })
+
+  it("makes rendered session items keyboard selectable", () => {
+    assert.ok(source.includes('item.tabIndex = 0'), "session rows must be focusable")
+    assert.ok(source.includes('item.dataset.sessionId = session.id'), "session rows must expose their session id")
+    assert.ok(source.includes('role", "option"'), "session rows must have option role")
+    assert.ok(source.includes('e.key === "Enter"'), "Enter must open a focused session")
+    assert.ok(source.includes('e.key === "ArrowDown"'), "ArrowDown must move between sessions")
+  })
 })

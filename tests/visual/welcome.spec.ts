@@ -229,5 +229,43 @@ test.describe('Welcome Screen', () => {
       const promptStartersSection = page.locator('.prompt-starters-section')
       await expect(promptStartersSection).toHaveAttribute('aria-label', 'Suggested prompts')
     })
+
+    test('session search renders as a single visible input', async ({ page }) => {
+      await page.goto('/')
+      await page.setViewportSize({ width: 400, height: 600 })
+
+      const toggle = page.locator('#welcome-search-toggle')
+      const inputWrapper = page.locator('#welcome-search-input')
+      const innerInput = inputWrapper.locator('input')
+
+      await expect(toggle).toHaveClass(/hidden/)
+      await expect(inputWrapper).not.toHaveClass(/hidden/)
+      await expect(innerInput).toBeVisible()
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    })
+
+    test('Escape key clears session search without hiding the input', async ({ page }) => {
+      await page.goto('/')
+      await page.setViewportSize({ width: 400, height: 600 })
+
+      const inputWrapper = page.locator('#welcome-search-input')
+      const innerInput = inputWrapper.locator('input')
+
+      await innerInput.fill('search text')
+      await innerInput.press('Escape')
+
+      await expect(inputWrapper).not.toHaveClass(/hidden/)
+      await expect(innerInput).toHaveValue('')
+    })
+
+    test('session search input is focusable directly', async ({ page }) => {
+      await page.goto('/')
+      await page.setViewportSize({ width: 400, height: 600 })
+
+      const innerInput = page.locator('#welcome-search-input input')
+
+      await innerInput.focus()
+      await expect(innerInput).toBeFocused()
+    })
   })
 })

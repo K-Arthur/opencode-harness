@@ -1,7 +1,7 @@
 # Implementation Status - AI Methodology Enhancements (Revised)
 
 ## Overview
-This document tracks the implementation status of AI methodology enhancement features following the corrected integration approach that leverages existing SADD/TDD infrastructure.
+This document tracks the implementation status of AI methodology enhancement features following the corrected integration approach that leverages existing SADD/TDD infrastructure, plus recent context monitoring and skills system enhancements.
 
 ## Corrected Approach
 
@@ -102,6 +102,19 @@ Leverage existing infrastructure:
   - Add spec selection in skill configuration
   - Display spec context in TDD progress indicators
   - Add spec verification results display
+
+### Context Optimization UI ⏳
+- **Status**: Partially complete
+- **Completed**: Backend ContextMonitor.generateOptimizationSuggestions() exposed via webview
+- **Remaining**: Display optimization suggestions in context usage panel, add warning banners
+- **Implementation**: WebviewEventRouter now calls ContextMonitor.generateOptimizationSuggestions() on context_suggestions_request
+
+### Skill Performance Recording Integration ⏳
+- **Status**: Infrastructure exists, integration pending
+- **Infrastructure**: ConfidenceScorer class with recordSkillUsage() method exists in src/skills/ConfidenceScorer.ts
+- **Challenge**: Current architecture lacks explicit skill invocation points to integrate recording
+- **Required**: Architectural work to integrate ConfidenceScorer with actual skill usage events
+- **Note**: Skills modal UI displays performance metrics when available, but backend recording integration requires identifying where skills are actually invoked
 
 ## Key Design Decisions
 

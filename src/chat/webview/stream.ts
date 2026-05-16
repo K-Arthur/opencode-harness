@@ -45,7 +45,7 @@ export interface StreamHandlers {
   handleSkillIndicator: (skillName: string) => void
   handleDiff: (diff: { diffId: string; path: string; hunks: DiffHunk[]; linesAdded: number; linesRemoved: number }) => void
   handleDiffResult: (blockId?: string, ok?: boolean, message?: string) => void
-  handleServerStatus: (status?: string) => void
+  handleServerStatus: (status?: string, errorContext?: unknown) => void
   showTypingIndicator: (label?: string) => void
   hideTypingIndicator: () => void
   clearMessages: () => void
@@ -180,8 +180,8 @@ class StreamSession implements StreamHandlers {
     handleDiffResult(this.els, blockId, ok, message)
   }
 
-  handleServerStatus(status?: string): void {
-    handleServerStatus(this.state, this.els, status)
+  handleServerStatus(status?: string, errorContext?: unknown): void {
+    handleServerStatus(this.state, this.els, status, errorContext as any)
   }
 
   showTypingIndicator(label?: string): void {

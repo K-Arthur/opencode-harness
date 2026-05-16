@@ -1,5 +1,6 @@
 import type { Block, ChatMessage, ToolCallBlock, DiffBlock, ErrorBlock, ToolCallState, DiffHunk } from "./types"
 import type { SdkMessageEvent, DiffChunk } from "../../types"
+import type { ErrorContext } from "./errorTypes"
 import { renderMessage } from "./messageRenderer"
 import { renderBlock, renderMarkdown, sanitizeHtml, highlightSyntax } from "./renderer"
 import type { ScrollAnchor } from "./scrollAnchor"
@@ -98,7 +99,7 @@ export interface StreamState {
 let _vscode: any = null
 export function setVsCodeApi(api: any) { _vscode = api }
 
-function webviewLog(msg: string, level: "info" | "warn" | "error" = "info") {
+export function webviewLog(msg: string, level: "info" | "warn" | "error" | string = "info") {
   if (_vscode) {
     _vscode.postMessage({ type: "webview_log", level, message: msg })
   }
@@ -717,13 +718,16 @@ export function handleDiffResult(
 export function handleServerStatus(
   state: StreamState,
   els: StreamElements,
-  status?: string
+  status?: string,
+  errorContext?: ErrorContext
 ): void {
   if (status === "thinking" || status === "busy") {
     showTypingIndicator(els, "Thinking...")
   } else if (status === "error") {
     hideTypingIndicator(els)
-    handleRequestError(state, els, [], () => {}, "An error occurred. Please try again.")
+    // Use mapped error context if available, otherwise fall back to generic message
+    const errorMessage = errorContext?.userMessage || "An error occurred. Please try again."
+    handleRequestError(state, els, [], () => {}, errorMessage)
   } else if (status === "idle") {
     hideTypingIndicator(els)
   } else if (status && (status.includes("tool") || status.includes("running"))) {

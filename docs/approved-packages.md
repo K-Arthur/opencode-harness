@@ -28,3 +28,5 @@
 | `eslint-config-prettier` | Prettier ESLint integration |
 | `playwright` | End-to-end browser tests |
 | `@playwright/test` | Playwright test framework |
+| `jsdom` | DOM implementation for webview tests |
+| `@types/jsdom` | TypeScript definitions for jsdom |

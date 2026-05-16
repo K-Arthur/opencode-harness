@@ -3,6 +3,8 @@
 .forgecraft/**
 .cursor/**
 .opencode/**
+.claude/**
+.windsurf/**
 .coverage-bundles/**
 coverage/**
 src/**
@@ -41,3 +43,11 @@ commitlint.config.js
 forgecraft.yaml
 forgecraft.yaml.bak
 Status.md
+opencode-easy-vision/**
+reports/**
+scratch/**
+fix_main.py
+stryker.config.json
+typecheck_output.txt
+REPAIR_NOTES.md
+changelog.md

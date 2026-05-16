@@ -35,7 +35,8 @@ export { ContextEngine } from '../context/ContextEngine.js';
 export { TaskClassifier } from './TaskClassifier.js';
 export { MethodologyCatalog, METHODOLOGY_RULES, PROMPT_TEMPLATES } from './MethodologyCatalog.js';
 export { CascadeRouter, QualityEvaluator } from './CascadeRouter.js';
-export { MethodologyOrchestrator } from './MethodologyOrchestrator.js';
+export { QualityEvaluator as StandaloneQualityEvaluator } from './QualityEvaluator.js';
+export { MethodologyOrchestrator, type AdvisoryOrchestrationResult } from './MethodologyOrchestrator.js';
 export { PromptEngine } from './PromptEngine.js';
 export { SchemaValidator } from './SchemaValidator.js';
 export type { SchemaDefinition, SchemaField, ValidationError, ValidatorConfig } from './SchemaValidator.js';
@@ -47,4 +48,8 @@ export { MethodologyAdvisor, METHODOLOGY_ADDENDUM_PREFIX } from './MethodologyAd
 export type { MethodologyAdvice, AdviseOptions } from './MethodologyAdvisor.js';
 export { SpecService, InMemorySpecStore } from './SpecService.js';
 export type { Spec, SpecElements, SpecStatus, SpecStore, TaskBreakdownItem, VerificationCriterion } from './SpecService.js';
+export { ModelProfileRegistry } from './ModelProfileRegistry.js';
+export type { ModelProfileEntry } from './ModelProfileRegistry.js';
+export { OutcomeTracker } from './OutcomeTracker.js';
+export type { OutcomeSignal, OutcomeEvent, MethodologyOutcomeStats } from './OutcomeTracker.js';
 export type * from './types.js';

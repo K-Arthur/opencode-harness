@@ -13,6 +13,9 @@ import type {
   TriggerMatch,
 } from './types';
 
+// Export types for use by other modules
+export type { ConfidenceSignals, ConfidenceResult };
+
 class ConfidenceScorer {
   private signalWeights: Map<string, number> = new Map();
   private historicalUsage: Map<string, number> = new Map();

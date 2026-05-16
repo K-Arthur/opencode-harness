@@ -1,4 +1,4 @@
-import type { ChatMessage, HostMessage, MentionItem, SessionSummary, ModelInfo, WebviewState, ContextChip, ToolCallState, TokenUsageSnapshot } from "./types"
+import type { ChatMessage, HostMessage, MentionItem, SessionSummary, ModelInfo, WebviewState, ContextChip, ToolCallState, TokenUsageSnapshot, UsageDelta } from "./types"
 import { createState } from "./state"
 import { getElementRefs, scrollToBottom, getActiveMessageList, toggleAllThinkingBlocks } from "./dom"
 import { renderMessage } from "./messageRenderer"
@@ -7,7 +7,7 @@ import { setupMentions } from "./mentions"
 import { createStreamHandlers, type StreamHandlers } from "./stream"
 import { createTabBar, createTabContent, switchToTab, removeTabContent } from "./tabs"
 import { setupModelDropdown } from "./model-dropdown"
-import { setVsCodeApi, setupToolKeyboardNav } from "./streamHandlers"
+import { setVsCodeApi, setupToolKeyboardNav, webviewLog } from "./streamHandlers"
 import { setupModelManager } from "./model-manager"
 import { setupVariantSelector } from "./variant-selector"
 import { setupMcpConfig } from "./mcp-config"
@@ -15,7 +15,7 @@ import type { McpServerInfo } from "../../mcp/McpServerManager"
 import { REMOVE_SVG } from "./icons"
 import { createPromptQueue, type PromptQueue, type QueueItem } from "./queue"
 import { updateContextChips, updateContextUsage, applyThemeVars, handleRateLimitExhausted } from "./theme"
-import { setupContextUsagePanel, setContextUsagePanel } from "./context-usage-panel"
+import { setupContextUsagePanel as setupContextUsagePanelInit, setContextUsagePanel, setContextUsagePostMessage, handleContextUsageMessage } from "./context-usage-panel"
 import { setupContextMonitor } from "./context-monitor"
 import { setupPromptStash } from "./prompt-stash"
 import { renderRecentSessions } from "./recent-sessions"
@@ -304,14 +304,6 @@ function getVsCodeApi() {
     }
   }
 
-  /** Log from webview back to extension host output channel */
-  function webviewLog(msg: string, level: "info" | "warn" | "error" = "info") {
-    vscode.postMessage({ type: "webview_log", level, message: msg })
-    if (level === "error") console.error(`[Webview] ${msg}`)
-    else if (level === "warn") console.warn(`[Webview] ${msg}`)
-    else console.info(`[Webview] ${msg}`)
-  }
-
   function init() {
     try {
       setupModeToggle()
@@ -349,7 +341,7 @@ function getVsCodeApi() {
       setupTimelineToggle()
       setupThinkingToggle()
       setupDisplayToggles()
-      setupToolKeyboardNav()
+      const cleanupToolKeyboardNav = setupToolKeyboardNav()
       setupSettingsMenuKeyboardNav()
       updateSendButton()
       setVsCodeApi(vscode)
@@ -411,28 +403,53 @@ function getVsCodeApi() {
       }
     })
 
-    // Search toggle handler
-    if (els.welcomeSearchToggle && els.welcomeSearchInput) {
+    // Session search is a single live input. The legacy toggle remains in the
+    // markup for compatibility with older templates, but is hidden to avoid
+    // rendering a second field under the visible search control.
+    if (els.welcomeSearchInput) {
       const searchToggle = els.welcomeSearchToggle
       const searchInput = els.welcomeSearchInput
-      searchToggle.addEventListener("click", () => {
-        const isHidden = searchInput.classList.contains("hidden")
-        if (isHidden) {
-          searchInput.classList.remove("hidden")
-          searchToggle.setAttribute("aria-expanded", "true")
-          const input = searchInput.querySelector("input")
-          if (input) input.focus()
-        } else {
-          searchInput.classList.add("hidden")
-          searchToggle.setAttribute("aria-expanded", "false")
-        }
-      })
-      
-      const input = searchInput.querySelector("input")
-      if (input) {
-        input.addEventListener("input", (e) => {
-          const query = (e.target as HTMLInputElement).value
+      const innerInput = searchInput.querySelector<HTMLInputElement>("input")
+
+      searchInput.classList.remove("hidden")
+      if (searchToggle) {
+        searchToggle.classList.add("hidden")
+        searchToggle.setAttribute("aria-expanded", "true")
+      }
+
+      const clearSessionSearch = () => {
+        if (innerInput) innerInput.value = ""
+        renderRecentSessionsList("")
+      }
+
+      if (innerInput) {
+        innerInput.setAttribute("autocomplete", "off")
+        innerInput.setAttribute("spellcheck", "false")
+        innerInput.addEventListener("input", (e) => {
+          const query = (e.target as HTMLInputElement).value.trim()
           renderRecentSessionsList(query)
+        })
+        innerInput.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") {
+            e.preventDefault()
+            clearSessionSearch()
+            return
+          }
+          if (e.key === "Enter") {
+            const firstResult = document.querySelector<HTMLElement>("#welcome-recent-sessions .recent-item[data-session-id]")
+            if (firstResult) {
+              e.preventDefault()
+              firstResult.click()
+            }
+            return
+          }
+          if (e.key === "ArrowDown") {
+            const firstResult = document.querySelector<HTMLElement>("#welcome-recent-sessions .recent-item[data-session-id]")
+            if (firstResult) {
+              e.preventDefault()
+              firstResult.focus()
+            }
+          }
         })
       }
     }
@@ -534,6 +551,8 @@ function getVsCodeApi() {
 
   function setupContextUsagePanel() {
     setContextUsagePanel(els.contextUsagePanel)
+    setContextUsagePostMessage((msg) => vscode.postMessage(msg as Record<string, unknown>))
+    setupContextUsagePanelInit()
     
     // Close button
     els.closeContextUsageBtn.addEventListener("click", () => {
@@ -726,17 +745,37 @@ function getVsCodeApi() {
   function closeTab(tabId: string) {
     const wasActive = stateManager.getState().activeSessionId === tabId
 
+    // Check if session is actively streaming and abort if needed
+    const session = stateManager.getSession(tabId)
+    const isStreaming = session?.isStreaming || false
+
     // Abort any streaming
     const stream = streamHandlers.get(tabId)
     if (stream) {
       stream.hideTypingIndicator()
     }
 
+    // Send abort message to extension if streaming was active
+    if (isStreaming) {
+      vscode.postMessage({ type: "abort", sessionId: tabId })
+      stateManager.setStreaming(tabId, false)
+    }
+
     // Soft close - keep in state but remove from UI
     stateManager.deleteSession(tabId)
     stateManager.flush()  // Ensure state is persisted
     removeTabContent(els, tabId)
+    
+    // Delete stream handler after cleanup
     streamHandlers.delete(tabId)
+
+    // Clean up tool timing data
+    for (const key of [...toolStartTimes.keys()]) {
+      if (key.startsWith(tabId + ":")) {
+        toolStartTimes.delete(key)
+      }
+    }
+    if (toolStartTimes.size === 0) stopToolElapsedTimer()
 
     // Clear prompt queue for this tab
     const queue = promptQueues.get(tabId)
@@ -2580,7 +2619,7 @@ function getVsCodeApi() {
             { label: "Build", value: "build" }
           ],
           onChange: (value: string) => {
-            vscode.postMessage({ type: "set_mode", mode: value })
+            vscode.postMessage({ type: "change_mode", mode: value, sessionId: stateManager.getState().activeSessionId ?? undefined })
           }
         }
       ]
@@ -3015,16 +3054,8 @@ function getVsCodeApi() {
         if (sid) {
           const stream = streamHandlers.get(sid)
           const seq = Number(_msg.seq || 0)
-          const lastChunkSeq = stream?.chunkSeq ?? 0
-          vscode.postMessage({ type: "stream_ack", sessionId: sid, seq, lastRenderedChunkSeq: lastChunkSeq })
-        }
-      }],
-      ["force_rerender", (_msg, sid) => {
-        if (sid && typeof _msg.text === "string") {
-          const stream = streamHandlers.get(sid)
-          if (stream) {
-            stream.forceRerender(_msg.text as string)
-          }
+          const ackSeq = stream?.chunkSeq ?? 0
+          vscode.postMessage({ type: "stream_ack", sessionId: sid, seq, lastRenderedChunkSeq: ackSeq })
         }
       }],
       ["force_rerender", (_msg, sid) => {
@@ -3186,8 +3217,11 @@ function getVsCodeApi() {
         const activeId = stateManager.getState().activeSessionId
         const tabPanel = activeId ? els.tabPanels.querySelector<HTMLElement>(`.tab-panel[data-tab-id="${CSS.escape(activeId)}"] .context-monitor`) : null
         if (tabPanel) updateContextUsage(tabPanel, { percent: msg.percent as number, tokens: msg.tokens as number, maxTokens: msg.maxTokens as number })
+        handleContextUsageMessage(msg as unknown as Record<string, unknown>)
       }],
-      ["server_status", (msg, sid) => { if (sid) handleServerStatus(sid, msg.status as string) }],
+      ["usage_history", (msg) => { handleContextUsageMessage(msg as unknown as Record<string, unknown>) }],
+      ["usage_statistics", (msg) => { handleContextUsageMessage(msg as unknown as Record<string, unknown>) }],
+      ["server_status", (msg, sid) => { if (sid) handleServerStatus(sid, msg.status as string, msg.errorContext) }],
       ["instructions_changed", (msg, sid) => {
         if (sid) {
           const sess = stateManager.getSession(sid)
@@ -3572,11 +3606,43 @@ function getVsCodeApi() {
       }],
       ["session_deleted", (msg) => {
         if (typeof msg.sessionId === "string") {
+          // Check if session is actively streaming and abort if needed
+          const session = stateManager.getSession(msg.sessionId)
+          const isStreaming = session?.isStreaming || false
+
+          // Abort streaming if active before cleanup
+          if (isStreaming) {
+            vscode.postMessage({ type: "abort", sessionId: msg.sessionId })
+            stateManager.setStreaming(msg.sessionId, false)
+          }
+
+          // Clean up stream handler
+          const stream = streamHandlers.get(msg.sessionId)
+          if (stream) {
+            stream.hideTypingIndicator()
+          }
+          streamHandlers.delete(msg.sessionId)
+
+          // Clean up tool timing data
+          for (const key of [...toolStartTimes.keys()]) {
+            if (key.startsWith(msg.sessionId + ":")) {
+              toolStartTimes.delete(key)
+            }
+          }
+          if (toolStartTimes.size === 0) stopToolElapsedTimer()
+
+          // Clear prompt queue for this session
+          const queue = promptQueues.get(msg.sessionId)
+          if (queue) {
+            queue.clear()
+            promptQueues.delete(msg.sessionId)
+          }
+          persistQueues()
+
           disposeVirtualList(msg.sessionId)
           const escapedId = CSS.escape(msg.sessionId)
           const wasActive = stateManager.getState().activeSessionId === msg.sessionId
           stateManager.deleteSession(msg.sessionId)
-          streamHandlers.delete(msg.sessionId)
           const deletedPanel = els.tabPanels.querySelector(`.tab-panel[data-tab-id="${escapedId}"]`)
           if (deletedPanel) deletedPanel.remove()
           const tabEl = els.tabBar.querySelector(`.tab[data-tab-id="${escapedId}"]`)
@@ -3698,23 +3764,46 @@ function getVsCodeApi() {
       }],
     ])
 
+    // I3: surface unknown host message types and capture handler exceptions so silent
+    // drops do not mask schema drift between the host and webview bundles.
+    const loggedUnknownTypes = new Set<string>()
     window.addEventListener("message", (event) => {
       const msg: HostMessage = event.data
       if (!msg || !msg.type) return
 
       const sessionId = (msg.message?.sessionId || msg.sessionId) as string | undefined
       const handler = messageHandlers.get(msg.type)
-      if (handler) handler(msg, sessionId)
+      if (!handler) {
+        if (!loggedUnknownTypes.has(msg.type)) {
+          loggedUnknownTypes.add(msg.type)
+          webviewLog(`[main] unknown host message type: ${msg.type}`)
+        }
+        return
+      }
+      try {
+        handler(msg, sessionId)
+      } catch (err) {
+        webviewLog(`[main] handler for ${msg.type} threw: ${err instanceof Error ? err.message : String(err)}`)
+      }
     })
+
+    let stateSyncDebounce: ReturnType<typeof setTimeout> | undefined
+
+    function requestStateSyncDebounced(): void {
+      if (stateSyncDebounce) clearTimeout(stateSyncDebounce)
+      stateSyncDebounce = setTimeout(() => {
+        vscode.postMessage({ type: "request_state_sync" })
+      }, 300)
+    }
 
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
-        vscode.postMessage({ type: "request_state_sync" })
+        requestStateSyncDebounced()
       }
     })
 
     window.addEventListener("focus", () => {
-      vscode.postMessage({ type: "request_state_sync" })
+      requestStateSyncDebounced()
     })
   }
 
@@ -4170,7 +4259,8 @@ try {
     }
     const s = stream!
     chunkLogCounter++
-    if (chunkLogCounter <= 3 || chunkLogCounter % 50 === 0 || (text && text.length > 1000)) {
+    // Reduce chunk logging frequency to avoid spamming output
+    if (chunkLogCounter <= 3 || chunkLogCounter % 100 === 0 || (text && text.length > 1000)) {
       vscode.postMessage({
         type: "webview_log",
         level: "info",
@@ -4310,10 +4400,10 @@ try {
     })
   }
 
-  function handleServerStatus(sessionId: string, status?: string) {
+  function handleServerStatus(sessionId: string, status?: string, errorContext?: unknown) {
     const stream = streamHandlers.get(sessionId)
     if (!stream) return
-    stream.handleServerStatus(status)
+    stream.handleServerStatus(status, errorContext)
     if (status === "executing" || status === "running") {
       updateAgentStatus("executing")
     } else if (status === "idle") {
@@ -4360,7 +4450,6 @@ try {
 
   /* ─── TOKEN/COST DISPLAY ─── */
 
-  type UsageDelta = { prompt: number; completion: number; total: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }
   const recentStepUsage = new Map<string, { signature: string; timestamp: number }>()
 
   function usageSignature(usage: UsageDelta): string {

@@ -1,5 +1,6 @@
 export { registerRollbackCommand } from "./rollback"
 export { registerThemePreviewCommand, registerCaptureTerminalCommand } from "./theme"
+export { registerGenerateAgentsMdCommand } from "./methodology"
 export {
   registerOpenChatCommand,
   registerNewSessionCommand,

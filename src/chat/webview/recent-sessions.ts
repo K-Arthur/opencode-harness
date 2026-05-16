@@ -55,12 +55,15 @@ export function renderRecentSessions(
     emptyMsg.style.textAlign = "center"
     list.appendChild(emptyMsg)
   } else {
-    // Take last 3 sessions
-    const recent = sessions.slice(0, 3)
+    const limit = isFiltered ? 10 : 3
+    const recent = sessions.slice(0, limit)
     
     recent.forEach((session) => {
       const item = document.createElement("div")
       item.className = "recent-item"
+      item.tabIndex = 0
+      item.dataset.sessionId = session.id
+      item.setAttribute("role", "option")
       
       // Indicator
       const indicator = document.createElement("span")
@@ -117,6 +120,17 @@ export function renderRecentSessions(
       actions.appendChild(deleteBtn)
       item.appendChild(actions)
       
+      item.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          onResume(session.id)
+        } else if (e.key === "ArrowDown") {
+          const next = item.nextElementSibling as HTMLElement | null
+          next?.focus()
+        } else if (e.key === "ArrowUp") {
+          const prev = item.previousElementSibling as HTMLElement | null
+          prev?.focus()
+        }
+      })
       item.addEventListener("click", () => onResume(session.id))
       list.appendChild(item)
     })

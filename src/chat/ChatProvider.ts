@@ -37,8 +37,6 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private _view?: vscode.WebviewView
   private diffApplier = new DiffApplier()
   private disposables: vscode.Disposable[] = []
-  private webviewReady = false
-
   private webviewContent: WebviewContent
   private tabManager: TabManager
   private streamCoordinator: StreamCoordinator
@@ -71,6 +69,21 @@ private autoCompactor: AutoCompactor
     (msg) => { this._view?.webview.postMessage(msg) },
     (msg) => log.info(msg),
   )
+
+  /** P2: Retry queue for critical messages with exponential backoff */
+  private messageRetryQueue: Array<{ msg: Record<string, unknown>; attempts: number; lastAttempt: number }> = []
+  /**
+   * O3: Stream lifecycle messages must arrive in order. Adding the start/tool messages here means
+   * a failed start no longer races ahead of a subsequent batched stream_chunk for the same session.
+   */
+  private static readonly CRITICAL_MESSAGE_TYPES = new Set([
+    "stream_start", "stream_end", "stream_chunk", "stream_tool_start", "stream_tool_end", "stream_tool_update",
+    "stream_error", "streaming_state",
+    "error", "webview_ready", "request_error",
+  ])
+  private static readonly MAX_RETRIES = 3
+  private static readonly RETRY_DELAYS_MS = [100, 500, 1000] // Exponential backoff
+  private retryTimer?: NodeJS.Timeout
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -232,9 +245,17 @@ private autoCompactor: AutoCompactor
     // Clear any pending chunk buffer and timer from previous webview instance
     this.chunkBatcher.dispose()
 
+    // P2: Clear retry queue on webview recreation
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer)
+      this.retryTimer = undefined
+    }
+    this.messageRetryQueue = []
+
     this._view = webviewView
     // H15: Reset ready state on re-solve to handle webview recreation
     this.eventRouter.webviewReady = false
+    this.eventRouter.startReadyTimeout()
 
     webviewView.webview.options = {
       enableScripts: true,
@@ -306,10 +327,33 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     // Webview message handler
     this.disposables.push(
       webviewView.webview.onDidReceiveMessage(async (msg: Record<string, unknown>) => {
+        // I8: rule #20 — origin guard. If the bound view has been replaced (re-resolve) or
+        // disposed, ignore stale messages from the old listener instead of mutating fresh state.
+        if (this._view !== webviewView) {
+          log.warn(`Discarding webview message from stale view; type=${typeof msg?.type === "string" ? msg.type : "?"}`)
+          return
+        }
         try {
           await this.handleWebviewMessage(msg)
         } catch (err) {
+          // I1: handler exceptions used to be swallowed silently — the webview would spin
+          // forever waiting for a response. Echo a webview_request_error envelope back so
+          // the UI can surface the failure and unblock the affected control.
           log.error("Error handling webview message", err)
+          const requestType = typeof msg?.type === "string" ? msg.type : "unknown"
+          const requestId = typeof msg?.requestId === "string" ? msg.requestId : undefined
+          const sessionId = typeof msg?.sessionId === "string" ? msg.sessionId : undefined
+          try {
+            this.postMessage({
+              type: "webview_request_error",
+              requestType,
+              requestId,
+              sessionId,
+              error: err instanceof Error ? err.message : String(err),
+            })
+          } catch (postErr) {
+            log.warn("Failed to post webview_request_error", postErr)
+          }
         }
       })
     )
@@ -317,6 +361,15 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     webviewView.onDidDispose(() => {
       this._view = undefined
       this.eventRouter.webviewReady = false
+      // O4: Dispose the batcher and clear retry/early state so nothing fires on the dead view.
+      try { this.chunkBatcher.dispose() } catch (err) { log.warn("ChunkBatcher dispose on view disposal failed", err) }
+      if (this.retryTimer) {
+        clearTimeout(this.retryTimer)
+        this.retryTimer = undefined
+      }
+      this.messageRetryQueue = []
+      this.eventRouter.clearReadyTimeout()
+      this.eventRouter.earlyMessageQueue = []
       // Abort any active streams when the panel is closed
       for (const t of this.tabManager.getAllTabs()) {
         if (t.isStreaming) {
@@ -518,10 +571,10 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       }
     }],
     ["session_status", async (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean; waitingForCompletion?: boolean }) => {
-      const data = event.data as { status?: { type?: string } } | undefined
+      const data = event.data as { status?: { type?: string } | undefined; errorContext?: unknown } | undefined
       const rawStatus = data?.status?.type || "unknown"
       const status = rawStatus === "busy" ? "thinking" : rawStatus
-      this.postMessage({ type: "server_status", sessionId: tabId, status })
+      this.postMessage({ type: "server_status", sessionId: tabId, status, errorContext: data?.errorContext })
 
       // Fallback finalization. If the server reports any non-busy terminal status
       // ("idle", "ready", "completed", "done") while we're still waiting for completion,
@@ -536,10 +589,10 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       }
     }],
     ["server_status", async (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean; waitingForCompletion?: boolean }) => {
-      const data = event.data as { status?: { type?: string } | undefined } | undefined
+      const data = event.data as { status?: { type?: string } | undefined; errorContext?: unknown } | undefined
       const rawStatus = data?.status?.type || "unknown"
       const status = rawStatus === "busy" ? "thinking" : rawStatus
-      this.postMessage({ type: "server_status", sessionId: tabId, status })
+      this.postMessage({ type: "server_status", sessionId: tabId, status, errorContext: data?.errorContext })
 
       if (rawStatus !== "busy" && rawStatus !== "thinking" && rawStatus !== "unknown" && tab?.waitingForCompletion) {
         log.info(`server_status: terminal status "${rawStatus}" while tab ${tabId} is waiting — triggering fallback finalization`)
@@ -779,13 +832,17 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     try {
       const rows = await this.sessionManager.getSessionMessages(session.cliSessionId)
       const messages = sdkMessagesToChatMessages(rows)
-      if (messages.length > 0) {
-        this.sessionStore.applyBackfilledMessages(session.id, messages, summarizeOpencodeMessageUsage(rows))
-        this.sessionStore.autoTitleFromMessages(session.id)
-        log.info(`[tab_created] Backfilled ${messages.length} messages for session ${session.id}`)
-        // Re-push init state to update webview with backfilled messages
-        this.restoredTabsHydrated = false
-        this.pushInitStateToWebview()
+        if (messages.length > 0) {
+          this.sessionStore.applyBackfilledMessages(session.id, messages, summarizeOpencodeMessageUsage(rows))
+          this.sessionStore.autoTitleFromMessages(session.id)
+          log.info(`[tab_created] Backfilled ${messages.length} messages for session ${session.id}`)
+          const tabAfter = this.tabManager.getTab(tabId)
+          if (tabAfter?.isStreaming) {
+            log.info(`[tab_created] Skipping pushInitState for ${session.id} because streaming started during backfill`)
+          } else {
+            this.restoredTabsHydrated = false
+            this.pushInitStateToWebview()
+          }
       } else {
         // Empty response — most likely the server has not finished loading
         // messages from disk. Preserve needsBackfill so the retry timer (or a
@@ -821,8 +878,9 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       return
     }
 
-    // text_chunk fires per-delta — too noisy to log every one. State events still log.
-    const isHighFrequency = event.type === "text_chunk"
+    // text_chunk, tool_end, and other high-frequency events are too noisy to log every one.
+    // State events still log.
+    const isHighFrequency = event.type === "text_chunk" || event.type === "tool_end" || event.type === "tool_start"
     if (!isHighFrequency) {
       log.debug(`Incoming server event: ${event.type} (sessionId: ${event.sessionId})`)
     }
@@ -1015,7 +1073,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
   }
 
   private replayLiveStreamsToWebview(): void {
-    if (!this._view || !this.webviewReady) return
+    if (!this._view || !this.eventRouter.webviewReady) return
     for (const tab of this.tabManager.getAllTabs()) {
       if (!tab.isStreaming) continue
       this.streamCoordinator.replayLiveStreamToWebview(tab.id, {
@@ -1046,23 +1104,47 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     // so the webview is fully initialized on first load.
     const passthrough = ["init_state", "theme_vars", "theme_config", "rate_limit_state", "model_update", "model_list", "webview_ready", "session_list_update"]
     if (!this.eventRouter.webviewReady && !passthrough.includes(msg.type as string)) {
-      this.eventRouter.earlyMessageQueue.push(msg)
+      // Use centralized queue enforcement in WebviewEventRouter
+      this.eventRouter.enqueueMessage(msg)
       return
     }
 
-    // R2: Batch stream_chunk messages — accumulate text per session and flush every 50ms
+    // R2: Batch stream_chunk messages — accumulate text per session and flush every 75ms
     if (msg.type === "stream_chunk" && typeof msg.sessionId === "string" && typeof msg.text === "string") {
       const messageId = typeof msg.messageId === "string" ? msg.messageId : undefined
       this.chunkBatcher.add(msg.sessionId, msg.text, messageId)
       return
     }
 
-    // For stream_end, flush any remaining chunks first so the webview has all text
+    // For stream_end, flush any remaining chunks first so the webview has all text.
+    // O2: A throw inside flush must not strand stream_end — the batcher already logs per-chunk failures.
     if (msg.type === "stream_end") {
-      this.chunkBatcher.flush()
+      try { this.chunkBatcher.flush() } catch (err) { log.error("chunkBatcher.flush before stream_end failed", err) }
     }
 
-    this._view.webview.postMessage(msg)
+    try {
+      // O5: VS Code's postMessage returns Thenable<boolean> — false signals the webview's
+      // internal queue refused the message (saturation, disposed, hidden). We previously
+      // discarded this signal entirely. Observe it and surface sustained backpressure.
+      const result = this._view.webview.postMessage(msg) as boolean | Thenable<boolean> | undefined
+      if (result && typeof (result as Thenable<boolean>).then === "function") {
+        ;(result as Thenable<boolean>).then(ok => { if (ok === false) this.recordPostMessageRejected(msg) }, () => { /* ignore */ })
+      } else if (result === false) {
+        this.recordPostMessageRejected(msg)
+      }
+    } catch (err) {
+      log.error("Failed to post message to webview", err)
+      // P2: Retry critical messages
+      if (ChatProvider.CRITICAL_MESSAGE_TYPES.has(msg.type as string)) {
+        // O3: While a stream lifecycle message is being retried, pause chunk delivery for the same
+        // session so a batched stream_chunk cannot overtake the not-yet-delivered stream_start.
+        const sid = typeof msg.sessionId === "string" ? msg.sessionId : undefined
+        if (sid && (msg.type === "stream_start" || msg.type === "stream_tool_start")) {
+          this.chunkBatcher.pauseSession(sid)
+        }
+        this.scheduleRetry(msg)
+      }
+    }
 
     // F15: Notify when turn completes and webview is not visible
     if (msg.type === "stream_end") {
@@ -1072,6 +1154,113 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
 
   private postRequestError(message: string, sessionId?: string): void {
     this.statePush.postRequestError(this.toUserErrorMessage(message), sessionId)
+  }
+
+  /** O5: Backpressure observability — counters for consecutive rejected postMessage results. */
+  private postMessageRejectedConsecutive = 0
+  private postMessageRejectedTotal = 0
+  private lastBackpressureLogAt = 0
+
+  /** O5: Called when webview.postMessage resolves to false (saturation / refused). */
+  private recordPostMessageRejected(msg: Record<string, unknown>): void {
+    this.postMessageRejectedConsecutive++
+    this.postMessageRejectedTotal++
+    const now = Date.now()
+    // Throttle to once per second to avoid log spam under sustained pressure.
+    if (now - this.lastBackpressureLogAt > 1000) {
+      this.lastBackpressureLogAt = now
+      log.warn(`Webview postMessage refused ${this.postMessageRejectedConsecutive} message(s) (total ${this.postMessageRejectedTotal}); latest type=${String(msg.type)}`)
+    }
+    // Re-route critical messages through retry so they aren't lost to a silent false.
+    if (ChatProvider.CRITICAL_MESSAGE_TYPES.has(msg.type as string)) {
+      this.scheduleRetry(msg)
+    }
+  }
+
+  /** P2: Schedule a retry for a failed critical message with exponential backoff */
+  private scheduleRetry(msg: Record<string, unknown>): void {
+    const retryItem = { msg, attempts: 0, lastAttempt: Date.now() }
+    this.messageRetryQueue.push(retryItem)
+    this.processRetryQueue()
+  }
+
+  /** P2: Process retry queue with exponential backoff */
+  private processRetryQueue(): void {
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer)
+    }
+
+    while (this.messageRetryQueue.length > 0) {
+      const now = Date.now()
+      const nextRetry = this.messageRetryQueue.find(item => {
+        const delayIndex = Math.min(item.attempts, ChatProvider.RETRY_DELAYS_MS.length - 1)
+        const delayMs = ChatProvider.RETRY_DELAYS_MS[delayIndex] ?? 1000
+        return now - item.lastAttempt >= delayMs
+      })
+
+      if (!nextRetry) {
+        const firstItem = this.messageRetryQueue[0]
+        if (firstItem) {
+          const delayIndex = Math.min(firstItem.attempts, ChatProvider.RETRY_DELAYS_MS.length - 1)
+          const delayMs = ChatProvider.RETRY_DELAYS_MS[delayIndex] ?? 1000
+          const timeUntilNext = delayMs - (now - firstItem.lastAttempt)
+          this.retryTimer = setTimeout(() => this.processRetryQueue(), timeUntilNext)
+        }
+        return
+      }
+
+      // O6: posting to a disposed view used to silently no-op via optional chaining.
+      // Treat absent _view as a failure so a hide/show cycle can recover, then bail.
+      if (!this._view) {
+        log.warn(`Retry skipped — webview disposed; type=${String(nextRetry.msg.type)}`)
+        nextRetry.attempts++
+        nextRetry.lastAttempt = Date.now()
+        if (nextRetry.attempts >= ChatProvider.MAX_RETRIES) {
+          log.error(`Max retries exceeded (no view) for message type: ${nextRetry.msg.type}`)
+          const index = this.messageRetryQueue.indexOf(nextRetry)
+          if (index > -1) this.messageRetryQueue.splice(index, 1)
+        }
+        // Reschedule and break — the disposed view will not flip mid-tick.
+        const firstItem = this.messageRetryQueue[0]
+        if (firstItem) {
+          const delayIndex = Math.min(firstItem.attempts, ChatProvider.RETRY_DELAYS_MS.length - 1)
+          const delayMs = ChatProvider.RETRY_DELAYS_MS[delayIndex] ?? 1000
+          this.retryTimer = setTimeout(() => this.processRetryQueue(), delayMs)
+        }
+        return
+      }
+
+      try {
+        this._view.webview.postMessage(nextRetry.msg)
+        const index = this.messageRetryQueue.indexOf(nextRetry)
+        if (index > -1) {
+          this.messageRetryQueue.splice(index, 1)
+        }
+        // O3: a successful stream_start / stream_tool_start retry releases the paused chunk buffer.
+        const sid = typeof nextRetry.msg.sessionId === "string" ? nextRetry.msg.sessionId : undefined
+        if (sid && (nextRetry.msg.type === "stream_start" || nextRetry.msg.type === "stream_tool_start")) {
+          this.chunkBatcher.resumeSession(sid)
+        }
+        log.info(`Successfully retried message of type: ${nextRetry.msg.type}`)
+      } catch (err) {
+        log.warn(`Retry post failed for ${String(nextRetry.msg.type)}: ${err instanceof Error ? err.message : String(err)}`)
+        nextRetry.attempts++
+        nextRetry.lastAttempt = Date.now()
+        if (nextRetry.attempts >= ChatProvider.MAX_RETRIES) {
+          log.error(`Max retries exceeded for message type: ${nextRetry.msg.type}`)
+          const index = this.messageRetryQueue.indexOf(nextRetry)
+          if (index > -1) {
+            this.messageRetryQueue.splice(index, 1)
+          }
+          // O3: give up gracefully — unblock the batcher so subsequent chunks for the session
+          // are not orphaned in memory. The webview will simply miss the start; better than a leak.
+          const sid = typeof nextRetry.msg.sessionId === "string" ? nextRetry.msg.sessionId : undefined
+          if (sid && (nextRetry.msg.type === "stream_start" || nextRetry.msg.type === "stream_tool_start")) {
+            this.chunkBatcher.resumeSession(sid)
+          }
+        }
+      }
+    }
   }
 
 private toUserErrorMessage(message: string): string {
@@ -1282,6 +1471,12 @@ private toUserErrorMessage(message: string): string {
       clearTimeout(this.backfillRetryTimer)
       this.backfillRetryTimer = undefined
     }
+    // P2: Clear retry timer and queue on disposal
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer)
+      this.retryTimer = undefined
+    }
+    this.messageRetryQueue = []
     this.chunkBatcher.dispose()
     for (const d of this.disposables) d.dispose()
     this.disposables = []
@@ -1292,7 +1487,7 @@ private toUserErrorMessage(message: string): string {
     this.chatCommands?.dispose()
     this.autoCompactor?.dispose()
     this.fileOps?.dispose()
-    this.diffApplier?.dispose()
+    this.eventRouter.clearReadyTimeout()
     this.webviewContent?.dispose()
   }
 }

@@ -3,7 +3,12 @@
  * task classification, methodology selection, cascade routing, prompt
  * engineering, and quality gates.
  *
- * This is the main entry point for the methodology enhancement system.
+ * Supports two modes:
+ * 1. Advisory — recommends model/methodology without making model calls
+ * 2. Full cascade — (requires ModelExecutor) routes through models with quality eval
+ *
+ * The advisory mode is the default for the VS Code extension, where the
+ * opencode CLI handles actual model execution.
  */
 
 import {
@@ -12,29 +17,26 @@ import {
   TaskClassification,
   MethodologySelection,
   ModelProfile,
-  RouterResult,
   AuditEntry,
-  ClassifiedError,
   MethodologyId,
   ModelTier,
 } from './types.js';
 import { TaskClassifier } from './TaskClassifier.js';
 import { MethodologyCatalog } from './MethodologyCatalog.js';
-import { CascadeRouter, ModelExecutor } from './CascadeRouter.js';
-import { SpecService, type Spec } from './SpecService.js';
+import { CascadeRouter, type AdvisoryResult, type ModelExecutor } from './CascadeRouter.js';
+import { ModelProfileRegistry } from './ModelProfileRegistry.js';
 
 // ─── Orchestrator ───────────────────────────────────────────────────────────
 
 export interface OrchestratorOptions {
   config?: Partial<MethodologyConfig>;
-  modelExecutor: ModelExecutor;
-  modelProfiles: ModelProfile[];
-  specService?: SpecService;
+  modelExecutor?: ModelExecutor;
+  modelProfiles?: ModelProfile[];
 }
 
-export interface OrchestrationResult {
+export interface AdvisoryOrchestrationResult {
   methodology: MethodologySelection;
-  routing: RouterResult;
+  advisory: AdvisoryResult;
   classification: TaskClassification;
   auditTrail: AuditEntry[];
 }
@@ -44,13 +46,15 @@ export class MethodologyOrchestrator {
   private classifier: TaskClassifier;
   private catalog: MethodologyCatalog;
   private router: CascadeRouter;
+  private registry: ModelProfileRegistry;
   private modelProfiles: ModelProfile[];
 
-  constructor(options: OrchestratorOptions) {
+  constructor(options: OrchestratorOptions = {}) {
     this.config = { ...DEFAULT_CONFIG, ...options.config };
     this.classifier = new TaskClassifier();
     this.catalog = new MethodologyCatalog();
-    this.modelProfiles = options.modelProfiles;
+    this.registry = new ModelProfileRegistry();
+    this.modelProfiles = options.modelProfiles ?? this.registry.getAllProfiles();
 
     this.router = new CascadeRouter(
       {
@@ -65,70 +69,65 @@ export class MethodologyOrchestrator {
   }
 
   /**
-   * Process a user request through the full methodology pipeline:
-   *
-   * 1. Classify the task
-   * 2. Select methodology
-   * 3. Generate methodology-specific prompt
-   * 4. Route through cascade router
-   * 5. Return result with audit trail
+   * Advisory processing — classifies task, selects methodology,
+   * recommends best model. No model calls made.
    */
-  async process(
+  advise(
     query: string,
     options: {
       hasImageAttachment?: boolean;
       selectedCode?: string;
       openFiles?: string[];
     } = {}
-  ): Promise<OrchestrationResult> {
-    // Step 1: Classify the task
+  ): AdvisoryOrchestrationResult {
     const classification = this.classifier.classify(query, options);
-
-    // Step 2: Select methodology
     const methodology = this.catalog.select(classification);
 
-    // Step 3: Generate prompt
-    const template = this.catalog.getPromptTemplate(methodology.promptStrategy);
-    const systemPrompt = template.systemPrompt;
-    const userPrompt = template.userPromptTemplate.replace('{{task}}', query);
-
-    // Step 4: Route through cascade router
-    const routing = await this.router.route(
+    const tierMap = this.mergeTierMaps();
+    const advisory = this.router.recommendModel(
       classification,
       methodology.methodology,
-      systemPrompt,
-      userPrompt,
+      methodology,
       this.modelProfiles,
-      this.config.modelTiers
+      tierMap
     );
 
-    // Step 5: Return result
     return {
       methodology,
-      routing,
+      advisory,
       classification,
       auditTrail: this.router.getAuditLog(),
     };
   }
 
-  /**
-   * Update model profiles at runtime (e.g., from empirical data).
-   */
+  getCatalog(): MethodologyCatalog {
+    return this.catalog;
+  }
+
+  getRegistry(): ModelProfileRegistry {
+    return this.registry;
+  }
+
   updateModelProfiles(profiles: ModelProfile[]): void {
     this.modelProfiles = profiles;
   }
 
-  /**
-   * Update configuration at runtime.
-   */
   updateConfig(config: Partial<MethodologyConfig>): void {
     this.config = { ...this.config, ...config };
   }
 
-  /**
-   * Get the current configuration.
-   */
   getConfig(): MethodologyConfig {
     return { ...this.config };
+  }
+
+  private mergeTierMaps(): Record<ModelTier, string[]> {
+    const staticMap = this.registry.buildTierMap();
+    const configMap = this.config.modelTiers;
+    return {
+      S: [...new Set([...(configMap.S ?? []), ...staticMap.S])],
+      A: [...new Set([...(configMap.A ?? []), ...staticMap.A])],
+      B: [...new Set([...(configMap.B ?? []), ...staticMap.B])],
+      C: [...new Set([...(configMap.C ?? []), ...staticMap.C])],
+    };
   }
 }

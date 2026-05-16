@@ -75,7 +75,7 @@ export interface ErrorBlock {
 }
 
 // Legacy block type — kept for backward compatibility with existing renders
-export interface LegacyBlock {
+ export interface LegacyBlock {
   type: string
   text?: string
   code?: string
@@ -89,7 +89,6 @@ export interface LegacyBlock {
   diffText?: string
   id?: string
   permissionId?: string
-  // New optional fields that may appear on legacy blocks
   class?: ToolCallClass
   state?: string
   name?: string
@@ -103,8 +102,13 @@ export interface LegacyBlock {
   streaming?: boolean
   detail?: string
   retryable?: boolean
+  status?: string
+  message?: string
+  data?: string
+  mimeType?: string
+  durationMs?: number
   [key: string]: unknown
-}
+ }
 
 // Legacy block type — kept for backward compatibility and as the canonical Block type.
 // All new renderers use type guards (isToolCallBlock, etc.) to narrow to specific types
@@ -163,6 +167,9 @@ export interface SkillInfo {
   description?: string
   category?: string
   enabled: boolean
+  performanceScore?: number
+  usageCount?: number
+  lastUsed?: number
 }
 
 export interface SubagentActivity {
@@ -271,6 +278,15 @@ export interface ContextUsage {
   breakdown?: ContextBreakdown
 }
 
+export interface UsageDelta {
+  prompt: number
+  completion: number
+  total: number
+  reasoning?: number
+  cacheRead?: number
+  cacheWrite?: number
+}
+
 export interface HostMessage {
   type: string
   message?: ChatMessage
@@ -278,13 +294,108 @@ export interface HostMessage {
   text?: string
   items?: MentionItem[]
   sessions?: SessionSummary[]
+  session?: SessionSummary
   status?: string
   vars?: Record<string, string>
   model?: string
   resetAt?: string
   blockId?: string
   ok?: boolean
-  [key: string]: unknown
+  sessionId?: string
+  name?: string
+  mode?: string
+  variant?: string
+  cost?: number
+  attachments?: Array<{ data: string; mimeType: string }>
+  path?: string
+  filePath?: string
+  proposedContent?: string
+  title?: string
+  diffId?: string
+  permissionId?: string
+  response?: string
+  query?: string
+  limit?: number
+  beforeIndex?: number
+  initialBeforeIndex?: number
+  hasMore?: boolean
+  newBeforeIndex?: number
+  totalCount?: number
+  messages?: ChatMessage[]
+  targetSessionId?: string
+  serverSessionId?: string
+  directory?: string
+  parentId?: string
+  created?: number
+  updated?: number
+  files?: number
+  file?: string
+  additions?: number
+  deletions?: number
+  isCurrentWorkspace?: boolean
+  checkpointId?: string
+  checkpoints?: unknown[]
+  filesChanged?: number
+  gitRef?: string
+  command?: string
+  commands?: unknown[]
+  showInChat?: boolean
+  arguments?: string
+  code?: string
+  language?: string
+  action?: string
+  content?: string
+  isGlobal?: boolean
+  id?: string
+  config?: Record<string, unknown>
+  disabled?: boolean
+  enabled?: boolean
+  visible?: boolean
+  pref?: string
+  value?: unknown
+  error?: string
+  errorContext?: unknown
+  days?: number
+  pendingTokens?: number
+  predictedTokens?: number
+  predictedCost?: number
+  willOverflow?: boolean
+  patterns?: unknown[]
+  suggestions?: unknown[]
+  subagentId?: string
+  activities?: unknown[]
+  isSteerPrompt?: boolean
+  autoSend?: boolean
+  seq?: number
+  lastRenderedChunkSeq?: number
+  resumed?: { existingText?: string; messageId?: string }
+  partial?: boolean
+  reason?: string
+  blocks?: Block[]
+  turnIndex?: number
+  hunkId?: string
+  hunk?: { id: string; hunkId: string; oldStart: number; oldCount: number; lines: Array<{ type: 'added' | 'removed' | 'context'; content: string }> }
+  rejected?: boolean
+  theme?: unknown
+  themes?: unknown[]
+  instructions?: string
+  percent?: number
+  tokens?: number | { input: number; output: number; reasoning?: number; cacheRead?: number; cacheWrite?: number } | unknown
+  maxTokens?: number
+  isStreaming?: boolean
+  toolCall?: unknown
+  result?: unknown
+  state?: WebviewState
+  workspaceName?: string
+  activeSessionId?: string
+  globalModel?: string
+  checkpointCreated?: boolean
+  usage?: ContextUsage | UsageDelta | unknown
+  skillName?: string
+  servers?: unknown[]
+  todos?: unknown[]
+  skills?: unknown[]
+  results?: unknown[]
 }
 
 export interface VsCodeApi {

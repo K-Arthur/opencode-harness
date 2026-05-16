@@ -3,8 +3,27 @@
  * Manages the UI for viewing and managing context usage breakdown with historical tracking and cost display.
  */
 
-declare const vscode: {
-  postMessage: (msg: Record<string, unknown>) => void
+/** I5: defense-in-depth — escape any string field before interpolating into innerHTML. */
+function escapeHtml(input: unknown): string {
+  if (typeof input !== "string") return ""
+  return input
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
+/** I5: coerce host-supplied numbers — non-numbers become 0 rather than rendering as raw HTML. */
+function safeNum(input: unknown): number {
+  const n = typeof input === "number" ? input : Number(input)
+  return Number.isFinite(n) ? n : 0
+}
+
+let _postMessage: (msg: Record<string, unknown>) => void = () => {}
+
+export function setContextUsagePostMessage(postMessage: (msg: Record<string, unknown>) => void): void {
+  _postMessage = postMessage
 }
 
 interface ContextBreakdown {
@@ -64,30 +83,27 @@ let suggestions: OptimizationSuggestion[] = []
  * Initialize the context usage panel.
  */
 export function setupContextUsagePanel(): void {
-  // Listen for context usage updates from extension
-  window.addEventListener("message", (event) => {
-    const data = event.data
-    if (data.type === "context_usage") {
-      currentUsage = data
-      updateContextUsageBar(currentUsage)
-      if (contextUsagePanelElement && !contextUsagePanelElement.classList.contains("hidden")) {
-        renderContextUsagePanel(currentUsage)
-      }
-    } else if (data.type === "usage_history") {
-      usageHistory = data.history || []
-      if (contextUsagePanelElement && !contextUsagePanelElement.classList.contains("hidden")) {
-        renderHistoricalData()
-      }
-    } else if (data.type === "usage_statistics") {
-      usageStatistics = data.statistics
-      if (contextUsagePanelElement && !contextUsagePanelElement.classList.contains("hidden")) {
-        renderStatistics()
-      }
-    }
-  })
-
-  // Request initial context usage
   postMessage({ type: "get_context_usage" })
+}
+
+export function handleContextUsageMessage(data: Record<string, unknown>): void {
+  if (data.type === "context_usage") {
+    currentUsage = data as unknown as ContextUsage
+    updateContextUsageBar(currentUsage)
+    if (contextUsagePanelElement && !contextUsagePanelElement.classList.contains("hidden")) {
+      renderContextUsagePanel(currentUsage)
+    }
+  } else if (data.type === "usage_history") {
+    usageHistory = (data.history as ContextUsageHistory[]) || []
+    if (contextUsagePanelElement && !contextUsagePanelElement.classList.contains("hidden")) {
+      renderHistoricalData()
+    }
+  } else if (data.type === "usage_statistics") {
+    usageStatistics = data.statistics as UsageStatistics
+    if (contextUsagePanelElement && !contextUsagePanelElement.classList.contains("hidden")) {
+      renderStatistics()
+    }
+  }
 }
 
 /**
@@ -103,6 +119,10 @@ function updateContextUsageBar(usage: ContextUsage | null): void {
 
   if (usage.tokens === 0) {
     bar.classList.add("hidden")
+    if (costDisplay) {
+      costDisplay.classList.add("hidden")
+      costDisplay.textContent = ""
+    }
     return
   }
 
@@ -143,6 +163,12 @@ function renderContextUsagePanel(usage: ContextUsage | null): void {
   }
 
   const total = usage.breakdown.system + usage.breakdown.history + usage.breakdown.workspace + usage.breakdown.queued + usage.breakdown.steer
+
+  // Avoid division by zero for empty breakdowns
+  if (total === 0) {
+    breakdownSection.innerHTML = '<p class="text-muted">No breakdown data available.</p>'
+    return
+  }
 
   breakdownSection.innerHTML = `
     <div class="context-breakdown-chart">
@@ -260,9 +286,9 @@ function renderStatistics(): void {
       <h3>Daily Breakdown</h3>
       ${usageStatistics.dailyBreakdown.map(day => `
         <div class="daily-row">
-          <span class="date">${day.date}</span>
-          <span class="tokens">${day.tokens.toLocaleString()} tok</span>
-          <span class="cost">$${day.cost.toFixed(4)}</span>
+          <span class="date">${escapeHtml(day.date)}</span>
+          <span class="tokens">${safeNum(day.tokens).toLocaleString()} tok</span>
+          <span class="cost">$${safeNum(day.cost).toFixed(4)}</span>
         </div>
       `).join('')}
     </div>
@@ -309,7 +335,7 @@ export function setContextUsagePanel(element: HTMLElement): void {
  * Post a message to the extension.
  */
 function postMessage(msg: Record<string, unknown>): void {
-  vscode.postMessage(msg)
+  _postMessage(msg)
 }
 
 // Re-export for main.ts

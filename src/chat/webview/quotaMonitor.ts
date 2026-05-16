@@ -135,7 +135,7 @@ export class QuotaMonitor {
 
     // Check each warning threshold
     for (const threshold of this.config.warningThresholds) {
-      if (percentage <= threshold && percentage > threshold - 10) {
+      if (percentage < threshold && percentage >= threshold - 10) {
         warnings.push(this.createWarning(threshold, percentage, state));
       }
     }
@@ -160,7 +160,7 @@ export class QuotaMonitor {
    * Calculate request usage percentage
    */
   private calculateRequestPercentage(state: QuotaState): number {
-    if (!state.limitRequests || state.limitRequests <= 0) return 100;
+    if (!state.limitRequests || state.limitRequests <= 0 || state.remainingRequests === undefined) return 100;
     return (state.remainingRequests / state.limitRequests) * 100;
   }
 
@@ -273,6 +273,7 @@ export class QuotaMonitor {
    */
   private calculateTimeUntilReset(state: QuotaState): number {
     if (!state.resetAt) return 0;
+    if (isNaN(state.resetAt.getTime())) return 0; // Handle invalid dates
     return Math.max(0, state.resetAt.getTime() - Date.now());
   }
 
@@ -286,7 +287,7 @@ export class QuotaMonitor {
 
     for (let i = 0; i < this.config.warningThresholds.length; i++) {
       const threshold = this.config.warningThresholds[i];
-      if (threshold !== undefined && percentage <= threshold) {
+      if (threshold !== undefined && percentage < threshold && percentage >= threshold - 10) {
         return threshold;
       }
     }

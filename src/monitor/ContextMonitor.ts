@@ -346,6 +346,44 @@ private currentTokens = 0
     return { predictedTokens, predictedCost, willOverflow }
   }
 
+  generateOptimizationSuggestions(): Array<{ type: "summarize" | "compact" | "warning"; priority: "high" | "medium" | "low"; message: string; estimatedSavings?: number }> {
+    const suggestions: Array<{ type: "summarize" | "compact" | "warning"; priority: "high" | "medium" | "low"; message: string; estimatedSavings?: number }> = []
+    const utilizationPercent = (this.currentTokens / this.tokenLimit) * 100
+
+    // High utilization warnings
+    if (utilizationPercent >= 90) {
+      suggestions.push({
+        type: "warning",
+        priority: "high",
+        message: `Context usage at ${utilizationPercent.toFixed(0)}% - consider compacting history`,
+      })
+    } else if (utilizationPercent >= 75) {
+      suggestions.push({
+        type: "warning",
+        priority: "medium",
+        message: `Context usage at ${utilizationPercent.toFixed(0)}% - monitor usage closely`,
+      })
+    }
+
+    // History compaction suggestions
+    const recentHistory = this.usageHistory.slice(-10)
+    const avgHistoryTokens = recentHistory.length > 0 
+      ? recentHistory.reduce((sum, entry) => sum + entry.breakdown.history, 0) / recentHistory.length 
+      : 0
+
+    if (avgHistoryTokens > this.tokenLimit * 0.3) {
+      const estimatedSavings = avgHistoryTokens * 0.5
+      suggestions.push({
+        type: "compact",
+        priority: "medium",
+        message: `History averages ${avgHistoryTokens.toFixed(0)} tokens - compaction could save ~${estimatedSavings.toFixed(0)} tokens`,
+        estimatedSavings,
+      })
+    }
+
+    return suggestions
+  }
+
   /**
    * Set the history retention period in days.
    */

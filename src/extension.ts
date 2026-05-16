@@ -41,11 +41,16 @@ import {
   registerCheckCliCommand,
   registerExportCommand,
   registerStopCommand,
+  registerGenerateAgentsMdCommand,
 } from "./commands"
+import { MethodologyOrchestrator, OutcomeTracker, type AdvisoryOrchestrationResult } from "./methodology"
 
 let sessionManager: SessionManager
 let sessionStore: SessionStore
 let chatProviderInstance: ChatProvider | undefined
+let methodologyOrchestrator: MethodologyOrchestrator | undefined
+let outcomeTracker: OutcomeTracker | undefined
+let methodologyStatusItem: vscode.StatusBarItem | undefined
 
 export async function activate(context: vscode.ExtensionContext) {
   try {
@@ -119,6 +124,9 @@ sessionManager = new SessionManager(mcpServerManager)
 
     // Connection status bar (must come after sessionStore is created)
     const connectionStatus = initConnectionStatusBar(context, sessionManager, sessionStore, modelManager)
+
+    // Methodology system — orchestrator + outcome tracker + status bar
+    const methStatus = initMethodology(context)
 
     // Auto-start server so user doesn't see disconnected state after reload
     void sessionManager.start().catch(err => log.warn("Auto-start server failed", err))
@@ -374,6 +382,69 @@ function registerCoreCommands(
   registerAddFileToSessionCommand(context, chatProvider)
   registerAddSelectionToSessionCommand(context, chatProvider)
   registerStopCommand(context, chatProvider)
+  registerGenerateAgentsMdCommand(context)
+}
+
+function initMethodology(context: vscode.ExtensionContext): vscode.StatusBarItem {
+  const methConfig = vscode.workspace.getConfiguration('opencode.methodology')
+
+  outcomeTracker = new OutcomeTracker(
+    context.globalState.get('opencode-methodology-outcomes') as import('./methodology').OutcomeEvent[] | undefined
+  )
+  outcomeTracker.setPersistenceFn((events) => {
+    void context.globalState.update('opencode-methodology-outcomes', events)
+  })
+
+  methodologyOrchestrator = new MethodologyOrchestrator({
+    config: {
+      enabled: methConfig.get<boolean>('enabled', true),
+      cascade: {
+        enabled: methConfig.get<boolean>('cascadeEnabled', true),
+        maxEscalations: methConfig.get<number>('maxEscalations', 2),
+        qualityThresholds: {},
+      },
+      prompting: {
+        defaultStrategy: methConfig.get<string>('defaultStrategy', 'hierarchical-cot') as import('./methodology').PromptStrategy,
+        maxRefinementPasses: 3,
+        contextBudget: 8000,
+      },
+    },
+  })
+
+  methodologyOrchestrator.getCatalog().setOutcomeTracker(outcomeTracker)
+
+  const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 98)
+  statusItem.name = 'OpenCode Methodology'
+  statusItem.text = '$(lightbulb) —'
+  statusItem.tooltip = 'OpenCode Methodology — click to configure'
+  statusItem.command = {
+    command: 'workbench.action.openSettings',
+    title: 'Open Settings',
+    arguments: ['opencode.methodology'],
+  }
+  statusItem.show()
+  context.subscriptions.push(statusItem)
+  methodologyStatusItem = statusItem
+
+  return statusItem
+}
+
+export function updateMethodologyStatus(result: AdvisoryOrchestrationResult): void {
+  if (!methodologyStatusItem) return
+  const conf = result.methodology.confidence
+  const label = `${result.methodology.methodology}`
+  const tier = result.advisory.recommendedTier
+  methodologyStatusItem.text = `$(lightbulb) ${label} · ${tier}`
+  const confPct = (conf * 100).toFixed(0)
+  methodologyStatusItem.tooltip = `Methodology: ${label}\nConfidence: ${confPct}%\nRecommended tier: ${tier}\n${result.advisory.reasoning}\n\nClick to configure`
+}
+
+export function getMethodologyOrchestrator(): MethodologyOrchestrator | undefined {
+  return methodologyOrchestrator
+}
+
+export function getOutcomeTracker(): OutcomeTracker | undefined {
+  return outcomeTracker
 }
 
 function registerChatProvider(context: vscode.ExtensionContext, chatProvider: ChatProvider): void {

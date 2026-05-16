@@ -1,7 +1,7 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-05-12
-**Version:** v0.2.6 (UI polish: back button, modal focus traps, keyboard nav, theme undo state)
+**Last Updated:** 2026-05-16
+**Version:** v0.2.7 (Context optimization + skill performance tracking)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
 
@@ -60,6 +60,10 @@
 | 33 | Settings Menu Keyboard Nav | ✅ | ArrowUp/Down, Home, End, Escape navigation |
 | 34 | Theme Customizer Undo State | ✅ | Save/reset push theme state onto undo stack |
 | 35 | Session Recovery Re-push | ✅ | `sessions_recovered` event triggers `pushInitStateToWebview` |
+| 36 | Context Optimization Suggestions | ✅ | `ContextMonitor.generateOptimizationSuggestions()` exposed via webview; WebviewEventRouter now calls it on context_suggestions_request |
+| 37 | Skills Performance Tracking UI | ✅ | `SkillInfo` extended with `performanceScore`, `usageCount`, `lastUsed`; skills modal displays metrics when available |
+| 38 | Context Optimization UI Display | ⏳ | Backend exposed, pending webview panel integration to display suggestions to users |
+| 39 | Skill Usage Recording Integration | ⏳ | ConfidenceScorer infrastructure exists, pending integration with actual skill invocation points (architectural work required) |
 
 ## Deferred (P2 — High Effort / Niche)
 
@@ -67,12 +71,14 @@
 |---|---------|--------|
 | 17 | Voice Input | Niche (P2), requires Web Speech API or VS Code speech extension |
 | 18 | Workspace Indexing | Very High effort — needs persistent embedding index, server-side support |
+| 38 | Context Optimization UI Display | Backend exposed via WebviewEventRouter, pending webview panel integration to display suggestions |
+| 39 | Skill Usage Recording Integration | ConfidenceScorer infrastructure exists, requires architectural work to identify and integrate with actual skill invocation points |
 
 ## Architecture
 
 22 components across 4 layers:
 
-- **Extension Host**: ChatProvider, TabManager, SessionStore, SessionManager, StreamCoordinator, MessageRouter, DiffHandler, ChunkBatcher, ContextEngine, ContextMonitor, ModelManager, RateLimitMonitor, CheckpointManager, ThemeManager, PromptManager, SessionExporter, InlineActionProvider, TerminalBridge, CliDiagnostics, DiffApplier, EventNormalizer
-- **Webview**: State, Renderer, DOM, Tabs, Model Dropdown, Mentions, Stream, Scroll Anchor, Theme, Recent Sessions, Search, Slash Autocomplete
+- **Extension Host**: ChatProvider, TabManager, SessionStore, SessionManager, StreamCoordinator, MessageRouter, DiffHandler, ChunkBatcher, ContextEngine, ContextMonitor (with optimization suggestions), ModelManager, RateLimitMonitor, CheckpointManager, ThemeManager, PromptManager, SessionExporter, InlineActionProvider, TerminalBridge, CliDiagnostics, DiffApplier, EventNormalizer
+- **Webview**: State, Renderer, DOM, Tabs, Model Dropdown, Mentions, Stream, Scroll Anchor, Theme, Recent Sessions, Search, Slash Autocomplete, Skills Modal (with performance metrics display)
 - **Communication**: @opencode-ai/sdk (REST + SSE over localhost)
 - **Server**: opencode serve (HTTP, multi-session)

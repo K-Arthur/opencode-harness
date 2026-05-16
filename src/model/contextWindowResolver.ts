@@ -60,7 +60,7 @@ function stripProvider(key: string): string {
 /**
  * Look up a context window with progressively looser matching:
  *   1. Exact (lowercase) key match
- *   2. Lookup by id, ignoring provider prefix
+ *   2. Lookup by id, ignoring provider prefix (only if no exact match found)
  *   3. Lookup by separator-collapsed id (treats "3.6" / "3-6" / "36" as equal)
  */
 export function findKnownContextWindow(modelKey: string): number | undefined {
@@ -92,7 +92,8 @@ export interface ResolveOptions {
  * Rules:
  *   - If the server reported nothing usable, return the known value (or undefined).
  *   - If the server value disagrees with the known value by more than 50%,
- *     the server is presumed wrong (stale config) and we use the known value.
+ *     the server is presumed wrong (stale config) and we use the known value,
+ *     UNLESS the modelKey provider is "opencode" (server override is trusted).
  *   - Otherwise we trust the server.
  */
 export function resolveContextWindow(
@@ -102,6 +103,13 @@ export function resolveContextWindow(
 ): number | undefined {
   const known = findKnownContextWindow(modelKey)
   if (!serverValue || serverValue <= 0) return known ?? undefined
+  
+  // Special case: if provider is "opencode", trust server value over known
+  const modelProvider = modelKey.split("/")[0]?.toLowerCase()
+  if (modelProvider === "opencode") {
+    return serverValue
+  }
+  
   if (known && Math.abs(serverValue - known) / known > 0.5) {
     options?.log?.(
       `Context window for ${modelKey}: server reports ${serverValue.toLocaleString()}, known is ${known.toLocaleString()} — using known value`,

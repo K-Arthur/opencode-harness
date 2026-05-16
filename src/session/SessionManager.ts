@@ -792,9 +792,10 @@ export class SessionManager {
           log.warn("SSE event missing string `type` after parser unwrap — dropping")
           continue
         }
-        // Skip per-chunk and heartbeat noise — these can fire 100+ times per response
+        // Skip per-chunk, heartbeat, and high-frequency noise — these can fire 100+ times per response
         // and drown out useful signal. State transitions still log via handleSdkEvent.
-        if (event.type !== "message.part.delta" && event.type !== "server.heartbeat") {
+        if (event.type !== "message.part.delta" && event.type !== "server.heartbeat" && 
+            event.type !== "message.part.updated" && event.type !== "sync") {
           log.debug(`SSE event: ${event.type} props=${JSON.stringify(event.properties ?? {}).slice(0, 200)}`)
         }
         this.handleSdkEvent(event as unknown as SdkEvent)

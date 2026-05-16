@@ -161,6 +161,10 @@
       {
         "command": "opencode-harness.quickChat",
         "title": "OpenCode: Quick Chat"
+      },
+      {
+        "command": "opencode-harness.generateAgentsMd",
+        "title": "OpenCode: Generate AGENTS.md"
       }
     ],
     "keybindings": [
@@ -837,6 +841,7 @@
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "jsdom": "^29.1.1",
+    "@types/jsdom": "^28.0.3",
     "mocha": "^11.3.0",
     "typescript": "^5.7.0"
   },

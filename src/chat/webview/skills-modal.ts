@@ -165,6 +165,28 @@ function renderSkillsList(container: HTMLElement, skills: SkillInfo[], options: 
       content.appendChild(category)
     }
 
+    // Performance metrics
+    if (skill.performanceScore !== undefined || skill.usageCount !== undefined) {
+      const metrics = document.createElement("div")
+      metrics.className = "skill-item-metrics"
+
+      if (skill.performanceScore !== undefined) {
+        const score = document.createElement("span")
+        score.className = "skill-item-score"
+        score.textContent = `Score: ${(skill.performanceScore * 100).toFixed(0)}%`
+        metrics.appendChild(score)
+      }
+
+      if (skill.usageCount !== undefined) {
+        const usage = document.createElement("span")
+        usage.className = "skill-item-usage"
+        usage.textContent = `Used: ${skill.usageCount}x`
+        metrics.appendChild(usage)
+      }
+
+      content.appendChild(metrics)
+    }
+
     item.appendChild(toggle)
     item.appendChild(content)
     list.appendChild(item)

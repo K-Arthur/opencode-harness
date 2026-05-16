@@ -14,6 +14,8 @@ import type { Block, ChatMessage } from "../types"
 import { StreamFinalizerService } from "./StreamFinalizerService"
 import { MethodologyAdvisor, type MethodologyAdvice } from "../../methodology/MethodologyAdvisor"
 import { classifyTool } from "./toolClassifier"
+import type { AdvisoryOrchestrationResult } from "../../methodology/MethodologyOrchestrator"
+import { updateMethodologyStatus, getMethodologyOrchestrator } from "../../extension"
 
 export interface StreamCallbacks {
   postMessage: (msg: Record<string, unknown>) => void
@@ -132,6 +134,16 @@ export class StreamCoordinator {
 
       parts.push({ type: "text", text: advice.promptAddendum })
       log.info(`[methodology] tab=${tabId.slice(0, 8)} ${advice.signature} (conf=${advice.selection.confidence.toFixed(2)})`)
+
+      // Update status bar via orchestrator advisory if available
+      try {
+        const orchestrator = getMethodologyOrchestrator()
+        if (orchestrator && orchestrator.getConfig().enabled) {
+          const result = orchestrator.advise(text, { hasImageAttachment: false })
+          updateMethodologyStatus(result)
+        }
+      } catch { /* best-effort status update */ }
+
       return advice
     } catch (err) {
       // Methodology advice is best-effort. Never break the user's send path.
@@ -785,7 +797,10 @@ export class StreamCoordinator {
       // saturating the message channel and worsening recovery.
       const lastRerenderSeq = this.lastForceRerenderSeqs.get(tabId) || 0
       if (seq - ackedSeq > 2 && seq > lastRerenderSeq) {
-        log.warn(`Heartbeat: tab ${tabId} missed ${seq - ackedSeq} pings, sending force_rerender (seq=${seq})`)
+        // Only log the first missed ping to avoid spamming the output
+        if (seq - ackedSeq === 3) {
+          log.warn(`Heartbeat: tab ${tabId} missed ${seq - ackedSeq} pings, sending force_rerender (seq=${seq})`)
+        }
         const fullText = tab.streamingBuffer || ""
         callbacks.postMessage({
           type: "force_rerender",
