@@ -1,6 +1,7 @@
 import * as vscode from "vscode"
 import { log } from "../utils/outputChannel"
 import { ProviderConfigManager } from "./ProviderConfigManager"
+import { resolveContextWindow } from "./contextWindowResolver"
 
 export interface ModelInfo {
   id: string
@@ -89,7 +90,7 @@ export class ModelManager {
     const target = modelId || this._current
     if (!target) return undefined
     const info = this._models.find(m => `${m.provider}/${m.id}` === target)
-    return info?.contextWindow
+    return resolveContextWindow(target, info?.contextWindow, { log: (m) => log.info(m) })
   }
 
   setModel(modelId: string): void {
@@ -161,12 +162,13 @@ export class ModelManager {
           const reasoning = m.reasoning === true || 
                             (m.name && (m.name.includes("Thinking") || m.name.includes("Reasoning") || m.name.includes("O1"))) ||
                             (m.id && (m.id.includes("thinking") || m.id.includes("reasoning") || m.id.includes("o1")))
+          const modelKey = `${provider.id}/${m.id}`
           
           models.push({
             id: m.id,
             provider: provider.id,
             displayName: m.name || m.id,
-            contextWindow: m.limit?.context || undefined,
+            contextWindow: resolveContextWindow(modelKey, m.limit?.context, { log: (msg) => log.info(msg) }),
             outputLimit: m.limit?.output || undefined,
             supportsVariants: !!reasoning,
           })
@@ -302,10 +304,11 @@ export class ModelManager {
         const fullId = `${m.provider}/${m.id}`
         const isCurrent = fullId === this._current
         const unavailableSuffix = m.available === false ? " (unavailable)" : ""
+        const effectiveContext = resolveContextWindow(fullId, m.contextWindow)
         items.push({
           label: m.displayName + unavailableSuffix,
           description: isCurrent ? "● Current" : "",
-          detail: m.contextWindow ? `${m.contextWindow.toLocaleString()} tokens` : "",
+          detail: effectiveContext ? `${effectiveContext.toLocaleString()} tokens` : "",
           fullId,
         })
       }

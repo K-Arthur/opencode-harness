@@ -82,6 +82,20 @@ it("renders_tool_call_with_dynamic_states", () => {
     assert.ok(source.includes("diff-btn--open"), "must have open file button")
   })
 
+  it("open_file_button_posts_routable_open_file_message", () => {
+    // The 'diff:openFile' message type has no handler in WebviewEventRouter,
+    // so clicking the button silently did nothing. The button must post
+    // 'open_file' (which IS routed and handles paths/line numbers correctly).
+    assert.ok(
+      source.includes("type: 'open_file'") || source.includes('type: "open_file"'),
+      "Open File button must post 'open_file' message that WebviewEventRouter routes",
+    )
+    assert.ok(
+      !source.includes("'diff:openFile'") && !source.includes('"diff:openFile"'),
+      "must not post the unrouted 'diff:openFile' message",
+    )
+  })
+
   it("thinking_block_uses_details_element", () => {
     assert.ok(source.includes("document.createElement(\"details\")"), "thinking block must use details element")
     assert.ok(source.includes("BRAIN_SVG"), "must have brain icon for thinking")

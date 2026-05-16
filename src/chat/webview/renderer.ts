@@ -926,11 +926,12 @@ function renderNewDiffBlock(block: Block, opts: RenderOptions): HTMLElement | nu
     const openBtn = document.createElement("button")
     openBtn.className = "diff-btn diff-btn--open"
     openBtn.textContent = "Open File"
+    openBtn.setAttribute("aria-label", `Open ${diffBlock.path} in editor`)
     openBtn.addEventListener("click", (e) => {
       e.stopPropagation()
       const postMessage = opts.postMessage
-      if (postMessage) {
-        postMessage({ type: 'diff:openFile', path: diffBlock.path })
+      if (postMessage && diffBlock.path) {
+        postMessage({ type: 'open_file', path: diffBlock.path })
       }
     })
     actionBar.appendChild(openBtn)
