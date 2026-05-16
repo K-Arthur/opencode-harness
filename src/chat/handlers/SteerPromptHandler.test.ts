@@ -1,70 +1,191 @@
-import { describe, it, mock } from "node:test"
+import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
-import { resolve } from "node:path"
+import Module from "node:module"
+import type { SteerPrompt } from "../webview/types"
 
-const source = readFileSync(resolve(__dirname, "SteerPromptHandler.ts"), "utf8")
+// SteerPromptHandler transitively imports `vscode` via `outputChannel`. In a
+// pure node test runner the `vscode` module doesn't exist, so we install a
+// minimal CJS shim into the loader cache before requiring the handler.
+const ModuleAny = Module as unknown as {
+  _resolveFilename: (id: string, parent: NodeModule, ...rest: unknown[]) => string
+  _cache: Record<string, { id: string; exports: unknown; loaded: boolean }>
+}
+const originalResolve = ModuleAny._resolveFilename
+ModuleAny._resolveFilename = function (id: string, parent: NodeModule, ...rest: unknown[]) {
+  if (id === "vscode") return "vscode-stub"
+  return originalResolve.call(this, id, parent, ...rest)
+}
+ModuleAny._cache["vscode-stub"] = {
+  id: "vscode-stub",
+  loaded: true,
+  exports: {
+    window: {
+      createOutputChannel: () => ({
+        appendLine: () => {},
+        append: () => {},
+        show: () => {},
+        dispose: () => {},
+      }),
+      showInformationMessage: () => Promise.resolve(undefined),
+      showWarningMessage: () => Promise.resolve(undefined),
+      showErrorMessage: () => Promise.resolve(undefined),
+    },
+    workspace: { getConfiguration: () => ({ get: () => undefined }) },
+    env: { openExternal: () => Promise.resolve(false) },
+    Uri: { parse: (s: string) => ({ toString: () => s }) },
+  },
+}
 
-describe("SteerPromptHandler.ts", () => {
-  it("exports SteerPromptHandler class", () => {
-    assert.ok(source.includes("export class SteerPromptHandler"), "SteerPromptHandler class must be exported")
+const { SteerPromptHandler } = require("./SteerPromptHandler") as typeof import("./SteerPromptHandler")
+
+type Captured = Record<string, unknown>[]
+
+function makeCallbacks() {
+  const posted: Captured = []
+  const errors: { message: string; sessionId?: string }[] = []
+  return {
+    posted,
+    errors,
+    postMessage: (msg: Record<string, unknown>) => { posted.push(msg) },
+    postRequestError: (message: string, sessionId?: string) => { errors.push({ message, sessionId }) },
+  }
+}
+
+function makeStreamCoordinator(overrides: Partial<Record<string, (...args: unknown[]) => unknown>> = {}) {
+  const calls: { name: string; args: unknown[] }[] = []
+  const stub = (name: string, fn?: (...args: unknown[]) => unknown) =>
+    async (...args: unknown[]) => {
+      calls.push({ name, args })
+      return fn ? fn(...args) : undefined
+    }
+  const sc = {
+    abort: stub("abort", overrides.abort),
+    startPrompt: stub("startPrompt", overrides.startPrompt),
+    registerAppendCallback: ((sessionId: string, cb: () => Promise<void>) => {
+      calls.push({ name: "registerAppendCallback", args: [sessionId, cb] })
+    }) as unknown as (sessionId: string, cb: () => Promise<void>) => void,
+    calls,
+  }
+  return sc
+}
+
+function makeSessionStore(sessions: Record<string, unknown> = {}) {
+  return {
+    get(id: string) {
+      return sessions[id]
+    },
+  } as unknown as import("../../session/SessionStore").SessionStore
+}
+
+describe("SteerPromptHandler.sendSteerPrompt", () => {
+  let callbacks: ReturnType<typeof makeCallbacks>
+  let coord: ReturnType<typeof makeStreamCoordinator>
+  let handler: InstanceType<typeof SteerPromptHandler>
+
+  beforeEach(() => {
+    callbacks = makeCallbacks()
+    coord = makeStreamCoordinator()
+    handler = new SteerPromptHandler(
+      coord as unknown as import("./StreamCoordinator").StreamCoordinator,
+      makeSessionStore({ "session-1": { id: "session-1" } }),
+    )
   })
 
-  it("has constructor accepting StreamCoordinator, SessionStore, and SessionManager", () => {
-    assert.ok(source.includes("constructor("), "must have constructor")
-    assert.ok(source.includes("streamCoordinator: StreamCoordinator"), "constructor must accept StreamCoordinator")
-    assert.ok(source.includes("sessionStore: SessionStore"), "constructor must accept SessionStore")
-    assert.ok(source.includes("sessionManager: SessionManager"), "constructor must accept SessionManager")
+  describe("validation", () => {
+    it("posts an error and returns when sessionId is missing", async () => {
+      const prompt: SteerPrompt = { id: "p1", text: "redirect", mode: "interrupt", attachments: [], timestamp: 1, sessionId: "session-1" }
+      await handler.sendSteerPrompt("", prompt, callbacks)
+      assert.equal(callbacks.errors.length, 1)
+      assert.match(callbacks.errors[0]!.message, /Session ID is required/)
+      assert.equal(coord.calls.length, 0)
+    })
+
+    it("posts an error when steer text is empty/whitespace", async () => {
+      const prompt: SteerPrompt = { id: "p1", text: "   ", mode: "interrupt", attachments: [], timestamp: 1, sessionId: "session-1" }
+      await handler.sendSteerPrompt("session-1", prompt, callbacks)
+      assert.equal(callbacks.errors.length, 1)
+      assert.match(callbacks.errors[0]!.message, /cannot be empty/)
+      assert.equal(coord.calls.length, 0)
+    })
+
+    it("posts an error when the session is not found", async () => {
+      const prompt: SteerPrompt = { id: "p1", text: "redirect", mode: "interrupt", attachments: [], timestamp: 1, sessionId: "session-1" }
+      await handler.sendSteerPrompt("unknown-session", prompt, callbacks)
+      assert.equal(callbacks.errors.length, 1)
+      assert.match(callbacks.errors[0]!.message, /Session not found/)
+    })
+
+    it("posts an error for unknown steer mode", async () => {
+      const prompt = { id: "p1", text: "redirect", mode: "unknown" as unknown as "interrupt", attachments: [], timestamp: 1, sessionId: "session-1" }
+      await handler.sendSteerPrompt("session-1", prompt as SteerPrompt, callbacks)
+      assert.equal(callbacks.errors.length, 1)
+      assert.match(callbacks.errors[0]!.message, /Unknown steer mode/)
+    })
   })
 
-  it("has sendSteerPrompt method", () => {
-    assert.ok(source.includes("async sendSteerPrompt("), "must have sendSteerPrompt method")
-    assert.ok(source.includes("sessionId: string"), "sendSteerPrompt must accept sessionId")
-    assert.ok(source.includes("steerPrompt:"), "sendSteerPrompt must accept steerPrompt")
-    assert.ok(source.includes("callbacks: StreamCallbacks"), "sendSteerPrompt must accept callbacks")
+  describe("interrupt mode", () => {
+    it("aborts the current stream and starts a new prompt", async () => {
+      const prompt: SteerPrompt = { id: "p1", text: "redirect", mode: "interrupt", attachments: [], timestamp: 1, sessionId: "session-1" }
+      await handler.sendSteerPrompt("session-1", prompt, callbacks)
+      assert.deepEqual(coord.calls.map(c => c.name), ["abort", "startPrompt"])
+      const startArgs = coord.calls[1]!.args
+      assert.equal(startArgs[0], "session-1")
+      assert.equal(startArgs[1], "redirect")
+    })
+
+    it("surfaces errors thrown by the stream coordinator", async () => {
+      const failing = makeStreamCoordinator({
+        abort: () => { throw new Error("boom") },
+      })
+      const h = new SteerPromptHandler(
+        failing as unknown as import("./StreamCoordinator").StreamCoordinator,
+        makeSessionStore({ "session-1": { id: "session-1" } }),
+      )
+      const prompt: SteerPrompt = { id: "p1", text: "redirect", mode: "interrupt", attachments: [], timestamp: 1, sessionId: "session-1" }
+      await h.sendSteerPrompt("session-1", prompt, callbacks)
+      assert.equal(callbacks.errors.length, 1)
+      assert.match(callbacks.errors[0]!.message, /Failed to send steer prompt/)
+    })
   })
 
-  it("has handleInterrupt method", () => {
-    assert.ok(source.includes("private async handleInterrupt("), "must have handleInterrupt method")
-    assert.ok(source.includes("await this.streamCoordinator.abort("), "handleInterrupt must call abort")
+  describe("append mode", () => {
+    it("registers a callback to fire after the current stream ends", async () => {
+      const prompt: SteerPrompt = { id: "p1", text: "and another thing", mode: "append", attachments: [], timestamp: 1, sessionId: "session-1" }
+      await handler.sendSteerPrompt("session-1", prompt, callbacks)
+      assert.equal(coord.calls.length, 1)
+      assert.equal(coord.calls[0]!.name, "registerAppendCallback")
+      assert.equal(coord.calls[0]!.args[0], "session-1")
+    })
+
+    it("the registered callback sends the prompt when invoked", async () => {
+      const prompt: SteerPrompt = { id: "p1", text: "and another thing", mode: "append", attachments: [], timestamp: 1, sessionId: "session-1" }
+      await handler.sendSteerPrompt("session-1", prompt, callbacks)
+      const cb = coord.calls[0]!.args[1] as () => Promise<void>
+      await cb()
+      const last = coord.calls[coord.calls.length - 1]!
+      assert.equal(last.name, "startPrompt")
+      assert.equal(last.args[1], "and another thing")
+    })
   })
 
-  it("has handleAppend method", () => {
-    assert.ok(source.includes("private async handleAppend("), "must have handleAppend method")
-    assert.ok(source.includes("registerAppendCallback"), "handleAppend must use registerAppendCallback")
-  })
-
-  it("has handleQueue method", () => {
-    assert.ok(source.includes("private async handleQueue("), "must have handleQueue method")
-  })
-
-  it("has trackSteerPrompt method", () => {
-    assert.ok(source.includes("private trackSteerPrompt("), "must have trackSteerPrompt method")
-  })
-
-  it("handles interrupt mode by calling streamCoordinator.abort", () => {
-    assert.ok(source.includes('case "interrupt":'), "must handle interrupt mode")
-    assert.ok(source.includes("await this.handleInterrupt"), "must call handleInterrupt for interrupt mode")
-  })
-
-  it("handles append mode by calling registerAppendCallback", () => {
-    assert.ok(source.includes('case "append":'), "must handle append mode")
-    assert.ok(source.includes("await this.handleAppend"), "must call handleAppend for append mode")
-  })
-
-  it("handles queue mode by calling handleQueue", () => {
-    assert.ok(source.includes('case "queue":'), "must handle queue mode")
-    assert.ok(source.includes("await this.handleQueue"), "must call handleQueue for queue mode")
-  })
-
-  it("has unknown mode handling with warning", () => {
-    assert.ok(source.includes("default:"), "must have default case for unknown modes")
-    assert.ok(source.includes("log.warn"), "must warn on unknown mode")
-  })
-
-  it("queue mode posts message to webview instead of sending immediately", () => {
-    assert.ok(source.includes('case "queue":'), "must handle queue mode")
-    assert.ok(source.includes("postMessage"), "queue mode should post message to webview")
-    assert.ok(!source.includes("sending immediately as fallback"), "queue mode should not use fallback")
+  describe("queue mode", () => {
+    it("posts an add_to_queue message to the webview with the steer flag set", async () => {
+      const prompt: SteerPrompt = {
+        id: "p1",
+        text: "queue me",
+        mode: "queue",
+        attachments: [{ data: "x", mimeType: "image/png" }], timestamp: 1, sessionId: "session-1",
+      }
+      await handler.sendSteerPrompt("session-1", prompt, callbacks)
+      assert.equal(callbacks.posted.length, 1)
+      const msg = callbacks.posted[0]!
+      assert.equal(msg.type, "add_to_queue")
+      assert.equal(msg.sessionId, "session-1")
+      assert.equal(msg.text, "queue me")
+      assert.equal(msg.isSteerPrompt, true)
+      assert.deepEqual(msg.attachments, [{ data: "x", mimeType: "image/png" }])
+      // Queue mode does NOT touch the stream coordinator
+      assert.equal(coord.calls.length, 0)
+    })
   })
 })

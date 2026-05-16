@@ -154,7 +154,7 @@ export function appendToolTiming(parent: HTMLElement, toolBlock: ToolCallBlock):
   } else if (toolState === 'running' || toolState === 'pending') {
     const elapsed = document.createElement("span")
     elapsed.className = "tool-elapsed"
-    elapsed.dataset.startTime = String(Date.now())
+    elapsed.dataset.blockId = toolBlock.id
     elapsed.textContent = "0s"
     parent.appendChild(elapsed)
   }
@@ -195,6 +195,41 @@ export function createToolArgsPanel(toolBlock: ToolCallBlock): HTMLElement | nul
   return argsDiv
 }
 
+function isDiffContent(text: string): boolean {
+  const lines = text.split("\n")
+  let added = 0
+  let removed = 0
+  for (const line of lines) {
+    if (line.startsWith("+") && !line.startsWith("++")) added++
+    else if (line.startsWith("-") && !line.startsWith("--")) removed++
+  }
+  return added + removed >= 3 && added > 0 && removed > 0
+}
+
+function renderDiffBody(text: string): { fragment: DocumentFragment; added: number; removed: number } {
+  const fragment = document.createDocumentFragment()
+  let added = 0
+  let removed = 0
+  const lines = text.split("\n")
+  for (const line of lines) {
+    const span = document.createElement("span")
+    if (line.startsWith("+") && !line.startsWith("++")) {
+      span.className = "diff-line diff-line--added"
+      added++
+    } else if (line.startsWith("-") && !line.startsWith("--")) {
+      span.className = "diff-line diff-line--removed"
+      removed++
+    } else if (line.startsWith("@@")) {
+      span.className = "diff-line diff-line--hunk"
+    } else {
+      span.className = "diff-line diff-line--context"
+    }
+    span.textContent = line + "\n"
+    fragment.appendChild(span)
+  }
+  return { fragment, added, removed }
+}
+
 export function createToolResultPanel(toolBlock: ToolCallBlock): HTMLElement | null {
   const toolState = toolBlock.state || 'running'
   const isTerminal = toolState === 'result' || toolState === 'completed' || toolState === 'stale' || toolState === 'error'
@@ -206,32 +241,55 @@ export function createToolResultPanel(toolBlock: ToolCallBlock): HTMLElement | n
   resultDiv.className = isErrorPanel ? "tool-result-panel tool-result-panel--error" : "tool-result-panel"
   const rawOutput = toolBlock.result !== undefined ? toolBlock.result : toolBlock.error
   const resultText = typeof rawOutput === 'string' ? rawOutput : JSON.stringify(rawOutput, null, 2)
-  const lines = resultText.split("\n")
-  const truncated = resultText.length > 2000 || lines.length > 40
-  const displayResult = truncated ? lines.slice(0, 40).join("\n").slice(0, 2000) : resultText
+
+  const isDiff = !isErrorPanel && isDiffContent(resultText)
+
   const meta = document.createElement("div")
   meta.className = "tool-result-meta"
-  meta.textContent = `${formatOutputSize(resultText.length)}${lines.length > 1 ? `, ${lines.length} lines` : ""}`
-  resultDiv.appendChild(meta)
-  const body = document.createElement("pre")
-  body.className = "tool-result-body"
-  body.textContent = displayResult
-  resultDiv.appendChild(body)
-  if (truncated) {
-    const more = document.createElement("button")
-    more.className = "tool-show-more"
-    more.textContent = "Show full"
-    more.addEventListener("click", () => {
-      body.textContent = resultText
-      more.remove()
-    })
-    resultDiv.appendChild(more)
+  const lines = resultText.split("\n")
+  let metaText = `${formatOutputSize(resultText.length)}${lines.length > 1 ? `, ${lines.length} lines` : ""}`
+
+  if (isDiff) {
+    const body = document.createElement("pre")
+    body.className = "tool-result-body tool-result-body--diff"
+    const { fragment, added, removed } = renderDiffBody(resultText)
+    body.appendChild(fragment)
+    metaText += ` · +${added}/-${removed}`
+    resultDiv.appendChild(meta)
+    meta.textContent = metaText
+    resultDiv.appendChild(body)
+  } else {
+    const truncated = resultText.length > 2000 || lines.length > 40
+    const displayResult = truncated ? lines.slice(0, 40).join("\n").slice(0, 2000) : resultText
+    meta.textContent = metaText
+    resultDiv.appendChild(meta)
+    const body = document.createElement("pre")
+    body.className = "tool-result-body"
+    body.textContent = displayResult
+    resultDiv.appendChild(body)
+    if (truncated) {
+      const more = document.createElement("button")
+      more.className = "tool-show-more"
+      more.textContent = "Show full"
+      more.addEventListener("click", () => {
+        body.textContent = resultText
+        more.remove()
+      })
+      resultDiv.appendChild(more)
+    }
   }
   return resultDiv
 }
 
 export function renderToolCallBlock(block: Block, opts: RenderOptions): HTMLElement | null {
   const toolBlock = normalizeToolBlock(block)
+
+  // Check if this is a plan file write
+  const planData = detectPlanFile(toolBlock)
+  if (planData) {
+    return renderPlanCard(planData, opts)
+  }
+
   const details = createToolDetailsContainer(toolBlock)
   const summary = createToolSummary(toolBlock, details)
   details.appendChild(summary)
@@ -253,6 +311,143 @@ export function extractKeyArg(args: unknown): string | null {
     if (typeof c === 'string' && c.trim()) return c.trim()
   }
   return null
+}
+
+export interface PlanData {
+  name: string
+  overview: string
+  todos: Array<{ id: string; content: string; status: string }>
+  filePath: string
+}
+
+/**
+ * Detect if a tool call's args represent a plan file (markdown with YAML frontmatter containing todos).
+ */
+export function detectPlanFile(toolBlock: ToolCallBlock): PlanData | null {
+  // Only check write-class tools
+  if (toolBlock.class !== 'write') return null
+
+  const args = toolBlock.args
+  if (!args || typeof args !== 'object') return null
+  const a = args as Record<string, unknown>
+
+  // Check file path
+  const filePath = (a.path ?? a.file ?? a.filename ?? '') as string
+  if (!filePath || (!filePath.endsWith('.md') && !filePath.endsWith('.plan.md'))) return null
+
+  // Check content for YAML frontmatter with todos
+  const content = (a.content ?? a.text ?? a.diff ?? '') as string
+  if (!content) return null
+
+  // Look for YAML frontmatter (--- at start) with todos array
+  const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/)
+  if (!frontmatterMatch) return null
+
+  const frontmatter = frontmatterMatch[1]
+  if (!frontmatter) return null
+  const todosMatch = frontmatter.match(/todos:\s*\n((?:\s+-[\s\S]*?)+)/)
+  if (!todosMatch || !todosMatch[1]) return null
+
+  const nameMatch = frontmatter.match(/name:\s*(.+)/)
+  const overviewMatch = frontmatter.match(/overview:\s*(.+)/)
+
+  const todos: PlanData['todos'] = []
+  const todoLines = todosMatch[1].split('\n')
+  let currentTodo: PlanData['todos'][0] | null = null
+  for (const line of todoLines) {
+    const todoStart = line.match(/^\s+-\s+id:\s*(.+)/)
+    const contentMatch = line.match(/^\s+(?:-\s+)?content:\s*(.+)/)
+    const statusMatch = line.match(/^\s+(?:-\s+)?status:\s*(.+)/)
+    if (todoStart) {
+      if (currentTodo) todos.push(currentTodo)
+      currentTodo = { id: todoStart[1]?.trim() ?? '', content: '', status: 'pending' }
+    } else if (currentTodo) {
+      if (contentMatch) currentTodo.content = contentMatch[1]?.trim() ?? ''
+      if (statusMatch) currentTodo.status = statusMatch[1]?.trim() ?? 'pending'
+    }
+  }
+  if (currentTodo) todos.push(currentTodo)
+
+  if (todos.length === 0) return null
+
+  return {
+    name: nameMatch?.[1]?.trim() || filePath.split('/').pop() || 'Plan',
+    overview: overviewMatch?.[1]?.trim() || '',
+    todos,
+    filePath,
+  }
+}
+
+/**
+ * Render a plan card with open-in-editor support.
+ */
+export function renderPlanCard(plan: PlanData, opts: RenderOptions): HTMLElement {
+  const card = document.createElement("div")
+  card.className = "plan-card"
+
+  const header = document.createElement("div")
+  header.className = "plan-card-header"
+
+  const icon = document.createElement("span")
+  icon.className = "plan-card-icon"
+  icon.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>`
+  header.appendChild(icon)
+
+  const title = document.createElement("span")
+  title.className = "plan-card-title"
+  title.textContent = plan.name
+  header.appendChild(title)
+
+  const openBtn = document.createElement("button")
+  openBtn.className = "plan-card-open-btn"
+  openBtn.textContent = "Open in Editor"
+  openBtn.title = `Open ${plan.filePath} in VS Code`
+  openBtn.addEventListener("click", () => {
+    opts.postMessage?.({ type: "open_file", path: plan.filePath })
+  })
+  header.appendChild(openBtn)
+
+  card.appendChild(header)
+
+  if (plan.overview) {
+    const overview = document.createElement("div")
+    overview.className = "plan-card-overview"
+    overview.textContent = plan.overview
+    card.appendChild(overview)
+  }
+
+  const todosList = document.createElement("div")
+  todosList.className = "plan-card-todos"
+
+  for (const todo of plan.todos) {
+    const item = document.createElement("div")
+    item.className = `plan-card-todo plan-card-todo--${todo.status}`
+    const checkbox = document.createElement("span")
+    checkbox.className = "plan-card-todo-checkbox"
+    checkbox.textContent = todo.status === 'completed' ? '✓' : '○'
+    item.appendChild(checkbox)
+
+    const text = document.createElement("span")
+    text.className = "plan-card-todo-text"
+    text.textContent = todo.content
+    item.appendChild(text)
+
+    const status = document.createElement("span")
+    status.className = "plan-card-todo-status"
+    status.textContent = todo.status
+    item.appendChild(status)
+
+    todosList.appendChild(item)
+  }
+
+  card.appendChild(todosList)
+
+  const footer = document.createElement("div")
+  footer.className = "plan-card-footer"
+  footer.textContent = `${plan.todos.filter(t => t.status === 'completed').length}/${plan.todos.length} completed · ${plan.filePath}`
+  card.appendChild(footer)
+
+  return card
 }
 
 export function groupConsecutiveToolCalls(blocks: Block[], groupBy: 'consecutive' | 'name' | 'type' = 'consecutive'): Block[][] {

@@ -406,4 +406,74 @@ it("unified modal: server session items send resume_server_session on click", ()
       "stream counter must be rendered when activeStreams > 0 — not only when isFull"
     )
   })
+
+  // ── Batch 2d: tab-aware token/cost counter ────────────────────────────────
+  describe("tab-aware usage counter", () => {
+    it("uses opencode-reported cost instead of browser-side provider pricing tables", () => {
+      assert.ok(
+        !source.includes("PRICING_2026"),
+        "webview must not maintain a hard-coded provider pricing table; opencode reports authoritative cost"
+      )
+      assert.ok(
+        !source.includes("function calcCost("),
+        "webview must not recompute cost from generic OpenAI/Anthropic-style rates"
+      )
+      assert.ok(
+        !source.includes("session.cost = computedCost"),
+        "token updates must not overwrite opencode-reported cost with a browser estimate"
+      )
+    })
+
+    it("accumulateTokenUsage gates the visible token display on the active session", () => {
+      const fnIdx = source.indexOf("function accumulateTokenUsage(")
+      assert.ok(fnIdx >= 0, "accumulateTokenUsage must exist")
+      // Slice a generous window covering the whole function body
+      const body = source.slice(fnIdx, fnIdx + 2000)
+      const displayIdx = body.indexOf("updateTokenDisplay(")
+      assert.ok(displayIdx >= 0, "must call updateTokenDisplay inside accumulateTokenUsage")
+
+      // Look at the lines immediately preceding the updateTokenDisplay call —
+      // there must be a guard that compares sessionId to the active session.
+      const preceding = body.slice(0, displayIdx)
+      assert.ok(
+        /activeSessionId|getActiveSession\s*\(\s*\)/.test(preceding),
+        "accumulateTokenUsage must check activeSessionId before updating the visible token display"
+      )
+    })
+
+    it("accumulateTokenUsage gates the cost/context display on the active session", () => {
+      const fnIdx = source.indexOf("function accumulateTokenUsage(")
+      assert.ok(fnIdx >= 0, "accumulateTokenUsage must exist")
+      const body = source.slice(fnIdx, fnIdx + 2000)
+
+      // Both updateCostDisplay and updateContextBarFromSession produce
+      // visible side effects that must not bleed from an inactive tab.
+      for (const call of ["updateCostDisplay(", "updateContextBarFromSession("]) {
+        const callIdx = body.indexOf(call)
+        assert.ok(callIdx >= 0, `must call ${call} inside accumulateTokenUsage`)
+        const preceding = body.slice(0, callIdx)
+        assert.ok(
+          /activeSessionId|getActiveSession\s*\(\s*\)/.test(preceding),
+          `${call} must be gated on the active session inside accumulateTokenUsage`
+        )
+      }
+    })
+
+    it("switchTab refreshes the visible counter from the new tab's stored tokenUsage", () => {
+      // Lock in: switchTab must pull token/cost data from the tab being
+      // activated so a previously-displayed tab's totals don't bleed in.
+      const fnIdx = source.indexOf("function switchTab(")
+      assert.ok(fnIdx >= 0, "switchTab must exist")
+      const body = source.slice(fnIdx, fnIdx + 2000)
+      assert.ok(body.includes("updateTokenDisplay("), "switchTab must call updateTokenDisplay")
+      assert.ok(
+        body.includes(".tokenUsage") || body.includes("selectDisplayedUsage("),
+        "switchTab must source token data from the tab being activated"
+      )
+      assert.ok(
+        body.includes("updateCostDisplay("),
+        "switchTab must refresh cost display for the new tab"
+      )
+    })
+  })
 })

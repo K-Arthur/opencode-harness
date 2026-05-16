@@ -283,8 +283,12 @@ describe("Regression: Prompt Queue", () => {
     assert.ok(queueSrc.includes('"failed"'), "must have failed state")
   })
 
-  it("sendMessage queues during streaming instead of aborting", () => {
-    assert.ok(files.mainTs.includes("enqueuePrompt("), "must enqueue during streaming")
+  it("steer-queue mode appends to the per-tab prompt queue", () => {
+    // The queue is populated via the `add_to_queue` webview message handler
+    // which calls queue.enqueue(...). Earlier this guard checked an orphan
+    // helper that was never wired to a UI affordance.
+    assert.ok(files.mainTs.includes("queue.enqueue("), "must enqueue prompts into the per-tab queue")
+    assert.ok(files.mainTs.includes('"add_to_queue"'), "must handle add_to_queue message")
   })
 
   it("handleStreamEnd processes next queued item", () => {

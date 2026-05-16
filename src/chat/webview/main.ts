@@ -1,4 +1,4 @@
-import type { ChatMessage, HostMessage, MentionItem, SessionSummary, ModelInfo, WebviewState, ContextChip, ToolCallState } from "./types"
+import type { ChatMessage, HostMessage, MentionItem, SessionSummary, ModelInfo, WebviewState, ContextChip, ToolCallState, TokenUsageSnapshot } from "./types"
 import { createState } from "./state"
 import { getElementRefs, scrollToBottom, getActiveMessageList, toggleAllThinkingBlocks } from "./dom"
 import { renderMessage } from "./messageRenderer"
@@ -27,6 +27,8 @@ import { setupTodosPanel } from "./todos-panel"
 import { setupSkillsModal } from "./skills-modal"
 import { setupSubagentPanel } from "./subagent-panel"
 import { setupQuickSettings } from "./quick-settings"
+import { shouldRefreshOnUpdate, selectDisplayedUsage } from "./tokenDisplayPolicy"
+import { setThinkingVisible } from "./displayPrefs"
 
 declare const acquireVsCodeApi: (() => {
   postMessage(message: Record<string, unknown>): void
@@ -252,18 +254,47 @@ function getVsCodeApi() {
 
   /* ─── INIT ─── */
 
+  /* ─── PER-TOOL ELAPSED TIMERS ─── */
+
+  const toolStartTimes = new Map<string, number>()
   let toolElapsedTimer: ReturnType<typeof setInterval> | null = null
+
   function startToolElapsedTimer(): void {
     if (toolElapsedTimer) return
     toolElapsedTimer = setInterval(() => {
-      const els = Array.from(document.querySelectorAll<HTMLSpanElement>(".tool-elapsed[data-start-time]"))
-      for (const el of els) {
-        const start = Number(el.dataset.startTime || 0)
-        if (!start) continue
-        const elapsed = Math.round((Date.now() - start) / 1000)
-        el.textContent = elapsed >= 60 ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s` : `${elapsed}s`
+      const now = Date.now()
+      for (const [toolId, startTime] of toolStartTimes) {
+        const el = document.querySelector<HTMLSpanElement>(`.tool-elapsed[data-block-id="${CSS.escape(toolId)}"]`)
+        if (!el) continue
+        el.textContent = formatElapsed(now - startTime)
+      }
+      if (toolStartTimes.size === 0) {
+        stopToolElapsedTimer()
       }
     }, 1000)
+  }
+
+  function registerToolStart(toolId: string): void {
+    toolStartTimes.set(toolId, Date.now())
+    startToolElapsedTimer()
+  }
+
+  function formatElapsed(ms: number): string {
+    const total = Math.max(0, Math.round(ms / 1000))
+    return total >= 60 ? `${Math.floor(total / 60)}m ${total % 60}s` : `${total}s`
+  }
+
+  function unregisterToolEnd(toolId: string, finalMs?: number): void {
+    const startedAt = toolStartTimes.get(toolId)
+    toolStartTimes.delete(toolId)
+    const el = document.querySelector<HTMLSpanElement>(`.tool-elapsed[data-block-id="${CSS.escape(toolId)}"]`)
+    if (!el) return
+    // Prefer server-reported duration; fall back to wall-clock since start.
+    const durationMs = (typeof finalMs === "number" && finalMs >= 0)
+      ? finalMs
+      : startedAt != null ? Date.now() - startedAt : 0
+    el.textContent = formatElapsed(durationMs)
+    el.classList.add("tool-elapsed--final")
   }
 
   function stopToolElapsedTimer(): void {
@@ -313,6 +344,7 @@ function getVsCodeApi() {
       setupMessageListener()
       setupPermissionListener()
       setupDiffActionListener()
+      restoreQueues()
       setupSearch()
       setupTimelineToggle()
       setupThinkingToggle()
@@ -662,11 +694,16 @@ function getVsCodeApi() {
       modelDropdown.setCurrentModel(activeSession.model)
     }
     
-    // Refresh cost/token displays for the new tab
+    // Refresh cost/token displays for the new tab — pull from the tab's
+    // own stored usage so a previously-displayed tab's totals don't bleed in.
     updateCostDisplay(tabId)
     const session = stateManager.getSession(tabId)
-    if (session?.tokenUsage) {
-      updateTokenDisplay(session.tokenUsage)
+    const displayed = selectDisplayedUsage(stateManager.getState().sessions, tabId)
+    if (displayed) {
+      updateTokenDisplay(displayed.usage)
+      updateContextBarFromSession(tabId)
+    } else {
+      clearTokenDisplay()
     }
     // Refresh changed files list for the new tab
     if (session?.changedFiles) {
@@ -707,6 +744,7 @@ function getVsCodeApi() {
       queue.clear()
       promptQueues.delete(tabId)
     }
+    persistQueues()
     const queueContainer = els.inputArea.querySelector(".prompt-queue")
     if (queueContainer) queueContainer.remove()
 
@@ -1496,21 +1534,27 @@ function getVsCodeApi() {
     )
   }
 
-  function enqueuePrompt(text: string) {
-    const active = stateManager.getActiveSession()
-    if (!active) return
-    let queue = promptQueues.get(active.id)
-    if (!queue) {
-      queue = createPromptQueue()
-      promptQueues.set(active.id, queue)
+  function persistQueues() {
+    const state = vscode.getState()
+    if (!state) return
+    const snapshot: Record<string, QueueItem[]> = {}
+    for (const [sid, q] of promptQueues.entries()) {
+      const items = q.persist().filter(i => i.state === "queued" || i.state === "failed")
+      if (items.length > 0) snapshot[sid] = items
     }
-    const atts = pendingAttachments.splice(0)
-    renderAttachmentChips()
-    queue.enqueue(text, atts)
-    els.promptInput.value = ""
-    autoResizeTextarea()
-    updateSendButton()
-    renderQueue(active.id)
+    vscode.setState({ ...state, queues: snapshot })
+  }
+
+  function restoreQueues() {
+    const state = vscode.getState() as { queues?: Record<string, QueueItem[]> } | null | undefined
+    const snapshot = state?.queues
+    if (!snapshot) return
+    for (const [sid, items] of Object.entries(snapshot)) {
+      if (!Array.isArray(items) || items.length === 0) continue
+      const q = createPromptQueue()
+      q.restore(items)
+      promptQueues.set(sid, q)
+    }
   }
 
   function renderQueue(tabId: string) {
@@ -1525,19 +1569,29 @@ function getVsCodeApi() {
     if (!queueContainer) {
       queueContainer = document.createElement("div")
       queueContainer.className = "prompt-queue"
+      queueContainer.setAttribute("role", "list")
+      queueContainer.setAttribute("aria-label", "Queued prompts (drag to reorder, Alt+Up/Down with focus)")
       els.inputArea.insertBefore(queueContainer, els.inputWrapper)
     }
     queueContainer.replaceChildren()
     const items = queue.getItems()
     const queuedCount = items.filter((i) => i.state === "queued").length
+    const totalTokens = queue.getTotalEstimatedTokens()
 
-    // Queue header with count and clear-all
+    // Queue header — count, total estimated tokens, and clear-all
     const headerRow = document.createElement("div")
     headerRow.className = "queue-header"
     const countLabel = document.createElement("span")
     countLabel.className = "queue-count"
     countLabel.textContent = `${items.length} queued`
     headerRow.appendChild(countLabel)
+    if (totalTokens > 0) {
+      const tokenLabel = document.createElement("span")
+      tokenLabel.className = "queue-tokens"
+      tokenLabel.textContent = `~${formatTokenCount(totalTokens)} tokens`
+      tokenLabel.title = `Estimated total token cost for all queued prompts (~${totalTokens})`
+      headerRow.appendChild(tokenLabel)
+    }
     if (queuedCount > 1) {
       const clearAllBtn = document.createElement("button")
       clearAllBtn.className = "queue-clear-all"
@@ -1547,6 +1601,7 @@ function getVsCodeApi() {
         for (const item of items) {
           if (item.state === "queued") queue.remove(item.id)
         }
+        persistQueues()
         renderQueue(tabId)
       })
       headerRow.appendChild(clearAllBtn)
@@ -1557,6 +1612,23 @@ function getVsCodeApi() {
       const chip = document.createElement("div")
       chip.className = `queue-chip queue-chip--${item.state}`
       chip.dataset.queueId = item.id
+      chip.setAttribute("role", "listitem")
+
+      const isMovable = item.state === "queued" || item.state === "failed"
+      if (isMovable) {
+        chip.draggable = true
+        chip.tabIndex = 0
+        chip.setAttribute("aria-grabbed", "false")
+        chip.setAttribute("aria-label",
+          `Queued prompt ${item.position + 1} of ${items.length}: ${item.text.slice(0, 60)}`)
+
+        // Drag handle — purely visual; whole chip is the drag source
+        const handle = document.createElement("span")
+        handle.className = "queue-chip-handle"
+        handle.setAttribute("aria-hidden", "true")
+        handle.innerHTML = '<svg viewBox="0 0 24 24" width="10" height="14" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>'
+        chip.appendChild(handle)
+      }
 
       const text = document.createElement("span")
       text.className = "queue-chip-text"
@@ -1570,6 +1642,14 @@ function getVsCodeApi() {
         attBadge.textContent = `+${item.attachments.length}`
         attBadge.title = `${item.attachments.length} image attachment(s)`
         chip.appendChild(attBadge)
+      }
+
+      if ((item.estimatedTokens ?? 0) > 0 && item.state === "queued") {
+        const tokBadge = document.createElement("span")
+        tokBadge.className = "queue-chip-tokens"
+        tokBadge.textContent = `~${formatTokenCount(item.estimatedTokens!)}`
+        tokBadge.title = `~${item.estimatedTokens} estimated tokens`
+        chip.appendChild(tokBadge)
       }
 
       const badge = document.createElement("span")
@@ -1593,6 +1673,7 @@ function getVsCodeApi() {
             const newText = input.value.trim()
             if (newText) {
               queue.edit(item.id, newText)
+              persistQueues()
               renderQueue(tabId)
             }
           }
@@ -1609,6 +1690,7 @@ function getVsCodeApi() {
         removeBtn.innerHTML = REMOVE_SVG
         removeBtn.addEventListener("click", () => {
           queue.remove(item.id)
+          persistQueues()
           renderQueue(tabId)
         })
         chip.appendChild(removeBtn)
@@ -1621,6 +1703,7 @@ function getVsCodeApi() {
         retryBtn.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>'
         retryBtn.addEventListener("click", () => {
           item.state = "queued"
+          persistQueues()
           renderQueue(tabId)
         })
         chip.appendChild(retryBtn)
@@ -1631,14 +1714,147 @@ function getVsCodeApi() {
         removeBtn2.innerHTML = REMOVE_SVG
         removeBtn2.addEventListener("click", () => {
           queue.remove(item.id)
+          persistQueues()
           renderQueue(tabId)
         })
         chip.appendChild(removeBtn2)
       }
 
+      if (isMovable) {
+        wireChipReorderHandlers(chip, item.id, tabId, queue)
+      }
       queueContainer.appendChild(chip)
     }
     updateQueueSendButton()
+  }
+
+  function formatTokenCount(n: number): string {
+    if (n >= 1000) return (n / 1000).toFixed(n >= 10_000 ? 0 : 1) + "k"
+    return String(n)
+  }
+
+  /**
+   * Wire drag-and-drop and keyboard reorder for a single queue chip.
+   * Drag source = the whole chip (any pointer down anywhere reorders).
+   * Drop target = each chip; uses `dragover` to compute insertion side
+   *               (before/after the hovered chip based on cursor Y).
+   * Keyboard: Alt+ArrowUp / Alt+ArrowDown with the chip focused.
+   *           Alt+Home → moveToFront. Alt+End → moveToBack.
+   * Edge cases: refuses moves the queue rejects (sending/streaming items);
+   *             cleans up its visual state on dragend even if drop fired.
+   */
+  function wireChipReorderHandlers(
+    chip: HTMLElement,
+    itemId: string,
+    tabId: string,
+    queue: PromptQueue,
+  ) {
+    function indexOf(id: string): number {
+      return queue.getItems().findIndex(i => i.id === id)
+    }
+
+    function clearAllDropMarkers() {
+      const container = chip.parentElement
+      if (!container) return
+      for (const el of Array.from(container.querySelectorAll(".queue-chip"))) {
+        el.classList.remove("queue-chip--drop-before", "queue-chip--drop-after")
+      }
+    }
+
+    chip.addEventListener("dragstart", (e) => {
+      const dt = e.dataTransfer
+      if (!dt) return
+      dt.effectAllowed = "move"
+      dt.setData("application/x-queue-item", itemId)
+      // Some browsers will refuse the drag without ANY text/plain payload
+      dt.setData("text/plain", itemId)
+      chip.classList.add("queue-chip--dragging")
+      chip.setAttribute("aria-grabbed", "true")
+    })
+
+    chip.addEventListener("dragend", () => {
+      chip.classList.remove("queue-chip--dragging")
+      chip.setAttribute("aria-grabbed", "false")
+      clearAllDropMarkers()
+    })
+
+    chip.addEventListener("dragover", (e) => {
+      const dt = e.dataTransfer
+      if (!dt) return
+      // Only respond to our own payload — don't hijack file drags etc.
+      if (!Array.from(dt.types).includes("application/x-queue-item")) return
+      e.preventDefault()
+      dt.dropEffect = "move"
+      clearAllDropMarkers()
+      const rect = chip.getBoundingClientRect()
+      const before = e.clientY < rect.top + rect.height / 2
+      chip.classList.add(before ? "queue-chip--drop-before" : "queue-chip--drop-after")
+    })
+
+    chip.addEventListener("dragleave", () => {
+      chip.classList.remove("queue-chip--drop-before", "queue-chip--drop-after")
+    })
+
+    chip.addEventListener("drop", (e) => {
+      const dt = e.dataTransfer
+      if (!dt) return
+      const sourceId = dt.getData("application/x-queue-item")
+      if (!sourceId || sourceId === itemId) { clearAllDropMarkers(); return }
+      e.preventDefault()
+      const fromIdx = indexOf(sourceId)
+      let toIdx = indexOf(itemId)
+      if (fromIdx === -1 || toIdx === -1) { clearAllDropMarkers(); return }
+      const rect = chip.getBoundingClientRect()
+      const before = e.clientY < rect.top + rect.height / 2
+      // When dropping below the target chip, insert AFTER it
+      if (!before && fromIdx > toIdx) toIdx += 0 // moving up to (toIdx+1) wouldn't happen — clamp instead
+      if (!before && fromIdx < toIdx) toIdx -= 0 // already covers "insert after"
+      // Recompute: when moving downward and dropping after, the array shift
+      // from removing the source means the target index is unchanged. When
+      // moving downward and dropping before, target stays. When moving upward
+      // and dropping after, we want toIdx + 1; when upward dropping before, toIdx.
+      let finalTo = toIdx
+      if (fromIdx < toIdx && before) finalTo = toIdx - 1
+      if (fromIdx > toIdx && !before) finalTo = toIdx + 1
+      const ok = queue.reorder(fromIdx, finalTo)
+      clearAllDropMarkers()
+      if (ok) {
+        persistQueues()
+        renderQueue(tabId)
+        // After re-render the chip node is gone; restore focus to the moved item
+        requestAnimationFrame(() => {
+          const newChip = document.querySelector(`.queue-chip[data-queue-id="${sourceId}"]`) as HTMLElement | null
+          newChip?.focus()
+        })
+      }
+    })
+
+    chip.addEventListener("keydown", (e) => {
+      if (!e.altKey) return
+      let moved = false
+      if (e.key === "ArrowUp") {
+        const idx = indexOf(itemId)
+        moved = idx > 0 && queue.reorder(idx, idx - 1)
+      } else if (e.key === "ArrowDown") {
+        const idx = indexOf(itemId)
+        moved = idx >= 0 && queue.reorder(idx, idx + 1)
+      } else if (e.key === "Home") {
+        moved = queue.moveToFront(itemId)
+      } else if (e.key === "End") {
+        moved = queue.moveToBack(itemId)
+      } else {
+        return
+      }
+      e.preventDefault()
+      if (moved) {
+        persistQueues()
+        renderQueue(tabId)
+        requestAnimationFrame(() => {
+          const newChip = document.querySelector(`.queue-chip[data-queue-id="${itemId}"]`) as HTMLElement | null
+          newChip?.focus()
+        })
+      }
+    })
   }
 
   function updateQueueSendButton() {
@@ -2776,6 +2992,7 @@ function getVsCodeApi() {
     }) as EventListener)
   }
 
+
   /* ─── MESSAGE LISTENER ─── */
 
   function setupMessageListener() {
@@ -3043,6 +3260,7 @@ function getVsCodeApi() {
           const stream = streamHandlers.get(sid)
           if (stream) {
             const toolCall = msg.toolCall as { id: string; name: string; class?: string; args?: unknown; state?: ToolCallState }
+            registerToolStart(toolCall.id)
             stream.handleToolStart(toolCall)
           }
         }
@@ -3066,6 +3284,7 @@ function getVsCodeApi() {
           const stream = streamHandlers.get(sid)
           if (stream) {
             const result = msg.result as { id: string; ok: boolean; result?: string; durationMs?: number; stale?: boolean }
+            unregisterToolEnd(result.id, result.durationMs)
             stream.handleToolEnd(result.id, result)
           }
         }
@@ -3085,7 +3304,7 @@ function getVsCodeApi() {
         if (queueItem && isSteerPrompt) {
           queue.markAsSteer(queueItem.id)
         }
-        
+        persistQueues()
         // Render queue UI
         renderQueue(sid)
       }],
@@ -3290,12 +3509,36 @@ function getVsCodeApi() {
         handleDiffResult(msg.blockId as string, msg.ok as boolean, typeof msg.message === "string" ? msg.message : undefined, Boolean(msg.checkpointCreated))
       }],
       ["cost_update", (msg) => {
-        handleCostUpdate(msg.sessionId as string, msg.cost as number)
-        updateCostDisplay(msg.sessionId as string)
+        const cost = msg.cost
+        if (isValidSessionId(msg.sessionId as string) && typeof cost === "number" && Number.isFinite(cost)) {
+          handleCostUpdate(msg.sessionId as string, cost)
+          updateCostDisplay(msg.sessionId as string)
+        }
       }],
       ["token_usage", (msg, sid) => {
-        if (sid && msg.usage) {
-          handleTokenUsage(sid, msg.usage as { prompt: number; completion: number; total: number })
+        if (isValidSessionId(sid) && msg.usage) {
+          const usage = msg.usage as UsageDelta
+          if (!isDuplicateRecentStepUsage(sid, usage)) {
+            handleTokenUsage(sid, usage)
+          }
+        }
+      }],
+      ["step_tokens", (msg, sid) => {
+        if (isValidSessionId(sid) && msg.tokens) {
+          const t = msg.tokens as { input: number; output: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }
+          const usage = {
+            prompt: t.input,
+            completion: t.output,
+            total: t.input + t.output + (t.reasoning ?? 0) + (t.cacheRead ?? 0) + (t.cacheWrite ?? 0),
+            reasoning: t.reasoning ?? 0,
+            cacheRead: t.cacheRead ?? 0,
+            cacheWrite: t.cacheWrite ?? 0,
+          }
+          accumulateTokenUsage(sid, usage)
+          rememberStepUsage(sid, usage)
+          if (typeof msg.cost === "number" && Number.isFinite(msg.cost) && msg.cost > 0) {
+            accumulateCost(sid, msg.cost)
+          }
         }
       }],
       ["revert_result", (msg, sid) => {
@@ -3511,37 +3754,47 @@ function getVsCodeApi() {
 	  function setupThinkingToggle() {
 	    const state = stateManager.getState()
 	    const thinkingVisible = state.displayPrefs?.thinkingVisible ?? true
-	    els.thinkingToggleBtn.setAttribute("aria-pressed", String(thinkingVisible))
-	    els.thinkingToggleBtn.classList.toggle("active", thinkingVisible)
-	    
-	    els.thinkingToggleBtn.addEventListener("click", () => {
+	    // Seed the renderer-facing cache so blocks rendered during boot honor
+	    // the persisted pref before the user touches the toggle.
+	    setThinkingVisible(thinkingVisible)
+	    els.thinkingToggleMenuItem.setAttribute("aria-checked", String(thinkingVisible))
+	    els.thinkingToggleMenuItem.classList.toggle("active", thinkingVisible)
+	    if (els.thinkingCheckmark) {
+	      els.thinkingCheckmark.style.visibility = thinkingVisible ? "visible" : "hidden"
+	    }
+
+	    els.thinkingToggleMenuItem.addEventListener("click", () => {
 	      const currentState = stateManager.getState()
 	      const newVisible = !(currentState.displayPrefs?.thinkingVisible ?? true)
 	      const updatedState: WebviewState = {
-        ...currentState,
-        displayPrefs: {
-          text: currentState.displayPrefs?.text ?? true,
-          tools: currentState.displayPrefs?.tools ?? true,
-          diffs: currentState.displayPrefs?.diffs ?? true,
-          errors: currentState.displayPrefs?.errors ?? true,
-          diffWrapEnabled: currentState.displayPrefs?.diffWrapEnabled ?? false,
-          thinkingVisible: newVisible,
-        },
-      }
-      vscode.setState(updatedState)
-      els.thinkingToggleBtn.setAttribute("aria-pressed", String(newVisible))
-      els.thinkingToggleBtn.classList.toggle("active", newVisible)
-      toggleAllThinkingBlocks(newVisible)
-    })
+	        ...currentState,
+	        displayPrefs: {
+	          text: currentState.displayPrefs?.text ?? true,
+	          tools: currentState.displayPrefs?.tools ?? true,
+	          diffs: currentState.displayPrefs?.diffs ?? true,
+	          errors: currentState.displayPrefs?.errors ?? true,
+	          diffWrapEnabled: currentState.displayPrefs?.diffWrapEnabled ?? false,
+	          thinkingVisible: newVisible,
+	        },
+	      }
+	      vscode.setState(updatedState)
+	      setThinkingVisible(newVisible)
+	      els.thinkingToggleMenuItem.setAttribute("aria-checked", String(newVisible))
+	      els.thinkingToggleMenuItem.classList.toggle("active", newVisible)
+	      if (els.thinkingCheckmark) {
+	        els.thinkingCheckmark.style.visibility = newVisible ? "visible" : "hidden"
+	      }
+	      toggleAllThinkingBlocks(newVisible)
+	    })
 
-    // Keyboard shortcut: Ctrl/Cmd+T
-    document.addEventListener("keydown", (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "t") {
-        e.preventDefault()
-        els.thinkingToggleBtn.click()
-      }
-    })
-  }
+	    // Keyboard shortcut: Ctrl/Cmd+Shift+T (avoiding Ctrl+T which is VS Code New Terminal)
+	    document.addEventListener("keydown", (e) => {
+	      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "t") {
+	        e.preventDefault()
+	        els.thinkingToggleMenuItem.click()
+	      }
+	    })
+	  }
 
 	  function applyTimelineVisibility(sessionId?: string) {
 	    const targetId = sessionId || stateManager.getState().activeSessionId || undefined
@@ -3786,6 +4039,7 @@ try {
   }
 
   function handleCostUpdate(sessionId: string, cost: number) {
+    if (!Number.isFinite(cost)) return
     const session = stateManager.getSession(sessionId)
     if (session) {
       session.cost = cost
@@ -3867,7 +4121,6 @@ try {
     vscode.postMessage({ type: "webview_log", level: "info", message: `handleStreamStart: Starting stream for ${sessionId} (msgId=${messageId})` })
     finalStream.handleStreamStart(messageId)
     stateManager.setStreaming(sessionId, true)
-    startToolElapsedTimer()
     updateTabBar()
     updateModeSelectorState()
     updateAgentStatus("thinking")
@@ -3947,6 +4200,7 @@ try {
     if (queue && queue.isNextReady()) {
       const next = queue.processNext()
       if (next) {
+        persistQueues()
         sendQueuedPrompt(sessionId, next.text, next.attachments)
       }
     }
@@ -3990,6 +4244,7 @@ try {
       processStreamEndBlocks(sessionId, messageId, blocks)
 
       stateManager.setStreaming(sessionId, false)
+      toolStartTimes.clear()
       stopToolElapsedTimer()
       updateTabBar()
       updateModeSelectorState()
@@ -4103,19 +4358,113 @@ try {
     }
   }
 
-  /* ─── TOKEN/COST DISPLAY (RED phase stubs) ─── */
+  /* ─── TOKEN/COST DISPLAY ─── */
 
-  function handleTokenUsage(sessionId: string, usage: { prompt: number; completion: number; total: number }) {
+  type UsageDelta = { prompt: number; completion: number; total: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }
+  const recentStepUsage = new Map<string, { signature: string; timestamp: number }>()
+
+  function usageSignature(usage: UsageDelta): string {
+    return [
+      usage.prompt,
+      usage.completion,
+      usage.total,
+      usage.reasoning ?? 0,
+      usage.cacheRead ?? 0,
+      usage.cacheWrite ?? 0,
+    ].join(":")
+  }
+
+  function rememberStepUsage(sessionId: string, usage: UsageDelta): void {
+    recentStepUsage.set(sessionId, { signature: usageSignature(usage), timestamp: Date.now() })
+  }
+
+  function isDuplicateRecentStepUsage(sessionId: string, usage: UsageDelta): boolean {
+    const recent = recentStepUsage.get(sessionId)
+    return !!recent && recent.signature === usageSignature(usage) && Date.now() - recent.timestamp < 30_000
+  }
+
+  function safeAdd(current: number, delta: number): number {
+    if (!Number.isFinite(delta)) return current
+    const result = current + delta
+    return Number.isFinite(result) ? result : current
+  }
+
+  function isValidSessionId(id: string | undefined): id is string {
+    return typeof id === "string" && id.length > 0 && !id.includes("\x00")
+  }
+
+  function accumulateTokenUsage(sessionId: string, delta: UsageDelta) {
+    if (!isValidSessionId(sessionId)) return
     const session = stateManager.getSession(sessionId)
-    if (session) {
-      session.tokenUsage = usage
-      stateManager.save()
+    if (!session) return
+    const deltaTotal = Number.isFinite(delta.total)
+      ? delta.total
+      : (delta.prompt ?? 0) + (delta.completion ?? 0) + (delta.reasoning ?? 0) + (delta.cacheRead ?? 0) + (delta.cacheWrite ?? 0)
+
+    if (!session.tokenUsage) {
+      session.tokenUsage = { prompt: 0, completion: 0, total: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
     }
-    updateTokenDisplay(usage)
+    session.tokenUsage.prompt = safeAdd(session.tokenUsage.prompt, delta.prompt)
+    session.tokenUsage.completion = safeAdd(session.tokenUsage.completion, delta.completion)
+    session.tokenUsage.total = safeAdd(session.tokenUsage.total, deltaTotal)
+    session.tokenUsage.reasoning = safeAdd(session.tokenUsage.reasoning ?? 0, delta.reasoning ?? 0)
+    session.tokenUsage.cacheRead = safeAdd(session.tokenUsage.cacheRead ?? 0, delta.cacheRead ?? 0)
+    session.tokenUsage.cacheWrite = safeAdd(session.tokenUsage.cacheWrite ?? 0, delta.cacheWrite ?? 0)
+    stateManager.save()
+
+    const activeId = stateManager.getState().activeSessionId
+    if (shouldRefreshOnUpdate(sessionId, activeId)) {
+      updateTokenDisplay(session.tokenUsage)
+      updateContextBarFromSession(sessionId)
+    }
+
+    updateCostDisplay(sessionId)
+  }
+
+  function handleTokenUsage(sessionId: string, usage: UsageDelta) {
+    accumulateTokenUsage(sessionId, usage)
+  }
+
+  function accumulateCost(sessionId: string, costDelta: number) {
+    if (!isValidSessionId(sessionId) || !Number.isFinite(costDelta) || costDelta <= 0) return
+    const session = stateManager.getSession(sessionId)
+    if (!session) return
+    if (session.cost === undefined) session.cost = 0
+    session.cost = safeAdd(session.cost, costDelta)
+    stateManager.save()
+    updateCostDisplay(sessionId)
+  }
+
+  const MAX_USAGE_SNAPSHOTS = 200
+
+  function recordUsageSnapshot(sessionId: string) {
+    const session = stateManager.getSession(sessionId)
+    if (!session?.tokenUsage || !session.model) return
+
+    const state = stateManager.getState()
+    if (!state.tokenUsageHistory) state.tokenUsageHistory = []
+
+    const snapshot: TokenUsageSnapshot = {
+      timestamp: Date.now(),
+      sessionId,
+      model: session.model,
+      prompt: session.tokenUsage.prompt,
+      completion: session.tokenUsage.completion,
+      total: session.tokenUsage.total,
+      reasoning: session.tokenUsage.reasoning ?? 0,
+      cacheRead: session.tokenUsage.cacheRead ?? 0,
+      cacheWrite: session.tokenUsage.cacheWrite ?? 0,
+      cost: session.cost ?? 0,
+    }
+    state.tokenUsageHistory.push(snapshot)
+    if (state.tokenUsageHistory.length > MAX_USAGE_SNAPSHOTS) {
+      state.tokenUsageHistory = state.tokenUsageHistory.slice(-MAX_USAGE_SNAPSHOTS)
+    }
+    stateManager.save()
   }
 
   function handleRateLimitState(state?: RateLimitWebviewState | null) {
-    updateQuotaBar(state || undefined)
+    updateQuotaBar(state ?? undefined)
   }
 
   function updateQuotaBar(state?: RateLimitWebviewState) {
@@ -4124,10 +4473,10 @@ try {
       return
     }
 
-    const tokenPct = state.remainingTokens !== undefined && state.limitTokens && state.limitTokens > 0
+    const tokenPct = typeof state.remainingTokens === "number" && Number.isFinite(state.remainingTokens) && state.limitTokens && state.limitTokens > 0
       ? Math.round((state.remainingTokens / state.limitTokens) * 100)
       : undefined
-    const requestPct = state.remainingRequests !== undefined && state.limitRequests && state.limitRequests > 0
+    const requestPct = typeof state.remainingRequests === "number" && Number.isFinite(state.remainingRequests) && state.limitRequests && state.limitRequests > 0
       ? Math.round((state.remainingRequests / state.limitRequests) * 100)
       : undefined
     const bindingPct = [tokenPct, requestPct].filter((value): value is number => value !== undefined).sort((a, b) => a - b)[0]
@@ -4146,8 +4495,8 @@ try {
     } else {
       els.quotaProgressBar.style.width = "100%"
       els.quotaLabel.textContent = `${provider} usage`
-      const observed = state.usedTokens !== undefined ? `${formatNumber(state.usedTokens)} tok` : "observed"
-      const cost = state.usedCost !== undefined ? ` · $${state.usedCost.toFixed(4)}` : ""
+      const observed = typeof state.usedTokens === "number" && Number.isFinite(state.usedTokens) ? `${formatNumber(state.usedTokens)} tok` : "observed"
+      const cost = typeof state.usedCost === "number" && Number.isFinite(state.usedCost) ? ` · $${state.usedCost.toFixed(4)}` : ""
       els.quotaDetail.textContent = `${observed}${cost}`
       els.quotaBar.classList.add("quota-bar--observed")
     }
@@ -4167,12 +4516,26 @@ try {
     return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date)
   }
 
-  function updateTokenDisplay(usage?: { prompt: number; completion: number; total: number }) {
-    // token-display is kept hidden outside the header (dom.ts optionalElement) for compatibility
+  function clearTokenDisplay() {
+    if (els.tokenDisplay) {
+      els.tokenDisplay.textContent = ""
+      els.tokenDisplay.removeAttribute("title")
+    }
+    if (els.statusTokens) {
+      els.statusTokens.textContent = ""
+      els.statusTokens.classList.add("hidden")
+    }
+  }
+
+  function updateTokenDisplay(usage?: { prompt: number; completion: number; total: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }) {
     const tokenDisplay = els.tokenDisplay
     if (tokenDisplay && usage) {
-      tokenDisplay.textContent = `${usage.total} tokens`
-      tokenDisplay.title = `Prompt: ${usage.prompt} · Completion: ${usage.completion}`
+      const parts: string[] = [`${usage.total.toLocaleString()} tok`]
+      if (usage.reasoning && usage.reasoning > 0) parts.push(`reasoning: ${usage.reasoning.toLocaleString()}`)
+      if (usage.cacheRead && usage.cacheRead > 0) parts.push(`cache read: ${usage.cacheRead.toLocaleString()}`)
+      if (usage.cacheWrite && usage.cacheWrite > 0) parts.push(`cache write: ${usage.cacheWrite.toLocaleString()}`)
+      tokenDisplay.textContent = parts.join(" · ")
+      tokenDisplay.title = `Prompt: ${usage.prompt.toLocaleString()} · Completion: ${usage.completion.toLocaleString()} · Total: ${usage.total.toLocaleString()}`
     }
     if (usage) {
       els.statusTokens.textContent = `${usage.total.toLocaleString()} tok`
@@ -4182,20 +4545,101 @@ try {
   }
 
   function updateCostDisplay(sessionId: string) {
+    // Cost display is tab-scoped: only render when the affected session is
+    // the active tab, so background streams don't overwrite the visible value.
+    if (!shouldRefreshOnUpdate(sessionId, stateManager.getState().activeSessionId)) return
     const session = stateManager.getSession(sessionId)
     const costEl = els.costDisplay
-    if (costEl && session?.cost !== undefined) {
+    if (costEl && typeof session?.cost === "number" && Number.isFinite(session.cost) && session.cost > 0) {
       costEl.textContent = `$${session.cost.toFixed(4)}`
       costEl.title = `Session cost: $${session.cost.toFixed(4)}`
       costEl.classList.remove("hidden")
     } else if (costEl) {
+      costEl.textContent = ""
+      costEl.removeAttribute("title")
       costEl.classList.add("hidden")
     }
-    if (session?.cost !== undefined && session.cost > 0) {
+    if (typeof session?.cost === "number" && Number.isFinite(session.cost) && session.cost > 0) {
       els.statusCost.textContent = `$${session.cost.toFixed(4)}`
       els.statusCost.classList.remove("hidden")
       showStatusStrip()
+    } else {
+      els.statusCost.textContent = ""
+      els.statusCost.classList.add("hidden")
     }
+  }
+
+  function updateContextBarFromSession(sessionId: string) {
+    const session = stateManager.getSession(sessionId)
+    if (!session?.tokenUsage) return
+
+    const ctxBar = els.contextUsage
+    if (!ctxBar) return
+
+    const modelKey = session.model ? `${session.model}` : undefined
+    const contextWindow = modelManager.getContextWindow(modelKey) ?? 200_000
+    const totalApiTokens = session.tokenUsage.total ?? 0
+    const pct = Math.min(100, Math.round((totalApiTokens / contextWindow) * 100))
+
+    ctxBar.textContent = `${totalApiTokens.toLocaleString()} / ${contextWindow.toLocaleString()} tok (${pct}%)`
+    ctxBar.title = `API tokens used: ${totalApiTokens.toLocaleString()} · Context window: ${contextWindow.toLocaleString()}`
+
+    const pctEl = ctxBar.querySelector<HTMLElement>(".context-usage-percent")
+    if (pctEl) {
+      pctEl.style.width = `${pct}%`
+      pctEl.classList.toggle("context-usage-percent--warning", pct >= 60 && pct < 85)
+      pctEl.classList.toggle("context-usage-percent--critical", pct >= 85)
+    }
+  }
+
+  const OVERFLOW_WARN_THRESHOLD = 0.85
+  const OVERFLOW_CRITICAL_THRESHOLD = 0.95
+  const COST_WARN_THRESHOLD = 5.00
+  let lastOverflowWarningAt = 0
+
+  function checkOverflowWarnings(sessionId: string) {
+    const session = stateManager.getSession(sessionId)
+    if (!session?.tokenUsage) return
+
+    const modelKey = session.model ? `${session.model}` : undefined
+    const contextWindow = modelManager.getContextWindow(modelKey) ?? 200_000
+    const totalApiTokens = session.tokenUsage.total ?? 0
+    const usageRatio = totalApiTokens / contextWindow
+
+    const now = Date.now()
+    const cooldown = 60_000
+
+    if (usageRatio >= OVERFLOW_CRITICAL_THRESHOLD && now - lastOverflowWarningAt > cooldown) {
+      lastOverflowWarningAt = now
+      showContextWarning(`Context window nearly full (${Math.round(usageRatio * 100)}%). Consider compacting or starting a new session.`)
+    } else if (usageRatio >= OVERFLOW_WARN_THRESHOLD && now - lastOverflowWarningAt > cooldown) {
+      lastOverflowWarningAt = now
+      showContextWarning(`Context usage at ${Math.round(usageRatio * 100)}%. Approaching limit.`)
+    }
+
+    if (session.cost !== undefined && session.cost >= COST_WARN_THRESHOLD) {
+      const costEl = els.costDisplay
+      if (costEl) costEl.classList.add("cost-display--warning")
+    }
+  }
+
+  function showContextWarning(message: string) {
+    const msgList = getActiveMessageList(els)
+    if (!msgList) return
+
+    const existing = msgList.querySelector<HTMLElement>(".context-overflow-warning")
+    if (existing) existing.remove()
+
+    const banner = document.createElement("div")
+    banner.className = "context-overflow-warning"
+    const icon = document.createElement("span")
+    icon.className = "context-overflow-warning-icon"
+    icon.textContent = "\u26A0"
+    banner.appendChild(icon)
+    banner.appendChild(document.createTextNode(" " + message))
+    msgList.insertBefore(banner, msgList.firstChild)
+
+    setTimeout(() => banner.remove(), 15_000)
   }
 
   function showStatusStrip() {

@@ -64,7 +64,8 @@ export interface ElementRefs {
   historyBtn: HTMLElement
   mcpBtn: HTMLElement
   timelineToggleBtn: HTMLElement
-  thinkingToggleBtn: HTMLElement
+  thinkingToggleMenuItem: HTMLElement
+  thinkingCheckmark: HTMLElement | null
   settingsBtn: HTMLElement
 
   contextBar: HTMLDivElement
@@ -231,7 +232,8 @@ export function getElementRefs(): ElementRefs {
     historyBtn: requireElement("history-btn"),
     mcpBtn: requireElement("mcp-btn"),
     timelineToggleBtn: requireElement("timeline-toggle-btn"),
-    thinkingToggleBtn: requireElement("thinking-toggle-btn"),
+    thinkingToggleMenuItem: requireElement("thinking-toggle-menu-item"),
+    thinkingCheckmark: optionalElement<HTMLElement>("settings-menu-checkmark"),
     settingsBtn: requireElement("settings-btn"),
 
     contextBar: requireElement<HTMLDivElement>("context-bar"),

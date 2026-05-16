@@ -12,6 +12,8 @@ import { ModelManager } from "../../model/ModelManager"
 import { log } from "../../utils/outputChannel"
 import type { Block, ChatMessage } from "../types"
 import { StreamFinalizerService } from "./StreamFinalizerService"
+import { MethodologyAdvisor, type MethodologyAdvice } from "../../methodology/MethodologyAdvisor"
+import { classifyTool } from "./toolClassifier"
 
 export interface StreamCallbacks {
   postMessage: (msg: Record<string, unknown>) => void
@@ -64,6 +66,8 @@ export class StreamCoordinator {
   private lastForceRerenderSeqs = new Map<string, number>()
   /** Per-tab append callbacks for steer prompts — executed after stream_end */
   private appendCallbacks = new Map<string, (() => Promise<void>)[]>()
+  /** Methodology classifier/selector — pluggable so tests can stub it */
+  private readonly methodologyAdvisor: MethodologyAdvisor
 
   constructor(
     private readonly sessionManager: SessionManager,
@@ -73,8 +77,10 @@ export class StreamCoordinator {
     private readonly modelManager: ModelManager,
     private readonly tabManager: TabManager,
     private readonly rateLimitMonitor: RateLimitMonitor,
-    diffApplier: DiffApplier
+    diffApplier: DiffApplier,
+    methodologyAdvisor?: MethodologyAdvisor
   ) {
+    this.methodologyAdvisor = methodologyAdvisor ?? new MethodologyAdvisor()
     this.diffHandler = new DiffHandler(diffApplier)
     this.finalizerService = new StreamFinalizerService({
       streamStates: this.streamStates,
@@ -96,6 +102,42 @@ export class StreamCoordinator {
       mergeFinalBlocks: (id, blocks) => this.mergeFinalBlocks(id, blocks),
       storeAssistantMessage: (id, msgId, blocks, tokenTotal) => this.storeAssistantMessage(id, msgId, blocks, tokenTotal),
     })
+  }
+
+  /**
+   * Classify the outgoing prompt, prepend a methodology hint to `parts`, and
+   * notify the webview via `methodology_selected`. Returns the advice (or
+   * null when the advisor declined). Never throws — methodology guidance
+   * must never block the user's prompt.
+   */
+  private applyMethodologyAdvice(
+    tabId: string,
+    text: string,
+    parts: Array<{ type: "text"; text: string }>,
+    _callbacks: StreamCallbacks
+  ): MethodologyAdvice | null {
+    if (!this.methodologyAdvisor.isEnabled()) return null
+    try {
+      const tab = this.tabManager.getTab(tabId)
+      // Per-tab opt-out: if the tab carries `methodologyDisabled`, skip.
+      const tabDisabled = (tab as unknown as { methodologyDisabled?: boolean } | undefined)?.methodologyDisabled === true
+      if (tabDisabled) return null
+
+      const advice = this.methodologyAdvisor.advise(text, {
+        // We don't currently know if an image is attached at this layer.
+        // The advisor remains conservative without it.
+        hasImageAttachment: false,
+      })
+      if (!advice) return null
+
+      parts.push({ type: "text", text: advice.promptAddendum })
+      log.info(`[methodology] tab=${tabId.slice(0, 8)} ${advice.signature} (conf=${advice.selection.confidence.toFixed(2)})`)
+      return advice
+    } catch (err) {
+      // Methodology advice is best-effort. Never break the user's send path.
+      log.warn("[methodology] advice failed", err)
+      return null
+    }
   }
 
   private setStreamState(tabId: string, state: StreamLifecycleState, context?: Record<string, unknown>): void {
@@ -430,10 +472,25 @@ export class StreamCoordinator {
 
       const modelRef = tab.model ? parseModelRef(tab.model) : undefined
 
-      // Pass tools configuration to server based on mode
-      // Plan mode: disable file_edit AND bash to prevent edits and shell execution (server uses tools field)
-      // Build/Auto modes: enable all tools (default behavior)
-      const tools = tab.mode === "plan" ? { file_edit: false, bash: false } : undefined
+      // Pass tools configuration to server based on mode.
+      //
+      // Plan mode disables EVERY write-capable tool so the agent can only
+      // read/analyze and propose changes (rendered as PLAN diffs the user
+      // approves). Canonical opencode tool names per
+      //   https://opencode.ai/docs/tools/
+      //   edit         — modify existing files
+      //   write        — create/overwrite files
+      //   apply_patch  — apply patches
+      //   bash         — execute shell commands
+      //
+      // Build/Auto modes pass undefined → server enables all tools by default.
+      //
+      // The previous code passed an unknown tool key that the server
+      // ignored, and `write`/`apply_patch` were never restricted at all,
+      // so plan mode silently allowed file mutations.
+      const tools = tab.mode === "plan"
+        ? { edit: false, write: false, apply_patch: false, bash: false }
+        : undefined
 
       // Inject per-tab instructions as a prepended text part on the first turn only
       const parts: Array<{ type: "text"; text: string }> = []
@@ -441,6 +498,13 @@ export class StreamCoordinator {
         parts.push({ type: "text", text: tab.instructions })
         this.injectedInstructionsSessions.add(cliSessionId)
       }
+
+      // Methodology advice — classify the user's prompt and prepend a short
+      // strategy hint. Pure/synchronous; returns null for trivial inputs and
+      // slash commands. The selected methodology is also surfaced to the
+      // webview so the user can see (and later override) it.
+      this.applyMethodologyAdvice(tabId, text, parts, callbacks)
+
       parts.push({ type: "text", text })
 
       await this.sessionManager.sendPromptAsync(cliSessionId, parts, { model: modelRef, tools, variant })
@@ -491,8 +555,9 @@ export class StreamCoordinator {
       const lastAssistant = [...messages].reverse().find(message => message.info.role === "assistant")
       if (lastAssistant) {
         blocks = this.partsToBlocks(lastAssistant.parts)
-        const info = lastAssistant.info as { cost?: number; tokens?: { input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } } }
+        const info = lastAssistant.info as { cost?: number; tokens?: { total?: number; input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } } }
         if (typeof info.cost === "number") {
+          this.sessionStore.updateCost(tabId, info.cost)
           callbacks.postMessage({ type: "cost_update", sessionId: tabId, cost: info.cost })
         }
         if (info.tokens) {
@@ -501,11 +566,19 @@ export class StreamCoordinator {
           const reasoning = info.tokens.reasoning ?? 0
           const cacheRead = info.tokens.cache?.read ?? 0
           const cacheWrite = info.tokens.cache?.write ?? 0
-          sdkTokenTotal = input + output
+          sdkTokenTotal = info.tokens.total ?? input + output + reasoning + cacheRead + cacheWrite
+          this.sessionStore.updateTokenUsage(tabId, {
+            prompt: input,
+            completion: output,
+            total: sdkTokenTotal,
+            reasoning,
+            cacheRead,
+            cacheWrite,
+          })
           callbacks.postMessage({
             type: "token_usage",
             sessionId: tabId,
-            usage: { prompt: input, completion: output, total: input + output, reasoning, cacheRead, cacheWrite },
+            usage: { prompt: input, completion: output, total: sdkTokenTotal, reasoning, cacheRead, cacheWrite },
           })
           const tab = this.tabManager.getTab(tabId)
           const selectedModel = tab?.model || this.modelManager.model
@@ -1069,11 +1142,7 @@ private cleanupTab(tabId: string): void {
   }
 
   private toolClass(toolName: string): "read" | "write" | "exec" | "meta" {
-    const lower = toolName.toLowerCase()
-    if (lower.includes("edit") || lower.includes("write") || lower.includes("patch")) return "write"
-    if (lower.includes("bash") || lower.includes("shell") || lower.includes("exec")) return "exec"
-    if (lower.includes("task") || lower.includes("todo")) return "meta"
-    return "read"
+    return classifyTool(toolName)
   }
 
   private isRecord(value: unknown): value is Record<string, unknown> {

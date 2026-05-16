@@ -15,7 +15,11 @@ import { estimateMessageTokens } from "../../utils/tokenCounter"
 export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecutive?: boolean): HTMLDivElement {
   const div = document.createElement("div")
   const role: string = msg.role || "assistant"
-  div.className = `message ${role}`
+  // Mark assistant turns produced in plan mode so the bubble can paint an
+  // amber accent — gives the user a clear "this was planning, not applied
+  // work" cue, even when the agent only wrote prose.
+  const planClass = opts?.mode === "plan" && role === "assistant" ? " message--plan-mode" : ""
+  div.className = `message ${role}${planClass}`
   if (msg.id) div.dataset.messageId = msg.id
   if (role) div.dataset.role = role
 

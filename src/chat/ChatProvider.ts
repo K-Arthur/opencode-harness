@@ -10,6 +10,7 @@ import { ModelManager } from "../model/ModelManager"
 import { CheckpointManager } from "../checkpoint/CheckpointManager"
 import { DiffApplier } from "../diff/DiffApplier"
 import { sdkMessagesToChatMessages } from "../session/sdkMessageConverter"
+import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
 import { WebviewContent } from "./WebviewContent"
 import { TabManager } from "./TabManager"
 import { StreamCoordinator } from "./handlers/StreamCoordinator"
@@ -103,7 +104,6 @@ private autoCompactor: AutoCompactor
     this.steerPromptHandler = new SteerPromptHandler(
       this.streamCoordinator,
       this.sessionStore,
-      this.sessionManager
     )
     this.themeController = new ThemeController(themeManager, (msg) => this.postMessage(msg))
     this.statePush = new StatePushService({
@@ -573,10 +573,22 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       const data = event.data as { tokens?: { input?: number; output?: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }; cost?: number } | undefined
       if (data?.tokens) {
         const t = data.tokens
+        const usage = {
+          prompt: t.input ?? 0,
+          completion: t.output ?? 0,
+          reasoning: t.reasoning ?? 0,
+          cacheRead: t.cacheRead ?? 0,
+          cacheWrite: t.cacheWrite ?? 0,
+          total: (t.input ?? 0) + (t.output ?? 0) + (t.reasoning ?? 0) + (t.cacheRead ?? 0) + (t.cacheWrite ?? 0),
+        }
+        this.sessionStore.accumulateTokenUsage(tabId, usage)
+        if (typeof data.cost === "number" && Number.isFinite(data.cost) && data.cost > 0) {
+          this.sessionStore.accumulateCost(tabId, data.cost)
+        }
         this.postMessage({
           type: "step_tokens",
           sessionId: tabId,
-          tokens: { input: t.input ?? 0, output: t.output ?? 0, reasoning: t.reasoning ?? 0, cacheRead: t.cacheRead ?? 0, cacheWrite: t.cacheWrite ?? 0 },
+          tokens: { input: usage.prompt, output: usage.completion, reasoning: usage.reasoning, cacheRead: usage.cacheRead, cacheWrite: usage.cacheWrite },
           cost: data.cost ?? 0,
         })
       }
@@ -680,7 +692,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         const rows = await this.sessionManager.getSessionMessages(session.cliSessionId)
         const messages = sdkMessagesToChatMessages(rows)
         if (messages.length > 0) {
-          this.sessionStore.applyBackfilledMessages(session.id, messages)
+          this.sessionStore.applyBackfilledMessages(session.id, messages, summarizeOpencodeMessageUsage(rows))
           this.sessionStore.autoTitleFromMessages(session.id)
           log.info(`[sessions_recovered] Backfilled ${messages.length} messages for session ${session.id}`)
           didBackfill = true
@@ -768,7 +780,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       const rows = await this.sessionManager.getSessionMessages(session.cliSessionId)
       const messages = sdkMessagesToChatMessages(rows)
       if (messages.length > 0) {
-        this.sessionStore.applyBackfilledMessages(session.id, messages)
+        this.sessionStore.applyBackfilledMessages(session.id, messages, summarizeOpencodeMessageUsage(rows))
         this.sessionStore.autoTitleFromMessages(session.id)
         log.info(`[tab_created] Backfilled ${messages.length} messages for session ${session.id}`)
         // Re-push init state to update webview with backfilled messages
@@ -962,6 +974,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       mode: s.mode || "build",
       messages: s.messages.slice(-MAX_MESSAGES_PER_TAB),
       cost: s.cost || 0,
+      tokenUsage: s.tokenUsage,
       totalMessages: s.messages.length,
     }))
 

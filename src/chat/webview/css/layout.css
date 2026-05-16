@@ -2008,6 +2008,79 @@ button.modal-session-item:focus {
   font-style: italic;
 }
 
+/* ─── Queue: token-cost badge in header + per-chip ─── */
+.queue-tokens {
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--color-muted);
+  margin-left: var(--space-2);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.queue-chip-tokens {
+  font-size: var(--text-2xs);
+  color: var(--color-muted);
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
+/* ─── Queue: drag-to-reorder affordances ─── */
+
+/* The drag handle on each chip (visual only — whole chip is the drag source) */
+.queue-chip-handle {
+  display: inline-flex;
+  align-items: center;
+  color: currentColor;
+  opacity: 0.35;
+  cursor: grab;
+  flex-shrink: 0;
+  margin-right: 1px;
+  transition: opacity var(--duration-fast);
+}
+
+.queue-chip[draggable="true"] {
+  cursor: grab;
+}
+
+.queue-chip[draggable="true"]:hover .queue-chip-handle,
+.queue-chip[draggable="true"]:focus-visible .queue-chip-handle {
+  opacity: 0.85;
+}
+
+.queue-chip[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.queue-chip--dragging {
+  opacity: 0.45;
+  transform: scale(0.97);
+}
+
+/* Insertion-point markers shown during dragover. The rendered ribbon is a
+ * 2px accent-colored line on the leading/trailing edge of the hovered chip. */
+.queue-chip--drop-before {
+  box-shadow: -3px 0 0 0 var(--color-accent);
+}
+
+.queue-chip--drop-after {
+  box-shadow: 3px 0 0 0 var(--color-accent);
+}
+
+.queue-chip:focus-visible {
+  outline: 1px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .queue-chip,
+  .queue-chip--dragging {
+    transition: none;
+    transform: none;
+  }
+}
+
 /* ═════════════════════════════════════════════════════════════════╛
    MODEL MANAGER PANEL
    ═════════════════════════════════════════════════════════════════╛ */

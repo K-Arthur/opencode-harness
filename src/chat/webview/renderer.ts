@@ -17,6 +17,7 @@ import {
   GEAR_SVG,
 } from "./icons"
 import { renderToolCallBlock, isToolCallBlock, groupConsecutiveToolCalls } from "./toolCallRenderer"
+import { getThinkingVisible } from "./displayPrefs"
 import type {
   Block,
   ChatMessage,
@@ -334,12 +335,55 @@ export function renderBlock(block: Block, opts?: RenderOptions): HTMLElement | n
 // Text block — markdown with mention chip support
 // ---------------------------------------------------------------------------
 
-function renderTextBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
+/**
+ * Heuristic: does this text look like a written plan?
+ *
+ * Looks for any TWO of the following signals so we don't false-positive on
+ * casual prose that happens to contain a single numbered line:
+ *   - A `# Plan` / `## Plan` / `# Implementation` heading
+ *   - Two or more `1. … 2. …` numbered steps
+ *   - Two or more `- [ ]` / `- [x]` checklist items
+ *   - An explicit "Plan:" / "Steps:" / "Implementation:" line opener
+ */
+export function detectPlanProse(text: string): boolean {
+  if (!text || text.length < 30) return false
+  const lower = text.toLowerCase()
+
+  const hasPlanHeading = /(^|\n)#{1,3}\s+(plan|implementation|approach|strategy|steps?)\b/i.test(text)
+  const numberedSteps = (text.match(/(^|\n)\s*\d+\.\s+\S/g) || []).length
+  const checklistItems = (text.match(/(^|\n)\s*-\s*\[[ xX]\]/g) || []).length
+  const hasPlanOpener = /(^|\n)\s*(plan|steps?|implementation|approach):\s/i.test(text)
+  const mentionsPlan = lower.includes("plan") || lower.includes("approach") || lower.includes("step")
+
+  let signals = 0
+  if (hasPlanHeading) signals++
+  if (numberedSteps >= 2) signals++
+  if (checklistItems >= 2) signals++
+  if (hasPlanOpener) signals++
+  // The "mentions plan" check is a weak signal — only counts when paired
+  // with structural evidence (numbered steps / checklist).
+  if (mentionsPlan && (numberedSteps >= 2 || checklistItems >= 2)) signals++
+
+  return signals >= 2
+}
+
+function renderTextBlock(block: Block, opts: RenderOptions): HTMLElement | null {
   const text = block.text || ""
   if (!text.trim()) return null
 
+  // Plan-prose: wrap the rendered markdown in a styled card when the assistant
+  // emits a plan-shaped message during plan mode.
+  const isPlanModePlan = opts?.mode === "plan" && detectPlanProse(text)
+
   const div = document.createElement("div")
-  div.className = "msg-text markdown-content"
+  div.className = isPlanModePlan ? "msg-text markdown-content plan-prose" : "msg-text markdown-content"
+
+  if (isPlanModePlan) {
+    const header = document.createElement("div")
+    header.className = "plan-prose-header"
+    header.textContent = "Proposed Plan"
+    div.appendChild(header)
+  }
 
   // Render mentions as chips if present in text
   const mentionPattern = /(@(file|folder|url|problems|terminal):\S+)/g
@@ -554,7 +598,7 @@ function extractSnippet(msg: import("./types").ChatMessage): string {
   return msg.role === "user" ? "Sent a message" : "Thinking..."
 }
 
-function renderThinkingBlock(block: Block, opts: RenderOptions): HTMLElement | null {
+function renderThinkingBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
   const thinking = isThinkingBlock(block) ? block : (block as unknown as ThinkingBlock)
   const content = thinking.content || ""
   if (!content.trim() && !thinking.streaming) return null
@@ -562,11 +606,14 @@ function renderThinkingBlock(block: Block, opts: RenderOptions): HTMLElement | n
   const details = document.createElement("details")
   details.className = "thinking-block"
   details.setAttribute("aria-label", thinking.streaming ? "Thinking in progress" : "Reasoning")
-  
-  // Collapse by default for cleaner UI (similar to tool calls)
-  const config = opts?.collapseConfig
-  if (config?.defaultCollapsed && !thinking.streaming) {
-    details.open = false
+
+  // While streaming, always show progress. Once final, honor the user pref
+  // (Settings → Show thinking) — read live from displayPrefs so blocks that
+  // arrive AFTER a toggle still pick up the latest preference.
+  if (thinking.streaming) {
+    details.open = true
+  } else {
+    details.open = getThinkingVisible()
   }
 
   const summary = document.createElement("summary")
@@ -647,8 +694,12 @@ function renderNewDiffBlock(block: Block, opts: RenderOptions): HTMLElement | nu
         linesRemoved: block.linesRemoved || 0,
       }
 
+  // Plan-mode diffs are proposals — not yet applied. Mark the wrapper so a
+  // distinct accent border + header pill make the difference visible at a glance.
+  const isPlanModeBlock = opts.mode === "plan"
+
   const wrapper = document.createElement("div")
-  wrapper.className = `diff-block diff-block--${diffBlock.state}`
+  wrapper.className = `diff-block diff-block--${diffBlock.state}${isPlanModeBlock ? " diff-block--plan" : ""}`
   wrapper.dataset.diffId = diffBlock.diffId
 
   // Header: filename + stats + wrap toggle
@@ -657,6 +708,14 @@ function renderNewDiffBlock(block: Block, opts: RenderOptions): HTMLElement | nu
 
   const fileInfo = document.createElement("div")
   fileInfo.className = "diff-file-info"
+
+  if (isPlanModeBlock) {
+    const planPill = document.createElement("span")
+    planPill.className = "diff-pill diff-pill--plan"
+    planPill.textContent = "PLAN"
+    planPill.title = "Proposed change — not yet applied"
+    fileInfo.appendChild(planPill)
+  }
 
   const filePath = document.createElement("span")
   filePath.className = "diff-file-path"

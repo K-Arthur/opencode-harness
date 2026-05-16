@@ -5,7 +5,14 @@
       "Read(//home/kevinarthur/.agents/skills/**)",
       "Read(//home/kevinarthur/.agents/**)",
       "Read(//home/kevinarthur/**)",
-      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); skills=d['skills']; first5=list\\(skills.items\\(\\)\\)[:5]; [print\\(k, json.dumps\\(v, indent=2\\)\\) for k,v in first5]\")"
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); skills=d['skills']; first5=list\\(skills.items\\(\\)\\)[:5]; [print\\(k, json.dumps\\(v, indent=2\\)\\) for k,v in first5]\")",
+      "Bash(git stash *)",
+      "Bash(npm view *)",
+      "Bash(git commit -m ' *)",
+      "WebFetch(domain:opencode.ai)",
+      "Bash(awk '/# fail|^# tests|^# pass/{print NR\": \"$0}' /tmp/claude-1000/-home-kevinarthur-PersonalProjects-opencode-harness/137d9669-76dc-4007-80d2-6a790fb79718/tasks/bk7fuabpy.output)",
+      "Bash(npm install *)",
+      "Bash(git add *)"
     ]
   }
 }

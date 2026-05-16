@@ -685,6 +685,122 @@
           "scope": "window",
           "default": false,
           "description": "Enable verbose debug logging to the OpenCode Harness output channel"
+        },
+        "opencode.tdd.enabled": {
+          "type": "boolean",
+          "scope": "window",
+          "default": false,
+          "description": "Enable Test-Driven Development orchestration. When enabled, coding tasks will follow Red-Green-Refactor cycles with automatic test generation and verification."
+        },
+        "opencode.tdd.minCoverage": {
+          "type": "number",
+          "scope": "window",
+          "default": 80,
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Minimum test coverage percentage required to complete the TDD cycle."
+        },
+        "opencode.tdd.maxIterations": {
+          "type": "number",
+          "scope": "window",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Maximum number of iterations allowed per TDD phase before marking it as failed."
+        },
+        "opencode.sadd.enabled": {
+          "type": "boolean",
+          "scope": "window",
+          "default": false,
+          "description": "Enable Sub-Agent Driven Development. When enabled, complex tasks will be decomposed into parallel subtasks executed by multiple sub-agents."
+        },
+        "opencode.sadd.maxSubagents": {
+          "type": "number",
+          "scope": "window",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 8,
+          "description": "Maximum number of sub-agents that can be dispatched for a single task."
+        },
+        "opencode.methodology.enabled": {
+          "type": "boolean",
+          "scope": "window",
+          "default": true,
+          "description": "Enable proactive methodology selection. When enabled, the extension automatically selects the best development approach (spec-first, TDD, cascade routing, etc.) based on task complexity and model capabilities."
+        },
+        "opencode.methodology.defaultStrategy": {
+          "type": "string",
+          "scope": "window",
+          "default": "hierarchical-cot",
+          "enum": [
+            "direct",
+            "hierarchical-cot",
+            "plan-then-execute",
+            "iterative-refinement",
+            "schema-first",
+            "few-shot-strong",
+            "conversational-decompose"
+          ],
+          "enumDescriptions": [
+            "Simple, direct responses with minimal reasoning overhead",
+            "Plan steps, execute sequentially, provide final answer",
+            "Separate planning and execution phases",
+            "Generate, critique, and refine iteratively",
+            "Return structured JSON matching a provided schema",
+            "Follow pre-generated examples from stronger models",
+            "Break complex tasks into sub-tasks with confirmation between each"
+          ],
+          "description": "Default prompt strategy when no specific methodology is selected."
+        },
+        "opencode.methodology.cascadeEnabled": {
+          "type": "boolean",
+          "scope": "window",
+          "default": true,
+          "description": "Enable cascade routing. When enabled, tasks start with the cheapest capable model and escalate to more capable models only when quality is insufficient."
+        },
+        "opencode.methodology.maxEscalations": {
+          "type": "number",
+          "scope": "window",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 5,
+          "description": "Maximum number of model escalations allowed in cascade routing before returning the best result."
+        },
+        "opencode.methodology.qualityThreshold": {
+          "type": "number",
+          "scope": "window",
+          "default": 0.7,
+          "minimum": 0.5,
+          "maximum": 1,
+          "description": "Minimum quality score (0.0-1.0) required to accept a model response without escalation."
+        },
+        "opencode.methodology.maxTokensPerRequest": {
+          "type": "number",
+          "scope": "window",
+          "default": 50000,
+          "minimum": 1000,
+          "description": "Maximum token budget per methodology request."
+        },
+        "opencode.methodology.maxCostPerRequest": {
+          "type": "number",
+          "scope": "window",
+          "default": 5,
+          "minimum": 0,
+          "description": "Maximum cost ($) per methodology request before returning the best result."
+        },
+        "opencode.methodology.validationEnabled": {
+          "type": "boolean",
+          "scope": "window",
+          "default": true,
+          "description": "Enable schema validation for LLM outputs. When enabled, responses are validated against expected schemas with automatic retry on failure."
+        },
+        "opencode.methodology.maxValidationRetries": {
+          "type": "number",
+          "scope": "window",
+          "default": 3,
+          "minimum": 0,
+          "maximum": 5,
+          "description": "Maximum number of validation retry attempts before accepting an invalid response."
         }
       }
     }
@@ -728,7 +844,7 @@
     "serialize-javascript": "^7.0.0"
   },
   "dependencies": {
-    "@opencode-ai/sdk": "^1.14.46",
+    "@opencode-ai/sdk": "^1.15.1",
     "@vscode-elements/elements": "^2.5.1",
     "dompurify": "^3.4.2",
     "fast-diff": "^1.3.0",

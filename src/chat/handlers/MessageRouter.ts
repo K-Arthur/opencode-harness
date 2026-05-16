@@ -238,6 +238,7 @@ export class MessageRouter {
       provider: m.provider,
       displayName: m.displayName,
       supportsVariants: m.supportsVariants,
+      contextWindow: m.contextWindow,
     }))
     context.postMessage({ type: "model_list", items: models, model: this.modelManager.model })
   }

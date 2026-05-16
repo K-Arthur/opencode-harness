@@ -261,61 +261,42 @@ describe("StreamCoordinator.ts", () => {
   })
 })
 
-  // ── Mode via tools field: plan mode disables file_edit and bash ──
-  it("plan mode disables file_edit and bash via tools field", () => {
+  // ── Plan mode tool restrictions ────────────────────────────────────────────
+  // opencode canonical tool names (per https://opencode.ai/docs/tools/):
+  //   edit         — modify existing files
+  //   write        — create/overwrite files
+  //   apply_patch  — apply patches
+  //   bash         — execute shell commands
+  // The legacy `file_edit` key was a no-op (server ignored it) which silently
+  // allowed the agent to edit, write, and patch files even in plan mode.
+  it("plan mode disables every write-capable tool (edit, write, apply_patch, bash)", () => {
+    assert.ok(source.includes("edit: false"), "plan mode must disable the 'edit' tool")
+    assert.ok(source.includes("write: false"), "plan mode must disable the 'write' tool")
     assert.ok(
-      source.includes('file_edit: false') && source.includes('bash: false'),
-      "plan mode must set tools: { file_edit: false, bash: false } in prompt body"
+      source.includes("apply_patch: false") || source.includes('"apply_patch": false'),
+      "plan mode must disable the 'apply_patch' tool"
+    )
+    assert.ok(source.includes("bash: false"), "plan mode must disable the 'bash' tool")
+  })
+
+  it("plan mode no longer uses the obsolete file_edit key", () => {
+    assert.ok(
+      !source.includes("file_edit"),
+      "tools key 'file_edit' is not a real opencode tool — remove it (canonical name is 'edit')"
     )
   })
 
-  it("non-plan modes use undefined tools (default enable)", () => {
+  it("non-plan modes pass undefined tools (server default enables all tools)", () => {
     assert.ok(
-      source.includes("? { file_edit: false, bash: false } : undefined"),
-      "non-plan modes must pass undefined tools (server default enables all tools)"
+      /tab\.mode === ['"]plan['"].*:\s*undefined/s.test(source),
+      "non-plan modes must pass undefined tools so the server enables all tools by default"
     )
   })
 
-  it("passes tools object to sendPromptAsync", () => {
-    assert.ok(
-      /tools[\s,)}]/.test(source),
-      "must pass tools parameter to sendPromptAsync"
-    )
-  })
-
-  it("defaults to undefined tools when no mode is set", () => {
-    assert.ok(
-      source.includes("? { file_edit: false, bash: false } : undefined"),
-      "must default to undefined tools when tab.mode is not 'plan'"
-    )
-  })
-
-  it("defaults to undefined tools when no mode is set", () => {
-    assert.ok(
-      source.includes('? { file_edit: false, bash: false } : undefined'),
-      "must set tools to undefined for non-plan modes"
-    )
-  })
-
-  // ── Mode via tools field: plan mode disables file_edit and bash ──
-  it("plan mode disables file_edit and bash via tools field", () => {
-    assert.ok(
-      source.includes("tab.mode === ") && source.includes("file_edit: false") && source.includes("bash: false"),
-      "plan mode must set tools: { file_edit: false, bash: false } in prompt body"
-    )
-  })
-
-  it("non-plan modes use undefined tools (default enable)", () => {
-    assert.ok(
-      source.includes("? { file_edit: false, bash: false } : undefined"),
-      "build/auto modes must pass undefined tools (server default enables all tools)"
-    )
-  })
-
-  it("passes tools object to sendPromptAsync", () => {
+  it("passes the tools object to sendPromptAsync", () => {
     assert.ok(
       source.includes("tools") && source.includes("sendPromptAsync"),
-      "must pass tools parameter to sendPromptAsync"
+      "must pass the tools parameter to sendPromptAsync"
     )
   })
 

@@ -171,6 +171,25 @@ export interface SubagentActivity {
   status: 'running' | 'completed' | 'failed'
   output?: string
   progress?: number
+  // SADD/TDD fields (Phase 1+)
+  tddPhase?: 'red' | 'green' | 'refactor' | 'coverage'
+  testsWritten?: number
+  testsPassing?: number
+  dependencies?: string[]
+  domain?: 'frontend' | 'backend' | 'database' | 'api' | 'shared'
+}
+
+export interface TokenUsageSnapshot {
+  timestamp: number
+  sessionId: string
+  model: string
+  prompt: number
+  completion: number
+  total: number
+  reasoning: number
+  cacheRead: number
+  cacheWrite: number
+  cost: number
 }
 
 export interface WebviewState {
@@ -195,6 +214,9 @@ export interface WebviewState {
   isTimelineVisible?: boolean
   skills?: Record<string, SkillInfo>
   toolCollapseConfig?: ToolCollapseConfig
+  tokenUsageHistory?: TokenUsageSnapshot[]
+  /** Per-session prompt queue snapshot — restored on webview reload. */
+  queues?: Record<string, import("./queue").QueueItem[]>
 }
 
 export interface MentionItem {
@@ -279,6 +301,7 @@ export interface ModelInfo {
   supportsVariants?: boolean
   favorite?: boolean
   recentRank?: number
+  contextWindow?: number
 }
 
 export interface TabInfo {

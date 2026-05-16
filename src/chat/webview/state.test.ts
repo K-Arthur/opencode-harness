@@ -2,8 +2,18 @@ import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
+import { createState } from "./state"
 
 const source = readFileSync(path.join(__dirname, "state.ts"), "utf8")
+
+function makeVsCodeStub() {
+  let saved: unknown = null
+  return {
+    getState: () => saved,
+    setState: (s: unknown) => { saved = s },
+    postMessage: () => {},
+  } as any
+}
 
 describe("state.ts", () => {
   it("exports createState", () => {
@@ -65,4 +75,56 @@ describe("state.ts", () => {
 	    assert.ok(source.includes("recentRank"), "must annotate models with recent rank")
 	  })
 	})
+})
+
+describe("state.ts — per-session token usage isolation (Batch 2d)", () => {
+  it("updateTokenUsage stores usage keyed by session id", () => {
+    const sm = createState(makeVsCodeStub())
+    const s1 = sm.createSession("Tab 1", "anthropic/claude-opus-4-7")
+    const s2 = sm.createSession("Tab 2", "anthropic/claude-opus-4-7")
+
+    sm.updateTokenUsage(s1.id, { prompt: 100, completion: 50, total: 150 })
+    sm.updateTokenUsage(s2.id, { prompt: 200, completion: 80, total: 280 })
+
+    assert.equal(sm.getSession(s1.id)?.tokenUsage?.total, 150)
+    assert.equal(sm.getSession(s2.id)?.tokenUsage?.total, 280)
+  })
+
+  it("updating one session's tokens never mutates the other session", () => {
+    const sm = createState(makeVsCodeStub())
+    const s1 = sm.createSession("Tab 1")
+    const s2 = sm.createSession("Tab 2")
+
+    sm.updateTokenUsage(s1.id, { prompt: 100, completion: 50, total: 150 })
+
+    assert.equal(sm.getSession(s1.id)?.tokenUsage?.total, 150)
+    assert.equal(sm.getSession(s2.id)?.tokenUsage, undefined)
+  })
+
+  it("getActiveSession returns the session whose tokens should drive the counter", () => {
+    const sm = createState(makeVsCodeStub())
+    const s1 = sm.createSession("Tab 1")
+    const s2 = sm.createSession("Tab 2")
+
+    sm.updateTokenUsage(s1.id, { prompt: 10, completion: 5, total: 15 })
+    sm.updateTokenUsage(s2.id, { prompt: 999, completion: 1, total: 1000 })
+
+    sm.setActiveSession(s1.id)
+    assert.equal(sm.getActiveSession()?.tokenUsage?.total, 15)
+
+    sm.setActiveSession(s2.id)
+    assert.equal(sm.getActiveSession()?.tokenUsage?.total, 1000)
+  })
+
+  it("loadSessions preserves local usage when host init_state has no recovered totals yet", () => {
+    const sm = createState(makeVsCodeStub())
+    const s1 = sm.createSession("Tab 1")
+    sm.updateTokenUsage(s1.id, { prompt: 10, completion: 5, total: 15 })
+    sm.getSession(s1.id)!.cost = 0.1234
+
+    sm.loadSessions([{ ...s1, messages: [], tokenUsage: undefined, cost: 0 }], s1.id, "anthropic/claude-opus-4-7")
+
+    assert.equal(sm.getSession(s1.id)?.tokenUsage?.total, 15)
+    assert.equal(sm.getSession(s1.id)?.cost, 0.1234)
+  })
 })

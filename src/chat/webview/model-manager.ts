@@ -20,6 +20,7 @@ export interface ModelManagerHandlers {
   updateModelFavorite: (modelId: string, favorite: boolean) => void
   getEnabledModels: () => ModelInfo[]
   getAllModels: () => ModelInfo[]
+  getContextWindow: (modelKey?: string) => number | undefined
   isOpen: () => boolean
   setProviders: (providers: ProviderConfig[]) => void
   addProvider: (name: string, apiKey: string, baseUrl?: string) => void
@@ -83,6 +84,12 @@ export function setupModelManager(els: ElementRefs, callbacks: ModelManagerCallb
 
   function getAllModels(): ModelInfo[] {
     return models
+  }
+
+  function getContextWindow(modelKey?: string): number | undefined {
+    if (!modelKey) return undefined
+    const model = models.find((m) => `${m.provider}/${m.id}` === modelKey)
+    return model?.contextWindow
   }
 
   function render() {
@@ -251,6 +258,7 @@ export function setupModelManager(els: ElementRefs, callbacks: ModelManagerCallb
     updateModelFavorite,
     getEnabledModels,
     getAllModels,
+    getContextWindow,
     isOpen: () => isOpen,
     setProviders: (newProviders: ProviderConfig[]) => {
       providers = newProviders

@@ -696,6 +696,92 @@ body.hide-errors .tool-result-panel--error { display: none; }
   color: var(--oc-error-fg);
 }
 
+/* Subagent header with name wrap + domain badge */
+.subagent-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  flex: 1;
+  min-width: 0;
+}
+
+.subagent-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subagent-domain-badge {
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  padding: var(--space-0-25) var(--space-1);
+  border-radius: var(--radius-xs);
+  background: var(--oc-muted-subtle);
+  color: var(--color-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* TDD phase bar */
+.subagent-tdd-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1-5);
+  border-radius: var(--radius-xs);
+  background: var(--oc-input-bg);
+  font-size: var(--text-2xs);
+}
+
+.subagent-tdd-phase {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.subagent-test-info {
+  font-weight: 500;
+  color: var(--color-muted);
+}
+
+.subagent-test-info--failing {
+  color: var(--oc-warning);
+}
+
+/* Subagent output snippet */
+.subagent-output {
+  font-size: var(--text-2xs);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 80px;
+  overflow-y: auto;
+  padding: var(--space-1);
+  background: var(--oc-input-bg);
+  border-radius: var(--radius-xs);
+  line-height: 1.4;
+}
+
+/* Empty state */
+.subagent-empty {
+  text-align: center;
+  padding: var(--space-6) var(--space-3);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+/* Subagent list container */
+.subagent-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 /* ─── TEXTAREA ─── */
 
 textarea {

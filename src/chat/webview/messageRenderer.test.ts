@@ -11,7 +11,9 @@ void describe("messageRenderer.ts", () => {
   })
 
   void it("renderMessage sets role-based class on container", () => {
-    assert.ok(source.includes('className = `message ${role}`'))
+    // The class string is `message ${role}` plus a conditional plan-mode
+    // suffix added in Batch 3e. We just assert the role-derived portion.
+    assert.ok(/className\s*=\s*`message \$\{role\}/.test(source))
     assert.ok(source.includes("roleSpan.textContent = role === \"user\" ? \"You\" : \"OpenCode\""))
   })
 

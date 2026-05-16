@@ -245,7 +245,11 @@ export class WebviewEventRouter {
     ["update_cost", (msg: Record<string, unknown>, sessionId?: string) => {
       if (sessionId) {
         const cost = Number(msg.cost ?? 0)
-        if (Number.isFinite(cost)) { this.opts.sessionStore.updateCost(sessionId, cost); this.opts.postMessage({ type: "cost_update", sessionId, cost }) }
+        if (Number.isFinite(cost) && cost > 0) {
+          this.opts.sessionStore.updateCost(sessionId, cost)
+          const session = this.opts.sessionStore.get(sessionId)
+          this.opts.postMessage({ type: "cost_update", sessionId, cost: session?.cost ?? cost })
+        }
       }
     }],
     ["rename_session", (msg: Record<string, unknown>, sessionId?: string) => {
@@ -685,17 +689,54 @@ export class WebviewEventRouter {
       }))
       this.opts.postMessage({ type: "changed_files_update", files, sessionId })
     }],
-    ["open_file", (msg: Record<string, unknown>) => {
-      const filePath = msg.path as string | undefined
-      if (!filePath) return
-      
-      vscode.workspace.openTextDocument(filePath).then(
-        (doc) => vscode.window.showTextDocument(doc),
-        (err) => {
-          log.error(`Failed to open file: ${filePath}`, err)
-          this.opts.showErrorMessage(`Failed to open file: ${(err as Error).message}`)
+    ["open_file", async (msg: Record<string, unknown>) => {
+      const rawPath = msg.path as string | undefined
+      if (!rawPath) return
+
+      try {
+        let filePath = rawPath
+
+        // Strip URI fragments (e.g. #L4 for line selection)
+        const fragmentIdx = filePath.indexOf("#")
+        let lineNumber: number | undefined
+        if (fragmentIdx >= 0) {
+          const fragment = filePath.slice(fragmentIdx + 1)
+          const lineMatch = fragment.match(/^L(\d+)/)
+          if (lineMatch) lineNumber = parseInt(lineMatch[1] ?? "0", 10)
+          filePath = filePath.slice(0, fragmentIdx)
         }
-      )
+
+        // Expand ~/ to home directory
+        if (filePath.startsWith("~/") || filePath === "~") {
+          const home = process.env.HOME ?? process.env.USERPROFILE ?? ""
+          filePath = path.join(home, filePath.replace(/^~/, ""))
+        }
+
+        // Resolve relative paths against workspace root
+        if (!path.isAbsolute(filePath)) {
+          const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+          if (workspaceRoot) {
+            filePath = path.join(workspaceRoot, filePath)
+          } else {
+            this.opts.showErrorMessage(`Cannot open relative file "${rawPath}": no workspace folder open`)
+            return
+          }
+        }
+
+        const uri = vscode.Uri.file(filePath)
+        const doc = await vscode.workspace.openTextDocument(uri)
+        const options: vscode.TextDocumentShowOptions = {
+          preview: true,
+          viewColumn: vscode.ViewColumn.Beside,
+        }
+        if (lineNumber) {
+          options.selection = new vscode.Range(lineNumber - 1, 0, lineNumber - 1, 0)
+        }
+        await vscode.window.showTextDocument(doc, options)
+      } catch (err) {
+        log.error(`Failed to open file: ${rawPath}`, err)
+        this.opts.showErrorMessage(`Failed to open file: ${(err as Error).message}`)
+      }
     }],
     ["get_skills", async (_: Record<string, unknown>) => {
       try {

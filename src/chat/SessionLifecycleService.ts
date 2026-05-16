@@ -9,6 +9,7 @@ import type { AutoCompactor } from "./AutoCompactor"
 import type { CheckpointManager } from "../checkpoint/CheckpointManager"
 import { checkFileSecurity } from "../utils/security"
 import { sdkMessagesToChatMessages } from "../session/sdkMessageConverter"
+import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
 import { log } from "../utils/outputChannel"
 import type { ChatMessage, Block } from "./types"
 
@@ -77,7 +78,7 @@ export class SessionLifecycleService {
         const rows = await this.opts.sessionManager.getSessionMessages(session.cliSessionId)
         const messages = sdkMessagesToChatMessages(rows)
         if (messages.length > 0) {
-          this.opts.sessionStore.applyBackfilledMessages(session.id, messages)
+          this.opts.sessionStore.applyBackfilledMessages(session.id, messages, summarizeOpencodeMessageUsage(rows))
           this.opts.sessionStore.autoTitleFromMessages(session.id)
         } else {
           // Backfill returned 0 rows - close tab as session is empty on server

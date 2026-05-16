@@ -165,18 +165,23 @@
   --tool-meta-color: var(--toolMetaColor, #a78bfa);
 
   /* ─── Diff Colours ─── */
-  --diff-added-bg: color-mix(in srgb, #4caf50 12%, transparent);
+  /* Backgrounds bumped from 12% → 22% so add/remove is obvious at a glance.
+     A separate (slightly darker) tint highlights the line-number gutter. */
+  --diff-added-bg: color-mix(in srgb, #4caf50 22%, transparent);
   --diff-added-fg: #4caf50;
-  --diff-removed-bg: color-mix(in srgb, #f44336 12%, transparent);
+  --diff-removed-bg: color-mix(in srgb, #f44336 22%, transparent);
   --diff-removed-fg: #f44336;
   --diff-context-color: var(--oc-diff-context, var(--oc-muted));
   --diff-hunk-bg: var(--oc-diff-context-bg, color-mix(in srgb, var(--color-accent) 8%, transparent));
   --diff-hunk-fg: var(--oc-diff-hunk-header, var(--color-muted));
   --diff-line-number-fg: var(--oc-diff-line-number, var(--color-muted));
-  --diff-added-bg: var(--oc-diff-added-bg, color-mix(in srgb, #4caf50 12%, transparent));
-  --diff-removed-bg: var(--oc-diff-removed-bg, color-mix(in srgb, #f44336 12%, transparent));
+  --diff-added-bg: var(--oc-diff-added-bg, color-mix(in srgb, #4caf50 22%, transparent));
+  --diff-removed-bg: var(--oc-diff-removed-bg, color-mix(in srgb, #f44336 22%, transparent));
   --diff-added-fg: var(--oc-diff-added, #4caf50);
   --diff-removed-fg: var(--oc-diff-removed, #f44336);
+  /* Line-number gutter tint — darker than the content background. */
+  --diff-added-line-number-bg: var(--oc-diff-added-line-number-bg, color-mix(in srgb, #4caf50 32%, transparent));
+  --diff-removed-line-number-bg: var(--oc-diff-removed-line-number-bg, color-mix(in srgb, #f44336 32%, transparent));
   --bg-code: var(--vscode-textCodeBlock-background, rgba(0,0,0,0.2));
 
   /* ─── Markdown Colours (OpenCode CLI theme parity) ─── */
@@ -311,9 +316,12 @@
   --bg-code: var(--vscode-textCodeBlock-background, rgba(0, 0, 0, 0.06));
   --oc-tool-bg: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.04));
 
-  /* Diff colours: lower opacity looks right on white */
-  --diff-added-bg: color-mix(in srgb, #4caf50 10%, transparent);
-  --diff-removed-bg: color-mix(in srgb, #f44336 10%, transparent);
+  /* Diff colours: lighter themes need slightly less saturation than dark
+     but still strong enough to be obvious at a glance. */
+  --diff-added-bg: color-mix(in srgb, #4caf50 18%, transparent);
+  --diff-removed-bg: color-mix(in srgb, #f44336 18%, transparent);
+  --diff-added-line-number-bg: color-mix(in srgb, #4caf50 28%, transparent);
+  --diff-removed-line-number-bg: color-mix(in srgb, #f44336 28%, transparent);
 }
 
 .vscode-dark {

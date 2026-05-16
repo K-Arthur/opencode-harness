@@ -48,6 +48,10 @@ describe("resolveContextWindow", () => {
     assert.equal(resolveContextWindow("unknown/some-model", 50_000), 50_000)
   })
 
+  it("does not override opencode server limits with another provider's known model id", () => {
+    assert.equal(resolveContextWindow("opencode/claude-opus-4-7-20260415", 1_000_000), 1_000_000)
+  })
+
   it("returns undefined when neither known nor server has a value", () => {
     assert.equal(resolveContextWindow("unknown/some-model"), undefined)
     assert.equal(resolveContextWindow("unknown/some-model", 0), undefined)

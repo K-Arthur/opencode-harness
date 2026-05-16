@@ -4,6 +4,7 @@ import { SessionStore } from "../session/SessionStore"
 import { SessionManager } from "../session/SessionManager"
 import { SessionDbReader } from "../session/SessionDbReader"
 import { sdkMessagesToChatMessages } from "../session/sdkMessageConverter"
+import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
 import { log } from "../utils/outputChannel"
 import { checkFileSecurity, sanitizeForPrompt } from "../utils/security"
 
@@ -458,7 +459,7 @@ export function registerChooseHistorySessionCommand(
               try {
                 const rows = await sessionManager.getSessionMessages(picked.id)
                 const chatMessages = sdkMessagesToChatMessages(rows)
-                sessionStore.applyBackfilledMessages(picked.id, chatMessages)
+                sessionStore.applyBackfilledMessages(picked.id, chatMessages, summarizeOpencodeMessageUsage(rows))
               } catch (err) {
                 log.warn(`Backfill failed for ${picked.id}`, err)
               }

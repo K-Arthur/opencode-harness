@@ -280,7 +280,9 @@ export function createState(vscode: VsCodeApi) {
         // the old array loses its data on the next state save.
         messages: existing ? existing.messages : s.messages,
         // Preserve local isStreaming flag if session exists
-        isStreaming: existing ? existing.isStreaming : false
+        isStreaming: existing ? existing.isStreaming : false,
+        tokenUsage: s.tokenUsage ?? existing?.tokenUsage,
+        cost: typeof s.cost === "number" && s.cost > 0 ? s.cost : existing?.cost ?? s.cost,
       }
     })
 

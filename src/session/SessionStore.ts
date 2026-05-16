@@ -36,7 +36,7 @@ export interface OpenCodeSession {
   archived?: boolean
   messages: ChatMessage[]
   cost: number
-  tokenUsage: { prompt: number; completion: number; total: number }
+  tokenUsage: { prompt: number; completion: number; total: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }
   changedFiles?: string[]
   workspacePath?: string
   /** ID of the session this was forked from, if any. */
@@ -511,10 +511,14 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
    * Used after fetching full history from the server for a session that was
    * imported via `importServerSessions`.
    */
-  applyBackfilledMessages(id: string, messages: ChatMessage[]): boolean {
+  applyBackfilledMessages(id: string, messages: ChatMessage[], usage?: { cost: number; tokenUsage: OpenCodeSession["tokenUsage"] }): boolean {
     const session = this.sessions.get(id)
     if (!session) return false
     session.messages = messages
+    if (usage) {
+      session.cost = usage.cost
+      session.tokenUsage = usage.tokenUsage
+    }
     delete session.needsBackfill
     this.save()
     this._onSessionsChanged.fire()
@@ -712,7 +716,39 @@ validateSessionName(name: string): string | null {
     this.save()
   }
 
-  updateTokenUsage(id: string, usage: { prompt: number; completion: number; total: number }): void {
+  accumulateCost(id: string, costDelta: number): void {
+    if (!Number.isFinite(costDelta) || costDelta <= 0) return
+    const session = this.sessions.get(id)
+    if (!session) return
+    if (session.cost === undefined) session.cost = 0
+    const result = session.cost + costDelta
+    session.cost = Number.isFinite(result) ? result : session.cost
+    session.lastActiveAt = Date.now()
+    this.save()
+  }
+
+  accumulateTokenUsage(id: string, delta: { prompt: number; completion: number; total: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }): void {
+    if (!Number.isFinite(delta.prompt) || !Number.isFinite(delta.completion)) return
+    const session = this.sessions.get(id)
+    if (!session) return
+    if (!session.tokenUsage) {
+      session.tokenUsage = { prompt: 0, completion: 0, total: 0 }
+    }
+    const safe = (cur: number, d: number) => Number.isFinite(cur + d) ? cur + d : cur
+    const deltaTotal = Number.isFinite(delta.total)
+      ? delta.total
+      : delta.prompt + delta.completion + (delta.reasoning ?? 0) + (delta.cacheRead ?? 0) + (delta.cacheWrite ?? 0)
+    session.tokenUsage.prompt = safe(session.tokenUsage.prompt, delta.prompt)
+    session.tokenUsage.completion = safe(session.tokenUsage.completion, delta.completion)
+    session.tokenUsage.total = safe(session.tokenUsage.total, deltaTotal)
+    if (delta.reasoning && Number.isFinite(delta.reasoning)) session.tokenUsage.reasoning = safe(session.tokenUsage.reasoning ?? 0, delta.reasoning)
+    if (delta.cacheRead && Number.isFinite(delta.cacheRead)) session.tokenUsage.cacheRead = safe(session.tokenUsage.cacheRead ?? 0, delta.cacheRead)
+    if (delta.cacheWrite && Number.isFinite(delta.cacheWrite)) session.tokenUsage.cacheWrite = safe(session.tokenUsage.cacheWrite ?? 0, delta.cacheWrite)
+    session.lastActiveAt = Date.now()
+    this.save()
+  }
+
+  updateTokenUsage(id: string, usage: OpenCodeSession["tokenUsage"]): void {
     const session = this.sessions.get(id)
     if (!session) return
     session.tokenUsage = usage

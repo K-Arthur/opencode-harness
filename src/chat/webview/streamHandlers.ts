@@ -6,6 +6,10 @@ import type { ScrollAnchor } from "./scrollAnchor"
 import { CHECK_SVG, SUCCESS_SVG, SPINNER_SVG } from "./icons"
 import { RenderQueue } from "./renderQueue"
 import { handleStreamEnd as handleStreamEndImpl } from "./streamEndHandler"
+import { getErrorHandler } from "./errorHandler"
+import { getErrorDisplay } from "./errorComponents"
+import { getNetworkMonitor } from "./networkMonitor"
+import { getQuotaMonitor } from "./quotaMonitor"
 
 export function stripContextFromText(text: string): string {
   const contextRegex = /<context>[\s\S]*?<\/context>/gi
@@ -615,23 +619,42 @@ export function handleStreamError(
   resetStreamState(state)
   state.rafPending = false
 
-  const errBlock: ErrorBlock = {
-    type: 'error',
-    code: error.code || 'unknown',
-    message: error.message || "An error occurred",
-    detail: error.detail,
-    retryable: error.retryable || false,
+  // Use new error handling system
+  const errorHandler = getErrorHandler({ logToConsole: true, logToExtension: false })
+  const errorContext = errorHandler.handleError(error)
+
+  // Check network status for network-related errors
+  const networkMonitor = getNetworkMonitor()
+  if (!networkMonitor.isOnline() && errorContext.category === 'network') {
+    // Enhance with network status
+    errorContext.technicalDetails = `Network Status: ${networkMonitor.getConnectionQuality()}, Latency: ${networkMonitor.getNetworkStatus().latency}ms`
   }
 
+  // Use new error display component
+  const errorDisplay = getErrorDisplay()
+  const errorElement = errorDisplay.render(errorContext)
+
+  // Create a wrapper message for the error
   const errMsg: ChatMessage = {
     role: "system",
     id: `error-${crypto.randomUUID()}`,
-    blocks: [errBlock as unknown as Block],
+    blocks: [{
+      type: 'text',
+      text: errorContext.userMessage
+    } as unknown as Block],
     timestamp: Date.now(),
   }
   messages.push(errMsg)
 
   const el = renderMessage(errMsg)
+  
+  // Replace the default message content with our enhanced error display
+  const messageContent = el.querySelector('.message-bubble')
+  if (messageContent) {
+    messageContent.innerHTML = ''
+    messageContent.appendChild(errorElement)
+  }
+  
   els.messageList.appendChild(el)
   els.scrollAnchor.scrollIfAnchored()
   saveState()

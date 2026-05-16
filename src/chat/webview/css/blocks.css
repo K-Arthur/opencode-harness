@@ -431,6 +431,13 @@
   animation: tool-elapsed-pulse 1s ease-in-out infinite;
 }
 
+/* Frozen final duration: no longer ticking, dimmer than active timers. */
+.tool-elapsed--final {
+  animation: none;
+  color: var(--color-muted, #888);
+  opacity: 0.8;
+}
+
 @keyframes tool-elapsed-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
@@ -780,6 +787,82 @@
   opacity: 0.5;
 }
 
+/* Plan-mode assistant turns: amber left border + subtle tint so prose
+   produced during planning is visibly distinct from applied work. */
+.message--plan-mode .message-bubble {
+  border-left: 3px solid color-mix(in srgb, var(--vscode-notificationsWarningIcon-foreground, #ffb74d) 60%, transparent);
+  background: color-mix(in srgb, var(--vscode-notificationsWarningIcon-foreground, #ffb74d) 4%, transparent);
+  padding-left: var(--space-2);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+.message--plan-mode .message-header::before {
+  content: "PLAN";
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-1-5);
+  height: var(--space-4);
+  margin-right: var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-2xs, 10px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  background: color-mix(in srgb, var(--vscode-notificationsWarningIcon-foreground, #ffb74d) 20%, transparent);
+  color: var(--vscode-notificationsWarningIcon-foreground, #ffb74d);
+  border: 1px solid color-mix(in srgb, var(--vscode-notificationsWarningIcon-foreground, #ffb74d) 40%, transparent);
+}
+
+/* Plan-shaped prose: when detectPlanProse() flags a text block as a plan,
+   it wraps the body in .plan-prose so we can give it a richer treatment. */
+.plan-prose {
+  margin: var(--space-2) 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--vscode-notificationsWarningIcon-foreground, #ffb74d) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vscode-notificationsWarningIcon-foreground, #ffb74d) 25%, transparent);
+}
+
+.plan-prose-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--vscode-notificationsWarningIcon-foreground, #ffb74d);
+  margin-bottom: var(--space-2);
+}
+
+/* Plan-mode diffs are proposals — distinct amber accent matches the
+   plan-mode pill in the mode dropdown so the visual language is consistent. */
+.diff-block--plan {
+  border-color: color-mix(in srgb, var(--vscode-notificationsWarningIcon-foreground, #ffb74d) 50%, var(--color-border));
+  border-left-width: 3px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vscode-notificationsWarningIcon-foreground, #ffb74d) 20%, transparent), var(--shadow-md);
+}
+
+/* PLAN pill in the diff header */
+.diff-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-1-5);
+  height: var(--space-4);
+  margin-right: var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-2xs, 10px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.diff-pill--plan {
+  background: color-mix(in srgb, var(--vscode-notificationsWarningIcon-foreground, #ffb74d) 20%, transparent);
+  color: var(--vscode-notificationsWarningIcon-foreground, #ffb74d);
+  border: 1px solid color-mix(in srgb, var(--vscode-notificationsWarningIcon-foreground, #ffb74d) 40%, transparent);
+}
+
 .diff-header {
   display: flex;
   align-items: center;
@@ -927,6 +1010,14 @@
 .diff-line--added .diff-line-content { background: var(--diff-added-bg); color: var(--diff-added-fg); }
 .diff-line--removed .diff-line-content { background: var(--diff-removed-bg); color: var(--diff-removed-fg); }
 .diff-line--context .diff-line-content { color: var(--diff-context-color, var(--color-muted)); }
+
+/* Tinted line-number gutter so the colour cue extends edge-to-edge. */
+.diff-line--added .diff-line-num,
+.diff-line--added .diff-line-marker { background: var(--diff-added-line-number-bg); }
+.diff-line--removed .diff-line-num,
+.diff-line--removed .diff-line-marker { background: var(--diff-removed-line-number-bg); }
+.diff-line--added .diff-line-marker { color: var(--diff-added-fg); font-weight: 700; }
+.diff-line--removed .diff-line-marker { color: var(--diff-removed-fg); font-weight: 700; }
 
 .diff-hunk-header {
   background: var(--diff-hunk-bg);
@@ -1365,5 +1456,179 @@
   .tool-call--error { border-left-color: ErrorText !important; }
 
   .diff-line--added .diff-line-content { background: GreenBackground !important; }
+
+/* ─── Plan Card ─── */
+
+.plan-card {
+  border: 1px solid var(--vscode-panel-border, #3c3c3c);
+  border-radius: 8px;
+  background: var(--vscode-sideBar-background, #1e1e1e);
+  padding: 12px 16px;
+  margin: 8px 0;
+}
+
+.plan-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.plan-card-icon {
+  color: var(--vscode-textLink-foreground, #3794ff);
+  display: flex;
+  align-items: center;
+}
+
+.plan-card-title {
+  font-weight: 600;
+  font-size: 14px;
+  flex: 1;
+  color: var(--vscode-foreground, #cccccc);
+}
+
+.plan-card-open-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid var(--vscode-button-border, #0078d4);
+  border-radius: 4px;
+  background: var(--vscode-button-secondaryBackground, #3a3d41);
+  color: var(--vscode-button-secondaryForeground, #ffffff);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.plan-card-open-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground, #45494e);
+}
+
+.plan-card-overview {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground, #999999);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.plan-card-todos {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.plan-card-todo {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+
+.plan-card-todo--completed {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.plan-card-todo--in-progress {
+  background: var(--vscode-inputValidation-infoBackground, rgba(0, 120, 212, 0.15));
+}
+
+.plan-card-todo-checkbox {
+  color: var(--vscode-terminal-ansiGreen, #89d185);
+  font-size: 14px;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.plan-card-todo-text {
+  flex: 1;
+  color: var(--vscode-foreground, #cccccc);
+}
+
+.plan-card-todo-status {
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground, #999999);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.plan-card-footer {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground, #999999);
+  border-top: 1px solid var(--vscode-panel-border, #3c3c3c);
+  padding-top: 6px;
+}
+
+/* ─── Tool Result Diff Highlighting ─── */
+
+.tool-result-body--diff {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: var(--vscode-editor-font-size, 13px);
+  line-height: 1.5;
+  overflow-x: auto;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+}
+
+.tool-result-body--diff .diff-line {
+  display: block;
+  padding: 0 8px;
+  white-space: pre;
+}
+
+.tool-result-body--diff .diff-line--added {
+  background: var(--diff-added-bg, rgba(40, 167, 69, 0.15));
+  color: var(--diff-added-fg, #89d185);
+}
+
+.tool-result-body--diff .diff-line--removed {
+  background: var(--diff-removed-bg, rgba(248, 81, 73, 0.15));
+  color: var(--diff-removed-fg, #f97583);
+}
+
+.tool-result-body--diff .diff-line--hunk {
+  background: var(--vscode-editor-inactiveSelectionBackground, rgba(128, 128, 128, 0.1));
+  color: var(--vscode-editorLineNumber-foreground, #858585);
+  font-weight: 600;
+}
+
+.tool-result-body--diff .diff-line--context {
+  color: var(--vscode-editor-foreground, #cccccc);
+}
+
+/* ─── Context Overflow Warning ─── */
+
+.context-overflow-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  margin: 8px 0;
+  background: var(--vscode-inputValidation-warningBackground, rgba(117, 117, 27, 0.15));
+  border: 1px solid var(--vscode-inputValidation-warningBorder, #cca700);
+  border-radius: 4px;
+  color: var(--vscode-inputValidation-warningForeground, #ffffff);
+  font-size: 12px;
+  line-height: 1.4;
+  animation: context-warning-in 0.3s ease-out;
+}
+
+.context-overflow-warning-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+@keyframes context-warning-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.cost-display--warning {
+  color: var(--vscode-notificationsWarningIcon-foreground, #cca700) !important;
+  font-weight: 600;
+}
   .diff-line--removed .diff-line-content { background: Mark !important; }
 }
