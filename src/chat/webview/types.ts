@@ -378,8 +378,10 @@ export interface RateLimitInfo {
 export interface CheckpointInfo {
   id: string
   sessionId: string
-  message?: string
+  messageId?: string
   createdAt?: number
+  filesChanged?: string[]
+  action?: string
 }
 
 export type HostMessage =
@@ -393,7 +395,7 @@ export type HostMessage =
   | { type: "server_status"; sessionId?: string; status: string; errorContext?: unknown }
   | { type: "permission_request"; sessionId: string; permissionId?: string; title: string }
   | { type: "todos_update"; sessionId: string; todos: unknown[] }
-  | { type: "changed_files_update"; sessionId: string; files: unknown[] }
+  | { type: "changed_files_update"; sessionId: string; files: FileChange[] }
   | { type: "file_edited"; sessionId: string; file: string }
   | { type: "message"; sessionId: string; message: ChatMessage }
   | { type: "session_compacted"; sessionId: string }
@@ -441,10 +443,10 @@ export type HostMessage =
   | { type: "insert_text"; code: string; language?: string }
   | { type: "command_list"; commands: unknown[]; showInChat?: boolean }
   | { type: "mcp_servers"; servers: unknown[] }
-  | { type: "diff_result"; sessionId: string; diffId: string; ok: boolean; filePath?: string; proposedContent?: string }
+  | { type: "diff_result"; sessionId: string; blockId: string; ok: boolean; message?: string; checkpointCreated?: boolean }
   | { type: "revert_result"; ok: boolean; sessionId?: string; error?: string }
   | { type: "checkpoint_list"; sessionId: string; checkpoints: CheckpointInfo[] }
-  | { type: "checkpoint_restored"; ok: boolean; checkpointId: string }
+  | { type: "checkpoint_restored"; sessionId: string; ok: boolean; checkpointId: string; error?: string }
   | { type: "stash_success"; name: string }
   | { type: "stash_error"; error: string }
   | { type: "stash_list"; stashes: unknown[] }
@@ -519,11 +521,11 @@ export type WebviewMessage =
   | { type: "abort"; sessionId: string }
   | { type: "close_tab"; sessionId: string }
   | { type: "switch_tab"; sessionId: string }
-  | { type: "accept_diff"; diffId: string; sessionId?: string }
+  | { type: "accept_diff"; diffId: string; path?: string; sessionId?: string }
   | { type: "reject_diff"; diffId: string; sessionId?: string }
   | { type: "accept_hunk"; sessionId: string; hunkId: string; diffId?: string }
   | { type: "reject_hunk"; sessionId: string; hunkId: string; diffId?: string }
-  | { type: "revert_diff"; diffId: string; sessionId?: string }
+  | { type: "revert_diff"; diffId: string; path: string; sessionId?: string }
   | { type: "accept_permission"; sessionId?: string; permissionId?: string; response?: string }
   | { type: "mention_search"; query: string }
   | { type: "list_sessions"; limit?: number }
@@ -568,7 +570,7 @@ export type WebviewMessage =
   | { type: "remove_mcp_server"; name: string }
   | { type: "toggle_mcp_server"; name: string; disabled: boolean }
   | { type: "get_mcp_servers" }
-  | { type: "show_diff"; diffId: string; sessionId?: string }
+  | { type: "show_diff"; filePath: string; proposedContent: string; title?: string; sessionId?: string }
   | { type: "list_checkpoints"; sessionId: string }
   | { type: "restore_checkpoint"; checkpointId: string; sessionId?: string }
   | { type: "revert_message"; sessionId?: string; messageId?: string }

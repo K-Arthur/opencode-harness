@@ -14,6 +14,10 @@ export interface ProposedEdit {
 }
 
 export class DiffApplier {
+  private acceptedEdits = new Map<string, ProposedEdit>()
+  private diffDocuments = new Map<string, string>()
+  private diffDocumentProvider?: vscode.Disposable
+
   parseCodeBlocks(parts: { type: string; text?: string }[]): ProposedEdit[] {
     const edits: ProposedEdit[] = []
     for (const part of parts) {
@@ -125,7 +129,14 @@ export class DiffApplier {
 
     try {
       // Create backup before applying changes
-      const originalContent = edit.originalContent || await this.readFile(uri)
+      let originalContent = edit.originalContent
+      if (!originalContent) {
+        try {
+          originalContent = await this.readFile(uri)
+        } catch {
+          originalContent = ""
+        }
+      }
       const backupPath = this.createBackup(edit.filePath, originalContent)
       edit.backupPath = backupPath
       log.info(`Backup created: ${backupPath}`)
@@ -202,6 +213,14 @@ export class DiffApplier {
     // No-op
   }
 
+  markAcceptedEdit(diffId: string, edit: ProposedEdit): void {
+    this.acceptedEdits.set(diffId, edit)
+  }
+
+  getAcceptedEdit(diffId: string): ProposedEdit | undefined {
+    return this.acceptedEdits.get(diffId)
+  }
+
   private resolveWorkspaceFile(filePath: string): vscode.Uri | null {
     const workspaceFolders = vscode.workspace.workspaceFolders
     if (!workspaceFolders || workspaceFolders.length === 0) return null
@@ -214,7 +233,11 @@ export class DiffApplier {
     return vscode.Uri.file(fullPath)
   }
 
-  dispose(): void {}
+  dispose(): void {
+    this.diffDocumentProvider?.dispose()
+    this.diffDocuments.clear()
+    this.acceptedEdits.clear()
+  }
 
   async showSideBySideDiff(filePath: string, proposedContent: string, title?: string): Promise<void> {
     const uri = this.resolveWorkspaceFile(filePath)
@@ -225,24 +248,22 @@ export class DiffApplier {
     const originalDoc = await vscode.workspace.openTextDocument(uri)
     const originalContent = originalDoc.getText()
 
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
-    const baseName = path.basename(filePath)
-    const leftUri = vscode.Uri.parse(`untitled:${baseName}.original.${timestamp}`)
-    const rightUri = vscode.Uri.parse(`untitled:${baseName}.proposed.${timestamp}`)
-
-    await vscode.workspace.openTextDocument(leftUri).then(doc => {
-      const edit = new vscode.WorkspaceEdit()
-      edit.insert(leftUri, new vscode.Position(0, 0), originalContent)
-      return vscode.workspace.applyEdit(edit)
-    })
-
-    await vscode.workspace.openTextDocument(rightUri).then(doc => {
-      const edit = new vscode.WorkspaceEdit()
-      edit.insert(rightUri, new vscode.Position(0, 0), proposedContent)
-      return vscode.workspace.applyEdit(edit)
-    })
+    this.ensureDiffDocumentProvider()
+    const timestamp = encodeURIComponent(new Date().toISOString())
+    const baseName = encodeURIComponent(path.basename(filePath))
+    const leftUri = vscode.Uri.parse(`opencode-diff:/${baseName}.original.${timestamp}`)
+    const rightUri = vscode.Uri.parse(`opencode-diff:/${baseName}.proposed.${timestamp}`)
+    this.diffDocuments.set(leftUri.toString(), originalContent)
+    this.diffDocuments.set(rightUri.toString(), proposedContent)
 
     await vscode.commands.executeCommand("vscode.diff", leftUri, rightUri, title || `Diff: ${filePath}`)
+  }
+
+  private ensureDiffDocumentProvider(): void {
+    if (this.diffDocumentProvider) return
+    this.diffDocumentProvider = vscode.workspace.registerTextDocumentContentProvider("opencode-diff", {
+      provideTextDocumentContent: (uri) => this.diffDocuments.get(uri.toString()) ?? "",
+    })
   }
 
   /** Parse a unified diff string into an array of hunk descriptors. Pure function — no I/O. */

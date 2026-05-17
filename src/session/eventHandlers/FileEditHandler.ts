@@ -2,16 +2,20 @@ import { SdkEventLike, NormalizedOpencodeEvent, NormalizerContext, EventHandler 
 
 export class FileEditHandler implements EventHandler {
   canHandle(eventType: string): boolean {
-    return eventType === "file.edited" || eventType === "session.diff"
+    return eventType === "file.edited"
   }
 
   handle(event: SdkEventLike, context: NormalizerContext): NormalizedOpencodeEvent[] {
-    const out: NormalizedOpencodeEvent[] = []
-    out.push({
+    const properties = event.properties as { sessionID?: string; file?: unknown } | undefined
+    const file = typeof properties?.file === "string" ? properties.file : undefined
+    return [{
       type: "file_edited",
-      sessionId: (event.properties as { sessionID?: string } | undefined)?.sessionID,
-      data: event.properties,
-    })
-    return out
+      sessionId: properties?.sessionID,
+      data: {
+        ...properties,
+        file,
+        files: file ? [file] : [],
+      },
+    }]
   }
 }

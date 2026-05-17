@@ -56,7 +56,7 @@ OpenCode includes advanced features like cost tracking, theme customization, gra
 - **Context-Aware** — Automatically includes open files, diagnostics, git status, and workspace structure
 - **Inline Code Actions** — CodeLens on functions for Explain, Refactor, and Generate Tests
 - **Smart Diffs** — AI-suggested code changes shown as unified diffs with Accept/Discard controls
-- **Checkpoints** — Git worktree snapshots before each AI action for instant rollback
+- **Checkpoints** — VS Code-safe file snapshots for extension-managed diff accepts, plus OpenCode-native message revert for server-managed edits
 - **Slash Commands** — `/clear`, `/model`, `/cost`, `/new`, `/export`, `/compact`, `/continue`, `/help`, `/queue`
 - **Export Conversation** — Save current session as Markdown file
 - **Session History** — Searchable conversation history with resume support in the chat surface
@@ -71,7 +71,9 @@ OpenCode includes advanced features like cost tracking, theme customization, gra
 - **Secure Storage** — MCP server configs stored in VS Code settings (`opencode.mcpServers`)
 
 ### Phase 2: Diff & Stop Command
-- **Side-by-Side Diff Viewer** — Compare AI-suggested changes with current file using `vscode.diff` command
+- **Side-by-Side Diff Viewer** — Compare AI-suggested changes with current file using read-only virtual documents and VS Code's `vscode.diff` command
+- **Undoable Diff Applies** — Accepted diffs are applied through `WorkspaceEdit` and get a pre-accept extension snapshot for local revert
+- **Changed-File Tracking** — Backend `SessionStore` persists canonical changed files; the webview chip bar and todos panel sync from `changed_files_update`
 - **Stop Command** — Abort active AI sessions with keyboard shortcuts (`Escape`, `Ctrl+Shift+Escape`)
 - **Fast Diff Algorithm** — Uses `fast-diff` library for O(n) diff computation (replacing naive O(n*m) algorithm)
 
@@ -410,11 +412,11 @@ OpenCode uses AI models to assist with coding tasks. Please note:
 - Use Build mode only in trusted environments with version control
 - Always test AI-generated code before deployment
 - Keep sensitive data (API keys, secrets) out of conversations
-- Use checkpoints to save your work before major changes
+- Use checkpoints for extension-managed diff accepts, and use message revert for OpenCode server-managed tool edits
 
 ### Safety Features
-- **Checkpoints:** Save your work before AI makes changes
-- **Rollback:** Revert to any checkpoint instantly
+- **Checkpoints:** Save extension-managed diff state before accepted changes are applied
+- **Rollback:** Revert accepted extension diffs from local file snapshots; revert server-side tool edits through OpenCode's native message rollback
 - **Permission Modes:** Control how much autonomy the AI has
 - **Cost Tracking:** Monitor and limit your AI usage
 
@@ -745,7 +747,7 @@ src/
 ├── terminal/
 │   └── TerminalBridge.ts        # Terminal output capture
 ├── checkpoint/
-│   └── CheckpointManager.ts     # Git snapshots
+│   └── CheckpointManager.ts     # VS Code file snapshots
 ├── utils/
 │   ├── outputChannel.ts         # Logging utility
 │   ├── tokenCounter.ts          # Token estimation

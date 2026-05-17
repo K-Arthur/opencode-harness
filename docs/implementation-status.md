@@ -101,6 +101,44 @@ After auditing the chat pipeline the following gaps were closed:
 - **File**: `src/chat/webview/main.test.ts`
 - The test grepped `main.ts` for `scrollMessageToTop(msgList, target)` inside the `scrollToTurn` block, but the implementation had moved to `src/chat/webview/ui/scrollMarkers.ts`. The test now reads from `scrollMarkersSource` (already imported at the top of the file).
 
+### Phase 3: Slash commands & session lifecycle fixes ✅ (2026-05-17)
+
+Frontend command availability and session creation edge cases:
+
+#### 9. Inline slash dropdown opacity ✅
+- **File**: `src/chat/webview/css/components.css`
+- **Symptom**: The mention/commands dropdown was semi-transparent (94% opacity via `color-mix`), making text behind it bleed through.
+- **Fix**: Changed `.dropdown` background from `color-mix(in srgb, var(--oc-editor-bg) 94%, var(--oc-panel-bg))` to `var(--oc-editor-bg)`.
+
+#### 10. Commands modal z-index consistency ✅
+- **File**: `src/chat/webview/css/components.css`
+- **Symptom**: `.commands-modal` used `var(--z-modal, 1000)` while the actual `--z-modal` token is `300`.
+- **Fix**: Changed fallback from `1000` to `300` to match all other modals.
+
+#### 11. Proactive command list loading ✅
+- **File**: `src/chat/webview/main.ts`
+- **Symptom**: Server commands and skill/prompt commands only appeared in the inline dropdown after typing `/commands`. On fresh sessions, only the 16 hardcoded `LOCAL_COMMANDS` were available.
+- **Fix**: `boot()` now sends `list_commands` immediately after `webview_ready`, pre-populating both the inline dropdown and the commands modal.
+
+#### 12. Commands palette accessibility ✅
+- **Files**: `src/chat/webview/index.html`, `src/chat/webview/dom.ts`, `src/chat/webview/main.ts`, `package.json`
+- **Symptom**: Commands modal only accessible by typing `/commands` or VS Code command palette — no keyboard shortcut, no visible button.
+- **Fix**: Added `Ctrl+Shift+/` keybinding, added a `>_` palette button in the input bottom bar, and the inline dropdown now hides when the modal opens.
+
+#### 13. Command execution on new sessions ✅
+- **File**: `src/chat/CommandExecutionService.ts`
+- **Symptom**: Running a server command on a freshly created tab (no server session) caused `NotFoundError: Session not found` because `tab.cliSessionId` was undefined.
+- **Fix**: `handleExecuteCommand` now calls `sessionManager.ensureSession()` when `cliSessionId` is missing, creates the server session on-demand, and persists the ID on both the tab and session store.
+
+#### 14. Host state push messages handled ✅
+- **File**: `src/chat/webview/main.ts`
+- **Symptom**: `push_all_state` and `push_visible_state` messages from the host were logged as "unknown host message type" and silently dropped.
+- **Fix**: Both messages now trigger `requestStateSyncDebounced()` for proper state synchronization.
+
+#### 15. TDD test coverage ✅
+- **File**: `src/chat/CommandExecutionService.test.ts` (new), `src/chat/webview/main.test.ts` (extended)
+- **Added**: 7 tests for `CommandExecutionService` (session ensure flow, ID persistence, error handling). 4 regression tests in `main.test.ts` for message handlers, proactive loading, and button wiring.
+
 ## Remaining Work
 
 ### Integrate TaskDecomposer with Spec System ⏳

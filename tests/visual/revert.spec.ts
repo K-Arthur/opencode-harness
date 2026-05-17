@@ -4,6 +4,7 @@ import { installVsCodeApi, expectNoWebviewErrors } from './webviewTestHarness'
 async function mountDiffBlockWithRevert(page: Page, state: 'pending' | 'accepted' | 'discarded' = 'accepted') {
   await page.evaluate((diffState) => {
     document.querySelector('.welcome-container')?.remove()
+    document.querySelector('#welcome-view')?.remove()
 
     const existingList = document.querySelector('.message-list')
     if (existingList) {
@@ -45,6 +46,42 @@ async function mountDiffBlockWithRevert(page: Page, state: 'pending' | 'accepted
       revertBtn.className = 'diff-btn diff-btn--revert'
       revertBtn.textContent = 'Revert'
       revertBtn.setAttribute('aria-label', 'Revert changes to src/example.ts')
+      revertBtn.addEventListener('click', () => {
+        document.getElementById('revert-modal')?.remove()
+
+        const modal = document.createElement('div')
+        modal.id = 'revert-modal'
+        modal.className = 'revert-modal'
+        modal.setAttribute('role', 'dialog')
+        modal.setAttribute('aria-modal', 'true')
+        modal.setAttribute('aria-labelledby', 'revert-modal-title')
+        modal.innerHTML = `
+          <div class="revert-modal-content">
+            <h2 id="revert-modal-title" class="revert-modal-title">Revert Changes?</h2>
+            <p class="revert-modal-text">
+              This will revert all changes to <strong>src/example.ts</strong>.
+              This action cannot be undone.
+            </p>
+            <div class="revert-modal-actions">
+              <button class="revert-modal-btn revert-modal-btn--cancel" id="revert-cancel">Cancel</button>
+              <button class="revert-modal-btn revert-modal-btn--confirm" id="revert-confirm">Revert Changes</button>
+            </div>
+          </div>
+        `
+        document.body.appendChild(modal)
+
+        const cancelBtn = modal.querySelector<HTMLButtonElement>('#revert-cancel')
+        cancelBtn?.addEventListener('click', () => modal.remove())
+
+        const handleEscape = (e: KeyboardEvent) => {
+          if (e.key === 'Escape') {
+            modal.remove()
+            document.removeEventListener('keydown', handleEscape)
+          }
+        }
+        document.addEventListener('keydown', handleEscape)
+        cancelBtn?.focus()
+      })
       actionBar.appendChild(revertBtn)
     } else if (diffState === 'discarded') {
       const chip = document.createElement('span')

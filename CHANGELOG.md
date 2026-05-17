@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Inline slash dropdown transparency** — The mention/commands dropdown background was 94% opaque (`color-mix`), causing text behind it to bleed through. Changed to fully opaque `var(--oc-editor-bg)`. (`src/chat/webview/css/components.css`)
+- **Commands modal z-index inconsistency** — `.commands-modal` used fallback `1000` while the `--z-modal` token is `300`. Fixed fallback to `300` for consistency with other modals. (`src/chat/webview/css/components.css`)
+- **Slash commands not available on first load** — Server and skill/prompt commands were only loaded when the user typed `/commands`. Now `list_commands` is sent on boot, pre-populating the inline dropdown and commands modal immediately. (`src/chat/webview/main.ts`)
+- **Command execution fails with "Session not found"** — Running a server command on a freshly created tab (no server session yet) caused `NotFoundError` because `tab.cliSessionId` was undefined. `CommandExecutionService.handleExecuteCommand` now calls `sessionManager.ensureSession()` to create a server session on-demand before executing remote commands. (`src/chat/CommandExecutionService.ts`)
+- **`push_all_state` / `push_visible_state` unhandled** — These host messages were logged as "unknown host message type" and dropped. The webview now handles them by triggering a debounced state sync. (`src/chat/webview/main.ts`)
+- **Commands modal and inline dropdown can both be visible** — Opening the commands modal now hides the inline mention dropdown. (`src/chat/webview/commands-modal.ts`)
+
 ### Added
+- **Commands palette button** — A `>_` terminal-style button in the input bottom bar (left of the `@` button) opens the commands palette modal with one click. (`src/chat/webview/index.html`, `src/chat/webview/dom.ts`, `src/chat/webview/main.ts`)
+- **`Ctrl+Shift+/` keybinding** — Opens the commands palette when the chat view is focused. (`package.json`)
+- **`CommandExecutionService` test suite** — 7 source-inspection tests covering class export, handleExecuteCommand method, server session ensure flow, cliSessionId persistence, error handling, and custom prompt routing. (`src/chat/CommandExecutionService.test.ts`)
+
+### Added
+- **Canonical changed-file sync** — `SessionStore.addChangedFiles()` now normalizes, deduplicates, persists, and replays changed files from both `file.edited` and `session.diff` SDK events. The webview treats `changed_files_update` as the canonical state message for the chip bar and todos panel, while `file_edited` remains a live incremental event. (`src/session/SessionStore.ts`, `src/session/eventHandlers/*`, `src/chat/ChatProvider.ts`, `src/chat/webview/main.ts`)
+- **VS Code-safe diff checkpoints** — Extension-managed diff accepts now capture explicit file snapshots before applying the edit. Snapshots are restored with `WorkspaceEdit` and VS Code filesystem APIs instead of git branches/stashes. (`src/checkpoint/CheckpointManager.ts`, `src/chat/SessionLifecycleService.ts`, `src/chat/handlers/DiffHandler.ts`)
+- **Session-aware file opener** — Changed-file chips, todo-panel file buttons, diff open actions, and direct `open_file` webview messages now route through one extension-host resolver that handles `#L12`, prefers the session workspace, checks workspace containment, and reports clear missing-file errors. (`src/chat/WebviewEventRouter.ts`)
 - **Back button and modal focus management** — A back button appears in the header when any modal is open (model manager, theme customizer, mode warning, MCP config, session modal). All modals now have proper focus trapping (Tab/Shift+Tab cycle within) with return-focus-to-trigger-element on close. (`src/chat/webview/index.html`, `src/chat/webview/dom.ts`, `src/chat/webview/main.ts`)
 - **Settings menu keyboard navigation** — ArrowUp/Down, Home, End, and Escape navigation within the settings overflow menu. (`src/chat/webview/main.ts`)
 - **Theme customizer undo/redo snapshots** — Save and reset actions push the current theme state onto an undo stack for potential undo/redo support. (`src/chat/webview/main.ts`)
@@ -30,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HC CSS tokens** — `tokens.css` now declares `.vscode-high-contrast` (dark) and `.vscode-high-contrast-light` (light) body-level overrides with the same hardcoded values as the new TS presets, ensuring CSS fallback matches the injected variables. (`src/chat/webview/css/tokens.css`)
 
 ### Changed
+- **Diff preview and revert contract** — Diff preview now uses a registered read-only virtual document provider plus `vscode.diff`; accepted diff metadata is retained so `revert_diff` restores the exact accepted edit instead of relying on an empty backup path. (`src/diff/DiffApplier.ts`, `src/chat/handlers/DiffHandler.ts`, `src/chat/WebviewEventRouter.ts`)
 - **`ThemePreset` union extended** — Added `"high-contrast-dark"` and `"high-contrast-light"` to the union type and `BUILT_IN_PRESETS` record. Both `loadConfig` (ThemeManager) and `normalizeThemeConfig` (ChatProvider) accept the new IDs. (`src/theme/ThemeManager.ts`, `src/chat/ChatProvider.ts`)
 - **Tool lifecycle deduplication** — `ToolPartHandler` now generates stable tool IDs (preferring `part.id` > `part.callID` > `messageID:tool`) and emits `tool_start` only once per stable ID. Pending→running transitions produce `tool_update`, not a second `tool_start`. Redundant events when nothing changed are suppressed. (`src/session/eventHandlers/ToolPartHandler.ts`)
 - **StreamCoordinator tool tracking** — `appendToolStart` deduplicates by stable tool ID; `maybeFinalizeStream` reconciles pending tools from server state before deciding to finalize; stale pending tools are closed with a `stale` status after a 2-second grace window. (`src/chat/handlers/StreamCoordinator.ts`)
@@ -38,6 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`ThemeManager` CSS_VAR_MAP: `--bg-secondary` and `--bg-tertiary` removed** — These tokens were mapped to the flat `panelBg` value, overriding the `color-mix()` depth layering that `tokens.css` computes for visual hierarchy. They are now owned entirely by the CSS layer. (`src/theme/ThemeManager.ts`)
 
 ### Fixed
+- **OpenCode SDK file event normalization** — `file.edited` now reads `properties.file`; `session.diff` reads `properties.diff[].file` with additions/deletions and forwards normalized file-change data even after stream state changes. (`src/session/eventHandlers/FileEditHandler.ts`, `src/session/eventHandlers/SessionDiffHandler.ts`, `src/chat/ChatProvider.ts`)
+- **Frontend changed-file registration drift** — `changed_files_update` now feeds the same dedupe path used by live `file_edited` events and updates the todos panel's changed-files view alongside the chip bar. (`src/chat/webview/main.ts`, `src/chat/webview/types.ts`)
 - **`handleUpdateThemeConfig` fails without workspace** — Was always writing to `ConfigurationTarget.Workspace`, throwing when no workspace folder is open. Now falls back to `ConfigurationTarget.Global` when `vscode.workspace.workspaceFolders` is `undefined`. (`src/chat/ChatProvider.ts`)
 - **Light-theme user message bubble rendered dark** — Added a comprehensive `.vscode-light` body override block to `tokens.css` for `--user-message-bg`, `--oc-user-msg-bg`, `--bg-code`, `--oc-tool-bg`, diff background opacities, and all shadow tokens. (`src/chat/webview/css/tokens.css`)
 - **Duplicate tool calls** — The first tool call no longer appears as an empty JSON object placeholder. `ToolPartHandler` uses stable tool IDs and suppresses redundant `tool_start` emission for already-started tools. (`src/session/eventHandlers/ToolPartHandler.ts`)
@@ -77,7 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Continue Last Session command** — `opencode-harness.continueLastSession` activates the most-recent session and opens the chat panel. Falls back to `newSession` when no sessions exist. (`src/commands/session.ts`)
 - **Choose History Session command** — `opencode-harness.chooseHistorySession` shows a quick-pick over the union of local + server sessions. Selecting an unbacked server session triggers a `withProgress` backfill of full message history before activation. (`src/commands/session.ts`)
 - **Attach to Remote Server command + settings** — `opencode-harness.attachRemote` prompts for a URL and optional bearer token, persists them to `opencode.serverUrl` / `opencode.serverAuthToken`, and reconnects `SessionManager` against the remote endpoint without spawning a local binary. (`src/commands/session.ts`, `src/session/SessionManager.ts`, `package.json`)
-- **Session-start git baseline** — When a fresh session is created, the extension now snapshots a baseline git ref via `CheckpointManager.snapshot(sessionId, "baseline")`, giving "restore to session start" a defined target. Cheap no-op when the working tree is clean. (`src/extension.ts`)
+- **Session-start baseline hook** — Fresh sessions still call `CheckpointManager.snapshot(sessionId, "baseline")`, but extension-local checkpoints now require explicit file paths; baseline-without-files is a no-op rather than a git ref. (`src/extension.ts`, `src/checkpoint/CheckpointManager.ts`)
 - **`SessionStore.onSessionCreated` event** — Decouples the baseline-checkpoint hook from the store. (`src/session/SessionStore.ts`)
 - **`SessionStore.importServerSessions` / `migrateLocalIdsToServerIds` / `promotePendingServerLink` / `applyBackfilledMessages`** — Public API for the unified-identity flow, exercised by 15 new behavioral tests in `src/session/sessionMigration.test.ts`.
 - **`SessionManager.setRemoteServer` / `isRemote`** — Switch between local-spawn and remote-attach without restarting the extension. Bearer auth supersedes the local Basic-auth path in `authHeader`. (`src/session/SessionManager.ts`)
@@ -315,7 +334,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Critical: `noUncheckedIndexedAccess` enabled** — fixed 40 potential `undefined` access crashes across 20 files
 - **Build/Plan mode buttons** — incorrectly used `setAttribute("appearance", ...)` which is ignored by `<vscode-button>`; now uses `.secondary = boolean` property and proper `--vscode-button-*` CSS custom properties
 - **RateLimitMonitor config listener** — now stored as `configListener` and properly disposed
-- **CheckpointManager concurrency** — `snapshotLock` prevents concurrent git operations; stash rollback on failure
+- **CheckpointManager concurrency** — `snapshotLock` prevents concurrent snapshot/restore operations without mutating git branches or stashes
 - **TabManager max tabs** — capped at 20 to prevent unbounded memory growth
 - **NaN cost values** — validated with `Number.isFinite()` in `update_cost` handler
 - **`StreamCoordinator.buildContextText`** — typed from `any` to proper `ContextShape` interface

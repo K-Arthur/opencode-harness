@@ -557,7 +557,7 @@ interface ModelInfo {
 **Responsibility:** Parse AI-generated code, compute diff against current file state, present for review, apply via VS Code API.
 
 #### CheckpointManager (`src/checkpoint/CheckpointManager.ts`)
-**Responsibility:** Create lightweight git snapshots before AI file writes, enabling instant rollback.
+**Responsibility:** Create VS Code-safe file snapshots before extension-managed diff accepts, enabling local rollback without switching branches or mutating git state.
 
 #### InlineActionProvider (`src/inline/InlineActionProvider.ts`)
 **Responsibility:** Provide CodeLens annotations and context menu actions for selected code.
@@ -600,8 +600,8 @@ MessageRouter
        ├─→ ContextEngine.gatherContext() ──→ ContextPackage
        │   (worker thread, non-blocking)
        │
-       ├─→ CheckpointManager.snapshot()
-       │   (git worktree, before any potential writes)
+       ├─→ CheckpointManager.snapshotBeforeAction()
+       │   (VS Code file snapshots before extension-managed diff accepts)
        │
        └─→ StreamCoordinator.startStream("tab-A", prompt, context)
               │
@@ -733,7 +733,7 @@ SessionManager detects 'exit' event
 | Markdown rendering | `marked` (lightweight) | Render assistant text in webview |
 | Diff computation | Custom minimal diff or `diff` npm package | Generate unified diffs for display |
 | Token estimation | Heuristic (charCount / 4) | Zero-dependency, <1ms, adequate for progress rings |
-| Git operations | `simple-git` or child_process git commands | Worktree management for checkpoints |
+| Checkpoint storage | VS Code `workspace.fs` + extension storage | File snapshots for extension-managed diff rollback without git mutation |
 | Testing | `@vscode/test-electron` + Mocha | VS Code extension integration testing |
 
 **Dependencies intentionally avoided:**
@@ -875,7 +875,7 @@ OpenCode is built with accessibility as a first-class concern:
 | SDK call timeout (model not responding) | Show "Model timed out" with retry button |
 | Permission required for tool call | Show inline permission prompt in chat |
 | File was modified since diff computed | Warn user, show side-by-side: current vs AI vs original |
-| Git worktree creation fails | Fall back to `git stash` + manual restoration |
+| Extension checkpoint restore fails | Report `checkpoint_restored.ok=false`; server-managed tool edits remain revertible through OpenCode `session.revert(messageID)` |
 | Webview postMessage size exceeded | Chunk large messages; show progress indicator |
 | Context package too large for token limit | Truncate lowest-priority files; show truncation summary |
 | Sensitive file or prompt-injection content attached | Warn before sending; allow attach all, review selected files, or cancel |

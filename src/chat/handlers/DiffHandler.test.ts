@@ -108,6 +108,12 @@ describe("DiffHandler.ts", () => {
     assert.ok(source.includes("this.acceptingDiffs.clear()"), "dispose must clear accepting set")
   })
 
+  it("exposes pending and accepted edits for checkpoints and revert", () => {
+    assert.ok(source.includes("getPendingEdit("), "DiffHandler must expose pending edit before accept")
+    assert.ok(source.includes("getAcceptedEdit("), "DiffHandler must expose accepted edit metadata for revert")
+    assert.ok(source.includes("acceptedDiffs"), "DiffHandler must retain accepted diffs after accept")
+  })
+
   it("never leaves webview stuck on error", () => {
     assert.ok(
       source.includes("try {"),

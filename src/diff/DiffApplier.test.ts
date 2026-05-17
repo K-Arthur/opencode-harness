@@ -47,6 +47,20 @@ describe("DiffApplier.ts", () => {
     assert.ok(source.includes("async rollbackEdit("))
   })
 
+  it("registers a read-only virtual document provider for vscode.diff previews", () => {
+    assert.ok(
+      source.includes("registerTextDocumentContentProvider"),
+      "DiffApplier must use a TextDocumentContentProvider for diff preview documents"
+    )
+    assert.ok(source.includes("vscode.diff"), "DiffApplier must open previews with vscode.diff")
+    assert.ok(!source.includes("untitled:"), "Diff previews must not create dirty untitled documents")
+  })
+
+  it("tracks accepted edit metadata for later revert", () => {
+    assert.ok(source.includes("acceptedEdits"), "DiffApplier must retain accepted edit metadata")
+    assert.ok(source.includes("getAcceptedEdit("), "DiffApplier must expose accepted edit metadata")
+  })
+
   // ── Feature 3: Hunk-Level Diff Control ───────────────────────────────────
 
   it("has_parseUnifiedDiff_pure_function", () => {

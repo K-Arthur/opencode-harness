@@ -47,9 +47,26 @@ export class CommandExecutionService {
     }
 
     const tab = this.opts.tabManager.getTab(sessionId)
-    if (!tab?.cliSessionId || !this.opts.sessionManager.isRunning) {
-      this.opts.postRequestError("Cannot execute command: server not running or session not linked", sessionId)
+    if (!tab) {
+      this.opts.postRequestError("Cannot execute command: no active session", sessionId)
       return
+    }
+
+    if (!this.opts.sessionManager.isRunning) {
+      this.opts.postRequestError("Cannot execute command: server not running", sessionId)
+      return
+    }
+
+    if (!tab.cliSessionId) {
+      try {
+        const cliSessionId = await this.opts.sessionManager.ensureSession(undefined, `Tab ${sessionId.slice(0, 8)}`)
+        this.opts.tabManager.setCliSessionId(sessionId, cliSessionId)
+        this.opts.sessionStore.updateCliSessionId(sessionId, cliSessionId)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Failed to create server session"
+        this.opts.postRequestError(`Cannot execute command: ${msg}`, sessionId)
+        return
+      }
     }
 
     await this.executeRemoteCommand(tab, sessionId, commandName, args)

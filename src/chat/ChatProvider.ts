@@ -632,11 +632,46 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       const data = event.data as { todos?: unknown[] } | undefined
       this.postMessage({ type: "todos_update", sessionId: tabId, todos: data?.todos ?? [] })
     }],
-    ["file_edited", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean }) => {
-      if (!tab?.isStreaming) return
-      const data = event.data as { file?: string; files?: string[] } | undefined
-      const file = data?.file || (Array.isArray(data?.files) && data.files[0])
-      if (file) this.postMessage({ type: "file_edited", sessionId: tabId, file })
+    ["file_edited", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {
+      const data = event.data as {
+        file?: string
+        files?: string[]
+        changes?: Array<{ path?: string; added?: number; removed?: number }>
+      } | undefined
+      const normalizeFilePath = (filePath: string) => filePath.trim().replace(/\\/g, "/")
+      const changeStats = new Map<string, { added: number; removed: number }>()
+      if (Array.isArray(data?.changes)) {
+        for (const change of data.changes) {
+          if (typeof change.path !== "string") continue
+          const changedPath = normalizeFilePath(change.path)
+          if (!changedPath) continue
+          changeStats.set(changedPath, {
+            added: Number.isFinite(change.added) ? Number(change.added) : 0,
+            removed: Number.isFinite(change.removed) ? Number(change.removed) : 0,
+          })
+        }
+      }
+      const files = Array.from(new Set([
+        ...(Array.isArray(data?.files) ? data.files.map(normalizeFilePath) : []),
+        ...changeStats.keys(),
+        ...(typeof data?.file === "string" ? [normalizeFilePath(data.file)] : []),
+      ]))
+        .filter(Boolean)
+      if (files.length === 0) return
+
+      this.sessionStore.addChangedFiles(tabId, files)
+      for (const file of files) {
+        this.postMessage({ type: "file_edited", sessionId: tabId, file })
+      }
+      this.postMessage({
+        type: "changed_files_update",
+        sessionId: tabId,
+        files: this.sessionStore.getChangedFiles(tabId).map((path) => ({
+          path,
+          added: changeStats.get(path)?.added ?? 0,
+          removed: changeStats.get(path)?.removed ?? 0,
+        })),
+      })
     }],
     ["thinking", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {
       const data = event.data as { text?: string } | undefined

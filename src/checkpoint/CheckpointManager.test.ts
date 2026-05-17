@@ -19,7 +19,8 @@ describe("CheckpointManager.ts", () => {
     assert.ok(source.includes("sessionId: string"))
     assert.ok(source.includes("timestamp: number"))
     assert.ok(source.includes("filesChanged: string[]"))
-    assert.ok(source.includes("gitRef: string"))
+    assert.ok(source.includes("createdAt: number"))
+    assert.ok(source.includes("action?: string"))
   })
 
   it("CheckpointManager has snapshot method", () => {
@@ -38,16 +39,24 @@ describe("CheckpointManager.ts", () => {
     assert.ok(source.includes("dispose()"))
   })
 
-  it("uses simple-git", () => {
-    assert.ok(source.includes("simple-git"))
+  it("uses VS Code workspace storage snapshots instead of git branch checkout", () => {
+    assert.ok(!source.includes("simple-git"), "CheckpointManager must not depend on git for extension-local snapshots")
+    assert.ok(!source.includes(".checkout("), "restore must not switch the user's git branch")
+    assert.ok(!source.includes(".stash("), "snapshot must not mutate the user's git stash")
+    assert.ok(source.includes("workspace.fs"), "snapshots must use VS Code workspace.fs")
+    assert.ok(source.includes("WorkspaceEdit"), "restore must use VS Code WorkspaceEdit for undoable writes")
   })
 
   it("creates checkpoint id with oc-ckp- prefix", () => {
     assert.ok(source.includes("oc-ckp-"))
   })
 
-  it("stashes changes during snapshot", () => {
-    assert.ok(source.includes(".stash(["))
+  it("snapshots explicit file paths", () => {
+    assert.ok(
+      source.includes("files: string[]") || source.includes("filePaths: string[]"),
+      "snapshot APIs must accept explicit file paths"
+    )
+    assert.ok(source.includes("snapshotBeforeAction("), "must keep pre-action snapshot API")
   })
 
   it("has MAX_CHECKPOINTS constant of 20", () => {

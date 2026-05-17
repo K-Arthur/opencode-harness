@@ -33,6 +33,8 @@ export interface CommandsModalOptions {
   onUseStash: (stash: StashEntry) => void
   /** Delete a stash by id. */
   onDeleteStash: (id: string) => void
+  /** Mention dropdown to hide when modal opens. */
+  mentionDropdown?: HTMLElement | null
 }
 
 type Mode = "commands" | "stashes"
@@ -74,6 +76,7 @@ export function setupCommandsModal(els: {
   function open(): void {
     mode = "commands"
     activeFilter = "all"
+    if (options.mentionDropdown) options.mentionDropdown.classList.add("hidden")
     commandsModal!.classList.remove("hidden")
     if (commandsTitle) commandsTitle.textContent = "Commands"
     commandsSearchInput!.value = ""
@@ -88,6 +91,7 @@ export function setupCommandsModal(els: {
     mode = "stashes"
     stashEntries = stashes
     activeFilter = "all"
+    if (options.mentionDropdown) options.mentionDropdown.classList.add("hidden")
     commandsModal!.classList.remove("hidden")
     if (commandsTitle) commandsTitle.textContent = "Stashed prompts"
     commandsSearchInput!.value = ""

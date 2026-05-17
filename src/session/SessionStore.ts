@@ -823,20 +823,43 @@ validateSessionName(name: string): string | null {
     this.save()
   }
 
-  /** 
-   * Track changed files for a session
+  private normalizeChangedFilePath(filePath: string): string | undefined {
+    const normalized = filePath.trim().replace(/\\/g, "/")
+    return normalized.length > 0 ? normalized : undefined
+  }
+
+  /**
+   * Track changed files for a session.
    */
-  addChangedFile(id: string, filePath: string): void {
+  addChangedFiles(id: string, files: string[]): void {
     const session = this.sessions.get(id)
     if (!session) return
-    if (!session.changedFiles) session.changedFiles = []
-    if (!session.changedFiles.includes(filePath)) {
-      session.changedFiles.push(filePath)
+
+    const existing = new Set((session.changedFiles || [])
+      .map((f) => this.normalizeChangedFilePath(f))
+      .filter((f): f is string => Boolean(f)))
+    const next = [...existing]
+    for (const file of files) {
+      const normalized = this.normalizeChangedFilePath(file)
+      if (!normalized || existing.has(normalized)) continue
+      existing.add(normalized)
+      next.push(normalized)
+    }
+
+    if (next.length !== (session.changedFiles || []).length) {
+      session.changedFiles = next
       this.save()
     }
   }
 
-  /** 
+  /**
+   * Track changed files for a session
+   */
+  addChangedFile(id: string, filePath: string): void {
+    this.addChangedFiles(id, [filePath])
+  }
+
+  /**
    * Get changed files for a session
    */
   getChangedFiles(id: string): string[] {

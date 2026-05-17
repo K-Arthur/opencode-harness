@@ -5,6 +5,7 @@ import { randomUUID } from "crypto"
 
 export class DiffHandler {
   private pendingDiffs = new Map<string, ProposedEdit>()
+  private acceptedDiffs = new Map<string, ProposedEdit>()
   private acceptingDiffs = new Set<string>()
 
   constructor(private readonly diffApplier: DiffApplier) {}
@@ -47,6 +48,8 @@ export class DiffHandler {
       if (!ok) {
         return { ok: false, message: "VS Code could not apply the edit." }
       }
+      this.acceptedDiffs.set(diffId, edit)
+      this.diffApplier.markAcceptedEdit(diffId, edit)
 
       vscode.window.showInformationMessage(`Applied changes to ${edit.filePath || "file"}.`)
 
@@ -95,7 +98,7 @@ export class DiffHandler {
    * Called when the "Open File" button is clicked in the webview.
    */
   async openFile(diffId: string): Promise<void> {
-    const edit = this.pendingDiffs.get(diffId)
+    const edit = this.pendingDiffs.get(diffId) ?? this.acceptedDiffs.get(diffId)
     if (!edit?.filePath) return
 
     try {
@@ -112,6 +115,14 @@ export class DiffHandler {
     // No longer needed — we use stable diffIds now
   }
 
+  getPendingEdit(diffId: string): ProposedEdit | undefined {
+    return this.pendingDiffs.get(diffId)
+  }
+
+  getAcceptedEdit(diffId: string): ProposedEdit | undefined {
+    return this.acceptedDiffs.get(diffId) ?? this.diffApplier.getAcceptedEdit(diffId)
+  }
+
   /**
    * Callback to emit messages to the webview.
    * Set by StreamCoordinator when initializing the diff handler.
@@ -120,6 +131,7 @@ export class DiffHandler {
 
   dispose(): void {
     this.pendingDiffs.clear()
+    this.acceptedDiffs.clear()
     this.acceptingDiffs.clear()
   }
 }

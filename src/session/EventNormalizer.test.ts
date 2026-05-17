@@ -142,11 +142,22 @@ describe("EventNormalizer — behavioral", () => {
   it("normalizes session.diff to file_edited", () => {
     const events = normalizer.normalize({
       type: "session.diff",
-      properties: { sessionID: "s9", file: "src/main.ts" },
+      properties: {
+        sessionID: "s9",
+        diff: [
+          { file: "src/main.ts", added: 3, removed: 1 },
+          { file: "src/utils.ts", added: 0, removed: 2 },
+        ],
+      },
     })
     assert.equal(events.length, 1)
     assert.equal(events[0]!.type, "file_edited")
     assert.equal(events[0]!.sessionId, "s9")
+    assert.deepEqual((events[0]!.data as { files?: string[] }).files, ["src/main.ts", "src/utils.ts"])
+    assert.deepEqual((events[0]!.data as { changes?: unknown[] }).changes, [
+      { path: "src/main.ts", added: 3, removed: 1 },
+      { path: "src/utils.ts", added: 0, removed: 2 },
+    ])
   })
 
   it("normalizes session.compacted to session_compacted", () => {
@@ -161,10 +172,13 @@ describe("EventNormalizer — behavioral", () => {
   it("normalizes file.edited to file_edited", () => {
     const events = normalizer.normalize({
       type: "file.edited",
-      properties: { file: "test.ts" },
+      properties: { sessionID: "s12", file: "test.ts" },
     })
     assert.equal(events.length, 1)
     assert.equal(events[0]!.type, "file_edited")
+    assert.equal(events[0]!.sessionId, "s12")
+    assert.equal((events[0]!.data as { file?: string }).file, "test.ts")
+    assert.deepEqual((events[0]!.data as { files?: string[] }).files, ["test.ts"])
   })
 
   it("normalizes permission.updated to permission_request", () => {

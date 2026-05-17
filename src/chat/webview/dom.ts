@@ -39,6 +39,7 @@ export interface ElementRefs {
   inputBottomBar: HTMLDivElement
   
   mentionBtn: HTMLElement
+  commandsPaletteBtn: HTMLElement
   attachBtn: HTMLElement
   modeDropdown: HTMLDivElement
   modeDropdownBtn: HTMLButtonElement
@@ -210,6 +211,7 @@ export function getElementRefs(): ElementRefs {
     inputBottomBar: requireElement<HTMLDivElement>("input-bottom-bar"),
     
     mentionBtn: requireElement("mention-btn"),
+    commandsPaletteBtn: requireElement("commands-palette-btn"),
     attachBtn: requireElement("attach-btn"),
     modeDropdown: requireElement<HTMLDivElement>("mode-dropdown"),
     modeDropdownBtn: requireElement<HTMLButtonElement>("mode-dropdown-btn"),

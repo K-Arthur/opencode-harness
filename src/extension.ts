@@ -97,7 +97,7 @@ sessionManager = new SessionManager(mcpServerManager)
     const terminalBridge = new TerminalBridge()
     context.subscriptions.push(terminalBridge)
 
-    const checkpointManager = new CheckpointManager()
+    const checkpointManager = new CheckpointManager(context)
     context.subscriptions.push(checkpointManager)
 
     const modelManager = initModelManager(context, sessionManager)

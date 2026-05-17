@@ -292,6 +292,7 @@ function getVsCodeApi() {
     commandsModalCloseBtn: els.commandsModalCloseBtn,
   }, {
     localCommands: LOCAL_COMMAND_ENTRIES,
+    mentionDropdown: els.mentionDropdown,
     onRun: (entry) => runCommandEntry(entry),
     onInsert: (text) => insertIntoPrompt(text),
     onUseStash: (stash) => {
@@ -929,6 +930,10 @@ function getVsCodeApi() {
       els.promptInput.value += "@"
       els.promptInput.focus()
       mention.handleTrigger()
+    })
+    els.commandsPaletteBtn.addEventListener("click", () => {
+      commandsModal.open()
+      vscode.postMessage({ type: "list_commands" })
     })
 
     // Steering mode selector handlers
@@ -2744,8 +2749,16 @@ function getVsCodeApi() {
         }
       }],
       ["changed_files_update", (msg) => {
+        const files = Array.isArray(msg.files) ? msg.files : []
+        const paths = files
+          .map((file) => typeof file === "string" ? file : (file && typeof file === "object" && "path" in file ? String((file as { path?: unknown }).path || "") : ""))
+          .filter((path) => path.length > 0)
+        const sid = typeof msg.sessionId === "string" ? msg.sessionId : stateManager.getState().activeSessionId
+        if (sid) {
+          handleChangedFiles(sid, paths)
+        }
         if (todosPanelApi && todosPanelApi.renderChangedFiles) {
-          todosPanelApi.renderChangedFiles(msg.files || [])
+          todosPanelApi.renderChangedFiles(files as any)
         }
       }],
       ["skills_list", (msg) => {
@@ -2762,6 +2775,12 @@ function getVsCodeApi() {
         if (subagentPanelApi && subagentPanelApi.renderActivities) {
           subagentPanelApi.renderActivities(msg.activities || [])
         }
+      }],
+      ["push_all_state", () => {
+        requestStateSyncDebounced()
+      }],
+      ["push_visible_state", () => {
+        requestStateSyncDebounced()
       }],
     ])
 
@@ -3518,6 +3537,7 @@ function boot() {
     try {
       init()
       vscode.postMessage({ type: "webview_ready" })
+      vscode.postMessage({ type: "list_commands" })
     } catch (err) {
       log.error("Fatal init error:", err)
       vscode.postMessage({ type: "webview_error", message: "Initialization failed" })

@@ -9,7 +9,8 @@
 | Package | Purpose | Version |
 |---------|---------|---------|
 | `@opencode-ai/sdk` | SDK client for OpenCode server | ^latest |
-| `simple-git` | Git checkpoint snapshots | ^latest |
+
+Checkpoint snapshots use VS Code `workspace.fs` and `WorkspaceEdit`; no runtime git helper is approved for checkpoint rollback.
 
 ## Dev Dependencies
 | Package | Purpose |

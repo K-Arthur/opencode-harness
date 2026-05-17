@@ -45,6 +45,38 @@ Slash commands use the same mention dropdown surface as `@` context mentions:
 - Runtime OpenCode server commands are forwarded without the leading slash, because the
   OpenCode server command API expects names like `init` or `review`, not `/init`.
 
+Server and skill/prompt commands are proactively loaded on webview boot via `list_commands`,
+so the inline dropdown is populated immediately without requiring the user to type
+`/commands` first.
+
+### Commands Palette
+
+The commands palette is a full-screen overlay modal (`#commands-modal`) accessible via:
+
+1. **`>_` button** in the input bottom bar (left of the `@` button)
+2. **`Ctrl+Shift+/`** keybinding (when chat view is focused)
+3. Typing `/commands` in the prompt input
+4. VS Code Command Palette → "OpenCode: Open Commands Palette"
+
+Opening the commands palette automatically hides the inline slash dropdown to prevent
+both UIs from being visible simultaneously.
+
+### Host-to-Webview State Messages
+
+- `push_all_state`: Host tells the webview to perform a full state sync. The webview
+  responds by sending `request_state_sync` (debounced at 300ms).
+- `push_visible_state`: Same as `push_all_state` — triggers a debounced state sync.
+
+These replace the previous behavior where these messages were logged as "unknown host
+message type" and silently dropped.
+
+### Remote Command Execution
+
+When a slash command targets a server session that doesn't exist yet (e.g., first command
+on a freshly created tab), `CommandExecutionService` calls `sessionManager.ensureSession()`
+to create a server session on-demand before executing the command. The resulting
+`cliSessionId` is persisted on both the `TabManager` tab and the `SessionStore` session.
+
 Unknown server command errors are converted to short user-facing messages instead of raw
 JSON or `[object Object]` output.
 
@@ -55,6 +87,32 @@ JSON or `[object Object]` output.
 - The conversation timeline is a right-side `conversation-timeline` aside toggled from the
   header button. It reserves message-list padding only while visible.
 
+## Changed Files
+
+Changed-file state is synchronized from the extension host:
+
+- `changed_files_update`: `{ type, sessionId, files: Array<{ path: string; added: number; removed: number }> }`
+  is the canonical state message. The webview replaces the session's changed-file list with
+  this payload, re-renders the chip bar, and updates the todos panel changed-files section.
+- `file_edited`: `{ type, sessionId, file }` is retained as a live incremental event for
+  compatibility and immediate feedback. It merges through the same dedupe path as
+  `changed_files_update`.
+- The frontend clears changed files on stream start for the active turn, then expects the
+  backend store to re-sync any subsequent file events for that session.
+- Open buttons post `{ type: "open_file", path }`; the extension host resolves relative paths
+  against the session workspace first, then open VS Code workspace folders, and supports
+  `#L12` line fragments.
+
+## Diff & Checkpoint Messages
+
+- `diff_result`: `{ type, sessionId, blockId, ok, message?, checkpointCreated? }`.
+- `checkpoint_list`: checkpoint objects include `id`, `sessionId`, `messageId`, `createdAt`,
+  `filesChanged`, and optional `action`.
+- `checkpoint_restored`: `{ type, sessionId, checkpointId, ok, error? }`.
+- `revert_diff` restores the accepted extension-managed diff metadata captured during
+  `accept_diff`. Server-side message rollback uses the OpenCode `session.revert(messageID)`
+  flow and reports through `revert_result`.
+
 ## Tests
 
 The relevant coverage lives in:
@@ -64,4 +122,6 @@ The relevant coverage lives in:
 - `src/chat/webview/renderer.test.ts` for sanitizer and external-link hardening.
 - `src/chat/webview/mentions.test.ts` and `src/chat/ChatProvider.test.ts` for slash command
   routing and dropdown structure.
+- `src/chat/CommandExecutionService.test.ts` for server session ensure flow and
+  remote command execution edge cases.
 - `tests/visual/messages.spec.ts` for message layout behavior in the current app shell.

@@ -913,7 +913,7 @@ textarea {
 
 .dropdown {
   position: absolute;
-  background: color-mix(in srgb, var(--oc-editor-bg) 94%, var(--oc-panel-bg));
+  background: var(--oc-editor-bg);
   border: 1px solid var(--oc-border);
   border-radius: var(--radius-md);
   max-height: 260px;
@@ -1388,7 +1388,7 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: var(--z-modal, 1000);
+  z-index: var(--z-modal, 300);
   padding: var(--space-4);
 }
 

@@ -381,6 +381,22 @@ void it("restore_checkpoint does not hard-code ok:true — uses the captured boo
   )
 })
 
+void it("restore_checkpoint response includes checkpointId and sessionId", () => {
+  const block = findRestoreCheckpointBlock(source.indexOf('["restore_checkpoint"') >= 0 ? source : eventRouterSource)
+  assert.ok(block.includes("checkpointId"), "checkpoint_restored payload must include checkpointId")
+  assert.ok(block.includes("sessionId"), "checkpoint_restored payload must include sessionId")
+})
+
+void it("file_edited server events register changed files in backend store before posting", () => {
+  const idx = source.indexOf('["file_edited"')
+  assert.ok(idx >= 0, "file_edited server-event handler must exist")
+  const blockEnd = source.indexOf('["thinking"', idx)
+  const block = source.slice(idx, blockEnd > idx ? blockEnd : idx + 2000)
+  assert.ok(block.includes("sessionStore.addChangedFiles"), "backend handler must persist all changed files")
+  assert.ok(block.indexOf("sessionStore.addChangedFiles") < block.indexOf("postMessage"), "backend store must update before webview post")
+  assert.ok(!block.includes("if (!tab?.isStreaming) return"), "backend changed-file registration must not be streaming-only")
+})
+
 // ── resume_server_session: open any server session from the modal ─────────
 // Users need to click a server session in the unified modal and have it open.
 // The backend must handle resume_server_session, create a local session entry
@@ -524,5 +540,27 @@ void it("sessions_recovered sends session_list_update (not session_list) to refr
   assert.ok(
     block.includes("this.sessionStore.list()"),
     "must get current session list from store to build the update"
+  )
+})
+
+void it("open_file resolves through the centralized session-aware opener", () => {
+  const idx = eventRouterSource.indexOf('["open_file"')
+  assert.ok(idx >= 0, "open_file handler must exist")
+  const block = eventRouterSource.slice(idx, idx + 500)
+  assert.ok(
+    block.includes("resolveOpenFileTarget(rawPath, sessionId)"),
+    "open_file handler must use the shared resolver with the active session id"
+  )
+  assert.ok(
+    eventRouterSource.includes("parseOpenFileTarget") && eventRouterSource.includes('fragment.match(/^L(\\d+)/i)'),
+    "shared opener must parse #L12 line fragments"
+  )
+  assert.ok(
+    eventRouterSource.includes("this.opts.sessionStore.get(sessionId)?.workspacePath"),
+    "shared opener must prefer the stored session workspace path"
+  )
+  assert.ok(
+    eventRouterSource.includes("isPathInsideRoot") && eventRouterSource.includes("outside the session workspace"),
+    "shared opener must reject out-of-workspace file opens"
   )
 })

@@ -53,7 +53,7 @@ Systematic audit comparing every opencode CLI feature against the VS Code extens
 **Gaps:** Minor — could read from actual HTTP response headers via SDK events.
 
 ### Feature 8: Checkpoints (High Coverage)
-**Exists:** CheckpointManager with git worktree snapshots, restore, MAX_CHECKPOINTS=20 pruning, snapshotBeforeAction for pre-write checkpoints.
+**Exists:** CheckpointManager with VS Code file snapshots for extension-managed diff accepts, restore, MAX_CHECKPOINTS=20 pruning, and snapshotBeforeAction for explicit file paths. Server-managed edits use OpenCode `session.revert(messageID)`.
 **Gaps:** Minor — rollback command not wired to QuickPick UI.
 
 ### Feature 9: Inline Suggestions (Not Implemented)

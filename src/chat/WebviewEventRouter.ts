@@ -518,8 +518,9 @@ export class WebviewEventRouter {
             id: cp.id,
             sessionId: cp.sessionId,
             messageId: cp.messageId,
+            createdAt: cp.createdAt,
             filesChanged: cp.filesChanged,
-            gitRef: cp.gitRef,
+            action: cp.action,
           })),
         })
       } catch (err) {
@@ -530,11 +531,12 @@ export class WebviewEventRouter {
     ["restore_checkpoint", async (msg: Record<string, unknown>, sessionId?: string) => {
       if (!sessionId || typeof msg.checkpointId !== "string") return
       try {
-        const ok = await this.opts.checkpointManager.restore(msg.checkpointId as string)
-        this.opts.postMessage({ type: "checkpoint_restored", sessionId, ok })
+        const checkpointId = msg.checkpointId as string
+        const ok = await this.opts.checkpointManager.restore(checkpointId)
+        this.opts.postMessage({ type: "checkpoint_restored", sessionId, checkpointId, ok })
       } catch (err) {
         log.error("Failed to restore checkpoint", err)
-        this.opts.postMessage({ type: "checkpoint_restored", sessionId, ok: false, error: (err as Error).message })
+        this.opts.postMessage({ type: "checkpoint_restored", sessionId, checkpointId: msg.checkpointId, ok: false, error: (err as Error).message })
         this.opts.showErrorMessage(`Failed to restore checkpoint: ${(err as Error).message}`)
       }
     }],
@@ -641,11 +643,12 @@ export class WebviewEventRouter {
       }
 
       try {
-        // Find the diff in the session and revert it
-        const success = await this.opts.diffApplier.rollbackEdit({
-          filePath: path,
-          backupPath: "", // Will be looked up from diff metadata
-        } as any)
+        // Find the accepted diff metadata and revert it.
+        const edit = this.opts.streamCoordinator.getDiffHandler().getAcceptedEdit(diffId)
+        if (!edit) {
+          throw new Error("No accepted diff metadata is available for this edit")
+        }
+        const success = await this.opts.diffApplier.rollbackEdit(edit)
 
         if (success) {
           this.opts.postMessage({
@@ -761,41 +764,12 @@ export class WebviewEventRouter {
       }))
       this.opts.postMessage({ type: "changed_files_update", files, sessionId })
     }],
-    ["open_file", async (msg: Record<string, unknown>) => {
+    ["open_file", async (msg: Record<string, unknown>, sessionId?: string) => {
       const rawPath = msg.path as string | undefined
       if (!rawPath) return
 
       try {
-        let filePath = rawPath
-
-        // Strip URI fragments (e.g. #L4 for line selection)
-        const fragmentIdx = filePath.indexOf("#")
-        let lineNumber: number | undefined
-        if (fragmentIdx >= 0) {
-          const fragment = filePath.slice(fragmentIdx + 1)
-          const lineMatch = fragment.match(/^L(\d+)/)
-          if (lineMatch) lineNumber = parseInt(lineMatch[1] ?? "0", 10)
-          filePath = filePath.slice(0, fragmentIdx)
-        }
-
-        // Expand ~/ to home directory
-        if (filePath.startsWith("~/") || filePath === "~") {
-          const home = process.env.HOME ?? process.env.USERPROFILE ?? ""
-          filePath = path.join(home, filePath.replace(/^~/, ""))
-        }
-
-        // Resolve relative paths against workspace root
-        if (!path.isAbsolute(filePath)) {
-          const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
-          if (workspaceRoot) {
-            filePath = path.join(workspaceRoot, filePath)
-          } else {
-            this.opts.showErrorMessage(`Cannot open relative file "${rawPath}": no workspace folder open`)
-            return
-          }
-        }
-
-        const uri = vscode.Uri.file(filePath)
+        const { uri, lineNumber } = await this.resolveOpenFileTarget(rawPath, sessionId)
         const doc = await vscode.workspace.openTextDocument(uri)
         const options: vscode.TextDocumentShowOptions = {
           preview: true,
@@ -1429,6 +1403,103 @@ export class WebviewEventRouter {
 
   private pushVisibleStateToWebview(): void {
     this.opts.statePush.pushVisibleStateToWebview()
+  }
+
+  private async resolveOpenFileTarget(rawPath: string, sessionId?: string): Promise<{ uri: vscode.Uri; lineNumber?: number }> {
+    const parsed = this.parseOpenFileTarget(rawPath)
+    const roots = this.getOpenFileRoots(sessionId)
+    const filePath = this.expandHomePath(parsed.filePath)
+
+    if (path.isAbsolute(filePath)) {
+      const absolutePath = path.resolve(filePath)
+      if (roots.length > 0 && !roots.some(root => this.isPathInsideRoot(absolutePath, root))) {
+        throw new Error(`Refusing to open "${rawPath}" because it is outside the session workspace`)
+      }
+      const uri = vscode.Uri.file(absolutePath)
+      await this.assertOpenableFile(uri, rawPath)
+      return { uri, lineNumber: parsed.lineNumber }
+    }
+
+    if (roots.length === 0) {
+      throw new Error(`Cannot open relative file "${rawPath}": no session workspace or VS Code workspace folder is available`)
+    }
+
+    const candidates = roots
+      .map(root => path.resolve(root, filePath))
+      .filter(candidate => roots.some(root => this.isPathInsideRoot(candidate, root)))
+
+    for (const candidate of candidates) {
+      const uri = vscode.Uri.file(candidate)
+      if (await this.isOpenableFile(uri)) {
+        return { uri, lineNumber: parsed.lineNumber }
+      }
+    }
+
+    throw new Error(`File "${parsed.filePath}" was not found under the session workspace or open workspace folders`)
+  }
+
+  private parseOpenFileTarget(rawPath: string): { filePath: string; lineNumber?: number } {
+    const fragmentIdx = rawPath.indexOf("#")
+    if (fragmentIdx < 0) return { filePath: rawPath }
+
+    const fragment = rawPath.slice(fragmentIdx + 1)
+    const lineMatch = fragment.match(/^L(\d+)/i)
+    const lineNumber = lineMatch ? Number.parseInt(lineMatch[1] ?? "0", 10) : undefined
+    return {
+      filePath: rawPath.slice(0, fragmentIdx),
+      lineNumber: lineNumber && lineNumber > 0 ? lineNumber : undefined,
+    }
+  }
+
+  private expandHomePath(filePath: string): string {
+    if (!filePath.startsWith("~/") && filePath !== "~") return filePath
+    const home = process.env.HOME ?? process.env.USERPROFILE
+    if (!home) return filePath
+    return path.join(home, filePath.replace(/^~\/?/, ""))
+  }
+
+  private getOpenFileRoots(sessionId?: string): string[] {
+    const roots: string[] = []
+    const sessionWorkspace = sessionId ? this.opts.sessionStore.get(sessionId)?.workspacePath : undefined
+    if (sessionWorkspace) roots.push(sessionWorkspace)
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+      roots.push(folder.uri.fsPath)
+    }
+
+    const seen = new Set<string>()
+    return roots
+      .filter(Boolean)
+      .map(root => path.resolve(root))
+      .filter(root => {
+        const key = this.normalizeFsPath(root)
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+  }
+
+  private isPathInsideRoot(filePath: string, rootPath: string): boolean {
+    const relative = path.relative(rootPath, filePath)
+    return relative === "" || (!!relative && !relative.startsWith("..") && !path.isAbsolute(relative))
+  }
+
+  private normalizeFsPath(filePath: string): string {
+    const resolved = path.resolve(filePath)
+    return process.platform === "win32" ? resolved.toLowerCase() : resolved
+  }
+
+  private async assertOpenableFile(uri: vscode.Uri, displayPath: string): Promise<void> {
+    if (await this.isOpenableFile(uri)) return
+    throw new Error(`File "${displayPath}" does not exist or is not a file`)
+  }
+
+  private async isOpenableFile(uri: vscode.Uri): Promise<boolean> {
+    try {
+      const stat = await vscode.workspace.fs.stat(uri)
+      return (stat.type & vscode.FileType.Directory) === 0
+    } catch {
+      return false
+    }
   }
 
   private async handleListCommands(): Promise<void> {

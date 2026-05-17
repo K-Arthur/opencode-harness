@@ -194,12 +194,16 @@ export class SessionLifecycleService {
 
   async handleAcceptDiff(blockId: string, sessionId?: string): Promise<void> {
     try {
+      const diffHandler = this.opts.streamCoordinator.getDiffHandler()
       let checkpointCreated = false
       if (sessionId) {
-        const cp = await this.opts.checkpointManager.snapshotBeforeAction(sessionId, "apply-diff", blockId)
+        const pendingEdit = diffHandler.getPendingEdit(blockId)
+        const cp = pendingEdit
+          ? await this.opts.checkpointManager.snapshotBeforeAction(sessionId, "apply-diff", pendingEdit.filePath)
+          : null
         checkpointCreated = cp !== null
       }
-      const result = await this.opts.streamCoordinator.getDiffHandler().accept(blockId)
+      const result = await diffHandler.accept(blockId)
       this.opts.statePush.postMessage({
         type: "diff_result",
         blockId,

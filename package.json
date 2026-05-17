@@ -215,6 +215,11 @@
         "command": "opencode-harness.stop",
         "key": "ctrl+shift+escape",
         "when": "focusedView == 'opencode-harness.chat'"
+      },
+      {
+        "command": "opencode-harness.openCommandsPalette",
+        "key": "ctrl+shift+/",
+        "when": "focusedView == 'opencode-harness.chat'"
       }
     ],
     "viewsContainers": {
@@ -847,6 +852,7 @@
     "@commitlint/config-conventional": "^20.5.3",
     "@playwright/test": "^1.49.0",
     "@stryker-mutator/core": "^9.6.1",
+    "@types/jsdom": "^28.0.3",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.19.17",
     "@types/vscode": "^1.98.0",
@@ -861,7 +867,6 @@
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "jsdom": "^29.1.1",
-    "@types/jsdom": "^28.0.3",
     "mocha": "^11.3.0",
     "typescript": "^5.7.0"
   },
@@ -875,7 +880,6 @@
     "fast-diff": "^1.3.0",
     "highlight.js": "^11.11.1",
     "markdown-it": "^14.1.0",
-    "markdown-it-task-lists": "^2.1.1",
-    "simple-git": "^3.27.0"
+    "markdown-it-task-lists": "^2.1.1"
   }
 }

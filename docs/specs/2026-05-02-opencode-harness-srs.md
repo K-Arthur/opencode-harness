@@ -141,7 +141,7 @@ The primary interaction point is a rich webview chat panel. It must display:
 
 | FR-ID | Requirement |
 |-------|------------|
-| FR-CKP-01 | Before any AI-initiated file write, take a git worktree snapshot |
+| FR-CKP-01 | Before extension-managed diff accepts, take a VS Code file snapshot for explicit changed paths |
 | FR-CKP-02 | Provide `/rollback` command to restore to any checkpoint |
 | FR-CKP-03 | Checkpoint list UI: show snapshot timestamp, triggering message, files changed |
 | FR-CKP-04 | Support "Restore Workspace Only" and "Restore Task and Workspace" |
@@ -249,7 +249,7 @@ The primary interaction point is a rich webview chat panel. It must display:
 - TerminalBridge: output channel + terminal capture
 
 ### Phase 4: Advanced & Polish (Week 7-8)
-- CheckpointManager: git worktree snapshots + rollback UI
+- CheckpointManager: VS Code file snapshots + rollback UI
 - SkillManager: tree view, enable/disable, visual indicator
 - Session history with search
 - URI handler for deep linking

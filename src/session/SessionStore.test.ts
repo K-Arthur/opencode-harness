@@ -188,6 +188,28 @@ describe("SessionStore.ts", () => {
     )
   })
 
+  it("has addChangedFiles method for canonical multi-file registration", () => {
+    assert.ok(
+      source.includes("addChangedFiles("),
+      "SessionStore must expose addChangedFiles(sessionId, files) for backend changed-file sync"
+    )
+    const idx = source.indexOf("addChangedFiles(")
+    const block = source.slice(idx, idx + 1200)
+    assert.ok(block.includes("Set("), "addChangedFiles must deduplicate files")
+    assert.ok(
+      source.includes("replace(/\\\\/g") || source.includes("replace(/\\\\\\\\/g"),
+      "addChangedFiles must normalize Windows separators"
+    )
+    assert.ok(block.includes("this.save()"), "addChangedFiles must persist changes")
+  })
+
+  it("addChangedFile delegates to addChangedFiles", () => {
+    const idx = source.indexOf("addChangedFile(")
+    assert.ok(idx >= 0, "addChangedFile must remain for existing callers")
+    const block = source.slice(idx, idx + 500)
+    assert.ok(block.includes("addChangedFiles"), "single-file wrapper must delegate to addChangedFiles")
+  })
+
   it("forkSession_copies_messages_up_to_atTurn", () => {
     const idx = source.indexOf("forkSession(")
     assert.ok(idx >= 0, "forkSession must exist")

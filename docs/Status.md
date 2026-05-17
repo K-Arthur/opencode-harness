@@ -1,7 +1,7 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-05-17
-**Version:** v0.2.8 (Skills wiring repair + methodology↔skills integration)
+**Version:** v0.2.9 (Checkpoint, diff, and changed-file tracking repair)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
 
@@ -29,7 +29,7 @@ The single failing test in v0.2.7 (`main.test.ts › timeline jumps use exact me
 | 5 | Slash Commands | ✅ | Unified autocomplete, 10 local commands, runtime server command routing, custom prompts |
 | 6 | Permission Modes | ✅ | 3-mode selector (Plan/Auto/Normal), plan enforcement, auto mode warning |
 | 7 | Rate Limits | ✅ | OpenAI/Anthropic/Generic adapters, webview quota bar, VS Code status bar, observed usage fallback, configurable provider limits |
-| 8 | Checkpoints | ✅ | Git worktree snapshots, 20-checkpoint cap, pre-action snapshot; restore now correctly reports ok:false on failure |
+| 8 | Checkpoints | ✅ | VS Code file snapshots for extension-managed diff accepts, 20-checkpoint cap, `WorkspaceEdit` restore; OpenCode server-managed edits revert through `session.revert(messageID)` |
 | 9 | UI Reliability | ✅ | Guarded stream finalization, late chunk recovery, right-side conversation timeline, markdown normalization, adaptive RenderQueue, tool deduplication, webview heartbeat, event stream reconnection, "Retry from here", tool grouping + keyboard nav |
 
 ## New Features (Extension-Only) — Complete
@@ -50,7 +50,7 @@ The single failing test in v0.2.7 (`main.test.ts › timeline jumps use exact me
 | 21 | Secure Context Attachments | ✅ | Explorer/editor context commands, styled input chips, sensitive-file warnings, prompt-injection checks, read-only context provider |
 | 22 | Path-Aware Mentions | ✅ | Debounced file search with path-aware globs and expanded result limit |
 | 23 | Unified Session Modal | ✅ | Single list merging local + server sessions, workspace badges, `resume_server_session`, `importOneServerSession` |
-| 24 | Changed-Files Chip Bar | ✅ | `file_edited` events accumulated into `session.changedFiles` with deduplication; chip bar re-renders live |
+| 24 | Changed-Files Chip Bar | ✅ | Backend `SessionStore.addChangedFiles()` persists normalized paths; `changed_files_update` is canonical for chip bar + todos panel, with `file_edited` merged live |
 | 25 | Token & Cost Display | ✅ | `StreamCoordinator.finalizeStream` forwards `AssistantMessage.cost` and `.tokens` to webview on every stream completion |
 | 26 | Welcome Dashboard | ✅ | Workspace context row, model name, "Continue last session" + "New session" quick actions, recent sessions sorted by recency, 2×2 prompt-starter grid; host-created empty sessions now open a tab immediately |
 | 27 | Header Consolidation | ✅ | Status strip below tab bar (model/tokens/cost); settings overflow menu (`#settings-menu`) with MCP + theme entries; 4-button header; `aria-pressed` on all toggles |

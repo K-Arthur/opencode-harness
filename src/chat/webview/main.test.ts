@@ -295,6 +295,14 @@ it("unified modal: server session items send resume_server_session on click", ()
     )
   })
 
+  it("changed_files_update is canonical sync for chip bar and todos panel", () => {
+    const idx = source.indexOf('"changed_files_update"')
+    assert.ok(idx >= 0, "changed_files_update handler must exist")
+    const block = source.slice(idx, idx + 900)
+    assert.ok(block.includes("handleChangedFiles"), "changed_files_update must update session changedFiles/chip bar")
+    assert.ok(block.includes("renderChangedFiles"), "changed_files_update must update todos panel changed-file list")
+  })
+
   // ── model selector on welcome screen ─────────────────────────────────────
   // When no session exists, selecting a model must still update the global
   // preference + dropdown UI — not silently discard the selection.
@@ -487,6 +495,34 @@ it("unified modal: server session items send resume_server_session on click", ()
         body.includes("updateCostDisplay("),
         "switchTab must refresh cost display for the new tab"
       )
+    })
+  })
+
+  // --- Bug fix regression tests: command availability, session lifecycle ---
+
+  describe("command availability fixes", () => {
+    it("handles push_all_state host message by triggering state sync", () => {
+      assert.ok(source.includes('"push_all_state"'), "must register a handler for push_all_state")
+      const idx = source.indexOf('["push_all_state"')
+      assert.ok(idx >= 0, "push_all_state must be in messageHandlers map")
+    })
+
+    it("handles push_visible_state host message by triggering state sync", () => {
+      assert.ok(source.includes('"push_visible_state"'), "must register a handler for push_visible_state")
+      const idx = source.indexOf('["push_visible_state"')
+      assert.ok(idx >= 0, "push_visible_state must be in messageHandlers map")
+    })
+
+    it("proactively loads command list on boot so slash commands are available immediately", () => {
+      const bootIdx = source.indexOf("function boot()")
+      assert.ok(bootIdx >= 0, "boot function must exist")
+      const bootBlock = source.slice(bootIdx, bootIdx + 400)
+      assert.ok(bootBlock.includes('"list_commands"'), "boot must send list_commands after webview_ready to pre-populate inline dropdown")
+    })
+
+    it("wires commands palette button to open modal and request commands", () => {
+      assert.ok(source.includes("commandsPaletteBtn"), "must reference commandsPaletteBtn element")
+      assert.ok(source.includes("commandsPaletteBtn.addEventListener"), "must wire click handler on commands palette button")
     })
   })
 })

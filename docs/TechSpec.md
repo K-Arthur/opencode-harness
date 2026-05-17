@@ -78,10 +78,10 @@ OpenCode Harness is a VS Code extension that integrates the opencode AI coding a
 - `session.create({ body })` - Create an OpenCode server session when a tab first needs server-side context.
 - `session.update({ path, body })` - Update server-side session properties such as model/agent metadata when supported.
 - `session.prompt({ path, body })` / `session.promptAsync({ path, body })` - Send prompts; `body.noReply: true` is reserved for context-only injection.
-- `event.subscribe()` - Subscribe to the server SSE event stream; `EventNormalizer` maps SDK events into webview stream/tool/file/permission messages.
+- `event.subscribe()` - Subscribe to the server SSE event stream; `EventNormalizer` maps SDK events into webview stream/tool/file/permission messages. File tracking follows the generated SDK shapes: `file.edited.properties.file` and `session.diff.properties.diff[].file` with additions/deletions.
 - `session.messages({ path })` / `session.get({ path })` / `session.list()` - Backfill, resume, and list conversations.
 - `session.command({ path, body })` / `session.shell({ path, body })` - Route slash commands and shell execution through the OpenCode server.
-- `session.abort({ path })`, `session.share({ path })`, `session.delete({ path })`, `session.revert({ path, body })` - Manage execution and lifecycle operations.
+- `session.abort({ path })`, `session.share({ path })`, `session.delete({ path })`, `session.revert({ path, body })` - Manage execution and lifecycle operations. Server-side tool edits are reverted through `session.revert({ body: { messageID } })`; extension-local checkpoints cover only extension-managed diff accepts.
 - `find.text()`, `find.files()`, `find.symbols()`, `file.read()`, `file.status()` - File/search/diff support for agent tool results and context views.
 
 The debug Extension Development Host must open the intended workspace folder. If no folder is open, VS Code reports an empty `workspaceFolders` list and `SessionManager` starts `opencode serve` from `process.cwd()`; in local F5 runs that can be `/home/kevinarthur`, which changes session recovery and workspace scoping.
@@ -92,6 +92,9 @@ The debug Extension Development Host must open the intended workspace folder. If
 - `StreamCoordinator` - Manages per-tab SSE streams
 - `MessageRouter` - Routes webview messages to handlers
 - `DiffHandler` - Tracks and presents code diffs
+- `DiffApplier` - Previews diffs through read-only virtual documents and `vscode.diff`; applies accepted edits through `WorkspaceEdit`
+- `CheckpointManager` - Stores explicit file snapshots in extension storage and restores them through `workspace.fs`/`WorkspaceEdit` without changing git state
+- `SessionStore.addChangedFiles(sessionId, files)` - Canonical backend changed-file registration with path normalization, dedupe, stable order, and persistence
 - `ContextMonitor` - Tracks context usage and provides optimization suggestions
 - `SkillManager` - Manages skill enablement and performance tracking
 - `SkillPreferencesStore` - Persists per-skill enable/disable preferences in `vscode.Memento` (`globalState`); consulted by `WebviewEventRouter.resolveAllSkills` for the modal and by the methodology advisor's skill hinter
@@ -157,7 +160,9 @@ The following features were audited against the opencode CLI and enhanced for th
 
 ### Checkpoints
 - **20-checkpoint cap**: Oldest checkpoints are pruned per session when the cap is exceeded.
-- **Pre-action snapshot**: `snapshotBeforeAction` creates a checkpoint before any write tool call.
+- **Extension-local scope**: Checkpoints snapshot explicit file paths before extension-managed diff accepts. They are stored under extension storage and restored with VS Code APIs, not git branch checkout or stash operations.
+- **Server-side scope**: OpenCode server-managed tool edits are reverted through `session.revert(messageID)`.
+- **Pre-action snapshot**: `snapshotBeforeAction(sessionId, action, filePath | filePaths)` creates a checkpoint before applying an accepted diff.
 
 ### Inline CodeLens Actions (Feature 9)
 - **InlineActionProvider**: CodeLens annotations on functions/classes for Explain, Refactor, Generate Tests.
@@ -192,7 +197,7 @@ The following features were audited against the opencode CLI and enhanced for th
 - **Downstream clearing**: `SessionStore.truncateMessages()` removes all messages after the edited one; webview state also truncates via `.splice()` to stay consistent.
 - **In-place editing**: `edit_message_prefill` loads original text into input, clears downstream UI elements.
 - **Revert button**: Assistant messages have a revert button (undo icon) that calls `sessionManager.revertMessage()`.
-- **Checkpoint indicator**: `diff_result` carries `checkpointCreated` flag; webview shows "Checkpoint saved" message.
+- **Checkpoint indicator**: `diff_result` carries `{ type, sessionId, blockId, ok, message?, checkpointCreated? }`; webview shows "Checkpoint saved" message when applicable.
 
 ### Search in Conversation (Feature 14)
 - **Ctrl+F**: Opens a hidden search bar with input, prev/next, close buttons, and match count.
@@ -287,7 +292,7 @@ The following features were audited against the opencode CLI and enhanced for th
 - **All sessions visible**: `list_server_sessions` handler no longer filters by current workspace — shows all non-subagent sessions, sorted by `updated` descending, with an `isCurrentWorkspace` flag for UI badging.
 
 ### Changed-Files Chip Bar (Feature 22 — Fixed)
-- **`file_edited` accumulation**: Frontend accumulates individual `{ type: "file_edited", file }` events into `session.changedFiles` incrementally. Each event checks for duplicates via `Array.includes()` before appending. Chip bar is re-rendered immediately for the active tab.
+- **Canonical changed-file sync**: Backend `SessionStore.addChangedFiles()` registers normalized paths from `file_edited` and `session.diff` events. The host posts `changed_files_update` as `{ type, sessionId, files: Array<{ path: string; added: number; removed: number }> }`; the frontend uses it as the canonical state for both the chip bar and todos panel. Legacy/live `file_edited` remains `{ type, sessionId, file }` and merges through the same dedupe path.
 - **Deduplication**: Restructured handler to hoist the `filePath` extraction and dedup check before `addMessage` so the test's 600-char window assertion passes.
 - **Cleared on session start**: `session.changedFiles` is reset when streaming begins so the chip bar shows only the current turn's changes.
 
@@ -345,7 +350,7 @@ The following features were audited against the opencode CLI and enhanced for th
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐              │
 │  │ Checkpoint    │ │ Prompt        │ │ Session       │              │
 │  │ Manager       │ │ Manager       │ │ Exporter      │              │
-│  │ (git snapshots)│ │ (.md prompts) │ │ (markdown)    │              │
+│  │ (file snapshots)│ │ (.md prompts) │ │ (markdown)    │              │
 │  └──────────────┘ └──────────────┘ └──────────────┘              │
 │  ┌──────────────┐ ┌──────────────┐                                │
 │  │ Terminal      │ │ Theme         │                                │
@@ -385,7 +390,7 @@ The following features were audited against the opencode CLI and enhanced for th
 | `ContextMonitor` | `src/monitor/ContextMonitor.ts` | Token usage tracking, autoCompact threshold |
 | `ModelManager` | `src/model/ModelManager.ts` | Model list from server, caching, QuickPick |
 | `RateLimitMonitor` | `src/monitor/RateLimitMonitor.ts` | Rate limit headers, countdown, status bar |
-| `CheckpointManager` | `src/checkpoint/CheckpointManager.ts` | Git worktree snapshots, rollback |
+| `CheckpointManager` | `src/checkpoint/CheckpointManager.ts` | Extension-local file snapshots, `WorkspaceEdit` restore |
 | `ThemeManager` | `src/theme/ThemeManager.ts` | Theme presets, CLI theme files, CSS variable injection |
 | `PromptManager` | `src/prompts/PromptManager.ts` | Custom slash commands from `.opencode/prompts/*.md` |
 | `InlineActionProvider` | `src/inline/InlineActionProvider.ts` | CodeLens actions (Explain, Refactor, Generate Tests) |

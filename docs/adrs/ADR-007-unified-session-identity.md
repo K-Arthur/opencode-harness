@@ -56,7 +56,7 @@ Local spawn remains the default. There is no automatic discovery.
 
 ### 4. Session-start baseline checkpoint
 
-When a session is created (whether by local action, server import, or migration), `CheckpointManager.snapshot(sessionId, "baseline")` is invoked. It is cheap when the working tree is clean (already early-returns) and gives "restore to session start" a defined target. The baseline checkpoint is exempt from `MAX_CHECKPOINTS` pruning.
+When a session is created (whether by local action, server import, or migration), `CheckpointManager.snapshot(sessionId, "baseline")` may be invoked by the extension hook. Current checkpoint semantics require explicit file paths, so a baseline call without files is a no-op. Extension-local checkpoints are created before accepted diffs; OpenCode server-managed edits are reverted through `session.revert(messageID)`.
 
 ### 5. New user-facing commands
 

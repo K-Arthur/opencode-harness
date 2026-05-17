@@ -4,15 +4,62 @@ import { installVsCodeApi, expectNoWebviewErrors } from './webviewTestHarness'
 async function mountTodosPanel(page: Page, visible: boolean = true) {
   await page.evaluate((isVisible) => {
     document.querySelector('.welcome-container')?.remove()
+    document.querySelector('#welcome-view')?.remove()
 
-    const existingPanel = document.getElementById('todos-panel')
-    if (existingPanel) {
-      existingPanel.classList.toggle('hidden', !isVisible)
-      return
+    const seedPanel = (panel: HTMLElement) => {
+      panel.classList.toggle('hidden', !isVisible)
+      panel.setAttribute('aria-label', 'Todos and changed files')
+
+      const todosList = panel.querySelector('#todos-list')
+      if (todosList) {
+        todosList.innerHTML = `
+          <ul class="todos-list">
+            <li class="todo-item todo-item--pending">
+              <div class="todo-checkbox" role="checkbox" aria-checked="false" aria-label="Todo: Implement feature X" tabindex="0"></div>
+              <span class="todo-content">Implement feature X</span>
+              <button class="todo-delete-btn" aria-label="Delete todo">×</button>
+            </li>
+            <li class="todo-item todo-item--completed">
+              <div class="todo-checkbox todo-checkbox--checked" role="checkbox" aria-checked="true" aria-label="Todo: Fix bug Y" tabindex="0"></div>
+              <span class="todo-content">Fix bug Y</span>
+              <button class="todo-delete-btn" aria-label="Delete todo">×</button>
+            </li>
+          </ul>
+        `
+      }
+
+      const changedFilesList = panel.querySelector('#changed-files-panel-list')
+      if (changedFilesList) {
+        changedFilesList.innerHTML = `
+          <ul class="changed-files-list">
+            <li class="changed-file-item">
+              <span class="changed-file-name" title="src/example.ts">example.ts</span>
+              <span class="changed-file-stats">
+                <span class="changed-file-stat changed-file-stat--added">+5</span>
+                <span class="changed-file-stat changed-file-stat--removed">-2</span>
+              </span>
+              <button class="changed-file-open-btn" aria-label="Open src/example.ts">Open</button>
+            </li>
+            <li class="changed-file-item">
+              <span class="changed-file-name" title="src/utils.ts">utils.ts</span>
+              <span class="changed-file-stats">
+                <span class="changed-file-stat changed-file-stat--added">+10</span>
+              </span>
+              <button class="changed-file-open-btn" aria-label="Open src/utils.ts">Open</button>
+            </li>
+          </ul>
+        `
+      }
     }
 
     const host = document.querySelector('.tab-panel.active') || document.querySelector('.chat-main') || document.body
-    const panel = document.createElement('div')
+    let panel = document.getElementById('todos-panel')
+    if (panel) {
+      seedPanel(panel)
+      return
+    }
+
+    panel = document.createElement('div')
     panel.id = 'todos-panel'
     panel.className = `todos-panel ${isVisible ? '' : 'hidden'}`
     panel.setAttribute('aria-label', 'Todos and changed files')
@@ -27,46 +74,21 @@ async function mountTodosPanel(page: Page, visible: boolean = true) {
       </div>
       <div class="todos-panel-content">
         <div class="todos-section">
-          <h3 class="todos-section-title">Todos</h3>
-          <div id="todos-list">
-            <div class="todo-item">
-              <div class="todo-checkbox"></div>
-              <span class="todo-content">Implement feature X</span>
-              <button class="todo-delete-btn" aria-label="Delete todo">×</button>
-            </div>
-            <div class="todo-item todo-item--completed">
-              <div class="todo-checkbox todo-checkbox--checked"></div>
-              <span class="todo-content">Fix bug Y</span>
-              <button class="todo-delete-btn" aria-label="Delete todo">×</button>
-            </div>
-          </div>
+            <h3 class="todos-section-title">Todos</h3>
+          <div id="todos-list"></div>
           <form class="todo-add-form" id="todo-add-form">
-            <input type="text" class="todo-add-input" id="todo-add-input" placeholder="Add a new todo..." aria-label="New todo">
+            <input type="text" class="todo-add-input" id="todo-add-input" placeholder="Add a task or reminder..." aria-label="New todo">
             <button type="submit" class="todo-add-btn">Add</button>
           </form>
         </div>
         <div class="todos-section">
           <h3 class="todos-section-title">Changed Files</h3>
-          <div id="changed-files-panel-list">
-            <div class="file-change-item">
-              <span class="file-change-path">src/example.ts</span>
-              <div class="file-change-stats">
-                <span class="file-change-stat file-change-stat--added">+5</span>
-                <span class="file-change-stat file-change-stat--removed">-2</span>
-              </div>
-            </div>
-            <div class="file-change-item">
-              <span class="file-change-path">src/utils.ts</span>
-              <div class="file-change-stats">
-                <span class="file-change-stat file-change-stat--added">+10</span>
-                <span class="file-change-stat file-change-stat--removed">-0</span>
-              </div>
-            </div>
-          </div>
+          <div id="changed-files-panel-list"></div>
         </div>
       </div>
     `
     host.appendChild(panel)
+    seedPanel(panel)
   }, visible)
 }
 
@@ -120,13 +142,14 @@ test.describe('Todos and Changed Files Panel', () => {
   })
 
   test('should render file change items', async ({ page }) => {
-    const fileItems = page.locator('.file-change-item')
+    const fileItems = page.locator('.changed-file-item')
     await expect(fileItems).toHaveCount(2)
     
     const firstFile = fileItems.nth(0)
-    await expect(firstFile.locator('.file-change-path')).toHaveText('src/example.ts')
-    await expect(firstFile.locator('.file-change-stat--added')).toHaveText('+5')
-    await expect(firstFile.locator('.file-change-stat--removed')).toHaveText('-2')
+    await expect(firstFile.locator('.changed-file-name')).toHaveText('example.ts')
+    await expect(firstFile.locator('.changed-file-name')).toHaveAttribute('title', 'src/example.ts')
+    await expect(firstFile.locator('.changed-file-stat--added')).toHaveText('+5')
+    await expect(firstFile.locator('.changed-file-stat--removed')).toHaveText('-2')
   })
 
   test('should have add todo form', async ({ page }) => {
@@ -135,7 +158,7 @@ test.describe('Todos and Changed Files Panel', () => {
     
     const input = page.locator('#todo-add-input')
     await expect(input).toBeVisible()
-    await expect(input).toHaveAttribute('placeholder', 'Add a new todo...')
+    await expect(input).toHaveAttribute('placeholder', 'Add a task or reminder...')
     
     const addBtn = form.locator('.todo-add-btn')
     await expect(addBtn).toHaveText('Add')
@@ -158,15 +181,17 @@ test.describe('Todos and Changed Files Panel', () => {
     
     // Hover to show
     await todoItem.hover()
-    const opacityAfter = await deleteBtn.evaluate(el => window.getComputedStyle(el).opacity)
-    expect(opacityAfter).not.toBe('0')
+    await expect.poll(
+      () => deleteBtn.evaluate(el => window.getComputedStyle(el).opacity),
+      { timeout: 1000 }
+    ).not.toBe('0')
   })
 
   test('should have proper section titles', async ({ page }) => {
     const todoTitle = page.locator('.todos-section-title').nth(0)
-    await expect(todoTitle).toHaveText('TODOS')
+    await expect(todoTitle).toHaveText('Todos')
     
     const filesTitle = page.locator('.todos-section-title').nth(1)
-    await expect(filesTitle).toHaveText('CHANGED FILES')
+    await expect(filesTitle).toHaveText('Changed Files')
   })
 })
