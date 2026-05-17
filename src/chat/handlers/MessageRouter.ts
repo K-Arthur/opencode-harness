@@ -214,7 +214,7 @@ export class MessageRouter {
         cliSessionId: s.cliSessionId,
         title: SessionStore.displayName(s),
         time: s.lastActiveAt,
-        messageCount: s.messages.length,
+        messageCount: s.messages.filter((m: { role: string }) => m.role === "user").length,
         cost: s.cost || 0,
         workspacePath: s.workspacePath,
       })),

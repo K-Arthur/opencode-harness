@@ -32,6 +32,9 @@ import { SessionLifecycleService } from "./SessionLifecycleService"
 import { CommandExecutionService } from "./CommandExecutionService"
 import { WebviewEventRouter } from "./WebviewEventRouter"
 import { SteerPromptHandler } from "./handlers/SteerPromptHandler"
+import { SkillPreferencesStore } from "../skills/SkillPreferencesStore"
+import { SkillTriggerEngine } from "../skills/SkillTriggerEngine"
+import { MethodologyAdvisor } from "../methodology/MethodologyAdvisor"
 
 export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   private _view?: vscode.WebviewView
@@ -56,6 +59,7 @@ private autoCompactor: AutoCompactor
   private sessionLifecycle: SessionLifecycleService
   private commandExec: CommandExecutionService
   private eventRouter: WebviewEventRouter
+  private skillPreferences: SkillPreferencesStore
   private restoredTabsHydrated = false
   private usageAnalytics: UsageAnalytics
   private steerPromptHandler: SteerPromptHandler
@@ -100,8 +104,23 @@ private autoCompactor: AutoCompactor
   ) {
     this.webviewContent = new WebviewContent(context.extensionUri)
     this.tabManager = new TabManager(context.globalState)
+    this.skillPreferences = new SkillPreferencesStore(context.globalState)
+
+    // SkillTriggerEngine matches user prompts against trigger rules and
+    // produces a list of skill IDs the methodology layer should surface to
+    // the model. The advisor consults this hinter when composing its
+    // prompt addendum; we filter by the user's enabled set so disabling a
+    // skill in the modal also stops it from being suggested to the model.
+    const skillTriggerEngine = new SkillTriggerEngine()
+    const methodologyAdvisor = new MethodologyAdvisor({
+      skillHinter: (text: string) => {
+        const ids = skillTriggerEngine.getTriggeredSkills(text)
+        return ids.filter((id) => this.skillPreferences.isEnabled(id))
+      },
+    })
+
     this.streamCoordinator = new StreamCoordinator(
-      sessionManager, sessionStore, contextEngine, contextMonitor, modelManager, this.tabManager, rateLimitMonitor, this.diffApplier
+      sessionManager, sessionStore, contextEngine, contextMonitor, modelManager, this.tabManager, rateLimitMonitor, this.diffApplier, methodologyAdvisor
     )
     this.promptManager = new PromptManager()
     this.promptManager.scanWorkspace()
@@ -208,6 +227,7 @@ private autoCompactor: AutoCompactor
       updateProvider: (id, updates) => this.handleUpdateProvider(id, updates),
       deleteProvider: (id) => { this.handleDeleteProvider(id) },
       showOpenFolderDialog: (dir) => { void vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(dir)) },
+      skillPreferences: this.skillPreferences,
     })
 
     // Subscribe to session store changes to keep webview and server in sync
@@ -871,7 +891,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         cliSessionId: s.cliSessionId,
         title: SessionStore.displayName(s),
         time: s.lastActiveAt,
-        messageCount: s.messages.length,
+        messageCount: s.messages.filter((m) => m.role === "user").length,
         cost: s.cost || 0,
         workspacePath: s.workspacePath,
       })),

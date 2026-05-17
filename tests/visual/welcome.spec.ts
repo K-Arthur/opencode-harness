@@ -166,45 +166,9 @@ test.describe('Welcome Screen', () => {
       expect(scrollWidth).toBe(clientWidth)
     })
 
-    test('search toggle should expand input', async ({ page }) => {
-      await page.goto('/')
-      await page.setViewportSize({ width: 400, height: 600 })
-      
-      const toggle = page.locator('#welcome-search-toggle')
-      const input = page.locator('#welcome-search-input')
-      
-      await expect(input).toHaveClass(/hidden/)
-      
-      await toggle.click()
-      await expect(input).not.toHaveClass(/hidden/)
-      await expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    })
-
-    test('quick settings toggle should expand panel', async ({ page }) => {
-      await page.goto('/')
-      await page.setViewportSize({ width: 400, height: 600 })
-      
-      const toggle = page.locator('#settings-toggle')
-      const panel = page.locator('#settings-panel')
-      
-      await expect(panel).toHaveClass(/hidden/)
-      
-      await toggle.click()
-      await expect(panel).not.toHaveClass(/hidden/)
-      await expect(toggle).toHaveAttribute('aria-expanded', 'true')
-      
-      // Verify quick settings content is rendered
-      const quickSettingsContent = page.locator('#quick-settings-content')
-      await expect(quickSettingsContent).toBeVisible()
-      
-      // Verify mode selector is rendered
-      const modeSelect = page.locator('#quick-setting-mode')
-      await expect(modeSelect).toBeVisible()
-    })
-
     test('time-based greeting should display correctly', async ({ page }) => {
       await page.goto('/')
-      
+
       const greeting = page.locator('#welcome-greeting')
       await expect(greeting).toBeVisible()
       const text = await greeting.textContent()
@@ -213,19 +177,11 @@ test.describe('Welcome Screen', () => {
 
     test('should have proper ARIA attributes for accessibility', async ({ page }) => {
       await page.goto('/')
-      
+
       const welcomeView = page.locator('#welcome-view')
       await expect(welcomeView).toHaveAttribute('role', 'region')
       await expect(welcomeView).toHaveAttribute('aria-label', 'OpenCode welcome')
-      
-      const searchToggle = page.locator('#welcome-search-toggle')
-      await expect(searchToggle).toHaveAttribute('aria-expanded')
-      await expect(searchToggle).toHaveAttribute('aria-controls', 'welcome-search-input')
-      
-      const settingsToggle = page.locator('#settings-toggle')
-      await expect(settingsToggle).toHaveAttribute('aria-expanded')
-      await expect(settingsToggle).toHaveAttribute('aria-controls', 'settings-panel')
-      
+
       const promptStartersSection = page.locator('.prompt-starters-section')
       await expect(promptStartersSection).toHaveAttribute('aria-label', 'Suggested prompts')
     })
@@ -234,14 +190,11 @@ test.describe('Welcome Screen', () => {
       await page.goto('/')
       await page.setViewportSize({ width: 400, height: 600 })
 
-      const toggle = page.locator('#welcome-search-toggle')
       const inputWrapper = page.locator('#welcome-search-input')
       const innerInput = inputWrapper.locator('input')
 
-      await expect(toggle).toHaveClass(/hidden/)
       await expect(inputWrapper).not.toHaveClass(/hidden/)
       await expect(innerInput).toBeVisible()
-      await expect(toggle).toHaveAttribute('aria-expanded', 'true')
     })
 
     test('Escape key clears session search without hiding the input', async ({ page }) => {

@@ -29,6 +29,14 @@ import type {
   MethodologyId,
 } from './types.js';
 
+/**
+ * A function that given the user's prompt returns the set of enabled skill
+ * names the system thinks are relevant. Returning `[]` means "none" — the
+ * advisor will simply omit the suggestion line. The advisor never throws if
+ * this hook throws — failures are swallowed (best-effort).
+ */
+export type SkillHinter = (text: string) => string[];
+
 const MIN_INPUT_LENGTH = 12;            // skip trivial prompts ("hi", "thanks")
 const MAX_CLASSIFY_LENGTH = 10_000;     // ceiling on classifier input
 const ADDENDUM_PREFIX = '[methodology]'; // grep marker for logs / debugging
@@ -88,11 +96,17 @@ export class MethodologyAdvisor {
   private classifier: TaskClassifier;
   private catalog: MethodologyCatalog;
   private enabled: boolean;
+  private skillHinter?: SkillHinter;
 
-  constructor(opts: { classifier?: TaskClassifier; catalog?: MethodologyCatalog; enabled?: boolean } = {}) {
+  constructor(opts: { classifier?: TaskClassifier; catalog?: MethodologyCatalog; enabled?: boolean; skillHinter?: SkillHinter } = {}) {
     this.classifier = opts.classifier ?? new TaskClassifier();
     this.catalog = opts.catalog ?? new MethodologyCatalog();
     this.enabled = opts.enabled ?? true;
+    this.skillHinter = opts.skillHinter;
+  }
+
+  setSkillHinter(hinter: SkillHinter | undefined): void {
+    this.skillHinter = hinter;
   }
 
   setEnabled(enabled: boolean): void {
@@ -130,19 +144,45 @@ export class MethodologyAdvisor {
     });
     const selection = this.catalog.select(classification);
 
-    const promptAddendum = this.renderAddendum(selection);
+    const triggeredSkills = this.collectTriggeredSkills(classifyInput);
+    const promptAddendum = this.renderAddendum(selection, triggeredSkills);
     const label = this.renderLabel(selection);
     const signature = this.makeSignature(classifyInput, selection);
 
     return { classification, selection, promptAddendum, label, signature };
   }
 
-  private renderAddendum(selection: MethodologySelection): string {
+  private collectTriggeredSkills(text: string): string[] {
+    if (!this.skillHinter) return [];
+    try {
+      const skills = this.skillHinter(text);
+      if (!Array.isArray(skills)) return [];
+      // Deduplicate while preserving order; cap at 4 so the addendum stays short.
+      const seen = new Set<string>();
+      const out: string[] = [];
+      for (const s of skills) {
+        if (typeof s !== 'string') continue;
+        const trimmed = s.trim();
+        if (!trimmed || seen.has(trimmed)) continue;
+        seen.add(trimmed);
+        out.push(trimmed);
+        if (out.length >= 4) break;
+      }
+      return out;
+    } catch {
+      return [];
+    }
+  }
+
+  private renderAddendum(selection: MethodologySelection, triggeredSkills: string[]): string {
     const hint = STRATEGY_HINTS[selection.promptStrategy] ?? STRATEGY_HINTS['hierarchical-cot'];
     const methodology = METHODOLOGY_LABELS[selection.methodology] ?? selection.methodology;
-    // Single self-contained line; opencode passes this as a text part so we
+    const skillLine = triggeredSkills.length > 0
+      ? `\nRelevant skills: ${triggeredSkills.join(', ')}.`
+      : '';
+    // Single self-contained block; opencode passes this as a text part so we
     // don't want to overwhelm the user's actual prompt.
-    return `${ADDENDUM_PREFIX} ${methodology} · ${selection.promptStrategy}\n${hint}`;
+    return `${ADDENDUM_PREFIX} ${methodology} · ${selection.promptStrategy}\n${hint}${skillLine}`;
   }
 
   private renderLabel(selection: MethodologySelection): string {

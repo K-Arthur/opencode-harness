@@ -122,10 +122,14 @@ describe("main.ts", () => {
   })
 
   it("timeline jumps use exact message-list scroll positioning", () => {
-    assert.ok(source.includes("function scrollMessageToTop("), "must have exact scroll helper")
-    const idx = source.indexOf("function scrollToTurn(")
-    assert.ok(idx >= 0, "scrollToTurn must exist")
-    const block = source.slice(idx, source.indexOf("/* ─── CONVERSATION TIMELINE", idx))
+    // scrollToTurn was extracted to the scrollMarkers module; assert against
+    // the module source where the actual implementation lives.
+    assert.ok(scrollMarkersSource.includes("export function scrollMessageToTop("), "must export the exact scroll helper")
+    const idx = scrollMarkersSource.indexOf("export function scrollToTurn(")
+    assert.ok(idx >= 0, "scrollToTurn must exist in scrollMarkers")
+    // Block ends at the next top-level export, or end of file.
+    const after = scrollMarkersSource.indexOf("\nexport function ", idx + 1)
+    const block = scrollMarkersSource.slice(idx, after >= 0 ? after : scrollMarkersSource.length)
     assert.ok(block.includes("scrollMessageToTop(msgList, target)"), "timeline jumps must use the message list scroller directly")
     assert.ok(!block.includes("scrollIntoView"), "timeline jumps must not rely on scrollIntoView/focus side effects")
   })

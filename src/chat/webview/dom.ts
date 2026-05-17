@@ -87,10 +87,7 @@ export interface ElementRefs {
   
   welcomeRecentSessions: HTMLDivElement | null
   welcomeModelCtx: HTMLSpanElement | null
-  welcomeSearchToggle: HTMLButtonElement | null
   welcomeSearchInput: HTMLDivElement | null
-  settingsToggle: HTMLButtonElement | null
-  settingsPanel: HTMLElement | null
 
   agentStatusLed: HTMLDivElement
   agentStatusText: HTMLSpanElement
@@ -113,7 +110,6 @@ export interface ElementRefs {
   modeWarningConfirm: HTMLButtonElement
 
   welcomeView: HTMLDivElement
-  quickSettingsContent: HTMLDivElement
 
   mcpConfigPanel: HTMLDivElement
   mcpConfigList: HTMLDivElement
@@ -262,10 +258,7 @@ export function getElementRefs(): ElementRefs {
     
     welcomeRecentSessions: optionalElement<HTMLDivElement>("welcome-recent-sessions"),
     welcomeModelCtx: optionalElement<HTMLSpanElement>("welcome-model-ctx"),
-    welcomeSearchToggle: optionalElement<HTMLButtonElement>("welcome-search-toggle"),
     welcomeSearchInput: optionalElement<HTMLDivElement>("welcome-search-input"),
-    settingsToggle: optionalElement<HTMLButtonElement>("settings-toggle"),
-    settingsPanel: optionalElement<HTMLElement>("settings-panel"),
 
     agentStatusLed: requireElement<HTMLDivElement>("agent-status-led"),
     agentStatusText: requireElement<HTMLSpanElement>("agent-status-text"),
@@ -288,7 +281,6 @@ export function getElementRefs(): ElementRefs {
     modeWarningConfirm: requireElement<HTMLButtonElement>("mode-warning-confirm"),
 
     welcomeView: requireElement<HTMLDivElement>("welcome-view"),
-    quickSettingsContent: requireElement<HTMLDivElement>("quick-settings-content"),
 
     mcpConfigPanel: requireElement<HTMLDivElement>("mcp-config-panel"),
     mcpConfigList: requireElement<HTMLDivElement>("mcp-config-list"),

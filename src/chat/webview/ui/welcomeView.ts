@@ -5,10 +5,7 @@ export interface WelcomeViewEls {
   welcomeContinueBtn: HTMLButtonElement | null
   welcomeModelName: HTMLElement | null
   welcomeSearchInput: HTMLElement | null
-  settingsToggle: HTMLElement | null
-  settingsPanel: HTMLElement | null
   promptInput: HTMLTextAreaElement
-  quickSettingsContent: HTMLElement | null
 }
 
 export interface WelcomeViewDeps {
@@ -118,21 +115,6 @@ export function setupWelcomeActions(deps: WelcomeViewDeps): void {
     }
   }
 
-  if (deps.els.settingsToggle && deps.els.settingsPanel) {
-    const settingsToggle = deps.els.settingsToggle
-    const settingsPanel = deps.els.settingsPanel
-    settingsToggle.addEventListener("click", () => {
-      const isHidden = settingsPanel.classList.contains("hidden")
-      if (isHidden) {
-        settingsPanel.classList.remove("hidden")
-        settingsToggle.setAttribute("aria-expanded", "true")
-      } else {
-        settingsPanel.classList.add("hidden")
-        settingsToggle.setAttribute("aria-expanded", "false")
-      }
-    })
-  }
-
   const greetingEl = document.getElementById("welcome-greeting") as HTMLElement | null
   if (greetingEl) {
     const hour = new Date().getHours()
@@ -157,44 +139,3 @@ export function setupWelcomeSuggestions(deps: WelcomeViewDeps): void {
   })
 }
 
-export function setupWelcomeQuickSettings(deps: WelcomeViewDeps): void {
-  const currentState = deps.getState()
-  const currentMode = "build"
-
-  const container = deps.els.quickSettingsContent
-  if (!container) return
-
-  container.innerHTML = ""
-  const group = document.createElement("div")
-  group.className = "quick-settings-group"
-
-  const label = document.createElement("label")
-  label.className = "quick-settings-label"
-  label.textContent = "Session Mode"
-
-  const desc = document.createElement("span")
-  desc.className = "quick-settings-desc"
-  desc.textContent = "Controls how OpenCode applies changes to your code"
-
-  const select = document.createElement("select")
-  select.className = "quick-settings-select"
-  for (const opt of [
-    { label: "Plan", value: "plan" },
-    { label: "Auto", value: "auto" },
-    { label: "Build", value: "build" },
-  ]) {
-    const option = document.createElement("option")
-    option.value = opt.value
-    option.textContent = opt.label
-    if (opt.value === currentMode) option.selected = true
-    select.appendChild(option)
-  }
-  select.addEventListener("change", () => {
-    deps.postMessage({ type: "change_mode", mode: select.value, sessionId: deps.getState().activeSessionId ?? undefined })
-  })
-
-  group.appendChild(label)
-  group.appendChild(desc)
-  group.appendChild(select)
-  container.appendChild(group)
-}

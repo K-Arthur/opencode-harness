@@ -42,7 +42,7 @@ import { setupSessionModal as setupSessionModalModule, openSessionModal as openS
 import { setupModeWarning as setupModeWarningModule, showAutoModeWarning as showAutoModeWarningModule, closeModeWarning as closeModeWarningModule, isModeWarningOpen, type ModeWarningEls } from "./ui/modeWarning"
 import { handleTokenUsage as handleTokenUsageModule, accumulateTokenUsage as accumulateTokenUsageModule, accumulateCost as accumulateCostModule, rememberStepUsage, isDuplicateRecentStepUsage, handleRateLimitState as handleRateLimitStateModule, recordUsageSnapshot as recordUsageSnapshotModule, updateCostDisplay as updateCostDisplayModule, updateTokenDisplay as updateTokenDisplayModule, clearTokenDisplay as clearTokenDisplayModule, updateContextBarFromSession as updateContextBarFromSessionModule, checkOverflowWarnings as checkOverflowWarningsModule, formatTokenCount as formatTokenCountModule, type TokenCostDeps, type RateLimitWebviewState } from "./ui/tokenCostDisplay"
 import { createAttachmentManager, parsePromptMentions, removePromptToken } from "./ui/attachments"
-import { showWelcomeView as showWelcomeViewModule, hideWelcomeView as hideWelcomeViewModule, renderWelcomeContext as renderWelcomeContextModule, setupWelcomeActions as setupWelcomeActionsModule, setupWelcomeSuggestions as setupWelcomeSuggestionsModule, setupWelcomeQuickSettings as setupWelcomeQuickSettingsModule, type WelcomeViewDeps } from "./ui/welcomeView"
+import { showWelcomeView as showWelcomeViewModule, hideWelcomeView as hideWelcomeViewModule, renderWelcomeContext as renderWelcomeContextModule, setupWelcomeActions as setupWelcomeActionsModule, setupWelcomeSuggestions as setupWelcomeSuggestionsModule, type WelcomeViewDeps } from "./ui/welcomeView"
 import { closeSettingsMenu as closeSettingsMenuModule, closeCurrentModal as closeCurrentModalModule, setupSettingsMenuKeyboardNav as setupSettingsMenuKeyboardNavModule, type SettingsMenuDeps } from "./ui/settingsMenu"
 import { trackFileChange as trackFileChangeModule, undoMessage as undoMessageModule, handleChangedFiles as handleChangedFilesModule, renderChangedFilesList as renderChangedFilesListModule, renderCheckpointPanel as renderCheckpointPanelModule, handleClearMessages as handleClearMessagesModule, type FileTrackingDeps } from "./ui/fileTracking"
 import { setupButtons as setupButtonsModule, type ButtonSetupDeps } from "./ui/buttonSetup"
@@ -383,7 +383,7 @@ function getVsCodeApi() {
         openMcpConfig: () => mcpConfig.open(),
         openThemeCustomizer: () => openThemeCustomizer(themeDeps),
         getActiveSessionId: () => stateManager.getState().activeSessionId ?? undefined,
-        skillsModalOpen: skillsModalApi?.open,
+        skillsModalOpen: () => skillsModalApi?.open?.(),
       })
       
       setupSessionModal()
@@ -407,7 +407,6 @@ function getVsCodeApi() {
       
       setupWelcomeSuggestions()
       setupWelcomeActions()
-      setupWelcomeQuickSettings()
       setupMessageListener()
       setupPermissionListener()
       setupDiffActionListener()
@@ -451,10 +450,7 @@ function getVsCodeApi() {
       welcomeContinueBtn: els.welcomeContinueBtn,
       welcomeModelName: els.welcomeModelName,
       welcomeSearchInput: els.welcomeSearchInput,
-      settingsToggle: els.settingsToggle,
-      settingsPanel: els.settingsPanel,
       promptInput: els.promptInput,
-      quickSettingsContent: els.quickSettingsContent,
     },
     postMessage: (msg) => vscode.postMessage(msg),
     getAllSessions: () => stateManager.getAllSessions(),
@@ -504,8 +500,23 @@ function getVsCodeApi() {
       return
     }
 
+    const matchesQuery = (s: typeof allValidSessions[number]): boolean => {
+      if (!query) return true
+      const name = (s.name || "").toLowerCase()
+      if (name.includes(query)) return true
+      for (const msg of s.messages) {
+        for (const block of msg.blocks || []) {
+          const text = (block as { type?: string; text?: string }).type === "text"
+            ? (block as { text?: string }).text
+            : undefined
+          if (text && text.toLowerCase().includes(query)) return true
+        }
+      }
+      return false
+    }
+
     const filteredSessions = allValidSessions
-      .filter((s) => !query || (s.name || "").toLowerCase().includes(query))
+      .filter(matchesQuery)
       .sort((a, b) => {
         const tA = a.messages[a.messages.length - 1]?.timestamp ?? 0
         const tB = b.messages[b.messages.length - 1]?.timestamp ?? 0
@@ -515,7 +526,7 @@ function getVsCodeApi() {
         id: s.id,
         title: s.name,
         time: s.messages[s.messages.length - 1]?.timestamp,
-        messageCount: s.messages.length,
+        messageCount: s.messages.filter((m) => m.role === "user").length,
         cost: s.cost || 0,
       }))
 
@@ -1833,10 +1844,6 @@ function getVsCodeApi() {
 
   function setupWelcomeSuggestions() {
     setupWelcomeSuggestionsModule(welcomeViewDeps)
-  }
-
-  function setupWelcomeQuickSettings() {
-    setupWelcomeQuickSettingsModule(welcomeViewDeps)
   }
 
   /* ─── SEARCH ─── */

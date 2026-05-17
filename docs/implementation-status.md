@@ -77,6 +77,30 @@ Leverage existing infrastructure:
 - **TaskDecomposer**: Can be used for task breakdown when spec is available (not yet integrated)
 - **MethodologyOrchestrator**: Routes through cascade router based on methodology selection
 
+### Phase 2: Methodology ↔ Skills runtime integration ✅ (2026-05-17)
+
+After auditing the chat pipeline the following gaps were closed:
+
+#### 5. Skills modal wiring bug ✅
+- **File**: `src/chat/webview/main.ts`
+- **Symptom**: clicking the "Manage skills" header button did nothing.
+- **Cause**: `setupButtonsModule({ …, skillsModalOpen: skillsModalApi?.open })` captured `skillsModalApi` (still `null` at that point in `init()`), so the click handler at `src/chat/webview/ui/buttonSetup.ts:100` resolved to `undefined` forever.
+- **Fix**: pass a thunk — `skillsModalOpen: () => skillsModalApi?.open?.()` — so resolution happens at click time.
+
+#### 6. Skill enable/disable persistence ✅
+- **Files**: `src/skills/SkillPreferencesStore.ts` (new), `src/chat/WebviewEventRouter.ts`, `src/chat/ChatProvider.ts`
+- **Previously**: `toggle_skill` was a deliberate no-op ("opencode server doesn't support agent enable/disable"); `resolveAllSkills` hardcoded `enabled: true`.
+- **Now**: `SkillPreferencesStore` persists disabled IDs to `globalState` (key `opencode-skill-disabled`). `toggle_skill` writes through the store and re-emits `skills_list`. `resolveAllSkills` reflects the persisted preference on every list.
+
+#### 7. SkillTriggerEngine wired into the prompt pipeline ✅
+- **Files**: `src/methodology/MethodologyAdvisor.ts`, `src/chat/ChatProvider.ts`
+- **Previously**: `SkillTriggerEngine` was instantiated only by its own tests; its trigger rules (`tdd-*`, `sadd-*`, `react-component`, `python-testing`, `code-review`, etc.) never influenced model input.
+- **Now**: `MethodologyAdvisor` accepts an optional `skillHinter: (text: string) => string[]`. `ChatProvider` wires it to `skillTriggerEngine.getTriggeredSkills(text)` filtered by `SkillPreferencesStore.isEnabled(id)`. The advisor appends `\nRelevant skills: …` to its methodology addendum (capped at 4 entries, dedup'd). Output flows through `StreamCoordinator.applyMethodologyAdvice` exactly like before, so the model receives a single combined hint per turn.
+
+#### 8. Pre-existing timeline-jumps test repaired ✅
+- **File**: `src/chat/webview/main.test.ts`
+- The test grepped `main.ts` for `scrollMessageToTop(msgList, target)` inside the `scrollToTurn` block, but the implementation had moved to `src/chat/webview/ui/scrollMarkers.ts`. The test now reads from `scrollMarkersSource` (already imported at the top of the file).
+
 ## Remaining Work
 
 ### Integrate TaskDecomposer with Spec System ⏳
@@ -110,11 +134,10 @@ Leverage existing infrastructure:
 - **Implementation**: WebviewEventRouter now calls ContextMonitor.generateOptimizationSuggestions() on context_suggestions_request
 
 ### Skill Performance Recording Integration ⏳
-- **Status**: Infrastructure exists, integration pending
+- **Status**: Invocation point now exists, recording wire-up pending
 - **Infrastructure**: ConfidenceScorer class with recordSkillUsage() method exists in src/skills/ConfidenceScorer.ts
-- **Challenge**: Current architecture lacks explicit skill invocation points to integrate recording
-- **Required**: Architectural work to integrate ConfidenceScorer with actual skill usage events
-- **Note**: Skills modal UI displays performance metrics when available, but backend recording integration requires identifying where skills are actually invoked
+- **Invocation point (new)**: `ChatProvider`'s `skillHinter` closure now runs `SkillTriggerEngine.getTriggeredSkills` on every classified prompt — this is the natural point to call `ConfidenceScorer.recordSkillUsage(skillId, …)` once we know which suggested skills the model actually leaned on.
+- **Outstanding**: emit `recordSkillUsage` from the hinter (suggested) and from a post-stream signal that observes whether the assistant referenced a suggested skill (effective). Surface counts back to `SkillInfo.performanceScore`/`usageCount` for the modal.
 
 ## Key Design Decisions
 

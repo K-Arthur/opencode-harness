@@ -20,7 +20,8 @@
       "Bash(tar -xzf opencode-ai-sdk-1.15.3.tgz)",
       "WebFetch(domain:github.com)",
       "Bash(grep -nE 'switch\\\\s*\\\\\\(\\\\s*[a-zA-Z_$][\\\\w$]*\\\\.type\\\\s*\\\\\\)' /home/kevinarthur/PersonalProjects/opencode-harness/__TRACKED_VAR__)",
-      "Bash(grep -nE \"switch\\\\s*\\\\\\(\\\\s*[a-zA-Z_$][\\\\w$]*\\\\.type\\\\s*\\\\\\)\" /home/kevinarthur/PersonalProjects/opencode-harness/src/chat/handlers/StreamCoordinator.ts)"
+      "Bash(grep -nE \"switch\\\\s*\\\\\\(\\\\s*[a-zA-Z_$][\\\\w$]*\\\\.type\\\\s*\\\\\\)\" /home/kevinarthur/PersonalProjects/opencode-harness/src/chat/handlers/StreamCoordinator.ts)",
+      "mcp__jcodemunch__find_references"
     ]
   }
 }

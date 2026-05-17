@@ -94,6 +94,10 @@ The debug Extension Development Host must open the intended workspace folder. If
 - `DiffHandler` - Tracks and presents code diffs
 - `ContextMonitor` - Tracks context usage and provides optimization suggestions
 - `SkillManager` - Manages skill enablement and performance tracking
+- `SkillPreferencesStore` - Persists per-skill enable/disable preferences in `vscode.Memento` (`globalState`); consulted by `WebviewEventRouter.resolveAllSkills` for the modal and by the methodology advisor's skill hinter
+- `SkillTriggerEngine` (`src/skills/`) - Compiled regex rule set (TDD, SADD, frontend/backend/db, etc.) that returns triggered skill IDs for a given prompt; wired into `MethodologyAdvisor` via the `skillHinter` constructor option
+- `MethodologyAdvisor` (`src/methodology/`) - Synchronous facade producing a prompt addendum from `TaskClassifier` + `MethodologyCatalog`; accepts an optional `SkillHinter` so the addendum carries a `Relevant skills: …` line (filtered to user-enabled skills)
+- `MethodologyOrchestrator` (`src/methodology/`) - Cascade/quality-aware orchestrator owning `OutcomeTracker`; powers the methodology status-bar item from `extension.ts`
 
 ## Security & Compliance
 - Extension does NOT handle API keys directly (opencode server manages auth)

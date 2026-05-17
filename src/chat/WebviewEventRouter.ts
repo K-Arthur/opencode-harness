@@ -21,6 +21,7 @@ import type { SteerPromptHandler } from "./handlers/SteerPromptHandler"
 import type { ChatMessage, Block } from "./types"
 import type { ContextMonitor } from "../monitor/ContextMonitor"
 import type { UsageAnalytics } from "../monitor/UsageAnalytics"
+import type { SkillPreferencesStoreLike } from "../skills/SkillPreferencesStore"
 import { log } from "../utils/outputChannel"
 import { handleWebviewError } from "./utils/errorHandler"
 
@@ -77,6 +78,7 @@ export interface WebviewEventRouterOptions {
   updateProvider: (id: string, updates: Record<string, unknown>) => Promise<void> | void
   deleteProvider: (id: string) => void
   showOpenFolderDialog: (dir: string) => void
+  skillPreferences: SkillPreferencesStoreLike
 }
 
 export class WebviewEventRouter {
@@ -817,8 +819,19 @@ export class WebviewEventRouter {
         this.opts.postMessage({ type: "skills_list", skills: [] })
       }
     }],
-    ["toggle_skill", (_: Record<string, unknown>) => {
-      // Agent enable/disable is not supported by the opencode server API.
+    ["toggle_skill", (msg: Record<string, unknown>) => {
+      // Persist the user's enable/disable preference locally. The opencode
+      // server doesn't accept agent enable/disable, so we surface this only
+      // to our own pipeline (SkillTriggerEngine ↦ methodology addendum) and
+      // to the modal's render state.
+      const skillId = typeof msg.skillId === "string" ? msg.skillId : ""
+      const enabled = msg.enabled === true
+      if (!skillId) return
+      this.opts.skillPreferences.setEnabled(skillId, enabled)
+      // Re-emit the list so the modal reflects the new state immediately.
+      void this.resolveAllSkills()
+        .then((skills) => this.opts.postMessage({ type: "skills_list", skills }))
+        .catch(() => { /* best effort */ })
     }],
     ["search_skills", async (msg: Record<string, unknown>) => {
       const query = (msg.query as string | undefined)?.toLowerCase() || ""
@@ -1436,6 +1449,7 @@ export class WebviewEventRouter {
   private async resolveAllSkills(): Promise<Array<{ id: string; name: string; description: string; category: string; enabled: boolean }>> {
     const seen = new Set<string>()
     const skills: Array<{ id: string; name: string; description: string; category: string; enabled: boolean }> = []
+    const prefs = this.opts.skillPreferences
 
     // API agents (server-managed, only when server is up)
     if (this.opts.sessionManager.isRunning) {
@@ -1445,7 +1459,7 @@ export class WebviewEventRouter {
         for (const a of agents) {
           if (seen.has(a.name)) continue
           seen.add(a.name)
-          skills.push({ id: a.name, name: a.name, description: a.description || "", category: a.builtIn ? "built-in" : "custom", enabled: true })
+          skills.push({ id: a.name, name: a.name, description: a.description || "", category: a.builtIn ? "built-in" : "custom", enabled: prefs.isEnabled(a.name) })
         }
       } catch (err) {
         log.warn("Failed to list agents from server", err)
@@ -1458,7 +1472,7 @@ export class WebviewEventRouter {
       for (const s of local) {
         if (seen.has(s.name)) continue
         seen.add(s.name)
-        skills.push({ id: s.id, name: s.name, description: s.description, category: s.category, enabled: true })
+        skills.push({ id: s.id, name: s.name, description: s.description, category: s.category, enabled: prefs.isEnabled(s.id) })
       }
     } catch (err) {
       log.warn("Failed to scan local skills", err)

@@ -146,7 +146,7 @@ describe("handleListSessions — cross-workspace CLI sessions", () => {
     assert.ok(block.includes("sessionStore.list()"),
       "must call sessionStore.list() to get all sessions")
     assert.ok(
-      !block.includes(".filter("),
+      !/\.filter\([^)]*workspacePath/.test(block),
       "must NOT filter by workspacePath — CLI sessions from other directories must surface in the unified modal"
     )
     assert.ok(
@@ -173,7 +173,7 @@ describe("handleListSessions — cross-workspace CLI sessions", () => {
     assert.ok(block.includes("id: s.id"), "must include session id")
     assert.ok(block.includes("title:"), "must include title")
     assert.ok(block.includes("time: s.lastActiveAt"), "must include lastActiveAt as time")
-    assert.ok(block.includes("messageCount: s.messages.length"), "must include message count")
+    assert.ok(block.includes("messageCount: s.messages.filter"), "must include message count (user-role only)")
     assert.ok(block.includes("cost: s.cost || 0"), "must include cost")
   })
 })

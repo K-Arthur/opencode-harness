@@ -1,20 +1,22 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-05-16
-**Version:** v0.2.7 (Context optimization + skill performance tracking)
+**Last Updated:** 2026-05-17
+**Version:** v0.2.8 (Skills wiring repair + methodology↔skills integration)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
 
 ## Test Summary
 
-| Metric | v0.2.5 | v0.2.6 | Delta |
-|--------|--------|--------|-------|
-| Tests | 702 | 894 | +192 |
-| Passing | 701 | 893 | +192 |
-| Failing | 0 | 0 | — |
-| Skipped | 1 | 1 | — |
-| Typecheck | ✅ | ✅ | — |
-| Build | ✅ | ✅ | — |
+| Metric | v0.2.6 | v0.2.7 | v0.2.8 | Delta |
+|--------|--------|--------|--------|-------|
+| Tests | 894 | 1466 | 1466 | — |
+| Passing | 893 | 1465 | 1466 | +1 |
+| Failing | 0 | 1 | 0 | -1 |
+| Skipped | 1 | 7 | 7 | — |
+| Typecheck | ✅ | ✅ | ✅ | — |
+| Build | ✅ | ✅ | ✅ | — |
+
+The single failing test in v0.2.7 (`main.test.ts › timeline jumps use exact message-list scroll positioning`) was a stale source-grep assertion left over from the extraction of `scrollToTurn`/`scrollMessageToTop` into `src/chat/webview/ui/scrollMarkers.ts`. The test now reads from `scrollMarkersSource` where the implementation actually lives.
 
 ## Feature Parity (CLI → Extension) — Complete
 
@@ -64,6 +66,9 @@
 | 37 | Skills Performance Tracking UI | ✅ | `SkillInfo` extended with `performanceScore`, `usageCount`, `lastUsed`; skills modal displays metrics when available |
 | 38 | Context Optimization UI Display | ⏳ | Backend exposed, pending webview panel integration to display suggestions to users |
 | 39 | Skill Usage Recording Integration | ⏳ | ConfidenceScorer infrastructure exists, pending integration with actual skill invocation points (architectural work required) |
+| 40 | Skills Modal Wiring Repair | ✅ | Fixed stale-closure on `skillsModalOpen` (`main.ts` passed `skillsModalApi?.open` before the API was constructed) by switching to a thunk so the lookup happens at click time; modal now opens reliably |
+| 41 | Skill Preferences Persistence | ✅ | New `SkillPreferencesStore` (`globalState`-backed) persists per-skill enable/disable; `toggle_skill` writes through the store and re-emits `skills_list`; `resolveAllSkills` reflects user preference on every list |
+| 42 | Methodology ↔ Skills Integration | ✅ | `MethodologyAdvisor` now accepts a `skillHinter`; `ChatProvider` wires `SkillTriggerEngine.getTriggeredSkills(text)` (filtered by enabled skills) into the addendum so the model receives a `Relevant skills: …` line on every classified prompt |
 
 ## Deferred (P2 — High Effort / Niche)
 
