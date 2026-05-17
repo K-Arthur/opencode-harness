@@ -60,21 +60,47 @@ export function createAttachmentManager(deps: AttachmentDeps) {
   }
 
   function onPaste(e: ClipboardEvent): void {
-    const items = e.clipboardData?.items
-    if (!items) return
+    const data = e.clipboardData
+    if (!data) return
 
-    const active = deps.getActiveSession()
-    if (!active) return
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
-      if (item && ALLOWED_IMAGE_MIMES.includes(item.type as typeof ALLOWED_IMAGE_MIMES[number])) {
-        e.preventDefault()
+    // First pass: DataTransferItemList. Some platforms duplicate the same
+    // MIME type with a string-typed entry whose getAsFile() returns null —
+    // keep iterating past those instead of bailing on the first MIME match.
+    const items = data.items
+    let attached = false
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        if (!item) continue
+        if (!ALLOWED_IMAGE_MIMES.includes(item.type as typeof ALLOWED_IMAGE_MIMES[number])) continue
         const blob = item.getAsFile()
-        if (blob) attachImageBlob(blob)
-        break
+        if (blob) {
+          attachImageBlob(blob)
+          attached = true
+          break
+        }
       }
     }
+
+    // Fallback: DataTransfer.files. Some hosts (notably some Wayland and
+    // Linux DE clipboards) surface pasted images only here.
+    if (!attached) {
+      const files = data.files
+      if (files && files.length > 0) {
+        for (let i = 0; i < files.length; i++) {
+          // Index access works for both FileList and plain arrays (tests use
+          // arrays); FileList also exposes `.item(i)` but it's not required.
+          const f = (files as unknown as { [k: number]: File | undefined })[i]
+          if (f && ALLOWED_IMAGE_MIMES.includes(f.type as typeof ALLOWED_IMAGE_MIMES[number])) {
+            attachImageBlob(f)
+            attached = true
+            break
+          }
+        }
+      }
+    }
+
+    if (attached) e.preventDefault()
   }
 
   function renderAttachmentChips(): void {

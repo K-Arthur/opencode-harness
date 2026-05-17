@@ -3,6 +3,7 @@ import { type ChatMessage } from "../types"
 import { log } from "../utils/outputChannel"
 import {
   buildSession,
+  isLocalPlaceholderSessionId,
   isValidSession as isValidSessionPure,
   isAutoSessionName,
   sessionDisplayName as sessionDisplayNamePure,
@@ -525,6 +526,19 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
     return true
   }
 
+  /**
+   * Clear the `needsBackfill` flag without touching messages. Called when
+   * repeated backfill attempts return empty — the session is treated as
+   * genuinely empty on the server, so we stop retrying and stop logging.
+   */
+  clearNeedsBackfill(id: string): boolean {
+    const session = this.sessions.get(id)
+    if (!session || !session.needsBackfill) return false
+    delete session.needsBackfill
+    this.save()
+    return true
+  }
+
   ensure(id: string, name?: string, model?: string, mode?: string): OpenCodeSession {
     const existing = this.sessions.get(id)
     if (existing) {
@@ -539,7 +553,7 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
       return existing
     }
 
-    const session = this.create(name, id)
+    const session = this.create(name, isLocalPlaceholderSessionId(id) ? { id, pendingServerLink: true } : id)
     // Set model/mode before persisting — create() already called save(),
     // but these fields weren't set yet. Single follow-up save is needed.
     let needsSave = false
@@ -743,6 +757,7 @@ validateSessionName(name: string): string | null {
     const session = this.sessions.get(id)
     if (!session) return
     session.cliSessionId = cliId
+    delete session.pendingServerLink
     this.save()
   }
 

@@ -4,6 +4,7 @@ import {
   buildSession,
   isValidSession,
   isAutoSessionName,
+  isLocalPlaceholderSessionId,
   sessionDisplayName,
   validateSessionName,
   generateTitleFromMessage,
@@ -43,6 +44,20 @@ void describe("buildSession", () => {
   void it("sets pendingServerLink flag", () => {
     const s = buildSession({ pendingServerLink: true })
     assert.equal(s.pendingServerLink, true)
+  })
+
+  void it("does not default pending local placeholder sessions to a CLI session id", () => {
+    const s = buildSession({ id: "session-deadbeef", pendingServerLink: true })
+    assert.equal(s.cliSessionId, undefined)
+    assert.equal(s.pendingServerLink, true)
+  })
+
+  void it("detects webview-local placeholder ids", () => {
+    assert.equal(isLocalPlaceholderSessionId("session-deadbeef"), true)
+    assert.equal(isLocalPlaceholderSessionId("session-4d3efea9"), true)
+    assert.equal(isLocalPlaceholderSessionId("session-not-real"), false)
+    assert.equal(isLocalPlaceholderSessionId("ses_1ca1abbb0ffe7g3Gwbt4U1lJds"), false)
+    assert.equal(isLocalPlaceholderSessionId(undefined), false)
   })
 
   void it("initializes zero values correctly", () => {

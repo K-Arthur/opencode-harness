@@ -24,6 +24,7 @@ import type { SdkEventLike } from "./types"
 import { SseEventParser, type SseParseResult } from "./sseParser"
 import { IdleWatchdog } from "./IdleWatchdog"
 import { McpServerManager } from "../mcp/McpServerManager"
+import { isLocalPlaceholderSessionId } from "./sessionUtils"
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -1488,13 +1489,15 @@ async getMessages(sessionId: string, limit?: number): Promise<{ info: unknown; p
     if (!this.client) throw new Error("Server not running")
 
     // If we have an existing ID, verify it's still valid on the server
-    if (cliSessionId) {
+    if (cliSessionId && !isLocalPlaceholderSessionId(cliSessionId)) {
       const exists = await this.sessionExists(cliSessionId)
       if (exists) {
         log.info(`Re-attached to existing server session: ${cliSessionId}`)
         return cliSessionId
       }
       log.info(`Server session ${cliSessionId} no longer exists – creating new one`)
+    } else if (cliSessionId) {
+      log.info(`Local placeholder session ${cliSessionId} needs a server session`)
     }
 
     // Create a fresh server-side session

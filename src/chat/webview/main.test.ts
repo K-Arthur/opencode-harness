@@ -524,5 +524,30 @@ it("unified modal: server session items send resume_server_session on click", ()
       assert.ok(source.includes("commandsPaletteBtn"), "must reference commandsPaletteBtn element")
       assert.ok(source.includes("commandsPaletteBtn.addEventListener"), "must wire click handler on commands palette button")
     })
+
+    it("passes session search query from session_list into the modal", () => {
+      const idx = source.indexOf('[\"session_list\"')
+      assert.ok(idx >= 0, "session_list handler must exist")
+      const block = source.slice(idx, source.indexOf('[\"session_list_update\"', idx))
+      assert.ok(block.includes("msg.query"), "session_list handler must read the host-provided search query")
+      assert.ok(block.includes("openSessionModal(sessions, "), "session_list handler must pass the query to openSessionModal")
+    })
+
+    it("forwards session modal search query to server session listing", () => {
+      const idx = sessionModalSource.indexOf("export function openSessionModal")
+      assert.ok(idx >= 0, "openSessionModal must exist")
+      const block = sessionModalSource.slice(idx, sessionModalSource.indexOf("export function closeSessionModal", idx))
+      assert.ok(block.includes("query"), "openSessionModal must accept the active search query")
+      assert.ok(block.includes('postMessage({ type: \"list_server_sessions\", query })'), "server session listing must receive the search query")
+    })
+
+    it("recovers optimistic streaming state on webview_request_error", () => {
+      const idx = source.indexOf('[\"webview_request_error\"')
+      assert.ok(idx >= 0, "must handle webview_request_error host messages")
+      const block = source.slice(idx, source.indexOf('[\"request_error\"', idx))
+      assert.ok(block.includes("handleRequestError"), "webview_request_error must surface the failure")
+      assert.ok(source.includes("stateManager.setStreaming(sessionId, false)"), "handleRequestError must unlock optimistic streaming state")
+      assert.ok(source.includes("updateSendButton()"), "handleRequestError must refresh the send button")
+    })
   })
 })

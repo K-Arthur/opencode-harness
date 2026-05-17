@@ -70,6 +70,21 @@ OpenCode Harness is a VS Code extension that integrates the opencode AI coding a
 6. Agent generates code changes → DiffHandler creates diff → presented in webview
 7. User reviews diff → applies via VS Code's undoable edit API (transactional)
 
+### Event Routing (Race-Tolerant)
+
+SSE events are dispatched to tabs via the `event.sessionID → tab` mapping maintained in `TabManager.cliSessionIndex`. Because the opencode server may emit events for a new session **before** the extension's `await session.create(...)` resolves and `setCliSessionId` runs, `ChatProvider.handleServerEvent` buffers events whose target mapping has not yet been registered:
+
+- **Buffer**: `src/chat/PendingEventBuffer.ts` — per-`cliSessionId` FIFO queue, 5-second TTL, 200-event-per-session cap.
+- **Replay trigger**: `TabManager.onCliSessionIdRegistered` fires when `setCliSessionId(tabId, cliSessionId)` succeeds; `ChatProvider` drains the buffer for that session and replays each event through the regular handler dispatch.
+- **Expiry**: events that age past the TTL are dropped and a single warn-level log line is emitted per session, citing the dropped count.
+- **Diagnostics**: `TabManager.setCliSessionId` logs at `error` level if the tabId is unknown — making the rare "mapping lost" case visible in the output channel.
+
+See `docs/adrs/ADR-009-pending-event-buffer.md` for the full motivation and alternatives.
+
+### Backfill Retry Bound
+
+`ChatProvider.backfillRecoveredSessions` uses a 4-step exponential backoff (`BACKFILL_RETRY_DELAYS_MS = [1500, 4000, 8000, 16000]`) when the opencode server returns an empty messages array on `session.messages()`. After the last attempt, `SessionStore.clearNeedsBackfill(sessionId)` is called for any session that is still empty, so subsequent `sessions_recovered` events stop re-trying and stop spamming "Empty response …" log lines. The session is treated as genuinely empty on the server.
+
 ## API Contracts
 
 ### OpenCode SDK Contracts
@@ -167,6 +182,13 @@ The following features were audited against the opencode CLI and enhanced for th
 ### Inline CodeLens Actions (Feature 9)
 - **InlineActionProvider**: CodeLens annotations on functions/classes for Explain, Refactor, Generate Tests.
 - No ghost-text completion support (extension uses CodeLens only).
+
+### Welcome Search and Image Paste (Robustness Hardening, v0.2.10)
+Welcome-page session search and pasted-image attachments share a webview-side contract documented in `docs/webview-session-search-and-attachments.md`. Hardening landed in v0.2.10:
+
+- Welcome search click handler triggers on any wrapper-targeted click (not just clicks resolved to `.search-icon`, which `pointer-events: none` makes unreachable).
+- Welcome search with a query bypasses the "must have visible messages" filter so unbacked-filled CLI sessions remain findable by name.
+- Paste handler walks `DataTransferItemList` first, then falls back to `DataTransfer.files`, and skips past same-MIME entries whose `getAsFile()` returned null.
 
 ### Image & Multimodal (Feature 10)
 - **Clipboard paste**: Webview listens for `paste` events; detects image clipboard data, encodes to base64 via `FileReader`.

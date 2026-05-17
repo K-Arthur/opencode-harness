@@ -47,6 +47,16 @@ describe("SessionManager.ts", () => {
     assert.ok(source.includes("async ensureSession("))
   })
 
+  it("ensureSession treats webview-local placeholder ids as pending, not server ids", () => {
+    const idx = source.indexOf("async ensureSession(")
+    assert.ok(idx >= 0, "ensureSession must exist")
+    const block = source.slice(idx, idx + 1200)
+    assert.ok(
+      block.includes("!isLocalPlaceholderSessionId(cliSessionId)"),
+      "ensureSession should not probe the OpenCode server for session-* placeholder ids"
+    )
+  })
+
   it("has getSessionMessages method backed by session.messages API", () => {
     assert.ok(source.includes("async getSessionMessages("), "must expose session message history")
     assert.ok(source.includes("this.client.session.messages("), "must use SDK session.messages(), not Session.history")

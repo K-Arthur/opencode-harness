@@ -43,7 +43,7 @@ describe("MessageRouter.ts", () => {
 
   it("has handleListSessions method", () => {
     assert.ok(
-      source.includes("async handleListSessions(sessionStore: any, context: RouteContext)"),
+      source.includes("async handleListSessions(sessionStore: any, context: RouteContext"),
       "handleListSessions must exist"
     )
     assert.ok(source.includes('type: "session_list"'), "must post session_list message")
@@ -132,7 +132,7 @@ describe("MessageRouter.ts", () => {
 })
 
 function findHandleListSessionsBlock(src: string): string {
-  const idx = src.indexOf("async handleListSessions(sessionStore: any, context: RouteContext)")
+  const idx = src.indexOf("async handleListSessions(sessionStore: any, context: RouteContext")
   if (idx < 0) return ""
   // Slice from method signature to the next method or end of class
   const nextMethod = src.indexOf("async handleAcceptPermission(", idx)
@@ -175,5 +175,14 @@ describe("handleListSessions — cross-workspace CLI sessions", () => {
     assert.ok(block.includes("time: s.lastActiveAt"), "must include lastActiveAt as time")
     assert.ok(block.includes("messageCount: s.messages.filter"), "must include message count (user-role only)")
     assert.ok(block.includes("cost: s.cost || 0"), "must include cost")
+  })
+
+  void it("filters by query across title, ids, workspace, and text blocks when supplied", () => {
+    assert.ok(block.includes("query"), "handleListSessions must accept a search query")
+    assert.ok(block.includes("matchesQuery"), "session search must use an explicit matcher")
+    assert.ok(block.includes("SessionStore.displayName"), "session search must match display names")
+    assert.ok(block.includes("cliSessionId"), "session search must match CLI session ids")
+    assert.ok(block.includes("workspacePath"), "session search must match workspace paths")
+    assert.ok(block.includes('type === "text"'), "session search must inspect text blocks safely")
   })
 })

@@ -422,7 +422,7 @@ describe("StreamCoordinator.ts", () => {
   void it("instructions_prepended_to_parts_on_first_turn", () => {
     const startIdx = source.indexOf("async startPrompt(")
     assert.ok(startIdx >= 0, "startPrompt must exist")
-    const block = source.slice(startIdx, startIdx + 6000)
+    const block = source.slice(startIdx, startIdx + 8000)
     assert.ok(
       block.includes("tab.instructions"),
       "startPrompt must read tab.instructions before building parts"
@@ -437,7 +437,7 @@ describe("StreamCoordinator.ts", () => {
   void it("instructions_not_re_injected_on_subsequent_turns", () => {
     const startIdx = source.indexOf("async startPrompt(")
     assert.ok(startIdx >= 0, "startPrompt must exist")
-    const block = source.slice(startIdx, startIdx + 6000)
+    const block = source.slice(startIdx, startIdx + 8000)
     assert.ok(
       block.includes(".has(cliSessionId)") ||
         /!.*injectedInstructionsSessions/.test(block) ||

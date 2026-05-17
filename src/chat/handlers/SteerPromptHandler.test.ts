@@ -108,6 +108,21 @@ describe("SteerPromptHandler.sendSteerPrompt", () => {
       assert.equal(coord.calls.length, 0)
     })
 
+    it("allows an attachment-only steer prompt", async () => {
+      const prompt: SteerPrompt = {
+        id: "p1",
+        text: "   ",
+        mode: "interrupt",
+        attachments: [{ data: "aGVsbG8=", mimeType: "image/png" }],
+        timestamp: 1,
+        sessionId: "session-1",
+      }
+      await handler.sendSteerPrompt("session-1", prompt, callbacks)
+      assert.equal(callbacks.errors.length, 0)
+      assert.deepEqual(coord.calls.map(c => c.name), ["abort", "startPrompt"])
+      assert.deepEqual(coord.calls[1]!.args[4], [{ data: "aGVsbG8=", mimeType: "image/png" }])
+    })
+
     it("posts an error when the session is not found", async () => {
       const prompt: SteerPrompt = { id: "p1", text: "redirect", mode: "interrupt", attachments: [], timestamp: 1, sessionId: "session-1" }
       await handler.sendSteerPrompt("unknown-session", prompt, callbacks)

@@ -36,7 +36,9 @@ export class SteerPromptHandler {
       return
     }
 
-    if (!steerPrompt || !steerPrompt.text || steerPrompt.text.trim().length === 0) {
+    const hasText = !!steerPrompt?.text && steerPrompt.text.trim().length > 0
+    const hasAttachments = Array.isArray(steerPrompt?.attachments) && steerPrompt.attachments.length > 0
+    if (!steerPrompt || (!hasText && !hasAttachments)) {
       log.warn("[SteerPromptHandler] Empty steer prompt text")
       callbacks.postRequestError("Steer prompt text cannot be empty", sessionId)
       return
@@ -91,7 +93,9 @@ export class SteerPromptHandler {
       await this.streamCoordinator.startPrompt(
         sessionId,
         steerPrompt.text,
-        callbacks
+        callbacks,
+        undefined,
+        steerPrompt.attachments,
       )
       
       // Track the steer prompt for history
@@ -119,7 +123,9 @@ export class SteerPromptHandler {
           await this.streamCoordinator.startPrompt(
             sessionId,
             steerPrompt.text,
-            callbacks
+            callbacks,
+            undefined,
+            steerPrompt.attachments,
           )
             } catch (error) {
           log.error(`[SteerPromptHandler] Error in append callback: ${error}`)

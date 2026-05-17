@@ -14,6 +14,14 @@ describe("SessionStore.ts", () => {
     assert.ok(source.includes("export class SessionStore"))
   })
 
+  it("keeps webview-local placeholder sessions pending until the server creates a real id", () => {
+    const idx = source.indexOf("ensure(id: string")
+    assert.ok(idx >= 0, "ensure method must exist")
+    const body = source.slice(idx, idx + 1400)
+    assert.ok(body.includes("isLocalPlaceholderSessionId(id)"), "ensure should detect webview-local placeholder ids")
+    assert.ok(body.includes("pendingServerLink: true"), "placeholder sessions should be marked pending server link")
+  })
+
   it("constructor takes globalState", () => {
     assert.ok(source.includes("constructor(private readonly globalState"))
   })

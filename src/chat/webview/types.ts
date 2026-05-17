@@ -429,7 +429,7 @@ export type HostMessage =
   | { type: "variant_update"; variant: string }
   | { type: "model_list"; items: ModelInfo[] }
   | { type: "mention_results"; items: MentionItem[]; query: string }
-  | { type: "session_list"; sessions: SessionSummary[] }
+  | { type: "session_list"; sessions: SessionSummary[]; query?: string }
   | { type: "server_session_list"; sessions: unknown[] }
   | { type: "server_session_deleted"; sessionId: string }
   | { type: "resume_session_data"; sessionId: string; messages: ChatMessage[]; model: string; isStreaming: boolean; cost?: number; tokenUsage?: TokenUsage; instructions?: string }
@@ -528,7 +528,7 @@ export type WebviewMessage =
   | { type: "revert_diff"; diffId: string; path: string; sessionId?: string }
   | { type: "accept_permission"; sessionId?: string; permissionId?: string; response?: string }
   | { type: "mention_search"; query: string }
-  | { type: "list_sessions"; limit?: number }
+  | { type: "list_sessions"; limit?: number; query?: string }
   | { type: "resume_session"; sessionId: string }
   | { type: "new_session" }
   | { type: "get_models" }
@@ -562,7 +562,7 @@ export type WebviewMessage =
   | { type: "create_file_from_code"; code: string; language?: string; filePath?: string }
   | { type: "compact_banner_action"; action: string; sessionId: string }
   | { type: "edit_message"; sessionId?: string }
-  | { type: "list_server_sessions" }
+  | { type: "list_server_sessions"; query?: string }
   | { type: "delete_server_session"; sessionId: string }
   | { type: "resume_server_session"; sessionId: string; title?: string }
   | { type: "add_mcp_server"; name: string; config: Record<string, unknown> }

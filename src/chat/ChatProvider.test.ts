@@ -581,6 +581,16 @@ void it("backfillTabIfNeeded does not skip sessions that already have messages u
   )
 })
 
+void it("backfillTabIfNeeded does not query the server for webview-local placeholder ids", () => {
+  const idx = source.indexOf("private async backfillTabIfNeeded(")
+  assert.ok(idx >= 0, "backfillTabIfNeeded must exist")
+  const block = source.slice(idx, idx + 1600)
+  assert.ok(
+    block.includes("isLocalPlaceholderSessionId(session.cliSessionId)"),
+    "webview-local session-* ids are not server ids and must not be backfilled"
+  )
+})
+
 void it("backfill retry budget allows at least 4 retries over 30 seconds", () => {
   const delaysIdx = source.indexOf("BACKFILL_RETRY_DELAYS_MS")
   assert.ok(delaysIdx >= 0, "BACKFILL_RETRY_DELAYS_MS must exist")

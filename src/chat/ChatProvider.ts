@@ -11,6 +11,7 @@ import { CheckpointManager } from "../checkpoint/CheckpointManager"
 import { DiffApplier } from "../diff/DiffApplier"
 import { sdkMessagesToChatMessages, reasoningEventToBlock } from "../session/sdkMessageConverter"
 import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
+import { isLocalPlaceholderSessionId } from "../session/sessionUtils"
 import { WebviewContent } from "./WebviewContent"
 import { TabManager } from "./TabManager"
 import { StreamCoordinator } from "./handlers/StreamCoordinator"
@@ -25,6 +26,7 @@ import { ChatCommands } from "./ChatCommands"
 import { AutoCompactor } from "./AutoCompactor"
 import { ChatFileOps } from "./ChatFileOps"
 import { ChunkBatcher } from "./ChunkBatcher"
+import { PendingEventBuffer } from "./PendingEventBuffer"
 import { McpServerManager } from "../mcp/McpServerManager"
 import { ThemeController } from "./ThemeController"
 import { StatePushService } from "./StatePushService"
@@ -73,6 +75,17 @@ private autoCompactor: AutoCompactor
     (msg) => { this._view?.webview.postMessage(msg) },
     (msg) => log.info(msg),
   )
+
+  /**
+   * Holds SSE events whose target tab has not yet registered its cliSessionId.
+   * Drains and replays on TabManager.onCliSessionIdRegistered. Closes the race
+   * window between `await session.create` and `setCliSessionId(...)`.
+   */
+  private pendingEventBuffer = new PendingEventBuffer({
+    ttlMs: 5_000,
+    maxPerSession: 200,
+    log: { warn: (m) => log.warn(m), info: (m) => log.info(m) },
+  })
 
   /** P2: Retry queue for critical messages with exponential backoff */
   private messageRetryQueue: Array<{ msg: Record<string, unknown>; attempts: number; lastAttempt: number }> = []
@@ -319,6 +332,12 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       }),
       this.tabManager.onInstructionsChanged(({ tabId, instructions }) => {
         this.postMessage({ type: "instructions_changed", sessionId: tabId, instructions })
+      }),
+      this.tabManager.onCliSessionIdRegistered(({ tabId, cliSessionId }) => {
+        const buffered = this.pendingEventBuffer.drain(cliSessionId)
+        if (buffered.length === 0) return
+        log.info(`Replaying ${buffered.length} buffered event(s) for cliSessionId "${cliSessionId}" (tab ${tabId})`)
+        for (const ev of buffered) this.handleServerEvent(ev)
       }),
       this.contextMonitor.onContextChanged?.((usage) => {
         this.postMessage({
@@ -774,17 +793,19 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
 
   private async backfillRecoveredSessions(sessions: import("../session/SessionStore").OpenCodeSession[], isRetry: boolean = false): Promise<boolean> {
     const sessionsNeedingBackfill = sessions
-      .filter((s) => s.needsBackfill === true && s.cliSessionId && s.messages.length === 0)
+      .filter((s) => s.needsBackfill === true && s.cliSessionId && !isLocalPlaceholderSessionId(s.cliSessionId) && s.messages.length === 0)
       .slice(0, 10)
 
-    // Log why other tabs weren't backfilled
-    const tabs = this.tabManager.getAllTabs()
-    for (const tab of tabs) {
-      const s = this.sessionStore.get(tab.id)
-      if (s && s.cliSessionId && !sessionsNeedingBackfill.some((sb) => sb.id === s.id)) {
-        log.info(`[sessions_recovered] Tab ${tab.id} not backfilled: needsBackfill=${s.needsBackfill}, messages.length=${s.messages.length}`)
-      } else if (s && !s.cliSessionId) {
-        log.info(`[sessions_recovered] Tab ${tab.id} has no cliSessionId`)
+    // Diagnostic: log tabs that lack a cliSessionId. Tabs that already have
+    // messages (or never needed backfill) are skipped silently to keep the
+    // output channel readable on the steady-state path.
+    if (sessionsNeedingBackfill.length === 0) {
+      const tabs = this.tabManager.getAllTabs()
+      for (const tab of tabs) {
+        const s = this.sessionStore.get(tab.id)
+        if (s && !s.cliSessionId) {
+          log.info(`[sessions_recovered] Tab ${tab.id} has no cliSessionId`)
+        }
       }
     }
 
@@ -802,7 +823,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
 
       this.backfillInProgress.add(session.id)
       try {
-        if (!session.cliSessionId) continue
+        if (!session.cliSessionId || isLocalPlaceholderSessionId(session.cliSessionId)) continue
         const rows = await this.sessionManager.getSessionMessages(session.cliSessionId)
         const messages = sdkMessagesToChatMessages(rows)
         if (messages.length > 0) {
@@ -862,13 +883,27 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       const stillStillPending = this.sessionStore
         .list()
         .filter((s) => s.needsBackfill === true && !!s.cliSessionId && s.messages.length === 0)
-      if (stillStillPending.length > 0) this.scheduleBackfillRetry(attempt + 1)
+      if (stillStillPending.length > 0) {
+        const isLastAttempt = attempt + 1 >= this.BACKFILL_RETRY_DELAYS_MS.length
+        if (isLastAttempt) {
+          // Server consistently returned empty for these — treat the session
+          // as genuinely empty so future sessions_recovered events stop
+          // re-trying and spamming "Empty response" logs.
+          const ids = stillStillPending.map((s) => s.id)
+          for (const s of stillStillPending) {
+            this.sessionStore.clearNeedsBackfill(s.id)
+          }
+          log.info(`[sessions_recovered] Giving up on backfill for ${ids.length} session(s) after ${this.BACKFILL_RETRY_DELAYS_MS.length} attempts: ${ids.join(", ")}`)
+        } else {
+          this.scheduleBackfillRetry(attempt + 1)
+        }
+      }
     }, delay)
   }
 
   private async backfillTabIfNeeded(tabId: string): Promise<void> {
     const session = this.sessionStore.get(tabId)
-    if (!session || !session.cliSessionId) {
+    if (!session || !session.cliSessionId || isLocalPlaceholderSessionId(session.cliSessionId)) {
       return
     }
 
@@ -957,7 +992,15 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     const targetTabId = tabId || event.sessionId || ""
 
     if (!tab && event.sessionId && event.type !== "session_status" && event.type !== "server_connected") {
-      log.warn(`Dropping server event ${event.type} for unknown cliSessionId "${event.sessionId}" to avoid routing it to the wrong tab`)
+      // Race-tolerant routing: the tab→session mapping may not be registered
+      // yet (the server can emit events between `session.create` resolving
+      // and `setCliSessionId(...)` running). Buffer the event; it will be
+      // replayed by the onCliSessionIdRegistered subscription, or dropped
+      // once after the TTL if the mapping never arrives.
+      this.pendingEventBuffer.add(event.sessionId, event)
+      if (!isHighFrequency) {
+        log.debug(`Buffered ${event.type} for cliSessionId "${event.sessionId}" (size=${this.pendingEventBuffer.size(event.sessionId)})`)
+      }
       return
     } else if (tab && !isHighFrequency) {
       log.debug(`Routed server event ${event.type} to tab: ${tab.id}`)

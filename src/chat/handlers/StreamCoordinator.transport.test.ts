@@ -29,6 +29,28 @@ describe("StreamCoordinator transport awareness", () => {
     assert.ok(!source.includes("startHardWatchdog"), "hard watchdog must remain folded into startWatchdog")
   })
 
+  it("forwards image attachments as file parts to the opencode SDK prompt body", () => {
+    const startIdx = source.indexOf("async startPrompt(")
+    assert.ok(startIdx >= 0, "startPrompt must exist")
+    const sendIdx = source.indexOf("sendPromptAsync", startIdx)
+    const block = source.slice(startIdx, sendIdx > startIdx ? sendIdx : startIdx + 5000)
+
+    assert.ok(block.includes("attachments:"), "startPrompt must accept attachments")
+    assert.ok(block.includes('type: "file"'), "image attachments must be emitted as file parts")
+    assert.ok(block.includes("mime:"), "file parts must carry the image MIME type")
+    assert.ok(block.includes("data:${attachment.mimeType};base64,${attachment.data}"), "file parts must carry the pasted image data URL")
+  })
+
+  it("uses the local first-message title when creating the SDK session", () => {
+    const startIdx = source.indexOf("async startPrompt(")
+    assert.ok(startIdx >= 0, "startPrompt must exist")
+    const sendIdx = source.indexOf("sendPromptAsync", startIdx)
+    const block = source.slice(startIdx, sendIdx > startIdx ? sendIdx : startIdx + 5000)
+
+    assert.ok(block.includes("this.sessionStore.get(tabId)?.name"), "SDK session creation should use the local first-message title")
+    assert.ok(!block.includes("`Tab ${tabId.slice(0, 8)}`"), "SDK session creation should not persist synthetic tab ids as titles")
+  })
+
   it("reconnect reconciliation replays a resumed stream_start instead of force_rerender", () => {
     const idx = source.indexOf("async reconcileAfterReconnect")
     assert.ok(idx >= 0, "reconcileAfterReconnect must exist")

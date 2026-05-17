@@ -490,8 +490,12 @@ function getVsCodeApi() {
     // session list updates, etc.) — not all of them sanitize the query.
     const query = (filterQuery || "").trim().toLowerCase()
     const activeId = stateManager.getState().activeSessionId
+    // Without a query: only show sessions that have visible messages (a clean
+    // welcome page). With a query: also surface sessions whose backfill
+    // hasn't landed yet, so the user can find them by name. Sessions match
+    // by name only in that case (no message text yet to search).
     const allValidSessions = stateManager.getAllSessions()
-      .filter((s) => s.id !== activeId && s.messages.length > 0)
+      .filter((s) => s.id !== activeId && (s.messages.length > 0 || (!!query && !!s.name)))
 
     const recentContainer = document.getElementById("welcome-recent-sessions") as HTMLDivElement | null
     if (!recentContainer) return
@@ -573,8 +577,8 @@ function getVsCodeApi() {
     postMessage: (msg: Record<string, unknown>) => vscode.postMessage(msg),
   }
 
-  function openSessionModal(sessions: Array<{ id: string; cliSessionId?: string; title?: string; messageCount?: number; cost?: number; time?: number }>) {
-    openSessionModalModule(sessionModalDeps, sessions)
+  function openSessionModal(sessions: Array<{ id: string; cliSessionId?: string; title?: string; messageCount?: number; cost?: number; time?: number }>, query = "") {
+    openSessionModalModule(sessionModalDeps, sessions, query)
   }
 
   function closeSessionModal() {
@@ -2059,7 +2063,7 @@ function getVsCodeApi() {
       ["mention_results", (msg) => { mention.renderResults(msg.items as MentionItem[] | undefined) }],
       ["session_list", (msg) => {
         const sessions = (msg.sessions || []) as SessionSummary[]
-        openSessionModal(sessions)
+        openSessionModal(sessions, typeof msg.query === "string" ? msg.query : "")
       }],
       ["session_list_update", (msg) => {
         const sessions = (msg.sessions || []) as SessionSummary[]
@@ -2547,6 +2551,9 @@ function getVsCodeApi() {
             updateSendButtonIcon(false)
           }
         }
+      }],
+      ["webview_request_error", (msg, sid) => {
+        handleRequestError(sid, typeof msg.error === "string" ? msg.error : undefined)
       }],
       ["request_error", (msg, sid) => { handleRequestError(sid, typeof msg.message === "string" ? msg.message : undefined) }],
       ["diff_result", (msg) => {

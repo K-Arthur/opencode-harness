@@ -140,7 +140,7 @@ export class WebviewEventRouter {
       }
     }],
     ["send_prompt", async (msg: Record<string, unknown>, sessionId?: string) => {
-      if (sessionId && typeof msg.text === "string" && msg.text.trim()) {
+      if (sessionId && this.hasPromptContent(msg)) {
         if (this.promptsInFlight.has(sessionId)) return
         this.promptsInFlight.add(sessionId)
         const safetyTimer = setTimeout(() => {
@@ -152,6 +152,7 @@ export class WebviewEventRouter {
         }, WebviewEventRouter.PROMPT_SAFETY_TIMEOUT_MS)
         this.promptSafetyTimers.set(sessionId, safetyTimer)
         try {
+          const text = this.getPromptText(msg)
           const model = (msg.model as string | undefined) || this.opts.modelManager.model
           if (!model) { throw new Error("No model selected. Please select a model and try again.") }
           this.opts.ensureLocalTab(sessionId, msg.name as string | undefined, model, msg.mode as string | undefined)
@@ -164,14 +165,14 @@ export class WebviewEventRouter {
             return
           }
           const attachments = validatedAttachments
-          const textBlocks: Block[] = msg.text ? [{ type: "text", text: msg.text }] : []
+          const textBlocks: Block[] = text.trim() ? [{ type: "text", text }] : []
           const imageBlocks: Block[] = attachments.map((a) => ({ type: "image", data: a.data, mimeType: a.mimeType }))
           const userMsg: ChatMessage = { role: "user", id: userMessageId, blocks: [...textBlocks, ...imageBlocks], timestamp: Date.now(), sessionId }
           this.opts.sessionStore.appendMessage(sessionId, userMsg)
-          await this.opts.streamCoordinator.startPrompt(sessionId, msg.text as string || "[image]", {
+          await this.opts.streamCoordinator.startPrompt(sessionId, text, {
             postMessage: (m) => this.opts.postMessage(m),
             postRequestError: (m) => this.opts.postRequestError(m),
-          }, variant)
+          }, variant, attachments)
         } catch (err) {
           log.error("send_prompt failed", err)
           this.opts.postRequestError(err instanceof Error ? err.message : "Failed to send prompt")
@@ -269,7 +270,7 @@ export class WebviewEventRouter {
     ["reject_diff", (msg: Record<string, unknown>) => { const diffId = msg.diffId as string || msg.blockId as string; if (diffId) this.opts.streamCoordinator.getDiffHandler().reject(diffId) }],
     ["accept_permission", async (msg: Record<string, unknown>) => { await this.opts.messageRouter.handleAcceptPermission(msg.sessionId as string, msg.permissionId as string, msg.response as string) }],
     ["mention_search", async (msg: Record<string, unknown>) => { await this.opts.messageRouter.handleMentionSearch(msg.query as string || "", { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) }) }],
-    ["list_sessions", async () => { await this.opts.messageRouter.handleListSessions(this.opts.sessionStore, { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) }) }],
+    ["list_sessions", async (msg: Record<string, unknown>) => { await this.opts.messageRouter.handleListSessions(this.opts.sessionStore, { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) }, typeof msg.query === "string" ? msg.query : "") }],
     ["resume_session", async (msg: Record<string, unknown>) => { if (msg.sessionId) await this.opts.sessionLifecycle.handleResumeSession(msg.sessionId as string) }],
     ["new_session", async () => {
       const session = this.opts.sessionStore.create()
@@ -457,7 +458,7 @@ export class WebviewEventRouter {
         }
       }
     }],
-    ["list_server_sessions", async () => {
+    ["list_server_sessions", async (msg: Record<string, unknown>) => {
       if (!this.opts.sessionManager.isRunning) {
         this.opts.postMessage({ type: "server_session_list", sessions: [] })
         return
@@ -465,10 +466,20 @@ export class WebviewEventRouter {
       try {
         const all = await this.opts.sessionManager.listSessions()
         const currentDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+        const query = typeof msg.query === "string" ? msg.query.trim().toLowerCase() : ""
+        const matchesServerSession = (s: { id?: string; title?: string; directory?: string }) => {
+          if (!query) return true
+          return [
+            s.id,
+            s.title,
+            s.directory,
+          ].some((value) => String(value || "").toLowerCase().includes(query))
+        }
         this.opts.postMessage({
           type: "server_session_list",
           sessions: all
             .filter((s) => !s.parentID)
+            .filter(matchesServerSession)
             .sort((a, b) => (b.time?.updated ?? 0) - (a.time?.updated ?? 0))
             .map((s) => ({
               id: s.id,
@@ -921,9 +932,10 @@ export class WebviewEventRouter {
           this.opts.postMessage({ type: "prompt_rejected", sessionId, reason: "invalid_attachments" })
           return
         }
+        const text = this.getPromptText(msg)
         const steerPrompt = {
           id: `steer-${crypto.randomUUID()}`,
-          text: msg.text as string || "",
+          text,
           attachments: validated,
           mode: msg.mode as 'interrupt' | 'append' | 'queue' || 'interrupt',
           timestamp: Date.now(),
@@ -1107,6 +1119,17 @@ export class WebviewEventRouter {
     return safe
   }
 
+  private getPromptText(msg: Record<string, unknown>): string {
+    return typeof msg.text === "string" ? msg.text : ""
+  }
+
+  private hasPromptContent(msg: Record<string, unknown>): boolean {
+    const text = this.getPromptText(msg)
+    const hasText = text.trim().length > 0
+    const hasAttachments = Array.isArray(msg.attachments) && msg.attachments.length > 0
+    return hasText || hasAttachments
+  }
+
   async route(msg: Record<string, unknown>): Promise<void> {
     if (!msg || typeof msg.type !== "string") return
 
@@ -1160,7 +1183,15 @@ export class WebviewEventRouter {
     switch (msgType) {
       case "send_prompt": {
         const text = msg.text as string | undefined
-        if (!text || typeof text !== "string" || text.length > 50000) {
+        if (text !== undefined && typeof text !== "string") {
+          log.warn("Rejected invalid prompt text")
+          return false
+        }
+        if (typeof text === "string" && text.length > 50000) {
+          log.warn("Rejected oversized prompt")
+          return false
+        }
+        if (!this.hasPromptContent(msg)) {
           log.warn("Rejected oversized or invalid prompt")
           return false
         }
@@ -1435,7 +1466,11 @@ export class WebviewEventRouter {
         }
         break
       case "send_steer_prompt":
-        if (!msg.text || typeof msg.text !== "string") {
+        if (msg.text !== undefined && typeof msg.text !== "string") {
+          log.warn("Invalid text in send_steer_prompt")
+          return false
+        }
+        if (!this.hasPromptContent(msg)) {
           log.warn("Invalid text in send_steer_prompt")
           return false
         }

@@ -1,20 +1,27 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-05-17
-**Version:** v0.2.9 (Checkpoint, diff, and changed-file tracking repair)
+**Version:** v0.2.10 (Race-tolerant event routing, welcome search, paste robustness)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
 
+## v0.2.10 Highlights
+
+- **Fixed silent event drop on first-message session create** — `ChatProvider.handleServerEvent` no longer drops `file_edited`, `tool_*`, or `message_complete` events that arrive in the race window between `session.create` resolving and `setCliSessionId(...)` running. Events are now buffered (5 s TTL, 200/session cap) and replayed on `TabManager.onCliSessionIdRegistered`. See `docs/adrs/ADR-009-pending-event-buffer.md`. This transitively also resolves the "send button stays disabled after first prompt" symptom — the stuck `isStreaming` flag was a downstream effect of the dropped `message_complete` event.
+- **Welcome-page search button works again** — the magnifying-glass icon has `pointer-events: none` in CSS, so a click on the glyph delivered the event with `target === wrapper`. The click handler now triggers on any wrapper-targeted click except clicks on the inner input. Queried searches also surface sessions whose backfill has not yet landed, so users can find an unbacked-filled CLI session by name.
+- **Image paste hardened** — the paste handler walks `DataTransferItemList` first, then falls back to `DataTransfer.files` (some Linux desktop clipboards put images only there), and skips past same-MIME entries whose `getAsFile()` returned null instead of bailing on the first MIME match. `preventDefault()` only fires once an image actually attaches.
+- **Bounded backfill diagnostics** — after the 4-attempt retry budget is exhausted, `needsBackfill` is cleared on the affected sessions so subsequent `sessions_recovered` events stop re-trying and stop logging "Empty response …" lines. Per-tab "not backfilled" diagnostics are suppressed on the steady-state path.
+
 ## Test Summary
 
-| Metric | v0.2.6 | v0.2.7 | v0.2.8 | Delta |
-|--------|--------|--------|--------|-------|
-| Tests | 894 | 1466 | 1466 | — |
-| Passing | 893 | 1465 | 1466 | +1 |
-| Failing | 0 | 1 | 0 | -1 |
-| Skipped | 1 | 7 | 7 | — |
-| Typecheck | ✅ | ✅ | ✅ | — |
-| Build | ✅ | ✅ | ✅ | — |
+| Metric | v0.2.6 | v0.2.7 | v0.2.8 | v0.2.10 | Delta |
+|--------|--------|--------|--------|---------|-------|
+| Tests | 894 | 1466 | 1466 | 1585 | +119 |
+| Passing | 893 | 1465 | 1466 | 1578 | +112 |
+| Failing | 0 | 1 | 0 | 0 | — |
+| Skipped | 1 | 7 | 7 | 7 | — |
+| Typecheck | ✅ | ✅ | ✅ | ✅ | — |
+| Build | ✅ | ✅ | ✅ | ✅ | — |
 
 The single failing test in v0.2.7 (`main.test.ts › timeline jumps use exact message-list scroll positioning`) was a stale source-grep assertion left over from the extraction of `scrollToTurn`/`scrollMessageToTop` into `src/chat/webview/ui/scrollMarkers.ts`. The test now reads from `scrollMarkersSource` where the implementation actually lives.
 

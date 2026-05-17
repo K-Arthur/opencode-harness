@@ -69,14 +69,38 @@ export function setupWelcomeActions(deps: WelcomeViewDeps): void {
   if (deps.els.welcomeSearchInput) {
     const searchInput = deps.els.welcomeSearchInput
     const innerInput = searchInput.querySelector<HTMLInputElement>("input")
+    let sessionSearchDebounce: ReturnType<typeof setTimeout> | null = null
 
     const clearSessionSearch = () => {
       if (innerInput) innerInput.value = ""
+      if (sessionSearchDebounce) clearTimeout(sessionSearchDebounce)
       deps.renderRecentSessionsList("")
     }
 
+    const submitSessionSearch = () => {
+      const query = (innerInput?.value || "").trim()
+      if (sessionSearchDebounce) clearTimeout(sessionSearchDebounce)
+      if (!query) {
+        clearSessionSearch()
+        return
+      }
+      deps.renderRecentSessionsList(query)
+      deps.postMessage({ type: "list_sessions", query })
+    }
+
+    searchInput.addEventListener("click", (e) => {
+      // Clicks on the inner <input> just focus it; clicks anywhere else in
+      // the wrapper (icon, border, padding) trigger a search. The icon has
+      // `pointer-events: none` in CSS, so a click on the icon glyph arrives
+      // here with `target === wrapper` rather than the icon itself —
+      // matching by descendant of `.search-icon` would miss that.
+      const target = e.target as HTMLElement | null
+      if (!target || target === innerInput) return
+      e.preventDefault()
+      submitSessionSearch()
+    })
+
     if (innerInput) {
-      let sessionSearchDebounce: ReturnType<typeof setTimeout> | null = null
       innerInput.addEventListener("input", (e) => {
         const raw = (e.target as HTMLInputElement).value
         const query = raw.trim()
@@ -98,9 +122,12 @@ export function setupWelcomeActions(deps: WelcomeViewDeps): void {
         }
         if (e.key === "Enter") {
           const firstResult = document.querySelector<HTMLElement>("#welcome-recent-sessions .recent-item[data-session-id]")
-          if (firstResult) {
-            e.preventDefault()
+          const query = innerInput.value.trim()
+          e.preventDefault()
+          if (firstResult && query) {
             firstResult.click()
+          } else {
+            submitSessionSearch()
           }
           return
         }
@@ -138,4 +165,3 @@ export function setupWelcomeSuggestions(deps: WelcomeViewDeps): void {
     }
   })
 }
-

@@ -130,8 +130,9 @@ export class StreamCoordinator {
   private applyMethodologyAdvice(
     tabId: string,
     text: string,
-    parts: Array<{ type: "text"; text: string }>,
-    _callbacks: StreamCallbacks
+    parts: Array<{ type: "text"; text: string } | { type: "file"; mime: string; url: string }>,
+    _callbacks: StreamCallbacks,
+    hasImageAttachment = false,
   ): MethodologyAdvice | null {
     if (!this.methodologyAdvisor.isEnabled()) return null
     try {
@@ -141,9 +142,7 @@ export class StreamCoordinator {
       if (tabDisabled) return null
 
       const advice = this.methodologyAdvisor.advise(text, {
-        // We don't currently know if an image is attached at this layer.
-        // The advisor remains conservative without it.
-        hasImageAttachment: false,
+        hasImageAttachment,
       })
       if (!advice) return null
 
@@ -154,7 +153,7 @@ export class StreamCoordinator {
       try {
         const orchestrator = getMethodologyOrchestrator()
         if (orchestrator && orchestrator.getConfig().enabled) {
-          const result = orchestrator.advise(text, { hasImageAttachment: false })
+          const result = orchestrator.advise(text, { hasImageAttachment })
           updateMethodologyStatus(result)
         }
       } catch { /* best-effort status update */ }
@@ -394,7 +393,13 @@ export class StreamCoordinator {
     }
   }
 
-  async startPrompt(tabId: string, text: string, callbacks: StreamCallbacks, variant?: string): Promise<void> {
+  async startPrompt(
+    tabId: string,
+    text: string,
+    callbacks: StreamCallbacks,
+    variant?: string,
+    attachments: Array<{ data: string; mimeType: string }> = [],
+  ): Promise<void> {
     const tab = this.tabManager.getTab(tabId)
     if (!tab) {
       callbacks.postRequestError("Tab not found")
@@ -443,7 +448,8 @@ export class StreamCoordinator {
     try {
       this.refreshContextTokenEstimate(tabId)
 
-      const cliSessionId = await this.sessionManager.ensureSession(tab.cliSessionId, `Tab ${tabId.slice(0, 8)}`)
+      const localTitle = this.sessionStore.get(tabId)?.name?.trim()
+      const cliSessionId = await this.sessionManager.ensureSession(tab.cliSessionId, localTitle || undefined)
       this.tabManager.setCliSessionId(tabId, cliSessionId)
       this.sessionStore.updateCliSessionId(tabId, cliSessionId)
       const streamMessageId = this.createStreamMessageId(tabId, cliSessionId)
@@ -523,7 +529,7 @@ export class StreamCoordinator {
         : undefined
 
       // Inject per-tab instructions as a prepended text part on the first turn only
-      const parts: Array<{ type: "text"; text: string }> = []
+      const parts: Array<{ type: "text"; text: string } | { type: "file"; mime: string; url: string }> = []
       if (tab.instructions && !this.injectedInstructionsSessions.has(cliSessionId)) {
         parts.push({ type: "text", text: tab.instructions })
         this.injectedInstructionsSessions.add(cliSessionId)
@@ -533,9 +539,19 @@ export class StreamCoordinator {
       // strategy hint. Pure/synchronous; returns null for trivial inputs and
       // slash commands. The selected methodology is also surfaced to the
       // webview so the user can see (and later override) it.
-      this.applyMethodologyAdvice(tabId, text, parts, callbacks)
+      this.applyMethodologyAdvice(tabId, text, parts, callbacks, attachments.length > 0)
 
-      parts.push({ type: "text", text })
+      if (text.trim()) {
+        parts.push({ type: "text", text })
+      }
+
+      for (const attachment of attachments) {
+        parts.push({
+          type: "file",
+          mime: attachment.mimeType,
+          url: `data:${attachment.mimeType};base64,${attachment.data}`,
+        })
+      }
 
       await this.sessionManager.sendPromptAsync(cliSessionId, parts, { model: modelRef, tools, variant })
 

@@ -49,7 +49,8 @@ export function setupSessionModal(deps: SessionModalDeps): void {
 
 export function openSessionModal(
   deps: SessionModalDeps,
-  sessions: Array<{ id: string; cliSessionId?: string; title?: string; messageCount?: number; cost?: number; time?: number }>
+  sessions: Array<{ id: string; cliSessionId?: string; title?: string; messageCount?: number; cost?: number; time?: number }>,
+  query = ""
 ): void {
   const { els, setUnifiedLocalSessions, setUnifiedServerSessions, renderUnifiedSessionList, postMessage } = deps
   setUnifiedLocalSessions(sessions)
@@ -69,7 +70,7 @@ export function openSessionModal(
   loading.textContent = "Loading sessions…"
   list.appendChild(loading)
 
-  postMessage({ type: "list_server_sessions" })
+  postMessage({ type: "list_server_sessions", query })
   renderUnifiedSessionList()
 
   els.sessionModal.classList.remove("hidden")

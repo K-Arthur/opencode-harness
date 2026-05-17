@@ -31,12 +31,14 @@ export class TabManager {
   private _onTabSwitched = new vscode.EventEmitter<string>()
   private _onStreamingStateChanged = new vscode.EventEmitter<{ tabId: string; isStreaming: boolean }>()
   private _onInstructionsChanged = new vscode.EventEmitter<{ tabId: string; instructions: string }>()
+  private _onCliSessionIdRegistered = new vscode.EventEmitter<{ tabId: string; cliSessionId: string }>()
 
   readonly onTabCreated = this._onTabCreated.event
   readonly onTabClosed = this._onTabClosed.event
   readonly onTabSwitched = this._onTabSwitched.event
   readonly onStreamingStateChanged = this._onStreamingStateChanged.event
   readonly onInstructionsChanged = this._onInstructionsChanged.event
+  readonly onCliSessionIdRegistered = this._onCliSessionIdRegistered.event
 
   /**
    * Tab IDs persisted from the previous session, in order. Populated by the
@@ -225,10 +227,14 @@ export class TabManager {
 
   setCliSessionId(id: string, cliSessionId: string): boolean {
     const tab = this.tabs.get(id)
-    if (!tab) return false
+    if (!tab) {
+      log.error(`setCliSessionId failed: no tab with id "${id}" (cliSessionId="${cliSessionId}"). Events for this session will be dropped.`)
+      return false
+    }
     if (tab.cliSessionId) this.cliSessionIndex.delete(tab.cliSessionId)
     tab.cliSessionId = cliSessionId
     this.cliSessionIndex.set(cliSessionId, tab)
+    this._onCliSessionIdRegistered.fire({ tabId: id, cliSessionId })
     return true
   }
 
@@ -307,5 +313,6 @@ export class TabManager {
     this._onTabSwitched.dispose()
     this._onStreamingStateChanged.dispose()
     this._onInstructionsChanged.dispose()
+    this._onCliSessionIdRegistered.dispose()
   }
 }

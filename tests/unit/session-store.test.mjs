@@ -118,7 +118,8 @@ describe("SessionStore — persistence", () => {
   it("ensure creates or updates a session", () => {
     assert.ok(source.includes("ensure("), "ensure method must exist")
     assert.ok(source.includes("existing)"), "must check for existing session")
-    assert.ok(source.includes("this.create(name, id)"), "must fallback to create")
+    assert.ok(source.includes("this.create(name,"), "must fallback to create")
+    assert.ok(source.includes("pendingServerLink: true"), "must keep local placeholder sessions pending")
   })
 })
 

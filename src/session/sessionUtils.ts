@@ -24,9 +24,13 @@ export interface CreateSessionParams {
   pendingServerLink?: boolean
 }
 
+export function isLocalPlaceholderSessionId(id: string | undefined): boolean {
+  return typeof id === "string" && /^session-[0-9a-f]{8}$/i.test(id)
+}
+
 export function buildSession(params: CreateSessionParams): SessionData {
   const sessionId = params.id || crypto.randomUUID()
-  const cliSessionId = params.cliSessionId ?? params.id
+  const cliSessionId = params.pendingServerLink ? params.cliSessionId : (params.cliSessionId ?? params.id)
   const now = Date.now()
   const session: SessionData = {
     id: sessionId,

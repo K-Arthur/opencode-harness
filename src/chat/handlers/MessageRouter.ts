@@ -201,14 +201,36 @@ export class MessageRouter {
     context.postMessage({ type: "mention_results", items })
   }
 
-  async handleListSessions(sessionStore: any, context: RouteContext): Promise<void> {
+  async handleListSessions(sessionStore: any, context: RouteContext, query = ""): Promise<void> {
     // Return all non-archived sessions so CLI-created sessions from any
     // workspace surface in the unified Session History modal. The webview
     // badges cross-workspace sessions via the separate server_session_list
     // path, and deduplicates by cliSessionId.
-    const all = sessionStore.list()
+    const normalizedQuery = query.trim().toLowerCase()
+    const matchesQuery = (s: any): boolean => {
+      if (!normalizedQuery) return true
+      const textFields = [
+        s.id,
+        s.cliSessionId,
+        s.workspacePath,
+        SessionStore.displayName(s),
+      ]
+      if (textFields.some((value) => String(value || "").toLowerCase().includes(normalizedQuery))) {
+        return true
+      }
+      for (const message of s.messages || []) {
+        for (const block of message.blocks || []) {
+          if (block?.type === "text" && String(block.text || "").toLowerCase().includes(normalizedQuery)) {
+            return true
+          }
+        }
+      }
+      return false
+    }
+    const all = sessionStore.list().filter(matchesQuery)
     context.postMessage({
       type: "session_list",
+      query: query.trim(),
       sessions: all.map((s: any) => ({
         id: s.id,
         cliSessionId: s.cliSessionId,
