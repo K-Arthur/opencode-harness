@@ -94,7 +94,7 @@ export function estimateMessageTokens(msg: { blocks?: any[] }): number {
       // Use a more accurate estimate based on data size
       const dataSize = block.data.length
       total += Math.ceil(dataSize / 100) // Rough estimate: 1 token per 100 chars of base64
-    } else if (block.type === "tool-call" || block.type === "tool_call") {
+    } else if (block.type === "tool-call" || block.type === "tool_call" || block.type === "tool") {
       total += estimateTokens(JSON.stringify(block.args || {}))
       if (block.result) total += estimateTokens(block.result)
     }

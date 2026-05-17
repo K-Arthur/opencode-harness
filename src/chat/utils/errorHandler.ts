@@ -1,4 +1,4 @@
-import { log } from "../utils/outputChannel"
+import { log } from "../../utils/outputChannel"
 
 /**
  * Error severity classification

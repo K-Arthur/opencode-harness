@@ -11,6 +11,8 @@ import { estimateContextTokens, parseModelRef, estimateTokens } from "../../util
 import { ModelManager } from "../../model/ModelManager"
 import { log } from "../../utils/outputChannel"
 import type { Block, ChatMessage } from "../types"
+import type { Part } from "@opencode-ai/sdk"
+import { partsToBlocks as sdkConvertPartsToBlocks } from "../../session/sdkMessageConverter"
 import { StreamFinalizerService } from "./StreamFinalizerService"
 import { MethodologyAdvisor, type MethodologyAdvice } from "../../methodology/MethodologyAdvisor"
 import { classifyTool } from "./toolClassifier"
@@ -68,6 +70,9 @@ export class StreamCoordinator {
   private lastForceRerenderSeqs = new Map<string, number>()
   /** Per-tab append callbacks for steer prompts — executed after stream_end */
   private appendCallbacks = new Map<string, (() => Promise<void>)[]>()
+  /** Per-tab message sequence counter — monotonically increasing, attached to every streaming message */
+  private msgSeqs = new Map<string, number>()
+  private tabCloseDisposable: vscode.Disposable | null = null
   /** Methodology classifier/selector — pluggable so tests can stub it */
   private readonly methodologyAdvisor: MethodologyAdvisor
 
@@ -103,7 +108,17 @@ export class StreamCoordinator {
       fetchFinalBlocks: (id, cliSessionId, cbs) => this.fetchFinalBlocks(id, cliSessionId, cbs),
       mergeFinalBlocks: (id, blocks) => this.mergeFinalBlocks(id, blocks),
       storeAssistantMessage: (id, msgId, blocks, tokenTotal) => this.storeAssistantMessage(id, msgId, blocks, tokenTotal),
+      nextSeq: (id) => this.nextSeq(id),
     })
+    this.tabCloseDisposable = this.tabManager.onTabClosed((tabId) => {
+      this.cleanupTab(tabId)
+    })
+  }
+
+  private nextSeq(tabId: string): number {
+    const seq = (this.msgSeqs.get(tabId) || 0) + 1
+    this.msgSeqs.set(tabId, seq)
+    return seq
   }
 
   /**
@@ -196,6 +211,7 @@ export class StreamCoordinator {
                 reason: "hard_timeout",
                 partial: true,
                 retryable: true,
+                seq: this.nextSeq(tab.id),
               })
               this.cleanupTab(tab.id)
             } else {
@@ -450,6 +466,7 @@ export class StreamCoordinator {
         type: "stream_start",
         sessionId: tabId,
         messageId: streamMessageId,
+        seq: this.nextSeq(tabId),
       })
 
       this.tabManager.setWaitingForCompletion(tabId, true)
@@ -473,6 +490,7 @@ export class StreamCoordinator {
             reason,
             partial: false,
             retryable: true,
+            seq: this.nextSeq(tabId),
           })
           if (eventStreamDisconnected) {
             callbacks.postRequestError("OpenCode event stream disconnected before any response events arrived.", tabId)
@@ -534,6 +552,7 @@ export class StreamCoordinator {
         messageId: this.ensureStreamMessageId(tabId, tab.cliSessionId || tabId),
         blocks: [],
         reason: "error",
+        seq: this.nextSeq(tabId),
       })
       callbacks.postRequestError(message)
       this.cleanupTab(tabId)
@@ -570,7 +589,7 @@ export class StreamCoordinator {
         const info = lastAssistant.info as { cost?: number; tokens?: { total?: number; input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } } }
         if (typeof info.cost === "number") {
           this.sessionStore.updateCost(tabId, info.cost)
-          callbacks.postMessage({ type: "cost_update", sessionId: tabId, cost: info.cost })
+          callbacks.postMessage({ type: "cost_update", sessionId: tabId, cost: info.cost, seq: this.nextSeq(tabId) })
         }
         if (info.tokens) {
           const input = info.tokens.input ?? 0
@@ -619,7 +638,7 @@ export class StreamCoordinator {
       for (const serverBlock of serverBlocks) {
         const exists = mergedBlocks.some(b =>
           b.type === serverBlock.type &&
-          (b as any).id === (serverBlock as any).id
+           b.id === serverBlock.id
         )
         if (!exists && serverBlock.type === "text") {
           const existingTextIdx = mergedBlocks.findIndex(b => b.type === "text")
@@ -716,7 +735,7 @@ export class StreamCoordinator {
 
     if (trigger !== "message_complete") return null
 
-    const lastToolIndex = [...blocks].reverse().findIndex((block) => block.type === "tool-call" || block.type === "tool_call")
+    const lastToolIndex = [...blocks].reverse().findIndex((block) => block.type === "tool-call" || block.type === "tool_call" || block.type === "tool")
     if (lastToolIndex < 0) return null
 
     const absoluteToolIndex = blocks.length - 1 - lastToolIndex
@@ -754,17 +773,18 @@ export class StreamCoordinator {
         messageId: streamMessageId,
         blocks: [],
         reason: "aborted",
+        seq: this.nextSeq(tabId),
       })
     } catch (e) {
       const message = e instanceof Error ? e.message : "Unknown error"
       log.warn(`Abort failed for tab ${tabId}: ${message}`, e)
-      // Still emit stream_end with aborted reason even if abort call fails
       callbacks.postMessage({
         type: "stream_end",
         sessionId: tabId,
         messageId: this.ensureStreamMessageId(tabId, tab.cliSessionId || tabId),
         blocks: [],
         reason: "aborted",
+        seq: this.nextSeq(tabId),
       })
     } finally {
       this.cleanupTab(tabId)
@@ -851,6 +871,7 @@ export class StreamCoordinator {
         existingBlocks: [...tab.blocksBuffer],
         messageId,
       },
+      seq: this.nextSeq(tabId),
     })
   }
 
@@ -893,7 +914,7 @@ export class StreamCoordinator {
     const lastUser = [...(lastMessages?.messages || [])].reverse().find(m => m.role === "user")
     const snippet = lastAssistant?.blocks
       ?.filter(b => b.type === "text")
-      ?.map(b => (b as any).text || "")
+      ?.map(b => b.text || "")
       ?.join(" ")
       ?.slice(0, 200) || ""
 
@@ -948,7 +969,7 @@ export class StreamCoordinator {
     }
 
     if (cbs) {
-      cbs.postMessage({ type: "stream_chunk", sessionId: tabId, text, messageId: uiMessageId })
+      cbs.postMessage({ type: "stream_chunk", sessionId: tabId, text, messageId: uiMessageId, seq: this.nextSeq(tabId) })
     }
   }
 
@@ -977,10 +998,11 @@ export class StreamCoordinator {
         type: "stream_tool_update",
         sessionId: tabId,
         toolCall: { ...toolCall, id: stableId },
+        seq: this.nextSeq(tabId),
       })
       if (existingBlock) {
         if (toolCall.args !== undefined) existingBlock.args = toolCall.args
-        if (toolCall.class) existingBlock.class = toolCall.class as any
+         if (toolCall.class) existingBlock.class = toolCall.class
         if (toolCall.name) existingBlock.name = toolCall.name
       }
       return
@@ -999,7 +1021,7 @@ export class StreamCoordinator {
       type: "tool-call",
       id: stableId,
       name: toolCall.name,
-      class: (toolCall.class as any) || this.toolClass(toolCall.name),
+       class: toolCall.class || this.toolClass(toolCall.name),
       state: toolCall.state === "pending" ? "pending" : "running",
       args: toolCall.args,
     })
@@ -1017,6 +1039,7 @@ export class StreamCoordinator {
       type: "skill_indicator",
       sessionId: tabId,
       skillName,
+      seq: this.nextSeq(tabId),
     })
   }
 
@@ -1039,7 +1062,7 @@ export class StreamCoordinator {
     const block = tab.blocksBuffer.find(b => b.type === "tool-call" && b.id === toolId)
     if (block) {
       if (toolCall.args) block.args = toolCall.args
-      if (toolCall.class) block.class = toolCall.class as any
+       if (toolCall.class) block.class = toolCall.class
       if (toolCall.state === "pending" || toolCall.state === "running") block.state = toolCall.state
     }
   }
@@ -1078,6 +1101,7 @@ private cleanupTab(tabId: string): void {
     this.stopHeartbeat(tabId)
     const cliSessionId = this.tabManager.getTab(tabId)?.cliSessionId
     if (cliSessionId) this.injectedInstructionsSessions.delete(cliSessionId)
+    this.msgSeqs.delete(tabId)
   }
 
   private refreshContextTokenEstimate(tabId: string): void {
@@ -1113,40 +1137,33 @@ private cleanupTab(tabId: string): void {
     return total
   }
 
+  /**
+   * Reconstruct blocks from a server-side parts snapshot. Delegates to the
+   * canonical converter so reconnect / replay produces the same shape as
+   * historical-load and live-stream paths. Spec ADR-008 §5.2.
+   *
+   * Skill/skill_badge parts are not part of the SDK's `Part` union — the
+   * server emits them as a parallel synthesised event. They're handled
+   * post-conversion here to keep the canonical converter free of
+   * non-SDK shapes.
+   */
   private partsToBlocks(parts: readonly unknown[]): Block[] {
-    const blocks: Block[] = []
+    const canonical = sdkConvertPartsToBlocks(parts as Part[])
+    const out: Block[] = []
+    for (const block of canonical) out.push(block as Block)
+    // Synthetic skill_badge parts: server-only, not in SDK Part union.
     for (const part of parts) {
       if (!this.isRecord(part)) continue
-      if (part.type === "text" && typeof part.text === "string" && part.text.trim()) {
-        blocks.push({ type: "text", text: part.text })
-        continue
-      }
-      if (part.type === "tool") {
-        const state = this.isRecord(part.state) ? part.state : {}
-        const status = typeof state.status === "string" ? state.status : "running"
-        const result = typeof state.output === "string" ? state.output : undefined
-        const error = typeof state.error === "string" ? state.error : undefined
-
-        const toolCount = blocks.filter(b => b.type === "tool-call").length + 1
-        blocks.push({
-          type: "tool-call",
-          id: typeof part.id === "string" ? part.id : `tool-${toolCount}`,
-          name: typeof part.tool === "string" ? part.tool : "tool",
-          class: this.toolClass(typeof part.tool === "string" ? part.tool : ""),
-          state: status === "completed" || status === "error" ? "result" : status,
-          args: state.input,
-          result,
-          error,
-        })
-        continue
-      }
-      if (part.type === "skill" || part.type === "skill_badge") {
-        const skillName = typeof (part as any).skillName === "string" ? (part as any).skillName : (typeof (part as any).skill === "string" ? (part as any).skill : "skill")
-        blocks.push({ type: "skill_badge", skillName })
-        continue
-      }
+      if (part.type !== "skill" && part.type !== "skill_badge") continue
+      const skillName =
+        typeof part.skillName === "string"
+          ? part.skillName
+          : typeof part.skill === "string"
+            ? (part.skill as string)
+            : "skill"
+      out.push({ type: "skill_badge", skillName })
     }
-    return blocks
+    return out
   }
 
   private blocksToText(blocks: readonly Block[]): string {
@@ -1184,6 +1201,8 @@ private cleanupTab(tabId: string): void {
   }
 
   dispose(): void {
+    this.tabCloseDisposable?.dispose()
+    this.tabCloseDisposable = null
     if (this.streamWatchdog) {
       clearInterval(this.streamWatchdog)
       this.streamWatchdog = null
@@ -1212,6 +1231,7 @@ private cleanupTab(tabId: string): void {
     this.heartbeatAckedSeqs.clear()
     this.heartbeatAckedChunkSeqs.clear()
     this.lastForceRerenderSeqs.clear()
+    this.msgSeqs.clear()
     this.diffHandler.dispose()
   }
 }

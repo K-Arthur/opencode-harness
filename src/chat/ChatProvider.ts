@@ -9,12 +9,12 @@ import { RateLimitMonitor } from "../monitor/RateLimitMonitor"
 import { ModelManager } from "../model/ModelManager"
 import { CheckpointManager } from "../checkpoint/CheckpointManager"
 import { DiffApplier } from "../diff/DiffApplier"
-import { sdkMessagesToChatMessages } from "../session/sdkMessageConverter"
+import { sdkMessagesToChatMessages, reasoningEventToBlock } from "../session/sdkMessageConverter"
 import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
 import { WebviewContent } from "./WebviewContent"
 import { TabManager } from "./TabManager"
 import { StreamCoordinator } from "./handlers/StreamCoordinator"
-import { PromptManager, PromptCommand } from "../prompts/PromptManager"
+import { PromptManager } from "../prompts/PromptManager"
 import { PromptStashManager } from "../prompts/PromptStashManager"
 import { ProviderConfigManager } from "../model/ProviderConfigManager"
 import { toUserErrorMessage as toUserErrorMessagePure, errorValueToMessage as errorValueToMessagePure, mapToolType as mapToolTypePure, isSessionInCurrentWorkspace as isSessionInCurrentWorkspacePure } from "./chatUtils"
@@ -82,7 +82,8 @@ private autoCompactor: AutoCompactor
     "error", "webview_ready", "request_error",
   ])
   private static readonly MAX_RETRIES = 3
-  private static readonly RETRY_DELAYS_MS = [100, 500, 1000] // Exponential backoff
+  private static readonly RETRY_DELAYS_MS = [100, 500, 1000]
+  private static readonly MAX_RETRY_QUEUE_SIZE = 50
   private retryTimer?: NodeJS.Timeout
 
   constructor(
@@ -199,12 +200,12 @@ private autoCompactor: AutoCompactor
       exportChatJson: () => { void vscode.commands.executeCommand("opencode-harness.exportConversationJson") },
       exportChatText: () => { void vscode.commands.executeCommand("opencode-harness.exportConversationText") },
       copyChat: () => { void vscode.commands.executeCommand("opencode-harness.copyConversation") },
-      stashPrompt: (name, content, isGlobal) => { this.handleStashPrompt(name, content, isGlobal) },
+      stashPrompt: (name, content, isGlobal) => this.handleStashPrompt(name, content, isGlobal),
       listStashes: () => { this.handleListStashes() },
       deleteStash: (id) => { this.handleDeleteStash(id) },
-      addProvider: (name, apiKey, baseUrl) => { this.handleAddProvider(name, apiKey, baseUrl) },
+      addProvider: (name, apiKey, baseUrl) => this.handleAddProvider(name, apiKey, baseUrl),
       listProviders: () => { this.handleListProviders() },
-      updateProvider: (id, updates) => { this.handleUpdateProvider(id, updates) },
+      updateProvider: (id, updates) => this.handleUpdateProvider(id, updates),
       deleteProvider: (id) => { this.handleDeleteProvider(id) },
       showOpenFolderDialog: (dir) => { void vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(dir)) },
     })
@@ -619,7 +620,12 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     }],
     ["thinking", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {
       const data = event.data as { text?: string } | undefined
-      this.postMessage({ type: "message", sessionId: tabId, message: { role: "system", blocks: [{ type: "thinking", text: data?.text || "" }], timestamp: Date.now(), sessionId: tabId } })
+      // Route through the canonical converter so the live block has the
+      // same shape as historical-load and reconnect-rebuilt reasoning
+      // blocks. Spec: ADR-008 §5.2 (one converter, one switch).
+      const block = reasoningEventToBlock({ text: data?.text })
+      if (!block) return
+      this.postMessage({ type: "message", sessionId: tabId, message: { role: "system", blocks: [block], timestamp: Date.now(), sessionId: tabId } })
     }],
     ["session_compacted", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => { log.info(`Session compacted for ${tabId}`); this.postMessage({ type: "session_compacted", sessionId: tabId }) }],
     ["step_finish", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {
@@ -1179,6 +1185,18 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
 
   /** P2: Schedule a retry for a failed critical message with exponential backoff */
   private scheduleRetry(msg: Record<string, unknown>): void {
+    if (this.messageRetryQueue.length >= ChatProvider.MAX_RETRY_QUEUE_SIZE) {
+      const oldestNonCriticalIdx = this.messageRetryQueue.findIndex(
+        item => !ChatProvider.CRITICAL_MESSAGE_TYPES.has(item.msg.type as string)
+      )
+      if (oldestNonCriticalIdx >= 0) {
+        this.messageRetryQueue.splice(oldestNonCriticalIdx, 1)
+        log.warn(`Retry queue at capacity (${ChatProvider.MAX_RETRY_QUEUE_SIZE}), dropped oldest non-critical retry`)
+      } else {
+        log.warn(`Retry queue at capacity with all critical messages — dropping oldest to enqueue ${String(msg.type)}`)
+        this.messageRetryQueue.shift()
+      }
+    }
     const retryItem = { msg, attempts: 0, lastAttempt: Date.now() }
     this.messageRetryQueue.push(retryItem)
     this.processRetryQueue()
@@ -1400,7 +1418,7 @@ private toUserErrorMessage(message: string): string {
   }
 
   private async handleCompactBannerAction(sessionId: string | undefined, action: string): Promise<void> {
-    this.autoCompactor.handleBannerAction(sessionId, action, {
+    await this.autoCompactor.handleBannerAction(sessionId, action, {
       postMessage: (m) => this.postMessage(m),
       postRequestError: (m) => this.postRequestError(m),
     })
@@ -1419,15 +1437,31 @@ private toUserErrorMessage(message: string): string {
 
   // ─── Built-in Slash Command Handlers ───
 
-  private async handleClearCommand(sessionId: string): Promise<void> {
+  /** Public façade: run a local slash command on the active tab (used by VS Code commands). */
+  async runSlashCommandOnActiveTab(commandName: string): Promise<void> {
+    const sid = this.tabManager.getActiveTab()?.id
+    if (!sid) {
+      vscode.window.showInformationMessage("Open a chat session before running this command.")
+      return
+    }
+    await this.commandExec.handleLocalSlashCommand(sid, commandName)
+  }
+
+  /** Open the in-webview commands palette. */
+  openCommandsPalette(): void {
+    if (!this._view) return
+    this.postMessage({ type: "open_commands_palette" })
+  }
+
+  async handleClearCommand(sessionId: string): Promise<void> {
     await this.commandExec.handleLocalSlashCommand(sessionId, "clear")
   }
 
-  private async handleCostCommand(sessionId: string): Promise<void> {
+  async handleCostCommand(sessionId: string): Promise<void> {
     await this.commandExec.handleLocalSlashCommand(sessionId, "cost")
   }
 
-  private async handleContinueCommand(sessionId: string): Promise<void> {
+  async handleContinueCommand(sessionId: string): Promise<void> {
     await this.commandExec.handleLocalSlashCommand(sessionId, "continue")
   }
 
@@ -1435,7 +1469,7 @@ private toUserErrorMessage(message: string): string {
     return this.commandExec.abortCurrentSession()
   }
 
-  private handleHelpCommand(sessionId: string): void {
+  handleHelpCommand(sessionId: string): void {
     void this.commandExec.handleLocalSlashCommand(sessionId, "help")
   }
 

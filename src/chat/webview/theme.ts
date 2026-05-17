@@ -1,5 +1,6 @@
 import type { ContextChip, ContextUsage } from "./types"
 import type { ElementRefs } from "./dom"
+import { timers } from "./timerRegistry"
 
 const warnTheme = (...args: unknown[]) => console.warn("[opencode-harness]", ...args)
 
@@ -121,7 +122,7 @@ export function handleRateLimitExhausted(els: ElementRefs, resetAt?: string) {
     const now = Date.now()
     const resetTime = new Date(resetAt).getTime()
     const delay = Math.max(resetTime - now, 30000)
-    setTimeout(() => {
+    timers.setTimeout(() => {
       const existing = els.inputArea.querySelector(".rate-limit-notice")
       if (existing) existing.remove()
       ;(els.sendBtn as HTMLButtonElement).disabled = false

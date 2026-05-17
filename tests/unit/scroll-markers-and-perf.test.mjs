@@ -8,6 +8,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const mainSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "main.ts"), "utf8")
 const rendererSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "renderer.ts"), "utf8")
 const messageRendererSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "messageRenderer.ts"), "utf8")
+const searchSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "ui", "messageSearch.ts"), "utf8")
+const allSource = mainSource + rendererSource + messageRendererSource + searchSource
 const messagesCss = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "css", "messages.css"), "utf8")
 
 describe("Scroll markers and navigation", () => {
@@ -38,7 +40,7 @@ describe("Rendering performance", () => {
   })
 
   it("renders messages with DocumentFragment batching on session resume", () => {
-    assert.ok(mainSource.includes("document.createDocumentFragment"),
+    assert.ok(allSource.includes("document.createDocumentFragment"),
       "message list rendering must batch appends via DocumentFragment")
   })
 })

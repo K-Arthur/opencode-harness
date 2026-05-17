@@ -2853,6 +2853,14 @@ button.modal-session-item:focus {
   flex-direction: column;
   gap: var(--space-2);
   background: var(--oc-bg);
+  color: var(--oc-fg);
+}
+
+.theme-preview-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1-5);
+  align-items: center;
 }
 
 .theme-preview-bubble-user {
@@ -2875,12 +2883,45 @@ button.modal-session-item:focus {
   font-size: var(--text-sm);
 }
 
+.theme-preview-code,
 .theme-preview-codeblock {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   background: var(--bg-code, var(--oc-editor-bg));
   padding: 1px 5px;
   border-radius: 3px;
+  color: var(--oc-syn-string, var(--oc-fg));
+}
+
+.theme-preview-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  background: color-mix(in srgb, var(--chip-bg, var(--oc-accent)) 20%, transparent);
+  color: var(--chip-bg, var(--oc-accent));
+}
+
+.theme-preview-diff {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.theme-preview-diff-add {
+  color: var(--oc-diff-added, #3fb950);
+  background: var(--oc-diff-added-bg, transparent);
+}
+
+.theme-preview-diff-del {
+  color: var(--oc-diff-removed, #f85149);
+  background: var(--oc-diff-removed-bg, transparent);
 }
 
 /* ─── Modal Animations ─── */

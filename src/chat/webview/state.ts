@@ -1,4 +1,5 @@
 import type { WebviewState, SessionState, ChatMessage, VsCodeApi, ToolCollapseConfig } from "./types"
+import { timers } from "./timerRegistry"
 
 const DEFAULT_TOOL_COLLAPSE_CONFIG: ToolCollapseConfig = {
   groupBy: 'consecutive',
@@ -37,31 +38,131 @@ function withDefaults(candidate: Partial<WebviewState>): WebviewState {
   }
 }
 
-function migrateState(old: any): WebviewState {
-  // Already migrated
-  if (old && old.sessions) return withDefaults(old as Partial<WebviewState>)
+/**
+ * Schema version of the persisted WebviewState. Bumped whenever the shape
+ * of `sessions[*].messages[*].blocks[*]` or session metadata changes in
+ * a way that's not strictly forward-compatible.
+ *
+ * History:
+ *   1 — Layer 5 of ADR-008. Canonical block shapes: `tool` (was tool_call/
+ *       tool-call), `reasoning` (was thinking, with `text` instead of
+ *       `content`). Session gains a `title` field mirroring SDK
+ *       `Session.title`.
+ */
+export const CURRENT_SCHEMA_VERSION = 1
 
-  // Old format: { messages, currentMode, currentSessionId }
-  const sessionId = old?.currentSessionId || "session-1"
-  const oldMode = old?.currentMode || "normal"
-  // Migrate old "normal" mode to "build" (new naming)
-  const mode = oldMode === "normal" ? "build" : oldMode
-  const session: SessionState = {
-    id: sessionId,
-    name: "Session 1",
-    model: "",
-    mode,
-    messages: old?.messages || [],
-    isStreaming: false,
+/**
+ * Walk a persisted block and normalise its shape to the canonical
+ * CanonicalBlock variants. Pure, idempotent, and runs once per block on
+ * cold-load. Unknown / unrecognised block types pass through unchanged so
+ * we never lose data we can't classify.
+ */
+function migrateBlock(input: unknown): unknown {
+  if (!input || typeof input !== "object") return input
+  const block = { ...(input as Record<string, unknown>) }
+
+  // Tool blocks: tool_call / tool-call → tool. Spec ADR-008 §5.1.
+  if (block.type === "tool_call" || block.type === "tool-call") {
+    block.type = "tool"
   }
 
-  return withDefaults({
-    sessions: { [sessionId]: session },
-    sessionOrder: [sessionId],
-    activeSessionId: sessionId,
-    nextSessionNum: 2,
-    globalModel: "",
-  })
+  // Reasoning blocks: thinking → reasoning, content → text.
+  if (block.type === "thinking") {
+    block.type = "reasoning"
+  }
+  if (block.type === "reasoning" && typeof block.content === "string" && typeof block.text !== "string") {
+    block.text = block.content
+    delete block.content
+  }
+
+  return block
+}
+
+function migrateMessage(input: unknown): unknown {
+  if (!input || typeof input !== "object") return input
+  const msg = { ...(input as Record<string, unknown>) }
+  const blocks = Array.isArray(msg.blocks) ? msg.blocks : []
+  msg.blocks = blocks.map(migrateBlock)
+  return msg
+}
+
+function migrateSession(input: unknown): unknown {
+  if (!input || typeof input !== "object") return input
+  const sess = { ...(input as Record<string, unknown>) }
+  // Layer 6 will rename `name` → `title` everywhere. For now, mirror the
+  // value to `title` so the SDK-aligned field is populated and the legacy
+  // `name` continues to satisfy current readers.
+  if (typeof sess.name === "string" && typeof sess.title !== "string") {
+    sess.title = sess.name
+  }
+  const messages = Array.isArray(sess.messages) ? sess.messages : []
+  sess.messages = messages.map(migrateMessage)
+  return sess
+}
+
+/**
+ * Bring a persisted WebviewState up to `CURRENT_SCHEMA_VERSION`. Lossless:
+ * unknown fields pass through. Idempotent: re-running on a current-version
+ * state is a no-op (deep-equal). Refuses to load state from a newer schema
+ * version (downgrade guard).
+ *
+ * Exported for testability. Used by `createState().restore()` on cold-load.
+ */
+export function migrateWebviewState(input: unknown): WebviewState & { schemaVersion: number } {
+  const raw = (input && typeof input === "object" ? input : {}) as Record<string, unknown>
+  const v = typeof raw.schemaVersion === "number" ? raw.schemaVersion : 0
+
+  if (v > CURRENT_SCHEMA_VERSION) {
+    throw new Error(
+      `WebviewState schemaVersion ${v} unsupported — this build supports up to ${CURRENT_SCHEMA_VERSION}. Refusing to downgrade.`,
+    )
+  }
+
+  let state: Record<string, unknown>
+
+  if (raw.sessions) {
+    // Already in v0+ shape (post-2026-05 architecture). Normalise blocks.
+    state = { ...raw }
+  } else {
+    // Pre-architecture shape: { messages, currentMode, currentSessionId }.
+    const sessionId = (raw.currentSessionId as string | undefined) || "session-1"
+    const oldMode = (raw.currentMode as string | undefined) || "normal"
+    const mode = oldMode === "normal" ? "build" : oldMode
+    const session: SessionState = {
+      id: sessionId,
+      name: "Session 1",
+      model: "",
+      mode,
+      messages: (raw.messages as ChatMessage[] | undefined) || [],
+      isStreaming: false,
+    }
+    state = {
+      sessions: { [sessionId]: session },
+      sessionOrder: [sessionId],
+      activeSessionId: sessionId,
+      nextSessionNum: 2,
+      globalModel: "",
+    }
+  }
+
+  // Walk sessions and migrate per-block. Skip if already at current version
+  // so the operation is a true no-op on idempotent re-entry.
+  if (v < CURRENT_SCHEMA_VERSION) {
+    const sessions = (state.sessions as Record<string, unknown> | undefined) || {}
+    const migratedSessions: Record<string, unknown> = {}
+    for (const [id, sess] of Object.entries(sessions)) {
+      migratedSessions[id] = migrateSession(sess)
+    }
+    state.sessions = migratedSessions
+  }
+
+  state.schemaVersion = CURRENT_SCHEMA_VERSION
+  return withDefaults(state as Partial<WebviewState>) as WebviewState & { schemaVersion: number }
+}
+
+/** Backwards-compatible export for legacy `restore()` callers. */
+function migrateState(old: any): WebviewState {
+  return migrateWebviewState(old)
 }
 
 function generateId(): string {
@@ -83,7 +184,7 @@ export function createState(vscode: VsCodeApi) {
   function schedulePrune(): void {
     if (pruneScheduled) return
     pruneScheduled = true
-    setTimeout(() => {
+    timers.setTimeout(() => {
       pruneScheduled = false
       doPrune()
     }, 5000)
@@ -126,8 +227,8 @@ export function createState(vscode: VsCodeApi) {
   }
 
   function save() {
-    if (saveTimer) clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => {
+    if (saveTimer) timers.clearTimeout(saveTimer)
+    saveTimer = timers.setTimeout(() => {
       pruneOversizedState()
       vscode.setState(state)
       saveTimer = null
@@ -137,7 +238,7 @@ export function createState(vscode: VsCodeApi) {
   // Force-save immediately (useful before tab close, etc.)
   function flush() {
     if (saveTimer) {
-      clearTimeout(saveTimer)
+      timers.clearTimeout(saveTimer)
       saveTimer = null
     }
     doPrune()

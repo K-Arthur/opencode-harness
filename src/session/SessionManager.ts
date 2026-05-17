@@ -125,6 +125,7 @@ export class SessionManager {
   private lastNormalizedEventAt = 0
   private lastRawEventType = ""
   private lastNormalizedEventType = ""
+  private lastSseEventId: string | null = null
   private eventStreamStableTimer: ReturnType<typeof setTimeout> | null = null
   private eventStreamGeneration = 0
   private eventStreamState: EventStreamLifecycleState = "disconnected"
@@ -658,6 +659,7 @@ export class SessionManager {
     const parser = new SseEventParser()
     const headers: Record<string, string> = { Accept: "text/event-stream" }
     if (this.authHeader) headers["Authorization"] = this.authHeader
+    if (this.lastSseEventId) headers["Last-Event-ID"] = this.lastSseEventId
 
     let connectionTimedOut = false
     const connectTimeout = setTimeout(() => {
@@ -776,12 +778,12 @@ export class SessionManager {
     }
     if (result.droppedNonDataFrames > 0) {
       this.droppedNonDataFrameCount += result.droppedNonDataFrames
-      // Log the running total at warn — surfaces SSE keep-alive misconfig
-      // (server pushing event:/id: lines without data:). Threshold avoids
-      // chatter on a single occurrence.
       if (this.droppedNonDataFrameCount % 25 === result.droppedNonDataFrames % 25) {
         log.warn(`OpenCode SSE: ${this.droppedNonDataFrameCount} non-data-bearing frames received so far this stream`)
       }
+    }
+    if (result.lastEventId !== null) {
+      this.lastSseEventId = result.lastEventId
     }
     for (const event of result.events) {
       try {

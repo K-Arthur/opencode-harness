@@ -3,14 +3,7 @@ import type { SdkEventLike } from "./types"
 export interface SseParseResult {
   events: SdkEventLike[]
   errors: Error[]
-  /**
-   * Count of frames that contained SSE fields (e.g. `event:`, `id:`) but no
-   * `data:` line, so they could not be turned into events. Pure comment / pure
-   * heartbeat frames (`:keep-alive`, `retry: N` only) are NOT counted — those
-   * are normal server traffic. A non-zero value here indicates the server is
-   * emitting non-data-bearing frames (often a sign of keep-alive misconfig
-   * or an event-name-only push); useful as a health metric.
-   */
+  lastEventId: string | null
   droppedNonDataFrames: number
 }
 
@@ -40,6 +33,7 @@ export class SseEventParser {
     const events: SdkEventLike[] = []
     const errors: Error[] = []
     let droppedNonDataFrames = 0
+    let lastEventId: string | null = null
 
     while (true) {
       const frameEnd = this.buffer.indexOf("\n\n")
@@ -52,18 +46,19 @@ export class SseEventParser {
         const result = parseFrameDetailed(frame)
         if (result.event) events.push(result.event)
         else if (result.hadNonHeartbeatFields) droppedNonDataFrames++
+        if (result.eventId !== null) lastEventId = result.eventId
       } catch (err) {
         errors.push(err instanceof Error ? err : new Error(String(err)))
       }
     }
 
-    return { events, errors, droppedNonDataFrames }
+    return { events, errors, lastEventId, droppedNonDataFrames }
   }
 
   flush(): SseParseResult {
     if (!this.buffer.trim()) {
       this.buffer = ""
-      return { events: [], errors: [], droppedNonDataFrames: 0 }
+      return { events: [], errors: [], lastEventId: null, droppedNonDataFrames: 0 }
     }
 
     const frame = this.buffer
@@ -73,12 +68,14 @@ export class SseEventParser {
       return {
         events: result.event ? [result.event] : [],
         errors: [],
+        lastEventId: result.eventId,
         droppedNonDataFrames: !result.event && result.hadNonHeartbeatFields ? 1 : 0,
       }
     } catch (err) {
       return {
         events: [],
         errors: [err instanceof Error ? err : new Error(String(err))],
+        lastEventId: null,
         droppedNonDataFrames: 0,
       }
     }
@@ -89,11 +86,14 @@ interface ParsedFrame {
   event: SdkEventLike | undefined
   /** True when the frame had at least one non-comment, non-heartbeat field but no `data:` line. */
   hadNonHeartbeatFields: boolean
+  /** The SSE `id:` field value, if present. */
+  eventId: string | null
 }
 
 function parseFrameDetailed(frame: string): ParsedFrame {
   const dataLines: string[] = []
   let sawNonDataField = false
+  let eventId: string | null = null
 
   for (const line of frame.split("\n")) {
     if (!line || line.startsWith(":")) continue
@@ -105,15 +105,15 @@ function parseFrameDetailed(frame: string): ParsedFrame {
 
     if (field === "data") {
       dataLines.push(value)
-    } else if (field !== "retry" && field !== "id") {
-      // `event:` (and any unknown field) qualifies as non-heartbeat. `retry:`
-      // and `id:` alone are routine SSE bookkeeping and not interesting.
+    } else if (field === "id") {
+      eventId = value
+    } else if (field !== "retry") {
       sawNonDataField = true
     }
   }
 
   if (dataLines.length === 0) {
-    return { event: undefined, hadNonHeartbeatFields: sawNonDataField }
+    return { event: undefined, hadNonHeartbeatFields: sawNonDataField, eventId }
   }
 
   const parsed = JSON.parse(dataLines.join("\n")) as unknown
@@ -122,7 +122,7 @@ function parseFrameDetailed(frame: string): ParsedFrame {
     throw new Error("SSE data frame did not contain an OpenCode event")
   }
 
-  return { event, hadNonHeartbeatFields: false }
+  return { event, hadNonHeartbeatFields: false, eventId }
 }
 
 export function parseSseFrame(frame: string): SdkEventLike | undefined {

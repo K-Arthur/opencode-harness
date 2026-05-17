@@ -39,20 +39,22 @@ test.describe('Global Show/Hide Thinking Toggle', () => {
     await installVsCodeApi(page)
     await page.goto('/')
     await mountThinkingBlock(page)
+    // The toggle lives inside the settings menu (hidden by default).
+    await page.locator('#settings-btn').click()
   })
 
   test.afterEach(async ({ page }) => {
     await expectNoWebviewErrors(page)
   })
 
-  test('should render thinking toggle button in header', async ({ page }) => {
-    const toggleBtn = page.locator('#thinking-toggle-btn')
+  test('should render thinking toggle item in settings menu', async ({ page }) => {
+    const toggleBtn = page.locator('#thinking-toggle-menu-item')
     await expect(toggleBtn).toBeVisible()
-    await expect(toggleBtn).toHaveAttribute('aria-label', 'Toggle thinking blocks')
+    await expect(toggleBtn).toHaveAttribute('aria-label', 'Show thinking blocks')
   })
 
   test('should toggle thinking block visibility on click', async ({ page }) => {
-    const toggleBtn = page.locator('#thinking-toggle-btn')
+    const toggleBtn = page.locator('#thinking-toggle-menu-item')
     const thinkingBlock = page.locator('.thinking-block')
     const thinkingBody = page.locator('.thinking-body')
 
@@ -71,21 +73,21 @@ test.describe('Global Show/Hide Thinking Toggle', () => {
     await expect(thinkingBody).toBeVisible()
   })
 
-  test('should update aria-pressed state', async ({ page }) => {
-    const toggleBtn = page.locator('#thinking-toggle-btn')
+  test('should update aria-checked state', async ({ page }) => {
+    const toggleBtn = page.locator('#thinking-toggle-menu-item')
 
-    // Initial state should be pressed (visible by default)
-    await expect(toggleBtn).toHaveAttribute('aria-pressed', 'true')
-
-    await toggleBtn.click()
-    await expect(toggleBtn).toHaveAttribute('aria-pressed', 'false')
+    // Initial state should be checked (visible by default)
+    await expect(toggleBtn).toHaveAttribute('aria-checked', 'true')
 
     await toggleBtn.click()
-    await expect(toggleBtn).toHaveAttribute('aria-pressed', 'true')
+    await expect(toggleBtn).toHaveAttribute('aria-checked', 'false')
+
+    await toggleBtn.click()
+    await expect(toggleBtn).toHaveAttribute('aria-checked', 'true')
   })
 
   test('should toggle active class on button', async ({ page }) => {
-    const toggleBtn = page.locator('#thinking-toggle-btn')
+    const toggleBtn = page.locator('#thinking-toggle-menu-item')
 
     // Initial state should have active class
     await expect(toggleBtn).toHaveClass(/active/)
@@ -119,7 +121,7 @@ test.describe('Global Show/Hide Thinking Toggle', () => {
       }
     })
 
-    const toggleBtn = page.locator('#thinking-toggle-btn')
+    const toggleBtn = page.locator('#thinking-toggle-menu-item')
     const thinkingBlocks = page.locator('.thinking-block')
 
     // All blocks should be visible initially
@@ -162,7 +164,7 @@ test.describe('Global Show/Hide Thinking Toggle', () => {
       list.appendChild(block2)
     })
 
-    const toggleBtn = page.locator('#thinking-toggle-btn')
+    const toggleBtn = page.locator('#thinking-toggle-menu-item')
     const block1 = page.locator('.thinking-block').nth(0)
     const block2 = page.locator('.thinking-block').nth(1)
 

@@ -165,6 +165,26 @@
       {
         "command": "opencode-harness.generateAgentsMd",
         "title": "OpenCode: Generate AGENTS.md"
+      },
+      {
+        "command": "opencode-harness.openCommandsPalette",
+        "title": "OpenCode: Open Commands Palette"
+      },
+      {
+        "command": "opencode-harness.clearSession",
+        "title": "OpenCode: Clear Active Session"
+      },
+      {
+        "command": "opencode-harness.showCost",
+        "title": "OpenCode: Show Session Cost"
+      },
+      {
+        "command": "opencode-harness.continueSession",
+        "title": "OpenCode: Continue Most Recent Session"
+      },
+      {
+        "command": "opencode-harness.showHelp",
+        "title": "OpenCode: Show Slash Commands"
       }
     ],
     "keybindings": [

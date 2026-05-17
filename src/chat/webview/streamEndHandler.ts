@@ -1,4 +1,5 @@
 import type { Block, ChatMessage } from "./types"
+import { createTextBlock } from "./blocks"
 import type { StreamState, StreamElements } from "./streamHandlers"
 import { hideTypingIndicator, finishUnresolvedToolCalls, reRenderMessage, resetStreamState, webviewLog } from "./streamHandlers"
 
@@ -54,7 +55,7 @@ function handleEmptyStreamEnd(
     const noticeText = "(no response \u2014 model returned no text content)"
     webviewLog(`handleStreamEnd: empty response for ${id}`, "warn")
     if (msgObj) {
-      msgObj.blocks = [{ type: "text", text: noticeText } as unknown as Block]
+      msgObj.blocks = [createTextBlock(noticeText)]
       finishUnresolvedToolCalls(msgObj.blocks)
       const renderId = msgObj.id || lookupId
       reRenderMessage(renderId, els, messages)
@@ -74,21 +75,19 @@ function mergeServerBlocks(msgObj: ChatMessage, blockList: Block[]): void {
         msgObj.blocks.push(sb)
       }
     } else if (sb.type === "tool-call") {
-      const sbtc = sb as any
       const existingIdx = msgObj.blocks.findIndex((b) => {
         if (b.type !== "tool-call") return false
-        const tc = b as any
-        if (tc.id === sbtc.id) return true
-        return tc.name === sbtc.name &&
-               JSON.stringify(tc.args) === JSON.stringify(sbtc.args)
+        if (b.id === sb.id) return true
+        return b.name === sb.name &&
+               JSON.stringify(b.args) === JSON.stringify(sb.args)
       })
 
       if (existingIdx >= 0) {
-        if (sbtc.state === "result" || sbtc.result || sbtc.error) {
-          msgObj.blocks[existingIdx] = sbtc
+        if (sb.state === "result" || sb.result || sb.error) {
+          msgObj.blocks[existingIdx] = sb
         }
       } else {
-        msgObj.blocks.push(sbtc as unknown as Block)
+        msgObj.blocks.push(sb)
       }
     } else if (sb.type === "skill_badge") {
       const exists = msgObj.blocks.some(b => b.type === "skill_badge" && b.skillName === sb.skillName)

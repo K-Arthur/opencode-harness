@@ -88,6 +88,25 @@
       </div>
     </div>
 
+    <!-- Commands palette modal: shown by /commands, list_stashes, or Ctrl+/ -->
+    <div id="commands-modal" class="commands-modal hidden" role="dialog" aria-label="Commands" aria-modal="true">
+      <div class="commands-modal-content">
+        <div class="commands-modal-header">
+          <h2 class="commands-modal-title" id="commands-modal-title">Commands</h2>
+          <button class="commands-modal-close-btn" id="commands-modal-close-btn" aria-label="Close commands modal">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div class="commands-modal-search">
+          <input type="text" class="commands-modal-search-input" id="commands-search-input" placeholder="Search commands..." aria-label="Search commands">
+        </div>
+        <div class="commands-modal-filter" id="commands-filter" role="group" aria-label="Filter commands"></div>
+        <div class="commands-modal-list" id="commands-list" role="listbox"></div>
+      </div>
+    </div>
+
     <!-- Settings overflow menu (anchored to #settings-btn) -->
     <div id="settings-menu" class="settings-menu hidden" role="menu" aria-label="More options">
       <button class="settings-menu-item" id="thinking-toggle-menu-item" role="menuitemcheckbox" aria-checked="true" aria-label="Show thinking blocks">
@@ -358,12 +377,12 @@
 
         <!-- Search Bar -->
         <div class="welcome-search-wrapper">
-          <button id="welcome-search-toggle" class="welcome-search-toggle" aria-expanded="false" aria-controls="welcome-search-input">
+          <button id="welcome-search-toggle" class="welcome-search-toggle hidden" aria-expanded="true" aria-controls="welcome-search-input" tabindex="-1" aria-hidden="true">
             <span class="search-icon">🔍</span>
             <span class="search-label">Search sessions...</span>
           </button>
-          <div id="welcome-search-input" class="welcome-search-input hidden">
-            <input type="text" placeholder="Search your conversation history..." aria-label="Search sessions">
+          <div id="welcome-search-input" class="welcome-search-input">
+            <input type="text" placeholder="Search your conversation history..." aria-label="Search sessions" autocomplete="off" spellcheck="false">
           </div>
         </div>
 
@@ -833,8 +852,19 @@
 
         <!-- Live preview swatch -->
         <div id="theme-preview-swatch" class="theme-preview-panel" aria-label="Theme preview">
-          <div class="theme-preview-bubble-user">How do I reverse a string in Python?</div>
-          <div class="theme-preview-bubble-assistant">Use slicing: <code class="theme-preview-codeblock">s[::-1]</code></div>
+          <div class="theme-preview-row">
+            <div class="theme-preview-bubble-user">How do I reverse a string?</div>
+            <div class="theme-preview-bubble-assistant">Use slicing: <code class="theme-preview-code">s[::-1]</code></div>
+          </div>
+          <div class="theme-preview-row">
+            <div class="theme-preview-chip" style="--chip-bg:var(--tool-read-color,var(--oc-primary))">Read</div>
+            <div class="theme-preview-chip" style="--chip-bg:var(--tool-write-color,var(--oc-error))">Write</div>
+            <div class="theme-preview-chip" style="--chip-bg:var(--tool-exec-color,var(--oc-success))">Exec</div>
+          </div>
+          <div class="theme-preview-row theme-preview-diff">
+            <span class="theme-preview-diff-add">+added line</span>
+            <span class="theme-preview-diff-del">-removed line</span>
+          </div>
         </div>
       </div>
 

@@ -457,9 +457,12 @@ export function groupConsecutiveToolCalls(blocks: Block[], groupBy: 'consecutive
   let lastToolClass: ToolCallClass | null = null
 
   for (const block of blocks) {
-    const isTool = block.type === "tool-call" || block.type === "tool_call"
-    const toolName = isTool ? (block as any).name || (block as any).toolName || "tool" : ""
-    const toolClass = isTool ? ((block as any).class as ToolCallClass) || 'read' : null
+    const isTool = block.type === "tool-call" || block.type === "tool_call" || block.type === "tool"
+     // Canonical `tool` blocks (post Layer 1) carry the tool name in `block.tool`;
+     // legacy shapes used `block.name` or `block.toolName`.
+     const canonicalToolName = typeof block.tool === "string" ? block.tool : ""
+     const toolName: string = isTool ? (canonicalToolName || block.name || block.toolName || "tool") : ""
+     const toolClass = isTool ? (block.class as ToolCallClass) || 'read' : null
 
     // Edge case: Non-tool blocks always break groups
     if (!isTool) {
@@ -514,10 +517,10 @@ export function renderToolGroup(blocks: Block[], opts: RenderOptions): HTMLEleme
   const toolName = tc?.name || 'tool'
 
   // Edge case: Auto-expand if any tool in group has error state
-  const hasError = blocks.some(b => {
-    const s = (b as any).state
-    return s === 'error' || (b as any).error
-  })
+   const hasError = blocks.some(b => {
+     const s = b.state
+     return s === 'error' || b.error
+   })
 
   // Edge case: Collapse by default for groups with 2+ tools, unless error
   const shouldCollapse = config.defaultCollapsed && !hasError && blocks.length >= config.collapseThreshold
@@ -557,7 +560,7 @@ export function renderToolGroup(blocks: Block[], opts: RenderOptions): HTMLEleme
   if (config.showTypeBreakdown && blocks.length > 1) {
     const typeCounts: Record<string, number> = {}
     blocks.forEach(b => {
-      const cls = (b as any).class || 'read'
+       const cls = b.class || 'read'
       typeCounts[cls] = (typeCounts[cls] || 0) + 1
     })
     const breakdown = Object.entries(typeCounts)
@@ -574,10 +577,10 @@ export function renderToolGroup(blocks: Block[], opts: RenderOptions): HTMLEleme
   count.textContent = `${blocks.length} call${blocks.length > 1 ? 's' : ''}`
   summary.appendChild(count)
 
-  const completed = blocks.filter(b => {
-    const s = (b as any).state
-    return s === 'result' || s === 'completed'
-  }).length
+   const completed = blocks.filter(b => {
+     const s = b.state
+     return s === 'result' || s === 'completed'
+   }).length
   const badge = document.createElement("span")
   badge.className = "tool-status"
   if (hasError) {

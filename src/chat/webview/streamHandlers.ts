@@ -1,4 +1,6 @@
 import type { Block, ChatMessage, ToolCallBlock, DiffBlock, ErrorBlock, ToolCallState, DiffHunk } from "./types"
+import { createTextBlock, createErrorBlock, createTaskBannerBlock } from "./blocks"
+import { timers } from "./timerRegistry"
 import type { SdkMessageEvent, DiffChunk } from "../../types"
 import type { ErrorContext } from "./errorTypes"
 import { renderMessage } from "./messageRenderer"
@@ -9,7 +11,6 @@ import { RenderQueue } from "./renderQueue"
 import { handleStreamEnd as handleStreamEndImpl } from "./streamEndHandler"
 import { getErrorHandler } from "./errorHandler"
 import { getErrorDisplay } from "./errorComponents"
-import { getNetworkMonitor } from "./networkMonitor"
 import { getQuotaMonitor } from "./quotaMonitor"
 
 export function stripContextFromText(text: string): string {
@@ -46,7 +47,7 @@ function appendTextToMessage(message: ChatMessage, text: string): void {
     textBlock.text = mergeStreamText(String(textBlock.text || ""), text)
     return
   }
-  message.blocks.push({ type: "text", text: stripContextFromText(text) } as unknown as Block)
+  message.blocks.push(createTextBlock(stripContextFromText(text)))
 }
 
 export function finishUnresolvedToolCalls(blocks: Block[]): void {
@@ -56,7 +57,7 @@ export function finishUnresolvedToolCalls(blocks: Block[]): void {
     if (block.type !== "tool-call") continue
     const tool = block as ToolCallBlock
     if (tool.state === "pending" || tool.state === "running") {
-      blocks[i] = { ...tool, state: "result" } as unknown as Block
+      blocks[i] = { ...tool, state: "result" } as Block
     }
   }
 }
@@ -188,7 +189,7 @@ export function handleStreamStart(
     state.lastStreamTextEl = textEl
     state.currentBlockEl = textEl
 
-    streamMsg.blocks.push({ type: "text", text: "" } as unknown as Block)
+    streamMsg.blocks.push(createTextBlock(""))
     state.currentBlockIndex = 0
   }
 
@@ -219,13 +220,13 @@ export function handleStreamStart(
     const displayText = stripContextFromText(state.currentBlockBuffer)
     textEl.textContent = displayText
 
-    const msgObj = messages.find((m) => m.id === streamId)
-    if (msgObj && state.currentBlockIndex >= 0) {
-      const block = msgObj.blocks[state.currentBlockIndex]
-      if (block && block.type === "text") {
-        (block as any).text = displayText
-      }
-    }
+     const msgObj = messages.find((m) => m.id === streamId)
+     if (msgObj && state.currentBlockIndex >= 0) {
+       const block = msgObj.blocks[state.currentBlockIndex]
+       if (block && block.type === "text") {
+         block.text = displayText
+       }
+     }
     els.scrollAnchor.scrollIfAnchored()
   })
 
@@ -318,7 +319,7 @@ export function handleStreamToken(
 
         const msgObj = messages.find((m: ChatMessage) => m.id === id)
         if (msgObj) {
-          msgObj.blocks.push({ type: "text", text: "" } as unknown as Block)
+          msgObj.blocks.push(createTextBlock(""))
           state.currentBlockIndex = msgObj.blocks.length - 1
         }
       }
@@ -329,13 +330,13 @@ export function handleStreamToken(
       textEl.textContent = displayText
     }
 
-    const msgObj = messages.find((m: ChatMessage) => m.id === id)
-    if (msgObj && state.currentBlockIndex >= 0) {
-      const block = msgObj.blocks[state.currentBlockIndex]
-      if (block && block.type === "text") {
-        (block as any).text = displayText
-      }
-    }
+     const msgObj = messages.find((m: ChatMessage) => m.id === id)
+     if (msgObj && state.currentBlockIndex >= 0) {
+       const block = msgObj.blocks[state.currentBlockIndex]
+       if (block && block.type === "text") {
+         block.text = displayText
+       }
+     }
 
     els.scrollAnchor.scrollIfAnchored()
   }
@@ -343,7 +344,7 @@ export function handleStreamToken(
   if (!state.rafPending) {
     state.rafPending = true
     requestAnimationFrame(doUpdate)
-    setTimeout(() => {
+    timers.setTimeout(() => {
       if (state.rafPending) doUpdate()
     }, 50)
   }
@@ -384,13 +385,13 @@ export function handleToolStart(
     args: toolCall.args,
   }
 
-  if (msgObj) msgObj.blocks.push(toolBlock as unknown as Block)
+  if (msgObj) msgObj.blocks.push(toolBlock as Block)
 
   const msgEl = els.messageList.querySelector(`[data-message-id="${id}"]`) as HTMLElement | null
   if (msgEl) {
     const bubble = msgEl.querySelector(".message-bubble")
     if (bubble) {
-      const blockEl = renderBlock(toolBlock as unknown as Block, {})
+      const blockEl = renderBlock(toolBlock as Block, {})
       if (blockEl) bubble.appendChild(blockEl)
     }
   }
@@ -531,13 +532,13 @@ export function handleDiff(
   }
 
   const msgObj = messages.find((m) => m.id === id)
-  if (msgObj) msgObj.blocks.push(diffBlock as unknown as Block)
+  if (msgObj) msgObj.blocks.push(diffBlock as Block)
 
   const msgEl = els.messageList.querySelector(`[data-message-id="${id}"]`) as HTMLElement | null
   if (msgEl) {
     const bubble = msgEl.querySelector(".message-bubble")
     if (bubble) {
-      const blockEl = renderBlock(diffBlock as unknown as Block, {})
+      const blockEl = renderBlock(diffBlock as Block, {})
       if (blockEl) bubble.appendChild(blockEl)
     }
   }
@@ -620,31 +621,18 @@ export function handleStreamError(
   resetStreamState(state)
   state.rafPending = false
 
-  // Use new error handling system
   const errorHandler = getErrorHandler({ logToConsole: true, logToExtension: false })
   const errorContext = errorHandler.handleError(error)
-
-  // Check network status for network-related errors
-  const networkMonitor = getNetworkMonitor()
-  if (!networkMonitor.isOnline() && errorContext.category === 'network') {
-    // Enhance with network status
-    errorContext.technicalDetails = `Network Status: ${networkMonitor.getConnectionQuality()}, Latency: ${networkMonitor.getNetworkStatus().latency}ms`
-  }
-
-  // Use new error display component
   const errorDisplay = getErrorDisplay()
   const errorElement = errorDisplay.render(errorContext)
 
   // Create a wrapper message for the error
-  const errMsg: ChatMessage = {
-    role: "system",
-    id: `error-${crypto.randomUUID()}`,
-    blocks: [{
-      type: 'text',
-      text: errorContext.userMessage
-    } as unknown as Block],
-    timestamp: Date.now(),
-  }
+   const errMsg: ChatMessage = {
+     role: "system",
+     id: `error-${crypto.randomUUID()}`,
+     blocks: [createErrorBlock("stream_error", errorContext.userMessage, false)],
+     timestamp: Date.now(),
+   }
   messages.push(errMsg)
 
   const el = renderMessage(errMsg)

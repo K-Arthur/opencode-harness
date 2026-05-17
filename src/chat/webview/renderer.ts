@@ -290,9 +290,22 @@ const RENDERER_MAP: Readonly<Record<string, BlockRenderer>> = {
   'text': renderTextBlock,
   'code': renderCodeBlock,
   'thinking': renderThinkingBlock,
+  'reasoning': renderThinkingBlock,
   'skill_badge': renderSkillBadge,
   'tool_call': renderToolCallBlock,
   'tool-call': renderToolCallBlock,
+  'tool': renderToolCallBlock,
+  // Canonical SDK part types (ADR-008 §5.1). Each renders a minimal chip/
+  // marker; richer presentation can replace these without changing the
+  // converter.
+  'step-start': renderStepStartBlock,
+  'step-finish': renderStepFinishBlock,
+  'snapshot': renderSnapshotBlock,
+  'patch': renderPatchBlock,
+  'agent': renderAgentBlock,
+  'retry': renderRetryBlock,
+  'compaction': renderCompactionBlock,
+  'subtask': renderSubtaskBlock,
   'diff_block': renderDiffBlock,
   'diff': renderNewDiffBlock,
   'permission': renderPermissionBlock,
@@ -571,7 +584,7 @@ export function groupMessagesIntoTurns(messages: import("./types").ChatMessage[]
         currentTurn.assistantMessageId = msg.id || ""
         // Count tool calls and diffs in this assistant message
         const blocks = msg.blocks || []
-        currentTurn.toolCount = blocks.filter(b => b.type === "tool-call" || b.type === "tool_call").length
+        currentTurn.toolCount = blocks.filter(b => b.type === "tool-call" || b.type === "tool_call" || b.type === "tool").length
         currentTurn.patchCount = blocks.filter(b => b.type === "diff" || b.type === "diff_block").length
         if (!currentTurn.snippet || currentTurn.snippet === "...") {
           currentTurn.snippet = extractSnippet(msg)
@@ -591,8 +604,9 @@ function extractSnippet(msg: import("./types").ChatMessage): string {
       const text = b.text.trim().replace(/\n/g, " ")
       if (text.length > 0) return text.slice(0, 80) + (text.length > 80 ? "..." : "")
     }
-    if (b.type === "tool-call" || b.type === "tool_call") {
-      return `Used ${b.name || b.toolName || 'tool'}`
+    if (b.type === "tool-call" || b.type === "tool_call" || b.type === "tool") {
+      const toolName = typeof b.tool === "string" ? b.tool : (b.name || b.toolName || "tool")
+      return `Used ${toolName}`
     }
   }
   return msg.role === "user" ? "Sent a message" : "Thinking..."
@@ -600,7 +614,15 @@ function extractSnippet(msg: import("./types").ChatMessage): string {
 
 function renderThinkingBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
   const thinking = isThinkingBlock(block) ? block : (block as unknown as ThinkingBlock)
-  const content = thinking.content || ""
+  // Tolerate the legacy `text` field: older persisted sessions (and the live
+  // "thinking" event before the field-name fix) stored reasoning under `text`
+  // instead of `content`. Reading both keeps historical messages renderable
+  // without forcing a state migration.
+  const legacyText = (thinking as unknown as { text?: unknown }).text
+  const content =
+    (typeof thinking.content === "string" && thinking.content) ||
+    (typeof legacyText === "string" ? legacyText : "") ||
+    ""
   if (!content.trim() && !thinking.streaming) return null
 
   const details = document.createElement("details")
@@ -669,6 +691,110 @@ function renderSkillBadge(block: Block, _opts: RenderOptions): HTMLElement | nul
   badge.appendChild(name)
 
   return badge
+}
+
+// ---------------------------------------------------------------------------
+// Canonical SDK part renderers (Layer 7 of ADR-008)
+// ---------------------------------------------------------------------------
+// Minimal chips/markers for SDK part types that were previously silently
+// dropped. Each renderer is intentionally small: surface that the event
+// happened so users see continuity across compactions, retries, agents,
+// subtasks, etc. — without claiming UI shape we don't have yet.
+
+function renderStepStartBlock(_block: Block, _opts: RenderOptions): HTMLElement | null {
+  const chip = document.createElement("div")
+  chip.className = "step-start-chip"
+  chip.textContent = "Step started"
+  return chip
+}
+
+function renderStepFinishBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
+  const chip = document.createElement("div")
+  chip.className = "step-finish-chip"
+  const reason = typeof block.reason === "string" ? block.reason : "stop"
+  const tokens = block.tokens as
+    | { input?: number; output?: number; reasoning?: number }
+    | undefined
+  const parts: string[] = [`Step finished (${reason})`]
+  if (tokens) {
+    const summary: string[] = []
+    if (typeof tokens.input === "number") summary.push(`in:${tokens.input}`)
+    if (typeof tokens.output === "number") summary.push(`out:${tokens.output}`)
+    if (typeof tokens.reasoning === "number" && tokens.reasoning > 0) {
+      summary.push(`reasoning:${tokens.reasoning}`)
+    }
+    if (summary.length > 0) parts.push(summary.join(" "))
+  }
+  chip.textContent = parts.join(" — ")
+  return chip
+}
+
+function renderSnapshotBlock(_block: Block, _opts: RenderOptions): HTMLElement | null {
+  const marker = document.createElement("div")
+  marker.className = "snapshot-marker"
+  marker.textContent = "Snapshot"
+  return marker
+}
+
+function renderPatchBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
+  const wrapper = document.createElement("div")
+  wrapper.className = "patch-summary"
+  const files = Array.isArray(block.files) ? (block.files as string[]) : []
+  if (files.length === 0) {
+    wrapper.textContent = "Patch applied"
+    return wrapper
+  }
+  const label = document.createElement("span")
+  label.className = "patch-summary-label"
+  label.textContent = `Patched ${files.length} file${files.length === 1 ? "" : "s"}: `
+  wrapper.appendChild(label)
+  const list = document.createElement("span")
+  list.className = "patch-summary-files"
+  list.textContent = files.join(", ")
+  wrapper.appendChild(list)
+  return wrapper
+}
+
+function renderAgentBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
+  const chip = document.createElement("div")
+  chip.className = "agent-chip"
+  const name = typeof block.name === "string" ? block.name : "agent"
+  chip.textContent = `Agent: ${name}`
+  return chip
+}
+
+function renderRetryBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
+  const chip = document.createElement("div")
+  chip.className = "retry-chip"
+  const attempt = typeof block.attempt === "number" ? block.attempt : 1
+  const msg = typeof block.errorMessage === "string" ? block.errorMessage : "retry"
+  chip.textContent = `Retry #${attempt} — ${msg}`
+  return chip
+}
+
+function renderCompactionBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
+  const marker = document.createElement("div")
+  marker.className = "compaction-marker"
+  const auto = block.auto === true
+  marker.textContent = auto ? "Auto-compacted" : "Compacted"
+  return marker
+}
+
+function renderSubtaskBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
+  const wrapper = document.createElement("div")
+  wrapper.className = "subtask-block"
+  const header = document.createElement("div")
+  header.className = "subtask-header"
+  const agent = typeof block.agent === "string" ? block.agent : "agent"
+  header.textContent = `Subtask → ${agent}`
+  wrapper.appendChild(header)
+  if (typeof block.description === "string" && block.description.trim()) {
+    const desc = document.createElement("div")
+    desc.className = "subtask-description"
+    desc.textContent = block.description
+    wrapper.appendChild(desc)
+  }
+  return wrapper
 }
 
 // ---------------------------------------------------------------------------

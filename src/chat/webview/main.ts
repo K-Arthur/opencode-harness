@@ -1,9 +1,12 @@
-import type { ChatMessage, HostMessage, MentionItem, SessionSummary, ModelInfo, WebviewState, ContextChip, ToolCallState, TokenUsageSnapshot, UsageDelta } from "./types"
+import type { ChatMessage, HostMessage, LegacyHostMessage, MentionItem, SessionSummary, ModelInfo, WebviewState, ContextChip, ToolCallState, TokenUsageSnapshot, UsageDelta, Block } from "./types"
+import type { AttachmentEls } from "./ui/attachments"
+import { timers } from "./timerRegistry"
 import { createState } from "./state"
-import { getElementRefs, scrollToBottom, getActiveMessageList, toggleAllThinkingBlocks } from "./dom"
+import { getElementRefs, scrollToBottom, getActiveMessageList, toggleAllThinkingBlocks, type ElementRefs } from "./dom"
 import { renderMessage } from "./messageRenderer"
 import { groupMessagesIntoTurns } from "./renderer"
 import { setupMentions } from "./mentions"
+import { setupCommandsModal, type CommandEntry } from "./commands-modal"
 import { createStreamHandlers, type StreamHandlers } from "./stream"
 import { createTabBar, createTabContent, switchToTab, removeTabContent } from "./tabs"
 import { setupModelDropdown } from "./model-dropdown"
@@ -26,9 +29,24 @@ import { createVirtualList, getVirtualList, disposeVirtualList } from "./virtual
 import { setupTodosPanel } from "./todos-panel"
 import { setupSkillsModal } from "./skills-modal"
 import { setupSubagentPanel } from "./subagent-panel"
-import { setupQuickSettings } from "./quick-settings"
 import { shouldRefreshOnUpdate, selectDisplayedUsage } from "./tokenDisplayPolicy"
-import { setThinkingVisible } from "./displayPrefs"
+import { setThinkingVisible, getThinkingVisible } from "./displayPrefs"
+import { setupSearch } from "./ui/messageSearch"
+import { ToolElapsedTracker } from "./ui/toolElapsed"
+import { FileEditBatcher } from "./ui/fileEditBatcher"
+import { setupDisplayToggles } from "./ui/displayToggles"
+import { setupThemeCustomizer, openThemeCustomizer, closeThemeCustomizer, populateCliList, applyThemeCustomizerConfig, collectThemeCustomizerConfig, type ThemeCustomizerConfig } from "./ui/themeCustomizer"
+import { setupModeToggle, updateModeDropdown, closeModeDropdown, updateModeSelectorState, syncModeUI as syncModeUIModule, getCurrentMode } from "./ui/modeDropdown"
+import { setupInstructionsEditor } from "./ui/instructionsEditor"
+import { setupSessionModal as setupSessionModalModule, openSessionModal as openSessionModalModule, closeSessionModal as closeSessionModalModule, trapModalFocus } from "./ui/sessionModal"
+import { setupModeWarning as setupModeWarningModule, showAutoModeWarning as showAutoModeWarningModule, closeModeWarning as closeModeWarningModule, isModeWarningOpen, type ModeWarningEls } from "./ui/modeWarning"
+import { handleTokenUsage as handleTokenUsageModule, accumulateTokenUsage as accumulateTokenUsageModule, accumulateCost as accumulateCostModule, rememberStepUsage, isDuplicateRecentStepUsage, handleRateLimitState as handleRateLimitStateModule, recordUsageSnapshot as recordUsageSnapshotModule, updateCostDisplay as updateCostDisplayModule, updateTokenDisplay as updateTokenDisplayModule, clearTokenDisplay as clearTokenDisplayModule, updateContextBarFromSession as updateContextBarFromSessionModule, checkOverflowWarnings as checkOverflowWarningsModule, formatTokenCount as formatTokenCountModule, type TokenCostDeps, type RateLimitWebviewState } from "./ui/tokenCostDisplay"
+import { createAttachmentManager, parsePromptMentions, removePromptToken } from "./ui/attachments"
+import { showWelcomeView as showWelcomeViewModule, hideWelcomeView as hideWelcomeViewModule, renderWelcomeContext as renderWelcomeContextModule, setupWelcomeActions as setupWelcomeActionsModule, setupWelcomeSuggestions as setupWelcomeSuggestionsModule, setupWelcomeQuickSettings as setupWelcomeQuickSettingsModule, type WelcomeViewDeps } from "./ui/welcomeView"
+import { closeSettingsMenu as closeSettingsMenuModule, closeCurrentModal as closeCurrentModalModule, setupSettingsMenuKeyboardNav as setupSettingsMenuKeyboardNavModule, type SettingsMenuDeps } from "./ui/settingsMenu"
+import { trackFileChange as trackFileChangeModule, undoMessage as undoMessageModule, handleChangedFiles as handleChangedFilesModule, renderChangedFilesList as renderChangedFilesListModule, renderCheckpointPanel as renderCheckpointPanelModule, handleClearMessages as handleClearMessagesModule, type FileTrackingDeps } from "./ui/fileTracking"
+import { setupButtons as setupButtonsModule, type ButtonSetupDeps } from "./ui/buttonSetup"
+import { updateScrollMarkers as updateScrollMarkersModule, setupJumpToBottom as setupJumpToBottomModule, scrollMessageToTop as scrollMessageToTopModule, scrollToTurn as scrollToTurnModule, type ScrollMarkerDeps } from "./ui/scrollMarkers"
 
 declare const acquireVsCodeApi: (() => {
   postMessage(message: Record<string, unknown>): void
@@ -213,8 +231,78 @@ function getVsCodeApi() {
     (msg) => vscode.postMessage(msg)
   )
 
+  // ── Commands palette (full modal). Triggered by /commands, Ctrl+/, or list_stashes flow.
+  // Local entries mirror the in-prompt slash switch below so any future addition is one-stop.
+  const LOCAL_COMMAND_ENTRIES: CommandEntry[] = [
+    { name: "clear",         description: "Clear conversation, start a new server session",     source: "local", insertText: "/clear" },
+    { name: "model",         description: "Switch the active model (use /model <id>)",          source: "local", insertText: "/model " },
+    { name: "cost",          description: "Show session cost (server figures when available)",  source: "local", insertText: "/cost" },
+    { name: "new",           description: "Open a new session tab",                              source: "local", insertText: "/new" },
+    { name: "continue",      description: "Resume the most recently closed session",            source: "local", insertText: "/continue" },
+    { name: "compact",       description: "Compact session context to free tokens",             source: "local", insertText: "/compact" },
+    { name: "stash",         description: "Stash current prompt — /stash <name> <content>",     source: "local", insertText: "/stash " },
+    { name: "stashes",       description: "Browse stashed prompts",                              source: "local", insertText: "/stashes" },
+    { name: "queue",         description: "Show queued prompts",                                  source: "local", insertText: "/queue" },
+    { name: "commands",      description: "Open this command palette",                          source: "local", insertText: "/commands" },
+    { name: "export",        description: "Export conversation (Markdown)",                     source: "local", insertText: "/export" },
+    { name: "export-json",   description: "Export conversation as JSON",                        source: "local", insertText: "/export-json" },
+    { name: "export-text",   description: "Export conversation as plain text",                  source: "local", insertText: "/export-text" },
+    { name: "copy",          description: "Copy conversation to clipboard",                     source: "local", insertText: "/copy" },
+    { name: "help",          description: "Show available slash commands",                      source: "local", insertText: "/help" },
+  ]
+
+  function runCommandEntry(entry: CommandEntry): void {
+    const active = stateManager.getActiveSession()
+    if (!active) return
+    if (entry.source === "local" && entry.insertText) {
+      // Locals that take no args run immediately; ones that take args (trailing space) get inserted.
+      if (entry.insertText.endsWith(" ")) {
+        els.promptInput.value = entry.insertText
+        autoResizeTextarea()
+        updateSendButton()
+        els.promptInput.focus()
+        return
+      }
+      // Reuse the existing switch — just fire-and-forget via execute_command or local routing.
+      els.promptInput.value = entry.insertText
+      sendMessage()
+      return
+    }
+    if (entry.source === "server") {
+      vscode.postMessage({ type: "execute_command", command: `/${entry.name}`, sessionId: active.id })
+      return
+    }
+    // Custom prompt — host expands template and pushes prefill_prompt back.
+    vscode.postMessage({ type: "execute_command", command: `/${entry.name}`, sessionId: active.id })
+  }
+
+  function insertIntoPrompt(text: string): void {
+    els.promptInput.value = text
+    autoResizeTextarea()
+    updateSendButton()
+    els.promptInput.focus()
+  }
+
+  const commandsModal = setupCommandsModal({
+    commandsModal: els.commandsModal,
+    commandsList: els.commandsList,
+    commandsSearchInput: els.commandsSearchInput,
+    commandsTitle: els.commandsTitle,
+    commandsFilter: els.commandsFilter,
+    commandsModalCloseBtn: els.commandsModalCloseBtn,
+  }, {
+    localCommands: LOCAL_COMMAND_ENTRIES,
+    onRun: (entry) => runCommandEntry(entry),
+    onInsert: (text) => insertIntoPrompt(text),
+    onUseStash: (stash) => {
+      // Insert the stash content into the prompt for review before sending.
+      insertIntoPrompt(stash.content)
+    },
+    onDeleteStash: (id) => vscode.postMessage({ type: "delete_stash", id }),
+  })
+
   // Mode state: "plan" or "build"
-  let currentMode = "build"
+  let currentMode = getCurrentMode()
 
   // Steering mode state: "interrupt", "append", or "queue"
   let currentSteerMode: 'interrupt' | 'append' | 'queue' = 'interrupt'
@@ -245,72 +333,59 @@ function getVsCodeApi() {
     els.inputArea.classList.add(`steer-${mode}`)
   }
 
-  // Pending image attachments queued for next send
-  interface PendingAttachment {
-    data: string
-    mimeType: string
-  }
-  let pendingAttachments: PendingAttachment[] = []
+  const attachmentManager = createAttachmentManager({
+    els: {
+      inputArea: els.inputArea,
+      inputWrapper: els.inputWrapper,
+      promptInput: els.promptInput,
+    },
+    postMessage: (msg) => vscode.postMessage(msg),
+    updateSendButton,
+    autoResizeTextarea,
+    updateContextChips: (els: AttachmentEls, chips?: ContextChip[]) => updateContextChips(els as ElementRefs, chips),
+    getActiveSession: () => stateManager.getActiveSession(),
+  })
 
   /* ─── INIT ─── */
 
   /* ─── PER-TOOL ELAPSED TIMERS ─── */
 
-  const toolStartTimes = new Map<string, number>()
-  let toolElapsedTimer: ReturnType<typeof setInterval> | null = null
-
-  function startToolElapsedTimer(): void {
-    if (toolElapsedTimer) return
-    toolElapsedTimer = setInterval(() => {
-      const now = Date.now()
-      for (const [toolId, startTime] of toolStartTimes) {
-        const el = document.querySelector<HTMLSpanElement>(`.tool-elapsed[data-block-id="${CSS.escape(toolId)}"]`)
-        if (!el) continue
-        el.textContent = formatElapsed(now - startTime)
-      }
-      if (toolStartTimes.size === 0) {
-        stopToolElapsedTimer()
-      }
-    }, 1000)
-  }
-
-  function registerToolStart(toolId: string): void {
-    toolStartTimes.set(toolId, Date.now())
-    startToolElapsedTimer()
-  }
-
-  function formatElapsed(ms: number): string {
-    const total = Math.max(0, Math.round(ms / 1000))
-    return total >= 60 ? `${Math.floor(total / 60)}m ${total % 60}s` : `${total}s`
-  }
-
-  function unregisterToolEnd(toolId: string, finalMs?: number): void {
-    const startedAt = toolStartTimes.get(toolId)
-    toolStartTimes.delete(toolId)
-    const el = document.querySelector<HTMLSpanElement>(`.tool-elapsed[data-block-id="${CSS.escape(toolId)}"]`)
-    if (!el) return
-    // Prefer server-reported duration; fall back to wall-clock since start.
-    const durationMs = (typeof finalMs === "number" && finalMs >= 0)
-      ? finalMs
-      : startedAt != null ? Date.now() - startedAt : 0
-    el.textContent = formatElapsed(durationMs)
-    el.classList.add("tool-elapsed--final")
-  }
-
-  function stopToolElapsedTimer(): void {
-    if (toolElapsedTimer) {
-      clearInterval(toolElapsedTimer)
-      toolElapsedTimer = null
-    }
-  }
+  const toolElapsedTracker = new ToolElapsedTracker()
 
   function init() {
     try {
-      setupModeToggle()
-      setupModeWarning()
+      setupModeToggle({
+        els,
+        getActiveSession: () => stateManager.getActiveSession(),
+        setSessionMode: (id, mode) => stateManager.setSessionMode(id, mode),
+        postMessage: (msg) => vscode.postMessage(msg),
+        showAutoModeWarning,
+      })
       setupInput()
-      setupButtons()
-      setupThemeCustomizer()
+      setupButtonsModule({
+        els: {
+          historyBtn: els.historyBtn,
+          sessionModal: els.sessionModal,
+          sessionModalBody: els.sessionModalBody,
+          mcpBtn: els.mcpBtn,
+          themeCustomizerBtn: els.themeCustomizerBtn,
+          settingsBtn: els.settingsBtn,
+          settingsMenu: els.settingsMenu,
+          checkpointPanel: els.checkpointPanel,
+          todosToggleBtn: els.todosToggleBtn,
+          todosPanel: els.todosPanel,
+          changedFilesList: els.changedFilesList,
+          attachBtn: els.attachBtn,
+          skillsBtn: els.skillsBtn,
+        },
+        postMessage: (msg) => vscode.postMessage(msg),
+        closeSettingsMenu,
+        openMcpConfig: () => mcpConfig.open(),
+        openThemeCustomizer: () => openThemeCustomizer(themeDeps),
+        getActiveSessionId: () => stateManager.getState().activeSessionId ?? undefined,
+        skillsModalOpen: skillsModalApi?.open,
+      })
+      
       setupSessionModal()
       setupContextUsagePanel()
       setupContextMonitor(els, (msg) => vscode.postMessage(msg as Record<string, unknown>))
@@ -337,10 +412,8 @@ function getVsCodeApi() {
       setupPermissionListener()
       setupDiffActionListener()
       restoreQueues()
-      setupSearch()
       setupTimelineToggle()
       setupThinkingToggle()
-      setupDisplayToggles()
       const cleanupToolKeyboardNav = setupToolKeyboardNav()
       setupSettingsMenuKeyboardNav()
       updateSendButton()
@@ -351,7 +424,7 @@ function getVsCodeApi() {
       showWelcomeView()
 
       // Let the extension be the source of truth - wait for init_state
-      const initTimeout = setTimeout(() => {
+      const initTimeout = timers.setTimeout(() => {
         // If we haven't received init_state after 3 seconds, just show welcome
         if (!stateManager.getState().activeSessionId) {
           log.warn("No init_state received, showing welcome view")
@@ -370,133 +443,55 @@ function getVsCodeApi() {
     }
   }
 
+  const welcomeViewDeps: WelcomeViewDeps = {
+    els: {
+      welcomeView: els.welcomeView,
+      welcomeNewBtn: els.welcomeNewBtn,
+      welcomeModelCtx: els.welcomeModelCtx,
+      welcomeContinueBtn: els.welcomeContinueBtn,
+      welcomeModelName: els.welcomeModelName,
+      welcomeSearchInput: els.welcomeSearchInput,
+      settingsToggle: els.settingsToggle,
+      settingsPanel: els.settingsPanel,
+      promptInput: els.promptInput,
+      quickSettingsContent: els.quickSettingsContent,
+    },
+    postMessage: (msg) => vscode.postMessage(msg),
+    getAllSessions: () => stateManager.getAllSessions(),
+    getState: () => {
+      const s = stateManager.getState()
+      return { ...s, activeSessionId: s.activeSessionId ?? undefined }
+    },
+    openModelManager: () => modelManager.open(),
+    renderRecentSessionsList,
+    hideStatusStrip,
+    applyTimelineVisibility,
+    autoResizeTextarea,
+    updateSendButton,
+  }
+
   function showWelcomeView() {
-    els.welcomeView.classList.remove("hidden")
-    hideStatusStrip()
-    renderRecentSessionsList()
-    renderWelcomeContext()
-    applyTimelineVisibility() // Force hide timeline
+    showWelcomeViewModule(welcomeViewDeps)
   }
 
   function hideWelcomeView() {
-    els.welcomeView.classList.add("hidden")
-  }
-
-  function setupWelcomeActions() {
-    els.welcomeNewBtn.addEventListener("click", () => {
-      vscode.postMessage({ type: "new_session" })
-    })
-    els.welcomeModelCtx?.addEventListener("click", () => {
-      modelManager.open()
-      vscode.postMessage({ type: "get_models" })
-    })
-    els.welcomeContinueBtn?.addEventListener("click", () => {
-      const mostRecent = stateManager.getAllSessions()
-        .filter((s) => s.messages.length > 0)
-        .sort((a, b) => {
-          const tA = a.messages[a.messages.length - 1]?.timestamp ?? 0
-          const tB = b.messages[b.messages.length - 1]?.timestamp ?? 0
-          return tB - tA
-        })[0]
-      if (mostRecent) {
-        vscode.postMessage({ type: "resume_session", sessionId: mostRecent.id })
-      }
-    })
-
-    // Session search is a single live input. The legacy toggle remains in the
-    // markup for compatibility with older templates, but is hidden to avoid
-    // rendering a second field under the visible search control.
-    if (els.welcomeSearchInput) {
-      const searchToggle = els.welcomeSearchToggle
-      const searchInput = els.welcomeSearchInput
-      const innerInput = searchInput.querySelector<HTMLInputElement>("input")
-
-      searchInput.classList.remove("hidden")
-      if (searchToggle) {
-        searchToggle.classList.add("hidden")
-        searchToggle.setAttribute("aria-expanded", "true")
-      }
-
-      const clearSessionSearch = () => {
-        if (innerInput) innerInput.value = ""
-        renderRecentSessionsList("")
-      }
-
-      if (innerInput) {
-        innerInput.setAttribute("autocomplete", "off")
-        innerInput.setAttribute("spellcheck", "false")
-        innerInput.addEventListener("input", (e) => {
-          const query = (e.target as HTMLInputElement).value.trim()
-          renderRecentSessionsList(query)
-        })
-        innerInput.addEventListener("keydown", (e) => {
-          if (e.key === "Escape") {
-            e.preventDefault()
-            clearSessionSearch()
-            return
-          }
-          if (e.key === "Enter") {
-            const firstResult = document.querySelector<HTMLElement>("#welcome-recent-sessions .recent-item[data-session-id]")
-            if (firstResult) {
-              e.preventDefault()
-              firstResult.click()
-            }
-            return
-          }
-          if (e.key === "ArrowDown") {
-            const firstResult = document.querySelector<HTMLElement>("#welcome-recent-sessions .recent-item[data-session-id]")
-            if (firstResult) {
-              e.preventDefault()
-              firstResult.focus()
-            }
-          }
-        })
-      }
-    }
-
-    // Settings toggle handler
-    if (els.settingsToggle && els.settingsPanel) {
-      const settingsToggle = els.settingsToggle
-      const settingsPanel = els.settingsPanel
-      settingsToggle.addEventListener("click", () => {
-        const isHidden = settingsPanel.classList.contains("hidden")
-        if (isHidden) {
-          settingsPanel.classList.remove("hidden")
-          settingsToggle.setAttribute("aria-expanded", "true")
-        } else {
-          settingsPanel.classList.add("hidden")
-          settingsToggle.setAttribute("aria-expanded", "false")
-        }
-      })
-    }
-
-    // Time-based greeting
-    const greetingEl = document.getElementById("welcome-greeting") as HTMLElement | null
-    if (greetingEl) {
-      const hour = new Date().getHours()
-      let greeting = "Good morning"
-      if (hour >= 12 && hour < 18) greeting = "Good afternoon"
-      else if (hour >= 18) greeting = "Good evening"
-      greetingEl.textContent = greeting
-      greetingEl.style.display = "block"
-    }
+    hideWelcomeViewModule(els)
   }
 
   function renderWelcomeContext() {
-    const globalModel = stateManager.getState().globalModel
-    if (globalModel && els.welcomeModelName) {
-      const parts = globalModel.split("/")
-      els.welcomeModelName.textContent = parts[parts.length - 1] ?? globalModel
-    }
-    const hasSessions = stateManager.getAllSessions().some((s) => s.messages.length > 0)
-    if (els.welcomeContinueBtn) {
-      els.welcomeContinueBtn.classList.toggle("hidden", !hasSessions)
-    }
+    renderWelcomeContextModule(welcomeViewDeps)
+  }
+
+  function setupWelcomeActions() {
+    setupWelcomeActionsModule(welcomeViewDeps)
   }
 
   /* ─── RECENT SESSIONS ─── */
 
   function renderRecentSessionsList(filterQuery: string = "") {
+    // Defensive trim: this is called from many call sites (welcome init,
+    // session list updates, etc.) — not all of them sanitize the query.
+    const query = (filterQuery || "").trim().toLowerCase()
     const activeId = stateManager.getState().activeSessionId
     const allValidSessions = stateManager.getAllSessions()
       .filter((s) => s.id !== activeId && s.messages.length > 0)
@@ -510,7 +505,7 @@ function getVsCodeApi() {
     }
 
     const filteredSessions = allValidSessions
-      .filter((s) => !filterQuery || (s.name || "").toLowerCase().includes(filterQuery.toLowerCase()))
+      .filter((s) => !query || (s.name || "").toLowerCase().includes(query))
       .sort((a, b) => {
         const tA = a.messages[a.messages.length - 1]?.timestamp ?? 0
         const tB = b.messages[b.messages.length - 1]?.timestamp ?? 0
@@ -531,21 +526,19 @@ function getVsCodeApi() {
       (sessionId) => {
         vscode.postMessage({ type: "resume_session", sessionId })
       },
-      !!filterQuery
+      !!query
     )
   }
 
   /* ─── SESSION HISTORY MODAL ─── */
 
   function setupSessionModal() {
-    els.sessionModalClose.addEventListener("click", closeSessionModal)
-    els.sessionModal.addEventListener("click", (e) => {
-      if (e.target === els.sessionModal) closeSessionModal()
-    })
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && !els.sessionModal.classList.contains("hidden")) {
-        closeSessionModal()
-      }
+    setupSessionModalModule({
+      els,
+      setUnifiedLocalSessions,
+      setUnifiedServerSessions,
+      renderUnifiedSessionList,
+      postMessage: (msg) => vscode.postMessage(msg),
     })
   }
 
@@ -560,76 +553,20 @@ function getVsCodeApi() {
     })
   }
 
-  function openSessionModal(sessions: Array<{ id: string; cliSessionId?: string; title?: string; messageCount?: number; cost?: number; time?: number }>) {
-    setUnifiedLocalSessions(sessions)
-    setUnifiedServerSessions(null)
-
-    const body = els.sessionModalBody
-    body.replaceChildren()
-
-    // Single unified list — no LOCAL/SERVER tab switching
-    const list = document.createElement("div")
-    list.className = "modal-session-list"
-    list.setAttribute("role", "listbox")
-    list.setAttribute("aria-label", "Sessions")
-    body.appendChild(list)
-
-    // Show a loading placeholder while server sessions are fetched
-    const loading = document.createElement("div")
-    loading.className = "modal-empty"
-    loading.textContent = "Loading sessions…"
-    list.appendChild(loading)
-
-    // Kick off the server session fetch; renderUnifiedSessionList will be called
-    // again when the server_session_list message arrives.
-    vscode.postMessage({ type: "list_server_sessions" })
-
-    // Immediately render local-only sessions so the modal is not empty
-    renderUnifiedSessionList()
-
-    els.sessionModal.classList.remove("hidden")
-
-    // Focus trap
-    sessionModalLastFocus = document.activeElement as HTMLElement | null
-    sessionModalFocusTrap = trapModalFocus(els.sessionModal)
-    document.addEventListener("keydown", sessionModalFocusTrap)
-    const firstBtn = els.sessionModal.querySelector<HTMLElement>("button, [href], input:not([type='hidden'])")
-    if (firstBtn) firstBtn.focus()
+  const sessionModalDeps = {
+    els,
+    setUnifiedLocalSessions,
+    setUnifiedServerSessions,
+    renderUnifiedSessionList,
+    postMessage: (msg: Record<string, unknown>) => vscode.postMessage(msg),
   }
 
-  // Focus trap state for session modal
-  let sessionModalFocusTrap: ((e: KeyboardEvent) => void) | null = null
-  let sessionModalLastFocus: HTMLElement | null = null
-
-  function trapModalFocus(container: HTMLElement): (e: KeyboardEvent) => void {
-    return (e: KeyboardEvent) => {
-      if (e.key !== "Tab") return
-      const focusable = container.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      )
-      if (focusable.length === 0) return
-      const first = focusable[0]!
-      const last = focusable[focusable.length - 1]!
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault()
-        last.focus()
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault()
-        first.focus()
-      }
-    }
+  function openSessionModal(sessions: Array<{ id: string; cliSessionId?: string; title?: string; messageCount?: number; cost?: number; time?: number }>) {
+    openSessionModalModule(sessionModalDeps, sessions)
   }
 
   function closeSessionModal() {
-    els.sessionModal.classList.add("hidden")
-    if (sessionModalFocusTrap) {
-      document.removeEventListener("keydown", sessionModalFocusTrap)
-      sessionModalFocusTrap = null
-    }
-    if (sessionModalLastFocus) {
-      sessionModalLastFocus.focus({ preventScroll: true })
-      sessionModalLastFocus = null
-    }
+    closeSessionModalModule(els)
   }
 
   /* ─── TAB MANAGEMENT ─── */
@@ -770,12 +707,7 @@ function getVsCodeApi() {
     streamHandlers.delete(tabId)
 
     // Clean up tool timing data
-    for (const key of [...toolStartTimes.keys()]) {
-      if (key.startsWith(tabId + ":")) {
-        toolStartTimes.delete(key)
-      }
-    }
-    if (toolStartTimes.size === 0) stopToolElapsedTimer()
+    toolElapsedTracker.clearForPrefix(tabId)
 
     // Clear prompt queue for this tab
     const queue = promptQueues.get(tabId)
@@ -898,250 +830,45 @@ function getVsCodeApi() {
 
   /* ─── MODE DROPDOWN ─── */
 
-  function updateModeDropdown(mode: string) {
-    const labels: Record<string, string> = { plan: "Plan", auto: "Auto", build: "Build" }
-    els.modeCurrentText.textContent = labels[mode] || mode
-    els.modeDropdownBtn.dataset.mode = mode
-
-    const iconSvg: string =
-      mode === "plan"
-        ? '<svg class="mode-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3v18"/><path d="M7 3v18"/><path d="M3 7.5h18"/><path d="M3 16.5h18"/><path d="M17 3a2 2 0 0 1 2 2"/><path d="M17 21a2 2 0 0 0 2-2"/><path d="M7 3a2 2 0 0 0-2 2"/><path d="M7 21a2 2 0 0 1-2-2"/></svg>'
-        : mode === "auto"
-          ? '<svg class="mode-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>'
-          : '<svg class="mode-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>'
-    const iconEl = els.modeDropdownLabel.querySelector(".mode-icon") as HTMLElement | null
-    if (iconEl) {
-      iconEl.outerHTML = iconSvg
-    }
-
-    for (const key of ["plan", "auto", "build"]) {
-      const opt = els[`modeOpt${key.charAt(0).toUpperCase() + key.slice(1)}` as keyof typeof els] as HTMLButtonElement
-      const isSelected = key === mode
-      opt.setAttribute("aria-selected", String(isSelected))
-      opt.classList.toggle("selected", isSelected)
-    }
-  }
-
-  function closeModeDropdown() {
-    els.modeDropdownBtn.setAttribute("aria-expanded", "false")
-    els.modeDropdownMenu.classList.add("hidden")
-  }
-
-  function updateModeSelectorState() {
-    const active = stateManager.getActiveSession()
-    const isStreaming = Boolean(active?.isStreaming)
-    els.modeDropdown.classList.toggle('disabled', isStreaming)
-    els.modeDropdownBtn.disabled = isStreaming
-    els.modeDropdownBtn.setAttribute("aria-disabled", String(isStreaming))
-
-    const buttons = [els.modeOptPlan, els.modeOptAuto, els.modeOptBuild]
-    for (const btn of buttons) {
-      btn.disabled = isStreaming
-      btn.setAttribute("aria-disabled", String(isStreaming))
-    }
-
-    if (isStreaming) closeModeDropdown()
-  }
-
-  function toggleModeDropdown() {
-    const active = stateManager.getActiveSession()
-    if (active?.isStreaming) return
-
-    const isOpen = els.modeDropdownMenu.classList.contains("hidden")
-    if (isOpen) {
-      els.modeDropdownMenu.classList.remove("hidden")
-      els.modeDropdownBtn.setAttribute("aria-expanded", "true")
-      // Focus the active option
-      const activeOpt = els.modeDropdownMenu.querySelector('[aria-selected="true"]') as HTMLElement | null
-      if (activeOpt) activeOpt.focus()
-    } else {
-      closeModeDropdown()
-    }
-  }
-
-  function setMode(mode: string) {
-    if (currentMode === mode) {
-      closeModeDropdown()
-      return
-    }
+  function updateModeDropdownLocal(mode: string) {
+    updateModeDropdown(mode, els)
     currentMode = mode
-    updateModeDropdown(mode)
-    closeModeDropdown()
-
-    const active = stateManager.getActiveSession()
-    if (active) {
-      stateManager.setSessionMode(active.id, mode)
-      vscode.postMessage({ type: "change_mode", mode, sessionId: active.id })
-    }
   }
 
-  function setupModeToggle() {
-    els.modeDropdownBtn.addEventListener("click", toggleModeDropdown)
+  function closeModeDropdownLocal() {
+    closeModeDropdown(els)
+  }
 
-    // Keyboard navigation within the dropdown
-    els.modeDropdownBtn.addEventListener("keydown", (e) => {
-      if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
-        e.preventDefault()
-        if (els.modeDropdownMenu.classList.contains("hidden")) {
-          toggleModeDropdown()
-        }
-      }
-    })
-
-    // Option click handlers
-    const options = [els.modeOptPlan, els.modeOptAuto, els.modeOptBuild]
-    for (const opt of options) {
-      opt.addEventListener("click", () => {
-        const mode = opt.dataset.mode
-        if (!mode) return
-
-        const active = stateManager.getActiveSession()
-        if (active?.isStreaming) return
-
-        // Only show warning when switching from Plan mode
-        if (currentMode === "plan" && mode === "auto") {
-          showAutoModeWarning()
-          return
-        }
-
-        setMode(mode)
-      })
-
-      // Keyboard support for option selection
-      opt.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault()
-          opt.click()
-        }
-        if (e.key === "Escape") {
-          closeModeDropdown()
-          els.modeDropdownBtn.focus()
-        }
-        if (e.key === "ArrowDown") {
-          e.preventDefault()
-          const next = opt.nextElementSibling as HTMLElement | null
-          if (next) next.focus()
-        }
-        if (e.key === "ArrowUp") {
-          e.preventDefault()
-          const prev = opt.previousElementSibling as HTMLElement | null
-          if (prev) prev.focus()
-        }
-      })
-    }
-
-    // Close on outside click
-    document.addEventListener("click", (e) => {
-      const target = e.target as Node
-      if (!els.modeDropdown.contains(target)) {
-        closeModeDropdown()
-      }
-    })
+  function updateModeSelectorStateLocal() {
+    updateModeSelectorState(els, () => stateManager.getActiveSession())
   }
 
   function syncModeUI() {
-    const active = stateManager.getActiveSession()
-    const rawMode = active?.mode || "plan"
-    currentMode = rawMode === "normal" ? "build" : rawMode
-    updateModeDropdown(currentMode)
-    updateModeSelectorState()
+    syncModeUIModule(els, () => stateManager.getActiveSession())
+    currentMode = getCurrentMode()
   }
 
   /* ─── PER-TAB INSTRUCTIONS (GEAR) ─── */
 
-  function setupInstructionsEditor() {
-    let saveDebounce: ReturnType<typeof setTimeout> | null = null
-
-    // Focus-trap: all focusable elements inside the editor
-    function getFocusables(): HTMLElement[] {
-      return Array.from(
-        els.instructionsEditor.querySelectorAll<HTMLElement>("textarea, button:not([disabled])")
-      )
-    }
-
-    function openEditor() {
-      const active = stateManager.getActiveSession()
-      els.instructionsTextarea.value = active?.instructions ?? ""
-      els.instructionsEditor.classList.remove("hidden")
-      els.instructionsGearBtn.setAttribute("aria-expanded", "true")
-      els.instructionsTextarea.focus()
-    }
-
-    function closeEditor() {
-      els.instructionsEditor.classList.add("hidden")
-      els.instructionsGearBtn.setAttribute("aria-expanded", "false")
-      if (saveDebounce) { clearTimeout(saveDebounce); saveDebounce = null }
-      // Return focus to the trigger button so keyboard users aren't stranded
-      els.instructionsGearBtn.focus()
-    }
-
-    function saveInstructions() {
-      const active = stateManager.getActiveSession()
-      if (!active) return
-      const text = els.instructionsTextarea.value
-      active.instructions = text
-      stateManager.save()
-      vscode.postMessage({ type: "set_instructions", sessionId: active.id, instructions: text })
-      closeEditor()
-    }
-
-    els.instructionsGearBtn.addEventListener("click", (e) => {
-      e.stopPropagation()
-      if (els.instructionsEditor.classList.contains("hidden")) {
-        openEditor()
-      } else {
-        closeEditor()
-      }
-    })
-
-    els.instructionsSaveBtn.addEventListener("click", saveInstructions)
-    els.instructionsCancelBtn.addEventListener("click", closeEditor)
-
-    els.instructionsEditor.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault()
-        saveInstructions()
-        return
-      }
-      if (e.key === "Escape") {
-        closeEditor()
-        return
-      }
-      // Focus trap: wrap Tab/Shift+Tab within the dialog
-      if (e.key === "Tab") {
-        const focusables = getFocusables()
-        if (focusables.length === 0) return
-        const first = focusables[0]!
-        const last = focusables[focusables.length - 1]!
-        if (e.shiftKey) {
-          if (document.activeElement === first) { e.preventDefault(); last.focus() }
-        } else {
-          if (document.activeElement === last) { e.preventDefault(); first.focus() }
-        }
-      }
-    })
-
-    document.addEventListener("click", (e) => {
-      const target = e.target as Node
-      if (!els.instructionsEditor.contains(target) && !els.instructionsGearBtn.contains(target)) {
-        if (!els.instructionsEditor.classList.contains("hidden")) closeEditor()
-      }
+  function setupInstructionsEditorLocal() {
+    setupInstructionsEditor({
+      els,
+      getActiveSession: () => stateManager.getActiveSession(),
+      saveSession: () => stateManager.save(),
+      postMessage: (msg) => vscode.postMessage(msg),
+      clearTimeout: (id) => timers.clearTimeout(id),
     })
   }
 
-  setupInstructionsEditor()
+  setupInstructionsEditorLocal()
 
   /* ─── AUTO MODE WARNING ─── */
 
-  let pendingAutoMode: string | null = null
-
-  // Undo stack for theme customizer
   let undoRedo: Array<{ themePreset: string; themeOverrides: Record<string, string> }> = []
   const UNDO_REDO_MAX_SIZE = 50
 
   function pushUndoRedo(state: { themePreset: string; themeOverrides: Record<string, string> }): void {
     undoRedo.push(state)
-    // Limit stack size to prevent memory issues
     if (undoRedo.length > UNDO_REDO_MAX_SIZE) {
       undoRedo.shift()
     }
@@ -1151,56 +878,33 @@ function getVsCodeApi() {
     pushUndoRedo(state)
   }
 
-  let modeWarningFocusTrap: ((e: KeyboardEvent) => void) | null = null
-  let modeWarningLastFocus: HTMLElement | null = null
+  function setMode(mode: string): void {
+    const active = stateManager.getActiveSession()
+    if (active) {
+      stateManager.setSessionMode(active.id, mode)
+    }
+  }
+
+  const modeWarningDeps = {
+    els: {
+      modeWarningTitle: els.modeWarningTitle,
+      modeWarningDescription: els.modeWarningDescription,
+      modeWarningModal: els.modeWarningModal,
+      modeWarningCancel: els.modeWarningCancel,
+      modeWarningConfirm: els.modeWarningConfirm,
+      modeWarningDontShow: els.modeWarningDontShow,
+    } as ModeWarningEls,
+    postMessage: (msg: Record<string, unknown>) => vscode.postMessage(msg),
+    setMode,
+  }
+  setupModeWarningModule(modeWarningDeps)
 
   function showAutoModeWarning() {
-    pendingAutoMode = "auto"
-    els.modeWarningTitle.textContent = "Switch to Auto mode?"
-    els.modeWarningDescription.textContent =
-      "Auto mode will allow the agent to apply changes without asking. The agent will have full autonomy to read, write, and execute commands. Use with caution."
-    els.modeWarningModal.classList.remove("hidden")
-    modeWarningLastFocus = document.activeElement as HTMLElement | null
-    modeWarningFocusTrap = trapModalFocus(els.modeWarningModal)
-    document.addEventListener("keydown", modeWarningFocusTrap)
-    const firstBtn = els.modeWarningModal.querySelector<HTMLElement>("button")
-    if (firstBtn) firstBtn.focus()
+    showAutoModeWarningModule(modeWarningDeps)
   }
 
   function closeModeWarning() {
-    els.modeWarningModal.classList.add("hidden")
-    if (modeWarningFocusTrap) {
-      document.removeEventListener("keydown", modeWarningFocusTrap)
-      modeWarningFocusTrap = null
-    }
-    if (modeWarningLastFocus) {
-      modeWarningLastFocus.focus({ preventScroll: true })
-      modeWarningLastFocus = null
-    }
-    pendingAutoMode = null
-  }
-
-  function setupModeWarning() {
-    els.modeWarningCancel.addEventListener("click", closeModeWarning)
-    els.modeWarningConfirm.addEventListener("click", () => {
-      if (pendingAutoMode) {
-        const dontShow = els.modeWarningDontShow.checked
-        if (dontShow) {
-          vscode.postMessage({ type: "update_setting", key: "skipModeWarning", value: true })
-        }
-        setMode(pendingAutoMode)
-        pendingAutoMode = null
-      }
-      els.modeWarningModal.classList.add("hidden")
-    })
-    els.modeWarningModal.addEventListener("click", (e) => {
-      if (e.target === els.modeWarningModal) closeModeWarning()
-    })
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && !els.modeWarningModal.classList.contains("hidden")) {
-        closeModeWarning()
-      }
-    })
+    closeModeWarningModule(modeWarningDeps.els)
   }
 
   /* ─── INPUT ─── */
@@ -1257,10 +961,10 @@ function getVsCodeApi() {
       const files = e.dataTransfer?.files
       if (files && files.length > 0) {
         const fileMentions: string[] = []
+        const allowedMimes = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const
         for (const f of Array.from(files)) {
-          if (ALLOWED_IMAGE_MIMES.includes(f.type as typeof ALLOWED_IMAGE_MIMES[number])) {
-            // Image files become attachment chips, not @file: mentions
-            attachImageBlob(f)
+          if (allowedMimes.includes(f.type as typeof allowedMimes[number])) {
+            attachmentManager.attachImageBlob(f)
           } else {
             const relPath = (f as { webkitRelativePath?: string }).webkitRelativePath || f.name
             fileMentions.push(`@file:${relPath}`)
@@ -1292,7 +996,7 @@ function getVsCodeApi() {
         }
         // Visual feedback for shortcut
         els.sendBtn?.classList.add("active-feedback")
-        setTimeout(() => els.sendBtn?.classList.remove("active-feedback"), 200)
+         timers.setTimeout(() => els.sendBtn?.classList.remove("active-feedback"), 200)
         return
       }
       if (e.key === "t") {
@@ -1355,132 +1059,17 @@ function getVsCodeApi() {
     }
   }
 
-  const ALLOWED_IMAGE_MIMES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const
-  const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
-
-  function attachImageBlob(blob: Blob): void {
-    if (blob.size > MAX_ATTACHMENT_BYTES) {
-      webviewLog(`Image too large (${(blob.size / (1024 * 1024)).toFixed(1)} MB) — limit is 10 MB.`, "error")
-      vscode.postMessage({ type: "show_error", message: "Image attachment exceeds 10 MB limit." })
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result as string
-      if (!result) return
-      const base64Match = result.match(/^data:(image\/[\w.+-]+);base64,(.+)$/)
-      if (base64Match && base64Match[1] && base64Match[2]) {
-        pendingAttachments.push({ data: base64Match[2], mimeType: base64Match[1] })
-        renderAttachmentChips()
-        updatePromptContextChips()
-        updateSendButton()
-      }
-    }
-    reader.onerror = () => {
-      log.error("Failed to read image")
-      webviewLog("Failed to read image. The file may be corrupted or too large.", "error")
-    }
-    reader.readAsDataURL(blob)
+  function onPaste(e: ClipboardEvent) {
+    attachmentManager.onPaste(e)
   }
 
-  function onPaste(e: ClipboardEvent) {
-    const items = e.clipboardData?.items
-    if (!items) return
-
-    const active = stateManager.getActiveSession()
-    if (!active) return
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
-      if (item && ALLOWED_IMAGE_MIMES.includes(item.type as typeof ALLOWED_IMAGE_MIMES[number])) {
-        e.preventDefault()
-        const blob = item.getAsFile()
-        if (blob) attachImageBlob(blob)
-        break
-      }
-    }
+  function updatePromptContextChips() {
+    attachmentManager.updatePromptContextChips()
   }
 
   function renderAttachmentChips() {
-    const existing = els.inputArea.querySelector(".attachment-chips")
-    if (existing) existing.remove()
-
-	    if (pendingAttachments.length === 0) {
-	      updatePromptContextChips()
-	      return
-	    }
-
-    const container = document.createElement("div")
-    container.className = "attachment-chips"
-
-    pendingAttachments.forEach((att, idx) => {
-      const chip = document.createElement("div")
-      chip.className = "attachment-chip"
-      const thumbnail = document.createElement("img")
-      thumbnail.src = `data:${att.mimeType};base64,${att.data}`
-      thumbnail.alt = "Attached image"
-      chip.appendChild(thumbnail)
-      const remove = document.createElement("button")
-      remove.className = "attachment-chip-remove"
-      remove.title = "Remove attachment"
-      remove.setAttribute("aria-label", "Remove attachment")
-      remove.innerHTML = REMOVE_SVG
-      remove.addEventListener("click", () => {
-	        pendingAttachments.splice(idx, 1)
-	        renderAttachmentChips()
-	        updatePromptContextChips()
-	        updateSendButton()
-	      })
-      chip.appendChild(remove)
-      container.appendChild(chip)
-    })
-
-	    els.inputArea.insertBefore(container, els.inputWrapper)
-	    updatePromptContextChips()
-	  }
-
-	  function updatePromptContextChips() {
-	    const mentions = parsePromptMentions(els.promptInput.value)
-	    const chips: ContextChip[] = mentions.map((mention) => ({
-	      label: mention.label,
-	      kind: mention.kind,
-	      removable: true,
-	      onRemove: () => {
-	        els.promptInput.value = removePromptToken(els.promptInput.value, mention.token)
-	        autoResizeTextarea()
-	        updatePromptContextChips()
-	        updateSendButton()
-	        els.promptInput.focus()
-	      },
-	    }))
-
-	    if (pendingAttachments.length > 0) {
-	      chips.push({
-	        label: pendingAttachments.length === 1 ? "1 image attached" : `${pendingAttachments.length} images attached`,
-	        kind: "file",
-	        removable: false,
-	      })
-	    }
-
-	    updateContextChips(els, chips)
-	  }
-
-	  function parsePromptMentions(text: string): Array<{ token: string; label: string; kind: string }> {
-	    const pattern = /@(file|folder|url|problems|terminal):(?:"[^"]+"|'[^']+'|\S+)/g
-	    const seen = new Set<string>()
-	    const matches: Array<{ token: string; label: string; kind: string }> = []
-	    for (const match of text.matchAll(pattern)) {
-	      const token = match[0]
-	      if (!token || seen.has(token)) continue
-	      seen.add(token)
-	      matches.push({ token, label: token, kind: match[1] || "file" })
-	    }
-	    return matches
-	  }
-
-	  function removePromptToken(text: string, token: string): string {
-	    return text.replace(token, "").replace(/[ \t]{2,}/g, " ").trimStart()
-	  }
+    attachmentManager.renderAttachmentChips()
+  }
 
   function autoResizeTextarea() {
     if (!els.promptInput) return
@@ -1512,7 +1101,7 @@ function getVsCodeApi() {
 
   function updateSendButton() {
     const hasText = els.promptInput.value.trim().length > 0
-    const hasAttachments = pendingAttachments.length > 0
+    const hasAttachments = attachmentManager.getAttachments().length > 0
     const active = stateManager.getActiveSession()
     const isStreaming = active?.isStreaming || false
     const streamCapacity = getStreamCapacityState()
@@ -1522,7 +1111,7 @@ function getVsCodeApi() {
     ;(els.sendBtn as HTMLButtonElement).disabled = !canSubmit
     els.sendBtn?.classList.toggle("stream-limit-blocked", blockedByStreamLimit)
     updateSendButtonIcon(isStreaming, streamCapacity)
-    updateModeSelectorState()
+    updateModeSelectorStateLocal()
   }
 
   function updateSendButtonIcon(isStreaming?: boolean, streamCapacity = getStreamCapacityState()) {
@@ -1768,8 +1357,7 @@ function getVsCodeApi() {
   }
 
   function formatTokenCount(n: number): string {
-    if (n >= 1000) return (n / 1000).toFixed(n >= 10_000 ? 0 : 1) + "k"
-    return String(n)
+    return formatTokenCountModule(n)
   }
 
   /**
@@ -1921,7 +1509,7 @@ function getVsCodeApi() {
     if (!active) return
 
     const text = els.promptInput.value.trim()
-    if (!text && pendingAttachments.length === 0) return
+    if (!text && attachmentManager.getAttachments().length === 0) return
 
     // Send steer prompt message with current mode
     vscode.postMessage({
@@ -1929,12 +1517,12 @@ function getVsCodeApi() {
       sessionId: active.id,
       text,
       mode: currentSteerMode,
-      attachments: pendingAttachments,
+      attachments: attachmentManager.getAttachments(),
     })
 
     // Clear input and attachments
     els.promptInput.value = ""
-    pendingAttachments = []
+    attachmentManager.clearAttachments()
     renderAttachmentChips()
     autoResizeTextarea()
     updateSendButton()
@@ -1946,7 +1534,7 @@ function getVsCodeApi() {
 
     if (active?.isStreaming) {
       // When streaming and there's text, send as steer prompt
-      if (text || pendingAttachments.length > 0) {
+      if (text || attachmentManager.getAttachments().length > 0) {
         sendSteerPrompt()
       } else {
         // Send button acts as stop button when streaming and no text
@@ -1955,7 +1543,7 @@ function getVsCodeApi() {
       return
     }
 
-    if (!text && pendingAttachments.length === 0) return
+    if (!text && attachmentManager.getAttachments().length === 0) return
 
     if (!active) {
       // Create a new session lazily; the first user message promotes the title.
@@ -2072,14 +1660,21 @@ function getVsCodeApi() {
           autoResizeTextarea()
           updateSendButton()
           return
-        case "/stash":
-          const currentInput = els.promptInput.value
-          const stashName = commandArgs[0] || "Stash"
-          vscode.postMessage({ type: "stash_prompt", name: stashName, content: currentInput.replace("/stash", "").trim(), isGlobal: true })
+        case "/stash": {
+          // Usage: /stash <name> <content...>   OR   /stash (uses textarea below cmd as content)
+          const stashName = (parts[1] && parts[1].trim()) ? parts[1] : "Untitled"
+          const inlineContent = parts.slice(2).join(" ").trim()
+          const stashContent = inlineContent || text.replace(/^\/stash(?:\s+\S+)?\s*/i, "").trim()
+          if (!stashContent) {
+            showSystemMessage(active.id, "Usage: /stash <name> <content>")
+          } else {
+            vscode.postMessage({ type: "stash_prompt", name: stashName, content: stashContent, isGlobal: true })
+          }
           els.promptInput.value = ""
           autoResizeTextarea()
           updateSendButton()
           return
+        }
         case "/stashes":
           vscode.postMessage({ type: "list_stashes" })
           els.promptInput.value = ""
@@ -2094,6 +1689,9 @@ function getVsCodeApi() {
           updateSendButton()
           return
         case "/commands":
+          // Open immediately so the user always sees built-in commands even if the server is offline.
+          commandsModal.open()
+          // Then request fresh server commands; the command_list handler will refresh the modal list.
           vscode.postMessage({ type: "list_commands" })
           els.promptInput.value = ""
           autoResizeTextarea()
@@ -2129,25 +1727,25 @@ function getVsCodeApi() {
     autoResizeTextarea()
     updateSendButton()
 
+    const attachments = attachmentManager.getAttachments()
     const msgObj: ChatMessage = {
       role: "user",
       id: "user-" + crypto.randomUUID(),
       blocks: [
         ...(text ? [{ type: "text", text }] : []),
-        ...pendingAttachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
+        ...attachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
       ],
       timestamp: Date.now(),
       sessionId: active.id,
     }
 
-    const attachments = pendingAttachments
-    pendingAttachments = []
+    attachmentManager.clearAttachments()
     renderAttachmentChips()
 
     addMessage(active.id, msgObj)
     stateManager.setStreaming(active.id, true)
     updateTabBar()
-    updateModeSelectorState()
+    updateModeSelectorStateLocal()
     updateSendButton()
 
     const stream = streamHandlers.get(active.id)
@@ -2177,7 +1775,7 @@ function getVsCodeApi() {
 
     stateManager.setStreaming(active.id, false)
     updateTabBar()
-    updateModeSelectorState()
+    updateModeSelectorStateLocal()
 
     const stream = streamHandlers.get(active.id)
     if (stream) stream.hideTypingIndicator()
@@ -2188,149 +1786,34 @@ function getVsCodeApi() {
     vscode.postMessage({ type: "abort", sessionId: active.id })
   }
 
-  /* ─── BUTTONS ─── */
 
-  function setupButtons() {
-    // NOTE: newTabBtn click is handled by createTabBar in tabs.ts
-    // to avoid duplicate listeners. Do NOT add another listener here.
-    
-    els.historyBtn.addEventListener("click", () => {
-      els.sessionModal.classList.remove("hidden")
-      els.sessionModalBody.innerHTML = '<div class="modal-empty">Loading sessions...</div>'
-      vscode.postMessage({ type: "list_sessions" })
-    })
-    
-    els.mcpBtn.addEventListener("click", () => {
-      closeSettingsMenu()
-      mcpConfig.open()
-      vscode.postMessage({ type: "open_mcp_config" })
-    })
-
-    els.themeCustomizerBtn.addEventListener("click", () => {
-      closeSettingsMenu()
-      openThemeCustomizer()
-    })
-
-    els.settingsBtn.addEventListener("click", (e) => {
-      e.stopPropagation()
-      const isExpanded = els.settingsBtn.getAttribute("aria-expanded") === "true"
-      els.settingsBtn.setAttribute("aria-expanded", String(!isExpanded))
-      els.settingsMenu.classList.toggle("hidden", isExpanded)
-    })
-
-    document.addEventListener("click", (e) => {
-      if (
-        !els.settingsMenu.classList.contains("hidden") &&
-        !els.settingsMenu.contains(e.target as Node) &&
-        e.target !== els.settingsBtn
-      ) {
-        closeSettingsMenu()
-      }
-    })
-
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && !els.settingsMenu.classList.contains("hidden")) {
-        closeSettingsMenu()
-        els.settingsBtn.focus()
-      }
-    })
-
-    // Toggle checkpoint panel — request fresh list whenever opening
-    const checkpointToggle = document.getElementById("checkpoint-toggle-btn")
-    checkpointToggle?.addEventListener("click", () => {
-      const panel = els.checkpointPanel
-      if (!panel) return
-      const showing = !panel.classList.contains("hidden")
-      panel.classList.toggle("hidden", showing)
-      checkpointToggle.setAttribute("aria-pressed", String(!showing))
-      if (!showing) {
-        // Opening: request the latest checkpoint list from backend
-        const sessionId = stateManager.getState().activeSessionId
-        if (sessionId) vscode.postMessage({ type: "list_checkpoints", sessionId })
-      }
-    })
-
-    // Toggle todos panel — request fresh data whenever opening
-    els.todosToggleBtn?.addEventListener("click", () => {
-      const panel = els.todosPanel
-      const showing = !panel.classList.contains("hidden")
-      panel.classList.toggle("hidden", showing)
-      els.todosToggleBtn.setAttribute("aria-pressed", String(!showing))
-      if (!showing) {
-        const sessionId = stateManager.getState().activeSessionId
-        if (sessionId) {
-          vscode.postMessage({ type: "get_todos", sessionId })
-          vscode.postMessage({ type: "get_changed_files", sessionId })
-        }
-        // Focus the close button inside the panel so keyboard users land somewhere useful
-        const closeBtn = panel.querySelector<HTMLElement>("#close-todos-btn")
-        closeBtn?.focus()
-      } else {
-        els.todosToggleBtn.focus()
-      }
-    })
-
-    // Skills button — open modal and fetch agents from server
-    els.skillsBtn?.addEventListener("click", () => {
-      if (skillsModalApi) {
-        skillsModalApi.open()
-        vscode.postMessage({ type: "get_skills" })
-      }
-    })
-
-    // Toggle changed files list
-    const filesToggle = document.getElementById("files-toggle-btn")
-    filesToggle?.addEventListener("click", () => {
-      els.changedFilesList?.classList.toggle("hidden")
-    })
-
-    els.attachBtn?.addEventListener("click", () => {
-       vscode.postMessage({ type: "attach_files" })
-     })
-   }
+  const settingsMenuDeps: SettingsMenuDeps = {
+    els: {
+      settingsBtn: els.settingsBtn,
+      settingsMenu: els.settingsMenu,
+      modelManagerPanel: els.modelManagerPanel,
+      themeCustomizerPanel: els.themeCustomizerPanel,
+      modeWarningModal: els.modeWarningModal,
+      mcpConfigPanel: els.mcpConfigPanel,
+      sessionModal: els.sessionModal,
+    },
+    closeModelManager: () => modelManager.close(),
+    closeThemeCustomizer,
+    closeModeWarning: () => closeModeWarning(),
+    closeMcpConfig: () => mcpConfig.close(),
+    closeSessionModal: () => closeSessionModal(),
+  }
 
   function closeSettingsMenu() {
-    els.settingsMenu.classList.add("hidden")
-    els.settingsBtn.setAttribute("aria-expanded", "false")
+    closeSettingsMenuModule(els)
   }
 
   function closeCurrentModal() {
-    if (!els.modelManagerPanel.classList.contains("hidden")) {
-      modelManager.close()
-    } else if (!els.themeCustomizerPanel.classList.contains("hidden")) {
-      closeThemeCustomizer()
-    } else if (!els.modeWarningModal.classList.contains("hidden")) {
-      closeModeWarning()
-    } else if (!els.mcpConfigPanel.classList.contains("hidden")) {
-      mcpConfig.close()
-    } else if (!els.sessionModal.classList.contains("hidden")) {
-      closeSessionModal()
-    }
+    closeCurrentModalModule(settingsMenuDeps)
   }
 
   function setupSettingsMenuKeyboardNav() {
-    const items = els.settingsMenu.querySelectorAll<HTMLElement>("button, [role='menuitem']")
-    const firstItem = items[0]
-    const lastItem = items[items.length - 1]
-    els.settingsMenu.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        closeSettingsMenu()
-        els.settingsBtn.focus()
-        return
-      }
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        e.preventDefault()
-        const current = document.activeElement
-        const idx = Array.from(items).indexOf(current as HTMLElement)
-        if (idx === -1) { firstItem?.focus(); return }
-        const next = e.key === "ArrowDown"
-          ? items[Math.min(idx + 1, items.length - 1)]
-          : items[Math.max(idx - 1, 0)]
-        next?.focus()
-      }
-      if (e.key === "Home") { e.preventDefault(); firstItem?.focus() }
-      if (e.key === "End") { e.preventDefault(); lastItem?.focus() }
-    })
+    setupSettingsMenuKeyboardNavModule(els, closeSettingsMenu)
   }
 
   type ThemeCustomizerConfig = {
@@ -2338,489 +1821,27 @@ function getVsCodeApi() {
     overrides?: Record<string, string>
   }
 
-  type RateLimitWebviewState = {
-    provider?: string
-    remainingTokens?: number
-    limitTokens?: number
-    remainingRequests?: number
-    limitRequests?: number
-    usedTokens?: number
-    usedCost?: number
-    resetAt?: string
-    lastUpdated?: string
+  const themeDeps = {
+    els,
+    postMessage: (msg: Record<string, unknown>) => vscode.postMessage(msg),
+    pushUndo: (state: { themePreset: string; themeOverrides: Record<string, string> }) => undoRedoPush(state),
+    trapFocus: (container: HTMLElement) => trapModalFocus(container),
   }
-
-  let activePreset = "cli-default"
-
-  function getThemeFields(): Array<{ input: HTMLInputElement; key: string }> {
-    return Array.from(
-      els.themeCustomizerPanel.querySelectorAll<HTMLInputElement>("input[data-theme-field]")
-    ).map((input) => ({ input, key: input.dataset.themeField! }))
-  }
-
-  function setupThemeCustomizer() {
-    els.themeCustomizerClose.addEventListener("click", closeThemeCustomizer)
-    els.themeCustomizerPanel.addEventListener("click", (event) => {
-      if (event.target === els.themeCustomizerPanel) closeThemeCustomizer()
-    })
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !els.themeCustomizerPanel.classList.contains("hidden")) {
-        closeThemeCustomizer()
-      }
-    })
-
-    // Preset card selection
-    els.themePresetCards.addEventListener("click", (event) => {
-      const card = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-preset]")
-      if (!card) return
-      const preset = card.dataset.preset!
-      activePreset = preset
-      els.themePresetCards.querySelectorAll("[data-preset]").forEach((c) => {
-        c.setAttribute("aria-pressed", c === card ? "true" : "false")
-      })
-      // Clear overrides and apply new preset immediately
-      getThemeFields().forEach((f) => { f.input.value = "" })
-      syncAllColorPickers()
-      updatePreviewSwatch()
-      vscode.postMessage({ type: "update_theme_config", theme: { preset: activePreset, overrides: {} } })
-    })
-
-    // CLI theme search — request list on first focus
-    let cliListLoaded = false
-    els.themeCliSearch.addEventListener("focus", () => {
-      if (!cliListLoaded) {
-        cliListLoaded = true
-        vscode.postMessage({ type: "list_cli_themes" })
-      }
-      els.themeCliList.classList.remove("hidden")
-    })
-    els.themeCliSearch.addEventListener("input", () => {
-      filterCliList(els.themeCliSearch.value.trim().toLowerCase())
-    })
-    document.addEventListener("click", (event) => {
-      if (!els.themeCliSearch.contains(event.target as Node) && !els.themeCliList.contains(event.target as Node)) {
-        els.themeCliList.classList.add("hidden")
-      }
-    })
-
-    // Sync color picker → text input
-    els.themeCustomizerPanel.addEventListener("input", (event) => {
-      const picker = event.target as HTMLInputElement
-      if (picker.type !== "color" || !picker.dataset.target) return
-      const textInput = document.getElementById(picker.dataset.target) as HTMLInputElement | null
-      if (textInput) {
-        textInput.value = picker.value
-        updatePreviewSwatch()
-      }
-    })
-
-    // Sync text input → color picker (hex only)
-    els.themeCustomizerPanel.addEventListener("change", (event) => {
-      const textInput = event.target as HTMLInputElement
-      if (textInput.type !== "text" || !textInput.id) return
-      const value = textInput.value.trim()
-      // Validate color format before syncing to color picker
-      if (/^#([0-9a-fA-F]{6})$/.test(value)) {
-        const picker = els.themeCustomizerPanel.querySelector<HTMLInputElement>(
-          `input[type="color"][data-target="${textInput.id}"]`
-        )
-        if (picker) {
-          picker.value = value
-        }
-      }
-      updatePreviewSwatch()
-    })
-
-    els.themeCustomizerSave.addEventListener("click", () => {
-      undoRedoPush({
-        themePreset: activePreset,
-        themeOverrides: collectThemeCustomizerConfig().overrides ?? {},
-      })
-      vscode.postMessage({ type: "update_theme_config", theme: collectThemeCustomizerConfig() })
-      closeThemeCustomizer()
-    })
-
-    els.themeCustomizerReset.addEventListener("click", () => {
-      undoRedoPush({
-        themePreset: activePreset,
-        themeOverrides: collectThemeCustomizerConfig().overrides ?? {},
-      })
-      getThemeFields().forEach((f) => { f.input.value = "" })
-      syncAllColorPickers()
-      updatePreviewSwatch()
-      vscode.postMessage({ type: "update_theme_config", theme: { preset: activePreset, overrides: {} } })
-    })
-  }
-
-  function filterCliList(query: string) {
-    const rows = els.themeCliList.querySelectorAll<HTMLButtonElement>("[data-cli-theme]")
-    rows.forEach((row) => {
-      const name = (row.dataset.cliTheme ?? "").toLowerCase()
-      row.style.display = !query || name.includes(query) ? "" : "none"
-    })
-  }
-
-  function populateCliList(themes: Array<{ name: string; source: string }>) {
-    els.themeCliList.innerHTML = ""
-    if (themes.length === 0) {
-      const empty = document.createElement("div")
-      empty.className = "theme-cli-empty"
-      empty.textContent = "No CLI themes found. Add .json files to ~/.config/opencode/themes/"
-      els.themeCliList.appendChild(empty)
-      return
-    }
-    for (const theme of themes) {
-      const btn = document.createElement("button")
-      btn.className = "theme-cli-row"
-      btn.dataset.cliTheme = theme.name
-      btn.setAttribute("role", "option")
-      btn.innerHTML = `<span class="theme-cli-name">${theme.name}</span><span class="theme-cli-source">${theme.source}</span>`
-      btn.addEventListener("click", () => {
-        els.themeCliSearch.value = theme.name
-        els.themeCliList.classList.add("hidden")
-        // Apply the CLI theme via cli-default preset (ThemeManager picks it up from tui.json)
-        activePreset = "cli-default"
-        els.themePresetCards.querySelectorAll("[data-preset]").forEach((c) => {
-          c.setAttribute("aria-pressed", (c as HTMLElement).dataset.preset === "cli-default" ? "true" : "false")
-        })
-        vscode.postMessage({ type: "update_theme_config", theme: { preset: "cli-default", overrides: {} } })
-      })
-      els.themeCliList.appendChild(btn)
-    }
-  }
-
-  function syncAllColorPickers() {
-    getThemeFields().forEach(({ input }) => {
-      const picker = els.themeCustomizerPanel.querySelector<HTMLInputElement>(
-        `input[type="color"][data-target="${input.id}"]`
-      )
-      if (picker && /^#[0-9a-fA-F]{6}$/.test(input.value.trim())) {
-        picker.value = input.value.trim()
-      }
-    })
-  }
-
-  function updatePreviewSwatch() {
-    const fields = getThemeFields()
-    const overrides: Record<string, string> = {}
-    fields.forEach(({ input, key }) => {
-      if (input.value.trim()) overrides[key] = input.value.trim()
-    })
-    const swatch = els.themePreviewSwatch
-    const set = (v: string | undefined, prop: string) => {
-      if (v) swatch.style.setProperty(prop, v)
-      else swatch.style.removeProperty(prop)
-    }
-    set(overrides.userMessageBg, "--oc-user-msg-bg")
-    set(overrides.userMessageFg, "--oc-user-msg-fg")
-    set(overrides.assistantMessageBg, "--oc-assistant-msg-bg")
-    set(overrides.assistantMessageFg, "--oc-assistant-msg-fg")
-    set(overrides.panelBg, "--oc-bg")
-    set(overrides.panelFg, "--oc-fg")
-    set(overrides.accentColor, "--oc-accent")
-    set(overrides.syntaxKeyword, "--oc-syn-keyword")
-    set(overrides.syntaxString, "--oc-syn-string")
-  }
-
-  let themeCustomizerFocusTrap: ((e: KeyboardEvent) => void) | null = null
-  let themeCustomizerLastFocus: HTMLElement | null = null
-
-  function openThemeCustomizer() {
-    els.themeCustomizerPanel.classList.remove("hidden")
-    vscode.postMessage({ type: "get_theme_config" })
-    themeCustomizerLastFocus = document.activeElement as HTMLElement | null
-    themeCustomizerFocusTrap = trapModalFocus(els.themeCustomizerPanel)
-    document.addEventListener("keydown", themeCustomizerFocusTrap)
-    els.themePresetCards.querySelector<HTMLButtonElement>("[data-preset]")?.focus()
-  }
-
-  function closeThemeCustomizer() {
-    els.themeCustomizerPanel.classList.add("hidden")
-    if (themeCustomizerFocusTrap) {
-      document.removeEventListener("keydown", themeCustomizerFocusTrap)
-      themeCustomizerFocusTrap = null
-    }
-    if (themeCustomizerLastFocus) {
-      themeCustomizerLastFocus.focus({ preventScroll: true })
-      themeCustomizerLastFocus = null
-    }
-  }
-
-  function collectThemeCustomizerConfig(): ThemeCustomizerConfig {
-    const overrides: Record<string, string> = {}
-    getThemeFields().forEach(({ input, key }) => {
-      const value = input.value.trim()
-      // Validate color format before including in overrides
-      if (value && isValidColorFormat(value)) {
-        overrides[key] = value
-      }
-    })
-    return { preset: activePreset, overrides }
-  }
-
-  function isValidColorFormat(value: string): boolean {
-    if (!value) return false
-    const trimmed = value.trim()
-    // Allow CSS variable references
-    if (/^var\(--[\w-]+\)$/.test(trimmed)) return true
-    // Allow transparent keyword
-    if (trimmed === "transparent") return true
-    // Validate hex format (#RGB or #RRGGBB)
-    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(trimmed)) return true
-    // Validate rgba/rgb format
-    if (/^rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*(,\s*[\d.]+\s*)?\)$/.test(trimmed)) return true
-    return false
-  }
-
-  function applyThemeCustomizerConfig(theme: ThemeCustomizerConfig | undefined) {
-    activePreset = theme?.preset || "cli-default"
-    const overrides = theme?.overrides || {}
-    els.themePresetCards.querySelectorAll("[data-preset]").forEach((card) => {
-      card.setAttribute("aria-pressed", (card as HTMLElement).dataset.preset === activePreset ? "true" : "false")
-    })
-    getThemeFields().forEach(({ input, key }) => {
-      input.value = typeof overrides[key] === "string" ? (overrides[key] as string) : ""
-    })
-    syncAllColorPickers()
-    updatePreviewSwatch()
-  }
+  setupThemeCustomizer(themeDeps)
 
   /* ─── WELCOME ─── */
 
   function setupWelcomeSuggestions() {
-    els.welcomeView.addEventListener("click", (e) => {
-      const target = e.target as HTMLElement
-      const card = target.closest(".prompt-starter") as HTMLButtonElement
-      if (card && card.dataset.prompt) {
-        els.promptInput.value = card.dataset.prompt
-        autoResizeTextarea()
-        updateSendButton()
-        els.promptInput.focus()
-      }
-    })
+    setupWelcomeSuggestionsModule(welcomeViewDeps)
   }
 
   function setupWelcomeQuickSettings() {
-    const currentState = stateManager.getState()
-    const currentMode = "build" // Default mode since WebviewState doesn't have mode property
-    
-    setupQuickSettings({
-      container: els.quickSettingsContent,
-      settings: [
-        {
-          id: "mode",
-          type: "dropdown",
-          label: "Session Mode",
-          description: "Controls how OpenCode applies changes to your code",
-          currentValue: currentMode,
-          options: [
-            { label: "Plan", value: "plan" },
-            { label: "Auto", value: "auto" },
-            { label: "Build", value: "build" }
-          ],
-          onChange: (value: string) => {
-            vscode.postMessage({ type: "change_mode", mode: value, sessionId: stateManager.getState().activeSessionId ?? undefined })
-          }
-        }
-      ]
-    })
+    setupWelcomeQuickSettingsModule(welcomeViewDeps)
   }
 
   /* ─── SEARCH ─── */
 
-  let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
-  let searchCurrentIndex = -1
-  let searchTotalMatches = 0
-
-  function setupSearch() {
-    const searchBar = document.getElementById("chat-search-bar") as HTMLDivElement
-    const searchInput = document.getElementById("chat-search-input") as HTMLInputElement
-    const searchPrev = document.getElementById("chat-search-prev")
-    const searchNext = document.getElementById("chat-search-next")
-    const searchClose = document.getElementById("chat-search-close")
-    const searchCount = document.getElementById("chat-search-count") as HTMLSpanElement
-
-    if (!searchBar || !searchInput || !searchPrev || !searchNext || !searchClose || !searchCount) return
-
-    document.addEventListener("keydown", (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
-        e.preventDefault()
-        searchBar.classList.remove("hidden")
-        searchInput.focus()
-        searchInput.select()
-        return
-      }
-
-      if (searchBar.classList.contains("hidden")) return
-
-      if (e.key === "Escape") {
-        closeSearch(searchBar)
-        return
-      }
-
-      if (e.key === "Enter" && document.activeElement === searchInput) {
-        e.preventDefault()
-        navigateSearch(e.shiftKey ? -1 : 1, searchCount)
-        return
-      }
-    })
-
-    searchInput.addEventListener("input", () => {
-      if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
-      searchDebounceTimer = setTimeout(() => performSearch(searchInput.value, searchCount), 200)
-    })
-
-    searchInput.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        e.stopPropagation()
-        closeSearch(searchBar)
-      }
-    })
-
-    searchPrev.addEventListener("click", () => navigateSearch(-1, searchCount))
-    searchNext.addEventListener("click", () => navigateSearch(1, searchCount))
-    searchClose.addEventListener("click", () => closeSearch(searchBar))
-  }
-
-  function closeSearch(searchBar: HTMLDivElement) {
-    searchBar.classList.add("hidden")
-    clearSearchHighlights()
-    searchCurrentIndex = -1
-    searchTotalMatches = 0
-  }
-
-  function updateSearchCount(current: number, total: number, el?: HTMLSpanElement) {
-    const span = el || document.getElementById("chat-search-count") as HTMLSpanElement
-    if (span) {
-      span.textContent = total > 0 ? `${current + 1} of ${total}` : ""
-    }
-  }
-
-  function clearSearchHighlights() {
-    document.querySelectorAll(".chat-search-highlight").forEach((mark) => {
-      const parent = mark.parentNode
-      if (parent) {
-        parent.replaceChild(document.createTextNode(mark.textContent || ""), mark)
-        parent.normalize()
-      }
-    })
-  }
-
-  function escapeRegExp(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  }
-
-  function highlightTextNodes(root: Element, regex: RegExp): number {
-    let count = 0
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-      acceptNode: (node) => {
-        const el = node.parentElement
-        if (el && (el.tagName === "MARK" || el.tagName === "SCRIPT" || el.tagName === "STYLE")) {
-          return NodeFilter.FILTER_REJECT
-        }
-        return regex.test(node.textContent || "") ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
-      },
-    })
-
-    const replacements: Array<{ node: Text; frag: DocumentFragment }> = []
-    let textNode: Text | null
-    while ((textNode = walker.nextNode() as Text | null)) {
-      let text = textNode.textContent || ""
-      regex.lastIndex = 0
-      const frag = document.createDocumentFragment()
-      let lastIdx = 0
-      let match: RegExpExecArray | null
-      while ((match = regex.exec(text)) !== null) {
-        if (match.index > lastIdx) {
-          frag.appendChild(document.createTextNode(text.slice(lastIdx, match.index)))
-        }
-        const mark = document.createElement("mark")
-        mark.className = "chat-search-highlight"
-        mark.textContent = match[0]
-        frag.appendChild(mark)
-        count++
-        lastIdx = regex.lastIndex
-        if (match[0].length === 0) break
-      }
-      if (lastIdx < text.length) {
-        frag.appendChild(document.createTextNode(text.slice(lastIdx)))
-      }
-      if (frag.childNodes.length > 0) {
-        replacements.push({ node: textNode, frag })
-      }
-    }
-
-    replacements.forEach(({ node, frag }) => {
-      node.parentNode?.replaceChild(frag, node)
-    })
-    return count
-  }
-
-  function performSearch(query: string, countEl?: HTMLSpanElement) {
-    clearSearchHighlights()
-    searchCurrentIndex = -1
-    searchTotalMatches = 0
-
-    if (!query.trim()) {
-      updateSearchCount(0, 0, countEl)
-      return
-    }
-
-    const activePanel = els.tabPanels.querySelector(".tab-panel.active")
-    if (!activePanel) {
-      updateSearchCount(0, 0, countEl)
-      return
-    }
-
-    const elements = activePanel.querySelectorAll(".message-bubble, .code-block-content, .msg-text")
-    const regex = new RegExp(escapeRegExp(query), "gi")
-    let total = 0
-    elements.forEach((el) => {
-      total += highlightTextNodes(el, regex)
-    })
-
-    searchTotalMatches = total
-    if (total > 0) {
-      navigateToMatch(0, countEl)
-    } else {
-      updateSearchCount(0, 0, countEl)
-    }
-  }
-
-  function navigateSearch(direction: number, countEl?: HTMLSpanElement) {
-    if (searchTotalMatches === 0) return
-    const marks = document.querySelectorAll(".chat-search-highlight")
-    if (marks.length === 0) return
-
-    marks.forEach((m) => m.classList.remove("current"))
-
-    if (searchCurrentIndex < 0) {
-      searchCurrentIndex = direction > 0 ? 0 : marks.length - 1
-    } else {
-      searchCurrentIndex = (searchCurrentIndex + direction + marks.length) % marks.length
-    }
-
-    const currentMark = marks[searchCurrentIndex] as HTMLElement
-    if (currentMark) {
-      currentMark.classList.add("current")
-      currentMark.scrollIntoView({ behavior: "smooth", block: "center" })
-    }
-    updateSearchCount(searchCurrentIndex, searchTotalMatches, countEl)
-  }
-
-  function navigateToMatch(index: number, countEl?: HTMLSpanElement) {
-    const marks = document.querySelectorAll(".chat-search-highlight")
-    if (marks.length === 0 || index >= marks.length) return
-
-    marks.forEach((m) => m.classList.remove("current"))
-    searchCurrentIndex = index
-    const mark = marks[index] as HTMLElement
-    if (mark) {
-      mark.classList.add("current")
-      mark.scrollIntoView({ behavior: "smooth", block: "center" })
-    }
-    updateSearchCount(index, searchTotalMatches, countEl)
-  }
+  setupSearch(() => els.tabPanels.querySelector(".tab-panel.active"))
 
   /* ─── MESSAGES ─── */
 
@@ -2866,66 +1887,19 @@ function getVsCodeApi() {
 
   /* ─── JUMP-TO-BOTTOM & SCROLL MARKERS ─── */
 
+  const scrollMarkerDeps: ScrollMarkerDeps = {
+    getMessageList: (id) => getMessageList(id),
+    getActiveMessageList: () => getActiveMessageList(els),
+    getSession: (id) => stateManager.getSession(id),
+    timers,
+  }
+
   const updateScrollMarkers = (sessionId: string) => {
-    const msgList = getMessageList(sessionId)
-    if (!msgList) return
-    const session = stateManager.getSession(sessionId)
-    if (!session) return
-
-    let markersEl = msgList.querySelector(".scroll-markers") as HTMLElement | null
-    if (!markersEl) {
-      markersEl = document.createElement("div")
-      markersEl.className = "scroll-markers"
-      markersEl.dataset.tabId = sessionId
-      msgList.appendChild(markersEl)
-    }
-
-    markersEl.replaceChildren()
-    const totalHeight = msgList.scrollHeight || 1
-    // Only show markers if there's meaningful scroll content
-    if (session.messages.length < 3) return
-
-    session.messages.forEach((m) => {
-      if (m.role !== "user" || !m.id) return
-      const msgEl = msgList.querySelector(`[data-message-id="${CSS.escape(m.id)}"]`) as HTMLElement | null
-      if (!msgEl) return
-      const offsetTop = msgEl.offsetTop
-      const ratio = Math.min(1, Math.max(0, offsetTop / totalHeight))
-      const dot = document.createElement("div")
-      dot.className = "scroll-marker-dot"
-      dot.style.top = `calc(${ratio * 100}% - 2px)`
-      const firstText = m.blocks?.find((b) => b.type === "text")
-      dot.title = (firstText?.text as string)?.slice(0, 60) || "User message"
-      dot.addEventListener("click", () => {
-        scrollMessageToTop(msgList, msgEl)
-      })
-      markersEl.appendChild(dot)
-    })
+    updateScrollMarkersModule(scrollMarkerDeps, sessionId)
   }
 
   const setupJumpToBottom = (sessionId: string) => {
-    const msgList = getMessageList(sessionId)
-    if (!msgList) return
-    const existing = msgList.parentElement?.querySelector(".jump-to-bottom")
-    if (existing) existing.remove()
-    const btn = document.createElement("button")
-    btn.className = "jump-to-bottom"
-    btn.dataset.tabId = sessionId
-    btn.textContent = "↓ Latest"
-    btn.setAttribute("aria-label", "Jump to latest message")
-    const onScroll = () => {
-      const threshold = 300
-      const isNearBottom = msgList.scrollHeight - (msgList.scrollTop + msgList.clientHeight) < threshold
-      btn.classList.toggle("visible", !isNearBottom)
-    }
-    btn.addEventListener("click", () => {
-      msgList.scrollTo({ top: msgList.scrollHeight, behavior: "smooth" })
-      btn.classList.remove("visible")
-    })
-    msgList.parentElement?.appendChild(btn)
-    msgList.addEventListener("scroll", onScroll, { passive: true })
-    // Evaluate initial scroll position so the button isn't shown when already at bottom
-    onScroll()
+    setupJumpToBottomModule(scrollMarkerDeps, sessionId)
   }
 
   function addMessage(sessionId: string, msg: ChatMessage) {
@@ -3035,10 +2009,14 @@ function getVsCodeApi() {
   /* ─── MESSAGE LISTENER ─── */
 
   function setupMessageListener() {
-    type MsgHandler = (msg: HostMessage, sessionId: string | undefined) => void
+    function isValidSessionId(id: string | undefined): id is string {
+      return !!id
+    }
+
+    type MsgHandler = (msg: LegacyHostMessage, sessionId: string | undefined) => void
 
     const messageHandlers = new Map<string, MsgHandler>([
-      ["message", (msg) => { if (msg.message) handleHostMessage(msg.message) }],
+      ["message", (msg) => { if (msg.message) handleHostMessage(msg.message as ChatMessage) }],
       ["stream_start", (_msg, sid) => {
         if (!sid) return
         handleStreamStart(sid, _msg.messageId as string)
@@ -3066,7 +2044,7 @@ function getVsCodeApi() {
           }
         }
       }],
-      ["mention_results", (msg) => { mention.renderResults(msg.items) }],
+      ["mention_results", (msg) => { mention.renderResults(msg.items as MentionItem[] | undefined) }],
       ["session_list", (msg) => {
         const sessions = (msg.sessions || []) as SessionSummary[]
         openSessionModal(sessions)
@@ -3294,7 +2272,7 @@ function getVsCodeApi() {
           const stream = streamHandlers.get(sid)
           if (stream) {
             const toolCall = msg.toolCall as { id: string; name: string; class?: string; args?: unknown; state?: ToolCallState }
-            registerToolStart(toolCall.id)
+            toolElapsedTracker.registerStart(toolCall.id)
             stream.handleToolStart(toolCall)
           }
         }
@@ -3318,7 +2296,7 @@ function getVsCodeApi() {
           const stream = streamHandlers.get(sid)
           if (stream) {
             const result = msg.result as { id: string; ok: boolean; result?: string; durationMs?: number; stale?: boolean }
-            unregisterToolEnd(result.id, result.durationMs)
+            toolElapsedTracker.unregisterEnd(result.id, result.durationMs)
             stream.handleToolEnd(result.id, result)
           }
         }
@@ -3374,15 +2352,15 @@ function getVsCodeApi() {
           fileEditBatcher.add(sid, filePath)
         }
       }],
-      ["theme_vars", (msg) => { applyThemeVars(msg.vars) }],
-      ["theme_config", (msg) => { applyThemeCustomizerConfig(msg.theme as ThemeCustomizerConfig | undefined) }],
+      ["theme_vars", (msg) => { applyThemeVars(msg.vars as Record<string, string> | undefined) }],
+      ["theme_config", (msg) => { applyThemeCustomizerConfig(els, msg.theme as ThemeCustomizerConfig | undefined) }],
       ["theme_config_error", (msg) => { 
         const error = msg.error as string | undefined
         console.error(`[opencode-harness] Theme config error: ${error || "Unknown error"}`)
         // Show error to user - could add a toast notification here
         alert(`Failed to save theme: ${error || "Unknown error"}`)
       }],
-      ["cli_themes_list", (msg) => { populateCliList(msg.themes as Array<{ name: string; source: string }>) }],
+      ["cli_themes_list", (msg) => { populateCliList(els, msg.themes as Array<{ name: string; source: string }>, (m) => vscode.postMessage(m)) }],
       ["rate_limit_state", (msg) => { handleRateLimitState(msg.state as RateLimitWebviewState | null | undefined) }],
       ["model_update", (msg) => {
         modelDropdown.setCurrentModel(msg.model as string)
@@ -3419,7 +2397,7 @@ function getVsCodeApi() {
       }],
       ["init_state", (msg) => {
         if (window.__opencodeInitTimeout) {
-          clearTimeout(window.__opencodeInitTimeout)
+          timers.clearTimeout(window.__opencodeInitTimeout)
           window.__opencodeInitTimeout = undefined
         }
         if (!stateManager.getState().initialized) {
@@ -3524,6 +2502,8 @@ function getVsCodeApi() {
         } else {
           showWelcomeView()
         }
+
+        vscode.postMessage({ type: "init_ack" })
       }],
       ["rate_limit_exhausted", (msg) => { handleRateLimitExhausted(els, msg.resetAt as string) }],
       ["prompt_rejected", (_msg, sid) => {
@@ -3624,12 +2604,7 @@ function getVsCodeApi() {
           streamHandlers.delete(msg.sessionId)
 
           // Clean up tool timing data
-          for (const key of [...toolStartTimes.keys()]) {
-            if (key.startsWith(msg.sessionId + ":")) {
-              toolStartTimes.delete(key)
-            }
-          }
-          if (toolStartTimes.size === 0) stopToolElapsedTimer()
+          toolElapsedTracker.clearForPrefix(msg.sessionId)
 
           // Clear prompt queue for this session
           const queue = promptQueues.get(msg.sessionId)
@@ -3675,13 +2650,32 @@ function getVsCodeApi() {
       ["command_list", (msg) => {
         const commands = (msg.commands || []) as Array<{ name: string; description?: string; template: string }>
         mention.updateServerCommands(commands)
+        commandsModal.updateServerCommands(commands)
         if (msg.showInChat !== true) return
+        // /commands now opens a real modal instead of dumping into chat history.
+        commandsModal.open()
+      }],
+      ["stash_success", (msg) => {
         const active = stateManager.getActiveSession()
-        if (active && commands.length > 0) {
-          const lines = commands.map(c => `/${c.name} \u2014 ${c.description || c.template}`).join("\n")
-          showSystemMessage(active.id, `Available commands:\n${lines}`)
+        if (active) {
+          const name = typeof msg.name === "string" ? msg.name : ""
+          showSystemMessage(active.id, `Stashed prompt${name ? ` as "${name}"` : ""}.`)
         }
       }],
+      ["stash_error", (msg) => {
+        const active = stateManager.getActiveSession()
+        const errText = typeof msg.error === "string" ? msg.error : "Stash operation failed."
+        if (active) showSystemMessage(active.id, `Stash error: ${errText}`)
+      }],
+      ["stash_list", (msg) => {
+        const stashes = (msg as unknown as { stashes?: Array<{ id: string; name: string; content: string; isGlobal: boolean }> }).stashes || []
+        commandsModal.openStashList(stashes)
+      }],
+      ["stash_deleted", () => {
+        // Refresh the stash list if open
+        vscode.postMessage({ type: "list_stashes" })
+      }],
+      ["open_commands_palette", () => commandsModal.open()],
       ["prefill_prompt", (msg) => {
         if (typeof msg.text === "string") {
           els.promptInput.value = msg.text
@@ -3768,10 +2762,10 @@ function getVsCodeApi() {
     // drops do not mask schema drift between the host and webview bundles.
     const loggedUnknownTypes = new Set<string>()
     window.addEventListener("message", (event) => {
-      const msg: HostMessage = event.data
+      const msg = event.data as LegacyHostMessage
       if (!msg || !msg.type) return
 
-      const sessionId = (msg.message?.sessionId || msg.sessionId) as string | undefined
+      const sessionId = ((msg.message as { sessionId?: string } | undefined)?.sessionId || msg.sessionId) as string | undefined
       const handler = messageHandlers.get(msg.type)
       if (!handler) {
         if (!loggedUnknownTypes.has(msg.type)) {
@@ -3790,8 +2784,8 @@ function getVsCodeApi() {
     let stateSyncDebounce: ReturnType<typeof setTimeout> | undefined
 
     function requestStateSyncDebounced(): void {
-      if (stateSyncDebounce) clearTimeout(stateSyncDebounce)
-      stateSyncDebounce = setTimeout(() => {
+      if (stateSyncDebounce) timers.clearTimeout(stateSyncDebounce)
+      stateSyncDebounce = timers.setTimeout(() => {
         vscode.postMessage({ type: "request_state_sync" })
       }, 300)
     }
@@ -3810,25 +2804,15 @@ function getVsCodeApi() {
   /* ─── TURN NAVIGATION ─── */
   // #turn-nav (prev/next/select) removed — the conversation timeline sidebar
   // is the single navigation aid. scrollToTurn is still used by the timeline.
-
   function scrollMessageToTop(msgList: HTMLElement, target: HTMLElement) {
-    msgList.scrollTo({ top: Math.max(0, target.offsetTop), behavior: "smooth" })
-    target.classList.add("message-flash")
-    setTimeout(() => target.classList.remove("message-flash"), 1500)
-    target.setAttribute("tabindex", "-1")
-    target.focus({ preventScroll: true })
+    scrollMessageToTopModule(msgList, target)
   }
 
   function scrollToTurn(messageId: string) {
-    const msgList = getActiveMessageList(els)
-    if (!msgList) return
-    const target = msgList.querySelector(`[data-message-id="${CSS.escape(messageId)}"]`) as HTMLElement | null
-    if (target) {
-      scrollMessageToTop(msgList, target)
-    }
+    scrollToTurnModule(scrollMarkerDeps, messageId)
   }
 
-	  /* ─── CONVERSATION TIMELINE ─── */
+  /* ─── CONVERSATION TIMELINE ─── */
 
 	  function setupTimelineToggle() {
 	    els.timelineToggleBtn.setAttribute("aria-pressed", String(stateManager.isTimelineVisible()))
@@ -3853,8 +2837,13 @@ function getVsCodeApi() {
 	    }
 
 	    els.thinkingToggleMenuItem.addEventListener("click", () => {
+	      // Read from the displayPrefs cache rather than stateManager: the
+	      // stateManager's in-memory state is not mutated by vscode.setState,
+	      // so reading from there would return stale values after the first
+	      // click and the toggle would appear stuck. The cache is updated on
+	      // every click below, so it is the only authoritative source here.
+	      const newVisible = !getThinkingVisible()
 	      const currentState = stateManager.getState()
-	      const newVisible = !(currentState.displayPrefs?.thinkingVisible ?? true)
 	      const updatedState: WebviewState = {
 	        ...currentState,
 	        displayPrefs: {
@@ -3866,6 +2855,9 @@ function getVsCodeApi() {
 	          thinkingVisible: newVisible,
 	        },
 	      }
+	      // Mutate in-memory state so future reads (e.g. on session save) see
+	      // the new pref, then persist via the webview state API.
+	      currentState.displayPrefs = updatedState.displayPrefs
 	      vscode.setState(updatedState)
 	      setThinkingVisible(newVisible)
 	      els.thinkingToggleMenuItem.setAttribute("aria-checked", String(newVisible))
@@ -4020,61 +3012,7 @@ function getVsCodeApi() {
 
 	  /* ─── DISPLAY TOGGLES (Phase 4.2) ─── */
 
-function loadDisplayPrefs(): { text: boolean; tools: boolean; diffs: boolean; errors: boolean } {
-    try {
-      const webState = stateManager.getState()
-      const prefs = webState?.displayPrefs
-      return {
-        text: prefs?.text !== false,
-        tools: prefs?.tools !== false,
-        diffs: prefs?.diffs !== false,
-        errors: prefs?.errors !== false,
-      }
-    } catch {
-      return { text: true, tools: true, diffs: true, errors: true }
-    }
-  }
-
-  function saveDisplayPrefs(prefs: { text: boolean; tools: boolean; diffs: boolean; errors: boolean }) {
-try {
-      const webState = stateManager.getState()
-      webState.displayPrefs = prefs
-      stateManager.save()
-    } catch {
-      /* webview state may be unavailable; fail silently */
-    }
-  }
-
-  function applyDisplayPrefs() {
-    const root = document.body
-    root.classList.toggle("hide-text", !els.toggleText.checked)
-    root.classList.toggle("hide-tools", !els.toggleTools.checked)
-    root.classList.toggle("hide-diffs", !els.toggleDiffs.checked)
-    root.classList.toggle("hide-errors", !els.toggleErrors.checked)
-  }
-
-  function setupDisplayToggles() {
-    const prefs = loadDisplayPrefs()
-    els.toggleText.checked = prefs.text
-    els.toggleTools.checked = prefs.tools
-    els.toggleDiffs.checked = prefs.diffs
-    els.toggleErrors.checked = prefs.errors
-    applyDisplayPrefs()
-
-    const persist = () => {
-      saveDisplayPrefs({
-        text: els.toggleText.checked,
-        tools: els.toggleTools.checked,
-        diffs: els.toggleDiffs.checked,
-        errors: els.toggleErrors.checked,
-      })
-      applyDisplayPrefs()
-    }
-    els.toggleText.addEventListener("change", persist)
-    els.toggleTools.addEventListener("change", persist)
-    els.toggleDiffs.addEventListener("change", persist)
-    els.toggleErrors.addEventListener("change", persist)
-  }
+  setupDisplayToggles({ els, getState: () => stateManager.getState(), save: () => stateManager.save() })
 
   function showSecondaryNav() {
     els.displayToggles.style.display = "flex"
@@ -4101,13 +3039,13 @@ try {
       pill.className = "skill-pill"
       pill.textContent = skillName
       container.appendChild(pill)
-      setTimeout(() => pill.remove(), 3000)
+      timers.setTimeout(() => pill.remove(), 3000)
     } else {
       const pill = document.createElement("span")
       pill.className = "skill-pill"
       pill.textContent = skillName
       indicator.appendChild(pill)
-      setTimeout(() => pill.remove(), 3000)
+      timers.setTimeout(() => pill.remove(), 3000)
     }
   }
 
@@ -4148,7 +3086,7 @@ try {
     if (isFinalAssistantMessage) {
       stateManager.setStreaming(msg.sessionId, false)
       updateTabBar()
-      updateModeSelectorState()
+      updateModeSelectorStateLocal()
       updateSendButton()
       updateAgentStatus("idle")
     }
@@ -4211,7 +3149,7 @@ try {
     finalStream.handleStreamStart(messageId)
     stateManager.setStreaming(sessionId, true)
     updateTabBar()
-    updateModeSelectorState()
+    updateModeSelectorStateLocal()
     updateAgentStatus("thinking")
     // Flush pending file edits and clear stale banners when new streaming starts
     fileEditBatcher.cancelAll()
@@ -4334,10 +3272,9 @@ try {
       processStreamEndBlocks(sessionId, messageId, blocks)
 
       stateManager.setStreaming(sessionId, false)
-      toolStartTimes.clear()
-      stopToolElapsedTimer()
+      toolElapsedTracker.clearAll()
       updateTabBar()
-      updateModeSelectorState()
+      updateModeSelectorStateLocal()
       updateAgentStatus("idle")
 
       showStreamEndReasonMessage(sessionId, reason, partial)
@@ -4353,7 +3290,7 @@ try {
       vscode.postMessage({ type: "webview_log", level: "error", message: `handleStreamEnd error: ${err instanceof Error ? err.message : String(err)}` })
       try { stateManager.setStreaming(sessionId, false) } catch {}
       try { updateTabBar() } catch {}
-      try { updateModeSelectorState() } catch {}
+      try { updateModeSelectorStateLocal() } catch {}
       try { updateAgentStatus("idle") } catch {}
       const msg = reason === "ttfb_timeout" ? "Model took too long. Try a different model."
         : reason === "timeout" ? "Response timed out."
@@ -4381,7 +3318,7 @@ try {
     addMessage(sessionId, msgObj)
     stateManager.setStreaming(sessionId, true)
     updateTabBar()
-    updateModeSelectorState()
+    updateModeSelectorStateLocal()
     updateSendButton()
     renderQueue(sessionId)
 
@@ -4422,7 +3359,7 @@ try {
 
     stateManager.setStreaming(sessionId, false)
     updateTabBar()
-    updateModeSelectorState()
+    updateModeSelectorStateLocal()
 
     const stream = streamHandlers.get(sessionId)
     if (stream) {
@@ -4450,285 +3387,55 @@ try {
 
   /* ─── TOKEN/COST DISPLAY ─── */
 
-  const recentStepUsage = new Map<string, { signature: string; timestamp: number }>()
-
-  function usageSignature(usage: UsageDelta): string {
-    return [
-      usage.prompt,
-      usage.completion,
-      usage.total,
-      usage.reasoning ?? 0,
-      usage.cacheRead ?? 0,
-      usage.cacheWrite ?? 0,
-    ].join(":")
-  }
-
-  function rememberStepUsage(sessionId: string, usage: UsageDelta): void {
-    recentStepUsage.set(sessionId, { signature: usageSignature(usage), timestamp: Date.now() })
-  }
-
-  function isDuplicateRecentStepUsage(sessionId: string, usage: UsageDelta): boolean {
-    const recent = recentStepUsage.get(sessionId)
-    return !!recent && recent.signature === usageSignature(usage) && Date.now() - recent.timestamp < 30_000
-  }
-
-  function safeAdd(current: number, delta: number): number {
-    if (!Number.isFinite(delta)) return current
-    const result = current + delta
-    return Number.isFinite(result) ? result : current
-  }
-
-  function isValidSessionId(id: string | undefined): id is string {
-    return typeof id === "string" && id.length > 0 && !id.includes("\x00")
-  }
-
-  function accumulateTokenUsage(sessionId: string, delta: UsageDelta) {
-    if (!isValidSessionId(sessionId)) return
-    const session = stateManager.getSession(sessionId)
-    if (!session) return
-    const deltaTotal = Number.isFinite(delta.total)
-      ? delta.total
-      : (delta.prompt ?? 0) + (delta.completion ?? 0) + (delta.reasoning ?? 0) + (delta.cacheRead ?? 0) + (delta.cacheWrite ?? 0)
-
-    if (!session.tokenUsage) {
-      session.tokenUsage = { prompt: 0, completion: 0, total: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
-    }
-    session.tokenUsage.prompt = safeAdd(session.tokenUsage.prompt, delta.prompt)
-    session.tokenUsage.completion = safeAdd(session.tokenUsage.completion, delta.completion)
-    session.tokenUsage.total = safeAdd(session.tokenUsage.total, deltaTotal)
-    session.tokenUsage.reasoning = safeAdd(session.tokenUsage.reasoning ?? 0, delta.reasoning ?? 0)
-    session.tokenUsage.cacheRead = safeAdd(session.tokenUsage.cacheRead ?? 0, delta.cacheRead ?? 0)
-    session.tokenUsage.cacheWrite = safeAdd(session.tokenUsage.cacheWrite ?? 0, delta.cacheWrite ?? 0)
-    stateManager.save()
-
-    const activeId = stateManager.getState().activeSessionId
-    if (shouldRefreshOnUpdate(sessionId, activeId)) {
-      updateTokenDisplay(session.tokenUsage)
-      updateContextBarFromSession(sessionId)
-    }
-
-    updateCostDisplay(sessionId)
+  const tokenCostDeps: TokenCostDeps = {
+    els,
+    getSession: (id: string) => stateManager.getSession(id),
+    getActiveSessionId: () => stateManager.getState().activeSessionId ?? undefined,
+    save: () => stateManager.save(),
+    getContextWindow: (modelKey?: string) => modelManager.getContextWindow(modelKey),
+    showStatusStrip,
+    getActiveMessageList: () => getActiveMessageList(els),
+    timers,
   }
 
   function handleTokenUsage(sessionId: string, usage: UsageDelta) {
-    accumulateTokenUsage(sessionId, usage)
+    handleTokenUsageModule(tokenCostDeps, sessionId, usage)
+  }
+
+  function accumulateTokenUsage(sessionId: string, delta: UsageDelta) {
+    accumulateTokenUsageModule(tokenCostDeps, sessionId, delta)
   }
 
   function accumulateCost(sessionId: string, costDelta: number) {
-    if (!isValidSessionId(sessionId) || !Number.isFinite(costDelta) || costDelta <= 0) return
-    const session = stateManager.getSession(sessionId)
-    if (!session) return
-    if (session.cost === undefined) session.cost = 0
-    session.cost = safeAdd(session.cost, costDelta)
-    stateManager.save()
-    updateCostDisplay(sessionId)
+    accumulateCostModule(tokenCostDeps, sessionId, costDelta)
   }
 
-  const MAX_USAGE_SNAPSHOTS = 200
-
   function recordUsageSnapshot(sessionId: string) {
-    const session = stateManager.getSession(sessionId)
-    if (!session?.tokenUsage || !session.model) return
-
-    const state = stateManager.getState()
-    if (!state.tokenUsageHistory) state.tokenUsageHistory = []
-
-    const snapshot: TokenUsageSnapshot = {
-      timestamp: Date.now(),
-      sessionId,
-      model: session.model,
-      prompt: session.tokenUsage.prompt,
-      completion: session.tokenUsage.completion,
-      total: session.tokenUsage.total,
-      reasoning: session.tokenUsage.reasoning ?? 0,
-      cacheRead: session.tokenUsage.cacheRead ?? 0,
-      cacheWrite: session.tokenUsage.cacheWrite ?? 0,
-      cost: session.cost ?? 0,
-    }
-    state.tokenUsageHistory.push(snapshot)
-    if (state.tokenUsageHistory.length > MAX_USAGE_SNAPSHOTS) {
-      state.tokenUsageHistory = state.tokenUsageHistory.slice(-MAX_USAGE_SNAPSHOTS)
-    }
-    stateManager.save()
+    recordUsageSnapshotModule({ ...tokenCostDeps, getState: () => stateManager.getState() }, sessionId)
   }
 
   function handleRateLimitState(state?: RateLimitWebviewState | null) {
-    updateQuotaBar(state ?? undefined)
-  }
-
-  function updateQuotaBar(state?: RateLimitWebviewState) {
-    if (!state) {
-      els.quotaBar.classList.add("hidden")
-      return
-    }
-
-    const tokenPct = typeof state.remainingTokens === "number" && Number.isFinite(state.remainingTokens) && state.limitTokens && state.limitTokens > 0
-      ? Math.round((state.remainingTokens / state.limitTokens) * 100)
-      : undefined
-    const requestPct = typeof state.remainingRequests === "number" && Number.isFinite(state.remainingRequests) && state.limitRequests && state.limitRequests > 0
-      ? Math.round((state.remainingRequests / state.limitRequests) * 100)
-      : undefined
-    const bindingPct = [tokenPct, requestPct].filter((value): value is number => value !== undefined).sort((a, b) => a - b)[0]
-    const provider = state.provider ? state.provider.replace(/-/g, " ") : "provider"
-
-    els.quotaBar.classList.remove("hidden", "quota-bar--ok", "quota-bar--warning", "quota-bar--critical", "quota-bar--observed")
-    if (bindingPct !== undefined) {
-      const pct = Math.max(0, Math.min(100, bindingPct))
-      const kind = requestPct !== undefined && requestPct === pct && (tokenPct === undefined || requestPct <= tokenPct) ? "requests" : "tokens"
-      els.quotaProgressBar.style.width = `${pct}%`
-      els.quotaLabel.textContent = `${provider} ${pct}%`
-      els.quotaDetail.textContent = kind === "requests"
-        ? `${formatNumber(state.remainingRequests)} / ${formatNumber(state.limitRequests)} req`
-        : `${formatNumber(state.remainingTokens)} / ${formatNumber(state.limitTokens)} tok`
-      els.quotaBar.classList.add(pct > 50 ? "quota-bar--ok" : pct > 10 ? "quota-bar--warning" : "quota-bar--critical")
-    } else {
-      els.quotaProgressBar.style.width = "100%"
-      els.quotaLabel.textContent = `${provider} usage`
-      const observed = typeof state.usedTokens === "number" && Number.isFinite(state.usedTokens) ? `${formatNumber(state.usedTokens)} tok` : "observed"
-      const cost = typeof state.usedCost === "number" && Number.isFinite(state.usedCost) ? ` · $${state.usedCost.toFixed(4)}` : ""
-      els.quotaDetail.textContent = `${observed}${cost}`
-      els.quotaBar.classList.add("quota-bar--observed")
-    }
-    const reset = state.resetAt ? ` · resets ${formatTime(state.resetAt)}` : ""
-    els.quotaBar.title = `${els.quotaLabel.textContent}: ${els.quotaDetail.textContent}${reset}`
-    showStatusStrip()
-  }
-
-  function formatNumber(value?: number): string {
-    if (value === undefined || !Number.isFinite(value)) return "-"
-    return new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(value)
-  }
-
-  function formatTime(value: string): string {
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return value
-    return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date)
+    handleRateLimitStateModule(tokenCostDeps, state)
   }
 
   function clearTokenDisplay() {
-    if (els.tokenDisplay) {
-      els.tokenDisplay.textContent = ""
-      els.tokenDisplay.removeAttribute("title")
-    }
-    if (els.statusTokens) {
-      els.statusTokens.textContent = ""
-      els.statusTokens.classList.add("hidden")
-    }
+    clearTokenDisplayModule(els)
   }
 
   function updateTokenDisplay(usage?: { prompt: number; completion: number; total: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }) {
-    const tokenDisplay = els.tokenDisplay
-    if (tokenDisplay && usage) {
-      const parts: string[] = [`${usage.total.toLocaleString()} tok`]
-      if (usage.reasoning && usage.reasoning > 0) parts.push(`reasoning: ${usage.reasoning.toLocaleString()}`)
-      if (usage.cacheRead && usage.cacheRead > 0) parts.push(`cache read: ${usage.cacheRead.toLocaleString()}`)
-      if (usage.cacheWrite && usage.cacheWrite > 0) parts.push(`cache write: ${usage.cacheWrite.toLocaleString()}`)
-      tokenDisplay.textContent = parts.join(" · ")
-      tokenDisplay.title = `Prompt: ${usage.prompt.toLocaleString()} · Completion: ${usage.completion.toLocaleString()} · Total: ${usage.total.toLocaleString()}`
-    }
-    if (usage) {
-      els.statusTokens.textContent = `${usage.total.toLocaleString()} tok`
-      els.statusTokens.classList.remove("hidden")
-      showStatusStrip()
-    }
+    updateTokenDisplayModule(els, usage)
   }
 
   function updateCostDisplay(sessionId: string) {
-    // Cost display is tab-scoped: only render when the affected session is
-    // the active tab, so background streams don't overwrite the visible value.
-    if (!shouldRefreshOnUpdate(sessionId, stateManager.getState().activeSessionId)) return
-    const session = stateManager.getSession(sessionId)
-    const costEl = els.costDisplay
-    if (costEl && typeof session?.cost === "number" && Number.isFinite(session.cost) && session.cost > 0) {
-      costEl.textContent = `$${session.cost.toFixed(4)}`
-      costEl.title = `Session cost: $${session.cost.toFixed(4)}`
-      costEl.classList.remove("hidden")
-    } else if (costEl) {
-      costEl.textContent = ""
-      costEl.removeAttribute("title")
-      costEl.classList.add("hidden")
-    }
-    if (typeof session?.cost === "number" && Number.isFinite(session.cost) && session.cost > 0) {
-      els.statusCost.textContent = `$${session.cost.toFixed(4)}`
-      els.statusCost.classList.remove("hidden")
-      showStatusStrip()
-    } else {
-      els.statusCost.textContent = ""
-      els.statusCost.classList.add("hidden")
-    }
+    updateCostDisplayModule(tokenCostDeps, sessionId)
   }
 
   function updateContextBarFromSession(sessionId: string) {
-    const session = stateManager.getSession(sessionId)
-    if (!session?.tokenUsage) return
-
-    const ctxBar = els.contextUsage
-    if (!ctxBar) return
-
-    const modelKey = session.model ? `${session.model}` : undefined
-    const contextWindow = modelManager.getContextWindow(modelKey) ?? 200_000
-    const totalApiTokens = session.tokenUsage.total ?? 0
-    const pct = Math.min(100, Math.round((totalApiTokens / contextWindow) * 100))
-
-    ctxBar.textContent = `${totalApiTokens.toLocaleString()} / ${contextWindow.toLocaleString()} tok (${pct}%)`
-    ctxBar.title = `API tokens used: ${totalApiTokens.toLocaleString()} · Context window: ${contextWindow.toLocaleString()}`
-
-    const pctEl = ctxBar.querySelector<HTMLElement>(".context-usage-percent")
-    if (pctEl) {
-      pctEl.style.width = `${pct}%`
-      pctEl.classList.toggle("context-usage-percent--warning", pct >= 60 && pct < 85)
-      pctEl.classList.toggle("context-usage-percent--critical", pct >= 85)
-    }
+    updateContextBarFromSessionModule(tokenCostDeps, sessionId)
   }
-
-  const OVERFLOW_WARN_THRESHOLD = 0.85
-  const OVERFLOW_CRITICAL_THRESHOLD = 0.95
-  const COST_WARN_THRESHOLD = 5.00
-  let lastOverflowWarningAt = 0
 
   function checkOverflowWarnings(sessionId: string) {
-    const session = stateManager.getSession(sessionId)
-    if (!session?.tokenUsage) return
-
-    const modelKey = session.model ? `${session.model}` : undefined
-    const contextWindow = modelManager.getContextWindow(modelKey) ?? 200_000
-    const totalApiTokens = session.tokenUsage.total ?? 0
-    const usageRatio = totalApiTokens / contextWindow
-
-    const now = Date.now()
-    const cooldown = 60_000
-
-    if (usageRatio >= OVERFLOW_CRITICAL_THRESHOLD && now - lastOverflowWarningAt > cooldown) {
-      lastOverflowWarningAt = now
-      showContextWarning(`Context window nearly full (${Math.round(usageRatio * 100)}%). Consider compacting or starting a new session.`)
-    } else if (usageRatio >= OVERFLOW_WARN_THRESHOLD && now - lastOverflowWarningAt > cooldown) {
-      lastOverflowWarningAt = now
-      showContextWarning(`Context usage at ${Math.round(usageRatio * 100)}%. Approaching limit.`)
-    }
-
-    if (session.cost !== undefined && session.cost >= COST_WARN_THRESHOLD) {
-      const costEl = els.costDisplay
-      if (costEl) costEl.classList.add("cost-display--warning")
-    }
-  }
-
-  function showContextWarning(message: string) {
-    const msgList = getActiveMessageList(els)
-    if (!msgList) return
-
-    const existing = msgList.querySelector<HTMLElement>(".context-overflow-warning")
-    if (existing) existing.remove()
-
-    const banner = document.createElement("div")
-    banner.className = "context-overflow-warning"
-    const icon = document.createElement("span")
-    icon.className = "context-overflow-warning-icon"
-    icon.textContent = "\u26A0"
-    banner.appendChild(icon)
-    banner.appendChild(document.createTextNode(" " + message))
-    msgList.insertBefore(banner, msgList.firstChild)
-
-    setTimeout(() => banner.remove(), 15_000)
+    checkOverflowWarningsModule(tokenCostDeps, sessionId)
   }
 
   function showStatusStrip() {
@@ -4742,63 +3449,35 @@ try {
     els.quotaBar.classList.add("hidden")
   }
 
-  const fileEditBatcher = new (class FileEditBatcher {
-    private pending = new Map<string, { files: Set<string>; timer: ReturnType<typeof setTimeout> | null }>()
-    private readonly FLUSH_MS = 500
+  const fileEditBatcher = new FileEditBatcher((sessionId, text) => {
+    addMessage(sessionId, {
+      role: "system",
+      id: "file-" + crypto.randomUUID(),
+      blocks: [{ type: "task_banner", status: "success", text }],
+      timestamp: Date.now(),
+      sessionId,
+    })
+  })
 
-    add(sessionId: string, filePath: string) {
-      let entry = this.pending.get(sessionId)
-      if (!entry) {
-        entry = { files: new Set<string>(), timer: null }
-        this.pending.set(sessionId, entry)
-      }
-      entry.files.add(filePath)
-      if (entry.timer !== null) clearTimeout(entry.timer)
-      entry.timer = setTimeout(() => this.flush(sessionId), this.FLUSH_MS)
-    }
-
-    private flush(sessionId: string) {
-      const entry = this.pending.get(sessionId)
-      if (!entry) return
-      this.pending.delete(sessionId)
-      const files = Array.from(entry.files)
-      if (files.length === 0) return
-      const text = files.length === 1
-        ? `Edited ${files[0]}`
-        : `Edited ${files.length} files: ${files.map(f => f.split("/").pop()).join(", ")}`
-      addMessage(sessionId, {
-        role: "system",
-        id: "file-" + crypto.randomUUID(),
-        blocks: [{ type: "task_banner", status: "success", text }],
-        timestamp: Date.now(),
-        sessionId,
-      })
-    }
-
-    cancelAll() {
-      for (const entry of this.pending.values()) {
-        if (entry.timer !== null) clearTimeout(entry.timer)
-      }
-      this.pending.clear()
-    }
-  })()
+  const fileTrackingDeps: FileTrackingDeps = {
+    getSession: (id) => stateManager.getSession(id),
+    save: () => stateManager.save(),
+    postMessage: (msg) => vscode.postMessage(msg),
+    getActiveSessionId: () => stateManager.getState().activeSessionId ?? undefined,
+    changedFilesList: els.changedFilesList,
+    checkpointPanel: els.checkpointPanel,
+    checkpointToggleBtn: els.checkpointToggleBtn,
+    clearMessages: (sessionId) => streamHandlers.get(sessionId)?.clearMessages(),
+    getMessageList: (id) => getMessageList(id),
+    getAllSessions: () => stateManager.getAllSessions(),
+  }
 
   function trackFileChange(sessionId: string, filePath: string) {
-    const session = stateManager.getSession(sessionId)
-    if (session) {
-      if (!session.changedFiles) session.changedFiles = []
-      if (!session.changedFiles.includes(filePath)) {
-        session.changedFiles.push(filePath)
-        stateManager.save()
-      }
-    }
+    trackFileChangeModule(fileTrackingDeps, sessionId, filePath)
   }
 
 function undoMessage(messageId: string) {
-    const sessionId = stateManager.getState().activeSessionId
-    if (sessionId) {
-      vscode.postMessage({ type: "revert_message", messageId, sessionId })
-    }
+    undoMessageModule(fileTrackingDeps, messageId)
   }
 
   // Stubs for workspace-based session browsing (used by extension host)
@@ -4811,82 +3490,19 @@ function undoMessage(messageId: string) {
   }
 
   function handleChangedFiles(sessionId: string, files: string[]) {
-    const session = stateManager.getSession(sessionId)
-    if (session) {
-      session.changedFiles = files
-      stateManager.save()
-    }
-    renderChangedFilesList(files)
+    handleChangedFilesModule(fileTrackingDeps, sessionId, files)
   }
 
   function renderChangedFilesList(files: string[]) {
-    const list = els.changedFilesList
-    if (!list) return
-    list.innerHTML = ""
-    if (files.length === 0) {
-      list.classList.add("hidden")
-      return
-    }
-    list.classList.remove("hidden")
-    for (const f of files) {
-      const chip = document.createElement("span")
-      chip.className = "changed-file-chip"
-      chip.textContent = f.split("/").pop() || f
-      chip.title = f
-      list.appendChild(chip)
-    }
+    renderChangedFilesListModule(fileTrackingDeps, files)
   }
 
   function renderCheckpointPanel(checkpoints: Array<{ id: string; sessionId: string; messageId?: string; filesChanged?: string[] }>) {
-    const panel = els.checkpointPanel
-    if (!panel) return
-    panel.innerHTML = ""
-    const toggleBtn = els.checkpointToggleBtn
-    if (checkpoints.length === 0) {
-      panel.classList.add("hidden")
-      toggleBtn?.setAttribute("aria-pressed", "false")
-      return
-    }
-    panel.classList.remove("hidden")
-    toggleBtn?.setAttribute("aria-pressed", "true")
-    for (const cp of checkpoints) {
-      const item = document.createElement("div")
-      item.className = "checkpoint-item"
-      item.setAttribute("role", "listitem")
-      
-      const label = document.createElement("span")
-      label.textContent = `Checkpoint ${cp.id.slice(0, 8)}... (${cp.filesChanged?.length || 0} files)`
-      label.title = `Message: ${cp.messageId || "unknown"}`
-      label.className = "checkpoint-label"
-      
-      const restoreBtn = document.createElement("button")
-      restoreBtn.className = "checkpoint-restore-btn"
-      restoreBtn.textContent = "Restore"
-      restoreBtn.setAttribute("aria-label", `Restore to checkpoint ${cp.id.slice(0, 8)}`)
-      restoreBtn.addEventListener("click", () => {
-        vscode.postMessage({ type: "restore_checkpoint", checkpointId: cp.id, sessionId: cp.sessionId })
-      })
-      
-      item.appendChild(label)
-      item.appendChild(restoreBtn)
-      panel.appendChild(item)
-    }
+    renderCheckpointPanelModule(fileTrackingDeps, checkpoints)
   }
 
   function handleClearMessages(sessionId?: string) {
-    if (sessionId) {
-      const stream = streamHandlers.get(sessionId)
-      if (stream) stream.clearMessages()
-      const msgList = getMessageList(sessionId)
-      if (msgList) msgList.innerHTML = ""
-    } else {
-      // Clear all
-      streamHandlers.forEach((s) => s.clearMessages())
-      stateManager.getAllSessions().forEach((s) => {
-        const msgList = getMessageList(s.id)
-        if (msgList) msgList.innerHTML = ""
-      })
-    }
+    handleClearMessagesModule(fileTrackingDeps, sessionId)
   }
 
   /* ─── START ─── */

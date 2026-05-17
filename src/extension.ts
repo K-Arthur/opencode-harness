@@ -41,6 +41,7 @@ import {
   registerCheckCliCommand,
   registerExportCommand,
   registerStopCommand,
+  registerSlashCommandShortcuts,
   registerGenerateAgentsMdCommand,
 } from "./commands"
 import { MethodologyOrchestrator, OutcomeTracker, type AdvisoryOrchestrationResult } from "./methodology"
@@ -382,6 +383,7 @@ function registerCoreCommands(
   registerAddFileToSessionCommand(context, chatProvider)
   registerAddSelectionToSessionCommand(context, chatProvider)
   registerStopCommand(context, chatProvider)
+  registerSlashCommandShortcuts(context, chatProvider)
   registerGenerateAgentsMdCommand(context)
 }
 

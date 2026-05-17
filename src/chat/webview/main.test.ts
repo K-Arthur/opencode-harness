@@ -4,6 +4,18 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 
 const source = readFileSync(path.join(__dirname, "main.ts"), "utf8")
+const themeCustomizerSource = readFileSync(path.join(__dirname, "ui", "themeCustomizer.ts"), "utf8")
+const modeDropdownSource = readFileSync(path.join(__dirname, "ui", "modeDropdown.ts"), "utf8")
+const sessionModalSource = readFileSync(path.join(__dirname, "ui", "sessionModal.ts"), "utf8")
+const tokenCostDisplaySource = readFileSync(path.join(__dirname, "ui", "tokenCostDisplay.ts"), "utf8")
+const attachmentsSource = readFileSync(path.join(__dirname, "ui", "attachments.ts"), "utf8")
+const modeWarningSource = readFileSync(path.join(__dirname, "ui", "modeWarning.ts"), "utf8")
+const welcomeViewSource = readFileSync(path.join(__dirname, "ui", "welcomeView.ts"), "utf8")
+const settingsMenuSource = readFileSync(path.join(__dirname, "ui", "settingsMenu.ts"), "utf8")
+const fileTrackingSource = readFileSync(path.join(__dirname, "ui", "fileTracking.ts"), "utf8")
+const buttonSetupSource = readFileSync(path.join(__dirname, "ui", "buttonSetup.ts"), "utf8")
+const scrollMarkersSource = readFileSync(path.join(__dirname, "ui", "scrollMarkers.ts"), "utf8")
+const allSource = source + "\n" + themeCustomizerSource + "\n" + modeDropdownSource + "\n" + sessionModalSource + "\n" + tokenCostDisplaySource + "\n" + attachmentsSource + "\n" + modeWarningSource + "\n" + welcomeViewSource + "\n" + settingsMenuSource + "\n" + fileTrackingSource + "\n" + buttonSetupSource + "\n" + scrollMarkersSource
 const sessionListRendererSource = readFileSync(path.join(__dirname, "sessionListRenderer.ts"), "utf8")
 const messagesCss = readFileSync(path.join(__dirname, "css", "messages.css"), "utf8")
 
@@ -94,10 +106,10 @@ describe("main.ts", () => {
   })
 
   it("mode_selector_disabled_during_stream", () => {
-    assert.ok(source.includes("isStreaming"), "must reference isStreaming state")
-    assert.ok(source.includes("updateModeSelectorState"), "must have updateModeSelectorState function")
-    assert.ok(source.includes("classList.toggle('disabled'"), "must toggle disabled class")
-    assert.ok(source.includes("btn.disabled = isStreaming"), "must disable buttons during streaming")
+    assert.ok(allSource.includes("isStreaming"), "must reference isStreaming state")
+    assert.ok(allSource.includes("updateModeSelectorState"), "must have updateModeSelectorState function")
+    assert.ok(modeDropdownSource.includes("classList.toggle(\"disabled\""), "must toggle disabled class")
+    assert.ok(modeDropdownSource.includes("btn.disabled = isStreaming"), "must disable buttons during streaming")
   })
 
   it("disables send with a clear tooltip when the global stream cap is full", () => {
@@ -136,10 +148,10 @@ describe("main.ts", () => {
   })
 
   it("has a personalized theme customizer modal workflow", () => {
-    assert.ok(source.includes("setupThemeCustomizer"), "must initialize the theme customizer modal")
-    assert.ok(source.includes('"get_theme_config"'), "must request current theme config")
-    assert.ok(source.includes('"update_theme_config"'), "must save personalized theme overrides")
-    assert.ok(source.includes('"theme_config"'), "must handle theme config responses")
+    assert.ok(allSource.includes("setupThemeCustomizer"), "must initialize the theme customizer modal")
+    assert.ok(allSource.includes('"get_theme_config"'), "must request current theme config")
+    assert.ok(allSource.includes('"update_theme_config"'), "must save personalized theme overrides")
+    assert.ok(allSource.includes('"theme_config"'), "must handle theme config responses")
   })
 
   // ===== RED PHASE: New tests for features that should exist but don't yet =====
@@ -204,16 +216,16 @@ describe("main.ts", () => {
   })
 
   it("unified modal: openSessionModal passes local sessions to renderer via setUnifiedLocalSessions", () => {
-    const idx = source.indexOf("function openSessionModal(")
-    assert.ok(idx >= 0, "openSessionModal must exist")
-    const block = source.slice(idx, idx + 300)
+    const idx = sessionModalSource.indexOf("export function openSessionModal(")
+    assert.ok(idx >= 0, "openSessionModal must exist in sessionModal module")
+    const block = sessionModalSource.slice(idx, idx + 600)
     assert.ok(
       block.includes("setUnifiedLocalSessions(sessions)"),
       "openSessionModal must call setUnifiedLocalSessions to pass local sessions to the renderer"
     )
     assert.ok(
       !block.includes("_unifiedLocalSessions = sessions"),
-      "openSessionModal must NOT directly assign to module-level _unifiedLocalSessions in main.ts — must use setUnifiedLocalSessions() from sessionListRenderer.ts"
+      "openSessionModal must NOT directly assign to module-level _unifiedLocalSessions — must use setUnifiedLocalSessions() from sessionListRenderer.ts"
     )
   })
 
@@ -321,8 +333,8 @@ it("unified modal: server session items send resume_server_session on click", ()
   })
 
   it("renders and updates the webview quota usage bar", () => {
-    assert.ok(source.includes("handleRateLimitState"), "must handle rate-limit state messages")
-    assert.ok(source.includes("updateQuotaBar"), "must render quota bar state")
+    assert.ok(allSource.includes("handleRateLimitState"), "must handle rate-limit state messages")
+    assert.ok(allSource.includes("updateQuotaBar"), "must render quota bar state")
     assert.ok(source.includes('"rate_limit_state"'), "must listen for rate_limit_state host messages")
   })
 
@@ -333,7 +345,7 @@ it("unified modal: server session items send resume_server_session on click", ()
     // they must not be silently loaded into pendingAttachments.
     const MAX = 10 * 1024 * 1024
     assert.ok(
-      source.includes(String(MAX)) || source.includes("10 * 1024 * 1024") || source.includes("MAX_ATTACHMENT_BYTES"),
+      allSource.includes(String(MAX)) || allSource.includes("10 * 1024 * 1024") || allSource.includes("MAX_ATTACHMENT_BYTES"),
       "onPaste must enforce a 10 MB size cap on pasted images"
     )
   })
@@ -425,35 +437,32 @@ it("unified modal: server session items send resume_server_session on click", ()
     })
 
     it("accumulateTokenUsage gates the visible token display on the active session", () => {
-      const fnIdx = source.indexOf("function accumulateTokenUsage(")
+      const first = allSource.indexOf("function accumulateTokenUsage(")
+      const fnIdx = allSource.indexOf("function accumulateTokenUsage(", first + 1)
       assert.ok(fnIdx >= 0, "accumulateTokenUsage must exist")
-      // Slice a generous window covering the whole function body
-      const body = source.slice(fnIdx, fnIdx + 2000)
+      const body = allSource.slice(fnIdx, fnIdx + 2000)
       const displayIdx = body.indexOf("updateTokenDisplay(")
       assert.ok(displayIdx >= 0, "must call updateTokenDisplay inside accumulateTokenUsage")
 
-      // Look at the lines immediately preceding the updateTokenDisplay call —
-      // there must be a guard that compares sessionId to the active session.
       const preceding = body.slice(0, displayIdx)
       assert.ok(
-        /activeSessionId|getActiveSession\s*\(\s*\)/.test(preceding),
+        /activeSessionId|getActiveSessionId\s*\(\s*\)/.test(preceding),
         "accumulateTokenUsage must check activeSessionId before updating the visible token display"
       )
     })
 
     it("accumulateTokenUsage gates the cost/context display on the active session", () => {
-      const fnIdx = source.indexOf("function accumulateTokenUsage(")
+      const first = allSource.indexOf("function accumulateTokenUsage(")
+      const fnIdx = allSource.indexOf("function accumulateTokenUsage(", first + 1)
       assert.ok(fnIdx >= 0, "accumulateTokenUsage must exist")
-      const body = source.slice(fnIdx, fnIdx + 2000)
+      const body = allSource.slice(fnIdx, fnIdx + 2000)
 
-      // Both updateCostDisplay and updateContextBarFromSession produce
-      // visible side effects that must not bleed from an inactive tab.
       for (const call of ["updateCostDisplay(", "updateContextBarFromSession("]) {
         const callIdx = body.indexOf(call)
         assert.ok(callIdx >= 0, `must call ${call} inside accumulateTokenUsage`)
         const preceding = body.slice(0, callIdx)
         assert.ok(
-          /activeSessionId|getActiveSession\s*\(\s*\)/.test(preceding),
+          /activeSessionId|getActiveSessionId\s*\(\s*\)/.test(preceding),
           `${call} must be gated on the active session inside accumulateTokenUsage`
         )
       }

@@ -187,6 +187,13 @@ export interface ElementRefs {
   skillsSearchInput: HTMLInputElement
   skillsFilter: HTMLElement
   skillsList: HTMLElement
+  // Commands modal — populated by setup; querySelector fallback for older HTML bundles is OK.
+  commandsModal: HTMLElement | null
+  commandsModalCloseBtn: HTMLElement | null
+  commandsSearchInput: HTMLInputElement | null
+  commandsTitle: HTMLElement | null
+  commandsFilter: HTMLElement | null
+  commandsList: HTMLElement | null
   subagentPanel: HTMLElement
   closeSubagentBtn: HTMLElement
   subagentList: HTMLElement
@@ -233,7 +240,7 @@ export function getElementRefs(): ElementRefs {
     mcpBtn: requireElement("mcp-btn"),
     timelineToggleBtn: requireElement("timeline-toggle-btn"),
     thinkingToggleMenuItem: requireElement("thinking-toggle-menu-item"),
-    thinkingCheckmark: optionalElement<HTMLElement>("settings-menu-checkmark"),
+    thinkingCheckmark: document.querySelector<HTMLElement>("#thinking-toggle-menu-item .settings-menu-checkmark"),
     settingsBtn: requireElement("settings-btn"),
 
     contextBar: requireElement<HTMLDivElement>("context-bar"),
@@ -358,6 +365,13 @@ export function getElementRefs(): ElementRefs {
     subagentPanel: requireElement("subagent-panel"),
     closeSubagentBtn: requireElement("close-subagent-btn"),
     subagentList: requireElement("subagent-list"),
+    // Commands modal: optional lookup so older HTML bundles still load.
+    commandsModal: document.getElementById("commands-modal"),
+    commandsModalCloseBtn: document.getElementById("commands-modal-close-btn"),
+    commandsSearchInput: document.getElementById("commands-search-input") as HTMLInputElement | null,
+    commandsTitle: document.getElementById("commands-modal-title"),
+    commandsFilter: document.getElementById("commands-filter"),
+    commandsList: document.getElementById("commands-list"),
   }
 }
 
@@ -380,25 +394,13 @@ export function getActiveTypingIndicator(els: ElementRefs): HTMLDivElement | nul
 }
 
 /**
- * Toggle all thinking blocks in the active panel to show or hide them
- * Simplified to use only native <details> open attribute
+ * Toggle every thinking block in the document to show or hide them.
+ * Why: the preference is global, so blocks in inactive tab panels must stay
+ * in sync — otherwise switching tabs reveals a stale open/closed state.
  */
 export function toggleAllThinkingBlocks(visible: boolean): void {
-  const activePanel = document.querySelector('.tab-panel.active')
-  if (!activePanel) {
-    return
-  }
-
-  const thinkingBlocks = activePanel.querySelectorAll<HTMLDetailsElement>('.thinking-block')
-  if (thinkingBlocks.length === 0) {
-    return
-  }
-
+  const thinkingBlocks = document.querySelectorAll<HTMLDetailsElement>('.thinking-block')
   thinkingBlocks.forEach((block) => {
-    if (visible) {
-      block.open = true
-    } else {
-      block.open = false
-    }
+    block.open = visible
   })
 }

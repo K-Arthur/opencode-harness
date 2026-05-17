@@ -76,10 +76,10 @@ const now = Date.now()
     }
   }
 
-  handleBannerAction(sessionId: string | undefined, action: string, callbacks: CompactorCallbacks): void {
+  async handleBannerAction(sessionId: string | undefined, action: string, callbacks: CompactorCallbacks): Promise<void> {
     if (!sessionId) return
     if (action === "compact_now") {
-      this.compactNow(sessionId, callbacks)
+      await this.compactNow(sessionId, callbacks)
       this.snoozeUntil = 0
     } else if (action === "remind_later") {
 this.snoozeUntil = Date.now() + 10 * 60 * 1000

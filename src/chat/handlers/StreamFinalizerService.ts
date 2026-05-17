@@ -22,6 +22,7 @@ export interface StreamFinalizerDeps {
   fetchFinalBlocks: (tabId: string, cliSessionId: string | undefined, callbacks: StreamCallbacks) => Promise<{ blocks: Block[]; sdkTokenTotal: number | undefined }>
   mergeFinalBlocks: (tabId: string, serverBlocks: Block[]) => Block[]
   storeAssistantMessage: (tabId: string, streamMessageId: string, blocks: Block[], sdkTokenTotal: number | undefined) => void
+  nextSeq: (tabId: string) => number
 }
 
 export class StreamFinalizerService {
@@ -91,6 +92,7 @@ export class StreamFinalizerService {
         sessionId: tabId,
         messageId: streamMessageId,
         blocks,
+        seq: this.deps.nextSeq(tabId),
       })
     }
 

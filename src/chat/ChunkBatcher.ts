@@ -72,22 +72,21 @@ export class ChunkBatcher {
     }
     if (this.buffer.size === 0) return
     this.flushCount++
-    const flushed: string[] = []
+    const succeeded: string[] = []
     for (const [sessionId, text] of this.buffer) {
       if (this.pausedSessions.has(sessionId)) continue
       const messageId = this.messageIds.get(sessionId)
-      // First flush per session: log to confirm wiring; subsequent flushes are silent.
       if (this.flushCount <= 1) {
         this.log?.(`[ChunkBatcher] flush #${this.flushCount} sessionId=${sessionId} len=${text.length}`)
       }
       try {
         this.delegate({ type: "stream_chunk", sessionId, text, messageId })
+        succeeded.push(sessionId)
       } catch (err) {
-        this.log?.(`[ChunkBatcher] delegate threw for ${sessionId}, dropping chunk: ${String(err)}`)
+        this.log?.(`[ChunkBatcher] delegate threw for ${sessionId}, retaining chunk for retry: ${String(err)}`)
       }
-      flushed.push(sessionId)
     }
-    for (const sid of flushed) {
+    for (const sid of succeeded) {
       this.buffer.delete(sid)
       this.messageIds.delete(sid)
     }

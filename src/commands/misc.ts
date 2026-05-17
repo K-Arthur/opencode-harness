@@ -55,3 +55,39 @@ export function registerStopCommand(
     })
   )
 }
+
+/**
+ * Register VS Code commands that map to the in-webview slash commands so they are also
+ * invokable from the command palette. The handlers target the currently-active chat tab.
+ */
+export function registerSlashCommandShortcuts(
+  context: vscode.ExtensionContext,
+  chatProvider: {
+    runSlashCommandOnActiveTab: (name: string) => Promise<void>
+    openCommandsPalette: () => void
+  }
+): void {
+  const map: Array<{ id: string; slash: string }> = [
+    { id: "opencode-harness.clearSession",   slash: "clear" },
+    { id: "opencode-harness.showCost",       slash: "cost" },
+    { id: "opencode-harness.continueSession", slash: "continue" },
+    { id: "opencode-harness.showHelp",       slash: "help" },
+  ]
+  for (const { id, slash } of map) {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(id, async () => {
+        try {
+          await chatProvider.runSlashCommandOnActiveTab(slash)
+        } catch (err) {
+          log.error(`${id} failed`, err)
+        }
+      })
+    )
+  }
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.openCommandsPalette", () => {
+      try { chatProvider.openCommandsPalette() }
+      catch (err) { log.error("openCommandsPalette failed", err) }
+    })
+  )
+}

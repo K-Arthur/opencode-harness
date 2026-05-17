@@ -665,6 +665,73 @@ validateSessionName(name: string): string | null {
     return this.updateName(id, name)
   }
 
+  /**
+   * Server-side title updater. Wired by the extension host on startup; tests
+   * inject a fake. Returning a promise lets us optionally await the server
+   * roundtrip; current call sites fire-and-forget so a slow server doesn't
+   * stall UI.
+   *
+   * Spec: ADR-008 §5.4 (bidirectional session title sync).
+   */
+  private serverTitleUpdater: ((cliSessionId: string, title: string) => Promise<void>) | null = null
+  setServerTitleUpdater(updater: (cliSessionId: string, title: string) => Promise<void>): void {
+    this.serverTitleUpdater = updater
+  }
+
+  /**
+   * Canonical, SDK-aligned setter for session title. Persists locally
+   * (mirroring `name` for now until Layer 6b renames the field everywhere)
+   * and propagates to the SDK server via the injected updater so the title
+   * appears in CLI and sibling windows.
+   *
+   * Returns false when the title fails validation (empty / oversize); local
+   * state is untouched in that case and the server is not called.
+   */
+  setTitle(id: string, title: string): boolean {
+    const trimmed = title.trim()
+    const validationError = this.validateSessionName(trimmed)
+    if (validationError) {
+      log.warn(`Invalid session title: ${validationError}`)
+      return false
+    }
+    const session = this.sessions.get(id)
+    if (!session) return false
+    session.name = trimmed
+    this.save()
+    this._onSessionsChanged.fire()
+    this.fireChangeEvent({ kind: "renamed", sessionId: id, name: trimmed })
+
+    // Best-effort server propagation. Skip when no cliSessionId yet (local-
+    // only sessions; server learns the title on first prompt).
+    if (this.serverTitleUpdater && session.cliSessionId) {
+      void this.serverTitleUpdater(session.cliSessionId, trimmed).catch(err =>
+        log.warn(`Failed to propagate session title to server for ${id}: ${(err as Error).message}`),
+      )
+    }
+    return true
+  }
+
+  /**
+   * Apply a title received from the server (`session.updated` SSE event).
+   * Looks the local session up by cliSessionId. No-op when unknown. Does
+   * NOT re-call `serverTitleUpdater` (avoid feedback loop).
+   */
+  applyServerTitle(cliSessionId: string, title: string): boolean {
+    const trimmed = title.trim()
+    if (!trimmed) return false
+    for (const session of this.sessions.values()) {
+      if (session.cliSessionId === cliSessionId) {
+        if (session.name === trimmed) return false
+        session.name = trimmed
+        this.save()
+        this._onSessionsChanged.fire()
+        this.fireChangeEvent({ kind: "renamed", sessionId: session.id, name: trimmed })
+        return true
+      }
+    }
+    return false
+  }
+
   updateCliSessionId(id: string, cliId: string): void {
     // Validate: prevent duplicate cliSessionId across sessions (one-to-one mapping)
     for (const [otherId, otherSess] of this.sessions) {

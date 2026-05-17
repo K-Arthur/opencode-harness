@@ -20,4 +20,4 @@ export {
 export { registerSelectModelCommand } from "./model"
 export { registerShowRateLimitsCommand, registerCheckCliCommand } from "./misc"
 export { registerExportCommand } from "./export"
-export { registerStopCommand } from "./misc"
+export { registerStopCommand, registerSlashCommandShortcuts } from "./misc"

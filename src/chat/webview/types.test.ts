@@ -42,8 +42,8 @@ describe("types.ts", () => {
     assert.ok(source.includes("export interface ContextUsage"))
   })
 
-  it("exports HostMessage interface", () => {
-    assert.ok(source.includes("export interface HostMessage"))
+  it("exports HostMessage discriminated union type", () => {
+    assert.ok(source.includes("export type HostMessage"))
   })
 
   it("exports VsCodeApi interface", () => {

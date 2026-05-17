@@ -109,7 +109,7 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
     compactMode: false
   }
   
-  const hasToolCalls = msg.blocks?.some(b => b.type === "tool-call" || b.type === "tool_call")
+  const hasToolCalls = msg.blocks?.some(b => b.type === "tool-call" || b.type === "tool_call" || b.type === "tool")
   if (hasToolCalls && role === "assistant" && !isConsecutive) {
     const toolControlsContainer = document.createElement("div")
     toolControlsContainer.className = "message-tool-controls"

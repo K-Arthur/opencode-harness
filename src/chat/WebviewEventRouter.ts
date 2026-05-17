@@ -67,27 +67,34 @@ export interface WebviewEventRouterOptions {
   exportChatJson: () => void
   exportChatText: () => void
   copyChat: () => void
-  stashPrompt: (name: string, content: string, isGlobal: boolean) => void
+  // Async handlers must declare Promise<void>; otherwise `await` in route() is a no-op and
+  // any rejection becomes an unhandled rejection at runtime.
+  stashPrompt: (name: string, content: string, isGlobal: boolean) => Promise<void> | void
   listStashes: () => void
   deleteStash: (id: string) => void
-  addProvider: (name: string, apiKey: string, baseUrl?: string) => void
+  addProvider: (name: string, apiKey: string, baseUrl?: string) => Promise<void> | void
   listProviders: () => void
-  updateProvider: (id: string, updates: Record<string, unknown>) => void
+  updateProvider: (id: string, updates: Record<string, unknown>) => Promise<void> | void
   deleteProvider: (id: string) => void
   showOpenFolderDialog: (dir: string) => void
 }
 
 export class WebviewEventRouter {
   private promptsInFlight = new Set<string>()
+  private promptSafetyTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private static readonly PROMPT_SAFETY_TIMEOUT_MS = 30_000
 
   /** H3: Timeout for webview_ready message to prevent unbounded queue growth */
   private readyTimeout?: ReturnType<typeof setTimeout>
+
+  /** Tracks whether the webview has processed init_state and sent init_ack. */
+  public webviewFullyInitialized = false
 
   private static readonly VALID_WEBVIEW_TYPES = new Set([
     "create_tab", "send_prompt", "change_mode", "set_model", "set_variant", "abort",
     "close_tab", "switch_tab", "accept_diff", "reject_diff",
     "accept_permission", "mention_search", "list_sessions", "resume_session",
-    "new_session", "get_models", "update_cost", "webview_ready", "rename_session", "webview_log",
+    "new_session", "get_models", "update_cost", "webview_ready", "init_ack", "rename_session", "webview_log",
     "open_settings", "connect_provider", "open_mcp_settings", "open_mcp_config", "attach_files", "export_chat", "export_chat_json", "export_chat_text", "copy_chat", "stash_prompt", "list_stashes", "delete_stash", "add_provider", "list_providers", "update_provider", "delete_provider",
     "compact_session", "execute_command", "list_commands",
     "insert_at_cursor", "create_file_from_code", "compact_banner_action",
@@ -132,6 +139,14 @@ export class WebviewEventRouter {
       if (sessionId && typeof msg.text === "string" && msg.text.trim()) {
         if (this.promptsInFlight.has(sessionId)) return
         this.promptsInFlight.add(sessionId)
+        const safetyTimer = setTimeout(() => {
+          if (this.promptsInFlight.has(sessionId)) {
+            log.warn(`promptsInFlight safety timeout for ${sessionId} — clearing stale entry`)
+            this.promptsInFlight.delete(sessionId)
+          }
+          this.promptSafetyTimers.delete(sessionId)
+        }, WebviewEventRouter.PROMPT_SAFETY_TIMEOUT_MS)
+        this.promptSafetyTimers.set(sessionId, safetyTimer)
         try {
           const model = (msg.model as string | undefined) || this.opts.modelManager.model
           if (!model) { throw new Error("No model selected. Please select a model and try again.") }
@@ -156,7 +171,11 @@ export class WebviewEventRouter {
         } catch (err) {
           log.error("send_prompt failed", err)
           this.opts.postRequestError(err instanceof Error ? err.message : "Failed to send prompt")
-        } finally { this.promptsInFlight.delete(sessionId) }
+        } finally {
+          this.promptsInFlight.delete(sessionId)
+          const timer = this.promptSafetyTimers.get(sessionId)
+          if (timer) { clearTimeout(timer); this.promptSafetyTimers.delete(sessionId) }
+        }
       }
     }],
     ["change_mode", async (msg: Record<string, unknown>, sessionId?: string) => {
@@ -282,7 +301,10 @@ export class WebviewEventRouter {
         const sessionId = this.pendingOpenSessionId
         this.pendingOpenSessionId = undefined
         await this.opts.sessionLifecycle.handleResumeSession(sessionId)
-      }
+       }
+    }],
+    ["init_ack", () => {
+      this.webviewFullyInitialized = true
     }],
     ["request_state_sync", () => {
       this.pushVisibleStateToWebview()
@@ -871,7 +893,7 @@ export class WebviewEventRouter {
   webviewReady = false
 
   /** H3: Maximum queue size to prevent unbounded memory growth */
-  private static readonly MAX_QUEUE_SIZE = 100
+  private static readonly MAX_QUEUE_SIZE = 200
   /** H3: Timeout for webview_ready message to prevent unbounded queue growth */
   private static readonly READY_TIMEOUT_MS = 5000
 

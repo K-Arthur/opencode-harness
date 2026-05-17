@@ -90,18 +90,17 @@ void describe("Webview Communication Error Scenarios", () => {
   })
 
   void describe("type safety improvements", () => {
-    void it("removed index signature from HostMessage", () => {
+    void it("HostMessage is a discriminated union type", () => {
       const typesSource = readFileSync(resolve(__dirname, "webview/types.ts"), "utf8")
-      const hostMessageMatch = typesSource.match(/export interface HostMessage \{[\s\S]*?\n\}/)
-      assert.ok(hostMessageMatch, "HostMessage interface not found")
-      assert.ok(!hostMessageMatch![0].includes("[key: string]: unknown"), "HostMessage should not have index signature")
+      assert.ok(typesSource.includes("export type HostMessage"), "HostMessage must be a discriminated union type")
+      assert.ok(!typesSource.includes("[key: string]: unknown") || !typesSource.match(/export type HostMessage[\s\S]*?\n\}/)?.[0]?.includes("[key: string]: unknown"), "HostMessage union members should not have index signatures")
     })
 
-    void it("has explicit optional properties for common fields", () => {
+    void it("has discriminated union members with typed fields", () => {
       const typesSource = readFileSync(resolve(__dirname, "webview/types.ts"), "utf8")
-      assert.ok(typesSource.includes("sessionId?: string"), "should have explicit sessionId property")
-      assert.ok(typesSource.includes("messageId?: string"), "should have explicit messageId property")
-      assert.ok(typesSource.includes("text?: string"), "should have explicit text property")
+      assert.ok(typesSource.includes('type: "stream_chunk"') && typesSource.includes("sessionId: string"), "stream_chunk should have sessionId")
+      assert.ok(typesSource.includes("messageId?: string"), "should have messageId on relevant members")
+      assert.ok(typesSource.includes("text: string"), "should have text on relevant members")
     })
   })
 })
