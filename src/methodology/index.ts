@@ -52,4 +52,8 @@ export { ModelProfileRegistry } from './ModelProfileRegistry.js';
 export type { ModelProfileEntry } from './ModelProfileRegistry.js';
 export { OutcomeTracker } from './OutcomeTracker.js';
 export type { OutcomeSignal, OutcomeEvent, MethodologyOutcomeStats } from './OutcomeTracker.js';
+export { QualityGateRunner } from './QualityGate.js';
+export type { GateCheckResult, GateReport } from './QualityGate.js';
+export { PlanValidator } from './PlanValidator.js';
+export type { ExecutionPlanNode, ExecutionPlanEdge, ExecutionPlan, CheckResult, ValidationResult } from './PlanValidator.js';
 export type * from './types.js';

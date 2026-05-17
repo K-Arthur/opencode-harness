@@ -13,6 +13,8 @@ import type { MessageRouter } from "./handlers/MessageRouter"
 import type { AutoCompactor } from "./AutoCompactor"
 import type { CheckpointManager } from "../checkpoint/CheckpointManager"
 import type { McpServerManager } from "../mcp/McpServerManager"
+import { sdkMessagesToChatMessages } from "../session/sdkMessageConverter"
+import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
 import type { ThemeManager } from "../theme/ThemeManager"
 import type { ThemeController } from "./ThemeController"
 import type { PromptManager } from "../prompts/PromptManager"
@@ -106,7 +108,7 @@ export class WebviewEventRouter {
     "add_mcp_server", "update_mcp_server", "remove_mcp_server", "toggle_mcp_server", "get_mcp_servers",
     "show_diff", "list_checkpoints", "restore_checkpoint",
     "preview_theme", "get_theme_config", "update_theme_config", "list_cli_themes",
-    "request_more_messages", "stream_ack", "retry_stream", "request_state_sync",
+    "request_more_messages", "refresh_session_messages", "stream_ack", "retry_stream", "request_state_sync",
     "set_instructions", "fork_session", "accept_hunk", "reject_hunk",
     "toggle_diff_wrap", "toggle_thinking", "revert_diff",
     "context_history_request", "context_cost_estimate", "context_suggestions_request",
@@ -540,7 +542,7 @@ export class WebviewEventRouter {
         this.opts.showErrorMessage(`Failed to restore checkpoint: ${(err as Error).message}`)
       }
     }],
-    ["request_more_messages", (msg: Record<string, unknown>, sessionId?: string) => {
+    ["request_more_messages", async (msg: Record<string, unknown>, sessionId?: string) => {
       if (!sessionId) return
       const session = this.opts.sessionStore.get(sessionId)
       if (!session) return
@@ -548,14 +550,75 @@ export class WebviewEventRouter {
       const limit = typeof msg.limit === "number" ? msg.limit : 50
       const start = Math.max(0, beforeIndex - limit)
       const slice = session.messages.slice(start, beforeIndex)
+
+      if (slice.length > 0 || start > 0) {
+        this.opts.postMessage({
+          type: "more_messages",
+          sessionId,
+          messages: slice,
+          hasMore: start > 0,
+          newBeforeIndex: start,
+          totalCount: session.messages.length,
+        })
+        return
+      }
+
+      // Local exhausted — try server if available
+      if (session.cliSessionId && this.opts.sessionManager.isRunning) {
+        try {
+          const rows = await this.opts.sessionManager.getSessionMessages(session.cliSessionId)
+          const serverMessages = sdkMessagesToChatMessages(rows)
+          if (serverMessages.length > session.messages.length) {
+            this.opts.sessionStore.applyBackfilledMessages(session.id, serverMessages, summarizeOpencodeMessageUsage(rows))
+            const refreshed = this.opts.sessionStore.get(sessionId)
+            if (refreshed) {
+              const newStart = Math.max(0, refreshed.messages.length - limit)
+              this.opts.postMessage({
+                type: "more_messages",
+                sessionId,
+                messages: refreshed.messages.slice(newStart),
+                hasMore: newStart > 0,
+                newBeforeIndex: newStart,
+                totalCount: refreshed.messages.length,
+              })
+            }
+            return
+          }
+        } catch (err) {
+          log.warn(`Server fallback for request_more_messages failed for ${sessionId}`, err)
+        }
+      }
+
       this.opts.postMessage({
         type: "more_messages",
         sessionId,
-        messages: slice,
-        hasMore: start > 0,
-        newBeforeIndex: start,
+        messages: [],
+        hasMore: false,
+        newBeforeIndex: 0,
         totalCount: session.messages.length,
       })
+    }],
+    ["refresh_session_messages", async (_msg: Record<string, unknown>, sessionId?: string) => {
+      if (!sessionId) return
+      const session = this.opts.sessionStore.get(sessionId)
+      if (!session) return
+      if (!session.cliSessionId || !this.opts.sessionManager.isRunning) {
+        this.opts.postMessage({ type: "session_messages_refreshed", sessionId, messages: session.messages, totalCount: session.messages.length })
+        return
+      }
+      try {
+        const rows = await this.opts.sessionManager.getSessionMessages(session.cliSessionId)
+        const messages = sdkMessagesToChatMessages(rows)
+        if (messages.length > 0) {
+          this.opts.sessionStore.applyBackfilledMessages(session.id, messages, summarizeOpencodeMessageUsage(rows))
+          this.opts.sessionStore.autoTitleFromMessages(session.id)
+        }
+        const refreshed = this.opts.sessionStore.get(sessionId) || session
+        this.opts.postMessage({ type: "session_messages_refreshed", sessionId, messages: refreshed.messages, totalCount: refreshed.messages.length })
+      } catch (err) {
+        log.warn(`refresh_session_messages failed for ${sessionId}`, err)
+        this.opts.postMessage({ type: "session_messages_refreshed", sessionId, messages: session.messages, totalCount: session.messages.length })
+      }
     }],
     ["delete_server_session", async (msg: Record<string, unknown>) => {
       const serverId = msg.serverSessionId as string | undefined

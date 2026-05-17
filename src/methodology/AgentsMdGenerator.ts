@@ -43,19 +43,7 @@ export interface AgentsMdResult {
   sectionsUpdated: string[];
 }
 
-export interface PackageJsonInfo {
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-  scripts?: Record<string, string>;
-  engines?: Record<string, string>;
-  main?: string;
-  module?: string;
-  exports?: Record<string, unknown>;
-}
-
-// ─── Package JSON Type ───────────────────────────────────────────────────────
-
-interface PackageJson {
+export interface PackageJson {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   scripts?: Record<string, string>;

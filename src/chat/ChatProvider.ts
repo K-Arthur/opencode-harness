@@ -52,7 +52,7 @@ private autoCompactor: AutoCompactor
   // EC7: Track in-progress backfills to prevent concurrent requests
   private backfillInProgress = new Set<string>()
   private backfillRetryTimer?: NodeJS.Timeout
-  private readonly BACKFILL_RETRY_DELAYS_MS = [1500, 4000]
+  private readonly BACKFILL_RETRY_DELAYS_MS = [1500, 4000, 8000, 16000]
   private fileOps = new ChatFileOps()
   private themeController: ThemeController
   private statePush: StatePushService
@@ -868,11 +868,13 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
 
   private async backfillTabIfNeeded(tabId: string): Promise<void> {
     const session = this.sessionStore.get(tabId)
-    // Backfill if: has cliSessionId, has no local messages, and server is running
-    // Note: We don't check needsBackfill flag here because a session might have
-    // empty messages with needsBackfill=false (e.g., imported session that
-    // was never backfilled). We should still attempt backfill for empty sessions.
-    if (!session || !session.cliSessionId || session.messages.length > 0) {
+    if (!session || !session.cliSessionId) {
+      return
+    }
+
+    // Skip if session already has fresh data (not stale) and not flagged for backfill.
+    // But allow re-backfill if needsBackfill is set even with existing messages.
+    if (session.messages.length > 0 && session.needsBackfill !== true) {
       return
     }
 
@@ -905,9 +907,6 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
             this.pushInitStateToWebview()
           }
       } else {
-        // Empty response — most likely the server has not finished loading
-        // messages from disk. Preserve needsBackfill so the retry timer (or a
-        // later user interaction) can try again. Do NOT close the tab.
         log.info(`[tab_created] Empty response for ${session.id}; leaving needsBackfill set for retry`)
       }
     } catch (err) {

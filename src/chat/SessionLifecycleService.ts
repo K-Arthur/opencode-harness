@@ -70,23 +70,21 @@ export class SessionLifecycleService {
       }
     }
 
-    const needsBackfill =
-      session.needsBackfill === true ||
-      (session.messages.length === 0 && !!session.cliSessionId)
-    if (needsBackfill && this.opts.sessionManager.isRunning && session.cliSessionId) {
+    const updatedSession = this.opts.sessionStore.get(sessionId) || session
+    const effectiveCliId = updatedSession.cliSessionId || session.cliSessionId
+
+    if (effectiveCliId && this.opts.sessionManager.isRunning) {
       try {
-        const rows = await this.opts.sessionManager.getSessionMessages(session.cliSessionId)
+        const rows = await this.opts.sessionManager.getSessionMessages(effectiveCliId)
         const messages = sdkMessagesToChatMessages(rows)
         if (messages.length > 0) {
           this.opts.sessionStore.applyBackfilledMessages(session.id, messages, summarizeOpencodeMessageUsage(rows))
           this.opts.sessionStore.autoTitleFromMessages(session.id)
-        } else {
-          // Backfill returned 0 rows - close tab as session is empty on server
-          this.opts.sessionStore.applyBackfilledMessages(session.id, [])
-          this.opts.tabManager.closeTab(session.id)
+        } else if (updatedSession.messages.length === 0) {
+          log.info(`Server returned 0 messages for ${session.id}; keeping local state for retry`)
         }
       } catch (err) {
-        log.warn(`Backfill on resume failed for ${session.id}`, err)
+        log.warn(`Message refresh on resume failed for ${session.id}`, err)
       }
     }
 

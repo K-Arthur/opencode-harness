@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Session messages permanently stale after resume** — Six interrelated bugs caused messages to remain stale after resuming a session:
+  - **Fix A**: `handleResumeSession` now always fetches fresh messages from the server on resume, regardless of local message count. Previously skipped backfill if `messages.length > 0`. (`src/chat/SessionLifecycleService.ts`)
+  - **Fix C**: Increased `BACKFILL_RETRY_DELAYS_MS` from `[1500, 4000]` to `[1500, 4000, 8000, 16000]` (4 retries over ~30s) to accommodate slow server lazy-loading. (`src/chat/ChatProvider.ts`)
+  - **Fix D**: Removed destructive `closeTab()` + `applyBackfilledMessages(id, [])` on empty backfill response. Now logs and preserves state for retry. (`src/chat/SessionLifecycleService.ts`)
+  - **Fix E**: `request_more_messages` handler now falls through to server fetch when local messages are exhausted, instead of returning an empty slice. (`src/chat/WebviewEventRouter.ts`)
+  - **Fix F**: Added `refresh_session_messages` message handler for explicit webview-triggered message refresh, with `session_messages_refreshed` response. (`src/chat/WebviewEventRouter.ts`, `src/chat/webview/main.ts`)
+- **`backfillTabIfNeeded` skipped stale sessions** — The method returned early if `session.messages.length > 0`, preventing re-backfill of stale sessions. Now only skips when `needsBackfill !== true`. (`src/chat/ChatProvider.ts`)
 - **Inline slash dropdown transparency** — The mention/commands dropdown background was 94% opaque (`color-mix`), causing text behind it to bleed through. Changed to fully opaque `var(--oc-editor-bg)`. (`src/chat/webview/css/components.css`)
 - **Commands modal z-index inconsistency** — `.commands-modal` used fallback `1000` while the `--z-modal` token is `300`. Fixed fallback to `300` for consistency with other modals. (`src/chat/webview/css/components.css`)
 - **Slash commands not available on first load** — Server and skill/prompt commands were only loaded when the user typed `/commands`. Now `list_commands` is sent on boot, pre-populating the inline dropdown and commands modal immediately. (`src/chat/webview/main.ts`)
@@ -19,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Commands palette button** — A `>_` terminal-style button in the input bottom bar (left of the `@` button) opens the commands palette modal with one click. (`src/chat/webview/index.html`, `src/chat/webview/dom.ts`, `src/chat/webview/main.ts`)
 - **`Ctrl+Shift+/` keybinding** — Opens the commands palette when the chat view is focused. (`package.json`)
 - **`CommandExecutionService` test suite** — 7 source-inspection tests covering class export, handleExecuteCommand method, server session ensure flow, cliSessionId persistence, error handling, and custom prompt routing. (`src/chat/CommandExecutionService.test.ts`)
+- **Session message freshness test suite** — 6 regression tests covering: handleResumeSession always refreshes, backfillTabIfNeeded respects needsBackfill, retry budget has 4 delays, no destructive closeTab on empty backfill, request_more_messages server fallback, and refresh_session_messages handler. (`src/chat/ChatProvider.test.ts`, `src/chat/SessionLifecycleService.test.ts`)
 
 ### Added
 - **Canonical changed-file sync** — `SessionStore.addChangedFiles()` now normalizes, deduplicates, persists, and replays changed files from both `file.edited` and `session.diff` SDK events. The webview treats `changed_files_update` as the canonical state message for the chip bar and todos panel, while `file_edited` remains a live incremental event. (`src/session/SessionStore.ts`, `src/session/eventHandlers/*`, `src/chat/ChatProvider.ts`, `src/chat/webview/main.ts`)

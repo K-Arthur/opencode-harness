@@ -2203,6 +2203,24 @@ function getVsCodeApi() {
         debouncedUpdateScrollMarkers(sid)
       }],
       ["clear_messages", (_msg, sid) => { handleClearMessages(sid) }],
+      ["session_messages_refreshed", (msg) => {
+        const sid = msg.sessionId as string | undefined
+        if (!sid) return
+        const refreshedMsgs = msg.messages as import("./types").ChatMessage[] | undefined
+        if (!refreshedMsgs) return
+        const session = stateManager.getSession(sid)
+        if (session) session.messages = refreshedMsgs
+        const msgList = getMessageList(sid)
+        if (!msgList) return
+        msgList.innerHTML = ""
+        const renderOpts = { mode: session?.mode ?? "build", sessionId: sid, postMessage: (m2: Record<string, unknown>) => vscode.postMessage(m2) }
+        for (const m of refreshedMsgs) {
+          const el = renderMessage(m, { ...renderOpts, turnIndex: refreshedMsgs.indexOf(m) }, false)
+          msgList.appendChild(el)
+        }
+        sessionBeforeIndex.set(sid, refreshedMsgs.length)
+        debouncedUpdateScrollMarkers(sid)
+      }],
       ["context_usage", (msg) => {
         const activeId = stateManager.getState().activeSessionId
         const tabPanel = activeId ? els.tabPanels.querySelector<HTMLElement>(`.tab-panel[data-tab-id="${CSS.escape(activeId)}"] .context-monitor`) : null

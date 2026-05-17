@@ -564,3 +564,75 @@ void it("open_file resolves through the centralized session-aware opener", () =>
     "shared opener must reject out-of-workspace file opens"
   )
 })
+
+// --- Session message freshness regression tests ---
+
+void it("backfillTabIfNeeded does not skip sessions that already have messages unless needsBackfill is false", () => {
+  const idx = source.indexOf("private async backfillTabIfNeeded(")
+  assert.ok(idx >= 0, "backfillTabIfNeeded must exist")
+  const block = source.slice(idx, idx + 1200)
+  assert.ok(
+    block.includes("session.messages.length > 0") && block.includes("needsBackfill"),
+    "backfillTabIfNeeded must only skip sessions with messages when needsBackfill is not set — stale sessions must be refreshed"
+  )
+  assert.ok(
+    !block.includes("session.messages.length > 0) {") && !block.includes("session.messages.length > 0)\n"),
+    "backfillTabIfNeeded must not have a bare messages.length > 0 early return — must also check needsBackfill"
+  )
+})
+
+void it("backfill retry budget allows at least 4 retries over 30 seconds", () => {
+  const delaysIdx = source.indexOf("BACKFILL_RETRY_DELAYS_MS")
+  assert.ok(delaysIdx >= 0, "BACKFILL_RETRY_DELAYS_MS must exist")
+  const lineStart = source.lastIndexOf("\n", delaysIdx) + 1
+  const lineEnd = source.indexOf("\n", delaysIdx)
+  const line = source.slice(lineStart, lineEnd)
+  const count = (line.match(/\d+/g) || []).length
+  assert.ok(count >= 4, `BACKFILL_RETRY_DELAYS_MS must have at least 4 retry delays, found ${count}: ${line.trim()}`)
+})
+
+void it("handleResumeSession does not destructively close tabs on empty backfill", () => {
+  const idx = lifecycleSource.indexOf("async handleResumeSession(")
+  assert.ok(idx >= 0, "handleResumeSession must exist")
+  const lifecycleBlock = lifecycleSource.slice(lifecycleSource.indexOf("async handleResumeSession("), lifecycleSource.indexOf("async handleAttachFiles("))
+  assert.ok(
+    !lifecycleBlock.includes("closeTab"),
+    "handleResumeSession must NOT call closeTab when backfill returns 0 messages"
+  )
+  assert.ok(
+    !lifecycleBlock.includes("applyBackfilledMessages(session.id, [])"),
+    "handleResumeSession must NOT call applyBackfilledMessages with empty array"
+  )
+})
+
+// --- Fix E: request_more_messages falls through to server ---
+
+void it("request_more_messages handler fetches from server when local is exhausted", () => {
+  const idx = eventRouterSource.indexOf('["request_more_messages"')
+  assert.ok(idx >= 0, "request_more_messages handler must exist")
+  const block = eventRouterSource.slice(idx, idx + 2000)
+  assert.ok(
+    block.includes("sessionManager.getSessionMessages") || block.includes("sessionManager.isRunning"),
+    "request_more_messages must attempt server fetch when local messages are exhausted"
+  )
+})
+
+// --- Fix F: refresh_session_messages handler exists ---
+
+void it("refresh_session_messages handler exists and fetches from server", () => {
+  const idx = eventRouterSource.indexOf('["refresh_session_messages"')
+  assert.ok(idx >= 0, "refresh_session_messages handler must exist in WebviewEventRouter")
+  const block = eventRouterSource.slice(idx, idx + 1500)
+  assert.ok(
+    block.includes("getSessionMessages"),
+    "refresh_session_messages must call getSessionMessages to fetch fresh data"
+  )
+  assert.ok(
+    block.includes("applyBackfilledMessages"),
+    "refresh_session_messages must apply backfilled messages to session store"
+  )
+  assert.ok(
+    block.includes("session_messages_refreshed"),
+    "refresh_session_messages must post session_messages_refreshed response to webview"
+  )
+})

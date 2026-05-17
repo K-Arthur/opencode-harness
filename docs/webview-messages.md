@@ -113,6 +113,41 @@ Changed-file state is synchronized from the extension host:
   `accept_diff`. Server-side message rollback uses the OpenCode `session.revert(messageID)`
   flow and reports through `revert_result`.
 
+## Session Message Freshness
+
+Session messages can become stale when the server lazy-loads conversations from disk after the
+extension has already restored local state. Six fixes address this:
+
+1. **Always refresh on resume**: `handleResumeSession` fetches fresh messages from the server on
+   every resume, regardless of local message count. It no longer skips backfill when
+   `messages.length > 0`.
+
+2. **`backfillTabIfNeeded` respects `needsBackfill` flag**: The method no longer uses
+   `messages.length > 0` as a standalone early-return guard. Sessions with existing messages are
+   re-backfilled when `needsBackfill === true`.
+
+3. **Extended retry budget**: `BACKFILL_RETRY_DELAYS_MS` is `[1500, 4000, 8000, 16000]` (4 retries
+   over ~30 seconds) to accommodate slow server lazy-loading.
+
+4. **No destructive close on empty backfill**: When the server returns 0 messages during
+   resume, the session state is preserved (not cleared and not closed) so that retries can
+   succeed once the server finishes loading.
+
+5. **`request_more_messages` server fallback**: When the webview requests earlier messages and
+   local state is exhausted (no more messages to paginate), the handler falls through to a
+   server fetch via `getSessionMessages`, applies any new data, and returns the fresh slice.
+
+6. **`refresh_session_messages` handler**: New webview-to-host message that explicitly requests a
+   full message refresh from the server. The host responds with `session_messages_refreshed`
+   containing the updated message list.
+
+### Messages
+
+- Webview → Host: `{ type: "refresh_session_messages" }` — triggers a full server fetch for the
+  active session's messages.
+- Host → Webview: `{ type: "session_messages_refreshed", sessionId, messages, totalCount }` —
+  contains the refreshed message array. The webview re-renders the message list.
+
 ## Tests
 
 The relevant coverage lives in:
@@ -124,4 +159,7 @@ The relevant coverage lives in:
   routing and dropdown structure.
 - `src/chat/CommandExecutionService.test.ts` for server session ensure flow and
   remote command execution edge cases.
+- `src/chat/SessionLifecycleService.test.ts` for session resume message freshness.
+- `src/chat/ChatProvider.test.ts` for backfill retry budget, stale session handling, and
+  `refresh_session_messages` / `request_more_messages` server fallback.
 - `tests/visual/messages.spec.ts` for message layout behavior in the current app shell.
