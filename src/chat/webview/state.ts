@@ -249,6 +249,16 @@ export function createState(vscode: VsCodeApi) {
     const saved = vscode.getState()
     if (saved) {
       state = migrateState(saved)
+      // No stream can possibly still be running across a webview reload.
+      // Stale `isStreaming: true` flags left from a prior session (e.g. one
+      // killed by a dropped message_complete event) would otherwise inflate
+      // getStreamCapacityState() and cause sendMessage() to silently bail at
+      // the "stream limit reached" guard — the user types, presses Enter,
+      // and nothing happens.
+      for (const id of Object.keys(state.sessions)) {
+        const s = state.sessions[id]
+        if (s && s.isStreaming) s.isStreaming = false
+      }
       return Object.keys(state.sessions).length > 0
     }
     return false

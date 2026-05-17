@@ -128,3 +128,68 @@ describe("state.ts — per-session token usage isolation (Batch 2d)", () => {
     assert.equal(sm.getSession(s1.id)?.cost, 0.1234)
   })
 })
+
+describe("state.ts — restore() must not resurrect stale isStreaming flags", () => {
+  // Background: when the extension restarts mid-stream (or a previous stream
+  // was orphaned by a dropped message_complete event), the webview's
+  // vscode.setState() snapshot still has `isStreaming: true` for those
+  // sessions. On reload, the stale flags inflated `getStreamCapacityState()`
+  // until it reported isFull, and `sendMessage()` then silently bailed at
+  // the "stream limit reached" guard — the user typed, pressed Enter, and
+  // nothing happened. Across a webview reload, NO stream can possibly still
+  // be running, so all isStreaming flags must reset to false on restore.
+
+  function stubWithSaved(saved: unknown) {
+    let s: unknown = saved
+    return {
+      getState: () => s,
+      setState: (v: unknown) => { s = v },
+      postMessage: () => {},
+    } as any
+  }
+
+  it("clears isStreaming on every restored session", () => {
+    const persisted = {
+      sessions: {
+        a: { id: "a", name: "Tab A", messages: [], isStreaming: true,  mode: "build", model: "x" },
+        b: { id: "b", name: "Tab B", messages: [], isStreaming: false, mode: "build", model: "x" },
+        c: { id: "c", name: "Tab C", messages: [], isStreaming: true,  mode: "build", model: "x" },
+      },
+      sessionOrder: ["a", "b", "c"],
+      activeSessionId: "a",
+      globalModel: "x",
+      initialized: true,
+    }
+
+    const sm = createState(stubWithSaved(persisted))
+    sm.restore()
+
+    const streaming = sm.getAllSessions().filter((s) => s.isStreaming)
+    assert.equal(streaming.length, 0, "no session may be marked streaming after a webview restore")
+  })
+
+  it("does not block the send button via a stale stream-cap from persisted flags", () => {
+    // Reproduces the exact failure path the user reported: 3 stuck-streaming
+    // sessions persisted → loadSessions/restore returns 3 streaming → capacity
+    // reports full → sendMessage's guard fires before posting send_prompt.
+    const persisted = {
+      sessions: {
+        s1: { id: "s1", name: "stuck1", messages: [], isStreaming: true, mode: "build", model: "x" },
+        s2: { id: "s2", name: "stuck2", messages: [], isStreaming: true, mode: "build", model: "x" },
+        s3: { id: "s3", name: "stuck3", messages: [], isStreaming: true, mode: "build", model: "x" },
+      },
+      sessionOrder: ["s1", "s2", "s3"],
+      activeSessionId: "s1",
+      globalModel: "x",
+      initialized: true,
+    }
+
+    const sm = createState(stubWithSaved(persisted))
+    sm.restore()
+    const activeStreams = sm.getAllSessions().filter((s) => s.isStreaming).length
+
+    // The bug: activeStreams === 3 → isFull → sendMessage bails.
+    // The fix: activeStreams === 0 → capacity available → send goes through.
+    assert.equal(activeStreams, 0, "stream-cap must not be inflated by stale persisted flags")
+  })
+})

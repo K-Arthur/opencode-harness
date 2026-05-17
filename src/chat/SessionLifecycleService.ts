@@ -57,7 +57,13 @@ export class SessionLifecycleService {
     }
     this.opts.tabManager.switchTab(session.id)
 
-    if (this.opts.sessionManager.isRunning) {
+    // Only re-attach to an existing server session here. Do NOT speculatively
+    // create a fresh CLI session for a still-pending tab with no messages —
+    // that produced server-side noise (empty `ses_…` sessions that
+    // immediately returned 0 messages on getSessionMessages) and gave the
+    // tab a bogus cliSessionId before the user had even typed. The first
+    // real prompt will create the session through StreamCoordinator.
+    if (this.opts.sessionManager.isRunning && session.cliSessionId) {
       try {
         const cliSessionId = await this.opts.sessionManager.ensureSession(
           session.cliSessionId,
