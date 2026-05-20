@@ -99,4 +99,87 @@ void describe("AutoCompactor.ts", () => {
   void it("sends task_banner for completion", () => {
     assert.ok(source.includes("task_banner"), "must send task_banner for completion")
   })
+
+  void describe("Stage 5: Audit hardening", () => {
+    // Background-tab context_usage events used to call tryCompactIfNeeded
+    // which always targets the *active* tab. So tab B at 90% would trigger
+    // compaction on tab A even if A was at 5%. The trigger now passes
+    // sessionId via CompactTriggerContext and bails when it doesn't match.
+    void it("tryCompactIfNeeded refuses when the firing tab isn't the active tab", () => {
+      const fnIdx = source.indexOf("tryCompactIfNeeded(")
+      assert.ok(fnIdx >= 0)
+      const block = source.slice(fnIdx, source.indexOf("handleBannerAction(", fnIdx))
+      assert.match(
+        block,
+        /ctx\??\.sessionId|CompactTriggerContext/,
+        "tryCompactIfNeeded must consult a trigger sessionId so background-tab triggers don't compact the active tab",
+      )
+      assert.match(
+        block,
+        /ctx\??\.sessionId\s*!==\s*activeTab\.id|sessionId\s*!==\s*activeTab\.id/,
+        "tryCompactIfNeeded must compare the trigger sessionId against the active tab id",
+      )
+    })
+
+    // A slow compactSession round-trip leaves the >=80% trigger free to
+    // fire again on every subsequent context_usage update, stacking
+    // duplicate compactions. The new inFlight Set blocks that.
+    void it("guards against re-entrant compaction via an in-flight Set", () => {
+      assert.match(source, /inFlight\s*=\s*new\s+Set<string>\(\)/,
+        "must declare a per-session in-flight Set so duplicate compactions don't stack",
+      )
+      assert.match(source, /inFlight\.add\(/, "must add to the in-flight Set when compaction starts")
+      assert.match(source, /inFlight\.delete\(/, "must clear the in-flight Set when compaction settles")
+      assert.match(source, /\.finally\(/, "must use finally to ensure in-flight is cleared on both success and error")
+    })
+
+    // The old percent recomputation in the banner path did Math.round((usage / limit) * 100)
+    // with no zero-guard. After the context-window fix, limit can legitimately
+    // be 0 (model unresolved) and we'd surface NaN in the banner payload.
+    void it("banner percent calc is safe when limit is 0 (model context window unresolved)", () => {
+      const fnIdx = source.indexOf("tryCompactIfNeeded(")
+      const block = source.slice(fnIdx, source.indexOf("handleBannerAction(", fnIdx))
+      // Must either clamp via Math.min/Math.max or branch on limit > 0
+      assert.match(
+        block,
+        /safeLimit|limit\s*>\s*0|Math\.(min|max)\([^)]*100/,
+        "tryCompactIfNeeded must guard against limit === 0 when computing the banner percent",
+      )
+    })
+
+    // compact_now used to reset snoozeUntil but leave snoozeTokens stale.
+    // A future banner could then be suppressed by the 1.05× gate against
+    // the old snoozeTokens value.
+    void it("resets BOTH snoozeUntil and snoozeTokens on compact_now", () => {
+      const fnIdx = source.indexOf("handleBannerAction(")
+      const block = source.slice(fnIdx, source.indexOf("async compactNow(", fnIdx))
+      assert.match(block, /snoozeUntil\s*=\s*0/, "must reset snoozeUntil on compact_now")
+      assert.match(block, /snoozeTokens\s*=\s*0/, "must reset snoozeTokens on compact_now (else stale value can gate future banners)")
+    })
+
+    // user-initiated compactNow should also respect the in-flight guard so
+    // double-clicking "Compact now" doesn't fire compactSession twice.
+    void it("compactNow refuses re-entrant invocations", () => {
+      const fnIdx = source.indexOf("async compactNow(")
+      const fnEnd = source.indexOf("/** Test", fnIdx) > 0 ? source.indexOf("/** Test", fnIdx) : source.indexOf("dispose()", fnIdx)
+      const block = source.slice(fnIdx, fnEnd)
+      assert.match(block, /inFlight\.has\(/,
+        "compactNow must short-circuit when a compaction is already in flight for this session",
+      )
+    })
+
+    // post-compaction success must explicitly post session_compacted on the
+    // compactNow path so the webview reload triggers and the user sees the
+    // refreshed message list — earlier this only fired on the auto-compact path.
+    void it("compactNow emits session_compacted on success", () => {
+      const fnIdx = source.indexOf("async compactNow(")
+      const fnEnd = source.indexOf("isCompacting", fnIdx)
+      const block = source.slice(fnIdx, fnEnd)
+      assert.match(
+        block,
+        /session_compacted/,
+        "compactNow must post session_compacted on success so the webview refreshes the message list",
+      )
+    })
+  })
 })

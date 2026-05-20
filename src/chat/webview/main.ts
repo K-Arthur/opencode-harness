@@ -19,6 +19,7 @@ import { REMOVE_SVG } from "./icons"
 import { createPromptQueue, type PromptQueue, type QueueItem } from "./queue"
 import { updateContextChips, updateContextUsage, applyThemeVars, handleRateLimitExhausted } from "./theme"
 import { setupContextUsagePanel as setupContextUsagePanelInit, setContextUsagePanel, setContextUsagePostMessage, handleContextUsageMessage, resetContextUsagePanel } from "./context-usage-panel"
+import { showCompactBanner, hideCompactBanner } from "./compact-banner"
 import { setupContextMonitor } from "./context-monitor"
 import { setupPromptStash } from "./prompt-stash"
 import { renderRecentSessions } from "./recent-sessions"
@@ -2715,14 +2716,48 @@ function getVsCodeApi() {
           }
         }
       }],
+      ["compact_banner", (msg, sid) => {
+        // Surfaced when autoCompact === "ask" and the active session crosses
+        // the threshold. Previously there was no handler and the banner was
+        // silently dropped, leaving the default "ask" mode unusable.
+        const sessionId = sid || (typeof msg.sessionId === "string" ? msg.sessionId : "")
+        if (!sessionId) return
+        showCompactBanner(
+          {
+            getContainer: (id) =>
+              els.tabPanels.querySelector<HTMLElement>(`.tab-panel[data-tab-id="${CSS.escape(id)}"]`),
+            postMessage: (m) => vscode.postMessage(m),
+          },
+          {
+            sessionId,
+            percent: typeof msg.percent === "number" ? msg.percent : 0,
+            tokens: typeof msg.tokens === "number" ? msg.tokens : 0,
+            maxTokens: typeof msg.maxTokens === "number" ? msg.maxTokens : 0,
+            actions: Array.isArray(msg.actions) ? (msg.actions as string[]) : undefined,
+          },
+        )
+      }],
+      ["compact_banner_dismissed", (_msg, sid) => {
+        if (sid) hideCompactBanner(sid)
+      }],
       ["compaction_started", (_msg, sid) => {
         if (sid) {
           showSystemMessage(sid, "Compacting session...")
+          // The banner is no longer relevant once compaction begins.
+          hideCompactBanner(sid)
         }
       }],
       ["session_compacted", (_msg, sid) => {
         if (sid) {
           showSystemMessage(sid, "Session compacted successfully.")
+          hideCompactBanner(sid)
+          // Re-fetch the session so the visual message list reflects the
+          // post-compact state. Before this, the chat said "compacted" but
+          // continued to show the old (uncompacted) messages — making
+          // compaction look like a no-op to the user. resume_session
+          // re-attaches the server session, pulls fresh messages, and
+          // re-renders the bubble list in place.
+          vscode.postMessage({ type: "resume_session", sessionId: sid })
         }
       }],
       ["command_list", (msg) => {

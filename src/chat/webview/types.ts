@@ -400,7 +400,12 @@ export type HostMessage =
   | { type: "message"; sessionId: string; message: ChatMessage }
   | { type: "session_compacted"; sessionId: string }
   | { type: "compaction_started"; sessionId: string }
-  | { type: "compact_banner"; sessionId: string; pendingTokens: number; predictedTokens: number; predictedCost: number; willOverflow: boolean }
+  // Shape matches what AutoCompactor.tryCompactIfNeeded actually posts.
+  // The previous declaration (pendingTokens / predictedTokens / etc.) didn't
+  // match the runtime payload at all — the host has always emitted percent /
+  // tokens / maxTokens / actions, and the old type was never enforced because
+  // no webview handler consumed the message.
+  | { type: "compact_banner"; sessionId: string; percent: number; tokens: number; maxTokens: number; actions: string[] }
   | { type: "compact_banner_dismissed"; sessionId: string }
   | { type: "step_tokens"; sessionId: string; tokens: number | TokenBreakdown; turnIndex?: number }
   | { type: "cost_update"; sessionId?: string; cost: number }

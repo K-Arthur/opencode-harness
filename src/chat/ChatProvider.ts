@@ -349,10 +349,17 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
           breakdown: usage.breakdown,
         })
         if (usage.percent >= 80) {
-          this.autoCompactor.tryCompactIfNeeded({
-            postMessage: (m) => this.postMessage(m),
-            postRequestError: (m) => this.postRequestError(m),
-          })
+          // Pass the firing sessionId so AutoCompactor can refuse to act
+          // when a background tab triggers the >=80% line for itself —
+          // without this, a high-usage background tab would cause us to
+          // compact the (possibly low-usage) active tab instead.
+          this.autoCompactor.tryCompactIfNeeded(
+            {
+              postMessage: (m) => this.postMessage(m),
+              postRequestError: (m) => this.postRequestError(m),
+            },
+            { sessionId: usage.sessionId },
+          )
         }
       })
     )
@@ -538,13 +545,6 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       const customCommands = this.promptManager.getPromptCommands()
       this.postMessage({ type: "command_list", commands: customCommands, showInChat: true })
     }
-  }
-
-  private autoCompactIfIdle(): void {
-    this.autoCompactor.tryCompactIfNeeded({
-      postMessage: (m) => this.postMessage(m),
-      postRequestError: (m) => this.postRequestError(m),
-    })
   }
 
   // ---------------------------------------------------------------------------

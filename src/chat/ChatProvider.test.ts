@@ -78,8 +78,19 @@ void describe("ChatProvider.ts", () => {
   })
 
   void it("delegates auto compaction to AutoCompactor", () => {
-    assert.ok(source.includes("private autoCompactIfIdle("), "must have autoCompactIfIdle method")
+    // The earlier autoCompactIfIdle() wrapper was dead code (declared but
+    // never called) so we removed it; the only real trigger path is the
+    // contextMonitor.onContextChanged listener invoking tryCompactIfNeeded
+    // directly.
     assert.ok(source.includes("this.autoCompactor.tryCompactIfNeeded"), "must delegate to AutoCompactor")
+    assert.ok(source.includes("onContextChanged"), "must trigger auto compaction from context-usage events")
+    // Cross-tab safety: the trigger must pass the firing sessionId so a
+    // background tab's >=80% event can't compact the active tab.
+    assert.match(
+      source,
+      /tryCompactIfNeeded\s*\([\s\S]{0,400}sessionId:\s*usage\.sessionId/,
+      "tryCompactIfNeeded must be called with the firing usage.sessionId for cross-tab safety",
+    )
   })
 
   void it("delegates slash commands to ChatCommands", () => {

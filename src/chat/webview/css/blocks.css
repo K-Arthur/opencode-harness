@@ -1633,6 +1633,76 @@
   font-weight: 600;
 }
 
+/* Compact-session banner. Surfaced when autoCompact === "ask" and the
+ * active session has crossed the 80% threshold. The user picks
+ * "Compact now" (runs SDK summarise) or "Remind me later" (10-min snooze). */
+.compact-banner {
+  margin: var(--space-3) var(--space-3) 0;
+  padding: var(--space-3);
+  background: var(--oc-warning-subtle, rgba(204, 167, 0, 0.08));
+  border: 1px solid var(--oc-warning-border, rgba(204, 167, 0, 0.3));
+  border-left: 3px solid var(--oc-warning-color, var(--vscode-notificationsWarningIcon-foreground, #cca700));
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--oc-fg);
+  animation: compact-banner-in var(--duration-fast) var(--ease-out);
+}
+
+@keyframes compact-banner-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.compact-banner-headline {
+  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  color: var(--oc-warning-color, var(--vscode-notificationsWarningIcon-foreground, #cca700));
+  margin-bottom: var(--space-1);
+}
+
+.compact-banner-body {
+  margin-bottom: var(--space-2);
+  color: var(--oc-muted);
+  line-height: 1.4;
+}
+
+.compact-banner-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.compact-banner-btn {
+  padding: var(--space-1) var(--space-3);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--oc-glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--oc-fg);
+  cursor: pointer;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+
+.compact-banner-btn:hover {
+  background: var(--oc-list-hover);
+  border-color: var(--oc-accent);
+}
+
+.compact-banner-btn--primary {
+  background: var(--oc-accent);
+  border-color: var(--oc-accent);
+  color: var(--oc-on-accent, #fff);
+}
+
+.compact-banner-btn--primary:hover {
+  background: var(--oc-accent-hover, var(--oc-accent));
+  filter: brightness(1.1);
+}
+
 /* Step-finish chip — only rendered for abnormal step endings
  * (e.g. length cap, content filter, abort, error). Normal "stop"
  * completions render no chip at all. Styling here is intentionally
