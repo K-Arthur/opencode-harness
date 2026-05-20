@@ -4,11 +4,14 @@ import { JSDOM } from "jsdom"
 
 describe("context usage panel", () => {
   beforeEach(() => {
+    // Markup mirrors the real ids defined in index.html so we test against the
+    // same DOM the production webview targets. The progress element is a real
+    // <progress>, not a styled <div>.
     const dom = new JSDOM(`<!doctype html>
-      <div id="context-usage-bar">
-        <div id="context-usage-progress-bar" style="width: 60%"></div>
-        <span id="context-usage-detail">12 / 20</span>
-        <span id="context-usage-cost">$1.2300</span>
+      <div id="context-usage" class="hidden">
+        <progress id="context-progress-bar" max="100" value="0"></progress>
+        <span id="context-label" class="context-usage-label">0%</span>
+        <span id="context-cost" class="context-cost hidden"></span>
       </div>
       <section id="panel">
         <div class="context-breakdown-section"></div>
@@ -20,6 +23,7 @@ describe("context usage panel", () => {
     ;(globalThis as any).window = dom.window
     ;(globalThis as any).document = dom.window.document
     ;(globalThis as any).HTMLElement = dom.window.HTMLElement
+    ;(globalThis as any).HTMLProgressElement = dom.window.HTMLProgressElement
     ;(globalThis as any).vscode = { postMessage() {} }
   })
 
@@ -34,8 +38,8 @@ describe("context usage panel", () => {
       percent: 0,
     })
 
-    const bar = document.getElementById("context-usage-bar")
-    const cost = document.getElementById("context-usage-cost")
+    const bar = document.getElementById("context-usage")
+    const cost = document.getElementById("context-cost")
 
     assert.ok(bar?.classList.contains("hidden"))
     assert.ok(cost?.classList.contains("hidden"))
@@ -70,31 +74,32 @@ describe("context usage panel", () => {
 
   it("resets context usage panel on tab switch", async () => {
     const { resetContextUsagePanel, handleContextUsageMessage } = await import("./context-usage-panel")
-    
+
     // First, set some usage data
     handleContextUsageMessage({
       type: "context_usage",
       tokens: 1000,
       maxTokens: 200_000,
-      percent: 0.5,
+      percent: 50,
       cost: 0.5,
     })
 
-    const bar = document.getElementById("context-usage-bar")
-    const progressBar = document.getElementById("context-usage-progress-bar")
-    const detail = document.getElementById("context-usage-detail")
-    const cost = document.getElementById("context-usage-cost")
+    const bar = document.getElementById("context-usage")
+    const progressBar = document.getElementById("context-progress-bar") as HTMLProgressElement | null
+    const label = document.getElementById("context-label")
+    const cost = document.getElementById("context-cost")
 
-    assert.ok(!bar?.classList.contains("hidden"))
-    assert.equal(detail?.textContent, "1,000 / 200,000")
+    assert.ok(!bar?.classList.contains("hidden"), "bar should be visible after non-zero usage")
+    assert.equal(label?.textContent, "1,000 / 200,000")
+    assert.equal(progressBar?.value, 50)
     assert.equal(cost?.textContent, "$0.5000")
 
     // Reset the panel
     resetContextUsagePanel()
 
-    assert.ok(bar?.classList.contains("hidden"))
-    assert.equal(progressBar?.style.width, "0%")
-    assert.equal(detail?.textContent, "")
+    assert.ok(bar?.classList.contains("hidden"), "bar should be hidden after reset")
+    assert.equal(progressBar?.value, 0, "progress bar should be zeroed")
+    assert.equal(label?.textContent, "0%", "label should be cleared to default")
     assert.equal(cost?.textContent, "")
     assert.ok(cost?.classList.contains("hidden"))
   })

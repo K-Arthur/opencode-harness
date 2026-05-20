@@ -82,22 +82,25 @@ let suggestions: OptimizationSuggestion[] = []
 /**
  * Reset the context usage panel to initial state.
  * Called on tab switch to prevent stale data from bleeding into the new tab.
+ * The element IDs here match index.html — earlier drafts referenced
+ * non-existent ids (e.g. "context-usage-bar") which silently no-op'd via
+ * the if-guards, so the reset never actually ran.
  */
 export function resetContextUsagePanel(): void {
   currentUsage = null
-  const bar = document.getElementById("context-usage-bar")
-  const progressBar = document.getElementById("context-usage-progress-bar")
-  const detail = document.getElementById("context-usage-detail")
-  const costDisplay = document.getElementById("context-usage-cost")
+  const bar = document.getElementById("context-usage")
+  const progressBar = document.getElementById("context-progress-bar") as HTMLProgressElement | null
+  const label = document.getElementById("context-label")
+  const costDisplay = document.getElementById("context-cost")
 
   if (bar) {
     bar.classList.add("hidden")
   }
   if (progressBar) {
-    progressBar.style.width = "0%"
+    progressBar.value = 0
   }
-  if (detail) {
-    detail.textContent = ""
+  if (label) {
+    label.textContent = "0%"
   }
   if (costDisplay) {
     costDisplay.classList.add("hidden")
@@ -134,14 +137,16 @@ export function handleContextUsageMessage(data: Record<string, unknown>): void {
 
 /**
  * Update the context usage bar in the status strip.
+ * Reads/writes the elements defined in index.html: #context-usage (container),
+ * #context-progress-bar (progress element), #context-label (text), #context-cost.
  */
 function updateContextUsageBar(usage: ContextUsage | null): void {
-  const bar = document.getElementById("context-usage-bar")
-  const progressBar = document.getElementById("context-usage-progress-bar")
-  const detail = document.getElementById("context-usage-detail")
-  const costDisplay = document.getElementById("context-usage-cost")
+  const bar = document.getElementById("context-usage")
+  const progressBar = document.getElementById("context-progress-bar") as HTMLProgressElement | null
+  const label = document.getElementById("context-label")
+  const costDisplay = document.getElementById("context-cost")
 
-  if (!bar || !progressBar || !detail || !usage) return
+  if (!bar || !progressBar || !label || !usage) return
 
   if (usage.tokens === 0) {
     bar.classList.add("hidden")
@@ -153,8 +158,8 @@ function updateContextUsageBar(usage: ContextUsage | null): void {
   }
 
   bar.classList.remove("hidden")
-  progressBar.style.width = `${usage.percent}%`
-  detail.textContent = `${usage.tokens.toLocaleString()} / ${usage.maxTokens.toLocaleString()}`
+  progressBar.value = usage.percent
+  label.textContent = `${usage.tokens.toLocaleString()} / ${usage.maxTokens.toLocaleString()}`
 
   // Add cost display if available
   if (costDisplay && usage.cost !== undefined) {

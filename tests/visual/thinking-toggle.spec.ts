@@ -140,8 +140,11 @@ test.describe('Global Show/Hide Thinking Toggle', () => {
   })
 
   test('should respect individual block open state when expanding', async ({ page }) => {
-    // Create thinking blocks with different initial states
+    // Clear the beforeEach-mounted block so nth(0)/nth(1) refer unambiguously
+    // to the two blocks this test creates with distinct initial states.
     await page.evaluate(() => {
+      document.querySelectorAll('.thinking-block').forEach((b) => b.remove())
+
       const list = document.querySelector('.message-list')
       if (!list) return
 

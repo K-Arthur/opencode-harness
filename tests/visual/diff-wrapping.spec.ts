@@ -5,16 +5,17 @@ async function mountDiffBlock(page: Page, wrapped: boolean = false) {
   await page.evaluate((isWrapped) => {
     document.querySelector('.welcome-container')?.remove()
 
-    const existingList = document.querySelector('.message-list')
-    if (existingList) {
-      existingList.innerHTML = ''
-      return
+    // Re-use an existing message-list if present so we don't double-mount,
+    // but always re-render the diff block inside it.
+    let list = document.querySelector('.message-list') as HTMLElement | null
+    if (list) {
+      list.innerHTML = ''
+    } else {
+      const host = document.querySelector('.tab-panel.active') || document.querySelector('.chat-main') || document.body
+      list = document.createElement('div')
+      list.className = 'message-list'
+      host.appendChild(list)
     }
-
-    const host = document.querySelector('.tab-panel.active') || document.querySelector('.chat-main') || document.body
-    const list = document.createElement('div')
-    list.className = 'message-list'
-    host.appendChild(list)
 
     const diffBlock = document.createElement('div')
     diffBlock.className = 'diff-block'
@@ -79,6 +80,18 @@ async function mountDiffBlock(page: Page, wrapped: boolean = false) {
       </div>
     `
     list.appendChild(diffBlock)
+
+    // Wire up the wrap toggle behaviour locally. In production this is wired
+    // by the message-renderer init path; the standalone-served bundle doesn't
+    // get a chance to run that against a manually injected block.
+    const toggle = diffBlock.querySelector('.diff-wrap-toggle') as HTMLElement | null
+    const wrapper = diffBlock.querySelector('.diff-table-wrapper') as HTMLElement | null
+    if (toggle && wrapper) {
+      toggle.addEventListener('click', () => {
+        const isWrapped = wrapper.classList.toggle('diff-table-wrapper--wrapped')
+        toggle.classList.toggle('active', isWrapped)
+      })
+    }
   }, wrapped)
 }
 
@@ -146,11 +159,12 @@ test.describe('Diff Wrapping', () => {
   test('should preserve diff content in both modes', async ({ page }) => {
     const diffContent = page.locator('.diff-line-content')
     const contentCount = await diffContent.count()
-    expect(contentCount).toBe(4)
+    // Fixture has 5 diff lines (context, removed, added, added, context).
+    expect(contentCount).toBe(5)
 
     // Toggle wrapping and verify content is preserved
     await page.locator('.diff-wrap-toggle').click()
     const contentCountAfter = await diffContent.count()
-    expect(contentCountAfter).toBe(4)
+    expect(contentCountAfter).toBe(5)
   })
 })

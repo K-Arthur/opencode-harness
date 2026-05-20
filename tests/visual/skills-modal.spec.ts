@@ -5,18 +5,18 @@ async function mountSkillsModal(page: Page, visible: boolean = true) {
   await page.evaluate((isVisible) => {
     document.querySelector('.welcome-container')?.remove()
 
+    // Reuse the existing #skills-modal node from index.html if present, but
+    // always re-populate its contents so the fixture state is deterministic.
+    // Previously this branch returned early, leaving the modal empty.
     const existingModal = document.getElementById('skills-modal')
-    if (existingModal) {
-      existingModal.classList.toggle('hidden', !isVisible)
-      return
+    const modal = existingModal ?? document.createElement('div')
+    if (!existingModal) {
+      modal.id = 'skills-modal'
+      modal.setAttribute('role', 'dialog')
+      modal.setAttribute('aria-label', 'Manage skills')
+      modal.setAttribute('aria-modal', 'true')
     }
-
-    const modal = document.createElement('div')
-    modal.id = 'skills-modal'
     modal.className = `skills-modal ${isVisible ? '' : 'hidden'}`
-    modal.setAttribute('role', 'dialog')
-    modal.setAttribute('aria-label', 'Manage skills')
-    modal.setAttribute('aria-modal', 'true')
     modal.innerHTML = `
       <div class="skills-modal-content">
         <div class="skills-modal-header">
@@ -64,7 +64,9 @@ async function mountSkillsModal(page: Page, visible: boolean = true) {
         </div>
       </div>
     `
-    document.body.appendChild(modal)
+    if (!existingModal) {
+      document.body.appendChild(modal)
+    }
   }, visible)
 }
 

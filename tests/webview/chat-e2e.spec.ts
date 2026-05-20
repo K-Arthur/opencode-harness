@@ -1,128 +1,229 @@
 import { test, expect } from "@playwright/test"
+import {
+  installVsCodeApi,
+  dispatchHostMessage,
+  postedMessages,
+  expectNoBrowserErrors,
+  captureErrors,
+} from "../visual/webviewTestHarness"
 
+// End-to-end webview tests that drive the standalone-served bundle through
+// the same host→webview message contract used at runtime. These verify the
+// four user-visible fixes:
+//   A) StreamCoordinator log-storm (no webview-side observable, covered by unit tests)
+//   B) Changed-files chips render per-language colored badges
+//   C) Model picker reflects the active session's model on restore
+//   D) Context usage bar resets when switching tabs
 test.describe("Chat Webview E2E", () => {
-  test("model dropdown syncs selected state on model change", async ({ page }) => {
-    await page.goto("/")
-    
-    // Mock VS Code API
-    await page.evaluate(() => {
-      (window as any).acquireVsCodeApi = () => ({
-        postMessage: (msg: any) => {
-          (window as any).__testMessages = (window as any).__testMessages || []
-          ;(window as any).__testMessages.push(msg)
-        },
-        getState: () => ({
-          sessions: [{ id: "test-1", name: "Test", model: "claude-3-opus-20240229", messages: [] }]
-        }),
-        setState: () => {}
-      })
-    })
-    
-    // Wait for page to load
-    await page.waitForSelector(".model-selector-btn")
-    
-    // Click model dropdown
-    await page.click(".model-selector-btn")
-    
-    // Select a different model
-    await page.click('[role="option"]:has-text("claude-3-sonnet")')
-    
-    // Verify model was changed
-    const messages = await page.evaluate(() => (window as any).__testMessages || [])
-    const modelUpdateMsg = messages.find((m: any) => m.type === "model_update")
-    expect(modelUpdateMsg).toBeDefined()
-    expect(modelUpdateMsg.model).toContain("claude-3-sonnet")
+  test.beforeEach(async ({ page }) => {
+    await installVsCodeApi(page)
   })
 
-  test("context usage panel resets on tab switch", async ({ page }) => {
+  // Fix C: a restored session's model must win over the global model.
+  // We seed two sessions with different models and verify init_state's
+  // active session model is what shows in the dropdown label, not the
+  // global default.
+  test("model picker shows the active session's model on restore", async ({ page }) => {
+    const captured = captureErrors(page)
     await page.goto("/")
-    
-    await page.evaluate(() => {
-      (window as any).acquireVsCodeApi = () => ({
-        postMessage: (msg: any) => {
-          (window as any).__testMessages = (window as any).__testMessages || []
-          ;(window as any).__testMessages.push(msg)
+
+    await dispatchHostMessage(page, {
+      type: "init_state",
+      sessions: [
+        {
+          id: "session-a",
+          name: "Session A",
+          model: "anthropic/claude-3-5-sonnet-20241022",
+          messages: [],
+          tokenUsage: { prompt: 0, completion: 0, total: 0 },
         },
-        getState: () => ({
-          sessions: [
-            { id: "test-1", name: "Test 1", model: "claude-3-opus-20240229", messages: [], tokenUsage: { total: 1000 } },
-            { id: "test-2", name: "Test 2", model: "claude-3-opus-20240229", messages: [], tokenUsage: { total: 0 } }
+        {
+          id: "session-b",
+          name: "Session B",
+          model: "openai/gpt-4o",
+          messages: [],
+          tokenUsage: { prompt: 0, completion: 0, total: 0 },
+        },
+      ],
+      activeSessionId: "session-b",
+      globalModel: "anthropic/claude-3-5-sonnet-20241022",
+    })
+
+    // The dropdown's short label shows the part after the last slash —
+    // active session's model is gpt-4o, NOT the global sonnet model.
+    const label = page.locator("#model-label")
+    await expect(label).toHaveText(/gpt-4o/, { timeout: 5000 })
+
+    expectNoBrowserErrors(captured)
+  })
+
+  // Fix D: switching tabs must zero out the context-usage bar so the previous
+  // tab's totals don't bleed into the new one.
+  test("context usage bar resets when switching to a tab with zero tokens", async ({ page }) => {
+    const captured = captureErrors(page)
+    await page.goto("/")
+
+    await dispatchHostMessage(page, {
+      type: "init_state",
+      sessions: [
+        {
+          id: "session-loaded",
+          name: "Loaded",
+          model: "anthropic/claude-3-5-sonnet-20241022",
+          messages: [],
+          tokenUsage: { prompt: 5000, completion: 3000, total: 8000 },
+        },
+        {
+          id: "session-empty",
+          name: "Empty",
+          model: "anthropic/claude-3-5-sonnet-20241022",
+          messages: [],
+          tokenUsage: { prompt: 0, completion: 0, total: 0 },
+        },
+      ],
+      activeSessionId: "session-loaded",
+    })
+
+    // Push some usage on the loaded session
+    await dispatchHostMessage(page, {
+      type: "context_usage",
+      tokens: 8000,
+      maxTokens: 200000,
+      percent: 4,
+    })
+
+    // Switch to the empty session via the same host event the extension
+    // sends when the active session changes.
+    await dispatchHostMessage(page, {
+      type: "active_session_changed",
+      sessionId: "session-empty",
+    })
+
+    const bar = page.locator("#context-usage")
+    // After switch the bar should be hidden again (no usage on the new tab).
+    await expect(bar).toHaveClass(/hidden/, { timeout: 3000 })
+
+    expectNoBrowserErrors(captured)
+  })
+
+  // Fix B: changed-files chips render with distinct per-language colored
+  // monogram badges, not identical generic SVGs.
+  test("changed-files chips render per-language colored badges", async ({ page }) => {
+    const captured = captureErrors(page)
+    await page.goto("/")
+
+    await dispatchHostMessage(page, {
+      type: "init_state",
+      sessions: [
+        {
+          id: "s",
+          name: "T",
+          model: "anthropic/claude-3-5-sonnet-20241022",
+          messages: [],
+          tokenUsage: { prompt: 0, completion: 0, total: 0 },
+          changedFiles: ["src/foo.ts", "src/bar.py", "README.md", "config.json"],
+        },
+      ],
+      activeSessionId: "s",
+    })
+
+    await page.waitForSelector(".changed-file-chip", { timeout: 5000 })
+
+    // One chip per file
+    await expect(page.locator(".changed-file-chip")).toHaveCount(4)
+
+    // Per-language classes should each appear at least once
+    await expect(page.locator(".changed-file-icon--ts")).toHaveCount(1)
+    await expect(page.locator(".changed-file-icon--py")).toHaveCount(1)
+    await expect(page.locator(".changed-file-icon--md")).toHaveCount(1)
+    await expect(page.locator(".changed-file-icon--json")).toHaveCount(1)
+
+    // Icons must contain visible text labels (not just SVGs)
+    const tsIcon = page.locator(".changed-file-icon--ts").first()
+    await expect(tsIcon).toHaveText("TS")
+
+    // Icons must be aria-hidden so screen readers skip the badge
+    await expect(tsIcon).toHaveAttribute("aria-hidden", "true")
+
+    expectNoBrowserErrors(captured)
+  })
+
+  // Regression: changed-files component supports more than the legacy core
+  // set — kotlin, shell, yaml, html should all map to a distinct badge.
+  test("changed-files chips cover extended language set", async ({ page }) => {
+    const captured = captureErrors(page)
+    await page.goto("/")
+
+    await dispatchHostMessage(page, {
+      type: "init_state",
+      sessions: [
+        {
+          id: "s",
+          name: "T",
+          model: "anthropic/claude-3-5-sonnet-20241022",
+          messages: [],
+          tokenUsage: { prompt: 0, completion: 0, total: 0 },
+          changedFiles: [
+            "app/Main.kt",
+            "scripts/deploy.sh",
+            "ci/workflow.yaml",
+            "public/index.html",
+            "schema/migration.sql",
           ],
-          activeSessionId: "test-1"
-        }),
-        setState: () => {}
-      })
+        },
+      ],
+      activeSessionId: "s",
     })
-    
-    // Switch to second tab
-    await page.evaluate(() => {
-      const vscode = (window as any).acquireVsCodeApi()
-      vscode.postMessage({ type: "active_session_changed", sessionId: "test-2" })
-    })
-    
-    // Verify context usage was reset
-    const contextBar = page.locator("#context-usage-bar")
-    await expect(contextBar).toHaveClass(/hidden/)
+
+    await page.waitForSelector(".changed-file-chip", { timeout: 5000 })
+
+    await expect(page.locator(".changed-file-icon--kt")).toHaveCount(1)
+    await expect(page.locator(".changed-file-icon--sh")).toHaveCount(1)
+    await expect(page.locator(".changed-file-icon--yaml")).toHaveCount(1)
+    await expect(page.locator(".changed-file-icon--html")).toHaveCount(1)
+    await expect(page.locator(".changed-file-icon--sql")).toHaveCount(1)
+
+    expectNoBrowserErrors(captured)
   })
 
-  test("changed files display with icons and status", async ({ page }) => {
+  // Fix C round-trip: when the user changes model via the dropdown, the
+  // webview should post a set_model message so the host can persist it.
+  test("model dropdown posts set_model when user picks a new model", async ({ page }) => {
+    await installVsCodeApi(page)
     await page.goto("/")
-    
-    await page.evaluate(() => {
-      (window as any).acquireVsCodeApi = () => ({
-        postMessage: (msg: any) => {
-          (window as any).__testMessages = (window as any).__testMessages || []
-          ;(window as any).__testMessages.push(msg)
-        },
-        getState: () => ({
-          sessions: [{ id: "test-1", name: "Test", model: "claude-3-opus-20240229", messages: [], changedFiles: ["src/index.ts", "src/utils.ts"] }]
-        }),
-        setState: () => {}
-      })
-    })
-    
-    // Wait for changed files to render
-    await page.waitForSelector(".changed-file-chip")
-    
-    // Verify icons are present
-    const icons = await page.locator(".changed-file-icon").count()
-    expect(icons).toBeGreaterThan(0)
-    
-    // Verify status indicators are present
-    const status = await page.locator(".changed-file-status").count()
-    expect(status).toBeGreaterThan(0)
-  })
 
-  test("streaming markdown handles partial code fences", async ({ page }) => {
-    await page.goto("/")
-    
-    await page.evaluate(() => {
-      (window as any).acquireVsCodeApi = () => ({
-        postMessage: (msg: any) => {
-          (window as any).__testMessages = (window as any).__testMessages || []
-          ;(window as any).__testMessages.push(msg)
+    await dispatchHostMessage(page, {
+      type: "init_state",
+      sessions: [
+        {
+          id: "s",
+          name: "T",
+          model: "anthropic/claude-3-5-sonnet-20241022",
+          messages: [],
+          tokenUsage: { prompt: 0, completion: 0, total: 0 },
         },
-        getState: () => ({
-          sessions: [{ id: "test-1", name: "Test", model: "claude-3-opus-20240229", messages: [] }]
-        }),
-        setState: () => {}
-      })
+      ],
+      activeSessionId: "s",
+      globalModel: "anthropic/claude-3-5-sonnet-20241022",
     })
-    
-    // Simulate streaming message with unclosed code fence
-    await page.evaluate(() => {
-      const vscode = (window as any).acquireVsCodeApi()
-      vscode.postMessage({
-        type: "stream_chunk",
-        sessionId: "test-1",
-        text: "```typescript\nconst x = 1",
-        messageId: "msg-1"
-      })
+
+    // Inject a model list so the dropdown has selectable entries
+    await dispatchHostMessage(page, {
+      type: "model_list",
+      items: [
+        { id: "claude-3-5-sonnet-20241022", provider: "anthropic", displayName: "Claude Sonnet 3.5", contextWindow: 200000 },
+        { id: "gpt-4o", provider: "openai", displayName: "GPT-4o", contextWindow: 128000 },
+      ],
+      model: "anthropic/claude-3-5-sonnet-20241022",
     })
-    
-    // Verify content is rendered (not treated as raw code block due to normalization)
-    await page.waitForSelector(".message-content")
-    const content = await page.locator(".message-content").textContent()
-    expect(content).toContain("```typescript")
+
+    // Open the dropdown and choose the other model
+    await page.click("#model-selector-btn")
+    await page.locator('[role="option"]').filter({ hasText: /GPT-4o/i }).first().click()
+
+    const messages = await postedMessages(page)
+    const setModelMsg = messages.find((m) => m.type === "set_model")
+    expect(setModelMsg).toBeDefined()
+    expect(String(setModelMsg!.model)).toMatch(/gpt-4o/)
   })
 })

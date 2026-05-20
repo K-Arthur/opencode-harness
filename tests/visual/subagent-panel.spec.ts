@@ -5,17 +5,23 @@ async function mountSubagentPanel(page: Page, visible: boolean = true) {
   await page.evaluate((isVisible) => {
     document.querySelector('.welcome-container')?.remove()
 
+    // Reuse the existing #subagent-panel (rendered by index.html and starting
+    // out hidden) — just unhide it and replace its contents with the fixture.
+    // Previously this branch did nothing, leaving the panel empty and
+    // breaking every render-items assertion.
     const existingPanel = document.getElementById('subagent-panel')
     if (existingPanel) {
       existingPanel.classList.toggle('hidden', !isVisible)
-      return
+      existingPanel.innerHTML = ''
     }
 
-    const host = document.querySelector('.tab-panel.active') || document.querySelector('.chat-main') || document.body
-    const panel = document.createElement('div')
-    panel.id = 'subagent-panel'
-    panel.className = `subagent-panel ${isVisible ? '' : 'hidden'}`
-    panel.setAttribute('aria-label', 'Subagent activity')
+    const host = existingPanel || document.querySelector('.tab-panel.active') || document.querySelector('.chat-main') || document.body
+    const panel = existingPanel ?? document.createElement('div')
+    if (!existingPanel) {
+      panel.id = 'subagent-panel'
+      panel.className = `subagent-panel ${isVisible ? '' : 'hidden'}`
+      panel.setAttribute('aria-label', 'Subagent activity')
+    }
     panel.innerHTML = `
       <div class="subagent-panel-header">
         <h2 class="subagent-panel-title">Subagent Activity</h2>
@@ -61,7 +67,9 @@ async function mountSubagentPanel(page: Page, visible: boolean = true) {
         </div>
       </div>
     `
-    host.appendChild(panel)
+    if (!existingPanel) {
+      host.appendChild(panel)
+    }
   }, visible)
 }
 
