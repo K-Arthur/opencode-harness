@@ -32,17 +32,38 @@ function assertRenderer(blockType: string, renderFnName: string, label: string):
 }
 
 describe("renderer — Layer 7 RED (canonical part renderers)", () => {
-  it("L7-T1: step-start renders via dedicated chip", () => {
+  it("L7-T1: step-start is dispatched but produces no visible chip", () => {
+    // step-start is a noisy SDK lifecycle event that adds nothing visible
+    // for end users (the token bar + model badge already convey progress).
+    // The renderer must still be wired so the dispatch table stays complete,
+    // but it must return null so no chip ends up in the bubble.
     assertRenderer("step-start", "renderStepStartBlock", "L7-T1")
+    const body = source.slice(
+      source.indexOf("function renderStepStartBlock"),
+      source.indexOf("function renderStepFinishBlock"),
+    )
+    assert.match(body, /return null/, "renderStepStartBlock must return null")
+    assert.ok(
+      !/Step started/.test(body),
+      "renderStepStartBlock must not emit the 'Step started' string (was leaking into the chat as a raw line)",
+    )
   })
 
-  it("L7-T2: step-finish renders with token summary", () => {
+  it("L7-T2: step-finish renders only for abnormal endings", () => {
     assertRenderer("step-finish", "renderStepFinishBlock", "L7-T2")
-    // Body must reference at least the reason field; tokens are optional
-    // surface area but the renderer should consult them.
     const body = source.slice(source.indexOf("function renderStepFinishBlock"))
+    // Renderer must consult reason + tokens — the SDK fields haven't gone away,
+    // we just changed what we do with them.
     assert.match(body, /block\.reason|reason/, "step-finish renderer must consult block.reason")
     assert.match(body, /tokens/, "step-finish renderer must consult block.tokens")
+    // Normal 'stop' completion must NOT render a chip — that was the
+    // "Step finished (stop) — in:X out:Y reasoning:Z" line cluttering chats.
+    assert.match(
+      body,
+      /reason\s*===\s*["']stop["']|stop["']\s*===|NORMAL_FINISH/,
+      "step-finish must short-circuit when reason === 'stop' (normal completion)",
+    )
+    assert.match(body, /return null/, "step-finish must return null for the normal 'stop' case")
   })
 
   it("L7-T3: patch renders as file list summary", () => {

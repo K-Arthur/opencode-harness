@@ -729,19 +729,29 @@ function renderSkillBadge(block: Block, _opts: RenderOptions): HTMLElement | nul
 // subtasks, etc. — without claiming UI shape we don't have yet.
 
 function renderStepStartBlock(_block: Block, _opts: RenderOptions): HTMLElement | null {
-  const chip = document.createElement("div")
-  chip.className = "step-start-chip"
-  chip.textContent = "Step started"
-  return chip
+  // step-start is an SDK lifecycle event with no UX value: the model badge,
+  // streaming spinner, and per-turn token bar already convey that work is in
+  // progress. Emitting a raw chip for it just clutters the chat. Keep the
+  // dispatch entry intact (so the SDK part isn't silently dropped at the
+  // type-system level), but produce no DOM.
+  return null
 }
 
 function renderStepFinishBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
-  const chip = document.createElement("div")
-  chip.className = "step-finish-chip"
+  // Normal completion (reason === "stop") needs no chip — the assistant's
+  // reply is already visible and the token/cost displays at the bottom of
+  // the chat show the post-step accounting. Only surface unusual finishes
+  // (length cap, abort, content filter, error) where the user benefits from
+  // knowing *why* the step ended.
   const reason = typeof block.reason === "string" ? block.reason : "stop"
+  if (reason === "stop") return null
+
   const tokens = block.tokens as
     | { input?: number; output?: number; reasoning?: number }
     | undefined
+
+  const chip = document.createElement("div")
+  chip.className = "step-finish-chip"
   const parts: string[] = [`Step finished (${reason})`]
   if (tokens) {
     const summary: string[] = []

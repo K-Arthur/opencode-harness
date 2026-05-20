@@ -1632,5 +1632,24 @@
   color: var(--vscode-notificationsWarningIcon-foreground, #cca700) !important;
   font-weight: 600;
 }
+
+/* Step-finish chip — only rendered for abnormal step endings
+ * (e.g. length cap, content filter, abort, error). Normal "stop"
+ * completions render no chip at all. Styling here is intentionally
+ * quiet: a small inline badge with a warning hue so users notice it
+ * without it dominating the conversation. */
+.step-finish-chip {
+  display: inline-block;
+  margin: var(--space-2) 0;
+  padding: var(--space-1) var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--oc-warning-color, var(--vscode-notificationsWarningIcon-foreground, #cca700));
+  background: var(--oc-warning-subtle, rgba(204, 167, 0, 0.08));
+  border: 1px solid var(--oc-warning-border, rgba(204, 167, 0, 0.3));
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.02em;
+}
+
   .diff-line--removed .diff-line-content { background: Mark !important; }
 }

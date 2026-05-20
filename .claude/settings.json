@@ -21,7 +21,11 @@
       "WebFetch(domain:github.com)",
       "Bash(grep -nE 'switch\\\\s*\\\\\\(\\\\s*[a-zA-Z_$][\\\\w$]*\\\\.type\\\\s*\\\\\\)' /home/kevinarthur/PersonalProjects/opencode-harness/__TRACKED_VAR__)",
       "Bash(grep -nE \"switch\\\\s*\\\\\\(\\\\s*[a-zA-Z_$][\\\\w$]*\\\\.type\\\\s*\\\\\\)\" /home/kevinarthur/PersonalProjects/opencode-harness/src/chat/handlers/StreamCoordinator.ts)",
-      "mcp__jcodemunch__find_references"
+      "mcp__jcodemunch__find_references",
+      "Bash(npx playwright *)",
+      "Bash(git checkout *)",
+      "Bash(xargs -I{} git show {} -- '*.ts' '*.css' '*.spec.ts')",
+      "Bash(git reset *)"
     ]
   }
 }
