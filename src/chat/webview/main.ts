@@ -18,7 +18,7 @@ import type { McpServerInfo } from "../../mcp/McpServerManager"
 import { REMOVE_SVG } from "./icons"
 import { createPromptQueue, type PromptQueue, type QueueItem } from "./queue"
 import { updateContextChips, updateContextUsage, applyThemeVars, handleRateLimitExhausted } from "./theme"
-import { setupContextUsagePanel as setupContextUsagePanelInit, setContextUsagePanel, setContextUsagePostMessage, handleContextUsageMessage } from "./context-usage-panel"
+import { setupContextUsagePanel as setupContextUsagePanelInit, setContextUsagePanel, setContextUsagePostMessage, handleContextUsageMessage, resetContextUsagePanel } from "./context-usage-panel"
 import { setupContextMonitor } from "./context-monitor"
 import { setupPromptStash } from "./prompt-stash"
 import { renderRecentSessions } from "./recent-sessions"
@@ -57,6 +57,14 @@ declare const acquireVsCodeApi: (() => {
 const log = {
   warn: (...args: unknown[]) => console.warn("[opencode-harness]", ...args),
   error: (...args: unknown[]) => console.error("[opencode-harness]", ...args),
+}
+
+function createWebviewId(prefix: string): string {
+  const randomUUID = (globalThis.crypto as { randomUUID?: () => string } | undefined)?.randomUUID
+  const id = randomUUID
+    ? randomUUID.call(globalThis.crypto)
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  return `${prefix}-${id}`
 }
 
 // Timeout handle for deferred initialization
@@ -343,7 +351,7 @@ function getVsCodeApi() {
     postMessage: (msg) => vscode.postMessage(msg),
     updateSendButton,
     autoResizeTextarea,
-    updateContextChips: (els: AttachmentEls, chips?: ContextChip[]) => updateContextChips(els as ElementRefs, chips),
+    updateContextChips: (_attachmentEls: AttachmentEls, chips?: ContextChip[]) => updateContextChips(els, chips),
     getActiveSession: () => stateManager.getActiveSession(),
   })
 
@@ -481,6 +489,16 @@ function getVsCodeApi() {
 
   function setupWelcomeActions() {
     setupWelcomeActionsModule(welcomeViewDeps)
+
+    const recentContainer = document.getElementById("welcome-recent-sessions")
+    if (recentContainer) {
+      recentContainer.addEventListener("recent-session-delete", ((e: CustomEvent) => {
+        const sid = e.detail?.sessionId
+        if (sid) {
+          vscode.postMessage({ type: "delete_session", targetSessionId: sid })
+        }
+      }) as EventListener)
+    }
   }
 
   /* ─── RECENT SESSIONS ─── */
@@ -666,6 +684,9 @@ function getVsCodeApi() {
       modelDropdown.setCurrentModel(activeSession.model)
     }
     
+    // Reset context usage panel to prevent stale data from bleeding into the new tab
+    resetContextUsagePanel()
+    
     // Refresh cost/token displays for the new tab — pull from the tab's
     // own stored usage so a previously-displayed tab's totals don't bleed in.
     updateCostDisplay(tabId)
@@ -677,10 +698,9 @@ function getVsCodeApi() {
     } else {
       clearTokenDisplay()
     }
-    // Refresh changed files list for the new tab
-    if (session?.changedFiles) {
-      renderChangedFilesList(session.changedFiles)
-    }
+    // Refresh changed files list for the new tab, clearing stale chips when
+    // the newly active session has no tracked edits.
+    renderChangedFilesList(session?.changedFiles ?? [])
     
     // Scroll to bottom of active tab using anchor if available
     const anchor = scrollAnchors.get(tabId)
@@ -927,6 +947,9 @@ function getVsCodeApi() {
 
   function setupInput() {
     els.promptInput.addEventListener("input", onInputChange)
+    els.promptInput.addEventListener("keyup", updateSendButton)
+    els.promptInput.addEventListener("change", updateSendButton)
+    els.promptInput.addEventListener("compositionend", onInputChange)
     els.promptInput.addEventListener("keydown", onInputKeydown)
     els.promptInput.addEventListener("paste", onPaste)
     els.sendBtn.addEventListener("click", sendMessage)
@@ -1742,15 +1765,22 @@ function getVsCodeApi() {
       }
     }
 
+    const attachments = attachmentManager.getAttachments()
+    const sendModel = active.model || modelDropdown.getCurrentModel() || stateManager.getState().globalModel
+    if (!sendModel) {
+      updateSendButton()
+      handleRequestError(active.id, "No model selected. Please select a model to continue.")
+      return
+    }
+
     // Post slash-commands: not a slash command, proceed with normal send
     els.promptInput.value = ""
     autoResizeTextarea()
     updateSendButton()
 
-    const attachments = attachmentManager.getAttachments()
     const msgObj: ChatMessage = {
       role: "user",
-      id: "user-" + crypto.randomUUID(),
+      id: createWebviewId("user"),
       blocks: [
         ...(text ? [{ type: "text", text }] : []),
         ...attachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
@@ -1771,12 +1801,6 @@ function getVsCodeApi() {
     const stream = streamHandlers.get(active.id)
     if (stream) stream.showTypingIndicator("Thinking...")
     updateAgentStatus("thinking")
-
-    const sendModel = active.model || modelDropdown.getCurrentModel()
-    if (!sendModel) {
-      handleRequestError(active.id, "No model selected. Please select a model to continue.")
-      return
-    }
 
     vscode.postMessage({
       type: "send_prompt",
@@ -1864,7 +1888,7 @@ function getVsCodeApi() {
   function showSystemMessage(sessionId: string, text: string, retryable?: boolean) {
     const msg: ChatMessage = {
       role: "system",
-      id: "sys-" + crypto.randomUUID(),
+      id: createWebviewId("sys"),
       blocks: [{ type: "text", text }],
       timestamp: Date.now(),
       sessionId,
@@ -2063,7 +2087,14 @@ function getVsCodeApi() {
       ["mention_results", (msg) => { mention.renderResults(msg.items as MentionItem[] | undefined) }],
       ["session_list", (msg) => {
         const sessions = (msg.sessions || []) as SessionSummary[]
-        openSessionModal(sessions, typeof msg.query === "string" ? msg.query : "")
+        const isWelcomeVisible = !els.welcomeView.classList.contains("hidden")
+        if (isWelcomeVisible && !els.sessionModal.classList.contains("hidden")) {
+          openSessionModal(sessions, typeof msg.query === "string" ? msg.query : "")
+        } else if (isWelcomeVisible) {
+          renderRecentSessionsList(typeof msg.query === "string" ? msg.query : "")
+        } else {
+          openSessionModal(sessions, typeof msg.query === "string" ? msg.query : "")
+        }
       }],
       ["session_list_update", (msg) => {
         const sessions = (msg.sessions || []) as SessionSummary[]
@@ -2358,7 +2389,7 @@ function getVsCodeApi() {
         if (sid) {
           addMessage(sid, {
             role: "system",
-            id: "perm-" + crypto.randomUUID(),
+            id: createWebviewId("perm"),
             blocks: [{
               type: "permission",
               permissionId: String(_msg.permissionId || ""),
@@ -2779,10 +2810,11 @@ function getVsCodeApi() {
           .map((file) => typeof file === "string" ? file : (file && typeof file === "object" && "path" in file ? String((file as { path?: unknown }).path || "") : ""))
           .filter((path) => path.length > 0)
         const sid = typeof msg.sessionId === "string" ? msg.sessionId : stateManager.getState().activeSessionId
+        const activeSid = stateManager.getState().activeSessionId
         if (sid) {
           handleChangedFiles(sid, paths)
         }
-        if (todosPanelApi && todosPanelApi.renderChangedFiles) {
+        if (sid && sid === activeSid && todosPanelApi && todosPanelApi.renderChangedFiles) {
           todosPanelApi.renderChangedFiles(files as any)
         }
       }],
@@ -3357,7 +3389,7 @@ function getVsCodeApi() {
 
     const msgObj: ChatMessage = {
       role: "user",
-      id: "user-" + crypto.randomUUID(),
+      id: createWebviewId("user"),
       blocks: [
         ...(text ? [{ type: "text" as const, text }] : []),
         ...(attachments || []).map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
@@ -3503,7 +3535,7 @@ function getVsCodeApi() {
   const fileEditBatcher = new FileEditBatcher((sessionId, text) => {
     addMessage(sessionId, {
       role: "system",
-      id: "file-" + crypto.randomUUID(),
+      id: createWebviewId("file"),
       blocks: [{ type: "task_banner", status: "success", text }],
       timestamp: Date.now(),
       sessionId,

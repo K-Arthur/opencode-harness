@@ -535,8 +535,8 @@ export type WebviewMessage =
   | { type: "update_cost"; cost: number; sessionId?: string }
   | { type: "webview_log"; level?: string; message?: string }
   | { type: "rename_session"; sessionId: string; name: string }
-  | { type: "delete_session"; sessionId: string }
-  | { type: "archive_session"; sessionId: string }
+  | { type: "delete_session"; targetSessionId: string }
+  | { type: "archive_session"; targetSessionId: string }
   | { type: "open_settings" }
   | { type: "connect_provider" }
   | { type: "open_mcp_settings" }

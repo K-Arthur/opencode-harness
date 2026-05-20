@@ -132,6 +132,45 @@
   white-space: nowrap;
 }
 
+.changed-file-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--oc-muted);
+}
+
+.changed-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.changed-file-status {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: var(--oc-diff-highlight-added);
+  color: var(--oc-diff-added);
+}
+
+.changed-file-status--modified {
+  background: var(--oc-diff-highlight-added);
+  color: var(--oc-diff-added);
+}
+
+.changed-file-status--new {
+  background: var(--oc-success-border);
+  color: var(--oc-success-color);
+}
+
+.changed-file-status--deleted {
+  background: var(--oc-error-border);
+  color: var(--oc-error-color);
+}
+
 /* ─── CHECKPOINT PANEL ─── */
 
 .checkpoint-panel {

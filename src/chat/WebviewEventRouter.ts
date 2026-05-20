@@ -141,7 +141,10 @@ export class WebviewEventRouter {
     }],
     ["send_prompt", async (msg: Record<string, unknown>, sessionId?: string) => {
       if (sessionId && this.hasPromptContent(msg)) {
-        if (this.promptsInFlight.has(sessionId)) return
+        if (this.promptsInFlight.has(sessionId)) {
+          log.warn(`send_prompt dropped: prompt already in flight for ${sessionId}`)
+          return
+        }
         this.promptsInFlight.add(sessionId)
         const safetyTimer = setTimeout(() => {
           if (this.promptsInFlight.has(sessionId)) {
@@ -155,10 +158,11 @@ export class WebviewEventRouter {
           const text = this.getPromptText(msg)
           const model = (msg.model as string | undefined) || this.opts.modelManager.model
           if (!model) { throw new Error("No model selected. Please select a model and try again.") }
+          const attachmentCount = Array.isArray(msg.attachments) ? msg.attachments.length : 0
+          log.info(`send_prompt processing: sessionId=${sessionId}, textLength=${text.length}, attachments=${attachmentCount}, model=${model}`)
           this.opts.ensureLocalTab(sessionId, msg.name as string | undefined, model, msg.mode as string | undefined)
           const variant = typeof msg.variant === "string" ? msg.variant : undefined
           const userMessageId = (msg.messageId as string) || `user-${crypto.randomUUID()}`
-          // I7: validate attachments before they hit the session store / agent — caps size & MIME.
           const validatedAttachments = this.validateAttachments(msg.attachments)
           if (validatedAttachments === null) {
             this.opts.postMessage({ type: "prompt_rejected", sessionId, reason: "invalid_attachments" })
@@ -181,6 +185,10 @@ export class WebviewEventRouter {
           const timer = this.promptSafetyTimers.get(sessionId)
           if (timer) { clearTimeout(timer); this.promptSafetyTimers.delete(sessionId) }
         }
+      } else {
+        const textLength = typeof msg.text === "string" ? msg.text.length : "N/A"
+        const attachmentCount = Array.isArray(msg.attachments) ? msg.attachments.length : 0
+        log.warn(`send_prompt dropped: sessionId=${sessionId ?? "undefined"}, hasContent=${this.hasPromptContent(msg)}, textType=${typeof msg.text}, textLength=${textLength}, attachments=${attachmentCount}`)
       }
     }],
     ["change_mode", async (msg: Record<string, unknown>, sessionId?: string) => {
@@ -1134,7 +1142,10 @@ export class WebviewEventRouter {
     if (!msg || typeof msg.type !== "string") return
 
     const sessionId = msg.sessionId as string | undefined
-    if (sessionId !== undefined && (typeof sessionId !== "string" || sessionId.length === 0 || sessionId.length > 100)) return
+    if (sessionId !== undefined && (typeof sessionId !== "string" || sessionId.length === 0 || sessionId.length > 100)) {
+      log.warn(`route: rejected invalid sessionId (type=${typeof sessionId}, len=${typeof sessionId === "string" ? sessionId.length : "N/A"}, msgType=${msg.type})`)
+      return
+    }
 
     if (!WebviewEventRouter.VALID_WEBVIEW_TYPES.has(msg.type)) {
       log.warn(`Unknown webview message type: ${msg.type}`)
@@ -1184,7 +1195,7 @@ export class WebviewEventRouter {
       case "send_prompt": {
         const text = msg.text as string | undefined
         if (text !== undefined && typeof text !== "string") {
-          log.warn("Rejected invalid prompt text")
+          log.warn(`Rejected send_prompt: invalid text type (${typeof text})`)
           return false
         }
         if (typeof text === "string" && text.length > 50000) {
@@ -1192,7 +1203,8 @@ export class WebviewEventRouter {
           return false
         }
         if (!this.hasPromptContent(msg)) {
-          log.warn("Rejected oversized or invalid prompt")
+          const attachmentCount = Array.isArray(msg.attachments) ? msg.attachments.length : 0
+          log.warn(`Rejected send_prompt: no content (textType=${typeof text}, textLength=${typeof text === "string" ? text.length : "N/A"}, attachments=${attachmentCount})`)
           return false
         }
         break

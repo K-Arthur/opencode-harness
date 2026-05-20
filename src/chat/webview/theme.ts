@@ -5,6 +5,10 @@ import { timers } from "./timerRegistry"
 const warnTheme = (...args: unknown[]) => console.warn("[opencode-harness]", ...args)
 
 export function updateContextChips(els: ElementRefs, chips?: ContextChip[]) {
+  if (!els.contextBar || !els.contextChips) {
+    warnTheme("Context chip container missing; skipping context chip render")
+    return
+  }
   els.contextChips.innerHTML = ""
   if (!chips || chips.length === 0) {
     els.contextBar.classList.add("hidden")

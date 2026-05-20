@@ -112,9 +112,14 @@ export function renderRecentSessions(
       const deleteBtn = document.createElement("button")
       deleteBtn.className = "recent-action-btn"
       deleteBtn.textContent = "Delete"
+      deleteBtn.dataset.sessionId = session.id
       deleteBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        console.log("Delete session", session.id);
+        e.stopPropagation()
+        const sid = (e.currentTarget as HTMLElement).dataset.sessionId
+        if (sid) {
+          const event = new CustomEvent("recent-session-delete", { detail: { sessionId: sid }, bubbles: true })
+          container.dispatchEvent(event)
+        }
       })
       
       actions.appendChild(deleteBtn)

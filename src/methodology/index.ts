@@ -56,4 +56,6 @@ export { QualityGateRunner } from './QualityGate.js';
 export type { GateCheckResult, GateReport } from './QualityGate.js';
 export { PlanValidator } from './PlanValidator.js';
 export type { ExecutionPlanNode, ExecutionPlanEdge, ExecutionPlan, CheckResult, ValidationResult } from './PlanValidator.js';
+export { RefactoringEngine } from './RefactoringEngine.js';
+export type { ComplexityReport, DuplicationCluster, DeadCodeCandidate, RefactoringSuggestion, RefactoringReport } from './RefactoringEngine.js';
 export type * from './types.js';

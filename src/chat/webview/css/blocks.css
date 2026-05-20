@@ -103,6 +103,8 @@
   white-space: pre;
   tab-size: 2;
   color: var(--oc-editor-fg);
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 /* Code block with line numbers (grid layout for >5 lines) */

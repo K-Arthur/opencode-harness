@@ -110,6 +110,14 @@ describe("SessionStore.ts", () => {
       "flush must not persist active empty sessions just because they are active"
     )
     assert.ok(block.includes("sess.messages.length > 0") && block.includes("exempt"))
+    assert.ok(!block.includes("pendingServerLink"), "empty pending local placeholders must not be persisted")
+  })
+
+  it("deletes empty pending local placeholders on close", () => {
+    const idx = source.indexOf("deleteIfEmpty(")
+    assert.ok(idx >= 0, "deleteIfEmpty method must exist")
+    const block = source.slice(idx, source.indexOf("private fireChangeEvent", idx))
+    assert.ok(!block.includes("pendingServerLink"), "empty pending local placeholders must not be exempt from close cleanup")
   })
 
   it("list filters archived sessions by default", () => {

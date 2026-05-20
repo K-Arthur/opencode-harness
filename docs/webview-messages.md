@@ -14,6 +14,20 @@ assistant message for the active tab instead of dropping them.
 - `stream_end` finalizes unresolved tool-call blocks so completed responses do not remain
   visually stuck in a running state.
 
+## First Prompt Send Flow
+
+The welcome-page prompt path is covered as a first-class contract:
+
+1. User types into `#prompt-input`; context chips update through the full webview element refs.
+2. Send button enables from prompt text or attachments.
+3. Clicking send creates a local placeholder tab only if no active session exists.
+4. The optimistic user message renders into the active tab before the host round-trip.
+5. The webview posts `send_prompt` with the selected model, message id, mode, text, and attachments.
+6. The typing indicator remains visible until stream events or request errors resolve the turn.
+
+The context-chip renderer must never throw from a partial element-ref object. If chip
+containers are unavailable, it logs and skips chip rendering so prompt submission can continue.
+
 ## Markdown Styling
 
 Markdown is rendered with `markdown-it`, sanitized through DOMPurify, and constrained for
@@ -84,6 +98,9 @@ JSON or `[object Object]` output.
 
 - Input context from `@file:`, `@folder:`, URL, problems, terminal, and pasted images
   renders as colored chips above the prompt input.
+- Attachment-owned prompt helpers must call `updateContextChips` with the full webview
+  `ElementRefs`; passing attachment-only refs will omit `contextBar`/`contextChips` and
+  break the prompt send path.
 - The conversation timeline is a right-side `conversation-timeline` aside toggled from the
   header button. It reserves message-list padding only while visible.
 
@@ -92,8 +109,9 @@ JSON or `[object Object]` output.
 Changed-file state is synchronized from the extension host:
 
 - `changed_files_update`: `{ type, sessionId, files: Array<{ path: string; added: number; removed: number }> }`
-  is the canonical state message. The webview replaces the session's changed-file list with
-  this payload, re-renders the chip bar, and updates the todos panel changed-files section.
+  is the canonical state message. The webview replaces that session's changed-file list with
+  this payload. It re-renders the chip bar and todos panel only when the update belongs to
+  the active session, preventing stale changed-file chips from leaking across tabs.
 - `file_edited`: `{ type, sessionId, file }` is retained as a live incremental event for
   compatibility and immediate feedback. It merges through the same dedupe path as
   `changed_files_update`.
@@ -102,6 +120,15 @@ Changed-file state is synchronized from the extension host:
 - Open buttons post `{ type: "open_file", path }`; the extension host resolves relative paths
   against the session workspace first, then open VS Code workspace folders, and supports
   `#L12` line fragments.
+
+## Session Deletion & Empty Sessions
+
+- Local session delete/archive messages use `targetSessionId`, matching
+  `WebviewEventRouter` validation and the unified session modal contract.
+- Empty local placeholder sessions (`pendingServerLink`) are transient. They are not persisted
+  or restored until a user message exists, and closing an empty placeholder deletes it.
+- Empty server-imported sessions waiting for history (`needsBackfill`) remain exempt while the
+  extension retries backfill.
 
 ## Diff & Checkpoint Messages
 
@@ -162,4 +189,10 @@ The relevant coverage lives in:
 - `src/chat/SessionLifecycleService.test.ts` for session resume message freshness.
 - `src/chat/ChatProvider.test.ts` for backfill retry budget, stale session handling, and
   `refresh_session_messages` / `request_more_messages` server fallback.
+- `src/chat/webview/main.test.ts` and `src/chat/webview/theme.test.ts` for prompt context-chip
+  wiring, safe webview ids, changed-file scoping, and missing-chip-container hardening.
+- `src/session/SessionStore.test.ts` for empty placeholder cleanup and persistence rules.
+- `tests/visual/webview-contract.spec.ts` for the rendered welcome send flow and message
+  contracts between the webview and host.
+- `tests/visual/input.spec.ts` for rendered input affordances and send-button enablement.
 - `tests/visual/messages.spec.ts` for message layout behavior in the current app shell.

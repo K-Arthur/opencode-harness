@@ -206,6 +206,23 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     const short = modelId.includes("/") ? modelId.split("/").pop()! : modelId
     els.modelLabel.textContent = short || "Default"
     els.modelSelectorBtn.title = `Model: ${modelId || "Default"}`
+
+    // Re-sync .selected class on dropdown items to match the current model
+    const options = getOptions()
+    for (const opt of options) {
+      const fullId = opt.id?.replace("model-option-", "")
+      const model = models[Number(fullId)]
+      if (model) {
+        const optionFullId = `${model.provider}/${model.id}`
+        if (optionFullId === modelId) {
+          opt.classList.add("selected")
+          opt.setAttribute("aria-selected", "true")
+        } else {
+          opt.classList.remove("selected")
+          opt.setAttribute("aria-selected", "false")
+        }
+      }
+    }
   }
 
   function getCurrentModel(): string {

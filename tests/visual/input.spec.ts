@@ -17,7 +17,7 @@ test.describe('Input Area', () => {
     
     const textarea = page.locator('#prompt-input')
     await expect(textarea).toBeVisible()
-    await expect(textarea).toHaveAttribute('placeholder', 'Ask OpenCode anything…')
+    await expect(textarea).toHaveAttribute('placeholder', 'Ask OpenCode a question about your code…')
   })
 
   test('should display bottom bar with all buttons', async ({ page }) => {

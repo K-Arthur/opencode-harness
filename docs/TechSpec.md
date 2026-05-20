@@ -314,7 +314,7 @@ Welcome-page session search and pasted-image attachments share a webview-side co
 - **All sessions visible**: `list_server_sessions` handler no longer filters by current workspace — shows all non-subagent sessions, sorted by `updated` descending, with an `isCurrentWorkspace` flag for UI badging.
 
 ### Changed-Files Chip Bar (Feature 22 — Fixed)
-- **Canonical changed-file sync**: Backend `SessionStore.addChangedFiles()` registers normalized paths from `file_edited` and `session.diff` events. The host posts `changed_files_update` as `{ type, sessionId, files: Array<{ path: string; added: number; removed: number }> }`; the frontend uses it as the canonical state for both the chip bar and todos panel. Legacy/live `file_edited` remains `{ type, sessionId, file }` and merges through the same dedupe path.
+- **Canonical changed-file sync**: Backend `SessionStore.addChangedFiles()` registers normalized paths from `file_edited` and `session.diff` events. The host posts `changed_files_update` as `{ type, sessionId, files: Array<{ path: string; added: number; removed: number }> }`; the frontend uses it as the canonical state for both the chip bar and todos panel. Rendering is scoped to the active session and tab switches clear stale chips when the new session has no changed files. Legacy/live `file_edited` remains `{ type, sessionId, file }` and merges through the same dedupe path.
 - **Deduplication**: Restructured handler to hoist the `filePath` extraction and dedup check before `addMessage` so the test's 600-char window assertion passes.
 - **Cleared on session start**: `session.changedFiles` is reset when streaming begins so the chip bar shows only the current turn's changes.
 
@@ -329,8 +329,14 @@ Welcome-page session search and pasted-image attachments share a webview-side co
 - **Cross-layer delete**: Deleting an extension session also calls `sessionManager.deleteSession(cliSessionId)`.
 - **`clearAll()` with dry-run**: Returns per-category counts (empty, test-named, orphaned, archived, corrupted); produces JSON backup log before deletion.
 - **Resume re-attaches server session**: `handleResumeSession` is async and calls `ensureSession(cliSessionId)`.
-- **Empty-session cleanup**: `SessionStore.deleteIfEmpty()` removes opened-but-unused sessions on tab close; `pruneEmptySessions()` periodically removes inactive empty sessions using `opencode.sessions.emptySessionTtlMinutes` and `opencode.sessions.cleanupIntervalMinutes`.
+- **Empty-session cleanup**: `SessionStore.deleteIfEmpty()` removes opened-but-unused sessions and empty local `pendingServerLink` placeholders on tab close; `pruneEmptySessions()` periodically removes inactive empty sessions using `opencode.sessions.emptySessionTtlMinutes` and `opencode.sessions.cleanupIntervalMinutes`. Only server-imported sessions with `needsBackfill` are exempt while empty.
 - **Open-tab restore**: `ChatProvider.pushInitStateToWebview()` restores previously open non-empty tabs for the current workspace when `opencode.sessions.restoreOpenTabs` is enabled.
+
+### Webview Send Flow (Feature 24 — Fixed)
+- **Context-chip safety**: Prompt context chips render through full webview `ElementRefs`, not the attachment-only refs used by the attachment manager. Missing chip containers are handled as a logged no-op instead of throwing.
+- **Welcome first-message contract**: Sending from the welcome page creates a local placeholder tab, renders the optimistic user message, starts the typing indicator, and posts `send_prompt` with the selected model. A Playwright contract test covers this rendered path.
+- **Pending-tab model refresh**: `ensureLocalTab` refreshes model/mode on existing pending tabs before streaming so welcome-page model selection is preserved on first prompt.
+- **Recent-session deletion**: The welcome recent-session delete action posts `{ type: "delete_session", targetSessionId }`, matching `WebviewEventRouter` validation.
 
 ### Session Export (Feature 4 — Enhanced)
 - **Markdown format**: Header (title, date range, model, message count, cost); messages with timestamps and role; tool calls in `<details>`; diffs in fenced ` ```diff` blocks.

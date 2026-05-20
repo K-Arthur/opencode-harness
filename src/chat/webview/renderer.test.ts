@@ -48,9 +48,30 @@ it("has type guards for discriminated blocks", () => {
 
   it("sanitizes_xss_with_dompurify", () => {
     assert.ok(source.includes("function sanitizeHtml"), "must call sanitizeHtml")
+    assert.ok(source.includes("return sanitizeHtml(md.render(normalized))"), "renderMarkdown must sanitize output")
     assert.ok(source.includes("DOMPurify.sanitize"), "must use DOMPurify")
     assert.ok(source.includes("FORBID_TAGS"), "must forbid dangerous tags")
     assert.ok(source.includes("FORBID_CONTENTS"), "must forbid dangerous content")
+  })
+
+  it("handles_streaming_markdown_artifacts", () => {
+    assert.ok(source.includes("export function normalizeStreamingMarkdown"), "must have streaming-aware normalization")
+    assert.ok(source.includes("openFences % 2 !== 0"), "must detect unclosed code fences")
+    assert.ok(source.includes("openInline % 2 !== 0"), "must detect unclosed inline code")
+  })
+
+  it("renderMarkdown_accepts_isStreaming_flag", () => {
+    assert.ok(source.includes("export function renderMarkdown(text: string, isStreaming"), "renderMarkdown must accept isStreaming parameter")
+    assert.ok(source.includes("isStreaming ? normalizeStreamingMarkdown(text) : normalizeMarkdownText(text)"), "must use streaming normalization when flag is true")
+  })
+
+  it("RenderOptions_includes_isStreaming", () => {
+    assert.ok(source.includes("isStreaming?: boolean"), "RenderOptions must include isStreaming flag")
+  })
+
+  it("renderTextBlock_uses_isStreaming_flag", () => {
+    assert.ok(source.includes("opts?.isStreaming ? normalizeStreamingMarkdown(part) : normalizeMarkdownText(part)"), "must use streaming flag for mentions")
+    assert.ok(source.includes("renderMarkdown(text, opts?.isStreaming ?? false)"), "must pass streaming flag to renderMarkdown")
   })
 
   it("hardens_external_markdown_links", () => {

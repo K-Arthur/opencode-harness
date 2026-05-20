@@ -41,8 +41,33 @@ export function normalizeMarkdownText(text: string): string {
     .replace(/\n{3,}/g, "\n\n")
 }
 
-export function renderMarkdown(text: string): string {
-  return md.render(normalizeMarkdownText(text))
+/**
+ * Streaming-aware markdown normalization.
+ * Handles partial markdown artifacts during streaming, such as unclosed code fences.
+ */
+export function normalizeStreamingMarkdown(text: string): string {
+  let normalized = normalizeMarkdownText(text)
+  
+  // Close unclosed code fences to prevent markdown-it from treating the rest as code
+  const codeFenceMatches = normalized.match(/^```[\s\S]*?```/gm) || []
+  const openFences = (normalized.match(/```/g) || []).length
+  if (openFences % 2 !== 0) {
+    normalized += "\n```"
+  }
+  
+  // Close unclosed inline code
+  const inlineCodeMatches = normalized.match(/`[^`\n]*`/g) || []
+  const openInline = (normalized.match(/`/g) || []).length
+  if (openInline % 2 !== 0) {
+    normalized += "`"
+  }
+  
+  return normalized
+}
+
+export function renderMarkdown(text: string, isStreaming: boolean = false): string {
+  const normalized = isStreaming ? normalizeStreamingMarkdown(text) : normalizeMarkdownText(text)
+  return sanitizeHtml(md.render(normalized))
 }
 
 const md = new MarkdownIt({
@@ -278,6 +303,7 @@ export interface RenderOptions {
   sessionId?: string
   skipHeader?: boolean
   collapseConfig?: ToolCollapseConfig
+  isStreaming?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -418,7 +444,8 @@ function renderTextBlock(block: Block, opts: RenderOptions): HTMLElement | null 
       if (i % 3 === 0) {
         // Plain text part
         const span = document.createElement("span")
-        span.innerHTML = sanitizeHtml(md.renderInline(normalizeMarkdownText(part), { label: false }))
+        const normalized = opts?.isStreaming ? normalizeStreamingMarkdown(part) : normalizeMarkdownText(part)
+        span.innerHTML = sanitizeHtml(md.renderInline(normalized, { label: false }))
         fragment.appendChild(span)
       } else if (i % 3 === 1) {
         // Full mention match (@file:/foo)
@@ -434,7 +461,7 @@ function renderTextBlock(block: Block, opts: RenderOptions): HTMLElement | null 
     div.appendChild(fragment)
   } else {
     // No mentions — standard markdown render
-    div.innerHTML = sanitizeHtml(renderMarkdown(text))
+    div.innerHTML = renderMarkdown(text, opts?.isStreaming ?? false)
   }
 
   return div

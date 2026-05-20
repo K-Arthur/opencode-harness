@@ -845,7 +845,10 @@
     "test:integration": "vscode-test",
     "test:visual": "playwright test",
     "test:visual:update": "playwright test --update-snapshots",
-    "test": "npm run test:unit"
+    "test:webview": "playwright test --project=chromium-webview",
+    "test:message-contract": "npx tsx --test tests/webview/message-contract.test.ts",
+    "test:roundtrip": "node --test tests/integration/message-roundtrip.test.mjs",
+    "test": "npm run test:unit && npm run test:message-contract && npm run test:roundtrip"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.3",

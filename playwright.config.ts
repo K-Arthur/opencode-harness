@@ -30,6 +30,15 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testDir: './tests/visual',
+      use: { 
+        ...devices['Desktop Chrome'],
+        viewport: { width: 400, height: 700 }
+      },
+    },
+    {
+      name: 'chromium-webview',
+      testDir: './tests/webview',
       use: { 
         ...devices['Desktop Chrome'],
         viewport: { width: 400, height: 700 }

@@ -488,6 +488,24 @@ void it("set_model handler persists to modelManager even without sessionId", () 
   )
 })
 
+void it("ensureLocalTab refreshes existing tab model and mode", () => {
+  const chatProviderBlock = source.slice(
+    source.indexOf("private ensureLocalTab("),
+    source.indexOf("private async handleResumeSession(", source.indexOf("private ensureLocalTab(")),
+  )
+  const lifecycleSource = readFileSync(resolve(__dirname, "SessionLifecycleService.ts"), "utf8")
+  const lifecycleBlock = lifecycleSource.slice(
+    lifecycleSource.indexOf("private ensureLocalTab("),
+    lifecycleSource.indexOf("async openSessionInWebview", lifecycleSource.indexOf("private ensureLocalTab(")),
+  )
+
+  for (const block of [chatProviderBlock, lifecycleBlock]) {
+    assert.ok(block.includes("const tab ="), "ensureLocalTab must inspect an existing tab")
+    assert.ok(block.includes("setModel(sessionId, nextModel)"), "existing tab model must be refreshed")
+    assert.ok(block.includes("setMode(sessionId, nextMode)"), "existing tab mode must be refreshed")
+  }
+})
+
 void it("pushes rate-limit state to the webview for the quota bar", () => {
   assert.ok(source.includes("rateLimitMonitor.onStateChanged"), "must subscribe to rate-limit state changes")
   const statePushSource = readFileSync(resolve(__dirname, "StatePushService.ts"), "utf8")

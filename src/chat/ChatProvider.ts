@@ -426,6 +426,10 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
   }
 
   private async handleWebviewMessage(msg: Record<string, unknown>): Promise<void> {
+    const msgType = typeof msg?.type === "string" ? msg.type : "unknown"
+    if (msgType === "send_prompt" || msgType === "create_tab" || msgType === "new_session") {
+      log.info(`handleWebviewMessage: type=${msgType}, sessionId=${typeof msg?.sessionId === "string" ? msg.sessionId : "N/A"}`)
+    }
     await this.eventRouter.route(msg)
   }
 
@@ -485,8 +489,14 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       model,
       mode || "normal"
     )
-    if (!this.tabManager.getTab(sessionId)) {
-      this.tabManager.createTab(sessionId, storeSession.cliSessionId, storeSession.model || model, storeSession.mode || mode)
+    const tab = this.tabManager.getTab(sessionId)
+    const nextModel = storeSession.model || model
+    const nextMode = storeSession.mode || mode
+    if (tab) {
+      if (nextModel && tab.model !== nextModel) this.tabManager.setModel(sessionId, nextModel)
+      if (nextMode && tab.mode !== nextMode) this.tabManager.setMode(sessionId, nextMode)
+    } else {
+      this.tabManager.createTab(sessionId, storeSession.cliSessionId, nextModel, nextMode)
     }
   }
 

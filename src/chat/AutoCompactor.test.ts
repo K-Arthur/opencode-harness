@@ -53,6 +53,32 @@ void describe("AutoCompactor.ts", () => {
 
   void it("sends session_compacted message on completion", () => {
     assert.ok(source.includes("session_compacted"), "must send session_compacted message")
+  })
+
+  void describe("Stage 4: Compaction safety features", () => {
+    void it("prevents compaction during active streaming", () => {
+      assert.ok(
+        source.includes("activeTab.isStreaming") && source.includes("return"),
+        "tryCompactIfNeeded must guard against compaction during streaming"
+      )
+    })
+
+    void it("handles compaction failures with error callback", () => {
+      assert.ok(
+        source.includes(".catch") && source.includes("postRequestError"),
+        "compaction failures must call postRequestError callback"
+      )
+    })
+
+    void it("sends compaction_started message before attempting compaction", () => {
+      assert.ok(
+        source.includes("compaction_started") && source.indexOf("compactSession") > source.indexOf("compaction_started"),
+        "must send compaction_started before calling compactSession"
+      )
+    })
+  })
+
+  void it("sends task_banner for completion", () => {
     assert.ok(source.includes("task_banner"), "must send task_banner for completion")
   })
 })

@@ -47,4 +47,16 @@ describe("model-dropdown.ts", () => {
   it("returns { open, close, render, setCurrentModel }", () => {
     assert.ok(source.includes("open, close, render, setCurrentModel"))
   })
+
+  it("setCurrentModel_syncs_selected_class_on_dropdown_items", () => {
+    assert.ok(source.includes("Re-sync .selected class"), "must re-sync selected state")
+    assert.ok(source.includes("opt.classList.add(\"selected\")"), "must add selected class to matching option")
+    assert.ok(source.includes("opt.classList.remove(\"selected\")"), "must remove selected class from non-matching options")
+    assert.ok(source.includes("aria-selected"), "must update aria-selected attribute")
+  })
+
+  it("setCurrentModel_updates_label_and_title", () => {
+    assert.ok(source.includes("els.modelLabel.textContent"), "must update label text")
+    assert.ok(source.includes("els.modelSelectorBtn.title"), "must update button title")
+  })
 })

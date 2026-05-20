@@ -59,4 +59,30 @@ void describe("SessionLifecycleService.ts", () => {
       )
     })
   })
+
+  void describe("Stage 1: Model preservation during session restoration", () => {
+    const ensureIdx = source.indexOf("ensureLocalTab(")
+    const ensureBlock = source.slice(ensureIdx, source.indexOf("async openSessionInWebview(", ensureIdx))
+
+    void it("preserves session model when restoring session", () => {
+      assert.ok(
+        ensureBlock.includes("storeSession.model || model"),
+        "ensureLocalTab must preserve session model when it exists"
+      )
+    })
+
+    void it("uses session model for tab creation when available", () => {
+      assert.ok(
+        ensureBlock.includes("nextModel") && ensureBlock.includes("createTab"),
+        "ensureLocalTab must use preserved model when creating tab"
+      )
+    })
+
+    void it("updates tab model if session model differs from current", () => {
+      assert.ok(
+        ensureBlock.includes("tab.model !== nextModel") && ensureBlock.includes("setModel"),
+        "ensureLocalTab must update tab model when session model differs"
+      )
+    })
+  })
 })

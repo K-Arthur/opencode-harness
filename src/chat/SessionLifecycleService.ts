@@ -37,8 +37,14 @@ export class SessionLifecycleService {
       model,
       mode || "normal"
     )
-    if (!this.opts.tabManager.getTab(sessionId)) {
-      this.opts.tabManager.createTab(sessionId, storeSession.cliSessionId, storeSession.model || model, storeSession.mode || mode)
+    const tab = this.opts.tabManager.getTab(sessionId)
+    const nextModel = storeSession.model || model
+    const nextMode = storeSession.mode || mode
+    if (tab) {
+      if (nextModel && tab.model !== nextModel) this.opts.tabManager.setModel(sessionId, nextModel)
+      if (nextMode && tab.mode !== nextMode) this.opts.tabManager.setMode(sessionId, nextMode)
+    } else {
+      this.opts.tabManager.createTab(sessionId, storeSession.cliSessionId, nextModel, nextMode)
     }
   }
 

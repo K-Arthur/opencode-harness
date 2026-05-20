@@ -25,14 +25,14 @@ test.describe('Webview host contract', () => {
   })
 
   test('header and input actions post host messages', async ({ page }) => {
-    await page.locator('#settings-btn').click()
-    await page.locator('#mcp-btn').click()
     await page.locator('#attach-btn').click()
+    await page.locator('#settings-btn').click()
+    await expect(page.locator('#settings-menu')).not.toHaveClass(/hidden/)
+    await page.locator('#mcp-btn').click()
 
     const types = (await postedMessages(page)).map((m) => m.type)
-    expect(types).toContain('open_settings')
-    expect(types).toContain('open_mcp_settings')
     expect(types).toContain('attach_files')
+    expect(types).toContain('open_mcp_config')
   })
 
   test('host can insert attached file mentions into the prompt', async ({ page }) => {
@@ -66,6 +66,39 @@ test.describe('Webview host contract', () => {
       type: 'set_model',
       model: 'opencode/big-pickle',
     }))
+  })
+
+  test('welcome prompt send renders locally and posts send_prompt to the host', async ({ page }) => {
+    const captured = captureErrors(page)
+    await expect.poll(async () => postedMessages(page)).toContainEqual(
+      expect.objectContaining({ type: 'webview_ready' })
+    )
+
+    await dispatchHostMessage(page, {
+      type: 'init_state',
+      sessions: [],
+      activeSessionId: null,
+      globalModel: 'opencode/big-pickle',
+    })
+    await expect.poll(async () => postedMessages(page)).toContainEqual(
+      expect.objectContaining({ type: 'init_ack' })
+    )
+
+    await page.locator('#prompt-input').fill('Hello from Playwright')
+    await expect(page.locator('#send-btn')).toBeEnabled()
+    await page.locator('#send-btn').click()
+
+    await expect(page.locator('.tab-panel.active .message.user')).toContainText('Hello from Playwright')
+    await expect(page.locator('.tab-panel.active .typing-indicator')).not.toHaveClass(/hidden/)
+    await expect.poll(async () => postedMessages(page)).toContainEqual(
+      expect.objectContaining({
+        type: 'send_prompt',
+        text: 'Hello from Playwright',
+        model: 'opencode/big-pickle',
+      })
+    )
+    expectNoBrowserErrors(captured)
+    captured.cleanup()
   })
 
   test('system tool messages do not mark an active stream as finished', async ({ page }) => {

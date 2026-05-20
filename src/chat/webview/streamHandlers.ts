@@ -73,7 +73,8 @@ export function reRenderMessage(
   const oldEl = els.messageList.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement | null
 
   // When re-rendering an existing message, skip the header to avoid re-adding it
-  const newEl = renderMessage(msgObj, { skipHeader: !!oldEl }, false)
+  // isStreaming is false here because the message is complete
+  const newEl = renderMessage(msgObj, { skipHeader: !!oldEl, isStreaming: false }, false)
   if (oldEl) {
     oldEl.replaceWith(newEl)
   } else {
@@ -176,7 +177,7 @@ export function handleStreamStart(
   }
   messages.push(streamMsg)
 
-  const el = renderMessage(streamMsg, undefined, isConsecutive)
+  const el = renderMessage(streamMsg, { isStreaming: true }, isConsecutive)
   el.classList.add("assistant", "streaming")
   if (state.streamingMessageId) el.dataset.messageId = state.streamingMessageId
 

@@ -67,4 +67,35 @@ describe("context usage panel", () => {
     assert.ok(!html.includes("NaN"))
     assert.ok(!html.includes("Infinity"))
   })
+
+  it("resets context usage panel on tab switch", async () => {
+    const { resetContextUsagePanel, handleContextUsageMessage } = await import("./context-usage-panel")
+    
+    // First, set some usage data
+    handleContextUsageMessage({
+      type: "context_usage",
+      tokens: 1000,
+      maxTokens: 200_000,
+      percent: 0.5,
+      cost: 0.5,
+    })
+
+    const bar = document.getElementById("context-usage-bar")
+    const progressBar = document.getElementById("context-usage-progress-bar")
+    const detail = document.getElementById("context-usage-detail")
+    const cost = document.getElementById("context-usage-cost")
+
+    assert.ok(!bar?.classList.contains("hidden"))
+    assert.equal(detail?.textContent, "1,000 / 200,000")
+    assert.equal(cost?.textContent, "$0.5000")
+
+    // Reset the panel
+    resetContextUsagePanel()
+
+    assert.ok(bar?.classList.contains("hidden"))
+    assert.equal(progressBar?.style.width, "0%")
+    assert.equal(detail?.textContent, "")
+    assert.equal(cost?.textContent, "")
+    assert.ok(cost?.classList.contains("hidden"))
+  })
 })

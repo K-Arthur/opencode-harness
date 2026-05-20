@@ -31,6 +31,11 @@ describe("theme.ts", () => {
     assert.ok(source.includes('els.contextBar.classList.remove("hidden")'))
   })
 
+  it("does not throw when context chip elements are unavailable", () => {
+    assert.ok(source.includes("if (!els.contextBar || !els.contextChips)"))
+    assert.ok(source.includes("Context chip container missing"))
+  })
+
   it("applies CSS custom properties via root.style.setProperty", () => {
     assert.ok(source.includes("root.style.setProperty"))
   })

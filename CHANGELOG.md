@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **First prompt from welcome created a blank tab and never sent** — The prompt input's context-chip refresh was wired with attachment-only element refs and then cast to full `ElementRefs`, so typing or clearing a prompt could throw inside `updateContextChips` before `send_prompt` was posted. The attachment manager now renders chips through the full webview refs, and `updateContextChips` safely skips rendering if the chip container is unavailable. (`src/chat/webview/main.ts`, `src/chat/webview/theme.ts`)
+- **Welcome-page model choice did not reliably reach first prompt** — Existing pending tabs now refresh their model/mode in both `ChatProvider.ensureLocalTab` and `SessionLifecycleService.ensureLocalTab` before prompt streaming starts. (`src/chat/ChatProvider.ts`, `src/chat/SessionLifecycleService.ts`)
+- **Empty local placeholder sessions could survive reload/close** — Empty `pendingServerLink` sessions are no longer persisted, restored, or exempt from close cleanup. Only server-imported sessions waiting for backfill (`needsBackfill`) remain exempt while empty. (`src/session/SessionStore.ts`)
+- **Recent-session delete used the wrong webview contract** — The welcome recent-session delete action now posts `targetSessionId`, matching `WebviewEventRouter` validation. (`src/chat/webview/main.ts`, `src/chat/webview/types.ts`)
+- **Changed-files UI leaked stale state across tabs** — Changed-file chip/todos rendering is now scoped to the active session and clears when switching to a session with no changed files. (`src/chat/webview/main.ts`, `src/chat/webview/ui/fileTracking.ts`)
 - **Session messages permanently stale after resume** — Six interrelated bugs caused messages to remain stale after resuming a session:
   - **Fix A**: `handleResumeSession` now always fetches fresh messages from the server on resume, regardless of local message count. Previously skipped backfill if `messages.length > 0`. (`src/chat/SessionLifecycleService.ts`)
   - **Fix C**: Increased `BACKFILL_RETRY_DELAYS_MS` from `[1500, 4000]` to `[1500, 4000, 8000, 16000]` (4 retries over ~30s) to accommodate slow server lazy-loading. (`src/chat/ChatProvider.ts`)
@@ -23,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Commands modal and inline dropdown can both be visible** — Opening the commands modal now hides the inline mention dropdown. (`src/chat/webview/commands-modal.ts`)
 
 ### Added
+- **Browser-level send-flow regression** — Playwright now covers welcome → type prompt → click send → local user message render → typing indicator → `send_prompt` posted with selected model, with browser/page error capture around the flow. (`tests/visual/webview-contract.spec.ts`)
 - **Commands palette button** — A `>_` terminal-style button in the input bottom bar (left of the `@` button) opens the commands palette modal with one click. (`src/chat/webview/index.html`, `src/chat/webview/dom.ts`, `src/chat/webview/main.ts`)
 - **`Ctrl+Shift+/` keybinding** — Opens the commands palette when the chat view is focused. (`package.json`)
 - **`CommandExecutionService` test suite** — 7 source-inspection tests covering class export, handleExecuteCommand method, server session ensure flow, cliSessionId persistence, error handling, and custom prompt routing. (`src/chat/CommandExecutionService.test.ts`)
@@ -112,7 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **`sessions_recovered` handler now imports** — Previously only re-linked already-known sessions on reconnect. Now imports any server session the local store does not yet know about, surfacing CLI-only sessions in the picker. (`src/extension.ts`)
 - **`SessionStore.create(name, opts)`** — Second argument is now `CreateSessionOptions` (`{ id?, cliSessionId?, pendingServerLink? }`); the legacy `create(name, idString)` signature is preserved for backward compatibility.
-- **Empty-session pruning exemptions** — Sessions marked `needsBackfill` (imported from server, history not yet fetched) or `pendingServerLink` (created offline, awaiting promotion) are exempt from empty-session filtering and stale-session pruning.
+- **Empty-session pruning exemptions** — Only sessions marked `needsBackfill` (imported from server, history not yet fetched) are exempt from empty-session filtering and stale-session pruning. Empty local placeholders marked `pendingServerLink` are transient until they receive a user message.
 
 ### Fixed
 - **Plan mode now prevents edits** — Replaced `mode` parameter with `tools` field in server API calls. Plan mode sets `tools: { file_edit: false }` to disable file edits (server uses tool permissions via `tools` field, not `mode` parameter). Build/auto modes pass `tools: undefined` (server default enables file edits). Updated `StreamCoordinator.ts` (tools config), `SessionManager.ts` (`sendPrompt()` and `sendPromptAsync()` accept `tools?` parameter), `ChatProvider.ts` (maps server tools config to extension modes). All 578 tests pass.

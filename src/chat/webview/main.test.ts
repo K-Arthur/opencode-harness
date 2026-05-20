@@ -29,6 +29,12 @@ describe("main.ts", () => {
     assert.ok(source.includes("function getVsCodeApi()"))
   })
 
+  it("uses a safe webview id helper instead of assuming crypto.randomUUID exists", () => {
+    assert.ok(source.includes("function createWebviewId("), "main.ts must define a safe ID helper")
+    assert.ok(source.includes("Math.random().toString(36)"), "ID helper must include a fallback path")
+    assert.ok(!source.includes('id: "user-" + crypto.randomUUID()'), "send path must not crash if crypto.randomUUID is unavailable")
+  })
+
   it("uses IIFE pattern", () => {
     assert.ok(source.includes("(function ()"))
   })
@@ -53,6 +59,24 @@ describe("main.ts", () => {
 
   it("manages scroll anchors per tab", () => {
     assert.ok(source.includes("scrollAnchors"))
+  })
+
+  it("keeps send button state synchronized across input event variants", () => {
+    const idx = source.indexOf("function setupInput()")
+    assert.ok(idx >= 0, "setupInput must exist")
+    const block = source.slice(idx, source.indexOf("function onInputChange", idx))
+    assert.ok(block.includes('addEventListener("input", onInputChange)'), "must handle normal input events")
+    assert.ok(block.includes('addEventListener("keyup", updateSendButton)'), "must refresh after keyup fallback")
+    assert.ok(block.includes('addEventListener("change", updateSendButton)'), "must refresh after change events")
+    assert.ok(block.includes('addEventListener("compositionend", onInputChange)'), "must refresh after IME composition")
+  })
+
+  it("wires attachment context chips through the full webview element refs", () => {
+    assert.ok(
+      source.includes("updateContextChips: (_attachmentEls: AttachmentEls, chips?: ContextChip[]) => updateContextChips(els, chips)"),
+      "attachment prompt chips must use full ElementRefs so contextBar/contextChips exist",
+    )
+    assert.ok(!source.includes("updateContextChips(els as ElementRefs, chips)"), "must not cast partial attachment refs to ElementRefs")
   })
 
   it("has concurrent streaming limit of 3", () => {
@@ -301,6 +325,16 @@ it("unified modal: server session items send resume_server_session on click", ()
     const block = source.slice(idx, idx + 900)
     assert.ok(block.includes("handleChangedFiles"), "changed_files_update must update session changedFiles/chip bar")
     assert.ok(block.includes("renderChangedFiles"), "changed_files_update must update todos panel changed-file list")
+  })
+
+  it("changed_files_update only renders active-session changed files", () => {
+    const idx = source.indexOf('"changed_files_update"')
+    assert.ok(idx >= 0, "changed_files_update handler must exist")
+    const block = source.slice(idx, idx + 1200)
+    assert.ok(block.includes("activeSid"), "handler must compare against active session")
+    assert.ok(block.includes("sid === activeSid"), "todos panel updates must be scoped to active session")
+    assert.ok(fileTrackingSource.includes("deps.getActiveSessionId() === sessionId"), "chip list must only render active session files")
+    assert.ok(source.includes("renderChangedFilesList(session?.changedFiles ?? [])"), "switching tabs must clear stale changed-file chips")
   })
 
   // ── model selector on welcome screen ─────────────────────────────────────

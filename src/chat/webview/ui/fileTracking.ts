@@ -35,7 +35,9 @@ export function handleChangedFiles(deps: FileTrackingDeps, sessionId: string, fi
     session.changedFiles = files
     deps.save()
   }
-  renderChangedFilesList(deps, files)
+  if (deps.getActiveSessionId() === sessionId) {
+    renderChangedFilesList(deps, files)
+  }
 }
 
 export function renderChangedFilesList(deps: FileTrackingDeps, files: string[]): void {
@@ -48,12 +50,57 @@ export function renderChangedFilesList(deps: FileTrackingDeps, files: string[]):
   }
   list.classList.remove("hidden")
   for (const f of files) {
-    const chip = document.createElement("span")
+    const chip = document.createElement("div")
     chip.className = "changed-file-chip"
-    chip.textContent = f.split("/").pop() || f
+    chip.setAttribute("data-testid", `changed-file-${f.replace(/[^a-zA-Z0-9]/g, "-")}`)
     chip.title = f
+
+    // Add file icon based on extension
+    const icon = document.createElement("span")
+    icon.className = "changed-file-icon"
+    icon.innerHTML = getFileIcon(f)
+    chip.appendChild(icon)
+
+    // Add filename
+    const name = document.createElement("span")
+    name.className = "changed-file-name"
+    name.textContent = f.split("/").pop() || f
+    chip.appendChild(name)
+
+    // Add status indicator (default to modified)
+    const status = document.createElement("span")
+    status.className = "changed-file-status changed-file-status--modified"
+    status.textContent = "M"
+    status.title = "Modified"
+    chip.appendChild(status)
+
     list.appendChild(chip)
   }
+}
+
+function getFileIcon(filePath: string): string {
+  const ext = filePath.split(".").pop()?.toLowerCase() || ""
+  const iconMap: Record<string, string> = {
+    ts: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+    tsx: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+    js: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+    jsx: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+    py: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+    rs: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+    go: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+    java: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+    json: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+    md: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+    css: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+    html: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+    yaml: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+    yml: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+    xml: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+    sql: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+    sh: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
+    txt: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>`,
+  }
+  return iconMap[ext] ?? iconMap.txt!
 }
 
 export function handleClearMessages(deps: FileTrackingDeps, sessionId?: string): void {

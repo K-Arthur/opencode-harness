@@ -1,12 +1,17 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-05-17
-**Version:** v0.2.10 (Race-tolerant event routing, welcome search, paste robustness)
+**Last Updated:** 2026-05-20
+**Version:** v0.2.11 (Welcome send-flow repair, session cleanup, active-scoped changed files)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
 
 ## v0.2.11 Highlights
 
+- **First prompt from welcome now sends and renders** — fixed the real blank-tab root cause: prompt context-chip updates were passing attachment-only refs into `updateContextChips`, throwing before `send_prompt` was posted. The send flow now renders the optimistic user message, shows the typing indicator, and posts `send_prompt` with the selected model. A Playwright contract test covers the rendered welcome → send path.
+- **Model selection reaches pending tabs** — `ensureLocalTab` now refreshes existing tab model/mode state before stream start, so model selections made on the welcome page are reflected in the first prompt.
+- **Empty placeholder sessions are transient again** — empty `pendingServerLink` sessions are no longer persisted/restored or exempt from close cleanup; only server imports awaiting backfill (`needsBackfill`) stay exempt while empty.
+- **Changed-files UI is active-session scoped** — changed-file updates now refresh chips/todos only for the active session and clear stale chips when switching tabs.
+- **Welcome recent-session delete uses the router contract** — recent delete actions post `targetSessionId`, matching `WebviewEventRouter` validation.
 - **Send button silently blocked after extension restart (root cause for "messaging fails completely")** — the webview's persisted `vscode.setState()` snapshot preserved `isStreaming: true` for any session whose stream had been orphaned by a prior dropped `message_complete`. On reload, those stale flags inflated `getStreamCapacityState()` to report 3+ active streams; `sendMessage()` then bailed at its `if (streamCapacity.isFull)` guard *before* posting `send_prompt`. The user typed, pressed Enter, and nothing happened — no log line either. Fixed in `src/chat/webview/state.ts`: `restore()` now clears `isStreaming` on every session because no stream can possibly be in progress across a webview reload.
 - **Speculative CLI session creation on resume** — `SessionLifecycleService.handleResumeSession` previously called `ensureSession(undefined)` for any tab without a `cliSessionId`, creating a fresh empty server session just to immediately query its 0 messages. Fix: only re-attach when a `cliSessionId` already exists; pending tabs wait for the first prompt to create the session via `StreamCoordinator`.
 
@@ -19,14 +24,14 @@
 
 ## Test Summary
 
-| Metric | v0.2.6 | v0.2.7 | v0.2.8 | v0.2.10 | Delta |
-|--------|--------|--------|--------|---------|-------|
-| Tests | 894 | 1466 | 1466 | 1585 | +119 |
-| Passing | 893 | 1465 | 1466 | 1578 | +112 |
-| Failing | 0 | 1 | 0 | 0 | — |
-| Skipped | 1 | 7 | 7 | 7 | — |
-| Typecheck | ✅ | ✅ | ✅ | ✅ | — |
-| Build | ✅ | ✅ | ✅ | ✅ | — |
+| Metric | v0.2.6 | v0.2.7 | v0.2.8 | v0.2.10 | v0.2.11 | Delta |
+|--------|--------|--------|--------|---------|---------|-------|
+| Tests | 894 | 1466 | 1466 | 1585 | 1604 | +19 |
+| Passing | 893 | 1465 | 1466 | 1578 | 1597 | +19 |
+| Failing | 0 | 1 | 0 | 0 | 0 | — |
+| Skipped | 1 | 7 | 7 | 7 | 7 | — |
+| Typecheck | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+| Build | ✅ | ✅ | ✅ | ✅ | ✅ | — |
 
 The single failing test in v0.2.7 (`main.test.ts › timeline jumps use exact message-list scroll positioning`) was a stale source-grep assertion left over from the extraction of `scrollToTurn`/`scrollMessageToTop` into `src/chat/webview/ui/scrollMarkers.ts`. The test now reads from `scrollMarkersSource` where the implementation actually lives.
 
@@ -62,13 +67,13 @@ The single failing test in v0.2.7 (`main.test.ts › timeline jumps use exact me
 | 21 | Secure Context Attachments | ✅ | Explorer/editor context commands, styled input chips, sensitive-file warnings, prompt-injection checks, read-only context provider |
 | 22 | Path-Aware Mentions | ✅ | Debounced file search with path-aware globs and expanded result limit |
 | 23 | Unified Session Modal | ✅ | Single list merging local + server sessions, workspace badges, `resume_server_session`, `importOneServerSession` |
-| 24 | Changed-Files Chip Bar | ✅ | Backend `SessionStore.addChangedFiles()` persists normalized paths; `changed_files_update` is canonical for chip bar + todos panel, with `file_edited` merged live |
+| 24 | Changed-Files Chip Bar | ✅ | Backend `SessionStore.addChangedFiles()` persists normalized paths; `changed_files_update` is canonical for chip bar + todos panel, with active-session scoped rendering and `file_edited` merged live |
 | 25 | Token & Cost Display | ✅ | `StreamCoordinator.finalizeStream` forwards `AssistantMessage.cost` and `.tokens` to webview on every stream completion |
 | 26 | Welcome Dashboard | ✅ | Workspace context row, model name, "Continue last session" + "New session" quick actions, recent sessions sorted by recency, 2×2 prompt-starter grid; host-created empty sessions now open a tab immediately |
 | 27 | Header Consolidation | ✅ | Status strip below tab bar (model/tokens/cost); settings overflow menu (`#settings-menu`) with MCP + theme entries; 4-button header; `aria-pressed` on all toggles |
 | 28 | CLI Session Sharing | ✅ | `OPENCODE_DATA_DIR`/`XDG_DATA_HOME` passed through env-var allowlist; `recoverSessions` no longer workspace-scoped |
 | 29 | Theme Customizer + CLI Theme Parity | ✅ | Webview modal with color pickers + Preview button; 7 override fields incl. user message bg; `--bg-secondary`/`--bg-tertiary` removed from CSS_VAR_MAP to preserve `color-mix()` depth; `.vscode-light` body overrides fix light-theme bubble rendering |
-| 30 | Empty Session Cleanup + Restore | ✅ | Empty unused sessions are transient, pruned periodically, deleted on close, and non-empty open tabs restore per workspace when enabled |
+| 30 | Empty Session Cleanup + Restore | ✅ | Empty unused sessions and local `pendingServerLink` placeholders are transient, pruned periodically, deleted on close, and non-empty open tabs restore per workspace when enabled; server imports awaiting backfill remain exempt |
 | 31 | Session Load Performance + Scroll Fixes | ✅ | `resume_session_data` truncated to last 50 msgs + `request_more_messages` pagination; chunked rAF rendering (`CHUNK_SIZE=20`); load-earlier banner; scroll-to-bottom after load; debounced scroll markers + timeline refresh; `content-visibility: auto; contain-intrinsic-size: auto 120px` on messages; `will-change: scroll-position` on message list |
 | 32 | Back Button + Modal Focus Traps | ✅ | Back button in header when any modal is open; Tab/Shift+Tab focus cycling within all modals; return-focus-to-trigger on close |
 | 33 | Settings Menu Keyboard Nav | ✅ | ArrowUp/Down, Home, End, Escape navigation |

@@ -121,10 +121,9 @@ export class SessionStore {
       if (typeof sess.tokenUsage !== "object") sess.tokenUsage = { prompt: 0, completion: 0, total: 0 }
       // Skip sessions with no messages — empty sessions serve no purpose
       // on restore (they were never interacted with). Imported server
-      // sessions and pending-link sessions are exempt: they are intentionally
-      // empty until backfill or first prompt.
+      // sessions are exempt: they are intentionally empty until backfill.
       const msgCount = Array.isArray(sess.messages) ? sess.messages.length : 0
-      const exempt = sess.needsBackfill === true || sess.pendingServerLink === true
+      const exempt = sess.needsBackfill === true
       if (msgCount === 0 && !exempt) {
         log.info(`Skipping empty session on load: ${id}`)
         continue
@@ -151,11 +150,11 @@ export class SessionStore {
     try {
       const obj: Record<string, OpenCodeSession> = {}
       for (const [id, sess] of this.sessions) {
-        // Persist sessions with messages, sessions awaiting server backfill,
-        // and offline-created sessions awaiting promotion. Empty active tabs
-        // are intentionally transient so an unused "New session" click does
-        // not survive reload and clutter history.
-        const exempt = sess.needsBackfill === true || sess.pendingServerLink === true
+        // Persist sessions with messages and server-imported sessions awaiting
+        // backfill. Empty local placeholder tabs are intentionally transient so
+        // an unused "New session" click does not survive reload and clutter
+        // history.
+        const exempt = sess.needsBackfill === true
         if (sess.messages.length > 0 || exempt) {
           obj[id] = sess
         }
@@ -210,7 +209,7 @@ export class SessionStore {
     const ttlMs = Math.max(1, ttlMinutes) * 60 * 1000
     const staleIds: string[] = []
     for (const [id, sess] of this.sessions) {
-      const exempt = sess.needsBackfill === true || sess.pendingServerLink === true
+      const exempt = sess.needsBackfill === true
       if (sess.messages.length === 0 && (now - sess.lastActiveAt) > ttlMs && id !== this.activeSessionId && !exempt) {
         staleIds.push(id)
       }
@@ -227,7 +226,7 @@ export class SessionStore {
   deleteIfEmpty(id: string): boolean {
     const session = this.sessions.get(id)
     if (!session) return false
-    const exempt = session.needsBackfill === true || session.pendingServerLink === true
+    const exempt = session.needsBackfill === true
     if (session.messages.length > 0 || exempt) return false
     this.delete(id)
     return true
