@@ -42,9 +42,17 @@ export const KNOWN_CONTEXT_WINDOWS: Readonly<Record<string, number>> = Object.fr
   "deepseek/deepseek-chat": 131_072,
   "deepseek/deepseek-reasoner": 65_536,
   "deepseek/deepseek-v3.5": 131_072,
+  "deepseek/deepseek-v4-flash": 131_072,
   "grok/grok-4": 131_072,
   "mistral/mistral-large-2411": 131_072,
   "minimax/minimax-m1": 4_096_000,
+  // opencode-routed models. The opencode server doesn't always populate
+  // limit.context for these so without explicit entries the resolver
+  // returned undefined and the ContextMonitor's old 100k default leaked
+  // through to the UI as a misleading "1% (X / 100,000)" indicator.
+  "opencode/big-pickle": 200_000,
+  "opencode/deepseek-v4-flash": 131_072,
+  "opencode/deepseek-v4-flash-free": 131_072,
 })
 
 /** Collapse separators so "qwen3.6-plus" matches "qwen-3.6-plus" matches "qwen3_6_plus". */

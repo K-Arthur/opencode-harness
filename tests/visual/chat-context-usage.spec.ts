@@ -53,6 +53,43 @@ test.describe("Context Usage", () => {
     expectNoBrowserErrors(captured)
   })
 
+  test("hides the per-tab monitor when maxTokens is unknown (0)", async ({ page }) => {
+    // Regression: when the active model's context window can't be resolved
+    // (e.g. opencode/big-pickle without a server limit), maxTokens used to
+    // come through as 100,000 — a misleading denominator. Now the monitor
+    // stays hidden until the real window resolves.
+    const captured = captureErrors(page)
+    await page.goto("/")
+
+    await dispatchHostMessage(page, {
+      type: "init_state",
+      sessions: [
+        {
+          id: "s",
+          name: "T",
+          model: "opencode/big-pickle",
+          messages: [],
+          tokenUsage: { prompt: 5000, completion: 3000, total: 8000 },
+        },
+      ],
+      activeSessionId: "s",
+    })
+
+    await page.waitForSelector('.tab-panel[data-tab-id="s"]', { timeout: 5000 })
+
+    await dispatchHostMessage(page, {
+      type: "context_usage",
+      tokens: 8000,
+      maxTokens: 0, // unresolved
+      percent: 0,
+    })
+
+    const monitor = page.locator('.tab-panel[data-tab-id="s"] .context-monitor')
+    await expect(monitor).toHaveClass(/hidden/, { timeout: 3000 })
+
+    expectNoBrowserErrors(captured)
+  })
+
   test("hides the usage bar when the session has zero tokens", async ({ page }) => {
     const captured = captureErrors(page)
     await page.goto("/")

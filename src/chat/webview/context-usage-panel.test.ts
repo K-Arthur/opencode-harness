@@ -72,6 +72,24 @@ describe("context usage panel", () => {
     assert.ok(!html.includes("Infinity"))
   })
 
+  it("hides the bar when maxTokens is 0 (unknown context window)", async () => {
+    // Regression: previously the bar rendered "X / 0" or "X / 100,000" when
+    // the model's context window hadn't resolved. We now hide the bar until
+    // both tokens and maxTokens are known.
+    const { setupContextUsagePanel, handleContextUsageMessage } = await import("./context-usage-panel")
+    setupContextUsagePanel()
+
+    handleContextUsageMessage({
+      type: "context_usage",
+      tokens: 1500,
+      maxTokens: 0, // model context window not yet resolved
+      percent: 0,
+    })
+
+    const bar = document.getElementById("context-usage")
+    assert.ok(bar?.classList.contains("hidden"), "bar must be hidden when maxTokens is 0")
+  })
+
   it("resets context usage panel on tab switch", async () => {
     const { resetContextUsagePanel, handleContextUsageMessage } = await import("./context-usage-panel")
 

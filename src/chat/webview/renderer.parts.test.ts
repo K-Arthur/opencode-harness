@@ -18,6 +18,11 @@ import { join } from "node:path"
 
 const source = readFileSync(join(__dirname, "renderer.ts"), "utf8")
 
+function indexOrEnd(s: string, needle: string): number {
+  const i = s.indexOf(needle)
+  return i === -1 ? s.length : i
+}
+
 function assertRenderer(blockType: string, renderFnName: string, label: string): void {
   assert.match(
     source,
@@ -51,19 +56,57 @@ describe("renderer — Layer 7 RED (canonical part renderers)", () => {
 
   it("L7-T2: step-finish renders only for abnormal endings", () => {
     assertRenderer("step-finish", "renderStepFinishBlock", "L7-T2")
-    const body = source.slice(source.indexOf("function renderStepFinishBlock"))
+    // Slice covers the normal-reasons constant + the function body. The
+    // constant may live just above the function for readability.
+    const startIdx = Math.min(
+      indexOrEnd(source, "NORMAL_FINISH_REASONS"),
+      source.indexOf("function renderStepFinishBlock"),
+    )
+    const body = source.slice(startIdx, source.indexOf("function renderSnapshotBlock"))
     // Renderer must consult reason + tokens — the SDK fields haven't gone away,
     // we just changed what we do with them.
     assert.match(body, /block\.reason|reason/, "step-finish renderer must consult block.reason")
     assert.match(body, /tokens/, "step-finish renderer must consult block.tokens")
-    // Normal 'stop' completion must NOT render a chip — that was the
-    // "Step finished (stop) — in:X out:Y reasoning:Z" line cluttering chats.
+    // Normal completions (any provider) must short-circuit. The set must include
+    // at least the common synonyms otherwise Anthropic's "end_turn" or
+    // "tool_use" would leak the chip back into the chat.
+    for (const normal of ["stop", "end_turn", "stop_sequence", "tool_use", "tool_calls", "complete"]) {
+      assert.match(
+        body,
+        new RegExp(`["']${normal}["']`),
+        `step-finish normal-reason set must include "${normal}"`,
+      )
+    }
+    assert.match(body, /return null/, "step-finish must return null for normal-completion cases")
+  })
+
+  it("L7-T2a: step-finish guards token summary against NaN / negative values", () => {
+    const body = source.slice(
+      source.indexOf("function renderStepFinishBlock"),
+      source.indexOf("function renderSnapshotBlock"),
+    )
+    // typeof NaN === "number" so a bare typeof check would emit "in:NaN".
+    // Renderer must additionally check Number.isFinite or >= 0 before pushing.
     assert.match(
       body,
-      /reason\s*===\s*["']stop["']|stop["']\s*===|NORMAL_FINISH/,
-      "step-finish must short-circuit when reason === 'stop' (normal completion)",
+      /Number\.isFinite|>=\s*0|>\s*-1/,
+      "step-finish token summary must reject NaN/negative values, not just typeof === 'number'",
     )
-    assert.match(body, /return null/, "step-finish must return null for the normal 'stop' case")
+  })
+
+  it("L7-T2b: step-finish treats empty/whitespace reason as a normal completion", () => {
+    const body = source.slice(
+      source.indexOf("function renderStepFinishBlock"),
+      source.indexOf("function renderSnapshotBlock"),
+    )
+    // An empty reason string would otherwise render the ugly "Step finished ()"
+    // chip. The implementation must normalise empty/whitespace-only reasons
+    // before the normal-set check (e.g. via .trim() or by including "" in the set).
+    assert.match(
+      body,
+      /\.trim\(\)|reason\s*===\s*["']\s*["']|!reason/,
+      "step-finish must treat empty/whitespace reason as normal completion",
+    )
   })
 
   it("L7-T3: patch renders as file list summary", () => {

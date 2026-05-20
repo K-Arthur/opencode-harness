@@ -737,14 +737,26 @@ function renderStepStartBlock(_block: Block, _opts: RenderOptions): HTMLElement 
   return null
 }
 
+// Reasons that mean "this step ended the normal way" — chip suppressed.
+// Covers the common set across SDK providers (OpenAI: stop / tool_calls,
+// Anthropic: end_turn / stop_sequence / tool_use, generic: complete).
+// Empty/whitespace reason is treated as normal too.
+const NORMAL_FINISH_REASONS = new Set<string>([
+  "stop",
+  "end_turn",
+  "stop_sequence",
+  "tool_use",
+  "tool_calls",
+  "complete",
+])
+
 function renderStepFinishBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
-  // Normal completion (reason === "stop") needs no chip — the assistant's
-  // reply is already visible and the token/cost displays at the bottom of
-  // the chat show the post-step accounting. Only surface unusual finishes
-  // (length cap, abort, content filter, error) where the user benefits from
-  // knowing *why* the step ended.
-  const reason = typeof block.reason === "string" ? block.reason : "stop"
-  if (reason === "stop") return null
+  // Normal completions need no chip — the assistant's reply is visible and
+  // the token/cost displays show the post-step accounting. Only surface
+  // unusual finishes (length cap, abort, content filter, error) where the
+  // user benefits from knowing *why* the step ended.
+  const rawReason = typeof block.reason === "string" ? block.reason.trim() : ""
+  if (rawReason === "" || NORMAL_FINISH_REASONS.has(rawReason)) return null
 
   const tokens = block.tokens as
     | { input?: number; output?: number; reasoning?: number }
@@ -752,12 +764,18 @@ function renderStepFinishBlock(block: Block, _opts: RenderOptions): HTMLElement 
 
   const chip = document.createElement("div")
   chip.className = "step-finish-chip"
-  const parts: string[] = [`Step finished (${reason})`]
+  const parts: string[] = [`Step finished (${rawReason})`]
   if (tokens) {
     const summary: string[] = []
-    if (typeof tokens.input === "number") summary.push(`in:${tokens.input}`)
-    if (typeof tokens.output === "number") summary.push(`out:${tokens.output}`)
-    if (typeof tokens.reasoning === "number" && tokens.reasoning > 0) {
+    // Use Number.isFinite + >= 0 so NaN, Infinity, and negative counts
+    // (which would otherwise pass typeof === "number") don't leak into the UI.
+    if (Number.isFinite(tokens.input) && (tokens.input as number) >= 0) {
+      summary.push(`in:${tokens.input}`)
+    }
+    if (Number.isFinite(tokens.output) && (tokens.output as number) >= 0) {
+      summary.push(`out:${tokens.output}`)
+    }
+    if (Number.isFinite(tokens.reasoning) && (tokens.reasoning as number) > 0) {
       summary.push(`reasoning:${tokens.reasoning}`)
     }
     if (summary.length > 0) parts.push(summary.join(" "))

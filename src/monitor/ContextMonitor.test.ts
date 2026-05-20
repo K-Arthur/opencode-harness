@@ -36,8 +36,21 @@ describe("ContextMonitor.ts", () => {
     assert.ok(source.includes("dispose()"))
   })
 
-  it("uses token limit of 100000", () => {
-    assert.ok(source.includes("100000"))
+  // The old 100,000 default was misleading: when a model's context window
+  // couldn't be resolved (e.g. opencode/big-pickle with no server limit), the
+  // UI showed "X / 100,000" as if that were correct. We now default to 0 and
+  // require setTokenLimit() to be called once the actual window is known.
+  // The webview hides the context bar when maxTokens <= 0.
+  it("defaults tokenLimit to 0 (unknown) so a model-less monitor doesn't leak a fake 100k denominator", () => {
+    assert.match(
+      source,
+      /private\s+tokenLimit\s*=\s*0\b/,
+      "tokenLimit must default to 0, not 100000 — the old default leaked into the UI as a misleading denominator",
+    )
+    assert.ok(
+      !/private\s+tokenLimit\s*=\s*100000\b/.test(source),
+      "the old 100000 default must be gone — left behind it would still leak via the maxTokens field",
+    )
   })
 
   it("has setTokenLimit method", () => {

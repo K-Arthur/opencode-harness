@@ -148,7 +148,13 @@ function updateContextUsageBar(usage: ContextUsage | null): void {
 
   if (!bar || !progressBar || !label || !usage) return
 
-  if (usage.tokens === 0) {
+  // Hide when either side of the ratio is unknown:
+  //  - tokens === 0: no usage yet, nothing to show
+  //  - maxTokens <= 0: the active model's context window hasn't resolved,
+  //    so the denominator would be "0" or NaN — better to show nothing
+  //    than mislead users (the earlier UI showed "X / 100,000" for any
+  //    model whose context window failed to resolve).
+  if (usage.tokens === 0 || !usage.maxTokens || usage.maxTokens <= 0) {
     bar.classList.add("hidden")
     if (costDisplay) {
       costDisplay.classList.add("hidden")

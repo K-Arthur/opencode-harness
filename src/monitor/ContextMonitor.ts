@@ -77,7 +77,12 @@ function getVsCodeApi(): typeof import("vscode") | undefined {
 
 export class ContextMonitor {
 private currentTokens = 0
-  private tokenLimit = 100000
+  // Default to 0 (unknown). The webview hides the context bar when the
+  // denominator is 0, so we surface no info rather than a misleading "X /
+  // 100,000" when the active model's true context window hasn't been
+  // resolved yet (e.g. opencode-routed models whose server config omits
+  // limit.context). setTokenLimit() is called once the model resolves.
+  private tokenLimit = 0
   private onContextChangedEmitter = new SimpleEventEmitter<ContextUsage>()
   private usageHistory: ContextUsageHistory[] = []
   private historyRetentionDays = 30

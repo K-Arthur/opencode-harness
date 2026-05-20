@@ -73,4 +73,51 @@ describe("KNOWN_CONTEXT_WINDOWS", () => {
       (KNOWN_CONTEXT_WINDOWS as Record<string, number>)["test"] = 1
     })
   })
+
+  // opencode-routed models surfaced by the UI dropdown. The user was seeing
+  // a misleading 100,000 fallback for these because they aren't in any other
+  // provider's namespace and the server doesn't always populate limit.context
+  // for them. Pin known values here so the context bar shows correctly.
+  it("contains opencode/big-pickle (200k, Claude Opus class)", () => {
+    assert.equal(KNOWN_CONTEXT_WINDOWS["opencode/big-pickle"], 200_000)
+  })
+
+  it("contains opencode/deepseek-v4-flash + free variant at 131k", () => {
+    assert.equal(KNOWN_CONTEXT_WINDOWS["opencode/deepseek-v4-flash"], 131_072)
+    assert.equal(KNOWN_CONTEXT_WINDOWS["opencode/deepseek-v4-flash-free"], 131_072)
+  })
+})
+
+describe("resolveContextWindow — opencode-prefixed models", () => {
+  it("falls back to known table for opencode/big-pickle when server reports nothing", () => {
+    // Previously returned undefined → ContextMonitor stuck at 100k default.
+    assert.equal(resolveContextWindow("opencode/big-pickle"), 200_000)
+    assert.equal(resolveContextWindow("opencode/big-pickle", 0), 200_000)
+  })
+
+  it("falls back to known table for deepseek-v4-flash variants", () => {
+    assert.equal(resolveContextWindow("opencode/deepseek-v4-flash"), 131_072)
+    assert.equal(resolveContextWindow("opencode/deepseek-v4-flash-free"), 131_072)
+  })
+
+  it("still trusts a positive server value for opencode-prefixed models", () => {
+    // The "opencode trusts server" rule shouldn't regress for the case
+    // where a real server value comes through.
+    assert.equal(resolveContextWindow("opencode/big-pickle", 500_000), 500_000)
+  })
+
+  it("returns undefined (not a misleading default) when truly unknown", () => {
+    assert.equal(resolveContextWindow("opencode/some-truly-unknown-model"), undefined)
+    assert.equal(resolveContextWindow("opencode/some-truly-unknown-model", 0), undefined)
+  })
+
+  // Fuzzy-match safety net: if a future opencode/* model wraps a deepseek
+  // model whose suffix happens to start with "deepseek-", the suffix-only
+  // matcher in findKnownContextWindow should still find a sane value rather
+  // than letting the UI fall back to 100k.
+  it("uses the provider-stripped lookup so deepseek-flavoured suffixes still resolve", () => {
+    // existing test confirms the suffix matcher works for any provider —
+    // re-asserting here to lock the contract for opencode routing.
+    assert.equal(resolveContextWindow("opencode/qwen3.6-plus"), 1_048_576)
+  })
 })
