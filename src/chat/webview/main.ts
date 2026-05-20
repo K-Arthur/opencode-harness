@@ -42,7 +42,7 @@ import { setupSessionModal as setupSessionModalModule, openSessionModal as openS
 import { setupModeWarning as setupModeWarningModule, showAutoModeWarning as showAutoModeWarningModule, closeModeWarning as closeModeWarningModule, isModeWarningOpen, type ModeWarningEls } from "./ui/modeWarning"
 import { handleTokenUsage as handleTokenUsageModule, accumulateTokenUsage as accumulateTokenUsageModule, accumulateCost as accumulateCostModule, rememberStepUsage, isDuplicateRecentStepUsage, handleRateLimitState as handleRateLimitStateModule, recordUsageSnapshot as recordUsageSnapshotModule, updateCostDisplay as updateCostDisplayModule, updateTokenDisplay as updateTokenDisplayModule, clearTokenDisplay as clearTokenDisplayModule, updateContextBarFromSession as updateContextBarFromSessionModule, checkOverflowWarnings as checkOverflowWarningsModule, formatTokenCount as formatTokenCountModule, type TokenCostDeps, type RateLimitWebviewState } from "./ui/tokenCostDisplay"
 import { createAttachmentManager, parsePromptMentions, removePromptToken } from "./ui/attachments"
-import { showWelcomeView as showWelcomeViewModule, hideWelcomeView as hideWelcomeViewModule, renderWelcomeContext as renderWelcomeContextModule, setupWelcomeActions as setupWelcomeActionsModule, setupWelcomeSuggestions as setupWelcomeSuggestionsModule, type WelcomeViewDeps } from "./ui/welcomeView"
+import { showWelcomeView as showWelcomeViewModule, hideWelcomeView as hideWelcomeViewModule, renderWelcomeContext as renderWelcomeContextModule, setupWelcomeActions as setupWelcomeActionsModule, setupWelcomeSuggestions as setupWelcomeSuggestionsModule, setupWelcomeResponsive as setupWelcomeResponsiveModule, type WelcomeViewDeps } from "./ui/welcomeView"
 import { closeSettingsMenu as closeSettingsMenuModule, closeCurrentModal as closeCurrentModalModule, setupSettingsMenuKeyboardNav as setupSettingsMenuKeyboardNavModule, type SettingsMenuDeps } from "./ui/settingsMenu"
 import { trackFileChange as trackFileChangeModule, undoMessage as undoMessageModule, handleChangedFiles as handleChangedFilesModule, renderChangedFilesList as renderChangedFilesListModule, renderCheckpointPanel as renderCheckpointPanelModule, handleClearMessages as handleClearMessagesModule, type FileTrackingDeps } from "./ui/fileTracking"
 import { setupButtons as setupButtonsModule, type ButtonSetupDeps } from "./ui/buttonSetup"
@@ -1877,6 +1877,7 @@ function getVsCodeApi() {
 
   function setupWelcomeSuggestions() {
     setupWelcomeSuggestionsModule(welcomeViewDeps)
+    setupWelcomeResponsiveModule(welcomeViewDeps)
   }
 
   /* ─── SEARCH ─── */

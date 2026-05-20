@@ -523,6 +523,37 @@
   margin-top: var(--space-2);
 }
 
+/* ─── Keyboard hint ─── */
+
+.keyboard-hint {
+  font-size: var(--text-2xs);
+  color: var(--oc-muted);
+  margin-top: var(--space-2);
+  opacity: 0.75;
+  letter-spacing: 0.02em;
+}
+
+.keyboard-hint kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  margin: 0 1px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  background: var(--oc-bg-tertiary);
+  border: 1px solid var(--oc-glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--oc-fg);
+}
+
+/* ─── Short-height collapse: hide non-essential rows ─── */
+
+/* Toggled on .welcome-container by JS when the viewport is too short to
+ * comfortably show the tagline + keyboard hint without crowding. */
+.welcome-container.welcome-short .welcome-tagline,
+.welcome-container.welcome-short #keyboard-hint {
+  display: none;
+}
+
 /* ─── Container Query Breakpoints ─── */
 
 /* Narrow (280px - 399px) */

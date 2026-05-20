@@ -165,3 +165,32 @@ export function setupWelcomeSuggestions(deps: WelcomeViewDeps): void {
     }
   })
 }
+
+/**
+ * Toggle the `.welcome-short` class on the welcome container whenever the
+ * welcome panel is too short to comfortably show the tagline + keyboard hint.
+ * CSS in welcome.css hides those rows when the class is set.
+ *
+ * Threshold (350px) is just above the height where the prompt-starter cards
+ * begin to crowd against the input area on the standalone-served bundle.
+ */
+export function setupWelcomeResponsive(deps: WelcomeViewDeps): void {
+  const container = deps.els.welcomeView.querySelector<HTMLElement>(".welcome-container")
+  if (!container) return
+
+  const SHORT_HEIGHT_PX = 350
+
+  const apply = () => {
+    container.classList.toggle("welcome-short", window.innerHeight < SHORT_HEIGHT_PX)
+  }
+
+  apply()
+  // Use ResizeObserver on documentElement so we react to webview panel resize,
+  // not just window resize (VS Code panels resize without firing a window event
+  // in some embedding modes).
+  if (typeof ResizeObserver !== "undefined") {
+    const ro = new ResizeObserver(() => apply())
+    ro.observe(document.documentElement)
+  }
+  window.addEventListener("resize", apply)
+}

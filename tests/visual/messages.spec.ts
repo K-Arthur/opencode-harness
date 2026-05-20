@@ -159,7 +159,7 @@ test.describe('Chat Messages', () => {
       // Verify no horizontal scroll
       const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
       const clientWidth = await page.evaluate(() => document.body.clientWidth)
-      expect(scrollWidth - clientWidth).toBeLessThanOrEqual(8)
+      expect(scrollWidth - clientWidth).toBeLessThanOrEqual(0)
     })
 
     test('should display correctly at medium width (400px)', async ({ page }) => {
@@ -185,7 +185,7 @@ test.describe('Chat Messages', () => {
       
       const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
       const clientWidth = await page.evaluate(() => document.body.clientWidth)
-      expect(scrollWidth - clientWidth).toBeLessThanOrEqual(8)
+      expect(scrollWidth - clientWidth).toBeLessThanOrEqual(0)
     })
 
     test('should display correctly at wide width (600px)', async ({ page }) => {
@@ -211,7 +211,7 @@ test.describe('Chat Messages', () => {
       
       const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
       const clientWidth = await page.evaluate(() => document.body.clientWidth)
-      expect(scrollWidth - clientWidth).toBeLessThanOrEqual(8)
+      expect(scrollWidth - clientWidth).toBeLessThanOrEqual(0)
     })
 
     test('should have no horizontal scroll at any width', async ({ page }) => {
@@ -236,7 +236,7 @@ test.describe('Chat Messages', () => {
         await page.setViewportSize({ width, height: 600 })
         const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
         const clientWidth = await page.evaluate(() => document.body.clientWidth)
-        expect(scrollWidth - clientWidth).toBeLessThanOrEqual(8)
+        expect(scrollWidth - clientWidth).toBeLessThanOrEqual(0)
       }
     })
 

@@ -81,13 +81,10 @@ test.describe('Welcome Screen', () => {
       const greeting = page.locator('#welcome-greeting')
       await expect(greeting).toBeVisible()
       
-      // No significant horizontal scroll. A few px of overflow is tolerated
-      // at the narrowest viewport (~280px) where browser scrollbar gutter +
-      // border-box rounding can leak through; anything beyond that is a
-      // genuine responsive bug. See TODO: tighten once 280px layout is fixed.
+      // No horizontal scroll at any width.
       const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
       const clientWidth = await page.evaluate(() => document.body.clientWidth)
-      expect(scrollWidth - clientWidth).toBeLessThanOrEqual(8)
+      expect(scrollWidth - clientWidth).toBeLessThanOrEqual(0)
     })
 
     test('should display correctly at medium width (400px)', async ({ page }) => {
@@ -103,13 +100,10 @@ test.describe('Welcome Screen', () => {
       const greeting = page.locator('#welcome-greeting')
       await expect(greeting).toBeVisible()
       
-      // No significant horizontal scroll. A few px of overflow is tolerated
-      // at the narrowest viewport (~280px) where browser scrollbar gutter +
-      // border-box rounding can leak through; anything beyond that is a
-      // genuine responsive bug. See TODO: tighten once 280px layout is fixed.
+      // No horizontal scroll at any width.
       const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
       const clientWidth = await page.evaluate(() => document.body.clientWidth)
-      expect(scrollWidth - clientWidth).toBeLessThanOrEqual(8)
+      expect(scrollWidth - clientWidth).toBeLessThanOrEqual(0)
     })
 
     test('should display correctly at wide width (600px)', async ({ page }) => {
@@ -125,17 +119,14 @@ test.describe('Welcome Screen', () => {
       const greeting = page.locator('#welcome-greeting')
       await expect(greeting).toBeVisible()
 
-      // #keyboard-hint is a planned element not yet present in the welcome
-      // markup. Once added, re-enable the visibility assertion below:
-      //   await expect(page.locator('#keyboard-hint')).toBeVisible()
+      // Roomy viewports show the keyboard hint
+      const keyboardHint = page.locator('#keyboard-hint')
+      await expect(keyboardHint).toBeVisible()
 
-      // No significant horizontal scroll. A few px of overflow is tolerated
-      // at the narrowest viewport (~280px) where browser scrollbar gutter +
-      // border-box rounding can leak through; anything beyond that is a
-      // genuine responsive bug. See TODO: tighten once 280px layout is fixed.
+      // No horizontal scroll
       const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
       const clientWidth = await page.evaluate(() => document.body.clientWidth)
-      expect(scrollWidth - clientWidth).toBeLessThanOrEqual(8)
+      expect(scrollWidth - clientWidth).toBeLessThanOrEqual(0)
     })
 
     test('should have no horizontal scroll at any width', async ({ page }) => {
@@ -146,15 +137,11 @@ test.describe('Welcome Screen', () => {
         await page.setViewportSize({ width, height: 600 })
         const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
         const clientWidth = await page.evaluate(() => document.body.clientWidth)
-        // 8px tolerance for the known narrow-viewport overflow (~7px @ 280px).
-        expect(scrollWidth - clientWidth).toBeLessThanOrEqual(8)
+        expect(scrollWidth - clientWidth).toBeLessThanOrEqual(0)
       }
     })
 
-    test.skip('should collapse non-essential elements on short height', async ({ page }) => {
-      // Skipped: the welcome-short collapse responsive class is a planned
-      // feature that's not yet implemented in the webview CSS/JS. Re-enable
-      // once the short-height layout lands.
+    test('should collapse non-essential elements on short height', async ({ page }) => {
       await page.goto('/')
       await page.setViewportSize({ width: 400, height: 300 })
 
@@ -175,13 +162,10 @@ test.describe('Welcome Screen', () => {
       const welcomeContainer = page.locator('.welcome-container')
       await expect(welcomeContainer).toBeVisible()
       
-      // No significant horizontal scroll. A few px of overflow is tolerated
-      // at the narrowest viewport (~280px) where browser scrollbar gutter +
-      // border-box rounding can leak through; anything beyond that is a
-      // genuine responsive bug. See TODO: tighten once 280px layout is fixed.
+      // No horizontal scroll at any width.
       const scrollWidth = await page.evaluate(() => document.body.scrollWidth)
       const clientWidth = await page.evaluate(() => document.body.clientWidth)
-      expect(scrollWidth - clientWidth).toBeLessThanOrEqual(8)
+      expect(scrollWidth - clientWidth).toBeLessThanOrEqual(0)
     })
 
     test('time-based greeting should display correctly', async ({ page }) => {

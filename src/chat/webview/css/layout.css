@@ -263,6 +263,31 @@
   gap: var(--space-1);
 }
 
+/* Narrow viewport (≤320px): six 32px icon buttons + header-left would push
+ * .header-row past the viewport (≈7px overflow at 280px). Shrink icon
+ * buttons and tighten the gap so the row fits without horizontal scroll. */
+@media (max-width: 320px) {
+  .header-actions {
+    gap: 0;
+  }
+
+  .header-actions .icon-btn {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+  }
+
+  .header-actions .icon-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* Header-left can collapse the status text — the LED already conveys it. */
+  #agent-status-text {
+    display: none;
+  }
+}
+
 /* ─── HEADER BUTTONS ─── */
 
 .header-btn {
