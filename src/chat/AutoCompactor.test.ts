@@ -76,6 +76,24 @@ void describe("AutoCompactor.ts", () => {
         "must send compaction_started before calling compactSession"
       )
     })
+
+    // User-initiated compactNow path was missing the streaming guard. Without
+    // it, clicking the banner's "Compact now" during a live stream would
+    // truncate the message list mid-response and leave the UI in a torn state.
+    void it("compactNow refuses to compact while the tab is streaming", () => {
+      const fnIdx = source.indexOf("async compactNow(")
+      assert.ok(fnIdx >= 0, "compactNow must exist")
+      const fnEnd = source.indexOf("\n  }", fnIdx)
+      const block = source.slice(fnIdx, fnEnd)
+      assert.ok(
+        /tab\?\.\s*isStreaming|tab\.isStreaming/.test(block),
+        "compactNow must check tab.isStreaming and refuse compaction during an active response"
+      )
+      assert.ok(
+        block.includes("postRequestError"),
+        "compactNow must surface a user-actionable error when refusing due to active streaming"
+      )
+    })
   })
 
   void it("sends task_banner for completion", () => {

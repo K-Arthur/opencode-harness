@@ -392,6 +392,49 @@ describe("StreamCoordinator.ts", () => {
       block.includes("this.activeMessageIds.delete(tabId)"),
       "cleanupTab must clear activeMessageIds entry to prevent stale prevId across turns"
     )
+    assert.ok(
+      block.includes("this.loggedBubbleMismatches.delete(tabId)"),
+      "cleanupTab must clear loggedBubbleMismatches entry so the dedupe set doesn't leak across turns"
+    )
+  })
+
+  // ── setStreamState must not log spurious "X → X" transitions.
+  // appendChunk / appendToolStart re-assert "streaming" on every chunk, so without
+  // a no-op guard the log channel gets one "streaming → streaming" line per token.
+  it("setStreamState is a no-op (no log) when previous === next state", () => {
+    const fnIdx = source.indexOf("private setStreamState(")
+    assert.ok(fnIdx >= 0, "setStreamState must exist")
+    const blockEnd = source.indexOf("\n  }", fnIdx)
+    const block = source.slice(fnIdx, blockEnd)
+    assert.ok(
+      /if\s*\(\s*previous\s*===\s*state\s*\)\s*return/.test(block),
+      "setStreamState must early-return when state is unchanged to avoid log spam"
+    )
+  })
+
+  // ── The bubble-id mismatch log must fire once per server messageId, not once per chunk.
+  // Without a dedupe set, this log emits on every text chunk for the duration of a turn.
+  it("appendChunk dedupes the bubble-id mismatch log per server messageId", () => {
+    const fnIdx = source.indexOf("appendChunk(")
+    assert.ok(fnIdx >= 0, "appendChunk must exist")
+    const blockEnd = source.indexOf("appendToolStart(", fnIdx)
+    const block = source.slice(fnIdx, blockEnd > fnIdx ? blockEnd : fnIdx + 2500)
+    assert.ok(
+      block.includes("loggedBubbleMismatches"),
+      "appendChunk must consult a dedupe Set (loggedBubbleMismatches) before logging the mismatch"
+    )
+    assert.ok(
+      /loggedBubbleMismatches[\s\S]{0,200}\.has\(/.test(block) ||
+        /loggedBubbleMismatches[\s\S]{0,200}\.add\(/.test(block),
+      "appendChunk must check and add to the dedupe Set so the log fires once per messageId"
+    )
+  })
+
+  it("loggedBubbleMismatches field is declared as a per-tab dedupe Map", () => {
+    assert.ok(
+      /private\s+loggedBubbleMismatches\s*=\s*new\s+Map<string,\s*Set<string>>\(\)/.test(source),
+      "loggedBubbleMismatches must be a Map<string, Set<string>> for per-tab per-messageId dedupe"
+    )
   })
 
   // ── Event-stream readiness gates prompt send so the UI can observe output.

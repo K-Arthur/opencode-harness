@@ -584,4 +584,39 @@ it("unified modal: server session items send resume_server_session on click", ()
       assert.ok(source.includes("updateSendButton()"), "handleRequestError must refresh the send button")
     })
   })
+
+  // ── Session-restore model-picker race fix.
+  // model_list arrives async after init_state. Without preferring the active
+  // session's model, the late-arriving model_list response overwrites the
+  // dropdown back to the global model, making restored sessions appear under
+  // the wrong model.
+  describe("model_list session-model preference", () => {
+    it("model_list handler prefers active session's model over global model", () => {
+      const idx = source.indexOf('[\"model_list\"')
+      assert.ok(idx >= 0, "model_list handler must exist")
+      const block = source.slice(idx, idx + 800)
+      assert.ok(
+        block.includes("getActiveSession") || block.includes("stateManager.getSession"),
+        "model_list must consult the active session before choosing which model to display"
+      )
+      assert.ok(
+        /activeSession\?\.\s*model|sessionModel/.test(block),
+        "model_list must reference the session's model so a restored session keeps its own model"
+      )
+    })
+
+    it("switchTab restores the session's model on the dropdown", () => {
+      const idx = source.indexOf("function switchTab(")
+      assert.ok(idx >= 0, "switchTab must exist")
+      const block = source.slice(idx, idx + 2000)
+      assert.ok(
+        block.includes("modelDropdown.setCurrentModel"),
+        "switchTab must call setCurrentModel so the dropdown reflects the active session's model"
+      )
+      assert.ok(
+        block.includes("resetContextUsagePanel"),
+        "switchTab must reset the context usage panel so per-session counters don't bleed across tabs"
+      )
+    })
+  })
 })

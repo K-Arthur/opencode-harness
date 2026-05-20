@@ -133,10 +133,45 @@
 }
 
 .changed-file-icon {
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  color: var(--oc-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  min-width: 22px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--oc-bg-tertiary);
+  color: var(--oc-fg);
+  text-align: center;
+  letter-spacing: 0.5px;
+  line-height: 1;
+}
+
+/* Per-language colored badges. Colors chosen from each language's
+ * conventional brand palette for at-a-glance recognition. */
+.changed-file-icon--ts   { background: #3178c6; color: #fff; }
+.changed-file-icon--js   { background: #f0db4f; color: #323330; }
+.changed-file-icon--py   { background: #3776ab; color: #ffd43b; }
+.changed-file-icon--rs   { background: #dea584; color: #000; }
+.changed-file-icon--go   { background: #00add8; color: #fff; }
+.changed-file-icon--java { background: #b07219; color: #fff; }
+.changed-file-icon--kt   { background: #a97bff; color: #fff; }
+.changed-file-icon--json { background: #6e6e6e; color: #fff; }
+.changed-file-icon--md   { background: #4b8bbe; color: #fff; }
+.changed-file-icon--css  { background: #563d7c; color: #fff; }
+.changed-file-icon--html { background: #e34c26; color: #fff; }
+.changed-file-icon--yaml { background: #cb171e; color: #fff; }
+.changed-file-icon--xml  { background: #0060ac; color: #fff; }
+.changed-file-icon--sql  { background: #336791; color: #fff; }
+.changed-file-icon--sh   { background: #4eaa25; color: #fff; }
+.changed-file-icon--toml { background: #9c4221; color: #fff; }
+.changed-file-icon--default {
+  background: var(--oc-bg-tertiary);
+  color: var(--oc-fg);
 }
 
 .changed-file-name {

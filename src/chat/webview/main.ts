@@ -2450,7 +2450,16 @@ function getVsCodeApi() {
       ["model_list", (msg) => {
         if (msg.items) {
           const modelsWithState = stateManager.applyModelState(msg.items as ModelInfo[])
-          const currentModel = msg.model as string || stateManager.getState().globalModel
+          // Prefer the active session's model over the global model so a
+          // restored session keeps its own model when this async response
+          // arrives after init_state has already switched tabs. Without
+          // this preference, model_list overwrites the dropdown back to
+          // the global model and makes the picker disagree with the
+          // session that was just restored.
+          const activeSession = stateManager.getActiveSession()
+          const sessionModel = activeSession?.model
+          const fallbackModel = msg.model as string || stateManager.getState().globalModel
+          const currentModel = sessionModel || fallbackModel
           modelDropdown.render(modelsWithState, currentModel)
           modelManager.setModels(modelsWithState)
           if (currentModel) {

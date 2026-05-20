@@ -95,6 +95,10 @@ this.snoozeUntil = Date.now() + 10 * 60 * 1000
       callbacks.postRequestError("Cannot compact: server not running or session not linked")
       return
     }
+    if (tab.isStreaming) {
+      callbacks.postRequestError("Cannot compact while a response is streaming. Wait for it to finish or cancel the stream.")
+      return
+    }
 
     try {
       callbacks.postMessage({ type: "compaction_started", sessionId })

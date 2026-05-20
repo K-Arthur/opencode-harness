@@ -50,6 +50,8 @@ export class StreamCoordinator {
   private streamStates = new Map<string, StreamLifecycleState>()
   /** Per-tab active message ID — detects when the server starts a new assistant message mid-stream */
   private activeMessageIds = new Map<string, string>()
+  /** Per-tab set of server messageIds we've already logged a bubble-id mismatch for — dedupes the log to once per turn instead of once per chunk */
+  private loggedBubbleMismatches = new Map<string, Set<string>>()
   /** Per-tab tool call counter for stable deterministic IDs when server IDs are missing */
   private toolCallCounts = new Map<string, number>()
   /** Per-tab pending tool call IDs. Set insertion order gives FIFO fallback for missing IDs. */
@@ -168,6 +170,7 @@ export class StreamCoordinator {
 
   private setStreamState(tabId: string, state: StreamLifecycleState, context?: Record<string, unknown>): void {
     const previous = this.streamStates.get(tabId) || "idle"
+    if (previous === state) return
     this.streamStates.set(tabId, state)
     const ctxStr = context ? ` ${JSON.stringify(context)}` : ""
     log.info(`[stream:${tabId}] ${previous} → ${state}${ctxStr}`)
@@ -975,7 +978,15 @@ export class StreamCoordinator {
       if (!uiMessageId) {
         this.activeMessageIds.set(tabId, messageId)
       } else if (uiMessageId !== messageId) {
-        log.info(`appendChunk: server messageId ${messageId} for tab ${tabId} renders in active bubble ${uiMessageId}`)
+        let logged = this.loggedBubbleMismatches.get(tabId)
+        if (!logged) {
+          logged = new Set<string>()
+          this.loggedBubbleMismatches.set(tabId, logged)
+        }
+        if (!logged.has(messageId)) {
+          logged.add(messageId)
+          log.info(`appendChunk: server messageId ${messageId} for tab ${tabId} renders in active bubble ${uiMessageId}`)
+        }
       }
     }
     const uiMessageId = this.activeMessageIds.get(tabId) ?? messageId
@@ -1114,6 +1125,7 @@ private cleanupTab(tabId: string): void {
     this.toolActivityAt.delete(tabId)
     this.clearPendingToolGraceTimeout(tabId)
     this.activeMessageIds.delete(tabId)
+    this.loggedBubbleMismatches.delete(tabId)
     this.stopHeartbeat(tabId)
     const cliSessionId = this.tabManager.getTab(tabId)?.cliSessionId
     if (cliSessionId) this.injectedInstructionsSessions.delete(cliSessionId)

@@ -55,10 +55,12 @@ export function renderChangedFilesList(deps: FileTrackingDeps, files: string[]):
     chip.setAttribute("data-testid", `changed-file-${f.replace(/[^a-zA-Z0-9]/g, "-")}`)
     chip.title = f
 
-    // Add file icon based on extension
+    // Add file icon based on extension — colored monogram badge per language
     const icon = document.createElement("span")
-    icon.className = "changed-file-icon"
-    icon.innerHTML = getFileIcon(f)
+    const meta = getFileIcon(f)
+    icon.className = `changed-file-icon ${meta.className}`
+    icon.textContent = meta.label
+    icon.setAttribute("aria-hidden", "true")
     chip.appendChild(icon)
 
     // Add filename
@@ -78,29 +80,43 @@ export function renderChangedFilesList(deps: FileTrackingDeps, files: string[]):
   }
 }
 
-function getFileIcon(filePath: string): string {
-  const ext = filePath.split(".").pop()?.toLowerCase() || ""
-  const iconMap: Record<string, string> = {
-    ts: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-    tsx: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-    js: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-    jsx: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-    py: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-    rs: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-    go: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-    java: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-    json: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-    md: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-    css: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-    html: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-    yaml: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-    yml: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-    xml: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-    sql: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-    sh: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
-    txt: `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>`,
-  }
-  return iconMap[ext] ?? iconMap.txt!
+interface FileTypeMeta { label: string; className: string }
+
+// Per-language colored monogram badges. Keeps the changed-files chips
+// readable at a glance without depending on an external icon font.
+const iconMap: Record<string, FileTypeMeta> = {
+  ts:   { label: "TS",  className: "changed-file-icon--ts" },
+  tsx:  { label: "TSX", className: "changed-file-icon--ts" },
+  js:   { label: "JS",  className: "changed-file-icon--js" },
+  jsx:  { label: "JSX", className: "changed-file-icon--js" },
+  mjs:  { label: "JS",  className: "changed-file-icon--js" },
+  cjs:  { label: "JS",  className: "changed-file-icon--js" },
+  py:   { label: "PY",  className: "changed-file-icon--py" },
+  rs:   { label: "RS",  className: "changed-file-icon--rs" },
+  go:   { label: "GO",  className: "changed-file-icon--go" },
+  java: { label: "JV",  className: "changed-file-icon--java" },
+  kt:   { label: "KT",  className: "changed-file-icon--kt" },
+  json: { label: "{}",  className: "changed-file-icon--json" },
+  md:   { label: "MD",  className: "changed-file-icon--md" },
+  css:  { label: "CSS", className: "changed-file-icon--css" },
+  scss: { label: "SCS", className: "changed-file-icon--css" },
+  html: { label: "<>",  className: "changed-file-icon--html" },
+  yaml: { label: "YML", className: "changed-file-icon--yaml" },
+  yml:  { label: "YML", className: "changed-file-icon--yaml" },
+  xml:  { label: "XML", className: "changed-file-icon--xml" },
+  sql:  { label: "SQL", className: "changed-file-icon--sql" },
+  sh:   { label: "SH",  className: "changed-file-icon--sh" },
+  bash: { label: "SH",  className: "changed-file-icon--sh" },
+  zsh:  { label: "SH",  className: "changed-file-icon--sh" },
+  toml: { label: "TOM", className: "changed-file-icon--toml" },
+  txt:  { label: "TXT", className: "changed-file-icon--default" },
+}
+
+function getFileIcon(filePath: string): FileTypeMeta {
+  const base = filePath.split("/").pop() ?? filePath
+  const dotIdx = base.lastIndexOf(".")
+  const ext = dotIdx > 0 ? base.slice(dotIdx + 1).toLowerCase() : ""
+  return iconMap[ext] ?? { label: "FIL", className: "changed-file-icon--default" }
 }
 
 export function handleClearMessages(deps: FileTrackingDeps, sessionId?: string): void {

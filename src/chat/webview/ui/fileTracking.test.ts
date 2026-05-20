@@ -43,6 +43,53 @@ describe("fileTracking.ts", () => {
     assert.ok(source.includes('yaml:'), "must support YAML")
   })
 
+  // ── Per-extension icons must be visually distinct, not duplicate art.
+  // Previously every extension mapped to the same generic SVG path which
+  // made the changed-files component useless for at-a-glance recognition.
+  it("file icons are visually distinct per language family", () => {
+    const classNames = [
+      "changed-file-icon--ts",
+      "changed-file-icon--js",
+      "changed-file-icon--py",
+      "changed-file-icon--rs",
+      "changed-file-icon--go",
+      "changed-file-icon--json",
+      "changed-file-icon--md",
+      "changed-file-icon--css",
+      "changed-file-icon--html",
+      "changed-file-icon--yaml",
+    ]
+    for (const cls of classNames) {
+      assert.ok(source.includes(cls), `iconMap must reference distinct className '${cls}'`)
+    }
+  })
+
+  it("getFileIcon returns a FileTypeMeta with label + className, not raw SVG markup", () => {
+    assert.ok(
+      /interface\s+FileTypeMeta\s*\{[^}]*label:\s*string[^}]*className:\s*string/.test(source),
+      "must declare FileTypeMeta interface with label and className fields"
+    )
+    assert.ok(
+      !/getFileIcon[\s\S]{0,200}<svg/i.test(source),
+      "getFileIcon must no longer return inline SVG markup (caused identical icons across extensions)"
+    )
+  })
+
+  it("getFileIcon handles extensionless filenames with a default badge", () => {
+    assert.ok(
+      /FIL[\s\S]{0,50}changed-file-icon--default/.test(source) ||
+        /changed-file-icon--default[\s\S]{0,50}FIL/.test(source),
+      "must return a default badge for files without a recognized extension"
+    )
+  })
+
+  it("renderChangedFilesList sets icon aria-hidden so screen readers skip the badge", () => {
+    assert.ok(
+      /aria-hidden["']?,\s*["']true["']/.test(source) || source.includes('setAttribute("aria-hidden", "true")'),
+      "icon span must be aria-hidden since the filename next to it is the accessible label"
+    )
+  })
+
   it("exports trackFileChange", () => {
     assert.ok(source.includes("export function trackFileChange"), "must export trackFileChange")
   })
