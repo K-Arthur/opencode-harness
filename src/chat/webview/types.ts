@@ -393,6 +393,7 @@ export interface CheckpointInfo {
 }
 
 export type HostMessage =
+  | { type: "host_message_batch"; messages: Array<Record<string, unknown> & { type: string }> }
   | { type: "init_state"; state: WebviewState; workspaceName: string; activeSessionId: string | null; globalModel?: string; commands?: unknown[]; showInChat?: boolean }
   | { type: "session_list_update"; sessions: SessionSummary[] }
   | { type: "session_deleted"; sessionId: string }

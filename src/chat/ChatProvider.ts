@@ -26,6 +26,7 @@ import { ChatCommands } from "./ChatCommands"
 import { AutoCompactor } from "./AutoCompactor"
 import { ChatFileOps } from "./ChatFileOps"
 import { ChunkBatcher } from "./ChunkBatcher"
+import { HostMessageBatcher } from "./HostMessageBatcher"
 import { PendingEventBuffer } from "./PendingEventBuffer"
 import { McpServerManager } from "../mcp/McpServerManager"
 import { ThemeController } from "./ThemeController"
@@ -70,11 +71,9 @@ private autoCompactor: AutoCompactor
 
   
 
-  /** R2: Chunk batching — buffers text_chunks and flushes every 50ms to reduce postMessage overhead */
-  private chunkBatcher = new ChunkBatcher(
-    (msg) => { this._view?.webview.postMessage(msg) },
-    (msg) => log.info(msg),
-  )
+  /** R2: Chunk batching — buffers text_chunks and adapts flush timing to stream velocity. */
+  private chunkBatcher = this.createChunkBatcher()
+  private hostMessageBatcher = this.createHostMessageBatcher()
 
   /**
    * Holds SSE events whose target tab has not yet registered its cliSessionId.
@@ -94,7 +93,7 @@ private autoCompactor: AutoCompactor
    * a failed start no longer races ahead of a subsequent batched stream_chunk for the same session.
    */
   private static readonly CRITICAL_MESSAGE_TYPES = new Set([
-    "stream_start", "stream_end", "stream_chunk", "stream_tool_start", "stream_tool_end", "stream_tool_update",
+    "stream_start", "stream_end", "stream_chunk", "stream_tool_start", "stream_tool_end",
     "stream_error", "streaming_state",
     "error", "webview_ready", "request_error",
   ])
@@ -265,6 +264,20 @@ private autoCompactor: AutoCompactor
     })
   }
 
+  private createChunkBatcher(): ChunkBatcher {
+    return new ChunkBatcher(
+      (msg) => this.postRawMessage(msg),
+      (msg) => log.info(msg),
+    )
+  }
+
+  private createHostMessageBatcher(): HostMessageBatcher {
+    return new HostMessageBatcher(
+      (msg) => this.postRawMessage(msg),
+      (msg) => log.info(msg),
+    )
+  }
+
   resolveWebviewView(
     webviewView: vscode.WebviewView,
     _context: vscode.WebviewViewResolveContext,
@@ -278,6 +291,9 @@ private autoCompactor: AutoCompactor
 
     // Clear any pending chunk buffer and timer from previous webview instance
     this.chunkBatcher.dispose()
+    this.hostMessageBatcher.dispose()
+    this.chunkBatcher = this.createChunkBatcher()
+    this.hostMessageBatcher = this.createHostMessageBatcher()
 
     // P2: Clear retry queue on webview recreation
     if (this.retryTimer) {
@@ -415,6 +431,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       this.eventRouter.webviewReady = false
       // O4: Dispose the batcher and clear retry/early state so nothing fires on the dead view.
       try { this.chunkBatcher.dispose() } catch (err) { log.warn("ChunkBatcher dispose on view disposal failed", err) }
+      try { this.hostMessageBatcher.dispose() } catch (err) { log.warn("HostMessageBatcher dispose on view disposal failed", err) }
       if (this.retryTimer) {
         clearTimeout(this.retryTimer)
         this.retryTimer = undefined
@@ -1245,7 +1262,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
       return
     }
 
-    // R2: Batch stream_chunk messages — accumulate text per session and flush every 75ms
+    // R2: Batch stream_chunk messages — accumulate text per session and adapt flush timing.
     if (msg.type === "stream_chunk" && typeof msg.sessionId === "string" && typeof msg.text === "string") {
       const messageId = typeof msg.messageId === "string" ? msg.messageId : undefined
       this.chunkBatcher.add(msg.sessionId, msg.text, messageId)
@@ -1258,6 +1275,21 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
       try { this.chunkBatcher.flush() } catch (err) { log.error("chunkBatcher.flush before stream_end failed", err) }
     }
 
+    if (HostMessageBatcher.isBatchable(msg)) {
+      this.hostMessageBatcher.post(msg)
+      return
+    }
+
+    this.postRawMessage(msg)
+
+    // F15: Notify when turn completes and webview is not visible
+    if (msg.type === "stream_end") {
+      this.notifyTurnComplete()
+    }
+  }
+
+  private postRawMessage(msg: Record<string, unknown>): boolean | Thenable<boolean> | undefined {
+    if (!this._view) return false
     try {
       // O5: VS Code's postMessage returns Thenable<boolean> — false signals the webview's
       // internal queue refused the message (saturation, disposed, hidden). We previously
@@ -1268,6 +1300,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
       } else if (result === false) {
         this.recordPostMessageRejected(msg)
       }
+      return result
     } catch (err) {
       log.error("Failed to post message to webview", err)
       // P2: Retry critical messages
@@ -1280,11 +1313,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
         }
         this.scheduleRetry(msg)
       }
-    }
-
-    // F15: Notify when turn completes and webview is not visible
-    if (msg.type === "stream_end") {
-      this.notifyTurnComplete()
+      return false
     }
   }
 
@@ -1642,6 +1671,7 @@ private toUserErrorMessage(message: string): string {
     }
     this.messageRetryQueue = []
     this.chunkBatcher.dispose()
+    this.hostMessageBatcher.dispose()
     for (const d of this.disposables) d.dispose()
     this.disposables = []
     this.streamCoordinator.dispose()

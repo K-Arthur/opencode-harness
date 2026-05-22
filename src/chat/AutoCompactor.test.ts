@@ -133,6 +133,13 @@ void describe("AutoCompactor.ts", () => {
       assert.match(source, /\.finally\(/, "must use finally to ensure in-flight is cleared on both success and error")
     })
 
+    void it("adds cooldown and token-density gates for repeated auto compaction", () => {
+      assert.match(source, /lastAutoCompact/, "must track recent auto compactions")
+      assert.match(source, /minAutoCompactIntervalMs/, "must enforce an auto-compaction cooldown")
+      assert.match(source, /tokenDensity/, "must consider token density before compacting")
+      assert.match(source, /minTokenDeltaRatio/, "must require material token growth before repeating")
+    })
+
     // The old percent recomputation in the banner path did Math.round((usage / limit) * 100)
     // with no zero-guard. After the context-window fix, limit can legitimately
     // be 0 (model unresolved) and we'd surface NaN in the banner payload.

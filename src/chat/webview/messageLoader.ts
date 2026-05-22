@@ -2,14 +2,17 @@
  * messageLoader — chunked, scroll-preserving message rendering
  *
  * Prevents the main thread from blocking when a session has many messages:
- * - Renders messages in CHUNK_SIZE batches using requestAnimationFrame
+ * - Renders messages in adaptive batches using requestAnimationFrame
  * - Provides a "load earlier messages" banner with scroll-position locking
  * - Throttles the O(n) updateScrollMarkers call so it runs at most once per
  *   SCROLL_MARKER_DEBOUNCE_MS after the last message is added
  */
 
-/** Messages per requestAnimationFrame tick when doing chunked rendering. */
+/** Initial messages per requestAnimationFrame tick when doing chunked rendering. */
 export const CHUNK_SIZE = 20
+export const MIN_CHUNK_SIZE = 8
+export const MAX_CHUNK_SIZE = 60
+export const TARGET_CHUNK_MS = 8
 
 /**
  * How many messages to send on the initial session resume.
@@ -23,7 +26,11 @@ export interface ChunkedLoaderOptions<T> {
   container: HTMLElement
   messages: T[]
   renderFn: (msg: T) => HTMLElement
-  onChunkDone?: (rendered: number, total: number) => void
+  initialChunkSize?: number
+  minChunkSize?: number
+  maxChunkSize?: number
+  targetFrameMs?: number
+  onChunkDone?: (rendered: number, total: number, chunkSize: number, durationMs: number) => void
   onAllDone?: () => void
 }
 
@@ -36,7 +43,7 @@ export interface ChunkedLoader {
 // ─── createChunkedLoader ──────────────────────────────────────────────────────
 
 /**
- * Renders `messages` into `container` in batches of CHUNK_SIZE, one batch per
+ * Renders `messages` into `container` in adaptive batches, one batch per
  * animation frame, so the browser stays responsive during large session loads.
  *
  * Usage:
@@ -50,6 +57,10 @@ export function createChunkedLoader<T>(opts: ChunkedLoaderOptions<T>): ChunkedLo
   let frameId: number | null = null
   let rendered = 0
   const { container, messages, renderFn, onChunkDone, onAllDone } = opts
+  const minChunkSize = clampChunkSize(opts.minChunkSize ?? MIN_CHUNK_SIZE, 1, MAX_CHUNK_SIZE)
+  const maxChunkSize = clampChunkSize(opts.maxChunkSize ?? MAX_CHUNK_SIZE, minChunkSize, 200)
+  const targetFrameMs = Math.max(2, opts.targetFrameMs ?? TARGET_CHUNK_MS)
+  let chunkSize = clampChunkSize(opts.initialChunkSize ?? CHUNK_SIZE, minChunkSize, maxChunkSize)
 
   function renderChunk() {
     if (cancelled) {
@@ -57,7 +68,8 @@ export function createChunkedLoader<T>(opts: ChunkedLoaderOptions<T>): ChunkedLo
       return
     }
 
-    const end = Math.min(rendered + CHUNK_SIZE, messages.length)
+    const startTime = now()
+    const end = Math.min(rendered + chunkSize, messages.length)
     const frag = document.createDocumentFragment()
 
     for (let i = rendered; i < end; i++) {
@@ -65,8 +77,10 @@ export function createChunkedLoader<T>(opts: ChunkedLoaderOptions<T>): ChunkedLo
     }
     container.appendChild(frag)
     rendered = end
+    const durationMs = now() - startTime
 
-    onChunkDone?.(rendered, messages.length)
+    onChunkDone?.(rendered, messages.length, chunkSize, durationMs)
+    chunkSize = nextChunkSize(chunkSize, durationMs, targetFrameMs, minChunkSize, maxChunkSize)
 
     if (rendered < messages.length) {
       frameId = requestAnimationFrame(renderChunk)
@@ -92,6 +106,37 @@ export function createChunkedLoader<T>(opts: ChunkedLoaderOptions<T>): ChunkedLo
       return frameId !== null
     },
   }
+}
+
+function now(): number {
+  return typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : Date.now()
+}
+
+function clampChunkSize(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min
+  return Math.max(min, Math.min(max, Math.round(value)))
+}
+
+export function nextChunkSize(
+  current: number,
+  durationMs: number,
+  targetFrameMs = TARGET_CHUNK_MS,
+  min = MIN_CHUNK_SIZE,
+  max = MAX_CHUNK_SIZE,
+): number {
+  const normalized = clampChunkSize(current, min, max)
+  if (!Number.isFinite(durationMs) || durationMs <= 0) {
+    return Math.min(max, normalized + 4)
+  }
+  if (durationMs > targetFrameMs * 1.25) {
+    return Math.max(min, Math.floor(normalized * 0.65))
+  }
+  if (durationMs < targetFrameMs * 0.5) {
+    return Math.min(max, normalized + Math.max(2, Math.ceil(normalized * 0.2)))
+  }
+  return normalized
 }
 
 // ─── prependMessagesPreservingScroll ─────────────────────────────────────────

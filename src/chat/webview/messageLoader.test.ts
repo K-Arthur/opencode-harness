@@ -8,8 +8,11 @@ const source = readFileSync(path.join(__dirname, "messageLoader.ts"), "utf8")
 describe("messageLoader.ts", () => {
   // ── Constants ──────────────────────────────────────────────────────────────
 
-  it("exports CHUNK_SIZE of 20", () => {
-    assert.ok(source.includes("export const CHUNK_SIZE = 20"), "CHUNK_SIZE must be 20")
+  it("exports adaptive chunk sizing defaults", () => {
+    assert.ok(source.includes("export const CHUNK_SIZE = 20"), "initial CHUNK_SIZE must remain 20")
+    assert.ok(source.includes("export const MIN_CHUNK_SIZE = 8"), "must clamp slow devices to a small chunk")
+    assert.ok(source.includes("export const MAX_CHUNK_SIZE = 60"), "must clamp fast devices to a bounded chunk")
+    assert.ok(source.includes("export const TARGET_CHUNK_MS = 8"), "must target a short frame budget")
   })
 
   it("exports INITIAL_LOAD_COUNT of 50", () => {
@@ -27,6 +30,12 @@ describe("messageLoader.ts", () => {
       source.includes("requestAnimationFrame"),
       "chunked loader must use requestAnimationFrame to avoid blocking the main thread"
     )
+  })
+
+  it("createChunkedLoader adapts chunk size from render duration", () => {
+    assert.ok(source.includes("nextChunkSize"), "must compute adaptive chunk sizes")
+    assert.ok(source.includes("durationMs > targetFrameMs"), "must shrink chunks when rendering is slow")
+    assert.ok(source.includes("durationMs < targetFrameMs"), "must grow chunks when rendering is fast")
   })
 
   it("createChunkedLoader accepts container, messages, renderFn, onChunkDone, onAllDone", () => {

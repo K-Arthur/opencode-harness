@@ -118,6 +118,8 @@ function getVsCodeApi() {
   const stateManager = createState(vscode)
   _stateManagerRef = stateManager
   const els = getElementRefs()
+  els.promptInput.dataset.testid = els.promptInput.dataset.testid || "prompt-input"
+  els.sendBtn.dataset.testid = els.sendBtn.dataset.testid || "send-button"
 
   // Core UI modules
   let modelManager: ReturnType<typeof setupModelManager>
@@ -348,6 +350,62 @@ function getVsCodeApi() {
   /* ─── PER-TOOL ELAPSED TIMERS ─── */
 
   const toolElapsedTracker = new ToolElapsedTracker()
+  const pendingToolUpdates = new Map<string, {
+    sessionId: string
+    toolId: string
+    update: { state?: ToolCallState; args?: unknown }
+    timer: ReturnType<typeof setTimeout>
+  }>()
+  const toolChainProgressTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+  function scheduleToolUpdate(sessionId: string, toolId: string, update: { state?: ToolCallState; args?: unknown }): void {
+    const key = `${sessionId}:${toolId}`
+    const pending = pendingToolUpdates.get(key)
+    if (pending) {
+      pending.update = { ...pending.update, ...update }
+      return
+    }
+    const timer = timers.setTimeout(() => {
+      const latest = pendingToolUpdates.get(key)
+      pendingToolUpdates.delete(key)
+      const stream = streamHandlers.get(sessionId)
+      if (latest && stream) stream.handleToolUpdate(toolId, latest.update)
+    }, 50)
+    pendingToolUpdates.set(key, { sessionId, toolId, update, timer })
+  }
+
+  function flushToolUpdate(sessionId: string, toolId: string): void {
+    const key = `${sessionId}:${toolId}`
+    const pending = pendingToolUpdates.get(key)
+    if (!pending) return
+    timers.clearTimeout(pending.timer)
+    pendingToolUpdates.delete(key)
+    const stream = streamHandlers.get(sessionId)
+    if (stream) stream.handleToolUpdate(toolId, pending.update)
+  }
+
+  function markToolChainProgress(sessionId: string): void {
+    if (toolChainProgressTimers.has(sessionId)) return
+    const timer = timers.setTimeout(() => {
+      toolChainProgressTimers.delete(sessionId)
+      const msgList = getMessageList(sessionId)
+      if (!msgList || msgList.querySelector(".tool-chain-progress")) return
+      const progress = document.createElement("div")
+      progress.className = "tool-chain-progress"
+      progress.textContent = "Tool chain running..."
+      progress.setAttribute("role", "status")
+      progress.setAttribute("aria-live", "polite")
+      msgList.appendChild(progress)
+    }, 900)
+    toolChainProgressTimers.set(sessionId, timer)
+  }
+
+  function clearToolChainProgress(sessionId: string): void {
+    const timer = toolChainProgressTimers.get(sessionId)
+    if (timer) timers.clearTimeout(timer)
+    toolChainProgressTimers.delete(sessionId)
+    getMessageList(sessionId)?.querySelectorAll(".tool-chain-progress").forEach((el) => el.remove())
+  }
 
   function init() {
     try {
@@ -1931,6 +1989,47 @@ function getVsCodeApi() {
     setupJumpToBottomModule(scrollMarkerDeps, sessionId)
   }
 
+  function applyHistoryCondensation(sessionId: string): void {
+    const session = stateManager.getSession(sessionId)
+    const msgList = getMessageList(sessionId)
+    if (!session || !msgList || session.isStreaming || session.messages.length <= 140) return
+    if (msgList.dataset.historyCondensed === "true") return
+
+    const preserveLast = 80
+    const groupSize = 20
+    const candidates = session.messages.slice(0, Math.max(0, session.messages.length - preserveLast))
+    for (let i = Math.floor(Math.max(0, candidates.length - 1) / groupSize) * groupSize; i >= 0; i -= groupSize) {
+      const group = candidates.slice(i, Math.min(candidates.length, i + groupSize))
+      const elements = group
+        .map((m) => m.id ? msgList.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(m.id)}"]`) : null)
+        .filter((el): el is HTMLElement => Boolean(el && !el.matches(":focus-within") && !el.querySelector(".streaming-text")))
+      if (elements.length < groupSize / 2) continue
+
+      const summary = document.createElement("button")
+      summary.type = "button"
+      summary.className = "history-condensed-summary"
+      const userCount = group.filter((m) => m.role === "user").length
+      const assistantCount = group.filter((m) => m.role === "assistant").length
+      const toolCount = group.reduce((count, m) => count + (m.blocks || []).filter((b) => b.type === "tool-call" || b.type === "tool_call" || b.type === "tool").length, 0)
+      summary.textContent = `${group.length} earlier messages: ${userCount} user, ${assistantCount} assistant${toolCount ? `, ${toolCount} tools` : ""}`
+      summary.setAttribute("aria-expanded", "false")
+
+      const fragment = document.createDocumentFragment()
+      for (const el of elements) fragment.appendChild(el)
+      summary.addEventListener("click", () => {
+        summary.setAttribute("aria-expanded", "true")
+        summary.replaceWith(fragment)
+        msgList.dataset.historyCondensed = "expanded"
+        debouncedUpdateScrollMarkers(sessionId)
+      }, { once: true })
+
+      const firstRemaining = msgList.firstElementChild
+      if (firstRemaining) msgList.insertBefore(summary, firstRemaining)
+      else msgList.appendChild(summary)
+    }
+    msgList.dataset.historyCondensed = "true"
+  }
+
   function addMessage(sessionId: string, msg: ChatMessage) {
     // Auto-create the session locally if the extension is referring to one
     // we haven't seen yet (e.g. it was filtered from init_state for being empty,
@@ -1995,6 +2094,7 @@ function getVsCodeApi() {
       msgList.appendChild(el)
       const vl = getVirtualList(sessionId)
       if (vl) vl.onMessageAdded(el)
+      applyHistoryCondensation(sessionId)
       const anchor = scrollAnchors.get(sessionId)
       if (anchor) {
         anchor.scrollIfAnchored()
@@ -2160,6 +2260,7 @@ function getVsCodeApi() {
                 }
               },
               onAllDone: () => {
+                applyHistoryCondensation(session.id)
                 setupJumpToBottom(session.id)
                 debouncedUpdateScrollMarkers(session.id)
                 refreshConversationTimeline(session.id)
@@ -2328,6 +2429,7 @@ function getVsCodeApi() {
             const toolCall = msg.toolCall as { id: string; name: string; class?: string; args?: unknown; state?: ToolCallState }
             toolElapsedTracker.registerStart(toolCall.id)
             stream.handleToolStart(toolCall)
+            markToolChainProgress(sid)
           }
         }
       }],
@@ -2337,7 +2439,7 @@ function getVsCodeApi() {
           if (stream) {
             const toolCall = msg.toolCall as { id: string; state?: ToolCallState; args?: unknown }
             if (toolCall.id) {
-              stream.handleToolUpdate(toolCall.id, {
+              scheduleToolUpdate(sid, toolCall.id, {
                 state: toolCall.state,
                 args: toolCall.args,
               })
@@ -2350,8 +2452,10 @@ function getVsCodeApi() {
           const stream = streamHandlers.get(sid)
           if (stream) {
             const result = msg.result as { id: string; ok: boolean; result?: string; durationMs?: number; stale?: boolean }
+            flushToolUpdate(sid, result.id)
             toolElapsedTracker.unregisterEnd(result.id, result.durationMs)
             stream.handleToolEnd(result.id, result)
+            clearToolChainProgress(sid)
           }
         }
       }],
@@ -2520,6 +2624,7 @@ function getVsCodeApi() {
                   }
                 },
                 onAllDone: () => {
+                  applyHistoryCondensation(s.id)
                   setupJumpToBottom(s.id)
                   debouncedUpdateScrollMarkers(s.id)
                   refreshConversationTimeline(s.id)
@@ -2876,8 +2981,7 @@ function getVsCodeApi() {
     // I3: surface unknown host message types and capture handler exceptions so silent
     // drops do not mask schema drift between the host and webview bundles.
     const loggedUnknownTypes = new Set<string>()
-    window.addEventListener("message", (event) => {
-      const msg = event.data as LegacyHostMessage
+    function dispatchHostMessage(msg: LegacyHostMessage): void {
       if (!msg || !msg.type) return
 
       const sessionId = ((msg.message as { sessionId?: string } | undefined)?.sessionId || msg.sessionId) as string | undefined
@@ -2894,6 +2998,17 @@ function getVsCodeApi() {
       } catch (err) {
         webviewLog(`[main] handler for ${msg.type} threw: ${err instanceof Error ? err.message : String(err)}`)
       }
+    }
+
+    window.addEventListener("message", (event) => {
+      const msg = event.data as LegacyHostMessage
+      if (msg?.type === "host_message_batch" && Array.isArray((msg as { messages?: unknown }).messages)) {
+        for (const item of (msg as { messages: unknown[] }).messages) {
+          dispatchHostMessage(item as LegacyHostMessage)
+        }
+        return
+      }
+      dispatchHostMessage(msg)
     })
 
     let stateSyncDebounce: ReturnType<typeof setTimeout> | undefined
@@ -3388,6 +3503,13 @@ function getVsCodeApi() {
 
       stateManager.setStreaming(sessionId, false)
       toolElapsedTracker.clearAll()
+      clearToolChainProgress(sessionId)
+      for (const [key, pending] of Array.from(pendingToolUpdates)) {
+        if (pending.sessionId === sessionId) {
+          timers.clearTimeout(pending.timer)
+          pendingToolUpdates.delete(key)
+        }
+      }
       updateTabBar()
       updateModeSelectorStateLocal()
       updateAgentStatus("idle")

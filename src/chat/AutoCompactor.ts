@@ -41,6 +41,10 @@ export class AutoCompactor {
   /** Per-tab in-flight set. Prevents stacking duplicate SDK summarize calls
    * when multiple ≥80% updates arrive while a previous one is still running. */
   private readonly inFlight = new Set<string>()
+  private readonly lastAutoCompact = new Map<string, { at: number; tokens: number; messageCount: number }>()
+  private readonly minAutoCompactIntervalMs = 5 * 60 * 1000
+  private readonly minTokenDeltaRatio = 0.08
+  private readonly minMessageDelta = 6
 
   constructor(
     private readonly sessionManager: SessionManager,
@@ -86,6 +90,14 @@ export class AutoCompactor {
 
     const tabId = activeTab.id
     const cliSessionId = activeTab.cliSessionId
+    const tokenDensity = currentTokens / Math.max(1, session.messages.length)
+    if (session.messages.length < 20 && tokenDensity < 1000) return
+    const recent = this.lastAutoCompact.get(tabId)
+    if (recent && now - recent.at < this.minAutoCompactIntervalMs) {
+      const tokenDelta = currentTokens - recent.tokens
+      const messageDelta = session.messages.length - recent.messageCount
+      if (tokenDelta < recent.tokens * this.minTokenDeltaRatio && messageDelta < this.minMessageDelta) return
+    }
     // Multi-tab safety: each tab has its own model (Claude in tab A, GPT in
     // tab B). The SDK's session.summarize accepts an explicit model arg so
     // the server-side summarizer uses the model the user actually expects.
@@ -99,6 +111,7 @@ export class AutoCompactor {
       callbacks.postMessage({ type: "compaction_started", sessionId: tabId })
       void this.sessionManager.compactSession(cliSessionId, modelRef ?? undefined).then(() => {
         log.info(`Auto-compaction completed for session ${tabId}`)
+        this.lastAutoCompact.set(tabId, { at: Date.now(), tokens: currentTokens, messageCount: session.messages.length })
         callbacks.postMessage({
           type: "message",
           sessionId: tabId,
@@ -195,5 +208,6 @@ export class AutoCompactor {
 
   dispose(): void {
     this.inFlight.clear()
+    this.lastAutoCompact.clear()
   }
 }

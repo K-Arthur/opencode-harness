@@ -31,6 +31,17 @@ const webviewConfig = {
   logLevel: "info",
 }
 
+const markdownWorkerConfig = {
+  entryPoints: [{ in: "src/chat/webview/markdownWorker.ts", out: "chat/webview/markdownWorker" }],
+  bundle: true,
+  format: "iife",
+  platform: "browser",
+  outdir: "dist",
+  sourcemap: false,
+  minify: production,
+  logLevel: "info",
+}
+
 const cssConfig = {
   entryPoints: [{ in: "src/chat/webview/css/styles.css", out: "chat/webview/styles" }],
   bundle: true,
@@ -63,12 +74,14 @@ if (watch) {
   Promise.all([
     esbuild.context(extensionConfig).then(ctx => ctx.watch()),
     esbuild.context(webviewConfig).then(ctx => ctx.watch()),
+    esbuild.context(markdownWorkerConfig).then(ctx => ctx.watch()),
     esbuild.context(cssConfig).then(ctx => ctx.watch()),
   ])
 } else {
   Promise.all([
     esbuild.build(extensionConfig),
     esbuild.build(webviewConfig),
+    esbuild.build(markdownWorkerConfig),
     esbuild.build(cssConfig),
   ])
     .then(copyWebviewAssets)

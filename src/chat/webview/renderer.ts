@@ -29,6 +29,12 @@ import type {
   ToolCollapseConfig,
 } from "./types"
 
+declare global {
+  interface Window {
+    __OC_MARKDOWN_WORKER_URI__?: string
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Markdown parser with security settings
 // ---------------------------------------------------------------------------
@@ -65,9 +71,233 @@ export function normalizeStreamingMarkdown(text: string): string {
   return normalized
 }
 
+class LruStringCache {
+  private values = new Map<string, { value: string; bytes: number }>()
+  private totalBytes = 0
+
+  constructor(
+    private readonly maxEntries: number,
+    private readonly maxBytes: number,
+  ) {}
+
+  get(key: string): string | undefined {
+    const hit = this.values.get(key)
+    if (!hit) return undefined
+    this.values.delete(key)
+    this.values.set(key, hit)
+    return hit.value
+  }
+
+  set(key: string, value: string): void {
+    const bytes = (key.length + value.length) * 2
+    if (bytes > this.maxBytes) return
+    const previous = this.values.get(key)
+    if (previous) {
+      this.totalBytes -= previous.bytes
+      this.values.delete(key)
+    }
+    this.values.set(key, { value, bytes })
+    this.totalBytes += bytes
+    this.prune()
+  }
+
+  clear(): void {
+    this.values.clear()
+    this.totalBytes = 0
+  }
+
+  get size(): number {
+    return this.values.size
+  }
+
+  private prune(): void {
+    while (this.values.size > this.maxEntries || this.totalBytes > this.maxBytes) {
+      const oldest = this.values.keys().next().value as string | undefined
+      if (!oldest) break
+      const entry = this.values.get(oldest)
+      if (entry) this.totalBytes -= entry.bytes
+      this.values.delete(oldest)
+    }
+  }
+}
+
+const markdownCache = new LruStringCache(250, 2 * 1024 * 1024)
+const highlightCache = new LruStringCache(500, 1024 * 1024)
+
+export const MARKDOWN_WORKER_MIN_CHARS = 8_000
+export const MARKDOWN_WORKER_MIN_CODE_CHARS = 4_000
+export const MARKDOWN_WORKER_TIMEOUT_MS = 8_000
+
+type MarkdownWorkerResponse =
+  | { id: number; html: string }
+  | { id: number; error: string }
+
+type PendingMarkdownRender = {
+  resolve: (html: string | undefined) => void
+  timer: ReturnType<typeof setTimeout>
+}
+
+function normalizeMarkdownForRender(text: string, isStreaming: boolean): string {
+  return isStreaming ? normalizeStreamingMarkdown(text) : normalizeMarkdownText(text)
+}
+
+export function getCachedMarkdown(text: string, isStreaming: boolean = false): string | undefined {
+  if (isStreaming) return undefined
+  return markdownCache.get(normalizeMarkdownForRender(text, false))
+}
+
+export function shouldRenderMarkdownInWorker(text: string, isStreaming: boolean = false): boolean {
+  if (isStreaming) return false
+  if (typeof window === "undefined") return false
+  if (typeof Worker === "undefined" || typeof URL === "undefined" || typeof fetch === "undefined") return false
+  if (!window.__OC_MARKDOWN_WORKER_URI__) return false
+  if (text.length >= MARKDOWN_WORKER_MIN_CHARS) return true
+  const fenceCount = (text.match(/(^|\n)```/g) || []).length
+  return text.length >= MARKDOWN_WORKER_MIN_CODE_CHARS && fenceCount >= 2
+}
+
+class MarkdownWorkerClient {
+  private worker: Worker | undefined
+  private workerPromise: Promise<Worker | null> | undefined
+  private objectUrl: string | undefined
+  private pending = new Map<number, PendingMarkdownRender>()
+  private nextId = 1
+  private disabled = false
+
+  async render(normalized: string): Promise<string | undefined> {
+    if (this.disabled) return undefined
+    const worker = await this.getWorker()
+    if (!worker) return undefined
+
+    const id = this.nextId++
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id)
+        resolve(undefined)
+      }, MARKDOWN_WORKER_TIMEOUT_MS)
+      this.pending.set(id, { resolve, timer })
+      try {
+        worker.postMessage({ id, text: normalized })
+      } catch {
+        clearTimeout(timer)
+        this.pending.delete(id)
+        resolve(undefined)
+      }
+    })
+  }
+
+  dispose(): void {
+    for (const entry of this.pending.values()) {
+      clearTimeout(entry.timer)
+      entry.resolve(undefined)
+    }
+    this.pending.clear()
+    try {
+      this.worker?.terminate()
+    } catch {
+      // Best-effort shutdown only.
+    }
+    if (this.objectUrl) {
+      try {
+        URL.revokeObjectURL(this.objectUrl)
+      } catch {
+        // Best-effort cleanup only.
+      }
+    }
+    this.worker = undefined
+    this.workerPromise = undefined
+    this.objectUrl = undefined
+  }
+
+  private async getWorker(): Promise<Worker | null> {
+    if (this.worker) return this.worker
+    if (this.workerPromise) return this.workerPromise
+    this.workerPromise = this.createWorker().catch(() => {
+      this.disabled = true
+      this.dispose()
+      return null
+    })
+    return this.workerPromise
+  }
+
+  private async createWorker(): Promise<Worker | null> {
+    const sourceUri = window.__OC_MARKDOWN_WORKER_URI__
+    if (!sourceUri) return null
+
+    const response = await fetch(sourceUri)
+    if (!response.ok) throw new Error(`Markdown worker fetch failed: ${response.status}`)
+    const blob = await response.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const worker = new Worker(objectUrl, { name: "opencode-markdown-renderer" })
+    this.objectUrl = objectUrl
+    this.worker = worker
+
+    worker.onmessage = (event: MessageEvent<MarkdownWorkerResponse>) => {
+      const message = event.data
+      const entry = this.pending.get(message?.id)
+      if (!entry) return
+      clearTimeout(entry.timer)
+      this.pending.delete(message.id)
+      entry.resolve("html" in message && typeof message.html === "string" ? message.html : undefined)
+    }
+    worker.onerror = () => {
+      this.disabled = true
+      this.dispose()
+    }
+
+    return worker
+  }
+}
+
+let markdownWorkerClient: MarkdownWorkerClient | undefined
+
+function getMarkdownWorkerClient(): MarkdownWorkerClient {
+  if (!markdownWorkerClient) markdownWorkerClient = new MarkdownWorkerClient()
+  return markdownWorkerClient
+}
+
 export function renderMarkdown(text: string, isStreaming: boolean = false): string {
-  const normalized = isStreaming ? normalizeStreamingMarkdown(text) : normalizeMarkdownText(text)
-  return sanitizeHtml(md.render(normalized))
+  const normalized = normalizeMarkdownForRender(text, isStreaming)
+  if (isStreaming) return sanitizeHtml(md.render(normalized))
+  const cached = markdownCache.get(normalized)
+  if (cached !== undefined) return cached
+  const rendered = sanitizeHtml(md.render(normalized))
+  markdownCache.set(normalized, rendered)
+  return rendered
+}
+
+export async function renderMarkdownAsync(text: string, isStreaming: boolean = false): Promise<string> {
+  const normalized = normalizeMarkdownForRender(text, isStreaming)
+  if (isStreaming) return sanitizeHtml(md.render(normalized))
+  const cached = markdownCache.get(normalized)
+  if (cached !== undefined) return cached
+
+  if (shouldRenderMarkdownInWorker(text, false)) {
+    const html = await getMarkdownWorkerClient().render(normalized)
+    if (html !== undefined) {
+      const rendered = sanitizeHtml(html)
+      markdownCache.set(normalized, rendered)
+      return rendered
+    }
+  }
+
+  const rendered = sanitizeHtml(md.render(normalized))
+  markdownCache.set(normalized, rendered)
+  return rendered
+}
+
+export function clearRendererCaches(): void {
+  markdownCache.clear()
+  highlightCache.clear()
+  markdownWorkerClient?.dispose()
+  markdownWorkerClient = undefined
+}
+
+export function getRendererCacheStats(): { markdownEntries: number; highlightEntries: number } {
+  return {
+    markdownEntries: markdownCache.size,
+    highlightEntries: highlightCache.size,
+  }
 }
 
 const md = new MarkdownIt({
@@ -461,7 +691,32 @@ function renderTextBlock(block: Block, opts: RenderOptions): HTMLElement | null 
     div.appendChild(fragment)
   } else {
     // No mentions — standard markdown render
-    div.innerHTML = renderMarkdown(text, opts?.isStreaming ?? false)
+    const isStreaming = opts?.isStreaming ?? false
+    const cached = getCachedMarkdown(text, isStreaming)
+    const target = isPlanModePlan ? document.createElement("div") : div
+    if (target !== div) {
+      target.className = "markdown-render-body"
+      div.appendChild(target)
+    }
+
+    if (!isStreaming && cached === undefined && shouldRenderMarkdownInWorker(text, false)) {
+      const renderId = `${Date.now()}-${Math.random()}`
+      target.dataset.markdownRenderId = renderId
+      target.setAttribute("aria-busy", "true")
+      void renderMarkdownAsync(text, false)
+        .then((html) => {
+          if (target.dataset.markdownRenderId !== renderId) return
+          target.innerHTML = html
+          target.removeAttribute("aria-busy")
+        })
+        .catch(() => {
+          if (target.dataset.markdownRenderId !== renderId) return
+          target.innerHTML = renderMarkdown(text, false)
+          target.removeAttribute("aria-busy")
+        })
+    } else {
+      target.innerHTML = cached ?? renderMarkdown(text, isStreaming)
+    }
   }
 
   return div
@@ -568,12 +823,26 @@ function renderCodeBlock(block: Block, _opts: RenderOptions): HTMLElement | null
 }
 
 export function highlightSyntax(code: string, language: string): string {
-  if (language && hljs.getLanguage(language)) {
-    try { return hljs.highlight(code, { language }).value } catch {}
+  const normalizedLanguage = normalizeMarkdownLanguage(language || "")
+  const cacheKey = `${normalizedLanguage}\u0000${code}`
+  const cached = highlightCache.get(cacheKey)
+  if (cached !== undefined) return cached
+
+  let highlighted: string
+  if (normalizedLanguage && hljs.getLanguage(normalizedLanguage)) {
+    try {
+      highlighted = hljs.highlight(code, { language: normalizedLanguage }).value
+      highlightCache.set(cacheKey, highlighted)
+      return highlighted
+    } catch {}
   }
-  try { return hljs.highlightAuto(code).value } catch (e) {
-    return code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  try {
+    highlighted = hljs.highlightAuto(code).value
+  } catch {
+    highlighted = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
   }
+  highlightCache.set(cacheKey, highlighted)
+  return highlighted
 }
 
 // ---------------------------------------------------------------------------

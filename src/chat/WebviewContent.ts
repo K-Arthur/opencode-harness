@@ -19,6 +19,9 @@ export class WebviewContent {
     const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, "dist", "chat", "webview", "main.js")
     )
+    const markdownWorkerUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, "dist", "chat", "webview", "markdownWorker.js")
+    )
     const wordmarkDarkUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, "dist", "chat", "webview", "media", "opencode-wordmark-dark.svg")
     )
@@ -50,7 +53,9 @@ export class WebviewContent {
       css = this.resolveCssImports(css, path.dirname(cssPath))
     }
     // CSP Security Notes:
-    // - connect-src 'none': Webview↔host uses postMessage only. CLI HTTP server
+    // - connect-src ${webview.cspSource}: Webview↔host uses postMessage only.
+    //   This permits fetching the bundled markdown worker asset so it can be
+    //   launched via a blob: URL, as required by VS Code webviews. CLI HTTP server
     //   (127.0.0.1:PORT) runs on extension host (Node.js), NOT in the webview.
     //   If future features need direct webview→CLI SSE, change to:
     //   `connect-src http://127.0.0.1:${port}`
@@ -58,17 +63,17 @@ export class WebviewContent {
     //   which use inline styles for dynamic theming.
     // - script-src 'strict-dynamic': Allows nonce-loaded scripts to dynamically
     //   load other scripts (needed for toolkit component registration).
-    // - worker/child/frame-src 'none': No sub-contexts needed.
+    // - worker-src blob: markdown rendering worker only; frame-src remains none.
     // - base-uri/form-action 'none': No navigation or form submission.
     const csp = [
       "default-src 'none'",
-      `connect-src 'none'`,
+      `connect-src ${webview.cspSource}`,
       `style-src ${webview.cspSource} 'nonce-${nonce}' 'unsafe-inline'`,
       `script-src 'nonce-${nonce}' 'strict-dynamic'`,
       `img-src ${webview.cspSource} data: https:`,
       `font-src ${webview.cspSource}`,
-      `worker-src 'none'`,
-      `child-src 'none'`,
+      `worker-src blob:`,
+      `child-src blob:`,
       `frame-src 'none'`,
       `base-uri 'none'`,
       `form-action 'none'`,
@@ -88,7 +93,7 @@ export class WebviewContent {
 
     html = html.replace(
       '<script src="main.js"></script>',
-      `<script nonce="${nonce}" src="${scriptUri}"></script>`
+      `<script nonce="${nonce}">window.__OC_MARKDOWN_WORKER_URI__ = "${markdownWorkerUri}";</script><script nonce="${nonce}" src="${scriptUri}"></script>`
     )
     html = html.replace(
       'src="media/opencode-wordmark-dark.svg"',

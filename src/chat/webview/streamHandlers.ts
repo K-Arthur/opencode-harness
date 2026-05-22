@@ -455,7 +455,10 @@ export function handleToolUpdate(
       resultEl.className = "tool-result-panel"
       toolEl.appendChild(resultEl)
     }
-    resultEl.textContent = update.result
+    if (resultEl.dataset.lastResult !== update.result) {
+      resultEl.textContent = update.result
+      resultEl.dataset.lastResult = update.result
+    }
   }
 
   if (update.error !== undefined) {
@@ -507,7 +510,10 @@ export function handleToolEnd(
       resultEl.className = "tool-result-panel"
       toolEl.appendChild(resultEl)
     }
-    resultEl.textContent = result.result
+    if (resultEl.dataset.lastResult !== result.result) {
+      resultEl.textContent = result.result
+      resultEl.dataset.lastResult = result.result
+    }
   }
 
   if (!result.ok) toolEl.classList.add("tool-call--error")

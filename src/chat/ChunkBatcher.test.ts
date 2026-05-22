@@ -71,4 +71,64 @@ void describe("ChunkBatcher", () => {
     batcher.flush()
     assert.equal(received[0]!.messageId, "msg_new")
   })
+
+  void it("flushes an existing session batch when configured size limit is exceeded", () => {
+    batcher.dispose()
+    received = []
+    batcher = new ChunkBatcher((msg) => { received.push(msg) }, undefined, { maxBatchSize: 5 })
+
+    batcher.add("s1", "1234")
+    batcher.add("s1", "56")
+    batcher.flush()
+
+    assert.equal(received.length, 2)
+    assert.equal(received[0]!.text, "1234")
+    assert.equal(received[1]!.text, "56")
+  })
+
+  void it("retains buffered chunks when delegate returns false", () => {
+    batcher.dispose()
+    received = []
+    let accepting = false
+    batcher = new ChunkBatcher((msg) => {
+      if (!accepting) return false
+      received.push(msg)
+      return true
+    })
+
+    batcher.add("s1", "retry me")
+    batcher.flush()
+    assert.equal(received.length, 0)
+
+    accepting = true
+    batcher.flush()
+    assert.equal(received.length, 1)
+    assert.equal(received[0]!.text, "retry me")
+  })
+
+  void it("uses adaptive high-velocity flush timing", () => {
+    const originalSetTimeout = globalThis.setTimeout
+    const originalClearTimeout = globalThis.clearTimeout
+    const delays: number[] = []
+    ;(globalThis as any).setTimeout = (_fn: () => void, ms?: number) => {
+      delays.push(Number(ms))
+      return 1
+    }
+    ;(globalThis as any).clearTimeout = () => {}
+
+    try {
+      batcher.dispose()
+      let now = 0
+      batcher = new ChunkBatcher((msg) => { received.push(msg) }, undefined, {
+        now: () => now,
+        minFlushMs: 35,
+        maxFlushMs: 150,
+      })
+      batcher.add("s1", "x".repeat(500))
+      assert.ok(delays.some((delay) => delay >= 100), "high velocity chunks should schedule a longer flush")
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+      globalThis.clearTimeout = originalClearTimeout
+    }
+  })
 })

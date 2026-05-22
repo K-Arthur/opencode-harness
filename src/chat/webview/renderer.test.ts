@@ -48,10 +48,17 @@ it("has type guards for discriminated blocks", () => {
 
   it("sanitizes_xss_with_dompurify", () => {
     assert.ok(source.includes("function sanitizeHtml"), "must call sanitizeHtml")
-    assert.ok(source.includes("return sanitizeHtml(md.render(normalized))"), "renderMarkdown must sanitize output")
+    assert.ok(source.includes("const rendered = sanitizeHtml(md.render(normalized))") || source.includes("return sanitizeHtml(md.render(normalized))"), "renderMarkdown must sanitize output")
     assert.ok(source.includes("DOMPurify.sanitize"), "must use DOMPurify")
     assert.ok(source.includes("FORBID_TAGS"), "must forbid dangerous tags")
     assert.ok(source.includes("FORBID_CONTENTS"), "must forbid dangerous content")
+  })
+
+  it("caches sanitized markdown and highlighted code with bounded LRU caches", () => {
+    assert.ok(source.includes("class LruStringCache"), "must define a bounded cache")
+    assert.ok(source.includes("markdownCache"), "must cache non-streaming markdown")
+    assert.ok(source.includes("highlightCache"), "must cache syntax highlighting")
+    assert.ok(source.includes("if (isStreaming) return sanitizeHtml"), "streaming markdown must skip the markdown cache")
   })
 
   it("handles_streaming_markdown_artifacts", () => {
@@ -62,7 +69,16 @@ it("has type guards for discriminated blocks", () => {
 
   it("renderMarkdown_accepts_isStreaming_flag", () => {
     assert.ok(source.includes("export function renderMarkdown(text: string, isStreaming"), "renderMarkdown must accept isStreaming parameter")
-    assert.ok(source.includes("isStreaming ? normalizeStreamingMarkdown(text) : normalizeMarkdownText(text)"), "must use streaming normalization when flag is true")
+    assert.ok(source.includes("normalizeMarkdownForRender(text, isStreaming)"), "must use streaming-aware normalization helper")
+  })
+
+  it("supports a VS Code-safe markdown worker for large final renders", () => {
+    assert.ok(source.includes("MARKDOWN_WORKER_MIN_CHARS"), "must define a worker size threshold")
+    assert.ok(source.includes("window.__OC_MARKDOWN_WORKER_URI__"), "must read worker URI from webview bootstrap config")
+    assert.ok(source.includes("new Worker(objectUrl"), "must launch worker from a blob URL")
+    assert.ok(source.includes("renderMarkdownAsync"), "must expose async markdown rendering")
+    assert.ok(source.includes("if (isStreaming) return false"), "worker path must skip active streaming text")
+    assert.ok(source.includes("const rendered = sanitizeHtml(html)"), "worker output must be sanitized before caching")
   })
 
   it("RenderOptions_includes_isStreaming", () => {
@@ -71,7 +87,7 @@ it("has type guards for discriminated blocks", () => {
 
   it("renderTextBlock_uses_isStreaming_flag", () => {
     assert.ok(source.includes("opts?.isStreaming ? normalizeStreamingMarkdown(part) : normalizeMarkdownText(part)"), "must use streaming flag for mentions")
-    assert.ok(source.includes("renderMarkdown(text, opts?.isStreaming ?? false)"), "must pass streaming flag to renderMarkdown")
+    assert.ok(source.includes("renderMarkdown(text, isStreaming)"), "must pass streaming flag to renderMarkdown")
   })
 
   it("hardens_external_markdown_links", () => {

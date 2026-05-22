@@ -72,7 +72,13 @@ void describe("Webview Message Flow Integration Tests", () => {
 
     void it("flushes batches on timer expiry", () => {
       assert.ok(chunkBatcherSource.includes("setTimeout"), "must use timer for flushing")
-      assert.ok(chunkBatcherSource.includes("FLUSH_MS"), "must have flush interval constant")
+      assert.ok(chunkBatcherSource.includes("computeFlushDelay"), "must compute adaptive flush timing")
+    })
+
+    void it("batches non-critical host messages without batching stream lifecycle", () => {
+      assert.ok(chatProviderSource.includes("HostMessageBatcher.isBatchable"), "ChatProvider must route non-critical host messages through HostMessageBatcher")
+      assert.ok(typesSource.includes("host_message_batch"), "HostMessage must include the batch envelope")
+      assert.ok(chatProviderSource.includes('"stream_start", "stream_end", "stream_chunk"'), "stream lifecycle messages must remain critical")
     })
 
     void it("flushes immediately on stream_end", () => {

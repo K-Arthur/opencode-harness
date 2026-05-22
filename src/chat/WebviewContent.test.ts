@@ -89,4 +89,11 @@ void describe("WebviewContent.ts", () => {
     assert.ok(source.includes("font-src"), "CSP must have font-src directive")
     assert.ok(source.includes("cspSource"), "font-src must use webview.cspSource")
   })
+
+  void it("allows only the bundled markdown worker fetch and blob worker execution", () => {
+    assert.ok(source.includes("markdownWorkerUri"), "must generate a webview URI for markdownWorker.js")
+    assert.ok(source.includes("connect-src ${webview.cspSource}"), "connect-src must allow fetching local webview assets")
+    assert.ok(source.includes("worker-src blob:"), "worker-src must allow blob workers")
+    assert.ok(source.includes("__OC_MARKDOWN_WORKER_URI__"), "must pass worker URI to the webview script")
+  })
 })

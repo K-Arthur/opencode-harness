@@ -68,18 +68,32 @@ void describe("Message Contract Tests", () => {
     const message: HostMessage = {
       type: "compact_banner",
       sessionId: "test-123",
-      pendingTokens: 150000,
-      predictedTokens: 160000,
-      predictedCost: 0.5,
-      willOverflow: true
+      percent: 80,
+      tokens: 150000,
+      maxTokens: 180000,
+      actions: ["compact_now", "remind_later"]
     }
     
     assert.strictEqual(typeof message.sessionId, "string")
-    assert.strictEqual(typeof message.pendingTokens, "number")
-    assert.strictEqual(typeof message.predictedTokens, "number")
-    assert.strictEqual(typeof message.predictedCost, "number")
-    assert.strictEqual(typeof message.willOverflow, "boolean")
-    assert.ok(message.pendingTokens > 0)
+    assert.strictEqual(typeof message.percent, "number")
+    assert.strictEqual(typeof message.tokens, "number")
+    assert.strictEqual(typeof message.maxTokens, "number")
+    assert.strictEqual(Array.isArray(message.actions), true)
+    assert.ok(message.tokens > 0)
+  })
+
+  void it("validates host_message_batch structure", () => {
+    const message: HostMessage = {
+      type: "host_message_batch",
+      messages: [
+        { type: "context_usage", sessionId: "test-123", percent: 80, tokens: 100, maxTokens: 200 },
+        { type: "server_status", sessionId: "test-123", status: "thinking" }
+      ]
+    }
+
+    assert.strictEqual(Array.isArray(message.messages), true)
+    assert.equal(message.messages.length, 2)
+    assert.equal(message.messages[0]!.type, "context_usage")
   })
 
   void it("validates active_session_changed message structure", () => {

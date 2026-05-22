@@ -14,7 +14,7 @@ import assert from "node:assert/strict"
 import { describe, it, before } from "mocha"
 import * as vscode from "vscode"
 
-const EXTENSION_ID = "undefined_publisher.opencode-harness"
+const EXTENSION_ID = "kevinoarthur.opencode-harness"
 
 describe("OpenCode Harness — Integration Tests", function () {
   this.timeout(30000)
@@ -40,7 +40,7 @@ describe("OpenCode Harness — Integration Tests", function () {
       assert.ok(extension, `Extension "${EXTENSION_ID}" not found in registry`)
     })
 
-    it("should activate successfully", async () => {
+    it("should activate successfully", async function () {
       if (!extension) this.skip()
       assert.ok(extension.isActive, "Extension did not activate")
     })

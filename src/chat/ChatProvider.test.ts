@@ -42,7 +42,7 @@ void describe("ChatProvider.ts", () => {
 
   void it("contains chunk batching and prompt-in-flight guards", () => {
     assert.ok(source.includes("promptsInFlight = new Set") || eventRouterSource.includes("promptsInFlight = new Set"), "promptInFlight guard must exist")
-    assert.ok(source.includes("private chunkBatcher = new ChunkBatcher"), "chunkBatcher must exist")
+    assert.ok(source.includes("private chunkBatcher = new ChunkBatcher") || source.includes("private chunkBatcher = this.createChunkBatcher()"), "chunkBatcher must exist")
     assert.ok(source.includes("import { ChunkBatcher } from"), "ChunkBatcher must be imported")
     assert.ok(source.includes("private earlyMessageQueue") || eventRouterSource.includes("earlyMessageQueue"), "earlyMessageQueue must exist")
   })

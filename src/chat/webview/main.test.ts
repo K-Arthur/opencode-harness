@@ -61,6 +61,29 @@ describe("main.ts", () => {
     assert.ok(source.includes("scrollAnchors"))
   })
 
+  it("dispatches host_message_batch envelopes item by item", () => {
+    assert.ok(source.includes('msg?.type === "host_message_batch"'), "must recognize host message batch envelopes")
+    assert.ok(source.includes("dispatchHostMessage(item as LegacyHostMessage)"), "must dispatch each batched message through normal handlers")
+  })
+
+  it("coalesces frequent tool update messages and clears progress state", () => {
+    assert.ok(source.includes("pendingToolUpdates"), "must buffer frequent tool updates")
+    assert.ok(source.includes("scheduleToolUpdate"), "must debounce tool updates")
+    assert.ok(source.includes("flushToolUpdate"), "must flush pending tool updates before tool end")
+    assert.ok(source.includes("tool-chain-progress"), "must surface long-running tool-chain progress")
+  })
+
+  it("adds Playwright-friendly test ids for the prompt and send controls", () => {
+    assert.ok(source.includes('dataset.testid = els.promptInput.dataset.testid || "prompt-input"'))
+    assert.ok(source.includes('dataset.testid = els.sendBtn.dataset.testid || "send-button"'))
+  })
+
+  it("condenses very long local history without mutating server history", () => {
+    assert.ok(source.includes("function applyHistoryCondensation"), "must define history condensation")
+    assert.ok(source.includes("history-condensed-summary"), "must render deterministic local summary controls")
+    assert.ok(source.includes("session.messages.length <= 140"), "must only condense long sessions")
+  })
+
   it("keeps send button state synchronized across input event variants", () => {
     const idx = source.indexOf("function setupInput()")
     assert.ok(idx >= 0, "setupInput must exist")

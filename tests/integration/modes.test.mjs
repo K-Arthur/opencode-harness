@@ -8,7 +8,7 @@ import assert from "node:assert/strict"
 import { describe, it, before } from "mocha"
 import * as vscode from "vscode"
 
-const EXTENSION_ID = "undefined_publisher.opencode-harness"
+const EXTENSION_ID = "kevinoarthur.opencode-harness"
 
 describe("OpenCode Harness — Build/Plan Mode Buttons", function () {
   this.timeout(30000)
@@ -30,13 +30,13 @@ describe("OpenCode Harness — Build/Plan Mode Buttons", function () {
   // ── Command Registration ─────────────────────────────────────
 
   describe("Mode toggle command registration", () => {
-    it("should register newSession command (creates a session for mode testing)", () => {
-      const cmds = vscode.commands.getCommands(true)
+    it("should register newSession command (creates a session for mode testing)", async () => {
+      const cmds = await vscode.commands.getCommands(true)
       assert.ok(cmds.includes("opencode-harness.newSession"))
     })
 
-    it("should register openChat command (activates the view containing mode buttons)", () => {
-      const cmds = vscode.commands.getCommands(true)
+    it("should register openChat command (activates the view containing mode buttons)", async () => {
+      const cmds = await vscode.commands.getCommands(true)
       assert.ok(cmds.includes("opencode-harness.openChat"))
     })
   })
