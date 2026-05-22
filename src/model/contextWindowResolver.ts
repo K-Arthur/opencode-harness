@@ -1,128 +1,62 @@
 /**
  * Context window resolution for AI models.
  *
- * Server-reported `limit.context` values are frequently stale or wrong for
- * newer models (e.g. Qwen 3.6 Plus is 1M tokens but some providers still
- * advertise 262K). This resolver normalizes model keys and falls back to a
- * curated table when the server value disagrees significantly.
+ * The opencode server is the authoritative source — each model's
+ * `limit.context` comes from `/config/providers` (or v2 `/api/model`).
+ * This resolver does NOT carry a hardcoded table of context-window sizes;
+ * a curated table inevitably drifts as new models ship and providers
+ * silently bump limits, and any stale entry would mislead the UI just as
+ * surely as the missing-value bug it tried to paper over.
+ *
+ * Behaviour:
+ *   - If the server reports a positive `limit.context`, that value wins.
+ *   - Otherwise the resolver returns `undefined`, and downstream
+ *     consumers (ContextMonitor, the webview context bar) hide the
+ *     usage indicator rather than display a fabricated denominator.
+ *
+ * A diagnostic log is emitted when the server provides nothing, so the
+ * gap is visible to operators (and a future telemetry sink can surface
+ * it as "model X is missing limit.context").
  */
 
 /**
- * Authoritative context window sizes (May 2026). Keys are lowercase
- * `provider/model-id`. Used as fallback when the server returns missing or
- * implausible values.
+ * @deprecated Kept as an empty frozen object so any older import sites
+ * that referenced it continue to compile. New code must rely solely on
+ * the server-reported limit.context.
  */
-export const KNOWN_CONTEXT_WINDOWS: Readonly<Record<string, number>> = Object.freeze({
-  "qwen/qwen3.6-plus": 1_048_576,
-  "qwen/qwen3.6-plus-free": 1_048_576,
-  "qwen/qwen3.6-max": 1_048_576,
-  "qwen/qwen3-235b": 131_072,
-  "qwen/qwen3-30b": 131_072,
-  "qwen/qwen3-32b": 131_072,
-  "qwen/qwen-plus": 131_072,
-  "anthropic/claude-sonnet-4-20250514": 200_000,
-  "anthropic/claude-sonnet-4-5-20250514": 200_000,
-  "anthropic/claude-sonnet-4-6-20251015": 1_000_000,
-  "anthropic/claude-opus-4-5-20251101": 200_000,
-  "anthropic/claude-opus-4-6-20260301": 200_000,
-  "anthropic/claude-opus-4-7-20260415": 200_000,
-  "anthropic/claude-opus-4-20250514": 200_000,
-  "anthropic/claude-haiku-4-5-20251001": 200_000,
-  "openai/gpt-4.1": 1_048_576,
-  "openai/gpt-4.1-mini": 1_048_576,
-  "openai/gpt-4.1-nano": 1_048_576,
-  "openai/gpt-5": 400_000,
-  "openai/o3": 200_000,
-  "openai/o3-pro": 200_000,
-  "openai/o4-mini": 200_000,
-  "google/gemini-2.5-pro": 1_048_576,
-  "google/gemini-2.5-flash": 1_048_576,
-  "google/gemini-2.5-flash-lite": 1_048_576,
-  "google/gemini-3.0-pro": 2_097_152,
-  "deepseek/deepseek-chat": 131_072,
-  "deepseek/deepseek-reasoner": 65_536,
-  "deepseek/deepseek-v3.5": 131_072,
-  "deepseek/deepseek-v4-flash": 131_072,
-  "grok/grok-4": 131_072,
-  "mistral/mistral-large-2411": 131_072,
-  "minimax/minimax-m1": 4_096_000,
-  // opencode-routed models. The opencode server doesn't always populate
-  // limit.context for these so without explicit entries the resolver
-  // returned undefined and the ContextMonitor's old 100k default leaked
-  // through to the UI as a misleading "1% (X / 100,000)" indicator.
-  "opencode/big-pickle": 200_000,
-  "opencode/deepseek-v4-flash": 131_072,
-  "opencode/deepseek-v4-flash-free": 131_072,
-})
-
-/** Collapse separators so "qwen3.6-plus" matches "qwen-3.6-plus" matches "qwen3_6_plus". */
-function normalizeId(s: string): string {
-  return s.toLowerCase().replace(/[-._]/g, "")
-}
-
-function stripProvider(key: string): string {
-  const slashIdx = key.indexOf("/")
-  return slashIdx >= 0 ? key.substring(slashIdx + 1) : key
-}
+export const KNOWN_CONTEXT_WINDOWS: Readonly<Record<string, number>> = Object.freeze({})
 
 /**
- * Look up a context window with progressively looser matching:
- *   1. Exact (lowercase) key match
- *   2. Lookup by id, ignoring provider prefix (only if no exact match found)
- *   3. Lookup by separator-collapsed id (treats "3.6" / "3-6" / "36" as equal)
+ * Always returns undefined — there is no hardcoded fallback table. This
+ * function is kept for backward source-compat with callers/tests; new
+ * callers should consult the SDK directly.
  */
-export function findKnownContextWindow(modelKey: string): number | undefined {
-  if (!modelKey) return undefined
-  const lower = modelKey.toLowerCase()
-  if (KNOWN_CONTEXT_WINDOWS[lower] !== undefined) return KNOWN_CONTEXT_WINDOWS[lower]
-
-  const idOnly = stripProvider(lower)
-  for (const [key, val] of Object.entries(KNOWN_CONTEXT_WINDOWS)) {
-    if (stripProvider(key) === idOnly) return val
-  }
-
-  const normIdOnly = normalizeId(idOnly)
-  for (const [key, val] of Object.entries(KNOWN_CONTEXT_WINDOWS)) {
-    if (normalizeId(stripProvider(key)) === normIdOnly) return val
-  }
-
+export function findKnownContextWindow(_modelKey: string): number | undefined {
   return undefined
 }
 
 export interface ResolveOptions {
-  /** Optional logger for diagnostic info when server/known disagree. */
+  /** Optional logger for diagnostic info when the server didn't supply a value. */
   log?: (message: string) => void
 }
 
 /**
  * Resolve the effective context window for a model.
  *
- * Rules:
- *   - If the server reported nothing usable, return the known value (or undefined).
- *   - If the server value disagrees with the known value by more than 50%,
- *     the server is presumed wrong (stale config) and we use the known value,
- *     UNLESS the modelKey provider is "opencode" (server override is trusted).
- *   - Otherwise we trust the server.
+ * Server-trust only. When the server doesn't supply a usable value the
+ * function returns undefined and emits a log line so the missing data is
+ * visible (rather than papered over with a hardcoded guess).
  */
 export function resolveContextWindow(
   modelKey: string,
   serverValue?: number,
   options?: ResolveOptions,
 ): number | undefined {
-  const known = findKnownContextWindow(modelKey)
-  if (!serverValue || serverValue <= 0) return known ?? undefined
-  
-  // Special case: if provider is "opencode", trust server value over known
-  const modelProvider = modelKey.split("/")[0]?.toLowerCase()
-  if (modelProvider === "opencode") {
-    return serverValue
-  }
-  
-  if (known && Math.abs(serverValue - known) / known > 0.5) {
+  if (typeof serverValue === "number" && serverValue > 0) return serverValue
+  if (modelKey) {
     options?.log?.(
-      `Context window for ${modelKey}: server reports ${serverValue.toLocaleString()}, known is ${known.toLocaleString()} — using known value`,
+      `Context window for ${modelKey}: server did not report limit.context — UI will hide the context bar until the server provides one`,
     )
-    return known
   }
-  return serverValue
+  return undefined
 }

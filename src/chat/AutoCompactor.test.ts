@@ -168,6 +168,80 @@ void describe("AutoCompactor.ts", () => {
       )
     })
 
+    // The 80% trigger threshold used to be hardcoded in ChatProvider. Models
+    // with very small contexts (e.g. 65k DeepSeek reasoner) may want a
+    // higher threshold so they don't compact prematurely; large models
+    // (1M Sonnet) may want a lower one to control cost. Threshold is now
+    // read from VS Code config `opencode.autoCompactThreshold` (number,
+    // default 80) with optional per-model overrides via
+    // `opencode.autoCompactPerModelThreshold` (object keyed by
+    // "provider/modelId" → number). The numeric logic lives in
+    // ContextMonitor.getAutoCompactThreshold; AutoCompactor only consumes it.
+    void it("AutoCompactor consults a configurable threshold per active model", () => {
+      assert.match(
+        source,
+        /getAutoCompactThreshold\([^)]*activeTab\.model/,
+        "tryCompactIfNeeded must call getAutoCompactThreshold(activeTab.model) so per-model overrides apply",
+      )
+    })
+
+    void it("ContextMonitor implements the configurable threshold with clamp + override map", () => {
+      const monitorSource = readFileSync(
+        resolve(__dirname, "../monitor/ContextMonitor.ts"),
+        "utf8",
+      )
+      assert.match(
+        monitorSource,
+        /getAutoCompactThreshold\s*\(/,
+        "ContextMonitor must export getAutoCompactThreshold",
+      )
+      assert.match(
+        monitorSource,
+        /autoCompactPerModelThreshold/,
+        "ContextMonitor must read the per-model override map from VS Code config",
+      )
+      assert.match(
+        monitorSource,
+        /Math\.max\([\s\S]{0,40}10[\s\S]{0,40}Math\.min\(95|clamp[\s\S]{0,40}10[\s\S]{0,40}95/,
+        "ContextMonitor must clamp threshold to [10, 95]",
+      )
+    })
+
+    // Multi-tab safety: when tabs A and B use different models, compactSession
+    // must use the tab's own model — not SessionManager's global currentModel.
+    // The earlier code called compactSession(cliSessionId) with no model arg,
+    // so the SDK summarized using whichever model was set globally — could
+    // be the wrong one for the tab being compacted.
+    void it("compactSession is called with the active tab's specific model", () => {
+      // Auto-compact path
+      const autoIdx = source.indexOf("tryCompactIfNeeded(")
+      const autoBlock = source.slice(autoIdx, source.indexOf("handleBannerAction(", autoIdx))
+      assert.match(
+        autoBlock,
+        /compactSession\([^)]*,\s*[a-zA-Z_]+[\s)]/,
+        "auto-compact must pass a second arg (model) to compactSession",
+      )
+      assert.match(
+        autoBlock,
+        /toModelRef|parseModelRef|activeTab\.model/,
+        "auto-compact must derive a ModelRef from the active tab's model field",
+      )
+
+      // Manual compactNow path
+      const manualIdx = source.indexOf("async compactNow(")
+      const manualBlock = source.slice(manualIdx, source.indexOf("isCompacting(", manualIdx))
+      assert.match(
+        manualBlock,
+        /compactSession\([^)]*,\s*[a-zA-Z_]+[\s)]/,
+        "compactNow must pass a second arg (model) to compactSession",
+      )
+      assert.match(
+        manualBlock,
+        /toModelRef|parseModelRef|tab\.model/,
+        "compactNow must derive a ModelRef from the tab's own model field",
+      )
+    })
+
     // post-compaction success must explicitly post session_compacted on the
     // compactNow path so the webview reload triggers and the user sees the
     // refreshed message list — earlier this only fired on the auto-compact path.

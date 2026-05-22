@@ -687,7 +687,26 @@
             "Compact automatically without asking",
             "Never auto-compact"
           ],
-          "description": "Controls automatic session compaction when context usage reaches 80%"
+          "description": "Controls automatic session compaction when context usage reaches the configured threshold (see opencode.autoCompactThreshold)."
+        },
+        "opencode.autoCompactThreshold": {
+          "type": "number",
+          "scope": "window",
+          "default": 80,
+          "minimum": 10,
+          "maximum": 95,
+          "description": "Percent of the model's context window at which to trigger auto-compaction. Lower values compact earlier (saves cost / runs less risk of overflow); higher values keep more raw history before summarising. Values outside [10, 95] are clamped."
+        },
+        "opencode.autoCompactPerModelThreshold": {
+          "type": "object",
+          "scope": "window",
+          "default": {},
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 10,
+            "maximum": 95
+          },
+          "description": "Per-model overrides for the auto-compaction threshold. Keys are 'provider/modelId' (e.g. 'anthropic/claude-sonnet-4-6-20251015'), values are percent (10-95). Models without an entry use opencode.autoCompactThreshold."
         },
         "opencode.sessions.emptySessionTtlMinutes": {
           "type": "number",

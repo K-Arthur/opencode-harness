@@ -106,6 +106,12 @@ private currentTokens = 0
     return this.tokenLimit
   }
 
+  /** Current usage as percent of limit, safe for limit === 0 (returns 0). */
+  get percent(): number {
+    if (this.tokenLimit <= 0) return 0
+    return Math.min(100, Math.max(0, Math.round((this.currentTokens / this.tokenLimit) * 100)))
+  }
+
   constructor() {
     this.initializeProviderPricing()
     this.loadSettings()
@@ -174,6 +180,35 @@ private currentTokens = 0
     const value = config.get<string>("autoCompact", "ask")
     if (value === "auto" || value === "off") return value
     return "ask"
+  }
+
+  /**
+   * Read the auto-compaction trigger threshold (percent of context window).
+   *
+   * Defaults to 80. Users with small-context models may prefer a higher
+   * threshold (e.g. 90) so the conversation isn't compacted prematurely;
+   * users on large-context models may prefer a lower one (e.g. 70) to
+   * control cost. Per-model overrides are looked up first by the
+   * `provider/modelId` key, e.g. `"deepseek/deepseek-reasoner": 90`.
+   *
+   * Returned value is clamped to [10, 95] to avoid two failure modes:
+   *  - too low → constant compaction storm
+   *  - too high → never compacts (no recovery from runaway context)
+   */
+  getAutoCompactThreshold(modelKey?: string): number {
+    const vscode = getVsCodeApi()
+    const defaultThreshold = 80
+    if (!vscode) return defaultThreshold
+    const config = vscode.workspace.getConfiguration("opencode")
+    let raw = config.get<number>("autoCompactThreshold", defaultThreshold)
+    if (modelKey) {
+      const overrides = config.get<Record<string, number>>("autoCompactPerModelThreshold", {}) || {}
+      if (typeof overrides[modelKey] === "number" && Number.isFinite(overrides[modelKey])) {
+        raw = overrides[modelKey]!
+      }
+    }
+    if (!Number.isFinite(raw)) raw = defaultThreshold
+    return Math.max(10, Math.min(95, Math.round(raw)))
   }
 
   updateTokens(tokensUsed: number, sessionId?: string, breakdown?: { system: number; history: number; workspace: number; queued?: number; steer?: number }): void {

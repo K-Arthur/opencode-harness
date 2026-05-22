@@ -348,11 +348,16 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
           sessionId: usage.sessionId,
           breakdown: usage.breakdown,
         })
-        if (usage.percent >= 80) {
+        // Coarse pre-gate: any usage above the lowest sensible threshold
+        // (10) gets handed to AutoCompactor, which does the model-aware
+        // per-tab check against the actual configured threshold. We can't
+        // hardcode 80 here because users may have set lower per-model
+        // thresholds via `opencode.autoCompactPerModelThreshold`.
+        if (usage.percent >= 10) {
           // Pass the firing sessionId so AutoCompactor can refuse to act
-          // when a background tab triggers the >=80% line for itself —
-          // without this, a high-usage background tab would cause us to
-          // compact the (possibly low-usage) active tab instead.
+          // when a background tab triggers the threshold — without this,
+          // a high-usage background tab would cause us to compact the
+          // (possibly low-usage) active tab instead.
           this.autoCompactor.tryCompactIfNeeded(
             {
               postMessage: (m) => this.postMessage(m),

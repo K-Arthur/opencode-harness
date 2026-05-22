@@ -10,6 +10,20 @@ export interface CompactorCallbacks {
 }
 
 /**
+ * Parse a tab's `model` field (formatted as `"provider/modelId"`) into the
+ * ModelRef shape the SDK summarize call expects. The slash split tolerates
+ * model IDs that themselves contain slashes (e.g. opencode/some/nested).
+ * Returns null when the input is empty or shapeless — callers fall back to
+ * the SDK's currentModel.
+ */
+export function toModelRef(model: string | undefined): { providerID: string; modelID: string } | null {
+  if (!model || typeof model !== "string") return null
+  const idx = model.indexOf("/")
+  if (idx <= 0 || idx === model.length - 1) return null
+  return { providerID: model.slice(0, idx), modelID: model.slice(idx + 1) }
+}
+
+/**
  * Optional context for `tryCompactIfNeeded` — when the trigger came from a
  * `context_usage` event we know which tab fired it, so we can refuse to act
  * if the firing tab isn't the active one. This prevents the previous bug
@@ -56,6 +70,13 @@ export class AutoCompactor {
     const autoCompact = this.contextMonitor.getAutoCompactSetting()
     if (autoCompact === "off") return
 
+    // Threshold check — done HERE rather than in ChatProvider so it can be
+    // customised per-model. ChatProvider still does a coarse >=80% pre-gate
+    // to avoid invoking this hot path for low-usage events; the authoritative
+    // check is the model-aware one below.
+    const threshold = this.contextMonitor.getAutoCompactThreshold(activeTab.model)
+    if (this.contextMonitor.percent < threshold) return
+
     const now = Date.now()
     if (now < this.snoozeUntil) return
     const currentTokens = this.contextMonitor.tokensUsed
@@ -65,12 +86,18 @@ export class AutoCompactor {
 
     const tabId = activeTab.id
     const cliSessionId = activeTab.cliSessionId
+    // Multi-tab safety: each tab has its own model (Claude in tab A, GPT in
+    // tab B). The SDK's session.summarize accepts an explicit model arg so
+    // the server-side summarizer uses the model the user actually expects.
+    // Previously we passed no model and the SDK fell back to its global
+    // currentModel — could be wrong if the user had just switched tabs.
+    const modelRef = toModelRef(activeTab.model)
 
     const doCompact = () => {
       this.inFlight.add(tabId)
-      log.info(`Auto-compacting session ${tabId} (context >= 80%, ${session.messages.length} messages)`)
+      log.info(`Auto-compacting session ${tabId} (context >= ${threshold}%, ${session.messages.length} messages, model=${activeTab.model || "default"})`)
       callbacks.postMessage({ type: "compaction_started", sessionId: tabId })
-      void this.sessionManager.compactSession(cliSessionId).then(() => {
+      void this.sessionManager.compactSession(cliSessionId, modelRef ?? undefined).then(() => {
         log.info(`Auto-compaction completed for session ${tabId}`)
         callbacks.postMessage({
           type: "message",
@@ -146,8 +173,11 @@ export class AutoCompactor {
     this.inFlight.add(sessionId)
     try {
       callbacks.postMessage({ type: "compaction_started", sessionId })
-      await this.sessionManager.compactSession(tab.cliSessionId)
-      log.info(`Session compacted: ${sessionId} (cli: ${tab.cliSessionId})`)
+      // Pass the tab's own model so the SDK summarises with the right
+      // provider/model rather than whichever was last set globally.
+      const modelRef = toModelRef(tab.model)
+      await this.sessionManager.compactSession(tab.cliSessionId, modelRef ?? undefined)
+      log.info(`Session compacted: ${sessionId} (cli: ${tab.cliSessionId}, model=${tab.model || "default"})`)
       callbacks.postMessage({ type: "session_compacted", sessionId })
     } catch (err) {
       const message = err instanceof Error ? err.message : "Compaction failed"
