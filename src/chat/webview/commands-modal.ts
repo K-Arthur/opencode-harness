@@ -5,6 +5,8 @@
  * Patterned after skills-modal.ts. Uses postMessage for execution so the host owns auth/state.
  */
 
+import { dedupServerCommands } from "./slash-commands"
+
 export interface CommandEntry {
   /** Without leading slash. */
   name: string
@@ -69,8 +71,31 @@ export function setupCommandsModal(els: {
   let activeFilter: string = "all"
   let lastFocused: HTMLElement | null = null
 
-  function escapeHtml(s: string): string {
-    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")
+  /** Selected index used by keyboard navigation (ArrowDown/Up/Enter). */
+  let selectedIdx = 0
+
+  /** Currently rendered focusable rows (commands or stash primary buttons). */
+  function focusableRows(): HTMLElement[] {
+    return Array.from(
+      commandsList!.querySelectorAll<HTMLElement>(
+        ".commands-modal-item, .commands-modal-stash-btn-primary",
+      ),
+    )
+  }
+
+  function highlight(idx: number): void {
+    const rows = focusableRows()
+    if (rows.length === 0) return
+    selectedIdx = ((idx % rows.length) + rows.length) % rows.length
+    rows.forEach((r, i) => {
+      r.classList.toggle("active", i === selectedIdx)
+      r.setAttribute("aria-selected", i === selectedIdx ? "true" : "false")
+      // scrollIntoView isn't available in jsdom; guard so behavior tests
+      // can exercise the rest of the path without crashing.
+      if (i === selectedIdx && typeof r.scrollIntoView === "function") {
+        r.scrollIntoView({ block: "nearest" })
+      }
+    })
   }
 
   function open(): void {
@@ -109,7 +134,9 @@ export function setupCommandsModal(els: {
   }
 
   function updateServerCommands(commands: Array<{ name: string; description?: string; template?: string }>): void {
-    serverCommands = commands.map(c => ({
+    // Drop server commands whose names collide with built-ins so users
+    // don't see duplicate rows for /clear, /help, etc.
+    serverCommands = dedupServerCommands(commands).map(c => ({
       name: c.name,
       description: c.description || c.template || "Server command",
       source: "server" as const,
@@ -172,9 +199,11 @@ export function setupCommandsModal(els: {
 
     if (mode === "stashes") {
       renderStashes(query)
-      return
+    } else {
+      renderCommands(query)
     }
-    renderCommands(query)
+    selectedIdx = 0
+    highlight(0)
   }
 
   function renderCommands(query: string): void {
@@ -292,25 +321,45 @@ export function setupCommandsModal(els: {
     // Click on backdrop closes
     if (e.target === commandsModal) close()
   })
-  // Esc closes; Enter runs first visible item
+  // Full keyboard nav: ↑/↓ cycle through rows, Enter activates the highlighted
+  // row, Esc closes. The previous handler only moved focus to the first item
+  // once (no cycling, no ArrowUp), so users couldn't reach later commands
+  // via keyboard at all.
   commandsModal.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       e.stopPropagation()
       close()
-    } else if (e.key === "Enter" && document.activeElement === commandsSearchInput) {
-      const first = commandsList!.querySelector<HTMLElement>(".commands-modal-item, .commands-modal-stash-item .commands-modal-stash-btn-primary")
-      if (first) first.click()
-    } else if (e.key === "ArrowDown") {
-      const first = commandsList!.querySelector<HTMLElement>(".commands-modal-item, .commands-modal-stash-btn-primary")
-      if (first) {
+      return
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault()
+      highlight(selectedIdx + 1)
+      return
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault()
+      highlight(selectedIdx - 1)
+      return
+    }
+    if (e.key === "Home") {
+      e.preventDefault()
+      highlight(0)
+      return
+    }
+    if (e.key === "End") {
+      e.preventDefault()
+      highlight(focusableRows().length - 1)
+      return
+    }
+    if (e.key === "Enter") {
+      const rows = focusableRows()
+      const target = rows[selectedIdx]
+      if (target) {
         e.preventDefault()
-        first.focus()
+        target.click()
       }
     }
   })
-
-  // Reference escapeHtml to keep TS happy if reused later (defense-in-depth helper).
-  void escapeHtml
 
   return { open, openStashList, close, updateServerCommands, updatePromptCommands }
 }

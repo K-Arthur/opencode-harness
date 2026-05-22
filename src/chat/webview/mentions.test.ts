@@ -18,12 +18,11 @@ describe("mentions.ts", () => {
     assert.ok(source.includes("LOCAL_COMMANDS"))
   })
 
-  it("includes /clear command", () => {
-    assert.ok(source.includes('"clear"'))
-  })
-
-  it("includes /help command", () => {
-    assert.ok(source.includes('"help"'))
+  it("LOCAL_COMMANDS is populated from the canonical registry (slash-commands.ts)", () => {
+    // Specific names live in slash-commands.ts now; mentions.ts just adapts them.
+    // The slash-commands.test.ts suite asserts the canonical list contains clear,
+    // help, model, etc., so we only verify the import wiring here.
+    assert.match(source, /LOCAL_COMMANDS[\s\S]{0,40}toMentionItems\(\)/)
   })
 
   it("has handleTrigger function", () => {
@@ -46,12 +45,24 @@ describe("mentions.ts", () => {
     assert.ok(source.includes("handleTrigger, handleKeydown, renderResults, updateServerCommands"))
   })
 
-  it("command icons use SVG constants from icons.ts, not emoji codepoints", () => {
-    // LOCAL_COMMANDS should reference SVG constants imported from icons.ts
-    assert.ok(source.includes("COMMAND_SVG"), "clear must use COMMAND_SVG")
-    assert.ok(source.includes("BRAIN_SVG"), "model must use BRAIN_SVG")
-    assert.ok(source.includes("CODE_SVG"), "help must use CODE_SVG")
-    assert.ok(source.includes("import"), "must import SVG constants")
+  it("uses the canonical slash-commands registry for local commands", () => {
+    // mentions.ts must NOT carry its own list of commands — that diverged
+    // from main.ts in the past. The canonical module owns the names and
+    // descriptions; this file only adapts them for the dropdown.
+    assert.ok(
+      source.includes('from "./slash-commands"'),
+      "mentions.ts must import from slash-commands.ts (canonical registry)",
+    )
+    assert.ok(
+      source.includes("toMentionItems()"),
+      "mentions.ts must build LOCAL_COMMANDS from toMentionItems()",
+    )
+    // Defensive: ensure the old hardcoded array literal is gone so future
+    // edits don't re-introduce drift.
+    assert.ok(
+      !/LOCAL_COMMANDS:\s*MentionItem\[\]\s*=\s*\[\s*\{\s*prefix:/.test(source),
+      "mentions.ts must not hardcode a LOCAL_COMMANDS array literal anymore",
+    )
   })
 
   it("renders slash commands with structured command rows", () => {
@@ -59,5 +70,49 @@ describe("mentions.ts", () => {
     assert.ok(source.includes("command-item"), "slash commands must use command-item rows")
     assert.ok(source.includes("dropdown-content"), "rows must group label and description")
     assert.ok(source.includes("aria-selected"), "keyboard selection state must be exposed")
+  })
+
+  // The old slash trigger regex was anchored to start-of-input (`^\/...$`),
+  // so typing "hello /clear" mid-prompt never opened the dropdown. The new
+  // regex accepts a slash either at the start of input or after whitespace.
+  it("slash trigger matches mid-line, not only at the start of input", () => {
+    assert.match(
+      source,
+      /\(\?:\^\|\\s\)\\\/\\?\(\\w\*\)\$|\(\?:\^\|\s\\\)\\?\/\(\?:\\w\*\)\$/,
+      "trigger regex must accept slash after whitespace, not just at position 0",
+    )
+    // Defensive: the obsolete start-anchored form must not survive.
+    assert.ok(
+      !/match\(\/\^\\\/\\?\(\\w\*\)\$\//.test(source),
+      "the old `^\\/(\\w*)$` regex must be replaced",
+    )
+  })
+
+  // @file: category items used to insert "@file:file" (prefix + display
+  // concatenation). The handler now honours item.insertText when present.
+  it("insertMention honours item.insertText for category rows so @file: doesn't become @file:file", () => {
+    const idx = source.indexOf("function insertMention(")
+    assert.ok(idx > 0, "insertMention must exist")
+    const block = source.slice(idx, source.indexOf("\n  }", idx + 50) + 4)
+    assert.ok(
+      /item\.insertText/.test(block),
+      "insertMention must consult item.insertText",
+    )
+    assert.ok(
+      /endsWith\(["']:["']\)/.test(block),
+      "insertMention must skip the trailing space for ':' category prefixes so the cursor lands ready to type",
+    )
+  })
+
+  // Server commands that share a name with a local one used to appear
+  // twice in the dropdown (one row per source). The handler now dedupes.
+  it("dedupes server commands whose names collide with local entries", () => {
+    const idx = source.indexOf("function handleTrigger()")
+    const block = source.slice(idx, source.indexOf("function renderCommandResults", idx))
+    assert.match(
+      block,
+      /localNames|filter\([\s\S]{0,200}toLowerCase\(\)/,
+      "handleTrigger must filter serverCommands against local names",
+    )
   })
 })

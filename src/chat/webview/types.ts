@@ -282,6 +282,14 @@ export interface MentionItem {
   display?: string
   description?: string
   icon?: string
+  /**
+   * Exact text inserted into the prompt when this item is picked. When
+   * present, this wins over the default `prefix + display` concatenation —
+   * which would otherwise produce nonsense for category items (e.g. clicking
+   * the "file" category with prefix "@file:" and display "file" used to
+   * insert "@file:file").
+   */
+  insertText?: string
 }
 
 export interface SessionSummary {

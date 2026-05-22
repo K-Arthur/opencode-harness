@@ -7,6 +7,7 @@ import { renderMessage } from "./messageRenderer"
 import { groupMessagesIntoTurns } from "./renderer"
 import { setupMentions } from "./mentions"
 import { setupCommandsModal, type CommandEntry } from "./commands-modal"
+import { toCommandEntries } from "./slash-commands"
 import { createStreamHandlers, type StreamHandlers } from "./stream"
 import { createTabBar, createTabContent, switchToTab, removeTabContent } from "./tabs"
 import { setupModelDropdown } from "./model-dropdown"
@@ -242,23 +243,9 @@ function getVsCodeApi() {
 
   // ── Commands palette (full modal). Triggered by /commands, Ctrl+/, or list_stashes flow.
   // Local entries mirror the in-prompt slash switch below so any future addition is one-stop.
-  const LOCAL_COMMAND_ENTRIES: CommandEntry[] = [
-    { name: "clear",         description: "Clear conversation, start a new server session",     source: "local", insertText: "/clear" },
-    { name: "model",         description: "Switch the active model (use /model <id>)",          source: "local", insertText: "/model " },
-    { name: "cost",          description: "Show session cost (server figures when available)",  source: "local", insertText: "/cost" },
-    { name: "new",           description: "Open a new session tab",                              source: "local", insertText: "/new" },
-    { name: "continue",      description: "Resume the most recently closed session",            source: "local", insertText: "/continue" },
-    { name: "compact",       description: "Compact session context to free tokens",             source: "local", insertText: "/compact" },
-    { name: "stash",         description: "Stash current prompt — /stash <name> <content>",     source: "local", insertText: "/stash " },
-    { name: "stashes",       description: "Browse stashed prompts",                              source: "local", insertText: "/stashes" },
-    { name: "queue",         description: "Show queued prompts",                                  source: "local", insertText: "/queue" },
-    { name: "commands",      description: "Open this command palette",                          source: "local", insertText: "/commands" },
-    { name: "export",        description: "Export conversation (Markdown)",                     source: "local", insertText: "/export" },
-    { name: "export-json",   description: "Export conversation as JSON",                        source: "local", insertText: "/export-json" },
-    { name: "export-text",   description: "Export conversation as plain text",                  source: "local", insertText: "/export-text" },
-    { name: "copy",          description: "Copy conversation to clipboard",                     source: "local", insertText: "/copy" },
-    { name: "help",          description: "Show available slash commands",                      source: "local", insertText: "/help" },
-  ]
+  // Local slash commands live in the canonical registry (slash-commands.ts)
+  // so the modal and the inline mention dropdown can't drift out of sync.
+  const LOCAL_COMMAND_ENTRIES: CommandEntry[] = toCommandEntries()
 
   function runCommandEntry(entry: CommandEntry): void {
     const active = stateManager.getActiveSession()

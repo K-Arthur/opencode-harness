@@ -144,24 +144,29 @@ export class MessageRouter {
   }
 
   private async executeMentionSearch(query: string, context: RouteContext): Promise<void> {
-    const items: { prefix: string; display: string; description: string }[] = []
+    // insertText is the exact text inserted when the user picks a category
+    // row. Without it the webview would concatenate prefix+display and end
+    // up with "@file:file" instead of the bare "@file:" we actually want.
+    const items: { prefix: string; display: string; description: string; insertText?: string }[] = []
     const lower = query.toLowerCase()
 
-    // Handle special mention types
+    // Handle special mention types — these are "categories" the user picks
+    // to drill into a specific context source. Picking one inserts just the
+    // prefix (e.g. "@file:") so they can keep typing a path or URL.
     if ("file".startsWith(lower) || query.startsWith("file")) {
-      items.push({ prefix: "@file:", display: "file", description: "Reference a file" })
+      items.push({ prefix: "@file:", display: "file", description: "Reference a file", insertText: "@file:" })
     }
     if ("folder".startsWith(lower) || query.startsWith("folder")) {
-      items.push({ prefix: "@folder:", display: "folder", description: "Reference a folder" })
+      items.push({ prefix: "@folder:", display: "folder", description: "Reference a folder", insertText: "@folder:" })
     }
     if ("problems".startsWith(lower) || query.startsWith("problems")) {
-      items.push({ prefix: "@problems:", display: "problems", description: "Workspace errors and warnings" })
+      items.push({ prefix: "@problems:", display: "problems", description: "Workspace errors and warnings", insertText: "@problems" })
     }
     if ("url".startsWith(lower) || query.startsWith("url")) {
-      items.push({ prefix: "@url:", display: "url", description: "Fetch content from a URL" })
+      items.push({ prefix: "@url:", display: "url", description: "Fetch content from a URL", insertText: "@url:" })
     }
     if ("terminal".startsWith(lower) || query.startsWith("terminal")) {
-      items.push({ prefix: "@terminal:", display: "terminal", description: "Capture terminal output" })
+      items.push({ prefix: "@terminal:", display: "terminal", description: "Capture terminal output", insertText: "@terminal" })
     }
 
     // Build proper glob pattern for path-aware search

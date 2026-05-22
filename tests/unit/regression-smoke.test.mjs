@@ -29,6 +29,7 @@ const files = {
   checkpoint: readFileSync(path.join(root, "src", "checkpoint", "CheckpointManager.ts"), "utf8"),
   indexHtml: readFileSync(path.join(root, "src", "chat", "webview", "index.html"), "utf8"),
   tokensCss: readFileSync(path.join(root, "src", "chat", "webview", "css", "tokens.css"), "utf8"),
+  slashCommands: readFileSync(path.join(root, "src", "chat", "webview", "slash-commands.ts"), "utf8"),
 }
 
 // ── Test Data Builders ──────────────────────────────────────────────────
@@ -172,9 +173,12 @@ describe("Regression: Slash Commands", () => {
       "SLASH_COMMANDS must be removed from main.ts")
   })
 
-  it("slash commands use SVG icons from icons.ts", () => {
-    assert.ok(files.mentions.includes("COMMAND_SVG"), "clear must use COMMAND_SVG")
-    assert.ok(files.mentions.includes("BRAIN_SVG"), "model must use BRAIN_SVG")
+  it("slash commands use SVG icons from icons.ts (via the canonical registry)", () => {
+    // Icons used to be declared inline in mentions.ts. They now live in the
+    // canonical slash-commands.ts registry which mentions.ts adapts from.
+    assert.ok(files.slashCommands.includes("COMMAND_SVG"), "clear must use COMMAND_SVG")
+    assert.ok(files.slashCommands.includes("BRAIN_SVG"), "model must use BRAIN_SVG")
+    // server-only icon is still imported by mentions.ts for non-local cmds
     assert.ok(files.mentions.includes("GEAR_SVG"), "server commands must use GEAR_SVG")
   })
 })

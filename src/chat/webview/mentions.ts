@@ -1,41 +1,12 @@
 import type { MentionItem } from "./types"
 import type { ElementRefs } from "./dom"
-import {
-  COMMAND_SVG, BRAIN_SVG, MCP_SVG, PLUS_SVG,
-  SHARE_SVG, REFRESH_SVG, PLAY_SVG, HISTORY_SVG, CODE_SVG, GEAR_SVG,
-} from "./icons"
+import { GEAR_SVG } from "./icons"
+import { toMentionItems } from "./slash-commands"
 
-const COMMAND_ICONS: Record<string, string> = {
-  clear: COMMAND_SVG,
-  model: BRAIN_SVG,
-  cost: MCP_SVG,
-  new: PLUS_SVG,
-  export: SHARE_SVG,
-  compact: REFRESH_SVG,
-  continue: PLAY_SVG,
-  commands: HISTORY_SVG,
-  queue: MCP_SVG,
-  help: CODE_SVG,
-}
-
-const LOCAL_COMMANDS: MentionItem[] = [
-  { prefix: "/", display: "clear", description: "Clear conversation", icon: COMMAND_SVG },
-  { prefix: "/", display: "model", description: "Switch model", icon: BRAIN_SVG },
-  { prefix: "/", display: "cost", description: "Show session cost", icon: MCP_SVG },
-  { prefix: "/", display: "new", description: "New session", icon: PLUS_SVG },
-  { prefix: "/", display: "export", description: "Export conversation", icon: SHARE_SVG },
-  { prefix: "/", display: "export-md", description: "Export as Markdown", icon: SHARE_SVG },
-  { prefix: "/", display: "export-json", description: "Export as JSON", icon: SHARE_SVG },
-  { prefix: "/", display: "export-text", description: "Export as plain text", icon: SHARE_SVG },
-  { prefix: "/", display: "copy", description: "Copy to clipboard", icon: SHARE_SVG },
-  { prefix: "/", display: "stash", description: "Stash current prompt", icon: SHARE_SVG },
-  { prefix: "/", display: "stashes", description: "List stashed prompts", icon: SHARE_SVG },
-  { prefix: "/", display: "compact", description: "Compact session context", icon: REFRESH_SVG },
-  { prefix: "/", display: "continue", description: "Resend last prompt", icon: PLAY_SVG },
-  { prefix: "/", display: "queue", description: "Show queued prompts", icon: MCP_SVG },
-  { prefix: "/", display: "commands", description: "List server commands", icon: HISTORY_SVG },
-  { prefix: "/", display: "help", description: "Show help", icon: CODE_SVG },
-]
+// Local slash commands come from the canonical registry in slash-commands.ts
+// — single source of truth shared with the commands palette modal so the two
+// surfaces can never drift out of sync again.
+const LOCAL_COMMANDS: MentionItem[] = toMentionItems()
 
 export interface MentionState {
   query: string
@@ -51,14 +22,22 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     const cursorPos = els.promptInput.selectionStart
     const textBefore = val.slice(0, cursorPos)
 
-    const slashMatch = textBefore.match(/^\/(\w*)$/)
+    // Trigger when the current token starts with "/". The old anchor (`^`)
+    // only fired when the slash sat at position 0, so typing "hello /clear"
+    // mid-prompt never opened the dropdown. We now accept a slash that is
+    // either at the start of input or preceded by whitespace.
+    const slashMatch = textBefore.match(/(?:^|\s)\/(\w*)$/)
     if (slashMatch) {
       state.mode = "command"
       state.query = slashMatch[1]!
       els.mentionDropdown.classList.add("command-mode")
       els.mentionDropdown.classList.remove("mention-mode")
       els.mentionDropdown.classList.remove("hidden")
-      const allCommands = [...LOCAL_COMMANDS, ...serverCommands]
+      // Drop server commands whose names collide with locals (case-insensitive)
+      // so the user doesn't see two rows for /clear when both exist.
+      const localNames = new Set(LOCAL_COMMANDS.map(c => (c.display || "").toLowerCase()))
+      const uniqueServer = serverCommands.filter(c => !localNames.has((c.display || "").toLowerCase()))
+      const allCommands = [...LOCAL_COMMANDS, ...uniqueServer]
       const filtered = allCommands.filter(c =>
         c.display!.toLowerCase().startsWith(state.query.toLowerCase())
       )
@@ -247,11 +226,25 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     const val = els.promptInput.value
     const cursor = els.promptInput.selectionStart
     const atIdx = val.lastIndexOf("@", cursor)
-    const text = (item.prefix || "") + (item.display || "")
+    // Prefer item.insertText when present — category items (e.g. {prefix:"@file:",
+    // display:"file"}) used to concatenate prefix + display and insert
+    // "@file:file" instead of the intended "@file:". The host-side
+    // MessageRouter now supplies insertText: "@file:" (etc.) for category
+    // rows so they insert the bare prefix and let the user keep typing.
+    let text: string
+    let trailing = " "
+    if (item.insertText) {
+      text = item.insertText
+      // Category prefixes end with ":" — leave the cursor right after so the
+      // user can type the file/url/etc. without an intervening space.
+      if (text.endsWith(":")) trailing = ""
+    } else {
+      text = (item.prefix || "") + (item.display || "")
+    }
     const before = val.slice(0, atIdx)
     const after = val.slice(cursor)
-    els.promptInput.value = before + text + " " + after
-    const newCursor = atIdx + text.length + 1
+    els.promptInput.value = before + text + trailing + after
+    const newCursor = atIdx + text.length + trailing.length
     els.promptInput.setSelectionRange(newCursor, newCursor)
     els.mentionDropdown.classList.add("hidden")
     els.promptInput.focus()

@@ -1494,7 +1494,9 @@ textarea {
   transition: border-color var(--duration-fast), background var(--duration-fast);
 }
 .commands-modal-item:hover,
-.commands-modal-item:focus-visible {
+.commands-modal-item:focus-visible,
+.commands-modal-item.active,
+.commands-modal-stash-btn-primary.active {
   border-color: var(--oc-accent);
   background: var(--oc-list-hover-bg, rgba(127, 127, 127, 0.08));
   outline: none;

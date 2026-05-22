@@ -1,0 +1,142 @@
+import { beforeEach, describe, it } from "node:test"
+import assert from "node:assert/strict"
+import { JSDOM } from "jsdom"
+
+let modal: HTMLElement
+let list: HTMLElement
+let search: HTMLInputElement
+let title: HTMLElement
+let filter: HTMLElement
+let closeBtn: HTMLElement
+let setupCommandsModal: any
+let toCommandEntries: any
+
+beforeEach(async () => {
+  const dom = new JSDOM(`<!doctype html>
+    <div id="modal" class="hidden">
+      <div class="commands-modal-header"><h2 id="title">x</h2><button id="close"></button></div>
+      <input id="search" type="text">
+      <div id="filter"></div>
+      <div id="list"></div>
+    </div>
+  `)
+  ;(globalThis as any).window = dom.window
+  ;(globalThis as any).document = dom.window.document
+  ;(globalThis as any).HTMLElement = dom.window.HTMLElement
+  ;(globalThis as any).HTMLInputElement = dom.window.HTMLInputElement
+  ;(globalThis as any).Element = dom.window.Element
+
+  modal = document.getElementById("modal")!
+  list = document.getElementById("list")!
+  search = document.getElementById("search") as HTMLInputElement
+  title = document.getElementById("title")!
+  filter = document.getElementById("filter")!
+  closeBtn = document.getElementById("close")!
+
+  ;({ setupCommandsModal } = await import("./commands-modal"))
+  ;({ toCommandEntries } = await import("./slash-commands"))
+})
+
+function buildHandle() {
+  const opts: any = {
+    localCommands: toCommandEntries(),
+    onRun: (entry: any) => {
+      opts._lastRun = entry
+    },
+    onInsert: () => {},
+    onUseStash: () => {},
+    onDeleteStash: () => {},
+  }
+  const handle = setupCommandsModal(
+    {
+      commandsModal: modal,
+      commandsList: list,
+      commandsSearchInput: search,
+      commandsTitle: title,
+      commandsFilter: filter,
+      commandsModalCloseBtn: closeBtn,
+    },
+    opts,
+  )
+  return { handle, opts }
+}
+
+function press(key: string) {
+  const event = new (globalThis as any).window.KeyboardEvent("keydown", { key, bubbles: true })
+  modal.dispatchEvent(event)
+}
+
+describe("commands modal — keyboard navigation", () => {
+  it("ArrowDown highlights the next row, cycling at the bottom", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    const rows = list.querySelectorAll<HTMLElement>(".commands-modal-item")
+    assert.ok(rows.length >= 3, "should render multiple rows for navigation test")
+    assert.ok(rows[0]!.classList.contains("active"), "first row should be active on open")
+
+    press("ArrowDown")
+    assert.ok(rows[1]!.classList.contains("active"))
+
+    // Cycle to the end + wrap around
+    for (let i = 0; i < rows.length - 1; i++) press("ArrowDown")
+    assert.ok(rows[0]!.classList.contains("active"), "wraps back to the first row")
+  })
+
+  it("ArrowUp moves backward and wraps to the last row from the first", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    const rows = list.querySelectorAll<HTMLElement>(".commands-modal-item")
+
+    press("ArrowUp")
+    assert.ok(rows[rows.length - 1]!.classList.contains("active"), "from first, ArrowUp goes to last")
+  })
+
+  it("Home jumps to first, End jumps to last", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    const rows = list.querySelectorAll<HTMLElement>(".commands-modal-item")
+
+    press("End")
+    assert.ok(rows[rows.length - 1]!.classList.contains("active"))
+
+    press("Home")
+    assert.ok(rows[0]!.classList.contains("active"))
+  })
+
+  it("Enter activates the highlighted row (not just whatever the browser focused)", () => {
+    const { handle, opts } = buildHandle()
+    handle.open()
+    press("ArrowDown")
+    press("ArrowDown")
+    press("Enter")
+    assert.ok(opts._lastRun, "onRun must fire")
+    // The third row (after two ArrowDowns from index 0) should have been activated.
+    const rows = list.querySelectorAll<HTMLElement>(".commands-modal-item")
+    assert.equal(opts._lastRun.name, rows[2]!.dataset.command)
+  })
+
+  it("Escape closes the modal", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    assert.ok(!modal.classList.contains("hidden"))
+    press("Escape")
+    assert.ok(modal.classList.contains("hidden"))
+  })
+})
+
+describe("commands modal — server command dedup", () => {
+  it("a server command named 'clear' does not appear twice next to the built-in", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    handle.updateServerCommands([
+      { name: "clear", description: "server-side clear" },
+      { name: "deploy", description: "deploy" },
+    ])
+    const labels = Array.from(list.querySelectorAll(".commands-modal-item-label")).map(
+      (l) => l.textContent || "",
+    )
+    const clearCount = labels.filter((l) => l === "/clear").length
+    assert.equal(clearCount, 1)
+    assert.ok(labels.includes("/deploy"))
+  })
+})

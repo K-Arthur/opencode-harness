@@ -5,13 +5,15 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const mainSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "main.ts"), "utf8")
-const mentionsSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "mentions.ts"), "utf8")
+const webviewDir = path.join(__dirname, "..", "..", "src", "chat", "webview")
+const mainSource = readFileSync(path.join(webviewDir, "main.ts"), "utf8")
+const mentionsSource = readFileSync(path.join(webviewDir, "mentions.ts"), "utf8")
+const slashCommandsSource = readFileSync(path.join(webviewDir, "slash-commands.ts"), "utf8")
 
 describe("Slash command unification", () => {
-  it("SLASH_COMMANDS must not be defined in main.ts — only LOCAL_COMMANDS in mentions.ts", () => {
+  it("SLASH_COMMANDS must not be defined in main.ts — only the canonical registry is allowed", () => {
     const hasSlashCommands = mainSource.includes("const SLASH_COMMANDS")
-    assert.ok(!hasSlashCommands, "SLASH_COMMANDS must be removed from main.ts — all slash commands must live in mentions.ts LOCAL_COMMANDS")
+    assert.ok(!hasSlashCommands, "SLASH_COMMANDS must be removed from main.ts")
   })
 
   it("renderSlashAutocomplete must be removed from main.ts", () => {
@@ -24,9 +26,47 @@ describe("Slash command unification", () => {
     assert.ok(!hasUpdate, "updateSlashAutocomplete must be removed — uses mentions system instead")
   })
 
-  it("LOCAL_COMMANDS in mentions.ts is the single source of truth for slash commands", () => {
-    assert.ok(mentionsSource.includes("LOCAL_COMMANDS"), "LOCAL_COMMANDS must exist in mentions.ts")
-    assert.ok(mentionsSource.includes('"clear"'), "must include clear command")
-    assert.ok(mentionsSource.includes('"help"'), "must include help command")
+  it("slash-commands.ts is the canonical source of truth (used by both modal and dropdown)", () => {
+    // Canonical registry exports the master list
+    assert.ok(
+      /export\s+const\s+LOCAL_SLASH_COMMANDS/.test(slashCommandsSource),
+      "slash-commands.ts must export LOCAL_SLASH_COMMANDS",
+    )
+    // Both adapters live here too
+    assert.ok(
+      /export\s+function\s+toMentionItems/.test(slashCommandsSource),
+      "slash-commands.ts must export toMentionItems()",
+    )
+    assert.ok(
+      /export\s+function\s+toCommandEntries/.test(slashCommandsSource),
+      "slash-commands.ts must export toCommandEntries()",
+    )
+
+    // mentions.ts consumes the adapter, doesn't redefine
+    assert.ok(
+      mentionsSource.includes('from "./slash-commands"'),
+      "mentions.ts must import from ./slash-commands",
+    )
+    assert.ok(
+      mentionsSource.includes("toMentionItems()"),
+      "mentions.ts must use toMentionItems() rather than carrying its own list",
+    )
+
+    // main.ts consumes the adapter
+    assert.ok(
+      mainSource.includes('from "./slash-commands"'),
+      "main.ts must import from ./slash-commands",
+    )
+    assert.ok(
+      mainSource.includes("toCommandEntries()"),
+      "main.ts must use toCommandEntries() rather than carrying its own list",
+    )
+  })
+
+  it("server commands are deduped against local entries", () => {
+    assert.ok(
+      /export\s+function\s+dedupServerCommands/.test(slashCommandsSource),
+      "must export dedupServerCommands",
+    )
   })
 })
