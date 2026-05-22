@@ -1533,7 +1533,26 @@ textarea {
 }
 .commands-modal-item-badge-local  { background: var(--oc-accent); color: var(--oc-accent-fg); }
 .commands-modal-item-badge-server { background: var(--color-border); color: var(--color-fg); }
+.commands-modal-item-badge-mcp    { background: var(--oc-info-subtle, rgba(64, 156, 255, 0.18)); color: var(--oc-info-color, #4ea3ff); }
+.commands-modal-item-badge-skill  { background: var(--oc-warning-subtle, rgba(204, 167, 0, 0.18)); color: var(--oc-warning-color, #cca700); }
 .commands-modal-item-badge-prompt { background: transparent; color: var(--color-muted); border: 1px solid var(--color-border); }
+
+/* Origin chip: small secondary label showing which MCP server / agent
+ * contributed an entry. Sits between the description and the source badge. */
+.commands-modal-item-origin {
+  margin-right: var(--space-2);
+  padding: 2px var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-muted);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .commands-modal-empty {
   padding: var(--space-4);

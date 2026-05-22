@@ -140,3 +140,63 @@ describe("commands modal — server command dedup", () => {
     assert.ok(labels.includes("/deploy"))
   })
 })
+
+describe("commands modal — MCP source", () => {
+  it("MCP-sourced commands get the 'MCP' badge and origin chip", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    handle.updateServerCommands([
+      { name: "review-pr", description: "Review a PR", agent: "github-mcp", source: "mcp" },
+      { name: "create-issue", description: "Create issue", agent: "linear-mcp", source: "mcp" },
+      { name: "lint", description: "Lint", source: "command" },
+    ])
+
+    // Locate the MCP rows
+    const rows = Array.from(list.querySelectorAll<HTMLElement>(".commands-modal-item"))
+    const reviewRow = rows.find((r) => r.dataset.command === "review-pr")
+    const lintRow = rows.find((r) => r.dataset.command === "lint")
+    assert.ok(reviewRow, "MCP command must render")
+    assert.ok(lintRow, "regular server command must render")
+
+    const reviewBadge = reviewRow!.querySelector(".commands-modal-item-badge")
+    assert.equal(reviewBadge?.textContent, "MCP", "MCP-sourced rows show the MCP badge")
+
+    const lintBadge = lintRow!.querySelector(".commands-modal-item-badge")
+    assert.equal(lintBadge?.textContent, "Server", "non-MCP rows still show Server")
+
+    const originChip = reviewRow!.querySelector(".commands-modal-item-origin")
+    assert.equal(originChip?.textContent, "github-mcp", "MCP origin chip shows the providing server name")
+  })
+
+  it("MCP filter chip restricts the list to MCP entries", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    handle.updateServerCommands([
+      { name: "review-pr", description: "PR", agent: "github-mcp", source: "mcp" },
+      { name: "deploy", description: "deploy", source: "command" },
+    ])
+    const mcpChip = list.parentElement!.querySelector<HTMLButtonElement>(
+      '.commands-modal-filter-btn[data-filter="mcp"]',
+    )
+    assert.ok(mcpChip, "MCP filter chip must exist")
+    mcpChip!.click()
+
+    const visible = Array.from(list.querySelectorAll<HTMLElement>(".commands-modal-item")).map(
+      (r) => r.dataset.command,
+    )
+    assert.deepEqual(visible, ["review-pr"])
+  })
+
+  it("falls back to source=server when the server doesn't tag a source", () => {
+    // Older opencode servers don't set Command.source. They must still
+    // render — just without the MCP-specific affordances.
+    const { handle } = buildHandle()
+    handle.open()
+    handle.updateServerCommands([
+      { name: "legacy", description: "no source tagged" },
+    ])
+    const row = list.querySelector<HTMLElement>('.commands-modal-item[data-command="legacy"]')
+    assert.ok(row)
+    assert.equal(row!.querySelector(".commands-modal-item-badge")?.textContent, "Server")
+  })
+})

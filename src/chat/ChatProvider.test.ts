@@ -192,7 +192,13 @@ void describe("ChatProvider.ts", () => {
 
   void it("has command handler methods", () => {
     assert.ok(source.includes("handleExecuteCommand("), "must have handleExecuteCommand")
-    assert.ok(source.includes("handleListCommands("), "must have handleListCommands")
+    // The user-initiated list_commands flow now lives in WebviewEventRouter
+    // (single source of truth for webview-message routing). ChatProvider
+    // still owns the silent MCP-driven refresh path.
+    assert.ok(
+      source.includes("refreshCommandListQuietly("),
+      "ChatProvider must own the silent command-list refresh (used by MCP tools-changed)",
+    )
     assert.ok(source.includes("handleClearCommand("), "must have handleClearCommand")
     assert.ok(source.includes("handleCostCommand("), "must have handleCostCommand")
     assert.ok(source.includes("handleContinueCommand("), "must have handleContinueCommand")

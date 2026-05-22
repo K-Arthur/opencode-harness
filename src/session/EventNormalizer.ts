@@ -16,6 +16,7 @@ import { StepFinishHandler } from "./eventHandlers/StepFinishHandler"
 import { FallbackHandler } from "./eventHandlers/FallbackHandler"
 import { ServerConnectedHandler } from "./eventHandlers/ServerConnectedHandler"
 import { TodoUpdatedHandler } from "./eventHandlers/TodoUpdatedHandler"
+import { McpToolsChangedHandler } from "./eventHandlers/McpToolsChangedHandler"
 
 const HANDLERS: EventHandler[] = [
   new TextPartHandler(),
@@ -32,6 +33,7 @@ const HANDLERS: EventHandler[] = [
   new StepFinishHandler(),
   new ServerConnectedHandler(),
   new TodoUpdatedHandler(),
+  new McpToolsChangedHandler(),
   new FallbackHandler(),
 ]
 

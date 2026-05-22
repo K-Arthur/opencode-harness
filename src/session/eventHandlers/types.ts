@@ -15,6 +15,7 @@ export type NormalizedOpencodeEventType =
   | "permission_request"
   | "permission_replied"
   | "step_finish"
+  | "mcp_tools_changed"
 
 export interface NormalizedOpencodeEvent {
   type: NormalizedOpencodeEventType | string

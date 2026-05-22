@@ -536,19 +536,28 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     return this.commandExec.handleLocalSlashCommand(sessionId, commandName)
   }
 
-  private async handleListCommands(): Promise<void> {
+  /**
+   * Re-fetch the command list and push it to the webview WITHOUT
+   * `showInChat`, so the inline @ dropdown + commands modal pick up the
+   * fresh set silently (no system message dump, no modal pop-up).
+   * Used when MCP server tools change mid-session.
+   *
+   * The user-initiated path (from /commands or the webview's list_commands
+   * message) is handled by WebviewEventRouter.handleListCommands, which
+   * sets showInChat: true so the modal opens. Both code paths share the
+   * same data source (promptManager + sessionManager.listCommands()).
+   */
+  private async refreshCommandListQuietly(): Promise<void> {
     try {
       const customCommands = this.promptManager.getPromptCommands()
       if (!this.sessionManager.isRunning) {
-        this.postMessage({ type: "command_list", commands: customCommands, showInChat: true })
+        this.postMessage({ type: "command_list", commands: customCommands })
         return
       }
       const commands = await this.sessionManager.listCommands()
-      this.postMessage({ type: "command_list", commands: [...customCommands, ...commands], showInChat: true })
+      this.postMessage({ type: "command_list", commands: [...customCommands, ...commands] })
     } catch (err) {
-      log.warn("Failed to list commands", err)
-      const customCommands = this.promptManager.getPromptCommands()
-      this.postMessage({ type: "command_list", commands: customCommands, showInChat: true })
+      log.warn("Failed to refresh command list after MCP change", err)
     }
   }
 
@@ -717,6 +726,15 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       this.postMessage({ type: "message", sessionId: tabId, message: { role: "system", blocks: [block], timestamp: Date.now(), sessionId: tabId } })
     }],
     ["session_compacted", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => { log.info(`Session compacted for ${tabId}`); this.postMessage({ type: "session_compacted", sessionId: tabId }) }],
+    ["mcp_tools_changed", (event: { type: string; sessionId?: string; data?: unknown }) => {
+      // MCP server tools changed (connect / disconnect / reauth) means the
+      // server's /command list may now include or exclude MCP-sourced
+      // prompts. Refresh quietly so the inline @ dropdown and the commands
+      // modal pick up the new entries without dumping into chat history.
+      const data = event.data as { server?: string } | undefined
+      log.info(`MCP tools changed${data?.server ? ` (server: ${data.server})` : ""} — refreshing command list`)
+      void this.refreshCommandListQuietly()
+    }],
     ["step_finish", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {
       const data = event.data as { tokens?: { input?: number; output?: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }; cost?: number } | undefined
       if (data?.tokens) {

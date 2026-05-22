@@ -11,10 +11,19 @@ export interface CommandEntry {
   /** Without leading slash. */
   name: string
   description: string
-  /** "local" — handled in webview; "server" — proxied via execute_command; "prompt" — custom prompt template. */
-  source: "local" | "server" | "prompt"
+  /**
+   * Origin of the command:
+   *   - "local"  — handled directly in the webview (slash-commands.ts)
+   *   - "server" — built-in opencode server command, proxied via execute_command
+   *   - "mcp"    — exposed by a connected MCP server (also proxied)
+   *   - "skill"  — derived from a skill definition
+   *   - "prompt" — user's custom prompt template
+   */
+  source: "local" | "server" | "mcp" | "skill" | "prompt"
   /** When source === "local", a fully formed slash command to insert into the prompt input. */
   insertText?: string
+  /** Optional origin label (e.g. MCP server name or agent name) shown next to the badge. */
+  origin?: string
 }
 
 export interface StashEntry {
@@ -133,14 +142,29 @@ export function setupCommandsModal(els: {
     }
   }
 
-  function updateServerCommands(commands: Array<{ name: string; description?: string; template?: string }>): void {
+  function updateServerCommands(
+    commands: Array<{ name: string; description?: string; template?: string; agent?: string; source?: string }>,
+  ): void {
     // Drop server commands whose names collide with built-ins so users
     // don't see duplicate rows for /clear, /help, etc.
-    serverCommands = dedupServerCommands(commands).map(c => ({
-      name: c.name,
-      description: c.description || c.template || "Server command",
-      source: "server" as const,
-    }))
+    serverCommands = dedupServerCommands(commands).map(c => {
+      // The server's `source` field disambiguates command / mcp / skill;
+      // if absent we default to "server" so older opencode builds still work.
+      const rawSource = (c.source || "").toLowerCase()
+      const mappedSource: CommandEntry["source"] =
+        rawSource === "mcp" ? "mcp" :
+        rawSource === "skill" ? "skill" :
+        "server"
+      return {
+        name: c.name,
+        description: c.description || c.template || (mappedSource === "mcp" ? "MCP-provided command" : "Server command"),
+        source: mappedSource,
+        // For MCP commands the agent string is typically the MCP server name —
+        // shown as an origin chip next to the badge so users can tell which
+        // server contributed which command.
+        origin: c.agent || undefined,
+      }
+    })
     if (mode === "commands" && !commandsModal!.classList.contains("hidden")) render()
   }
 
@@ -166,6 +190,8 @@ export function setupCommandsModal(els: {
           { key: "all", label: "All" },
           { key: "local", label: "Built-in" },
           { key: "server", label: "Server" },
+          { key: "mcp", label: "MCP" },
+          { key: "skill", label: "Skill" },
           { key: "prompt", label: "Custom" },
         ]
     for (const chip of chips) {
@@ -240,9 +266,24 @@ export function setupCommandsModal(els: {
 
       const badge = document.createElement("span")
       badge.className = `commands-modal-item-badge commands-modal-item-badge-${entry.source}`
-      badge.textContent = entry.source === "local" ? "Built-in" : entry.source === "server" ? "Server" : "Custom"
+      badge.textContent =
+        entry.source === "local"  ? "Built-in" :
+        entry.source === "server" ? "Server" :
+        entry.source === "mcp"    ? "MCP" :
+        entry.source === "skill"  ? "Skill" :
+        "Custom"
 
       item.appendChild(left)
+      if (entry.origin) {
+        // Small secondary chip showing which MCP server / agent provided the
+        // command. Helps users tell e.g. github-mcp's /review apart from
+        // linear-mcp's /review.
+        const originChip = document.createElement("span")
+        originChip.className = "commands-modal-item-origin"
+        originChip.textContent = entry.origin
+        originChip.title = `Provided by ${entry.origin}`
+        item.appendChild(originChip)
+      }
       item.appendChild(badge)
 
       item.addEventListener("click", () => {

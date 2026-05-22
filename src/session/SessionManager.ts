@@ -1227,12 +1227,24 @@ async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part
     return resp.data as boolean
   }
 
-  async listCommands(): Promise<Array<{ name: string; description?: string; template: string }>> {
+  /**
+   * Return the server-discovered command catalog.
+   *
+   * The opencode server merges multiple sources into a single `/command`
+   * endpoint:
+   *   - source: "command"  → built-in or user-defined opencode commands
+   *   - source: "mcp"      → prompts exposed by connected MCP servers
+   *   - source: "skill"    → skill-derived commands
+   * Newer servers also tag each entry with `agent` so the UI can show
+   * which agent / MCP server it came from. We preserve all of these so
+   * the modal can render proper badges.
+   */
+  async listCommands(): Promise<Array<{ name: string; description?: string; template: string; agent?: string; source?: string }>> {
     if (this.disposed) throw new Error("SessionManager has been disposed")
     if (!this.client) throw new Error("Server not running")
     const resp = await this.client.command.list()
     if (resp.error) throw new Error(`Failed to list commands: ${JSON.stringify(resp.error)}`)
-    return (resp.data as Array<{ name: string; description?: string; template: string }>) ?? []
+    return (resp.data as Array<{ name: string; description?: string; template: string; agent?: string; source?: string }>) ?? []
   }
 
   async abortSession(sessionId: string): Promise<boolean> {
