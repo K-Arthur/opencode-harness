@@ -50,6 +50,65 @@ describe("findKnownContextWindow — deprecated shim", () => {
   })
 })
 
+describe("resolveContextWindow — OpenRouter cache fallback (0.2.15)", () => {
+  it("consults the OpenRouter cache when the server didn't supply a value", () => {
+    const cache = new Map<string, number>([
+      ["moonshotai/kimi-k2.5", 200_000],
+      ["kimi-k2.5", 200_000],
+    ])
+    // The exact server-reported key wins.
+    assert.equal(
+      resolveContextWindow("moonshotai/kimi-k2.5", undefined, { openRouterCache: cache }),
+      200_000,
+    )
+  })
+
+  it("falls back to the short id when the provider prefix differs (cross-provider lookup)", () => {
+    // Same model weights, different host: the prefix doesn't match but
+    // the short id does. This is the whole reason we built the
+    // OpenRouter fallback.
+    const cache = new Map<string, number>([
+      ["moonshotai/kimi-k2.5", 200_000],
+      ["kimi-k2.5", 200_000],
+    ])
+    assert.equal(
+      resolveContextWindow("openrouter/kimi-k2.5", undefined, { openRouterCache: cache }),
+      200_000,
+    )
+  })
+
+  it("server-reported value still wins over the cache (server is authoritative)", () => {
+    const cache = new Map<string, number>([["kimi-k2.5", 1_000_000]])
+    // Server says 200k, cache says 1M. Trust the server.
+    assert.equal(
+      resolveContextWindow("anyhost/kimi-k2.5", 200_000, { openRouterCache: cache }),
+      200_000,
+    )
+  })
+
+  it("returns undefined and logs when both server and cache come up empty", () => {
+    const lines: string[] = []
+    const cache = new Map<string, number>([["totally-different/model", 1]])
+    const out = resolveContextWindow("opencode/proprietary-model", undefined, {
+      openRouterCache: cache,
+      log: (m) => lines.push(m),
+    })
+    assert.equal(out, undefined)
+    assert.equal(lines.length, 1, "should log the miss so operators can notice")
+    assert.match(lines[0]!, /no OpenRouter fallback hit/, "log line must reflect that fallback also failed")
+  })
+
+  it("does not log when the cache hits — silence on the happy path", () => {
+    const lines: string[] = []
+    const cache = new Map<string, number>([["kimi-k2.5", 200_000]])
+    resolveContextWindow("anyhost/kimi-k2.5", undefined, {
+      openRouterCache: cache,
+      log: (m) => lines.push(m),
+    })
+    assert.equal(lines.length, 0)
+  })
+})
+
 describe("KNOWN_CONTEXT_WINDOWS — deprecated empty table", () => {
   it("is an empty frozen object — no hardcoded values", () => {
     assert.equal(Object.keys(KNOWN_CONTEXT_WINDOWS).length, 0)

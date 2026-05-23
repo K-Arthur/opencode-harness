@@ -76,14 +76,23 @@ export function updateContextUsage(contextMonitorEl: HTMLElement, usage?: { perc
         }
       }
     } else {
-      // Tokens-only display when maxTokens is unknown
+      // Tokens-only display when maxTokens is unknown.
+      // Make the row clickable so the user can fix it with one click —
+      // the previous version dropped a tooltip pointing them at a
+      // command they had to find via the palette themselves.
       if (progressFill) {
         progressFill.style.width = "0%"
         progressFill.classList.remove("context-warning", "context-critical", "context-good")
       }
       if (contextText) {
-        contextText.textContent = `${usage.tokens.toLocaleString()} tokens (limit unknown)`
-        contextText.title = "Context window limit not reported by server. Use 'OpenCode: Set Context Window Override' to set manually."
+        contextText.textContent = `${usage.tokens.toLocaleString()} tok · set limit ⚙`
+        contextText.title = "Context window limit not reported by server or OpenRouter cache. Click to set a manual override."
+        contextText.classList.add("context-text--unknown-limit")
+        contextMonitorEl.classList.add("context-monitor--needs-override")
+        contextMonitorEl.dataset.needsOverride = "true"
+      } else {
+        contextMonitorEl.classList.remove("context-monitor--needs-override")
+        delete contextMonitorEl.dataset.needsOverride
       }
     }
 

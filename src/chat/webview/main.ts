@@ -216,6 +216,7 @@ function getVsCodeApi() {
     onClose: (tabId) => closeTab(tabId),
     onNew: () => createNewTab(),
     onToggleContextMonitor: () => contextMonitorHandlers?.toggle(),
+    onSetContextWindowOverride: () => vscode.postMessage({ type: "open_context_window_override_dialog" }),
   })
 
   // Streaming state per session
@@ -708,6 +709,7 @@ function getVsCodeApi() {
       onClose: (tabId) => closeTab(tabId),
       onNew: () => createNewTab(),
       onToggleContextMonitor: () => contextMonitorHandlers?.toggle(),
+      onSetContextWindowOverride: () => vscode.postMessage({ type: "open_context_window_override_dialog" }),
     })
     if (!view) return
 

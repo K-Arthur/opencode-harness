@@ -5,6 +5,21 @@ All notable changes to the **OpenCode Harness** extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.15] - 2026-05-23
+
+### Fixed
+- **Context window now resolves for models the opencode server doesn't report `limit.context` for** — the 0.2.13 fix only papered over the bug. The `opencode.contextWindowOverride` setting was only consulted inside an `if (ctxWindow)` guard, so when the server returned no window (kimi-k2.5, deepseek-v4-flash-free, most OSS / free-tier models) the override was silently ignored. `ChatProvider.applyContextWindowFor` now applies the override regardless, plus reacts live to `onDidChangeConfiguration` so a new override value takes effect without an extension reload. (`src/chat/ChatProvider.ts`)
+
+### Added
+- **Cross-provider context-window fallback via OpenRouter's `/api/v1/models`** — when the opencode server doesn't report `limit.context` for a model, `resolveContextWindow` now consults a cached catalogue from OpenRouter. Same model weights typically share the same window regardless of which provider hosts them, so kimi-k2.5 served by any host hits OpenRouter's canonical `200_000` entry. The catalogue is fetched on first model-refresh, persisted to `globalState` with a 24h TTL, and refreshed in the background. Resolution order: server → OpenRouter → user override → unknown. No hand-curated tables; no provider drift.
+- **Clickable "set limit ⚙" affordance on the per-tab context monitor** — when both the server and OpenRouter come up empty, the monitor row now reads `N tok · set limit ⚙` and clicking it opens the `Set Context Window Override` dialog directly. Previously the user got a tooltip that told them to find the command in the palette.
+- **`open_context_window_override_dialog` webview message type** — routes the click above through the established webview-event-router validation path.
+
+### Tests
+- New `src/model/openRouterMetadata.test.ts` — 9 behavioral tests covering payload parsing, short-id cross-provider lookup, case-insensitive matching, cache-freshness TTL, and graceful degradation on missing/junk data.
+- Extended `src/model/contextWindowResolver.test.ts` with 5 tests pinning the OpenRouter fallback path: cache consultation, short-id fallback, server-still-wins, miss-then-log behaviour, happy-path silence.
+- Updated `src/chat/webview/theme.test.ts` to assert the new "set limit" hint and `needs-override` click marker.
+
 ## [0.2.14] - 2026-05-23
 
 ### Fixed
