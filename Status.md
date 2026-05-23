@@ -1,8 +1,14 @@
 # Status.md
 
-## Last Updated: 2026-05-06
+## Last Updated: 2026-05-22
 ## Project State: V7 STREAMING & UI OVERHAUL — Critical fixes applied, 306/307 tests passing
-### Recent Fix: Streaming pipeline, session persistence, and frontend redesign
+
+### Recent Fix (2026-05-22): Show-thinking visibility + codex-style compact tool blocks
+- **Show-thinking now actually hides blocks** — previously the toggle only flipped each `<details>` element to closed, which still left the summary chip in the layout. Now the toggle drives a `hide-thinking` body class that CSS uses to `display: none` every `.thinking-block`. `setupThinkingToggle()` calls `toggleAllThinkingBlocks()` at boot so the persisted pref applies immediately instead of after a double-click. (`src/chat/webview/dom.ts:395`, `src/chat/webview/main.ts:3065`, `src/chat/webview/css/components.css:44`).
+- **Codex-style compact tool blocks** — `.tool-call` now renders without a heavy card border (only the left accent stripe survives). `.tool-header` is a single-line row at `min-height: var(--size-target-min)` (24 px) with `text-xs` font. Multi-tool turns no longer become a wall of cards. (`src/chat/webview/css/blocks.css:263-340`).
+- **Tests**: 6 new source-string assertions across `dom.test.ts`, `messages-css.test.ts`, `main.test.ts`. Updated existing `thinking-toggle.spec.ts` to assert full block invisibility (not just body collapse), added `hide-thinking` body-class assertion, added new `compact-tool-blocks.spec.ts` Playwright suite that pins row height ≤ 28 px and asserts the flat-not-card border shape.
+
+### Previous Fix: Streaming pipeline, session persistence, and frontend redesign
 - **Critical: Stream handler prototype methods lost on spread** — `...stream` on `StreamSession` class instance silently discarded all handler methods. Fixed via `Object.assign(Object.create(proto), stream, overrides)`.
 - **Critical: Extension crash on startup** — `initConnectionStatusBar` called with `sessionStore` before it was initialized. Reordered initialization.
 - **Critical: Session history lost tool calls** — `handleStreamEnd` was replacing entire `blocks` array with server blocks (text + tool only). Changed to merge, preserving all block types.
