@@ -1,7 +1,6 @@
 import type { Block, ChatMessage, ToolCollapseConfig } from "./types"
 import {
   isToolCallBlock,
-  groupConsecutiveToolCalls,
   renderBlock,
   renderToolGroup,
   formatRelativeTime,
@@ -104,12 +103,13 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
   const config = opts?.collapseConfig || {
     groupBy: 'consecutive',
     defaultCollapsed: true,
-    collapseThreshold: 2,
+    collapseThreshold: 1,
     showTypeBreakdown: true,
     compactMode: false
   }
   
-  const hasToolCalls = msg.blocks?.some(b => b.type === "tool-call" || b.type === "tool_call" || b.type === "tool")
+  const toolBlocks = (msg.blocks || []).filter(isToolCallBlock)
+  const hasToolCalls = toolBlocks.length > 0
   if (hasToolCalls && role === "assistant" && !isConsecutive) {
     const toolControlsContainer = document.createElement("div")
     toolControlsContainer.className = "message-tool-controls"
@@ -145,27 +145,29 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
   }
 
   if (msg.blocks && Array.isArray(msg.blocks)) {
-    const groups = groupConsecutiveToolCalls(msg.blocks, config.groupBy)
-    for (const group of groups) {
-      const firstBlock = group[0]
-      if (!firstBlock) continue
-      if (group.length === 1 || !isToolCallBlock(firstBlock)) {
-        const el = renderBlock(firstBlock, { 
-          messageId: msg.id, 
-          mode: opts?.mode, 
-          postMessage: opts?.postMessage,
-          collapseConfig: config
-        })
-        if (el) bubble.appendChild(el)
-      } else {
-        const groupEl = renderToolGroup(group, { 
-          messageId: msg.id, 
-          mode: opts?.mode, 
-          postMessage: opts?.postMessage,
-          collapseConfig: config
-        })
-        if (groupEl) bubble.appendChild(groupEl)
+    let renderedToolGroup = false
+    for (const block of msg.blocks) {
+      if (role === "assistant" && isToolCallBlock(block)) {
+        if (!renderedToolGroup) {
+          const groupEl = renderToolGroup(toolBlocks, {
+            messageId: msg.id,
+            mode: opts?.mode,
+            postMessage: opts?.postMessage,
+            collapseConfig: config,
+          })
+          if (groupEl) bubble.appendChild(groupEl)
+          renderedToolGroup = true
+        }
+        continue
       }
+
+      const el = renderBlock(block, {
+          messageId: msg.id, 
+          mode: opts?.mode, 
+          postMessage: opts?.postMessage,
+          collapseConfig: config
+      })
+      if (el) bubble.appendChild(el)
     }
   }
 

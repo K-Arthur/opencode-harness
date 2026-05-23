@@ -98,11 +98,37 @@ it("has type guards for discriminated blocks", () => {
     assert.ok(source.includes('token.attrSet("rel", "noopener noreferrer")'), "external links must be isolated from opener access")
   })
 
-it("renders_tool_call_with_dynamic_states", () => {
+  it("renders_tool_call_with_dynamic_states", () => {
     assert.ok(source.includes("tool-call--${toolState}") || toolCallRendererSource.includes("tool-call--${toolState}"), "must use dynamic tool state class")
     assert.ok(source.includes("tool-call--error") || toolCallRendererSource.includes("tool-call--error"), "must support error state")
     assert.ok(source.includes("aria-label") || toolCallRendererSource.includes("aria-label"), "must have aria-label")
     assert.ok(source.includes("tool-status--${toolState}") || toolCallRendererSource.includes("tool-status--${toolState}"), "must have dynamic status badge")
+  })
+
+  it("assistant tool calls render as one grouped expandable row per message", () => {
+    assert.ok(
+      messageRendererSource.includes("const toolBlocks = (msg.blocks || []).filter(isToolCallBlock)"),
+      "messageRenderer must collect all assistant tool calls before rendering",
+    )
+    assert.ok(
+      messageRendererSource.includes("renderToolGroup(toolBlocks"),
+      "messageRenderer must render one grouped tool row for the collected tools",
+    )
+    assert.ok(
+      !messageRendererSource.includes("group.length === 1 || !isToolCallBlock(firstBlock)"),
+      "single tool calls must not bypass the grouped expandable row",
+    )
+  })
+
+  it("tool groups collapse by default even for a single tool call", () => {
+    assert.ok(
+      toolCallRendererSource.includes("collapseThreshold: 1"),
+      "default tool collapse threshold must be one so a single tool is still a compact expandable row",
+    )
+    assert.ok(
+      toolCallRendererSource.includes("blocks.length >= config.collapseThreshold"),
+      "tool group collapse decision must use the configured threshold",
+    )
   })
 
   it("renders_diff_block_with_table", () => {
@@ -329,6 +355,38 @@ it("tool_call_renderer_uses_class_specific_icons", () => {
         detectPlanProse("I see three issues here. 1. The first is small."),
         false
       )
+    })
+  })
+
+  describe("conversation timeline snippets", () => {
+    const { groupMessagesIntoTurns } = require("./renderer") as {
+      groupMessagesIntoTurns: (messages: Array<Record<string, unknown>>) => Array<{ snippet: string }>
+    }
+
+    it("extracts user snippets from runtime content strings when blocks are absent", () => {
+      const turns = groupMessagesIntoTurns([
+        {
+          role: "user",
+          id: "user-1",
+          content: "Please audit the webview communication channel.",
+          timestamp: 1,
+        },
+      ])
+
+      assert.equal(turns[0]?.snippet, "Please audit the webview communication channel.")
+    })
+
+    it("extracts user snippets from runtime parts arrays", () => {
+      const turns = groupMessagesIntoTurns([
+        {
+          role: "user",
+          id: "user-1",
+          parts: [{ type: "text", text: "Check the checkpoint button." }],
+          timestamp: 1,
+        },
+      ])
+
+      assert.equal(turns[0]?.snippet, "Check the checkpoint button.")
     })
   })
 

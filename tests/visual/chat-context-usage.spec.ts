@@ -53,11 +53,9 @@ test.describe("Context Usage", () => {
     expectNoBrowserErrors(captured)
   })
 
-  test("hides the per-tab monitor when maxTokens is unknown (0)", async ({ page }) => {
-    // Regression: when the active model's context window can't be resolved
-    // (e.g. opencode/big-pickle without a server limit), maxTokens used to
-    // come through as 100,000 — a misleading denominator. Now the monitor
-    // stays hidden until the real window resolves.
+  test("shows the per-tab monitor as tokens-only when maxTokens is unknown (0)", async ({ page }) => {
+    // When the active model's context window can't be resolved, keep the
+    // per-tab monitor useful without inventing a misleading denominator.
     const captured = captureErrors(page)
     await page.goto("/")
 
@@ -85,7 +83,8 @@ test.describe("Context Usage", () => {
     })
 
     const monitor = page.locator('.tab-panel[data-tab-id="s"] .context-monitor')
-    await expect(monitor).toHaveClass(/hidden/, { timeout: 3000 })
+    await expect(monitor).not.toHaveClass(/hidden/, { timeout: 3000 })
+    await expect(monitor.locator(".context-text")).toHaveText(/tokens \(limit unknown\)/)
 
     expectNoBrowserErrors(captured)
   })
@@ -117,6 +116,35 @@ test.describe("Context Usage", () => {
 
     const bar = page.locator("#context-usage")
     await expect(bar).toHaveClass(/hidden/, { timeout: 5000 })
+
+    expectNoBrowserErrors(captured)
+  })
+
+  test("status strip shows model, percent used, tokens over limit, and session cost", async ({ page }) => {
+    const captured = captureErrors(page)
+    await page.goto("/")
+
+    await dispatchHostMessage(page, {
+      type: "init_state",
+      sessions: [
+        {
+          id: "s",
+          name: "T",
+          model: "opencode/big-pickle",
+          messages: [],
+          tokenUsage: { prompt: 40000, completion: 10000, total: 50000 },
+          cost: 0.1234,
+        },
+      ],
+      activeSessionId: "s",
+    })
+
+    const contextBar = page.locator("#context-usage")
+    await expect(contextBar).not.toHaveClass(/hidden/, { timeout: 5000 })
+    await expect(page.locator("#status-model")).toHaveText("big-pickle")
+    await expect(page.locator("#context-label")).toContainText("25% used")
+    await expect(page.locator("#context-label")).toContainText("50,000 tokens / 200,000")
+    await expect(page.locator("#status-cost")).toHaveText("$0.1234")
 
     expectNoBrowserErrors(captured)
   })
@@ -219,6 +247,42 @@ test.describe("Changed Files", () => {
     await expect(page.locator(".changed-file-chip")).toHaveCount(2)
     await expect(page.locator(".changed-file-icon--go")).toHaveCount(1)
     await expect(page.locator(".changed-file-icon--rs")).toHaveCount(1)
+
+    expectNoBrowserErrors(captured)
+  })
+})
+
+test.describe("Checkpoints", () => {
+  test.beforeEach(async ({ page }) => {
+    await installVsCodeApi(page)
+  })
+
+  test("empty checkpoint response leaves a visible panel state", async ({ page }) => {
+    const captured = captureErrors(page)
+    await page.goto("/")
+
+    await dispatchHostMessage(page, {
+      type: "init_state",
+      sessions: [
+        {
+          id: "s",
+          name: "T",
+          model: "opencode/big-pickle",
+          messages: [],
+          tokenUsage: { prompt: 0, completion: 0, total: 0 },
+        },
+      ],
+      activeSessionId: "s",
+    })
+
+    await dispatchHostMessage(page, {
+      type: "checkpoint_list",
+      sessionId: "s",
+      checkpoints: [],
+    })
+
+    await expect(page.locator("#checkpoint-panel")).not.toHaveClass(/hidden/)
+    await expect(page.locator(".checkpoint-empty")).toHaveText("No checkpoints yet")
 
     expectNoBrowserErrors(captured)
   })

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { installVsCodeApi, expectNoWebviewErrors } from './webviewTestHarness'
+import { dispatchHostMessage, installVsCodeApi, expectNoWebviewErrors } from './webviewTestHarness'
 
 async function mountMessageList(page: Page) {
   await page.evaluate(() => {
@@ -87,6 +87,37 @@ test.describe('Chat Messages', () => {
     await expect(markdownContent).toBeVisible()
     await expect(markdownContent.locator('strong')).toHaveText('bold')
     await expect(markdownContent.locator('em')).toHaveText('italic')
+  })
+
+  test('assistant tool calls collapse into one grouped expandable row', async ({ page }) => {
+    await dispatchHostMessage(page, {
+      type: 'init_state',
+      sessions: [{
+        id: 's',
+        name: 'Tool grouping',
+        model: 'opencode/big-pickle',
+        messages: [
+          {
+            role: 'assistant',
+            id: 'a1',
+            sessionId: 's',
+            blocks: [
+              { type: 'text', text: 'I will inspect the files first.' },
+              { type: 'tool', id: 't1', tool: 'rg', state: 'completed', args: { pattern: 'checkpoint' }, result: 'one' },
+              { type: 'text', text: 'Now I will check the renderer.' },
+              { type: 'tool', id: 't2', tool: 'sed', state: 'completed', args: { file: 'renderer.ts' }, result: 'two' },
+            ],
+          },
+        ],
+        tokenUsage: { prompt: 0, completion: 0, total: 0 },
+      }],
+      activeSessionId: 's',
+    })
+
+    const grouped = page.locator('.message.assistant details.tool-group')
+    await expect(grouped).toHaveCount(1)
+    await expect(page.locator('.message.assistant details.tool-group > summary').first()).toContainText('2 calls')
+    await expect(page.locator('.message.assistant .message-bubble > details.tool-call:not(.tool-group)')).toHaveCount(0)
   })
 
   test('should have proper message spacing and layout', async ({ page }) => {

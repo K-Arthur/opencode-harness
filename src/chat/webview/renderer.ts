@@ -896,13 +896,37 @@ export function groupMessagesIntoTurns(messages: import("./types").ChatMessage[]
 function extractSnippet(msg: import("./types").ChatMessage): string {
   const blocks = msg.blocks || []
   for (const b of blocks) {
-    if (b.type === "text" && b.text) {
-      const text = b.text.trim().replace(/\n/g, " ")
+    if (b.type === "text" && (b.text || b.content)) {
+      const rawText = typeof b.text === "string" ? b.text : String(b.content ?? "")
+      const text = rawText.trim().replace(/\n/g, " ")
       if (text.length > 0) return text.slice(0, 80) + (text.length > 80 ? "..." : "")
     }
     if (b.type === "tool-call" || b.type === "tool_call" || b.type === "tool") {
       const toolName = typeof b.tool === "string" ? b.tool : (b.name || b.toolName || "tool")
       return `Used ${toolName}`
+    }
+  }
+  const loose = msg as unknown as {
+    text?: unknown
+    content?: unknown
+    message?: unknown
+    parts?: unknown[]
+  }
+  for (const value of [loose.text, loose.content, loose.message]) {
+    if (typeof value === "string") {
+      const text = value.trim().replace(/\n/g, " ")
+      if (text.length > 0) return text.slice(0, 80) + (text.length > 80 ? "..." : "")
+    }
+  }
+  if (Array.isArray(loose.parts)) {
+    for (const part of loose.parts) {
+      if (!part || typeof part !== "object") continue
+      const p = part as { type?: unknown; text?: unknown; content?: unknown }
+      if (p.type === "text" && (typeof p.text === "string" || typeof p.content === "string")) {
+        const rawText = typeof p.text === "string" ? p.text : String(p.content ?? "")
+        const text = rawText.trim().replace(/\n/g, " ")
+        if (text.length > 0) return text.slice(0, 80) + (text.length > 80 ? "..." : "")
+      }
     }
   }
   return msg.role === "user" ? "Sent a message" : "Thinking..."

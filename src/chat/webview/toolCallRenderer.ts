@@ -16,7 +16,7 @@ export interface RenderOptions {
 }
 
 export function isToolCallBlock(block: Block): block is ToolCallBlock {
-  return block.type === 'tool-call'
+  return block.type === 'tool-call' || block.type === 'tool_call' || block.type === 'tool'
 }
 
 function safeJsonParse(value: string): unknown {
@@ -32,7 +32,7 @@ export function normalizeToolBlock(block: Block): ToolCallBlock {
   return {
     type: 'tool-call',
     id: block.id || `tool-${Date.now()}`,
-    name: block.toolName || block.name || "tool",
+    name: (typeof block.tool === "string" ? block.tool : undefined) || block.toolName || block.name || "tool",
     class: (block.class as ToolCallClass) || (block.toolType as ToolCallClass) || 'read',
     state: (block.state as ToolCallState) || 'running',
     args: block.args ? (typeof block.args === 'string' ? safeJsonParse(block.args) : block.args) : undefined,
@@ -506,7 +506,7 @@ export function renderToolGroup(blocks: Block[], opts: RenderOptions): HTMLEleme
   const config = opts.collapseConfig || {
     groupBy: 'consecutive',
     defaultCollapsed: true,
-    collapseThreshold: 2,
+    collapseThreshold: 1,
     showTypeBreakdown: true,
     compactMode: false
   }
