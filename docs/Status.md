@@ -1,9 +1,13 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-05-22
-**Version:** v0.2.12 (Show-thinking actually hides + codex-style compact tool blocks)
+**Version:** v0.2.13 (Suppress redundant "Step finished (tool-calls)" chip)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
+
+## v0.2.13 Highlights
+
+- **Removed the redundant "Step finished (tool-calls) — in:N out:N reasoning:N" chip rendered after every assistant step** — the renderer's normal-completion short-circuit only matched OpenAI-style underscore reasons (`tool_calls`, `end_turn`), but the SDK in practice emits hyphenated variants (`tool-calls`, `end-turn`), so the chip leaked into every step. `renderStepFinishBlock` now normalizes hyphens to underscores before the set lookup. Genuine non-normal finishes (`length`, `content_filter`, abort, errors) still render the chip so the user sees *why* a step ended unusually.
 
 ## v0.2.12 Highlights
 
