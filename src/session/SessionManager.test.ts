@@ -43,6 +43,12 @@ describe("SessionManager.ts", () => {
     assert.ok(source.includes("MAX_RETRIES"))
   })
 
+  it("supports OpenCode agent selection on prompt bodies", () => {
+    assert.ok(source.includes("agent?: string"), "PromptOptions must expose the SDK agent field")
+    assert.ok(source.includes("const agent = options?.agent"), "sendPrompt methods must read options.agent")
+    assert.ok(source.includes("...(agent ? { agent } : {})"), "prompt body must include agent when provided")
+  })
+
   it("has ensureSession method", () => {
     assert.ok(source.includes("async ensureSession("))
   })

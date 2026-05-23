@@ -89,6 +89,9 @@ export interface ErrorBlock {
   diffText?: string
   id?: string
   permissionId?: string
+  permissionType?: string
+  pattern?: string | string[]
+  metadata?: Record<string, unknown>
   class?: ToolCallClass
   state?: string
   name?: string
@@ -404,7 +407,7 @@ export type HostMessage =
   | { type: "instructions_changed"; sessionId: string; instructions: string }
   | { type: "context_usage"; sessionId: string; percent: number; tokens: number; maxTokens: number; usage?: ContextUsage | UsageDelta }
   | { type: "server_status"; sessionId?: string; status: string; errorContext?: unknown }
-  | { type: "permission_request"; sessionId: string; permissionId?: string; title: string }
+  | { type: "permission_request"; sessionId: string; permissionId?: string; title: string; permissionType?: string; pattern?: string | string[]; metadata?: Record<string, unknown> }
   | { type: "todos_update"; sessionId: string; todos: unknown[] }
   | { type: "changed_files_update"; sessionId: string; files: FileChange[] }
   | { type: "file_edited"; sessionId: string; file: string }

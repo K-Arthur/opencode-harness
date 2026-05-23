@@ -78,6 +78,14 @@ describe("main.ts", () => {
     assert.ok(source.includes('dataset.testid = els.sendBtn.dataset.testid || "send-button"'))
   })
 
+  it("auto-mode warning confirmation updates UI state and notifies the host", () => {
+    const setModeIdx = source.indexOf("function setMode(mode: string): void")
+    assert.ok(setModeIdx >= 0, "auto-mode warning setMode helper must exist")
+    const block = source.slice(setModeIdx, source.indexOf("const modeWarningDeps", setModeIdx))
+    assert.ok(block.includes("updateModeDropdownLocal(mode)"), "confirming auto mode must update the visible dropdown")
+    assert.ok(block.includes('vscode.postMessage({ type: "change_mode", mode, sessionId: active.id })'), "confirming auto mode must notify the extension host")
+  })
+
   it("condenses very long local history without mutating server history", () => {
     assert.ok(source.includes("function applyHistoryCondensation"), "must define history condensation")
     assert.ok(source.includes("history-condensed-summary"), "must render deterministic local summary controls")

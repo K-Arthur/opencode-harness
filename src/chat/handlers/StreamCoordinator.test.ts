@@ -261,42 +261,42 @@ describe("StreamCoordinator.ts", () => {
   })
 })
 
-  // ── Plan mode tool restrictions ────────────────────────────────────────────
-  // opencode canonical tool names (per https://opencode.ai/docs/tools/):
-  //   edit         — modify existing files
-  //   write        — create/overwrite files
-  //   apply_patch  — apply patches
-  //   bash         — execute shell commands
-  // The legacy `file_edit` key was a no-op (server ignored it) which silently
-  // allowed the agent to edit, write, and patch files even in plan mode.
-  it("plan mode disables every write-capable tool (edit, write, apply_patch, bash)", () => {
-    assert.ok(source.includes("edit: false"), "plan mode must disable the 'edit' tool")
-    assert.ok(source.includes("write: false"), "plan mode must disable the 'write' tool")
+  // ── Plan/build agent selection ──────────────────────────────────────────────
+  it("maps extension plan mode to the OpenCode plan agent", () => {
     assert.ok(
-      source.includes("apply_patch: false") || source.includes('"apply_patch": false'),
-      "plan mode must disable the 'apply_patch' tool"
+      source.includes('const agent = tab.mode === "plan" ? "plan" : "build"'),
+      "plan mode must send agent: 'plan' to OpenCode"
     )
-    assert.ok(source.includes("bash: false"), "plan mode must disable the 'bash' tool")
+  })
+
+  it("maps build and auto modes to the OpenCode build agent", () => {
+    assert.ok(
+      source.includes('? "plan" : "build"'),
+      "non-plan modes must send agent: 'build' so Auto remains a local UX mode"
+    )
+  })
+
+  it("does not send deprecated prompt tools overrides for plan mode", () => {
+    assert.ok(
+      !source.includes("edit: false") &&
+        !source.includes("write: false") &&
+        !source.includes("apply_patch: false") &&
+        !source.includes("bash: false"),
+      "plan mode should rely on agent permissions, not deprecated tools overrides"
+    )
   })
 
   it("plan mode no longer uses the obsolete file_edit key", () => {
     assert.ok(
       !source.includes("file_edit"),
-      "tools key 'file_edit' is not a real opencode tool — remove it (canonical name is 'edit')"
+      "tools key 'file_edit' is not a real opencode tool"
     )
   })
 
-  it("non-plan modes pass undefined tools (server default enables all tools)", () => {
+  it("passes the agent option to sendPromptAsync", () => {
     assert.ok(
-      /tab\.mode === ['"]plan['"].*:\s*undefined/s.test(source),
-      "non-plan modes must pass undefined tools so the server enables all tools by default"
-    )
-  })
-
-  it("passes the tools object to sendPromptAsync", () => {
-    assert.ok(
-      source.includes("tools") && source.includes("sendPromptAsync"),
-      "must pass the tools parameter to sendPromptAsync"
+      /sendPromptAsync\(cliSessionId,\s*parts,\s*\{[^}]*agent/s.test(source),
+      "must pass agent to sendPromptAsync"
     )
   })
 

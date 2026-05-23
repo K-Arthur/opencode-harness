@@ -138,6 +138,14 @@ it("has type guards for discriminated blocks", () => {
     assert.ok(source.includes("diff-line-num"), "must have line number cells")
   })
 
+  it("permission approval UI supports once, always, and reject responses", () => {
+    assert.ok(source.includes('response: "once"'), "Allow must send an SDK-compatible once response")
+    assert.ok(source.includes('response: "always"'), "Scoped approvals must support the SDK-compatible always response")
+    assert.ok(source.includes('response: "reject"'), "Deny must send an SDK-compatible reject response")
+    assert.ok(source.includes("permissionType"), "permission responses must preserve the permission type")
+    assert.ok(source.includes("pattern"), "permission responses must preserve the permission pattern")
+  })
+
   it("diff_action_bar_has_accept_discard_open_buttons", () => {
     assert.ok(source.includes("diff-action-bar"), "must have diff action bar")
     assert.ok(source.includes("diff-btn--accept"), "must have accept button")

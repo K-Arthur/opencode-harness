@@ -511,25 +511,17 @@ export class StreamCoordinator {
 
       const modelRef = tab.model ? parseModelRef(tab.model) : undefined
 
-      // Pass tools configuration to server based on mode.
+      // Pass the corresponding OpenCode primary agent for mode-specific
+      // behavior. OpenCode's current config model uses `agent` + permissions;
+      // legacy `tools` booleans are deprecated and can over-block Plan's
+      // `.opencode/plans/*.md` exception.
       //
-      // Plan mode disables EVERY write-capable tool so the agent can only
-      // read/analyze and propose changes (rendered as PLAN diffs the user
-      // approves). Canonical opencode tool names per
-      //   https://opencode.ai/docs/tools/
-      //   edit         — modify existing files
-      //   write        — create/overwrite files
-      //   apply_patch  — apply patches
-      //   bash         — execute shell commands
+      // Plan maps to the built-in `plan` agent. Build and Auto map to
+      // `build`; Auto remains the extension's UX mode for fewer local prompts.
       //
-      // Build/Auto modes pass undefined → server enables all tools by default.
-      //
-      // The previous code passed an unknown tool key that the server
-      // ignored, and `write`/`apply_patch` were never restricted at all,
-      // so plan mode silently allowed file mutations.
-      const tools = tab.mode === "plan"
-        ? { edit: false, write: false, apply_patch: false, bash: false }
-        : undefined
+      // Docs: plan restricts write/edit/patch/bash, with an exception for
+      // `.opencode/plans/*.md`; `edit` permission gates write/edit/apply_patch.
+      const agent = tab.mode === "plan" ? "plan" : "build"
 
       // Inject per-tab instructions as a prepended text part on the first turn only
       const parts: Array<{ type: "text"; text: string } | { type: "file"; mime: string; url: string }> = []
@@ -556,7 +548,7 @@ export class StreamCoordinator {
         })
       }
 
-      await this.sessionManager.sendPromptAsync(cliSessionId, parts, { model: modelRef, tools, variant })
+      await this.sessionManager.sendPromptAsync(cliSessionId, parts, { model: modelRef, agent, variant })
 
       this.startHeartbeat(tabId, callbacks)
       // startWatchdog is the single hard safety net and is driven by server activity.

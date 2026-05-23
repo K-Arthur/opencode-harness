@@ -361,6 +361,43 @@ void it("change_mode triggers auto-mode confirmation when mode is auto", () => {
   )
 })
 
+void it("accept_permission rejects mutating requests while the session is in plan mode", () => {
+  const acceptIdx = eventRouterSource.indexOf('["accept_permission"')
+  assert.ok(acceptIdx >= 0, "accept_permission handler must exist")
+  const block = eventRouterSource.slice(acceptIdx, eventRouterSource.indexOf('["mention_search"', acceptIdx))
+  assert.ok(block.includes("isPlanModeSession(sessionId)"), "accept_permission must check the session mode")
+  assert.ok(block.includes("shouldRejectPlanPermissionResponse"), "plan-mode permission responses must be filtered by permission metadata")
+  assert.ok(block.includes('"reject"'), "plan-mode permission requests must be rejected")
+  assert.ok(block.includes("handleAcceptPermission"), "permission rejection must be sent back to the server")
+})
+
+void it("accept_permission allows plan document permission responses in plan mode", () => {
+  assert.ok(
+    eventRouterSource.includes('startsWith(".opencode/plans/")') &&
+      eventRouterSource.includes('endsWith(".md")'),
+    "plan mode must allow OpenCode's .opencode/plans/*.md permission exception"
+  )
+})
+
+void it("server permission requests reject mutating plan-mode requests before reaching the webview", () => {
+  const permissionIdx = source.indexOf('["permission_request"')
+  assert.ok(permissionIdx >= 0, "permission_request server handler must exist")
+  const block = source.slice(permissionIdx, source.indexOf('["permission_replied"', permissionIdx))
+  assert.ok(block.includes('currentTab?.mode === "plan"'), "server permission handler must inspect plan mode")
+  assert.ok(block.includes("shouldAutoRejectPlanPermission"), "server permission handler must filter by permission metadata")
+  assert.ok(block.includes("respondToPermission") && block.includes('"reject"'), "plan-mode server permissions must be rejected")
+  assert.ok(block.indexOf("respondToPermission") < block.indexOf("postMessage"), "plan-mode rejection must happen before posting permission UI")
+})
+
+void it("server permission requests forward type and pattern metadata to the webview", () => {
+  const permissionIdx = source.indexOf('["permission_request"')
+  assert.ok(permissionIdx >= 0, "permission_request server handler must exist")
+  const block = source.slice(permissionIdx, source.indexOf('["permission_replied"', permissionIdx))
+  assert.ok(block.includes("permissionType"), "permission type must be forwarded for response-time filtering")
+  assert.ok(block.includes("pattern"), "permission pattern must be forwarded for scoped approvals")
+  assert.ok(block.includes("metadata"), "permission metadata must be forwarded for UI context")
+})
+
 // ── restore_checkpoint: must respect boolean return value ─────────────────
 // CheckpointManager.restore() returns Promise<boolean> — false on failure.
 // The handler must forward ok=false to the webview when restore returns false

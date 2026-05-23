@@ -42,6 +42,24 @@
               <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
             </svg>
           </button>
+          <!-- Changed Files toolbar button — opens a floating dropdown -->
+          <button class="icon-btn cf-toolbar-btn hidden" id="changed-files-btn"
+            title="Changed files" aria-label="Changed files"
+            aria-haspopup="true" aria-expanded="false" aria-controls="changed-files-dropdown">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/><line x1="12" y1="12" x2="12" y2="18"/>
+            </svg>
+            <span id="cf-count-badge" class="cf-count-badge hidden" aria-hidden="true"></span>
+          </button>
+          <!-- Context Usage toolbar button — opens a floating dropdown -->
+          <button class="icon-btn ctx-toolbar-btn hidden" id="context-usage-btn"
+            title="Context usage" aria-label="Context usage"
+            aria-haspopup="true" aria-expanded="false" aria-controls="context-usage-dropdown">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+            </svg>
+            <span id="ctx-pct-badge" class="ctx-pct-badge hidden" aria-hidden="true"></span>
+          </button>
           <button class="icon-btn" id="timeline-toggle-btn" title="Toggle conversation timeline" aria-label="Toggle conversation timeline" aria-pressed="false">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
@@ -175,7 +193,7 @@
           <span id="quota-detail" class="quota-detail"></span>
         </div>
       </div>
-      <div id="changed-files-list" class="changed-files-list hidden" aria-label="Changed files"></div>
+      <!-- #changed-files-list removed — canonical UI is now #changed-files-dropdown -->
       <div id="checkpoint-panel" class="checkpoint-panel hidden" role="list" aria-label="Checkpoints" aria-live="polite"></div>
       <div id="todos-panel" class="todos-panel hidden" role="region" aria-label="Todos and changed files">
         <div class="todos-panel-header">
@@ -188,16 +206,11 @@
         </div>
         <div class="todos-panel-content">
           <div class="todos-section">
-            <h3 class="todos-section-title">Todos</h3>
             <div id="todos-list"></div>
             <form class="todo-add-form" id="todo-add-form">
               <input type="text" class="todo-add-input" id="todo-add-input" placeholder="Add a task or reminder..." aria-label="New todo">
               <button type="submit" class="todo-add-btn">Add</button>
             </form>
-          </div>
-          <div class="todos-section">
-            <h3 class="todos-section-title">Changed Files</h3>
-            <div id="changed-files-panel-list"></div>
           </div>
         </div>
       </div>
@@ -214,17 +227,30 @@
           <!-- Subagent activities will be rendered dynamically -->
         </div>
       </div>
-      <div id="context-usage-panel" class="context-usage-panel hidden" aria-label="Context usage">
-        <div class="context-usage-header">
-          <h3>Context Usage</h3>
-          <button class="icon-btn close-context-usage-btn" aria-label="Close context usage panel">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
+      <!-- #context-usage-panel removed — canonical UI is now #context-usage-dropdown -->
+      <!-- Changed Files floating dropdown — anchored below the toolbar button -->
+      <div id="changed-files-dropdown" class="cf-dropdown hidden"
+        role="region" aria-label="Changed files"
+        aria-live="polite">
+        <div class="cf-dropdown-header">
+          <span class="cf-dropdown-title">Changed Files</span>
+          <button class="icon-btn" id="cf-dropdown-close" aria-label="Close changed files">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
           </button>
         </div>
-        <div class="context-breakdown-section"></div>
-        <div class="cost-section hidden"></div>
+        <div id="cf-dropdown-tree" class="cf-dropdown-tree"></div>
+      </div>
+      <!-- Context Usage floating dropdown — anchored below the toolbar button -->
+      <div id="context-usage-dropdown" class="ctx-dropdown hidden"
+        role="region" aria-label="Context usage details"
+        aria-live="polite">
+        <div class="ctx-dropdown-header">
+          <span class="ctx-dropdown-title">Context Usage</span>
+          <button class="icon-btn" id="ctx-dropdown-close" aria-label="Close context usage">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div id="ctx-dropdown-content" class="ctx-dropdown-content"></div>
       </div>
       <div id="tab-panels">
       </div>
@@ -493,32 +519,7 @@
       <div id="context-chips"></div>
     </div>
 
-    <!-- Context Monitor Panel -->
-    <div id="context-monitor-panel" class="panel hidden" role="dialog" aria-modal="true" aria-label="Context Usage Monitor">
-      <div class="panel-header">
-        <h2>Context Usage</h2>
-        <button id="context-monitor-close" class="icon-btn" aria-label="Close context monitor">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M18 6 6 18"/>
-            <path d="M6 6l12 12"/>
-          </svg>
-        </button>
-      </div>
-      <div class="panel-body">
-        <div class="context-monitor-section">
-          <h3>Usage History (7 days)</h3>
-          <div id="context-monitor-history-graph" class="context-history-graph"></div>
-        </div>
-        <div class="context-monitor-section">
-          <h3>Cost Summary</h3>
-          <div id="context-monitor-cost-display" class="cost-display"></div>
-        </div>
-        <div class="context-monitor-section">
-          <h3>Optimization Suggestions</h3>
-          <div id="context-monitor-suggestions-panel" class="suggestions-panel"></div>
-        </div>
-      </div>
-    </div>
+    <!-- #context-monitor-panel removed — canonical UI is now #context-usage-dropdown -->
 
     <div id="prompt-stash-panel" class="prompt-stash-panel hidden">
       <div class="panel-header">
