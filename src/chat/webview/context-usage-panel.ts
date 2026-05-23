@@ -118,7 +118,6 @@ export function setupContextUsagePanel(): void {
 export function handleContextUsageMessage(data: Record<string, unknown>): void {
   if (data.type === "context_usage") {
     currentUsage = data as unknown as ContextUsage
-    updateContextUsageBar(currentUsage)
     if (contextUsagePanelElement && !contextUsagePanelElement.classList.contains("hidden")) {
       renderContextUsagePanel(currentUsage)
     }
@@ -132,56 +131,6 @@ export function handleContextUsageMessage(data: Record<string, unknown>): void {
     if (contextUsagePanelElement && !contextUsagePanelElement.classList.contains("hidden")) {
       renderStatistics()
     }
-  }
-}
-
-/**
- * Update the context usage bar in the status strip.
- * Reads/writes the elements defined in index.html: #context-usage (container),
- * #context-progress-bar (progress element), #context-label (text), #context-cost.
- */
-function updateContextUsageBar(usage: ContextUsage | null): void {
-  const bar = document.getElementById("context-usage")
-  const progressBar = document.getElementById("context-progress-bar") as HTMLProgressElement | null
-  const label = document.getElementById("context-label")
-  const costDisplay = document.getElementById("context-cost")
-
-  if (!bar || !progressBar || !label || !usage) return
-
-  // Hide when either side of the ratio is unknown:
-  //  - tokens === 0: no usage yet, nothing to show
-  //  - maxTokens <= 0: the active model's context window hasn't resolved,
-  //    so the denominator would be "0" or NaN — better to show nothing
-  //    than mislead users (the earlier UI showed "X / 100,000" for any
-  //    model whose context window failed to resolve).
-  if (usage.tokens === 0 || !usage.maxTokens || usage.maxTokens <= 0) {
-    bar.classList.add("hidden")
-    if (costDisplay) {
-      costDisplay.classList.add("hidden")
-      costDisplay.textContent = ""
-    }
-    return
-  }
-
-  bar.classList.remove("hidden")
-  progressBar.value = usage.percent
-  label.textContent = `${usage.tokens.toLocaleString()} / ${usage.maxTokens.toLocaleString()}`
-
-  // Add cost display if available
-  if (costDisplay && usage.cost !== undefined) {
-    costDisplay.textContent = `$${usage.cost.toFixed(4)}`
-    costDisplay.classList.remove("hidden")
-  }
-
-  // Color-coded zones
-  if (usage.percent < 60) {
-    progressBar.style.backgroundColor = "var(--usage-green, #4caf50)"
-  } else if (usage.percent < 80) {
-    progressBar.style.backgroundColor = "var(--usage-yellow, #ff9800)"
-  } else if (usage.percent < 95) {
-    progressBar.style.backgroundColor = "var(--usage-red, #f44336)"
-  } else {
-    progressBar.style.backgroundColor = "var(--usage-critical, #d32f2f)"
   }
 }
 

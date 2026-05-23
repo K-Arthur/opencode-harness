@@ -4,6 +4,7 @@ export interface TabCallbacks {
   onSwitch: (tabId: string) => void
   onClose: (tabId: string) => void
   onNew: () => void
+  onToggleContextMonitor: () => void
 }
 
 export function createTabBar(els: ElementRefs, callbacks: TabCallbacks) {
@@ -157,7 +158,7 @@ export function createTabBar(els: ElementRefs, callbacks: TabCallbacks) {
   return { renderTabs }
 }
 
-export function createTabContent(tabId: string, tabName: string): HTMLElement[] {
+export function createTabContent(tabId: string, tabName: string, callbacks: TabCallbacks): HTMLElement[] {
   const view = document.createElement("div")
   view.className = "tab-panel"
   view.dataset.tabId = tabId
@@ -175,19 +176,31 @@ export function createTabContent(tabId: string, tabName: string): HTMLElement[] 
   const contextMonitor = document.createElement("div")
   contextMonitor.className = "context-monitor hidden"
   contextMonitor.setAttribute("aria-label", "Context usage")
-  
+  contextMonitor.setAttribute("role", "button")
+  contextMonitor.setAttribute("tabindex", "0")
+  contextMonitor.title = "Click to view context usage history and cost summary"
+
   const progressBar = document.createElement("div")
   progressBar.className = "context-progress-bar"
   const progressFill = document.createElement("div")
   progressFill.className = "context-progress-fill"
   progressBar.appendChild(progressFill)
-  
+
   const contextText = document.createElement("span")
   contextText.className = "context-text"
-  
+
   contextMonitor.appendChild(progressBar)
   contextMonitor.appendChild(contextText)
-  
+
+  // Make context-monitor clickable to open the full panel
+  contextMonitor.addEventListener("click", () => callbacks.onToggleContextMonitor())
+  contextMonitor.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      callbacks.onToggleContextMonitor()
+    }
+  })
+
   view.appendChild(contextMonitor)
 
   const typingIndicator = document.createElement("div")
