@@ -5,6 +5,11 @@ All notable changes to the **OpenCode Harness** extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.13] - 2026-05-22
+
+### Fixed
+- **Redundant "Step finished (tool-calls) — in:N out:N reasoning:N" chip rendered after every assistant step** — `NORMAL_FINISH_REASONS` listed the OpenAI-style underscore forms (`tool_calls`, `end_turn`, …) but the opencode SDK actually emits hyphenated variants (`tool-calls`, `end-turn`, …), so the normal-completion short-circuit never matched and every step rendered a clutter chip beneath each tool row. `renderStepFinishBlock` now normalizes the reason by replacing `-` with `_` before the set lookup, so both shapes suppress the chip. The chip still renders for genuinely unusual finishes (`length`, `content_filter`, `abort`, errors). (`src/chat/webview/renderer.ts`)
+
 ## [0.2.12] - 2026-05-22
 
 ### Fixed
