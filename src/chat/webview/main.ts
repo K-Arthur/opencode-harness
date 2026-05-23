@@ -1,4 +1,4 @@
-import type { ChatMessage, HostMessage, LegacyHostMessage, MentionItem, SessionSummary, ModelInfo, WebviewState, ContextChip, ToolCallState, TokenUsageSnapshot, UsageDelta, Block } from "./types"
+import type { ChatMessage, HostMessage, LegacyHostMessage, MentionItem, SessionSummary, ModelInfo, WebviewState, ContextChip, ToolCallState, TokenUsageSnapshot, UsageDelta, Block, Todo } from "./types"
 import type { AttachmentEls } from "./ui/attachments"
 import { timers } from "./timerRegistry"
 import { createState } from "./state"
@@ -126,6 +126,36 @@ function getVsCodeApi() {
   
   // Panel APIs
   let todosPanelApi: any = null
+  let currentTodosList: Todo[] = []
+
+  function getMergedTodos(sessionId: string, serverTodos: Todo[]): Todo[] {
+    const session = stateManager.getSession(sessionId)
+    if (!session) return serverTodos
+
+    currentTodosList = serverTodos
+
+    const overrides = session.todoOverrides || {}
+    const userTodos = session.userTodos || []
+
+    const mergedServerTodos = serverTodos
+      .map(todo => {
+        const overrideStatus = overrides[todo.id]
+        if (overrideStatus) {
+          return { ...todo, status: overrideStatus }
+        }
+        return todo
+      })
+      .filter(todo => todo.status !== ('deleted' as any))
+
+    return [...mergedServerTodos, ...userTodos]
+  }
+
+  function triggerTodosRender(sessionId: string) {
+    if (todosPanelApi && todosPanelApi.renderTodos) {
+      const merged = getMergedTodos(sessionId, currentTodosList)
+      todosPanelApi.renderTodos(merged)
+    }
+  }
   let skillsModalApi: any = null
   let subagentPanelApi: any = null
 
@@ -450,10 +480,72 @@ function getVsCodeApi() {
       contextMonitorHandlers = setupContextMonitor(els, (msg) => vscode.postMessage(msg as Record<string, unknown>))
       setupPromptStash(els, (msg) => vscode.postMessage(msg as Record<string, unknown>))
       
-      // Setup panels
       todosPanelApi = setupTodosPanel(els, {
-        onToggleTodo: (todoId: string) => vscode.postMessage({ type: "toggle_todo", todoId }),
-        onDeleteTodo: (todoId: string) => vscode.postMessage({ type: "delete_todo", todoId }),
+        onToggleTodo: (todoId: string) => {
+          const activeSid = stateManager.getState().activeSessionId
+          if (!activeSid) return
+          const session = stateManager.getSession(activeSid)
+          if (!session) return
+
+          if (todoId.startsWith("todo-")) {
+            const todo = session.userTodos?.find(t => t.id === todoId)
+            if (todo) {
+              todo.status = todo.status === "completed" ? "pending" : "completed"
+              stateManager.save()
+              triggerTodosRender(activeSid)
+            }
+          } else {
+            if (!session.todoOverrides) {
+              session.todoOverrides = {}
+            }
+            const currentStatus = session.todoOverrides[todoId] || 
+              (currentTodosList.find(t => t.id === todoId)?.status ?? "pending")
+            const newStatus = currentStatus === "completed" ? "pending" : "completed"
+            session.todoOverrides[todoId] = newStatus
+            stateManager.save()
+            triggerTodosRender(activeSid)
+            vscode.postMessage({ type: "toggle_todo", todoId })
+          }
+        },
+        onDeleteTodo: (todoId: string) => {
+          const activeSid = stateManager.getState().activeSessionId
+          if (!activeSid) return
+          const session = stateManager.getSession(activeSid)
+          if (!session) return
+
+          if (todoId.startsWith("todo-")) {
+            session.userTodos = session.userTodos?.filter(t => t.id !== todoId) || []
+            stateManager.save()
+            triggerTodosRender(activeSid)
+          } else {
+            if (!session.todoOverrides) {
+              session.todoOverrides = {}
+            }
+            session.todoOverrides[todoId] = 'deleted' as any
+            stateManager.save()
+            triggerTodosRender(activeSid)
+            vscode.postMessage({ type: "delete_todo", todoId })
+          }
+        },
+        onAddTodo: (content: string) => {
+          const activeSid = stateManager.getState().activeSessionId
+          if (!activeSid) return
+          const session = stateManager.getSession(activeSid)
+          if (!session) return
+
+          if (!session.userTodos) {
+            session.userTodos = []
+          }
+          const newTodo: Todo = {
+            id: `todo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            content,
+            status: "pending",
+            createdAt: Date.now()
+          }
+          session.userTodos.push(newTodo)
+          stateManager.save()
+          triggerTodosRender(activeSid)
+        },
         onOpenFile: (filePath: string) => vscode.postMessage({ type: "open_file", path: filePath }),
       })
       skillsModalApi = setupSkillsModal(els, {
@@ -774,6 +866,11 @@ function getVsCodeApi() {
     // Refresh changed files list for the new tab, clearing stale chips when
     // the newly active session has no tracked edits.
     renderChangedFilesList(session?.changedFiles ?? [])
+
+    // Sync todos panel for the switched tab
+    vscode.postMessage({ type: "get_todos", sessionId: tabId })
+    vscode.postMessage({ type: "get_changed_files", sessionId: tabId })
+    triggerTodosRender(tabId)
     
     // Scroll to bottom of active tab using anchor if available
     const anchor = scrollAnchors.get(tabId)
@@ -2967,8 +3064,13 @@ function getVsCodeApi() {
         }
       }],
       ["todos_update", (msg) => {
-        if (todosPanelApi && todosPanelApi.renderTodos) {
-          todosPanelApi.renderTodos(msg.todos || [])
+        const sid = typeof msg.sessionId === "string" ? msg.sessionId : stateManager.getState().activeSessionId
+        const activeSid = stateManager.getState().activeSessionId
+        if (sid) {
+          const merged = getMergedTodos(sid, (msg.todos as Todo[]) || [])
+          if (sid === activeSid && todosPanelApi && todosPanelApi.renderTodos) {
+            todosPanelApi.renderTodos(merged)
+          }
         }
       }],
       ["changed_files_update", (msg) => {

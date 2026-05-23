@@ -49,6 +49,7 @@ export function partToBlock(part: Part, opts: { streaming?: boolean } = {}): Blo
       if (part.synthetic || part.ignored) return null
       const text = part.text?.trim()
       if (!text) return null
+      if (text.startsWith("[methodology]")) return null
       return { id: part.id, type: "text", text }
     }
 
