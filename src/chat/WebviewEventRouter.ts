@@ -118,7 +118,7 @@ export class WebviewEventRouter {
     "get_changed_files", "open_file", "open_folder", "open_url",
     "get_subagent_activities", "cancel_subagent",
     "update_setting", "show_error", "get_context_usage", "record_stash_usage",
-    "open_context_window_override_dialog",
+    "open_context_window_override_dialog", "model_favorite", "model_toggle",
   ])
 
   private readonly webviewHandlers: Map<string, (msg: Record<string, unknown>, sessionId?: string) => void | Promise<void>> = new Map([
@@ -732,6 +732,17 @@ export class WebviewEventRouter {
         this.opts.postMessage({ type: "display_pref_update", pref: "skipModeWarning", value: true })
       }
     }],
+    ["model_favorite", (msg: Record<string, unknown>) => {
+      const modelId = msg.modelId as string
+      this.opts.modelManager.toggleModelFavorite(modelId)
+      this.pushModelListToWebview()
+    }],
+    ["model_toggle", (msg: Record<string, unknown>) => {
+      const modelId = msg.modelId as string
+      const enabled = msg.enabled as boolean
+      this.opts.modelManager.setModelEnabled(modelId, enabled)
+      this.pushModelListToWebview()
+    }],
     ["show_error", (msg: Record<string, unknown>) => {
       const message = msg.message as string
       if (message) {
@@ -1282,6 +1293,18 @@ export class WebviewEventRouter {
         }
         if (msg.variant && typeof msg.variant !== "string") {
           log.warn("Invalid variant type")
+          return false
+        }
+        break
+      case "model_favorite":
+        if (typeof msg.modelId !== "string" || !msg.modelId) {
+          log.warn("Invalid modelId in model_favorite")
+          return false
+        }
+        break
+      case "model_toggle":
+        if (typeof msg.modelId !== "string" || !msg.modelId || typeof msg.enabled !== "boolean") {
+          log.warn("Invalid modelId or enabled in model_toggle")
           return false
         }
         break

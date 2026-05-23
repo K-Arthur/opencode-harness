@@ -84,7 +84,7 @@ test.describe("Context Usage", () => {
 
     const monitor = page.locator('.tab-panel[data-tab-id="s"] .context-monitor')
     await expect(monitor).not.toHaveClass(/hidden/, { timeout: 3000 })
-    await expect(monitor.locator(".context-text")).toHaveText(/tokens \(limit unknown\)/)
+    await expect(monitor.locator(".context-text")).toHaveText(/8,000 tok · set limit/i)
 
     expectNoBrowserErrors(captured)
   })

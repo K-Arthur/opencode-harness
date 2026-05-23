@@ -260,7 +260,7 @@ test.describe("Chat Webview E2E", () => {
     await expect(contextMonitor).not.toHaveClass(/hidden/)
 
     const contextText = contextMonitor.locator(".context-text")
-    await expect(contextText).toHaveText(/tokens \(limit unknown\)/)
+    await expect(contextText).toHaveText(/12,345 tok · set limit/i)
 
     await expectNoBrowserErrors(captured)
   })

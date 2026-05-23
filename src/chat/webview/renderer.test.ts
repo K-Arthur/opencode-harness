@@ -560,7 +560,7 @@ it("tool_call_renderer_uses_class_specific_icons", () => {
       // Find within renderNewDiffBlock area
       const fnIdx = source.indexOf("function renderNewDiffBlock(")
       assert.ok(fnIdx >= 0, "renderNewDiffBlock must exist")
-      const body = source.slice(fnIdx, fnIdx + 2000)
+      const body = source.slice(fnIdx, fnIdx + 3500)
       assert.ok(
         body.includes("e.stopPropagation()"),
         "click listener must stop event propagation"
@@ -573,12 +573,28 @@ it("tool_call_renderer_uses_class_specific_icons", () => {
 
     it("renderNewDiffBlock dispatches open_file via postMessage", () => {
       const fnIdx = source.indexOf("function renderNewDiffBlock(")
-      const body = source.slice(fnIdx, fnIdx + 2500)
+      const body = source.slice(fnIdx, fnIdx + 3500)
       assert.ok(
         body.includes('type: "open_file", path: diffBlock.path') ||
         body.includes("type: 'open_file', path: diffBlock.path") ||
         body.includes("type: \"open_file\", path: diffBlock.path"),
         "click listener must dispatch open_file with diffBlock.path"
+      )
+    })
+
+    it("renderNewDiffBlock excludes command-like paths or File Change placeholder from interactivity", () => {
+      const fnIdx = source.indexOf("function renderNewDiffBlock(")
+      const body = source.slice(fnIdx, fnIdx + 2500)
+      assert.ok(
+        body.includes("isCommand") && body.includes("!isCommand"),
+        "must check isCommand and apply click listener conditionally"
+      )
+    })
+
+    it("appendToolKeyArg excludes command runner tools or command arguments from interactivity", () => {
+      assert.ok(
+        toolCallRendererSource.includes("isCommand") && toolCallRendererSource.includes("!isCommand"),
+        "appendToolKeyArg must check for command/exec context and apply click listener conditionally"
       )
     })
   })

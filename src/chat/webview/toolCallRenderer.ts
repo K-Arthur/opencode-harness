@@ -124,35 +124,47 @@ export function appendToolKeyArg(
   argEl.textContent = truncateMiddle(keyArg, 30)
   argEl.title = keyArg
 
-  // Make the file path / directory / URL interactive and hoverable
-  argEl.style.cursor = "pointer"
-  argEl.addEventListener("click", (e) => {
-    e.stopPropagation()
-    e.preventDefault()
+  const toolName = toolBlock?.name?.toLowerCase() || ""
+  const toolClass = toolBlock?.class?.toLowerCase() || ""
 
-    const pm = postMessage || (window as any).vscode?.postMessage
-    if (!pm) return
+  const isCommand =
+    toolClass === "exec" ||
+    toolName.includes("command") ||
+    toolName.includes("bash") ||
+    toolName.includes("shell") ||
+    toolName.includes("terminal") ||
+    keyArg.startsWith("npm ") ||
+    keyArg.startsWith("git ") ||
+    keyArg.startsWith("node ") ||
+    keyArg.startsWith("python ")
 
-    if (keyArg.startsWith("http://") || keyArg.startsWith("https://")) {
-      pm({ type: "open_url", url: keyArg })
-    } else {
-      const toolName = toolBlock?.name?.toLowerCase() || ""
-      const toolClass = toolBlock?.class?.toLowerCase() || ""
+  if (!isCommand) {
+    // Make the file path / directory / URL interactive and hoverable
+    argEl.style.cursor = "pointer"
+    argEl.addEventListener("click", (e) => {
+      e.stopPropagation()
+      e.preventDefault()
 
-      const isFolder =
-        toolName.includes("dir") ||
-        toolName.includes("folder") ||
-        toolName.includes("grep") ||
-        toolName.includes("search") ||
-        (toolClass === "exec" && keyArg.includes("/") && !keyArg.includes("."))
+      const pm = postMessage || (window as any).vscode?.postMessage
+      if (!pm) return
 
-      if (isFolder) {
-        pm({ type: "open_folder", dir: keyArg })
+      if (keyArg.startsWith("http://") || keyArg.startsWith("https://")) {
+        pm({ type: "open_url", url: keyArg })
       } else {
-        pm({ type: "open_file", path: keyArg })
+        const isFolder =
+          toolName.includes("dir") ||
+          toolName.includes("folder") ||
+          toolName.includes("grep") ||
+          toolName.includes("search")
+
+        if (isFolder) {
+          pm({ type: "open_folder", dir: keyArg })
+        } else {
+          pm({ type: "open_file", path: keyArg })
+        }
       }
-    }
-  })
+    })
+  }
 
   parent.appendChild(argEl)
 }

@@ -225,3 +225,13 @@
 .message-flash {
   animation: message-flash 1.5s var(--ease-out);
 }
+
+/* ─── Error Shake In ─── */
+@keyframes error-shake-in {
+  0% { transform: translateX(0) scale(0.98); opacity: 0; }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+  100% { transform: translateX(0) scale(1); opacity: 1; }
+}

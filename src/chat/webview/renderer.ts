@@ -1216,13 +1216,30 @@ function renderNewDiffBlock(block: Block, opts: RenderOptions): HTMLElement | nu
   const filePath = document.createElement("span")
   filePath.className = "diff-file-path"
   filePath.textContent = diffBlock.path
-  filePath.style.cursor = "pointer"
-  filePath.title = "Click to open file"
-  filePath.addEventListener("click", (e) => {
-    e.stopPropagation()
-    e.preventDefault()
-    opts.postMessage?.({ type: "open_file", path: diffBlock.path })
-  })
+  
+  const lowerPath = (diffBlock.path || "").trim().toLowerCase()
+  const isCommand =
+    lowerPath === "file change" ||
+    lowerPath.startsWith("npm ") ||
+    lowerPath.startsWith("git ") ||
+    lowerPath.startsWith("node ") ||
+    lowerPath.startsWith("python ") ||
+    lowerPath.startsWith("bash ") ||
+    lowerPath.startsWith("sh ") ||
+    lowerPath.includes("&&") ||
+    lowerPath.includes("||") ||
+    lowerPath.includes("|") ||
+    lowerPath.includes(">")
+
+  if (!isCommand) {
+    filePath.style.cursor = "pointer"
+    filePath.title = "Click to open file"
+    filePath.addEventListener("click", (e) => {
+      e.stopPropagation()
+      e.preventDefault()
+      opts.postMessage?.({ type: "open_file", path: diffBlock.path })
+    })
+  }
   fileInfo.appendChild(filePath)
 
   const stats = document.createElement("span")
