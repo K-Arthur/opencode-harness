@@ -19,6 +19,7 @@
       "description": "Requires workspace access to read and modify files"
     }
   },
+  "activationEvents": [],
   "categories": [
     "Other",
     "Programming Languages"

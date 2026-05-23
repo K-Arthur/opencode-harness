@@ -681,3 +681,62 @@ void it("refresh_session_messages handler exists and fetches from server", () =>
     "refresh_session_messages must post session_messages_refreshed response to webview"
   )
 })
+
+// --- Perf: parallelized session backfill ---
+
+void it("BACKFILL_CONCURRENCY is declared with a bounded value", () => {
+  const idx = source.indexOf("BACKFILL_CONCURRENCY")
+  assert.ok(idx >= 0, "BACKFILL_CONCURRENCY must be declared on ChatProvider")
+  const lineStart = source.lastIndexOf("\n", idx) + 1
+  const lineEnd = source.indexOf("\n", idx)
+  const line = source.slice(lineStart, lineEnd)
+  const numMatch = line.match(/=\s*(\d+)/)
+  assert.ok(numMatch, `BACKFILL_CONCURRENCY must be assigned a number, found: ${line.trim()}`)
+  const value = parseInt(numMatch[1] ?? "0", 10)
+  assert.ok(value >= 2 && value <= 16, `BACKFILL_CONCURRENCY=${value} must be between 2 and 16 to balance parallelism vs server load`)
+})
+
+void it("backfillRecoveredSessions processes sessions in parallel chunks", () => {
+  const fnIdx = source.indexOf("private async backfillRecoveredSessions(")
+  assert.ok(fnIdx >= 0, "backfillRecoveredSessions must exist")
+  const fnEnd = source.indexOf("private scheduleBackfillRetry(", fnIdx)
+  assert.ok(fnEnd > fnIdx, "scheduleBackfillRetry must follow backfillRecoveredSessions")
+  const block = source.slice(fnIdx, fnEnd)
+
+  assert.ok(
+    block.includes("Promise.allSettled"),
+    "backfillRecoveredSessions must use Promise.allSettled to run requests concurrently"
+  )
+  assert.ok(
+    block.includes("BACKFILL_CONCURRENCY"),
+    "backfillRecoveredSessions must consume BACKFILL_CONCURRENCY to bound parallel requests"
+  )
+  assert.ok(
+    !/for\s*\(\s*const\s+session\s+of\s+sessionsNeedingBackfill\s*\)\s*{/.test(block),
+    "backfillRecoveredSessions must NOT use a serial for...of loop directly over sessionsNeedingBackfill"
+  )
+})
+
+void it("backfillRecoveredSessions guards in-progress and skips local placeholder ids", () => {
+  const fnIdx = source.indexOf("private async backfillRecoveredSessions(")
+  assert.ok(fnIdx >= 0, "backfillRecoveredSessions must exist")
+  const fnEnd = source.indexOf("private scheduleBackfillRetry(", fnIdx)
+  const block = source.slice(fnIdx, fnEnd)
+
+  assert.ok(
+    block.includes("backfillInProgress.has(session.id)"),
+    "must check backfillInProgress before adding (concurrency-safe Set guard)"
+  )
+  assert.ok(
+    block.includes("backfillInProgress.add(session.id)"),
+    "must mark session as in-progress before awaiting"
+  )
+  assert.ok(
+    block.includes("backfillInProgress.delete(session.id)"),
+    "must clear in-progress flag in a finally block"
+  )
+  assert.ok(
+    block.includes("isLocalPlaceholderSessionId(session.cliSessionId)"),
+    "must skip local placeholder ids that are not real server sessions"
+  )
+})

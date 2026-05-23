@@ -56,6 +56,9 @@ private autoCompactor: AutoCompactor
   private backfillInProgress = new Set<string>()
   private backfillRetryTimer?: NodeJS.Timeout
   private readonly BACKFILL_RETRY_DELAYS_MS = [1500, 4000, 8000, 16000]
+  // Cap parallel getSessionMessages calls to keep load on the local opencode
+  // server bounded while still parallelizing the otherwise-serial backfill.
+  private readonly BACKFILL_CONCURRENCY = 5
   private fileOps = new ChatFileOps()
   private themeController: ThemeController
   private statePush: StatePushService
@@ -864,16 +867,20 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       log.info(`[sessions_recovered] Auto-backfilling ${sessionsNeedingBackfill.length} recent sessions`)
     }
 
-    for (const session of sessionsNeedingBackfill) {
+    // Parallelize per-session HTTP calls with a small concurrency cap. Each
+    // call is independent (writes are keyed by session.id; backfillInProgress
+    // is a Set, safe under concurrent add/delete from the same loop). Cap of
+    // BACKFILL_CONCURRENCY keeps load on the local opencode server bounded.
+    const backfillOne = async (session: import("../session/SessionStore").OpenCodeSession): Promise<void> => {
       // EC7: Skip if backfill is already in progress for this session
       if (this.backfillInProgress.has(session.id)) {
         log.info(`[sessions_recovered] Skipping backfill for ${session.id} because backfill is already in progress`)
-        continue
+        return
       }
 
       this.backfillInProgress.add(session.id)
       try {
-        if (!session.cliSessionId || isLocalPlaceholderSessionId(session.cliSessionId)) continue
+        if (!session.cliSessionId || isLocalPlaceholderSessionId(session.cliSessionId)) return
         const rows = await this.sessionManager.getSessionMessages(session.cliSessionId)
         const messages = sdkMessagesToChatMessages(rows)
         if (messages.length > 0) {
@@ -893,6 +900,11 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       } finally {
         this.backfillInProgress.delete(session.id)
       }
+    }
+
+    for (let i = 0; i < sessionsNeedingBackfill.length; i += this.BACKFILL_CONCURRENCY) {
+      const chunk = sessionsNeedingBackfill.slice(i, i + this.BACKFILL_CONCURRENCY)
+      await Promise.allSettled(chunk.map(backfillOne))
     }
 
     const stillPending = this.sessionStore
