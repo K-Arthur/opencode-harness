@@ -3068,6 +3068,11 @@ function getVsCodeApi() {
 	    // Seed the renderer-facing cache so blocks rendered during boot honor
 	    // the persisted pref before the user touches the toggle.
 	    setThinkingVisible(thinkingVisible)
+	    // Apply the pref to any already-rendered blocks AND set the body class
+	    // so future renders are hidden via CSS. Without this boot call, a user
+	    // who unchecked the toggle in a previous session reopens the panel
+	    // and sees thinking blocks until they click the toggle twice.
+	    toggleAllThinkingBlocks(thinkingVisible)
 	    els.thinkingToggleMenuItem.setAttribute("aria-checked", String(thinkingVisible))
 	    els.thinkingToggleMenuItem.classList.toggle("active", thinkingVisible)
 	    if (els.thinkingCheckmark) {

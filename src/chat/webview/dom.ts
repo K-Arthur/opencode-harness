@@ -388,11 +388,22 @@ export function getActiveTypingIndicator(els: ElementRefs): HTMLDivElement | nul
 }
 
 /**
- * Toggle every thinking block in the document to show or hide them.
- * Why: the preference is global, so blocks in inactive tab panels must stay
- * in sync — otherwise switching tabs reveals a stale open/closed state.
+ * Apply the "Show thinking" preference globally.
+ *
+ * Two effects, both required:
+ *  1. Body class `hide-thinking` — CSS uses this to `display: none` every
+ *     `.thinking-block`. Without it the summary chip stays in the flow even
+ *     after the user unchecks the toggle (the reported bug).
+ *  2. `block.open` flip — keeps the per-block <details> attribute coherent
+ *     with the global state so screen-readers, snapshot tests, and a future
+ *     "expand on hover" do not see a stale value.
+ *
+ * Why both: hiding via the body class alone leaves stale `open` attributes
+ * which leak through aria queries. Flipping `open` alone leaves the summary
+ * chip rendered — which is exactly what the user reported.
  */
 export function toggleAllThinkingBlocks(visible: boolean): void {
+  document.body.classList.toggle('hide-thinking', !visible)
   const thinkingBlocks = document.querySelectorAll<HTMLDetailsElement>('.thinking-block')
   thinkingBlocks.forEach((block) => {
     block.open = visible
