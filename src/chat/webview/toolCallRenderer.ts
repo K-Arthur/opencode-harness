@@ -450,11 +450,53 @@ export function renderPlanCard(plan: PlanData, opts: RenderOptions): HTMLElement
   return card
 }
 
+/**
+ * SDK lifecycle blocks (`step-start`, and `step-finish` with a normal
+ * completion reason) render to `null` — the user never sees them. The
+ * grouper must therefore treat them as *transparent*: they don't break a
+ * run of tool calls, they don't reset the current tool name/class, but
+ * they DO still appear in the output (emitted as single-element groups
+ * after the current tool group is closed) so downstream code that wants
+ * to know they existed (debug overlays, token accounting) can find them.
+ *
+ * Without this, a single assistant turn that runs 6 tools — each followed
+ * by an SDK step-finish event — rendered as 6 separate one-element groups
+ * instead of one folded group of 6. That was the "wall of tool rows" the
+ * user reported.
+ */
+function isSilentLifecycleBlock(block: Block): boolean {
+  if (block.type === "step-start") return true
+  if (block.type === "step-finish") {
+    const raw = typeof block.reason === "string" ? block.reason.trim() : ""
+    if (raw === "") return true
+    // Mirror NORMAL_FINISH_REASONS in renderer.ts (hyphen-normalised).
+    const normalized = raw.replace(/-/g, "_")
+    return (
+      normalized === "stop" ||
+      normalized === "end_turn" ||
+      normalized === "stop_sequence" ||
+      normalized === "tool_use" ||
+      normalized === "tool_calls" ||
+      normalized === "complete"
+    )
+  }
+  return false
+}
+
 export function groupConsecutiveToolCalls(blocks: Block[], groupBy: 'consecutive' | 'name' | 'type' = 'consecutive'): Block[][] {
   const groups: Block[][] = []
   let currentGroup: Block[] = []
   let lastToolName: string | null = null
   let lastToolClass: ToolCallClass | null = null
+  // Lifecycle blocks encountered while a tool group is open. We hold them
+  // here so they don't break the group, then emit them as their own
+  // single-element groups when the run finally closes.
+  const pendingLifecycle: Block[] = []
+
+  const flushLifecycle = () => {
+    for (const lc of pendingLifecycle) groups.push([lc])
+    pendingLifecycle.length = 0
+  }
 
   for (const block of blocks) {
     const isTool = block.type === "tool-call" || block.type === "tool_call" || block.type === "tool"
@@ -464,9 +506,22 @@ export function groupConsecutiveToolCalls(blocks: Block[], groupBy: 'consecutive
      const toolName: string = isTool ? (canonicalToolName || block.name || block.toolName || "tool") : ""
      const toolClass = isTool ? (block.class as ToolCallClass) || 'read' : null
 
+    // Silent lifecycle blocks (step-start, normal step-finish): defer until
+    // the current tool group closes. Don't touch lastToolName/lastToolClass.
+    if (!isTool && isSilentLifecycleBlock(block)) {
+      if (currentGroup.length > 0) {
+        pendingLifecycle.push(block)
+      } else {
+        // Not inside a tool run — emit immediately so order is preserved.
+        groups.push([block])
+      }
+      continue
+    }
+
     // Edge case: Non-tool blocks always break groups
     if (!isTool) {
       if (currentGroup.length > 0) groups.push(currentGroup)
+      flushLifecycle()
       groups.push([block])
       currentGroup = []
       lastToolName = null
@@ -491,12 +546,14 @@ export function groupConsecutiveToolCalls(blocks: Block[], groupBy: 'consecutive
       currentGroup.push(block)
     } else {
       if (currentGroup.length > 0) groups.push(currentGroup)
+      flushLifecycle()
       currentGroup = [block]
       lastToolName = toolName
       lastToolClass = toolClass
     }
   }
   if (currentGroup.length > 0) groups.push(currentGroup)
+  flushLifecycle()
   return groups
 }
 

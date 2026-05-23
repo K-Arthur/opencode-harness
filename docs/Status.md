@@ -1,9 +1,13 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-05-22
-**Version:** v0.2.13 (Suppress redundant "Step finished (tool-calls)" chip)
+**Last Updated:** 2026-05-23
+**Version:** v0.2.14 (Tool calls actually group into one codex-style row, live)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
+
+## v0.2.14 Highlights
+
+- **Tool calls actually group into one row now** — the 0.2.12 CSS work shrank each tool row but consecutive tool calls still stacked one-per-line because (a) `groupConsecutiveToolCalls` treated every non-tool block (including silent SDK lifecycle blocks) as a group-breaker, and (b) the live-streaming append path bypassed the grouper entirely. The grouper now treats `step-start` and normal `step-finish` as transparent, and a new `appendOrFoldToolDOM` helper folds new tools into the prior `details.tool-group` (or wraps the prior single tool + new tool into a fresh group) at append time. The previous tool's live DOM is moved into the group rather than re-rendered, preserving runtime state (args/result/duration) that the update handlers write directly without going through msg.blocks.
 
 ## v0.2.13 Highlights
 
