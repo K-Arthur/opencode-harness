@@ -74,12 +74,14 @@ export function setupWelcomeActions(deps: WelcomeViewDeps): void {
     const clearSessionSearch = () => {
       if (innerInput) innerInput.value = ""
       if (sessionSearchDebounce) clearTimeout(sessionSearchDebounce)
+      sessionSearchDebounce = null
       deps.renderRecentSessionsList("")
     }
 
     const submitSessionSearch = () => {
       const query = (innerInput?.value || "").trim()
       if (sessionSearchDebounce) clearTimeout(sessionSearchDebounce)
+      sessionSearchDebounce = null
       if (!query) {
         clearSessionSearch()
         return
@@ -106,11 +108,14 @@ export function setupWelcomeActions(deps: WelcomeViewDeps): void {
         const query = raw.trim()
         if (sessionSearchDebounce) clearTimeout(sessionSearchDebounce)
         if (query.length === 0) {
+          sessionSearchDebounce = null
           deps.renderRecentSessionsList("")
           return
         }
         sessionSearchDebounce = setTimeout(() => {
           deps.renderRecentSessionsList(query)
+          deps.postMessage({ type: "list_sessions", query })
+          sessionSearchDebounce = null
         }, 150)
       })
       innerInput.addEventListener("keydown", (e) => {

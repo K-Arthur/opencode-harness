@@ -28,6 +28,28 @@ describe("Welcome page session_list fix (main.ts)", () => {
     )
   })
 
+  it("session_list handler passes host results into welcome rendering", () => {
+    const handlerBlock = mainSource.substring(
+      mainSource.indexOf('["session_list"'),
+      mainSource.indexOf('["session_list_update"') - 2,
+    )
+    assert.ok(
+      handlerBlock.includes("renderRecentSessionsList(query, sessions)"),
+      "welcome search results must render the host-provided sessions, not only cached webview state",
+    )
+  })
+
+  it("session_list handler ignores stale welcome search responses", () => {
+    const handlerBlock = mainSource.substring(
+      mainSource.indexOf('["session_list"'),
+      mainSource.indexOf('["session_list_update"') - 2,
+    )
+    assert.ok(
+      handlerBlock.includes("welcomeSearchInput") && handlerBlock.includes("currentSearchQuery") && handlerBlock.includes("return"),
+      "welcome search must ignore old session_list responses when the user has already typed a newer query",
+    )
+  })
+
   it("delete button event listener is registered in setupWelcomeActions", () => {
     const setupBlock = mainSource.substring(
       mainSource.indexOf("function setupWelcomeActions()"),

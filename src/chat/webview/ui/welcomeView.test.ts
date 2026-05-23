@@ -103,4 +103,19 @@ describe("welcomeView.ts", () => {
     assert.deepEqual(renderedQueries, [])
     assert.deepEqual(messages, [])
   })
+
+  it("debounces a host session search while typing", async () => {
+    const { dom, messages, renderedQueries, input } = createDeps()
+
+    input.value = "  pickle  "
+    input.dispatchEvent(new dom.window.InputEvent("input", { bubbles: true }))
+
+    assert.deepEqual(renderedQueries, [])
+    assert.deepEqual(messages, [])
+
+    await new Promise((resolve) => setTimeout(resolve, 175))
+
+    assert.deepEqual(renderedQueries, ["pickle"])
+    assert.deepEqual(messages, [{ type: "list_sessions", query: "pickle" }])
+  })
 })
