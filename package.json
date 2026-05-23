@@ -9,7 +9,7 @@
   },
   "description": "AI-powered coding assistant integrated into VS Code. Chat, refactor, debug, and write code with the OpenCode agent while staying in your editor. Supports multiple AI models (Claude, GPT, Gemini), custom themes, cost tracking, and granular permission controls.",
   "icon": "media/opencode-icon-256.png",
-  "version": "0.2.14",
+  "version": "0.2.15",
   "engines": {
     "vscode": "^1.98.0"
   },

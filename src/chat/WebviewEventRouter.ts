@@ -118,6 +118,7 @@ export class WebviewEventRouter {
     "get_changed_files", "open_file",
     "get_subagent_activities", "cancel_subagent",
     "update_setting", "show_error", "get_context_usage", "record_stash_usage",
+    "open_context_window_override_dialog",
   ])
 
   private readonly webviewHandlers: Map<string, (msg: Record<string, unknown>, sessionId?: string) => void | Promise<void>> = new Map([
@@ -323,6 +324,13 @@ export class WebviewEventRouter {
       this.pushVisibleStateToWebview()
     }],
     ["open_settings", async () => { await this.opts.openOpenCodeConfigOrSettings() }],
+    ["open_context_window_override_dialog", async () => {
+      // Fires from the context-monitor row when the window limit is
+      // unknown. Invoking the registered command keeps a single source
+      // of truth for the dialog UX — also lets users hit it via the
+      // command palette.
+      await vscode.commands.executeCommand("opencode-harness.setContextWindowOverride")
+    }],
     ["connect_provider", async () => { await this.opts.handleConnectProvider() }],
     ["open_mcp_settings", async () => { await this.opts.mcpServerManager.openPrimaryConfigFile() }],
     ["open_mcp_config", () => { this.pushMcpServersToWebview() }],

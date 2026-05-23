@@ -51,8 +51,23 @@ describe("theme.ts", () => {
     assert.ok(source.includes(".context-progress-fill"))
   })
 
-  it("shows tokens-only when maxTokens is unknown", () => {
-    assert.ok(source.includes("tokens (limit unknown)"))
-    assert.ok(source.includes("Tokens-only display when maxTokens is unknown"))
+  it("shows tokens-only when maxTokens is unknown, with a clickable 'set limit' affordance (0.2.15)", () => {
+    // 0.2.13 dropped a tooltip pointing at the override command. 0.2.15
+    // makes the row itself clickable via the `needs-override` marker so
+    // the user can fix the missing window in one click. Lock both:
+    //   - the visible "set limit" hint (text)
+    //   - the marker the click handler in tabs.ts keys off of
+    assert.ok(
+      source.includes("set limit"),
+      "must show a 'set limit' affordance when maxTokens is unknown",
+    )
+    assert.ok(
+      source.includes("Tokens-only display when maxTokens is unknown"),
+      "must keep the inline comment so the rationale survives a future refactor",
+    )
+    assert.ok(
+      source.includes("needs-override"),
+      "must set a marker the click handler can key off of so the row routes to the override dialog",
+    )
   })
 })

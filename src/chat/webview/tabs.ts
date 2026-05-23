@@ -5,6 +5,15 @@ export interface TabCallbacks {
   onClose: (tabId: string) => void
   onNew: () => void
   onToggleContextMonitor: () => void
+  /**
+   * Fired when the user clicks the per-tab context-monitor while it is
+   * in the "limit unknown" state (server didn't report a window AND the
+   * OpenRouter fallback came up empty). Triggers the
+   * `setContextWindowOverride` command so the user can fix the missing
+   * window in one click. Optional so existing tab-creation tests don't
+   * need to thread the callback.
+   */
+  onSetContextWindowOverride?: () => void
 }
 
 export function createTabBar(els: ElementRefs, callbacks: TabCallbacks) {
@@ -192,12 +201,24 @@ export function createTabContent(tabId: string, tabName: string, callbacks: TabC
   contextMonitor.appendChild(progressBar)
   contextMonitor.appendChild(contextText)
 
-  // Make context-monitor clickable to open the full panel
-  contextMonitor.addEventListener("click", () => callbacks.onToggleContextMonitor())
+  // Make context-monitor clickable. Behavior depends on whether the
+  // window limit is known:
+  //   - known: opens the breakdown panel (original behavior)
+  //   - unknown (`data-needs-override="true"`): fires the
+  //     `setContextWindowOverride` command so the user can fix it in
+  //     one click instead of digging through the command palette.
+  const handleContextMonitorActivate = () => {
+    if (contextMonitor.dataset.needsOverride === "true") {
+      callbacks.onSetContextWindowOverride?.()
+      return
+    }
+    callbacks.onToggleContextMonitor()
+  }
+  contextMonitor.addEventListener("click", handleContextMonitorActivate)
   contextMonitor.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault()
-      callbacks.onToggleContextMonitor()
+      handleContextMonitorActivate()
     }
   })
 
