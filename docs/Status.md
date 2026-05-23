@@ -1,9 +1,14 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-05-20
-**Version:** v0.2.11 (Welcome send-flow repair, session cleanup, active-scoped changed files)
+**Last Updated:** 2026-05-22
+**Version:** v0.2.12 (Show-thinking actually hides + codex-style compact tool blocks)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
+
+## v0.2.12 Highlights
+
+- **Show-thinking toggle actually hides thinking blocks now** — previously it only collapsed each `<details>`, leaving the summary chip in the layout. The toggle drives a `hide-thinking` body class and CSS removes `.thinking-block` outright (`display: none`). `setupThinkingToggle()` also applies the persisted pref at boot, so a user's prior choice takes effect on the first load instead of requiring a double-click.
+- **Codex-style compact tool blocks** — `.tool-call` no longer renders as a bordered card. Only the left accent stripe survives (so tool class is still color-coded), and `.tool-header` is a single-line row at `min-height: var(--size-target-min)` (24 px) with `text-xs` font. Multi-tool turns stack as a tight one-line log instead of a wall of cards.
 
 ## v0.2.11 Highlights
 
@@ -24,14 +29,14 @@
 
 ## Test Summary
 
-| Metric | v0.2.6 | v0.2.7 | v0.2.8 | v0.2.10 | v0.2.11 | Delta |
-|--------|--------|--------|--------|---------|---------|-------|
-| Tests | 894 | 1466 | 1466 | 1585 | 1604 | +19 |
-| Passing | 893 | 1465 | 1466 | 1578 | 1597 | +19 |
-| Failing | 0 | 1 | 0 | 0 | 0 | — |
-| Skipped | 1 | 7 | 7 | 7 | 7 | — |
-| Typecheck | ✅ | ✅ | ✅ | ✅ | ✅ | — |
-| Build | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+| Metric | v0.2.6 | v0.2.7 | v0.2.8 | v0.2.10 | v0.2.11 | v0.2.12 | Delta |
+|--------|--------|--------|--------|---------|---------|---------|-------|
+| Tests | 894 | 1466 | 1466 | 1585 | 1604 | 1746 | +142 |
+| Passing | 893 | 1465 | 1466 | 1578 | 1597 | 1739 | +142 |
+| Failing | 0 | 1 | 0 | 0 | 0 | 0 | — |
+| Skipped | 1 | 7 | 7 | 7 | 7 | 7 | — |
+| Typecheck | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+| Build | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
 
 The single failing test in v0.2.7 (`main.test.ts › timeline jumps use exact message-list scroll positioning`) was a stale source-grep assertion left over from the extraction of `scrollToTurn`/`scrollMessageToTop` into `src/chat/webview/ui/scrollMarkers.ts`. The test now reads from `scrollMarkersSource` where the implementation actually lives.
 
