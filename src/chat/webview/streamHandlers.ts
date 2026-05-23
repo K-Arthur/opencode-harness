@@ -5,6 +5,7 @@ import type { SdkMessageEvent, DiffChunk } from "../../types"
 import type { ErrorContext } from "./errorTypes"
 import { renderMessage } from "./messageRenderer"
 import { renderBlock, renderMarkdown, sanitizeHtml, highlightSyntax } from "./renderer"
+import { renderToolGroup } from "./toolCallRenderer"
 import type { ScrollAnchor } from "./scrollAnchor"
 import { CHECK_SVG, SUCCESS_SVG, SPINNER_SVG } from "./icons"
 import { RenderQueue } from "./renderQueue"
@@ -390,14 +391,122 @@ export function handleToolStart(
 
   const msgEl = els.messageList.querySelector(`[data-message-id="${id}"]`) as HTMLElement | null
   if (msgEl) {
-    const bubble = msgEl.querySelector(".message-bubble")
-    if (bubble) {
-      const blockEl = renderBlock(toolBlock as Block, {})
-      if (blockEl) bubble.appendChild(blockEl)
+    const bubble = msgEl.querySelector(".message-bubble") as HTMLElement | null
+    if (bubble && msgObj) {
+      appendOrFoldToolDOM(bubble, toolBlock as Block, msgObj.blocks)
     }
   }
 
   els.scrollAnchor.scrollIfAnchored()
+}
+
+/**
+ * Append a newly-started tool to the bubble while honoring codex-style
+ * grouping: consecutive tool calls fold into one `details.tool-group`
+ * instead of stacking as individual rows.
+ *
+ * Why this lives here (and not in messageRenderer): the live streaming
+ * path appends tools one at a time as the server emits them. Calling
+ * `reRenderMessage` mid-stream would tear down the still-mutating
+ * streaming-text element. Folding at append-time keeps the streaming
+ * state intact while giving the user the same visual result the
+ * post-stream re-render already produces via groupConsecutiveToolCalls.
+ *
+ * The msg.blocks array is the source of truth: we look at the previous
+ * non-silent block to decide whether to extend an existing group, wrap
+ * the prior tool into a new group, or just append a fresh row.
+ */
+function appendOrFoldToolDOM(bubble: HTMLElement, newToolBlock: Block, allBlocks: Block[]): void {
+  // Find the previous block that the renderer would have produced visible
+  // DOM for. Skip silent step-start / normal step-finish blocks — they
+  // don't render, so they don't appear in the bubble's child list.
+  let prevBlock: Block | null = null
+  for (let i = allBlocks.length - 2; i >= 0; i--) {
+    const b = allBlocks[i]
+    if (!b) continue
+    if (b.type === "step-start") continue
+    if (b.type === "step-finish") {
+      const raw = typeof b.reason === "string" ? b.reason.trim() : ""
+      const norm = raw.replace(/-/g, "_")
+      if (raw === "" || norm === "stop" || norm === "end_turn" || norm === "stop_sequence" ||
+          norm === "tool_use" || norm === "tool_calls" || norm === "complete") {
+        continue
+      }
+    }
+    prevBlock = b
+    break
+  }
+
+  const lastEl = bubble.lastElementChild as HTMLElement | null
+  const prevIsTool = prevBlock?.type === "tool-call" || prevBlock?.type === "tool_call" || prevBlock?.type === "tool"
+
+  // Case 1: previous block was a tool and the DOM tail is already a
+  // tool-group → append the new tool as another child of that group and
+  // refresh the summary count.
+  if (prevIsTool && lastEl && lastEl.matches("details.tool-group")) {
+    const childrenContainer = lastEl.querySelector(".tool-group-children")
+    if (childrenContainer) {
+      const blockEl = renderBlock(newToolBlock, {})
+      if (blockEl) {
+        blockEl.classList.add("tool-group-child")
+        childrenContainer.appendChild(blockEl)
+        updateToolGroupHeader(lastEl)
+        return
+      }
+    }
+  }
+
+  // Case 2: previous block was a tool but the DOM tail is still a single
+  // `details.tool-call` (no group yet) → wrap the live previous DOM and
+  // the new tool into a fresh group.
+  //
+  // Why move the live DOM instead of re-rendering both from msg.blocks:
+  // handleToolUpdate / handleToolEnd mutate the previous tool's DOM
+  // directly (args panel, result panel, duration, error state) WITHOUT
+  // writing those mutations back into msg.blocks. A naive re-render
+  // would silently lose all of that state. Moving the existing element
+  // into the new group keeps every progressive update intact.
+  if (prevIsTool && lastEl && lastEl.matches("details.tool-call") && !lastEl.classList.contains("tool-group") && prevBlock) {
+    const groupEl = renderToolGroup([prevBlock, newToolBlock], {}) as HTMLElement | null
+    if (groupEl) {
+      const children = groupEl.querySelector(".tool-group-children") as HTMLElement | null
+      if (children) {
+        // Drop the freshly-rendered first child (a copy of prevBlock with
+        // no runtime state) and slot the live DOM in its place.
+        const fresh = children.firstElementChild
+        if (fresh) fresh.remove()
+        lastEl.classList.add("tool-group-child")
+        // Detach lastEl from bubble before inserting into the group.
+        lastEl.remove()
+        children.insertBefore(lastEl, children.firstChild)
+        bubble.appendChild(groupEl)
+        return
+      }
+    }
+  }
+
+  // Case 3: nothing to fold into → append the tool individually.
+  const blockEl = renderBlock(newToolBlock, {})
+  if (blockEl) bubble.appendChild(blockEl)
+}
+
+function updateToolGroupHeader(groupEl: HTMLElement): void {
+  const children = groupEl.querySelectorAll<HTMLElement>(".tool-group-children > .tool-group-child")
+  const count = children.length
+  const countEl = groupEl.querySelector(".tool-group-count")
+  if (countEl) countEl.textContent = `${count} call${count > 1 ? "s" : ""}`
+  // Refresh breakdown: count tool-class variants present in the group.
+  const breakdownEl = groupEl.querySelector(".tool-group-breakdown")
+  if (breakdownEl) {
+    const counts: Record<string, number> = {}
+    children.forEach((child) => {
+      const match = child.className.match(/tool-call--(read|write|exec|meta|error)/)
+      const cls = match ? match[1]! : "read"
+      counts[cls] = (counts[cls] || 0) + 1
+    })
+    const breakdown = Object.entries(counts).map(([type, n]) => `${n} ${type}`).join(", ")
+    breakdownEl.textContent = `(${breakdown})`
+  }
 }
 
 export function handleToolUpdate(

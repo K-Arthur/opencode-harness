@@ -5,6 +5,18 @@ All notable changes to the **OpenCode Harness** extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.14] - 2026-05-23
+
+### Fixed
+- **Tool calls now actually group into a single codex-style row** — the 0.2.12 CSS work shrank each tool row but consecutive tool calls still stacked one per line. Two root causes:
+  1. `groupConsecutiveToolCalls` treated every non-tool block as a group-breaker, so SDK lifecycle blocks (`step-start`, normal `step-finish`) split runs of tools into single-element groups. The grouper now treats these silent lifecycle blocks as transparent: they don't break tool runs and don't reset the last tool name/class. Visible non-tool blocks (text, diffs, errors, abnormal step-finish) still legitimately break grouping.
+  2. The live-streaming append path (`handleToolStart`) was bypassing the grouper entirely — every new tool was appended directly to the bubble. A new helper `appendOrFoldToolDOM` now folds the new tool into the prior `details.tool-group` (or wraps the prior single tool + the new tool into a fresh group) at append time, so the codex-style grouped view shows live, not just after stream end. The previous tool's live DOM is moved into the group rather than re-rendered, preserving runtime state (args panel, result panel, duration, error class) that `handleToolUpdate` / `handleToolEnd` write directly without updating `msg.blocks`.
+
+### Tests
+- New `src/chat/webview/toolGrouping.test.ts` — 8 behavioral tests for the grouper covering: three consecutive tools across step-finish blocks → one group of 3; step-start transparency; hyphenated normal-finish reasons; text breaks grouping; abnormal step-finish breaks grouping; lifecycle blocks preserved in output; tools-then-lifecycle-tail.
+- Extended `tests/visual/compact-tool-blocks.spec.ts` with a "three consecutive tools render as ONE folded tool-group" assertion that pins the visible DOM shape so a future regression in `appendOrFoldToolDOM` is caught in the browser layer.
+- Updated `src/chat/webview/stream.test.ts` to accept either the direct `renderBlock(toolBlock)` call or the new `appendOrFoldToolDOM` indirection.
+
 ## [0.2.13] - 2026-05-22
 
 ### Fixed
