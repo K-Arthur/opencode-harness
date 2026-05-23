@@ -104,6 +104,10 @@
         "title": "OpenCode: Choose Model"
       },
       {
+        "command": "opencode-harness.setContextWindowOverride",
+        "title": "OpenCode: Set Context Window Override"
+      },
+      {
         "command": "opencode-harness.checkCli",
         "title": "OpenCode: Test CLI Connection"
       },
@@ -628,6 +632,12 @@
           "default": "",
           "scope": "window",
           "description": "Default model ID in provider/model format (e.g. anthropic/claude-sonnet-4-20250514). Set via 'OpenCode: Select Model' command."
+        },
+        "opencode.contextWindowOverride": {
+          "type": "number",
+          "default": 0,
+          "scope": "window",
+          "description": "Override the context window limit for the active model. Set to 0 to use the server-reported value. Use this when the server doesn't report limit.context for your model."
         },
         "opencode.rateLimits": {
           "type": "object",

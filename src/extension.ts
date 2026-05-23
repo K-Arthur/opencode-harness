@@ -37,6 +37,7 @@ import {
   registerAddFileToSessionCommand,
   registerAddSelectionToSessionCommand,
   registerSelectModelCommand,
+  registerSetContextWindowOverrideCommand,
   registerShowRateLimitsCommand,
   registerCheckCliCommand,
   registerExportCommand,
@@ -215,8 +216,9 @@ function initModelManager(context: vscode.ExtensionContext, sessionManager: Sess
   const manager = new ModelManager()
   manager.setGlobalState(context.globalState)
   context.subscriptions.push(manager)
-  // Auto-fetch models from CLI on startup (no port yet, no auth needed)
-  manager.refreshModels().catch(err => log.warn("Auto-fetch models failed", err))
+  // Models are fetched from the server when it connects (ChatProvider.ts:487, commands/model.ts:18).
+  // CLI auto-fetch is skipped because it cannot extract context windows, leaving the
+  // context usage counter hidden. Wait for server connection to get full model metadata.
   return manager
 }
 
@@ -371,6 +373,7 @@ function registerCoreCommands(
   registerInsertMentionCommand(context)
   registerShowRateLimitsCommand(context, rateLimitMonitor)
   registerSelectModelCommand(context, modelManager, sessionManager, sessionStore)
+  registerSetContextWindowOverrideCommand(context)
   registerCheckCliCommand(context, sessionManager, cliDiagnostics)
   registerListSessionsCommand(context, sessionStore)
   registerDeleteSessionCommand(context, sessionStore)

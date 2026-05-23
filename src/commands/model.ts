@@ -50,3 +50,38 @@ export function registerSelectModelCommand(
     })
   )
 }
+
+export function registerSetContextWindowOverrideCommand(context: vscode.ExtensionContext): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.setContextWindowOverride", async () => {
+      try {
+        const config = vscode.workspace.getConfiguration("opencode")
+        const currentOverride = config.get<number>("contextWindowOverride", 0)
+        const input = await vscode.window.showInputBox({
+          prompt: "Enter context window override (tokens)",
+          placeHolder: currentOverride > 0 ? currentOverride.toString() : "0 (use server value)",
+          validateInput: (value) => {
+            const num = Number(value)
+            if (isNaN(num) || num < 0) {
+              return "Must be a non-negative number"
+            }
+            return null
+          },
+        })
+        if (input !== undefined) {
+          const value = Number(input)
+          await config.update("contextWindowOverride", value, vscode.ConfigurationTarget.Global)
+          log.info(`Context window override set to ${value}`)
+          vscode.window.showInformationMessage(
+            value > 0
+              ? `Context window override set to ${value} tokens`
+              : "Context window override cleared (using server value)",
+          )
+        }
+      } catch (err) {
+        log.error("Set context window override command failed", err)
+        vscode.window.showErrorMessage("Failed to set context window override. Check the OpenCode output channel for details.")
+      }
+    })
+  )
+}

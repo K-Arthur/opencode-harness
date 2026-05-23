@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Context usage counter hidden when server doesn't report limit.context** — The extension previously hid the context usage bar entirely when the opencode server didn't provide a context window limit. Now shows tokens-only display with a helpful tooltip when the limit is unknown, and users can manually set an override via the new `opencode.contextWindowOverride` setting or `OpenCode: Set Context Window Override` command. The root cause was CLI auto-fetch on startup which couldn't extract context windows; this was removed so models are now only fetched from the server (which provides full metadata). (`src/extension.ts`, `src/chat/webview/theme.ts`, `src/chat/webview/context-usage-panel.ts`, `package.json`, `src/commands/model.ts`)
+- **Duplicate context usage display surfaces** — Removed the status-strip `#context-usage` element, leaving only the per-tab `.context-monitor` element to avoid duplicate displays. (`src/chat/webview/index.html`, `src/chat/webview/context-usage-panel.ts`)
+- **Context monitor panel had no way to open it** — The per-tab context-monitor element is now clickable (with keyboard support) to open the full context monitor panel with history graph and cost summary. (`src/chat/webview/tabs.ts`, `src/chat/webview/main.ts`)
+
+### Added
+- **`opencode.contextWindowOverride` configuration** — Users can now manually set a context window override via Settings UI when the server doesn't report one. (`package.json`)
+- **`OpenCode: Set Context Window Override` command** — Quick command palette access to set or clear the context window override. (`src/commands/model.ts`, `package.json`)
+
 ### Performance
 - **Parallelized session restoration backfill** — `backfillRecoveredSessions` previously fetched recent session message histories from the local opencode server one at a time via a serial `for...await` loop, taking ~50s to restore 10 sessions on cold start (initial sweep ~9s + four retry rounds for slow lazy-loaded sessions). The loop now runs in chunks of `BACKFILL_CONCURRENCY=5` via `Promise.allSettled`, dropping cold-start restoration to ~15-20s while keeping local-server load bounded. Per-session writes are keyed by `session.id` and the `backfillInProgress` Set is concurrency-safe, so no shared state mutates unsafely. (`src/chat/ChatProvider.ts`)
 
