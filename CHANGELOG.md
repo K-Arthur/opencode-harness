@@ -5,6 +5,17 @@ All notable changes to the **OpenCode Harness** extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.12] - 2026-05-22
+
+### Fixed
+- **Show-thinking toggle did not actually hide thinking blocks** — Unchecking *Settings → Show thinking* previously only flipped each `<details>` element closed, which still left the summary chip in the layout. The toggle now drives a `hide-thinking` body class that CSS uses to `display: none` every `.thinking-block` outright. `setupThinkingToggle()` also applies the persisted preference at boot, so a user's prior choice takes effect immediately instead of after a double-click. (`src/chat/webview/dom.ts`, `src/chat/webview/main.ts`, `src/chat/webview/css/components.css`)
+
+### Changed
+- **Codex-style compact tool blocks** — `.tool-call` no longer renders as a bordered card; only the left accent stripe remains so tool class is still color-coded at a glance. `.tool-header` is a single-line row at `min-height: var(--size-target-min)` (24 px) with `text-xs` font. Multi-tool turns that previously rendered as a wall of cards now stack tightly as a one-line log. Expanded args/result panels still get their full styling on click. (`src/chat/webview/css/blocks.css`)
+
+### Tests
+- 6 new source-string assertions across `dom.test.ts`, `messages-css.test.ts`, `main.test.ts`. Updated `tests/visual/thinking-toggle.spec.ts` to assert full block invisibility (not just body collapse) and the `hide-thinking` body class. New `tests/visual/compact-tool-blocks.spec.ts` pins row height ≤ 28 px and the flat-not-card border shape.
+
 ## [Unreleased]
 
 ### Fixed
