@@ -50,4 +50,9 @@ describe("theme.ts", () => {
     assert.ok(source.includes("usage.percent"))
     assert.ok(source.includes(".context-progress-fill"))
   })
+
+  it("shows tokens-only when maxTokens is unknown", () => {
+    assert.ok(source.includes("tokens (limit unknown)"))
+    assert.ok(source.includes("Tokens-only display when maxTokens is unknown"))
+  })
 })

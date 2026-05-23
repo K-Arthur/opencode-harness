@@ -226,4 +226,42 @@ test.describe("Chat Webview E2E", () => {
     expect(setModelMsg).toBeDefined()
     expect(String(setModelMsg!.model)).toMatch(/gpt-4o/)
   })
+
+  // Test: context usage shows tokens-only when maxTokens is unknown
+  test("context usage shows tokens-only when maxTokens is unknown", async ({ page }) => {
+    const captured = captureErrors(page)
+    await page.goto("/")
+
+    await dispatchHostMessage(page, {
+      type: "init_state",
+      sessions: [
+        {
+          id: "session-a",
+          name: "Session A",
+          model: "anthropic/claude-3-5-sonnet-20241022",
+          messages: [],
+          tokenUsage: { prompt: 0, completion: 0, total: 0 },
+        },
+      ],
+      activeSessionId: "session-a",
+      globalModel: "anthropic/claude-3-5-sonnet-20241022",
+    })
+
+    // Send context_usage with maxTokens = 0 (unknown)
+    await dispatchHostMessage(page, {
+      type: "context_usage",
+      percent: 0,
+      tokens: 12345,
+      maxTokens: 0,
+    })
+
+    // Verify the context monitor shows tokens-only text
+    const contextMonitor = page.locator(".context-monitor")
+    await expect(contextMonitor).not.toHaveClass(/hidden/)
+
+    const contextText = contextMonitor.locator(".context-text")
+    await expect(contextText).toHaveText(/tokens \(limit unknown\)/)
+
+    await expectNoBrowserErrors(captured)
+  })
 })

@@ -209,10 +209,13 @@ function getVsCodeApi() {
     onClose: () => {},
   })
 
+  let contextMonitorHandlers: { toggle: () => void } | null = null
+
   const tabBar = createTabBar(els, {
     onSwitch: (tabId) => switchTab(tabId),
     onClose: (tabId) => closeTab(tabId),
     onNew: () => createNewTab(),
+    onToggleContextMonitor: () => contextMonitorHandlers?.toggle(),
   })
 
   // Streaming state per session
@@ -443,7 +446,7 @@ function getVsCodeApi() {
       
       setupSessionModal()
       setupContextUsagePanel()
-      setupContextMonitor(els, (msg) => vscode.postMessage(msg as Record<string, unknown>))
+      contextMonitorHandlers = setupContextMonitor(els, (msg) => vscode.postMessage(msg as Record<string, unknown>))
       setupPromptStash(els, (msg) => vscode.postMessage(msg as Record<string, unknown>))
       
       // Setup panels
@@ -683,7 +686,12 @@ function getVsCodeApi() {
       })
     }
 
-    const [view] = createTabContent(tabId, tabName)
+    const [view] = createTabContent(tabId, tabName, {
+      onSwitch: (tabId) => switchTab(tabId),
+      onClose: (tabId) => closeTab(tabId),
+      onNew: () => createNewTab(),
+      onToggleContextMonitor: () => contextMonitorHandlers?.toggle(),
+    })
     if (!view) return
 
     // Find insertion position based on state order
