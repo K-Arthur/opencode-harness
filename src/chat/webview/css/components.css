@@ -41,6 +41,7 @@ body.hide-tools .tool-call { display: none; }
 body.hide-diffs .diff-block { display: none; }
 body.hide-errors .msg-error { display: none; }
 body.hide-errors .tool-result-panel--error { display: none; }
+body.hide-thinking .thinking-block { display: none; }
 
 .toggle-label {
   display: flex;

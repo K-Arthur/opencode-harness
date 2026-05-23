@@ -258,6 +258,8 @@ Welcome-page session search and pasted-image attachments share a webview-side co
 - **Guarded streaming finalization**: Tool-only interim completions defer finalization until active tools resolve or final text arrives, preventing late chunks from rendering outside their original message.
 - **Markdown normalization**: Chunk-sensitive list markers/headings are normalized before `markdown-it`; hard line breaks are disabled for standard chat Markdown rhythm.
 - **Conversation Timeline**: The header timeline toggle restores a right-side turn timeline with role previews, tool counts, active-turn tracking, and responsive padding only while visible.
+- **Show-thinking toggle (visibility, not collapse)**: The settings-menu "Show thinking" item drives a `hide-thinking` body class. CSS hides every `.thinking-block` outright (`display: none`) — the previous implementation only flipped each `<details>` to closed, which left the summary chip in the layout. Per-block `<details>` state is still flipped for screen-reader / snapshot coherence. `setupThinkingToggle()` now also calls `toggleAllThinkingBlocks()` at boot so the persisted pref takes effect immediately rather than after a double-click.
+- **Codex-style compact tool blocks**: Tool calls render as one-line entries (`min-height: var(--size-target-min)` = 24 px) with no card border — only the existing left accent stripe survives so tool class is still color-coded at a glance. Expanded args / result panels keep their full styling when the user opens the `<details>`. This replaces the prior bordered-card treatment that produced a "wall of cards" for multi-tool turns.
 
 ### Permission Modes (Feature 6 — Enhanced)
 - **3 modes**: Plan (review before apply), Auto (apply without asking), Normal (ask per action).

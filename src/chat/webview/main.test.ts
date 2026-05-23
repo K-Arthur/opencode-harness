@@ -642,4 +642,23 @@ it("unified modal: server session items send resume_server_session on click", ()
       )
     })
   })
+
+  // ── Hide-thinking boot sync: when the webview loads, the persisted
+  // "Show thinking" pref must be applied to the DOM immediately —
+  // otherwise the user opens the panel and sees the thinking blocks they
+  // explicitly hid in their last session.
+  describe("setupThinkingToggle — boot-time sync", () => {
+    it("calls toggleAllThinkingBlocks at boot with the persisted preference", () => {
+      const fnIdx = source.indexOf("function setupThinkingToggle()")
+      assert.ok(fnIdx >= 0, "setupThinkingToggle must exist")
+      // Inspect a window before the click handler (which is the second
+      // place toggleAllThinkingBlocks is called from).
+      const clickIdx = source.indexOf("addEventListener(\"click\"", fnIdx)
+      const bootBlock = source.slice(fnIdx, clickIdx)
+      assert.ok(
+        bootBlock.includes("toggleAllThinkingBlocks"),
+        "setupThinkingToggle must call toggleAllThinkingBlocks during boot so the persisted pref is applied to existing DOM",
+      )
+    })
+  })
 })

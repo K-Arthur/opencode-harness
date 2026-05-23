@@ -62,15 +62,32 @@ test.describe('Global Show/Hide Thinking Toggle', () => {
     await expect(thinkingBlock).toHaveAttribute('open', '')
     await expect(thinkingBody).toBeVisible()
 
-    // Click to hide thinking
+    // Click to hide thinking — the entire block should disappear from the
+    // layout, not just collapse to the summary chip. This is the bug the
+    // user reported: previously only the body collapsed and the summary
+    // remained on screen.
     await toggleBtn.click()
     await expect(thinkingBlock).not.toHaveAttribute('open')
+    await expect(thinkingBlock).not.toBeVisible()
     await expect(thinkingBody).not.toBeVisible()
 
     // Click to show thinking
     await toggleBtn.click()
     await expect(thinkingBlock).toHaveAttribute('open', '')
+    await expect(thinkingBlock).toBeVisible()
     await expect(thinkingBody).toBeVisible()
+  })
+
+  test('hide-thinking body class is added when toggle is unchecked', async ({ page }) => {
+    const toggleBtn = page.locator('#thinking-toggle-menu-item')
+    // Initially visible — no body class
+    await expect(page.locator('body')).not.toHaveClass(/hide-thinking/)
+
+    await toggleBtn.click()
+    await expect(page.locator('body')).toHaveClass(/hide-thinking/)
+
+    await toggleBtn.click()
+    await expect(page.locator('body')).not.toHaveClass(/hide-thinking/)
   })
 
   test('should update aria-checked state', async ({ page }) => {
@@ -131,12 +148,14 @@ test.describe('Global Show/Hide Thinking Toggle', () => {
     await expect(thinkingBlocks.nth(2)).toHaveAttribute('open', '')
     await expect(thinkingBlocks.nth(3)).toHaveAttribute('open', '')
 
-    // Toggle to hide
+    // Toggle to hide — all blocks should be removed from layout AND lose
+    // their open attribute (defense-in-depth: hidden via body class even if
+    // the open attribute is somehow preserved).
     await toggleBtn.click()
-    await expect(thinkingBlocks.nth(0)).not.toHaveAttribute('open')
-    await expect(thinkingBlocks.nth(1)).not.toHaveAttribute('open')
-    await expect(thinkingBlocks.nth(2)).not.toHaveAttribute('open')
-    await expect(thinkingBlocks.nth(3)).not.toHaveAttribute('open')
+    for (const i of [0, 1, 2, 3]) {
+      await expect(thinkingBlocks.nth(i)).not.toHaveAttribute('open')
+      await expect(thinkingBlocks.nth(i)).not.toBeVisible()
+    }
   })
 
   test('should respect individual block open state when expanding', async ({ page }) => {
