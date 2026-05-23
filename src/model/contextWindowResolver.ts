@@ -38,14 +38,29 @@ export function findKnownContextWindow(_modelKey: string): number | undefined {
 export interface ResolveOptions {
   /** Optional logger for diagnostic info when the server didn't supply a value. */
   log?: (message: string) => void
+  /**
+   * Optional OpenRouter-backed metadata cache. When the opencode server
+   * returns no `limit.context` for a model, we consult this map as a
+   * cross-provider fallback. The cache is built by `openRouterMetadata.ts`
+   * from the public OpenRouter `/api/v1/models` catalogue — same model
+   * weights typically have the same context window regardless of host.
+   * See ADR/CHANGELOG for 0.2.15 for the rationale.
+   */
+  openRouterCache?: Map<string, number>
 }
 
 /**
  * Resolve the effective context window for a model.
  *
- * Server-trust only. When the server doesn't supply a usable value the
- * function returns undefined and emits a log line so the missing data is
- * visible (rather than papered over with a hardcoded guess).
+ * Resolution order:
+ *   1. The opencode server's reported `limit.context` (authoritative when present).
+ *   2. The OpenRouter metadata cache, looked up by full id then short id
+ *      (handles providers that don't expose context in their config).
+ *   3. `undefined` — UI hides the bar / offers a "set context window" affordance.
+ *
+ * Hardcoded fallback tables are intentionally avoided: a curated list
+ * drifts as new models ship. OpenRouter's catalogue is auto-updated and
+ * covers the cross-provider case (same weights, different host).
  */
 export function resolveContextWindow(
   modelKey: string,
@@ -53,9 +68,22 @@ export function resolveContextWindow(
   options?: ResolveOptions,
 ): number | undefined {
   if (typeof serverValue === "number" && serverValue > 0) return serverValue
+
+  // Try the OpenRouter cache before logging a miss — same model weights
+  // typically have the same window regardless of which provider hosts
+  // them, so a lookup by short id usually succeeds.
+  if (options?.openRouterCache && modelKey) {
+    const exact = options.openRouterCache.get(modelKey)
+    if (typeof exact === "number" && exact > 0) return exact
+    const slash = modelKey.indexOf("/")
+    const shortId = slash >= 0 ? modelKey.slice(slash + 1) : modelKey
+    const short = options.openRouterCache.get(shortId)
+    if (typeof short === "number" && short > 0) return short
+  }
+
   if (modelKey) {
     options?.log?.(
-      `Context window for ${modelKey}: server did not report limit.context — UI will hide the context bar until the server provides one`,
+      `Context window for ${modelKey}: server did not report limit.context and no OpenRouter fallback hit — UI will hide the context bar until a manual override is set`,
     )
   }
   return undefined

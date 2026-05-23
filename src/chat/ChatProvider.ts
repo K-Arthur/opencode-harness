@@ -326,18 +326,19 @@ private autoCompactor: AutoCompactor
     this.disposables.push(
       this.modelManager.onModelChanged((model) => {
         this.pushModelToWebview(model)
-        const ctxWindow = this.modelManager.getContextWindow(model)
-        if (ctxWindow) {
-          const override = vscode.workspace.getConfiguration("opencode").get<number>("contextWindowOverride", 0)
-          this.contextMonitor.setTokenLimit(override > 0 ? override : ctxWindow)
-        }
+        this.applyContextWindowFor(model)
       }),
       this.modelManager.onModelsRefreshed(() => {
         this.pushModelListToWebview()
-        const ctxWindow = this.modelManager.getContextWindow()
-        if (ctxWindow) {
-          const override = vscode.workspace.getConfiguration("opencode").get<number>("contextWindowOverride", 0)
-          this.contextMonitor.setTokenLimit(override > 0 ? override : ctxWindow)
+        this.applyContextWindowFor()
+      }),
+      // React to live changes to opencode.contextWindowOverride — the user
+      // may set it via the "Set Context Window Override" command without
+      // restarting the extension. Without this listener the new value
+      // would only take effect on the next model switch.
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration("opencode.contextWindowOverride")) {
+          this.applyContextWindowFor()
         }
       }),
       this.themeManager.onThemeChanged(() => this.themeController.pushThemeToWebview()),
@@ -1086,6 +1087,41 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
 
   private pushModelToWebview(model?: string): void {
     this.statePush.pushModelToWebview(model || this.modelManager.model)
+  }
+
+  /**
+   * Resolve the active model's context window and push it into the
+   * monitor + webview. Resolution order (matches resolveContextWindow):
+   *   1. opencode server's `limit.context` (via ModelManager)
+   *   2. OpenRouter cross-provider catalogue
+   *   3. `opencode.contextWindowOverride` user setting — applied even
+   *      when both server and OpenRouter come up empty (the 0.2.13 bug
+   *      was that the override was only consulted INSIDE an
+   *      `if (ctxWindow)` block, so it never fired in the case it was
+   *      designed for).
+   *   4. Still nothing → tell the webview the window is unknown so it
+   *      can render the "Set context window" affordance.
+   */
+  private applyContextWindowFor(model?: string): void {
+    const resolvedWindow = this.modelManager.getContextWindow(model)
+    const override = vscode.workspace.getConfiguration("opencode").get<number>("contextWindowOverride", 0)
+    const effectiveWindow = override > 0 ? override : resolvedWindow
+    if (effectiveWindow && effectiveWindow > 0) {
+      this.contextMonitor.setTokenLimit(effectiveWindow)
+      this.statePush.postMessage({
+        type: "context_window_known",
+        sessionId: this.sessionStore.activeId,
+        maxTokens: effectiveWindow,
+        source: override > 0 ? "override" : (resolvedWindow ? "server-or-openrouter" : "unknown"),
+      })
+    } else {
+      // Window unknown: tell the webview so it can show the affordance.
+      this.statePush.postMessage({
+        type: "context_window_unknown",
+        sessionId: this.sessionStore.activeId,
+        modelId: model || this.modelManager.model,
+      })
+    }
   }
 
   private pushModelListToWebview(): void {

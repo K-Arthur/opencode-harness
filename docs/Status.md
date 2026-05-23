@@ -1,9 +1,15 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-05-23
-**Version:** v0.2.14 (Tool calls actually group into one codex-style row, live)
+**Version:** v0.2.15 (Context window resolves via OpenRouter cross-provider fallback + override fix)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
+
+## v0.2.15 Highlights
+
+- **Context window resolves for models the server doesn't report `limit.context` for** — kimi-k2.5, deepseek-v4-flash-free, and most OSS/free-tier models silently lost their context bar in 0.2.13 because the override config was only consulted inside an `if (ctxWindow)` guard. The override now applies regardless, and `onDidChangeConfiguration` re-applies it live without an extension reload.
+- **OpenRouter cross-provider fallback** — when our server returns no `limit.context`, the resolver consults a cached catalogue pulled from `https://openrouter.ai/api/v1/models`. Same model weights share the same window regardless of which provider hosts them, so kimi-k2.5 served by any host now resolves to OpenRouter's canonical entry. Catalogue is persisted to `globalState` with a 24h TTL and refreshed in the background; no hand-curated tables.
+- **Clickable "set limit ⚙" affordance** — when both the server and OpenRouter come up empty, clicking the per-tab context monitor opens the `Set Context Window Override` dialog directly instead of showing a tooltip.
 
 ## v0.2.14 Highlights
 
