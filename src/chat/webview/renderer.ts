@@ -1562,16 +1562,27 @@ function renderPermissionBlock(block: Block, _opts: RenderOptions): HTMLElement 
     allowBtn.className = "permission-btn permission-btn--allow"
     allowBtn.textContent = "Allow"
     allowBtn.addEventListener("click", () => {
-      window.dispatchEvent(new CustomEvent("oc-permission", { detail: { permissionId: block.permissionId, response: "once" } }))
+      window.dispatchEvent(new CustomEvent("oc-permission", { detail: { permissionId: block.permissionId, response: "once", permissionType: block.permissionType, pattern: block.pattern } }))
       actions.replaceChildren(document.createTextNode("Allowed"))
     })
     actions.appendChild(allowBtn)
+
+    if (block.pattern) {
+      const alwaysBtn = document.createElement("button")
+      alwaysBtn.className = "permission-btn permission-btn--allow"
+      alwaysBtn.textContent = "Always"
+      alwaysBtn.addEventListener("click", () => {
+        window.dispatchEvent(new CustomEvent("oc-permission", { detail: { permissionId: block.permissionId, response: "always", permissionType: block.permissionType, pattern: block.pattern } }))
+        actions.replaceChildren(document.createTextNode("Always allowed"))
+      })
+      actions.appendChild(alwaysBtn)
+    }
 
     const denyBtn = document.createElement("button")
     denyBtn.className = "permission-btn permission-btn--deny"
     denyBtn.textContent = "Deny"
     denyBtn.addEventListener("click", () => {
-      window.dispatchEvent(new CustomEvent("oc-permission", { detail: { permissionId: block.permissionId, response: "reject" } }))
+      window.dispatchEvent(new CustomEvent("oc-permission", { detail: { permissionId: block.permissionId, response: "reject", permissionType: block.permissionType, pattern: block.pattern } }))
       actions.replaceChildren(document.createTextNode("Denied"))
     })
     actions.appendChild(denyBtn)
@@ -1781,7 +1792,16 @@ function renderImageBlock(block: Block, _opts: RenderOptions): HTMLElement | nul
         fullImg.className = "image-viewer-full"
         fullImg.loading = "lazy"
         viewer.appendChild(fullImg)
-    viewer.addEventListener("click", () => viewer.remove())
+    const close = () => {
+      viewer.removeEventListener("click", close)
+      document.removeEventListener("keydown", onKey)
+      viewer.remove()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" || e.key === "Backspace") close()
+    }
+    viewer.addEventListener("click", close)
+    document.addEventListener("keydown", onKey)
     document.body.appendChild(viewer)
   })
 

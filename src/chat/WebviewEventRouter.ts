@@ -291,7 +291,16 @@ export class WebviewEventRouter {
     }],
     ["accept_diff", async (msg: Record<string, unknown>, sessionId?: string) => { const diffId = msg.diffId as string || msg.blockId as string; if (diffId) await this.opts.sessionLifecycle.handleAcceptDiff(diffId, sessionId) }],
     ["reject_diff", (msg: Record<string, unknown>) => { const diffId = msg.diffId as string || msg.blockId as string; if (diffId) this.opts.streamCoordinator.getDiffHandler().reject(diffId) }],
-    ["accept_permission", async (msg: Record<string, unknown>) => { await this.opts.messageRouter.handleAcceptPermission(msg.sessionId as string, msg.permissionId as string, msg.response as string) }],
+    ["accept_permission", async (msg: Record<string, unknown>) => {
+      const sessionId = msg.sessionId as string
+      if (this.isPlanModeSession(sessionId) && this.shouldRejectPlanPermissionResponse(msg)) {
+        log.warn(`Rejected permission ${msg.permissionId as string} because session ${sessionId} is in plan mode`)
+        await this.opts.messageRouter.handleAcceptPermission(sessionId, msg.permissionId as string, "reject")
+        this.opts.postMessage({ type: "permission_rejected", sessionId, permissionId: msg.permissionId, reason: "plan_mode" })
+        return
+      }
+      await this.opts.messageRouter.handleAcceptPermission(sessionId, msg.permissionId as string, msg.response as string)
+    }],
     ["mention_search", async (msg: Record<string, unknown>) => { await this.opts.messageRouter.handleMentionSearch(msg.query as string || "", { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) }) }],
     ["list_sessions", async (msg: Record<string, unknown>) => { await this.opts.messageRouter.handleListSessions(this.opts.sessionStore, { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) }, typeof msg.query === "string" ? msg.query : "") }],
     ["resume_session", async (msg: Record<string, unknown>) => { if (msg.sessionId) await this.opts.sessionLifecycle.handleResumeSession(msg.sessionId as string) }],
@@ -1578,6 +1587,36 @@ export class WebviewEventRouter {
 
   private pushVisibleStateToWebview(): void {
     this.opts.statePush.pushVisibleStateToWebview()
+  }
+
+  private isPlanModeSession(sessionId: string | undefined): boolean {
+    if (!sessionId) return false
+    return this.opts.tabManager.getTab(sessionId)?.mode === "plan" ||
+      this.opts.sessionStore.get(sessionId)?.mode === "plan"
+  }
+
+  private shouldRejectPlanPermissionResponse(msg: Record<string, unknown>): boolean {
+    const permissionType = typeof msg.permissionType === "string" ? msg.permissionType : undefined
+    const pattern = typeof msg.pattern === "string" || Array.isArray(msg.pattern) ? msg.pattern : undefined
+    if (permissionType && !this.isMutatingPlanPermission(permissionType)) return false
+    if (this.isPlanDocumentPattern(pattern)) return false
+    return permissionType ? this.isMutatingPlanPermission(permissionType) : true
+  }
+
+  private isMutatingPlanPermission(permissionType: string): boolean {
+    const type = permissionType.toLowerCase()
+    return type === "edit" ||
+      type === "write" ||
+      type === "patch" ||
+      type === "apply_patch" ||
+      type === "multiedit" ||
+      type === "bash" ||
+      type === "external_directory"
+  }
+
+  private isPlanDocumentPattern(pattern: string | string[] | undefined): boolean {
+    const patterns = Array.isArray(pattern) ? pattern : pattern ? [pattern] : []
+    return patterns.some((p) => p.startsWith(".opencode/plans/") && p.endsWith(".md"))
   }
 
   private async resolveOpenFileTarget(rawPath: string, sessionId?: string): Promise<{ uri: vscode.Uri; lineNumber?: number }> {

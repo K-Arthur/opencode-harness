@@ -41,6 +41,74 @@ function mergeStreamText(existing: string, chunk: string): string {
   return stripContextFromText(existing + chunk)
 }
 
+function finalizeCurrentTextBlock(
+  state: StreamState,
+  els: StreamElements,
+  messages: ChatMessage[],
+): void {
+  if (!state.currentBlockEl || !state.currentBlockBuffer.trim()) return
+  const displayText = stripContextFromText(state.currentBlockBuffer)
+  if (!displayText.trim()) return
+
+  const textEl = state.currentBlockEl
+  textEl.classList.remove("streaming-text")
+  textEl.classList.add("msg-text", "markdown-content")
+  textEl.innerHTML = renderMarkdown(displayText, false)
+
+  const id = state.streamingMessageId
+  if (id) {
+    const msgObj = messages.find((m) => m.id === id)
+    if (msgObj && state.currentBlockIndex >= 0) {
+      const block = msgObj.blocks[state.currentBlockIndex]
+      if (block && block.type === "text") {
+        block.text = displayText
+      }
+    }
+  }
+}
+
+function insertStreamingTextAfterLastBlock(
+  bubble: HTMLElement,
+  state: StreamState,
+  messages: ChatMessage[],
+): HTMLElement | null {
+  let insertAfter: HTMLElement | null = null
+  for (let i = bubble.children.length - 1; i >= 0; i--) {
+    const child = bubble.children[i] as HTMLElement
+    if (child.matches("details.tool-call, details.tool-group, .diff-block, .skill-badge")) {
+      insertAfter = child
+      break
+    }
+    if (child.classList.contains("msg-text") && !child.classList.contains("streaming-text")) {
+      break
+    }
+  }
+
+  const textEl = document.createElement("div")
+  textEl.className = "msg-text streaming-text"
+
+  if (insertAfter && insertAfter.nextSibling) {
+    bubble.insertBefore(textEl, insertAfter.nextSibling)
+  } else if (insertAfter) {
+    bubble.appendChild(textEl)
+  } else {
+    bubble.appendChild(textEl)
+  }
+
+  state.currentBlockEl = textEl
+  state.lastStreamTextEl = textEl
+
+  const id = state.streamingMessageId
+  if (id) {
+    const msgObj = messages.find((m) => m.id === id)
+    if (msgObj) {
+      msgObj.blocks.push(createTextBlock(""))
+      state.currentBlockIndex = msgObj.blocks.length - 1
+    }
+  }
+
+  return textEl
+}
 
 function appendTextToMessage(message: ChatMessage, text: string): void {
   const textBlock = message.blocks.find((block) => block.type === "text") as (Block & { text?: string }) | undefined
@@ -209,12 +277,12 @@ export function handleStreamStart(
       if (bubble) {
         textEl = bubble.querySelector(".streaming-text") as HTMLElement
         if (!textEl) {
-          textEl = document.createElement("div")
-          textEl.className = "msg-text streaming-text"
-          bubble.appendChild(textEl)
+          textEl = insertStreamingTextAfterLastBlock(bubble, state, messages)
         }
-        state.currentBlockEl = textEl
-        state.lastStreamTextEl = textEl
+        if (textEl) {
+          state.currentBlockEl = textEl
+          state.lastStreamTextEl = textEl
+        }
       }
     }
     if (!textEl) return
@@ -297,12 +365,12 @@ export function handleStreamToken(
       if (bubble) {
         textEl = bubble.querySelector(".streaming-text") as HTMLElement
         if (!textEl) {
-          textEl = document.createElement("div")
-          textEl.className = "msg-text streaming-text"
-          bubble.appendChild(textEl)
+          textEl = insertStreamingTextAfterLastBlock(bubble, state, messages)
         }
-        state.currentBlockEl = textEl
-        state.lastStreamTextEl = textEl
+        if (textEl) {
+          state.currentBlockEl = textEl
+          state.lastStreamTextEl = textEl
+        }
       } else {
         webviewLog(`handleStreamToken: bubble missing for ${id}, triggering recovery re-render`, "warn")
         reRenderMessage(id, els, messages)
@@ -310,20 +378,10 @@ export function handleStreamToken(
       }
     }
     
-    if (!textEl.classList.contains("msg-text")) {
+    if (!textEl || !textEl.classList.contains("msg-text")) {
       const bubble = els.messageList.querySelector(`[data-message-id="${id}"] .message-bubble`) as HTMLElement
       if (bubble) {
-        textEl = document.createElement("div")
-        textEl.className = "msg-text streaming-text"
-        bubble.appendChild(textEl)
-        state.currentBlockEl = textEl
-        state.lastStreamTextEl = textEl
-
-        const msgObj = messages.find((m: ChatMessage) => m.id === id)
-        if (msgObj) {
-          msgObj.blocks.push(createTextBlock(""))
-          state.currentBlockIndex = msgObj.blocks.length - 1
-        }
+        textEl = insertStreamingTextAfterLastBlock(bubble, state, messages)
       }
     }
 
@@ -374,6 +432,7 @@ export function handleToolStart(
     return
   }
 
+  finalizeCurrentTextBlock(state, els, messages)
   state.streamingToolCallId = toolCall.id
   state.currentBlockBuffer = ""
   state.currentBlockEl = null
@@ -636,6 +695,10 @@ export function handleDiff(
 ): void {
   const id = state.streamingMessageId
   if (!id) return
+
+  finalizeCurrentTextBlock(state, els, messages)
+  state.currentBlockBuffer = ""
+  state.currentBlockEl = null
 
   const diffBlock: DiffBlock = {
     type: 'diff',

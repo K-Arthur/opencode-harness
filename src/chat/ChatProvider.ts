@@ -687,9 +687,25 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         }, "status").catch(err => log.error("Fallback maybeFinalizeStream failed", err))
       }
     }],
-    ["permission_request", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {
-      const data = event.data as { id?: string; title?: string; type?: string } | undefined
-      this.postMessage({ type: "permission_request", sessionId: tabId, permissionId: data?.id, title: data?.title || `Allow ${data?.type || "action"}?` })
+    ["permission_request", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean }) => {
+      const data = event.data as { id?: string; title?: string; type?: string; pattern?: string | string[]; metadata?: Record<string, unknown> } | undefined
+      const currentTab = this.tabManager.getTab(tabId)
+      if (currentTab?.mode === "plan" && data?.id && this.shouldAutoRejectPlanPermission(data)) {
+        const cliSessionId = event.sessionId || currentTab.cliSessionId || tabId
+        log.warn(`Auto-rejecting permission ${data.id} in plan mode for session ${tabId}`)
+        void this.sessionManager.respondToPermission(cliSessionId, data.id, "reject")
+          .catch(err => log.warn(`Failed to reject plan-mode permission ${data.id}`, err))
+        return
+      }
+      this.postMessage({
+        type: "permission_request",
+        sessionId: tabId,
+        permissionId: data?.id,
+        title: data?.title || `Allow ${data?.type || "action"}?`,
+        permissionType: data?.type,
+        pattern: data?.pattern,
+        metadata: data?.metadata,
+      })
     }],
     ["permission_replied", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => { log.info(`Permission response for ${tabId}`) }],
     ["todo_updated", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {
@@ -1075,6 +1091,25 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     } else {
       log.warn(`No handler for server event type: ${event.type}`)
     }
+  }
+
+  private shouldAutoRejectPlanPermission(data: { type?: string; pattern?: string | string[] }): boolean {
+    if (data.pattern && this.isPlanDocumentPattern(data.pattern)) return false
+    if (!data.type) return true
+
+    const type = data.type.toLowerCase()
+    return type === "edit" ||
+      type === "write" ||
+      type === "patch" ||
+      type === "apply_patch" ||
+      type === "multiedit" ||
+      type === "bash" ||
+      type === "external_directory"
+  }
+
+  private isPlanDocumentPattern(pattern: string | string[]): boolean {
+    const patterns = Array.isArray(pattern) ? pattern : [pattern]
+    return patterns.some((p) => p.startsWith(".opencode/plans/") && p.endsWith(".md"))
   }
 
   private async handleAcceptDiff(blockId: string, sessionId?: string): Promise<void> {

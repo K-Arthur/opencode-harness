@@ -74,8 +74,11 @@ export interface ElementRefs {
   contextUsage: HTMLDivElement
   contextProgressBar: HTMLElement
   contextLabel: HTMLSpanElement
-  contextUsagePanel: HTMLElement
-  closeContextUsageBtn: HTMLButtonElement
+  contextUsageBtn: HTMLButtonElement | null
+  contextUsageDropdown: HTMLElement | null
+  ctxDropdownContent: HTMLElement | null
+  ctxPctBadge: HTMLElement | null
+  // Legacy context-monitor refs — kept for backward compat with context-monitor.ts
   contextMonitorPanel: HTMLDivElement | null
   contextMonitorClose: HTMLButtonElement | null
   contextMonitorHistoryGraph: HTMLDivElement | null
@@ -165,8 +168,11 @@ export interface ElementRefs {
   tokenDisplay: HTMLElement | null
   costDisplay: HTMLElement | null
 
-  // File change tracking (Phase 5)
-  changedFilesList: HTMLElement | null
+  // File change tracking — canonical toolbar dropdown
+  changedFilesBtn: HTMLButtonElement | null
+  changedFilesDropdown: HTMLElement | null
+  cfDropdownTree: HTMLElement | null
+  cfCountBadge: HTMLElement | null
 
   // Checkpoint/undo panel (Phase 5)
   checkpointPanel: HTMLElement | null
@@ -176,7 +182,6 @@ export interface ElementRefs {
   todosList: HTMLElement
   todoAddForm: HTMLFormElement
   todoAddInput: HTMLInputElement
-  changedFilesPanelList: HTMLElement
   todosToggleBtn: HTMLElement
   skillsBtn: HTMLElement
   skillsModal: HTMLElement
@@ -246,13 +251,16 @@ export function getElementRefs(): ElementRefs {
     contextUsage: requireElement<HTMLDivElement>("context-usage"),
     contextProgressBar: requireElement("context-progress-bar"),
     contextLabel: requireElement<HTMLSpanElement>("context-label"),
-    contextUsagePanel: requireElement("context-usage-panel"),
-    closeContextUsageBtn: requireElement<HTMLButtonElement>("close-context-usage-btn"),
-    contextMonitorPanel: optionalElement<HTMLDivElement>("context-monitor-panel"),
-    contextMonitorClose: optionalElement<HTMLButtonElement>("context-monitor-close"),
-    contextMonitorHistoryGraph: optionalElement<HTMLDivElement>("context-monitor-history-graph"),
-    contextMonitorCostDisplay: optionalElement<HTMLDivElement>("context-monitor-cost-display"),
-    contextMonitorSuggestionsPanel: optionalElement<HTMLDivElement>("context-monitor-suggestions-panel"),
+    contextUsageBtn: document.getElementById("context-usage-btn") as HTMLButtonElement | null,
+    contextUsageDropdown: document.getElementById("context-usage-dropdown"),
+    ctxDropdownContent: document.getElementById("ctx-dropdown-content"),
+    ctxPctBadge: document.getElementById("ctx-pct-badge"),
+    // Legacy context-monitor refs — elements removed from HTML, always null now
+    contextMonitorPanel: null,
+    contextMonitorClose: null,
+    contextMonitorHistoryGraph: null,
+    contextMonitorCostDisplay: null,
+    contextMonitorSuggestionsPanel: null,
     
     promptStashPanel: optionalElement<HTMLDivElement>("prompt-stash-panel"),
     promptStashClose: optionalElement<HTMLButtonElement>("prompt-stash-close"),
@@ -337,8 +345,11 @@ export function getElementRefs(): ElementRefs {
     tokenDisplay: optionalElement("token-display"),
     costDisplay: optionalElement("cost-display"),
 
-    // File change tracking (Phase 5)
-    changedFilesList: document.getElementById("changed-files-list"),
+    // File change tracking — canonical toolbar dropdown
+    changedFilesBtn: document.getElementById("changed-files-btn") as HTMLButtonElement | null,
+    changedFilesDropdown: document.getElementById("changed-files-dropdown"),
+    cfDropdownTree: document.getElementById("cf-dropdown-tree"),
+    cfCountBadge: document.getElementById("cf-count-badge"),
 
     // Checkpoint/undo panel (Phase 5)
     checkpointPanel: document.getElementById("checkpoint-panel"),
@@ -348,7 +359,6 @@ export function getElementRefs(): ElementRefs {
     todosList: requireElement("todos-list"),
     todoAddForm: requireElement<HTMLFormElement>("todo-add-form"),
     todoAddInput: requireElement<HTMLInputElement>("todo-add-input"),
-    changedFilesPanelList: requireElement("changed-files-panel-list"),
     todosToggleBtn: requireElement("todos-toggle-btn"),
     skillsBtn: requireElement("skills-btn"),
     skillsModal: requireElement("skills-modal"),

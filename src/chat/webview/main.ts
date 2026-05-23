@@ -19,9 +19,10 @@ import type { McpServerInfo } from "../../mcp/McpServerManager"
 import { REMOVE_SVG } from "./icons"
 import { createPromptQueue, type PromptQueue, type QueueItem } from "./queue"
 import { updateContextChips, updateContextUsage, applyThemeVars, handleRateLimitExhausted } from "./theme"
-import { setupContextUsagePanel as setupContextUsagePanelInit, setContextUsagePanel, setContextUsagePostMessage, handleContextUsageMessage, resetContextUsagePanel } from "./context-usage-panel"
+import { setContextUsagePostMessage, handleContextUsageMessage, resetContextUsagePanel } from "./context-usage-panel"
+import { setupChangedFilesDropdown, updateChangedFiles, handleDiffResponse as handleCfDiffResponse, resetChangedFilesDropdown } from "./changed-files-dropdown"
+import { setupContextUsageDropdown as setupCtxDropdown, updateUsage as updateCtxDropdown, resetContextUsageDropdown } from "./context-usage-dropdown"
 import { showCompactBanner, hideCompactBanner } from "./compact-banner"
-import { setupContextMonitor } from "./context-monitor"
 import { setupPromptStash } from "./prompt-stash"
 import { renderRecentSessions } from "./recent-sessions"
 import { renderUnifiedSessionList, setSessionListPostMessage, setUnifiedServerSessions, setUnifiedLocalSessions } from "./sessionListRenderer"
@@ -239,13 +240,18 @@ function getVsCodeApi() {
     onClose: () => {},
   })
 
-  let contextMonitorHandlers: { toggle: () => void } | null = null
+  let cfDropdownApi: { updateChangedFiles: typeof updateChangedFiles; handleDiffResponse: typeof handleCfDiffResponse } | null = null
+  let ctxDropdownApi: { updateUsage: typeof updateCtxDropdown } | null = null
 
   const tabBar = createTabBar(els, {
     onSwitch: (tabId) => switchTab(tabId),
     onClose: (tabId) => closeTab(tabId),
     onNew: () => createNewTab(),
-    onToggleContextMonitor: () => contextMonitorHandlers?.toggle(),
+    onToggleContextMonitor: () => {
+      if (els.contextUsageBtn && !els.contextUsageBtn.classList.contains("hidden")) {
+        els.contextUsageBtn.click()
+      }
+    },
     onSetContextWindowOverride: () => vscode.postMessage({ type: "open_context_window_override_dialog" }),
   })
 
@@ -463,7 +469,7 @@ function getVsCodeApi() {
           checkpointPanel: els.checkpointPanel,
           todosToggleBtn: els.todosToggleBtn,
           todosPanel: els.todosPanel,
-          changedFilesList: els.changedFilesList,
+          changedFilesList: null,
           attachBtn: els.attachBtn,
           skillsBtn: els.skillsBtn,
         },
@@ -476,8 +482,7 @@ function getVsCodeApi() {
       })
       
       setupSessionModal()
-      setupContextUsagePanel()
-      contextMonitorHandlers = setupContextMonitor(els, (msg) => vscode.postMessage(msg as Record<string, unknown>))
+      setupContextUsageDropdownPanel()
       setupPromptStash(els, (msg) => vscode.postMessage(msg as Record<string, unknown>))
       
       todosPanelApi = setupTodosPanel(els, {
@@ -556,6 +561,31 @@ function getVsCodeApi() {
       subagentPanelApi = setupSubagentPanel(els, {
         onCancelSubagent: (subagentId: string) => vscode.postMessage({ type: "cancel_subagent", subagentId }),
       })
+
+      // Changed Files dropdown — canonical toolbar implementation
+      if (els.changedFilesBtn && els.changedFilesDropdown && els.cfDropdownTree && els.cfCountBadge) {
+        setupChangedFilesDropdown({
+          btn: els.changedFilesBtn,
+          panel: els.changedFilesDropdown,
+          treeContainer: els.cfDropdownTree,
+          badge: els.cfCountBadge,
+          postMessage: (msg) => vscode.postMessage(msg),
+          onOpenFile: (path) => vscode.postMessage({ type: "open_file", path }),
+        })
+        cfDropdownApi = { updateChangedFiles, handleDiffResponse: handleCfDiffResponse }
+      }
+
+      // Context Usage dropdown — canonical toolbar implementation
+      if (els.contextUsageBtn && els.contextUsageDropdown && els.ctxDropdownContent && els.ctxPctBadge) {
+        setupCtxDropdown({
+          btn: els.contextUsageBtn,
+          panel: els.contextUsageDropdown,
+          content: els.ctxDropdownContent,
+          badge: els.ctxPctBadge,
+          postMessage: (msg) => vscode.postMessage(msg),
+        })
+        ctxDropdownApi = { updateUsage: updateCtxDropdown }
+      }
       
       setupWelcomeSuggestions()
       setupWelcomeActions()
@@ -736,27 +766,8 @@ function getVsCodeApi() {
     })
   }
 
-  function setupContextUsagePanel() {
-    setContextUsagePanel(els.contextUsagePanel)
+  function setupContextUsageDropdownPanel() {
     setContextUsagePostMessage((msg) => vscode.postMessage(msg as Record<string, unknown>))
-    setupContextUsagePanelInit()
-    
-    // Close button
-    els.closeContextUsageBtn.addEventListener("click", () => {
-      els.contextUsagePanel.classList.add("hidden")
-    })
-
-    // Toggle panel via status bar/strip
-    els.contextUsage.addEventListener("click", () => {
-      const activeSid = stateManager.getState().activeSessionId
-      if (!activeSid) return
-      
-      const isHidden = els.contextUsagePanel.classList.toggle("hidden")
-      if (!isHidden) {
-        vscode.postMessage({ type: "context_history_request", days: 7 })
-        vscode.postMessage({ type: "get_context_usage" })
-      }
-    })
   }
 
   const sessionModalDeps = {
@@ -813,7 +824,11 @@ function getVsCodeApi() {
       onSwitch: (tabId) => switchTab(tabId),
       onClose: (tabId) => closeTab(tabId),
       onNew: () => createNewTab(),
-      onToggleContextMonitor: () => contextMonitorHandlers?.toggle(),
+      onToggleContextMonitor: () => {
+      if (els.contextUsageBtn && !els.contextUsageBtn.classList.contains("hidden")) {
+        els.contextUsageBtn.click()
+      }
+    },
       onSetContextWindowOverride: () => vscode.postMessage({ type: "open_context_window_override_dialog" }),
     })
     if (!view) return
@@ -896,6 +911,17 @@ function getVsCodeApi() {
     
 	  applyTimelineVisibility(tabId)
 	  showSecondaryNav()
+
+    const isActiveStreaming = activeSession?.isStreaming || false
+    updateSendButtonIcon(isActiveStreaming)
+    if (isActiveStreaming) {
+      els.promptInput.placeholder = "Guide the AI: correct errors, change direction, or add context…"
+    } else {
+      els.promptInput.placeholder = "Ask OpenCode a question about your code…"
+    }
+    if (!isActiveStreaming) {
+      els.inputArea.classList.remove("steer-interrupt", "steer-append", "steer-queue")
+    }
   }
 
   function closeTab(tabId: string) {
@@ -1100,7 +1126,9 @@ function getVsCodeApi() {
   function setMode(mode: string): void {
     const active = stateManager.getActiveSession()
     if (active) {
+      updateModeDropdownLocal(mode)
       stateManager.setSessionMode(active.id, mode)
+      vscode.postMessage({ type: "change_mode", mode, sessionId: active.id })
     }
   }
 
@@ -2491,6 +2519,7 @@ function getVsCodeApi() {
         const tabPanel = activeId ? els.tabPanels.querySelector<HTMLElement>(`.tab-panel[data-tab-id="${CSS.escape(activeId)}"] .context-monitor`) : null
         if (tabPanel) updateContextUsage(tabPanel, { percent: msg.percent as number, tokens: msg.tokens as number, maxTokens: msg.maxTokens as number })
         handleContextUsageMessage(msg as unknown as Record<string, unknown>)
+        ctxDropdownApi?.updateUsage(msg as Record<string, unknown>)
       }],
       ["context_window_unknown", (msg) => {
         // Hide the context bar and show the "Set override" chip so the user
@@ -2512,6 +2541,7 @@ function getVsCodeApi() {
         }
         // Also keep context usage panel in sync
         handleContextUsageMessage(msg as unknown as Record<string, unknown>)
+        ctxDropdownApi?.updateUsage(msg as Record<string, unknown>)
       }],
       ["context_window_known", (msg) => {
         // Context window resolved — hide the chip and let the normal bar render.
@@ -2560,27 +2590,28 @@ function getVsCodeApi() {
       ["streaming_state", (msg, sid) => {
         if (sid) {
           stateManager.setStreaming(sid, Boolean(msg.isStreaming))
-          
-          // Show/hide steering mode selector based on streaming state
-          const steerModeSelector = document.getElementById("steer-mode-selector") as HTMLElement
-          if (steerModeSelector) {
-            if (msg.isStreaming) {
-              steerModeSelector.classList.remove("hidden")
-            } else {
-              steerModeSelector.classList.add("hidden")
+
+          const isActiveSession = sid === stateManager.getState().activeSessionId
+
+          if (isActiveSession) {
+            const steerModeSelector = document.getElementById("steer-mode-selector") as HTMLElement
+            if (steerModeSelector) {
+              if (msg.isStreaming) {
+                steerModeSelector.classList.remove("hidden")
+              } else {
+                steerModeSelector.classList.add("hidden")
+              }
             }
-          }
 
-          // Update placeholder text based on streaming state
-          if (msg.isStreaming) {
-            els.promptInput.placeholder = "Guide the AI: correct errors, change direction, or add context…"
-          } else {
-            els.promptInput.placeholder = "Ask OpenCode a question about your code…"
-          }
+            if (msg.isStreaming) {
+              els.promptInput.placeholder = "Guide the AI: correct errors, change direction, or add context…"
+            } else {
+              els.promptInput.placeholder = "Ask OpenCode a question about your code…"
+            }
 
-          // Remove steering mode classes from input area when not streaming
-          if (!msg.isStreaming) {
-            els.inputArea.classList.remove("steer-interrupt", "steer-append", "steer-queue")
+            if (!msg.isStreaming) {
+              els.inputArea.classList.remove("steer-interrupt", "steer-append", "steer-queue")
+            }
           }
           
           if (!msg.isStreaming) {
@@ -2665,6 +2696,9 @@ function getVsCodeApi() {
             blocks: [{
               type: "permission",
               permissionId: String(_msg.permissionId || ""),
+              permissionType: typeof _msg.permissionType === "string" ? _msg.permissionType : undefined,
+              pattern: typeof _msg.pattern === "string" || Array.isArray(_msg.pattern) ? _msg.pattern as string | string[] : undefined,
+              metadata: _msg.metadata && typeof _msg.metadata === "object" ? _msg.metadata as Record<string, unknown> : undefined,
               text: typeof _msg.title === "string" ? _msg.title : "Allow OpenCode to perform this action?",
             }],
             timestamp: Date.now(),
@@ -3135,8 +3169,11 @@ function getVsCodeApi() {
         if (sid) {
           handleChangedFiles(sid, paths)
         }
-        if (sid && sid === activeSid && todosPanelApi && todosPanelApi.renderChangedFiles) {
-          todosPanelApi.renderChangedFiles(files as any)
+        if (sid && sid === activeSid) {
+          if (todosPanelApi && todosPanelApi.renderChangedFiles) {
+            todosPanelApi.renderChangedFiles(files as any)
+          }
+          cfDropdownApi?.updateChangedFiles(files as any)
         }
       }],
       ["file_diff_response", (msg) => {
@@ -3144,6 +3181,7 @@ function getVsCodeApi() {
         const lines = Array.isArray(msg.lines) ? msg.lines : []
         const error = typeof msg.error === "string" ? msg.error : undefined
         if (path) handleFileDiffResponse(path, lines as any, error)
+        if (path) cfDropdownApi?.handleDiffResponse(path, lines as any, error)
       }],
       ["skills_list", (msg) => {
         if (skillsModalApi && skillsModalApi.renderSkills) {
@@ -3199,6 +3237,10 @@ function getVsCodeApi() {
         return
       }
       dispatchHostMessage(msg)
+    })
+
+    window.addEventListener("beforeunload", () => {
+      stateManager.flush()
     })
 
     let stateSyncDebounce: ReturnType<typeof setTimeout> | undefined
@@ -3896,7 +3938,7 @@ function getVsCodeApi() {
     save: () => stateManager.save(),
     postMessage: (msg) => vscode.postMessage(msg),
     getActiveSessionId: () => stateManager.getState().activeSessionId ?? undefined,
-    changedFilesList: els.changedFilesList,
+    changedFilesList: null,
     checkpointPanel: els.checkpointPanel,
     checkpointToggleBtn: els.checkpointToggleBtn,
     clearMessages: (sessionId) => streamHandlers.get(sessionId)?.clearMessages(),

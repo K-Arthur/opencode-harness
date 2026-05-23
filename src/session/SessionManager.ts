@@ -76,6 +76,7 @@ export interface ModelRef {
 
 export interface PromptOptions {
   model?: ModelRef
+  agent?: string
   tools?: Record<string, boolean>
   variant?: string
 }
@@ -1073,10 +1074,11 @@ async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part
     if (!this.client) throw new Error("Server not running")
 
     const modelRef = options?.model ?? this.currentModel ?? undefined
+    const agent = options?.agent
     const variant = options?.variant
     const filteredTools = this.filterToolsForModel(options?.tools, modelRef)
     const idempotencyKey = `${sessionId}-${randomUUID()}`
-    log.info(`Sending prompt to session ${sessionId} (idempotency: ${idempotencyKey.slice(0, 16)}..., model=${modelRef ? `${modelRef.providerID}/${modelRef.modelID}` : "default"}, variant=${variant ?? "none"}, tools=${JSON.stringify(options?.tools ?? {})}, filteredTools=${JSON.stringify(filteredTools ?? {})})`)
+    log.info(`Sending prompt to session ${sessionId} (idempotency: ${idempotencyKey.slice(0, 16)}..., model=${modelRef ? `${modelRef.providerID}/${modelRef.modelID}` : "default"}, agent=${agent ?? "default"}, variant=${variant ?? "none"}, tools=${JSON.stringify(options?.tools ?? {})}, filteredTools=${JSON.stringify(filteredTools ?? {})})`)
 
     const resp = await this.client.session.prompt({
       path: { id: sessionId },
@@ -1086,6 +1088,7 @@ async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part
       body: {
         parts,
         ...(modelRef ? { model: modelRef } : {}),
+        ...(agent ? { agent } : {}),
         ...(variant ? { variant } : {}),
         ...(filteredTools ? { tools: filteredTools } : {}),
       },
@@ -1118,11 +1121,12 @@ async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part
     if (!this.client) throw new Error("Server not running")
 
     const modelRef = options?.model ?? this.currentModel ?? undefined
+    const agent = options?.agent
     const variant = options?.variant
     const filteredTools = this.filterToolsForModel(options?.tools, modelRef)
     // Generate a per-prompt idempotency key so the server can deduplicate retries
     const idempotencyKey = `${sessionId}-${randomUUID()}`
-    log.info(`Sending async prompt to session ${sessionId} (idempotency: ${idempotencyKey.slice(0, 16)}..., model=${modelRef ? `${modelRef.providerID}/${modelRef.modelID}` : "default"}, variant=${variant ?? "none"}, tools=${JSON.stringify(options?.tools ?? {})}, filteredTools=${JSON.stringify(filteredTools ?? {})}, eventStream=${this.eventStreamState}, lastRaw=${this.lastRawEventType || "none"})`)
+    log.info(`Sending async prompt to session ${sessionId} (idempotency: ${idempotencyKey.slice(0, 16)}..., model=${modelRef ? `${modelRef.providerID}/${modelRef.modelID}` : "default"}, agent=${agent ?? "default"}, variant=${variant ?? "none"}, tools=${JSON.stringify(options?.tools ?? {})}, filteredTools=${JSON.stringify(filteredTools ?? {})}, eventStream=${this.eventStreamState}, lastRaw=${this.lastRawEventType || "none"})`)
 
     let lastError: Error | null = null
 
@@ -1133,6 +1137,7 @@ async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part
           body: {
             parts,
             ...(modelRef ? { model: modelRef } : {}),
+            ...(agent ? { agent } : {}),
             ...(variant ? { variant } : {}),
             ...(filteredTools ? { tools: filteredTools } : {}),
           },
