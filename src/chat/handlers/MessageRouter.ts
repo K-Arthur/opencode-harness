@@ -211,6 +211,15 @@ export class MessageRouter {
     // workspace surface in the unified Session History modal. The webview
     // badges cross-workspace sessions via the separate server_session_list
     // path, and deduplicates by cliSessionId.
+    if (this.sessionManager.isRunning && typeof sessionStore.importServerSessions === "function") {
+      try {
+        const serverSessions = await this.sessionManager.listSessions()
+        sessionStore.importServerSessions(serverSessions.filter((s: { parentID?: string }) => !s.parentID))
+      } catch (err) {
+        log.warn("Could not import server sessions for history search", err)
+      }
+    }
+
     const normalizedQuery = query.trim().toLowerCase()
     const matchesQuery = (s: any): boolean => {
       if (!normalizedQuery) return true

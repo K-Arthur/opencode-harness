@@ -552,10 +552,30 @@ function getVsCodeApi() {
 
   /* ─── RECENT SESSIONS ─── */
 
-  function renderRecentSessionsList(filterQuery: string = "") {
+  function renderRecentSessionsList(filterQuery: string = "", hostSessions?: SessionSummary[]) {
     // Defensive trim: this is called from many call sites (welcome init,
     // session list updates, etc.) — not all of them sanitize the query.
     const query = (filterQuery || "").trim().toLowerCase()
+    const recentContainer = document.getElementById("welcome-recent-sessions") as HTMLDivElement | null
+    if (!recentContainer) return
+
+    if (hostSessions) {
+      const filteredSessions = hostSessions
+        .slice()
+        .sort((a, b) => (b.time ?? 0) - (a.time ?? 0))
+
+      renderRecentSessions(
+        filteredSessions,
+        recentContainer,
+        () => vscode.postMessage({ type: "list_sessions", query: filterQuery.trim() }),
+        (sessionId) => {
+          vscode.postMessage({ type: "resume_session", sessionId })
+        },
+        !!query
+      )
+      return
+    }
+
     const activeId = stateManager.getState().activeSessionId
     // Without a query: only show sessions that have visible messages (a clean
     // welcome page). With a query: also surface sessions whose backfill
@@ -563,9 +583,6 @@ function getVsCodeApi() {
     // by name only in that case (no message text yet to search).
     const allValidSessions = stateManager.getAllSessions()
       .filter((s) => s.id !== activeId && (s.messages.length > 0 || (!!query && !!s.name)))
-
-    const recentContainer = document.getElementById("welcome-recent-sessions") as HTMLDivElement | null
-    if (!recentContainer) return
 
     if (allValidSessions.length === 0) {
       recentContainer.style.display = "none"
@@ -2185,12 +2202,15 @@ function getVsCodeApi() {
       ["session_list", (msg) => {
         const sessions = (msg.sessions || []) as SessionSummary[]
         const isWelcomeVisible = !els.welcomeView.classList.contains("hidden")
+        const query = typeof msg.query === "string" ? msg.query : ""
         if (isWelcomeVisible && !els.sessionModal.classList.contains("hidden")) {
-          openSessionModal(sessions, typeof msg.query === "string" ? msg.query : "")
+          openSessionModal(sessions, query)
         } else if (isWelcomeVisible) {
-          renderRecentSessionsList(typeof msg.query === "string" ? msg.query : "")
+          const currentSearchQuery = (els.welcomeSearchInput?.querySelector<HTMLInputElement>("input")?.value || "").trim()
+          if (query && currentSearchQuery !== query.trim()) return
+          renderRecentSessionsList(query, sessions)
         } else {
-          openSessionModal(sessions, typeof msg.query === "string" ? msg.query : "")
+          openSessionModal(sessions, query)
         }
       }],
       ["session_list_update", (msg) => {

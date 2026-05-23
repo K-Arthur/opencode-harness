@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { installVsCodeApi, expectNoWebviewErrors } from './webviewTestHarness'
+import { dispatchHostMessage, installVsCodeApi, expectNoWebviewErrors, postedMessages } from './webviewTestHarness'
 
 test.describe('Welcome Screen', () => {
   test.beforeEach(async ({ page }) => {
@@ -221,6 +221,42 @@ test.describe('Welcome Screen', () => {
 
       await innerInput.focus()
       await expect(innerInput).toBeFocused()
+    })
+
+    test('typing fetches and renders matching session results', async ({ page }) => {
+      await page.goto('/')
+      await page.setViewportSize({ width: 400, height: 600 })
+
+      const innerInput = page.locator('#welcome-search-input input')
+      await innerInput.fill('model')
+
+      await expect.poll(async () => {
+        return (await postedMessages(page))
+          .filter((msg) => msg.type === 'list_sessions' && msg.query === 'model')
+          .length
+      }).toBeGreaterThan(0)
+
+      await dispatchHostMessage(page, {
+        type: 'session_list',
+        query: 'old',
+        sessions: [
+          { id: 'old-session', title: 'Old stale result', time: 1, messageCount: 1, cost: 0 },
+        ],
+      })
+
+      await expect(page.locator('#welcome-recent-sessions')).toBeHidden()
+
+      await dispatchHostMessage(page, {
+        type: 'session_list',
+        query: 'model',
+        sessions: [
+          { id: 'model-session', title: 'Compare model providers', time: 2, messageCount: 3, cost: 0 },
+        ],
+      })
+
+      await expect(page.locator('#welcome-recent-sessions')).toBeVisible()
+      await expect(page.locator('#welcome-recent-sessions .recent-item-title')).toHaveText('Compare model providers')
+      await expect(page.locator('#welcome-recent-sessions')).not.toContainText('Old stale result')
     })
   })
 })

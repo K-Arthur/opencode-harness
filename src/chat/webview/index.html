@@ -154,6 +154,12 @@
         <span id="status-model" class="status-strip-model"></span>
         <span id="status-cost" class="status-strip-cost hidden"></span>
         <span id="status-tokens" class="status-strip-tokens hidden"></span>
+        <div id="context-usage" class="context-usage-bar hidden" role="group" aria-label="Context usage">
+          <span class="context-usage-label">Context</span>
+          <progress id="context-progress-bar" class="context-usage-percent" max="100" value="0"></progress>
+          <span id="context-label" class="context-usage-detail">0%</span>
+          <span id="context-cost" class="context-usage-detail hidden"></span>
+        </div>
         <div id="quota-bar" class="quota-bar hidden" role="group" aria-label="Provider quota and usage">
           <span id="quota-label" class="quota-label">Usage</span>
           <div class="quota-track" aria-hidden="true">

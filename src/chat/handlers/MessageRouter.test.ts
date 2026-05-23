@@ -185,4 +185,11 @@ describe("handleListSessions — cross-workspace CLI sessions", () => {
     assert.ok(block.includes("workspacePath"), "session search must match workspace paths")
     assert.ok(block.includes('type === "text"'), "session search must inspect text blocks safely")
   })
+
+  void it("imports non-subagent server sessions before filtering so live search can find previous CLI sessions", () => {
+    assert.ok(block.includes("this.sessionManager.isRunning"), "must check whether the OpenCode server is running")
+    assert.ok(block.includes("this.sessionManager.listSessions()"), "must use the OpenCode SDK session list path")
+    assert.ok(block.includes("!s.parentID"), "must exclude subagent/child sessions from imported history")
+    assert.ok(block.includes("sessionStore.importServerSessions"), "must import unknown server sessions before mapping results")
+  })
 })
