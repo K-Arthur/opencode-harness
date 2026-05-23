@@ -275,6 +275,10 @@ export class MessageRouter {
       displayName: m.displayName,
       supportsVariants: m.supportsVariants,
       contextWindow: m.contextWindow,
+      available: m.available !== false,
+      unavailableReason: m.unavailableReason,
+      favorite: m.favorite === true,
+      enabled: m.enabled !== false,
     }))
     context.postMessage({ type: "model_list", items: models, model: this.modelManager.model })
     if (models.length === 0) {

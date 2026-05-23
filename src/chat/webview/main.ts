@@ -28,7 +28,7 @@ import { renderUnifiedSessionList, setSessionListPostMessage, setUnifiedServerSe
 import { createScrollAnchor, type ScrollAnchor } from "./scrollAnchor"
 import { createChunkedLoader, prependMessagesPreservingScroll, createLoadEarlierBanner, throttleScrollMarkers } from "./messageLoader"
 import { createVirtualList, getVirtualList, disposeVirtualList } from "./virtualList"
-import { setupTodosPanel } from "./todos-panel"
+import { setupTodosPanel, handleFileDiffResponse } from "./todos-panel"
 import { setupSkillsModal } from "./skills-modal"
 import { setupSubagentPanel } from "./subagent-panel"
 import { shouldRefreshOnUpdate, selectDisplayedUsage } from "./tokenDisplayPolicy"
@@ -547,6 +547,7 @@ function getVsCodeApi() {
           triggerTodosRender(activeSid)
         },
         onOpenFile: (filePath: string) => vscode.postMessage({ type: "open_file", path: filePath }),
+        postMessage: (msg: Record<string, unknown>) => vscode.postMessage(msg),
       })
       skillsModalApi = setupSkillsModal(els, {
         onToggleSkill: (skillId: string, enabled: boolean) => vscode.postMessage({ type: "toggle_skill", skillId, enabled }),
@@ -743,6 +744,18 @@ function getVsCodeApi() {
     // Close button
     els.closeContextUsageBtn.addEventListener("click", () => {
       els.contextUsagePanel.classList.add("hidden")
+    })
+
+    // Toggle panel via status bar/strip
+    els.contextUsage.addEventListener("click", () => {
+      const activeSid = stateManager.getState().activeSessionId
+      if (!activeSid) return
+      
+      const isHidden = els.contextUsagePanel.classList.toggle("hidden")
+      if (!isHidden) {
+        vscode.postMessage({ type: "context_history_request", days: 7 })
+        vscode.postMessage({ type: "get_context_usage" })
+      }
     })
   }
 
@@ -2479,6 +2492,45 @@ function getVsCodeApi() {
         if (tabPanel) updateContextUsage(tabPanel, { percent: msg.percent as number, tokens: msg.tokens as number, maxTokens: msg.maxTokens as number })
         handleContextUsageMessage(msg as unknown as Record<string, unknown>)
       }],
+      ["context_window_unknown", (msg) => {
+        // Hide the context bar and show the "Set override" chip so the user
+        // knows the model's context window is unavailable rather than seeing
+        // a misleading fabricated denominator.
+        els.contextUsage.classList.add("hidden")
+        const chip = document.getElementById("ctx-window-unknown-chip") as HTMLButtonElement | null
+        if (chip) {
+          const modelId = typeof msg.modelId === "string" ? msg.modelId : ""
+          chip.title = `Context window unknown for ${modelId || "this model"}. Click to set an override.`
+          chip.classList.remove("hidden")
+          // Wire the click once (guard against double-attaching on repeated messages)
+          if (!chip.dataset.wired) {
+            chip.dataset.wired = "1"
+            chip.addEventListener("click", () => {
+              vscode.postMessage({ type: "open_context_window_override_dialog" })
+            })
+          }
+        }
+        // Also keep context usage panel in sync
+        handleContextUsageMessage(msg as unknown as Record<string, unknown>)
+      }],
+      ["context_window_known", (msg) => {
+        // Context window resolved — hide the chip and let the normal bar render.
+        const chip = document.getElementById("ctx-window-unknown-chip")
+        if (chip) chip.classList.add("hidden")
+        // Push the known maxTokens into the per-tab monitor if it's active
+        const activeId = stateManager.getState().activeSessionId
+        if (activeId && typeof msg.maxTokens === "number") {
+          const tabPanel = els.tabPanels.querySelector<HTMLElement>(`.tab-panel[data-tab-id="${CSS.escape(activeId)}"] .context-monitor`)
+          const session = stateManager.getSession(activeId)
+          const tokens = session?.tokenUsage?.total ?? 0
+          const pct = msg.maxTokens > 0 ? Math.min(100, Math.round((tokens / (msg.maxTokens as number)) * 100)) : 0
+          if (tabPanel) updateContextUsage(tabPanel, { percent: pct, tokens, maxTokens: msg.maxTokens as number })
+        }
+      }],
+      ["context_history_response", (msg) => {
+        handleContextUsageMessage({ type: "usage_history", history: msg.history })
+        handleContextUsageMessage({ type: "usage_statistics", statistics: msg.statistics })
+      }],
       ["usage_history", (msg) => { handleContextUsageMessage(msg as unknown as Record<string, unknown>) }],
       ["usage_statistics", (msg) => { handleContextUsageMessage(msg as unknown as Record<string, unknown>) }],
       ["server_status", (msg, sid) => { if (sid) handleServerStatus(sid, msg.status as string, msg.errorContext) }],
@@ -3086,6 +3138,12 @@ function getVsCodeApi() {
         if (sid && sid === activeSid && todosPanelApi && todosPanelApi.renderChangedFiles) {
           todosPanelApi.renderChangedFiles(files as any)
         }
+      }],
+      ["file_diff_response", (msg) => {
+        const path = typeof msg.path === "string" ? msg.path : ""
+        const lines = Array.isArray(msg.lines) ? msg.lines : []
+        const error = typeof msg.error === "string" ? msg.error : undefined
+        if (path) handleFileDiffResponse(path, lines as any, error)
       }],
       ["skills_list", (msg) => {
         if (skillsModalApi && skillsModalApi.renderSkills) {

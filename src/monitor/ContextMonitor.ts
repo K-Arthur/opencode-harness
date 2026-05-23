@@ -216,10 +216,13 @@ private currentTokens = 0
     this.currentTokens = Math.max(0, tokensUsed)
     const cost = this.calculateCost(this.currentTokens, breakdown)
     
-    // Handle zero token limit to avoid division by zero
-    const safeTokenLimit = this.tokenLimit > 0 ? this.tokenLimit : 1
+    // Emit percent:0 when the limit is unknown (tokenLimit === 0) rather than
+    // dividing by a fake safeLimit of 1, which would produce percent:100 for
+    // any non-zero token count and trigger a false critical-red ring in the UI.
     const usage: ContextUsage = {
-      percent: Math.min(100, Math.round((this.currentTokens / safeTokenLimit) * 100)),
+      percent: this.tokenLimit > 0
+        ? Math.min(100, Math.round((this.currentTokens / this.tokenLimit) * 100))
+        : 0,
       tokens: this.currentTokens,
       maxTokens: this.tokenLimit,
       sessionId,
@@ -247,10 +250,13 @@ private currentTokens = 0
     const safeQueueTokens = Math.max(0, queueTokens)
     const safeSteerTokens = Math.max(0, steerTokens)
     
-    // This will be called by the queue when items are added/removed
-    // The breakdown will be merged with the current context usage
+    // This will be called by the queue when items are added/removed.
+    // Guard against tokenLimit === 0 (unknown context window) to prevent
+    // NaN/Infinity in the emitted percent field.
     const usage: ContextUsage = {
-      percent: Math.min(100, Math.round((this.currentTokens / this.tokenLimit) * 100)),
+      percent: this.tokenLimit > 0
+        ? Math.min(100, Math.round((this.currentTokens / this.tokenLimit) * 100))
+        : 0,
       tokens: this.currentTokens,
       maxTokens: this.tokenLimit,
       sessionId,

@@ -264,9 +264,12 @@ export function updateContextBarFromSession(deps: TokenCostDeps, sessionId: stri
   if (!ctxBar) return
 
   const modelKey = session.model ? `${session.model}` : undefined
-  const contextWindow = deps.getContextWindow(modelKey) ?? 200_000
+  // No hardcoded fallback: when the server hasn't reported limit.context and
+  // OpenRouter couldn't fill it either, we hide the bar rather than display a
+  // fabricated denominator. The host fires context_window_unknown in this case.
+  const contextWindow = deps.getContextWindow(modelKey)
   const totalApiTokens = session.tokenUsage.total ?? 0
-  if (totalApiTokens <= 0 || contextWindow <= 0) {
+  if (totalApiTokens <= 0 || !contextWindow || contextWindow <= 0) {
     ctxBar.classList.add("hidden")
     ctxBar.querySelector<HTMLElement>("#context-cost")?.classList.add("hidden")
     return
@@ -311,7 +314,10 @@ export function checkOverflowWarnings(deps: TokenCostDeps, sessionId: string): v
   if (!session?.tokenUsage) return
 
   const modelKey = session.model ? `${session.model}` : undefined
-  const contextWindow = deps.getContextWindow(modelKey) ?? 200_000
+  // Suppress warnings when context window is unknown — a fabricated 200k
+  // denominator would fire warnings at completely wrong thresholds.
+  const contextWindow = deps.getContextWindow(modelKey)
+  if (!contextWindow || contextWindow <= 0) return
   const totalApiTokens = session.tokenUsage.total ?? 0
   const usageRatio = totalApiTokens / contextWindow
 

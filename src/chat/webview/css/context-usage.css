@@ -6,6 +6,13 @@
   align-items: center;
   gap: var(--spacing-xs);
   padding: 0 var(--spacing-sm);
+  cursor: pointer;
+  border-radius: var(--radius-sm, 4px);
+  transition: background var(--duration-fast, 0.2s);
+}
+
+.context-usage-bar:hover {
+  background: var(--oc-glass-bg, rgba(255, 255, 255, 0.05));
 }
 
 .context-usage-bar.hidden {
@@ -469,4 +476,135 @@
   font-size: 0.75rem;
   color: var(--oc-muted);
   font-family: var(--font-mono);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONTEXT USAGE — Premium redesign additions (.cup-*)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Radial ring (SVG) in breakdown panel header */
+.cup-ring-svg { flex-shrink: 0; }
+.cup-ring-bg { stroke: var(--oc-border); }
+.cup-ring-fill {
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.5s cubic-bezier(0.4,0,0.2,1), stroke 0.3s;
+}
+.cup-ring-fill--good     { stroke: var(--usage-green, #4caf50); }
+.cup-ring-fill--warning  { stroke: var(--usage-yellow, #ff9800); }
+.cup-ring-fill--critical { stroke: var(--usage-red, #f44336); animation: ring-pulse 1.5s ease-in-out infinite; }
+.cup-ring-label { fill: var(--oc-fg); font-family: var(--font-mono); font-weight: 600; }
+
+@keyframes ring-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+/* Header row: ring + text */
+.cup-header-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: var(--spacing-md);
+}
+.cup-header-text { display: flex; flex-direction: column; gap: 4px; }
+.cup-summary-text { font-size: 0.85rem; color: var(--oc-fg); font-weight: 500; }
+
+/* Critical banner */
+.cup-critical-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(244,67,54,0.08);
+  border: 1px solid rgba(244,67,54,0.3);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  color: #f44336;
+  margin-bottom: var(--spacing-sm);
+  animation: banner-slide-in 0.2s ease;
+}
+.cup-critical-icon { font-size: 1rem; }
+@keyframes banner-slide-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* Breakdown chart enhancements */
+.cup-breakdown-chart {
+  display: flex;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  gap: 2px;
+  margin-bottom: var(--spacing-sm);
+}
+.cup-segment {
+  transition: width 0.4s cubic-bezier(0.4,0,0.2,1);
+  position: relative;
+  cursor: default;
+}
+/* Segment tooltip via CSS attr() */
+.cup-segment::after {
+  content: attr(data-detail);
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--oc-panel-bg);
+  border: 1px solid var(--oc-border);
+  border-radius: 4px;
+  padding: 3px 7px;
+  font-size: 0.7rem;
+  color: var(--oc-fg);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 10;
+}
+.cup-segment:hover::after { opacity: 1; }
+
+/* Colour states for per-tab monitor */
+.context-monitor--good .context-progress-fill    { background: var(--usage-green, #4caf50); }
+.context-monitor--warning .context-progress-fill { background: var(--usage-yellow, #ff9800); }
+.context-monitor--critical .context-progress-fill {
+  background: var(--usage-red, #f44336);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+/* Projected overflow badge */
+.cup-projected {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--spacing-sm);
+  font-size: 0.8rem;
+  color: var(--oc-muted);
+}
+.cup-projected--overflow { color: #f44336; }
+.cup-overflow-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(244,67,54,0.12);
+  border: 1px solid rgba(244,67,54,0.35);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #f44336;
+}
+
+/* Cost row inside breakdown panel */
+.cup-cost-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+}
+.cup-cost-label { color: var(--oc-muted); }
+.cup-cost-value { font-family: var(--font-mono); font-weight: 600; color: var(--oc-fg); }
+
+/* Tab-numbers in monospace for alignment */
+.cup-summary-text,
+.cup-cost-value,
+.cup-projected-value {
+  font-variant-numeric: tabular-nums;
 }

@@ -49,9 +49,10 @@ function createModelOption(
 ): HTMLDivElement {
   const fullId = `${model.provider}/${model.id}`
   const isSelected = fullId === currentModel
+  const isUnavailable = model.available === false
 
   const option = document.createElement("div")
-  option.className = "model-option" + (isSelected ? " selected" : "")
+  option.className = "model-option" + (isSelected ? " selected" : "") + (isUnavailable ? " unavailable" : "")
   option.id = `model-option-${index}`
   option.setAttribute("role", "option")
   option.setAttribute("aria-selected", isSelected ? "true" : "false")
@@ -65,7 +66,7 @@ function createModelOption(
 
   const name = document.createElement("span")
   name.className = "model-option-name"
-  name.textContent = model.displayName
+  name.textContent = model.displayName + (isUnavailable ? " (discontinued)" : "")
   option.appendChild(name)
 
   if (model.favorite || typeof model.recentRank === "number") {
@@ -73,13 +74,25 @@ function createModelOption(
     meta.className = "model-option-meta"
     meta.textContent = model.favorite ? "Favorite" : "Recent"
     option.appendChild(meta)
+  } else if (isUnavailable) {
+    const meta = document.createElement("span")
+    meta.className = "model-option-meta"
+    meta.style.borderColor = "var(--oc-accent-border, #f44336)"
+    meta.style.color = "var(--usage-red, #f44336)"
+    meta.style.background = "rgba(244, 67, 54, 0.1)"
+    meta.textContent = "Offline"
+    option.appendChild(meta)
   }
 
-  option.addEventListener("click", () => {
-    callbacks.onSelect(fullId)
-    closeDropdown()
-    focusBtn()
-  })
+  if (!isUnavailable) {
+    option.addEventListener("click", () => {
+      callbacks.onSelect(fullId)
+      closeDropdown()
+      focusBtn()
+    })
+  } else {
+    option.setAttribute("aria-disabled", "true")
+  }
   return option
 }
 
@@ -118,9 +131,11 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
   let isOpen = false
   let models: ModelInfo[] = []
   let focusedIndex = -1
+  let searchQuery = ""
+  let _currentModel = ""
 
   function getOptions(): HTMLElement[] {
-    return Array.from(els.modelDropdown.querySelectorAll('[role="option"]'))
+    return Array.from(els.modelDropdown.querySelectorAll('[role="option"]:not(.manage-models-option)'))
   }
 
   function toggle() {
@@ -134,6 +149,16 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     els.modelSelectorBtn.setAttribute("aria-expanded", "true")
     els.modelSelectorBtn.setAttribute("aria-activedescendant", "")
     callbacks.onOpen?.()
+    
+    // Auto-focus search input
+    const searchInput = els.modelDropdown.querySelector(".model-dropdown-search") as HTMLInputElement | null
+    if (searchInput) {
+      setTimeout(() => {
+        searchInput.focus()
+        searchInput.select()
+      }, 50)
+    }
+
     if (models.length === 0 && els.modelDropdown.children.length === 0) {
       const empty = document.createElement("div")
       empty.className = "dropdown-empty"
@@ -157,6 +182,7 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
   function focusOption(index: number) {
     const options = getOptions()
     for (const opt of options) opt.classList.remove("focused")
+    if (options.length === 0) return
     if (index < 0) index = options.length - 1
     if (index >= options.length) index = 0
     focusedIndex = index
@@ -172,69 +198,13 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     const options = getOptions()
     if (focusedIndex >= 0 && focusedIndex < options.length) {
       const opt = options[focusedIndex]
-      if (opt) opt.dispatchEvent(new Event("click", { bubbles: true }))
-    }
-  }
-
-  function render(modelsList: ModelInfo[], currentModel: string) {
-    models = modelsList
-    els.modelDropdown.replaceChildren()
-
-    const enabledModels = modelsList.filter((m) => m.enabled !== false)
-    const sortedModels = sortModels(enabledModels)
-    const byProvider = groupByProvider(sortedModels)
-
-    let optionIndex = 0
-    for (const [provider, providerModels] of byProvider) {
-      els.modelDropdown.appendChild(createProviderGroupLabel(provider))
-      for (const model of providerModels) {
-        els.modelDropdown.appendChild(createModelOption(model, optionIndex, currentModel, callbacks, close, () => els.modelSelectorBtn.focus()))
-        optionIndex++
-      }
-    }
-
-    if (optionIndex > 0) {
-      els.modelDropdown.appendChild(createDivider())
-    }
-    els.modelDropdown.appendChild(createManageModelsOption(callbacks, close))
-  }
-
-  let _currentModel = ""
-
-  function setCurrentModel(modelId: string) {
-    _currentModel = modelId
-    const short = modelId.includes("/") ? modelId.split("/").pop()! : modelId
-    els.modelLabel.textContent = short || "Default"
-    els.modelSelectorBtn.title = `Model: ${modelId || "Default"}`
-
-    // Re-sync .selected class on dropdown items to match the current model
-    const options = getOptions()
-    for (const opt of options) {
-      const fullId = opt.id?.replace("model-option-", "")
-      const model = models[Number(fullId)]
-      if (model) {
-        const optionFullId = `${model.provider}/${model.id}`
-        if (optionFullId === modelId) {
-          opt.classList.add("selected")
-          opt.setAttribute("aria-selected", "true")
-        } else {
-          opt.classList.remove("selected")
-          opt.setAttribute("aria-selected", "false")
-        }
+      if (opt && !opt.classList.contains("unavailable")) {
+        opt.dispatchEvent(new Event("click", { bubbles: true }))
       }
     }
   }
 
-  function getCurrentModel(): string {
-    return _currentModel
-  }
-
-  els.modelSelectorBtn.addEventListener("click", (e) => {
-    e.stopPropagation()
-    toggle()
-  })
-
-  els.modelSelectorBtn.addEventListener("keydown", (e) => {
+  function handleKeydown(e: KeyboardEvent) {
     if (!isOpen) {
       if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
         e.preventDefault()
@@ -253,7 +223,6 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
         focusOption(focusedIndex - 1)
         break
       case "Enter":
-      case " ":
         e.preventDefault()
         selectFocused()
         break
@@ -271,6 +240,134 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
         focusOption(getOptions().length - 1)
         break
     }
+  }
+
+  function render(modelsList: ModelInfo[], currentModel: string) {
+    models = modelsList
+    _currentModel = currentModel
+    
+    updateList()
+  }
+
+  function updateList() {
+    els.modelDropdown.replaceChildren()
+
+    // Add sticky search input
+    const searchContainer = document.createElement("div")
+    searchContainer.className = "model-dropdown-search-container"
+    searchContainer.addEventListener("click", (e) => e.stopPropagation())
+
+    const searchInput = document.createElement("input")
+    searchInput.type = "text"
+    searchInput.className = "model-dropdown-search"
+    searchInput.placeholder = "Search models..."
+    searchInput.value = searchQuery
+    searchInput.setAttribute("role", "searchbox")
+    searchInput.setAttribute("aria-label", "Search models")
+    
+    searchInput.addEventListener("input", () => {
+      searchQuery = searchInput.value.toLowerCase().trim()
+      updateList()
+      // Refocus after replacement
+      const newInput = els.modelDropdown.querySelector(".model-dropdown-search") as HTMLInputElement | null
+      if (newInput) {
+        newInput.focus()
+        newInput.setSelectionRange(newInput.value.length, newInput.value.length)
+      }
+    })
+
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === "Escape") {
+        e.preventDefault()
+        e.stopPropagation()
+        handleKeydown(e)
+      }
+    })
+
+    searchContainer.appendChild(searchInput)
+    els.modelDropdown.appendChild(searchContainer)
+
+    const enabledModels = models.filter((m) => m.enabled !== false)
+    const filteredModels = searchQuery
+      ? enabledModels.filter(
+          (m) =>
+            m.displayName.toLowerCase().includes(searchQuery) ||
+            m.provider.toLowerCase().includes(searchQuery) ||
+            m.id.toLowerCase().includes(searchQuery)
+        )
+      : enabledModels
+
+    const sortedModels = sortModels(filteredModels)
+    
+    // Performance limit for very large catalogs
+    const limitedModels = sortedModels.slice(0, 40)
+    const byProvider = groupByProvider(limitedModels)
+
+    let optionIndex = 0
+    for (const [provider, providerModels] of byProvider) {
+      els.modelDropdown.appendChild(createProviderGroupLabel(provider))
+      for (const model of providerModels) {
+        els.modelDropdown.appendChild(createModelOption(model, optionIndex, _currentModel, callbacks, close, () => els.modelSelectorBtn.focus()))
+        optionIndex++
+      }
+    }
+
+    if (optionIndex > 0) {
+      els.modelDropdown.appendChild(createDivider())
+    }
+    
+    els.modelDropdown.appendChild(createManageModelsOption(callbacks, close))
+  }
+
+  function setCurrentModel(modelId: string) {
+    _currentModel = modelId
+    const short = modelId.includes("/") ? modelId.split("/").pop()! : modelId
+    els.modelLabel.textContent = short || "Default"
+    els.modelSelectorBtn.title = `Model: ${modelId || "Default"}`
+
+    // Re-sync .selected class on dropdown items to match the current model
+    const options = getOptions()
+    for (const opt of options) {
+      const optionIndexStr = opt.id?.replace("model-option-", "")
+      if (optionIndexStr) {
+        const optionIdx = Number(optionIndexStr)
+        const enabledModels = models.filter((m) => m.enabled !== false)
+        const filteredModels = searchQuery
+          ? enabledModels.filter(
+              (m) =>
+                m.displayName.toLowerCase().includes(searchQuery) ||
+                m.provider.toLowerCase().includes(searchQuery) ||
+                m.id.toLowerCase().includes(searchQuery)
+            )
+          : enabledModels
+        const sortedModels = sortModels(filteredModels)
+        const limitedModels = sortedModels.slice(0, 40)
+        const model = limitedModels[optionIdx]
+        if (model) {
+          const optionFullId = `${model.provider}/${model.id}`
+          if (optionFullId === modelId) {
+            opt.classList.add("selected")
+            opt.setAttribute("aria-selected", "true")
+          } else {
+            opt.classList.remove("selected")
+            opt.setAttribute("aria-selected", "false")
+          }
+        }
+      }
+    }
+  }
+
+  function getCurrentModel(): string {
+    return _currentModel
+  }
+
+  els.modelSelectorBtn.addEventListener("click", (e) => {
+    e.stopPropagation()
+    toggle()
+  })
+
+  els.modelSelectorBtn.addEventListener("keydown", (e) => {
+    handleKeydown(e)
   })
 
   document.addEventListener("click", (e: Event) => {

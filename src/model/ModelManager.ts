@@ -13,6 +13,8 @@ export interface ModelInfo {
   available?: boolean
   unavailableReason?: string
   supportsVariants?: boolean
+  favorite?: boolean
+  enabled?: boolean
 }
 
 const MODEL_CACHE_KEY = "opencode-harness.modelCache"
@@ -26,16 +28,21 @@ export class ModelManager {
   private _onModelsRefreshed = new vscode.EventEmitter<void>()
   private _globalState?: vscode.Memento
   private providerConfigManager?: ProviderConfigManager
+  private _favoriteModels: Set<string> = new Set()
+  private _disabledModels: Set<string> = new Set()
   /**
    * Cross-provider context-window catalogue from OpenRouter. Populated
-   * lazily on first model-refresh; persisted to globalState with a 24h
-   * TTL. When the opencode server doesn't report `limit.context` for a
-   * model, `resolveContextWindow` consults this map as a fallback.
+   * dynamically during `refreshModels` using OpenRouter's metadata API.
    */
   private _openRouterCache: Map<string, number> = new Map()
 
-  readonly onModelChanged = this._onModelChanged.event
-  readonly onModelsRefreshed = this._onModelsRefreshed.event
+  get onModelChanged(): vscode.Event<string> {
+    return this._onModelChanged.event
+  }
+
+  get onModelsRefreshed(): vscode.Event<void> {
+    return this._onModelsRefreshed.event
+  }
 
   constructor() {
   }
@@ -68,9 +75,19 @@ export class ModelManager {
   private loadCachedModels(): void {
     if (!this._globalState) return
     try {
+      this._favoriteModels = new Set(this._globalState.get<string[]>("opencode-harness.favoriteModels", []))
+      this._disabledModels = new Set(this._globalState.get<string[]>("opencode-harness.disabledModels", []))
+
       const cached = this._globalState.get<ModelInfo[]>(MODEL_CACHE_KEY, [])
       if (cached.length > 0) {
-        this._models = cached
+        this._models = cached.map(m => {
+          const modelKey = `${m.provider}/${m.id}`
+          return {
+            ...m,
+            favorite: this._favoriteModels.has(modelKey),
+            enabled: !this._disabledModels.has(modelKey),
+          }
+        })
         this._onModelsRefreshed.fire()
         log.info(`Loaded ${cached.length} cached models from globalState`)
       }
@@ -119,6 +136,42 @@ export class ModelManager {
       await this._globalState.update(OPENROUTER_CACHE_TS_KEY, Date.now())
     } catch (err) {
       log.warn("Failed to persist OpenRouter context-window cache", err)
+    }
+  }
+
+  toggleModelFavorite(modelId: string): boolean {
+    if (this._favoriteModels.has(modelId)) {
+      this._favoriteModels.delete(modelId)
+    } else {
+      this._favoriteModels.add(modelId)
+    }
+    this.savePreferences()
+    this.updateModelProperties(modelId, { favorite: this._favoriteModels.has(modelId) })
+    return this._favoriteModels.has(modelId)
+  }
+
+  setModelEnabled(modelId: string, enabled: boolean): void {
+    if (enabled) {
+      this._disabledModels.delete(modelId)
+    } else {
+      this._disabledModels.add(modelId)
+    }
+    this.savePreferences()
+    this.updateModelProperties(modelId, { enabled })
+  }
+
+  private savePreferences(): void {
+    if (!this._globalState) return
+    this._globalState.update("opencode-harness.favoriteModels", Array.from(this._favoriteModels))
+    this._globalState.update("opencode-harness.disabledModels", Array.from(this._disabledModels))
+  }
+
+  private updateModelProperties(modelId: string, props: Partial<ModelInfo>): void {
+    const model = this._models.find(m => `${m.provider}/${m.id}` === modelId)
+    if (model) {
+      Object.assign(model, props)
+      this.saveCachedModels()
+      this._onModelsRefreshed.fire()
     }
   }
 
@@ -246,6 +299,10 @@ export class ModelManager {
             }),
             outputLimit: m.limit?.output || undefined,
             supportsVariants: !!reasoning,
+            available: m.available !== false,
+            unavailableReason: m.unavailableReason || undefined,
+            favorite: this._favoriteModels.has(modelKey),
+            enabled: !this._disabledModels.has(modelKey),
           })
         }
       }
@@ -305,22 +362,30 @@ export class ModelManager {
         if (code === 0 && stdout.trim()) {
           try {
             const lines = stdout.trim().split("\n").filter(l => l.trim())
-            this._models = lines.map((line) => {
+             this._models = lines.map((line) => {
               const trimmed = line.trim()
               const slashIdx = trimmed.indexOf("/")
               if (slashIdx >= 0) {
                 const provider = trimmed.substring(0, slashIdx)
                 const modelId = trimmed.substring(slashIdx + 1)
+                const modelKey = `${provider}/${modelId}`
                 return {
                   id: modelId,
                   provider,
                   displayName: modelId,
+                  available: true,
+                  favorite: this._favoriteModels.has(modelKey),
+                  enabled: !this._disabledModels.has(modelKey),
                 }
               }
+              const modelKey = `unknown/${trimmed}`
               return {
                 id: trimmed,
                 provider: "unknown",
                 displayName: trimmed,
+                available: true,
+                favorite: this._favoriteModels.has(modelKey),
+                enabled: !this._disabledModels.has(modelKey),
               }
             })
             this._onModelsRefreshed.fire()

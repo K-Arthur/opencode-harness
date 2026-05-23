@@ -103,12 +103,14 @@
 .changed-files-list {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1);
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--oc-glass-border);
-  background: var(--oc-glass-bg);
-  max-height: 80px;
+  gap: var(--space-1-5);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--oc-glass-border, rgba(255, 255, 255, 0.08));
+  background: linear-gradient(180deg, var(--oc-glass-bg, rgba(30, 30, 30, 0.4)), rgba(20, 20, 20, 0.2));
+  backdrop-filter: blur(12px);
+  max-height: 95px;
   overflow-y: auto;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .changed-files-list.hidden {
@@ -118,18 +120,33 @@
 .changed-file-chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-0-5) var(--space-2);
+  gap: var(--space-1-5);
+  padding: var(--space-1) var(--space-2-5);
   font-size: var(--text-xs);
   font-family: var(--font-mono);
-  background: var(--oc-bg-secondary);
-  border: 1px solid var(--oc-glass-border);
-  border-radius: var(--radius-sm);
+  background: var(--oc-bg-secondary, rgba(0, 0, 0, 0.15));
+  border: 1px solid var(--oc-glass-border, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-md);
   color: var(--oc-fg);
-  max-width: 200px;
+  max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: all var(--duration-fast) var(--ease-out);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+
+.changed-file-chip:hover {
+  background: var(--oc-accent-subtle, rgba(0, 120, 212, 0.12));
+  border-color: var(--oc-accent-border, rgba(0, 120, 212, 0.35));
+  color: var(--color-accent);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 4px 12px rgba(0, 120, 212, 0.2);
+}
+
+.changed-file-chip:active {
+  transform: translateY(0) scale(1);
 }
 
 .changed-file-icon {
@@ -138,36 +155,37 @@
   justify-content: center;
   flex-shrink: 0;
   font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 700;
-  min-width: 22px;
+  font-size: 8px;
+  font-weight: 800;
+  min-width: 20px;
   height: 14px;
-  padding: 0 3px;
-  border-radius: 3px;
-  background: var(--oc-bg-tertiary);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--oc-bg-tertiary, rgba(255,255,255,0.08));
   color: var(--oc-fg);
   text-align: center;
   letter-spacing: 0.5px;
   line-height: 1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 /* Per-language colored badges. Colors chosen from each language's
  * conventional brand palette for at-a-glance recognition. */
-.changed-file-icon--ts   { background: #3178c6; color: #fff; }
-.changed-file-icon--js   { background: #f0db4f; color: #323330; }
-.changed-file-icon--py   { background: #3776ab; color: #ffd43b; }
-.changed-file-icon--rs   { background: #dea584; color: #000; }
-.changed-file-icon--go   { background: #00add8; color: #fff; }
-.changed-file-icon--java { background: #b07219; color: #fff; }
-.changed-file-icon--kt   { background: #a97bff; color: #fff; }
-.changed-file-icon--json { background: #6e6e6e; color: #fff; }
-.changed-file-icon--md   { background: #4b8bbe; color: #fff; }
-.changed-file-icon--css  { background: #563d7c; color: #fff; }
-.changed-file-icon--html { background: #e34c26; color: #fff; }
-.changed-file-icon--yaml { background: #cb171e; color: #fff; }
-.changed-file-icon--xml  { background: #0060ac; color: #fff; }
-.changed-file-icon--sql  { background: #336791; color: #fff; }
-.changed-file-icon--sh   { background: #4eaa25; color: #fff; }
+.changed-file-icon--ts   { background: #3178c6; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.changed-file-icon--js   { background: #f0db4f; color: #323330; text-shadow: 0 1px 2px rgba(255,255,255,0.2); }
+.changed-file-icon--py   { background: #3776ab; color: #ffd43b; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.changed-file-icon--rs   { background: #dea584; color: #000; text-shadow: 0 1px 2px rgba(255,255,255,0.2); }
+.changed-file-icon--go   { background: #00add8; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.changed-file-icon--java { background: #b07219; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.changed-file-icon--kt   { background: #a97bff; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.changed-file-icon--json { background: #6e6e6e; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.changed-file-icon--md   { background: #4b8bbe; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.changed-file-icon--css  { background: #563d7c; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.changed-file-icon--html { background: #e34c26; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.changed-file-icon--yaml { background: #cb171e; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.changed-file-icon--xml  { background: #0060ac; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.changed-file-icon--sql  { background: #336791; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.changed-file-icon--sh   { background: #4eaa25; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
 .changed-file-icon--toml { background: #9c4221; color: #fff; }
 .changed-file-icon--default {
   background: var(--oc-bg-tertiary);
@@ -1255,6 +1273,46 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-mission);
   z-index: var(--z-dropdown);
+}
+
+.model-dropdown-search-container {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--oc-glass-border);
+  position: sticky;
+  top: 0;
+  background: var(--oc-panel-bg);
+  z-index: 2;
+}
+
+.model-dropdown-search {
+  width: 100%;
+  padding: var(--space-1-5) var(--space-2);
+  border: 1px solid var(--oc-glass-border);
+  background: var(--oc-input-bg, rgba(255, 255, 255, 0.05));
+  color: var(--oc-fg);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  outline: none;
+  transition: border-color var(--duration-fast, 0.2s);
+}
+
+.model-dropdown-search:focus {
+  border-color: var(--color-accent);
+}
+
+.model-option.unavailable {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: transparent !important;
+}
+
+.model-option.unavailable .model-option-name {
+  text-decoration: line-through;
+}
+
+.model-option.unavailable:hover {
+  background: transparent !important;
+  border-left-color: transparent !important;
 }
 
 #variant-dropdown-container {

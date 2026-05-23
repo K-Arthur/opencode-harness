@@ -479,6 +479,8 @@ export type HostMessage =
   | { type: "skills_search_results"; results: unknown[] }
   | { type: "subagent_activities"; activities: unknown[] }
   | { type: "show_error"; message: string }
+  /** Response to get_file_diff — carries unified diff lines for a given path. */
+  | { type: "file_diff_response"; path: string; sessionId?: string; lines: DiffLine[]; error?: string }
 
 // Backward-compatible alias — gradual migration; remove once all consumers use the union.
 export type LegacyHostMessage = HostMessage & Record<string, unknown>
@@ -498,6 +500,8 @@ export interface ModelInfo {
   favorite?: boolean
   recentRank?: number
   contextWindow?: number
+  available?: boolean
+  unavailableReason?: string
 }
 
 export interface TabInfo {
@@ -619,6 +623,8 @@ export type WebviewMessage =
   | { type: "update_setting"; key: string; value: unknown }
   | { type: "show_error"; message: string }
   | { type: "get_context_usage"; sessionId: string }
+  /** Request unified diff hunks for a specific file path in the active session. */
+  | { type: "get_file_diff"; path: string; sessionId?: string }
 
 // Backward-compatible alias
 export type LegacyWebviewMessage = WebviewMessage & Record<string, unknown>
