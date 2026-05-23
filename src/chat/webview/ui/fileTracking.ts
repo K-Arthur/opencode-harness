@@ -139,8 +139,12 @@ export function renderCheckpointPanel(deps: FileTrackingDeps, checkpoints: Array
   panel.innerHTML = ""
   const toggleBtn = deps.checkpointToggleBtn
   if (checkpoints.length === 0) {
-    panel.classList.add("hidden")
-    toggleBtn?.setAttribute("aria-pressed", "false")
+    panel.classList.remove("hidden")
+    toggleBtn?.setAttribute("aria-pressed", "true")
+    const empty = document.createElement("div")
+    empty.className = "checkpoint-empty"
+    empty.textContent = "No checkpoints yet"
+    panel.appendChild(empty)
     return
   }
   panel.classList.remove("hidden")

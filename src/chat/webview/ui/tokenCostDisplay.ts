@@ -16,6 +16,7 @@ export type RateLimitWebviewState = {
 export interface TokenCostEls {
   tokenDisplay: HTMLElement | null
   statusTokens: HTMLElement
+  statusModel: HTMLElement
   costDisplay: HTMLElement | null
   statusCost: HTMLElement
   contextUsage: HTMLElement
@@ -265,17 +266,44 @@ export function updateContextBarFromSession(deps: TokenCostDeps, sessionId: stri
   const modelKey = session.model ? `${session.model}` : undefined
   const contextWindow = deps.getContextWindow(modelKey) ?? 200_000
   const totalApiTokens = session.tokenUsage.total ?? 0
+  if (totalApiTokens <= 0 || contextWindow <= 0) {
+    ctxBar.classList.add("hidden")
+    ctxBar.querySelector<HTMLElement>("#context-cost")?.classList.add("hidden")
+    return
+  }
   const pct = Math.min(100, Math.round((totalApiTokens / contextWindow) * 100))
 
-  ctxBar.textContent = `${totalApiTokens.toLocaleString()} / ${contextWindow.toLocaleString()} tok (${pct}%)`
-  ctxBar.title = `API tokens used: ${totalApiTokens.toLocaleString()} · Context window: ${contextWindow.toLocaleString()}`
+  ctxBar.classList.remove("hidden")
+  const model = session.model ? session.model.split("/").pop() || session.model : ""
+  if (model) deps.els.statusModel.textContent = model
 
-  const pctEl = ctxBar.querySelector<HTMLElement>(".context-usage-percent")
+  const labelEl = ctxBar.querySelector<HTMLElement>("#context-label")
+  const pctEl = ctxBar.querySelector<HTMLProgressElement>("#context-progress-bar")
+    || ctxBar.querySelector<HTMLProgressElement>(".context-usage-percent")
+  const costEl = ctxBar.querySelector<HTMLElement>("#context-cost")
+  const detailText = `${totalApiTokens.toLocaleString()} tokens / ${contextWindow.toLocaleString()}`
+
+  if (labelEl) {
+    labelEl.textContent = `${pct}% used · ${detailText}`
+  } else {
+    ctxBar.textContent = `${pct}% used · ${detailText}`
+  }
+  ctxBar.title = `${model ? `${model} · ` : ""}API tokens used: ${totalApiTokens.toLocaleString()} · Context window: ${contextWindow.toLocaleString()}`
+
   if (pctEl) {
+    pctEl.value = pct
     pctEl.style.width = `${pct}%`
     pctEl.classList.toggle("context-usage-percent--warning", pct >= 60 && pct < 85)
     pctEl.classList.toggle("context-usage-percent--critical", pct >= 85)
   }
+  if (costEl && typeof session.cost === "number" && Number.isFinite(session.cost) && session.cost > 0) {
+    costEl.textContent = `$${session.cost.toFixed(4)}`
+    costEl.classList.remove("hidden")
+  } else if (costEl) {
+    costEl.textContent = ""
+    costEl.classList.add("hidden")
+  }
+  deps.showStatusStrip()
 }
 
 export function checkOverflowWarnings(deps: TokenCostDeps, sessionId: string): void {

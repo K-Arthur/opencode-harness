@@ -105,4 +105,19 @@ describe("fileTracking.ts", () => {
   it("exports renderCheckpointPanel", () => {
     assert.ok(source.includes("export function renderCheckpointPanel"), "must export renderCheckpointPanel")
   })
+
+  it("checkpoint panel shows an empty state instead of making the toolbar button appear inert", () => {
+    assert.ok(
+      source.includes("No checkpoints yet"),
+      "empty checkpoint lists must render a visible empty state",
+    )
+    assert.ok(
+      source.includes("checkpoint-empty"),
+      "empty checkpoint state must have a stable class for styling and tests",
+    )
+    assert.ok(
+      !source.includes("checkpoints.length === 0) {\n    panel.classList.add(\"hidden\")"),
+      "checkpoint panel must not immediately hide when a list request returns no checkpoints",
+    )
+  })
 })
