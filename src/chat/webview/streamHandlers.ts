@@ -220,7 +220,7 @@ export function handleStreamStart(
     if (!textEl) return
 
     const displayText = stripContextFromText(state.currentBlockBuffer)
-    textEl.textContent = displayText
+    textEl.innerHTML = renderMarkdown(displayText, true)
 
      const msgObj = messages.find((m) => m.id === streamId)
      if (msgObj && state.currentBlockIndex >= 0) {
@@ -329,7 +329,7 @@ export function handleStreamToken(
 
     const displayText = stripContextFromText(state.currentBlockBuffer)
     if (textEl) {
-      textEl.textContent = displayText
+      textEl.innerHTML = renderMarkdown(displayText, true)
     }
 
      const msgObj = messages.find((m: ChatMessage) => m.id === id)

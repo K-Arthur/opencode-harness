@@ -122,7 +122,7 @@ describe("stream.ts", () => {
 
   it("has handleStreamToken for targeted DOM updates", () => {
     assert.ok(sourceIncludes("handleStreamToken(text?: string)"), "handleStreamToken must exist")
-    assert.ok(sourceIncludes("textEl.textContent = displayText"), "must set textContent directly")
+    assert.ok(sourceIncludes("textEl.innerHTML = renderMarkdown(displayText, true)"), "must set innerHTML with renderMarkdown")
     assert.ok(sourceIncludes("state.lastStreamTextEl = textEl"), "must track last element")
     assert.ok(sourceIncludes("streaming-text"), "must use streaming-text class for CSS cursor")
   })

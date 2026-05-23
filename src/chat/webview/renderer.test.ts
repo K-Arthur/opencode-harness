@@ -505,4 +505,81 @@ it("tool_call_renderer_uses_class_specific_icons", () => {
       )
     })
   })
+
+  // ── Batch 3b: interactive tool arguments ──────────────────────────────────
+  describe("interactive tool-arg click handling (Batch 3b)", () => {
+    it("appendToolKeyArg styles the chip with a pointer cursor", () => {
+      assert.ok(
+        toolCallRendererSource.includes('argEl.style.cursor = "pointer"') ||
+        toolCallRendererSource.includes("argEl.style.cursor = 'pointer'"),
+        "tool-arg element must set pointer cursor"
+      )
+    })
+
+    it("appendToolKeyArg handles click, stops propagation, and prevents default", () => {
+      assert.ok(
+        toolCallRendererSource.includes("e.stopPropagation()"),
+        "click listener must stop event propagation"
+      )
+      assert.ok(
+        toolCallRendererSource.includes("e.preventDefault()"),
+        "click listener must prevent default detail toggle behavior"
+      )
+    })
+
+    it("appendToolKeyArg dispatches open_file, open_folder, or open_url via postMessage", () => {
+      assert.ok(
+        toolCallRendererSource.includes('pm({ type: "open_url", url: keyArg })') ||
+        toolCallRendererSource.includes("pm({ type: 'open_url', url: keyArg })"),
+        "click listener must support dispatching open_url"
+      )
+      assert.ok(
+        toolCallRendererSource.includes('pm({ type: "open_folder", dir: keyArg })') ||
+        toolCallRendererSource.includes("pm({ type: 'open_folder', dir: keyArg })"),
+        "click listener must support dispatching open_folder"
+      )
+      assert.ok(
+        toolCallRendererSource.includes('pm({ type: "open_file", path: keyArg })') ||
+        toolCallRendererSource.includes("pm({ type: 'open_file', path: keyArg })"),
+        "click listener must support dispatching open_file"
+      )
+    })
+  })
+
+  // ── Batch 3c: interactive diff file paths ──────────────────────────────────
+  describe("interactive diff-file-path click handling (Batch 3c)", () => {
+    it("renderNewDiffBlock styles the file path with a pointer cursor", () => {
+      assert.ok(
+        source.includes('filePath.style.cursor = "pointer"') ||
+        source.includes("filePath.style.cursor = 'pointer'"),
+        "diff-file-path element must set pointer cursor"
+      )
+    })
+
+    it("renderNewDiffBlock handles click, stops propagation, and prevents default", () => {
+      // Find within renderNewDiffBlock area
+      const fnIdx = source.indexOf("function renderNewDiffBlock(")
+      assert.ok(fnIdx >= 0, "renderNewDiffBlock must exist")
+      const body = source.slice(fnIdx, fnIdx + 2000)
+      assert.ok(
+        body.includes("e.stopPropagation()"),
+        "click listener must stop event propagation"
+      )
+      assert.ok(
+        body.includes("e.preventDefault()"),
+        "click listener must prevent default actions"
+      )
+    })
+
+    it("renderNewDiffBlock dispatches open_file via postMessage", () => {
+      const fnIdx = source.indexOf("function renderNewDiffBlock(")
+      const body = source.slice(fnIdx, fnIdx + 2500)
+      assert.ok(
+        body.includes('type: "open_file", path: diffBlock.path') ||
+        body.includes("type: 'open_file', path: diffBlock.path") ||
+        body.includes("type: \"open_file\", path: diffBlock.path"),
+        "click listener must dispatch open_file with diffBlock.path"
+      )
+    })
+  })
 })
