@@ -277,6 +277,9 @@ export class MessageRouter {
       contextWindow: m.contextWindow,
     }))
     context.postMessage({ type: "model_list", items: models, model: this.modelManager.model })
+    if (models.length === 0) {
+      this.modelManager.refreshModels(this.sessionManager.currentPort, this.sessionManager.authHeader).catch(() => {})
+    }
   }
 
   dispose(): void {

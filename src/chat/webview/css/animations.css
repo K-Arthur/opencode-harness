@@ -141,10 +141,28 @@
 }
 
 @keyframes banner-fade-out {
-  to {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 250px;
+  }
+  90% {
     opacity: 0;
     transform: translateY(-8px);
+    max-height: 250px;
+    padding: var(--space-3) var(--space-4);
+    margin: var(--space-3) 0;
+    border-width: 1px;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-8px);
+    max-height: 0;
+    padding: 0;
+    margin: 0;
+    border-width: 0;
     pointer-events: none;
+    visibility: hidden;
   }
 }
 

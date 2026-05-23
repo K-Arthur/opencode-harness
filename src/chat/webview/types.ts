@@ -190,6 +190,8 @@ export interface SessionState {
   instructions?: string
   revertHistory?: RevertEntry[]
   subagentActivities?: SubagentActivity[]
+  userTodos?: Todo[]
+  todoOverrides?: Record<string, 'pending' | 'in-progress' | 'completed'>
 }
 
 export interface RevertEntry {

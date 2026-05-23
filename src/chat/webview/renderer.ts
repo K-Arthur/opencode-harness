@@ -637,7 +637,8 @@ export function detectPlanProse(text: string): boolean {
 }
 
 function renderTextBlock(block: Block, opts: RenderOptions): HTMLElement | null {
-  const text = block.text || ""
+  let text = block.text || ""
+  if (text.startsWith("[methodology]")) return null
   if (!text.trim()) return null
 
   // Plan-prose: wrap the rendered markdown in a styled card when the assistant
@@ -1539,14 +1540,79 @@ function renderTaskBanner(block: Block, _opts: RenderOptions): HTMLElement | nul
   wrapper.className = `task-banner task-banner--${status}`
   wrapper.setAttribute("role", status === "error" ? "alert" : "status")
 
+  const header = document.createElement("div")
+  header.className = "task-banner-header"
+
   const icon = document.createElement("span")
   icon.className = "task-banner-icon"
   icon.innerHTML = status === "success" ? SUCCESS_SVG : ERROR_SVG
-  wrapper.appendChild(icon)
+  header.appendChild(icon)
 
-  const text = document.createElement("span")
-  text.textContent = block.text || "Task Status Updated"
-  wrapper.appendChild(text)
+  const textVal = block.text || "Task Status Updated"
+  const multiMatch = textVal.match(/^Edited (\d+) files:\s*(.*)$/)
+  const singleMatch = textVal.match(/^Edited (?!.*files:)(.*)$/)
+
+  const title = document.createElement("span")
+  title.className = "task-banner-title"
+
+  if (multiMatch && multiMatch[2]) {
+    title.textContent = `Edited ${multiMatch[1]} files`
+    header.appendChild(title)
+    wrapper.appendChild(header)
+
+    const filesContainer = document.createElement("div")
+    filesContainer.className = "task-banner-files"
+    const filesList = multiMatch[2].split(",").map(f => f.trim()).filter(Boolean)
+    filesList.forEach(file => {
+      const chip = document.createElement("span")
+      chip.className = "task-file-badge"
+      chip.title = file
+
+      const ext = file.split(".").pop() || "FIL"
+      const fileIcon = document.createElement("span")
+      fileIcon.className = `task-file-icon task-file-icon--${ext.toLowerCase()}`
+      fileIcon.textContent = ext.substring(0, 3).toUpperCase()
+
+      const fileName = document.createElement("span")
+      fileName.className = "task-file-name"
+      fileName.textContent = file
+
+      chip.appendChild(fileIcon)
+      chip.appendChild(fileName)
+      filesContainer.appendChild(chip)
+    })
+    wrapper.appendChild(filesContainer)
+  } else if (singleMatch && singleMatch[1]) {
+    title.textContent = "Edited file"
+    header.appendChild(title)
+    wrapper.appendChild(header)
+
+    const filesContainer = document.createElement("div")
+    filesContainer.className = "task-banner-files"
+
+    const file = singleMatch[1].trim()
+    const chip = document.createElement("span")
+    chip.className = "task-file-badge"
+    chip.title = file
+
+    const ext = file.split(".").pop() || "FIL"
+    const fileIcon = document.createElement("span")
+    fileIcon.className = `task-file-icon task-file-icon--${ext.toLowerCase()}`
+    fileIcon.textContent = ext.substring(0, 3).toUpperCase()
+
+    const fileName = document.createElement("span")
+    fileName.className = "task-file-name"
+    fileName.textContent = file.split("/").pop() || file
+
+    chip.appendChild(fileIcon)
+    chip.appendChild(fileName)
+    filesContainer.appendChild(chip)
+    wrapper.appendChild(filesContainer)
+  } else {
+    title.textContent = textVal
+    header.appendChild(title)
+    wrapper.appendChild(header)
+  }
 
   return wrapper
 }
