@@ -1010,6 +1010,12 @@ function renderStepStartBlock(_block: Block, _opts: RenderOptions): HTMLElement 
 // Covers the common set across SDK providers (OpenAI: stop / tool_calls,
 // Anthropic: end_turn / stop_sequence / tool_use, generic: complete).
 // Empty/whitespace reason is treated as normal too.
+//
+// Some opencode providers emit hyphenated variants ("tool-calls",
+// "end-turn"). We normalize hyphens → underscores before the set lookup
+// so both shapes suppress the chip — otherwise every assistant step that
+// ran tools would render a redundant "Step finished (tool-calls) — …"
+// row beneath the tool, which is exactly the clutter the user reported.
 const NORMAL_FINISH_REASONS = new Set<string>([
   "stop",
   "end_turn",
@@ -1025,7 +1031,8 @@ function renderStepFinishBlock(block: Block, _opts: RenderOptions): HTMLElement 
   // unusual finishes (length cap, abort, content filter, error) where the
   // user benefits from knowing *why* the step ended.
   const rawReason = typeof block.reason === "string" ? block.reason.trim() : ""
-  if (rawReason === "" || NORMAL_FINISH_REASONS.has(rawReason)) return null
+  const normalizedReason = rawReason.replace(/-/g, "_")
+  if (rawReason === "" || NORMAL_FINISH_REASONS.has(normalizedReason)) return null
 
   const tokens = block.tokens as
     | { input?: number; output?: number; reasoning?: number }

@@ -80,6 +80,28 @@ describe("renderer — Layer 7 RED (canonical part renderers)", () => {
     assert.match(body, /return null/, "step-finish must return null for normal-completion cases")
   })
 
+  it("L7-T2c: step-finish normalizes hyphenated finish reasons before lookup (tool-calls, end-turn, etc.)", () => {
+    // Some opencode providers emit hyphenated reason strings ("tool-calls",
+    // "end-turn", "stop-sequence", "tool-use"). The previous implementation
+    // only kept underscore forms in NORMAL_FINISH_REASONS, so every assistant
+    // step rendered a redundant "Step finished (tool-calls) — in:... out:..."
+    // chip beneath every tool row — the user-reported clutter. The renderer
+    // must normalize the reason (replace '-' with '_' OR include both forms)
+    // before deciding whether to suppress.
+    const body = source.slice(
+      source.indexOf("function renderStepFinishBlock"),
+      source.indexOf("function renderSnapshotBlock"),
+    )
+    const normalizes = /replace\(\s*\/[-_]\/g\s*,\s*["']_["']\s*\)|replace\(\s*\/-\/g\s*,\s*["']_["']\s*\)/.test(body)
+    const setIncludesHyphenForms = ["tool-calls", "end-turn", "stop-sequence", "tool-use"].every((r) =>
+      new RegExp(`["']${r}["']`).test(source),
+    )
+    assert.ok(
+      normalizes || setIncludesHyphenForms,
+      "step-finish must either normalize hyphen→underscore OR include hyphenated variants in NORMAL_FINISH_REASONS",
+    )
+  })
+
   it("L7-T2a: step-finish guards token summary against NaN / negative values", () => {
     const body = source.slice(
       source.indexOf("function renderStepFinishBlock"),
