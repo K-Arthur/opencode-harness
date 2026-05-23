@@ -526,8 +526,6 @@ body.hide-thinking .thinking-block { display: none; }
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  max-height: 280px;
-  overflow-y: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--oc-bg-secondary, rgba(0, 0, 0, 0.02));
@@ -1078,8 +1076,9 @@ textarea {
 }
 
 .context-chip:hover {
-  background: var(--oc-accent-border);
-  border-color: var(--color-accent);
+  opacity: 0.85;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 .context-chip[data-kind="file"] { border-color: var(--oc-accent-border); background: var(--oc-accent-subtle); color: var(--color-accent); }
@@ -1482,12 +1481,14 @@ textarea {
   }
 
 .msg-image img {
-  max-width: 280px;
-  max-height: 180px;
+  max-width: 100%;
+  max-height: 160px;
+  width: auto;
+  height: auto;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   cursor: pointer;
-  object-fit: cover;
+  object-fit: contain;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   transition: transform var(--duration-normal) var(--ease-out), border-color var(--duration-fast);
 }

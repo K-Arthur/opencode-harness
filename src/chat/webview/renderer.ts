@@ -656,7 +656,7 @@ function renderTextBlock(block: Block, opts: RenderOptions): HTMLElement | null 
   }
 
   // Render mentions as chips if present in text
-  const mentionPattern = /(@(file|folder|url|problems|terminal):\S+)/g
+  const mentionPattern = /(@(file|folder|url|problems|terminal):(?:"[^"]+"|\S+))/g
   const hasMentions = mentionPattern.test(text)
 
   if (hasMentions && block.text) {
@@ -685,6 +685,20 @@ function renderTextBlock(block: Block, opts: RenderOptions): HTMLElement | null 
         chip.className = "context-chip"
         chip.dataset.kind = type
         chip.textContent = part
+        chip.style.cursor = "pointer"
+        chip.title = `Click to open ${type}`
+        chip.addEventListener("click", (e) => {
+          e.stopPropagation()
+          const rawValue = part.substring(type.length + 2)
+          const value = rawValue.replace(/^["']|["']$/g, "")
+          if (type === "file") {
+            opts?.postMessage?.({ type: "open_file", path: value })
+          } else if (type === "folder") {
+            opts?.postMessage?.({ type: "open_folder", dir: value })
+          } else if (type === "url") {
+            opts?.postMessage?.({ type: "open_url", url: value })
+          }
+        })
         fragment.appendChild(chip)
         i++ // Skip the 'type' part since we consumed it
       }
@@ -1202,6 +1216,13 @@ function renderNewDiffBlock(block: Block, opts: RenderOptions): HTMLElement | nu
   const filePath = document.createElement("span")
   filePath.className = "diff-file-path"
   filePath.textContent = diffBlock.path
+  filePath.style.cursor = "pointer"
+  filePath.title = "Click to open file"
+  filePath.addEventListener("click", (e) => {
+    e.stopPropagation()
+    e.preventDefault()
+    opts.postMessage?.({ type: "open_file", path: diffBlock.path })
+  })
   fileInfo.appendChild(filePath)
 
   const stats = document.createElement("span")
@@ -1464,6 +1485,19 @@ function renderNewDiffBlock(block: Block, opts: RenderOptions): HTMLElement | nu
     })
     actionBar.appendChild(discardBtn)
 
+    const reviewBtn = document.createElement("button")
+    reviewBtn.className = "diff-btn diff-btn--review"
+    reviewBtn.textContent = "Review Changes"
+    reviewBtn.setAttribute("aria-label", `Review changes to ${diffBlock.path} in diff editor`)
+    reviewBtn.addEventListener("click", (e) => {
+      e.stopPropagation()
+      const postMessage = opts.postMessage
+      if (postMessage) {
+        postMessage({ type: 'show_diff', diffId: diffBlock.diffId, filePath: diffBlock.path })
+      }
+    })
+    actionBar.appendChild(reviewBtn)
+
     const openBtn = document.createElement("button")
     openBtn.className = "diff-btn diff-btn--open"
     openBtn.textContent = "Open File"
@@ -1567,6 +1601,11 @@ function renderTaskBanner(block: Block, _opts: RenderOptions): HTMLElement | nul
       const chip = document.createElement("span")
       chip.className = "task-file-badge"
       chip.title = file
+      chip.style.cursor = "pointer"
+      chip.addEventListener("click", (e) => {
+        e.stopPropagation()
+        _opts.postMessage?.({ type: "open_file", path: file })
+      })
 
       const ext = file.split(".").pop() || "FIL"
       const fileIcon = document.createElement("span")
@@ -1594,6 +1633,11 @@ function renderTaskBanner(block: Block, _opts: RenderOptions): HTMLElement | nul
     const chip = document.createElement("span")
     chip.className = "task-file-badge"
     chip.title = file
+    chip.style.cursor = "pointer"
+    chip.addEventListener("click", (e) => {
+      e.stopPropagation()
+      _opts.postMessage?.({ type: "open_file", path: file })
+    })
 
     const ext = file.split(".").pop() || "FIL"
     const fileIcon = document.createElement("span")

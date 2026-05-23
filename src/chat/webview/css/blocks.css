@@ -367,6 +367,12 @@
   flex: 1;
   min-width: 0;
   max-width: 200px;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.tool-arg:hover {
+  color: var(--vscode-textLink-foreground, var(--color-accent, #3794ff));
+  text-decoration: underline;
 }
 
   /* Status badge */
@@ -913,6 +919,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.diff-file-path:hover {
+  color: var(--vscode-textLink-foreground, var(--color-accent, #3794ff));
+  text-decoration: underline;
 }
 
 .diff-stats {
@@ -1154,6 +1167,18 @@
 .diff-btn--discard:hover {
   background: var(--oc-error-subtle);
   border-color: var(--color-error);
+}
+
+.diff-btn--review {
+  background: var(--oc-accent-subtle);
+  color: var(--color-accent);
+  border: 1px solid var(--oc-accent-border);
+}
+
+.diff-btn--review:hover {
+  background: var(--oc-accent-hover);
+  color: var(--oc-accent-fg);
+  border-color: transparent;
 }
 
 .diff-btn--open {

@@ -64,7 +64,11 @@ export function createToolDetailsContainer(toolBlock: ToolCallBlock): HTMLDetail
   return details
 }
 
-export function createToolSummary(toolBlock: ToolCallBlock, details: HTMLDetailsElement): HTMLElement {
+export function createToolSummary(
+  toolBlock: ToolCallBlock,
+  details: HTMLDetailsElement,
+  opts?: RenderOptions
+): HTMLElement {
   const summary = document.createElement("summary")
   summary.className = "tool-header"
   summary.setAttribute("tabindex", "0")
@@ -87,7 +91,7 @@ export function createToolSummary(toolBlock: ToolCallBlock, details: HTMLDetails
   name.textContent = toolBlock.name
   summary.appendChild(name)
 
-  appendToolKeyArg(summary, toolBlock.args)
+  appendToolKeyArg(summary, toolBlock.args, toolBlock, opts?.postMessage)
   appendToolStatusBadge(summary, toolBlock)
   appendToolTiming(summary, toolBlock)
   appendToolOutputSize(summary, toolBlock)
@@ -107,13 +111,49 @@ export function appendToolIcon(parent: HTMLElement, toolClass: ToolCallClass): v
   parent.appendChild(icon)
 }
 
-export function appendToolKeyArg(parent: HTMLElement, args: unknown): void {
+export function appendToolKeyArg(
+  parent: HTMLElement,
+  args: unknown,
+  toolBlock?: ToolCallBlock,
+  postMessage?: (msg: Record<string, unknown>) => void
+): void {
   const keyArg = extractKeyArg(args)
   if (!keyArg) return
   const argEl = document.createElement("span")
   argEl.className = "tool-arg"
   argEl.textContent = truncateMiddle(keyArg, 30)
   argEl.title = keyArg
+
+  // Make the file path / directory / URL interactive and hoverable
+  argEl.style.cursor = "pointer"
+  argEl.addEventListener("click", (e) => {
+    e.stopPropagation()
+    e.preventDefault()
+
+    const pm = postMessage || (window as any).vscode?.postMessage
+    if (!pm) return
+
+    if (keyArg.startsWith("http://") || keyArg.startsWith("https://")) {
+      pm({ type: "open_url", url: keyArg })
+    } else {
+      const toolName = toolBlock?.name?.toLowerCase() || ""
+      const toolClass = toolBlock?.class?.toLowerCase() || ""
+
+      const isFolder =
+        toolName.includes("dir") ||
+        toolName.includes("folder") ||
+        toolName.includes("grep") ||
+        toolName.includes("search") ||
+        (toolClass === "exec" && keyArg.includes("/") && !keyArg.includes("."))
+
+      if (isFolder) {
+        pm({ type: "open_folder", dir: keyArg })
+      } else {
+        pm({ type: "open_file", path: keyArg })
+      }
+    }
+  })
+
   parent.appendChild(argEl)
 }
 
@@ -291,7 +331,7 @@ export function renderToolCallBlock(block: Block, opts: RenderOptions): HTMLElem
   }
 
   const details = createToolDetailsContainer(toolBlock)
-  const summary = createToolSummary(toolBlock, details)
+  const summary = createToolSummary(toolBlock, details, opts)
   details.appendChild(summary)
 
   const argsPanel = createToolArgsPanel(toolBlock)

@@ -115,7 +115,7 @@ export class WebviewEventRouter {
     "send_steer_prompt", "add_to_queue",
     "get_todos", "toggle_todo", "delete_todo",
     "get_skills", "toggle_skill", "search_skills",
-    "get_changed_files", "open_file",
+    "get_changed_files", "open_file", "open_folder", "open_url",
     "get_subagent_activities", "cancel_subagent",
     "update_setting", "show_error", "get_context_usage", "record_stash_usage",
     "open_context_window_override_dialog",
@@ -133,11 +133,25 @@ export class WebviewEventRouter {
       }
     }],
     ["show_diff", async (msg: Record<string, unknown>, sessionId?: string) => {
-      const filePath = msg.filePath as string
-      const proposed = msg.proposedContent as string
-      const title = msg.title as string | undefined
+      const diffId = msg.diffId as string | undefined
+      let filePath = msg.filePath as string | undefined
+      let proposed = msg.proposedContent as string | undefined
+      let title = msg.title as string | undefined
+
+      if (diffId) {
+        const diffHandler = this.opts.streamCoordinator.getDiffHandler()
+        const edit = diffHandler.getPendingEdit(diffId) ?? diffHandler.getAcceptedEdit(diffId)
+        if (edit) {
+          filePath = edit.filePath
+          proposed = edit.proposedContent
+          title = title || `Review Changes: ${path.basename(filePath)}`
+        }
+      }
+
       if (filePath && proposed) {
         await this.opts.diffApplier.showSideBySideDiff(filePath, proposed, title)
+      } else {
+        log.warn("show_diff: could not resolve filePath and proposedContent", { diffId, filePath })
       }
     }],
     ["send_prompt", async (msg: Record<string, unknown>, sessionId?: string) => {
@@ -872,6 +886,26 @@ export class WebviewEventRouter {
       } catch (err) {
         log.error(`Failed to open file: ${rawPath}`, err)
         this.opts.showErrorMessage(`Failed to open file: ${(err as Error).message}`)
+      }
+    }],
+    ["open_folder", async (msg: Record<string, unknown>, sessionId?: string) => {
+      const rawDir = msg.dir as string | undefined
+      if (!rawDir) return
+      try {
+        const uri = vscode.Uri.file(rawDir)
+        await vscode.commands.executeCommand("vscode.openFolder", uri)
+      } catch (err) {
+        log.error(`Failed to open folder: ${rawDir}`, err)
+      }
+    }],
+    ["open_url", async (msg: Record<string, unknown>, sessionId?: string) => {
+      const rawUrl = msg.url as string | undefined
+      if (!rawUrl) return
+      try {
+        const uri = vscode.Uri.parse(rawUrl)
+        await this.opts.openExternal(uri)
+      } catch (err) {
+        log.error(`Failed to open URL: ${rawUrl}`, err)
       }
     }],
     ["get_skills", async (_: Record<string, unknown>) => {

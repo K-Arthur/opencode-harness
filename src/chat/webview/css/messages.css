@@ -645,8 +645,7 @@
   color: var(--color-success);
   font-size: var(--text-sm);
   font-weight: 600;
-  animation: banner-slide-in var(--duration-normal) var(--ease-out),
-             banner-fade-out var(--duration-normal) var(--ease-out) 6s forwards;
+  animation: banner-slide-in var(--duration-normal) var(--ease-out);
   transition: opacity var(--duration-fast);
   box-sizing: border-box;
   overflow: hidden;
@@ -695,10 +694,27 @@
   flex-wrap: wrap;
   gap: var(--space-1);
   width: 100%;
-  max-height: 120px;
+  max-height: 200px;
   overflow-y: auto;
   padding-right: var(--space-1);
   margin-top: var(--space-0-5);
+}
+
+.task-banner-files::-webkit-scrollbar {
+  width: 6px;
+}
+
+.task-banner-files::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.task-banner-files::-webkit-scrollbar-thumb {
+  background: var(--oc-glass-border, rgba(0,0,0,0.15));
+  border-radius: 3px;
+}
+
+.task-banner-files::-webkit-scrollbar-thumb:hover {
+  background: var(--oc-accent-border, rgba(0, 120, 212, 0.3));
 }
 
 .task-file-badge {
@@ -716,6 +732,19 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.task-file-badge:hover {
+  background: var(--oc-accent-subtle, rgba(0, 120, 212, 0.08));
+  border-color: var(--oc-accent-border, rgba(0, 120, 212, 0.25));
+  color: var(--color-accent);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.task-file-badge:active {
+  transform: translateY(0);
 }
 
 .task-file-icon {

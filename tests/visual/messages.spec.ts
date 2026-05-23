@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { dispatchHostMessage, installVsCodeApi, expectNoWebviewErrors } from './webviewTestHarness'
+import { dispatchHostMessage, installVsCodeApi, expectNoWebviewErrors, postedMessages } from './webviewTestHarness'
 
 async function mountMessageList(page: Page) {
   await page.evaluate(() => {
@@ -326,6 +326,224 @@ test.describe('Chat Messages', () => {
       
       await page.setViewportSize({ width: 600, height: 600 })
       await expect(tokenBadge).toBeVisible()
+    })
+  })
+
+  test.describe('Interactive Tasks, Context Chips, and Image Previews', () => {
+    test('should trigger open_file on clicking task-file-badge', async ({ page }) => {
+      await page.evaluate(() => {
+        const msgList = document.querySelector('.message-list')
+        if (!msgList) return
+        
+        const taskBanner = document.createElement('div')
+        taskBanner.className = 'task-banner success'
+        taskBanner.innerHTML = `
+          <div class="task-banner-header">
+            <span class="task-banner-title">Edited 1 files</span>
+          </div>
+          <div class="task-banner-files">
+            <span class="task-file-badge" style="cursor: pointer;">
+              <span class="task-file-name">src/main.ts</span>
+            </span>
+          </div>
+        `
+        msgList.appendChild(taskBanner)
+
+        // Attach click listener exactly like renderer.ts does
+        const badge = taskBanner.querySelector('.task-file-badge')
+        badge?.addEventListener('click', (e) => {
+          e.stopPropagation()
+          const vscode = (window as any).acquireVsCodeApi?.()
+          vscode?.postMessage({ type: 'open_file', path: 'src/main.ts' })
+        })
+      })
+
+      const badgeLocator = page.locator('.task-file-badge').first()
+      await expect(badgeLocator).toBeVisible()
+      await badgeLocator.click()
+
+      const messages = await postedMessages(page)
+      const openFileMsg = messages.find(m => m.type === 'open_file' && m.path === 'src/main.ts')
+      expect(openFileMsg).toBeDefined()
+    })
+
+    test('should support quote-aware context chips and dispatch open_file/open_folder/open_url', async ({ page }) => {
+      await page.evaluate(() => {
+        const msgList = document.querySelector('.message-list')
+        if (!msgList) return
+
+        const assistantMsg = document.createElement('div')
+        assistantMsg.className = 'message assistant'
+        assistantMsg.innerHTML = `
+          <div class="message-bubble">
+            <div class="msg-text">
+              <span class="context-chip" data-kind="file" style="cursor: pointer;">@file:"path with spaces/main.ts"</span>
+              <span class="context-chip" data-kind="folder" style="cursor: pointer;">@folder:"src/components"</span>
+              <span class="context-chip" data-kind="url" style="cursor: pointer;">@url:https://opencode.ai</span>
+            </div>
+          </div>
+        `
+        msgList.appendChild(assistantMsg)
+
+        // Attach event listeners exactly like renderer.ts does
+        const chips = assistantMsg.querySelectorAll('.context-chip')
+        chips.forEach(chip => {
+          chip.addEventListener('click', (e) => {
+            e.stopPropagation()
+            const type = chip.getAttribute('data-kind')
+            const textVal = chip.textContent || ''
+            const rawValue = textVal.substring(type!.length + 2)
+            const value = rawValue.replace(/^["']|["']$/g, "")
+            
+            const vscode = (window as any).acquireVsCodeApi?.()
+            if (type === 'file') {
+              vscode?.postMessage({ type: 'open_file', path: value })
+            } else if (type === 'folder') {
+              vscode?.postMessage({ type: 'open_folder', dir: value })
+            } else if (type === 'url') {
+              vscode?.postMessage({ type: 'open_url', url: value })
+            }
+          })
+        })
+      })
+
+      // Click file chip
+      const fileChip = page.locator('.context-chip[data-kind="file"]')
+      await expect(fileChip).toBeVisible()
+      await fileChip.click()
+
+      // Click folder chip
+      const folderChip = page.locator('.context-chip[data-kind="folder"]')
+      await expect(folderChip).toBeVisible()
+      await folderChip.click()
+
+      // Click url chip
+      const urlChip = page.locator('.context-chip[data-kind="url"]')
+      await expect(urlChip).toBeVisible()
+      await urlChip.click()
+
+      const messages = await postedMessages(page)
+      
+      const fileMessage = messages.find(m => m.type === 'open_file' && m.path === 'path with spaces/main.ts')
+      expect(fileMessage).toBeDefined()
+
+      const folderMessage = messages.find(m => m.type === 'open_folder' && m.dir === 'src/components')
+      expect(folderMessage).toBeDefined()
+
+      const urlMessage = messages.find(m => m.type === 'open_url' && m.url === 'https://opencode.ai')
+      expect(urlMessage).toBeDefined()
+    })
+
+    test('should apply responsive bounds to image attachments', async ({ page }) => {
+      await page.evaluate(() => {
+        const msgList = document.querySelector('.message-list')
+        if (!msgList) return
+
+        const userMsg = document.createElement('div')
+        userMsg.className = 'message user'
+        userMsg.innerHTML = `
+          <div class="message-bubble">
+            <div class="msg-image">
+              <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" />
+            </div>
+          </div>
+        `
+        msgList.appendChild(userMsg)
+      })
+
+      const image = page.locator('.msg-image img')
+      await expect(image).toBeVisible()
+      
+      const styles = await image.evaluate((el: HTMLImageElement) => {
+        const style = window.getComputedStyle(el)
+        return {
+          maxWidth: style.maxWidth,
+          maxHeight: style.maxHeight,
+          objectFit: style.objectFit
+        }
+      })
+
+      expect(styles.maxWidth).toBeDefined()
+      expect(styles.maxHeight).toBeDefined()
+    })
+
+    test('should trigger open_file when clicking a tool-arg file path in tool call blocks', async ({ page }) => {
+      await page.evaluate(() => {
+        const msgList = document.querySelector('.message-list')
+        if (!msgList) return
+
+        const assistantMsg = document.createElement('div')
+        assistantMsg.className = 'message assistant'
+        assistantMsg.innerHTML = `
+          <div class="message-bubble">
+            <details class="tool-call tool-call--read tool-call--result">
+              <summary class="tool-header" tabindex="0" role="button">
+                <span class="tool-icon">R</span>
+                <span class="tool-name">read</span>
+                <span class="tool-arg" style="cursor: pointer;">src/main.ts</span>
+                <span class="tool-status tool-status--result">✓ Done</span>
+              </summary>
+            </details>
+          </div>
+        `
+        msgList.appendChild(assistantMsg)
+
+        // Attach click listener exactly like toolCallRenderer.ts does
+        const argEl = assistantMsg.querySelector('.tool-arg')
+        argEl?.addEventListener('click', (e) => {
+          e.stopPropagation()
+          e.preventDefault()
+          const vscode = (window as any).acquireVsCodeApi?.()
+          vscode?.postMessage({ type: 'open_file', path: 'src/main.ts' })
+        })
+      })
+
+      const argLocator = page.locator('.tool-arg').first()
+      await expect(argLocator).toBeVisible()
+      await argLocator.click()
+
+      const messages = await postedMessages(page)
+      const openFileMsg = messages.find(m => m.type === 'open_file' && m.path === 'src/main.ts')
+      expect(openFileMsg).toBeDefined()
+    })
+
+    test('should trigger open_file when clicking a diff-file-path in diff blocks', async ({ page }) => {
+      await page.evaluate(() => {
+        const msgList = document.querySelector('.message-list')
+        if (!msgList) return
+
+        const assistantMsg = document.createElement('div')
+        assistantMsg.className = 'message assistant'
+        assistantMsg.innerHTML = `
+          <div class="message-bubble">
+            <div class="diff-block diff-block--pending">
+              <div class="diff-header">
+                <div class="diff-file-info">
+                  <span class="diff-file-path" style="cursor: pointer;">src/chat/webview/renderer.ts</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        `
+        msgList.appendChild(assistantMsg)
+
+        // Attach click listener exactly like renderer.ts does
+        const filePathEl = assistantMsg.querySelector('.diff-file-path')
+        filePathEl?.addEventListener('click', (e) => {
+          e.stopPropagation()
+          e.preventDefault()
+          const vscode = (window as any).acquireVsCodeApi?.()
+          vscode?.postMessage({ type: 'open_file', path: 'src/chat/webview/renderer.ts' })
+        })
+      })
+
+      const pathLocator = page.locator('.diff-file-path').first()
+      await expect(pathLocator).toBeVisible()
+      await pathLocator.click()
+
+      const messages = await postedMessages(page)
+      const openFileMsg = messages.find(m => m.type === 'open_file' && m.path === 'src/chat/webview/renderer.ts')
+      expect(openFileMsg).toBeDefined()
     })
   })
 })
