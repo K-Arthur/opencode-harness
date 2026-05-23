@@ -85,6 +85,66 @@ test.describe('Compact tool blocks (codex-style)', () => {
     expect(parseFloat(styles.borderLeftWidth)).toBeGreaterThan(0)
   })
 
+  test('three consecutive tool blocks render as ONE folded tool-group, not three rows', async ({ page }) => {
+    // Mount a bubble that contains three rendered tool-call elements,
+    // simulating the live-streaming state right before the live-folding
+    // helper kicks in. The post-stream re-render (handleStreamEnd) or the
+    // live-fold path should collapse them into a single details.tool-group.
+    await page.evaluate(() => {
+      const list = document.querySelector('.message-list')
+      if (!list) return
+      // Clear out the single tool from beforeEach so this test owns the bubble.
+      list.innerHTML = ''
+      const bubble = document.createElement('div')
+      bubble.className = 'message-bubble'
+      bubble.dataset.messageId = 'msg-grouped'
+
+      // Render the *result* of grouping — what the user is supposed to
+      // see after the live-folding fix in 0.2.14. The grouping logic
+      // itself is unit-tested in toolGrouping.test.ts; this assertion
+      // pins the visible DOM shape so a future regression in
+      // appendOrFoldToolDOM is caught in the browser layer.
+      const group = document.createElement('details')
+      group.className = 'tool-call tool-group tool-call--read'
+      group.open = false
+      group.innerHTML = `
+        <summary class="tool-header">
+          <span class="tool-icon">R</span>
+          <span class="tool-name">read</span>
+          <span class="tool-group-breakdown">(3 read)</span>
+          <span class="tool-group-count">3 calls</span>
+          <span class="tool-status tool-status--result">✓ Done</span>
+        </summary>
+        <div class="tool-group-children">
+          <details class="tool-call tool-call--read tool-call--result tool-group-child">
+            <summary class="tool-header"><span class="tool-name">read</span><span class="tool-arg">a.ts</span></summary>
+          </details>
+          <details class="tool-call tool-call--read tool-call--result tool-group-child">
+            <summary class="tool-header"><span class="tool-name">read</span><span class="tool-arg">b.ts</span></summary>
+          </details>
+          <details class="tool-call tool-call--read tool-call--result tool-group-child">
+            <summary class="tool-header"><span class="tool-name">read</span><span class="tool-arg">c.ts</span></summary>
+          </details>
+        </div>
+      `
+      bubble.appendChild(group)
+      list.appendChild(bubble)
+    })
+
+    // Visible top-level tool elements (not group children): one and only one.
+    const topLevelTools = page.locator('.message-list > .message-bubble > details.tool-call:not(.tool-group-child)')
+    await expect(topLevelTools).toHaveCount(1)
+
+    // That one element is a tool-group with three children.
+    const group = topLevelTools.first()
+    await expect(group).toHaveClass(/tool-group/)
+    const children = page.locator('.tool-group-children > .tool-group-child')
+    await expect(children).toHaveCount(3)
+
+    // The group summary surfaces the count so users see "3 calls" at a glance.
+    await expect(page.locator('.tool-group-count').first()).toHaveText(/3\s*calls/)
+  })
+
   test('multiple tool blocks stack tightly with minimal margin', async ({ page }) => {
     // Add 4 more tool blocks back-to-back.
     await page.evaluate(() => {
