@@ -136,7 +136,15 @@ describe("stream.ts", () => {
   it("has handleToolStart method", () => {
     assert.ok(sourceIncludes("handleToolStart("), "handleToolStart must exist")
     assert.ok(sourceIncludes("state.streamingToolCallId = toolCall.id"), "must set streamingToolCallId")
-    assert.ok(sourceIncludes("renderBlock(toolBlock"), "must call renderBlock")
+    // renderBlock can be invoked directly OR via the appendOrFoldToolDOM
+    // helper added in 0.2.14 for live tool-group folding — both routes
+    // ultimately call renderBlock on the new tool block.
+    assert.ok(
+      sourceIncludes("renderBlock(toolBlock") ||
+        sourceIncludes("renderBlock(newToolBlock") ||
+        sourceIncludes("appendOrFoldToolDOM("),
+      "must call renderBlock (directly or via appendOrFoldToolDOM)",
+    )
   })
 
   it("has handleToolUpdate method", () => {
