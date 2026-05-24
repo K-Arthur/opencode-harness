@@ -9,15 +9,16 @@ export class SessionDiffHandler implements EventHandler {
     const properties = event.properties as {
       sessionID?: string
       file?: unknown
-      diff?: Array<{ file?: unknown; added?: unknown; removed?: unknown }>
+      // SDK FileDiff uses additions/deletions (not added/removed)
+      diff?: Array<{ file?: unknown; additions?: unknown; deletions?: unknown }>
     } | undefined
     const changes = Array.isArray(properties?.diff)
       ? properties.diff
-        .filter((entry): entry is { file: string; added?: unknown; removed?: unknown } => typeof entry.file === "string")
+        .filter((entry): entry is { file: string; additions?: unknown; deletions?: unknown } => typeof entry.file === "string")
         .map((entry) => ({
           path: entry.file,
-          added: typeof entry.added === "number" ? entry.added : 0,
-          removed: typeof entry.removed === "number" ? entry.removed : 0,
+          added: typeof entry.additions === "number" ? entry.additions : 0,
+          removed: typeof entry.deletions === "number" ? entry.deletions : 0,
         }))
       : typeof properties?.file === "string"
         ? [{ path: properties.file, added: 0, removed: 0 }]

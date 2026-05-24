@@ -2,6 +2,7 @@ import hljs from "highlight.js/lib/core"
 import MarkdownIt from "markdown-it"
 import taskLists from "markdown-it-task-lists"
 import DOMPurify from "dompurify"
+import { escapeHtml, normalizeMarkdownLanguage } from "./htmlUtils"
 import {
   BRAIN_SVG,
   WARNING_SVG,
@@ -308,15 +309,6 @@ const md = new MarkdownIt({
   highlight: (str, lang) => highlightSyntax(str, normalizeMarkdownLanguage(lang)),
 }).use(taskLists, { label: false })
 
-function normalizeMarkdownLanguage(language: string): string {
-  const normalized = language.trim().toLowerCase()
-  if (normalized === "tsx" || normalized === "jsx") return "typescript"
-  if (normalized === "shell" || normalized === "sh" || normalized === "zsh") return "bash"
-  if (normalized === "yml") return "yaml"
-  if (normalized === "html") return "xml"
-  return normalized
-}
-
 const defaultLinkOpen = md.renderer.rules.link_open || ((tokens, idx, options, _env, self) =>
   self.renderToken(tokens, idx, options))
 
@@ -512,13 +504,6 @@ function showRevertConfirmation(diffId: string, path: string, postMessage?: (msg
 
   // Focus cancel button
   if (cancelBtn) cancelBtn.focus()
-}
-
-// Helper to escape HTML to prevent XSS
-function escapeHtml(text: string): string {
-  const div = document.createElement('div')
-  div.textContent = text
-  return div.innerHTML
 }
 
 // ---------------------------------------------------------------------------
@@ -1562,7 +1547,7 @@ function renderPermissionBlock(block: Block, _opts: RenderOptions): HTMLElement 
     allowBtn.className = "permission-btn permission-btn--allow"
     allowBtn.textContent = "Allow"
     allowBtn.addEventListener("click", () => {
-      window.dispatchEvent(new CustomEvent("oc-permission", { detail: { permissionId: block.permissionId, response: "once", permissionType: block.permissionType, pattern: block.pattern } }))
+      window.dispatchEvent(new CustomEvent("oc-permission", { detail: { sessionId: block.sessionId, permissionId: block.permissionId, response: "once", permissionType: block.permissionType, pattern: block.pattern } }))
       actions.replaceChildren(document.createTextNode("Allowed"))
     })
     actions.appendChild(allowBtn)
@@ -1572,7 +1557,7 @@ function renderPermissionBlock(block: Block, _opts: RenderOptions): HTMLElement 
       alwaysBtn.className = "permission-btn permission-btn--allow"
       alwaysBtn.textContent = "Always"
       alwaysBtn.addEventListener("click", () => {
-        window.dispatchEvent(new CustomEvent("oc-permission", { detail: { permissionId: block.permissionId, response: "always", permissionType: block.permissionType, pattern: block.pattern } }))
+        window.dispatchEvent(new CustomEvent("oc-permission", { detail: { sessionId: block.sessionId, permissionId: block.permissionId, response: "always", permissionType: block.permissionType, pattern: block.pattern } }))
         actions.replaceChildren(document.createTextNode("Always allowed"))
       })
       actions.appendChild(alwaysBtn)
@@ -1582,7 +1567,7 @@ function renderPermissionBlock(block: Block, _opts: RenderOptions): HTMLElement 
     denyBtn.className = "permission-btn permission-btn--deny"
     denyBtn.textContent = "Deny"
     denyBtn.addEventListener("click", () => {
-      window.dispatchEvent(new CustomEvent("oc-permission", { detail: { permissionId: block.permissionId, response: "reject", permissionType: block.permissionType, pattern: block.pattern } }))
+      window.dispatchEvent(new CustomEvent("oc-permission", { detail: { sessionId: block.sessionId, permissionId: block.permissionId, response: "reject", permissionType: block.permissionType, pattern: block.pattern } }))
       actions.replaceChildren(document.createTextNode("Denied"))
     })
     actions.appendChild(denyBtn)

@@ -210,7 +210,7 @@ describe("SessionStore.ts", () => {
       "SessionStore must expose addChangedFiles(sessionId, files) for backend changed-file sync"
     )
     const idx = source.indexOf("addChangedFiles(")
-    const block = source.slice(idx, idx + 1200)
+    const block = source.slice(idx, idx + 1800)
     assert.ok(block.includes("Set("), "addChangedFiles must deduplicate files")
     assert.ok(
       source.includes("replace(/\\\\/g") || source.includes("replace(/\\\\\\\\/g"),

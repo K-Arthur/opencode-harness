@@ -1,4 +1,73 @@
-import type { SessionSummary } from "./types"
+import type { ChatMessage, SessionSummary } from "./types"
+
+type WelcomeLocalSession = {
+  id: string
+  name?: string
+  messages: ChatMessage[]
+  cost?: number
+}
+
+export type PreparedRecentSessions = {
+  sessions: SessionSummary[]
+  hasCandidates: boolean
+  isFiltered: boolean
+}
+
+function normalizeRecentSessionQuery(filterQuery: string = ""): string {
+  return filterQuery.trim().toLowerCase()
+}
+
+function sessionMatchesQuery(session: WelcomeLocalSession, query: string): boolean {
+  if (!query) return true
+  const name = (session.name || "").toLowerCase()
+  if (name.includes(query)) return true
+  for (const msg of session.messages) {
+    for (const block of msg.blocks || []) {
+      const text = (block as { type?: string; text?: string }).type === "text"
+        ? (block as { text?: string }).text
+        : undefined
+      if (text && text.toLowerCase().includes(query)) return true
+    }
+  }
+  return false
+}
+
+export function prepareHostRecentSessions(sessions: SessionSummary[]): SessionSummary[] {
+  return sessions
+    .slice()
+    .sort((a, b) => (b.time ?? 0) - (a.time ?? 0))
+}
+
+export function prepareLocalRecentSessions(
+  sessions: WelcomeLocalSession[],
+  activeSessionId: string | null | undefined,
+  filterQuery: string = ""
+): PreparedRecentSessions {
+  const query = normalizeRecentSessionQuery(filterQuery)
+  const candidates = sessions
+    .filter((s) => s.id !== activeSessionId && (s.messages.length > 0 || (!!query && !!s.name)))
+
+  const prepared = candidates
+    .filter((s) => sessionMatchesQuery(s, query))
+    .sort((a, b) => {
+      const tA = a.messages[a.messages.length - 1]?.timestamp ?? 0
+      const tB = b.messages[b.messages.length - 1]?.timestamp ?? 0
+      return tB - tA
+    })
+    .map((s) => ({
+      id: s.id,
+      title: s.name,
+      time: s.messages[s.messages.length - 1]?.timestamp,
+      messageCount: s.messages.filter((m) => m.role === "user").length,
+      cost: s.cost || 0,
+    }))
+
+  return {
+    sessions: prepared,
+    hasCandidates: candidates.length > 0,
+    isFiltered: !!query,
+  }
+}
 
 function getRelativeTime(timestamp: number): string {
   const now = Date.now();

@@ -271,6 +271,10 @@ export function handleStreamStart(
 
   const streamId = state.streamingMessageId
   state.renderQueue = new RenderQueue((_text: string) => {
+    // Guard: if tool-start cleared the buffer between enqueue and flush, skip
+    // so we don't create a spurious empty text block after each tool call.
+    if (!state.currentBlockBuffer.trim()) return
+
     let textEl = state.currentBlockEl
     if (!textEl || !els.messageList.contains(textEl)) {
       const bubble = els.messageList.querySelector(`[data-message-id="${streamId}"] .message-bubble`) as HTMLElement
@@ -358,7 +362,9 @@ export function handleStreamToken(
 
   const doUpdate = () => {
     state.rafPending = false
-    
+    // Guard: if tool-start cleared the buffer, nothing to render
+    if (!state.currentBlockBuffer.trim()) return
+
     let textEl = state.currentBlockEl
     if (!textEl || !els.messageList.contains(textEl)) {
       const bubble = els.messageList.querySelector(`[data-message-id="${id}"] .message-bubble`) as HTMLElement

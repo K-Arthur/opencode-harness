@@ -1702,6 +1702,28 @@
 }
 
 /* ─── Session List ─── */
+.modal-session-search {
+  padding: var(--space-3) var(--space-6) var(--space-2);
+  border-bottom: 1px solid var(--oc-border);
+}
+
+.modal-session-search-input {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--oc-border);
+  border-radius: var(--radius-sm);
+  background: var(--oc-input-bg, var(--oc-editor-bg));
+  color: var(--oc-fg);
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  font-size: var(--text-sm);
+  outline: none;
+}
+
+.modal-session-search-input:focus {
+  border-color: var(--vscode-focusBorder, var(--color-accent));
+}
+
 .modal-session-list {
   flex: 1;
   overflow-y: auto;

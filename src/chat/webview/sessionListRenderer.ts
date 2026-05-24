@@ -8,10 +8,23 @@ export type ServerSessionEntry = {
 }
 
 type LocalSessionEntry = { id: string; cliSessionId?: string; title?: string; messageCount?: number; cost?: number; time?: number }
+type UnifiedSessionItem = {
+  type: "synced" | "local" | "remote"
+  localId?: string
+  serverId?: string
+  title: string
+  directory?: string
+  isCurrentWorkspace?: boolean
+  messageCount?: number
+  time?: number
+  cost?: number
+  files?: number
+}
 
 let _unifiedServerSessions: ServerSessionEntry[] | null = null
 let _unifiedLocalSessions: LocalSessionEntry[] = []
 let _postMessage: (msg: unknown) => void = () => {}
+let _query = ""
 
 export function setSessionListPostMessage(postMessage: (msg: unknown) => void) {
   _postMessage = postMessage
@@ -25,27 +38,37 @@ export function setUnifiedLocalSessions(sessions: LocalSessionEntry[]) {
   _unifiedLocalSessions = sessions
 }
 
-function buildUnifiedSessionItems() {
+export function setUnifiedSessionQuery(query: string) {
+  _query = query.trim().toLowerCase()
+}
+
+export function getUnifiedSessionQuery(): string {
+  return _query
+}
+
+function buildUnifiedSessionItems(): UnifiedSessionItem[] {
   const serverById = new Map<string, ServerSessionEntry>()
   if (_unifiedServerSessions) {
     for (const s of _unifiedServerSessions) serverById.set(s.id, s)
   }
 
-  const claimedServerIds = new Set<string>()
-  const items: Array<{
-    type: "synced" | "local" | "remote"
-    localId?: string
-    serverId?: string
-    title: string
-    directory?: string
-    isCurrentWorkspace?: boolean
-    messageCount?: number
-    time?: number
-    cost?: number
-    files?: number
-  }> = []
-
+  const localByIdentity = new Map<string, LocalSessionEntry>()
   for (const local of _unifiedLocalSessions) {
+    const identity = local.cliSessionId || local.id
+    const existing = localByIdentity.get(identity)
+    if (!existing) {
+      localByIdentity.set(identity, local)
+      continue
+    }
+    const existingScore = (existing.id === identity ? 2 : 0) + (existing.messageCount || 0)
+    const nextScore = (local.id === identity ? 2 : 0) + (local.messageCount || 0)
+    if (nextScore > existingScore) localByIdentity.set(identity, local)
+  }
+
+  const claimedServerIds = new Set<string>()
+  const items: UnifiedSessionItem[] = []
+
+  for (const local of localByIdentity.values()) {
     const server = local.cliSessionId ? serverById.get(local.cliSessionId) : undefined
     if (server) {
       claimedServerIds.add(server.id)
@@ -53,7 +76,7 @@ function buildUnifiedSessionItems() {
         type: "synced",
         localId: local.id,
         serverId: server.id,
-        title: local.title || server.title || "Untitled",
+        title: server.title || local.title || "Untitled",
         directory: server.directory,
         isCurrentWorkspace: server.isCurrentWorkspace,
         messageCount: local.messageCount,
@@ -89,7 +112,17 @@ function buildUnifiedSessionItems() {
     }
   }
 
-  return items
+  return filterSessionItems(items)
+}
+
+function filterSessionItems(items: UnifiedSessionItem[]): UnifiedSessionItem[] {
+  if (!_query) return items
+  return items.filter((item) => [
+    item.title,
+    item.directory,
+    item.serverId,
+    item.localId,
+  ].some((value) => String(value || "").toLowerCase().includes(_query)))
 }
 
 function renderEmptySessionState(container: HTMLElement): void {

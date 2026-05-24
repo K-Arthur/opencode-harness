@@ -7,6 +7,7 @@ export type NormalizedOpencodeEventType =
   | "text_chunk"
   | "message_complete"
   | "session_status"
+  | "session_updated"
   | "session_compacted"
   | "server_connected"
   | "server_disconnected"

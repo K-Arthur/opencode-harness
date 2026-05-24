@@ -1,22 +1,85 @@
 /* Context Usage Styles */
 
-/* Context usage bar in status strip */
+/* Context usage bar in status strip — always visible when data exists, clickable for details */
 .context-usage-bar {
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
-  padding: 0 var(--spacing-sm);
+  padding: 2px var(--spacing-sm);
   cursor: pointer;
   border-radius: var(--radius-sm, 4px);
-  transition: background var(--duration-fast, 0.2s);
+  transition: background var(--duration-fast, 0.2s), outline-color var(--duration-fast, 0.2s);
+  outline: 1px solid transparent;
 }
 
 .context-usage-bar:hover {
   background: var(--oc-glass-bg, rgba(255, 255, 255, 0.05));
 }
 
+.context-usage-bar:focus-visible {
+  outline-color: var(--vscode-focusBorder, #007fd4);
+}
+
 .context-usage-bar.hidden {
   display: none;
+}
+
+/* Colour states driven by JS toggle */
+.context-usage-bar--warning .context-usage-percent,
+.context-usage-bar--warning #context-label {
+  color: var(--usage-warning, #ff9800);
+}
+.context-usage-bar--critical .context-usage-percent,
+.context-usage-bar--critical #context-label {
+  color: var(--usage-critical, #f44336);
+}
+
+/* Changed Files Always-Visible Strip */
+.cf-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--oc-panel-bg, var(--vscode-sideBar-background));
+  border-top: 1px solid var(--oc-border, var(--vscode-panel-border));
+  font-size: 0.72rem;
+  color: var(--oc-muted);
+  cursor: pointer;
+  overflow: hidden;
+  flex-shrink: 0;
+  min-height: 26px;
+  white-space: nowrap;
+  transition: background var(--duration-fast, 0.15s);
+  outline: none;
+}
+
+.cf-strip:hover { background: var(--oc-glass-bg, rgba(255,255,255,0.04)); }
+.cf-strip:focus-visible { outline: 1px solid var(--vscode-focusBorder, #007fd4); }
+.cf-strip.hidden { display: none; }
+
+.cf-strip-icon { display: flex; align-items: center; color: var(--oc-accent, var(--vscode-textLink-foreground)); flex-shrink: 0; }
+.cf-strip-label { font-weight: 600; color: var(--oc-fg); flex-shrink: 0; }
+.cf-strip-divider { color: var(--oc-border); flex-shrink: 0; }
+
+.cf-strip-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--oc-glass-bg, rgba(255,255,255,0.06));
+  border: 1px solid var(--oc-border);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.70rem;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+.cf-strip-overflow {
+  color: var(--oc-muted);
+  flex-shrink: 0;
+  font-style: italic;
 }
 
 .context-usage-label {

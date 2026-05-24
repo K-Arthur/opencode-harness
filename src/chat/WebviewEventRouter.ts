@@ -880,11 +880,12 @@ export class WebviewEventRouter {
       const session = this.opts.sessionStore.get(sessionId)
       if (!session) return
       
-      // Convert changedFiles string[] to FileChange format
+      // Return stored diff stats alongside paths so the dropdown shows real change counts
+      const stats = this.opts.sessionStore.getChangedFileStats(sessionId)
       const files = (session.changedFiles || []).map((path: string) => ({
         path,
-        added: 0,
-        removed: 0,
+        added: stats[path]?.added ?? 0,
+        removed: stats[path]?.removed ?? 0,
       }))
       this.opts.postMessage({ type: "changed_files_update", files, sessionId })
     }],

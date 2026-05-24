@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 
 const mainSource = readFileSync(path.join(__dirname, "main.ts"), "utf8")
+const welcomeViewSource = readFileSync(path.join(__dirname, "ui", "welcomeView.ts"), "utf8")
 
 describe("Welcome page session_list fix (main.ts)", () => {
   it("session_list handler checks if welcome view is visible before deciding modal vs inline", () => {
@@ -50,21 +51,25 @@ describe("Welcome page session_list fix (main.ts)", () => {
     )
   })
 
-  it("delete button event listener is registered in setupWelcomeActions", () => {
-    const setupBlock = mainSource.substring(
-      mainSource.indexOf("function setupWelcomeActions()"),
-      mainSource.indexOf("function setupWelcomeActions()") + 1500,
+  it("delete button event listener is registered in the welcome view module", () => {
+    const setupBlock = welcomeViewSource.substring(
+      welcomeViewSource.indexOf("function setupWelcomeActions("),
+      welcomeViewSource.indexOf("function setupWelcomeActions(") + 6000,
     )
     assert.ok(
       setupBlock.includes("recent-session-delete"),
       "setupWelcomeActions must listen for recent-session-delete custom event",
     )
     assert.ok(
-      setupBlock.includes("delete_session"),
-      "delete handler must post delete_session message to extension host",
+      setupBlock.includes("onDeleteRecentSession"),
+      "delete handler must delegate through the injected delete callback",
     )
     assert.ok(
-      setupBlock.includes("targetSessionId"),
+      mainSource.includes('vscode.postMessage({ type: "delete_session", targetSessionId: sessionId })'),
+      "main.ts must preserve the router's delete_session message contract",
+    )
+    assert.ok(
+      mainSource.includes("targetSessionId"),
       "delete handler must use the router's targetSessionId contract",
     )
   })

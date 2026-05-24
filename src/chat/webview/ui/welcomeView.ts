@@ -19,6 +19,7 @@ export interface WelcomeViewDeps {
   applyTimelineVisibility: (sessionId?: string) => void
   autoResizeTextarea: () => void
   updateSendButton: () => void
+  onDeleteRecentSession?: (sessionId: string) => void
 }
 
 export function showWelcomeView(deps: WelcomeViewDeps): void {
@@ -146,6 +147,14 @@ export function setupWelcomeActions(deps: WelcomeViewDeps): void {
       })
     }
   }
+
+  const recentContainer = document.getElementById("welcome-recent-sessions")
+  recentContainer?.addEventListener("recent-session-delete", ((e: CustomEvent) => {
+    const sid = e.detail?.sessionId
+    if (typeof sid === "string" && sid) {
+      deps.onDeleteRecentSession?.(sid)
+    }
+  }) as EventListener)
 
   const greetingEl = document.getElementById("welcome-greeting") as HTMLElement | null
   if (greetingEl) {

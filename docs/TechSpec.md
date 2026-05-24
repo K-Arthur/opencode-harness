@@ -59,7 +59,7 @@ OpenCode Harness is a VS Code extension that integrates the opencode AI coding a
 - **UI**: Webview (HTML/CSS/TypeScript embedded in VS Code extension)
 - **Testing**: Playwright (E2E), Node.js built-in test runner (unit + behavioral), Mocha (integration via vscode-test)
 - **Build**: esbuild, npm
-- **Password/security**: Auto-generated `OPENCODE_SERVER_PASSWORD` per session, Bearer token auth via SDK client headers, environment allowlist for child processes
+- **Password/security**: Auto-generated `OPENCODE_SERVER_PASSWORD` per local server session, HTTP Basic auth via SDK client headers, environment allowlist for child processes
 
 ### Data Flow
 1. User opens chat panel → Extension activates ChatProvider with TabManager
@@ -98,6 +98,12 @@ See `docs/adrs/ADR-009-pending-event-buffer.md` for the full motivation and alte
 - `session.command({ path, body })` / `session.shell({ path, body })` - Route slash commands and shell execution through the OpenCode server.
 - `session.abort({ path })`, `session.share({ path })`, `session.delete({ path })`, `session.revert({ path, body })` - Manage execution and lifecycle operations. Server-side tool edits are reverted through `session.revert({ body: { messageID } })`; extension-local checkpoints cover only extension-managed diff accepts.
 - `find.text()`, `find.files()`, `find.symbols()`, `file.read()`, `file.status()` - File/search/diff support for agent tool results and context views.
+
+### Server Authentication
+- Local spawn mode starts `opencode serve` with a generated or inherited `OPENCODE_SERVER_PASSWORD` and authenticates SDK/fetch calls with HTTP Basic auth using username `opencode`.
+- Remote attach mode follows the same official opencode server contract: a saved remote secret is treated as the server password and encoded as `Basic opencode:<password>`.
+- For compatibility with custom proxies, a saved remote secret that already starts with `Basic ` or `Bearer ` is passed through unchanged.
+- The opencode server and SDK docs describe the server as HTTP-based, with `opencode serve` exposing the OpenAPI-backed API surface and `@opencode-ai/sdk` generated from that spec.
 
 The debug Extension Development Host must open the intended workspace folder. If no folder is open, VS Code reports an empty `workspaceFolders` list and `SessionManager` starts `opencode serve` from `process.cwd()`; in local F5 runs that can be `/home/kevinarthur`, which changes session recovery and workspace scoping.
 
@@ -160,8 +166,11 @@ The following features were audited against the opencode CLI and enhanced for th
 - **Webview model manager**: Connect Provider opens OpenCode provider/config actions; favorites and recent selections are stored in webview state and sorted above provider groups.
 
 ### Session History
-- **Auto-title**: First user message generates a title (first sentence, truncated at 40 chars).
+- **Canonical identity**: Synced sessions use the OpenCode server session id as the canonical key. Legacy local rows with a matching `cliSessionId` are merged into the server-keyed record on load/recovery.
+- **Title source of truth**: Server `Session.title` is authoritative for synced sessions. Local rename calls `SessionManager.updateSessionTitle()` / SDK `client.session.update`, and `session.updated` SSE events flow back through `SessionStore.applyServerTitle()`.
+- **Auto-title**: First user message/server title generates a title (first sentence, truncated at 40 chars) and is mirrored locally for cached display.
 - **Rename validation**: Non-empty, max 80 chars, no path separators.
+- **Search**: Welcome search and the Session History modal both search previous sessions. The modal filters cached rows locally while querying `list_server_sessions` for server-only matches.
 - **Delete confirmation**: Modal confirmation; streaming sessions are aborted first.
 - **Export**: Markdown format with tool calls in `<details>` blocks, diffs in fenced code blocks, timestamps.
 
@@ -308,12 +317,14 @@ Welcome-page session search and pasted-image attachments share a webview-side co
 
 ### Unified Session Modal (Feature 21 — New)
 - **Single list**: Replaced the LOCAL/SERVER two-tab modal with a unified list that merges `SessionStore` sessions and server sessions.
-- **Deduplication**: If a local session has a `cliSessionId` matching a server session ID, it appears once (server metadata primary, "synced" semantics).
+- **Deduplication**: If a local session has a `cliSessionId` matching a server session ID, it appears once (server metadata/title primary, "synced" semantics). The renderer groups local rows by `cliSessionId || id` so legacy duplicate local keys cannot produce duplicate modal rows.
+- **Search**: The modal renders a search input above the list. Input updates the local filter immediately and debounces `list_server_sessions` requests with the active query.
 - **Workspace badges**: Filled dot (current workspace), hollow dot (other workspace), dimmed dot (local-only, no server counterpart).
 - **`resume_server_session` message**: Clicking a server-only session sends `{ type: "resume_server_session", serverSessionId, title, directory }` from the webview. `ChatProvider` calls `sessionStore.importOneServerSession()` then `handleResumeSession()`. If the session directory differs from the current VS Code workspace, an information message offers "Open Folder" or "Continue Here".
 - **`SessionStore.importOneServerSession(serverId, title?, directory?)`**: Idempotent — returns the existing session if `cliSessionId === serverId` already exists; otherwise creates a new session keyed by `serverId` with `needsBackfill: true` and `workspacePath` from the server session's directory (not the current VS Code workspace).
 - **Workspace folder change listener**: If the server is already running when a workspace folder is added, an information message offers to restart the server in the new workspace directory. (`src/extension.ts`)
 - **All sessions visible**: `list_server_sessions` handler no longer filters by current workspace — shows all non-subagent sessions, sorted by `updated` descending, with an `isCurrentWorkspace` flag for UI badging.
+- **Recovery consolidation**: `SessionStore.importServerSessions` and `migrateLocalIdsToServerIds` merge duplicate local/server records that reference the same server id, preserving richer local transcript data while keeping the server-keyed row as canonical.
 
 ### Changed-Files Chip Bar (Feature 22 — Fixed)
 - **Canonical changed-file sync**: Backend `SessionStore.addChangedFiles()` registers normalized paths from `file_edited` and `session.diff` events. The host posts `changed_files_update` as `{ type, sessionId, files: Array<{ path: string; added: number; removed: number }> }`; the frontend uses it as the canonical state for both the chip bar and todos panel. Rendering is scoped to the active session and tab switches clear stale chips when the new session has no changed files. Legacy/live `file_edited` remains `{ type, sessionId, file }` and merges through the same dedupe path.

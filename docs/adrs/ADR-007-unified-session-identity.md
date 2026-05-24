@@ -32,12 +32,14 @@ Two routes still produce sessions whose ID is locally generated:
 - **Offline create** — when the server is not running, the store falls back to `crypto.randomUUID()` and marks the session `pendingServerLink: true`. On next server connect, the session is promoted: a server session is created and the local entry is rewritten under the server ID (one-shot, atomic, with a key migration in the persisted map).
 - **Migration** — pre-existing local sessions with a `cliSessionId` are rekeyed to that ID on first load after upgrade.
 
+If a legacy local-keyed row and a server-keyed row already exist for the same server session, the migration **merges** them instead of preserving both. The server-keyed row remains canonical, local transcript/cost/workspace metadata are preserved where richer, and the duplicate local key is removed.
+
 ### 2. Bidirectional session import on connect
 
 `sessions_recovered` is now an import event, not just a re-link event:
 
 1. For every server session the extension does **not** know about, import it: create a local entry keyed by the server ID, backfill `messages` lazily on first activation via `SessionManager.getMessages()`, and surface it in the picker with a "loading…" indicator until the backfill completes.
-2. For every local session whose `cliSessionId` matches a server session, no-op (already linked).
+2. For every local session whose `cliSessionId` matches a server session, canonicalize it under the server id. If another entry already uses that server id, merge the two records and keep a single server-keyed row.
 3. For every local session whose `cliSessionId` is no longer on the server, leave the local message history intact but clear `cliSessionId` (current behavior).
 
 The recovery cap is raised: instead of `MAX_RECOVERED_SESSIONS = 3` tabs auto-opening, all server sessions are imported into the store but only the most-recent N are surfaced as tabs. The rest live in the history picker.
@@ -84,7 +86,7 @@ Existing `newSession` and `openStoredSession` remain.
 - Single source of truth for session IDs eliminates a class of edge cases (re-attach drift, tab-vs-store ID mismatches).
 
 **Negative:**
-- One-shot migration touches existing users' globalState. Mitigated by: only rekeying when `cliSessionId` is set and unique; logging every rewrite; preserving original entries if migration fails.
+- One-shot migration touches existing users' globalState. Mitigated by: only rekeying/merging when `cliSessionId` is set; preserving richer local transcript data during conflict merges; logging every rewrite/merge; preserving original entries if migration fails before mutation.
 - Backfilling messages from the server on import has latency cost (one HTTP call per imported session). Mitigated by: lazy backfill on first activation, not on import.
 - Remote attach exposes a new auth surface. Mitigated by: URL validation, token read from `machine`-scoped config, token never persisted in session state, and `https://` warnings for non-local remote URLs.
 
@@ -93,10 +95,10 @@ Existing `newSession` and `openStoredSession` remain.
 
 ## Implementation notes
 
-- Tests added at the SessionStore boundary (RED phase): import idempotency, migrator rekey-by-cliSessionId, pendingServerLink promotion.
+- Tests added at the SessionStore boundary (RED phase): import idempotency, migrator rekey-by-cliSessionId, duplicate local/server merge, pendingServerLink promotion.
 - `extension.ts:172` (`sessions_recovered` handler) becomes the single import entry point. Hash-then-rewrite is performed inside `SessionStore.importServerSessions(serverSessions)`.
 - `SessionManager.authHeader` getter is added (currently referenced from `extension.ts:154` but missing).
-- No change to webview protocol — the webview already keys by session ID, so the rekey is transparent to it.
+- No change to webview protocol — the webview already keys by session ID, so the rekey is transparent to it. The unified session modal still defensively dedupes by `cliSessionId || id` to avoid showing duplicate rows while old state is being repaired.
 
 ## References
 

@@ -139,6 +139,7 @@ it("has type guards for discriminated blocks", () => {
   })
 
   it("permission approval UI supports once, always, and reject responses", () => {
+    assert.ok(source.includes("sessionId: block.sessionId"), "permission responses must target the session that received the request")
     assert.ok(source.includes('response: "once"'), "Allow must send an SDK-compatible once response")
     assert.ok(source.includes('response: "always"'), "Scoped approvals must support the SDK-compatible always response")
     assert.ok(source.includes('response: "reject"'), "Deny must send an SDK-compatible reject response")

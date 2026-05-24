@@ -68,6 +68,11 @@ describe("SessionManager.ts", () => {
     assert.ok(source.includes("this.client.session.messages("), "must use SDK session.messages(), not Session.history")
   })
 
+  it("updates session titles through the OpenCode SDK", () => {
+    assert.ok(source.includes("async updateSessionTitle("), "must expose SDK-backed title updates")
+    assert.ok(source.includes("this.client.session.update({ path: { id }, body: { title } })"), "must call session.update with title")
+  })
+
   it("generates SERVER_PASSWORD when none is configured", () => {
     assert.ok(source.includes("generatePassword"), "must have generatePassword method")
     assert.ok(source.includes("randomUUID"), "must use randomUUID for password")
@@ -77,6 +82,8 @@ describe("SessionManager.ts", () => {
   it("passes password as Basic auth to SDK client", () => {
     assert.ok(source.includes("Authorization"), "must set Authorization header")
     assert.ok(source.includes("Basic"), "must use Basic scheme (opencode server uses HTTP Basic Auth)")
+    assert.ok(source.includes("buildRemoteAuthHeader"), "remote attach must share the Basic auth builder")
+    assert.ok(source.includes("opencode:${secret}"), "bare remote secrets must be encoded as opencode:<password>")
   })
 
   it("has idempotency key on sendPromptAsync to prevent duplicate retries", () => {

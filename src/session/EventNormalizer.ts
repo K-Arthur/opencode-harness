@@ -17,6 +17,7 @@ import { FallbackHandler } from "./eventHandlers/FallbackHandler"
 import { ServerConnectedHandler } from "./eventHandlers/ServerConnectedHandler"
 import { TodoUpdatedHandler } from "./eventHandlers/TodoUpdatedHandler"
 import { McpToolsChangedHandler } from "./eventHandlers/McpToolsChangedHandler"
+import { SessionUpdatedHandler } from "./eventHandlers/SessionUpdatedHandler"
 
 const HANDLERS: EventHandler[] = [
   new TextPartHandler(),
@@ -26,6 +27,7 @@ const HANDLERS: EventHandler[] = [
   new SessionStatusHandler(),
   new SessionErrorHandler(),
   new SessionIdleHandler(),
+  new SessionUpdatedHandler(),
   new FileEditHandler(),
   new PermissionHandler(),
   new SessionDiffHandler(),

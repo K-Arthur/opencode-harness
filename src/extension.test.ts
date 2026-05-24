@@ -79,4 +79,11 @@ describe("extension.ts", () => {
   it("handles server_disconnected event", () => {
     assert.ok(extensionSource.includes("server_disconnected"))
   })
+
+  it("wires SDK-backed session title sync", () => {
+    assert.ok(extensionSource.includes("setServerTitleUpdater"), "SessionStore must propagate local renames to the server")
+    assert.ok(extensionSource.includes("updateSessionTitle"), "title updater must call the SDK-backed SessionManager method")
+    assert.ok(extensionSource.includes('case "session_updated"'), "server title updates must flow back into local cache")
+    assert.ok(extensionSource.includes("applyServerTitle"), "session.updated events must update local cached title")
+  })
 })

@@ -65,14 +65,22 @@ describe("migrateLocalIdsToServerIds", () => {
     assert.equal(map.get("srv-A")!.messages.length, 2)
   })
 
-  it("does not clobber an existing entry under the target id", () => {
+  it("merges a duplicate local-keyed entry into the existing server-keyed entry", () => {
     const map = new Map<string, MigratableSession>()
-    map.set("srv-A", makeSession({ id: "srv-A", cliSessionId: "srv-A", name: "Existing" }))
-    map.set("local-1", makeSession({ id: "local-1", cliSessionId: "srv-A", name: "Conflict" }))
+    map.set("srv-A", makeSession({ id: "srv-A", cliSessionId: "srv-A", name: "Session A", messages: [] }))
+    map.set("local-1", makeSession({
+      id: "local-1",
+      cliSessionId: "srv-A",
+      name: "User named session",
+      messages: [{ role: "user" }, { role: "assistant" }],
+    }))
     const result = migrateLocalIdsToServerIds(map)
-    assert.equal(result.rekeyed, 0, "must not overwrite existing target")
-    assert.equal(map.get("srv-A")!.name, "Existing")
-    assert.equal(map.has("local-1"), true)
+    assert.equal(result.rekeyed, 0)
+    assert.equal(result.merged, 1)
+    assert.equal(map.has("local-1"), false)
+    assert.equal(map.size, 1)
+    assert.equal(map.get("srv-A")!.name, "User named session")
+    assert.equal(map.get("srv-A")!.messages.length, 2)
   })
 })
 
@@ -99,6 +107,17 @@ describe("mergeServerSessions", () => {
     assert.equal(result.imported, 0)
     assert.equal(result.skipped, 1)
     assert.equal(map.get("srv-A")!.name, "Local A", "local name preserved")
+  })
+
+  it("deduplicates local entries that already point at the same server id", () => {
+    const map = new Map<string, MigratableSession>()
+    map.set("local-1", makeSession({ id: "local-1", cliSessionId: "srv-A", name: "Local A" }))
+    const result = mergeServerSessions(map, [{ id: "srv-A", title: "Server A" }])
+    assert.equal(result.imported, 0)
+    assert.equal(result.skipped, 1)
+    assert.equal(map.has("local-1"), false)
+    assert.equal(map.has("srv-A"), true)
+    assert.equal(map.get("srv-A")!.cliSessionId, "srv-A")
   })
 
   it("reaffirms cliSessionId on a previously unlinked local entry", () => {

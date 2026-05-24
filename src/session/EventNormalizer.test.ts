@@ -145,8 +145,8 @@ describe("EventNormalizer — behavioral", () => {
       properties: {
         sessionID: "s9",
         diff: [
-          { file: "src/main.ts", added: 3, removed: 1 },
-          { file: "src/utils.ts", added: 0, removed: 2 },
+          { file: "src/main.ts", additions: 3, deletions: 1 },
+          { file: "src/utils.ts", additions: 0, deletions: 2 },
         ],
       },
     })
@@ -167,6 +167,17 @@ describe("EventNormalizer — behavioral", () => {
     })
     assert.equal(events.length, 1)
     assert.equal(events[0]!.type, "session_compacted")
+  })
+
+  it("normalizes session.updated to session_updated with server title", () => {
+    const events = normalizer.normalize({
+      type: "session.updated",
+      properties: { info: { id: "s10", title: "Server title" } },
+    })
+    assert.equal(events.length, 1)
+    assert.equal(events[0]!.type, "session_updated")
+    assert.equal(events[0]!.sessionId, "s10")
+    assert.equal((events[0]!.data as { title?: string }).title, "Server title")
   })
 
   it("normalizes file.edited to file_edited", () => {

@@ -106,9 +106,9 @@ test.describe("Chat Webview E2E", () => {
     expectNoBrowserErrors(captured)
   })
 
-  // Fix B: changed-files chips render with distinct per-language colored
-  // monogram badges, not identical generic SVGs.
-  test("changed-files chips render per-language colored badges", async ({ page }) => {
+  // Fix B: changed-files always-visible strip appears when files are reported,
+  // shows file names, and clicking it opens the full dropdown tree.
+  test("changed-files strip shows file names and opens dropdown on click", async ({ page }) => {
     const captured = captureErrors(page)
     await page.goto("/")
 
@@ -121,36 +121,49 @@ test.describe("Chat Webview E2E", () => {
           model: "anthropic/claude-3-5-sonnet-20241022",
           messages: [],
           tokenUsage: { prompt: 0, completion: 0, total: 0 },
-          changedFiles: ["src/foo.ts", "src/bar.py", "README.md", "config.json"],
         },
       ],
       activeSessionId: "s",
+      globalModel: "anthropic/claude-3-5-sonnet-20241022",
     })
 
-    await page.waitForSelector(".changed-file-chip", { timeout: 5000 })
+    await page.waitForTimeout(300)
 
-    // One chip per file
-    await expect(page.locator(".changed-file-chip")).toHaveCount(4)
+    await dispatchHostMessage(page, {
+      type: "changed_files_update",
+      sessionId: "s",
+      files: [
+        { path: "src/foo.ts", added: 10, removed: 2 },
+        { path: "src/bar.py", added: 5, removed: 1 },
+        { path: "README.md", added: 3, removed: 0 },
+        { path: "config.json", added: 1, removed: 1 },
+      ],
+    })
 
-    // Per-language classes should each appear at least once
-    await expect(page.locator(".changed-file-icon--ts")).toHaveCount(1)
-    await expect(page.locator(".changed-file-icon--py")).toHaveCount(1)
-    await expect(page.locator(".changed-file-icon--md")).toHaveCount(1)
-    await expect(page.locator(".changed-file-icon--json")).toHaveCount(1)
+    // Always-visible strip must appear (not hidden)
+    const strip = page.locator("#changed-files-strip")
+    await expect(strip).not.toHaveClass(/hidden/, { timeout: 5000 })
 
-    // Icons must contain visible text labels (not just SVGs)
-    const tsIcon = page.locator(".changed-file-icon--ts").first()
-    await expect(tsIcon).toHaveText("TS")
+    // Strip must show a "4 files changed" label
+    await expect(strip).toContainText("4 files changed")
 
-    // Icons must be aria-hidden so screen readers skip the badge
-    await expect(tsIcon).toHaveAttribute("aria-hidden", "true")
+    // File basenames appear as chips in the strip
+    await expect(strip).toContainText("foo.ts")
+    await expect(strip).toContainText("bar.py")
+    await expect(strip).toContainText("README.md")
+    await expect(strip).toContainText("config.json")
+
+    // Clicking the strip opens the full dropdown tree
+    await strip.click()
+    const tree = page.locator("#cf-dropdown-tree")
+    await expect(tree).toBeVisible({ timeout: 3000 })
 
     expectNoBrowserErrors(captured)
   })
 
-  // Regression: changed-files component supports more than the legacy core
-  // set — kotlin, shell, yaml, html should all map to a distinct badge.
-  test("changed-files chips cover extended language set", async ({ page }) => {
+  // Regression: changed-files strip handles extended language set —
+  // kotlin, shell, yaml, html, sql — shows all 5 files with correct count.
+  test("changed-files strip counts extended language set correctly", async ({ page }) => {
     const captured = captureErrors(page)
     await page.goto("/")
 
@@ -163,25 +176,36 @@ test.describe("Chat Webview E2E", () => {
           model: "anthropic/claude-3-5-sonnet-20241022",
           messages: [],
           tokenUsage: { prompt: 0, completion: 0, total: 0 },
-          changedFiles: [
-            "app/Main.kt",
-            "scripts/deploy.sh",
-            "ci/workflow.yaml",
-            "public/index.html",
-            "schema/migration.sql",
-          ],
         },
       ],
       activeSessionId: "s",
+      globalModel: "anthropic/claude-3-5-sonnet-20241022",
     })
 
-    await page.waitForSelector(".changed-file-chip", { timeout: 5000 })
+    await page.waitForTimeout(300)
 
-    await expect(page.locator(".changed-file-icon--kt")).toHaveCount(1)
-    await expect(page.locator(".changed-file-icon--sh")).toHaveCount(1)
-    await expect(page.locator(".changed-file-icon--yaml")).toHaveCount(1)
-    await expect(page.locator(".changed-file-icon--html")).toHaveCount(1)
-    await expect(page.locator(".changed-file-icon--sql")).toHaveCount(1)
+    await dispatchHostMessage(page, {
+      type: "changed_files_update",
+      sessionId: "s",
+      files: [
+        { path: "app/Main.kt", added: 20, removed: 5 },
+        { path: "scripts/deploy.sh", added: 8, removed: 2 },
+        { path: "ci/workflow.yaml", added: 15, removed: 0 },
+        { path: "public/index.html", added: 4, removed: 1 },
+        { path: "schema/migration.sql", added: 12, removed: 3 },
+      ],
+    })
+
+    const strip = page.locator("#changed-files-strip")
+    await expect(strip).not.toHaveClass(/hidden/, { timeout: 5000 })
+    await expect(strip).toContainText("5 files changed")
+
+    // All 5 basenames appear in the strip chips
+    await expect(strip).toContainText("Main.kt")
+    await expect(strip).toContainText("deploy.sh")
+    await expect(strip).toContainText("workflow.yaml")
+    await expect(strip).toContainText("index.html")
+    await expect(strip).toContainText("migration.sql")
 
     expectNoBrowserErrors(captured)
   })
@@ -227,7 +251,9 @@ test.describe("Chat Webview E2E", () => {
     expect(String(setModelMsg!.model)).toMatch(/gpt-4o/)
   })
 
-  // Test: context usage shows tokens-only when maxTokens is unknown
+  // Test: context usage dropdown shows tokens-only summary when maxTokens is unknown.
+  // When maxTokens = 0 the toolbar button must become visible and the dropdown
+  // must surface the "set limit" hint via buildSummaryText.
   test("context usage shows tokens-only when maxTokens is unknown", async ({ page }) => {
     const captured = captureErrors(page)
     await page.goto("/")
@@ -247,7 +273,9 @@ test.describe("Chat Webview E2E", () => {
       globalModel: "anthropic/claude-3-5-sonnet-20241022",
     })
 
-    // Send context_usage with maxTokens = 0 (unknown)
+    await page.waitForTimeout(300)
+
+    // Send context_usage with maxTokens = 0 (unknown context window)
     await dispatchHostMessage(page, {
       type: "context_usage",
       percent: 0,
@@ -255,13 +283,94 @@ test.describe("Chat Webview E2E", () => {
       maxTokens: 0,
     })
 
-    // Verify the context monitor shows tokens-only text
-    const contextMonitor = page.locator(".context-monitor")
-    await expect(contextMonitor).not.toHaveClass(/hidden/)
+    // Status-strip bar must become visible (always-visible context-usage UI)
+    const ctxBar = page.locator("#context-usage")
+    await expect(ctxBar).not.toHaveClass(/hidden/, { timeout: 5000 })
 
-    const contextText = contextMonitor.locator(".context-text")
-    await expect(contextText).toHaveText(/12,345 tok · set limit/i)
+    // Open the dropdown and verify "tokens-only" summary text
+    await ctxBar.click()
+    const summaryText = page.locator(".cup-summary-text")
+    await expect(summaryText).toBeVisible({ timeout: 3000 })
+    await expect(summaryText).toHaveText(/12,345 tok · set limit/i)
 
     await expectNoBrowserErrors(captured)
+  })
+
+  // Regression: context usage dropdown must render on top of chat content.
+  // z-index: 100 was insufficient — chat transforms/stacking contexts beat it.
+  test("context usage dropdown is visible above chat content", async ({ page }) => {
+    await page.goto("/")
+
+    await dispatchHostMessage(page, {
+      type: "init_state",
+      sessions: [{ id: "s", name: "T", model: "anthropic/claude-3-5-sonnet-20241022", messages: [], tokenUsage: { prompt: 0, completion: 0, total: 0 } }],
+      activeSessionId: "s",
+      globalModel: "anthropic/claude-3-5-sonnet-20241022",
+    })
+
+    await dispatchHostMessage(page, { type: "context_usage", percent: 45, tokens: 90000, maxTokens: 200000 })
+
+    const ctxBar = page.locator("#context-usage")
+    await expect(ctxBar).not.toHaveClass(/hidden/, { timeout: 5000 })
+    await ctxBar.click()
+
+    const panel = page.locator("#context-usage-dropdown")
+    await expect(panel).not.toHaveClass(/hidden/, { timeout: 3000 })
+
+    // Panel must be in front — no other element should fully obscure it.
+    // Playwright evaluates visibility: the panel must have non-zero dimensions and be unclipped.
+    await expect(panel).toBeVisible()
+
+    // The panel must show actual usage data, not the "no data" fallback.
+    await expect(panel).not.toContainText("No context usage data available")
+    await expect(panel).toContainText("45")
+
+    // Panel must be closeable by pressing Escape.
+    await page.keyboard.press("Escape")
+    await expect(panel).toHaveClass(/hidden/, { timeout: 2000 })
+  })
+
+  // Regression: changed-files dropdown must open anchored to the strip, not off-screen.
+  // The dropdown was anchored to a detached createElement("button") whose getBoundingClientRect
+  // returned all zeros, placing the panel at top:4px right:${window.innerWidth}px (off-screen).
+  test("changed-files dropdown opens on-screen anchored to strip", async ({ page }) => {
+    await page.goto("/")
+
+    await dispatchHostMessage(page, {
+      type: "init_state",
+      sessions: [{ id: "s", name: "T", model: "anthropic/claude-3-5-sonnet-20241022", messages: [], tokenUsage: { prompt: 0, completion: 0, total: 0 } }],
+      activeSessionId: "s",
+      globalModel: "anthropic/claude-3-5-sonnet-20241022",
+    })
+
+    await page.waitForTimeout(300)
+
+    await dispatchHostMessage(page, {
+      type: "changed_files_update",
+      sessionId: "s",
+      files: [
+        { path: "src/alpha.ts", added: 5, removed: 2 },
+        { path: "src/beta.ts", added: 1, removed: 0 },
+      ],
+    })
+
+    const strip = page.locator("#changed-files-strip")
+    await expect(strip).not.toHaveClass(/hidden/, { timeout: 5000 })
+
+    await strip.click()
+
+    const dropdown = page.locator("#changed-files-dropdown")
+    await expect(dropdown).not.toHaveClass(/hidden/, { timeout: 3000 })
+    await expect(dropdown).toBeVisible()
+
+    // Dropdown must be positioned on-screen (right edge not off-screen)
+    const box = await dropdown.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.x).toBeGreaterThan(-10)           // not off-screen left
+    expect(box!.x + box!.width).toBeLessThan(2000) // not off-screen right
+
+    // Dropdown must be closeable
+    await page.keyboard.press("Escape")
+    await expect(dropdown).toHaveClass(/hidden/, { timeout: 2000 })
   })
 })

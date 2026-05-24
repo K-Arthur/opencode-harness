@@ -39,6 +39,8 @@ export interface OpenCodeSession {
   cost: number
   tokenUsage: { prompt: number; completion: number; total: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }
   changedFiles?: string[]
+  /** Per-file cumulative diff stats, keyed by normalized path. */
+  changedFileStats?: Record<string, { added: number; removed: number }>
   workspacePath?: string
   /** ID of the session this was forked from, if any. */
   parentSessionId?: string
@@ -469,7 +471,7 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
    */
   migrateLocalIdsToServerIds(): MigrationResult {
     const result = migrateLocalIdsToServerIdsPure(this.sessions as unknown as Map<string, MigratableSession>)
-    if (result.rekeyed > 0) {
+    if (result.rekeyed > 0 || result.merged > 0) {
       // If the active session was rekeyed, follow it.
       const active = this.sessions.get(this.activeSessionId)
       if (!active) {
@@ -483,7 +485,7 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
       }
       this.save()
       this._onSessionsChanged.fire()
-      log.info(`Migrated ${result.rekeyed} local session id(s) to server ids`)
+      log.info(`Migrated ${result.rekeyed} local session id(s) to server ids, merged ${result.merged} duplicate link(s)`)
     }
     return result
   }
@@ -716,8 +718,9 @@ validateSessionName(name: string): string | null {
 
     // Best-effort server propagation. Skip when no cliSessionId yet (local-
     // only sessions; server learns the title on first prompt).
-    if (this.serverTitleUpdater && session.cliSessionId) {
-      void this.serverTitleUpdater(session.cliSessionId, trimmed).catch(err =>
+    const serverId = session.cliSessionId || (!isLocalPlaceholderSessionId(session.id) ? session.id : undefined)
+    if (this.serverTitleUpdater && serverId) {
+      void this.serverTitleUpdater(serverId, trimmed).catch(err =>
         log.warn(`Failed to propagate session title to server for ${id}: ${(err as Error).message}`),
       )
     }
@@ -733,7 +736,7 @@ validateSessionName(name: string): string | null {
     const trimmed = title.trim()
     if (!trimmed) return false
     for (const session of this.sessions.values()) {
-      if (session.cliSessionId === cliSessionId) {
+      if (session.cliSessionId === cliSessionId || session.id === cliSessionId) {
         if (session.name === trimmed) return false
         session.name = trimmed
         this.save()
@@ -845,7 +848,11 @@ validateSessionName(name: string): string | null {
   /**
    * Track changed files for a session.
    */
-  addChangedFiles(id: string, files: string[]): void {
+  addChangedFiles(
+    id: string,
+    files: string[],
+    stats?: Array<{ path: string; added: number; removed: number }>,
+  ): void {
     const session = this.sessions.get(id)
     if (!session) return
 
@@ -860,10 +867,25 @@ validateSessionName(name: string): string | null {
       next.push(normalized)
     }
 
+    // Persist cumulative diff stats, accumulating additions/deletions per file
+    if (stats && stats.length > 0) {
+      const stored = session.changedFileStats ?? {}
+      for (const s of stats) {
+        const key = this.normalizeChangedFilePath(s.path)
+        if (!key) continue
+        const prev = stored[key] ?? { added: 0, removed: 0 }
+        stored[key] = {
+          added: prev.added + (Number.isFinite(s.added) ? s.added : 0),
+          removed: prev.removed + (Number.isFinite(s.removed) ? s.removed : 0),
+        }
+      }
+      session.changedFileStats = stored
+    }
+
     if (next.length !== (session.changedFiles || []).length) {
       session.changedFiles = next
-      this.save()
     }
+    this.save()
   }
 
   /**
@@ -871,6 +893,10 @@ validateSessionName(name: string): string | null {
    */
   addChangedFile(id: string, filePath: string): void {
     this.addChangedFiles(id, [filePath])
+  }
+
+  getChangedFileStats(id: string): Record<string, { added: number; removed: number }> {
+    return this.sessions.get(id)?.changedFileStats ?? {}
   }
 
   /**
@@ -888,6 +914,7 @@ validateSessionName(name: string): string | null {
     const session = this.sessions.get(id)
     if (session) {
       session.changedFiles = []
+      session.changedFileStats = {}
       this.save()
     }
   }

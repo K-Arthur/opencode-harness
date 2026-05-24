@@ -130,23 +130,24 @@ nothing forces producers to emit a valid shape.
 |---|---|---|
 | `block.type === "tool_call"` | sdkMessageConverter, CommandExecutionService, SessionExporter (4 places) | Renderer expects `"tool-call"` (with hyphen). Many call-sites defensively check both. |
 | `block.text` on thinking blocks | (formerly) sdkMessageConverter, ChatProvider | Renderer reads `block.content` (we just patched the renderer to tolerate both). |
-| `Session.title` (SDK) | `client.session.create({ body: { title } })` | Extension's local session stores `name`. Never echoes back to server. |
+| `Session.title` (SDK) | `client.session.create({ body: { title } })`, `client.session.update({ path, body: { title } })`, `session.updated` SSE | Extension keeps a local `name` compatibility cache, but synced rows prefer server title. |
 | `block.toolType` vs `block.class` vs `block.name` | Various tool-call producers | Three different names for the same concept. |
 
-### 3.4 Session naming — what's broken
+### 3.4 Session naming — original gaps and current behavior
 
 `SessionManager.createSession(title)` calls `client.session.create({ body: { title } })`
 and stores the returned `Session.title` only transiently. The local
-`SessionStore` keeps `session.name` independently.
+`SessionStore` originally kept `session.name` independently.
 
-- ✗ `SessionStore.updateName(id, name)` writes locally; no
-  `client.session.update(…)` call.
-- ✗ No subscription to `session.updated` / `session.created` / `session.deleted`
-  SSE events — title changes from CLI / another tab never reach this extension.
-- ✗ When the user creates a session in the extension before naming it, the
-  server's `title` field stays whatever was sent (often empty), but the
-  extension auto-generates a `name` locally from the first user message —
-  the server never learns the new title.
+Resolved implementation:
+
+- `SessionStore.setTitle(id, title)` writes the local cache and calls
+  `SessionManager.updateSessionTitle(serverId, title)`, which wraps SDK
+  `client.session.update({ path: { id }, body: { title } })`.
+- `SessionUpdatedHandler` subscribes to `session.updated`; the extension
+  applies `info.title` through `SessionStore.applyServerTitle()`.
+- Synced session rows prefer server `Session.title`. Local `name` remains as
+  a compatibility/cache field until the wider `name -> title` rename lands.
 
 Net: the two stores drift the moment a session is renamed on either side.
 
@@ -279,22 +280,23 @@ the ad-hoc `stableToolPartId` heuristic in `StreamCoordinator`.
 
 ### 5.4 Session naming — bidirectional sync
 
-1. **Local rename → server.** `SessionStore.updateName(id, name)` is renamed
-   to `setTitle(id, title)` and, after local write, calls
-   `sessionManager.updateSessionTitle(cliSessionId, title)` (new method
-   wrapping `client.session.update`, which the SDK exposes — see ADR for
-   the exact endpoint we'll bind to).
-2. **Server rename → local.** Add handlers for
-   `session.created`, `session.updated`, `session.deleted` in
-   `eventHandlers/`. On `session.updated`, copy `info.title` into the
-   local store and fire `_onSessionsChanged`.
-3. **Field rename.** `SessionState.name` is renamed to `title` across the
-   codebase. The webview migration walks `WebviewState.sessions[*]` and
-   copies `name` → `title` when missing. Display helpers (`displayName`)
-   become `displayTitle`.
-4. **Identity.** `SessionState.id` (extension's GUID) and `cliSessionId`
-   (server's id) keep their existing relationship — those are separate
-   concepts and the audit found no drift there. Only `title` aligns.
+1. **Local rename → server.** `SessionStore.updateName(id, name)` is superseded
+   by `setTitle(id, title)` and, after local write, calls
+   `sessionManager.updateSessionTitle(serverId, title)`. `serverId` resolves
+   to `cliSessionId` when present, otherwise the session id if it is already
+   a real OpenCode server id. The manager wraps SDK `client.session.update`
+   / `PATCH /session/{id}` with `{ title }`.
+2. **Server rename → local.** `SessionUpdatedHandler` normalizes
+   `session.updated` to `session_updated`; the extension applies
+   `info.title` through `SessionStore.applyServerTitle()` and fires
+   `_onSessionsChanged`.
+3. **Field compatibility.** `SessionState.name` remains as the compatibility
+   cache for now, but server `Session.title` is authoritative for synced
+   sessions. Webview rows prefer server title over local title.
+4. **Identity.** OpenCode server session id is canonical for synced
+   sessions. `cliSessionId` is a legacy attachment alias used for migration
+   and event routing. Duplicate local/server rows that point at the same
+   server id are merged into one server-keyed record.
 
 ### 5.5 Lossless one-shot migration
 

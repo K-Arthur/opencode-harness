@@ -61,7 +61,7 @@ test.describe("Streaming Interleave Display", () => {
     const children = messageBubble.locator("> *")
     const count = await children.count()
 
-    assert.ok(count >= 2, `Expected at least 2 children (text + tool), got ${count}`)
+    expect(count, `Expected at least 2 children (text + tool), got ${count}`).toBeGreaterThanOrEqual(2)
 
     const firstChild = children.nth(0)
     await expect(firstChild).toHaveClass(/msg-text/)
@@ -137,7 +137,7 @@ test.describe("Streaming Interleave Display", () => {
     const directChildren = bubble.locator("> *")
     const count = await directChildren.count()
 
-    assert.ok(count >= 3, `Expected at least 3 children (text + tool + text), got ${count}`)
+    expect(count, `Expected at least 3 children (text + tool + text), got ${count}`).toBeGreaterThanOrEqual(3)
 
     const lastChild = directChildren.nth(count - 1)
     await expect(lastChild).toHaveClass(/streaming-text/)
@@ -198,6 +198,3 @@ test.describe("Streaming Interleave Display", () => {
   })
 })
 
-function assert(condition: boolean, message: string) {
-  if (!condition) throw new Error(message)
-}
