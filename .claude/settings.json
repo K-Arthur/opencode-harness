@@ -25,7 +25,9 @@
       "Bash(npx playwright *)",
       "Bash(git checkout *)",
       "Bash(xargs -I{} git show {} -- '*.ts' '*.css' '*.spec.ts')",
-      "Bash(git reset *)"
+      "Bash(git reset *)",
+      "Bash(wait)",
+      "WebSearch"
     ]
   }
 }

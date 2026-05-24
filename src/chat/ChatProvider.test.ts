@@ -389,6 +389,15 @@ void it("server permission requests reject mutating plan-mode requests before re
   assert.ok(block.indexOf("respondToPermission") < block.indexOf("postMessage"), "plan-mode rejection must happen before posting permission UI")
 })
 
+void it("server permission requests are auto-approved in auto mode without prompting", () => {
+  const permissionIdx = source.indexOf('["permission_request"')
+  assert.ok(permissionIdx >= 0, "permission_request server handler must exist")
+  const block = source.slice(permissionIdx, source.indexOf('["permission_replied"', permissionIdx))
+  assert.ok(block.includes('currentTab?.mode === "auto"'), "server permission handler must inspect auto mode")
+  assert.ok(block.includes("respondToPermission") && block.includes('"once"'), "auto-mode server permissions must be approved once")
+  assert.ok(block.indexOf('currentTab?.mode === "auto"') < block.indexOf("postMessage"), "auto-mode approval must happen before posting permission UI")
+})
+
 void it("server permission requests forward type and pattern metadata to the webview", () => {
   const permissionIdx = source.indexOf('["permission_request"')
   assert.ok(permissionIdx >= 0, "permission_request server handler must exist")

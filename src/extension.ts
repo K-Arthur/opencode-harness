@@ -112,6 +112,9 @@ sessionManager = new SessionManager(mcpServerManager)
     // Session store — don't create a default session on start, let the welcome
     // page guide the user through their first interaction.
     sessionStore = new SessionStore(context.globalState)
+    sessionStore.setServerTitleUpdater(async (cliSessionId, title) => {
+      await sessionManager.updateSessionTitle(cliSessionId, title)
+    })
 
     // ADR-007: snapshot a git baseline whenever a fresh session is created so
     // "restore to session start" has a defined target. CheckpointManager
@@ -277,6 +280,13 @@ function initConnectionStatusBar(
         if (data?.sessions) {
           const result = sessionStore.importServerSessions(data.sessions)
           log.info(`Session recovery: ${result.imported} imported, ${result.skipped} already known (total server: ${data.sessions.length})`)
+        }
+        break
+      }
+      case "session_updated": {
+        const data = event.data as { title?: string } | undefined
+        if (event.sessionId && data?.title) {
+          sessionStore.applyServerTitle(event.sessionId, data.title)
         }
         break
       }

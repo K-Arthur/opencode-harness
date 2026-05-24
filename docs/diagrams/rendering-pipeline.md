@@ -65,12 +65,22 @@ flowchart TD
 
 ```
 Streaming IDLE → stream_start → STREAMING
-STREAMING → stream_token → STREAMING (targeted textContent update)
-STREAMING → tool_start → STREAMING (pending tool call appended)
+STREAMING → stream_token → STREAMING (RenderQueue enqueue; RAF/50ms flush updates streaming-text element)
+STREAMING → tool_start → STREAMING (finalizeCurrentTextBlock first; then pending tool call appended)
 STREAMING → tool_update → STREAMING (tool call state updated)
 STREAMING → tool_end → STREAMING (tool call → result state)
-STREAMING → diff → STREAMING (diff block appended)
+STREAMING → diff → STREAMING (finalizeCurrentTextBlock first; then diff block inserted)
 STREAMING → stream_end → IDLE (cursor removed, blocks finalized)
 STREAMING → stream_error → IDLE (placeholder removed, error block shown)
 STREAMING → abort → IDLE (stream:end with reason:aborted)
 ```
+
+## Text/Tool Interleave Ordering
+
+Text blocks, tool blocks, and diff blocks are interleaved in source order within a single assistant bubble (`div.message-bubble`). The ordering contract:
+
+1. **Streaming text** lives in a `div.streaming-text` element updated in-place by the RenderQueue.
+2. **Tool start** triggers `finalizeCurrentTextBlock()` which converts `div.streaming-text` → `div.msg-text.markdown-content` (non-streaming markdown), then creates a new tool `<details>` appended/folded via `appendOrFoldToolDOM`.
+3. **Post-tool text** is inserted immediately after the last tool/diff block via `insertStreamingTextAfterLastBlock`, not appended at the bubble tail.
+4. **Diff start** triggers `finalizeCurrentTextBlock()` before inserting the diff element, preserving text-before-diff ordering.
+5. **Deferred flush guards** — the RenderQueue callback and RAF `doUpdate` bail when `state.currentBlockBuffer.trim()` is empty, preventing spurious empty blocks after a tool-start clear.

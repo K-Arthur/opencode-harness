@@ -42,24 +42,9 @@
               <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
             </svg>
           </button>
-          <!-- Changed Files toolbar button — opens a floating dropdown -->
-          <button class="icon-btn cf-toolbar-btn hidden" id="changed-files-btn"
-            title="Changed files" aria-label="Changed files"
-            aria-haspopup="true" aria-expanded="false" aria-controls="changed-files-dropdown">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/><line x1="12" y1="12" x2="12" y2="18"/>
-            </svg>
-            <span id="cf-count-badge" class="cf-count-badge hidden" aria-hidden="true"></span>
-          </button>
-          <!-- Context Usage toolbar button — opens a floating dropdown -->
-          <button class="icon-btn ctx-toolbar-btn hidden" id="context-usage-btn"
-            title="Context usage" aria-label="Context usage"
-            aria-haspopup="true" aria-expanded="false" aria-controls="context-usage-dropdown">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
-            </svg>
-            <span id="ctx-pct-badge" class="ctx-pct-badge hidden" aria-hidden="true"></span>
-          </button>
+          <!-- badge sinks for backward-compat — invisible, no toolbar buttons -->
+          <span id="cf-count-badge" class="hidden" aria-hidden="true"></span>
+          <span id="ctx-pct-badge" class="hidden" aria-hidden="true"></span>
           <button class="icon-btn" id="timeline-toggle-btn" title="Toggle conversation timeline" aria-label="Toggle conversation timeline" aria-pressed="false">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
@@ -172,7 +157,8 @@
         <span id="status-model" class="status-strip-model"></span>
         <span id="status-cost" class="status-strip-cost hidden"></span>
         <span id="status-tokens" class="status-strip-tokens hidden"></span>
-        <div id="context-usage" class="context-usage-bar hidden" role="group" aria-label="Context usage">
+        <div id="context-usage" class="context-usage-bar hidden" role="button" tabindex="0"
+          aria-label="Context usage — click for details" aria-haspopup="true" aria-controls="context-usage-dropdown">
           <span class="context-usage-label">Context</span>
           <progress id="context-progress-bar" class="context-usage-percent" max="100" value="0"></progress>
           <span id="context-label" class="context-usage-detail">0%</span>
@@ -253,6 +239,13 @@
         <div id="ctx-dropdown-content" class="ctx-dropdown-content"></div>
       </div>
       <div id="tab-panels">
+      </div>
+
+      <!-- Always-visible compact strip: appears above input when files have been changed -->
+      <div id="changed-files-strip" class="cf-strip hidden"
+        role="button" tabindex="0"
+        aria-label="Changed files — click to view"
+        aria-haspopup="true" aria-controls="changed-files-dropdown">
       </div>
 
       <div id="input-area">

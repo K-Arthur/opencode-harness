@@ -43,8 +43,8 @@ export function resetChangedFilesDropdown(): void {
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export interface ChangedFilesDropdownOptions {
-  /** Toolbar button that opens/closes the dropdown */
-  btn: HTMLButtonElement
+  /** Toolbar button that opens/closes the dropdown — null to anchor to #changed-files-strip */
+  btn: HTMLButtonElement | null
   /** Floating panel element to populate */
   panel: HTMLElement
   /** Container inside the panel to render the file tree into */
@@ -69,13 +69,15 @@ export function setupChangedFilesDropdown(opts: ChangedFilesDropdownOptions): vo
 
   // Initially hidden
   _panel.classList.add("hidden")
-  _btn.setAttribute("aria-expanded", "false")
+  if (_btn) _btn.setAttribute("aria-expanded", "false")
   _updateBadge(0)
 
-  _btn.addEventListener("click", (e) => {
-    e.stopPropagation()
-    _toggle()
-  })
+  if (_btn) {
+    _btn.addEventListener("click", (e) => {
+      e.stopPropagation()
+      _toggle()
+    })
+  }
 
   // Close button inside the dropdown
   const closeBtn = document.getElementById("cf-dropdown-close")
@@ -88,14 +90,55 @@ export function setupChangedFilesDropdown(opts: ChangedFilesDropdownOptions): vo
 export function updateChangedFiles(files: FileChange[]): void {
   _lastFiles = files
   _updateBadge(files.length)
-  if (_btn) {
-    _btn.classList.toggle("hidden", false) // always show the button once we have data
+  if (_btn && _btn.isConnected) {
+    _btn.classList.toggle("hidden", files.length === 0)
     _btn.classList.toggle("cf-btn--has-files", files.length > 0)
     _btn.setAttribute("aria-label", `Changed files (${files.length})`)
   }
   if (_isOpen && _treeContainer) {
     _renderTree(_treeContainer, files)
   }
+  updateChangedFilesStrip(files)
+}
+
+/**
+ * Render the always-visible compact strip above the input area.
+ * Shows file basenames (up to MAX_VISIBLE) then an overflow count.
+ * Clicking the strip opens the full dropdown panel.
+ */
+const CF_STRIP_MAX = 5
+export function updateChangedFilesStrip(files: FileChange[]): void {
+  const strip = document.getElementById("changed-files-strip")
+  if (!strip) return
+  if (files.length === 0) {
+    strip.classList.add("hidden")
+    strip.innerHTML = ""
+    return
+  }
+  strip.classList.remove("hidden")
+
+  const visible = files.slice(0, CF_STRIP_MAX)
+  const overflow = files.length - visible.length
+
+  let html = `<span class="cf-strip-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/><line x1="12" y1="12" x2="12" y2="18"/></svg></span>`
+  html += `<span class="cf-strip-label">${files.length} file${files.length !== 1 ? "s" : ""} changed</span>`
+  html += `<span class="cf-strip-divider" aria-hidden="true">·</span>`
+  for (const f of visible) {
+    const fpath = f.path ?? ""
+    const name = fpath.split("/").pop() || fpath
+    const escaped = name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    html += `<span class="cf-strip-chip" title="${f.path ?? ""}" data-path="${f.path ?? ""}">${escaped}</span>`
+  }
+  if (overflow > 0) {
+    html += `<span class="cf-strip-overflow">+${overflow} more</span>`
+  }
+  strip.innerHTML = html
+  // Single click anywhere on the strip opens the full dropdown
+  strip.onclick = (e) => {
+    e.stopPropagation()
+    _toggle()
+  }
+  strip.setAttribute("aria-label", `${files.length} changed file${files.length !== 1 ? "s" : ""} — click to view`)
 }
 
 /** Called by main.ts when file_diff_response arrives */
@@ -114,29 +157,38 @@ function _toggle(): void {
 }
 
 function _open(): void {
-  if (!_panel || !_treeContainer || !_btn) return
+  if (!_panel || !_treeContainer) return
   _isOpen = true
   _panel.classList.remove("hidden")
-  _btn.setAttribute("aria-expanded", "true")
+  if (_btn) _btn.setAttribute("aria-expanded", "true")
 
-  // Position dropdown below the button
-  const btnRect = _btn.getBoundingClientRect()
-  _panel.style.position = "fixed"
-  _panel.style.top = `${btnRect.bottom + 4}px`
-  const rightEdge = window.innerWidth - btnRect.right
-  _panel.style.right = `${rightEdge}px`
-  _panel.style.width = "420px"
+  // Anchor to the strip when btn is absent/detached, otherwise anchor to btn
+  const anchor: Element | null =
+    (_btn && _btn.isConnected) ? _btn : document.getElementById("changed-files-strip")
+  if (anchor) {
+    const r = anchor.getBoundingClientRect()
+    const panelW = 420
+    // Align right edge of panel with right edge of anchor; clamp to viewport
+    const leftEdge = Math.max(0, Math.min(r.right - panelW, window.innerWidth - panelW))
+    _panel.style.position = "fixed"
+    _panel.style.top = `${r.bottom + 4}px`
+    _panel.style.left = `${leftEdge}px`
+    _panel.style.right = "unset"
+    _panel.style.width = `${panelW}px`
+    _panel.style.maxHeight = `${window.innerHeight - r.bottom - 16}px`
+  }
 
   _renderTree(_treeContainer, _lastFiles)
 
   // Dismiss on outside click
+  const strip = document.getElementById("changed-files-strip")
   _outsideClickHandler = (e: MouseEvent) => {
-    if (_panel && _btn && !_panel.contains(e.target as Node) && !_btn.contains(e.target as Node)) {
+    const target = e.target as Node
+    if (_panel && !_panel.contains(target) && !strip?.contains(target) && !_btn?.contains(target)) {
       _close()
     }
   }
   _keyHandler = (e: KeyboardEvent) => { if (e.key === "Escape") _close() }
-  // Use requestAnimationFrame so the current click doesn't immediately close
   requestAnimationFrame(() => {
     document.addEventListener("click", _outsideClickHandler!)
     document.addEventListener("keydown", _keyHandler!)
@@ -144,10 +196,10 @@ function _open(): void {
 }
 
 function _close(): void {
-  if (!_panel || !_btn) return
+  if (!_panel) return
   _isOpen = false
   _panel.classList.add("hidden")
-  _btn.setAttribute("aria-expanded", "false")
+  if (_btn) _btn.setAttribute("aria-expanded", "false")
   if (_outsideClickHandler) document.removeEventListener("click", _outsideClickHandler)
   if (_keyHandler) document.removeEventListener("keydown", _keyHandler)
   _outsideClickHandler = null

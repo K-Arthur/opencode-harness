@@ -626,6 +626,13 @@ export class StreamCoordinator {
           const selectedModel = tab?.model || this.modelManager.model
           const provider = parseModelRef(selectedModel).providerID || parseModelRef(this.modelManager.model).providerID || undefined
           this.rateLimitMonitor.recordTokenUsage(input, output, provider, info.cost)
+          // Feed the SDK-reported input token count into ContextMonitor as the
+          // authoritative context fill for this turn. tokens.input = system +
+          // history + workspace + user message — everything the LLM consumed.
+          // This replaces the heuristic estimate from refreshContextTokenEstimate.
+          if (input > 0) {
+            this.contextMonitor.updateTokens(input, tabId)
+          }
         }
       }
     } catch (err) {

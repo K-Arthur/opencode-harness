@@ -27,6 +27,7 @@ describe("welcomeView.ts", () => {
         <span class="search-icon"></span>
         <input aria-label="Search sessions" />
       </div>
+      <div id="welcome-recent-sessions"></div>
       <div id="welcome-greeting"></div>
     `)
     globalThis.document = dom.window.document
@@ -53,6 +54,9 @@ describe("welcomeView.ts", () => {
       applyTimelineVisibility: () => {},
       autoResizeTextarea: () => {},
       updateSendButton: () => {},
+      onDeleteRecentSession: (sessionId) => {
+        messages.push({ type: "delete_session", targetSessionId: sessionId })
+      },
     }
 
     setupWelcomeActions(deps)
@@ -117,5 +121,17 @@ describe("welcomeView.ts", () => {
 
     assert.deepEqual(renderedQueries, ["pickle"])
     assert.deepEqual(messages, [{ type: "list_sessions", query: "pickle" }])
+  })
+
+  it("bridges recent session delete events through the supplied callback", () => {
+    const { dom, messages } = createDeps()
+    const recentContainer = document.getElementById("welcome-recent-sessions")!
+
+    recentContainer.dispatchEvent(new dom.window.CustomEvent("recent-session-delete", {
+      bubbles: true,
+      detail: { sessionId: "sess_delete_me" },
+    }))
+
+    assert.deepEqual(messages, [{ type: "delete_session", targetSessionId: "sess_delete_me" }])
   })
 })

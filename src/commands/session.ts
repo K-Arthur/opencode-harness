@@ -506,27 +506,27 @@ export function registerAttachRemoteCommand(
         if (url === undefined) return // user cancelled
 
         const trimmed = url.trim()
-        let token: string | undefined
+        let password: string | undefined
         if (trimmed.length > 0) {
-          token = await vscode.window.showInputBox({
-            title: "Authentication Token (optional)",
-            prompt: "Bearer token for the remote server (leave blank for none)",
+          password = await vscode.window.showInputBox({
+            title: "Server Password (optional)",
+            prompt: "HTTP Basic auth password for the remote server (leave blank for none)",
             password: true,
           })
-          if (token === undefined) return
+          if (password === undefined) return
         }
 
         await config.update("serverUrl", trimmed, vscode.ConfigurationTarget.Global)
-        // Store auth token securely via SecretStorage instead of plaintext settings.json
-        if (token) {
-          await context.secrets.store("opencode-harness.serverAuthToken", token)
+        // Store remote auth secret securely via SecretStorage instead of plaintext settings.json.
+        if (password) {
+          await context.secrets.store("opencode-harness.serverAuthToken", password)
         } else {
           await context.secrets.delete("opencode-harness.serverAuthToken")
         }
         await config.update("serverAuthToken", "", vscode.ConfigurationTarget.Global)
-        // Clean up any previously stored token in settings
+        // Clean up any previously stored auth secret in settings.
 
-        sessionManager.setRemoteServer(trimmed.length > 0 ? trimmed : null, token ?? null)
+        sessionManager.setRemoteServer(trimmed.length > 0 ? trimmed : null, password ?? null)
 
         // Restart connection with the new configuration.
         try {
@@ -579,7 +579,7 @@ export function registerRenameSessionCommand(
           },
         })
         if (newName) {
-          const success = sessionStore.rename(sessionId, newName)
+          const success = sessionStore.setTitle(sessionId, newName)
           if (success) {
             log.info(`Session renamed: ${sessionId} → ${newName}`)
             vscode.window.showInformationMessage(`Renamed to: ${newName}`)

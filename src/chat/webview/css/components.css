@@ -546,37 +546,9 @@ body.hide-thinking .thinking-block { display: none; }
   border-color: var(--color-border);
 }
 
-.changed-file-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.changed-file-name-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.changed-file-name {
-  font-size: var(--text-xs);
-  font-weight: 500;
-  color: var(--color-fg);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.changed-file-dir {
-  font-size: 10px;
-  color: var(--color-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-top: 1px;
-}
+/* NOTE: .changed-file-icon, .changed-file-name, and language badge
+ * styles are canonical in layout.css (strip chips). Dropdown file
+ * rendering uses .cf-file-icon / .cf-file-name instead. */
 
 .changed-file-stats {
   display: flex;
@@ -1596,51 +1568,8 @@ textarea {
   border-color: var(--oc-accent);
 }
 
-/* ─── Context Monitor ─── */
-.context-monitor {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-2) var(--space-3);
-  background: var(--oc-glass-bg, rgba(128, 128, 128, 0.05));
-  backdrop-filter: blur(var(--oc-glass-blur, 8px));
-  -webkit-backdrop-filter: blur(var(--oc-glass-blur, 8px));
-  border-top: 1px solid var(--color-border);
-  border-bottom: 1px solid var(--color-border);
-  font-size: var(--text-xs);
-  color: var(--color-muted);
-}
-
-.context-monitor.hidden {
-  display: none;
-}
-
-.context-progress-bar {
-  height: 4px;
-  background: var(--oc-list-hover, rgba(128, 128, 128, 0.1));
-  border-radius: var(--radius-full);
-  overflow: hidden;
-}
-
-.context-progress-fill {
-  height: 100%;
-  background: var(--color-accent, #007acc);
-  width: 0%;
-  transition: width var(--duration-normal) var(--ease-out), background-color var(--duration-normal);
-}
-
-.context-progress-fill.context-warning {
-  background: var(--oc-warning, #d29922);
-}
-
-.context-progress-fill.context-critical {
-  background: var(--oc-error, #f85149);
-}
-
-.context-text {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-}
+/* NOTE: Context monitor / progress bar styles are canonical in
+ * context-usage.css. Do not duplicate them here. */
 
 /* ─── STEERING MODE SELECTOR ─── */
 
@@ -2220,7 +2149,7 @@ textarea {
   border: 1px solid var(--oc-border);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-  z-index: 100;
+  z-index: 9000;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2277,7 +2206,7 @@ textarea {
   border: 1px solid var(--oc-border);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-  z-index: 100;
+  z-index: 9000;
   display: flex;
   flex-direction: column;
   overflow: hidden;

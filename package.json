@@ -296,7 +296,7 @@
           "type": "string",
           "default": "",
           "scope": "machine",
-          "description": "Optional bearer token sent with requests to the remote opencode server. Only used when 'opencode.serverUrl' is set."
+          "description": "Optional HTTP Basic auth password sent with requests to the remote opencode server. Only used when 'opencode.serverUrl' is set. Values explicitly prefixed with 'Basic ' or 'Bearer ' are passed through for custom deployments."
         },
         "opencode.mcpServers": {
           "type": "object",

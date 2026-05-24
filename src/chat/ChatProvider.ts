@@ -690,11 +690,19 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     ["permission_request", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean }) => {
       const data = event.data as { id?: string; title?: string; type?: string; pattern?: string | string[]; metadata?: Record<string, unknown> } | undefined
       const currentTab = this.tabManager.getTab(tabId)
-      if (currentTab?.mode === "plan" && data?.id && this.shouldAutoRejectPlanPermission(data)) {
+      if (data?.id && currentTab?.mode === "auto") {
         const cliSessionId = event.sessionId || currentTab.cliSessionId || tabId
-        log.warn(`Auto-rejecting permission ${data.id} in plan mode for session ${tabId}`)
-        void this.sessionManager.respondToPermission(cliSessionId, data.id, "reject")
-          .catch(err => log.warn(`Failed to reject plan-mode permission ${data.id}`, err))
+        log.info(`Auto-approving permission ${data.id} in auto mode for session ${tabId}`)
+        void this.sessionManager.respondToPermission(cliSessionId, data.id, "once")
+          .catch(err => log.warn(`Failed to approve auto-mode permission ${data.id}`, err))
+        return
+      }
+      if (data?.id && currentTab?.mode === "plan") {
+        const cliSessionId = event.sessionId || currentTab.cliSessionId || tabId
+        const response = this.shouldAutoRejectPlanPermission(data) ? "reject" : "once"
+        log.info(`Auto-${response === "reject" ? "rejecting" : "approving"} permission ${data.id} in plan mode for session ${tabId}`)
+        void this.sessionManager.respondToPermission(cliSessionId, data.id, response)
+          .catch(err => log.warn(`Failed to ${response} plan-mode permission ${data.id}`, err))
         return
       }
       this.postMessage({
@@ -739,18 +747,27 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         .filter(Boolean)
       if (files.length === 0) return
 
-      this.sessionStore.addChangedFiles(tabId, files)
+      // Persist stats so future tab-switches and get_changed_files requests
+      // can report accurate additions/deletions for older files.
+      const statsArray = Array.from(changeStats.entries()).map(([path, s]) => ({ path, ...s }))
+      this.sessionStore.addChangedFiles(tabId, files, statsArray)
       for (const file of files) {
         this.postMessage({ type: "file_edited", sessionId: tabId, file })
       }
+      // Merge stored cumulative stats with the current batch (current batch wins on conflict)
+      const storedStats = this.sessionStore.getChangedFileStats(tabId)
       this.postMessage({
         type: "changed_files_update",
         sessionId: tabId,
-        files: this.sessionStore.getChangedFiles(tabId).map((path) => ({
-          path,
-          added: changeStats.get(path)?.added ?? 0,
-          removed: changeStats.get(path)?.removed ?? 0,
-        })),
+        files: this.sessionStore.getChangedFiles(tabId).map((path) => {
+          const current = changeStats.get(path)
+          const stored = storedStats[path]
+          return {
+            path,
+            added: current?.added ?? stored?.added ?? 0,
+            removed: current?.removed ?? stored?.removed ?? 0,
+          }
+        }),
       })
     }],
     ["thinking", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {

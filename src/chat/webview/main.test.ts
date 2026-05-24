@@ -126,7 +126,7 @@ describe("main.ts", () => {
   })
 
   it("renderRecentSessionsList excludes active session", () => {
-    assert.ok(source.includes("s.id !== activeId"))
+    assert.ok(source.includes("prepareLocalRecentSessions"))
   })
 
   it("setupButtons does not add duplicate newTabBtn listener", () => {
@@ -272,6 +272,24 @@ describe("main.ts", () => {
       source.includes("renderUnifiedSessionList") || source.includes("renderSessionList"),
       "must have a unified session list renderer"
     )
+  })
+
+  it("unified modal: deduplicates local entries by server session id", () => {
+    assert.ok(sessionListRendererSource.includes("localByIdentity"), "renderer must group local rows by cliSessionId/local id")
+    assert.ok(sessionListRendererSource.includes("local.cliSessionId || local.id"), "server session id must be the dedupe identity when available")
+  })
+
+  it("unified modal: prefers server title for synced sessions", () => {
+    assert.ok(
+      sessionListRendererSource.includes("server.title || local.title"),
+      "server title must be the source of truth for synced rows"
+    )
+  })
+
+  it("unified modal: includes a search input that filters local and server sessions", () => {
+    assert.ok(sessionModalSource.includes('type = "search"'), "session modal must render a search input")
+    assert.ok(sessionModalSource.includes("setUnifiedSessionQuery"), "search input must update renderer query state")
+    assert.ok(sessionModalSource.includes('postMessage({ type: "list_server_sessions", query: nextQuery })'), "search must refresh server session results")
   })
 
   it("unified modal: openSessionModal passes local sessions to renderer via setUnifiedLocalSessions", () => {

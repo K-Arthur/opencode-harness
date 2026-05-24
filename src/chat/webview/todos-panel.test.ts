@@ -1,13 +1,26 @@
 /**
- * Unit tests for todos-panel renderChangedFilesList redesign.
- * TDD red phase — written before implementation.
+ * Unit tests for the consolidated Changed Files rendering engine.
+ * Relies on the canonical changed-files-dropdown.ts implementation.
  */
 import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
 import { JSDOM } from "jsdom"
+import {
+  setupChangedFilesDropdown,
+  updateChangedFiles,
+  resetChangedFilesDropdown,
+  handleDiffResponse
+} from "./changed-files-dropdown"
 
 function setupDom() {
-  const dom = new JSDOM(`<!doctype html><div id="container"></div>`)
+  const dom = new JSDOM(`<!doctype html>
+    <html>
+      <body>
+        <div id="container"></div>
+        <div id="changed-files-strip"></div>
+      </body>
+    </html>
+  `)
   ;(globalThis as any).document = dom.window.document
   ;(globalThis as any).window = dom.window
   ;(globalThis as any).HTMLElement = dom.window.HTMLElement
@@ -15,17 +28,26 @@ function setupDom() {
   return dom.window.document.getElementById("container") as HTMLElement
 }
 
-// Dynamic import to pick up a fresh module each test run
-async function getRenderer() {
-  // Force fresh module load for isolated state
-  const mod = await import("./todos-panel")
-  return mod
+function renderChangedFilesList(container: HTMLElement, files: any[], options: any) {
+  const btn = document.createElement("button")
+  const panel = document.createElement("div")
+  const badge = document.createElement("div")
+  setupChangedFilesDropdown({
+    btn,
+    panel,
+    treeContainer: container,
+    badge,
+    postMessage: options.postMessage || (() => {}),
+    onOpenFile: options.onOpenFile || (() => {}),
+  })
+  updateChangedFiles(files)
+  // Open the dropdown to render the tree into container
+  btn.click()
 }
 
 describe("renderChangedFilesList — summary bar", () => {
   it("renders a summary bar with total file count", async () => {
     const container = setupDom()
-    const { renderChangedFilesList } = await import("./todos-panel")
     const files = [
       { path: "src/a.ts", added: 10, removed: 2 },
       { path: "src/b.ts", added: 5, removed: 0 },
@@ -38,7 +60,6 @@ describe("renderChangedFilesList — summary bar", () => {
 
   it("renders total added and removed in summary bar", async () => {
     const container = setupDom()
-    const { renderChangedFilesList } = await import("./todos-panel")
     renderChangedFilesList(container, [
       { path: "a.ts", added: 7, removed: 3 },
       { path: "b.ts", added: 2, removed: 0 },
@@ -50,7 +71,6 @@ describe("renderChangedFilesList — summary bar", () => {
 
   it("renders an empty state with .cf-empty when files array is empty", async () => {
     const container = setupDom()
-    const { renderChangedFilesList } = await import("./todos-panel")
     renderChangedFilesList(container, [], { onOpenFile: () => {} } as any)
     assert.ok(container.querySelector(".cf-empty"), "must render .cf-empty for empty list")
     assert.ok(!container.querySelector(".cf-summary-bar"), "must not render summary for empty list")
@@ -60,7 +80,6 @@ describe("renderChangedFilesList — summary bar", () => {
 describe("renderChangedFilesList — status badge inference", () => {
   it("assigns badge A (added) when removed === 0 and added > 0", async () => {
     const container = setupDom()
-    const { renderChangedFilesList } = await import("./todos-panel")
     renderChangedFilesList(container, [{ path: "new.ts", added: 20, removed: 0 }], { onOpenFile: () => {} } as any)
     const badge = container.querySelector(".cf-status-badge")
     assert.ok(badge, "must render a status badge")
@@ -72,7 +91,6 @@ describe("renderChangedFilesList — status badge inference", () => {
 
   it("assigns badge D (deleted) when added === 0 and removed > 0", async () => {
     const container = setupDom()
-    const { renderChangedFilesList } = await import("./todos-panel")
     renderChangedFilesList(container, [{ path: "gone.ts", added: 0, removed: 15 }], { onOpenFile: () => {} } as any)
     const badge = container.querySelector(".cf-status-badge")
     assert.ok(
@@ -83,7 +101,6 @@ describe("renderChangedFilesList — status badge inference", () => {
 
   it("assigns badge M (modified) when both added > 0 and removed > 0", async () => {
     const container = setupDom()
-    const { renderChangedFilesList } = await import("./todos-panel")
     renderChangedFilesList(container, [{ path: "edit.ts", added: 5, removed: 3 }], { onOpenFile: () => {} } as any)
     const badge = container.querySelector(".cf-status-badge")
     assert.ok(
@@ -94,7 +111,6 @@ describe("renderChangedFilesList — status badge inference", () => {
 
   it("handles non-number added/removed safely (coerced to 0)", async () => {
     const container = setupDom()
-    const { renderChangedFilesList } = await import("./todos-panel")
     renderChangedFilesList(container, [{ path: "x.ts", added: NaN as any, removed: undefined as any }], { onOpenFile: () => {} } as any)
     // Should not throw; badge should be M or A or D (not crash)
     assert.ok(container.querySelector(".cf-status-badge"), "must not crash on non-numeric stats")
@@ -104,7 +120,6 @@ describe("renderChangedFilesList — status badge inference", () => {
 describe("renderChangedFilesList — directory grouping", () => {
   it("groups files by parent directory", async () => {
     const container = setupDom()
-    const { renderChangedFilesList } = await import("./todos-panel")
     renderChangedFilesList(container, [
       { path: "src/components/Button.tsx", added: 5, removed: 1 },
       { path: "src/components/Input.tsx", added: 3, removed: 0 },
@@ -116,7 +131,6 @@ describe("renderChangedFilesList — directory grouping", () => {
 
   it("groups files at root level under a root group", async () => {
     const container = setupDom()
-    const { renderChangedFilesList } = await import("./todos-panel")
     renderChangedFilesList(container, [{ path: "README.md", added: 1, removed: 0 }], { onOpenFile: () => {} } as any)
     const groups = container.querySelectorAll(".cf-dir-group")
     assert.ok(groups.length >= 1, "must create at least one group for root files")
@@ -126,7 +140,6 @@ describe("renderChangedFilesList — directory grouping", () => {
 describe("renderChangedFilesList — controls", () => {
   it("renders a collapse-all button", async () => {
     const container = setupDom()
-    const { renderChangedFilesList } = await import("./todos-panel")
     renderChangedFilesList(container, [{ path: "a.ts", added: 1, removed: 0 }], { onOpenFile: () => {} } as any)
     const btn = container.querySelector("[data-action='collapse-all'], .cf-collapse-all-btn")
     assert.ok(btn, "must render collapse-all control")
@@ -134,7 +147,6 @@ describe("renderChangedFilesList — controls", () => {
 
   it("renders a sort toggle button", async () => {
     const container = setupDom()
-    const { renderChangedFilesList } = await import("./todos-panel")
     renderChangedFilesList(container, [{ path: "a.ts", added: 1, removed: 0 }], { onOpenFile: () => {} } as any)
     const btn = container.querySelector("[data-action='toggle-sort'], .cf-sort-btn")
     assert.ok(btn, "must render sort toggle control")
@@ -144,8 +156,7 @@ describe("renderChangedFilesList — controls", () => {
 describe("renderChangedFilesList — expand/diff preview", () => {
   it("renders an expand chevron button on each file row", async () => {
     const container = setupDom()
-    const { renderChangedFilesList, resetChangedFilesState } = await import("./todos-panel")
-    resetChangedFilesState()
+    resetChangedFilesDropdown()
     renderChangedFilesList(container, [{ path: "src/chevron-test.ts", added: 5, removed: 2 }], { onOpenFile: () => {} } as any)
     const chevron = container.querySelector(".cf-expand-btn")
     assert.ok(chevron, "must render a .cf-expand-btn chevron on each file row")
@@ -153,8 +164,7 @@ describe("renderChangedFilesList — expand/diff preview", () => {
 
   it("renders a hunk preview area that is initially hidden", async () => {
     const container = setupDom()
-    const { renderChangedFilesList, resetChangedFilesState } = await import("./todos-panel")
-    resetChangedFilesState()
+    resetChangedFilesDropdown()
     renderChangedFilesList(container, [{ path: "src/hidden-preview.ts", added: 5, removed: 2 }], { onOpenFile: () => {} } as any)
     const preview = container.querySelector(".cf-hunk-preview")
     assert.ok(preview, "must render .cf-hunk-preview")
@@ -166,8 +176,7 @@ describe("renderChangedFilesList — expand/diff preview", () => {
 
   it("renders a loading state inside the hunk preview when clicked (before response arrives)", async () => {
     const container = setupDom()
-    const { renderChangedFilesList, resetChangedFilesState } = await import("./todos-panel")
-    resetChangedFilesState()
+    resetChangedFilesDropdown()
     const postMessages: any[] = []
     renderChangedFilesList(
       container,
@@ -189,8 +198,7 @@ describe("renderChangedFilesList — expand/diff preview", () => {
 
   it("posts get_file_diff message when a file row is expanded", async () => {
     const container = setupDom()
-    const { renderChangedFilesList, resetChangedFilesState } = await import("./todos-panel")
-    resetChangedFilesState()
+    resetChangedFilesDropdown()
     const postMessages: any[] = []
     renderChangedFilesList(
       container,
@@ -209,12 +217,11 @@ describe("renderChangedFilesList — expand/diff preview", () => {
 describe("renderChangedFilesList — open file button", () => {
   it("calls onOpenFile with full path when open button is clicked", async () => {
     const container = setupDom()
-    const { renderChangedFilesList } = await import("./todos-panel")
     let opened = ""
     renderChangedFilesList(container, [{ path: "src/main.ts", added: 1, removed: 0 }], {
       onOpenFile: (p: string) => { opened = p },
     } as any)
-    const btn = container.querySelector<HTMLElement>(".changed-file-open-btn")
+    const btn = container.querySelector<HTMLElement>(".cf-open-btn")
     btn!.click()
     assert.equal(opened, "src/main.ts")
   })

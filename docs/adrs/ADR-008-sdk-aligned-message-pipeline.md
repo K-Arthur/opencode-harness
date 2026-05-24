@@ -46,8 +46,10 @@ message representation. Specifically:
    reconstruction in `StreamCoordinator` is removed.
 
 4. **Session title is bidirectionally synced via `client.session.update`
-   and the `session.updated` SSE event.** The extension's local field
-   `SessionState.name` is renamed to `title` to match the SDK.
+   and the `session.updated` SSE event.** The server title is the source
+   of truth for synced sessions. The host currently mirrors the title into
+   the legacy local `name` field for compatibility; the webview prefers
+   SDK/server `title` when rendering synced session rows.
 
 5. **Lossless one-shot state migration.** `WebviewState` gains a
    `schemaVersion` field. On boot, blocks and session metadata are
@@ -57,6 +59,12 @@ message representation. Specifically:
 6. **`SessionStore` (extension host) is the single source of truth for
    session metadata.** Webview persists only message arrays + active-tab
    state and queries the host for current session metadata on boot.
+
+7. **OpenCode server session id is the single source of identity for
+   synced sessions.** `cliSessionId` is treated as a migration/attachment
+   alias only. Store migration and recovery merge duplicate local rows into
+   the server-keyed row, and the unified modal dedupes by `cliSessionId || id`
+   as a defensive rendering rule.
 
 ## Alternatives considered
 
@@ -107,9 +115,8 @@ on it is free. Rejected.
 - Each layer of the rollout lands behind tests written first (TDD).
 - Migration is exercised against three captured production-shape
   fixtures before release.
-- Open question Q1 (does the server implement `PATCH /session/:id`?)
-  must be resolved before the title-sync layer ships; the spec's
-  Acceptance Criterion A3 is gated on it.
+- Q1 is resolved: OpenCode SDK exposes `client.session.update`, and the
+  generated `SessionUpdateData` accepts `body.title` for `PATCH /session/{id}`.
 
 ## Validation
 

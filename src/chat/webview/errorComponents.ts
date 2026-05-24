@@ -17,6 +17,7 @@ import {
   ModelErrorContext,
   ContextErrorContext
 } from './errorTypes';
+import { escapeHtml } from "./htmlUtils"
 
 /**
  * Error display configuration
@@ -594,7 +595,7 @@ export class GenerationErrorDisplay extends ErrorDisplay {
         ? error.partialResponse.substring(0, 100) + '...' 
         : error.partialResponse;
       
-      partialInfo.innerHTML = `<strong>Partial Response Saved:</strong><br><code>${this.escapeHtml(preview)}</code>`;
+      partialInfo.innerHTML = `<strong>Partial Response Saved:</strong><br><code>${escapeHtml(preview)}</code>`;
       container.appendChild(partialInfo);
     }
 
@@ -614,14 +615,6 @@ export class GenerationErrorDisplay extends ErrorDisplay {
     return container;
   }
 
-  /**
-   * Escape HTML for safe rendering
-   */
-  private escapeHtml(text: string): string {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
 }
 
 /**

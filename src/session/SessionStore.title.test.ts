@@ -29,12 +29,12 @@ describe("SessionStore.setTitle — Layer 6 RED (structural)", () => {
     assert.match(fnBody, /session\.name\s*=\s*trimmed/, "setTitle must write to session.name")
   })
 
-  it("L6-T2: setTitle invokes serverTitleUpdater with cliSessionId when present", () => {
+  it("L6-T2: setTitle invokes serverTitleUpdater with the canonical server id", () => {
     const fnBody = STORE_SRC.slice(STORE_SRC.indexOf("setTitle("))
     assert.match(
       fnBody,
-      /serverTitleUpdater\(\s*session\.cliSessionId/,
-      "setTitle must propagate the title to the SDK via serverTitleUpdater(cliSessionId, …)",
+      /serverTitleUpdater\(\s*serverId/,
+      "setTitle must propagate the title to the SDK via serverTitleUpdater(serverId, …)",
     )
   })
 
@@ -44,13 +44,12 @@ describe("SessionStore.setTitle — Layer 6 RED (structural)", () => {
     assert.match(fnBody, /return\s+false/, "setTitle must return false on invalid input")
   })
 
-  it("L6-T4: setTitle no-ops the server call when cliSessionId is missing", () => {
+  it("L6-T4: setTitle no-ops the server call when no canonical server id exists", () => {
     const fnBody = STORE_SRC.slice(STORE_SRC.indexOf("setTitle("))
-    // The guard is `if (this.serverTitleUpdater && session.cliSessionId)`.
     assert.match(
       fnBody,
-      /session\.cliSessionId/,
-      "setTitle must guard the server call on cliSessionId presence",
+      /const serverId = session\.cliSessionId/,
+      "setTitle must resolve a canonical server id before calling the SDK",
     )
   })
 

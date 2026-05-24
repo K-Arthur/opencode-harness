@@ -2,6 +2,7 @@ import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
+import { prepareHostRecentSessions, prepareLocalRecentSessions } from "./recent-sessions"
 
 const source = readFileSync(path.join(__dirname, "recent-sessions.ts"), "utf8")
 
@@ -72,5 +73,58 @@ describe("recent-sessions.ts", () => {
     assert.ok(source.includes('role", "option"'), "session rows must have option role")
     assert.ok(source.includes('e.key === "Enter"'), "Enter must open a focused session")
     assert.ok(source.includes('e.key === "ArrowDown"'), "ArrowDown must move between sessions")
+  })
+
+  it("prepares host sessions newest first without mutating input", () => {
+    const sessions = [
+      { id: "old", time: 10 },
+      { id: "new", time: 30 },
+      { id: "middle", time: 20 },
+    ]
+
+    const prepared = prepareHostRecentSessions(sessions)
+
+    assert.deepEqual(prepared.map((s) => s.id), ["new", "middle", "old"])
+    assert.deepEqual(sessions.map((s) => s.id), ["old", "new", "middle"])
+  })
+
+  it("prepares local sessions with active exclusion and text/name filtering", () => {
+    const sessions = [
+      {
+        id: "active",
+        name: "Active",
+        cost: 1,
+        messages: [{ role: "user", timestamp: 40, blocks: [{ type: "text", text: "active renderer" }] }],
+      },
+      {
+        id: "text-match",
+        name: "Other",
+        cost: 2,
+        messages: [{ role: "user", timestamp: 30, blocks: [{ type: "text", text: "fix the renderer" }] }],
+      },
+      {
+        id: "name-match-empty",
+        name: "Renderer notes",
+        messages: [],
+      },
+      {
+        id: "miss",
+        name: "Nope",
+        messages: [{ role: "assistant", timestamp: 50, blocks: [{ type: "text", text: "unrelated" }] }],
+      },
+    ] as any
+
+    const prepared = prepareLocalRecentSessions(sessions, "active", "renderer")
+
+    assert.equal(prepared.hasCandidates, true)
+    assert.equal(prepared.isFiltered, true)
+    assert.deepEqual(prepared.sessions.map((s) => s.id), ["text-match", "name-match-empty"])
+    assert.deepEqual(prepared.sessions[0], {
+      id: "text-match",
+      title: "Other",
+      time: 30,
+      messageCount: 1,
+      cost: 2,
+    })
   })
 })

@@ -14,6 +14,17 @@ assistant message for the active tab instead of dropping them.
 - `stream_end` finalizes unresolved tool-call blocks so completed responses do not remain
   visually stuck in a running state.
 
+### Text/Tool Interleave Invariants
+
+When a `stream_tool_start` event arrives mid-stream (i.e. `state.currentBlockBuffer` is non-empty):
+
+1. **Finalize first** — `finalizeCurrentTextBlock()` must be called before clearing any buffer/element state. This converts the live `streaming-text` element to a finalized `msg-text markdown-content` block with non-streaming markdown rendering.
+2. **Guard deferred flushes** — the RenderQueue callback and the RAF `doUpdate` path must both bail early (`return`) when `state.currentBlockBuffer.trim()` is empty after a tool-start clear, to prevent creating spurious empty text blocks.
+3. **Post-tool text positioning** — `insertStreamingTextAfterLastBlock()` must splice the new text element immediately after the last `details.tool-call`, `details.tool-group`, `.diff-block`, or `.skill-badge` using `bubble.insertBefore(textEl, insertAfter.nextSibling)`, not `bubble.appendChild()`. It must also push a new `createTextBlock("")` entry to `msgObj.blocks` and update `state.currentBlockIndex` so subsequent chunks accumulate correctly.
+4. **Diff blocks** — `handleDiff` must call `finalizeCurrentTextBlock()` before appending a diff element, for the same ordering guarantee.
+
+The `stream-interleave.test.ts` (source-structure assertions) and `streaming-interleave.spec.ts` (Playwright DOM assertions) pin these invariants.
+
 ## First Prompt Send Flow
 
 The welcome-page prompt path is covered as a first-class contract:

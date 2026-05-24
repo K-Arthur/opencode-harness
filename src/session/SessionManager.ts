@@ -41,6 +41,7 @@ export type OpencodeEventType =
   | "text_chunk"
   | "message_complete"
   | "session_status"
+  | "session_updated"
   | "server_connected"
   | "server_disconnected"
   | "server_error"
@@ -171,10 +172,10 @@ export class SessionManager {
    * directly to the supplied URL. Auth is applied via {@link authHeader}.
    */
   private remoteServerUrl: string | null = null
-  private remoteServerToken: string | null = null
+  private remoteServerPassword: string | null = null
 
   /** Configure remote-attach mode. Pass null/empty to fall back to local spawn. */
-  setRemoteServer(url: string | null | undefined, token?: string | null): void {
+  setRemoteServer(url: string | null | undefined, password?: string | null): void {
     const trimmed = (url ?? "").trim().replace(/\/+$/, "")
 
     if (trimmed.length > 0) {
@@ -188,7 +189,7 @@ export class SessionManager {
     }
 
     this.remoteServerUrl = trimmed.length > 0 ? trimmed : null
-    this.remoteServerToken = token?.trim() || null
+    this.remoteServerPassword = password?.trim() || null
   }
 
   /** True when the manager is configured to attach to a remote server. */
@@ -200,7 +201,7 @@ export class SessionManager {
    * Generate a cryptographically random server password.
    * If OPENCODE_SERVER_PASSWORD is already set in the parent environment (e.g. user
    * configured it in their shell), we respect that value rather than generating one.
-   * Used for --password flag on the server process and Bearer auth on the SDK client.
+   * Used for --password flag on the server process and Basic auth on the SDK client.
    * Never persisted to disk — lives only in this instance's lifetime.
    */
   private generatePassword(): string {
@@ -249,14 +250,19 @@ export class SessionManager {
 
   /**
    * Authorization header for the current server instance.
-   * - Remote-attach mode: Bearer token from `opencode.serverAuthToken`.
+   * - Remote-attach mode: HTTP Basic auth derived from `opencode.serverAuthToken`.
    * - Local spawn: HTTP Basic auth derived from the generated server password.
    * Returns undefined when no auth is required.
    */
   get authHeader(): string | undefined {
-    if (this.remoteServerToken) return `Bearer ${this.remoteServerToken}`
+    if (this.remoteServerPassword) return this.buildRemoteAuthHeader(this.remoteServerPassword)
     if (!this.serverPassword) return undefined
     return `Basic ${Buffer.from(`opencode:${this.serverPassword}`).toString("base64")}`
+  }
+
+  private buildRemoteAuthHeader(secret: string): string {
+    if (/^(Basic|Bearer)\s+/i.test(secret)) return secret
+    return `Basic ${Buffer.from(`opencode:${secret}`).toString("base64")}`
   }
 
   get eventStreamStatus(): EventStreamStatus {
@@ -316,10 +322,10 @@ export class SessionManager {
   }
 
   private makeRemoteClient(baseUrl: string): OpencodeClient {
-    if (this.remoteServerToken) {
+    if (this.remoteServerPassword) {
       return createOpencodeClient({
         baseUrl,
-        headers: { Authorization: `Bearer ${this.remoteServerToken}` },
+        headers: { Authorization: this.buildRemoteAuthHeader(this.remoteServerPassword) },
       })
     }
     return createOpencodeClient({ baseUrl })
@@ -334,7 +340,7 @@ export class SessionManager {
     const timer = setTimeout(() => controller.abort(), 5_000)
     try {
       const headers: Record<string, string> = {}
-      if (this.remoteServerToken) headers["Authorization"] = `Bearer ${this.remoteServerToken}`
+      if (this.remoteServerPassword) headers["Authorization"] = this.buildRemoteAuthHeader(this.remoteServerPassword)
       const resp = await fetch(`${baseUrl}/global/health`, {
         signal: controller.signal,
         headers,
@@ -1019,6 +1025,14 @@ export class SessionManager {
     const resp = await this.client.session.get({ path: { id } })
     // C6: Check for SDK error before returning data
     if (resp.error) throw new Error(`Failed to get session: ${JSON.stringify(resp.error)}`)
+    return resp.data as Session
+  }
+
+  async updateSessionTitle(id: string, title: string): Promise<Session> {
+    if (this.disposed) throw new Error("SessionManager has been disposed")
+    if (!this.client) throw new Error("Server not running")
+    const resp = await this.client.session.update({ path: { id }, body: { title } })
+    if (resp.error) throw new Error(`Failed to update session title: ${JSON.stringify(resp.error)}`)
     return resp.data as Session
   }
 

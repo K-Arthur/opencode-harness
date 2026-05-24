@@ -127,7 +127,7 @@ L6-T1. `setTitle_writes_local_state`
 L6-T2. `setTitle_calls_client_session_update_with_new_title`
 L6-T3. `setTitle_validation_rejects_empty_string`
 L6-T4. `setTitle_validation_rejects_oversize_string`
-L6-T5. `setTitle_no_op_when_cliSessionId_missing`
+L6-T5. `setTitle_no_op_when_no_canonical_server_id_exists`
 L6-T6. `setTitle_marks_session_as_not_auto_titled`
 
 **File:** `src/session/eventHandlers/SessionUpdatedHandler.test.ts` (new)
@@ -143,6 +143,14 @@ L6-T11. `session_deleted_event_removes_local_record`
 L6-T12. `rename_in_extension_reaches_server_within_one_round_trip`
 L6-T13. `rename_on_server_appears_in_extension_via_session_updated_event`
 L6-T14. `auto_title_from_first_user_message_propagates_to_server`
+
+**Additional identity/search regression tests**
+
+L6-T15. `migrateLocalIdsToServerIds_merges_duplicate_local_key_into_server_key`
+L6-T16. `mergeServerSessions_deduplicates_local_entries_by_cliSessionId`
+L6-T17. `session_history_modal_dedupes_by_cliSessionId_or_id`
+L6-T18. `session_history_modal_prefers_server_title_for_synced_rows`
+L6-T19. `session_history_modal_search_filters_local_rows_and_refreshes_server_results`
 
 ## Layer 7 — Unsupported part types now render
 

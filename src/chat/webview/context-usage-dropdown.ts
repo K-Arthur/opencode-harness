@@ -54,8 +54,16 @@ export function resetContextUsageDropdown(): void {
   _isOpen = false
 }
 
+export function openContextUsageDropdown(): void {
+  _open()
+}
+
+export function closeContextUsageDropdownIfOpen(): void {
+  if (_isOpen) _close()
+}
+
 export interface ContextUsageDropdownOptions {
-  btn: HTMLButtonElement
+  btn: HTMLButtonElement | null   // null when status-strip bar is used as the trigger instead
   panel: HTMLElement
   content: HTMLElement
   badge: HTMLElement
@@ -70,13 +78,14 @@ export function setupContextUsageDropdown(opts: ContextUsageDropdownOptions): vo
   _postMessage = opts.postMessage
 
   _panel.classList.add("hidden")
-  _btn.setAttribute("aria-expanded", "false")
+  if (_btn) {
+    _btn.setAttribute("aria-expanded", "false")
+    _btn.addEventListener("click", (e) => {
+      e.stopPropagation()
+      _toggle()
+    })
+  }
   _updateBadge(0)
-
-  _btn.addEventListener("click", (e) => {
-    e.stopPropagation()
-    _toggle()
-  })
 
   // Close button inside the dropdown
   const closeBtn = document.getElementById("ctx-dropdown-close")
@@ -107,23 +116,26 @@ function _toggle(): void {
 }
 
 function _open(): void {
-  if (!_panel || !_content || !_btn) return
+  if (!_panel || !_content) return
   _isOpen = true
   _panel.classList.remove("hidden")
-  _btn.setAttribute("aria-expanded", "true")
+  if (_btn) _btn.setAttribute("aria-expanded", "true")
 
-  // Position dropdown below the button
-  const btnRect = _btn.getBoundingClientRect()
-  _panel.style.position = "fixed"
-  _panel.style.top = `${btnRect.bottom + 4}px`
-  const rightEdge = window.innerWidth - btnRect.right
-  _panel.style.right = `${rightEdge}px`
-  _panel.style.width = "380px"
+  // Anchor below the trigger (toolbar button or status-strip bar)
+  const anchor = _btn ?? document.getElementById("context-usage")
+  if (anchor) {
+    const r = anchor.getBoundingClientRect()
+    _panel.style.position = "fixed"
+    _panel.style.top = `${r.bottom + 4}px`
+    _panel.style.right = `${window.innerWidth - r.right}px`
+    _panel.style.width = "380px"
+  }
 
   _render(_content, _currentUsage)
 
   _outsideClickHandler = (e: MouseEvent) => {
-    if (_panel && _btn && !_panel.contains(e.target as Node) && !_btn.contains(e.target as Node)) {
+    const trigger = _btn ?? document.getElementById("context-usage")
+    if (_panel && !_panel.contains(e.target as Node) && !trigger?.contains(e.target as Node)) {
       _close()
     }
   }
@@ -137,10 +149,10 @@ function _open(): void {
 }
 
 function _close(): void {
-  if (!_panel || !_btn) return
+  if (!_panel) return
   _isOpen = false
   _panel.classList.add("hidden")
-  _btn.setAttribute("aria-expanded", "false")
+  if (_btn) _btn.setAttribute("aria-expanded", "false")
   if (_outsideClickHandler) document.removeEventListener("click", _outsideClickHandler)
   if (_keyHandler) document.removeEventListener("keydown", _keyHandler)
   _outsideClickHandler = null

@@ -88,6 +88,7 @@ export interface ErrorBlock {
   filePath?: string
   diffText?: string
   id?: string
+  sessionId?: string
   permissionId?: string
   permissionType?: string
   pattern?: string | string[]
@@ -188,6 +189,7 @@ export interface SessionState {
   isStreaming: boolean
   cost?: number
   tokenUsage?: TokenUsage
+  contextUsage?: { percent: number; tokens: number; maxTokens: number }
   changedFiles?: string[]
   lastActiveAt?: number
   instructions?: string

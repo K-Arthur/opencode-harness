@@ -1,6 +1,7 @@
 import hljs from "highlight.js/lib/core"
 import MarkdownIt from "markdown-it"
 import taskLists from "markdown-it-task-lists"
+import { escapeHtml, normalizeMarkdownLanguage } from "./htmlUtils"
 import javascript from "highlight.js/lib/languages/javascript"
 import typescript from "highlight.js/lib/languages/typescript"
 import python from "highlight.js/lib/languages/python"
@@ -47,23 +48,6 @@ hljs.registerAliases(["ts"], { languageName: "typescript" })
 hljs.registerAliases(["sh", "zsh"], { languageName: "bash" })
 hljs.registerAliases(["html", "htm"], { languageName: "xml" })
 hljs.registerAliases(["py"], { languageName: "python" })
-
-function normalizeMarkdownLanguage(language: string): string {
-  const normalized = language.trim().toLowerCase()
-  if (normalized === "tsx" || normalized === "jsx") return "typescript"
-  if (normalized === "shell" || normalized === "sh" || normalized === "zsh") return "bash"
-  if (normalized === "yml") return "yaml"
-  if (normalized === "html") return "xml"
-  return normalized
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-}
 
 function highlightSyntax(code: string, language: string): string {
   const normalized = normalizeMarkdownLanguage(language)

@@ -29,7 +29,7 @@ export interface TokenCostEls {
 
 export interface TokenCostDeps {
   els: TokenCostEls
-  getSession: (id: string) => { tokenUsage?: { prompt: number; completion: number; total: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }; cost?: number; model?: string; changedFiles?: string[] } | undefined
+  getSession: (id: string) => { tokenUsage?: { prompt: number; completion: number; total: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }; cost?: number; model?: string; changedFiles?: string[]; contextUsage?: { percent: number; tokens: number; maxTokens: number } } | undefined
   getActiveSessionId: () => string | undefined
   save: () => void
   getContextWindow: (modelKey?: string) => number | undefined
@@ -263,6 +263,14 @@ export function updateContextBarFromSession(deps: TokenCostDeps, sessionId: stri
   const ctxBar = deps.els.contextUsage
   if (!ctxBar) return
 
+  // context_usage events drive the bar via updateContextUsageBar — don't overwrite
+  // with cumulative tokenUsage.total, which is unbounded and produces impossible values.
+  // Yield to the authoritative source when it has data.
+  if (session.contextUsage && session.contextUsage.tokens > 0) {
+    deps.showStatusStrip()
+    return
+  }
+
   const modelKey = session.model ? `${session.model}` : undefined
   // No hardcoded fallback: when the server hasn't reported limit.context and
   // OpenRouter couldn't fill it either, we hide the bar rather than display a
@@ -270,8 +278,10 @@ export function updateContextBarFromSession(deps: TokenCostDeps, sessionId: stri
   const contextWindow = deps.getContextWindow(modelKey)
   const totalApiTokens = session.tokenUsage.total ?? 0
   if (totalApiTokens <= 0 || !contextWindow || contextWindow <= 0) {
-    ctxBar.classList.add("hidden")
-    ctxBar.querySelector<HTMLElement>("#context-cost")?.classList.add("hidden")
+    // Only hide the bar if context_usage hasn't already shown it
+    if (ctxBar.classList.contains("hidden")) {
+      ctxBar.querySelector<HTMLElement>("#context-cost")?.classList.add("hidden")
+    }
     return
   }
   const pct = Math.min(100, Math.round((totalApiTokens / contextWindow) * 100))

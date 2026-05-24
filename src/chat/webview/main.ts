@@ -18,18 +18,18 @@ import { setupMcpConfig } from "./mcp-config"
 import type { McpServerInfo } from "../../mcp/McpServerManager"
 import { REMOVE_SVG } from "./icons"
 import { createPromptQueue, type PromptQueue, type QueueItem } from "./queue"
-import { updateContextChips, updateContextUsage, applyThemeVars, handleRateLimitExhausted } from "./theme"
+import { updateContextChips, applyThemeVars, handleRateLimitExhausted } from "./theme"
 import { setContextUsagePostMessage, handleContextUsageMessage, resetContextUsagePanel } from "./context-usage-panel"
 import { setupChangedFilesDropdown, updateChangedFiles, handleDiffResponse as handleCfDiffResponse, resetChangedFilesDropdown } from "./changed-files-dropdown"
-import { setupContextUsageDropdown as setupCtxDropdown, updateUsage as updateCtxDropdown, resetContextUsageDropdown } from "./context-usage-dropdown"
+import { setupContextUsageDropdown as setupCtxDropdown, updateUsage as updateCtxDropdown, resetContextUsageDropdown, openContextUsageDropdown } from "./context-usage-dropdown"
 import { showCompactBanner, hideCompactBanner } from "./compact-banner"
 import { setupPromptStash } from "./prompt-stash"
-import { renderRecentSessions } from "./recent-sessions"
-import { renderUnifiedSessionList, setSessionListPostMessage, setUnifiedServerSessions, setUnifiedLocalSessions } from "./sessionListRenderer"
+import { prepareHostRecentSessions, prepareLocalRecentSessions, renderRecentSessions } from "./recent-sessions"
+import { renderUnifiedSessionList, setSessionListPostMessage, setUnifiedServerSessions, setUnifiedLocalSessions, setUnifiedSessionQuery, getUnifiedSessionQuery } from "./sessionListRenderer"
 import { createScrollAnchor, type ScrollAnchor } from "./scrollAnchor"
 import { createChunkedLoader, prependMessagesPreservingScroll, createLoadEarlierBanner, throttleScrollMarkers } from "./messageLoader"
 import { createVirtualList, getVirtualList, disposeVirtualList } from "./virtualList"
-import { setupTodosPanel, handleFileDiffResponse } from "./todos-panel"
+import { setupTodosPanel } from "./todos-panel"
 import { setupSkillsModal } from "./skills-modal"
 import { setupSubagentPanel } from "./subagent-panel"
 import { shouldRefreshOnUpdate, selectDisplayedUsage } from "./tokenDisplayPolicy"
@@ -340,9 +340,6 @@ function getVsCodeApi() {
     onDeleteStash: (id) => vscode.postMessage({ type: "delete_stash", id }),
   })
 
-  // Mode state: "plan" or "build"
-  let currentMode = getCurrentMode()
-
   // Steering mode state: "interrupt", "append", or "queue"
   let currentSteerMode: 'interrupt' | 'append' | 'queue' = 'interrupt'
 
@@ -562,10 +559,10 @@ function getVsCodeApi() {
         onCancelSubagent: (subagentId: string) => vscode.postMessage({ type: "cancel_subagent", subagentId }),
       })
 
-      // Changed Files dropdown — canonical toolbar implementation
-      if (els.changedFilesBtn && els.changedFilesDropdown && els.cfDropdownTree && els.cfCountBadge) {
+      // Changed Files — always-visible strip + floating dropdown (no toolbar button)
+      if (els.changedFilesDropdown && els.cfDropdownTree && els.cfCountBadge) {
         setupChangedFilesDropdown({
-          btn: els.changedFilesBtn,
+          btn: els.changedFilesBtn ?? null,  // null → _open() anchors to #changed-files-strip
           panel: els.changedFilesDropdown,
           treeContainer: els.cfDropdownTree,
           badge: els.cfCountBadge,
@@ -573,18 +570,50 @@ function getVsCodeApi() {
           onOpenFile: (path) => vscode.postMessage({ type: "open_file", path }),
         })
         cfDropdownApi = { updateChangedFiles, handleDiffResponse: handleCfDiffResponse }
+        // Keyboard support for the always-visible strip
+        const strip = document.getElementById("changed-files-strip")
+        if (strip) {
+          strip.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); strip.click() }
+          })
+        }
       }
 
-      // Context Usage dropdown — canonical toolbar implementation
-      if (els.contextUsageBtn && els.contextUsageDropdown && els.ctxDropdownContent && els.ctxPctBadge) {
+      // Context Usage — status-strip bar is the always-visible primary trigger;
+      // toolbar button kept as fallback but nulled out so the dropdown anchors
+      // to the progress bar element instead.
+      if (els.contextUsageDropdown && els.ctxDropdownContent && els.ctxPctBadge) {
         setupCtxDropdown({
-          btn: els.contextUsageBtn,
+          btn: null,  // no separate toolbar button — status-strip bar is the trigger
           panel: els.contextUsageDropdown,
           content: els.ctxDropdownContent,
           badge: els.ctxPctBadge,
           postMessage: (msg) => vscode.postMessage(msg),
         })
         ctxDropdownApi = { updateUsage: updateCtxDropdown }
+        // Wire the always-visible status-strip context bar as the click target
+        els.contextUsage.setAttribute("tabindex", "0")
+        els.contextUsage.setAttribute("role", "button")
+        els.contextUsage.setAttribute("aria-haspopup", "true")
+        els.contextUsage.setAttribute("aria-controls", "context-usage-dropdown")
+        const _openCtxDropdown = () => {
+          // Prime the dropdown with current session data before opening so it
+          // never shows "No context usage data available" even if context_usage
+          // events haven't fired since the last tab switch.
+          const activeId = stateManager.getState().activeSessionId
+          const activeSess = activeId ? stateManager.getSession(activeId) : undefined
+          if (activeSess?.contextUsage) {
+            ctxDropdownApi?.updateUsage({ type: "context_usage", ...activeSess.contextUsage } as Record<string, unknown>)
+          }
+          openContextUsageDropdown()
+        }
+        els.contextUsage.addEventListener("click", (e) => {
+          e.stopPropagation()
+          _openCtxDropdown()
+        })
+        els.contextUsage.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); _openCtxDropdown() }
+        })
       }
       
       setupWelcomeSuggestions()
@@ -642,6 +671,9 @@ function getVsCodeApi() {
     },
     openModelManager: () => modelManager.open(),
     renderRecentSessionsList,
+    onDeleteRecentSession: (sessionId) => {
+      vscode.postMessage({ type: "delete_session", targetSessionId: sessionId })
+    },
     hideStatusStrip,
     applyTimelineVisibility,
     autoResizeTextarea,
@@ -662,34 +694,18 @@ function getVsCodeApi() {
 
   function setupWelcomeActions() {
     setupWelcomeActionsModule(welcomeViewDeps)
-
-    const recentContainer = document.getElementById("welcome-recent-sessions")
-    if (recentContainer) {
-      recentContainer.addEventListener("recent-session-delete", ((e: CustomEvent) => {
-        const sid = e.detail?.sessionId
-        if (sid) {
-          vscode.postMessage({ type: "delete_session", targetSessionId: sid })
-        }
-      }) as EventListener)
-    }
   }
 
   /* ─── RECENT SESSIONS ─── */
 
   function renderRecentSessionsList(filterQuery: string = "", hostSessions?: SessionSummary[]) {
-    // Defensive trim: this is called from many call sites (welcome init,
-    // session list updates, etc.) — not all of them sanitize the query.
     const query = (filterQuery || "").trim().toLowerCase()
     const recentContainer = document.getElementById("welcome-recent-sessions") as HTMLDivElement | null
     if (!recentContainer) return
 
     if (hostSessions) {
-      const filteredSessions = hostSessions
-        .slice()
-        .sort((a, b) => (b.time ?? 0) - (a.time ?? 0))
-
       renderRecentSessions(
-        filteredSessions,
+        prepareHostRecentSessions(hostSessions),
         recentContainer,
         () => vscode.postMessage({ type: "list_sessions", query: filterQuery.trim() }),
         (sessionId) => {
@@ -700,57 +716,24 @@ function getVsCodeApi() {
       return
     }
 
-    const activeId = stateManager.getState().activeSessionId
-    // Without a query: only show sessions that have visible messages (a clean
-    // welcome page). With a query: also surface sessions whose backfill
-    // hasn't landed yet, so the user can find them by name. Sessions match
-    // by name only in that case (no message text yet to search).
-    const allValidSessions = stateManager.getAllSessions()
-      .filter((s) => s.id !== activeId && (s.messages.length > 0 || (!!query && !!s.name)))
-
-    if (allValidSessions.length === 0) {
+    const prepared = prepareLocalRecentSessions(
+      stateManager.getAllSessions(),
+      stateManager.getState().activeSessionId,
+      filterQuery
+    )
+    if (!prepared.hasCandidates) {
       recentContainer.style.display = "none"
       return
     }
 
-    const matchesQuery = (s: typeof allValidSessions[number]): boolean => {
-      if (!query) return true
-      const name = (s.name || "").toLowerCase()
-      if (name.includes(query)) return true
-      for (const msg of s.messages) {
-        for (const block of msg.blocks || []) {
-          const text = (block as { type?: string; text?: string }).type === "text"
-            ? (block as { text?: string }).text
-            : undefined
-          if (text && text.toLowerCase().includes(query)) return true
-        }
-      }
-      return false
-    }
-
-    const filteredSessions = allValidSessions
-      .filter(matchesQuery)
-      .sort((a, b) => {
-        const tA = a.messages[a.messages.length - 1]?.timestamp ?? 0
-        const tB = b.messages[b.messages.length - 1]?.timestamp ?? 0
-        return tB - tA
-      })
-      .map((s) => ({
-        id: s.id,
-        title: s.name,
-        time: s.messages[s.messages.length - 1]?.timestamp,
-        messageCount: s.messages.filter((m) => m.role === "user").length,
-        cost: s.cost || 0,
-      }))
-
     renderRecentSessions(
-      filteredSessions,
+      prepared.sessions,
       recentContainer,
       () => vscode.postMessage({ type: "list_sessions" }),
       (sessionId) => {
         vscode.postMessage({ type: "resume_session", sessionId })
       },
-      !!query
+      prepared.isFiltered
     )
   }
 
@@ -761,6 +744,7 @@ function getVsCodeApi() {
       els,
       setUnifiedLocalSessions,
       setUnifiedServerSessions,
+      setUnifiedSessionQuery,
       renderUnifiedSessionList,
       postMessage: (msg) => vscode.postMessage(msg),
     })
@@ -774,6 +758,7 @@ function getVsCodeApi() {
     els,
     setUnifiedLocalSessions,
     setUnifiedServerSessions,
+    setUnifiedSessionQuery,
     renderUnifiedSessionList,
     postMessage: (msg: Record<string, unknown>) => vscode.postMessage(msg),
   }
@@ -799,6 +784,11 @@ function getVsCodeApi() {
 
     updateTabBar()
     renderRecentSessionsList()
+    // New tab is never streaming — sync chat bar so it doesn't inherit the
+    // streaming state visually from a previously-active streaming session.
+    updateSendButton()
+    els.promptInput.placeholder = "Ask OpenCode a question about your code…"
+    els.inputArea.classList.remove("steer-interrupt", "steer-append", "steer-queue")
     return session
   }
 
@@ -877,9 +867,20 @@ function getVsCodeApi() {
       modelDropdown.setCurrentModel(activeSession.model)
     }
     
-    // Reset context usage panel to prevent stale data from bleeding into the new tab
+    // Reset legacy panel (no-op if already removed from DOM) and restore
+    // the toolbar dropdown to this session's persisted context usage data.
     resetContextUsagePanel()
-    
+    resetContextUsageDropdown()
+    const switchedSession = stateManager.getSession(tabId)
+    if (switchedSession?.contextUsage) {
+      const cu = switchedSession.contextUsage
+      ctxDropdownApi?.updateUsage({ type: "context_usage", ...cu } as Record<string, unknown>)
+      updateContextUsageBar(cu.percent, cu.tokens, cu.maxTokens)
+    } else {
+      // No context data for this session — hide the bar until new data arrives
+      els.contextUsage.classList.add("hidden")
+    }
+
     // Refresh cost/token displays for the new tab — pull from the tab's
     // own stored usage so a previously-displayed tab's totals don't bleed in.
     updateCostDisplay(tabId)
@@ -891,9 +892,16 @@ function getVsCodeApi() {
     } else {
       clearTokenDisplay()
     }
-    // Refresh changed files list for the new tab, clearing stale chips when
-    // the newly active session has no tracked edits.
+    // Refresh changed files strip for the new tab.
     renderChangedFilesList(session?.changedFiles ?? [])
+    if (session?.changedFiles && session.changedFiles.length > 0) {
+      cfDropdownApi?.updateChangedFiles(
+        session.changedFiles.map((p) => ({ path: p, added: 0, removed: 0 })) as any
+      )
+    } else {
+      const strip = document.getElementById("changed-files-strip")
+      if (strip) { strip.classList.add("hidden"); strip.innerHTML = "" }
+    }
 
     // Sync todos panel for the switched tab
     vscode.postMessage({ type: "get_todos", sessionId: tabId })
@@ -1077,7 +1085,6 @@ function getVsCodeApi() {
 
   function updateModeDropdownLocal(mode: string) {
     updateModeDropdown(mode, els)
-    currentMode = mode
   }
 
   function closeModeDropdownLocal() {
@@ -1090,7 +1097,6 @@ function getVsCodeApi() {
 
   function syncModeUI() {
     syncModeUIModule(els, () => stateManager.getActiveSession())
-    currentMode = getCurrentMode()
   }
 
   /* ─── PER-TAB INSTRUCTIONS (GEAR) ─── */
@@ -2357,7 +2363,7 @@ function getVsCodeApi() {
         const sessions = (msg.sessions || []) as SessionSummary[]
         setUnifiedLocalSessions(sessions)
         if (!els.sessionModal.classList.contains("hidden")) {
-          vscode.postMessage({ type: "list_server_sessions" })
+          vscode.postMessage({ type: "list_server_sessions", query: getUnifiedSessionQuery() })
         }
       }],
       ["server_session_list", (msg) => {
@@ -2515,11 +2521,21 @@ function getVsCodeApi() {
         debouncedUpdateScrollMarkers(sid)
       }],
       ["context_usage", (msg) => {
+        const pct = msg.percent as number
+        const tokens = msg.tokens as number
+        const maxTokens = msg.maxTokens as number
         const activeId = stateManager.getState().activeSessionId
-        const tabPanel = activeId ? els.tabPanels.querySelector<HTMLElement>(`.tab-panel[data-tab-id="${CSS.escape(activeId)}"] .context-monitor`) : null
-        if (tabPanel) updateContextUsage(tabPanel, { percent: msg.percent as number, tokens: msg.tokens as number, maxTokens: msg.maxTokens as number })
-        handleContextUsageMessage(msg as unknown as Record<string, unknown>)
+        // Persist per-session so it survives tab switches
+        if (activeId) {
+          const sess = stateManager.getSession(activeId)
+          if (sess) {
+            sess.contextUsage = { percent: pct, tokens, maxTokens }
+            stateManager.save()
+          }
+        }
+        // Update both the floating dropdown detail view and the always-visible status strip bar
         ctxDropdownApi?.updateUsage(msg as Record<string, unknown>)
+        updateContextUsageBar(pct, tokens, maxTokens)
       }],
       ["context_window_unknown", (msg) => {
         // Hide the context bar and show the "Set override" chip so the user
@@ -2544,17 +2560,22 @@ function getVsCodeApi() {
         ctxDropdownApi?.updateUsage(msg as Record<string, unknown>)
       }],
       ["context_window_known", (msg) => {
-        // Context window resolved — hide the chip and let the normal bar render.
+        // Context window resolved — hide the override chip.
         const chip = document.getElementById("ctx-window-unknown-chip")
         if (chip) chip.classList.add("hidden")
-        // Push the known maxTokens into the per-tab monitor if it's active
+        // Re-derive percent using the persisted context FILL (msg.tokens from ContextMonitor),
+        // not tokenUsage.total which is cumulative spend and can be orders of magnitude larger.
         const activeId = stateManager.getState().activeSessionId
-        if (activeId && typeof msg.maxTokens === "number") {
-          const tabPanel = els.tabPanels.querySelector<HTMLElement>(`.tab-panel[data-tab-id="${CSS.escape(activeId)}"] .context-monitor`)
+        if (activeId && typeof msg.maxTokens === "number" && (msg.maxTokens as number) > 0) {
           const session = stateManager.getSession(activeId)
-          const tokens = session?.tokenUsage?.total ?? 0
-          const pct = msg.maxTokens > 0 ? Math.min(100, Math.round((tokens / (msg.maxTokens as number)) * 100)) : 0
-          if (tabPanel) updateContextUsage(tabPanel, { percent: pct, tokens, maxTokens: msg.maxTokens as number })
+          const fill = session?.contextUsage  // set by context_usage handler, represents current fill
+          if (fill) {
+            const pct = Math.min(100, Math.round((fill.tokens / (msg.maxTokens as number)) * 100))
+            const updatedUsage = { type: "context_usage", percent: pct, tokens: fill.tokens, maxTokens: msg.maxTokens as number }
+            ctxDropdownApi?.updateUsage(updatedUsage as Record<string, unknown>)
+            updateContextUsageBar(pct, fill.tokens, msg.maxTokens as number)
+          }
+          // If no fill data yet, the next context_usage message will update the display correctly.
         }
       }],
       ["context_history_response", (msg) => {
@@ -2695,6 +2716,7 @@ function getVsCodeApi() {
             id: createWebviewId("perm"),
             blocks: [{
               type: "permission",
+              sessionId: sid,
               permissionId: String(_msg.permissionId || ""),
               permissionType: typeof _msg.permissionType === "string" ? _msg.permissionType : undefined,
               pattern: typeof _msg.pattern === "string" || Array.isArray(_msg.pattern) ? _msg.pattern as string | string[] : undefined,
@@ -3170,9 +3192,7 @@ function getVsCodeApi() {
           handleChangedFiles(sid, paths)
         }
         if (sid && sid === activeSid) {
-          if (todosPanelApi && todosPanelApi.renderChangedFiles) {
-            todosPanelApi.renderChangedFiles(files as any)
-          }
+          // Note: renderChangedFiles is consolidated and handled by cfDropdownApi.updateChangedFiles
           cfDropdownApi?.updateChangedFiles(files as any)
         }
       }],
@@ -3180,7 +3200,6 @@ function getVsCodeApi() {
         const path = typeof msg.path === "string" ? msg.path : ""
         const lines = Array.isArray(msg.lines) ? msg.lines : []
         const error = typeof msg.error === "string" ? msg.error : undefined
-        if (path) handleFileDiffResponse(path, lines as any, error)
         if (path) cfDropdownApi?.handleDiffResponse(path, lines as any, error)
       }],
       ["skills_list", (msg) => {
@@ -3750,6 +3769,8 @@ function getVsCodeApi() {
       updateTabBar()
       updateModeSelectorStateLocal()
       updateAgentStatus("idle")
+      // Refresh the conversation timeline — the assistant turn is now complete.
+      debouncedTimelineRefresh(sessionId)
 
       showStreamEndReasonMessage(sessionId, reason, partial)
 
@@ -3906,6 +3927,38 @@ function getVsCodeApi() {
 
   function updateContextBarFromSession(sessionId: string) {
     updateContextBarFromSessionModule(tokenCostDeps, sessionId)
+  }
+
+  // Update the always-visible status-strip context bar (progress + label text).
+  // Separate from ctxDropdownApi which drives the floating detail panel.
+  function updateContextUsageBar(pct: number, tokens: number, maxTokens: number): void {
+    try {
+      const safePct = Number.isFinite(pct) ? Math.min(100, Math.max(0, pct)) : 0
+      const safeTokens = Number.isFinite(tokens) ? Math.max(0, tokens) : 0
+      const bar = els.contextUsage
+      const prog = els.contextProgressBar as HTMLProgressElement | null
+      const label = els.contextLabel
+
+      if (prog && "value" in prog) {
+        (prog as HTMLProgressElement).value = safePct
+      }
+      if (label) {
+        const tokStr = formatTokenCount(safeTokens)
+        const maxStr = maxTokens > 0 ? ` · ${formatTokenCount(maxTokens)}` : ""
+        label.textContent = `${safePct}%${maxStr !== "" ? ` · ${tokStr}` : ` · ${tokStr} tok`}`
+      }
+      const shouldHide = safePct === 0 && safeTokens === 0
+      bar.classList.toggle("hidden", shouldHide)
+      if (!shouldHide) {
+        // Parent status-strip has the HTML hidden attribute by default — reveal it.
+        els.statusStrip.removeAttribute("hidden")
+      }
+      // Apply colour class based on utilisation
+      bar.classList.toggle("context-usage-bar--warning", safePct >= 70 && safePct < 90)
+      bar.classList.toggle("context-usage-bar--critical", safePct >= 90)
+    } catch {
+      // Non-fatal — bar stays in its previous state
+    }
   }
 
   function checkOverflowWarnings(sessionId: string) {
