@@ -24,24 +24,25 @@ const MAX_CHECKPOINTS = 20
 export class CheckpointManager {
   private checkpoints: Map<string, Checkpoint> = new Map()
   private snapshots: Map<string, FileSnapshot[]> = new Map()
-  private snapshotLock = false
+  private snapshotQueue: Promise<unknown> = Promise.resolve()
 
   constructor(private readonly context?: vscode.ExtensionContext) {}
 
   /**
    * Create a checkpoint snapshot for explicit file paths.
    * If the per-session cap (MAX_CHECKPOINTS) is exceeded, prune oldest first.
+   * Uses a promise-chain serializer to prevent TOCTOU races between concurrent calls.
    */
   async snapshot(sessionId: string, messageId: string, files: string[] = []): Promise<Checkpoint | null> {
-    if (this.snapshotLock) {
-      log.warn("Snapshot already in progress — skipping concurrent snapshot")
-      return null
-    }
+    const next = this.snapshotQueue.then(() => this.snapshotImpl(sessionId, messageId, files))
+    this.snapshotQueue = next.catch(() => {})
+    return next
+  }
 
+  private async snapshotImpl(sessionId: string, messageId: string, files: string[]): Promise<Checkpoint | null> {
     const uniqueFiles = Array.from(new Set(files.map((file) => this.normalizePath(file)).filter(Boolean)))
     if (uniqueFiles.length === 0) return null
 
-    this.snapshotLock = true
     try {
       if (this.context) {
         await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(this.context.globalStorageUri, "checkpoints"))
@@ -80,8 +81,6 @@ export class CheckpointManager {
     } catch (err) {
       log.error("Checkpoint snapshot failed", err)
       return null
-    } finally {
-      this.snapshotLock = false
     }
   }
 

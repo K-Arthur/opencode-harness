@@ -61,6 +61,11 @@ export interface ResolveOptions {
  * Hardcoded fallback tables are intentionally avoided: a curated list
  * drifts as new models ship. OpenRouter's catalogue is auto-updated and
  * covers the cross-provider case (same weights, different host).
+ *
+ * NOTE: When called in a hot loop (e.g., model refresh), `options.log` should
+ * be set to `debug`-level to avoid flooding the output channel with per-model
+ * miss lines. The caller is responsible for aggregating misses into a single
+ * summary.
  */
 export function resolveContextWindow(
   modelKey: string,

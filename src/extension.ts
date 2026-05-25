@@ -46,6 +46,7 @@ import {
   registerGenerateAgentsMdCommand,
 } from "./commands"
 import { MethodologyOrchestrator, OutcomeTracker, type AdvisoryOrchestrationResult } from "./methodology"
+import { resolveAuthToken } from "./migrations/authTokenMigration"
 
 let sessionManager: SessionManager
 let sessionStore: SessionStore
@@ -188,27 +189,6 @@ sessionManager = new SessionManager(mcpServerManager)
 // Initialization helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Resolve the remote server auth token from SecretStorage (preferred) with
- * fallback to the legacy settings.json entry. Migrates found settings values
- * to secrets for future use.
- */
-async function resolveAuthToken(context: vscode.ExtensionContext): Promise<string> {
-  // Try SecretStorage first (post-migration)
-  const secretsToken = await context.secrets.get("opencode-harness.serverAuthToken")
-  if (secretsToken) return secretsToken
-
-  // Fallback: read from legacy settings.json
-  const legacyToken = vscode.workspace.getConfiguration("opencode").get<string>("serverAuthToken") || ""
-  if (legacyToken) {
-    // Migrate to SecretStorage and clear legacy setting
-    await context.secrets.store("opencode-harness.serverAuthToken", legacyToken)
-    await vscode.workspace.getConfiguration("opencode").update("serverAuthToken", undefined, vscode.ConfigurationTarget.Global)
-    log.info("Migrated serverAuthToken from settings.json to SecretStorage")
-  }
-  return legacyToken
-}
-
 function initContextEngine(context: vscode.ExtensionContext): ContextEngine {
   const engine = new ContextEngine()
   context.subscriptions.push(engine)
@@ -320,42 +300,51 @@ function registerInlineProviders(context: vscode.ExtensionContext, chatProvider:
   )
 
   // Inline code actions (CodeLens)
-  for (const action of ["explainCode", "refactorCode", "generateTests"]) {
+  const inlinePrompts: Record<string, string> = {
+    explainCode: `Explain the following code from {path}:\n\`\`\`\n{code}\n\`\`\``,
+    refactorCode: `Refactor the following code from {path}. Return only the refactored code in a code block:\n\`\`\`\n{code}\n\`\`\``,
+    generateTests: `Generate unit tests for the following code from {path}. Return only the test code in a code block:\n\`\`\`\n{code}\n\`\`\``,
+  }
+
+  for (const [action, template] of Object.entries(inlinePrompts)) {
     context.subscriptions.push(
-      vscode.commands.registerCommand(`opencode-harness.${action}`, async (uri: vscode.Uri, range?: vscode.Range) => {
-        try {
-          const editor = vscode.window.activeTextEditor
-          if (!editor) return
-          let selection = range && !range.isEmpty ? range : editor.selection
-          if (selection.isEmpty) {
-            const docEnd = editor.document.lineAt(editor.document.lineCount - 1).range.end
-            selection = new vscode.Range(new vscode.Position(0, 0), docEnd)
-            vscode.window.showWarningMessage("No code range was selected; sending the current file instead.")
-          }
-          const text = editor.document.getText(selection)
-          if (!text.trim()) {
-            vscode.window.showWarningMessage("No code content was available to send to OpenCode.")
-            return
-          }
-          const relativePath = vscode.workspace.asRelativePath(uri)
-
-          const prompts: Record<string, string> = {
-            explainCode: `Explain the following code from ${relativePath}:\n\`\`\`\n${text}\n\`\`\``,
-            refactorCode: `Refactor the following code from ${relativePath}. Return only the refactored code in a code block:\n\`\`\`\n${text}\n\`\`\``,
-            generateTests: `Generate unit tests for the following code from ${relativePath}. Return only the test code in a code block:\n\`\`\`\n${text}\n\`\`\``,
-          }
-
-          // Focus chat and send prompt
-          await vscode.commands.executeCommand("opencode-harness.openChat")
-          await vscode.commands.executeCommand("workbench.view.extension.opencode-harness")
-          chatProvider.sendPromptToWebview(prompts[action] ?? "")
-          vscode.window.showInformationMessage(`${action.replace("Code", "")} requested for ${relativePath}`)
-        } catch (err) {
-          log.error(`Inline action ${action} failed`, err)
-          vscode.window.showErrorMessage(`Failed to ${action.replace("Code", "").toLowerCase()} code.`)
-        }
-      })
+      vscode.commands.registerCommand(`opencode-harness.${action}`, createInlineCommand(action, template, chatProvider))
     )
+  }
+}
+
+function buildInlinePrompt(template: string, relativePath: string, code: string): string {
+  return template.replace("{path}", relativePath).replace("{code}", code)
+}
+
+function createInlineCommand(action: string, promptTemplate: string, chatProvider: ChatProvider): (uri: vscode.Uri, range?: vscode.Range) => Promise<void> {
+  const verb = action.replace("Code", "").toLowerCase()
+  return async (uri: vscode.Uri, range?: vscode.Range) => {
+    try {
+      const editor = vscode.window.activeTextEditor
+      if (!editor) return
+      let selection = range && !range.isEmpty ? range : editor.selection
+      if (selection.isEmpty) {
+        const docEnd = editor.document.lineAt(editor.document.lineCount - 1).range.end
+        selection = new vscode.Range(new vscode.Position(0, 0), docEnd)
+        vscode.window.showWarningMessage("No code range was selected; sending the current file instead.")
+      }
+      const text = editor.document.getText(selection)
+      if (!text.trim()) {
+        vscode.window.showWarningMessage("No code content was available to send to OpenCode.")
+        return
+      }
+      const relativePath = vscode.workspace.asRelativePath(uri)
+
+      // Focus chat and send prompt
+      await vscode.commands.executeCommand("opencode-harness.openChat")
+      await vscode.commands.executeCommand("workbench.view.extension.opencode-harness")
+      chatProvider.sendPromptToWebview(buildInlinePrompt(promptTemplate, relativePath, text))
+      vscode.window.showInformationMessage(`${verb} requested for ${relativePath}`)
+    } catch (err) {
+      log.error(`Inline action ${action} failed`, err)
+      vscode.window.showErrorMessage(`Failed to ${verb} code.`)
+    }
   }
 }
 

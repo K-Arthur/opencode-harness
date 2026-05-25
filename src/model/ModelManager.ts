@@ -274,6 +274,7 @@ export class ModelManager {
 
       const models: ModelInfo[] = []
       const providers = Array.isArray(data) ? data : data.providers || []
+      let unresolvedContextWindowCount = 0
       for (const provider of providers) {
         const providerModels = Array.isArray(provider.models)
           ? provider.models
@@ -289,14 +290,17 @@ export class ModelManager {
                             (m.id && (m.id.includes("thinking") || m.id.includes("reasoning") || m.id.includes("o1")))
           const modelKey = `${provider.id}/${m.id}`
           
+          const ctx = resolveContextWindow(modelKey, m.limit?.context, {
+            log: (msg) => log.debug(msg),
+            openRouterCache: this._openRouterCache,
+          })
+          if (ctx === undefined) unresolvedContextWindowCount++
+
           models.push({
             id: m.id,
             provider: provider.id,
             displayName: m.name || m.id,
-            contextWindow: resolveContextWindow(modelKey, m.limit?.context, {
-              log: (msg) => log.info(msg),
-              openRouterCache: this._openRouterCache,
-            }),
+            contextWindow: ctx,
             outputLimit: m.limit?.output || undefined,
             supportsVariants: !!reasoning,
             available: m.available !== false,
@@ -313,6 +317,9 @@ export class ModelManager {
       this._onModelsRefreshed.fire()
       if (models.length !== prevCount) {
         log.info(`Refreshed models from server: ${models.length} models available`)
+      }
+      if (unresolvedContextWindowCount > 0) {
+        log.info(`Refreshed models: ${models.length} (${unresolvedContextWindowCount} without limit.context — server didn't report and no OpenRouter match)`)
       }
       return models
     } finally {

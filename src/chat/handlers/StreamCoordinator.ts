@@ -41,6 +41,7 @@ export class StreamCoordinator {
   private streamWatchdog: ReturnType<typeof setInterval> | null = null
   private stuckStreamHandlers: Map<string, StreamCallbacks> = new Map()
   private ttfbTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
+  private ttfbAbortControllers: Map<string, AbortController> = new Map()
   private pendingToolGraceTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
   /** Tabs currently in the process of finalizing — guards against double-finalize */
   private finalizingTabs = new Set<string>()
@@ -483,6 +484,8 @@ export class StreamCoordinator {
       this.startWatchdog()
 
       // TTFB (time-to-first-byte) timeout — fires if no stream chunk arrives within 30s
+      const abortController = new AbortController()
+      this.ttfbAbortControllers.set(tabId, abortController)
       const ttfbTimeout = setTimeout(() => {
         const t = this.tabManager.getTab(tabId)
         if (t?.isStreaming && t.waitingForCompletion) {
@@ -491,6 +494,7 @@ export class StreamCoordinator {
           const reason = eventStreamDisconnected ? "event_stream_disconnected" : "ttfb_timeout"
           log.warn(`TTFB timeout for tab ${tabId} — no chunk received within ${this.TTFB_TIMEOUT_MS}ms (eventStream=${eventStreamStatus.state}, lastRaw=${eventStreamStatus.lastRawEventType || "none"})`)
           this.setStreamState(tabId, "timeout", { sessionId: t.cliSessionId, eventStream: eventStreamStatus.state })
+          abortController.abort("ttfb_timeout")
           callbacks.postMessage({
             type: "stream_end",
             sessionId: tabId,
@@ -548,7 +552,8 @@ export class StreamCoordinator {
         })
       }
 
-      await this.sessionManager.sendPromptAsync(cliSessionId, parts, { model: modelRef, agent, variant })
+      const abortSignal = this.ttfbAbortControllers.get(tabId)?.signal
+      await this.sessionManager.sendPromptAsync(cliSessionId, parts, { model: modelRef, agent, variant, signal: abortSignal })
 
       this.startHeartbeat(tabId, callbacks)
       // startWatchdog is the single hard safety net and is driven by server activity.
@@ -930,6 +935,18 @@ export class StreamCoordinator {
     const lastMessages = this.sessionStore.get(tabId)
     const lastAssistant = [...(lastMessages?.messages || [])].reverse().find(m => m.role === "assistant")
     const lastUser = [...(lastMessages?.messages || [])].reverse().find(m => m.role === "user")
+
+    // Detect TTFB timeout: the stream state was "timeout" and no assistant output was produced.
+    const prevState = this.streamStates.get(tabId)
+    const wasTimeout = prevState === "timeout"
+    const hasAssistantOutput = lastAssistant?.blocks?.some(b => b.type === "text" && b.text?.trim())
+
+    if (wasTimeout && !hasAssistantOutput && lastUser) {
+      log.info(`retryFromHere: TTFB timeout detected for tab ${tabId} — re-sending original user prompt`)
+      await this.startPrompt(tabId, lastUser.blocks.map(b => b.type === "text" ? b.text : "").join(" ").trim() || "Please retry the last request.", callbacks)
+      return
+    }
+
     const snippet = lastAssistant?.blocks
       ?.filter(b => b.type === "text")
       ?.map(b => b.text || "")
@@ -1113,6 +1130,7 @@ export class StreamCoordinator {
 
 private cleanupTab(tabId: string): void {
     this.clearTtfbTimeout(tabId)
+    this.ttfbAbortControllers.delete(tabId)
     this.tabManager.setStreaming(tabId, false)
     this.stopWatchdogIfNoStreams()
     this.tabManager.setWaitingForCompletion(tabId, false)
@@ -1239,6 +1257,7 @@ private cleanupTab(tabId: string): void {
       clearTimeout(timer)
     }
     this.ttfbTimeouts.clear()
+    this.ttfbAbortControllers.clear()
     for (const timer of this.pendingToolGraceTimeouts.values()) {
       clearTimeout(timer)
     }

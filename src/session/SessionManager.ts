@@ -80,6 +80,7 @@ export interface PromptOptions {
   agent?: string
   tools?: Record<string, boolean>
   variant?: string
+  signal?: AbortSignal
 }
 
 export type EventStreamLifecycleState =
@@ -411,7 +412,7 @@ export class SessionManager {
             try {
               await this.client.session.list()
             } catch {
-              log.info(`Stored port ${this.storedPort} auth mismatch — starting new server`)
+              log.debug(`Stored port ${this.storedPort} auth mismatch — starting new server`)
               this.client = null
               this.port = 0
               throw new Error("Auth verification failed")
@@ -428,7 +429,7 @@ export class SessionManager {
       } catch (e) {
         const msg = (e as Error).message
         if (!msg.includes("Auth verification failed")) {
-          log.info(`Stored port ${this.storedPort} health check failed, starting new server`)
+          log.debug(`Stored port ${this.storedPort} health check failed, starting new server`)
         }
       }
     }
@@ -1134,6 +1135,9 @@ async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part
     if (this.disposed) throw new Error("SessionManager has been disposed")
     if (!this.client) throw new Error("Server not running")
 
+    const signal = options?.signal
+    if (signal?.aborted) return
+
     const modelRef = options?.model ?? this.currentModel ?? undefined
     const agent = options?.agent
     const variant = options?.variant
@@ -1145,8 +1149,10 @@ async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part
     let lastError: Error | null = null
 
     for (let attempt = 0; attempt <= this.MAX_RETRIES; attempt++) {
+      if (signal?.aborted) return
+
       try {
-        const resp = await this.client.session.promptAsync({
+        const requestOptions: Parameters<typeof this.client.session.promptAsync>[0] = {
           path: { id: sessionId },
           body: {
             parts,
@@ -1158,7 +1164,18 @@ async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part
           headers: {
             "Idempotency-Key": idempotencyKey,
           },
-        })
+        }
+
+        const resp = await (signal
+          ? Promise.race([
+              this.client.session.promptAsync(requestOptions),
+              new Promise<never>((_, reject) => {
+                if (signal.aborted) return reject(new DOMException("Aborted", "AbortError"))
+                const onAbort = () => reject(new DOMException("Aborted", "AbortError"))
+                signal.addEventListener("abort", onAbort, { once: true })
+              }),
+            ])
+          : this.client.session.promptAsync(requestOptions))
 
         if (resp.error) {
           const errorMsg = JSON.stringify(resp.error)
@@ -1175,6 +1192,9 @@ async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part
         // Success - return early
         return
       } catch (err) {
+        // Abort is not an error — return silently
+        if (err instanceof DOMException && err.name === "AbortError") return
+
         lastError = err instanceof Error ? err : new Error(String(err))
 
         // Only retry network/timeout errors — not business logic failures
