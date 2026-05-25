@@ -26,7 +26,7 @@ Context usage was visible in two places simultaneously — the per-tab `.context
 
 **Fix**: The canonical context usage UI is now exclusively the `#context-usage-btn` toolbar button with `#context-usage-dropdown` panel (`context-usage-dropdown.ts`). The `context_usage` and `context_window_known` handlers route only to `ctxDropdownApi.updateUsage()`. `SessionState` gains a `contextUsage: { percent, tokens, maxTokens }` field; `switchTab()` restores it on activation.
 
-The `.context-monitor` bar remains in the DOM but stays `hidden` at all times. It should be removed in a future cleanup pass once any indirect CSS dependencies are confirmed absent.
+The `.context-monitor` bar remains in the DOM but stays `hidden` at all times. Unknown context windows are surfaced through the status-strip override chip instead of a fabricated denominator.
 
 ## Tool Call Reduction
 
@@ -42,6 +42,18 @@ Timeline snippets prefer visible text from `message.blocks`, but runtime and rec
 
 The status strip keeps separate DOM children for model, context, tokens, and cost. Context rendering updates the existing `#context-label` and `#context-progress-bar` nodes instead of replacing the whole strip with text. Zero-token sessions and unknown context windows remain hidden until useful context data is available.
 
+The context usage detail surface is a fixed-position dropdown anchored to `#context-usage`. It must collision-check against the webview viewport, clamp width on narrow panes, set a usable `max-height`, and scroll internally instead of rendering behind the header or outside the viewport. The same positioning contract applies to the changed-files dropdown anchored to `#changed-files-strip`.
+
+## Changed Files Strip
+
+OpenCode's event list includes both `file.edited` and `session.diff`; observed OpenCode 1.15.x `file.edited` payloads can be global and omit `sessionID`. The extension attributes those sessionless file edits to the sole live stream, or to the active tab when no live stream is available, before updating `SessionStore.addChangedFiles()` and posting `changed_files_update`. Empty `session.diff` arrays do not clear existing changed-file state.
+
+The visible changed-files strip is driven by `changed_files_update`, not only by old per-file chips. A live edit must make `#changed-files-strip` visible and clicking the strip must open the viewport-safe `#changed-files-dropdown`.
+
 ## Checkpoint Panel
 
 An empty checkpoint response leaves the panel open and shows `No checkpoints yet`. This makes the toolbar action visibly responsive even when the active session has not produced restorable checkpoints.
+
+## Mixed Tool Groups
+
+Grouped tool-call summaries must represent the whole group, not just the first child tool. A group containing read, write, and exec calls renders as `tools` with `tool-call--mixed` styling and the breakdown `(1 read, 1 write, 1 exec)`. Individual child rows keep their original read/write/exec classes.

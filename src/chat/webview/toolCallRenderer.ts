@@ -622,8 +622,10 @@ export function renderToolGroup(blocks: Block[], opts: RenderOptions): HTMLEleme
 
   const firstTool = blocks[0]!
   const tc = isToolCallBlock(firstTool) ? firstTool : null
-  const toolClass = tc?.class || 'read'
-  const toolName = tc?.name || 'tool'
+  const toolClasses = new Set(blocks.map((b) => (b.class as ToolCallClass | undefined) || 'read'))
+  const isMixedGroup = toolClasses.size > 1
+  const toolClass = isMixedGroup ? 'mixed' : (tc?.class || 'read')
+  const toolName = isMixedGroup ? 'tools' : (tc?.name || 'tool')
 
   // Edge case: Auto-expand if any tool in group has error state
    const hasError = blocks.some(b => {
@@ -656,6 +658,7 @@ export function renderToolGroup(blocks: Block[], opts: RenderOptions): HTMLEleme
     case 'write': icon.innerHTML = TOOL_WRITE_SVG; break
     case 'exec': icon.innerHTML = TOOL_EXEC_SVG; break
     case 'meta': icon.innerHTML = TOOL_META_SVG; break
+    case 'mixed': icon.innerHTML = TOOL_META_SVG; break
     default: icon.innerHTML = TOOL_READ_SVG; break
   }
   summary.appendChild(icon)

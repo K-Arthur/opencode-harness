@@ -145,6 +145,37 @@ test.describe('Compact tool blocks (codex-style)', () => {
     await expect(page.locator('.tool-group-count').first()).toHaveText(/3\s*calls/)
   })
 
+  test('mixed read/write/exec tool groups are labeled as tools, not read', async ({ page }) => {
+    await page.evaluate(() => {
+      const list = document.querySelector('.message-list')
+      if (!list) return
+      list.innerHTML = ''
+      const group = document.createElement('details')
+      group.className = 'tool-call tool-group tool-call--mixed'
+      group.open = true
+      group.innerHTML = `
+        <summary class="tool-header">
+          <span class="tool-icon">M</span>
+          <span class="tool-name">tools</span>
+          <span class="tool-group-breakdown">(1 read, 1 write, 1 exec)</span>
+          <span class="tool-group-count">3 calls</span>
+          <span class="tool-status tool-status--result">✓ Done</span>
+        </summary>
+        <div class="tool-group-children">
+          <details class="tool-call tool-call--read tool-call--result tool-group-child"><summary class="tool-header"><span class="tool-name">read</span></summary></details>
+          <details class="tool-call tool-call--write tool-call--result tool-group-child"><summary class="tool-header"><span class="tool-name">edit</span></summary></details>
+          <details class="tool-call tool-call--exec tool-call--result tool-group-child"><summary class="tool-header"><span class="tool-name">bash</span></summary></details>
+        </div>
+      `
+      list.appendChild(group)
+    })
+
+    const group = page.locator('.tool-group').first()
+    await expect(group).toHaveClass(/tool-call--mixed/)
+    await expect(group.locator('.tool-name').first()).toHaveText('tools')
+    await expect(group.locator('.tool-group-breakdown').first()).toHaveText('(1 read, 1 write, 1 exec)')
+  })
+
   test('multiple tool blocks stack tightly with minimal margin', async ({ page }) => {
     // Add 4 more tool blocks back-to-back.
     await page.evaluate(() => {

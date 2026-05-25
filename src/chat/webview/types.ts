@@ -6,7 +6,7 @@ export type MessageRole = "user" | "assistant" | "system"
 // New discriminated block types (preferred for new code)
 // ---------------------------------------------------------------------------
 
-export type ToolCallClass = 'read' | 'write' | 'exec' | 'error' | 'meta'
+export type ToolCallClass = 'read' | 'write' | 'exec' | 'error' | 'meta' | 'mixed'
 export type ToolCallState = 'pending' | 'running' | 'result' | 'error' | 'completed' | 'stale'
 
 export interface ToolCollapseConfig {

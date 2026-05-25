@@ -28,6 +28,7 @@ let _badge: HTMLElement | null = null
 let _isOpen = false
 let _outsideClickHandler: ((e: MouseEvent) => void) | null = null
 let _keyHandler: ((e: KeyboardEvent) => void) | null = null
+let _resizeHandler: (() => void) | null = null
 
 /** Reset all state — for unit-test isolation and port-change resilience */
 export function resetChangedFilesDropdown(): void {
@@ -165,18 +166,7 @@ function _open(): void {
   // Anchor to the strip when btn is absent/detached, otherwise anchor to btn
   const anchor: Element | null =
     (_btn && _btn.isConnected) ? _btn : document.getElementById("changed-files-strip")
-  if (anchor) {
-    const r = anchor.getBoundingClientRect()
-    const panelW = 420
-    // Align right edge of panel with right edge of anchor; clamp to viewport
-    const leftEdge = Math.max(0, Math.min(r.right - panelW, window.innerWidth - panelW))
-    _panel.style.position = "fixed"
-    _panel.style.top = `${r.bottom + 4}px`
-    _panel.style.left = `${leftEdge}px`
-    _panel.style.right = "unset"
-    _panel.style.width = `${panelW}px`
-    _panel.style.maxHeight = `${window.innerHeight - r.bottom - 16}px`
-  }
+  if (anchor) positionPanel(anchor)
 
   _renderTree(_treeContainer, _lastFiles)
 
@@ -189,10 +179,44 @@ function _open(): void {
     }
   }
   _keyHandler = (e: KeyboardEvent) => { if (e.key === "Escape") _close() }
+  _resizeHandler = () => {
+    const trigger: Element | null =
+      (_btn && _btn.isConnected) ? _btn : document.getElementById("changed-files-strip")
+    if (_isOpen && trigger) positionPanel(trigger)
+  }
   requestAnimationFrame(() => {
     document.addEventListener("click", _outsideClickHandler!)
     document.addEventListener("keydown", _keyHandler!)
+    window.addEventListener("resize", _resizeHandler!)
   })
+}
+
+function positionPanel(anchor: Element): void {
+  if (!_panel) return
+  const margin = 8
+  const r = anchor.getBoundingClientRect()
+  const panelW = Math.min(440, Math.max(300, window.innerWidth - margin * 2))
+  const estimatedHeight = Math.min(540, Math.max(260, _panel.getBoundingClientRect().height || 420))
+  const spaceBelow = window.innerHeight - r.bottom - margin
+  const spaceAbove = r.top - margin
+  const openAbove = spaceBelow < Math.min(260, estimatedHeight) && spaceAbove > spaceBelow
+  const maxHeight = Math.max(220, Math.floor((openAbove ? spaceAbove : spaceBelow) - 4))
+  const visibleHeight = Math.min(estimatedHeight, maxHeight)
+  const leftEdge = Math.min(
+    Math.max(margin, r.right - panelW),
+    Math.max(margin, window.innerWidth - panelW - margin),
+  )
+  const top = openAbove
+    ? Math.max(margin, r.top - visibleHeight - 6)
+    : Math.min(window.innerHeight - margin - visibleHeight, r.bottom + 6)
+
+  _panel.style.position = "fixed"
+  _panel.style.top = `${Math.max(margin, top)}px`
+  _panel.style.left = `${leftEdge}px`
+  _panel.style.right = "auto"
+  _panel.style.width = `${panelW}px`
+  _panel.style.maxHeight = `${maxHeight}px`
+  _panel.style.overflow = "auto"
 }
 
 function _close(): void {
@@ -202,8 +226,10 @@ function _close(): void {
   if (_btn) _btn.setAttribute("aria-expanded", "false")
   if (_outsideClickHandler) document.removeEventListener("click", _outsideClickHandler)
   if (_keyHandler) document.removeEventListener("keydown", _keyHandler)
+  if (_resizeHandler) window.removeEventListener("resize", _resizeHandler)
   _outsideClickHandler = null
   _keyHandler = null
+  _resizeHandler = null
 }
 
 // ─── Badge ────────────────────────────────────────────────────────────────────

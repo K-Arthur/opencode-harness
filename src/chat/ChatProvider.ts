@@ -1081,6 +1081,21 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     if (!tab && event.sessionId) {
       tab = this.tabManager.getTab(event.sessionId)
     }
+    if (!tab && !event.sessionId && event.type === "file_edited") {
+      const activeTab = this.tabManager.getActiveTab()
+      const liveTabs = this.tabManager.getAllTabs().filter((t) => t.isStreaming || t.waitingForCompletion)
+      if (liveTabs.length === 1) {
+        tab = liveTabs[0]
+      } else if (activeTab && (activeTab.isStreaming || activeTab.waitingForCompletion || liveTabs.length === 0)) {
+        tab = activeTab
+      }
+      if (tab) {
+        log.debug(`Attributed sessionless file_edited event to tab: ${tab.id}`)
+      } else {
+        log.warn("Dropping sessionless file_edited event: no active or streaming tab could be resolved")
+        return
+      }
+    }
     let tabId = tab?.id
 
     // CRITICAL: Ensure we use the mapped tabId, not the raw CLI sessionId, when calling handlers
