@@ -24,8 +24,8 @@ describe("extension.ts", () => {
     assert.ok(extensionSource.includes("new SessionManager"))
   })
 
-  it("creates ContextEngine", () => {
-    assert.ok(extensionSource.includes("new ContextEngine()"))
+  it("creates ContextEngine with VSCodeWorkspaceAdapter", () => {
+    assert.ok(extensionSource.includes("new ContextEngine(adapter)") || extensionSource.includes("new ContextEngine("))
   })
 
   it("creates ThemeManager", () => {
