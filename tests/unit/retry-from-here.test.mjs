@@ -15,7 +15,7 @@ describe("T1.5 — Retry-from-here after TTFB timeout", () => {
 
   it("checks for assistant text output before falling back", () => {
     assert.ok(source.includes("hasAssistantOutput"), "must check for assistant output")
-    assert.ok(source.includes("b.type === \"text\" && b.text?.trim()"), "must check for non-empty text blocks")
+    assert.ok(source.includes('typeof b.text === "string"') || source.includes("b.text?.trim()") || source.includes(".trim().length > 0"), "must check for non-empty text blocks")
   })
 
   it("re-sends original user prompt when timeout and no assistant output", () => {

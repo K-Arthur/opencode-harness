@@ -45,7 +45,7 @@ describe("ContextEngine — private methods", () => {
 
   it("gathers diagnostics with severity filtering", () => {
     assert.ok(source.includes("gatherDiagnostics"), "gatherDiagnostics method must exist")
-    assert.ok(source.includes("DiagnosticSeverity.Error") || source.includes("severity"), "must filter by severity")
+    assert.ok(source.includes("adapter.getDiagnostics") || source.includes("getDiagnostics"), "must delegate diagnostics to adapter")
   })
 
   it("gathers workspace tree with depth limit", () => {
@@ -87,11 +87,9 @@ describe("ContextEngine — error handling", () => {
     assert.ok(method.includes("try") && method.includes("catch"), "gatherProjectConfigs must use try/catch")
   })
 
-  it("wraps gatherGitStatus in try/catch", () => {
-    const methodStart = source.indexOf("private async gatherGitStatus")
-    const methodEnd = source.indexOf("dispose()", methodStart)
-    const method = source.slice(methodStart, methodEnd > 0 ? methodEnd : undefined)
-    assert.ok(method.includes("try") && method.includes("catch"), "gatherGitStatus must use try/catch")
+  it("delegates gatherGitStatus to adapter", () => {
+    assert.ok(source.includes("gatherGitStatus"), "gatherGitStatus method must exist")
+    assert.ok(source.includes("adapter.getGitInfo") || source.includes("getGitInfo"), "must delegate git status to adapter")
   })
 })
 

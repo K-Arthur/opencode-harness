@@ -3,6 +3,7 @@ import { SessionManager } from "./session/SessionManager"
 import { SessionStore } from "./session/SessionStore"
 import { SessionExporter } from "./session/SessionExporter"
 import { ContextEngine } from "./context/ContextEngine"
+import { VSCodeWorkspaceAdapter } from "./context/VSCodeWorkspaceAdapter"
 import { ContextFileProvider } from "./context/ContextFileProvider"
 import { ContextMonitor } from "./monitor/ContextMonitor"
 import { TerminalBridge } from "./terminal/TerminalBridge"
@@ -190,7 +191,8 @@ sessionManager = new SessionManager(mcpServerManager)
 // ---------------------------------------------------------------------------
 
 function initContextEngine(context: vscode.ExtensionContext): ContextEngine {
-  const engine = new ContextEngine()
+  const adapter = new VSCodeWorkspaceAdapter()
+  const engine = new ContextEngine(adapter)
   context.subscriptions.push(engine)
   return engine
 }

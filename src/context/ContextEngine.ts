@@ -1,10 +1,11 @@
 import { log } from "../utils/outputChannel"
 import * as vscode from "vscode"
 import { estimateTokens } from "../utils/tokenCounter"
+import type { WorkspaceAdapter } from "./WorkspaceAdapter"
 
 export interface GatherConfig {
   mode: "basic" | "deep"
-  maxTokens?: number // Max tokens for open files (default 50000)
+  maxTokens?: number
 }
 
 export interface ContextPackage {
@@ -26,6 +27,8 @@ export class ContextEngine {
   private _onConfigChanged = new vscode.EventEmitter<void>()
   onConfigChanged = this._onConfigChanged.event
 
+  constructor(private readonly adapter: WorkspaceAdapter) {}
+
   async gatherContext(config: GatherConfig = { mode: "basic" }): Promise<ContextPackage> {
     const [openFiles, diagnostics, workspaceTree, projectConfigs, gitStatus] = await Promise.all([
       this.gatherOpenFiles(config.maxTokens),
@@ -40,83 +43,61 @@ export class ContextEngine {
 
   private async gatherOpenFiles(maxTokens = 50_000): Promise<ContextPackage["openFiles"]> {
     const result: ContextPackage["openFiles"] = []
-    const tabs = vscode.window.tabGroups.all.flatMap((g) => g.tabs)
+    const tabs = this.adapter.listOpenTabs()
     let usedTokens = 0
 
     for (const tab of tabs) {
-      if (tab.input && typeof tab.input === "object" && "uri" in tab.input) {
-        const uri = (tab.input as { uri: vscode.Uri }).uri
-        try {
-          const doc = await vscode.workspace.openTextDocument(uri)
-          let content = doc.getText()
-          const contentTokens = estimateTokens(content)
+      try {
+        const fileContent = await this.adapter.readFile(tab.uri)
+        let content = fileContent.content
+        const contentTokens = estimateTokens(content)
 
-          // Token-based truncation instead of character-based
-          if (usedTokens + contentTokens > maxTokens) {
-            const remainingTokens = maxTokens - usedTokens
-            if (remainingTokens <= 0) {
-              content = `[File skipped: would exceed token limit of ${maxTokens}]`
-            } else {
-              // Estimate characters from remaining tokens (rough 4 chars per token)
-              const maxChars = remainingTokens * 4
-              content = content.slice(0, maxChars) + `\n[File truncated: remaining ${contentTokens - remainingTokens} tokens hidden]`
-              usedTokens += remainingTokens
-            }
+        if (usedTokens + contentTokens > maxTokens) {
+          const remainingTokens = maxTokens - usedTokens
+          if (remainingTokens <= 0) {
+            content = `[File skipped: would exceed token limit of ${maxTokens}]`
           } else {
-            usedTokens += contentTokens
+            const maxChars = remainingTokens * 4
+            content = content.slice(0, maxChars) + `\n[File truncated: remaining ${contentTokens - remainingTokens} tokens hidden]`
+            usedTokens += remainingTokens
           }
-
-          const editor = vscode.window.activeTextEditor
-          let selection
-          if (editor && editor.document.uri.toString() === uri.toString() && !editor.selection.isEmpty) {
-            selection = {
-              startLine: editor.selection.start.line + 1,
-              endLine: editor.selection.end.line + 1,
-              text: editor.document.getText(editor.selection),
-            }
-          }
-
-          result.push({
-            path: vscode.workspace.asRelativePath(uri),
-            language: doc.languageId,
-            content,
-            selection,
-          })
-        } catch {
-          // skip inaccessible files
+        } else {
+          usedTokens += contentTokens
         }
+
+        const selection = this.adapter.getActiveSelection()
+        let selectionInfo: { startLine: number; endLine: number; text: string } | undefined
+        if (selection && selection.uri === tab.uri) {
+          selectionInfo = { startLine: selection.startLine, endLine: selection.endLine, text: selection.text }
+        }
+
+        result.push({
+          path: this.adapter.getRelativePath(tab.uri),
+          language: fileContent.languageId,
+          content,
+          selection: selectionInfo,
+        })
+      } catch {
+        // skip inaccessible files
       }
     }
     return result.slice(0, 10)
   }
 
   private gatherDiagnostics(): ContextPackage["diagnostics"] {
-    return vscode.languages.getDiagnostics()
-      .filter(([_, diags]) => diags.length > 0)
-      .map(([uri, diags]) => ({
-        file: vscode.workspace.asRelativePath(uri),
-        errors: diags.filter((d) => d.severity === vscode.DiagnosticSeverity.Error).map((d) => d.message),
-        warnings: diags.filter((d) => d.severity === vscode.DiagnosticSeverity.Warning).map((d) => d.message),
-        hints: diags.filter((d) => d.severity === vscode.DiagnosticSeverity.Hint || d.severity === vscode.DiagnosticSeverity.Information).map((d) => d.message),
-      }))
+    return this.adapter.getDiagnostics()
   }
 
   private async gatherWorkspaceTree(depth = 3): Promise<ContextPackage["workspaceTree"]> {
-    const folders = vscode.workspace.workspaceFolders
-    if (!folders || folders.length === 0) return []
+    const folders = this.adapter.getWorkspaceFolders()
+    if (folders.length === 0) return []
 
     try {
-      // M3: Find files with a reasonable limit to avoid performance issues
-      const files = await vscode.workspace.findFiles(
-        new vscode.RelativePattern(folders[0]!.uri, "**/*"),
-        "**/node_modules/**",
-        100
-      )
-
+      const files = await this.adapter.findFiles("**/*", "**/node_modules/**", 100)
       const tree: Map<string, { name: string; type: "file" | "directory" }> = new Map()
 
       for (const file of files) {
-        const relative = vscode.workspace.asRelativePath(file)
+        const relative = this.adapter.getRelativePath(file)
         const parts = relative.split("/")
         if (parts.length > depth) continue
         for (let i = 0; i < parts.length; i++) {
@@ -142,14 +123,14 @@ export class ContextEngine {
     const configFiles = ["package.json", "tsconfig.json", "pyproject.toml", "Cargo.toml", "go.mod"]
 
     for (const fileName of configFiles) {
-      const files = await vscode.workspace.findFiles(fileName, "**/node_modules/**", 1)
+      const files = await this.adapter.findFiles(fileName, "**/node_modules/**", 1)
       if (files.length > 0) {
         try {
-          const doc = await vscode.workspace.openTextDocument(files[0]!)
+          const fileContent = await this.adapter.readFile(files[0]!)
           configs.push({
             type: fileName,
-            path: vscode.workspace.asRelativePath(files[0]!),
-            content: doc.getText(),
+            path: this.adapter.getRelativePath(files[0]!),
+            content: fileContent.content,
           })
         } catch {
           // skip
@@ -161,22 +142,7 @@ export class ContextEngine {
   }
 
   private async gatherGitStatus(): Promise<ContextPackage["gitStatus"]> {
-    try {
-      const gitExt = vscode.extensions.getExtension("vscode.git")
-      if (!gitExt || !gitExt.isActive) {
-        return { branch: "unknown", modified: [], staged: [] }
-      }
-      const git = gitExt.exports.getAPI(1)
-      const repo = git.repositories[0]
-      if (!repo) return { branch: "unknown", modified: [], staged: [] }
-      return {
-        branch: repo.state.HEAD?.name || "unknown",
-        modified: repo.state.workingTreeChanges.map((c: { uri: { fsPath: string } }) => c.uri.fsPath),
-        staged: repo.state.indexChanges.map((c: { uri: { fsPath: string } }) => c.uri.fsPath),
-      }
-    } catch {
-      return { branch: "unknown", modified: [], staged: [] }
-    }
+    return this.adapter.getGitInfo()
   }
 
   dispose(): void {
