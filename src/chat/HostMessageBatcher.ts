@@ -1,3 +1,5 @@
+import { BatchEngine } from "./BatchEngine"
+
 type MaybeThenable<T> = T | PromiseLike<T>
 
 export interface HostMessageBatcherOptions {
@@ -34,19 +36,24 @@ const IMMEDIATE_TYPES = new Set([
   "force_rerender",
 ])
 
+function batchMessageReducer(existing: BatchableHostMessage[] | undefined, value: BatchableHostMessage): BatchableHostMessage[] {
+  return [...(existing ?? []), value]
+}
+
 export class HostMessageBatcher {
-  private queued: BatchableHostMessage[] = []
-  private timer: ReturnType<typeof setTimeout> | undefined
-  private readonly flushMs: number
-  private readonly maxBatchSize: number
+  private engine: BatchEngine<string, BatchableHostMessage[], BatchableHostMessage>
 
   constructor(
     private readonly delegate: (msg: Record<string, unknown>) => MaybeThenable<boolean | void>,
     private readonly log?: (msg: string) => void,
     options: HostMessageBatcherOptions = {},
   ) {
-    this.flushMs = options.flushMs ?? 16
-    this.maxBatchSize = options.maxBatchSize ?? 25
+    this.engine = new BatchEngine(
+      batchMessageReducer,
+      (_key, messages) => this.delegate({ type: "host_message_batch", messages }),
+      log,
+      { flushMs: options.flushMs ?? 16, maxBatchSize: options.maxBatchSize ?? 25 },
+    )
   }
 
   static isBatchable(msg: Record<string, unknown>): msg is BatchableHostMessage {
@@ -59,39 +66,20 @@ export class HostMessageBatcher {
       return this.dispatch(msg)
     }
 
-    this.queued.push(msg)
-    if (this.queued.length >= this.maxBatchSize) {
-      this.flush()
-      return true
-    }
-
-    if (!this.timer) {
-      this.timer = setTimeout(() => this.flush(), this.flushMs)
-    }
+    this.engine.add("main", msg)
     return true
   }
 
   flush(): void {
-    if (this.timer) {
-      clearTimeout(this.timer)
-      this.timer = undefined
-    }
-    if (this.queued.length === 0) return
-    const messages = this.queued.splice(0)
-    this.dispatch({ type: "host_message_batch", messages })
+    this.engine.flush()
   }
 
   clear(): void {
-    if (this.timer) {
-      clearTimeout(this.timer)
-      this.timer = undefined
-    }
-    this.queued = []
+    this.engine.clear()
   }
 
   dispose(): void {
-    this.flush()
-    this.clear()
+    this.engine.dispose()
   }
 
   private dispatch(msg: Record<string, unknown>): boolean {
