@@ -460,6 +460,16 @@ void it("file_edited server events register changed files in backend store befor
   assert.ok(!block.includes("if (!tab?.isStreaming) return"), "backend changed-file registration must not be streaming-only")
 })
 
+void it("sessionless file_edited events are attributed to an active or streaming tab", () => {
+  const idx = source.indexOf("private handleServerEvent(")
+  assert.ok(idx >= 0, "handleServerEvent must exist")
+  const block = source.slice(idx, idx + 2400)
+  assert.ok(block.includes('event.type === "file_edited"'), "sessionless file_edited handling must be explicit")
+  assert.ok(block.includes("getAllTabs().filter"), "must inspect live tabs before dropping sessionless file edits")
+  assert.ok(block.includes("getActiveTab()"), "must fall back to the active tab for global file.edited events")
+  assert.ok(block.includes("Dropping sessionless file_edited"), "must log rather than silently writing to an empty session id")
+})
+
 // ── resume_server_session: open any server session from the modal ─────────
 // Users need to click a server session in the unified modal and have it open.
 // The backend must handle resume_server_session, create a local session entry

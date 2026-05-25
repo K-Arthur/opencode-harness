@@ -93,7 +93,7 @@ See `docs/adrs/ADR-009-pending-event-buffer.md` for the full motivation and alte
 - `session.create({ body })` - Create an OpenCode server session when a tab first needs server-side context.
 - `session.update({ path, body })` - Update server-side session properties such as model/agent metadata when supported.
 - `session.prompt({ path, body })` / `session.promptAsync({ path, body })` - Send prompts; `body.noReply: true` is reserved for context-only injection.
-- `event.subscribe()` - Subscribe to the server SSE event stream; `EventNormalizer` maps SDK events into webview stream/tool/file/permission messages. File tracking follows the generated SDK shapes: `file.edited.properties.file` and `session.diff.properties.diff[].file` with additions/deletions.
+- `event.subscribe()` - Subscribe to the server SSE event stream; `EventNormalizer` maps SDK events into webview stream/tool/file/permission messages. File tracking follows the generated SDK shapes: `file.edited.properties.file` and `session.diff.properties.diff[].file` with additions/deletions. Because `file.edited` is a global file event in the OpenCode event catalog and can arrive without `sessionID`, `ChatProvider` attributes sessionless file edits to the sole active stream or active tab before persisting changed-file state.
 - `session.messages({ path })` / `session.get({ path })` / `session.list()` - Backfill, resume, and list conversations.
 - `session.command({ path, body })` / `session.shell({ path, body })` - Route slash commands and shell execution through the OpenCode server.
 - `session.abort({ path })`, `session.share({ path })`, `session.delete({ path })`, `session.revert({ path, body })` - Manage execution and lifecycle operations. Server-side tool edits are reverted through `session.revert({ body: { messageID } })`; extension-local checkpoints cover only extension-managed diff accepts.
@@ -116,6 +116,7 @@ The debug Extension Development Host must open the intended workspace folder. If
 - `DiffApplier` - Previews diffs through read-only virtual documents and `vscode.diff`; applies accepted edits through `WorkspaceEdit`
 - `CheckpointManager` - Stores explicit file snapshots in extension storage and restores them through `workspace.fs`/`WorkspaceEdit` without changing git state
 - `SessionStore.addChangedFiles(sessionId, files)` - Canonical backend changed-file registration with path normalization, dedupe, stable order, and persistence
+- `changed_files_update` - Canonical frontend sync for the changed-files strip/dropdown. The host posts `{ type, sessionId, files: Array<{ path, added, removed }> }` after backend persistence; `file_edited` remains a compatibility incremental event.
 - `ContextMonitor` - Tracks context usage and provides optimization suggestions
 - `SkillManager` - Manages skill enablement and performance tracking
 - `SkillPreferencesStore` - Persists per-skill enable/disable preferences in `vscode.Memento` (`globalState`); consulted by `WebviewEventRouter.resolveAllSkills` for the modal and by the methodology advisor's skill hinter

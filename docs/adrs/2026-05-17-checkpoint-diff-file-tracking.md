@@ -18,6 +18,8 @@ Changed-file tracking also had two competing paths: live `file_edited` events up
 - Diff applies use `WorkspaceEdit`, and accepted diff metadata is retained so `revert_diff` can restore the correct edit.
 - Backend `SessionStore.addChangedFiles(sessionId, files)` is the canonical changed-file registration API.
 - The host posts `changed_files_update` as canonical frontend state and keeps `file_edited` only as a live incremental compatibility event.
+- Sessionless OpenCode `file.edited` events are attributed before persistence. If exactly one tab is streaming or waiting for completion, it owns the edit; otherwise the active tab is used when safe. This preserves the OpenCode global event contract while avoiding writes to an empty frontend session id.
+- Empty `session.diff` payloads are ignored for changed-file registration and must not clear the existing file list.
 - File opening is resolved in the extension host against the session workspace first, then VS Code workspace folders, with `#L12` support and clear errors for missing or out-of-workspace files.
 
 ## Public Contracts
@@ -34,4 +36,3 @@ Changed-file tracking also had two competing paths: live `file_edited` events up
 - Extension checkpoints are intentionally scoped: they cover files the extension itself is about to edit through diff acceptance.
 - Full rollback of OpenCode server-side tool edits remains delegated to OpenCode's server-side session history.
 - The changed-files chip bar, todos panel, and Open buttons now share one backend/frontend contract.
-

@@ -7,6 +7,8 @@
   gap: var(--spacing-xs);
   padding: 2px var(--spacing-sm);
   cursor: pointer;
+  min-width: 0;
+  max-width: min(42vw, 360px);
   border-radius: var(--radius-sm, 4px);
   transition: background var(--duration-fast, 0.2s), outline-color var(--duration-fast, 0.2s);
   outline: 1px solid transparent;
@@ -86,10 +88,14 @@
   font-size: 0.75rem;
   color: var(--oc-muted);
   font-weight: 500;
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .context-usage-track {
-  width: 80px;
+  width: clamp(42px, 8vw, 80px);
+  flex: 0 0 clamp(42px, 8vw, 80px);
   height: 4px;
   background: var(--oc-muted);
   border-radius: 2px;
@@ -106,6 +112,10 @@
   font-size: 0.75rem;
   color: var(--oc-muted);
   font-family: var(--font-mono);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Context usage panel */
@@ -539,6 +549,14 @@
   font-size: 0.75rem;
   color: var(--oc-muted);
   font-family: var(--font-mono);
+}
+
+#context-usage-dropdown,
+#changed-files-dropdown {
+  z-index: calc(var(--z-modal, 1000) + 20);
+  max-width: calc(100vw - 16px);
+  overscroll-behavior: contain;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.42), 0 0 0 1px var(--oc-border);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

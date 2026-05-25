@@ -25,6 +25,13 @@ When a `stream_tool_start` event arrives mid-stream (i.e. `state.currentBlockBuf
 
 The `stream-interleave.test.ts` (source-structure assertions) and `streaming-interleave.spec.ts` (Playwright DOM assertions) pin these invariants.
 
+### Tool Group Labels
+
+Tool groups summarize the full run of grouped tool calls. If every child has the same tool
+class, the group may use that class and name. If children contain mixed classes, the summary
+uses `tools`, applies `tool-call--mixed`, and keeps the type breakdown visible (for example
+`(1 read, 1 write, 1 exec)`). Child rows retain their individual classes.
+
 ## First Prompt Send Flow
 
 The welcome-page prompt path is covered as a first-class contract:
@@ -126,6 +133,12 @@ Changed-file state is synchronized from the extension host:
 - `file_edited`: `{ type, sessionId, file }` is retained as a live incremental event for
   compatibility and immediate feedback. It merges through the same dedupe path as
   `changed_files_update`.
+- OpenCode `file.edited` SSE events can be sessionless. The host must resolve those global
+  file events to a live or active tab before posting `file_edited`/`changed_files_update`; the
+  webview should never receive or persist changed files under an empty session id.
+- The compact `#changed-files-strip` is the primary visible surface. It appears from
+  `changed_files_update` and opens the full `#changed-files-dropdown`, which must stay within
+  the webview viewport and scroll internally.
 - The frontend clears changed files on stream start for the active turn, then expects the
   backend store to re-sync any subsequent file events for that session.
 - Open buttons post `{ type: "open_file", path }`; the extension host resolves relative paths

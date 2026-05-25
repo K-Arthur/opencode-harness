@@ -297,6 +297,11 @@
   border-left-color: var(--tool-exec-color, #e6a23c);
   background: color-mix(in srgb, var(--tool-exec-color, #e6a23c) 2%, var(--oc-editor-bg));
 }
+
+.tool-call--mixed {
+  border-left-color: var(--oc-accent, #4db6ff);
+  background: color-mix(in srgb, var(--oc-accent, #4db6ff) 3%, var(--oc-editor-bg));
+}
 .tool-call--error {
   border-left-color: var(--tool-error-color, #e07070);
   background: color-mix(in srgb, var(--tool-error-color, #e07070) 4%, var(--oc-editor-bg));
@@ -347,6 +352,7 @@
 .tool-call--write .tool-icon { color: var(--tool-write-color, #7cb87c); }
 .tool-call--exec .tool-icon { color: var(--tool-exec-color, #e6a23c); }
 .tool-call--meta .tool-icon { color: var(--tool-meta-color, #a78bfa); }
+.tool-call--mixed .tool-icon { color: var(--oc-accent, #4db6ff); }
 .tool-call--error .tool-icon { color: var(--tool-error-color, #e07070); }
 
 .tool-name {
@@ -1489,6 +1495,7 @@
   .tool-call--meta { border-left-color: LinkText !important; }
   .tool-call--write { border-left-color: Highlight !important; }
   .tool-call--exec { border-left-color: GreenText !important; }
+  .tool-call--mixed { border-left-color: Highlight !important; }
   .tool-call--error { border-left-color: ErrorText !important; }
 
   .diff-line--added .diff-line-content { background: GreenBackground !important; }

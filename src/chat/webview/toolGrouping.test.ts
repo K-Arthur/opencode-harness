@@ -15,15 +15,16 @@
  */
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { groupConsecutiveToolCalls } from "./toolCallRenderer"
+import { JSDOM } from "jsdom"
+import { groupConsecutiveToolCalls, renderToolGroup } from "./toolCallRenderer"
 import type { Block, ToolCallBlock } from "./types"
 
-function tool(id: string, name = "read"): ToolCallBlock {
+function tool(id: string, name = "read", cls: ToolCallBlock["class"] = "read"): ToolCallBlock {
   return {
     type: "tool-call",
     id,
     name,
-    class: "read",
+    class: cls,
     state: "result",
   }
 }
@@ -135,5 +136,29 @@ describe("groupConsecutiveToolCalls — lifecycle blocks must not break tool gro
     const groups = groupConsecutiveToolCalls(blocks, "consecutive")
     const toolGroup = groups.find((g) => g.every((b) => b.type === "tool-call") && g.length === 2)
     assert.ok(toolGroup, "trailing lifecycle blocks must not split the preceding tool run")
+  })
+
+  it("renders mixed tool groups as tools, not as the first tool type", () => {
+    const dom = new JSDOM("<!doctype html><body></body>")
+    const previousDocument = globalThis.document
+    const previousWindow = globalThis.window
+    ;(globalThis as unknown as { document: Document }).document = dom.window.document
+    ;(globalThis as unknown as { window: Window }).window = dom.window as unknown as Window
+    try {
+      const group = renderToolGroup([
+        tool("t1", "read", "read"),
+        tool("t2", "edit", "write"),
+        tool("t3", "bash", "exec"),
+      ], {})
+      assert.ok(group)
+      assert.ok(group!.classList.contains("tool-call--mixed"), "mixed groups must get mixed styling")
+      assert.equal(group!.querySelector(".tool-name")?.textContent, "tools")
+      assert.match(group!.textContent ?? "", /1 read/)
+      assert.match(group!.textContent ?? "", /1 write/)
+      assert.match(group!.textContent ?? "", /1 exec/)
+    } finally {
+      ;(globalThis as unknown as { document: Document | undefined }).document = previousDocument
+      ;(globalThis as unknown as { window: Window | undefined }).window = previousWindow
+    }
   })
 })

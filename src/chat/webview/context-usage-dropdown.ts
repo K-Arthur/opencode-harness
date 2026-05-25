@@ -48,6 +48,7 @@ let _isOpen = false
 let _currentUsage: ContextUsage | null = null
 let _outsideClickHandler: ((e: MouseEvent) => void) | null = null
 let _keyHandler: ((e: KeyboardEvent) => void) | null = null
+let _resizeHandler: (() => void) | null = null
 
 export function resetContextUsageDropdown(): void {
   _currentUsage = null
@@ -123,13 +124,7 @@ function _open(): void {
 
   // Anchor below the trigger (toolbar button or status-strip bar)
   const anchor = _btn ?? document.getElementById("context-usage")
-  if (anchor) {
-    const r = anchor.getBoundingClientRect()
-    _panel.style.position = "fixed"
-    _panel.style.top = `${r.bottom + 4}px`
-    _panel.style.right = `${window.innerWidth - r.right}px`
-    _panel.style.width = "380px"
-  }
+  if (anchor) positionPanel(anchor)
 
   _render(_content, _currentUsage)
 
@@ -140,12 +135,45 @@ function _open(): void {
     }
   }
   _keyHandler = (e: KeyboardEvent) => { if (e.key === "Escape") _close() }
+  _resizeHandler = () => {
+    const trigger = _btn ?? document.getElementById("context-usage")
+    if (_isOpen && trigger) positionPanel(trigger)
+  }
   requestAnimationFrame(() => {
     document.addEventListener("click", _outsideClickHandler!)
     document.addEventListener("keydown", _keyHandler!)
+    window.addEventListener("resize", _resizeHandler!)
   })
 
   _postMessage?.({ type: "get_context_usage" })
+}
+
+function positionPanel(anchor: Element): void {
+  if (!_panel) return
+  const margin = 8
+  const r = anchor.getBoundingClientRect()
+  const panelWidth = Math.min(420, Math.max(300, window.innerWidth - margin * 2))
+  const estimatedHeight = Math.min(520, Math.max(260, _panel.getBoundingClientRect().height || 420))
+  const spaceBelow = window.innerHeight - r.bottom - margin
+  const spaceAbove = r.top - margin
+  const openAbove = spaceBelow < Math.min(260, estimatedHeight) && spaceAbove > spaceBelow
+  const maxHeight = Math.max(220, Math.floor((openAbove ? spaceAbove : spaceBelow) - 4))
+  const visibleHeight = Math.min(estimatedHeight, maxHeight)
+  const left = Math.min(
+    Math.max(margin, r.right - panelWidth),
+    Math.max(margin, window.innerWidth - panelWidth - margin),
+  )
+  const top = openAbove
+    ? Math.max(margin, r.top - visibleHeight - 6)
+    : Math.min(window.innerHeight - margin - visibleHeight, r.bottom + 6)
+
+  _panel.style.position = "fixed"
+  _panel.style.left = `${left}px`
+  _panel.style.right = "auto"
+  _panel.style.top = `${Math.max(margin, top)}px`
+  _panel.style.width = `${panelWidth}px`
+  _panel.style.maxHeight = `${maxHeight}px`
+  _panel.style.overflow = "auto"
 }
 
 function _close(): void {
@@ -155,8 +183,10 @@ function _close(): void {
   if (_btn) _btn.setAttribute("aria-expanded", "false")
   if (_outsideClickHandler) document.removeEventListener("click", _outsideClickHandler)
   if (_keyHandler) document.removeEventListener("keydown", _keyHandler)
+  if (_resizeHandler) window.removeEventListener("resize", _resizeHandler)
   _outsideClickHandler = null
   _keyHandler = null
+  _resizeHandler = null
 }
 
 function _updateBadge(pct: number): void {
