@@ -922,13 +922,13 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
           this.sessionStore.autoTitleFromMessages(session.id)
           log.info(`[sessions_recovered] Backfilled ${messages.length} messages for session ${session.id}`)
           didBackfill = true
-        } else {
-          // Empty response at startup is almost always the opencode server
-          // still lazy-loading messages from disk, not a truly empty session.
-          // Leave needsBackfill=true so the bounded retry (or a later
-          // tab_created) can try again. Do NOT close the tab.
-          log.info(`[sessions_recovered] Empty response for ${session.id}; leaving needsBackfill set for retry`)
-        }
+          } else {
+            // Empty response at startup is almost always the opencode server
+            // still lazy-loading messages from disk, not a truly empty session.
+            // Leave needsBackfill=true so the bounded retry (or a later
+            // tab_created) can try again. Do NOT close the tab.
+            log.debug(`[sessions_recovered] Empty response for ${session.id}; leaving needsBackfill set for retry`)
+          }
       } catch (err) {
         log.warn(`[sessions_recovered] Backfill failed for ${session.id}`, err)
       } finally {
@@ -946,6 +946,11 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       .filter((s) => s.needsBackfill === true && !!s.cliSessionId && s.messages.length === 0)
     if (stillPending.length > 0 && !isRetry) {
       this.scheduleBackfillRetry(0)
+    }
+
+    if (didBackfill || isRetry) {
+      const succeeded = sessionsNeedingBackfill.length - stillPending.length
+      log.info(`[sessions_recovered] Backfill summary: ${succeeded}/${sessionsNeedingBackfill.length} succeeded, ${stillPending.length} pending`)
     }
 
     return didBackfill
@@ -1038,7 +1043,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
             this.pushInitStateToWebview()
           }
       } else {
-        log.info(`[tab_created] Empty response for ${session.id}; leaving needsBackfill set for retry`)
+        log.debug(`[tab_created] Empty response for ${session.id}; leaving needsBackfill set for retry`)
       }
     } catch (err) {
       // EC5: Handle session deletion or other errors gracefully
