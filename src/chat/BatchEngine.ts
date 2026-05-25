@@ -1,9 +1,10 @@
 type MaybeThenable<T> = T | PromiseLike<T>
 
-export interface BatchEngineOptions {
+export interface BatchEngineOptions<K = unknown, V = unknown> {
   flushMs?: number
   maxBatchSize?: number
   now?: () => number
+  skipKey?: (key: K, value: V) => boolean
 }
 
 export class BatchEngine<K, V, T = V> {
@@ -15,15 +16,18 @@ export class BatchEngine<K, V, T = V> {
   private scheduledFlushAt = 0
   private disposed = false
 
+  private readonly skipKey?: (key: K, value: V) => boolean
+
   constructor(
     private readonly reducer: (existing: V | undefined, value: T) => V,
     private readonly flushEach: (key: K, value: V) => MaybeThenable<boolean | void>,
     private readonly log?: (msg: string) => void,
-    options: BatchEngineOptions = {},
+    options: BatchEngineOptions<K, V> = {},
   ) {
     this.flushMs = options.flushMs ?? 16
     this.maxBatchSize = options.maxBatchSize ?? 25
     this.now = options.now ?? (() => Date.now())
+    this.skipKey = options.skipKey
   }
 
   add(key: K, value: T): void {
@@ -46,6 +50,7 @@ export class BatchEngine<K, V, T = V> {
 
     const succeeded: K[] = []
     for (const [key, value] of this.buffer) {
+      if (this.skipKey?.(key, value)) continue
       try {
         const result = this.flushEach(key, value)
         if (result === false) continue
@@ -84,6 +89,14 @@ export class BatchEngine<K, V, T = V> {
     return this.buffer.keys()
   }
 
+  get(key: K): V | undefined {
+    return this.buffer.get(key)
+  }
+
+  delete(key: K): boolean {
+    return this.buffer.delete(key)
+  }
+
   clear(): void {
     this.buffer.clear()
     if (this.timer) {
@@ -100,7 +113,7 @@ export class BatchEngine<K, V, T = V> {
   }
 
   private scheduleFlush(delayMs: number): void {
-    if (this.disposed || this.buffer.size === 0) return
+    if (this.disposed || this.buffer.size === 0 || delayMs <= 0) return
     const dueAt = this.now() + delayMs
     if (this.timer && this.scheduledFlushAt <= dueAt) return
     if (this.timer) clearTimeout(this.timer)

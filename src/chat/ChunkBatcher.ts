@@ -1,3 +1,5 @@
+import { BatchEngine } from "./BatchEngine.js"
+
 type MaybeThenable<T> = T | PromiseLike<T>
 
 export interface ChunkBatcherOptions {
@@ -10,13 +12,12 @@ export interface ChunkBatcherOptions {
   now?: () => number
 }
 
-/** R2: Chunk batching — buffers text_chunks and adapts flush timing to stream velocity. */
 export class ChunkBatcher {
-  private buffer = new Map<string, string>()
+  private engine: BatchEngine<string, string>
   private messageIds = new Map<string, string>()
   private flushTimer: ReturnType<typeof setTimeout> | null = null
   private static readonly DEFAULT_FLUSH_MS = 75
-  private static readonly DEFAULT_MAX_BATCH_SIZE = 10 * 1024 // 10KB max batch size per session
+  private static readonly DEFAULT_MAX_BATCH_SIZE = 10 * 1024
   private readonly minFlushMs: number
   private readonly baseFlushMs: number
   private readonly maxFlushMs: number
@@ -31,7 +32,6 @@ export class ChunkBatcher {
   private scheduledFlushAt = 0
   private flushCount = 0
   private disposed = false
-  /** O3: Sessions whose chunk flush is paused while a higher-priority message (e.g. stream_start) is retrying. */
   private pausedSessions = new Set<string>()
 
   constructor(
@@ -46,48 +46,52 @@ export class ChunkBatcher {
     this.highVelocityCharsPerMs = options.highVelocityCharsPerMs ?? 2
     this.maxBatchSize = options.maxBatchSize ?? ChunkBatcher.DEFAULT_MAX_BATCH_SIZE
     this.now = options.now ?? (() => Date.now())
+
+    this.engine = new BatchEngine<string, string>(
+      (existing, text) => (existing ?? "") + text,
+      (sessionId, text) => this.flushSession(sessionId, text),
+      this.log,
+      {
+        flushMs: 0,
+        maxBatchSize: Number.MAX_SAFE_INTEGER,
+        skipKey: (key) => this.pausedSessions.has(key),
+      },
+    )
   }
 
   add(sessionId: string, text: string, messageId?: string): void {
-    if (this.disposed) {
-      return
-    }
+    if (this.disposed) return
     const now = this.now()
     this.recordVelocity(text.length, now)
-    let existing = this.buffer.get(sessionId) || ""
-    
-    // Check if adding this text would exceed max batch size
-    if (existing.length > 0 && existing.length + text.length > this.maxBatchSize) {
-      // Flush existing buffer for this session before adding new text
-      const ok = this.flushSession(sessionId, existing, this.messageIds.get(sessionId))
+
+    const existing = this.engine.get(sessionId)
+    if (existing && existing.length + text.length > this.maxBatchSize) {
+      const ok = this.flushSession(sessionId, existing)
       if (!ok) {
         this.log?.(`[ChunkBatcher] size-limit flush failed for ${sessionId}; retaining chunk for retry`)
         this.scheduleFlush(this.computeFlushDelay(now))
         return
       }
-      this.buffer.delete(sessionId)
+      this.engine.delete(sessionId)
       this.messageIds.delete(sessionId)
-      existing = ""
     }
-    
-    this.buffer.set(sessionId, existing + text)
+
+    this.engine.add(sessionId, text)
     if (messageId) this.messageIds.set(sessionId, messageId)
     if (!this.firstBufferedAt) this.firstBufferedAt = now
     this.scheduleFlush(this.computeFlushDelay(now))
   }
 
-  /** O3: Pause flushing for a sessionId until resumeSession is called. Buffered chunks remain in memory. */
   pauseSession(sessionId: string): void {
     this.pausedSessions.add(sessionId)
   }
 
-  /** O3: Resume flushing for a sessionId and immediately flush any buffered chunks for it. */
   resumeSession(sessionId: string): void {
     if (!this.pausedSessions.delete(sessionId)) return
-    const text = this.buffer.get(sessionId)
+    const text = this.engine.get(sessionId)
     if (text === undefined) return
     const messageId = this.messageIds.get(sessionId)
-    this.buffer.delete(sessionId)
+    this.engine.delete(sessionId)
     this.messageIds.delete(sessionId)
     try {
       this.delegate({ type: "stream_chunk", sessionId, text, messageId })
@@ -96,33 +100,15 @@ export class ChunkBatcher {
     }
   }
 
-  /**
-   * O2: Per-entry try/catch — one failing delegate must not strand other sessions' chunks
-   * or leave the buffer in a half-cleared state. Skips paused sessions.
-   */
   flush(): void {
     if (this.flushTimer) {
       clearTimeout(this.flushTimer)
       this.flushTimer = null
     }
-    if (this.buffer.size === 0) return
+    if (this.engine.size === 0) return
     this.flushCount++
-    const succeeded: string[] = []
-    for (const [sessionId, text] of this.buffer) {
-      if (this.pausedSessions.has(sessionId)) continue
-      const messageId = this.messageIds.get(sessionId)
-      if (this.flushCount <= 1) {
-        this.log?.(`[ChunkBatcher] flush #${this.flushCount} sessionId=${sessionId} len=${text.length}`)
-      }
-      if (this.flushSession(sessionId, text, messageId)) {
-        succeeded.push(sessionId)
-      }
-    }
-    for (const sid of succeeded) {
-      this.buffer.delete(sid)
-      this.messageIds.delete(sid)
-    }
-    if (this.buffer.size === 0) {
+    this.engine.flush()
+    if (this.engine.size === 0) {
       this.firstBufferedAt = 0
     } else {
       this.scheduleFlush(this.baseFlushMs)
@@ -130,7 +116,7 @@ export class ChunkBatcher {
   }
 
   clear(): void {
-    this.buffer.clear()
+    this.engine.clear()
     this.messageIds.clear()
     this.pausedSessions.clear()
     this.firstBufferedAt = 0
@@ -143,7 +129,7 @@ export class ChunkBatcher {
   dispose(): void {
     this.disposed = true
     try { this.flush() } catch { /* dispose must not throw */ }
-    this.buffer.clear()
+    this.engine.clear()
     this.messageIds.clear()
     this.pausedSessions.clear()
     if (this.flushTimer) {
@@ -182,7 +168,7 @@ export class ChunkBatcher {
   }
 
   private scheduleFlush(delayMs: number): void {
-    if (this.disposed || this.buffer.size === 0) return
+    if (this.disposed || this.engine.size === 0) return
     const dueAt = this.now() + delayMs
     if (this.flushTimer && this.scheduledFlushAt <= dueAt) return
     if (this.flushTimer) clearTimeout(this.flushTimer)
@@ -190,7 +176,8 @@ export class ChunkBatcher {
     this.flushTimer = setTimeout(() => this.flush(), delayMs)
   }
 
-  private flushSession(sessionId: string, text: string, messageId?: string): boolean {
+  private flushSession(sessionId: string, text: string): boolean {
+    const messageId = this.messageIds.get(sessionId)
     try {
       const result = this.delegate({ type: "stream_chunk", sessionId, text, messageId })
       if (result === false) return false
