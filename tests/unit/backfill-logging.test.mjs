@@ -5,7 +5,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const providerSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "ChatProvider.ts"), "utf8")
+const providerSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "BackfillService.ts"), "utf8")
 
 describe("T1.4 — Backfill logging levels", () => {
   it("uses log.debug for empty backfill response in sessions_recovered", () => {

@@ -25,7 +25,6 @@ import { MessageRouter } from "./handlers/MessageRouter"
 import { ChatCommands } from "./ChatCommands"
 import { AutoCompactor } from "./AutoCompactor"
 import { ChatFileOps } from "./ChatFileOps"
-import { ChunkBatcher } from "./ChunkBatcher"
 import { HostMessageBatcher } from "./HostMessageBatcher"
 import { PendingEventBuffer } from "./PendingEventBuffer"
 import { McpServerManager } from "../mcp/McpServerManager"
@@ -38,6 +37,7 @@ import { SteerPromptHandler } from "./handlers/SteerPromptHandler"
 import { SkillPreferencesStore } from "../skills/SkillPreferencesStore"
 import { SkillTriggerEngine } from "../skills/SkillTriggerEngine"
 import { MethodologyAdvisor } from "../methodology/MethodologyAdvisor"
+import { BackfillService } from "./BackfillService"
 
 export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   private _view?: vscode.WebviewView
@@ -51,14 +51,8 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private pendingPrompt?: { text: string; autoSend: boolean }
   private pendingOpenSessionId?: string
   private chatCommands: ChatCommands
-private autoCompactor: AutoCompactor
-  // EC7: Track in-progress backfills to prevent concurrent requests
-  private backfillInProgress = new Set<string>()
-  private backfillRetryTimer?: NodeJS.Timeout
-  private readonly BACKFILL_RETRY_DELAYS_MS = [1500, 4000, 8000, 16000]
-  // Cap parallel getSessionMessages calls to keep load on the local opencode
-  // server bounded while still parallelizing the otherwise-serial backfill.
-  private readonly BACKFILL_CONCURRENCY = 5
+ private autoCompactor: AutoCompactor
+  private backfillService: BackfillService
   private fileOps = new ChatFileOps()
   private themeController: ThemeController
   private statePush: StatePushService
@@ -66,7 +60,6 @@ private autoCompactor: AutoCompactor
   private commandExec: CommandExecutionService
   private eventRouter: WebviewEventRouter
   private skillPreferences: SkillPreferencesStore
-  private restoredTabsHydrated = false
   private usageAnalytics: UsageAnalytics
   private steerPromptHandler: SteerPromptHandler
   private promptStashManager: PromptStashManager
@@ -74,9 +67,8 @@ private autoCompactor: AutoCompactor
 
   
 
-  /** R2: Chunk batching — buffers text_chunks and adapts flush timing to stream velocity. */
-  private chunkBatcher = this.createChunkBatcher()
-  private hostMessageBatcher = this.createHostMessageBatcher()
+  /** Buffers host updates and stream chunks behind one priority-aware protocol boundary. */
+  private messageBatcher = this.createHostMessageBatcher()
 
   /**
    * Holds SSE events whose target tab has not yet registered its cliSessionId.
@@ -144,6 +136,13 @@ private autoCompactor: AutoCompactor
     this.messageRouter = new MessageRouter(sessionManager, modelManager)
     this.chatCommands = new ChatCommands(sessionStore, sessionManager, this.tabManager, this.streamCoordinator)
     this.autoCompactor = new AutoCompactor(sessionManager, sessionStore, contextMonitor, this.tabManager)
+    this.backfillService = new BackfillService({
+      sessionStore: this.sessionStore,
+      tabManager: this.tabManager,
+      getSessionMessages: (cliSessionId) => this.sessionManager.getSessionMessages(cliSessionId),
+      pushInitState: () => this.pushInitStateToWebview(),
+      postSessionListUpdate: (sessions) => this.postSessionListUpdate(sessions),
+    })
     this.usageAnalytics = new UsageAnalytics()
     this.usageAnalytics.setHistory(contextMonitor.getHistory())
     this.promptStashManager = new PromptStashManager({ context })
@@ -190,7 +189,7 @@ private autoCompactor: AutoCompactor
     // Hook into tab creation to backfill tabs that need it
     this.tabManager.onTabCreated((tabId) => {
       log.info(`[tab_created] Tab created: ${tabId}, checking if backfill needed`)
-      this.backfillTabIfNeeded(tabId).catch(err => log.error(`Failed to backfill tab ${tabId} on creation`, err))
+      this.backfillService.backfillTabIfNeeded(tabId).catch(err => log.error(`Failed to backfill tab ${tabId} on creation`, err))
     })
 
     this.eventRouter = new WebviewEventRouter({
@@ -267,13 +266,6 @@ private autoCompactor: AutoCompactor
     })
   }
 
-  private createChunkBatcher(): ChunkBatcher {
-    return new ChunkBatcher(
-      (msg) => this.postRawMessage(msg),
-      (msg) => log.info(msg),
-    )
-  }
-
   private createHostMessageBatcher(): HostMessageBatcher {
     return new HostMessageBatcher(
       (msg) => this.postRawMessage(msg),
@@ -292,11 +284,9 @@ private autoCompactor: AutoCompactor
     }
     this.disposables = []
 
-    // Clear any pending chunk buffer and timer from previous webview instance
-    this.chunkBatcher.dispose()
-    this.hostMessageBatcher.dispose()
-    this.chunkBatcher = this.createChunkBatcher()
-    this.hostMessageBatcher = this.createHostMessageBatcher()
+    // Clear pending message buffers and timers from the previous webview instance.
+    this.messageBatcher.dispose()
+    this.messageBatcher = this.createHostMessageBatcher()
 
     // P2: Clear retry queue on webview recreation
     if (this.retryTimer) {
@@ -434,8 +424,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       this._view = undefined
       this.eventRouter.webviewReady = false
       // O4: Dispose the batcher and clear retry/early state so nothing fires on the dead view.
-      try { this.chunkBatcher.dispose() } catch (err) { log.warn("ChunkBatcher dispose on view disposal failed", err) }
-      try { this.hostMessageBatcher.dispose() } catch (err) { log.warn("HostMessageBatcher dispose on view disposal failed", err) }
+      try { this.messageBatcher.dispose() } catch (err) { log.warn("HostMessageBatcher dispose on view disposal failed", err) }
       if (this.retryTimer) {
         clearTimeout(this.retryTimer)
         this.retryTimer = undefined
@@ -865,13 +854,13 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     }],
     ["sessions_recovered", async () => {
       log.info("sessions_recovered: re-pushing init state with recovered sessions")
-      this.restoredTabsHydrated = false
+      this.backfillService.setHydrated(false)
       const all = this.sessionStore.list()
       this.pushInitStateToWebview()
       this.postSessionListUpdate(all)
 
       if (await this.backfillRecoveredSessions(all)) {
-        this.restoredTabsHydrated = false
+        this.backfillService.setHydrated(false)
         this.pushInitStateToWebview()
         this.postSessionListUpdate(this.sessionStore.list())
       }
@@ -879,178 +868,15 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
   ])
 
   private async backfillRecoveredSessions(sessions: import("../session/SessionStore").OpenCodeSession[], isRetry: boolean = false): Promise<boolean> {
-    const sessionsNeedingBackfill = sessions
-      .filter((s) => s.needsBackfill === true && s.cliSessionId && !isLocalPlaceholderSessionId(s.cliSessionId) && s.messages.length === 0)
-      .slice(0, 10)
-
-    // Diagnostic: log tabs that lack a cliSessionId. Tabs that already have
-    // messages (or never needed backfill) are skipped silently to keep the
-    // output channel readable on the steady-state path.
-    if (sessionsNeedingBackfill.length === 0) {
-      const tabs = this.tabManager.getAllTabs()
-      for (const tab of tabs) {
-        const s = this.sessionStore.get(tab.id)
-        if (s && !s.cliSessionId) {
-          log.info(`[sessions_recovered] Tab ${tab.id} has no cliSessionId`)
-        }
-      }
-    }
-
-    let didBackfill = false
-    if (sessionsNeedingBackfill.length > 0) {
-      log.info(`[sessions_recovered] Auto-backfilling ${sessionsNeedingBackfill.length} recent sessions`)
-    }
-
-    // Parallelize per-session HTTP calls with a small concurrency cap. Each
-    // call is independent (writes are keyed by session.id; backfillInProgress
-    // is a Set, safe under concurrent add/delete from the same loop). Cap of
-    // BACKFILL_CONCURRENCY keeps load on the local opencode server bounded.
-    const backfillOne = async (session: import("../session/SessionStore").OpenCodeSession): Promise<void> => {
-      // EC7: Skip if backfill is already in progress for this session
-      if (this.backfillInProgress.has(session.id)) {
-        log.info(`[sessions_recovered] Skipping backfill for ${session.id} because backfill is already in progress`)
-        return
-      }
-
-      this.backfillInProgress.add(session.id)
-      try {
-        if (!session.cliSessionId || isLocalPlaceholderSessionId(session.cliSessionId)) return
-        const rows = await this.sessionManager.getSessionMessages(session.cliSessionId)
-        const messages = sdkMessagesToChatMessages(rows)
-        if (messages.length > 0) {
-          this.sessionStore.applyBackfilledMessages(session.id, messages, summarizeOpencodeMessageUsage(rows))
-          this.sessionStore.autoTitleFromMessages(session.id)
-          log.info(`[sessions_recovered] Backfilled ${messages.length} messages for session ${session.id}`)
-          didBackfill = true
-          } else {
-            // Empty response at startup is almost always the opencode server
-            // still lazy-loading messages from disk, not a truly empty session.
-            // Leave needsBackfill=true so the bounded retry (or a later
-            // tab_created) can try again. Do NOT close the tab.
-            log.debug(`[sessions_recovered] Empty response for ${session.id}; leaving needsBackfill set for retry`)
-          }
-      } catch (err) {
-        log.warn(`[sessions_recovered] Backfill failed for ${session.id}`, err)
-      } finally {
-        this.backfillInProgress.delete(session.id)
-      }
-    }
-
-    for (let i = 0; i < sessionsNeedingBackfill.length; i += this.BACKFILL_CONCURRENCY) {
-      const chunk = sessionsNeedingBackfill.slice(i, i + this.BACKFILL_CONCURRENCY)
-      await Promise.allSettled(chunk.map(backfillOne))
-    }
-
-    const stillPending = this.sessionStore
-      .list()
-      .filter((s) => s.needsBackfill === true && !!s.cliSessionId && s.messages.length === 0)
-    if (stillPending.length > 0 && !isRetry) {
-      this.scheduleBackfillRetry(0)
-    }
-
-    if (didBackfill || isRetry) {
-      const succeeded = sessionsNeedingBackfill.length - stillPending.length
-      log.info(`[sessions_recovered] Backfill summary: ${succeeded}/${sessionsNeedingBackfill.length} succeeded, ${stillPending.length} pending`)
-    }
-
-    return didBackfill
+    return this.backfillService.backfillRecoveredSessions(sessions, isRetry)
   }
 
   private scheduleBackfillRetry(attempt: number): void {
-    if (attempt >= this.BACKFILL_RETRY_DELAYS_MS.length) return
-    if (this.backfillRetryTimer) clearTimeout(this.backfillRetryTimer)
-
-    const delay = this.BACKFILL_RETRY_DELAYS_MS[attempt]!
-    this.backfillRetryTimer = setTimeout(async () => {
-      this.backfillRetryTimer = undefined
-      const all = this.sessionStore.list()
-      const stillPending = all.filter(
-        (s) => s.needsBackfill === true && !!s.cliSessionId && s.messages.length === 0
-      )
-      if (stillPending.length === 0) return
-
-      log.info(`[sessions_recovered] Retry attempt ${attempt + 1} for ${stillPending.length} session(s)`)
-      try {
-        const changed = await this.backfillRecoveredSessions(all, true)
-        if (changed) {
-          this.restoredTabsHydrated = false
-          this.pushInitStateToWebview()
-          this.postSessionListUpdate(this.sessionStore.list())
-        }
-      } catch (err) {
-        log.warn(`[sessions_recovered] Retry attempt ${attempt + 1} failed`, err)
-      }
-
-      const stillStillPending = this.sessionStore
-        .list()
-        .filter((s) => s.needsBackfill === true && !!s.cliSessionId && s.messages.length === 0)
-      if (stillStillPending.length > 0) {
-        const isLastAttempt = attempt + 1 >= this.BACKFILL_RETRY_DELAYS_MS.length
-        if (isLastAttempt) {
-          // Server consistently returned empty for these — treat the session
-          // as genuinely empty so future sessions_recovered events stop
-          // re-trying and spamming "Empty response" logs.
-          const ids = stillStillPending.map((s) => s.id)
-          for (const s of stillStillPending) {
-            this.sessionStore.clearNeedsBackfill(s.id)
-          }
-          log.info(`[sessions_recovered] Giving up on backfill for ${ids.length} session(s) after ${this.BACKFILL_RETRY_DELAYS_MS.length} attempts: ${ids.join(", ")}`)
-        } else {
-          this.scheduleBackfillRetry(attempt + 1)
-        }
-      }
-    }, delay)
+    this.backfillService.scheduleBackfillRetry(attempt)
   }
 
   private async backfillTabIfNeeded(tabId: string): Promise<void> {
-    const session = this.sessionStore.get(tabId)
-    if (!session || !session.cliSessionId || isLocalPlaceholderSessionId(session.cliSessionId)) {
-      return
-    }
-
-    // Skip if session already has fresh data (not stale) and not flagged for backfill.
-    // But allow re-backfill if needsBackfill is set even with existing messages.
-    if (session.messages.length > 0 && session.needsBackfill !== true) {
-      return
-    }
-
-    // EC7: Prevent concurrent backfill requests for the same session
-    if (this.backfillInProgress.has(tabId)) {
-      log.info(`[tab_created] Skipping backfill for ${tabId} because backfill is already in progress`)
-      return
-    }
-
-    // EC4: Avoid backfill if session is currently streaming
-    const tab = this.tabManager.getTab(tabId)
-    if (tab?.isStreaming) {
-      log.info(`[tab_created] Skipping backfill for ${tabId} because it is currently streaming`)
-      return
-    }
-
-    this.backfillInProgress.add(tabId)
-    try {
-      const rows = await this.sessionManager.getSessionMessages(session.cliSessionId)
-      const messages = sdkMessagesToChatMessages(rows)
-        if (messages.length > 0) {
-          this.sessionStore.applyBackfilledMessages(session.id, messages, summarizeOpencodeMessageUsage(rows))
-          this.sessionStore.autoTitleFromMessages(session.id)
-          log.info(`[tab_created] Backfilled ${messages.length} messages for session ${session.id}`)
-          const tabAfter = this.tabManager.getTab(tabId)
-          if (tabAfter?.isStreaming) {
-            log.info(`[tab_created] Skipping pushInitState for ${session.id} because streaming started during backfill`)
-          } else {
-            this.restoredTabsHydrated = false
-            this.pushInitStateToWebview()
-          }
-      } else {
-        log.debug(`[tab_created] Empty response for ${session.id}; leaving needsBackfill set for retry`)
-      }
-    } catch (err) {
-      // EC5: Handle session deletion or other errors gracefully
-      log.warn(`[tab_created] Backfill failed for ${session.id}`, err)
-    } finally {
-      this.backfillInProgress.delete(tabId)
-    }
+    return this.backfillService.backfillTabIfNeeded(tabId)
   }
 
   private postSessionListUpdate(sessions: import("../session/SessionStore").OpenCodeSession[]): void {
@@ -1221,7 +1047,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     // order. The persisted list lives in globalState (TabManager.persist).
     // Treat it as a startup import only. Runtime state syncs must not revive a
     // tab the user already closed in this extension session.
-    const shouldHydrateRestoredTabs = restoreOpenTabs && !this.restoredTabsHydrated
+    const shouldHydrateRestoredTabs = restoreOpenTabs && !this.backfillService.isHydrated
     const restoredIds = shouldHydrateRestoredTabs ? this.tabManager.getRestoredTabIds() : []
     const restoredActiveId = shouldHydrateRestoredTabs ? this.tabManager.getRestoredActiveId() : ""
 
@@ -1317,7 +1143,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       globalModel: this.modelManager.model || "",
       workspaceName,
     })
-    this.restoredTabsHydrated = true
+    this.backfillService.setHydrated(true)
   }
 
 private isSessionInCurrentWorkspace(session: import("../session/SessionStore").OpenCodeSession): boolean {
@@ -1340,7 +1166,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
   }
 
   private pushVisibleStateToWebview(): void {
-    this.chunkBatcher.flush()
+    this.messageBatcher.flush()
     this.pushAllStateToWebview()
     this.replayLiveStreamsToWebview()
   }
@@ -1382,25 +1208,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
       return
     }
 
-    // R2: Batch stream_chunk messages — accumulate text per session and adapt flush timing.
-    if (msg.type === "stream_chunk" && typeof msg.sessionId === "string" && typeof msg.text === "string") {
-      const messageId = typeof msg.messageId === "string" ? msg.messageId : undefined
-      this.chunkBatcher.add(msg.sessionId, msg.text, messageId)
-      return
-    }
-
-    // For stream_end, flush any remaining chunks first so the webview has all text.
-    // O2: A throw inside flush must not strand stream_end — the batcher already logs per-chunk failures.
-    if (msg.type === "stream_end") {
-      try { this.chunkBatcher.flush() } catch (err) { log.error("chunkBatcher.flush before stream_end failed", err) }
-    }
-
-    if (HostMessageBatcher.isBatchable(msg)) {
-      this.hostMessageBatcher.post(msg)
-      return
-    }
-
-    this.postRawMessage(msg)
+    this.messageBatcher.post(msg)
 
     // F15: Notify when turn completes and webview is not visible
     if (msg.type === "stream_end") {
@@ -1429,7 +1237,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
         // session so a batched stream_chunk cannot overtake the not-yet-delivered stream_start.
         const sid = typeof msg.sessionId === "string" ? msg.sessionId : undefined
         if (sid && (msg.type === "stream_start" || msg.type === "stream_tool_start")) {
-          this.chunkBatcher.pauseSession(sid)
+          this.messageBatcher.pauseSession(sid)
         }
         this.scheduleRetry(msg)
       }
@@ -1536,7 +1344,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
         // O3: a successful stream_start / stream_tool_start retry releases the paused chunk buffer.
         const sid = typeof nextRetry.msg.sessionId === "string" ? nextRetry.msg.sessionId : undefined
         if (sid && (nextRetry.msg.type === "stream_start" || nextRetry.msg.type === "stream_tool_start")) {
-          this.chunkBatcher.resumeSession(sid)
+          this.messageBatcher.resumeSession(sid)
         }
         log.info(`Successfully retried message of type: ${nextRetry.msg.type}`)
       } catch (err) {
@@ -1553,7 +1361,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
           // are not orphaned in memory. The webview will simply miss the start; better than a leak.
           const sid = typeof nextRetry.msg.sessionId === "string" ? nextRetry.msg.sessionId : undefined
           if (sid && (nextRetry.msg.type === "stream_start" || nextRetry.msg.type === "stream_tool_start")) {
-            this.chunkBatcher.resumeSession(sid)
+            this.messageBatcher.resumeSession(sid)
           }
         }
       }
@@ -1780,18 +1588,14 @@ private toUserErrorMessage(message: string): string {
   }
 
   dispose(): void {
-    if (this.backfillRetryTimer) {
-      clearTimeout(this.backfillRetryTimer)
-      this.backfillRetryTimer = undefined
-    }
+    this.backfillService.dispose()
     // P2: Clear retry timer and queue on disposal
     if (this.retryTimer) {
       clearTimeout(this.retryTimer)
       this.retryTimer = undefined
     }
     this.messageRetryQueue = []
-    this.chunkBatcher.dispose()
-    this.hostMessageBatcher.dispose()
+    this.messageBatcher.dispose()
     for (const d of this.disposables) d.dispose()
     this.disposables = []
     this.streamCoordinator.dispose()

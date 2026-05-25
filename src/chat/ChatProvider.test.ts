@@ -9,6 +9,7 @@ const utilsSource = readFileSync(resolve(__dirname, "chatUtils.ts"), "utf8")
 const lifecycleSource = readFileSync(resolve(__dirname, "SessionLifecycleService.ts"), "utf8")
 const commandExecSource = readFileSync(resolve(__dirname, "CommandExecutionService.ts"), "utf8")
 const eventRouterSource = readFileSync(resolve(__dirname, "WebviewEventRouter.ts"), "utf8")
+const backfillSource = readFileSync(resolve(__dirname, "BackfillService.ts"), "utf8")
 
 void describe("ChatProvider.ts", () => {
   void it("exports ChatProvider class with correct interfaces", () => {
@@ -40,10 +41,11 @@ void describe("ChatProvider.ts", () => {
     assert.ok(source.includes("webview_ready") || eventRouterSource.includes("webview_ready"), "must include webview_ready")
   })
 
-  void it("contains chunk batching and prompt-in-flight guards", () => {
+  void it("contains unified host/chunk batching and prompt-in-flight guards", () => {
     assert.ok(source.includes("promptsInFlight = new Set") || eventRouterSource.includes("promptsInFlight = new Set"), "promptInFlight guard must exist")
-    assert.ok(source.includes("private chunkBatcher = new ChunkBatcher") || source.includes("private chunkBatcher = this.createChunkBatcher()"), "chunkBatcher must exist")
-    assert.ok(source.includes("import { ChunkBatcher } from"), "ChunkBatcher must be imported")
+    assert.ok(source.includes("private messageBatcher = this.createHostMessageBatcher()"), "single messageBatcher must exist")
+    assert.ok(source.includes("import { HostMessageBatcher } from"), "HostMessageBatcher must be imported")
+    assert.ok(!source.includes("import { ChunkBatcher } from"), "ChatProvider must not keep a second chunk batcher import")
     assert.ok(source.includes("private earlyMessageQueue") || eventRouterSource.includes("earlyMessageQueue"), "earlyMessageQueue must exist")
   })
 
@@ -603,8 +605,8 @@ void it("sessions_recovered resets restoredTabsHydrated and calls pushInitStateT
   assert.ok(handleServerIdx > handlerIdx, "handleServerEvent must follow sessions_recovered handler")
   const block = source.slice(handlerIdx, handleServerIdx)
   assert.ok(
-    block.includes("restoredTabsHydrated = false"),
-    "must reset restoredTabsHydrated so the next pushInitStateToWebview re-reads persisted tab IDs"
+    block.includes("backfillService.setHydrated(false)"),
+    "must reset backfill hydration so the next pushInitStateToWebview re-reads persisted tab IDs"
   )
   assert.ok(
     block.includes("pushInitStateToWebview()"),
@@ -659,9 +661,9 @@ void it("open_file resolves through the centralized session-aware opener", () =>
 // --- Session message freshness regression tests ---
 
 void it("backfillTabIfNeeded does not skip sessions that already have messages unless needsBackfill is false", () => {
-  const idx = source.indexOf("private async backfillTabIfNeeded(")
+  const idx = backfillSource.indexOf("async backfillTabIfNeeded(")
   assert.ok(idx >= 0, "backfillTabIfNeeded must exist")
-  const block = source.slice(idx, idx + 1200)
+  const block = backfillSource.slice(idx, idx + 1200)
   assert.ok(
     block.includes("session.messages.length > 0") && block.includes("needsBackfill"),
     "backfillTabIfNeeded must only skip sessions with messages when needsBackfill is not set — stale sessions must be refreshed"
@@ -673,9 +675,9 @@ void it("backfillTabIfNeeded does not skip sessions that already have messages u
 })
 
 void it("backfillTabIfNeeded does not query the server for webview-local placeholder ids", () => {
-  const idx = source.indexOf("private async backfillTabIfNeeded(")
+  const idx = backfillSource.indexOf("async backfillTabIfNeeded(")
   assert.ok(idx >= 0, "backfillTabIfNeeded must exist")
-  const block = source.slice(idx, idx + 1600)
+  const block = backfillSource.slice(idx, idx + 1600)
   assert.ok(
     block.includes("isLocalPlaceholderSessionId(session.cliSessionId)"),
     "webview-local session-* ids are not server ids and must not be backfilled"
@@ -683,11 +685,11 @@ void it("backfillTabIfNeeded does not query the server for webview-local placeho
 })
 
 void it("backfill retry budget allows at least 4 retries over 30 seconds", () => {
-  const delaysIdx = source.indexOf("BACKFILL_RETRY_DELAYS_MS")
+  const delaysIdx = backfillSource.indexOf("BACKFILL_RETRY_DELAYS_MS")
   assert.ok(delaysIdx >= 0, "BACKFILL_RETRY_DELAYS_MS must exist")
-  const lineStart = source.lastIndexOf("\n", delaysIdx) + 1
-  const lineEnd = source.indexOf("\n", delaysIdx)
-  const line = source.slice(lineStart, lineEnd)
+  const lineStart = backfillSource.lastIndexOf("\n", delaysIdx) + 1
+  const lineEnd = backfillSource.indexOf("\n", delaysIdx)
+  const line = backfillSource.slice(lineStart, lineEnd)
   const count = (line.match(/\d+/g) || []).length
   assert.ok(count >= 4, `BACKFILL_RETRY_DELAYS_MS must have at least 4 retry delays, found ${count}: ${line.trim()}`)
 })
@@ -741,11 +743,11 @@ void it("refresh_session_messages handler exists and fetches from server", () =>
 // --- Perf: parallelized session backfill ---
 
 void it("BACKFILL_CONCURRENCY is declared with a bounded value", () => {
-  const idx = source.indexOf("BACKFILL_CONCURRENCY")
-  assert.ok(idx >= 0, "BACKFILL_CONCURRENCY must be declared on ChatProvider")
-  const lineStart = source.lastIndexOf("\n", idx) + 1
-  const lineEnd = source.indexOf("\n", idx)
-  const line = source.slice(lineStart, lineEnd)
+  const idx = backfillSource.indexOf("BACKFILL_CONCURRENCY")
+  assert.ok(idx >= 0, "BACKFILL_CONCURRENCY must be declared on BackfillService")
+  const lineStart = backfillSource.lastIndexOf("\n", idx) + 1
+  const lineEnd = backfillSource.indexOf("\n", idx)
+  const line = backfillSource.slice(lineStart, lineEnd)
   const numMatch = line.match(/=\s*(\d+)/)
   assert.ok(numMatch, `BACKFILL_CONCURRENCY must be assigned a number, found: ${line.trim()}`)
   const value = parseInt(numMatch[1] ?? "0", 10)
@@ -753,11 +755,11 @@ void it("BACKFILL_CONCURRENCY is declared with a bounded value", () => {
 })
 
 void it("backfillRecoveredSessions processes sessions in parallel chunks", () => {
-  const fnIdx = source.indexOf("private async backfillRecoveredSessions(")
+  const fnIdx = backfillSource.indexOf("async backfillRecoveredSessions(")
   assert.ok(fnIdx >= 0, "backfillRecoveredSessions must exist")
-  const fnEnd = source.indexOf("private scheduleBackfillRetry(", fnIdx)
+  const fnEnd = backfillSource.indexOf("scheduleBackfillRetry(", fnIdx)
   assert.ok(fnEnd > fnIdx, "scheduleBackfillRetry must follow backfillRecoveredSessions")
-  const block = source.slice(fnIdx, fnEnd)
+  const block = backfillSource.slice(fnIdx, fnEnd)
 
   assert.ok(
     block.includes("Promise.allSettled"),
@@ -774,10 +776,10 @@ void it("backfillRecoveredSessions processes sessions in parallel chunks", () =>
 })
 
 void it("backfillRecoveredSessions guards in-progress and skips local placeholder ids", () => {
-  const fnIdx = source.indexOf("private async backfillRecoveredSessions(")
+  const fnIdx = backfillSource.indexOf("async backfillRecoveredSessions(")
   assert.ok(fnIdx >= 0, "backfillRecoveredSessions must exist")
-  const fnEnd = source.indexOf("private scheduleBackfillRetry(", fnIdx)
-  const block = source.slice(fnIdx, fnEnd)
+  const fnEnd = backfillSource.indexOf("scheduleBackfillRetry(", fnIdx)
+  const block = backfillSource.slice(fnIdx, fnEnd)
 
   assert.ok(
     block.includes("backfillInProgress.has(session.id)"),
