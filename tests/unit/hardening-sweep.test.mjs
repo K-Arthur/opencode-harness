@@ -43,8 +43,8 @@ describe("Security hardening", () => {
   })
 
   it("spawn calls use shell: false", () => {
-    const sessionManager = readFileSync(path.join(root, "src", "session", "SessionManager.ts"), "utf8")
-    assert.ok(sessionManager.includes("shell: false"), "spawn must use shell: false")
+    const serverLifecycle = readFileSync(path.join(root, "src", "session", "ServerLifecycle.ts"), "utf8")
+    assert.ok(serverLifecycle.includes("shell: false"), "spawn must use shell: false")
   })
 })
 

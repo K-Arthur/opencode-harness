@@ -12,6 +12,8 @@ const root = path.join(__dirname, "..", "..")
 const files = {
   sessionStore: readFileSync(path.join(root, "src", "session", "SessionStore.ts"), "utf8"),
   sessionManager: readFileSync(path.join(root, "src", "session", "SessionManager.ts"), "utf8"),
+  authProvider: readFileSync(path.join(root, "src", "session", "AuthProvider.ts"), "utf8"),
+  serverLifecycle: readFileSync(path.join(root, "src", "session", "ServerLifecycle.ts"), "utf8"),
   chatProvider: readFileSync(path.join(root, "src", "chat", "ChatProvider.ts"), "utf8"),
   webviewEventRouter: readFileSync(path.join(root, "src", "chat", "WebviewEventRouter.ts"), "utf8"),
   chatCommands: readFileSync(path.join(root, "src", "chat", "ChatCommands.ts"), "utf8"),
@@ -90,16 +92,16 @@ describe("Regression: Activation & Server Connection", () => {
   })
 
   it("SessionManager.start() guards concurrent calls via startPromise", () => {
-    assert.ok(files.sessionManager.includes("this.startPromise = this._start()"),
+    assert.ok(files.serverLifecycle.includes("this.startPromise = this._start("),
       "must assign _start() to startPromise for concurrency guard")
-    assert.ok(files.sessionManager.includes("this.startPromise = null"),
+    assert.ok(files.serverLifecycle.includes("this.startPromise = null"),
       "must clear startPromise after completion")
   })
 
   it("SessionManager generates server password on start", () => {
-    assert.ok(files.sessionManager.includes("generatePassword"), "must have generatePassword method")
-    assert.ok(files.sessionManager.includes("OPENCODE_SERVER_PASSWORD"), "must pass password via env var")
-    assert.ok(files.sessionManager.includes("OPENCODE_SERVER_PASSWORD"), "must pass env var")
+    assert.ok(files.authProvider.includes("generatePassword"), "must have generatePassword method")
+    assert.ok(files.authProvider.includes("OPENCODE_SERVER_PASSWORD"), "must pass password via env var")
+    assert.ok(files.serverLifecycle.includes("OPENCODE_SERVER_PASSWORD"), "must pass env var")
   })
 })
 
@@ -257,8 +259,8 @@ describe("Regression: Security & Access Control", () => {
   })
 
   it("spawn uses shell: false and environment allowlist", () => {
-    assert.ok(files.sessionManager.includes("shell: false"), "spawn must use shell: false")
-    assert.ok(files.sessionManager.includes("allowedEnvVars"), "must filter environment vars")
+    assert.ok(files.serverLifecycle.includes("shell: false"), "spawn must use shell: false")
+    assert.ok(files.serverLifecycle.includes("allowedEnvVars"), "must filter environment vars")
   })
 })
 
