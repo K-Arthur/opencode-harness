@@ -6,7 +6,8 @@ import { fileURLToPath } from "node:url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const coordinatorSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "handlers", "StreamCoordinator.ts"), "utf8")
-const sessionManagerSource = readFileSync(path.join(__dirname, "..", "..", "src", "session", "SessionManager.ts"), "utf8")
+const sessionClientSource = readFileSync(path.join(__dirname, "..", "..", "src", "session", "SessionClient.ts"), "utf8")
+const sessionManagerTypes = readFileSync(path.join(__dirname, "..", "..", "src", "session", "SessionManager.ts"), "utf8")
 
 describe("T1.1 — TTFB timeout cancels in-flight request", () => {
   it("creates an AbortController per tab before calling sendPromptAsync", () => {
@@ -36,19 +37,19 @@ describe("T1.1 — TTFB timeout cancels in-flight request", () => {
   })
 
   it("sendPromptAsync accepts signal in PromptOptions", () => {
-    assert.ok(sessionManagerSource.includes("signal?: AbortSignal"), "PromptOptions must have signal property")
+    assert.ok(sessionManagerTypes.includes("signal?: AbortSignal"), "PromptOptions must have signal property")
   })
 
   it("sendPromptAsync checks signal.aborted at entry and per-retry", () => {
-    assert.ok(sessionManagerSource.includes("if (signal?.aborted) return"), "must return silently when already aborted")
+    assert.ok(sessionClientSource.includes("if (signal?.aborted) return"), "must return silently when already aborted")
   })
 
   it("sendPromptAsync races SDK call against abort signal", () => {
-    assert.ok(sessionManagerSource.includes("Promise.race(["), "must race SDK call with abort signal")
-    assert.ok(sessionManagerSource.includes("signal.addEventListener(\"abort\""), "must listen for abort event")
+    assert.ok(sessionClientSource.includes("Promise.race(["), "must race SDK call with abort signal")
+    assert.ok(sessionClientSource.includes("signal.addEventListener(\"abort\""), "must listen for abort event")
   })
 
   it("sendPromptAsync translates AbortError to silent return", () => {
-    assert.ok(sessionManagerSource.includes("DOMException") && sessionManagerSource.includes("AbortError"), "must catch AbortError")
+    assert.ok(sessionClientSource.includes("DOMException") && sessionClientSource.includes("AbortError"), "must catch AbortError")
   })
 })
