@@ -16,6 +16,13 @@ const queueSource = (() => {
 })()
 
 const mainSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "main.ts"), "utf8")
+const orchestratorSource = (() => {
+  try {
+    return readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "streamOrchestrator.ts"), "utf8")
+  } catch {
+    return ""
+  }
+})()
 
 describe("Prompt queue state machine", () => {
   // Before queue.ts exists, these tests will fail with a reference error
@@ -65,7 +72,7 @@ describe("Prompt queue webview integration", () => {
   })
 
   it("handleStreamEnd calls processNext on stream completion", () => {
-    assert.ok(mainSource.includes("processNext") || mainSource.includes("processQueue"),
+    assert.ok(mainSource.includes("processNext") || mainSource.includes("processQueue") || orchestratorSource.includes("processNext") || orchestratorSource.includes("processQueue"),
       "handleStreamEnd must trigger queue processNext when stream ends")
   })
 })

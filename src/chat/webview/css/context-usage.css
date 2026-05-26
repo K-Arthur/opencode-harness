@@ -1,6 +1,4 @@
-/* Context Usage Styles */
-
-/* Context usage bar in status strip — always visible when data exists, clickable for details */
+/* Context usage bar in status strip */
 .context-usage-bar {
   display: flex;
   align-items: center;
@@ -22,11 +20,8 @@
   outline-color: var(--vscode-focusBorder, #007fd4);
 }
 
-.context-usage-bar.hidden {
-  display: none;
-}
+.context-usage-bar.hidden { display: none; }
 
-/* Colour states driven by JS toggle */
 .context-usage-bar--warning .context-usage-percent,
 .context-usage-bar--warning #context-label {
   color: var(--usage-warning, #ff9800);
@@ -93,21 +88,6 @@
   white-space: nowrap;
 }
 
-.context-usage-track {
-  width: clamp(42px, 8vw, 80px);
-  flex: 0 0 clamp(42px, 8vw, 80px);
-  height: 4px;
-  background: var(--oc-muted);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.context-usage-fill {
-  height: 100%;
-  background: var(--usage-green, #4caf50);
-  transition: width 0.3s, background-color 0.3s;
-}
-
 .context-usage-detail {
   font-size: 0.75rem;
   color: var(--oc-muted);
@@ -118,429 +98,17 @@
   white-space: nowrap;
 }
 
-/* Context usage panel */
-.context-usage-panel {
-  background: var(--oc-panel-bg);
-  border-bottom: 1px solid var(--oc-border);
-  padding: var(--spacing-md);
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.context-usage-panel.hidden {
-  display: none;
-}
-
-/* Context usage header */
-.context-usage-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-md);
-}
-
-.context-usage-header h3 {
-  margin: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--oc-fg);
-}
-
-/* Breakdown section */
-.context-breakdown-section {
-  margin-bottom: var(--spacing-md);
-}
-
-.context-breakdown-chart {
-  display: flex;
-  height: 24px;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  margin-bottom: var(--spacing-sm);
-}
-
-.breakdown-segment {
-  height: 100%;
-  transition: width 0.3s;
-}
-
-.breakdown-segment.system {
-  background: var(--breakdown-system, #2196f3);
-}
-
-.breakdown-segment.history {
-  background: var(--breakdown-history, #9c27b0);
-}
-
-.breakdown-segment.workspace {
-  background: var(--breakdown-workspace, #ff9800);
-}
-
-.breakdown-segment.queued {
-  background: var(--breakdown-queued, #4caf50);
-}
-
-.breakdown-segment.steer {
-  background: var(--breakdown-steer, #f44336);
-}
-
-/* Legend */
-.breakdown-legend {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-  gap: var(--spacing-xs);
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  font-size: 0.75rem;
-  color: var(--oc-fg);
-}
-
-.legend-color {
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
-}
-
-.legend-item.system .legend-color {
-  background: var(--breakdown-system, #2196f3);
-}
-
-.legend-item.history .legend-color {
-  background: var(--breakdown-history, #9c27b0);
-}
-
-.legend-item.workspace .legend-color {
-  background: var(--breakdown-workspace, #ff9800);
-}
-
-.legend-item.queued .legend-color {
-  background: var(--breakdown-queued, #4caf50);
-}
-
-.legend-item.steer .legend-color {
-  background: var(--breakdown-steer, #f44336);
-}
-
-/* Projected section */
-.projected-section {
-  margin-bottom: var(--spacing-md);
-  padding: var(--spacing-sm);
-  background: var(--oc-editor-bg);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--oc-border);
-}
-
-.projected-section p {
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--oc-editor-fg);
-}
-
-.overflow-warning {
-  color: var(--breakdown-steer, #f44336);
-  margin-left: var(--spacing-xs);
-}
-
-/* Actions */
-.context-usage-actions {
-  display: flex;
-  gap: var(--spacing-sm);
-  flex-wrap: wrap;
-}
-
-/* Text muted utility */
-.text-muted {
-  color: var(--oc-muted);
-}
-
-/* Cost section */
-.cost-section {
-  margin-bottom: var(--spacing-md);
-  padding: var(--spacing-sm);
-  background: var(--oc-editor-bg);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--oc-border);
-}
-
-.cost-display {
-  margin: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--oc-editor-fg);
-}
-
-/* History section */
-.history-section {
-  margin-bottom: var(--spacing-md);
-  padding: var(--spacing-sm);
-  background: var(--oc-editor-bg);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--oc-border);
-}
-
-.history-graph {
-  margin-bottom: var(--spacing-sm);
-}
-
-.sparkline {
-  width: 100%;
-  height: 50px;
-}
-
-.history-stats {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-  font-size: 0.8rem;
-  color: var(--oc-editor-fg);
-}
-
-.history-stats p {
-  margin: 0;
-}
-
-/* Statistics section */
-.statistics-section {
-  margin-bottom: var(--spacing-md);
-  padding: var(--spacing-sm);
-  background: var(--oc-editor-bg);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--oc-border);
-}
-
-.stats-overview {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-md);
-}
-
-.stat-card {
-  padding: var(--spacing-sm);
-  background: var(--oc-panel-bg);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--oc-border);
-}
-
-.stat-card h3 {
-  margin: 0 0 var(--spacing-xs) 0;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--oc-muted);
-}
-
-.stat-value {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--oc-fg);
-}
-
-.daily-breakdown {
-  margin-top: var(--spacing-md);
-}
-
-.daily-breakdown h3 {
-  margin: 0 0 var(--spacing-sm) 0;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--oc-fg);
-}
-
-.daily-row {
-  display: flex;
-  justify-content: space-between;
-  padding: var(--spacing-xs) 0;
-  font-size: 0.8rem;
-  border-bottom: 1px solid var(--oc-border);
-}
-
-.daily-row:last-child {
-  border-bottom: none;
-}
-
-.daily-row .date {
-  color: var(--oc-muted);
-}
-
-.daily-row .tokens {
-  font-family: var(--font-mono);
-  color: var(--oc-fg);
-}
-
-.daily-row .cost {
-  font-family: var(--font-mono);
-  color: var(--oc-fg);
-}
-
-/* Context Monitor Panel */
-#context-monitor-panel {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 600px;
-  max-width: 90vw;
-  max-height: 80vh;
-  background: var(--oc-panel-bg);
-  border: 1px solid var(--oc-border);
-  border-radius: var(--radius-md);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-}
-
-#context-monitor-panel.hidden {
-  display: none;
-}
-
-#context-monitor-panel .panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-md);
-  border-bottom: 1px solid var(--oc-border);
-}
-
-#context-monitor-panel .panel-header h2 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--oc-fg);
-}
-
-#context-monitor-panel .panel-body {
-  padding: var(--spacing-md);
-  overflow-y: auto;
-  flex: 1;
-}
-
-.context-monitor-section {
-  margin-bottom: var(--spacing-lg);
-}
-
-.context-monitor-section h3 {
-  margin: 0 0 var(--spacing-sm) 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--oc-fg);
-}
-
-.context-history-graph {
-  height: 60px;
-  background: var(--oc-editor-bg);
-  border: 1px solid var(--oc-border);
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.context-history-graph svg {
-  width: 100%;
-  height: 100%;
-}
-
-.cost-display {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-}
-
-.cost-summary {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-sm);
-  background: var(--oc-editor-bg);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--oc-border);
-}
-
-.cost-label {
-  font-size: 0.85rem;
-  color: var(--oc-muted);
-}
-
-.cost-value {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--oc-fg);
-  font-family: var(--font-mono);
-}
-
-.suggestions-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-}
-
-.suggestions-empty {
-  padding: var(--spacing-md);
-  text-align: center;
-  color: var(--oc-muted);
-  font-size: 0.85rem;
-}
-
-.suggestion-item {
-  padding: var(--spacing-sm);
-  background: var(--oc-editor-bg);
-  border: 1px solid var(--oc-border);
-  border-radius: var(--radius-sm);
-  border-left-width: 3px;
-}
-
-.suggestion-item.priority-high {
-  border-left-color: #f44336;
-}
-
-.suggestion-item.priority-medium {
-  border-left-color: #ff9800;
-}
-
-.suggestion-item.priority-low {
-  border-left-color: #4caf50;
-}
-
-.suggestion-title {
-  font-weight: 600;
-  font-size: 0.85rem;
-  color: var(--oc-fg);
-  margin-bottom: var(--spacing-xs);
-}
-
-.suggestion-description {
-  font-size: 0.8rem;
-  color: var(--oc-muted);
-  line-height: 1.4;
-}
-
 /* Context progress fill colors */
-.context-progress-fill.context-good {
-  background: var(--usage-green, #4caf50);
-}
-
-.context-progress-fill.context-warning {
-  background: var(--usage-yellow, #ff9800);
-}
-
+.context-progress-fill.context-good { background: var(--usage-green, #4caf50); }
+.context-progress-fill.context-warning { background: var(--usage-yellow, #ff9800); }
 .context-progress-fill.context-critical {
   background: var(--usage-red, #f44336);
   animation: pulse 1s infinite;
 }
 
 @keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 /* Context cost display in status strip */
@@ -559,11 +127,16 @@
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.42), 0 0 0 1px var(--oc-border);
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   CONTEXT USAGE — Premium redesign additions (.cup-*)
-   ═══════════════════════════════════════════════════════════════════════════ */
+/* COLOR states for per-tab monitor */
+.context-monitor--good .context-progress-fill    { background: var(--usage-green, #4caf50); }
+.context-monitor--warning .context-progress-fill { background: var(--usage-yellow, #ff9800); }
+.context-monitor--critical .context-progress-fill {
+  background: var(--usage-red, #f44336);
+  animation: pulse 1s ease-in-out infinite;
+}
 
-/* Radial ring (SVG) in breakdown panel header */
+/* CONTEXT USAGE dropdown (.cup-*) */
+
 .cup-ring-svg { flex-shrink: 0; }
 .cup-ring-bg { stroke: var(--oc-border); }
 .cup-ring-fill {
@@ -580,7 +153,6 @@
   50%       { opacity: 0.6; }
 }
 
-/* Header row: ring + text */
 .cup-header-row {
   display: flex;
   align-items: center;
@@ -590,7 +162,6 @@
 .cup-header-text { display: flex; flex-direction: column; gap: 4px; }
 .cup-summary-text { font-size: 0.85rem; color: var(--oc-fg); font-weight: 500; }
 
-/* Critical banner */
 .cup-critical-banner {
   display: flex;
   align-items: center;
@@ -604,10 +175,8 @@
   margin-bottom: var(--spacing-sm);
   animation: banner-slide-in 0.2s ease;
 }
-.cup-critical-icon { font-size: 1rem; }
 @keyframes banner-slide-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
-/* Breakdown chart enhancements */
 .cup-breakdown-chart {
   display: flex;
   height: 20px;
@@ -621,7 +190,6 @@
   position: relative;
   cursor: default;
 }
-/* Segment tooltip via CSS attr() */
 .cup-segment::after {
   content: attr(data-detail);
   position: absolute;
@@ -642,15 +210,52 @@
 }
 .cup-segment:hover::after { opacity: 1; }
 
-/* Colour states for per-tab monitor */
-.context-monitor--good .context-progress-fill    { background: var(--usage-green, #4caf50); }
-.context-monitor--warning .context-progress-fill { background: var(--usage-yellow, #ff9800); }
-.context-monitor--critical .context-progress-fill {
-  background: var(--usage-red, #f44336);
-  animation: pulse 1s ease-in-out infinite;
+/* Breakdown chart + legend (kept for dropdown) */
+.context-breakdown-chart {
+  display: flex;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: var(--spacing-sm);
 }
 
-/* Projected overflow badge */
+.breakdown-segment {
+  height: 100%;
+  transition: width 0.3s;
+}
+
+.breakdown-segment.system  { background: var(--breakdown-system, #2196f3); }
+.breakdown-segment.history { background: var(--breakdown-history, #9c27b0); }
+.breakdown-segment.workspace { background: var(--breakdown-workspace, #ff9800); }
+.breakdown-segment.queued  { background: var(--breakdown-queued, #4caf50); }
+.breakdown-segment.steer   { background: var(--breakdown-steer, #f44336); }
+
+.breakdown-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: var(--spacing-xs);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: 0.75rem;
+  color: var(--oc-fg);
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.legend-item.system .legend-color  { background: var(--breakdown-system, #2196f3); }
+.legend-item.history .legend-color { background: var(--breakdown-history, #9c27b0); }
+.legend-item.workspace .legend-color { background: var(--breakdown-workspace, #ff9800); }
+.legend-item.queued .legend-color  { background: var(--breakdown-queued, #4caf50); }
+.legend-item.steer .legend-color   { background: var(--breakdown-steer, #f44336); }
+
 .cup-projected {
   display: flex;
   align-items: center;
@@ -673,7 +278,6 @@
   color: #f44336;
 }
 
-/* Cost row inside breakdown panel */
 .cup-cost-row {
   display: flex;
   align-items: center;
@@ -683,7 +287,6 @@
 .cup-cost-label { color: var(--oc-muted); }
 .cup-cost-value { font-family: var(--font-mono); font-weight: 600; color: var(--oc-fg); }
 
-/* Tab-numbers in monospace for alignment */
 .cup-summary-text,
 .cup-cost-value,
 .cup-projected-value {

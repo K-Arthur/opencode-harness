@@ -10,6 +10,7 @@ import {
   resetChangedFilesDropdown,
   setupChangedFilesDropdown,
   updateChangedFiles,
+  setCurrentSession,
 } from "./changed-files-dropdown"
 
 let previousDocument: Document | undefined
@@ -102,7 +103,8 @@ describe("floating webview dropdown positioning", () => {
       postMessage: () => {},
       onOpenFile: () => {},
     })
-    updateChangedFiles([{ path: "/tmp/example.ts", added: 1, removed: 0 }])
+    setCurrentSession("session-a")
+    updateChangedFiles("session-a", [{ path: "/tmp/example.ts", added: 1, removed: 0 }])
     strip.click()
 
     const left = Number.parseFloat(panel.style.left)

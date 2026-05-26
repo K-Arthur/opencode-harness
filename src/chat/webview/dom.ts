@@ -78,12 +78,7 @@ export interface ElementRefs {
   contextUsageDropdown: HTMLElement | null
   ctxDropdownContent: HTMLElement | null
   ctxPctBadge: HTMLElement | null
-  // Legacy context-monitor refs — kept for backward compat with context-monitor.ts
-  contextMonitorPanel: HTMLDivElement | null
-  contextMonitorClose: HTMLButtonElement | null
-  contextMonitorHistoryGraph: HTMLDivElement | null
-  contextMonitorCostDisplay: HTMLDivElement | null
-  contextMonitorSuggestionsPanel: HTMLDivElement | null
+  // context-monitor refs removed — panelled monitor was replaced by dropdown
   
   promptStashPanel: HTMLDivElement | null
   promptStashClose: HTMLButtonElement | null
@@ -255,12 +250,6 @@ export function getElementRefs(): ElementRefs {
     contextUsageDropdown: document.getElementById("context-usage-dropdown"),
     ctxDropdownContent: document.getElementById("ctx-dropdown-content"),
     ctxPctBadge: document.getElementById("ctx-pct-badge"),
-    // Legacy context-monitor refs — elements removed from HTML, always null now
-    contextMonitorPanel: null,
-    contextMonitorClose: null,
-    contextMonitorHistoryGraph: null,
-    contextMonitorCostDisplay: null,
-    contextMonitorSuggestionsPanel: null,
     
     promptStashPanel: optionalElement<HTMLDivElement>("prompt-stash-panel"),
     promptStashClose: optionalElement<HTMLButtonElement>("prompt-stash-close"),

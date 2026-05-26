@@ -18,6 +18,7 @@
  * gap is visible to operators (and a future telemetry sink can surface
  * it as "model X is missing limit.context").
  */
+import { lookupContextWindow } from "./openRouterMetadata"
 
 /**
  * @deprecated Kept as an empty frozen object so any older import sites
@@ -78,12 +79,8 @@ export function resolveContextWindow(
   // typically have the same window regardless of which provider hosts
   // them, so a lookup by short id usually succeeds.
   if (options?.openRouterCache && modelKey) {
-    const exact = options.openRouterCache.get(modelKey)
-    if (typeof exact === "number" && exact > 0) return exact
-    const slash = modelKey.indexOf("/")
-    const shortId = slash >= 0 ? modelKey.slice(slash + 1) : modelKey
-    const short = options.openRouterCache.get(shortId)
-    if (typeof short === "number" && short > 0) return short
+    const fallback = lookupContextWindow(options.openRouterCache, modelKey)
+    if (typeof fallback === "number" && fallback > 0) return fallback
   }
 
   if (modelKey) {

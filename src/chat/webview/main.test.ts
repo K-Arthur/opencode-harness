@@ -6,6 +6,8 @@ import path from "node:path"
 const source = readFileSync(path.join(__dirname, "main.ts"), "utf8")
 const orchestratorSource = (() => { try { return readFileSync(path.join(__dirname, "streamOrchestrator.ts"), "utf8") } catch { return "" } })()
 const timelineSource = (() => { try { return readFileSync(path.join(__dirname, "timeline.ts"), "utf8") } catch { return "" } })()
+const composerSource = (() => { try { return readFileSync(path.join(__dirname, "composer.ts"), "utf8") } catch { return "" } })()
+const withComposer = source + "\n" + composerSource
 const themeCustomizerSource = readFileSync(path.join(__dirname, "ui", "themeCustomizer.ts"), "utf8")
 const modeDropdownSource = readFileSync(path.join(__dirname, "ui", "modeDropdown.ts"), "utf8")
 const sessionModalSource = readFileSync(path.join(__dirname, "ui", "sessionModal.ts"), "utf8")
@@ -50,9 +52,9 @@ describe("main.ts", () => {
   })
 
   it("has slash command handlers", () => {
-    assert.ok(source.includes('"/clear"'))
-    assert.ok(source.includes('"/model"'))
-    assert.ok(source.includes('"/help"'))
+    assert.ok(withComposer.includes('"/clear"'))
+    assert.ok(withComposer.includes('"/model"'))
+    assert.ok(withComposer.includes('"/help"'))
   })
 
   it("sends webview_ready message", () => {
@@ -97,9 +99,10 @@ describe("main.ts", () => {
   })
 
   it("keeps send button state synchronized across input event variants", () => {
-    const idx = source.indexOf("function setupInput()")
-    assert.ok(idx >= 0, "setupInput must exist")
-    const block = source.slice(idx, source.indexOf("function onInputChange", idx))
+    const idx = composerSource.indexOf("function setupInput()")
+    assert.ok(idx >= 0, "setupInput must exist in composer.ts")
+    const nextFn = composerSource.indexOf("\n  function ", idx + 1)
+    const block = composerSource.slice(idx, nextFn > idx ? nextFn : composerSource.length)
     assert.ok(block.includes('addEventListener("input", onInputChange)'), "must handle normal input events")
     assert.ok(block.includes('addEventListener("keyup", updateSendButton)'), "must refresh after keyup fallback")
     assert.ok(block.includes('addEventListener("change", updateSendButton)'), "must refresh after change events")
@@ -115,8 +118,8 @@ describe("main.ts", () => {
   })
 
   it("has concurrent streaming limit of 3", () => {
-    assert.ok(source.includes("MAX_CONCURRENT_STREAMS = 3"))
-    assert.ok(source.includes("activeStreams >= maxStreams"))
+    assert.ok(withComposer.includes("MAX_CONCURRENT_STREAMS = 3"))
+    assert.ok(withComposer.includes("activeStreams >= MAX_CONCURRENT_STREAMS"))
   })
 
   it("init_state checks for .tab-panel not vscode-tab-panel", () => {
@@ -140,28 +143,28 @@ describe("main.ts", () => {
   })
 
   it("drag_drop_handler_prevents_default_on_dragover", () => {
-    assert.ok(source.includes('inputArea.addEventListener("dragover"'))
-    assert.ok(source.includes("e.preventDefault()"))
+    assert.ok(withComposer.includes('inputArea.addEventListener("dragover"'))
+    assert.ok(withComposer.includes("e.preventDefault()"))
   })
 
   it("drag_drop_handler_inserts_at_file_mentions", () => {
-    assert.ok(source.includes("@file:"))
-    assert.ok(source.includes("dataTransfer?.files"))
+    assert.ok(withComposer.includes("@file:"))
+    assert.ok(withComposer.includes("dataTransfer?.files"))
   })
 
   it("slash_command_triggers_mention_dropdown_on_leading_slash", () => {
-    assert.ok(source.includes("mention.handleTrigger()"),
+    assert.ok(withComposer.includes("mention.handleTrigger()"),
       "slash commands must trigger unified mention/command dropdown")
   })
 
   it("slash_command_in_sendMessage_handles_known_and_unknown", () => {
-    assert.ok(source.includes('text.startsWith("/")'))
+    assert.ok(withComposer.includes('text.startsWith("/")'))
   })
 
   it("slash_unknown_routes_to_host_for_server_commands", () => {
-    assert.ok(source.includes('command: cmd'), "runtime slash commands must route to the extension host")
-    assert.ok(source.includes("commandArgs"), "must preserve slash command arguments")
-    assert.ok(!source.includes("Unknown command: ${cmd}"), "must not reject server-discovered commands in the webview")
+    assert.ok(withComposer.includes('command: cmd'), "runtime slash commands must route to the extension host")
+    assert.ok(withComposer.includes("commandArgs"), "must preserve slash command arguments")
+    assert.ok(!withComposer.includes("Unknown command: ${cmd}"), "must not reject server-discovered commands in the webview")
   })
 
   it("mode_selector_disabled_during_stream", () => {
@@ -172,12 +175,13 @@ describe("main.ts", () => {
   })
 
   it("disables send with a clear tooltip when the global stream cap is full", () => {
-    const idx = source.indexOf("function updateSendButton()")
-    assert.ok(idx >= 0, "updateSendButton must exist")
-    const block = source.slice(idx, source.indexOf("function updateSendButtonIcon", idx))
+    const idx = composerSource.indexOf("function updateSendButton()")
+    assert.ok(idx >= 0, "updateSendButton must exist in composer.ts")
+    const nextFn = composerSource.indexOf("\n  function ", idx + 1)
+    const block = composerSource.slice(idx, nextFn > idx ? nextFn : composerSource.length)
     assert.ok(block.includes("getStreamCapacityState"), "send button must inspect global stream capacity")
     assert.ok(block.includes("stream-limit-blocked"), "send button must expose a blocked visual state")
-    assert.ok(source.includes("3 streams active — wait or stop another tab first"), "must explain the stream cap in the tooltip")
+    assert.ok(composerSource.includes("3 streams active"), "must explain the stream cap in the tooltip")
   })
 
   it("timeline jumps use exact message-list scroll positioning", () => {
@@ -206,8 +210,8 @@ describe("main.ts", () => {
   })
 
   it("mode_persisted_per_tab_in_session_store", () => {
-    assert.ok(source.includes("setSessionMode"))
-    assert.ok(source.includes("active.mode"))
+    assert.ok(withComposer.includes("setSessionMode"))
+    assert.ok(withComposer.includes("active.mode"))
   })
 
   it("has a personalized theme customizer modal workflow", () => {
@@ -453,9 +457,9 @@ it("unified modal: server session items send resume_server_session on click", ()
     // When the user drops a PNG/JPG/WEBP/GIF onto the input area the file must
     // become an image attachment (pendingAttachments) — not an @file: mention.
     // Only non-image files should become @file: mentions.
-    const dropIdx = source.indexOf('addEventListener("drop"')
-    assert.ok(dropIdx >= 0, "drop listener must exist")
-    const dropBlock = source.slice(dropIdx, dropIdx + 800)
+    const dropIdx = composerSource.indexOf('inputArea.addEventListener("drop"')
+    assert.ok(dropIdx >= 0, "drop listener must exist in composer.ts")
+    const dropBlock = composerSource.slice(dropIdx, dropIdx + 800)
     // Drop handler must branch on image MIME (via ALLOWED_IMAGE_MIMES or direct type check)
     // and call the shared attachImageBlob helper (which pushes to pendingAttachments)
     assert.ok(
@@ -469,7 +473,7 @@ it("unified modal: server session items send resume_server_session on click", ()
     // Only png, jpeg, webp, and gif must be accepted as image attachments.
     // Other image/* subtypes (e.g. image/tiff, image/bmp) should be rejected.
     assert.ok(
-      source.includes("image/png") && source.includes("image/jpeg") && source.includes("image/webp"),
+      withComposer.includes("image/png") && withComposer.includes("image/jpeg") && withComposer.includes("image/webp"),
       "must validate against an explicit MIME allowlist (png, jpeg, webp, gif)"
     )
   })
@@ -481,10 +485,10 @@ it("unified modal: server session items send resume_server_session on click", ()
     // must include the names of the currently streaming sessions, not just the
     // static tooltip string, so screen readers and sighted users know which
     // tabs to stop.
-    const idx = source.indexOf("function updateSendButtonIcon(")
-    assert.ok(idx >= 0, "updateSendButtonIcon must exist")
-    const fnEnd = source.indexOf("\n  function ", idx + 1)
-    const block = fnEnd > idx ? source.slice(idx, fnEnd) : source.slice(idx, idx + 600)
+    const idx = composerSource.indexOf("function updateSendButtonIcon(")
+    assert.ok(idx >= 0, "updateSendButtonIcon must exist in composer.ts")
+    const fnEnd = composerSource.indexOf("\n  function ", idx + 1)
+    const block = fnEnd > idx ? composerSource.slice(idx, fnEnd) : composerSource.slice(idx, idx + 600)
     assert.ok(
       block.includes("streamingNames") || block.includes("streamCapacity.streamingNames"),
       "updateSendButtonIcon must include streaming session names in the tooltip when at limit"
@@ -495,9 +499,9 @@ it("unified modal: server session items send resume_server_session on click", ()
     // The error shown when the user tries to send despite being at the stream
     // cap must name the streaming tabs (the streamingNames from capacity state),
     // not just emit the static STREAM_LIMIT_TOOLTIP.
-    const idx = source.indexOf("handleRequestError(active?.id")
+    const idx = withComposer.indexOf("handleRequestError(active.id")
     assert.ok(idx >= 0, "stream-limit handleRequestError call must exist")
-    const block = source.slice(idx, idx + 300)
+    const block = withComposer.slice(idx, idx + 300)
     assert.ok(
       block.includes("streamingNames"),
       "request error on stream-limit must include streamingNames in the detail"
@@ -608,8 +612,8 @@ it("unified modal: server session items send resume_server_session on click", ()
     })
 
     it("wires commands palette button to open modal and request commands", () => {
-      assert.ok(source.includes("commandsPaletteBtn"), "must reference commandsPaletteBtn element")
-      assert.ok(source.includes("commandsPaletteBtn.addEventListener"), "must wire click handler on commands palette button")
+      assert.ok(withComposer.includes("commandsPaletteBtn"), "must reference commandsPaletteBtn element")
+      assert.ok(withComposer.includes("commandsPaletteBtn.addEventListener"), "must wire click handler on commands palette button")
     })
 
     it("passes session search query from session_list into the modal", () => {

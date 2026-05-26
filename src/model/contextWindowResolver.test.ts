@@ -77,6 +77,16 @@ describe("resolveContextWindow — OpenRouter cache fallback (0.2.15)", () => {
     )
   })
 
+  it("uses the OpenRouter lookup helper for case-insensitive short-id hits", () => {
+    const cache = new Map<string, number>([
+      ["MoonshotAI/Kimi-K2.5", 200_000],
+    ])
+    assert.equal(
+      resolveContextWindow("openrouter/kimi-k2.5", undefined, { openRouterCache: cache }),
+      200_000,
+    )
+  })
+
   it("server-reported value still wins over the cache (server is authoritative)", () => {
     const cache = new Map<string, number>([["kimi-k2.5", 1_000_000]])
     // Server says 200k, cache says 1M. Trust the server.

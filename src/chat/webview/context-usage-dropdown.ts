@@ -1,13 +1,6 @@
 /**
- * Context Usage Dropdown — canonical single implementation.
- *
- * Toolbar button with a percent badge that opens a floating dropdown
- * anchored below the header. Replaces:
- *   - #context-usage-panel (inline panel below status strip)
- *   - #context-monitor-panel (full modal dialog)
- *   - click handler on #context-usage progress bar
- *
- * Pattern: Codex / Claude Code / Cline — toolbar icon → dropdown panel.
+ * Context Usage Dropdown — floating panel anchored below the status strip.
+ * Contains a ring chart, breakdown chart + legend, and optional cost/projected rows.
  */
 
 import {

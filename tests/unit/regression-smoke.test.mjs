@@ -20,6 +20,7 @@ const files = {
   streamCoordinator: readFileSync(path.join(root, "src", "chat", "handlers", "StreamCoordinator.ts"), "utf8"),
   tabManager: readFileSync(path.join(root, "src", "chat", "TabManager.ts"), "utf8"),
   mainTs: readFileSync(path.join(root, "src", "chat", "webview", "main.ts"), "utf8"),
+  composerTs: (() => { try { return readFileSync(path.join(root, "src", "chat", "webview", "composer.ts"), "utf8") } catch { return "" } })(),
   streamOrchestrator: (() => { try { return readFileSync(path.join(root, "src", "chat", "webview", "streamOrchestrator.ts"), "utf8") } catch { return "" } })(),
   renderer: readFileSync(path.join(root, "src", "chat", "webview", "renderer.ts"), "utf8"),
   messageRenderer: readFileSync(path.join(root, "src", "chat", "webview", "messageRenderer.ts"), "utf8"),
@@ -166,7 +167,7 @@ describe("Regression: Tabs & Concurrency", () => {
   })
 
   it("sendMessage checks streaming count before sending", () => {
-    assert.ok(files.mainTs.includes("streamingCount >= 3") || files.mainTs.includes("concurrent stream"),
+    assert.ok(files.mainTs.includes("streamingCount >= 3") || files.mainTs.includes("concurrent stream") || files.composerTs.includes("concurrent stream") || files.composerTs.includes("streamCapacity.isFull"),
       "webview must check concurrent stream limit")
   })
 })
@@ -189,7 +190,7 @@ describe("Regression: Slash Commands", () => {
 
 describe("Regression: Context & References", () => {
   it("mention button triggers @ mention search", () => {
-    assert.ok(files.mainTs.includes("mention.handleTrigger()"), "must trigger mention from @ button")
+    assert.ok(files.mainTs.includes("mention.handleTrigger()") || files.composerTs.includes("mention.handleTrigger()"), "must trigger mention from @ button")
   })
 })
 

@@ -7,20 +7,54 @@
  *   - the "Changed Files" section inside #todos-panel (todos-panel.ts)
  *
  * Pattern: Codex / Claude Code / Cline — toolbar icon → dropdown panel.
+ *
+ * State is partitioned per-session: every session keeps its own sort mode,
+ * expanded/collapsed sets, diff cache, and last-known files list. The UI
+ * only ever displays state for `_currentSessionId`, but writes from any
+ * session are stored so switching tabs surfaces the right state without
+ * a host round-trip. Cross-session leakage is impossible by construction.
  */
 
 import type { FileChange, DiffLine } from "./types"
+import { renderFileChipListHtml } from "./file-chip-list"
 
-// ─── Module-level state ───────────────────────────────────────────────────────
+// ─── Per-session state ────────────────────────────────────────────────────────
 
-let _sortMode: "changes" | "alpha" = "changes"
-let _compact = false
-let _expandedFiles = new Set<string>()
-let _collapsedDirs = new Set<string>()
-const _diffCache = new Map<string, DiffLine[] | null | string>()
+interface ChangedFilesState {
+  sortMode: "changes" | "alpha"
+  compact: boolean
+  expandedFiles: Set<string>
+  collapsedDirs: Set<string>
+  diffCache: Map<string, DiffLine[] | null | string>
+  lastFiles: FileChange[]
+}
 
+function _createState(): ChangedFilesState {
+  return {
+    sortMode: "changes",
+    compact: false,
+    expandedFiles: new Set<string>(),
+    collapsedDirs: new Set<string>(),
+    diffCache: new Map<string, DiffLine[] | null | string>(),
+    lastFiles: [],
+  }
+}
+
+const _sessionStates = new Map<string, ChangedFilesState>()
+
+function _stateFor(sessionId: string): ChangedFilesState {
+  let s = _sessionStates.get(sessionId)
+  if (!s) {
+    s = _createState()
+    _sessionStates.set(sessionId, s)
+  }
+  return s
+}
+
+// ─── Module-level UI state (not session-scoped) ───────────────────────────────
+
+let _currentSessionId: string | null = null
 let _postMessage: ((msg: Record<string, unknown>) => void) | null = null
-let _lastFiles: FileChange[] = []
 let _treeContainer: HTMLElement | null = null
 let _btn: HTMLButtonElement | null = null
 let _panel: HTMLElement | null = null
@@ -32,13 +66,17 @@ let _resizeHandler: (() => void) | null = null
 
 /** Reset all state — for unit-test isolation and port-change resilience */
 export function resetChangedFilesDropdown(): void {
-  _sortMode = "changes"
-  _compact = false
-  _expandedFiles.clear()
-  _collapsedDirs.clear()
-  _diffCache.clear()
-  _lastFiles = []
+  _sessionStates.clear()
+  _currentSessionId = null
   _isOpen = false
+}
+
+/** Drop one session's state (e.g. on session deletion) */
+export function resetSessionState(sessionId: string): void {
+  _sessionStates.delete(sessionId)
+  if (_currentSessionId === sessionId) {
+    _currentSessionId = null
+  }
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -87,9 +125,35 @@ export function setupChangedFilesDropdown(opts: ChangedFilesDropdownOptions): vo
   }
 }
 
-/** Called by main.ts when changed_files_update arrives */
-export function updateChangedFiles(files: FileChange[]): void {
-  _lastFiles = files
+/**
+ * Switch which session's state is currently displayed in the dropdown + strip.
+ * Pass `null` when no session is active (e.g. on session deletion with no
+ * fallback). Triggers a re-render of the visible UI.
+ */
+export function setCurrentSession(sessionId: string | null): void {
+  _currentSessionId = sessionId
+  if (sessionId === null) {
+    _updateBadge(0)
+    if (_btn && _btn.isConnected) _btn.classList.add("hidden")
+    const strip = document.getElementById("changed-files-strip")
+    if (strip) { strip.classList.add("hidden"); strip.innerHTML = "" }
+    if (_isOpen && _treeContainer) _renderTree(_treeContainer, [])
+    return
+  }
+  const state = _stateFor(sessionId)
+  _refreshUI(sessionId, state.lastFiles)
+}
+
+/** Called by main.ts when changed_files_update arrives. sessionId is REQUIRED. */
+export function updateChangedFiles(sessionId: string, files: FileChange[]): void {
+  const state = _stateFor(sessionId)
+  state.lastFiles = files
+  if (sessionId === _currentSessionId) {
+    _refreshUI(sessionId, files)
+  }
+}
+
+function _refreshUI(sessionId: string, files: FileChange[]): void {
   _updateBadge(files.length)
   if (_btn && _btn.isConnected) {
     _btn.classList.toggle("hidden", files.length === 0)
@@ -99,16 +163,27 @@ export function updateChangedFiles(files: FileChange[]): void {
   if (_isOpen && _treeContainer) {
     _renderTree(_treeContainer, files)
   }
-  updateChangedFilesStrip(files)
+  _renderStrip(sessionId, files)
 }
 
 /**
  * Render the always-visible compact strip above the input area.
  * Shows file basenames (up to MAX_VISIBLE) then an overflow count.
  * Clicking the strip opens the full dropdown panel.
+ *
+ * Public for backwards compatibility; internal callers should prefer
+ * `updateChangedFiles` which routes through `_refreshUI`.
  */
 const CF_STRIP_MAX = 5
-export function updateChangedFilesStrip(files: FileChange[]): void {
+export function updateChangedFilesStrip(sessionId: string, files: FileChange[]): void {
+  const state = _stateFor(sessionId)
+  state.lastFiles = files
+  if (sessionId === _currentSessionId) {
+    _renderStrip(sessionId, files)
+  }
+}
+
+function _renderStrip(_sessionId: string, files: FileChange[]): void {
   const strip = document.getElementById("changed-files-strip")
   if (!strip) return
   if (files.length === 0) {
@@ -117,23 +192,10 @@ export function updateChangedFilesStrip(files: FileChange[]): void {
     return
   }
   strip.classList.remove("hidden")
-
-  const visible = files.slice(0, CF_STRIP_MAX)
-  const overflow = files.length - visible.length
-
-  let html = `<span class="cf-strip-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/><line x1="12" y1="12" x2="12" y2="18"/></svg></span>`
-  html += `<span class="cf-strip-label">${files.length} file${files.length !== 1 ? "s" : ""} changed</span>`
-  html += `<span class="cf-strip-divider" aria-hidden="true">·</span>`
-  for (const f of visible) {
-    const fpath = f.path ?? ""
-    const name = fpath.split("/").pop() || fpath
-    const escaped = name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    html += `<span class="cf-strip-chip" title="${f.path ?? ""}" data-path="${f.path ?? ""}">${escaped}</span>`
-  }
-  if (overflow > 0) {
-    html += `<span class="cf-strip-overflow">+${overflow} more</span>`
-  }
-  strip.innerHTML = html
+  strip.innerHTML = renderFileChipListHtml(
+    files.map((f) => f.path ?? "").filter((p) => p.length > 0),
+    { maxVisible: CF_STRIP_MAX, showLeadingIcon: true, showCountLabel: true },
+  )
   // Single click anywhere on the strip opens the full dropdown
   strip.onclick = (e) => {
     e.stopPropagation()
@@ -142,11 +204,13 @@ export function updateChangedFilesStrip(files: FileChange[]): void {
   strip.setAttribute("aria-label", `${files.length} changed file${files.length !== 1 ? "s" : ""} — click to view`)
 }
 
-/** Called by main.ts when file_diff_response arrives */
-export function handleDiffResponse(path: string, lines: DiffLine[] | null, error?: string): void {
-  _diffCache.set(path, error ? error : (lines ?? []))
+/** Called by main.ts when file_diff_response arrives. sessionId is REQUIRED. */
+export function handleDiffResponse(sessionId: string, path: string, lines: DiffLine[] | null, error?: string): void {
+  const state = _stateFor(sessionId)
+  state.diffCache.set(path, error ? error : (lines ?? []))
+  if (sessionId !== _currentSessionId) return
   document.querySelectorAll<HTMLElement>(".cf-hunk-preview--open[data-path]").forEach((el) => {
-    if (el.dataset.path === path) _renderHunk(el, path)
+    if (el.dataset.path === path) _renderHunk(el, sessionId, path)
   })
 }
 
@@ -168,7 +232,8 @@ function _open(): void {
     (_btn && _btn.isConnected) ? _btn : document.getElementById("changed-files-strip")
   if (anchor) positionPanel(anchor)
 
-  _renderTree(_treeContainer, _lastFiles)
+  const files = _currentSessionId ? _stateFor(_currentSessionId).lastFiles : []
+  _renderTree(_treeContainer, files)
 
   // Dismiss on outside click
   const strip = document.getElementById("changed-files-strip")
@@ -272,9 +337,13 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
     return
   }
 
+  const sessionId = _currentSessionId
+  if (!sessionId) return
+  const state = _stateFor(sessionId)
+
   const safe = files.map((f) => ({ ...f, added: safeNum(f.added), removed: safeNum(f.removed) }))
   const sorted = [...safe].sort((a, b) =>
-    _sortMode === "alpha"
+    state.sortMode === "alpha"
       ? a.path.localeCompare(b.path)
       : (b.added + b.removed) - (a.added + a.removed)
   )
@@ -302,11 +371,11 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
   const controls = document.createElement("div")
   controls.className = "cf-controls"
   controls.innerHTML = `
-    <button class="cf-sort-btn icon-btn" data-action="toggle-sort" title="Sort: ${_sortMode === "changes" ? "most changed" : "alphabetical"}" aria-label="Toggle sort order">
+    <button class="cf-sort-btn icon-btn" data-action="toggle-sort" title="Sort: ${state.sortMode === "changes" ? "most changed" : "alphabetical"}" aria-label="Toggle sort order">
       <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
-      ${_sortMode === "changes" ? "By changes" : "A–Z"}
+      ${state.sortMode === "changes" ? "By changes" : "A–Z"}
     </button>
-    <button class="cf-compact-btn icon-btn" data-action="toggle-compact" title="Compact mode" aria-label="Toggle compact mode" aria-pressed="${_compact}">
+    <button class="cf-compact-btn icon-btn" data-action="toggle-compact" title="Compact mode" aria-label="Toggle compact mode" aria-pressed="${state.compact}">
       <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
     </button>
     <button class="icon-btn" data-action="collapse-all" title="Collapse all" aria-label="Collapse all groups">
@@ -317,19 +386,19 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
     </button>
   `
   controls.querySelector('[data-action="toggle-sort"]')!.addEventListener("click", () => {
-    _sortMode = _sortMode === "changes" ? "alpha" : "changes"
+    state.sortMode = state.sortMode === "changes" ? "alpha" : "changes"
     _renderTree(container, files)
   })
   controls.querySelector('[data-action="toggle-compact"]')!.addEventListener("click", () => {
-    _compact = !_compact
+    state.compact = !state.compact
     _renderTree(container, files)
   })
   controls.querySelector('[data-action="collapse-all"]')!.addEventListener("click", () => {
-    sorted.forEach((f) => { const d = f.path.split("/").slice(0, -1).join("/") || "."; _collapsedDirs.add(d) })
+    sorted.forEach((f) => { const d = f.path.split("/").slice(0, -1).join("/") || "."; state.collapsedDirs.add(d) })
     _renderTree(container, files)
   })
   controls.querySelector('[data-action="expand-all"]')!.addEventListener("click", () => {
-    _collapsedDirs.clear()
+    state.collapsedDirs.clear()
     _renderTree(container, files)
   })
   container.appendChild(controls)
@@ -344,7 +413,7 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
   })
 
   dirMap.forEach((dirFiles, dir) => {
-    const isCollapsed = _collapsedDirs.has(dir)
+    const isCollapsed = state.collapsedDirs.has(dir)
     const group = document.createElement("div")
     group.className = "cf-dir-group"
 
@@ -357,8 +426,8 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       <span class="cf-dir-count">${dirFiles.length}</span>
     `
     header.addEventListener("click", () => {
-      if (isCollapsed) _collapsedDirs.delete(dir)
-      else _collapsedDirs.add(dir)
+      if (isCollapsed) state.collapsedDirs.delete(dir)
+      else state.collapsedDirs.add(dir)
       _renderTree(container, files)
     })
     group.appendChild(header)
@@ -373,10 +442,10 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       const fileChange = file.added + file.removed
       const barWidth = Math.round((fileChange / maxChange) * 100)
       const addedBarPct = fileChange > 0 ? Math.round((file.added / fileChange) * 100) : 50
-      const isExpanded = _expandedFiles.has(file.path)
+      const isExpanded = state.expandedFiles.has(file.path)
 
       const row = document.createElement("div")
-      row.className = `cf-file-row${_compact ? " cf-file-row--compact" : ""}${isExpanded ? " cf-file-row--expanded" : ""}`
+      row.className = `cf-file-row${state.compact ? " cf-file-row--compact" : ""}${isExpanded ? " cf-file-row--expanded" : ""}`
       row.setAttribute("data-path", file.path)
 
       const badge = document.createElement("span")
@@ -422,17 +491,17 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       const preview = document.createElement("div")
       preview.className = `cf-hunk-preview${isExpanded ? " cf-hunk-preview--open" : ""}`
       preview.setAttribute("data-path", file.path)
-      if (isExpanded) _renderHunk(preview, file.path)
+      if (isExpanded) _renderHunk(preview, sessionId, file.path)
 
       expandBtn.addEventListener("click", (e) => {
         e.stopPropagation()
-        if (_expandedFiles.has(file.path)) {
-          _expandedFiles.delete(file.path)
+        if (state.expandedFiles.has(file.path)) {
+          state.expandedFiles.delete(file.path)
         } else {
-          _expandedFiles.add(file.path)
-          if (!_diffCache.has(file.path)) {
-            _diffCache.set(file.path, null)
-            _postMessage?.({ type: "get_file_diff", path: file.path })
+          state.expandedFiles.add(file.path)
+          if (!state.diffCache.has(file.path)) {
+            state.diffCache.set(file.path, null)
+            _postMessage?.({ type: "get_file_diff", path: file.path, sessionId })
           }
         }
         _renderTree(container, files)
@@ -454,8 +523,9 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
   })
 }
 
-function _renderHunk(el: HTMLElement, path: string): void {
-  const data = _diffCache.get(path)
+function _renderHunk(el: HTMLElement, sessionId: string, path: string): void {
+  const state = _stateFor(sessionId)
+  const data = state.diffCache.get(path)
   if (data === null || data === undefined) {
     el.innerHTML = '<div class="cf-hunk-loading"><span class="cf-hunk-loading-dot"></span>Loading diff…</div>'
     return

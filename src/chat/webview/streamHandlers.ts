@@ -443,6 +443,53 @@ export function handleToolStart(
   state.currentBlockBuffer = ""
   state.currentBlockEl = null
 
+  // Special-case: opencode's `question` tool needs an interactive UI
+  // (options + free-text input + submit) so the user can actually answer
+  // and unblock the stream. Render it as a `question` block instead of a
+  // passive tool-call card.
+  if ((toolCall.name || "").toLowerCase() === "question") {
+    const args = toolCall.args as Record<string, unknown> | undefined
+    const questionText =
+      (typeof args?.question === "string" && args.question) ||
+      (typeof args?.prompt === "string" && args.prompt) ||
+      (typeof args?.message === "string" && args.message) ||
+      (typeof args?.text === "string" && args.text) ||
+      ""
+    const optionsRaw =
+      (Array.isArray(args?.options) && args!.options) ||
+      (Array.isArray(args?.choices) && args!.choices) ||
+      (Array.isArray(args?.select) && args!.select) ||
+      []
+    const options = (optionsRaw as unknown[]).map((o) =>
+      typeof o === "string" ? o : typeof o === "object" && o && "label" in (o as Record<string, unknown>)
+        ? String((o as { label?: unknown }).label ?? "")
+        : String(o)
+    ).filter(Boolean)
+    const allowFreeText = args?.allowFreeText !== false
+
+    const questionBlock = {
+      type: "question",
+      id: toolCall.id,
+      toolCallId: toolCall.id,
+      sessionId: msgObj?.sessionId,
+      text: questionText,
+      options,
+      allowFreeText,
+    } as unknown as Block
+
+    if (msgObj) msgObj.blocks.push(questionBlock)
+
+    const msgEl = els.messageList.querySelector(`[data-message-id="${id}"]`) as HTMLElement | null
+    if (msgEl) {
+      const bubble = msgEl.querySelector(".message-bubble") as HTMLElement | null
+      if (bubble && msgObj) {
+        appendOrFoldToolDOM(bubble, questionBlock, msgObj.blocks)
+      }
+    }
+    els.scrollAnchor.scrollIfAnchored()
+    return
+  }
+
   const toolBlock: ToolCallBlock = {
     type: 'tool-call',
     id: toolCall.id,

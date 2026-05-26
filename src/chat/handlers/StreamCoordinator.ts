@@ -939,7 +939,7 @@ export class StreamCoordinator {
     // Detect TTFB timeout: the stream state was "timeout" and no assistant output was produced.
     const prevState = this.streamStates.get(tabId)
     const wasTimeout = prevState === "timeout"
-    const hasAssistantOutput = lastAssistant?.blocks?.some(b => b.type === "text" && b.text?.trim())
+    const hasAssistantOutput = lastAssistant?.blocks?.some(b => b.type === "text" && typeof b.text === "string" && b.text.trim().length > 0)
 
     if (wasTimeout && !hasAssistantOutput && lastUser) {
       log.info(`retryFromHere: TTFB timeout detected for tab ${tabId} — re-sending original user prompt`)

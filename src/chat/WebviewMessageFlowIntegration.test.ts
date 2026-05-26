@@ -5,7 +5,7 @@ import { resolve } from "node:path"
 
 const chatProviderSource = readFileSync(resolve(__dirname, "ChatProvider.ts"), "utf8")
 const eventRouterSource = readFileSync(resolve(__dirname, "WebviewEventRouter.ts"), "utf8")
-const chunkBatcherSource = readFileSync(resolve(__dirname, "ChunkBatcher.ts"), "utf8")
+const hostMessageBatcherSource = readFileSync(resolve(__dirname, "HostMessageBatcher.ts"), "utf8")
 const typesSource = readFileSync(resolve(__dirname, "webview/types.ts"), "utf8")
 
 void describe("Webview Message Flow Integration Tests", () => {
@@ -66,29 +66,29 @@ void describe("Webview Message Flow Integration Tests", () => {
 
   void describe("chunk batching flow", () => {
     void it("batches stream_chunk messages by sessionId", () => {
-      assert.ok(chunkBatcherSource.includes('type: "stream_chunk"'), "must emit stream_chunk in delegate")
-      assert.ok(chunkBatcherSource.includes("buffer.set(sessionId"), "must buffer by sessionId")
+      assert.ok(hostMessageBatcherSource.includes('type: "stream_chunk"'), "must emit stream_chunk in delegate")
+      assert.ok(hostMessageBatcherSource.includes("chunkQueue.add(msg.sessionId"), "must buffer by sessionId")
     })
 
     void it("flushes batches on timer expiry", () => {
-      assert.ok(chunkBatcherSource.includes("setTimeout"), "must use timer for flushing")
-      assert.ok(chunkBatcherSource.includes("computeFlushDelay"), "must compute adaptive flush timing")
+      assert.ok(hostMessageBatcherSource.includes("setTimeout"), "must use timer for flushing")
+      assert.ok(hostMessageBatcherSource.includes("computeChunkFlushDelay"), "must compute adaptive flush timing")
     })
 
     void it("batches non-critical host messages without batching stream lifecycle", () => {
-      assert.ok(chatProviderSource.includes("HostMessageBatcher.isBatchable"), "ChatProvider must route non-critical host messages through HostMessageBatcher")
+      assert.ok(chatProviderSource.includes("this.messageBatcher.post(msg)"), "ChatProvider must route host messages through the unified batcher")
       assert.ok(typesSource.includes("host_message_batch"), "HostMessage must include the batch envelope")
       assert.ok(chatProviderSource.includes('"stream_start", "stream_end", "stream_chunk"'), "stream lifecycle messages must remain critical")
     })
 
     void it("flushes immediately on stream_end", () => {
-      assert.ok(chatProviderSource.includes('msg.type === "stream_end"'), "must detect stream_end")
-      assert.ok(chatProviderSource.includes("this.chunkBatcher.flush()"), "must flush on stream_end")
+      assert.ok(hostMessageBatcherSource.includes('msg.type === "stream_end"'), "must detect stream_end")
+      assert.ok(hostMessageBatcherSource.includes("this.flushChunks()"), "must flush on stream_end")
     })
 
     void it("prevents new chunks after disposal", () => {
-      assert.ok(chunkBatcherSource.includes("if (this.disposed)"), "must check disposed flag")
-      assert.ok(chunkBatcherSource.includes("return"), "must return early if disposed")
+      assert.ok(hostMessageBatcherSource.includes("if (this.disposed)"), "must check disposed flag")
+      assert.ok(hostMessageBatcherSource.includes("return"), "must return early if disposed")
     })
   })
 
@@ -148,8 +148,8 @@ void describe("Webview Message Flow Integration Tests", () => {
   })
 
   void describe("webview lifecycle flow", () => {
-    void it("clears chunk batcher on webview recreation", () => {
-      assert.ok(chatProviderSource.includes("this.chunkBatcher.dispose()"), "must dispose chunk batcher on resolve")
+    void it("clears message batcher on webview recreation", () => {
+      assert.ok(chatProviderSource.includes("this.messageBatcher.dispose()"), "must dispose message batcher on resolve")
     })
 
     void it("resets webviewReady state on recreation", () => {

@@ -1,12 +1,22 @@
 import { randomUUID } from "crypto"
-import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk"
+import type { CreateOpencodeClient } from "./opencodeClientFactory"
 import { log } from "../utils/outputChannel"
 import { validateServerUrl } from "../utils/security"
+
+type OpencodeClient = ReturnType<CreateOpencodeClient>
+type OpencodeClientConfig = Parameters<CreateOpencodeClient>[0]
+
+function createOpencodeClient(config?: OpencodeClientConfig): OpencodeClient {
+  const factory = require("./opencodeClientFactory") as typeof import("./opencodeClientFactory")
+  return factory.createOpencodeClient(config)
+}
 
 export class AuthProvider {
   private _serverPassword = ""
   private _remoteServerUrl: string | null = null
   private _remoteServerPassword: string | null = null
+
+  constructor(private readonly createClient: CreateOpencodeClient = createOpencodeClient) {}
 
   get serverPassword(): string {
     return this._serverPassword
@@ -62,22 +72,22 @@ export class AuthProvider {
     const baseUrl = `http://127.0.0.1:${port}`
     if (this._serverPassword) {
       const basic = Buffer.from(`opencode:${this._serverPassword}`).toString("base64")
-      return createOpencodeClient({
+      return this.createClient({
         baseUrl,
         headers: { Authorization: `Basic ${basic}` },
       })
     }
-    return createOpencodeClient({ baseUrl })
+    return this.createClient({ baseUrl })
   }
 
   makeRemoteClient(baseUrl: string): OpencodeClient {
     if (this._remoteServerPassword) {
-      return createOpencodeClient({
+      return this.createClient({
         baseUrl,
         headers: { Authorization: this.buildRemoteAuthHeader(this._remoteServerPassword) },
       })
     }
-    return createOpencodeClient({ baseUrl })
+    return this.createClient({ baseUrl })
   }
 
   buildRemoteAuthHeader(secret: string): string {

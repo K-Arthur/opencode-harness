@@ -1,10 +1,6 @@
 /**
- * context-usage-service.ts
- * Pure helper functions shared by all three context UI implementations:
- *   1. Status strip bar (tokenCostDisplay.ts)
- *   2. Per-tab bottom monitor (tabs.ts)
- *   3. Breakdown panel + history modal (context-usage-panel.ts, context-monitor.ts)
- *
+ * Pure helper functions for context usage display.
+ * Shared by: status-strip bar (tokenCostDisplay.ts) and per-tab monitor (tabs.ts).
  * All functions are pure (no DOM, no side-effects) — fully unit-testable.
  */
 
