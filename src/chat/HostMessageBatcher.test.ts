@@ -36,4 +36,44 @@ void describe("HostMessageBatcher", () => {
     assert.equal(HostMessageBatcher.isBatchable({ type: "stream_tool_start" }), false)
     assert.equal(HostMessageBatcher.isBatchable({ type: "stream_tool_end" }), false)
   })
+
+  void it("buffers stream chunks by session through the same post API", () => {
+    const posted: Record<string, unknown>[] = []
+    const batcher = new HostMessageBatcher((msg) => { posted.push(msg) })
+
+    batcher.post({ type: "stream_chunk", sessionId: "s1", text: "Hello ", messageId: "m1" })
+    batcher.post({ type: "stream_chunk", sessionId: "s1", text: "World", messageId: "m1" })
+    batcher.flush()
+
+    assert.equal(posted.length, 1)
+    assert.equal(posted[0]!.type, "stream_chunk")
+    assert.equal(posted[0]!.sessionId, "s1")
+    assert.equal(posted[0]!.text, "Hello World")
+    assert.equal(posted[0]!.messageId, "m1")
+  })
+
+  void it("flushes pending chunks before stream_end", () => {
+    const posted: Record<string, unknown>[] = []
+    const batcher = new HostMessageBatcher((msg) => { posted.push(msg) })
+
+    batcher.post({ type: "stream_chunk", sessionId: "s1", text: "tail" })
+    batcher.post({ type: "stream_end", sessionId: "s1" })
+
+    assert.deepEqual(posted.map((m) => m.type), ["stream_chunk", "stream_end"])
+  })
+
+  void it("pauses and resumes chunk delivery for lifecycle retries", () => {
+    const posted: Record<string, unknown>[] = []
+    const batcher = new HostMessageBatcher((msg) => { posted.push(msg) })
+
+    batcher.pauseSession("s1")
+    batcher.post({ type: "stream_chunk", sessionId: "s1", text: "held" })
+    batcher.flush()
+    assert.equal(posted.length, 0)
+
+    batcher.resumeSession("s1")
+    assert.equal(posted.length, 1)
+    assert.equal(posted[0]!.type, "stream_chunk")
+    assert.equal(posted[0]!.text, "held")
+  })
 })

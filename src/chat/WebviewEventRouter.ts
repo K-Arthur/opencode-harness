@@ -119,6 +119,7 @@ export class WebviewEventRouter {
     "get_subagent_activities", "cancel_subagent",
     "update_setting", "show_error", "get_context_usage", "record_stash_usage",
     "open_context_window_override_dialog", "model_favorite", "model_toggle",
+    "question_answer",
   ])
 
   private readonly webviewHandlers: Map<string, (msg: Record<string, unknown>, sessionId?: string) => void | Promise<void>> = new Map([
@@ -204,6 +205,54 @@ export class WebviewEventRouter {
         const textLength = typeof msg.text === "string" ? msg.text.length : "N/A"
         const attachmentCount = Array.isArray(msg.attachments) ? msg.attachments.length : 0
         log.warn(`send_prompt dropped: sessionId=${sessionId ?? "undefined"}, hasContent=${this.hasPromptContent(msg)}, textType=${typeof msg.text}, textLength=${textLength}, attachments=${attachmentCount}`)
+      }
+    }],
+    ["question_answer", async (msg: Record<string, unknown>, sessionId?: string) => {
+      // The user just answered a `question` tool call from opencode. Forward
+      // the answer as a follow-up user prompt — opencode receives it in
+      // context, resolves the pending tool, and continues the stream. This
+      // reuses send_prompt's in-flight guard so a double-submit can't fire
+      // twice and clobber the stream.
+      if (!sessionId) {
+        log.warn("question_answer dropped: missing sessionId")
+        return
+      }
+      const value = typeof msg.value === "string" ? msg.value.trim() : ""
+      if (!value) {
+        log.warn(`question_answer dropped: empty value (sessionId=${sessionId})`)
+        return
+      }
+      const toolCallId = typeof msg.toolCallId === "string" ? msg.toolCallId : undefined
+      const source = typeof msg.source === "string" ? msg.source : "unknown"
+      log.info(`question_answer: sessionId=${sessionId}, toolCallId=${toolCallId ?? "N/A"}, source=${source}, len=${value.length}`)
+
+      if (this.promptsInFlight.has(sessionId)) {
+        log.warn(`question_answer dropped: prompt already in flight for ${sessionId}`)
+        return
+      }
+      this.promptsInFlight.add(sessionId)
+      try {
+        const model = this.opts.modelManager.model
+        if (!model) throw new Error("No model selected. Please select a model and try again.")
+        this.opts.ensureLocalTab(sessionId)
+        const userMessageId = (msg.messageId as string) || `user-${crypto.randomUUID()}`
+        const userMsg: ChatMessage = {
+          role: "user",
+          id: userMessageId,
+          blocks: [{ type: "text", text: value }],
+          timestamp: Date.now(),
+          sessionId,
+        }
+        this.opts.sessionStore.appendMessage(sessionId, userMsg)
+        await this.opts.streamCoordinator.startPrompt(sessionId, value, {
+          postMessage: (m) => this.opts.postMessage(m),
+          postRequestError: (m) => this.opts.postRequestError(m),
+        })
+      } catch (err) {
+        log.error("question_answer failed", err)
+        this.opts.postRequestError(err instanceof Error ? err.message : "Failed to send answer")
+      } finally {
+        this.promptsInFlight.delete(sessionId)
       }
     }],
     ["change_mode", async (msg: Record<string, unknown>, sessionId?: string) => {

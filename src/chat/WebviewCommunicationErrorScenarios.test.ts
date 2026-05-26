@@ -5,7 +5,7 @@ import { resolve } from "node:path"
 
 const chatProviderSource = readFileSync(resolve(__dirname, "ChatProvider.ts"), "utf8")
 const eventRouterSource = readFileSync(resolve(__dirname, "WebviewEventRouter.ts"), "utf8")
-const chunkBatcherSource = readFileSync(resolve(__dirname, "ChunkBatcher.ts"), "utf8")
+const hostMessageBatcherSource = readFileSync(resolve(__dirname, "HostMessageBatcher.ts"), "utf8")
 
 void describe("Webview Communication Error Scenarios", () => {
   void describe("postMessage error handling", () => {
@@ -58,15 +58,15 @@ void describe("Webview Communication Error Scenarios", () => {
     })
   })
 
-  void describe("ChunkBatcher graceful shutdown", () => {
+  void describe("HostMessageBatcher graceful shutdown", () => {
     void it("has disposed flag to prevent new chunks", () => {
-      assert.ok(chunkBatcherSource.includes("disposed = false"), "must have disposed flag")
-      assert.ok(chunkBatcherSource.includes("if (this.disposed)"), "must check disposed flag")
+      assert.ok(hostMessageBatcherSource.includes("disposed = false"), "must have disposed flag")
+      assert.ok(hostMessageBatcherSource.includes("if (this.disposed)"), "must check disposed flag")
     })
 
     void it("sets disposed flag before flushing in dispose", () => {
-      assert.ok(chunkBatcherSource.includes("this.disposed = true"), "must set disposed flag")
-      assert.ok(chunkBatcherSource.includes("this.flush()"), "must flush before clearing")
+      assert.ok(hostMessageBatcherSource.includes("this.disposed = true"), "must set disposed flag")
+      assert.ok(hostMessageBatcherSource.includes("this.flush()"), "must flush before clearing")
     })
   })
 

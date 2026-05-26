@@ -4,12 +4,12 @@
     "src/session/EventNormalizer.ts",
     "src/session/eventHandlers/StepFinishHandler.ts",
     "src/session/eventHandlers/ToolPartHandler.ts",
-    "src/chat/ChunkBatcher.ts",
+    "src/chat/HostMessageBatcher.ts",
     "src/utils/cssSanitizer.ts"
   ],
   "testRunner": "command",
   "commandRunner": {
-    "command": "npx tsx --test 'src/session/EventNormalizer.test.ts' 'src/session/eventHandlers/StepFinishHandler.test.ts' 'src/session/eventHandlers/ToolPartHandler.test.ts' 'src/chat/ChunkBatcher.test.ts' 'src/utils/cssSanitizer.test.ts'"
+    "command": "npx tsx --test 'src/session/EventNormalizer.test.ts' 'src/session/eventHandlers/StepFinishHandler.test.ts' 'src/session/eventHandlers/ToolPartHandler.test.ts' 'src/chat/HostMessageBatcher.test.ts' 'src/utils/cssSanitizer.test.ts'"
   },
   "reporters": ["progress", "html", "clear-text"],
   "concurrency": 4,

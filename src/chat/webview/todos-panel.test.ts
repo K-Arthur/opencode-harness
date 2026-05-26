@@ -9,7 +9,8 @@ import {
   setupChangedFilesDropdown,
   updateChangedFiles,
   resetChangedFilesDropdown,
-  handleDiffResponse
+  handleDiffResponse,
+  setCurrentSession,
 } from "./changed-files-dropdown"
 
 function setupDom() {
@@ -40,7 +41,8 @@ function renderChangedFilesList(container: HTMLElement, files: any[], options: a
     postMessage: options.postMessage || (() => {}),
     onOpenFile: options.onOpenFile || (() => {}),
   })
-  updateChangedFiles(files)
+  setCurrentSession("test-session")
+  updateChangedFiles("test-session", files)
   // Open the dropdown to render the tree into container
   btn.click()
 }

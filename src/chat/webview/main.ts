@@ -54,6 +54,7 @@ import { setupButtons as setupButtonsModule, type ButtonSetupDeps } from "./ui/b
 import { updateScrollMarkers as updateScrollMarkersModule, setupJumpToBottom as setupJumpToBottomModule, scrollMessageToTop as scrollMessageToTopModule, scrollToTurn as scrollToTurnModule, type ScrollMarkerDeps } from "./ui/scrollMarkers"
 import { createStreamOrchestrator, type StreamOrchestratorAPI } from "./streamOrchestrator"
 import { createTimeline, type TimelineAPI } from "./timeline"
+import { createComposer, type ComposerAPI } from "./composer"
 
 declare const acquireVsCodeApi: (() => {
   postMessage(message: Record<string, unknown>): void
@@ -294,35 +295,11 @@ function getVsCodeApi() {
   const LOCAL_COMMAND_ENTRIES: CommandEntry[] = toCommandEntries()
 
   function runCommandEntry(entry: CommandEntry): void {
-    const active = stateManager.getActiveSession()
-    if (!active) return
-    if (entry.source === "local" && entry.insertText) {
-      // Locals that take no args run immediately; ones that take args (trailing space) get inserted.
-      if (entry.insertText.endsWith(" ")) {
-        els.promptInput.value = entry.insertText
-        autoResizeTextarea()
-        updateSendButton()
-        els.promptInput.focus()
-        return
-      }
-      // Reuse the existing switch — just fire-and-forget via execute_command or local routing.
-      els.promptInput.value = entry.insertText
-      sendMessage()
-      return
-    }
-    if (entry.source === "server") {
-      vscode.postMessage({ type: "execute_command", command: `/${entry.name}`, sessionId: active.id })
-      return
-    }
-    // Custom prompt — host expands template and pushes prefill_prompt back.
-    vscode.postMessage({ type: "execute_command", command: `/${entry.name}`, sessionId: active.id })
+    composer.runCommandEntry(entry)
   }
 
   function insertIntoPrompt(text: string): void {
-    els.promptInput.value = text
-    autoResizeTextarea()
-    updateSendButton()
-    els.promptInput.focus()
+    composer.insertIntoPrompt(text)
   }
 
   const commandsModal = setupCommandsModal({
@@ -344,33 +321,8 @@ function getVsCodeApi() {
     onDeleteStash: (id) => vscode.postMessage({ type: "delete_stash", id }),
   })
 
-  // Steering mode state: "interrupt", "append", or "queue"
-  let currentSteerMode: 'interrupt' | 'append' | 'queue' = 'interrupt'
-
   function setSteerMode(mode: 'interrupt' | 'append' | 'queue') {
-    currentSteerMode = mode
-
-    // Update UI to reflect selected mode
-    const interruptBtn = document.getElementById("steer-mode-interrupt") as HTMLButtonElement
-    const appendBtn = document.getElementById("steer-mode-append") as HTMLButtonElement
-    const queueBtn = document.getElementById("steer-mode-queue") as HTMLButtonElement
-
-    if (interruptBtn) {
-      interruptBtn.classList.toggle("active", mode === "interrupt")
-      interruptBtn.setAttribute("aria-pressed", String(mode === "interrupt"))
-    }
-    if (appendBtn) {
-      appendBtn.classList.toggle("active", mode === "append")
-      appendBtn.setAttribute("aria-pressed", String(mode === "append"))
-    }
-    if (queueBtn) {
-      queueBtn.classList.toggle("active", mode === "queue")
-      queueBtn.setAttribute("aria-pressed", String(mode === "queue"))
-    }
-
-    // Update input area border color to indicate steering mode
-    els.inputArea.classList.remove("steer-interrupt", "steer-append", "steer-queue")
-    els.inputArea.classList.add(`steer-${mode}`)
+    composer.setSteerMode(mode)
   }
 
   const attachmentManager = createAttachmentManager({
@@ -415,8 +367,8 @@ function getVsCodeApi() {
       hideWelcomeView,
       updateTabBar,
       updateModeSelectorStateLocal,
-      updateSendButtonIcon,
-      updateSendButton,
+      updateSendButtonIcon: (isStreaming?: boolean, streamCapacity?: any) => composer.updateSendButtonIcon(isStreaming, streamCapacity),
+      updateSendButton: () => composer.updateSendButton(),
       getMessageList,
       createStreamHandlersForTab,
       setupJumpToBottom,
@@ -426,10 +378,10 @@ function getVsCodeApi() {
       toolElapsedTracker,
       fileEditBatcher: fileEditBatcherRef,
       promptQueues,
-      renderQueue,
+      renderQueue: (tabId: string) => composer.renderQueue(tabId),
       syncModeUI,
       renderRecentSessionsList,
-      persistQueues,
+      persistQueues: () => composer.persistQueues(),
     })
   }
 
@@ -452,6 +404,59 @@ function getVsCodeApi() {
     })
   }
 
+  let composer!: ComposerAPI
+
+  function wireComposer() {
+    composer = createComposer({
+      els: els as any,
+      vscode: vscode as any,
+      stateManager: stateManager as any,
+      attachmentManager: attachmentManager as any,
+      mention: mention as any,
+      modelDropdown: modelDropdown as any,
+      modelManager: modelManager as any,
+      commandsModal: commandsModal as any,
+      streamHandlers: streamHandlers as any,
+      tabBar: tabBar as any,
+      timers: timers as any,
+      promptQueues: promptQueues as any,
+      hideWelcomeView,
+      showSystemMessage,
+      handleRequestError,
+      addMessage,
+      updateTabBar,
+      switchTab,
+      switchToTab: ((id: string) => switchToTab(els as any, id)) as any,
+      createTabUI,
+      createNewTab,
+      closeTab,
+      updateAgentStatus: updateAgentStatus as any,
+      syncModelViews,
+      updateModeSelectorState: () => updateModeSelectorState(els as any, () => stateManager.getActiveSession()),
+      renderRecentSessionsList,
+      debouncedUpdateScrollMarkers,
+      STREAM_LIMIT_TOOLTIP,
+      getAllSessions: () => stateManager.getAllSessions() as any,
+    })
+  }
+
+  const settingsMenuDeps: SettingsMenuDeps = {
+    els: {
+      settingsBtn: els.settingsBtn,
+      settingsMenu: els.settingsMenu,
+      modelManagerPanel: els.modelManagerPanel,
+      themeCustomizerPanel: els.themeCustomizerPanel,
+      modeWarningModal: els.modeWarningModal,
+      mcpConfigPanel: els.mcpConfigPanel,
+      sessionModal: els.sessionModal,
+    },
+    closeModelManager: () => modelManager.close(),
+    closeThemeCustomizer,
+    closeModeWarning: () => closeModeWarning(),
+    closeMcpConfig: () => mcpConfig.close(),
+    closeSessionModal: () => closeSessionModal(),
+  }
+
   let fileEditBatcherRef!: FileEditBatcher
 
   function init() {
@@ -463,7 +468,8 @@ function getVsCodeApi() {
         postMessage: (msg) => vscode.postMessage(msg),
         showAutoModeWarning,
       })
-      setupInput()
+      wireComposer()
+      composer.setupInput()
       setupButtonsModule({
         els: {
           historyBtn: els.historyBtn,
@@ -632,12 +638,12 @@ function getVsCodeApi() {
       setupMessageListener()
       setupPermissionListener()
       setupDiffActionListener()
-      restoreQueues()
-      setupTimelineToggle()
-      setupThinkingToggle()
+      composer.restoreQueues()
+      timeline.setupTimelineToggle()
+      timeline.setupThinkingToggle()
       const cleanupToolKeyboardNav = setupToolKeyboardNav()
       setupSettingsMenuKeyboardNav()
-      updateSendButton()
+      composer.updateSendButton()
       setVsCodeApi(vscode)
       setSessionListPostMessage((msg) => vscode.postMessage(msg as Record<string, unknown>))
 
@@ -1172,457 +1178,63 @@ function getVsCodeApi() {
   /* ─── INPUT ─── */
 
   function setupInput() {
-    els.promptInput.addEventListener("input", onInputChange)
-    els.promptInput.addEventListener("keyup", updateSendButton)
-    els.promptInput.addEventListener("change", updateSendButton)
-    els.promptInput.addEventListener("compositionend", onInputChange)
-    els.promptInput.addEventListener("keydown", onInputKeydown)
-    els.promptInput.addEventListener("paste", onPaste)
-    els.sendBtn.addEventListener("click", sendMessage)
-    els.mentionBtn.addEventListener("click", () => {
-      els.promptInput.value += "@"
-      els.promptInput.focus()
-      mention.handleTrigger()
-    })
-    els.commandsPaletteBtn.addEventListener("click", () => {
-      commandsModal.open()
-      vscode.postMessage({ type: "list_commands" })
-    })
-
-    // Steering mode selector handlers
-    const steerModeSelector = document.getElementById("steer-mode-selector") as HTMLElement
-    const interruptBtn = document.getElementById("steer-mode-interrupt") as HTMLButtonElement
-    const appendBtn = document.getElementById("steer-mode-append") as HTMLButtonElement
-    const queueBtn = document.getElementById("steer-mode-queue") as HTMLButtonElement
-
-    if (interruptBtn) {
-      interruptBtn.addEventListener("click", () => setSteerMode("interrupt"))
-    }
-    if (appendBtn) {
-      appendBtn.addEventListener("click", () => setSteerMode("append"))
-    }
-    if (queueBtn) {
-      queueBtn.addEventListener("click", () => setSteerMode("queue"))
-    }
-
-    // Add keyboard shortcut hint
-    els.sendBtn?.setAttribute("title", "Send (Ctrl+Enter)")
-
-    window.addEventListener("oc-input-changed", () => {
-      autoResizeTextarea()
-      updateSendButton()
-    })
-
-    els.inputArea.addEventListener("dragover", (e) => {
-      e.preventDefault()
-      e.stopPropagation()
-      els.inputArea.classList.add("drag-over")
-    })
-    els.inputArea.addEventListener("dragleave", (e) => {
-      e.preventDefault()
-      e.stopPropagation()
-      els.inputArea.classList.remove("drag-over")
-    })
-    els.inputArea.addEventListener("drop", (e) => {
-      e.preventDefault()
-      e.stopPropagation()
-      els.inputArea.classList.remove("drag-over")
-      const files = e.dataTransfer?.files
-      if (files && files.length > 0) {
-        const fileMentions: string[] = []
-        const allowedMimes = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const
-        for (const f of Array.from(files)) {
-          if (allowedMimes.includes(f.type as typeof allowedMimes[number])) {
-            attachmentManager.attachImageBlob(f)
-          } else {
-            const relPath = (f as { webkitRelativePath?: string }).webkitRelativePath || f.name
-            fileMentions.push(`@file:${relPath}`)
-          }
-        }
-        if (fileMentions.length > 0) insertTextAtCursor(fileMentions.join(" "))
-      }
-    })
+    composer.setupInput()
   }
 
-	  function onInputChange() {
-	    autoResizeTextarea()
-	    mention.handleTrigger()
-	    updatePromptContextChips()
-	    updateSendButton()
-	  }
+  function onInputChange() {
+    composer.onInputChange()
+  }
 
   function onInputKeydown(e: KeyboardEvent) {
-    // Keyboard shortcuts for tabs
-    if (e.ctrlKey || e.metaKey) {
-      if (e.key === "Enter") {
-        e.preventDefault()
-        const active = stateManager.getActiveSession()
-        // When streaming, Ctrl+Enter sends as steer prompt
-        if (active?.isStreaming) {
-          sendSteerPrompt()
-        } else {
-          sendMessage()
-        }
-        // Visual feedback for shortcut
-        els.sendBtn?.classList.add("active-feedback")
-         timers.setTimeout(() => els.sendBtn?.classList.remove("active-feedback"), 200)
-        return
-      }
-      if (e.key === "t") {
-        e.preventDefault()
-        createNewTab()
-        return
-      }
-      if (e.key === "w") {
-        e.preventDefault()
-        const active = stateManager.getActiveSession()
-        if (active) closeTab(active.id)
-        return
-      }
-      if (e.key === "Tab") {
-        e.preventDefault()
-        const sessions = stateManager.getAllSessions()
-        const activeId = stateManager.getState().activeSessionId
-        if (sessions.length > 1 && activeId) {
-          const idx = sessions.findIndex((s) => s.id === activeId)
-          const nextIdx = e.shiftKey
-            ? (idx - 1 + sessions.length) % sessions.length
-            : (idx + 1) % sessions.length
-          const nextSession = sessions[nextIdx]
-          if (nextSession) switchTab(nextSession.id)
-        }
-        return
-      }
-      // Steering mode shortcuts (only when streaming)
-      if (e.key === "1") {
-        e.preventDefault()
-        setSteerMode("interrupt")
-        return
-      }
-      if (e.key === "2") {
-        e.preventDefault()
-        setSteerMode("append")
-        return
-      }
-      if (e.key === "3") {
-        e.preventDefault()
-        setSteerMode("queue")
-        return
-      }
-    }
-
-    if (!els.mentionDropdown.classList.contains("hidden")) {
-      mention.handleKeydown(e)
-      return
-    }
-
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      const active = stateManager.getActiveSession()
-      // When streaming, Enter sends as steer prompt
-      if (active?.isStreaming) {
-        sendSteerPrompt()
-      } else {
-        sendMessage()
-      }
-    }
+    composer.onInputKeydown(e)
   }
 
   function onPaste(e: ClipboardEvent) {
-    attachmentManager.onPaste(e)
+    composer.onPaste(e)
   }
 
   function updatePromptContextChips() {
-    attachmentManager.updatePromptContextChips()
+    composer.updatePromptContextChips()
   }
 
   function renderAttachmentChips() {
-    attachmentManager.renderAttachmentChips()
+    composer.renderAttachmentChips()
   }
 
   function autoResizeTextarea() {
-    if (!els.promptInput) return
-    const el = els.promptInput
-    el.style.height = "auto"
-    el.style.height = Math.min(el.scrollHeight, 200) + "px"
+    composer.autoResizeTextarea()
   }
 
-  function getSessionDisplayName(session: { name?: string; id?: string }): string {
-    return session.name?.trim() || "Untitled session"
-  }
-
-  function getStreamCapacityState() {
-    const streamingSessions = stateManager.getAllSessions().filter((s) => s.isStreaming)
-    const activeStreams = streamingSessions.length
-    const maxStreams = MAX_CONCURRENT_STREAMS
-    const isFull = activeStreams >= maxStreams
-    const streamingNames = streamingSessions
-      .map((s) => `"${getSessionDisplayName(s)}"`)
-      .join(", ")
-    return {
-      activeStreams,
-      maxStreams,
-      isFull,
-      streamingNames,
-      reason: isFull ? STREAM_LIMIT_TOOLTIP : "",
-    }
+  function getStreamCapacityState(): any {
+    return composer.getStreamCapacityState()
   }
 
   function updateSendButton() {
-    const hasText = els.promptInput.value.trim().length > 0
-    const hasAttachments = attachmentManager.getAttachments().length > 0
-    const active = stateManager.getActiveSession()
-    const isStreaming = active?.isStreaming || false
-    const streamCapacity = getStreamCapacityState()
-    const blockedByStreamLimit = !isStreaming && streamCapacity.isFull
-    const canSubmit = isStreaming || ((hasText || hasAttachments) && !blockedByStreamLimit)
-    // Button remains enabled during streaming so it can be used as a stop button
-    ;(els.sendBtn as HTMLButtonElement).disabled = !canSubmit
-    els.sendBtn?.classList.toggle("stream-limit-blocked", blockedByStreamLimit)
-    updateSendButtonIcon(isStreaming, streamCapacity)
-    updateModeSelectorStateLocal()
+    composer.updateSendButton()
   }
 
-  function updateSendButtonIcon(isStreaming?: boolean, streamCapacity = getStreamCapacityState()) {
-    const active = stateManager.getActiveSession()
-    const streaming = isStreaming ?? active?.isStreaming ?? false
-    if (streaming) {
-      els.sendBtn?.classList.add("stopping")
-      els.sendBtn?.classList.remove("stream-limit-blocked")
-      els.sendBtn?.setAttribute("aria-label", "Stop generation")
-      els.sendBtn?.setAttribute("title", "Stop generation")
-    } else if (streamCapacity.isFull) {
-      els.sendBtn?.classList.remove("stopping")
-      els.sendBtn?.classList.add("stream-limit-blocked")
-      const limitLabel = streamCapacity.streamingNames
-        ? `3 streams active (${streamCapacity.streamingNames}) — stop one to continue`
-        : STREAM_LIMIT_TOOLTIP
-      els.sendBtn?.setAttribute("aria-label", limitLabel)
-      els.sendBtn?.setAttribute("title", limitLabel)
-    } else {
-      els.sendBtn?.classList.remove("stopping")
-      els.sendBtn?.classList.remove("stream-limit-blocked")
-      els.sendBtn?.setAttribute("aria-label", "Send message")
-      els.sendBtn?.setAttribute("title", "Send (Ctrl+Enter)")
-    }
+  function updateSendButtonIcon(isStreaming?: boolean, streamCapacity?: any) {
+    composer.updateSendButtonIcon(isStreaming, streamCapacity)
   }
 
   function generateTitle(text: string): string {
-    if (!text.trim()) return ""
-    const firstSentence = text.split(/[.!?\n]/)[0] || text
-    const trimmed = firstSentence.trim()
-    if (trimmed.length === 0) return ""
-    if (trimmed.length > 40) return trimmed.slice(0, 37).trimEnd() + "..."
-    return trimmed
+    return composer.generateTitle(text)
   }
 
   function isAutoSessionName(name?: string): boolean {
-    const raw = (name || "").trim()
-    return (
-      !raw ||
-      raw === "Default" ||
-      raw === "New Chat" ||
-      raw === "New Session" ||
-      raw === "Untitled session" ||
-      /^Session [A-Za-z0-9]{1,8}$/.test(raw) ||
-      /^Session \d+$/.test(raw) ||
-      /^New session\b/i.test(raw) ||
-      /^Tab session\b/i.test(raw)
-    )
+    return composer.isAutoSessionName(name)
   }
 
   function persistQueues() {
-    const state = vscode.getState()
-    if (!state) return
-    const snapshot: Record<string, QueueItem[]> = {}
-    for (const [sid, q] of promptQueues.entries()) {
-      const items = q.persist().filter(i => i.state === "queued" || i.state === "failed")
-      if (items.length > 0) snapshot[sid] = items
-    }
-    vscode.setState({ ...state, queues: snapshot })
+    composer.persistQueues()
   }
 
   function restoreQueues() {
-    const state = vscode.getState() as { queues?: Record<string, QueueItem[]> } | null | undefined
-    const snapshot = state?.queues
-    if (!snapshot) return
-    for (const [sid, items] of Object.entries(snapshot)) {
-      if (!Array.isArray(items) || items.length === 0) continue
-      const q = createPromptQueue()
-      q.restore(items)
-      promptQueues.set(sid, q)
-    }
+    composer.restoreQueues()
   }
 
   function renderQueue(tabId: string) {
-    const queue = promptQueues.get(tabId)
-    const container = els.inputArea.querySelector(".prompt-queue") as HTMLElement | null
-    if (!queue || queue.getItems().length === 0) {
-      if (container) container.remove()
-      updateQueueSendButton()
-      return
-    }
-    let queueContainer = container
-    if (!queueContainer) {
-      queueContainer = document.createElement("div")
-      queueContainer.className = "prompt-queue"
-      queueContainer.setAttribute("role", "list")
-      queueContainer.setAttribute("aria-label", "Queued prompts (drag to reorder, Alt+Up/Down with focus)")
-      els.inputArea.insertBefore(queueContainer, els.inputWrapper)
-    }
-    queueContainer.replaceChildren()
-    const items = queue.getItems()
-    const queuedCount = items.filter((i) => i.state === "queued").length
-    const totalTokens = queue.getTotalEstimatedTokens()
-
-    // Queue header — count, total estimated tokens, and clear-all
-    const headerRow = document.createElement("div")
-    headerRow.className = "queue-header"
-    const countLabel = document.createElement("span")
-    countLabel.className = "queue-count"
-    countLabel.textContent = `${items.length} queued`
-    headerRow.appendChild(countLabel)
-    if (totalTokens > 0) {
-      const tokenLabel = document.createElement("span")
-      tokenLabel.className = "queue-tokens"
-      tokenLabel.textContent = `~${formatTokenCount(totalTokens)} tokens`
-      tokenLabel.title = `Estimated total token cost for all queued prompts (~${totalTokens})`
-      headerRow.appendChild(tokenLabel)
-    }
-    if (queuedCount > 1) {
-      const clearAllBtn = document.createElement("button")
-      clearAllBtn.className = "queue-clear-all"
-      clearAllBtn.textContent = "Clear all"
-      clearAllBtn.setAttribute("aria-label", `Clear ${queuedCount} queued prompts`)
-      clearAllBtn.addEventListener("click", () => {
-        for (const item of items) {
-          if (item.state === "queued") queue.remove(item.id)
-        }
-        persistQueues()
-        renderQueue(tabId)
-      })
-      headerRow.appendChild(clearAllBtn)
-    }
-    queueContainer.appendChild(headerRow)
-
-    for (const item of items) {
-      const chip = document.createElement("div")
-      chip.className = `queue-chip queue-chip--${item.state}`
-      chip.dataset.queueId = item.id
-      chip.setAttribute("role", "listitem")
-
-      const isMovable = item.state === "queued" || item.state === "failed"
-      if (isMovable) {
-        chip.draggable = true
-        chip.tabIndex = 0
-        chip.setAttribute("aria-grabbed", "false")
-        chip.setAttribute("aria-label",
-          `Queued prompt ${item.position + 1} of ${items.length}: ${item.text.slice(0, 60)}`)
-
-        // Drag handle — purely visual; whole chip is the drag source
-        const handle = document.createElement("span")
-        handle.className = "queue-chip-handle"
-        handle.setAttribute("aria-hidden", "true")
-        handle.innerHTML = '<svg viewBox="0 0 24 24" width="10" height="14" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>'
-        chip.appendChild(handle)
-      }
-
-      const text = document.createElement("span")
-      text.className = "queue-chip-text"
-      text.textContent = item.text.length > 40 ? item.text.slice(0, 40) + "…" : item.text
-      text.title = item.text
-      chip.appendChild(text)
-
-      if (item.attachments && item.attachments.length > 0) {
-        const attBadge = document.createElement("span")
-        attBadge.className = "queue-chip-att"
-        attBadge.textContent = `+${item.attachments.length}`
-        attBadge.title = `${item.attachments.length} image attachment(s)`
-        chip.appendChild(attBadge)
-      }
-
-      if ((item.estimatedTokens ?? 0) > 0 && item.state === "queued") {
-        const tokBadge = document.createElement("span")
-        tokBadge.className = "queue-chip-tokens"
-        tokBadge.textContent = `~${formatTokenCount(item.estimatedTokens!)}`
-        tokBadge.title = `~${item.estimatedTokens} estimated tokens`
-        chip.appendChild(tokBadge)
-      }
-
-      const badge = document.createElement("span")
-      badge.className = "queue-chip-state"
-      const stateLabels: Record<string, string> = { queued: "Q", sending: "Sending", streaming: "Active", completed: "Done", failed: "Error" }
-      badge.textContent = stateLabels[item.state] || item.state
-      chip.appendChild(badge)
-
-      if (item.state === "queued") {
-        // Edit on click — make the text editable inline
-        text.addEventListener("click", () => {
-          const input = document.createElement("input")
-          input.className = "queue-chip-input"
-          input.type = "text"
-          input.value = item.text
-          input.setAttribute("aria-label", "Edit queued prompt")
-          chip.replaceChild(input, text)
-          input.focus()
-          input.select()
-          const save = () => {
-            const newText = input.value.trim()
-            if (newText) {
-              queue.edit(item.id, newText)
-              persistQueues()
-              renderQueue(tabId)
-            }
-          }
-          input.addEventListener("blur", save)
-          input.addEventListener("keydown", (e) => {
-            if (e.key === "Enter") { e.preventDefault(); input.blur() }
-            if (e.key === "Escape") { e.preventDefault(); renderQueue(tabId) }
-          })
-        })
-
-        const removeBtn = document.createElement("button")
-        removeBtn.className = "queue-chip-remove icon-btn"
-        removeBtn.setAttribute("aria-label", "Remove queued prompt")
-        removeBtn.innerHTML = REMOVE_SVG
-        removeBtn.addEventListener("click", () => {
-          queue.remove(item.id)
-          persistQueues()
-          renderQueue(tabId)
-        })
-        chip.appendChild(removeBtn)
-      }
-
-      if (item.state === "failed") {
-        const retryBtn = document.createElement("button")
-        retryBtn.className = "queue-chip-retry icon-btn"
-        retryBtn.setAttribute("aria-label", "Retry failed prompt")
-        retryBtn.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>'
-        retryBtn.addEventListener("click", () => {
-          item.state = "queued"
-          persistQueues()
-          renderQueue(tabId)
-        })
-        chip.appendChild(retryBtn)
-
-        const removeBtn2 = document.createElement("button")
-        removeBtn2.className = "queue-chip-remove icon-btn"
-        removeBtn2.setAttribute("aria-label", "Remove failed prompt")
-        removeBtn2.innerHTML = REMOVE_SVG
-        removeBtn2.addEventListener("click", () => {
-          queue.remove(item.id)
-          persistQueues()
-          renderQueue(tabId)
-        })
-        chip.appendChild(removeBtn2)
-      }
-
-      if (isMovable) {
-        wireChipReorderHandlers(chip, item.id, tabId, queue)
-      }
-      queueContainer.appendChild(chip)
-    }
-    updateQueueSendButton()
+    composer.renderQueue(tabId)
   }
 
   function formatTokenCount(n: number): string {
@@ -1754,324 +1366,19 @@ function getVsCodeApi() {
   }
 
   function updateQueueSendButton() {
-    const active = stateManager.getActiveSession()
-    if (!active) return
-    const queue = promptQueues.get(active.id)
-    const qCount = queue ? queue.getItems().filter((i) => i.state === "queued").length : 0
-    const hint = els.inputArea.querySelector(".queue-hint") as HTMLElement | null
-    if (qCount > 0) {
-      if (!hint) {
-        const div = document.createElement("div")
-        div.className = "queue-hint"
-        els.inputArea.insertBefore(div, els.inputWrapper)
-      }
-      const hintEl = els.inputArea.querySelector(".queue-hint")!
-      hintEl.textContent = `${qCount} queued — auto-sends when current response completes`
-    } else {
-      if (hint) hint.remove()
-    }
+    composer.updateQueueSendButton()
   }
 
   function sendSteerPrompt() {
-    const active = stateManager.getActiveSession()
-
-    if (!active) return
-
-    const text = els.promptInput.value.trim()
-    if (!text && attachmentManager.getAttachments().length === 0) return
-
-    // Send steer prompt message with current mode
-    vscode.postMessage({
-      type: "send_steer_prompt",
-      sessionId: active.id,
-      text,
-      mode: currentSteerMode,
-      attachments: attachmentManager.getAttachments(),
-    })
-
-    // Clear input and attachments
-    els.promptInput.value = ""
-    attachmentManager.clearAttachments()
-    renderAttachmentChips()
-    autoResizeTextarea()
-    updateSendButton()
+    composer.sendSteerPrompt()
   }
 
   function sendMessage() {
-    const text = els.promptInput.value.trim()
-    let active = stateManager.getActiveSession()
-
-    if (active?.isStreaming) {
-      // When streaming and there's text, send as steer prompt
-      if (text || attachmentManager.getAttachments().length > 0) {
-        sendSteerPrompt()
-      } else {
-        // Send button acts as stop button when streaming and no text
-        abortStream()
-      }
-      return
-    }
-
-    if (!text && attachmentManager.getAttachments().length === 0) return
-
-    if (!active) {
-      // Create a new session lazily; the first user message promotes the title.
-      const title = generateTitle(text)
-      active = createNewTab(title)
-    }
-
-    // Always hide welcome on send — the user has chosen to start chatting.
-    // Without this, an active session restored from persisted webview state
-    // (but filtered out of init_state for having 0 messages) would leave the
-    // welcome screen covering the chat panel.
-    hideWelcomeView()
-
-    // Check concurrent streaming limit BEFORE mutating state
-    const streamCapacity = getStreamCapacityState()
-    if (streamCapacity.isFull) {
-      updateSendButton()
-      handleRequestError(active?.id,
-        streamCapacity.streamingNames
-          ? `${STREAM_LIMIT_TOOLTIP}. Currently streaming: ${streamCapacity.streamingNames}. Stop one to continue.`
-          : `${STREAM_LIMIT_TOOLTIP}. Stop a streaming tab to free a slot.`
-      )
-      return
-    }
-
-    // Ensure tab UI exists for this session, and switch to it
-    if (!els.tabPanels.querySelector(`.tab-panel[data-tab-id="${active.id}"]`)) {
-      createTabUI(active.id, active.name)
-      switchToTab(els, active.id)
-      updateTabBar()
-    } else if (stateManager.getState().activeSessionId !== active.id) {
-      switchTab(active.id)
-    }
-
-    // Handle slash commands
-    if (text.startsWith("/")) {
-      const parts = text.split(/\s+/)
-      const cmd = (parts[0] || "").toLowerCase()
-      const commandArgs = parts.slice(1).join(" ")
-      switch (cmd) {
-        case "/clear":
-          // Delegate to extension host — preserves session in history, creates new server session
-          vscode.postMessage({ type: "execute_command", command: "/clear", sessionId: active.id })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/model":
-          if (commandArgs) {
-            stateManager.setSessionModel(active.id, commandArgs)
-            stateManager.setGlobalModel(commandArgs)
-            modelDropdown.setCurrentModel(commandArgs)
-            syncModelViews()
-            vscode.postMessage({ type: "set_model", model: commandArgs, sessionId: active.id })
-            els.promptInput.value = ""
-            autoResizeTextarea()
-            updateSendButton()
-            return
-          }
-          vscode.postMessage({ type: "get_models" })
-          modelDropdown.open()
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/cost": {
-          // Delegate to extension host for server cost figures
-          vscode.postMessage({ type: "execute_command", command: "/cost", sessionId: active.id })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        }
-        case "/new":
-          createNewTab()
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/help":
-          // Delegate to extension host — shows markdown table with commands
-          vscode.postMessage({ type: "execute_command", command: "/help", sessionId: active.id })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/export":
-          vscode.postMessage({ type: "export_chat" })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/export-md":
-          vscode.postMessage({ type: "export_chat" })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/export-json":
-          vscode.postMessage({ type: "export_chat_json" })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/export-text":
-          vscode.postMessage({ type: "export_chat_text" })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/copy":
-          vscode.postMessage({ type: "copy_chat" })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/stash": {
-          // Usage: /stash <name> <content...>   OR   /stash (uses textarea below cmd as content)
-          const stashName = (parts[1] && parts[1].trim()) ? parts[1] : "Untitled"
-          const inlineContent = parts.slice(2).join(" ").trim()
-          const stashContent = inlineContent || text.replace(/^\/stash(?:\s+\S+)?\s*/i, "").trim()
-          if (!stashContent) {
-            showSystemMessage(active.id, "Usage: /stash <name> <content>")
-          } else {
-            vscode.postMessage({ type: "stash_prompt", name: stashName, content: stashContent, isGlobal: true })
-          }
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        }
-        case "/stashes":
-          vscode.postMessage({ type: "list_stashes" })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/compact":
-          vscode.postMessage({ type: "compact_session", sessionId: active.id })
-          showSystemMessage(active.id, "Compacting session...")
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/commands":
-          // Open immediately so the user always sees built-in commands even if the server is offline.
-          commandsModal.open()
-          // Then request fresh server commands; the command_list handler will refresh the modal list.
-          vscode.postMessage({ type: "list_commands" })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/queue":
-          renderQueue(active.id)
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/continue":
-          // Delegate to extension host — resumes most recently closed session
-          vscode.postMessage({ type: "execute_command", command: "/continue", sessionId: active.id })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        default: {
-          // Custom prompts and OpenCode server commands are discovered at runtime,
-          // so the host is the source of truth for non-local slash commands.
-          vscode.postMessage({ type: "execute_command", command: cmd, arguments: commandArgs, sessionId: active.id })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        }
-      }
-    }
-
-    const attachments = attachmentManager.getAttachments()
-    const sendModel = active.model || modelDropdown.getCurrentModel() || stateManager.getState().globalModel
-    if (!sendModel) {
-      updateSendButton()
-      handleRequestError(active.id, "No model selected. Please select a model to continue.")
-      return
-    }
-
-    // Post slash-commands: not a slash command, proceed with normal send
-    els.promptInput.value = ""
-    autoResizeTextarea()
-    updateSendButton()
-
-    const msgObj: ChatMessage = {
-      role: "user",
-      id: createWebviewId("user"),
-      blocks: [
-        ...(text ? [{ type: "text", text }] : []),
-        ...attachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
-      ],
-      timestamp: Date.now(),
-      sessionId: active.id,
-    }
-
-    attachmentManager.clearAttachments()
-    renderAttachmentChips()
-
-    addMessage(active.id, msgObj)
-    stateManager.setStreaming(active.id, true)
-    updateTabBar()
-    updateModeSelectorStateLocal()
-    updateSendButton()
-
-    const stream = streamHandlers.get(active.id)
-    if (stream) stream.showTypingIndicator("Thinking...")
-    updateAgentStatus("thinking")
-
-    vscode.postMessage({
-      type: "send_prompt",
-      text,
-      sessionId: active.id,
-      messageId: msgObj.id,
-      model: sendModel,
-      mode: active.mode,
-      ...(attachments.length > 0 ? { attachments } : {}),
-    })
+    composer.sendMessage()
   }
 
   function abortStream() {
-    const active = stateManager.getActiveSession()
-    if (!active) return
-
-    stateManager.setStreaming(active.id, false)
-    updateTabBar()
-    updateModeSelectorStateLocal()
-
-    const stream = streamHandlers.get(active.id)
-    if (stream) stream.hideTypingIndicator()
-
-    updateSendButtonIcon(false)
-    updateSendButton()
-
-    vscode.postMessage({ type: "abort", sessionId: active.id })
-  }
-
-
-  const settingsMenuDeps: SettingsMenuDeps = {
-    els: {
-      settingsBtn: els.settingsBtn,
-      settingsMenu: els.settingsMenu,
-      modelManagerPanel: els.modelManagerPanel,
-      themeCustomizerPanel: els.themeCustomizerPanel,
-      modeWarningModal: els.modeWarningModal,
-      mcpConfigPanel: els.mcpConfigPanel,
-      sessionModal: els.sessionModal,
-    },
-    closeModelManager: () => modelManager.close(),
-    closeThemeCustomizer,
-    closeModeWarning: () => closeModeWarning(),
-    closeMcpConfig: () => mcpConfig.close(),
-    closeSessionModal: () => closeSessionModal(),
+    composer.abortStream()
   }
 
   function closeSettingsMenu() {
@@ -3297,19 +2604,7 @@ function getVsCodeApi() {
   }
 
   function insertTextAtCursor(text: string) {
-    const input = els.promptInput
-    const start = input.selectionStart ?? input.value.length
-    const end = input.selectionEnd ?? input.value.length
-    const needsSpaceBefore = start > 0 && !/\s$/.test(input.value.slice(0, start))
-    const insert = `${needsSpaceBefore ? " " : ""}${text}`
-    input.value = input.value.slice(0, start) + insert + input.value.slice(end)
-    const cursor = start + insert.length
-    input.setSelectionRange(cursor, cursor)
-    input.focus()
-	    autoResizeTextarea()
-	    updatePromptContextChips()
-	    updateSendButton()
-    stateManager.save()
+    composer.insertTextAtCursor(text)
   }
 
   function handleCostUpdate(sessionId: string, cost: number) {

@@ -18,6 +18,7 @@ import {
   GEAR_SVG,
 } from "./icons"
 import { renderToolCallBlock, isToolCallBlock, groupConsecutiveToolCalls } from "./toolCallRenderer"
+import { renderFileChipListHtml } from "./file-chip-list"
 import { getThinkingVisible } from "./displayPrefs"
 import type {
   Block,
@@ -551,6 +552,7 @@ const RENDERER_MAP: Readonly<Record<string, BlockRenderer>> = {
   'diff': renderNewDiffBlock,
   'permission': renderPermissionBlock,
   'task_banner': renderTaskBanner,
+  'question': renderQuestionBlock,
   'context': renderContextBlock,
   'error': renderErrorBlock,
   'image': renderImageBlock,
@@ -1583,6 +1585,191 @@ function renderPermissionBlock(block: Block, _opts: RenderOptions): HTMLElement 
 
 function renderTaskBanner(block: Block, _opts: RenderOptions): HTMLElement | null {
   const status = (block.status as "success" | "error" | "warning") || "success"
+  const textVal = block.text || "Task Status Updated"
+
+  const multiMatch = textVal.match(/^Edited (\d+) files:\s*(.*)$/)
+  const singleMatch = !multiMatch ? textVal.match(/^Edited (?!.*files:)(.*)$/) : null
+
+  // Non-edit banners (errors, warnings, generic status) keep the original
+  // card layout — those carry alert weight and benefit from the larger
+  // visual footprint. Edit banners get a compact single-row layout that
+  // shares the file-chip helper with the bottom strip.
+  if (status !== "success" || (!multiMatch && !singleMatch)) {
+    return renderLegacyTaskBanner(block, _opts, status, textVal)
+  }
+
+  const files: string[] = multiMatch
+    ? multiMatch[2]!.split(",").map((f) => f.trim()).filter(Boolean)
+    : [singleMatch![1]!.trim()]
+
+  const wrapper = document.createElement("div")
+  wrapper.className = `task-banner task-banner--success task-banner--compact`
+  wrapper.setAttribute("role", "status")
+  wrapper.setAttribute("aria-label", `Edited ${files.length} file${files.length !== 1 ? "s" : ""} — click to expand`)
+  wrapper.style.cursor = files.length > FILE_CHIP_VISIBLE ? "pointer" : "default"
+
+  const chevron = document.createElement("span")
+  chevron.className = "task-banner-chevron"
+  chevron.setAttribute("aria-hidden", "true")
+  chevron.innerHTML = `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`
+  wrapper.appendChild(chevron)
+
+  const checkmark = document.createElement("span")
+  checkmark.className = "task-banner-check"
+  checkmark.setAttribute("aria-hidden", "true")
+  checkmark.innerHTML = SUCCESS_SVG
+  wrapper.appendChild(checkmark)
+
+  // Inline chip list — shares the same helper (and therefore the same look)
+  // as the persistent #changed-files-strip at the bottom of the composer.
+  const chipHost = document.createElement("span")
+  chipHost.className = "task-banner-chips"
+  chipHost.innerHTML = renderFileChipListHtml(files, {
+    maxVisible: FILE_CHIP_VISIBLE,
+    showLeadingIcon: false,
+    showCountLabel: true,
+  })
+  wrapper.appendChild(chipHost)
+
+  // Wire chip-click and toggle-expand. Click on a chip opens the file;
+  // click anywhere else on the banner toggles the expanded chip list.
+  wrapper.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement | null
+    const chip = target?.closest?.(".cf-strip-chip") as HTMLElement | null
+    if (chip && chipHost.contains(chip)) {
+      e.stopPropagation()
+      const path = chip.getAttribute("data-path") || ""
+      if (path) _opts.postMessage?.({ type: "open_file", path })
+      return
+    }
+    if (files.length > FILE_CHIP_VISIBLE) {
+      const isExpanded = wrapper.classList.toggle("task-banner--expanded")
+      // Re-render chips in expanded mode (no overflow pill, all chips shown)
+      chipHost.innerHTML = renderFileChipListHtml(files, {
+        maxVisible: isExpanded ? files.length : FILE_CHIP_VISIBLE,
+        showLeadingIcon: false,
+        showCountLabel: true,
+      })
+    }
+  })
+
+  return wrapper
+}
+
+const FILE_CHIP_VISIBLE = 4
+
+// ---------------------------------------------------------------------------
+// Question block — interactive UI for the opencode `question` tool
+// ---------------------------------------------------------------------------
+
+function renderQuestionBlock(block: Block, opts: RenderOptions): HTMLElement | null {
+  const wrapper = document.createElement("div")
+  wrapper.className = "question-block"
+  wrapper.setAttribute("role", "form")
+
+  const sessionId = (block.sessionId as string | undefined) || ""
+  const toolCallId = (block.toolCallId as string | undefined) || (block.id as string | undefined) || ""
+  const messageId = (opts.messageId as string | undefined) || (block.id as string | undefined) || ""
+  const questionText = (block.text as string | undefined) || (block.question as string | undefined) || ""
+  const options = Array.isArray(block.options) ? (block.options as unknown[]).map(String) : []
+  const allowFreeText = block.allowFreeText !== false
+
+  let answered = false
+
+  const header = document.createElement("div")
+  header.className = "question-block-header"
+  const icon = document.createElement("span")
+  icon.className = "question-block-icon"
+  icon.setAttribute("aria-hidden", "true")
+  icon.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`
+  header.appendChild(icon)
+  const label = document.createElement("span")
+  label.className = "question-block-label"
+  label.textContent = "Question from model"
+  header.appendChild(label)
+  wrapper.appendChild(header)
+
+  const text = document.createElement("div")
+  text.className = "question-text"
+  text.textContent = questionText
+  wrapper.appendChild(text)
+
+  function submit(value: string, source: "option" | "freetext") {
+    if (answered) return
+    if (!value) return
+    answered = true
+    wrapper.classList.add("question-block--answered")
+    wrapper.querySelectorAll<HTMLButtonElement>(".question-option, .question-submit").forEach((b) => {
+      b.disabled = true
+    })
+    const ta = wrapper.querySelector(".question-freetext") as HTMLTextAreaElement | null
+    if (ta) ta.disabled = true
+
+    const echo = document.createElement("div")
+    echo.className = "question-answer"
+    echo.textContent = `Answered: ${value}`
+    wrapper.appendChild(echo)
+
+    opts.postMessage?.({
+      type: "question_answer",
+      sessionId,
+      toolCallId,
+      messageId,
+      value,
+      source,
+    })
+  }
+
+  if (options.length > 0) {
+    const optionsList = document.createElement("div")
+    optionsList.className = "question-options"
+    for (const opt of options) {
+      const btn = document.createElement("button")
+      btn.type = "button"
+      btn.className = "question-option"
+      btn.textContent = opt
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation()
+        submit(opt, "option")
+      })
+      optionsList.appendChild(btn)
+    }
+    wrapper.appendChild(optionsList)
+  }
+
+  if (allowFreeText) {
+    const ta = document.createElement("textarea")
+    ta.className = "question-freetext"
+    ta.rows = 2
+    ta.placeholder = "Or type a custom answer…"
+    ta.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        submit(ta.value.trim(), "freetext")
+      }
+    })
+    wrapper.appendChild(ta)
+
+    const submitBtn = document.createElement("button")
+    submitBtn.type = "button"
+    submitBtn.className = "question-submit"
+    submitBtn.textContent = "Submit"
+    submitBtn.addEventListener("click", (e) => {
+      e.stopPropagation()
+      submit(ta.value.trim(), "freetext")
+    })
+    wrapper.appendChild(submitBtn)
+  }
+
+  return wrapper
+}
+
+function renderLegacyTaskBanner(
+  block: Block,
+  _opts: RenderOptions,
+  status: "success" | "error" | "warning",
+  textVal: string,
+): HTMLElement {
   const wrapper = document.createElement("div")
   wrapper.className = `task-banner task-banner--${status}`
   wrapper.setAttribute("role", status === "error" ? "alert" : "status")
@@ -1595,81 +1782,11 @@ function renderTaskBanner(block: Block, _opts: RenderOptions): HTMLElement | nul
   icon.innerHTML = status === "success" ? SUCCESS_SVG : ERROR_SVG
   header.appendChild(icon)
 
-  const textVal = block.text || "Task Status Updated"
-  const multiMatch = textVal.match(/^Edited (\d+) files:\s*(.*)$/)
-  const singleMatch = textVal.match(/^Edited (?!.*files:)(.*)$/)
-
   const title = document.createElement("span")
   title.className = "task-banner-title"
-
-  if (multiMatch && multiMatch[2]) {
-    title.textContent = `Edited ${multiMatch[1]} files`
-    header.appendChild(title)
-    wrapper.appendChild(header)
-
-    const filesContainer = document.createElement("div")
-    filesContainer.className = "task-banner-files"
-    const filesList = multiMatch[2].split(",").map(f => f.trim()).filter(Boolean)
-    filesList.forEach(file => {
-      const chip = document.createElement("span")
-      chip.className = "task-file-badge"
-      chip.title = file
-      chip.style.cursor = "pointer"
-      chip.addEventListener("click", (e) => {
-        e.stopPropagation()
-        _opts.postMessage?.({ type: "open_file", path: file })
-      })
-
-      const ext = file.split(".").pop() || "FIL"
-      const fileIcon = document.createElement("span")
-      fileIcon.className = `task-file-icon task-file-icon--${ext.toLowerCase()}`
-      fileIcon.textContent = ext.substring(0, 3).toUpperCase()
-
-      const fileName = document.createElement("span")
-      fileName.className = "task-file-name"
-      fileName.textContent = file
-
-      chip.appendChild(fileIcon)
-      chip.appendChild(fileName)
-      filesContainer.appendChild(chip)
-    })
-    wrapper.appendChild(filesContainer)
-  } else if (singleMatch && singleMatch[1]) {
-    title.textContent = "Edited file"
-    header.appendChild(title)
-    wrapper.appendChild(header)
-
-    const filesContainer = document.createElement("div")
-    filesContainer.className = "task-banner-files"
-
-    const file = singleMatch[1].trim()
-    const chip = document.createElement("span")
-    chip.className = "task-file-badge"
-    chip.title = file
-    chip.style.cursor = "pointer"
-    chip.addEventListener("click", (e) => {
-      e.stopPropagation()
-      _opts.postMessage?.({ type: "open_file", path: file })
-    })
-
-    const ext = file.split(".").pop() || "FIL"
-    const fileIcon = document.createElement("span")
-    fileIcon.className = `task-file-icon task-file-icon--${ext.toLowerCase()}`
-    fileIcon.textContent = ext.substring(0, 3).toUpperCase()
-
-    const fileName = document.createElement("span")
-    fileName.className = "task-file-name"
-    fileName.textContent = file.split("/").pop() || file
-
-    chip.appendChild(fileIcon)
-    chip.appendChild(fileName)
-    filesContainer.appendChild(chip)
-    wrapper.appendChild(filesContainer)
-  } else {
-    title.textContent = textVal
-    header.appendChild(title)
-    wrapper.appendChild(header)
-  }
+  title.textContent = textVal
+  header.appendChild(title)
+  wrapper.appendChild(header)
 
   return wrapper
 }
