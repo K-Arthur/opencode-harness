@@ -361,8 +361,8 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
     <span class="cf-summary-count">${sorted.length} file${sorted.length !== 1 ? "s" : ""}</span>
     <span class="cf-summary-stats"><span class="cf-stat-added">+${totalAdded}</span> <span class="cf-stat-removed">−${totalRemoved}</span></span>
     <div class="cf-summary-diffbar" aria-hidden="true">
-      <div class="cf-summary-diffbar-added" style="width:${addedPct}%"></div>
-      <div class="cf-summary-diffbar-removed" style="width:${100 - addedPct}%"></div>
+      <div class="cf-summary-diffbar-added" style="--p:${(addedPct / 100).toFixed(3)}"></div>
+      <div class="cf-summary-diffbar-removed" style="--p:${((100 - addedPct) / 100).toFixed(3)}"></div>
     </div>
   `
   container.appendChild(summary)

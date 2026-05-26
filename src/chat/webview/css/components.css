@@ -95,7 +95,110 @@ body.hide-thinking .thinking-block { display: none; }
   font-weight: 600;
 }
 
-/* ─── BUTTONS ─── */
+/* ───────────────────────────────────────────────────────────────
+   OC-BTN — Unified button primitive
+   ───────────────────────────────────────────────────────────────
+
+   One base, variants driven by data-attributes. Lets us define
+   hover / focus / active / disabled in ONE place; new buttons
+   pick up state coverage automatically.
+
+     <button class="oc-btn" data-variant="primary">Send</button>
+     <button class="oc-btn" data-variant="secondary">Cancel</button>
+     <button class="oc-btn" data-variant="ghost" data-size="icon" aria-label="…"><svg/></button>
+
+   This is the canonical button. Legacy variants (.btn-primary,
+   .icon-btn, etc.) live below for backwards compatibility while
+   we migrate; do NOT add new bespoke button rules.
+*/
+.oc-btn {
+  --oc-btn-bg: transparent;
+  --oc-btn-fg: var(--color-fg);
+  --oc-btn-border: transparent;
+  --oc-btn-hover-bg: var(--oc-list-hover);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--size-target-comfortable);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--oc-btn-border);
+  border-radius: var(--radius-md);
+  background: var(--oc-btn-bg);
+  color: var(--oc-btn-fg);
+  font: 500 var(--text-sm)/1.2 var(--font-sans);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color var(--duration-fast) var(--ease-out),
+              color           var(--duration-fast) var(--ease-out),
+              border-color    var(--duration-fast) var(--ease-out),
+              box-shadow      var(--duration-fast) var(--ease-out),
+              transform       var(--duration-fast) var(--ease-out);
+}
+
+.oc-btn:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--oc-btn-hover-bg);
+}
+.oc-btn:active:not(:disabled, [aria-disabled="true"]) {
+  transform: scale(0.97);
+}
+.oc-btn:disabled,
+.oc-btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Variants */
+.oc-btn[data-variant="primary"] {
+  --oc-btn-bg: var(--oc-accent);
+  --oc-btn-fg: var(--oc-accent-fg);
+  --oc-btn-hover-bg: var(--oc-accent-hover);
+  --oc-btn-border: var(--oc-accent);
+  box-shadow: var(--shadow-glow);
+  font-weight: 600;
+}
+.oc-btn[data-variant="secondary"] {
+  --oc-btn-bg: var(--oc-button-secondary);
+  --oc-btn-fg: var(--oc-button-secondary-fg);
+  --oc-btn-hover-bg: var(--oc-button-secondary-hover);
+  --oc-btn-border: var(--oc-glass-border);
+}
+.oc-btn[data-variant="ghost"] {
+  /* Inherits transparent bg + list-hover */
+  padding-inline: var(--space-2);
+}
+.oc-btn[data-variant="danger"] {
+  --oc-btn-bg: var(--oc-error);
+  --oc-btn-fg: #ffffff;
+  --oc-btn-hover-bg: var(--oc-error-action);
+  --oc-btn-border: var(--oc-error);
+}
+
+/* Sizes */
+.oc-btn[data-size="sm"] {
+  min-height: var(--size-target-min);
+  padding-inline: var(--space-2);
+  font-size: var(--text-xs);
+}
+.oc-btn[data-size="lg"] {
+  min-height: var(--size-target-large);
+  padding-inline: var(--space-4);
+  font-size: var(--text-md);
+}
+.oc-btn[data-size="icon"] {
+  padding: 0;
+  inline-size: var(--size-target-comfortable);
+  block-size: var(--size-target-comfortable);
+  aspect-ratio: 1;
+}
+.oc-btn[data-size="icon"][data-density="compact"] {
+  inline-size: var(--size-target-min);
+  block-size: var(--size-target-min);
+}
+
+/* ─── BUTTONS (legacy variants — to be migrated to .oc-btn) ─── */
 
 .btn {
   display: inline-flex;
@@ -109,7 +212,7 @@ body.hide-thinking .thinking-block { display: none; }
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
   min-height: var(--size-target-comfortable);
 }
 
@@ -121,7 +224,7 @@ body.hide-thinking .thinking-block { display: none; }
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
 }
 
 .btn-icon:hover {
@@ -151,8 +254,18 @@ body.hide-thinking .thinking-block { display: none; }
   color: var(--oc-button-fg);
   box-shadow: var(--shadow-glow);
   font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* Eyebrow: tiny, tracked-out, all-caps labels reserved for ≤3-word headings
+   (e.g. "TRY" above the prompt starters). Do NOT apply to button labels —
+   uppercased body text reduces reading speed and harms accessibility. */
+.oc-eyebrow {
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  color: var(--color-muted);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -268,9 +381,13 @@ body.hide-thinking .thinking-block { display: none; }
 
 .todo-progress-bar-fill {
   height: 100%;
+  width: 100%;
   background: var(--oc-accent);
   border-radius: var(--radius-full, 9999px);
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: left center;
+  transform: scaleX(var(--p, 0));
+  transition: transform var(--duration-slow) var(--ease-smooth);
+  will-change: transform;
 }
 
 /* Filter Tabs */
@@ -445,7 +562,7 @@ body.hide-thinking .thinking-block { display: none; }
 }
 
 .todo-tag {
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   padding: 1px 5px;
   border-radius: 3px;
@@ -557,7 +674,7 @@ body.hide-thinking .thinking-block { display: none; }
 }
 
 .changed-file-stat {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   padding: 1px 5px;
   border-radius: var(--radius-xs);
@@ -684,7 +801,7 @@ body.hide-thinking .thinking-block { display: none; }
   font-size: var(--text-2xs);
   color: var(--color-muted);
   cursor: pointer;
-  transition: all var(--duration-fast);
+  transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast), opacity var(--duration-fast), box-shadow var(--duration-fast);
 }
 
 .skills-modal-filter-btn:hover {
@@ -731,7 +848,7 @@ body.hide-thinking .thinking-block { display: none; }
   justify-content: center;
   flex-shrink: 0;
   margin-top: 2px;
-  transition: all var(--duration-fast);
+  transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast), opacity var(--duration-fast), box-shadow var(--duration-fast);
 }
 
 .skill-item-toggle:focus-visible {
@@ -872,8 +989,12 @@ body.hide-thinking .thinking-block { display: none; }
 
 .subagent-item-progress-bar {
   height: 100%;
+  width: 100%;
   background: var(--oc-accent);
-  transition: width var(--duration-fast);
+  transform-origin: left center;
+  transform: scaleX(var(--p, 0));
+  transition: transform var(--duration-fast) var(--ease-out);
+  will-change: transform;
 }
 
 .subagent-item-output {
@@ -902,7 +1023,7 @@ body.hide-thinking .thinking-block { display: none; }
   font-size: var(--text-2xs);
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--duration-fast);
+  transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast), opacity var(--duration-fast), box-shadow var(--duration-fast);
 }
 
 .subagent-cancel-btn:hover {
@@ -999,7 +1120,7 @@ body.hide-thinking .thinking-block { display: none; }
 /* ─── TEXTAREA ─── */
 
 textarea {
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
 }
 
 /* ─── CONTEXT CHIPS ─── */
@@ -1022,7 +1143,7 @@ textarea {
   text-overflow: ellipsis;
   vertical-align: middle;
   margin: 0 4px;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
   position: relative;
 }
 
@@ -1099,7 +1220,7 @@ textarea {
   gap: var(--space-2);
   padding: var(--space-1) var(--space-2-5);
   background: color-mix(in srgb, var(--oc-accent) 8%, var(--oc-glass-bg));
-  backdrop-filter: blur(8px);
+  backdrop-filter: var(--blur-surface);
   border: 1px solid color-mix(in srgb, var(--oc-accent) 20%, var(--oc-border));
   border-radius: var(--radius-md);
   color: var(--oc-accent);
@@ -1429,7 +1550,7 @@ textarea {
     border-radius: var(--radius-md);
     font-size: var(--text-xs);
     cursor: pointer;
-    transition: all var(--duration-fast) var(--ease-out);
+    transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
   }
 
   .mcp-config-row-edit {
@@ -1713,7 +1834,7 @@ textarea {
   font-size: var(--text-2xs);
   color: var(--color-muted);
   cursor: pointer;
-  transition: all var(--duration-fast);
+  transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast), opacity var(--duration-fast), box-shadow var(--duration-fast);
 }
 .commands-modal-filter-btn:hover { border-color: var(--oc-accent); color: var(--color-fg); }
 .commands-modal-filter-btn.active {
@@ -1854,7 +1975,7 @@ textarea {
   font-size: var(--text-2xs);
   color: var(--color-fg);
   cursor: pointer;
-  transition: all var(--duration-fast);
+  transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast), opacity var(--duration-fast), box-shadow var(--duration-fast);
 }
 .commands-modal-stash-btn:hover { border-color: var(--oc-accent); }
 .commands-modal-stash-btn-primary {
@@ -1906,8 +2027,17 @@ textarea {
   overflow: hidden;
   background: var(--oc-border);
 }
-.cf-summary-diffbar-added  { background: var(--usage-green, #4caf50); transition: width 0.3s; }
-.cf-summary-diffbar-removed { background: var(--usage-red, #f44336); transition: width 0.3s; }
+.cf-summary-diffbar-added,
+.cf-summary-diffbar-removed {
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  transform: scaleX(var(--p, 0));
+  transition: transform var(--duration-slow) var(--ease-smooth);
+  will-change: transform;
+}
+.cf-summary-diffbar-added  { background: var(--usage-green, #4caf50); }
+.cf-summary-diffbar-removed { background: var(--usage-red, #f44336); }
 
 /* Controls row */
 .cf-controls {
@@ -2149,7 +2279,7 @@ textarea {
   border: 1px solid var(--oc-border);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-  z-index: 9000;
+  z-index: var(--z-tooltip);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2206,7 +2336,7 @@ textarea {
   border: 1px solid var(--oc-border);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-  z-index: 9000;
+  z-index: var(--z-tooltip);
   display: flex;
   flex-direction: column;
   overflow: hidden;

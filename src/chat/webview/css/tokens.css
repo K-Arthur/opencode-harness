@@ -57,6 +57,20 @@
   --oc-glass-border: var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
   --oc-glass-blur: blur(12px);
 
+  /* ─── Backdrop filter scope tokens ─────────────────────────────
+     Two distinct backdrop blur tokens keep cost predictable:
+       --blur-surface : applied only to floating TOP-LAYER surfaces
+                        (jump-to-bottom, dropdowns, modals, sticky
+                        toolbar). One layer per visible surface.
+       --blur-bubble  : applied per-message. Defaults to `none` so
+                        a long chat does not pay the compositing
+                        cost on every bubble. Authors can enable it
+                        via `body.glass-bubbles` for low-density
+                        sessions or screenshots.
+  */
+  --blur-surface: var(--oc-glass-blur);
+  --blur-bubble: none;
+
   /* ─── Spacing: 4px baseline grid ─── */
   --space-0: 0px;
   --space-px: 1px;
@@ -114,6 +128,10 @@
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.2);
   --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.5);
   --shadow-mission: 0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--oc-glass-border);
+  /* Accent glow — used by primary buttons & focused affordances.
+     Defined late enough to reference --oc-accent-border/glow tokens below. */
+  --shadow-glow: 0 0 0 1px var(--oc-accent-border, transparent),
+                 0 4px 14px var(--oc-accent-glow, transparent);
 
   /* ─── Animation ─── */
   --duration-instant: 100ms;
@@ -326,6 +344,20 @@
 
 .vscode-dark {
   --oc-glass-bg: rgba(22, 22, 26, 0.7);
+}
+
+/* Opt-in: enable per-bubble glass when explicitly requested. */
+body.glass-bubbles {
+  --blur-bubble: var(--oc-glass-blur);
+}
+
+/* Reduced motion (and reduced data) implies low-end hardware preference —
+   disable both per-bubble and top-surface blur to recover compositing budget. */
+@media (prefers-reduced-motion: reduce), (prefers-reduced-data: reduce) {
+  :root {
+    --blur-surface: none;
+    --blur-bubble: none;
+  }
 }
 
 /* High Contrast Adjustments — dark (black bg / white text / yellow accents) */

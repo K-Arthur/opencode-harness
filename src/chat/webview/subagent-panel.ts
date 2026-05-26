@@ -174,8 +174,9 @@ function renderSubagentList(container: HTMLElement, activities: SubagentActivity
       progressContainer.className = "subagent-progress-container"
 
       const progressBar = document.createElement("div")
-      progressBar.className = "subagent-progress-bar"
-      progressBar.style.width = `${activity.progress}%`
+      progressBar.className = "subagent-item-progress-bar"
+      const ratio = Math.max(0, Math.min(1, activity.progress / 100))
+      progressBar.style.setProperty("--p", String(ratio))
 
       progressContainer.appendChild(progressBar)
       item.appendChild(progressContainer)

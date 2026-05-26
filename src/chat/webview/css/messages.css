@@ -110,8 +110,8 @@
   gap: var(--space-2);
   padding: var(--space-1-5) var(--space-4);
   background: var(--oc-glass-bg, var(--bg-secondary));
-  backdrop-filter: blur(var(--oc-glass-blur, 8px));
-  -webkit-backdrop-filter: blur(var(--oc-glass-blur, 8px));
+  backdrop-filter: var(--blur-surface);
+  -webkit-backdrop-filter: var(--blur-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
   color: var(--color-accent);
@@ -119,7 +119,7 @@
   font-weight: 600;
   cursor: pointer;
   box-shadow: var(--shadow-md);
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
   width: fit-content;
   white-space: nowrap;
 }
@@ -142,15 +142,15 @@
   display: none; /* Hidden by default, toggled via button */
   flex-direction: column;
   gap: var(--space-2);
-  z-index: 100;
+  z-index: var(--z-sticky);
   pointer-events: auto;
   opacity: 1;
   transform: translateX(0);
-  transition: all var(--duration-normal) var(--ease-in-out);
+  transition: background-color var(--duration-normal) var(--ease-in-out), color var(--duration-normal) var(--ease-in-out), border-color var(--duration-normal) var(--ease-in-out), transform var(--duration-normal) var(--ease-in-out), opacity var(--duration-normal) var(--ease-in-out), box-shadow var(--duration-normal) var(--ease-in-out);
   padding: var(--space-2);
   background: var(--oc-glass-bg);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: var(--blur-surface);
+  -webkit-backdrop-filter: var(--blur-surface);
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-lg);
   overflow-y: auto;
@@ -184,7 +184,7 @@
   padding: var(--space-1-5) var(--space-2);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--duration-fast);
+  transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast), opacity var(--duration-fast), box-shadow var(--duration-fast);
   border: 1px solid transparent;
   background: transparent;
   color: inherit;
@@ -281,9 +281,12 @@
   left: 0;
   top: 0;
   width: 2px;
-  height: 0%;
+  height: 100%;
   background: var(--color-accent);
-  transition: height 0.1s linear;
+  transform-origin: top center;
+  transform: scaleY(var(--p, 0));
+  transition: transform 0.1s linear;
+  will-change: transform;
 }
 
 @media (max-width: 600px) {
@@ -561,9 +564,10 @@
   gap: var(--space-2);
   text-align: center;
   justify-content: center;
-  backdrop-filter: blur(12px);
+  backdrop-filter: var(--blur-bubble);
+  -webkit-backdrop-filter: var(--blur-bubble);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.05);
-  transition: all var(--duration-normal) var(--ease-out);
+  transition: background-color var(--duration-normal) var(--ease-out), color var(--duration-normal) var(--ease-out), border-color var(--duration-normal) var(--ease-out), transform var(--duration-normal) var(--ease-out), opacity var(--duration-normal) var(--ease-out), box-shadow var(--duration-normal) var(--ease-out);
   animation: error-shake-in 0.4s var(--ease-out);
 }
 
@@ -575,7 +579,7 @@
 
 .message.system .system-bubble::before {
   content: "⚠️";
-  font-size: 20px;
+  font-size: var(--text-2xl);
   display: block;
   animation: pulse 2s infinite ease-in-out;
   flex: none;
@@ -600,7 +604,7 @@
   cursor: pointer;
   margin-top: var(--space-2);
   font-family: var(--font-sans);
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
   box-shadow: var(--shadow-sm);
 }
 
@@ -629,9 +633,10 @@
   margin: var(--space-3) 0;
   word-break: break-word;
   overflow-wrap: anywhere;
-  backdrop-filter: blur(8px);
+  backdrop-filter: var(--blur-bubble);
+  -webkit-backdrop-filter: var(--blur-bubble);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  transition: all var(--duration-normal) var(--ease-out);
+  transition: background-color var(--duration-normal) var(--ease-out), color var(--duration-normal) var(--ease-out), border-color var(--duration-normal) var(--ease-out), transform var(--duration-normal) var(--ease-out), opacity var(--duration-normal) var(--ease-out), box-shadow var(--duration-normal) var(--ease-out);
   animation: error-shake-in 0.4s var(--ease-out);
 }
 
@@ -705,10 +710,11 @@
   color: var(--oc-fg, var(--color-fg));
   font-size: var(--text-sm);
   font-weight: 600;
-  backdrop-filter: blur(10px);
+  backdrop-filter: var(--blur-bubble);
+  -webkit-backdrop-filter: var(--blur-bubble);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   animation: banner-slide-in var(--duration-normal) var(--ease-out);
-  transition: all var(--duration-normal) var(--ease-out);
+  transition: background-color var(--duration-normal) var(--ease-out), color var(--duration-normal) var(--ease-out), border-color var(--duration-normal) var(--ease-out), transform var(--duration-normal) var(--ease-out), opacity var(--duration-normal) var(--ease-out), box-shadow var(--duration-normal) var(--ease-out);
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -835,7 +841,7 @@
   border-radius: var(--radius-sm);
   color: var(--oc-fg);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
 }
 .question-option:hover:not(:disabled) {
   background: var(--oc-accent-subtle, rgba(0, 120, 212, 0.15));
@@ -985,7 +991,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
   cursor: pointer;
 }
 
@@ -1006,7 +1012,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 8px;
+  font-size: var(--text-2xs);
   font-weight: 800;
   min-width: 20px;
   height: 14px;
@@ -1343,7 +1349,7 @@
   flex-shrink: 0;
   margin-top: 4px;
   position: relative;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
 }
 
 .task-list-item-checkbox:checked {
@@ -1488,7 +1494,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--duration-fast);
+  transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast), opacity var(--duration-fast), box-shadow var(--duration-fast);
   border: 1px solid transparent;
 }
 

@@ -74,7 +74,7 @@ function renderFilteredTodos(container: HTMLElement, todos: Todo[], options: Tod
       <span class="todo-progress-percentage">${progressPercent}%</span>
     </div>
     <div class="todo-progress-bar-track" aria-hidden="true">
-      <div class="todo-progress-bar-fill" style="width: ${progressPercent}%"></div>
+      <div class="todo-progress-bar-fill" style="--p: ${(progressPercent / 100).toFixed(3)}"></div>
     </div>
   `
   container.appendChild(gaugeContainer)

@@ -1,6 +1,14 @@
 /* ═══════════════════════════════════════════════════════════════
    Accessibility & Focus Management
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════════════
+
+   This file is imported into the @layer accessibility cascade layer
+   (see styles.css). Cascade layers guarantee that everything here
+   wins against earlier layers (tokens, base, layout, components,
+   messages, blocks) regardless of selector specificity — so a stray
+   `outline: none` deeper in the codebase can never strip the keyboard
+   focus ring. Add new focus rules HERE rather than in component files.
+*/
 
 /* ─── Focus Visible Rings ─── */
 *:focus:not(:focus-visible) {

@@ -186,7 +186,12 @@
   margin-bottom: var(--spacing-sm);
 }
 .cup-segment {
-  transition: width 0.4s cubic-bezier(0.4,0,0.2,1);
+  /* Width is still set inline by JS (so the segments share the chart row width
+     proportionally) but the visual update on data change is animated via a
+     transform-only effect to avoid triggering layout on the parent chart.
+     The segment's own width allocates space; opacity fades in cleanly. */
+  transition: opacity var(--duration-normal) var(--ease-smooth),
+              transform var(--duration-normal) var(--ease-smooth);
   position: relative;
   cursor: default;
 }
@@ -206,7 +211,7 @@
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.15s;
-  z-index: 10;
+  z-index: var(--z-tooltip);
 }
 .cup-segment:hover::after { opacity: 1; }
 
@@ -221,7 +226,7 @@
 
 .breakdown-segment {
   height: 100%;
-  transition: width 0.3s;
+  transition: opacity var(--duration-slow) var(--ease-smooth);
 }
 
 .breakdown-segment.system  { background: var(--breakdown-system, #2196f3); }
