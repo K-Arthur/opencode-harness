@@ -253,7 +253,15 @@
       <div id="variant-dropdown-container" class="hidden"></div>
 
       <div id="input-wrapper">
-        <textarea id="prompt-input" rows="1" placeholder="Ask OpenCode a question about your code…" aria-label="Message input" aria-controls="mention-dropdown slash-autocomplete" autocomplete="off" spellcheck="true"></textarea>
+        <textarea id="prompt-input" rows="1"
+                  placeholder="Ask OpenCode a question about your code…"
+                  aria-label="Message input"
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-expanded="false"
+                  aria-controls="mention-dropdown slash-autocomplete"
+                  autocomplete="off"
+                  spellcheck="true"></textarea>
         <div id="mention-dropdown" class="dropdown hidden" role="listbox" aria-label="File mentions"></div>
         <div id="slash-autocomplete" class="slash-autocomplete hidden" role="listbox" aria-label="Slash commands"></div>
       </div>
@@ -386,18 +394,22 @@
     </div>
 
     <!-- Display toggles (Phase 4.2) -->
-    <div class="display-toggles" id="display-toggles" style="display:none;" aria-label="Display options">
-      <label class="toggle-label">
-        <input type="checkbox" id="toggle-text" checked> Text
+    <div class="display-toggles hidden" id="display-toggles" role="group" aria-label="Display options">
+      <label class="toggle-label" for="toggle-text">
+        <input type="checkbox" id="toggle-text" checked>
+        <span class="toggle-label-text">Text</span>
       </label>
-      <label class="toggle-label">
-        <input type="checkbox" id="toggle-tools" checked> Tools
+      <label class="toggle-label" for="toggle-tools">
+        <input type="checkbox" id="toggle-tools" checked>
+        <span class="toggle-label-text">Tools</span>
       </label>
-      <label class="toggle-label">
-        <input type="checkbox" id="toggle-diffs" checked> Diffs
+      <label class="toggle-label" for="toggle-diffs">
+        <input type="checkbox" id="toggle-diffs" checked>
+        <span class="toggle-label-text">Diffs</span>
       </label>
-      <label class="toggle-label">
-        <input type="checkbox" id="toggle-errors" checked> Errors
+      <label class="toggle-label" for="toggle-errors">
+        <input type="checkbox" id="toggle-errors" checked>
+        <span class="toggle-label-text">Errors</span>
       </label>
     </div>
 
@@ -406,7 +418,7 @@
       <div class="welcome-container">
         <div class="welcome-header">
           <div class="welcome-brand" aria-hidden="true">
-            <img class="welcome-wordmark" src="media/opencode-wordmark-dark.svg" width="120" height="auto" alt="OpenCode" aria-hidden="true">
+            <img class="welcome-wordmark" src="media/opencode-wordmark-dark.svg" width="120" height="32" alt="OpenCode" aria-hidden="true">
           </div>
           <div class="welcome-title">
           <h1 id="welcome-greeting" class="welcome-greeting">OpenCode</h1>
@@ -416,7 +428,12 @@
         <!-- Search Bar -->
         <div class="welcome-search-wrapper">
           <div id="welcome-search-input" class="welcome-search-input">
-            <span class="search-icon" aria-hidden="true">🔍</span>
+            <span class="search-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                <circle cx="11" cy="11" r="7"/>
+                <path d="m20 20-3.5-3.5"/>
+              </svg>
+            </span>
             <input type="text" placeholder="Search your conversation history..." aria-label="Search sessions" autocomplete="off" spellcheck="false">
           </div>
         </div>
@@ -881,7 +898,9 @@
     <div class="modal-content session-modal-content">
       <div class="modal-header">
         <h2 id="session-modal-title">Session History</h2>
-        <button class="modal-close-btn" id="session-modal-close" aria-label="Close session history">&times;</button>
+        <button class="modal-close-btn" id="session-modal-close" aria-label="Close session history">
+          <span aria-hidden="true">&times;</span>
+        </button>
       </div>
       <div class="modal-body" id="session-modal-body">
         <!-- JS will populate this with tabs, search, and list -->
@@ -894,11 +913,13 @@
   </div>
 
   <!-- Mode Transition Warning Modal -->
-  <div id="mode-warning-modal" class="modal-overlay hidden" role="alertdialog" aria-modal="true" aria-label="Mode change warning">
+  <div id="mode-warning-modal" class="modal-overlay hidden" role="alertdialog" aria-modal="true" aria-labelledby="mode-warning-title" aria-describedby="mode-warning-description">
     <div class="modal-content mode-warning-content">
       <div class="modal-header">
-        <span id="mode-warning-title">Switch mode?</span>
-        <button class="modal-close-btn" id="mode-warning-close" aria-label="Cancel">&times;</button>
+        <h2 id="mode-warning-title">Switch mode?</h2>
+        <button class="modal-close-btn" id="mode-warning-close" aria-label="Cancel">
+          <span aria-hidden="true">&times;</span>
+        </button>
       </div>
       <p id="mode-warning-description" class="mode-warning-description"></p>
       <div class="mode-warning-actions">

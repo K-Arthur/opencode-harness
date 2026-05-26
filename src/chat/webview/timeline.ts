@@ -215,7 +215,7 @@ export function createTimeline(deps: TimelineDeps): TimelineAPI {
     const progress = timeline.querySelector<HTMLElement>(".timeline-progress")
     const total = Math.max(1, msgList.scrollHeight - msgList.clientHeight)
     const ratio = Math.min(1, Math.max(0, msgList.scrollTop / total))
-    if (progress) progress.style.height = `${Math.round(ratio * 100)}%`
+    if (progress) progress.style.setProperty("--p", ratio.toFixed(3))
 
     const items = Array.from(timeline.querySelectorAll<HTMLElement>(".timeline-item"))
     let active: HTMLElement | null = null

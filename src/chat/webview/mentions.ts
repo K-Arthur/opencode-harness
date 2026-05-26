@@ -33,6 +33,7 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
       els.mentionDropdown.classList.add("command-mode")
       els.mentionDropdown.classList.remove("mention-mode")
       els.mentionDropdown.classList.remove("hidden")
+      els.promptInput.setAttribute("aria-expanded", "true")
       // Drop server commands whose names collide with locals (case-insensitive)
       // so the user doesn't see two rows for /clear when both exist.
       const localNames = new Set(LOCAL_COMMANDS.map(c => (c.display || "").toLowerCase()))
@@ -52,10 +53,13 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
       els.mentionDropdown.classList.add("mention-mode")
       els.mentionDropdown.classList.remove("command-mode")
       els.mentionDropdown.classList.remove("hidden")
+      els.promptInput.setAttribute("aria-expanded", "true")
       postMessage({ type: "mention_search", query: state.query })
     } else {
       els.mentionDropdown.classList.remove("command-mode", "mention-mode")
       els.mentionDropdown.classList.add("hidden")
+      els.promptInput.setAttribute("aria-expanded", "false")
+      els.promptInput.removeAttribute("aria-activedescendant")
     }
   }
 

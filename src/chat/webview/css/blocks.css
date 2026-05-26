@@ -158,9 +158,8 @@
   transition: background var(--duration-fast), border-color var(--duration-fast);
 }
 
-/* Smooth transition for thinking block expand/collapse */
 .thinking-block > .thinking-body {
-  transition: max-height var(--duration-normal) var(--ease-smooth), opacity var(--duration-normal) var(--ease-smooth);
+  transition: opacity var(--duration-normal) var(--ease-smooth);
   max-height: 2000px;
   opacity: 1;
   overflow: hidden;
@@ -391,7 +390,7 @@
     letter-spacing: 0.05em;
     flex-shrink: 0;
     border: 1px solid transparent;
-    transition: all var(--duration-fast) var(--ease-out);
+    transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
     margin-left: auto; /* Always push to the right */
     margin-right: 2px; /* Small gap from edge */
     order: 10; /* Ensure it is the rightmost element */
@@ -498,7 +497,7 @@
   line-height: var(--leading-normal);
   color: var(--color-fg);
   background: var(--oc-editor-bg);
-  transition: all var(--duration-normal) var(--ease-smooth);
+  transition: background-color var(--duration-normal) var(--ease-smooth), color var(--duration-normal) var(--ease-smooth), border-color var(--duration-normal) var(--ease-smooth), transform var(--duration-normal) var(--ease-smooth), opacity var(--duration-normal) var(--ease-smooth), box-shadow var(--duration-normal) var(--ease-smooth);
 }
 
 .tool-call[open] .tool-args-panel {
@@ -520,7 +519,7 @@
   line-height: var(--leading-normal);
   color: var(--color-fg);
   background: var(--oc-editor-bg);
-  transition: all var(--duration-normal) var(--ease-smooth);
+  transition: background-color var(--duration-normal) var(--ease-smooth), color var(--duration-normal) var(--ease-smooth), border-color var(--duration-normal) var(--ease-smooth), transform var(--duration-normal) var(--ease-smooth), opacity var(--duration-normal) var(--ease-smooth), box-shadow var(--duration-normal) var(--ease-smooth);
 }
 
 .tool-call[open] .tool-result-panel {
@@ -695,7 +694,7 @@
   margin: var(--space-1) 0;
   overflow: hidden;
   background: var(--oc-editor-bg);
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
   box-shadow: var(--shadow-sm);
 }
 
@@ -781,7 +780,7 @@
   line-height: var(--leading-normal);
   color: var(--color-fg);
   background: var(--oc-editor-bg);
-  transition: all var(--duration-normal) var(--ease-smooth);
+  transition: background-color var(--duration-normal) var(--ease-smooth), color var(--duration-normal) var(--ease-smooth), border-color var(--duration-normal) var(--ease-smooth), transform var(--duration-normal) var(--ease-smooth), opacity var(--duration-normal) var(--ease-smooth), box-shadow var(--duration-normal) var(--ease-smooth);
 }
 
 .tool-card.expanded .tool-result {
@@ -1124,8 +1123,8 @@
   position: sticky;
   bottom: 0;
   z-index: var(--z-sticky, 100);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: var(--blur-surface);
+  -webkit-backdrop-filter: var(--blur-surface);
 }
 
 .diff-state-chip {
@@ -1152,7 +1151,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--duration-fast);
+  transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast), opacity var(--duration-fast), box-shadow var(--duration-fast);
   min-height: 28px;
   flex: 1;
 }
@@ -1261,7 +1260,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--duration-fast);
+  transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast), opacity var(--duration-fast), box-shadow var(--duration-fast);
   min-height: 32px;
 }
 
@@ -1350,7 +1349,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--duration-fast);
+  transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast), opacity var(--duration-fast), box-shadow var(--duration-fast);
   min-height: 32px;
 }
 
@@ -1525,13 +1524,13 @@
 
 .plan-card-title {
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--text-md);
   flex: 1;
   color: var(--vscode-foreground, #cccccc);
 }
 
 .plan-card-open-btn {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 2px 8px;
   border: 1px solid var(--vscode-button-border, #0078d4);
   border-radius: 4px;
@@ -1546,7 +1545,7 @@
 }
 
 .plan-card-overview {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--vscode-descriptionForeground, #999999);
   margin-bottom: 8px;
   line-height: 1.4;
@@ -1562,7 +1561,7 @@
   display: flex;
   align-items: baseline;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   padding: 3px 6px;
   border-radius: 4px;
 }
@@ -1578,7 +1577,7 @@
 
 .plan-card-todo-checkbox {
   color: var(--vscode-terminal-ansiGreen, #89d185);
-  font-size: 14px;
+  font-size: var(--text-md);
   width: 16px;
   text-align: center;
   flex-shrink: 0;
@@ -1590,7 +1589,7 @@
 }
 
 .plan-card-todo-status {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--vscode-descriptionForeground, #999999);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1598,7 +1597,7 @@
 
 .plan-card-footer {
   margin-top: 8px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--vscode-descriptionForeground, #999999);
   border-top: 1px solid var(--vscode-panel-border, #3c3c3c);
   padding-top: 6px;
@@ -1654,13 +1653,13 @@
   border: 1px solid var(--vscode-inputValidation-warningBorder, #cca700);
   border-radius: 4px;
   color: var(--vscode-inputValidation-warningForeground, #ffffff);
-  font-size: 12px;
+  font-size: var(--text-sm);
   line-height: 1.4;
   animation: context-warning-in 0.3s ease-out;
 }
 
 .context-overflow-warning-icon {
-  font-size: 14px;
+  font-size: var(--text-md);
   flex-shrink: 0;
 }
 

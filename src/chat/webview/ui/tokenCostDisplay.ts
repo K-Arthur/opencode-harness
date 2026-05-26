@@ -168,14 +168,14 @@ export function updateQuotaBar(deps: TokenCostDeps, state?: RateLimitWebviewStat
   if (bindingPct !== undefined) {
     const pct = Math.max(0, Math.min(100, bindingPct))
     const kind = requestPct !== undefined && requestPct === pct && (tokenPct === undefined || requestPct <= tokenPct) ? "requests" : "tokens"
-    deps.els.quotaProgressBar.style.width = `${pct}%`
+    deps.els.quotaProgressBar.style.setProperty("--p", (pct / 100).toFixed(3))
     deps.els.quotaLabel.textContent = `${provider} ${pct}%`
     deps.els.quotaDetail.textContent = kind === "requests"
       ? `${formatNumber(state.remainingRequests)} / ${formatNumber(state.limitRequests)} req`
       : `${formatNumber(state.remainingTokens)} / ${formatNumber(state.limitTokens)} tok`
     deps.els.quotaBar.classList.add(pct > 50 ? "quota-bar--ok" : pct > 10 ? "quota-bar--warning" : "quota-bar--critical")
   } else {
-    deps.els.quotaProgressBar.style.width = "100%"
+    deps.els.quotaProgressBar.style.setProperty("--p", "1")
     deps.els.quotaLabel.textContent = `${provider} usage`
     const observed = typeof state.usedTokens === "number" && Number.isFinite(state.usedTokens) ? `${formatNumber(state.usedTokens)} tok` : "observed"
     const cost = typeof state.usedCost === "number" && Number.isFinite(state.usedCost) ? ` · $${state.usedCost.toFixed(4)}` : ""
