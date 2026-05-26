@@ -5,7 +5,34 @@ All notable changes to the **OpenCode Harness** extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.16] - 2026-05-23
+## [0.2.17] - 2026-05-26
+
+> Supersedes the unreleased 0.2.16 draft. All 0.2.16 work (streaming
+> interleave, changed-files toolbar dropdown, context-usage singleton)
+> ships together with the 2026-05-26 webview audit under 0.2.17 since
+> 0.2.16 was never tagged or published.
+
+### Performance
+- **Replaced 56× `transition: all`** with explicit cheap-property lists across `components.css`, `layout.css`, `messages.css`, `welcome.css`, `blocks.css` so hover state no longer animates layout-affecting properties (padding, border-width, font-size, etc.). Lower paint cost on every interaction.
+- **Replaced 8 layout-thrashing `transition: width|height`** with `transform: scaleX/Y(var(--p))`. JS callers (`timeline.ts`, `subagent-panel.ts`, `todos-panel.ts`, `changed-files-dropdown.ts`, `ui/tokenCostDisplay.ts`) now set the `--p` custom property (0..1) instead of a width string. The per-scroll timeline progress bar no longer triggers layout each frame.
+- **Tokenised backdrop-filter scope** with two new tokens in `tokens.css`: `--blur-bubble` (per-message, defaults to `none`) and `--blur-surface` (floating top-layer surfaces only). Both disable automatically under `prefers-reduced-motion` / `prefers-reduced-data`. 19 sites converted; long chats no longer pay one compositor layer per bubble.
+- **Added `--shadow-glow` token** (previously undefined → `.btn-primary` was rendering with no shadow at all).
+
+### Accessibility
+- **CSS cascade layers** introduced in `styles.css`: `@layer tokens, base, layout, components, messages, blocks, animations, themes, utilities, accessibility`. The accessibility layer wins regardless of selector specificity or import order, so the focus ring (`*:focus-visible { outline: 2px … }`) cannot be stripped by component CSS.
+- **mode-warning modal** title is now `<h2>` with proper `aria-labelledby` + `aria-describedby` (was a `<span>` inside `role="alertdialog"`). (`src/chat/webview/index.html`)
+- **`&times;` close glyphs** wrapped in `aria-hidden` spans so screen readers no longer announce "multiplication sign".
+- **Welcome wordmark** gets explicit `height="32"` (was invalid `height="auto"`), eliminating CLS on first paint.
+- **Display toggles** use `class="hidden"` + `<span class="toggle-label-text">` with `for` association (was inline `style="display:none"` + bare text node).
+- **Prompt textarea** gets full combobox semantics (`role="combobox" aria-autocomplete="list" aria-expanded="false"`) toggled from `mentions.ts` when the slash/mention dropdown opens/closes.
+- **Replaced emoji search icon** (`🔍`) with stroke-1.75 SVG for cross-platform consistency.
+- **Removed `text-transform: uppercase`** from `.btn-primary` (slows reading speed by ~10–15%). New `.oc-eyebrow` utility retained for ≤3-word tracked-out labels.
+
+### Tokens & system
+- **Replaced raw px font-sizes** (8 / 9 / 10 / 11 / 12 / 13 / 14 / 20) with the `--text-*` scale.
+- **Replaced hardcoded z-indices** (9000 / 200 / 30 / 100 / 20 / 10) with the `--z-*` scale.
+- **Removed duplicate `blocks.css` `@import`** in `styles.css`.
+- **New `.oc-btn` primitive** in `components.css` with `data-variant="primary|secondary|ghost|danger"` and `data-size="sm|lg|icon"`. State coverage (hover/active/disabled) in one place. Legacy variants retained for incremental migration.
 
 ### Fixed
 - **Streaming text/tool interleave disorder** — text chunks that arrived before a tool call were being rendered all at once after the stream completed instead of appearing live. Two root causes:

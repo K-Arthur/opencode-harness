@@ -1,6 +1,6 @@
 # Webview Regression Notes
 
-## Streaming Text/Tool Interleave (v0.2.16)
+## Streaming Text/Tool Interleave (v0.2.17)
 
 Text chunks streamed before and between tool calls must appear live and stay correctly ordered relative to tool elements. Three distinct failure modes were fixed:
 
@@ -16,11 +16,11 @@ Text chunks streamed before and between tool calls must appear live and stay cor
 
 **Fix**: `finalizeCurrentTextBlock(state, els, messages)` call added at the start of `handleDiff`.
 
-## Session-Scoped Chat Bar (v0.2.16)
+## Session-Scoped Chat Bar (v0.2.17)
 
 Opening a new tab while another session is streaming previously showed the "Stop" button in the new (idle) tab. Root cause: `createNewTab()` called only `switchToTab()` (which only applies CSS `active` class to the tab panel) without calling `updateSendButton()`. The send button therefore retained whatever streaming state the previously-active tab had left. Fix: explicit `updateSendButton()` call added to `createNewTab()` immediately after `switchToTab`.
 
-## Context Usage Singleton (v0.2.16)
+## Context Usage Singleton (v0.2.17)
 
 Context usage was visible in two places simultaneously — the per-tab `.context-monitor` bar (inside each `tab-panel`) and the `#context-usage` status strip below the tab bar — because the `context_usage` message handler updated both. Additionally, switching tabs wiped the displayed usage because `SessionState` had no field to hold it between switches.
 
