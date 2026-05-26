@@ -19,8 +19,10 @@ import type { McpServerInfo } from "../../mcp/McpServerManager"
 import { REMOVE_SVG } from "./icons"
 import { createPromptQueue, type PromptQueue, type QueueItem } from "./queue"
 import { updateContextChips, applyThemeVars, handleRateLimitExhausted } from "./theme"
-import { setContextUsagePostMessage, handleContextUsageMessage, resetContextUsagePanel } from "./context-usage-panel"
-import { setupChangedFilesDropdown, updateChangedFiles, handleDiffResponse as handleCfDiffResponse, resetChangedFilesDropdown } from "./changed-files-dropdown"
+// context-usage-panel.ts removed — canonical UI is now context-usage-dropdown.ts
+import { setupChangedFilesDropdown, updateChangedFiles, handleDiffResponse as handleCfDiffResponse, resetChangedFilesDropdown, setCurrentSession as setCfCurrentSession } from "./changed-files-dropdown"
+import type { DiffLine } from "./types"
+import { mergeEditBannerFiles } from "./file-chip-list"
 import { setupContextUsageDropdown as setupCtxDropdown, updateUsage as updateCtxDropdown, resetContextUsageDropdown, openContextUsageDropdown } from "./context-usage-dropdown"
 import { showCompactBanner, hideCompactBanner } from "./compact-banner"
 import { setupPromptStash } from "./prompt-stash"
@@ -50,6 +52,8 @@ import { closeSettingsMenu as closeSettingsMenuModule, closeCurrentModal as clos
 import { trackFileChange as trackFileChangeModule, undoMessage as undoMessageModule, handleChangedFiles as handleChangedFilesModule, renderChangedFilesList as renderChangedFilesListModule, renderCheckpointPanel as renderCheckpointPanelModule, handleClearMessages as handleClearMessagesModule, type FileTrackingDeps } from "./ui/fileTracking"
 import { setupButtons as setupButtonsModule, type ButtonSetupDeps } from "./ui/buttonSetup"
 import { updateScrollMarkers as updateScrollMarkersModule, setupJumpToBottom as setupJumpToBottomModule, scrollMessageToTop as scrollMessageToTopModule, scrollToTurn as scrollToTurnModule, type ScrollMarkerDeps } from "./ui/scrollMarkers"
+import { createStreamOrchestrator, type StreamOrchestratorAPI } from "./streamOrchestrator"
+import { createTimeline, type TimelineAPI } from "./timeline"
 
 declare const acquireVsCodeApi: (() => {
   postMessage(message: Record<string, unknown>): void
@@ -240,7 +244,7 @@ function getVsCodeApi() {
     onClose: () => {},
   })
 
-  let cfDropdownApi: { updateChangedFiles: typeof updateChangedFiles; handleDiffResponse: typeof handleCfDiffResponse } | null = null
+  let cfDropdownApi: { updateChangedFiles: typeof updateChangedFiles; handleDiffResponse: typeof handleCfDiffResponse; setCurrentSession: typeof setCfCurrentSession } | null = null
   let ctxDropdownApi: { updateUsage: typeof updateCtxDropdown } | null = null
 
   const tabBar = createTabBar(els, {
@@ -387,62 +391,68 @@ function getVsCodeApi() {
   /* ─── PER-TOOL ELAPSED TIMERS ─── */
 
   const toolElapsedTracker = new ToolElapsedTracker()
-  const pendingToolUpdates = new Map<string, {
-    sessionId: string
-    toolId: string
-    update: { state?: ToolCallState; args?: unknown }
-    timer: ReturnType<typeof setTimeout>
-  }>()
-  const toolChainProgressTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
-  function scheduleToolUpdate(sessionId: string, toolId: string, update: { state?: ToolCallState; args?: unknown }): void {
-    const key = `${sessionId}:${toolId}`
-    const pending = pendingToolUpdates.get(key)
-    if (pending) {
-      pending.update = { ...pending.update, ...update }
-      return
-    }
-    const timer = timers.setTimeout(() => {
-      const latest = pendingToolUpdates.get(key)
-      pendingToolUpdates.delete(key)
-      const stream = streamHandlers.get(sessionId)
-      if (latest && stream) stream.handleToolUpdate(toolId, latest.update)
-    }, 50)
-    pendingToolUpdates.set(key, { sessionId, toolId, update, timer })
+  /* ─── STREAM ORCHESTRATOR ─── */
+
+  let streamOrchestrator!: StreamOrchestratorAPI
+
+  function wireStreamOrchestrator() {
+    streamOrchestrator = createStreamOrchestrator({
+      vscode,
+      els,
+      streamHandlers,
+      getState: () => stateManager.getState() as any,
+      getSession: (id) => stateManager.getSession(id) as any,
+      getAllSessions: () => stateManager.getAllSessions() as any,
+      ensureSession: (init) => stateManager.ensureSession(init) as any,
+      setStreaming: (sid, streaming) => stateManager.setStreaming(sid, streaming),
+      save: () => stateManager.save(),
+      createWebviewId,
+      addMessage,
+      showSystemMessage,
+      createTabUI,
+      switchTab,
+      hideWelcomeView,
+      updateTabBar,
+      updateModeSelectorStateLocal,
+      updateSendButtonIcon,
+      updateSendButton,
+      getMessageList,
+      createStreamHandlersForTab,
+      setupJumpToBottom,
+      debouncedUpdateScrollMarkers,
+      debouncedTimelineRefresh,
+      refreshConversationTimeline,
+      toolElapsedTracker,
+      fileEditBatcher: fileEditBatcherRef,
+      promptQueues,
+      renderQueue,
+      syncModeUI,
+      renderRecentSessionsList,
+      persistQueues,
+    })
   }
 
-  function flushToolUpdate(sessionId: string, toolId: string): void {
-    const key = `${sessionId}:${toolId}`
-    const pending = pendingToolUpdates.get(key)
-    if (!pending) return
-    timers.clearTimeout(pending.timer)
-    pendingToolUpdates.delete(key)
-    const stream = streamHandlers.get(sessionId)
-    if (stream) stream.handleToolUpdate(toolId, pending.update)
+  let timeline!: TimelineAPI
+
+  function wireTimeline() {
+    timeline = createTimeline({
+      els,
+      getState: () => stateManager.getState(),
+      getSession: (id) => stateManager.getSession(id) as any,
+      isTimelineVisible: () => stateManager.isTimelineVisible(),
+      setTimelineVisible: (v) => stateManager.setTimelineVisible(v),
+      getMessageList,
+      scrollToTurn: (messageId) => scrollToTurnModule(scrollMarkerDeps, messageId),
+      setThinkingVisible,
+      getThinkingVisible,
+      toggleAllThinkingBlocks,
+      vscodeSetState: (s) => vscode.setState(s),
+      debouncedUpdateScrollMarkers,
+    })
   }
 
-  function markToolChainProgress(sessionId: string): void {
-    if (toolChainProgressTimers.has(sessionId)) return
-    const timer = timers.setTimeout(() => {
-      toolChainProgressTimers.delete(sessionId)
-      const msgList = getMessageList(sessionId)
-      if (!msgList || msgList.querySelector(".tool-chain-progress")) return
-      const progress = document.createElement("div")
-      progress.className = "tool-chain-progress"
-      progress.textContent = "Tool chain running..."
-      progress.setAttribute("role", "status")
-      progress.setAttribute("aria-live", "polite")
-      msgList.appendChild(progress)
-    }, 900)
-    toolChainProgressTimers.set(sessionId, timer)
-  }
-
-  function clearToolChainProgress(sessionId: string): void {
-    const timer = toolChainProgressTimers.get(sessionId)
-    if (timer) timers.clearTimeout(timer)
-    toolChainProgressTimers.delete(sessionId)
-    getMessageList(sessionId)?.querySelectorAll(".tool-chain-progress").forEach((el) => el.remove())
-  }
+  let fileEditBatcherRef!: FileEditBatcher
 
   function init() {
     try {
@@ -479,7 +489,6 @@ function getVsCodeApi() {
       })
       
       setupSessionModal()
-      setupContextUsageDropdownPanel()
       setupPromptStash(els, (msg) => vscode.postMessage(msg as Record<string, unknown>))
       
       todosPanelApi = setupTodosPanel(els, {
@@ -569,7 +578,7 @@ function getVsCodeApi() {
           postMessage: (msg) => vscode.postMessage(msg),
           onOpenFile: (path) => vscode.postMessage({ type: "open_file", path }),
         })
-        cfDropdownApi = { updateChangedFiles, handleDiffResponse: handleCfDiffResponse }
+        cfDropdownApi = { updateChangedFiles, handleDiffResponse: handleCfDiffResponse, setCurrentSession: setCfCurrentSession }
         // Keyboard support for the always-visible strip
         const strip = document.getElementById("changed-files-strip")
         if (strip) {
@@ -618,6 +627,8 @@ function getVsCodeApi() {
       
       setupWelcomeSuggestions()
       setupWelcomeActions()
+      wireStreamOrchestrator()
+      wireTimeline()
       setupMessageListener()
       setupPermissionListener()
       setupDiffActionListener()
@@ -750,9 +761,7 @@ function getVsCodeApi() {
     })
   }
 
-  function setupContextUsageDropdownPanel() {
-    setContextUsagePostMessage((msg) => vscode.postMessage(msg as Record<string, unknown>))
-  }
+  // context-usage-dropdown is set up inline below; no separate panel needed.
 
   const sessionModalDeps = {
     els,
@@ -867,10 +876,8 @@ function getVsCodeApi() {
       modelDropdown.setCurrentModel(activeSession.model)
     }
     
-    // Reset legacy panel (no-op if already removed from DOM) and restore
-    // the toolbar dropdown to this session's persisted context usage data.
+    // Restore the toolbar dropdown to this session's persisted context usage data.
     resetContextUsagePanel()
-    resetContextUsageDropdown()
     const switchedSession = stateManager.getSession(tabId)
     if (switchedSession?.contextUsage) {
       const cu = switchedSession.contextUsage
@@ -894,13 +901,15 @@ function getVsCodeApi() {
     }
     // Refresh changed files strip for the new tab.
     renderChangedFilesList(session?.changedFiles ?? [])
+    // Tell the dropdown which session to display. This re-renders the strip
+    // and (if open) the tree from this session's per-session state, so files
+    // from another tab never bleed into the visible UI.
+    cfDropdownApi?.setCurrentSession(tabId)
     if (session?.changedFiles && session.changedFiles.length > 0) {
       cfDropdownApi?.updateChangedFiles(
+        tabId,
         session.changedFiles.map((p) => ({ path: p, added: 0, removed: 0 })) as any
       )
-    } else {
-      const strip = document.getElementById("changed-files-strip")
-      if (strip) { strip.classList.add("hidden"); strip.innerHTML = "" }
     }
 
     // Sync todos panel for the switched tab
@@ -2161,44 +2170,7 @@ function getVsCodeApi() {
   }
 
   function applyHistoryCondensation(sessionId: string): void {
-    const session = stateManager.getSession(sessionId)
-    const msgList = getMessageList(sessionId)
-    if (!session || !msgList || session.isStreaming || session.messages.length <= 140) return
-    if (msgList.dataset.historyCondensed === "true") return
-
-    const preserveLast = 80
-    const groupSize = 20
-    const candidates = session.messages.slice(0, Math.max(0, session.messages.length - preserveLast))
-    for (let i = Math.floor(Math.max(0, candidates.length - 1) / groupSize) * groupSize; i >= 0; i -= groupSize) {
-      const group = candidates.slice(i, Math.min(candidates.length, i + groupSize))
-      const elements = group
-        .map((m) => m.id ? msgList.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(m.id)}"]`) : null)
-        .filter((el): el is HTMLElement => Boolean(el && !el.matches(":focus-within") && !el.querySelector(".streaming-text")))
-      if (elements.length < groupSize / 2) continue
-
-      const summary = document.createElement("button")
-      summary.type = "button"
-      summary.className = "history-condensed-summary"
-      const userCount = group.filter((m) => m.role === "user").length
-      const assistantCount = group.filter((m) => m.role === "assistant").length
-      const toolCount = group.reduce((count, m) => count + (m.blocks || []).filter((b) => b.type === "tool-call" || b.type === "tool_call" || b.type === "tool").length, 0)
-      summary.textContent = `${group.length} earlier messages: ${userCount} user, ${assistantCount} assistant${toolCount ? `, ${toolCount} tools` : ""}`
-      summary.setAttribute("aria-expanded", "false")
-
-      const fragment = document.createDocumentFragment()
-      for (const el of elements) fragment.appendChild(el)
-      summary.addEventListener("click", () => {
-        summary.setAttribute("aria-expanded", "true")
-        summary.replaceWith(fragment)
-        msgList.dataset.historyCondensed = "expanded"
-        debouncedUpdateScrollMarkers(sessionId)
-      }, { once: true })
-
-      const firstRemaining = msgList.firstElementChild
-      if (firstRemaining) msgList.insertBefore(summary, firstRemaining)
-      else msgList.appendChild(summary)
-    }
-    msgList.dataset.historyCondensed = "true"
+    timeline.applyHistoryCondensation(sessionId)
   }
 
   function addMessage(sessionId: string, msg: ChatMessage) {
@@ -2555,8 +2527,6 @@ function getVsCodeApi() {
             })
           }
         }
-        // Also keep context usage panel in sync
-        handleContextUsageMessage(msg as unknown as Record<string, unknown>)
         ctxDropdownApi?.updateUsage(msg as Record<string, unknown>)
       }],
       ["context_window_known", (msg) => {
@@ -2578,12 +2548,9 @@ function getVsCodeApi() {
           // If no fill data yet, the next context_usage message will update the display correctly.
         }
       }],
-      ["context_history_response", (msg) => {
-        handleContextUsageMessage({ type: "usage_history", history: msg.history })
-        handleContextUsageMessage({ type: "usage_statistics", statistics: msg.statistics })
+      ["context_history_response", () => {
+        // context usage history/statistics panel was removed — no-op
       }],
-      ["usage_history", (msg) => { handleContextUsageMessage(msg as unknown as Record<string, unknown>) }],
-      ["usage_statistics", (msg) => { handleContextUsageMessage(msg as unknown as Record<string, unknown>) }],
       ["server_status", (msg, sid) => { if (sid) handleServerStatus(sid, msg.status as string, msg.errorContext) }],
       ["instructions_changed", (msg, sid) => {
         if (sid) {
@@ -2660,7 +2627,7 @@ function getVsCodeApi() {
             const toolCall = msg.toolCall as { id: string; name: string; class?: string; args?: unknown; state?: ToolCallState }
             toolElapsedTracker.registerStart(toolCall.id)
             stream.handleToolStart(toolCall)
-            markToolChainProgress(sid)
+            streamOrchestrator.markToolChainProgress(sid)
           }
         }
       }],
@@ -2670,7 +2637,7 @@ function getVsCodeApi() {
           if (stream) {
             const toolCall = msg.toolCall as { id: string; state?: ToolCallState; args?: unknown }
             if (toolCall.id) {
-              scheduleToolUpdate(sid, toolCall.id, {
+              streamOrchestrator.scheduleToolUpdate(sid, toolCall.id, {
                 state: toolCall.state,
                 args: toolCall.args,
               })
@@ -2683,10 +2650,10 @@ function getVsCodeApi() {
           const stream = streamHandlers.get(sid)
           if (stream) {
             const result = msg.result as { id: string; ok: boolean; result?: string; durationMs?: number; stale?: boolean }
-            flushToolUpdate(sid, result.id)
+            streamOrchestrator.flushToolUpdate(sid, result.id)
             toolElapsedTracker.unregisterEnd(result.id, result.durationMs)
             stream.handleToolEnd(result.id, result)
-            clearToolChainProgress(sid)
+            streamOrchestrator.clearToolChainProgress(sid)
           }
         }
       }],
@@ -2742,7 +2709,7 @@ function getVsCodeApi() {
               renderChangedFilesList(session.changedFiles)
             }
           }
-          fileEditBatcher.add(sid, filePath)
+          fileEditBatcherRef.add(sid, filePath)
         }
       }],
       ["theme_vars", (msg) => { applyThemeVars(msg.vars as Record<string, string> | undefined) }],
@@ -3182,25 +3149,35 @@ function getVsCodeApi() {
         }
       }],
       ["changed_files_update", (msg) => {
+        // Strict: never fall back to the active tab for changed-file sync.
+        const sid = typeof msg.sessionId === "string" ? msg.sessionId : null
+        if (!sid) {
+          webviewLog(`[main] dropped changed_files_update without sessionId`)
+          return
+        }
         const files = Array.isArray(msg.files) ? msg.files : []
         const paths = files
           .map((file) => typeof file === "string" ? file : (file && typeof file === "object" && "path" in file ? String((file as { path?: unknown }).path || "") : ""))
           .filter((path) => path.length > 0)
-        const sid = typeof msg.sessionId === "string" ? msg.sessionId : stateManager.getState().activeSessionId
+        handleChangedFiles(sid, paths)
         const activeSid = stateManager.getState().activeSessionId
-        if (sid) {
-          handleChangedFiles(sid, paths)
+        if (sid === activeSid) {
+          renderChangedFilesList(paths)
         }
-        if (sid && sid === activeSid) {
-          // Note: renderChangedFiles is consolidated and handled by cfDropdownApi.updateChangedFiles
-          cfDropdownApi?.updateChangedFiles(files as any)
-        }
+        // Always store per-session state; the dropdown itself decides whether
+        // to render based on its current session.
+        cfDropdownApi?.updateChangedFiles(sid, files as any)
       }],
       ["file_diff_response", (msg) => {
+        const sid = typeof msg.sessionId === "string" ? msg.sessionId : null
+        if (!sid) {
+          webviewLog(`[main] dropped file_diff_response without sessionId`)
+          return
+        }
         const path = typeof msg.path === "string" ? msg.path : ""
-        const lines = Array.isArray(msg.lines) ? msg.lines : []
+        const lines = Array.isArray(msg.lines) ? msg.lines as DiffLine[] : null
         const error = typeof msg.error === "string" ? msg.error : undefined
-        if (path) cfDropdownApi?.handleDiffResponse(path, lines as any, error)
+        if (path) cfDropdownApi?.handleDiffResponse(sid, path, lines, error)
       }],
       ["skills_list", (msg) => {
         if (skillsModalApi && skillsModalApi.renderSkills) {
@@ -3289,212 +3266,12 @@ function getVsCodeApi() {
     scrollMessageToTopModule(msgList, target)
   }
 
-  function scrollToTurn(messageId: string) {
-    scrollToTurnModule(scrollMarkerDeps, messageId)
-  }
+  /* ─── CONVERSATION TIMELINE ─── (delegated to timeline.ts) */
 
-  /* ─── CONVERSATION TIMELINE ─── */
-
-	  function setupTimelineToggle() {
-	    els.timelineToggleBtn.setAttribute("aria-pressed", String(stateManager.isTimelineVisible()))
-	    els.timelineToggleBtn.addEventListener("click", () => {
-	      const visible = !stateManager.isTimelineVisible()
-	      stateManager.setTimelineVisible(visible)
-	      applyTimelineVisibility()
-	    })
-	    applyTimelineVisibility()
-	  }
-
-	  function setupThinkingToggle() {
-	    const state = stateManager.getState()
-	    const thinkingVisible = state.displayPrefs?.thinkingVisible ?? true
-	    // Seed the renderer-facing cache so blocks rendered during boot honor
-	    // the persisted pref before the user touches the toggle.
-	    setThinkingVisible(thinkingVisible)
-	    // Apply the pref to any already-rendered blocks AND set the body class
-	    // so future renders are hidden via CSS. Without this boot call, a user
-	    // who unchecked the toggle in a previous session reopens the panel
-	    // and sees thinking blocks until they click the toggle twice.
-	    toggleAllThinkingBlocks(thinkingVisible)
-	    els.thinkingToggleMenuItem.setAttribute("aria-checked", String(thinkingVisible))
-	    els.thinkingToggleMenuItem.classList.toggle("active", thinkingVisible)
-	    if (els.thinkingCheckmark) {
-	      els.thinkingCheckmark.style.visibility = thinkingVisible ? "visible" : "hidden"
-	    }
-
-	    els.thinkingToggleMenuItem.addEventListener("click", () => {
-	      // Read from the displayPrefs cache rather than stateManager: the
-	      // stateManager's in-memory state is not mutated by vscode.setState,
-	      // so reading from there would return stale values after the first
-	      // click and the toggle would appear stuck. The cache is updated on
-	      // every click below, so it is the only authoritative source here.
-	      const newVisible = !getThinkingVisible()
-	      const currentState = stateManager.getState()
-	      const updatedState: WebviewState = {
-	        ...currentState,
-	        displayPrefs: {
-	          text: currentState.displayPrefs?.text ?? true,
-	          tools: currentState.displayPrefs?.tools ?? true,
-	          diffs: currentState.displayPrefs?.diffs ?? true,
-	          errors: currentState.displayPrefs?.errors ?? true,
-	          diffWrapEnabled: currentState.displayPrefs?.diffWrapEnabled ?? false,
-	          thinkingVisible: newVisible,
-	        },
-	      }
-	      // Mutate in-memory state so future reads (e.g. on session save) see
-	      // the new pref, then persist via the webview state API.
-	      currentState.displayPrefs = updatedState.displayPrefs
-	      vscode.setState(updatedState)
-	      setThinkingVisible(newVisible)
-	      els.thinkingToggleMenuItem.setAttribute("aria-checked", String(newVisible))
-	      els.thinkingToggleMenuItem.classList.toggle("active", newVisible)
-	      if (els.thinkingCheckmark) {
-	        els.thinkingCheckmark.style.visibility = newVisible ? "visible" : "hidden"
-	      }
-	      toggleAllThinkingBlocks(newVisible)
-	    })
-
-	    // Keyboard shortcut: Ctrl/Cmd+Shift+T (avoiding Ctrl+T which is VS Code New Terminal)
-	    document.addEventListener("keydown", (e) => {
-	      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "t") {
-	        e.preventDefault()
-	        els.thinkingToggleMenuItem.click()
-	      }
-	    })
-	  }
-
-	  function applyTimelineVisibility(sessionId?: string) {
-	    const targetId = sessionId || stateManager.getState().activeSessionId || undefined
-	    const welcomeVisible = !els.welcomeView.classList.contains("hidden")
-	    const visible = stateManager.isTimelineVisible() && !welcomeVisible
-
-	    els.timelineToggleBtn.classList.toggle("active", visible)
-	    els.timelineToggleBtn.setAttribute("aria-pressed", String(visible))
-	    els.timelineToggleBtn.classList.toggle("hidden", welcomeVisible)
-
-	    document.querySelectorAll(".message-list.timeline-visible").forEach((el) => el.classList.remove("timeline-visible"))
-	    document.querySelectorAll(".conversation-timeline.visible").forEach((el) => el.classList.remove("visible"))
-
-	    if (!visible || !targetId) return
-	    refreshConversationTimeline(targetId)
-	  }
-
-	  function refreshConversationTimeline(sessionId?: string) {
-	    const targetId = sessionId || stateManager.getState().activeSessionId || undefined
-	    if (!targetId || !stateManager.isTimelineVisible()) return
-
-	    const session = stateManager.getSession(targetId)
-	    const msgList = getMessageList(targetId)
-	    const timeline = ensureTimeline(targetId)
-	    if (!session || !msgList || !timeline) return
-
-	    const turns = groupMessagesIntoTurns(session.messages)
-	    timeline.replaceChildren()
-	    msgList.classList.toggle("timeline-visible", turns.length > 0)
-	    timeline.classList.toggle("visible", turns.length > 0)
-	    if (turns.length === 0) return
-
-	    const progress = document.createElement("div")
-	    progress.className = "timeline-progress"
-	    timeline.appendChild(progress)
-
-	    const header = document.createElement("div")
-	    header.className = "timeline-header"
-	    header.textContent = "Conversation Timeline"
-	    timeline.appendChild(header)
-
-	    turns.forEach((turn, index) => {
-	      const item = document.createElement("button")
-	      item.type = "button"
-	      item.className = "timeline-item"
-	      item.dataset.messageId = turn.userMessageId
-	      item.setAttribute("aria-label", `Jump to turn ${index + 1}: ${turn.snippet}`)
-
-	      const role = document.createElement("span")
-	      role.className = "timeline-item-role"
-	      const dot = document.createElement("span")
-	      dot.className = "role-dot user"
-	      role.appendChild(dot)
-	      const label = document.createElement("span")
-	      label.textContent = `Turn ${index + 1}`
-	      role.appendChild(label)
-	      item.appendChild(role)
-
-	      const preview = document.createElement("span")
-	      preview.className = "timeline-item-preview" + (turn.toolCount > 0 ? " has-tool" : "")
-	      preview.textContent = turn.toolCount > 0 ? `${turn.snippet} (${turn.toolCount} tools)` : turn.snippet
-	      item.appendChild(preview)
-
-	      item.addEventListener("click", () => {
-	        scrollToTurn(turn.userMessageId)
-	        updateTimelineProgress(targetId)
-	      })
-	      timeline.appendChild(item)
-	    })
-
-	    if (!timeline.dataset.keyListener) {
-	      timeline.dataset.keyListener = "true"
-	      timeline.addEventListener("keydown", (e) => {
-	        const items = Array.from(timeline!.querySelectorAll<HTMLElement>(".timeline-item"))
-	        if (items.length === 0) return
-	        const focused = timeline!.querySelector<HTMLElement>(".timeline-item:focus")
-	        const idx = focused ? items.indexOf(focused) : -1
-	        if (e.key === "ArrowDown") {
-	          e.preventDefault()
-	          items[Math.min(idx + 1, items.length - 1)]?.focus()
-	        } else if (e.key === "ArrowUp") {
-	          e.preventDefault()
-	          items[Math.max(idx - 1, 0)]?.focus()
-	        } else if (e.key === "Home") {
-	          e.preventDefault()
-	          items[0]?.focus()
-	        } else if (e.key === "End") {
-	          e.preventDefault()
-	          items[items.length - 1]?.focus()
-	        }
-	      })
-	    }
-
-	    if (!msgList.dataset.timelineListener) {
-	      msgList.dataset.timelineListener = "true"
-	      msgList.addEventListener("scroll", () => updateTimelineProgress(targetId), { passive: true })
-	    }
-	    updateTimelineProgress(targetId)
-	  }
-
-	  function ensureTimeline(sessionId: string): HTMLElement | null {
-	    const view = els.tabPanels.querySelector<HTMLElement>(`.tab-panel[data-tab-id="${CSS.escape(sessionId)}"]`)
-	    if (!view) return null
-	    let timeline = view.querySelector<HTMLElement>(".conversation-timeline")
-	    if (!timeline) {
-	      timeline = document.createElement("aside")
-	      timeline.className = "conversation-timeline"
-	      timeline.setAttribute("role", "navigation")
-	      timeline.setAttribute("aria-label", "Conversation turns")
-	      view.appendChild(timeline)
-	    }
-	    return timeline
-	  }
-
-	  function updateTimelineProgress(sessionId: string) {
-	    const msgList = getMessageList(sessionId)
-	    const timeline = ensureTimeline(sessionId)
-	    if (!msgList || !timeline) return
-	    const progress = timeline.querySelector<HTMLElement>(".timeline-progress")
-	    const total = Math.max(1, msgList.scrollHeight - msgList.clientHeight)
-	    const ratio = Math.min(1, Math.max(0, msgList.scrollTop / total))
-	    if (progress) progress.style.height = `${Math.round(ratio * 100)}%`
-
-	    const items = Array.from(timeline.querySelectorAll<HTMLElement>(".timeline-item"))
-	    let active: HTMLElement | null = null
-	    for (const item of items) {
-	      const id = item.dataset.messageId
-	      if (!id) continue
-	      const target = msgList.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(id)}"]`)
-	      if (target && target.offsetTop <= msgList.scrollTop + 48) active = item
-	    }
-	    items.forEach((item) => item.classList.toggle("active", item === active))
-	  }
+  function setupTimelineToggle() { timeline.setupTimelineToggle() }
+  function setupThinkingToggle() { timeline.setupThinkingToggle() }
+  function applyTimelineVisibility(sessionId?: string) { timeline.applyTimelineVisibility(sessionId) }
+  function refreshConversationTimeline(sessionId?: string) { timeline.refreshConversationTimeline(sessionId) }
 
 	  /* ─── DISPLAY TOGGLES (Phase 4.2) ─── */
 
@@ -3516,23 +3293,7 @@ function getVsCodeApi() {
   }
 
   function showSkillIndicator(sessionId: string, skillName: string) {
-    const indicator = els.inputArea.querySelector(".skill-indicators")
-    if (!indicator) {
-      const container = document.createElement("div")
-      container.className = "skill-indicators"
-      els.inputArea.insertBefore(container, els.inputWrapper)
-      const pill = document.createElement("span")
-      pill.className = "skill-pill"
-      pill.textContent = skillName
-      container.appendChild(pill)
-      timers.setTimeout(() => pill.remove(), 3000)
-    } else {
-      const pill = document.createElement("span")
-      pill.className = "skill-pill"
-      pill.textContent = skillName
-      indicator.appendChild(pill)
-      timers.setTimeout(() => pill.remove(), 3000)
-    }
+    streamOrchestrator.showSkillIndicator(sessionId, skillName)
   }
 
   function insertTextAtCursor(text: string) {
@@ -3552,332 +3313,44 @@ function getVsCodeApi() {
   }
 
   function handleCostUpdate(sessionId: string, cost: number) {
-    if (!Number.isFinite(cost)) return
-    const session = stateManager.getSession(sessionId)
-    if (session) {
-      session.cost = cost
-      stateManager.save()
-      renderRecentSessionsList()
-    }
+    streamOrchestrator.handleCostUpdate(sessionId, cost)
   }
 
   function handleHostMessage(msg: ChatMessage) {
-    if (!msg.sessionId) return
-    const stream = streamHandlers.get(msg.sessionId)
-    const isFinalAssistantMessage = msg.role === "assistant"
-    if (stream && isFinalAssistantMessage) {
-      stream.hideTypingIndicator()
-    }
-    addMessage(msg.sessionId, msg)
-    if (isFinalAssistantMessage) {
-      stateManager.setStreaming(msg.sessionId, false)
-      updateTabBar()
-      updateModeSelectorStateLocal()
-      updateSendButton()
-      updateAgentStatus("idle")
-    }
-    syncModeUI()
+    streamOrchestrator.handleHostMessage(msg)
   }
 
   function updateAgentStatus(status: "idle" | "thinking" | "executing") {
-    els.agentStatusLed.className = `status-led ${status}`
-    els.agentStatusText.textContent = status === "idle" ? "SYSTEM READY" : status.toUpperCase()
+    streamOrchestrator.updateAgentStatus(status)
   }
 
   function handleStreamStart(sessionId: string, messageId?: string) {
-    // Ensure the session exists in webview state. The extension can start a
-    // stream for a session the webview doesn't yet know about — e.g. when the
-    // session was filtered out of init_state because it had no persisted
-    // messages, or when the user submitted a prompt before init_state arrived.
-    let session = stateManager.getSession(sessionId)
-    if (!session) {
-      vscode.postMessage({ type: "webview_log", level: "warn", message: `handleStreamStart: Session ${sessionId} not in state, ensuring it` })
-      session = stateManager.ensureSession({
-        id: sessionId,
-        name: "New Session",
-        model: stateManager.getState().globalModel || "",
-        mode: "build",
-        messages: [],
-        isStreaming: false,
-      })
-    }
-
-    // Ensure tab UI exists in the DOM before processing stream
-    let msgList = getMessageList(sessionId)
-    if (!msgList) {
-      vscode.postMessage({ type: "webview_log", level: "warn", message: `handleStreamStart: No message list for ${sessionId}, creating tab UI` })
-      createTabUI(sessionId, session.name || "New Session")
-      msgList = getMessageList(sessionId)
-    }
-
-    const stream = streamHandlers.get(sessionId)
-    if (!stream) {
-      vscode.postMessage({ type: "webview_log", level: "warn", message: `handleStreamStart: No stream found for session ${sessionId}, creating...` })
-      const newStream = createStreamHandlersForTab(sessionId)
-      streamHandlers.set(sessionId, newStream)
-    }
-
-    const finalStream = streamHandlers.get(sessionId)
-    if (!finalStream) {
-      vscode.postMessage({ type: "webview_log", level: "error", message: `handleStreamStart: Failed to get/create stream for ${sessionId}` })
-      return
-    }
-
-    // Ensure the tab is visible (active) and welcome screen is hidden
-    if (stateManager.getState().activeSessionId !== sessionId) {
-      vscode.postMessage({ type: "webview_log", level: "info", message: `handleStreamStart: Switching to tab ${sessionId}` })
-      switchTab(sessionId)
-    }
-    hideWelcomeView()
-    updateTabBar()
-
-    vscode.postMessage({ type: "webview_log", level: "info", message: `handleStreamStart: Starting stream for ${sessionId} (msgId=${messageId})` })
-    finalStream.handleStreamStart(messageId)
-    stateManager.setStreaming(sessionId, true)
-    updateTabBar()
-    updateModeSelectorStateLocal()
-    updateAgentStatus("thinking")
-    // Flush pending file edits and clear stale banners when new streaming starts
-    fileEditBatcher.cancelAll()
-    const activeMsgList = getMessageList(sessionId)
-    if (activeMsgList) {
-      const staleBanners = activeMsgList.querySelectorAll(".task-banner")
-      staleBanners.forEach(b => {
-        if (b.textContent?.includes("Edited")) b.remove()
-      })
-      if (!activeMsgList.querySelector(".jump-to-bottom")) {
-        setupJumpToBottom(sessionId)
-      }
-      debouncedUpdateScrollMarkers(sessionId)
-    }
+    streamOrchestrator.handleStreamStart(sessionId, messageId)
   }
 
   let chunkLogCounter = 0
   function handleStreamChunk(sessionId: string, text?: string, messageId?: string) {
-    // Defensive: if a chunk arrives for a session we haven't bootstrapped yet
-    // (race with init_state, or session filtered from init_state), bootstrap
-    // everything now so the chunk renders into a visible bubble.
-    if (!stateManager.getSession(sessionId)) {
-      stateManager.ensureSession({
-        id: sessionId,
-        name: "New Session",
-        model: stateManager.getState().globalModel || "",
-        mode: "build",
-        messages: [],
-        isStreaming: false,
-      })
-    }
-    if (!els.tabPanels.querySelector(`.tab-panel[data-tab-id="${CSS.escape(sessionId)}"]`)) {
-      const sess = stateManager.getSession(sessionId)
-      if (sess) {
-        createTabUI(sessionId, sess.name)
-        updateTabBar()
-        hideWelcomeView()
-      }
-    }
-    let stream = streamHandlers.get(sessionId)
-    if (!stream) {
-      vscode.postMessage({ type: "webview_log", level: "warn", message: `handleStreamChunk: No stream found for session ${sessionId}, creating...` })
-      stream = createStreamHandlersForTab(sessionId)
-      streamHandlers.set(sessionId, stream)
-    }
-    const s = stream!
-    chunkLogCounter++
-    // Reduce chunk logging frequency to avoid spamming output
-    if (chunkLogCounter <= 3 || chunkLogCounter % 100 === 0 || (text && text.length > 1000)) {
-      vscode.postMessage({
-        type: "webview_log",
-        level: "info",
-        message: `handleStreamChunk: chunk #${chunkLogCounter} for ${sessionId} len=${text?.length || 0} streamingMessageId=${s.streamingMessageId ?? "<null>"}`,
-      })
-    }
-    s.handleStreamChunk(text, messageId)
-  }
-
-  function showStreamEndReasonMessage(sessionId: string, reason?: string, partial?: boolean) {
-    if (reason === "ttfb_timeout") {
-      showSystemMessage(sessionId, "The model took too long to start responding. Please try again or select a different model.", true)
-    } else if (reason === "timeout") {
-      showSystemMessage(sessionId, partial
-        ? "Response was cut off (timeout). Partial output has been preserved."
-        : "Response timed out. Please try again or select a different model.", true)
-    } else if (reason === "hard_timeout") {
-      showSystemMessage(sessionId, "Stream interrupted after extended run. Partial output preserved.", true)
-    } else if (reason === "error") {
-      showSystemMessage(sessionId, "An error occurred while generating the response. Please try again.", true)
-    }
-  }
-
-  function processQueueIfReady(sessionId: string, reason?: string) {
-    if (reason === "aborted") return
-    const queue = promptQueues.get(sessionId)
-    if (queue && queue.isNextReady()) {
-      const next = queue.processNext()
-      if (next) {
-        persistQueues()
-        sendQueuedPrompt(sessionId, next.text, next.attachments)
-      }
-    }
-  }
-
-  function processStreamEndBlocks(sessionId: string, messageId?: string, blocks?: unknown) {
-    const blockList = Array.isArray(blocks) ? blocks as ChatMessage["blocks"] : []
-    if (blockList.length === 0) return
-
-    const msgList = getMessageList(sessionId)
-    if (messageId && msgList) {
-      const placeholder = msgList.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement | null
-      if (placeholder) {
-        const textEl = placeholder.querySelector(".streaming-text, .msg-text") as HTMLElement | null
-        const hasContent = textEl && textEl.textContent && textEl.textContent.trim().length > 2
-        if (!hasContent) placeholder.remove()
-      }
-    }
-    addMessage(sessionId, {
-      role: "assistant",
-      id: messageId || `resp-${Date.now()}`,
-      blocks: blockList,
-      timestamp: Date.now(),
-    })
+    streamOrchestrator.handleStreamChunk(sessionId, text, messageId)
   }
 
   function handleStreamEnd(sessionId: string, messageId?: string, blocks?: unknown, reason?: string, partial?: boolean) {
-    try {
-      const stream = streamHandlers.get(sessionId)
-      if (!stream) {
-        vscode.postMessage({ type: "webview_log", level: "warn", message: `handleStreamEnd: No stream found for session ${sessionId}` })
-      } else {
-        try {
-          stream.handleStreamEnd(messageId, blocks)
-        } catch (err) {
-          log.error("stream.handleStreamEnd threw:", err)
-          vscode.postMessage({ type: "webview_log", level: "error", message: `handleStreamEnd: stream handler threw: ${err instanceof Error ? err.message : err}` })
-        }
-      }
-
-      processStreamEndBlocks(sessionId, messageId, blocks)
-
-      stateManager.setStreaming(sessionId, false)
-      toolElapsedTracker.clearAll()
-      clearToolChainProgress(sessionId)
-      for (const [key, pending] of Array.from(pendingToolUpdates)) {
-        if (pending.sessionId === sessionId) {
-          timers.clearTimeout(pending.timer)
-          pendingToolUpdates.delete(key)
-        }
-      }
-      updateTabBar()
-      updateModeSelectorStateLocal()
-      updateAgentStatus("idle")
-      // Refresh the conversation timeline — the assistant turn is now complete.
-      debouncedTimelineRefresh(sessionId)
-
-      showStreamEndReasonMessage(sessionId, reason, partial)
-
-      if (sessionId === stateManager.getState().activeSessionId) {
-        updateSendButtonIcon(false)
-        updateSendButton()
-      }
-
-      processQueueIfReady(sessionId, reason)
-    } catch (err) {
-      log.error("handleStreamEnd top-level error:", err)
-      vscode.postMessage({ type: "webview_log", level: "error", message: `handleStreamEnd error: ${err instanceof Error ? err.message : String(err)}` })
-      try { stateManager.setStreaming(sessionId, false) } catch {}
-      try { updateTabBar() } catch {}
-      try { updateModeSelectorStateLocal() } catch {}
-      try { updateAgentStatus("idle") } catch {}
-      const msg = reason === "ttfb_timeout" ? "Model took too long. Try a different model."
-        : reason === "timeout" ? "Response timed out."
-        : reason === "error" ? "An error occurred."
-        : "Unexpected error."
-      try { showSystemMessage(sessionId, msg) } catch {}
-    }
+    streamOrchestrator.handleStreamEnd(sessionId, messageId, blocks, reason, partial)
   }
 
   function sendQueuedPrompt(sessionId: string, text: string, attachments?: Array<{ data: string; mimeType: string }>) {
-    const active = stateManager.getSession(sessionId)
-    if (!active) return
-
-    const msgObj: ChatMessage = {
-      role: "user",
-      id: createWebviewId("user"),
-      blocks: [
-        ...(text ? [{ type: "text" as const, text }] : []),
-        ...(attachments || []).map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
-      ],
-      timestamp: Date.now(),
-      sessionId,
-    }
-
-    addMessage(sessionId, msgObj)
-    stateManager.setStreaming(sessionId, true)
-    updateTabBar()
-    updateModeSelectorStateLocal()
-    updateSendButton()
-    renderQueue(sessionId)
-
-    const stream = streamHandlers.get(sessionId)
-    if (stream) stream.showTypingIndicator("Thinking...")
-    updateAgentStatus("thinking")
-
-    vscode.postMessage({
-      type: "send_prompt",
-      text,
-      sessionId,
-      messageId: msgObj.id,
-      model: active.model,
-      mode: active.mode,
-      ...(attachments && attachments.length > 0 ? { attachments } : {}),
-    })
+    streamOrchestrator.sendQueuedPrompt(sessionId, text, attachments)
   }
 
   function handleServerStatus(sessionId: string, status?: string, errorContext?: unknown) {
-    const stream = streamHandlers.get(sessionId)
-    if (!stream) return
-    stream.handleServerStatus(status, errorContext)
-    if (status === "executing" || status === "running") {
-      updateAgentStatus("executing")
-    } else if (status === "idle") {
-      updateAgentStatus("idle")
-    }
+    streamOrchestrator.handleServerStatus(sessionId, status, errorContext)
   }
 
   function handleRequestError(sessionId: string | undefined, message?: string) {
-    if (!sessionId) {
-      // Global error - find any streaming session
-      const sessions = stateManager.getAllSessions()
-      const streaming = sessions.find(s => s.isStreaming)
-      if (streaming) sessionId = streaming.id
-      else return
-    }
-
-    stateManager.setStreaming(sessionId, false)
-    updateTabBar()
-    updateModeSelectorStateLocal()
-
-    const stream = streamHandlers.get(sessionId)
-    if (stream) {
-      stream.handleRequestError(message)
-    }
-
-    if (sessionId === stateManager.getState().activeSessionId) {
-      updateSendButtonIcon(false)
-      updateSendButton()
-    }
+    streamOrchestrator.handleRequestError(sessionId, message)
   }
 
   function handleDiffResult(blockId?: string, ok?: boolean, message?: string, checkpointCreated?: boolean) {
-    for (const [sid, stream] of streamHandlers) {
-      stream.handleDiffResult(blockId, ok, message)
-    }
-    // Show checkpoint indicator when a snapshot was created during diff accept
-    if (ok && checkpointCreated) {
-      const active = stateManager.getActiveSession()
-      if (active) {
-        showSystemMessage(active.id, "Checkpoint saved — you can revert via OpenCode: Rollback Changes")
-      }
-    }
+    streamOrchestrator.handleDiffResult(blockId, ok, message, checkpointCreated)
   }
 
   /* ─── TOKEN/COST DISPLAY ─── */
@@ -3929,6 +3402,11 @@ function getVsCodeApi() {
     updateContextBarFromSessionModule(tokenCostDeps, sessionId)
   }
 
+  function resetContextUsagePanel() {
+    resetContextUsageDropdown()
+    els.contextUsage.classList.add("hidden")
+  }
+
   // Update the always-visible status-strip context bar (progress + label text).
   // Separate from ctxDropdownApi which drives the floating detail panel.
   function updateContextUsageBar(pct: number, tokens: number, maxTokens: number): void {
@@ -3976,7 +3454,49 @@ function getVsCodeApi() {
     els.quotaBar.classList.add("hidden")
   }
 
-  const fileEditBatcher = new FileEditBatcher((sessionId, text) => {
+  const TASK_BANNER_COALESCE_MS = 5000
+
+  /**
+   * Coalesce successive "Edited N files" task banners that arrive within a
+   * short window of each other. Without this, every 500ms FileEditBatcher
+   * flush spawns a fresh banner row — three rapid edits = three stacked
+   * cards. With it, we merge the new files into the latest existing banner
+   * and re-render that one node in place. Falls back to a fresh banner if
+   * the previous message is something else or older than the window.
+   */
+  function appendOrCoalesceEditBanner(sessionId: string, text: string) {
+    const session = stateManager.getSession(sessionId)
+    const last = session?.messages?.[session.messages.length - 1]
+    const lastBlock = last?.blocks?.[0]
+    const isRecentEditBanner =
+      last &&
+      last.role === "system" &&
+      lastBlock?.type === "task_banner" &&
+      lastBlock?.status === "success" &&
+      typeof lastBlock?.text === "string" &&
+      /^Edited /.test(lastBlock.text) &&
+      typeof last.timestamp === "number" &&
+      Date.now() - last.timestamp < TASK_BANNER_COALESCE_MS
+
+    if (isRecentEditBanner && last && lastBlock) {
+      const mergedFiles = mergeEditBannerFiles(lastBlock.text as string, text)
+      lastBlock.text = mergedFiles
+      last.timestamp = Date.now()
+      stateManager.save()
+      // Re-render the affected message in place
+      const msgList = getMessageList(sessionId)
+      const node = last.id ? msgList?.querySelector(`[data-message-id="${CSS.escape(last.id)}"]`) : null
+      if (node && msgList) {
+        const session2 = stateManager.getSession(sessionId)
+        const fresh = renderMessage(last, {
+          mode: session2?.mode || "build",
+          postMessage: (m) => vscode.postMessage(m),
+        } as Parameters<typeof renderMessage>[1])
+        if (fresh) node.replaceWith(fresh)
+      }
+      return
+    }
+
     addMessage(sessionId, {
       role: "system",
       id: createWebviewId("file"),
@@ -3984,6 +3504,10 @@ function getVsCodeApi() {
       timestamp: Date.now(),
       sessionId,
     })
+  }
+
+  fileEditBatcherRef = new FileEditBatcher((sessionId, text) => {
+    appendOrCoalesceEditBanner(sessionId, text)
   })
 
   const fileTrackingDeps: FileTrackingDeps = {
