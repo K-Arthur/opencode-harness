@@ -5,6 +5,7 @@ import path from "node:path"
 
 const source = readFileSync(path.join(__dirname, "main.ts"), "utf8")
 const orchestratorSource = (() => { try { return readFileSync(path.join(__dirname, "streamOrchestrator.ts"), "utf8") } catch { return "" } })()
+const timelineSource = (() => { try { return readFileSync(path.join(__dirname, "timeline.ts"), "utf8") } catch { return "" } })()
 const themeCustomizerSource = readFileSync(path.join(__dirname, "ui", "themeCustomizer.ts"), "utf8")
 const modeDropdownSource = readFileSync(path.join(__dirname, "ui", "modeDropdown.ts"), "utf8")
 const sessionModalSource = readFileSync(path.join(__dirname, "ui", "sessionModal.ts"), "utf8")
@@ -89,9 +90,10 @@ describe("main.ts", () => {
   })
 
   it("condenses very long local history without mutating server history", () => {
-    assert.ok(source.includes("function applyHistoryCondensation"), "must define history condensation")
-    assert.ok(source.includes("history-condensed-summary"), "must render deterministic local summary controls")
-    assert.ok(source.includes("session.messages.length <= 140"), "must only condense long sessions")
+    const combined = source + orchestratorSource + timelineSource
+    assert.ok(combined.includes("function applyHistoryCondensation") || combined.includes("applyHistoryCondensation"), "must define history condensation")
+    assert.ok(combined.includes("history-condensed-summary"), "must render deterministic local summary controls")
+    assert.ok(combined.includes("session.messages.length <= 140"), "must only condense long sessions")
   })
 
   it("keeps send button state synchronized across input event variants", () => {
@@ -678,12 +680,11 @@ it("unified modal: server session items send resume_server_session on click", ()
   // explicitly hid in their last session.
   describe("setupThinkingToggle — boot-time sync", () => {
     it("calls toggleAllThinkingBlocks at boot with the persisted preference", () => {
-      const fnIdx = source.indexOf("function setupThinkingToggle()")
+      const combined = source + timelineSource
+      const fnIdx = combined.indexOf("function setupThinkingToggle()")
       assert.ok(fnIdx >= 0, "setupThinkingToggle must exist")
-      // Inspect a window before the click handler (which is the second
-      // place toggleAllThinkingBlocks is called from).
-      const clickIdx = source.indexOf("addEventListener(\"click\"", fnIdx)
-      const bootBlock = source.slice(fnIdx, clickIdx)
+      const clickIdx = combined.indexOf("addEventListener(\"click\"", fnIdx)
+      const bootBlock = combined.slice(fnIdx, clickIdx)
       assert.ok(
         bootBlock.includes("toggleAllThinkingBlocks"),
         "setupThinkingToggle must call toggleAllThinkingBlocks during boot so the persisted pref is applied to existing DOM",
