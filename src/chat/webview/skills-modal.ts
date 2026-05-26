@@ -1,3 +1,4 @@
+import { createFocusTrap, type FocusTrap } from "./focus-trap"
 import type { SkillInfo } from "./types"
 
 export interface SkillsModalOptions {
@@ -18,17 +19,21 @@ export function setupSkillsModal(els: any, options: SkillsModalOptions) {
 
   let allSkills: SkillInfo[] = []
   let activeCategory = "all"
+  let focusTrap: FocusTrap | null = null
+  let openTrigger: HTMLElement | null = null
 
   function closeModal() {
     skillsModal.classList.add("hidden")
-    const trigger = document.getElementById("skills-btn")
+    if (focusTrap) { focusTrap.destroy(); focusTrap = null }
+    const trigger = openTrigger ?? document.getElementById("skills-btn")
     trigger?.focus()
+    openTrigger = null
   }
 
   closeBtn.addEventListener("click", closeModal)
 
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !skillsModal.classList.contains("hidden")) closeModal()
+    if (e.key === "Escape" && !skillsModal.classList.contains("hidden")) { e.stopPropagation(); closeModal() }
   })
 
   searchInput.addEventListener("input", (e: Event) => {
@@ -103,7 +108,10 @@ export function setupSkillsModal(els: any, options: SkillsModalOptions) {
       renderSkillsList(skillsList, results, options)
     },
     open: () => {
+      openTrigger = document.activeElement as HTMLElement
       skillsModal.classList.remove("hidden")
+      focusTrap = createFocusTrap(skillsModal)
+      document.addEventListener("keydown", focusTrap.handler)
       searchInput.focus()
     },
     close: closeModal,

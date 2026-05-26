@@ -416,100 +416,121 @@ export function handleStreamToken(
   }
 }
 
+type ToolStartPayload = { id: string; name: string; class?: string; args?: unknown; state?: ToolCallState }
+
 export function handleToolStart(
   state: StreamState,
   els: StreamElements,
   messages: ChatMessage[],
-  toolCall: { id: string; name: string; class?: string; args?: unknown; state?: ToolCallState }
+  toolCall: ToolStartPayload
 ): void {
   const id = state.streamingMessageId
   if (!id) return
 
   const msgObj = messages.find((m) => m.id === id)
+  if (updateExistingToolStart(state, els, msgObj, toolCall)) return
+
+  prepareForToolBlock(state, els, messages, toolCall.id)
+  appendStreamingToolBlock(
+    els,
+    id,
+    msgObj,
+    isQuestionTool(toolCall) ? createQuestionToolBlock(toolCall, msgObj) : createToolCallBlock(toolCall) as Block,
+  )
+  els.scrollAnchor.scrollIfAnchored()
+}
+
+function updateExistingToolStart(
+  state: StreamState,
+  els: StreamElements,
+  msgObj: ChatMessage | undefined,
+  toolCall: ToolStartPayload,
+): boolean {
   const existing = msgObj?.blocks.findIndex(
     (b) => b.type === "tool-call" && (b as ToolCallBlock).id === toolCall.id
   ) ?? -1
-  if (existing >= 0) {
-    state.streamingToolCallId = toolCall.id
-    webviewLog(`handleToolStart: updating existing tool_start id=${toolCall.id}`)
-    const block = msgObj!.blocks[existing] as ToolCallBlock
-    block.args = toolCall.args
-    handleToolUpdate(els, toolCall.id, { args: toolCall.args })
-    return
-  }
+  if (existing < 0 || !msgObj) return false
 
-  finalizeCurrentTextBlock(state, els, messages)
   state.streamingToolCallId = toolCall.id
+  webviewLog(`handleToolStart: updating existing tool_start id=${toolCall.id}`)
+  const block = msgObj.blocks[existing] as ToolCallBlock
+  block.args = toolCall.args
+  handleToolUpdate(els, toolCall.id, { args: toolCall.args })
+  return true
+}
+
+function prepareForToolBlock(
+  state: StreamState,
+  els: StreamElements,
+  messages: ChatMessage[],
+  toolCallId: string,
+): void {
+  finalizeCurrentTextBlock(state, els, messages)
+  state.streamingToolCallId = toolCallId
   state.currentBlockBuffer = ""
   state.currentBlockEl = null
+}
 
-  // Special-case: opencode's `question` tool needs an interactive UI
-  // (options + free-text input + submit) so the user can actually answer
-  // and unblock the stream. Render it as a `question` block instead of a
-  // passive tool-call card.
-  if ((toolCall.name || "").toLowerCase() === "question") {
-    const args = toolCall.args as Record<string, unknown> | undefined
-    const questionText =
-      (typeof args?.question === "string" && args.question) ||
-      (typeof args?.prompt === "string" && args.prompt) ||
-      (typeof args?.message === "string" && args.message) ||
-      (typeof args?.text === "string" && args.text) ||
-      ""
-    const optionsRaw =
-      (Array.isArray(args?.options) && args!.options) ||
-      (Array.isArray(args?.choices) && args!.choices) ||
-      (Array.isArray(args?.select) && args!.select) ||
-      []
-    const options = (optionsRaw as unknown[]).map((o) =>
-      typeof o === "string" ? o : typeof o === "object" && o && "label" in (o as Record<string, unknown>)
-        ? String((o as { label?: unknown }).label ?? "")
-        : String(o)
-    ).filter(Boolean)
-    const allowFreeText = args?.allowFreeText !== false
+function isQuestionTool(toolCall: ToolStartPayload): boolean {
+  return (toolCall.name || "").toLowerCase() === "question"
+}
 
-    const questionBlock = {
-      type: "question",
-      id: toolCall.id,
-      toolCallId: toolCall.id,
-      sessionId: msgObj?.sessionId,
-      text: questionText,
-      options,
-      allowFreeText,
-    } as unknown as Block
+function createQuestionToolBlock(toolCall: ToolStartPayload, msgObj: ChatMessage | undefined): Block {
+  const args = toolCall.args as Record<string, unknown> | undefined
+  return {
+    type: "question",
+    id: toolCall.id,
+    toolCallId: toolCall.id,
+    sessionId: msgObj?.sessionId,
+    text: getQuestionText(args),
+    options: getQuestionOptions(args),
+    allowFreeText: args?.allowFreeText !== false,
+  } as unknown as Block
+}
 
-    if (msgObj) msgObj.blocks.push(questionBlock)
+function getQuestionText(args: Record<string, unknown> | undefined): string {
+  return (typeof args?.question === "string" && args.question) ||
+    (typeof args?.prompt === "string" && args.prompt) ||
+    (typeof args?.message === "string" && args.message) ||
+    (typeof args?.text === "string" && args.text) ||
+    ""
+}
 
-    const msgEl = els.messageList.querySelector(`[data-message-id="${id}"]`) as HTMLElement | null
-    if (msgEl) {
-      const bubble = msgEl.querySelector(".message-bubble") as HTMLElement | null
-      if (bubble && msgObj) {
-        appendOrFoldToolDOM(bubble, questionBlock, msgObj.blocks)
-      }
-    }
-    els.scrollAnchor.scrollIfAnchored()
-    return
-  }
+function getQuestionOptions(args: Record<string, unknown> | undefined): string[] {
+  const optionsRaw =
+    (Array.isArray(args?.options) && args!.options) ||
+    (Array.isArray(args?.choices) && args!.choices) ||
+    (Array.isArray(args?.select) && args!.select) ||
+    []
+  return (optionsRaw as unknown[]).map((o) =>
+    typeof o === "string" ? o : typeof o === "object" && o && "label" in (o as Record<string, unknown>)
+      ? String((o as { label?: unknown }).label ?? "")
+      : String(o)
+  ).filter(Boolean)
+}
 
-  const toolBlock: ToolCallBlock = {
-    type: 'tool-call',
+function createToolCallBlock(toolCall: ToolStartPayload): ToolCallBlock {
+  return {
+    type: "tool-call",
     id: toolCall.id,
     name: toolCall.name || "Tool",
-    class: (toolCall.class as ToolCallBlock['class']) || 'read',
-    state: toolCall.state === 'running' ? 'running' : 'pending',
+    class: (toolCall.class as ToolCallBlock["class"]) || "read",
+    state: toolCall.state === "running" ? "running" : "pending",
     args: toolCall.args,
   }
+}
 
-  if (msgObj) msgObj.blocks.push(toolBlock as Block)
+function appendStreamingToolBlock(
+  els: StreamElements,
+  messageId: string,
+  msgObj: ChatMessage | undefined,
+  block: Block,
+): void {
+  if (msgObj) msgObj.blocks.push(block)
 
-  const msgEl = els.messageList.querySelector(`[data-message-id="${id}"]`) as HTMLElement | null
-  if (msgEl) {
-    const bubble = msgEl.querySelector(".message-bubble") as HTMLElement | null
-    if (bubble && msgObj) {
-      appendOrFoldToolDOM(bubble, toolBlock as Block, msgObj.blocks)
-    }
-  }
-
-  els.scrollAnchor.scrollIfAnchored()
+  const msgEl = els.messageList.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement | null
+  const bubble = msgEl?.querySelector(".message-bubble") as HTMLElement | null
+  if (bubble && msgObj) appendOrFoldToolDOM(bubble, block, msgObj.blocks)
 }
 
 /**

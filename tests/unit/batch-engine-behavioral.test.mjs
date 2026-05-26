@@ -1,7 +1,17 @@
 import { describe, it, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
+import ts from "typescript"
 
-const { BatchEngine } = await import("../../src/chat/BatchEngine.js")
+const batchEngineSource = readFileSync(new URL("../../src/chat/BatchEngine.ts", import.meta.url), "utf8")
+const { outputText } = ts.transpileModule(batchEngineSource, {
+  compilerOptions: {
+    module: ts.ModuleKind.ESNext,
+    target: ts.ScriptTarget.ES2022,
+  },
+})
+const encodedModule = Buffer.from(outputText, "utf8").toString("base64")
+const { BatchEngine } = await import(`data:text/javascript;base64,${encodedModule}`)
 
 void describe("BatchEngine behavioral", () => {
   let received

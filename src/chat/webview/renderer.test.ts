@@ -86,7 +86,11 @@ it("has type guards for discriminated blocks", () => {
   })
 
   it("renderTextBlock_uses_isStreaming_flag", () => {
-    assert.ok(source.includes("opts?.isStreaming ? normalizeStreamingMarkdown(part) : normalizeMarkdownText(part)"), "must use streaming flag for mentions")
+    assert.ok(
+      source.includes("opts?.isStreaming ? normalizeStreamingMarkdown(part) : normalizeMarkdownText(part)") ||
+        source.includes("opts?.isStreaming ? normalizeStreamingMarkdown(text) : normalizeMarkdownText(text)"),
+      "must use streaming flag for mentions"
+    )
     assert.ok(source.includes("renderMarkdown(text, isStreaming)"), "must pass streaming flag to renderMarkdown")
   })
 

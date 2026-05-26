@@ -5,6 +5,7 @@ import { resolve } from "node:path"
 
 const chatProviderSource = readFileSync(resolve(__dirname, "ChatProvider.ts"), "utf8")
 const eventRouterSource = readFileSync(resolve(__dirname, "WebviewEventRouter.ts"), "utf8")
+const validatorSource = readFileSync(resolve(__dirname, "WebviewMessageValidator.ts"), "utf8")
 const hostMessageBatcherSource = readFileSync(resolve(__dirname, "HostMessageBatcher.ts"), "utf8")
 const typesSource = readFileSync(resolve(__dirname, "webview/types.ts"), "utf8")
 
@@ -23,20 +24,23 @@ void describe("Webview Message Flow Integration Tests", () => {
 
     void it("validates send_prompt text length", () => {
       assert.ok(eventRouterSource.includes("validateMessage"), "must call validateMessage")
-      assert.ok(eventRouterSource.includes('case "send_prompt"'), "must validate send_prompt")
-      assert.ok(eventRouterSource.includes("text.length > 50000"), "must validate prompt length")
+      assert.ok(validatorSource.includes("send_prompt: validateSendPrompt"), "must validate send_prompt")
+      assert.ok(validatorSource.includes("text.length > 50000"), "must validate prompt length")
     })
 
     void it("validates mention_search query length", () => {
       assert.ok(eventRouterSource.includes("validateMessage"), "must call validateMessage")
-      assert.ok(eventRouterSource.includes('case "mention_search"'), "must validate mention_search")
-      assert.ok(eventRouterSource.includes("query.length > 500"), "must validate query length")
+      assert.ok(validatorSource.includes("mention_search: validateMentionSearch"), "must validate mention_search")
+      assert.ok(
+        validatorSource.includes('invalidOptionalString(msg, "query", "Rejected oversized mention search query", deps, 500)'),
+        "must validate query length"
+      )
     })
 
     void it("validates change_mode values", () => {
       assert.ok(eventRouterSource.includes("validateMessage"), "must call validateMessage")
-      assert.ok(eventRouterSource.includes('case "change_mode"'), "must validate change_mode")
-      assert.ok(eventRouterSource.includes('["normal", "plan", "build", "auto"]'), "must validate mode values")
+      assert.ok(validatorSource.includes("change_mode: validateChangeMode"), "must validate change_mode")
+      assert.ok(validatorSource.includes('new Set(["normal", "plan", "build", "auto"])'), "must validate mode values")
     })
   })
 

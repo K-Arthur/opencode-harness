@@ -13,7 +13,7 @@ import { sdkMessagesToChatMessages, reasoningEventToBlock } from "../session/sdk
 import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
 import { isLocalPlaceholderSessionId } from "../session/sessionUtils"
 import { WebviewContent } from "./WebviewContent"
-import { TabManager } from "./TabManager"
+import { TabManager, type TabState } from "./TabManager"
 import { StreamCoordinator } from "./handlers/StreamCoordinator"
 import { PromptManager } from "../prompts/PromptManager"
 import { PromptStashManager } from "../prompts/PromptStashManager"
@@ -38,6 +38,8 @@ import { SkillPreferencesStore } from "../skills/SkillPreferencesStore"
 import { SkillTriggerEngine } from "../skills/SkillTriggerEngine"
 import { MethodologyAdvisor } from "../methodology/MethodologyAdvisor"
 import { BackfillService } from "./BackfillService"
+
+type ServerEvent = { type: string; sessionId?: string; data?: unknown }
 
 export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   private _view?: vscode.WebviewView
@@ -575,7 +577,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
   // Server event handler map - for lower complexity in handleServerEvent
   // ---------------------------------------------------------------------------
 
-  private readonly serverEventHandlers: Map<string, (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean }) => void | Promise<void>> = new Map([
+  private readonly serverEventHandlers: Map<string, (event: ServerEvent, tabId: string, tab?: { id: string; isStreaming: boolean }) => void | Promise<void>> = new Map([
     ["tool_start", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean }) => {
       const data = event.data as { id?: string; tool?: string; input?: unknown; status?: string } | undefined
       const targetId = tab?.id || tabId
@@ -894,63 +896,76 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     })
   }
 
-  private handleServerEvent(event: { type: string; sessionId?: string; data?: unknown }): void {
+  private handleServerEvent(event: ServerEvent): void {
     if (!this._view) {
       log.debug(`Ignoring server event ${event.type} — no webview active`)
       return
     }
 
-    // text_chunk, tool_end, and other high-frequency events are too noisy to log every one.
-    // State events still log.
-    const isHighFrequency = event.type === "text_chunk" || event.type === "tool_end" || event.type === "tool_start"
-    if (!isHighFrequency) {
-      log.debug(`Incoming server event: ${event.type} (sessionId: ${event.sessionId})`)
-    }
+    const isHighFrequency = this.isHighFrequencyServerEvent(event)
+    this.logIncomingServerEvent(event, isHighFrequency)
 
-    // Resolve tab by cliSessionId first (O(1) via index), then by local tab id.
-    let tab = event.sessionId ? this.tabManager.getTabByCliSessionId(event.sessionId) : undefined
-    if (!tab && event.sessionId) {
-      tab = this.tabManager.getTab(event.sessionId)
-    }
-    if (!tab && !event.sessionId && event.type === "file_edited") {
-      const activeTab = this.tabManager.getActiveTab()
-      const liveTabs = this.tabManager.getAllTabs().filter((t) => t.isStreaming || t.waitingForCompletion)
-      if (liveTabs.length === 1) {
-        tab = liveTabs[0]
-      } else if (activeTab && (activeTab.isStreaming || activeTab.waitingForCompletion || liveTabs.length === 0)) {
-        tab = activeTab
-      }
-      if (tab) {
-        log.debug(`Attributed sessionless file_edited event to tab: ${tab.id}`)
-      } else {
-        log.warn("Dropping sessionless file_edited event: no active or streaming tab could be resolved")
-        return
-      }
-    }
-    let tabId = tab?.id
+    const { tab, drop } = this.resolveServerEventTab(event)
+    if (drop) return
 
-    // CRITICAL: Ensure we use the mapped tabId, not the raw CLI sessionId, when calling handlers
-    // as handlers expect the local webview sessionId.
-    const targetTabId = tabId || event.sessionId || ""
-
-    if (!tab && event.sessionId && event.type !== "session_status" && event.type !== "server_connected") {
-      // Race-tolerant routing: the tab→session mapping may not be registered
-      // yet (the server can emit events between `session.create` resolving
-      // and `setCliSessionId(...)` running). Buffer the event; it will be
-      // replayed by the onCliSessionIdRegistered subscription, or dropped
-      // once after the TTL if the mapping never arrives.
-      this.pendingEventBuffer.add(event.sessionId, event)
-      if (!isHighFrequency) {
-        log.debug(`Buffered ${event.type} for cliSessionId "${event.sessionId}" (size=${this.pendingEventBuffer.size(event.sessionId)})`)
-      }
+    if (this.bufferServerEventIfNeeded(event, tab, isHighFrequency)) {
       return
-    } else if (tab && !isHighFrequency) {
-      log.debug(`Routed server event ${event.type} to tab: ${tab.id}`)
+    }
+    if (tab && !isHighFrequency) log.debug(`Routed server event ${event.type} to tab: ${tab.id}`)
+
+    this.dispatchServerEvent(event, tab?.id || event.sessionId || "", tab)
+  }
+
+  private isHighFrequencyServerEvent(event: ServerEvent): boolean {
+    return event.type === "text_chunk" || event.type === "tool_end" || event.type === "tool_start"
+  }
+
+  private logIncomingServerEvent(event: ServerEvent, isHighFrequency: boolean): void {
+    if (!isHighFrequency) log.debug(`Incoming server event: ${event.type} (sessionId: ${event.sessionId})`)
+  }
+
+  private resolveServerEventTab(event: ServerEvent): { tab?: TabState; drop: boolean } {
+    const tab = event.sessionId
+      ? this.tabManager.getTabByCliSessionId(event.sessionId) ?? this.tabManager.getTab(event.sessionId)
+      : this.resolveSessionlessFileEditTab(event)
+    return { tab, drop: event.type === "file_edited" && !event.sessionId && !tab }
+  }
+
+  private resolveSessionlessFileEditTab(event: ServerEvent): TabState | undefined {
+    if (event.sessionId || event.type !== "file_edited") return undefined
+
+    const activeTab = this.tabManager.getActiveTab()
+    const liveTabs = this.tabManager.getAllTabs().filter((t) => t.isStreaming || t.waitingForCompletion)
+    const tab = liveTabs.length === 1
+      ? liveTabs[0]
+      : activeTab && (activeTab.isStreaming || activeTab.waitingForCompletion || liveTabs.length === 0)
+        ? activeTab
+        : undefined
+
+    if (tab) {
+      log.debug(`Attributed sessionless file_edited event to tab: ${tab.id}`)
+    } else {
+      log.warn("Dropping sessionless file_edited event: no active or streaming tab could be resolved")
+    }
+    return tab
+  }
+
+  private bufferServerEventIfNeeded(event: ServerEvent, tab: TabState | undefined, isHighFrequency: boolean): boolean {
+    if (tab || !event.sessionId || event.type === "session_status" || event.type === "server_connected") {
+      return false
     }
 
+    this.pendingEventBuffer.add(event.sessionId, event)
+    if (!isHighFrequency) {
+      log.debug(`Buffered ${event.type} for cliSessionId "${event.sessionId}" (size=${this.pendingEventBuffer.size(event.sessionId)})`)
+    }
+    return true
+  }
+
+  private dispatchServerEvent(event: ServerEvent, targetTabId: string, tab: TabState | undefined): void {
     const handler = this.serverEventHandlers.get(event.type)
-    if (handler) { 
-      handler(event, targetTabId, tab ?? undefined) 
+    if (handler) {
+      handler(event, targetTabId, tab ?? undefined)
     } else {
       log.warn(`No handler for server event type: ${event.type}`)
     }

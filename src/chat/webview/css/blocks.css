@@ -1216,7 +1216,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: var(--z-modal, 1000);
+  z-index: var(--z-modal, 300);
   padding: var(--space-4);
 }
 

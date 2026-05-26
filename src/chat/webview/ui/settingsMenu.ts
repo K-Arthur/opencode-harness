@@ -52,8 +52,8 @@ export function setupSettingsMenuKeyboardNav(els: { settingsMenu: HTMLElement; s
       const idx = Array.from(items).indexOf(current as HTMLElement)
       if (idx === -1) { firstItem?.focus(); return }
       const next = e.key === "ArrowDown"
-        ? items[Math.min(idx + 1, items.length - 1)]
-        : items[Math.max(idx - 1, 0)]
+        ? items[(idx + 1) % items.length]
+        : items[(idx - 1 + items.length) % items.length]
       next?.focus()
     }
     if (e.key === "Home") { e.preventDefault(); firstItem?.focus() }

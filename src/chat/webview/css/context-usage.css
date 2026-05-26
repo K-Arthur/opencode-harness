@@ -121,7 +121,7 @@
 
 #context-usage-dropdown,
 #changed-files-dropdown {
-  z-index: calc(var(--z-modal, 1000) + 20);
+  z-index: calc(var(--z-modal, 300) + 20);
   max-width: calc(100vw - 16px);
   overscroll-behavior: contain;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.42), 0 0 0 1px var(--oc-border);
