@@ -203,7 +203,9 @@ test.describe("Frontend Hardening E2E", () => {
 
     const banner = page.locator(".task-banner--compact").first()
     await expect(banner).not.toHaveClass(/task-banner--expanded/)
-    await banner.click()
+    // Click the chevron, not a file chip — clicking on a chip would route to
+    // open_file instead of toggling expansion (intentional separation).
+    await banner.locator(".task-banner-chevron").click()
     await expect(banner).toHaveClass(/task-banner--expanded/)
     // After expansion all 13 chips are present, no overflow pill
     await expect(banner.locator(".cf-strip-chip")).toHaveCount(13)

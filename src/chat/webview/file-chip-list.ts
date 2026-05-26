@@ -17,6 +17,8 @@ export interface FileChipListOptions {
   showLeadingIcon?: boolean
   /** Show a leading count label (e.g. "13 files"). */
   showCountLabel?: boolean
+  /** Optional verb after the count, e.g. "changed" → "13 files changed". */
+  countLabelSuffix?: string
   /** Render compact (smaller font, less padding). */
   compact?: boolean
 }
@@ -57,8 +59,9 @@ export function renderFileChipListHtml(files: string[], opts: FileChipListOption
   }
 
   if (opts.showCountLabel !== false) {
+    const suffix = opts.countLabelSuffix ? ` ${opts.countLabelSuffix}` : ""
     parts.push(
-      `<span class="cf-strip-label">${files.length} file${files.length !== 1 ? "s" : ""}</span>`
+      `<span class="cf-strip-label">${files.length} file${files.length !== 1 ? "s" : ""}${suffix}</span>`
     )
     parts.push(`<span class="cf-strip-divider" aria-hidden="true">·</span>`)
   }
