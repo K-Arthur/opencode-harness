@@ -194,7 +194,7 @@ function _renderStrip(_sessionId: string, files: FileChange[]): void {
   strip.classList.remove("hidden")
   strip.innerHTML = renderFileChipListHtml(
     files.map((f) => f.path ?? "").filter((p) => p.length > 0),
-    { maxVisible: CF_STRIP_MAX, showLeadingIcon: true, showCountLabel: true },
+    { maxVisible: CF_STRIP_MAX, showLeadingIcon: true, showCountLabel: true, countLabelSuffix: "changed" },
   )
   // Single click anywhere on the strip opens the full dropdown
   strip.onclick = (e) => {
