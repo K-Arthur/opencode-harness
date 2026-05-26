@@ -1,11 +1,15 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-05-26
-**Version:** v0.2.16 (Webview accessibility & performance audit)
+**Version:** v0.2.17 (Webview accessibility & performance audit + streaming/dropdown fixes)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
 
-## v0.2.16 Highlights — Webview a11y & perf audit (2026-05-26)
+> 0.2.16 was drafted but never tagged or published; everything intended for
+> 0.2.16 (streaming interleave, changed-files toolbar dropdown, context-usage
+> singleton) ships together with the 2026-05-26 audit under 0.2.17.
+
+## v0.2.17 Highlights — Webview a11y & perf audit (2026-05-26)
 
 Closes 13 audit items spanning critical, major, and maintainability concerns.
 End-user behaviour unchanged; measurable perf gains under streaming and long
@@ -55,7 +59,7 @@ sessions; WCAG 2.2 AA posture strengthened.
 
 Verified: typecheck clean · esbuild clean · **2097 unit tests pass / 0 fail / 7 skipped**.
 
-## v0.2.16 Highlights — earlier work
+## v0.2.17 Highlights — streaming interleave + UI centralization (earlier work, also in 0.2.17)
 
 - **Streaming text/tool interleave fixed** — text chunks streamed before a tool call are now finalized immediately when the tool starts (`finalizeCurrentTextBlock` before clearing buffer), rendered live during streaming (not bunched up at end), and positioned correctly before/between tool elements. Spurious empty blocks from deferred RAF flushes after buffer clear are guarded. Diff blocks also finalize text first. New `stream-interleave.test.ts` and `streaming-interleave.spec.ts` cover the DOM behavior.
 - **Changed-files chip bar → toolbar dropdown** — the inline chip strip (`changed-file-chip`) is replaced by a `#changed-files-btn` toolbar button with a count badge opening a floating panel. Files are grouped by directory, show diff stat bars, support sort/compact modes, and load per-file inline diffs on demand.
@@ -100,7 +104,7 @@ Verified: typecheck clean · esbuild clean · **2097 unit tests pass / 0 fail / 
 
 ## Test Summary
 
-| Metric | v0.2.12 | v0.2.14 | v0.2.15 | v0.2.16 (pre-audit) | v0.2.16 (audit) | Delta |
+| Metric | v0.2.12 | v0.2.14 | v0.2.15 | v0.2.17 (pre-audit) | v0.2.17 (audit) | Delta |
 |--------|---------|---------|---------|---------------------|-----------------|-------|
 | Unit tests | 1746 | 1877 | 1877 | 1877 | 2104 | +227 |
 | Passing | 1739 | 1870 | 1870 | 1870 | 2097 | +227 |
