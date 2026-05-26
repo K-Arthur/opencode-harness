@@ -7,37 +7,43 @@ import { fileURLToPath } from "node:url"
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const mainSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "main.ts"), "utf8")
 const handlersSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "streamHandlers.ts"), "utf8")
+const orchestratorSource = (() => {
+  try {
+    return readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "streamOrchestrator.ts"), "utf8")
+  } catch {
+    return ""
+  }
+})()
+
+const combinedSource = mainSource + orchestratorSource
 
 describe("Stream timeout frontend feedback", () => {
   it("stream_end dispatches reason field to handler", () => {
-    assert.ok(mainSource.includes("msg.reason"),
+    assert.ok(combinedSource.includes("msg.reason"),
       "main.ts must pass msg.reason from stream_end message to handler")
-    assert.ok(mainSource.includes("msg.partial"),
+    assert.ok(combinedSource.includes("msg.partial"),
       "main.ts must pass msg.partial from stream_end message to handler")
   })
 
   it("handleStreamEnd shows user-actionable message on TTFB timeout", () => {
-    assert.ok(mainSource.includes('reason === "ttfb_timeout"'),
+    assert.ok(combinedSource.includes('reason === "ttfb_timeout"'),
       "must handle ttfb_timeout reason")
-    assert.ok(mainSource.includes("took too long"),
+    assert.ok(combinedSource.includes("took too long"),
       "must show 'took too long' message for TTFB timeout")
   })
 
   it("handleStreamEnd shows user-actionable message on completion timeout", () => {
-    assert.ok(mainSource.includes('reason === "timeout"'),
+    assert.ok(combinedSource.includes('reason === "timeout"'),
       "must handle timeout reason")
-    assert.ok(mainSource.includes("Response was cut off"),
+    assert.ok(combinedSource.includes("Response was cut off"),
       "must show timeout message for partial completion timeout")
   })
 
   it("aborted stream_end does not show error message", () => {
-    assert.ok(mainSource.includes('showStreamEndReasonMessage'),
+    assert.ok(combinedSource.includes('showStreamEndReasonMessage'),
       "must use showStreamEndReasonMessage for reason handling")
-    // "aborted" is intentionally not handled in showStreamEndReasonMessage —
-    // the function only checks ttfb_timeout, timeout, hard_timeout, and error,
-    // so aborted naturally falls through without showing any system message.
-    const fnStart = mainSource.indexOf("showStreamEndReasonMessage")
-    const fnBlock = mainSource.slice(fnStart, fnStart + 600)
+    const fnStart = combinedSource.indexOf("showStreamEndReasonMessage")
+    const fnBlock = combinedSource.slice(fnStart, fnStart + 600)
     assert.equal(fnBlock.includes('"aborted"'), false,
       "should not show system message for user-initiated abort")
   })

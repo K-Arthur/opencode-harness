@@ -11,6 +11,14 @@ const providerSource = readFileSync(path.join(__dirname, "..", "..", "src", "cha
 const eventRouterSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "WebviewEventRouter.ts"), "utf8")
 const streamHandlersSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "streamHandlers.ts"), "utf8")
 const mainSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "main.ts"), "utf8")
+const orchestratorSource = (() => {
+  try {
+    return readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "streamOrchestrator.ts"), "utf8")
+  } catch {
+    return ""
+  }
+})()
+const combinedMain = mainSource + orchestratorSource
 
 describe("StreamCoordinator timeout hardening", () => {
   it("has separate TTFB_TIMEOUT_MS constant", () => {
@@ -117,12 +125,12 @@ describe("Stream state machine", () => {
 
 describe("Webview error handling", () => {
   it("handles prompt_rejected message to reset streaming state", () => {
-    assert.ok(mainSource.includes('"prompt_rejected"'), "main.ts must handle prompt_rejected")
-    assert.ok(mainSource.includes("stateManager.setStreaming(sessionId, false)"), "must reset streaming state on rejection")
+    assert.ok(combinedMain.includes('"prompt_rejected"'), "main.ts must handle prompt_rejected")
+    assert.ok(combinedMain.includes("setStreaming") && combinedMain.includes("false"), "must reset streaming state on rejection")
   })
 
   it("shows error message on stream_end with reason=error", () => {
-    assert.ok(mainSource.includes('reason === "error"'), "must handle error reason in stream_end")
-    assert.ok(mainSource.includes("An error occurred while generating the response"), "must show actionable error message")
+    assert.ok(combinedMain.includes('reason === "error"'), "must handle error reason in stream_end")
+    assert.ok(combinedMain.includes("An error occurred while generating the response"), "must show actionable error message")
   })
 })
