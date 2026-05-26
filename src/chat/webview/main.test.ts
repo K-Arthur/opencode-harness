@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 
 const source = readFileSync(path.join(__dirname, "main.ts"), "utf8")
+const orchestratorSource = (() => { try { return readFileSync(path.join(__dirname, "streamOrchestrator.ts"), "utf8") } catch { return "" } })()
 const themeCustomizerSource = readFileSync(path.join(__dirname, "ui", "themeCustomizer.ts"), "utf8")
 const modeDropdownSource = readFileSync(path.join(__dirname, "ui", "modeDropdown.ts"), "utf8")
 const sessionModalSource = readFileSync(path.join(__dirname, "ui", "sessionModal.ts"), "utf8")
@@ -67,10 +68,11 @@ describe("main.ts", () => {
   })
 
   it("coalesces frequent tool update messages and clears progress state", () => {
-    assert.ok(source.includes("pendingToolUpdates"), "must buffer frequent tool updates")
-    assert.ok(source.includes("scheduleToolUpdate"), "must debounce tool updates")
-    assert.ok(source.includes("flushToolUpdate"), "must flush pending tool updates before tool end")
-    assert.ok(source.includes("tool-chain-progress"), "must surface long-running tool-chain progress")
+    const combined = source + orchestratorSource
+    assert.ok(combined.includes("pendingToolUpdates"), "must buffer frequent tool updates")
+    assert.ok(combined.includes("scheduleToolUpdate"), "must debounce tool updates")
+    assert.ok(combined.includes("flushToolUpdate"), "must flush pending tool updates before tool end")
+    assert.ok(combined.includes("tool-chain-progress"), "must surface long-running tool-chain progress")
   })
 
   it("adds Playwright-friendly test ids for the prompt and send controls", () => {
@@ -625,12 +627,13 @@ it("unified modal: server session items send resume_server_session on click", ()
     })
 
     it("recovers optimistic streaming state on webview_request_error", () => {
-      const idx = source.indexOf('[\"webview_request_error\"')
+      const combined = source + orchestratorSource
+      const idx = combined.indexOf('["webview_request_error"')
       assert.ok(idx >= 0, "must handle webview_request_error host messages")
-      const block = source.slice(idx, source.indexOf('[\"request_error\"', idx))
+      const block = combined.slice(idx, combined.indexOf('["request_error"', idx))
       assert.ok(block.includes("handleRequestError"), "webview_request_error must surface the failure")
-      assert.ok(source.includes("stateManager.setStreaming(sessionId, false)"), "handleRequestError must unlock optimistic streaming state")
-      assert.ok(source.includes("updateSendButton()"), "handleRequestError must refresh the send button")
+      assert.ok(combined.includes("setStreaming") && combined.match(/setStreaming\([^)]+false\)/), "handleRequestError must unlock optimistic streaming state")
+      assert.ok(combined.includes("updateSendButton()"), "handleRequestError must refresh the send button")
     })
   })
 

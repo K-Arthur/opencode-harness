@@ -20,6 +20,7 @@ const files = {
   streamCoordinator: readFileSync(path.join(root, "src", "chat", "handlers", "StreamCoordinator.ts"), "utf8"),
   tabManager: readFileSync(path.join(root, "src", "chat", "TabManager.ts"), "utf8"),
   mainTs: readFileSync(path.join(root, "src", "chat", "webview", "main.ts"), "utf8"),
+  streamOrchestrator: (() => { try { return readFileSync(path.join(root, "src", "chat", "webview", "streamOrchestrator.ts"), "utf8") } catch { return "" } })(),
   renderer: readFileSync(path.join(root, "src", "chat", "webview", "renderer.ts"), "utf8"),
   messageRenderer: readFileSync(path.join(root, "src", "chat", "webview", "messageRenderer.ts"), "utf8"),
   streamHandlers: readFileSync(path.join(root, "src", "chat", "webview", "streamHandlers.ts"), "utf8"),
@@ -124,9 +125,10 @@ describe("Regression: Send Prompt & Streamed Response", () => {
   })
 
   it("stream_end reason is forwarded to webview for timeout feedback", () => {
-    assert.ok(files.mainTs.includes('msg.reason'), "webview must pass stream_end reason")
-    assert.ok(files.mainTs.includes('"ttfb_timeout"'), "must handle ttfb_timeout reason")
-    assert.ok(files.mainTs.includes('"timeout"'), "must handle timeout reason")
+    const combined = files.mainTs + files.streamOrchestrator
+    assert.ok(combined.includes('msg.reason'), "webview must pass stream_end reason")
+    assert.ok(combined.includes('"ttfb_timeout"'), "must handle ttfb_timeout reason")
+    assert.ok(combined.includes('"timeout"'), "must handle timeout reason")
   })
 
   it("chunk batching uses requestAnimationFrame in streamHandlers", () => {
@@ -298,7 +300,7 @@ describe("Regression: Prompt Queue", () => {
   })
 
   it("handleStreamEnd processes next queued item", () => {
-    assert.ok(files.mainTs.includes("processNext()"), "must process next queue item on stream end")
+    assert.ok(files.mainTs.includes("processNext()") || files.streamOrchestrator.includes("processNext()"), "must process next queue item on stream end")
   })
 
   it("queue items support image attachments", () => {
