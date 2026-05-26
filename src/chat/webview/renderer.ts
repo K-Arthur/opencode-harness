@@ -624,104 +624,116 @@ export function detectPlanProse(text: string): boolean {
 }
 
 function renderTextBlock(block: Block, opts: RenderOptions): HTMLElement | null {
-  let text = block.text || ""
+  const text = block.text || ""
   if (text.startsWith("[methodology]")) return null
   if (!text.trim()) return null
 
-  // Plan-prose: wrap the rendered markdown in a styled card when the assistant
-  // emits a plan-shaped message during plan mode.
   const isPlanModePlan = opts?.mode === "plan" && detectPlanProse(text)
+  const div = createTextBlockContainer(isPlanModePlan)
+  if (appendMentionRichText(div, text, opts)) return div
+  appendMarkdownText(div, text, isPlanModePlan, opts)
+  return div
+}
 
+function createTextBlockContainer(isPlanModePlan: boolean): HTMLElement {
   const div = document.createElement("div")
   div.className = isPlanModePlan ? "msg-text markdown-content plan-prose" : "msg-text markdown-content"
-
   if (isPlanModePlan) {
     const header = document.createElement("div")
     header.className = "plan-prose-header"
     header.textContent = "Proposed Plan"
     div.appendChild(header)
   }
+  return div
+}
 
-  // Render mentions as chips if present in text
+function appendMentionRichText(container: HTMLElement, text: string, opts: RenderOptions): boolean {
   const mentionPattern = /(@(file|folder|url|problems|terminal):(?:"[^"]+"|\S+))/g
-  const hasMentions = mentionPattern.test(text)
+  if (!mentionPattern.test(text)) return false
 
-  if (hasMentions && block.text) {
-    const parts = block.text.split(mentionPattern)
-    const fragment = document.createDocumentFragment()
-
-    // With capturing groups, split() returns [text, fullMatch, type, text, fullMatch, type, ...]
-    // But our regex has TWO capturing groups: 1 for full match, 1 for the type.
-    // So split returns [text, @file:/foo, file, text, ...]
-    // Parts array length will be 1 + (number of matches * 3)
-
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i]
-      if (!part) continue
-
-      if (i % 3 === 0) {
-        // Plain text part
-        const span = document.createElement("span")
-        const normalized = opts?.isStreaming ? normalizeStreamingMarkdown(part) : normalizeMarkdownText(part)
-        span.innerHTML = sanitizeHtml(md.renderInline(normalized, { label: false }))
-        fragment.appendChild(span)
-      } else if (i % 3 === 1) {
-        // Full mention match (@file:/foo)
-        const type = parts[i+1] || "file"
-        const chip = document.createElement("span")
-        chip.className = "context-chip"
-        chip.dataset.kind = type
-        chip.textContent = part
-        chip.style.cursor = "pointer"
-        chip.title = `Click to open ${type}`
-        chip.addEventListener("click", (e) => {
-          e.stopPropagation()
-          const rawValue = part.substring(type.length + 2)
-          const value = rawValue.replace(/^["']|["']$/g, "")
-          if (type === "file") {
-            opts?.postMessage?.({ type: "open_file", path: value })
-          } else if (type === "folder") {
-            opts?.postMessage?.({ type: "open_folder", dir: value })
-          } else if (type === "url") {
-            opts?.postMessage?.({ type: "open_url", url: value })
-          }
-        })
-        fragment.appendChild(chip)
-        i++ // Skip the 'type' part since we consumed it
-      }
-    }
-    div.appendChild(fragment)
-  } else {
-    // No mentions — standard markdown render
-    const isStreaming = opts?.isStreaming ?? false
-    const cached = getCachedMarkdown(text, isStreaming)
-    const target = isPlanModePlan ? document.createElement("div") : div
-    if (target !== div) {
-      target.className = "markdown-render-body"
-      div.appendChild(target)
-    }
-
-    if (!isStreaming && cached === undefined && shouldRenderMarkdownInWorker(text, false)) {
-      const renderId = `${Date.now()}-${Math.random()}`
-      target.dataset.markdownRenderId = renderId
-      target.setAttribute("aria-busy", "true")
-      void renderMarkdownAsync(text, false)
-        .then((html) => {
-          if (target.dataset.markdownRenderId !== renderId) return
-          target.innerHTML = html
-          target.removeAttribute("aria-busy")
-        })
-        .catch(() => {
-          if (target.dataset.markdownRenderId !== renderId) return
-          target.innerHTML = renderMarkdown(text, false)
-          target.removeAttribute("aria-busy")
-        })
-    } else {
-      target.innerHTML = cached ?? renderMarkdown(text, isStreaming)
+  const parts = text.split(mentionPattern)
+  const fragment = document.createDocumentFragment()
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i]
+    if (!part) continue
+    if (i % 3 === 0) {
+      fragment.appendChild(createMentionPlainText(part, opts))
+    } else if (i % 3 === 1) {
+      fragment.appendChild(createMentionChip(part, parts[i + 1] || "file", opts))
+      i++
     }
   }
+  container.appendChild(fragment)
+  return true
+}
 
-  return div
+function createMentionPlainText(text: string, opts: RenderOptions): HTMLElement {
+  const span = document.createElement("span")
+  const normalized = opts?.isStreaming ? normalizeStreamingMarkdown(text) : normalizeMarkdownText(text)
+  span.innerHTML = sanitizeHtml(md.renderInline(normalized, { label: false }))
+  return span
+}
+
+function createMentionChip(fullMatch: string, type: string, opts: RenderOptions): HTMLElement {
+  const chip = document.createElement("span")
+  chip.className = "context-chip"
+  chip.dataset.kind = type
+  chip.textContent = fullMatch
+  chip.style.cursor = "pointer"
+  chip.title = `Click to open ${type}`
+  chip.addEventListener("click", (e) => {
+    e.stopPropagation()
+    postMentionOpenMessage(fullMatch, type, opts)
+  })
+  return chip
+}
+
+function postMentionOpenMessage(fullMatch: string, type: string, opts: RenderOptions): void {
+  const rawValue = fullMatch.substring(type.length + 2)
+  const value = rawValue.replace(/^["']|["']$/g, "")
+  if (type === "file") {
+    opts?.postMessage?.({ type: "open_file", path: value })
+  } else if (type === "folder") {
+    opts?.postMessage?.({ type: "open_folder", dir: value })
+  } else if (type === "url") {
+    opts?.postMessage?.({ type: "open_url", url: value })
+  }
+}
+
+function appendMarkdownText(container: HTMLElement, text: string, isPlanModePlan: boolean, opts: RenderOptions): void {
+  const isStreaming = opts?.isStreaming ?? false
+  const cached = getCachedMarkdown(text, isStreaming)
+  const target = isPlanModePlan ? createMarkdownRenderBody(container) : container
+
+  if (!isStreaming && cached === undefined && shouldRenderMarkdownInWorker(text, false)) {
+    renderMarkdownIntoTargetAsync(target, text)
+  } else {
+    target.innerHTML = cached ?? renderMarkdown(text, isStreaming)
+  }
+}
+
+function createMarkdownRenderBody(container: HTMLElement): HTMLElement {
+  const target = document.createElement("div")
+  target.className = "markdown-render-body"
+  container.appendChild(target)
+  return target
+}
+
+function renderMarkdownIntoTargetAsync(target: HTMLElement, text: string): void {
+  const renderId = `${Date.now()}-${Math.random()}`
+  target.dataset.markdownRenderId = renderId
+  target.setAttribute("aria-busy", "true")
+  void renderMarkdownAsync(text, false)
+    .then((html) => {
+      if (target.dataset.markdownRenderId !== renderId) return
+      target.innerHTML = html
+      target.removeAttribute("aria-busy")
+    })
+    .catch(() => {
+      if (target.dataset.markdownRenderId !== renderId) return
+      target.innerHTML = renderMarkdown(text, false)
+      target.removeAttribute("aria-busy")
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -1165,48 +1177,81 @@ export { groupConsecutiveToolCalls, renderToolGroup, truncateMiddle, formatOutpu
 // ---------------------------------------------------------------------------
 
 function renderNewDiffBlock(block: Block, opts: RenderOptions): HTMLElement | null {
-  const diffBlock: DiffBlock = isDiffBlock(block)
-    ? block
-    : {
-        type: 'diff',
-        diffId: block.diffId || block.id || `diff-${Date.now()}`,
-        path: block.filePath || block.path || "File Change",
-        hunks: block.hunks || [],
-        state: (block.state as 'pending' | 'accepted' | 'discarded') || 'pending',
-        linesAdded: block.linesAdded || 0,
-        linesRemoved: block.linesRemoved || 0,
-      }
+  const diffBlock = toDiffBlock(block)
+  const wrapper = createDiffWrapper(diffBlock, opts.mode === "plan")
 
-  // Plan-mode diffs are proposals — not yet applied. Mark the wrapper so a
-  // distinct accent border + header pill make the difference visible at a glance.
-  const isPlanModeBlock = opts.mode === "plan"
+  wrapper.appendChild(createDiffHeader(diffBlock, opts, wrapper))
+  appendDiffBody(wrapper, block, diffBlock, opts)
+  wrapper.appendChild(createDiffActionBar(wrapper, diffBlock, opts))
 
+  return wrapper
+}
+
+function toDiffBlock(block: Block): DiffBlock {
+  if (isDiffBlock(block)) return block
+  return {
+    type: "diff",
+    diffId: block.diffId || block.id || `diff-${Date.now()}`,
+    path: block.filePath || block.path || "File Change",
+    hunks: block.hunks || [],
+    state: (block.state as "pending" | "accepted" | "discarded") || "pending",
+    linesAdded: block.linesAdded || 0,
+    linesRemoved: block.linesRemoved || 0,
+    revertable: (block as any).revertable ?? false,
+  }
+}
+
+function createDiffWrapper(diffBlock: DiffBlock, isPlanMode: boolean): HTMLElement {
   const wrapper = document.createElement("div")
-  wrapper.className = `diff-block diff-block--${diffBlock.state}${isPlanModeBlock ? " diff-block--plan" : ""}`
+  wrapper.className = `diff-block diff-block--${diffBlock.state}${isPlanMode ? " diff-block--plan" : ""}`
   wrapper.dataset.diffId = diffBlock.diffId
+  return wrapper
+}
 
-  // Header: filename + stats + wrap toggle
+function createDiffHeader(diffBlock: DiffBlock, opts: RenderOptions, wrapper: HTMLElement): HTMLElement {
   const header = document.createElement("div")
   header.className = "diff-header"
 
   const fileInfo = document.createElement("div")
   fileInfo.className = "diff-file-info"
+  if (opts.mode === "plan") fileInfo.appendChild(createPlanDiffPill())
+  fileInfo.appendChild(createDiffFilePath(diffBlock, opts))
+  fileInfo.appendChild(createDiffStats(diffBlock))
 
-  if (isPlanModeBlock) {
-    const planPill = document.createElement("span")
-    planPill.className = "diff-pill diff-pill--plan"
-    planPill.textContent = "PLAN"
-    planPill.title = "Proposed change — not yet applied"
-    fileInfo.appendChild(planPill)
-  }
+  header.appendChild(fileInfo)
+  header.appendChild(createDiffWrapToggle(wrapper))
+  return header
+}
 
+function createPlanDiffPill(): HTMLElement {
+  const planPill = document.createElement("span")
+  planPill.className = "diff-pill diff-pill--plan"
+  planPill.textContent = "PLAN"
+  planPill.title = "Proposed change — not yet applied"
+  return planPill
+}
+
+function createDiffFilePath(diffBlock: DiffBlock, opts: RenderOptions): HTMLElement {
   const filePath = document.createElement("span")
   filePath.className = "diff-file-path"
   filePath.textContent = diffBlock.path
-  
-  const lowerPath = (diffBlock.path || "").trim().toLowerCase()
-  const isCommand =
-    lowerPath === "file change" ||
+
+  if (!isCommandLikeDiffPath(diffBlock.path)) {
+    filePath.style.cursor = "pointer"
+    filePath.title = "Click to open file"
+    filePath.addEventListener("click", (e) => {
+      e.stopPropagation()
+      e.preventDefault()
+      opts.postMessage?.({ type: "open_file", path: diffBlock.path })
+    })
+  }
+
+  return filePath
+}
+
+function isCommandLikeDiffPath(filePath: string | undefined): boolean {
+  const lowerPath = (filePath || "").trim().toLowerCase()
+  return lowerPath === "file change" ||
     lowerPath.startsWith("npm ") ||
     lowerPath.startsWith("git ") ||
     lowerPath.startsWith("node ") ||
@@ -1217,307 +1262,306 @@ function renderNewDiffBlock(block: Block, opts: RenderOptions): HTMLElement | nu
     lowerPath.includes("||") ||
     lowerPath.includes("|") ||
     lowerPath.includes(">")
+}
 
-  if (!isCommand) {
-    filePath.style.cursor = "pointer"
-    filePath.title = "Click to open file"
-    filePath.addEventListener("click", (e) => {
-      e.stopPropagation()
-      e.preventDefault()
-      opts.postMessage?.({ type: "open_file", path: diffBlock.path })
-    })
-  }
-  fileInfo.appendChild(filePath)
-
+function createDiffStats(diffBlock: DiffBlock): HTMLElement {
   const stats = document.createElement("span")
   stats.className = "diff-stats"
-  if (diffBlock.linesAdded > 0) {
-    const added = document.createElement("span")
-    added.className = "diff-stat diff-stat--added"
-    added.textContent = `+${diffBlock.linesAdded}`
-    stats.appendChild(added)
-  }
-  if (diffBlock.linesRemoved > 0) {
-    const removed = document.createElement("span")
-    removed.className = "diff-stat diff-stat--removed"
-    removed.textContent = `-${diffBlock.linesRemoved}`
-    stats.appendChild(removed)
-  }
-  fileInfo.appendChild(stats)
+  if (diffBlock.linesAdded > 0) stats.appendChild(createDiffStat("added", `+${diffBlock.linesAdded}`))
+  if (diffBlock.linesRemoved > 0) stats.appendChild(createDiffStat("removed", `-${diffBlock.linesRemoved}`))
+  return stats
+}
 
-  // Wrap toggle button
+function createDiffStat(kind: "added" | "removed", text: string): HTMLElement {
+  const stat = document.createElement("span")
+  stat.className = `diff-stat diff-stat--${kind}`
+  stat.textContent = text
+  return stat
+}
+
+function createDiffWrapToggle(wrapper: HTMLElement): HTMLButtonElement {
   const wrapToggle = document.createElement("button")
   wrapToggle.className = "diff-wrap-toggle"
   wrapToggle.setAttribute("aria-label", "Toggle line wrapping")
   wrapToggle.title = "Toggle line wrapping"
   wrapToggle.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg><span>Wrap</span>`
-  wrapToggle.addEventListener("click", () => {
-    const tableWrapper = wrapper.querySelector(".diff-table-wrapper")
-    if (!tableWrapper) {
-      return
-    }
-    
-    const isWrapped = tableWrapper.classList.toggle("diff-table-wrapper--wrapped")
-    wrapToggle.classList.toggle("active", isWrapped)
-    
-    // Store preference in webview state with error handling
-    const vscode = (window as any).acquireVsCodeApi?.()
-    if (vscode) {
-      try {
-        const state = vscode.getState()
-        if (state?.displayPrefs) {
-          state.displayPrefs.diffWrapEnabled = isWrapped
-          vscode.setState(state)
-        }
-      } catch (error) {
-        console.warn("Failed to persist diff wrap preference:", error)
-      }
-    }
-  })
+  wrapToggle.classList.toggle("active", readDiffWrapPreference())
+  wrapToggle.addEventListener("click", () => toggleDiffWrap(wrapper, wrapToggle))
+  return wrapToggle
+}
 
-  // Check initial state from webview state with error handling
+function toggleDiffWrap(wrapper: HTMLElement, wrapToggle: HTMLElement): void {
+  const tableWrapper = wrapper.querySelector(".diff-table-wrapper")
+  if (!tableWrapper) return
+
+  const isWrapped = tableWrapper.classList.toggle("diff-table-wrapper--wrapped")
+  wrapToggle.classList.toggle("active", isWrapped)
+  persistDiffWrapPreference(isWrapped)
+}
+
+function readDiffWrapPreference(): boolean {
   const vscode = (window as any).acquireVsCodeApi?.()
-  if (vscode) {
-    try {
-      const state = vscode.getState()
-      if (state?.displayPrefs?.diffWrapEnabled) {
-        wrapToggle.classList.add("active")
-      }
-    } catch (error) {
-      console.warn("Failed to load diff wrap preference:", error)
+  if (!vscode) return false
+  try {
+    return vscode.getState()?.displayPrefs?.diffWrapEnabled === true
+  } catch (error) {
+    console.warn("Failed to load diff wrap preference:", error)
+    return false
+  }
+}
+
+function persistDiffWrapPreference(isWrapped: boolean): void {
+  const vscode = (window as any).acquireVsCodeApi?.()
+  if (!vscode) return
+  try {
+    const state = vscode.getState()
+    if (state?.displayPrefs) {
+      state.displayPrefs.diffWrapEnabled = isWrapped
+      vscode.setState(state)
     }
+  } catch (error) {
+    console.warn("Failed to persist diff wrap preference:", error)
   }
+}
 
-  header.appendChild(fileInfo)
-  header.appendChild(wrapToggle)
-  wrapper.appendChild(header)
-
-  // Diff table
+function appendDiffBody(wrapper: HTMLElement, block: Block, diffBlock: DiffBlock, opts: RenderOptions): void {
   if (diffBlock.hunks.length > 0) {
-    const tableWrapper = document.createElement("div")
-    tableWrapper.className = "diff-table-wrapper"
+    wrapper.appendChild(createDiffTableWrapper(diffBlock, opts))
+    return
+  }
+  if (block.diffText) wrapper.appendChild(createRawDiffContent(block.diffText))
+}
 
-    const table = document.createElement("table")
-    table.className = "diff-table"
+function createDiffTableWrapper(diffBlock: DiffBlock, opts: RenderOptions): HTMLElement {
+  const tableWrapper = document.createElement("div")
+  tableWrapper.className = "diff-table-wrapper"
 
-    diffBlock.hunks.forEach((hunk, hunkIndex) => {
-      // Hunk header — unified-diff line counts: old = removed+context, new = added+context
-      const oldCount = hunk.lines.filter((l) => l.type === "removed" || l.type === "context").length
-      const newCount = hunk.lines.filter((l) => l.type === "added" || l.type === "context").length
-      const hunkId = hunk.id || `${diffBlock.diffId}:${hunkIndex}`
-      const hunkState = hunk.state || "pending"
-      const hunkRow = document.createElement("tr")
-      hunkRow.className = `diff-hunk-header diff-hunk--${hunkState}`
-      hunkRow.dataset.hunkId = hunkId
-      const hunkCell = document.createElement("td")
-      hunkCell.colSpan = 3
-      hunkCell.textContent = `@@ -${hunk.oldStart},${oldCount} +${hunk.newStart},${newCount} @@`
-      hunkRow.appendChild(hunkCell)
+  const table = document.createElement("table")
+  table.className = "diff-table"
+  diffBlock.hunks.forEach((hunk, hunkIndex) => appendHunkRows(table, diffBlock, hunk, hunkIndex, opts))
 
-      // Per-hunk action buttons (only in pending state and when block is pending)
-      const hunkActCell = document.createElement("td")
-      hunkActCell.className = "diff-hunk-actions"
-      if (diffBlock.state === "pending" && hunkState === "pending") {
-        const acceptHunk = document.createElement("button")
-        acceptHunk.className = "diff-hunk-btn diff-hunk-btn--accept"
-        acceptHunk.textContent = "✓"
-        acceptHunk.title = "Accept this hunk"
-        acceptHunk.addEventListener("click", (e) => {
-          e.stopPropagation()
-          opts.postMessage?.({
-            type: "accept_hunk",
-            diffId: diffBlock.diffId,
-            hunkId,
-            path: diffBlock.path,
-            hunk: { id: hunkId, hunkId, oldStart: hunk.oldStart, oldCount, lines: hunk.lines },
-          })
-          hunkRow.classList.replace(`diff-hunk--${hunkState}`, "diff-hunk--accepted")
-        })
-        const rejectHunk = document.createElement("button")
-        rejectHunk.className = "diff-hunk-btn diff-hunk-btn--reject"
-        rejectHunk.textContent = "✗"
-        rejectHunk.title = "Reject this hunk"
-        rejectHunk.addEventListener("click", (e) => {
-          e.stopPropagation()
-          opts.postMessage?.({ type: "reject_hunk", diffId: diffBlock.diffId, hunkId, path: diffBlock.path })
-          hunkRow.classList.replace(`diff-hunk--${hunkState}`, "diff-hunk--rejected")
-        })
-        hunkActCell.appendChild(acceptHunk)
-        hunkActCell.appendChild(rejectHunk)
-      } else if (hunkState === "accepted") {
-        hunkActCell.textContent = "✓"
-        hunkActCell.className += " diff-hunk-accepted-chip"
-      } else if (hunkState === "rejected") {
-        hunkActCell.textContent = "✗"
-        hunkActCell.className += " diff-hunk-rejected-chip"
-      }
-      hunkRow.appendChild(hunkActCell)
-      table.appendChild(hunkRow)
+  tableWrapper.appendChild(table)
+  return tableWrapper
+}
 
-      hunk.lines.forEach((line) => {
-        const row = document.createElement("tr")
-        row.className = `diff-line diff-line--${line.type}`
+function appendHunkRows(table: HTMLElement, diffBlock: DiffBlock, hunk: DiffHunk, hunkIndex: number, opts: RenderOptions): void {
+  const oldCount = hunk.lines.filter((l) => l.type === "removed" || l.type === "context").length
+  const newCount = hunk.lines.filter((l) => l.type === "added" || l.type === "context").length
+  const hunkId = hunk.id || `${diffBlock.diffId}:${hunkIndex}`
+  const hunkState = hunk.state || "pending"
 
-        // Old line number
-        const oldNum = document.createElement("td")
-        oldNum.className = "diff-line-num diff-line-num--old"
-        oldNum.textContent = line.oldLine != null ? String(line.oldLine) : ""
-        row.appendChild(oldNum)
+  table.appendChild(createHunkHeaderRow(diffBlock, hunk, hunkId, hunkState, oldCount, newCount, opts))
+  hunk.lines.forEach((line) => table.appendChild(createDiffLineRow(line)))
+}
 
-        // New line number
-        const newNum = document.createElement("td")
-        newNum.className = "diff-line-num diff-line-num--new"
-        newNum.textContent = line.newLine != null ? String(line.newLine) : ""
-        row.appendChild(newNum)
+function createHunkHeaderRow(
+  diffBlock: DiffBlock,
+  hunk: DiffHunk,
+  hunkId: string,
+  hunkState: string,
+  oldCount: number,
+  newCount: number,
+  opts: RenderOptions
+): HTMLElement {
+  const hunkRow = document.createElement("tr")
+  hunkRow.className = `diff-hunk-header diff-hunk--${hunkState}`
+  hunkRow.dataset.hunkId = hunkId
 
-        // Change marker
-        const marker = document.createElement("td")
-        marker.className = "diff-line-marker"
-        marker.textContent = line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' '
-        row.appendChild(marker)
+  const hunkCell = document.createElement("td")
+  hunkCell.colSpan = 3
+  hunkCell.textContent = `@@ -${hunk.oldStart},${oldCount} +${hunk.newStart},${newCount} @@`
+  hunkRow.appendChild(hunkCell)
+  hunkRow.appendChild(createHunkActionCell(diffBlock, hunk, hunkId, hunkState, oldCount, opts, hunkRow))
 
-        // Content
-        const content = document.createElement("td")
-        content.className = "diff-line-content"
-        content.textContent = line.content
-        row.appendChild(content)
+  return hunkRow
+}
 
-        table.appendChild(row)
+function createHunkActionCell(
+  diffBlock: DiffBlock,
+  hunk: DiffHunk,
+  hunkId: string,
+  hunkState: string,
+  oldCount: number,
+  opts: RenderOptions,
+  hunkRow: HTMLElement
+): HTMLElement {
+  const actionCell = document.createElement("td")
+  actionCell.className = "diff-hunk-actions"
+
+  if (diffBlock.state === "pending" && hunkState === "pending") {
+    actionCell.appendChild(createHunkButton("accept", "✓", "Accept this hunk", () => {
+      opts.postMessage?.({
+        type: "accept_hunk",
+        diffId: diffBlock.diffId,
+        hunkId,
+        path: diffBlock.path,
+        hunk: { id: hunkId, hunkId, oldStart: hunk.oldStart, oldCount, lines: hunk.lines },
       })
-    })
-
-    tableWrapper.appendChild(table)
-    wrapper.appendChild(tableWrapper)
-  } else if (block.diffText) {
-    // Fallback: render raw diff text
-    const pre = document.createElement("pre")
-    pre.className = "diff-content"
-    pre.textContent = block.diffText
-    wrapper.appendChild(pre)
+      hunkRow.classList.replace(`diff-hunk--${hunkState}`, "diff-hunk--accepted")
+    }))
+    actionCell.appendChild(createHunkButton("reject", "✗", "Reject this hunk", () => {
+      opts.postMessage?.({ type: "reject_hunk", diffId: diffBlock.diffId, hunkId, path: diffBlock.path })
+      hunkRow.classList.replace(`diff-hunk--${hunkState}`, "diff-hunk--rejected")
+    }))
+  } else if (hunkState === "accepted") {
+    actionCell.textContent = "✓"
+    actionCell.className += " diff-hunk-accepted-chip"
+  } else if (hunkState === "rejected") {
+    actionCell.textContent = "✗"
+    actionCell.className += " diff-hunk-rejected-chip"
   }
 
-  // Action bar (sticky bottom)
+  return actionCell
+}
+
+function createHunkButton(kind: "accept" | "reject", text: string, title: string, onClick: () => void): HTMLElement {
+  const button = document.createElement("button")
+  button.className = `diff-hunk-btn diff-hunk-btn--${kind}`
+  button.textContent = text
+  button.title = title
+  button.addEventListener("click", (e) => {
+    e.stopPropagation()
+    onClick()
+  })
+  return button
+}
+
+function createDiffLineRow(line: DiffLine): HTMLElement {
+  const row = document.createElement("tr")
+  row.className = `diff-line diff-line--${line.type}`
+  row.appendChild(createDiffLineNumber("old", line.oldLine))
+  row.appendChild(createDiffLineNumber("new", line.newLine))
+  row.appendChild(createDiffLineMarker(line))
+  row.appendChild(createDiffLineContent(line.content))
+  return row
+}
+
+function createDiffLineNumber(kind: "old" | "new", value: number | undefined): HTMLElement {
+  const cell = document.createElement("td")
+  cell.className = `diff-line-num diff-line-num--${kind}`
+  cell.textContent = value != null ? String(value) : ""
+  return cell
+}
+
+function createDiffLineMarker(line: DiffLine): HTMLElement {
+  const marker = document.createElement("td")
+  marker.className = "diff-line-marker"
+  marker.textContent = line.type === "added" ? "+" : line.type === "removed" ? "-" : " "
+  return marker
+}
+
+function createDiffLineContent(contentText: string): HTMLElement {
+  const content = document.createElement("td")
+  content.className = "diff-line-content"
+  content.textContent = contentText
+  return content
+}
+
+function createRawDiffContent(diffText: string): HTMLElement {
+  const pre = document.createElement("pre")
+  pre.className = "diff-content"
+  pre.textContent = diffText
+  return pre
+}
+
+function createDiffActionBar(wrapper: HTMLElement, diffBlock: DiffBlock, opts: RenderOptions): HTMLElement {
   const actionBar = document.createElement("div")
   actionBar.className = "diff-action-bar"
 
-  if (diffBlock.state === 'accepted') {
-    actionBar.innerHTML = ''
-    const chip = document.createElement("span")
-    chip.className = "diff-state-chip diff-state--accepted"
-    chip.innerHTML = SUCCESS_SVG + ' Applied'
-    actionBar.appendChild(chip)
-    
-    // Add revert button if diff is revertable
-    if (diffBlock.revertable) {
-      const revertBtn = document.createElement("button")
-      revertBtn.className = "diff-btn diff-btn--revert"
-      revertBtn.textContent = "Revert"
-      revertBtn.setAttribute("aria-label", `Revert changes to ${diffBlock.path}`)
-      revertBtn.addEventListener("click", (e) => {
-        e.stopPropagation()
-        if (!diffBlock.diffId || !diffBlock.path) {
-          console.warn("Cannot show revert confirmation: missing diffId or path")
-          return
-        }
-        showRevertConfirmation(diffBlock.diffId, diffBlock.path, opts.postMessage)
-      })
-      actionBar.appendChild(revertBtn)
-    }
-    
-    wrapper.classList.add("diff-block--accepted")
-  } else if (diffBlock.state === 'discarded') {
-    actionBar.innerHTML = ''
-    const chip = document.createElement("span")
-    chip.className = "diff-state-chip diff-state--discarded"
-    chip.innerHTML = ERROR_SVG + ' Discarded'
-    actionBar.appendChild(chip)
-    wrapper.classList.add("diff-block--discarded")
-    // Auto-collapse diff on discard
-    const tableWrapper = wrapper.querySelector(".diff-table-wrapper")
-    if (tableWrapper) tableWrapper.classList.add("hidden")
-    const diffContent = wrapper.querySelector(".diff-content")
-    if (diffContent) diffContent.classList.add("hidden")
+  if (diffBlock.state === "accepted") {
+    renderAcceptedDiffActions(actionBar, wrapper, diffBlock, opts)
+  } else if (diffBlock.state === "discarded") {
+    renderDiscardedDiffActions(actionBar, wrapper)
   } else {
-    const isPlanMode = opts.mode === "plan"
-
-      if (isPlanMode) {
-        const reviewLabel = document.createElement("span")
-        reviewLabel.className = "diff-review-label"
-        reviewLabel.textContent = "Review"
-        actionBar.appendChild(reviewLabel)
-      }
-
-    const acceptBtn = document.createElement("button")
-    acceptBtn.className = isPlanMode ? "diff-btn diff-btn--approve" : "diff-btn diff-btn--accept"
-    acceptBtn.textContent = isPlanMode ? "Approve & Apply" : "Accept"
-    acceptBtn.setAttribute("aria-label", `Accept changes to ${diffBlock.path}`)
-    acceptBtn.addEventListener("click", (e) => {
-      e.stopPropagation()
-      const postMessage = opts.postMessage
-      if (postMessage) {
-        postMessage({ type: 'accept_diff', diffId: diffBlock.diffId, path: diffBlock.path })
-      }
-      actionBar.innerHTML = ''
-      const chip = document.createElement("span")
-      chip.className = "diff-state-chip diff-state--accepted"
-      chip.innerHTML = SUCCESS_SVG + ' Applied'
-      actionBar.appendChild(chip)
-      wrapper.classList.add("diff-block--accepted")
-    })
-    actionBar.appendChild(acceptBtn)
-
-    const discardBtn = document.createElement("button")
-    discardBtn.className = "diff-btn diff-btn--discard"
-    discardBtn.textContent = "Discard"
-    discardBtn.setAttribute("aria-label", `Discard changes to ${diffBlock.path}`)
-    discardBtn.addEventListener("click", (e) => {
-      e.stopPropagation()
-      const postMessage = opts.postMessage
-      if (postMessage) {
-        postMessage({ type: 'reject_diff', diffId: diffBlock.diffId })
-      }
-      actionBar.innerHTML = ''
-      const chip = document.createElement("span")
-      chip.className = "diff-state-chip diff-state--discarded"
-      chip.innerHTML = ERROR_SVG + ' Discarded'
-      actionBar.appendChild(chip)
-      wrapper.classList.add("diff-block--discarded")
-      const tableWrapper = wrapper.querySelector(".diff-table-wrapper")
-      if (tableWrapper) tableWrapper.classList.add("hidden")
-      const diffContent = wrapper.querySelector(".diff-content")
-      if (diffContent) diffContent.classList.add("hidden")
-    })
-    actionBar.appendChild(discardBtn)
-
-    const reviewBtn = document.createElement("button")
-    reviewBtn.className = "diff-btn diff-btn--review"
-    reviewBtn.textContent = "Review Changes"
-    reviewBtn.setAttribute("aria-label", `Review changes to ${diffBlock.path} in diff editor`)
-    reviewBtn.addEventListener("click", (e) => {
-      e.stopPropagation()
-      const postMessage = opts.postMessage
-      if (postMessage) {
-        postMessage({ type: 'show_diff', diffId: diffBlock.diffId, filePath: diffBlock.path })
-      }
-    })
-    actionBar.appendChild(reviewBtn)
-
-    const openBtn = document.createElement("button")
-    openBtn.className = "diff-btn diff-btn--open"
-    openBtn.textContent = "Open File"
-    openBtn.setAttribute("aria-label", `Open ${diffBlock.path} in editor`)
-    openBtn.addEventListener("click", (e) => {
-      e.stopPropagation()
-      const postMessage = opts.postMessage
-      if (postMessage && diffBlock.path) {
-        postMessage({ type: 'open_file', path: diffBlock.path })
-      }
-    })
-    actionBar.appendChild(openBtn)
+    renderPendingDiffActions(actionBar, wrapper, diffBlock, opts)
   }
 
-  wrapper.appendChild(actionBar)
-  return wrapper
+  return actionBar
+}
+
+function renderAcceptedDiffActions(actionBar: HTMLElement, wrapper: HTMLElement, diffBlock: DiffBlock, opts: RenderOptions): void {
+  showDiffStateChip(actionBar, wrapper, "accepted")
+  if (diffBlock.revertable) actionBar.appendChild(createRevertDiffButton(diffBlock, opts))
+}
+
+function renderDiscardedDiffActions(actionBar: HTMLElement, wrapper: HTMLElement): void {
+  showDiffStateChip(actionBar, wrapper, "discarded")
+  collapseDiffContent(wrapper)
+}
+
+function renderPendingDiffActions(actionBar: HTMLElement, wrapper: HTMLElement, diffBlock: DiffBlock, opts: RenderOptions): void {
+  const isPlanMode = opts.mode === "plan"
+  if (isPlanMode) actionBar.appendChild(createDiffReviewLabel())
+
+  actionBar.appendChild(createDiffButton(isPlanMode ? "approve" : "accept", isPlanMode ? "Approve & Apply" : "Accept", `Accept changes to ${diffBlock.path}`, (e) => {
+    e.stopPropagation()
+    opts.postMessage?.({ type: "accept_diff", diffId: diffBlock.diffId, path: diffBlock.path })
+    showDiffStateChip(actionBar, wrapper, "accepted")
+  }))
+  actionBar.appendChild(createDiffButton("discard", "Discard", `Discard changes to ${diffBlock.path}`, (e) => {
+    e.stopPropagation()
+    opts.postMessage?.({ type: "reject_diff", diffId: diffBlock.diffId })
+    showDiffStateChip(actionBar, wrapper, "discarded")
+    collapseDiffContent(wrapper)
+  }))
+  actionBar.appendChild(createDiffButton("review", "Review Changes", `Review changes to ${diffBlock.path} in diff editor`, (e) => {
+    e.stopPropagation()
+    opts.postMessage?.({ type: "show_diff", diffId: diffBlock.diffId, filePath: diffBlock.path })
+  }))
+  actionBar.appendChild(createDiffButton("open", "Open File", `Open ${diffBlock.path} in editor`, (e) => {
+    e.stopPropagation()
+    if (diffBlock.path) opts.postMessage?.({ type: "open_file", path: diffBlock.path })
+  }))
+}
+
+function createDiffReviewLabel(): HTMLElement {
+  const reviewLabel = document.createElement("span")
+  reviewLabel.className = "diff-review-label"
+  reviewLabel.textContent = "Review"
+  return reviewLabel
+}
+
+const DIFF_BUTTON_CLASS_BY_KIND: Record<string, string> = {
+  accept: "diff-btn--accept",
+  approve: "diff-btn--approve",
+  discard: "diff-btn--discard",
+  review: "diff-btn--review",
+  open: "diff-btn--open",
+  revert: "diff-btn--revert",
+}
+
+function createDiffButton(kind: string, text: string, ariaLabel: string, onClick: (event: MouseEvent) => void): HTMLElement {
+  const button = document.createElement("button")
+  button.className = `diff-btn ${DIFF_BUTTON_CLASS_BY_KIND[kind] ?? `diff-btn--${kind}`}`
+  button.textContent = text
+  button.setAttribute("aria-label", ariaLabel)
+  button.addEventListener("click", onClick)
+  return button
+}
+
+function createRevertDiffButton(diffBlock: DiffBlock, opts: RenderOptions): HTMLElement {
+  return createDiffButton("revert", "Revert", `Revert changes to ${diffBlock.path}`, (e) => {
+    e.stopPropagation()
+    if (!diffBlock.diffId || !diffBlock.path) {
+      console.warn("Cannot show revert confirmation: missing diffId or path")
+      return
+    }
+    showRevertConfirmation(diffBlock.diffId, diffBlock.path, opts.postMessage)
+  })
+}
+
+function showDiffStateChip(actionBar: HTMLElement, wrapper: HTMLElement, state: "accepted" | "discarded"): void {
+  actionBar.innerHTML = ""
+  const chip = document.createElement("span")
+  chip.className = `diff-state-chip diff-state--${state}`
+  chip.innerHTML = (state === "accepted" ? SUCCESS_SVG : ERROR_SVG) + (state === "accepted" ? " Applied" : " Discarded")
+  actionBar.appendChild(chip)
+  wrapper.classList.add(`diff-block--${state}`)
+}
+
+function collapseDiffContent(wrapper: HTMLElement): void {
+  wrapper.querySelector(".diff-table-wrapper")?.classList.add("hidden")
+  wrapper.querySelector(".diff-content")?.classList.add("hidden")
 }
 
 // ---------------------------------------------------------------------------

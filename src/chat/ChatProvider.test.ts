@@ -9,6 +9,7 @@ const utilsSource = readFileSync(resolve(__dirname, "chatUtils.ts"), "utf8")
 const lifecycleSource = readFileSync(resolve(__dirname, "SessionLifecycleService.ts"), "utf8")
 const commandExecSource = readFileSync(resolve(__dirname, "CommandExecutionService.ts"), "utf8")
 const eventRouterSource = readFileSync(resolve(__dirname, "WebviewEventRouter.ts"), "utf8")
+const validatorSource = readFileSync(resolve(__dirname, "WebviewMessageValidator.ts"), "utf8")
 const backfillSource = readFileSync(resolve(__dirname, "BackfillService.ts"), "utf8")
 
 void describe("ChatProvider.ts", () => {
@@ -72,11 +73,15 @@ void describe("ChatProvider.ts", () => {
     assert.ok(source.includes("import { ChatFileOps } from \"./ChatFileOps\""), "must import ChatFileOps")
   })
 
-  void it("contains message validation guards for send_prompt and mention_search", () => {
+  void it("delegates message validation guards for send_prompt and mention_search", () => {
     assert.ok(source.includes('msg.type === "send_prompt"') || eventRouterSource.includes('"send_prompt"'), "must handle send_prompt")
     assert.ok(source.includes('msg.type === "mention_search"') || eventRouterSource.includes('"mention_search"'), "must handle mention_search")
-    assert.ok(source.includes("text.length > 50000") || eventRouterSource.includes("text.length > 50000"), "must reject oversized prompts")
-    assert.ok(source.includes("query.length > 500") || eventRouterSource.includes("query.length > 500"), "must reject oversized mention queries")
+    assert.ok(eventRouterSource.includes("validateWebviewMessage"), "WebviewEventRouter must delegate validation")
+    assert.ok(validatorSource.includes("text.length > 50000"), "must reject oversized prompts")
+    assert.ok(
+      validatorSource.includes('invalidOptionalString(msg, "query", "Rejected oversized mention search query", deps, 500)'),
+      "must reject oversized mention queries"
+    )
   })
 
   void it("delegates auto compaction to AutoCompactor", () => {

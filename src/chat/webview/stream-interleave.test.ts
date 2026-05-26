@@ -8,10 +8,16 @@ const handlersSource = readFileSync(path.join(__dirname, "streamHandlers.ts"), "
 describe("streaming text-tool interleave", () => {
   it("handleToolStart calls finalizeCurrentTextBlock before clearing buffer", () => {
     const handleToolStartIdx = handlersSource.indexOf("export function handleToolStart(")
-    const finalizeInTool = handlersSource.indexOf("finalizeCurrentTextBlock(state, els, messages)", handleToolStartIdx)
-    const toolCallIdAfterFinalize = handlersSource.indexOf("state.streamingToolCallId = toolCall.id", finalizeInTool)
+    const prepareCallIdx = handlersSource.indexOf("prepareForToolBlock(state, els, messages, toolCall.id)", handleToolStartIdx)
+    const prepareHelperIdx = handlersSource.indexOf("function prepareForToolBlock(")
+    const finalizeInPrepare = handlersSource.indexOf("finalizeCurrentTextBlock(state, els, messages)", prepareHelperIdx)
+    const toolCallIdAfterFinalize = handlersSource.indexOf("state.streamingToolCallId = toolCallId", finalizeInPrepare)
+    const clearBufferAfterFinalize = handlersSource.indexOf('state.currentBlockBuffer = ""', finalizeInPrepare)
     assert.ok(
-      finalizeInTool > handleToolStartIdx && toolCallIdAfterFinalize > finalizeInTool,
+      prepareCallIdx > handleToolStartIdx &&
+        finalizeInPrepare > prepareHelperIdx &&
+        toolCallIdAfterFinalize > finalizeInPrepare &&
+        clearBufferAfterFinalize > finalizeInPrepare,
       "finalizeCurrentTextBlock must be called before clearing streaming state in handleToolStart"
     )
   })

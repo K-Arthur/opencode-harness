@@ -49,7 +49,7 @@ import { handleTokenUsage as handleTokenUsageModule, accumulateTokenUsage as acc
 import { createAttachmentManager, parsePromptMentions, removePromptToken } from "./ui/attachments"
 import { showWelcomeView as showWelcomeViewModule, hideWelcomeView as hideWelcomeViewModule, renderWelcomeContext as renderWelcomeContextModule, setupWelcomeActions as setupWelcomeActionsModule, setupWelcomeSuggestions as setupWelcomeSuggestionsModule, setupWelcomeResponsive as setupWelcomeResponsiveModule, type WelcomeViewDeps } from "./ui/welcomeView"
 import { closeSettingsMenu as closeSettingsMenuModule, closeCurrentModal as closeCurrentModalModule, setupSettingsMenuKeyboardNav as setupSettingsMenuKeyboardNavModule, type SettingsMenuDeps } from "./ui/settingsMenu"
-import { trackFileChange as trackFileChangeModule, undoMessage as undoMessageModule, handleChangedFiles as handleChangedFilesModule, renderChangedFilesList as renderChangedFilesListModule, renderCheckpointPanel as renderCheckpointPanelModule, handleClearMessages as handleClearMessagesModule, type FileTrackingDeps } from "./ui/fileTracking"
+import { trackFileChange as trackFileChangeModule, undoMessage as undoMessageModule, handleChangedFiles as handleChangedFilesModule, renderCheckpointPanel as renderCheckpointPanelModule, handleClearMessages as handleClearMessagesModule, type FileTrackingDeps } from "./ui/fileTracking"
 import { setupButtons as setupButtonsModule, type ButtonSetupDeps } from "./ui/buttonSetup"
 import { updateScrollMarkers as updateScrollMarkersModule, setupJumpToBottom as setupJumpToBottomModule, scrollMessageToTop as scrollMessageToTopModule, scrollToTurn as scrollToTurnModule, type ScrollMarkerDeps } from "./ui/scrollMarkers"
 import { createStreamOrchestrator, type StreamOrchestratorAPI } from "./streamOrchestrator"
@@ -461,213 +461,219 @@ function getVsCodeApi() {
 
   function init() {
     try {
-      setupModeToggle({
-        els,
-        getActiveSession: () => stateManager.getActiveSession(),
-        setSessionMode: (id, mode) => stateManager.setSessionMode(id, mode),
-        postMessage: (msg) => vscode.postMessage(msg),
-        showAutoModeWarning,
-      })
-      wireComposer()
-      composer.setupInput()
-      setupButtonsModule({
-        els: {
-          historyBtn: els.historyBtn,
-          sessionModal: els.sessionModal,
-          sessionModalBody: els.sessionModalBody,
-          mcpBtn: els.mcpBtn,
-          themeCustomizerBtn: els.themeCustomizerBtn,
-          settingsBtn: els.settingsBtn,
-          settingsMenu: els.settingsMenu,
-          checkpointPanel: els.checkpointPanel,
-          todosToggleBtn: els.todosToggleBtn,
-          todosPanel: els.todosPanel,
-          changedFilesList: null,
-          attachBtn: els.attachBtn,
-          skillsBtn: els.skillsBtn,
-        },
-        postMessage: (msg) => vscode.postMessage(msg),
-        closeSettingsMenu,
-        openMcpConfig: () => mcpConfig.open(),
-        openThemeCustomizer: () => openThemeCustomizer(themeDeps),
-        getActiveSessionId: () => stateManager.getState().activeSessionId ?? undefined,
-        skillsModalOpen: () => skillsModalApi?.open?.(),
-      })
-      
-      setupSessionModal()
-      setupPromptStash(els, (msg) => vscode.postMessage(msg as Record<string, unknown>))
-      
-      todosPanelApi = setupTodosPanel(els, {
-        onToggleTodo: (todoId: string) => {
-          const activeSid = stateManager.getState().activeSessionId
-          if (!activeSid) return
-          const session = stateManager.getSession(activeSid)
-          if (!session) return
-
-          if (todoId.startsWith("todo-")) {
-            const todo = session.userTodos?.find(t => t.id === todoId)
-            if (todo) {
-              todo.status = todo.status === "completed" ? "pending" : "completed"
-              stateManager.save()
-              triggerTodosRender(activeSid)
-            }
-          } else {
-            if (!session.todoOverrides) {
-              session.todoOverrides = {}
-            }
-            const currentStatus = session.todoOverrides[todoId] || 
-              (currentTodosList.find(t => t.id === todoId)?.status ?? "pending")
-            const newStatus = currentStatus === "completed" ? "pending" : "completed"
-            session.todoOverrides[todoId] = newStatus
-            stateManager.save()
-            triggerTodosRender(activeSid)
-            vscode.postMessage({ type: "toggle_todo", todoId })
-          }
-        },
-        onDeleteTodo: (todoId: string) => {
-          const activeSid = stateManager.getState().activeSessionId
-          if (!activeSid) return
-          const session = stateManager.getSession(activeSid)
-          if (!session) return
-
-          if (todoId.startsWith("todo-")) {
-            session.userTodos = session.userTodos?.filter(t => t.id !== todoId) || []
-            stateManager.save()
-            triggerTodosRender(activeSid)
-          } else {
-            if (!session.todoOverrides) {
-              session.todoOverrides = {}
-            }
-            session.todoOverrides[todoId] = 'deleted' as any
-            stateManager.save()
-            triggerTodosRender(activeSid)
-            vscode.postMessage({ type: "delete_todo", todoId })
-          }
-        },
-        onAddTodo: (content: string) => {
-          const activeSid = stateManager.getState().activeSessionId
-          if (!activeSid) return
-          const session = stateManager.getSession(activeSid)
-          if (!session) return
-
-          if (!session.userTodos) {
-            session.userTodos = []
-          }
-          const newTodo: Todo = {
-            id: `todo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            content,
-            status: "pending",
-            createdAt: Date.now()
-          }
-          session.userTodos.push(newTodo)
-          stateManager.save()
-          triggerTodosRender(activeSid)
-        },
-        onOpenFile: (filePath: string) => vscode.postMessage({ type: "open_file", path: filePath }),
-        postMessage: (msg: Record<string, unknown>) => vscode.postMessage(msg),
-      })
-      skillsModalApi = setupSkillsModal(els, {
-        onToggleSkill: (skillId: string, enabled: boolean) => vscode.postMessage({ type: "toggle_skill", skillId, enabled }),
-        onSearchSkills: (query: string) => vscode.postMessage({ type: "search_skills", query }),
-      })
-      subagentPanelApi = setupSubagentPanel(els, {
-        onCancelSubagent: (subagentId: string) => vscode.postMessage({ type: "cancel_subagent", subagentId }),
-      })
-
-      // Changed Files — always-visible strip + floating dropdown (no toolbar button)
-      if (els.changedFilesDropdown && els.cfDropdownTree && els.cfCountBadge) {
-        setupChangedFilesDropdown({
-          btn: els.changedFilesBtn ?? null,  // null → _open() anchors to #changed-files-strip
-          panel: els.changedFilesDropdown,
-          treeContainer: els.cfDropdownTree,
-          badge: els.cfCountBadge,
-          postMessage: (msg) => vscode.postMessage(msg),
-          onOpenFile: (path) => vscode.postMessage({ type: "open_file", path }),
-        })
-        cfDropdownApi = { updateChangedFiles, handleDiffResponse: handleCfDiffResponse, setCurrentSession: setCfCurrentSession }
-        // Keyboard support for the always-visible strip
-        const strip = document.getElementById("changed-files-strip")
-        if (strip) {
-          strip.addEventListener("keydown", (e) => {
-            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); strip.click() }
-          })
-        }
-      }
-
-      // Context Usage — status-strip bar is the always-visible primary trigger;
-      // toolbar button kept as fallback but nulled out so the dropdown anchors
-      // to the progress bar element instead.
-      if (els.contextUsageDropdown && els.ctxDropdownContent && els.ctxPctBadge) {
-        setupCtxDropdown({
-          btn: null,  // no separate toolbar button — status-strip bar is the trigger
-          panel: els.contextUsageDropdown,
-          content: els.ctxDropdownContent,
-          badge: els.ctxPctBadge,
-          postMessage: (msg) => vscode.postMessage(msg),
-        })
-        ctxDropdownApi = { updateUsage: updateCtxDropdown }
-        // Wire the always-visible status-strip context bar as the click target
-        els.contextUsage.setAttribute("tabindex", "0")
-        els.contextUsage.setAttribute("role", "button")
-        els.contextUsage.setAttribute("aria-haspopup", "true")
-        els.contextUsage.setAttribute("aria-controls", "context-usage-dropdown")
-        const _openCtxDropdown = () => {
-          // Prime the dropdown with current session data before opening so it
-          // never shows "No context usage data available" even if context_usage
-          // events haven't fired since the last tab switch.
-          const activeId = stateManager.getState().activeSessionId
-          const activeSess = activeId ? stateManager.getSession(activeId) : undefined
-          if (activeSess?.contextUsage) {
-            ctxDropdownApi?.updateUsage({ type: "context_usage", ...activeSess.contextUsage } as Record<string, unknown>)
-          }
-          openContextUsageDropdown()
-        }
-        els.contextUsage.addEventListener("click", (e) => {
-          e.stopPropagation()
-          _openCtxDropdown()
-        })
-        els.contextUsage.addEventListener("keydown", (e) => {
-          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); _openCtxDropdown() }
-        })
-      }
-      
-      setupWelcomeSuggestions()
-      setupWelcomeActions()
-      wireStreamOrchestrator()
-      wireTimeline()
-      setupMessageListener()
-      setupPermissionListener()
-      setupDiffActionListener()
-      composer.restoreQueues()
-      timeline.setupTimelineToggle()
-      timeline.setupThinkingToggle()
-      const cleanupToolKeyboardNav = setupToolKeyboardNav()
-      setupSettingsMenuKeyboardNav()
-      composer.updateSendButton()
-      setVsCodeApi(vscode)
-      setSessionListPostMessage((msg) => vscode.postMessage(msg as Record<string, unknown>))
-
-      // Show welcome view by default — no session created until user sends a message
-      showWelcomeView()
-
-      // Let the extension be the source of truth - wait for init_state
-      const initTimeout = timers.setTimeout(() => {
-        // If we haven't received init_state after 3 seconds, just show welcome
-        if (!stateManager.getState().activeSessionId) {
-          log.warn("No init_state received, showing welcome view")
-          showWelcomeView()
-        }
-      }, 3000)
-
-      // Store timeout so we can clear it when init_state is received
-      window.__opencodeInitTimeout = initTimeout
+      setupCoreInteractionControls()
+      setupSessionUtilities()
+      setupTodoSkillAndSubagentPanels()
+      setupChangedFilesFeature()
+      setupContextUsageFeature()
+      finishWebviewInitialization()
     } catch (err) {
-      log.error("Initialization error:", err)
-      const errorDiv = document.createElement("div")
-      errorDiv.className = "error-boundary"
-      errorDiv.textContent = "Failed to initialize. Please reload."
-      document.body.appendChild(errorDiv)
+      showInitializationFailure(err)
     }
+  }
+
+  function setupCoreInteractionControls(): void {
+    setupModeToggle({
+      els,
+      getActiveSession: () => stateManager.getActiveSession(),
+      setSessionMode: (id, mode) => stateManager.setSessionMode(id, mode),
+      postMessage: (msg) => vscode.postMessage(msg),
+      showAutoModeWarning,
+    })
+    wireComposer()
+    composer.setupInput()
+    setupButtonsModule({
+      els: {
+        historyBtn: els.historyBtn,
+        sessionModal: els.sessionModal,
+        sessionModalBody: els.sessionModalBody,
+        mcpBtn: els.mcpBtn,
+        themeCustomizerBtn: els.themeCustomizerBtn,
+        settingsBtn: els.settingsBtn,
+        settingsMenu: els.settingsMenu,
+        checkpointPanel: els.checkpointPanel,
+        todosToggleBtn: els.todosToggleBtn,
+        todosPanel: els.todosPanel,
+        changedFilesList: null,
+        attachBtn: els.attachBtn,
+        skillsBtn: els.skillsBtn,
+      },
+      postMessage: (msg) => vscode.postMessage(msg),
+      closeSettingsMenu,
+      openMcpConfig: () => mcpConfig.open(),
+      openThemeCustomizer: () => openThemeCustomizer(themeDeps),
+      getActiveSessionId: () => stateManager.getState().activeSessionId ?? undefined,
+      skillsModalOpen: () => skillsModalApi?.open?.(),
+    })
+  }
+
+  function setupSessionUtilities(): void {
+    setupSessionModal()
+    setupPromptStash(els, (msg) => vscode.postMessage(msg as Record<string, unknown>))
+  }
+
+  function setupTodoSkillAndSubagentPanels(): void {
+    todosPanelApi = setupTodosPanel(els, {
+      onToggleTodo: toggleTodo,
+      onDeleteTodo: deleteTodo,
+      onAddTodo: addUserTodo,
+      onOpenFile: (filePath: string) => vscode.postMessage({ type: "open_file", path: filePath }),
+      postMessage: (msg: Record<string, unknown>) => vscode.postMessage(msg),
+    })
+    skillsModalApi = setupSkillsModal(els, {
+      onToggleSkill: (skillId: string, enabled: boolean) => vscode.postMessage({ type: "toggle_skill", skillId, enabled }),
+      onSearchSkills: (query: string) => vscode.postMessage({ type: "search_skills", query }),
+    })
+    subagentPanelApi = setupSubagentPanel(els, {
+      onCancelSubagent: (subagentId: string) => vscode.postMessage({ type: "cancel_subagent", subagentId }),
+    })
+  }
+
+  function toggleTodo(todoId: string): void {
+    const activeSid = stateManager.getState().activeSessionId
+    if (!activeSid) return
+    const session = stateManager.getSession(activeSid)
+    if (!session) return
+
+    if (todoId.startsWith("todo-")) {
+      const todo = session.userTodos?.find(t => t.id === todoId)
+      if (todo) {
+        todo.status = todo.status === "completed" ? "pending" : "completed"
+        stateManager.save()
+        triggerTodosRender(activeSid)
+      }
+      return
+    }
+
+    session.todoOverrides ??= {}
+    const currentStatus = session.todoOverrides[todoId] ||
+      (currentTodosList.find(t => t.id === todoId)?.status ?? "pending")
+    session.todoOverrides[todoId] = currentStatus === "completed" ? "pending" : "completed"
+    stateManager.save()
+    triggerTodosRender(activeSid)
+    vscode.postMessage({ type: "toggle_todo", todoId })
+  }
+
+  function deleteTodo(todoId: string): void {
+    const activeSid = stateManager.getState().activeSessionId
+    if (!activeSid) return
+    const session = stateManager.getSession(activeSid)
+    if (!session) return
+
+    if (todoId.startsWith("todo-")) {
+      session.userTodos = session.userTodos?.filter(t => t.id !== todoId) || []
+      stateManager.save()
+      triggerTodosRender(activeSid)
+      return
+    }
+
+    session.todoOverrides ??= {}
+    session.todoOverrides[todoId] = "deleted" as any
+    stateManager.save()
+    triggerTodosRender(activeSid)
+    vscode.postMessage({ type: "delete_todo", todoId })
+  }
+
+  function addUserTodo(content: string): void {
+    const activeSid = stateManager.getState().activeSessionId
+    if (!activeSid) return
+    const session = stateManager.getSession(activeSid)
+    if (!session) return
+
+    session.userTodos ??= []
+    session.userTodos.push({
+      id: `todo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      content,
+      status: "pending",
+      createdAt: Date.now()
+    })
+    stateManager.save()
+    triggerTodosRender(activeSid)
+  }
+
+  function setupChangedFilesFeature(): void {
+    if (!els.changedFilesDropdown || !els.cfDropdownTree || !els.cfCountBadge) return
+
+    setupChangedFilesDropdown({
+      btn: els.changedFilesBtn ?? null,
+      panel: els.changedFilesDropdown,
+      treeContainer: els.cfDropdownTree,
+      badge: els.cfCountBadge,
+      postMessage: (msg) => vscode.postMessage(msg),
+      onOpenFile: (path) => vscode.postMessage({ type: "open_file", path }),
+    })
+    cfDropdownApi = { updateChangedFiles, handleDiffResponse: handleCfDiffResponse, setCurrentSession: setCfCurrentSession }
+
+    const strip = document.getElementById("changed-files-strip")
+    strip?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); strip.click() }
+    })
+  }
+
+  function setupContextUsageFeature(): void {
+    if (!els.contextUsageDropdown || !els.ctxDropdownContent || !els.ctxPctBadge) return
+
+    setupCtxDropdown({
+      btn: null,
+      panel: els.contextUsageDropdown,
+      content: els.ctxDropdownContent,
+      badge: els.ctxPctBadge,
+      postMessage: (msg) => vscode.postMessage(msg),
+    })
+    ctxDropdownApi = { updateUsage: updateCtxDropdown }
+    els.contextUsage.setAttribute("tabindex", "0")
+    els.contextUsage.setAttribute("role", "button")
+    els.contextUsage.setAttribute("aria-haspopup", "true")
+    els.contextUsage.setAttribute("aria-controls", "context-usage-dropdown")
+    els.contextUsage.addEventListener("click", (e) => {
+      e.stopPropagation()
+      openPrimedContextUsageDropdown()
+    })
+    els.contextUsage.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPrimedContextUsageDropdown() }
+    })
+  }
+
+  function openPrimedContextUsageDropdown(): void {
+    const activeId = stateManager.getState().activeSessionId
+    const activeSess = activeId ? stateManager.getSession(activeId) : undefined
+    if (activeSess?.contextUsage) {
+      ctxDropdownApi?.updateUsage({ type: "context_usage", ...activeSess.contextUsage } as Record<string, unknown>)
+    }
+    openContextUsageDropdown()
+  }
+
+  function finishWebviewInitialization(): void {
+    setupWelcomeSuggestions()
+    setupWelcomeActions()
+    wireStreamOrchestrator()
+    wireTimeline()
+    setupMessageListener()
+    setupPermissionListener()
+    setupDiffActionListener()
+    composer.restoreQueues()
+    timeline.setupTimelineToggle()
+    timeline.setupThinkingToggle()
+    setupToolKeyboardNav()
+    setupSettingsMenuKeyboardNav()
+    composer.updateSendButton()
+    setVsCodeApi(vscode)
+    setSessionListPostMessage((msg) => vscode.postMessage(msg as Record<string, unknown>))
+    showWelcomeView()
+    window.__opencodeInitTimeout = timers.setTimeout(() => {
+      if (!stateManager.getState().activeSessionId) {
+        log.warn("No init_state received, showing welcome view")
+        showWelcomeView()
+      }
+    }, 3000)
+  }
+
+  function showInitializationFailure(err: unknown): void {
+    log.error("Initialization error:", err)
+    const errorDiv = document.createElement("div")
+    errorDiv.className = "error-boundary"
+    errorDiv.textContent = "Failed to initialize. Please reload."
+    document.body.appendChild(errorDiv)
   }
 
   const welcomeViewDeps: WelcomeViewDeps = {
@@ -905,8 +911,6 @@ function getVsCodeApi() {
     } else {
       clearTokenDisplay()
     }
-    // Refresh changed files strip for the new tab.
-    renderChangedFilesList(session?.changedFiles ?? [])
     // Tell the dropdown which session to display. This re-renders the strip
     // and (if open) the tree from this session's per-session state, so files
     // from another tab never bleed into the visible UI.
@@ -1257,112 +1261,7 @@ function getVsCodeApi() {
     tabId: string,
     queue: PromptQueue,
   ) {
-    function indexOf(id: string): number {
-      return queue.getItems().findIndex(i => i.id === id)
-    }
-
-    function clearAllDropMarkers() {
-      const container = chip.parentElement
-      if (!container) return
-      for (const el of Array.from(container.querySelectorAll(".queue-chip"))) {
-        el.classList.remove("queue-chip--drop-before", "queue-chip--drop-after")
-      }
-    }
-
-    chip.addEventListener("dragstart", (e) => {
-      const dt = e.dataTransfer
-      if (!dt) return
-      dt.effectAllowed = "move"
-      dt.setData("application/x-queue-item", itemId)
-      // Some browsers will refuse the drag without ANY text/plain payload
-      dt.setData("text/plain", itemId)
-      chip.classList.add("queue-chip--dragging")
-      chip.setAttribute("aria-grabbed", "true")
-    })
-
-    chip.addEventListener("dragend", () => {
-      chip.classList.remove("queue-chip--dragging")
-      chip.setAttribute("aria-grabbed", "false")
-      clearAllDropMarkers()
-    })
-
-    chip.addEventListener("dragover", (e) => {
-      const dt = e.dataTransfer
-      if (!dt) return
-      // Only respond to our own payload — don't hijack file drags etc.
-      if (!Array.from(dt.types).includes("application/x-queue-item")) return
-      e.preventDefault()
-      dt.dropEffect = "move"
-      clearAllDropMarkers()
-      const rect = chip.getBoundingClientRect()
-      const before = e.clientY < rect.top + rect.height / 2
-      chip.classList.add(before ? "queue-chip--drop-before" : "queue-chip--drop-after")
-    })
-
-    chip.addEventListener("dragleave", () => {
-      chip.classList.remove("queue-chip--drop-before", "queue-chip--drop-after")
-    })
-
-    chip.addEventListener("drop", (e) => {
-      const dt = e.dataTransfer
-      if (!dt) return
-      const sourceId = dt.getData("application/x-queue-item")
-      if (!sourceId || sourceId === itemId) { clearAllDropMarkers(); return }
-      e.preventDefault()
-      const fromIdx = indexOf(sourceId)
-      let toIdx = indexOf(itemId)
-      if (fromIdx === -1 || toIdx === -1) { clearAllDropMarkers(); return }
-      const rect = chip.getBoundingClientRect()
-      const before = e.clientY < rect.top + rect.height / 2
-      // When dropping below the target chip, insert AFTER it
-      if (!before && fromIdx > toIdx) toIdx += 0 // moving up to (toIdx+1) wouldn't happen — clamp instead
-      if (!before && fromIdx < toIdx) toIdx -= 0 // already covers "insert after"
-      // Recompute: when moving downward and dropping after, the array shift
-      // from removing the source means the target index is unchanged. When
-      // moving downward and dropping before, target stays. When moving upward
-      // and dropping after, we want toIdx + 1; when upward dropping before, toIdx.
-      let finalTo = toIdx
-      if (fromIdx < toIdx && before) finalTo = toIdx - 1
-      if (fromIdx > toIdx && !before) finalTo = toIdx + 1
-      const ok = queue.reorder(fromIdx, finalTo)
-      clearAllDropMarkers()
-      if (ok) {
-        persistQueues()
-        renderQueue(tabId)
-        // After re-render the chip node is gone; restore focus to the moved item
-        requestAnimationFrame(() => {
-          const newChip = document.querySelector(`.queue-chip[data-queue-id="${sourceId}"]`) as HTMLElement | null
-          newChip?.focus()
-        })
-      }
-    })
-
-    chip.addEventListener("keydown", (e) => {
-      if (!e.altKey) return
-      let moved = false
-      if (e.key === "ArrowUp") {
-        const idx = indexOf(itemId)
-        moved = idx > 0 && queue.reorder(idx, idx - 1)
-      } else if (e.key === "ArrowDown") {
-        const idx = indexOf(itemId)
-        moved = idx >= 0 && queue.reorder(idx, idx + 1)
-      } else if (e.key === "Home") {
-        moved = queue.moveToFront(itemId)
-      } else if (e.key === "End") {
-        moved = queue.moveToBack(itemId)
-      } else {
-        return
-      }
-      e.preventDefault()
-      if (moved) {
-        persistQueues()
-        renderQueue(tabId)
-        requestAnimationFrame(() => {
-          const newChip = document.querySelector(`.queue-chip[data-queue-id="${itemId}"]`) as HTMLElement | null
-          newChip?.focus()
-        })
-      }
-    })
+    composer.wireChipReorderHandlers(chip, itemId, tabId, queue)
   }
 
   function updateQueueSendButton() {
@@ -1915,9 +1814,6 @@ function getVsCodeApi() {
               sess.changedFiles = []
               stateManager.save()
             }
-            if (sid === stateManager.getState().activeSessionId) {
-              renderChangedFilesList([])
-            }
           }
           updateTabBar()
           updateSendButton()
@@ -2011,9 +1907,6 @@ function getVsCodeApi() {
             if (!session.changedFiles.includes(filePath)) {
               session.changedFiles.push(filePath)
               stateManager.save()
-            }
-            if (sid === stateManager.getState().activeSessionId) {
-              renderChangedFilesList(session.changedFiles)
             }
           }
           fileEditBatcherRef.add(sid, filePath)
@@ -2244,6 +2137,28 @@ function getVsCodeApi() {
           }
         }
       }],
+      ["revert_success", (msg: any, sid) => {
+        const diffId = msg.diffId as string | undefined
+        if (diffId) {
+          const el = document.querySelector(`.diff-block[data-diff-id="${CSS.escape(diffId)}"]`)
+          if (el) {
+            const actionBar = el.querySelector(".diff-action-bar")
+            if (actionBar) {
+              actionBar.innerHTML = ""
+              const chip = document.createElement("span")
+              chip.className = "diff-state-chip diff-state-chip--reverted"
+              chip.textContent = "Reverted"
+              actionBar.appendChild(chip)
+            }
+            el.classList.remove("diff-block--accepted")
+            el.classList.add("diff-block--discarded")
+          }
+        }
+        if (sid) showSystemMessage(sid, `Changes reverted${msg.path ? ` for ${msg.path}` : ""}.`)
+      }],
+      ["revert_failed", (msg: any, sid) => {
+        if (sid) showSystemMessage(sid, `Revert failed: ${msg.error || "Unknown error"}`)
+      }],
       ["checkpoint_list", (msg) => {
         if (msg.checkpoints) {
           renderCheckpointPanel(msg.checkpoints as Array<{ id: string; sessionId: string; messageId?: string; filesChanged?: string[] }>)
@@ -2467,10 +2382,6 @@ function getVsCodeApi() {
           .map((file) => typeof file === "string" ? file : (file && typeof file === "object" && "path" in file ? String((file as { path?: unknown }).path || "") : ""))
           .filter((path) => path.length > 0)
         handleChangedFiles(sid, paths)
-        const activeSid = stateManager.getState().activeSessionId
-        if (sid === activeSid) {
-          renderChangedFilesList(paths)
-        }
         // Always store per-session state; the dropdown itself decides whether
         // to render based on its current session.
         cfDropdownApi?.updateChangedFiles(sid, files as any)
@@ -2585,7 +2496,7 @@ function getVsCodeApi() {
   setupDisplayToggles({ els, getState: () => stateManager.getState(), save: () => stateManager.save() })
 
   function showSecondaryNav() {
-    els.displayToggles.style.display = "flex"
+    els.displayToggles.classList.remove("hidden")
     const activeId = stateManager.getState().activeSessionId
     if (activeId) {
       const model = stateManager.getSession(activeId)?.model || stateManager.getState().globalModel
@@ -2837,10 +2748,6 @@ function undoMessage(messageId: string) {
 
   function handleChangedFiles(sessionId: string, files: string[]) {
     handleChangedFilesModule(fileTrackingDeps, sessionId, files)
-  }
-
-  function renderChangedFilesList(files: string[]) {
-    renderChangedFilesListModule(fileTrackingDeps, files)
   }
 
   function renderCheckpointPanel(checkpoints: Array<{ id: string; sessionId: string; messageId?: string; filesChanged?: string[] }>) {

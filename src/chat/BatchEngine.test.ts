@@ -1,11 +1,15 @@
 import { describe, it, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 
 const source = readFileSync(path.join(__dirname, "BatchEngine.ts"), "utf8")
 
 void describe("BatchEngine<T> class structure", () => {
+  void it("does not keep a stale JavaScript duplicate beside the TypeScript source", () => {
+    assert.equal(existsSync(path.join(__dirname, "BatchEngine.js")), false)
+  })
+
   void it("exports BatchEngine class", () => {
     assert.ok(source.includes("export class BatchEngine"))
   })

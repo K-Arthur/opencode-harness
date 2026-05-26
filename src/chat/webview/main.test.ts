@@ -381,17 +381,15 @@ it("unified modal: server session items send resume_server_session on click", ()
     assert.ok(idx >= 0, "changed_files_update handler must exist")
     const block = source.slice(idx, idx + 900)
     assert.ok(block.includes("handleChangedFiles"), "changed_files_update must update session changedFiles/chip bar")
-    assert.ok(block.includes("renderChangedFiles"), "changed_files_update must update todos panel changed-file list")
+    assert.ok(block.includes("updateChangedFiles"), "changed_files_update must sync per-session changed files to dropdown")
   })
 
   it("changed_files_update only renders active-session changed files", () => {
     const idx = source.indexOf('"changed_files_update"')
     assert.ok(idx >= 0, "changed_files_update handler must exist")
     const block = source.slice(idx, idx + 1200)
-    assert.ok(block.includes("activeSid"), "handler must compare against active session")
-    assert.ok(block.includes("sid === activeSid"), "todos panel updates must be scoped to active session")
     assert.ok(fileTrackingSource.includes("deps.getActiveSessionId() === sessionId"), "chip list must only render active session files")
-    assert.ok(source.includes("renderChangedFilesList(session?.changedFiles ?? [])"), "switching tabs must clear stale changed-file chips")
+    assert.ok(source.includes("cfDropdownApi?.setCurrentSession("), "switching tabs must reset dropdown to correct session")
   })
 
   // ── model selector on welcome screen ─────────────────────────────────────
