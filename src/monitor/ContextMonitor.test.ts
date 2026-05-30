@@ -57,6 +57,16 @@ describe("ContextMonitor.ts", () => {
     assert.ok(source.includes("setTokenLimit("))
   })
 
+  it("setTokenLimit does not emit sessionless stale usage", () => {
+    const idx = source.indexOf("setTokenLimit(")
+    assert.ok(idx >= 0, "setTokenLimit must exist")
+    const block = source.slice(idx, source.indexOf("\n  /**\n   * Read the autoCompact setting", idx))
+    assert.ok(
+      !block.includes("this.updateTokens(this.currentTokens)"),
+      "setTokenLimit must not re-emit currentTokens without a sessionId"
+    )
+  })
+
   it("reads autoCompact setting", () => {
     assert.ok(source.includes("autoCompact"))
   })

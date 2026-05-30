@@ -1019,11 +1019,12 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     const resolvedWindow = this.modelManager.getContextWindow(model)
     const override = vscode.workspace.getConfiguration("opencode").get<number>("contextWindowOverride", 0)
     const effectiveWindow = override > 0 ? override : resolvedWindow
+    const activeSessionId = this.sessionStore.activeId
     if (effectiveWindow && effectiveWindow > 0) {
-      this.contextMonitor.setTokenLimit(effectiveWindow)
+      this.contextMonitor.setTokenLimit(effectiveWindow, activeSessionId)
       this.statePush.postMessage({
         type: "context_window_known",
-        sessionId: this.sessionStore.activeId,
+        sessionId: activeSessionId,
         maxTokens: effectiveWindow,
         source: override > 0 ? "override" : (resolvedWindow ? "server-or-openrouter" : "unknown"),
       })
@@ -1031,7 +1032,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       // Window unknown: tell the webview so it can show the affordance.
       this.statePush.postMessage({
         type: "context_window_unknown",
-        sessionId: this.sessionStore.activeId,
+        sessionId: activeSessionId,
         modelId: model || this.modelManager.model,
       })
     }

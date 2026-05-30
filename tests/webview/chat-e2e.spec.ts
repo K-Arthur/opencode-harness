@@ -106,6 +106,53 @@ test.describe("Chat Webview E2E", () => {
     expectNoBrowserErrors(captured)
   })
 
+  test("background context_usage does not update the active tab", async ({ page }) => {
+    const captured = captureErrors(page)
+    await page.goto("/")
+
+    await dispatchHostMessage(page, {
+      type: "init_state",
+      sessions: [
+        {
+          id: "session-a",
+          name: "Session A",
+          model: "anthropic/claude-3-5-sonnet-20241022",
+          messages: [],
+          tokenUsage: { prompt: 0, completion: 0, total: 0 },
+        },
+        {
+          id: "session-b",
+          name: "Session B",
+          model: "anthropic/claude-3-5-sonnet-20241022",
+          messages: [],
+          tokenUsage: { prompt: 0, completion: 0, total: 0 },
+        },
+      ],
+      activeSessionId: "session-a",
+    })
+
+    await dispatchHostMessage(page, {
+      type: "context_usage",
+      sessionId: "session-b",
+      tokens: 75000,
+      maxTokens: 100000,
+      percent: 75,
+    })
+
+    const bar = page.locator("#context-usage")
+    await expect(bar).toHaveClass(/hidden/, { timeout: 3000 })
+
+    await dispatchHostMessage(page, {
+      type: "active_session_changed",
+      sessionId: "session-b",
+    })
+
+    await expect(bar).not.toHaveClass(/hidden/, { timeout: 3000 })
+    await expect(page.locator("#context-label")).toContainText("75%")
+
+    expectNoBrowserErrors(captured)
+  })
+
   // Fix B: changed-files always-visible strip appears when files are reported,
   // shows file names, and clicking it opens the full dropdown tree.
   test("changed-files strip shows file names and opens dropdown on click", async ({ page }) => {
