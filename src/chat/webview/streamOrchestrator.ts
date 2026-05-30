@@ -6,6 +6,7 @@ import { timers } from "./timerRegistry"
 import type { ToolElapsedTracker } from "./ui/toolElapsed"
 import type { FileEditBatcher } from "./ui/fileEditBatcher"
 import type { PromptQueue } from "./queue"
+import { placeholderHasRenderedContent } from "./placeholderContent"
 
 export interface StreamOrchestratorDeps {
   vscode: { postMessage(msg: Record<string, unknown>): void }
@@ -310,10 +311,10 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     const msgList = getMessageList(sessionId)
     if (messageId && msgList) {
       const placeholder = msgList.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement | null
-      if (placeholder) {
-        const textEl = placeholder.querySelector(".streaming-text, .msg-text") as HTMLElement | null
-        const hasContent = textEl && textEl.textContent && textEl.textContent.trim().length > 2
-        if (!hasContent) placeholder.remove()
+      // M7: only remove a placeholder that has neither text nor tool/diff/skill
+      // blocks — a text-less turn that still showed tool calls must survive.
+      if (placeholder && !placeholderHasRenderedContent(placeholder)) {
+        placeholder.remove()
       }
     }
     addMessage(sessionId, {
