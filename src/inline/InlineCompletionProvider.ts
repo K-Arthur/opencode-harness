@@ -1,5 +1,4 @@
 import * as vscode from "vscode"
-import { log } from "../utils/outputChannel"
 
 export class InlineCompletionProvider implements vscode.InlineCompletionItemProvider {
   private debounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -54,13 +53,10 @@ export class InlineCompletionProvider implements vscode.InlineCompletionItemProv
     })
   }
 
-  private generateCompletion(prefix: string, suffix: string): vscode.InlineCompletionItem | null {
+  private generateCompletion(prefix: string, _suffix: string): vscode.InlineCompletionItem | null {
     if (prefix.length === 0) return null
 
-    log.info(`InlineCompletion: prefix=${prefix.length}chars suffix=${suffix.length}chars`)
-
-    const insertText = "// TODO: implement completion via opencode server"
-    return new vscode.InlineCompletionItem(insertText)
+    return null
   }
 
   private clearDebounce(): void {

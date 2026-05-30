@@ -6,6 +6,8 @@
 .claude/**
 .windsurf/**
 .coverage-bundles/**
+.jcodemunch.jsonc
+.vscode-test.mjs
 coverage/**
 src/**
 !media/**
@@ -31,6 +33,7 @@ AUDIT_REPORT.md
 AUDIT_FINAL_REPORT.md
 UI_AUDIT_REPORT.md
 AUDIT_DELIVERABLES.md
+audit-report.md
 esbuild.js
 index.html
 opencode-harness-*.vsix

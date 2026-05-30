@@ -7,9 +7,20 @@ import {
   SerializableRateLimitState,
   type RateLimitAdapter,
 } from "./rateLimitCore"
+import { log } from "../utils/outputChannel"
 
 export { safeParseInt, parseDuration, ADAPTERS, type RateLimitAdapter, type RateLimitState, type SerializableRateLimitState }
 export { OPENAI_ADAPTER, ANTHROPIC_ADAPTER, GENERIC_ADAPTER } from "./rateLimitCore"
+
+const RATE_LIMIT_USAGE_KEY = "opencode-harness.rateLimitMonitor.usage"
+
+interface PersistedRateLimitUsage {
+  provider: string
+  inputTokens: number
+  outputTokens: number
+  cost: number
+  lastUpdated: string
+}
 
 export class RateLimitMonitor {
   private _onStateChanged = new vscode.EventEmitter<RateLimitState | null>()
@@ -38,11 +49,13 @@ export class RateLimitMonitor {
   // Countdown timer for rate limit reset
   private countdownInterval: ReturnType<typeof setInterval> | null = null
 
-  constructor() {
+  constructor(private readonly storage?: vscode.Memento) {
     this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99)
     this.statusBarItem.name = "OpenCode Rate Limit"
     this.statusBarItem.command = "opencode-harness.showRateLimits"
     this.loadConfig()
+    this.restorePersistedUsage()
+    this.updateStatusBar()
 
     this.configListener = vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("opencode.rateLimits")) this.loadConfig()
@@ -82,6 +95,65 @@ export class RateLimitMonitor {
     }
   }
 
+  private restorePersistedUsage(): void {
+    const saved = this.storage?.get<PersistedRateLimitUsage>(RATE_LIMIT_USAGE_KEY)
+    if (!saved || typeof saved.provider !== "string" || saved.provider.trim().length === 0) return
+    if (!Number.isFinite(saved.inputTokens) || !Number.isFinite(saved.outputTokens) || !Number.isFinite(saved.cost)) return
+
+    this.cumulativeProvider = saved.provider
+    this.cumulativeInputTokens = Math.max(0, saved.inputTokens)
+    this.cumulativeOutputTokens = Math.max(0, saved.outputTokens)
+    this.cumulativeCost = Math.max(0, saved.cost)
+    const lastUpdated = saved.lastUpdated ? new Date(saved.lastUpdated) : new Date()
+    this.state = this.buildObservedState(saved.provider, Number.isNaN(lastUpdated.getTime()) ? new Date() : lastUpdated)
+  }
+
+  private persistUsage(): void {
+    if (!this.storage || !this.cumulativeProvider) return
+    const payload: PersistedRateLimitUsage = {
+      provider: this.cumulativeProvider,
+      inputTokens: this.cumulativeInputTokens,
+      outputTokens: this.cumulativeOutputTokens,
+      cost: this.cumulativeCost,
+      lastUpdated: new Date().toISOString(),
+    }
+    void this.storage.update(RATE_LIMIT_USAGE_KEY, payload).then(undefined, (err) => {
+      log.warn("Failed to persist rate-limit usage", err)
+    })
+  }
+
+  private resetCumulativeUsage(): void {
+    this.cumulativeInputTokens = 0
+    this.cumulativeOutputTokens = 0
+    this.cumulativeCost = 0
+    this.warnedLowTokens = false
+    this.warnedExhausted = false
+  }
+
+  private buildObservedState(provider: string, lastUpdated = new Date()): RateLimitState {
+    const usedTokens = this.cumulativeInputTokens + this.cumulativeOutputTokens
+    const baseState: RateLimitState = {
+      ...(this.state || { provider, lastUpdated }),
+      provider,
+      usedInputTokens: this.cumulativeInputTokens,
+      usedOutputTokens: this.cumulativeOutputTokens,
+      usedTokens,
+      usedCost: this.cumulativeCost || undefined,
+      lastUpdated,
+    }
+    const limits = this.providerLimits[provider]
+    if (!limits) return baseState
+
+    const ratio = usedTokens / limits.tokensPerMin
+    return {
+      ...baseState,
+      remainingTokens: Math.max(0, Math.round((1 - ratio) * limits.tokensPerMin)),
+      limitTokens: limits.tokensPerMin,
+      remainingRequests: Math.max(0, Math.round((1 - ratio) * limits.requestsPerMin)),
+      limitRequests: limits.requestsPerMin,
+    }
+  }
+
   private loadConfig(): void {
     const config = vscode.workspace.getConfiguration("opencode")
     const limits = config.get<Record<string, { tokensPerMin?: number; requestsPerMin?: number }>>("rateLimits")
@@ -114,11 +186,7 @@ export class RateLimitMonitor {
   recordTokenUsage(inputTokens: number, outputTokens: number, provider?: string, cost?: number): void {
     const resolvedProvider = provider || this.state?.provider || "unknown"
     if (this.cumulativeProvider && this.cumulativeProvider !== resolvedProvider) {
-      this.cumulativeInputTokens = 0
-      this.cumulativeOutputTokens = 0
-      this.cumulativeCost = 0
-      this.warnedLowTokens = false
-      this.warnedExhausted = false
+      this.resetCumulativeUsage()
     }
     this.cumulativeProvider = resolvedProvider
     this.cumulativeInputTokens += inputTokens
@@ -127,32 +195,11 @@ export class RateLimitMonitor {
       this.cumulativeCost += cost
     }
 
-    const limits = this.providerLimits[resolvedProvider]
-    const usedTokens = this.cumulativeInputTokens + this.cumulativeOutputTokens
-    const baseState: RateLimitState = {
-      ...(this.state || { provider: resolvedProvider, lastUpdated: new Date() }),
-      provider: resolvedProvider,
-      usedInputTokens: this.cumulativeInputTokens,
-      usedOutputTokens: this.cumulativeOutputTokens,
-      usedTokens,
-      usedCost: this.cumulativeCost || undefined,
-      lastUpdated: new Date(),
-    }
-    if (limits) {
-      const ratio = usedTokens / limits.tokensPerMin
-      this.state = {
-        ...baseState,
-        remainingTokens: Math.max(0, Math.round((1 - ratio) * limits.tokensPerMin)),
-        limitTokens: limits.tokensPerMin,
-        remainingRequests: Math.max(0, Math.round((1 - ratio) * limits.requestsPerMin)),
-        limitRequests: limits.requestsPerMin,
-      }
-    } else {
-      this.state = baseState
-    }
+    this.state = this.buildObservedState(resolvedProvider)
     this.evaluate()
     this._onStateChanged.fire(this.state)
     this.updateStatusBar()
+    this.persistUsage()
   }
 
   private evaluate(): void {

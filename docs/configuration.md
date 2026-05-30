@@ -75,6 +75,12 @@ opening MCP settings creates:
 Legacy `opencode.mcpServers` VS Code settings are still loaded as a fallback for older
 installations, but OpenCode config entries take precedence.
 
+MCP entries are validated before they are loaded or saved. Server names may only use
+letters, numbers, dot, underscore, and dash. Stdio commands reject shell metacharacters
+and path traversal. Args/env/header values reject control characters. Remote MCP URLs
+must use HTTPS unless they target localhost/loopback. Tool names reported by MCP
+servers are also sanitized before they are shown or routed.
+
 ### `opencode.mcpServers`
 - **Type**: `object`
 - **Default**: `{}`
@@ -127,6 +133,7 @@ installations, but OpenCode config entries take precedence.
 - **Default**: `{}`
 - **Scope**: `window`
 - **Description**: Fallback per-minute quota configuration by provider id. Used when the provider/server does not expose remaining/limit headers. OpenCode Zen uses provider id `opencode`; because Zen is pay-as-you-go with optional monthly limits, the extension only shows exact remaining quota when headers are available, otherwise it shows observed token/cost usage or this configured fallback estimate.
+- **Persistence**: Observed input/output tokens and cost are persisted in VS Code `globalState` by provider, so window reloads do not reset the visible usage picture.
 - **Properties per provider**:
   | Property | Type | Default | Description |
   |-----------|------|---------|-------------|
@@ -219,8 +226,12 @@ The server inherits the extension's environment with these filtered variables:
 
 ### Remote Server URLs
 When `opencode.serverUrl` is set, `SessionManager` validates the URL before enabling remote attach.
-Invalid URLs are rejected. Non-HTTPS remote URLs are allowed for local-network workflows, but they emit
-a warning unless the host is localhost or a loopback address.
+Invalid URLs are rejected. Non-HTTPS URLs are allowed only for localhost or loopback development
+servers. Remote hosts must use HTTPS.
+
+Remote auth secrets should be set through `OpenCode: Attach Remote Server`, which stores the token in
+VS Code SecretStorage. Legacy `opencode.serverAuthToken` settings are migrated once into SecretStorage
+and cleared from settings to avoid keeping plaintext credentials in shared workspace files.
 
 ---
 

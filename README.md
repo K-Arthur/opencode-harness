@@ -68,7 +68,7 @@ OpenCode includes advanced features like cost tracking, theme customization, gra
 - **MCP Server Manager** — Add, update, remove, and toggle MCP servers directly from the chat interface
 - **MCP Config Panel** — Modal overlay following model-manager pattern for managing Model Context Protocol servers
 - **Server Status Tracking** — Visual indicators for connected/disconnected/error states
-- **Secure Storage** — MCP server configs stored in VS Code settings (`opencode.mcpServers`)
+- **Validated Config** — MCP server configs are stored in OpenCode config files first, with legacy VS Code settings used only as fallback; names, commands, args, env, headers, URLs, and reported tool names are validated before use
 
 ### Phase 2: Diff & Stop Command
 - **Side-by-Side Diff Viewer** — Compare AI-suggested changes with current file using read-only virtual documents and VS Code's `vscode.diff` command
@@ -326,6 +326,8 @@ When exact quota data is unavailable, the bar switches to an observed-usage mode
 ### Provider Accuracy
 
 Different providers expose different quota signals. Header adapters parse OpenAI, Anthropic, and generic `ratelimit-*` headers when those headers are available. If the OpenCode SDK response path only exposes assistant `tokens`/`cost`, the extension records observed usage and can estimate a per-minute quota only when `opencode.rateLimits` includes the selected provider.
+
+Observed token and cost usage is persisted in VS Code `globalState`, so a window reload no longer clears the quota/cost picture for the active provider.
 
 OpenCode Zen uses the provider id `opencode` and currently works like any other OpenCode provider. Zen is pay-as-you-go, supports auto-reload, and can have monthly workspace/member limits; those billing limits are not exposed through the prompt token metadata, so the extension does not infer remaining Zen balance/monthly budget unless the server exposes quota headers or you configure fallback limits.
 
@@ -635,6 +637,8 @@ npm run test:lint      # lint with tsc --noEmit
 | Setting | Default | Scope | Description |
 |---------|---------|-------|-------------|
 | `opencode.binaryPath` | `""` | machine | Path to the opencode binary. If not set, the extension will search for 'opencode' in your PATH |
+| `opencode.serverUrl` | `""` | machine | Optional remote opencode server URL. Non-loopback HTTP is rejected; use HTTPS for remote hosts |
+| `opencode.serverAuthToken` | `""` | machine | Deprecated plaintext fallback. Use `OpenCode: Attach Remote Server` so the token is stored in SecretStorage |
 | `opencode.theme` | `{ "preset": "cli-default" }` | window | Theme configuration (see Theme Customization below) |
 | `opencode.mcpServers` | `{}` | window | Legacy fallback MCP server map for stdio/HTTP/SSE entries when OpenCode config does not define the server |
 | `opencode.model` | `""` | window | Default model ID in provider/model format (e.g. anthropic/claude-sonnet-4-20250514) |
@@ -645,6 +649,7 @@ npm run test:lint      # lint with tsc --noEmit
 | `opencode.rateLimits` | `{}` | window | Per-provider rate limit configuration (tokensPerMin, requestsPerMin) |
 | `opencode.rateLimitWarningThreshold` | `0.1` | window | Fraction of remaining rate limit that triggers a warning notification (0.0-1.0) |
 | `opencode.rateLimitCriticalThreshold` | `0.05` | window | Fraction of remaining rate limit that triggers a critical warning (0.0-1.0) |
+| `opencode.inlineSuggestions.enabled` | `false` | window | Reserved for server-backed inline completions; disabled until implemented end-to-end |
 
 ## Commands
 

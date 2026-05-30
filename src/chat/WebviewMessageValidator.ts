@@ -14,6 +14,9 @@ type MessageValidator = (
 
 const MODE_VALUES = new Set(["normal", "plan", "build", "auto"])
 const STEER_MODE_VALUES = new Set(["interrupt", "append", "queue"])
+const MCP_SERVER_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/
+const MCP_COMMAND_PATTERN = /^[A-Za-z0-9@._/\\:-]+$/
+const MCP_HEADER_NAME_PATTERN = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/
 
 function reject(deps: WebviewMessageValidatorDeps, message: string): false {
   deps.warn(message)
@@ -64,6 +67,32 @@ function invalidOptionalNumber(
   if (msg[key] === undefined || typeof msg[key] === "number") return false
   reject(deps, message)
   return true
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+}
+
+function isSafeStringArray(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every((item) => typeof item === "string" && !/[\u0000-\u001F\u007F]/.test(item) && item.length <= 500))
+}
+
+function isSafeStringRecord(value: unknown, keyPattern = /^[A-Za-z_][A-Za-z0-9_]*$/): boolean {
+  if (value === undefined) return true
+  if (!isPlainObject(value)) return false
+  return Object.entries(value).every(([key, raw]) => keyPattern.test(key) && typeof raw === "string" && !/[\u0000-\u001F\u007F]/.test(raw) && raw.length <= 4000)
+}
+
+function isSafeRemoteUrl(value: unknown): boolean {
+  if (value === undefined) return true
+  if (typeof value !== "string" || /[\u0000-\u001F\u007F]/.test(value)) return false
+  try {
+    const parsed = new URL(value)
+    const isLoopback = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "::1"
+    return (parsed.protocol === "https:" || (parsed.protocol === "http:" && isLoopback))
+  } catch {
+    return false
+  }
 }
 
 function validateSendPrompt(msg: Record<string, unknown>, _msgType: string, deps: WebviewMessageValidatorDeps): boolean {
@@ -155,7 +184,24 @@ function validateToggleMcpServer(msg: Record<string, unknown>, _msgType: string,
 
 function validateMcpServerConfig(msg: Record<string, unknown>, msgType: string, deps: WebviewMessageValidatorDeps): boolean {
   if (invalidRequiredString(msg, "name", `Invalid name in ${msgType}`, deps)) return false
-  if (!msg.config || typeof msg.config !== "object") return reject(deps, `Invalid config in ${msgType}`)
+  if (!MCP_SERVER_NAME_PATTERN.test(msg.name as string)) return reject(deps, `Invalid name in ${msgType}`)
+  if (!isPlainObject(msg.config)) return reject(deps, `Invalid config in ${msgType}`)
+
+  const config = msg.config
+  const command = config.command
+  const url = config.url
+  if (command !== undefined && (typeof command !== "string" || !MCP_COMMAND_PATTERN.test(command) || command.includes("..") || /[\u0000-\u001F\u007F]/.test(command))) {
+    return reject(deps, `Invalid command in ${msgType}`)
+  }
+  if (command === undefined && url === undefined && msgType === "add_mcp_server") {
+    return reject(deps, `Missing command or url in ${msgType}`)
+  }
+  if (!isSafeRemoteUrl(url)) return reject(deps, `Invalid url in ${msgType}`)
+  if (!isSafeStringArray(config.args)) return reject(deps, `Invalid args in ${msgType}`)
+  if (!isSafeStringRecord(config.env)) return reject(deps, `Invalid env in ${msgType}`)
+  if (!isSafeStringRecord(config.headers, MCP_HEADER_NAME_PATTERN)) return reject(deps, `Invalid headers in ${msgType}`)
+  if (config.disabled !== undefined && typeof config.disabled !== "boolean") return reject(deps, `Invalid disabled in ${msgType}`)
+  if (config.enabled !== undefined && typeof config.enabled !== "boolean") return reject(deps, `Invalid enabled in ${msgType}`)
   return true
 }
 

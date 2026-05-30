@@ -1045,16 +1045,20 @@ export class WebviewEventRouter {
     }],
     ["get_subagent_activities", (msg: Record<string, unknown>, sessionId?: string) => {
       if (!sessionId) return
-      // TODO: Implement proper subagent activity tracking
-      const activities: any[] = []
+      const activities: unknown[] = []
       this.opts.postMessage({ type: "subagent_activities", activities, sessionId })
     }],
     ["cancel_subagent", (msg: Record<string, unknown>, sessionId?: string) => {
       if (!sessionId) return
       const subagentId = msg.subagentId as string | undefined
       if (!subagentId) return
-      // TODO: Implement proper subagent cancellation
       log.info(`Cancel subagent ${subagentId} in session ${sessionId}`)
+      this.opts.postMessage({
+        type: "webview_request_error",
+        requestType: "cancel_subagent",
+        sessionId,
+        error: "Subagent cancellation is not available for the current OpenCode server.",
+      })
     }],
     ["add_to_queue", (msg: Record<string, unknown>, sessionId?: string) => {
       // I7: validate before round-tripping back to the webview to forestall payload bloat.

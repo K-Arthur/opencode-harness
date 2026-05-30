@@ -1,23 +1,30 @@
 import * as vscode from "vscode"
 import { log } from "../utils/outputChannel"
 
+const SECRET_KEY = "opencode-harness.serverAuthToken"
+
 /**
- * Resolve the remote server auth token from SecretStorage (preferred) with
- * fallback to the legacy settings.json entry. Migrates found settings values
- * to secrets for future use.
+ * Resolve the remote server auth token from SecretStorage. Legacy settings
+ * values are migrated once, cleared from settings, and logged so plaintext
+ * tokens do not remain an invisible fallback.
  */
 export async function resolveAuthToken(context: vscode.ExtensionContext): Promise<string> {
-  // Try SecretStorage first (post-migration)
-  const secretsToken = await context.secrets.get("opencode-harness.serverAuthToken")
+  const secretsToken = await context.secrets.get(SECRET_KEY)
   if (secretsToken) return secretsToken
 
-  // Fallback: read from legacy settings.json
-  const legacyToken = vscode.workspace.getConfiguration("opencode").get<string>("serverAuthToken") || ""
+  const config = vscode.workspace.getConfiguration("opencode")
+  const inspected = config.inspect<string>("serverAuthToken")
+  const legacyToken = inspected?.globalValue || inspected?.workspaceValue || inspected?.workspaceFolderValue || ""
   if (legacyToken) {
-    // Migrate to SecretStorage and clear legacy setting
-    await context.secrets.store("opencode-harness.serverAuthToken", legacyToken)
-    await vscode.workspace.getConfiguration("opencode").update("serverAuthToken", undefined, vscode.ConfigurationTarget.Global)
-    log.info("Migrated serverAuthToken from settings.json to SecretStorage")
+    await context.secrets.store(SECRET_KEY, legacyToken)
+    await Promise.all([
+      inspected?.globalValue ? config.update("serverAuthToken", undefined, vscode.ConfigurationTarget.Global) : Promise.resolve(),
+      inspected?.workspaceValue ? config.update("serverAuthToken", undefined, vscode.ConfigurationTarget.Workspace) : Promise.resolve(),
+    ])
+    if (inspected?.workspaceFolderValue) {
+      log.warn("Found a workspace-folder opencode.serverAuthToken setting. It was migrated to SecretStorage, but you should remove it from folder settings manually.")
+    }
+    log.warn("Migrated legacy opencode.serverAuthToken setting to SecretStorage and cleared plaintext settings fallback.")
   }
   return legacyToken
 }

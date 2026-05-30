@@ -86,4 +86,22 @@ describe("extension.ts", () => {
     assert.ok(extensionSource.includes('case "session_updated"'), "server title updates must flow back into local cache")
     assert.ok(extensionSource.includes("applyServerTitle"), "session.updated events must update local cached title")
   })
+
+  it("installs removable unhandled rejection diagnostics", () => {
+    assert.ok(extensionSource.includes("installUnhandledRejectionDiagnostics"), "activation must install diagnostics")
+    assert.ok(extensionSource.includes('process.on("unhandledRejection"'), "must listen for unhandled rejections")
+    assert.ok(extensionSource.includes('process.off("unhandledRejection"'), "listener must be disposed on deactivate")
+    assert.ok(extensionSource.includes("unhandledRejectionCount"), "must count repeated failures")
+  })
+
+  it("handles all added workspace folders in one restart prompt", () => {
+    assert.ok(extensionSource.includes("e.added.map"), "workspace folder handler must inspect the full added batch")
+    assert.ok(!extensionSource.includes("e.added[0]?.uri.fsPath"), "workspace folder handler must not only use the first folder")
+  })
+
+  it("registers inline completions only for code document selectors", () => {
+    assert.ok(extensionSource.includes("INLINE_CODE_LANGUAGES"), "must centralize inline code languages")
+    assert.ok(extensionSource.includes("codeDocumentSelectors"), "must use language-specific selectors")
+    assert.ok(!extensionSource.includes('{ pattern: "**" }'), "inline provider must not register for every file")
+  })
 })

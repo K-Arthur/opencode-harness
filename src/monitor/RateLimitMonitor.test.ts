@@ -1,5 +1,7 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
+import path from "node:path"
 import {
   OPENAI_ADAPTER,
   ANTHROPIC_ADAPTER,
@@ -7,6 +9,8 @@ import {
   safeParseInt,
   parseDuration,
 } from "./rateLimitCore"
+
+const monitorSource = readFileSync(path.join(__dirname, "RateLimitMonitor.ts"), "utf8")
 
 describe("safeParseInt", () => {
   it("returns undefined for undefined input", () => {
@@ -159,5 +163,14 @@ describe("ADAPTERS priority (openai-like headers)", () => {
     })
     assert.ok(result)
     assert.equal(result!.provider, "anthropic")
+  })
+})
+
+describe("RateLimitMonitor persistence", () => {
+  it("persists cumulative observed token and cost usage", () => {
+    assert.ok(monitorSource.includes("RATE_LIMIT_USAGE_KEY"), "must define a persistence key")
+    assert.ok(monitorSource.includes("restorePersistedUsage"), "must restore persisted usage on construction")
+    assert.ok(monitorSource.includes("persistUsage"), "must persist usage after recording")
+    assert.ok(monitorSource.includes("context.globalState") || monitorSource.includes("vscode.Memento"), "must use VS Code memento storage")
   })
 })

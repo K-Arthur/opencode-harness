@@ -1,6 +1,8 @@
 import * as vscode from "vscode"
 import { log } from "../utils/outputChannel"
 
+const MAX_CAPTURED_OUTPUT_CHARS = 200_000
+
 export class TerminalBridge {
   private capturedOutput = ""
 
@@ -41,7 +43,9 @@ export class TerminalBridge {
       activeTerminal.show()
       const selection = await vscode.env.clipboard.readText()
       if (selection) {
-        this.capturedOutput = selection
+        this.capturedOutput = selection.length > MAX_CAPTURED_OUTPUT_CHARS
+          ? `${selection.slice(0, MAX_CAPTURED_OUTPUT_CHARS)}\n[OpenCode: terminal capture truncated at ${MAX_CAPTURED_OUTPUT_CHARS} characters]`
+          : selection
         vscode.window.showInformationMessage("Terminal output captured. Use @terminal in chat to include it.")
       }
       return selection

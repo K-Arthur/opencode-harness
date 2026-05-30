@@ -23,4 +23,17 @@ describe("McpServerManager.ts", () => {
     assert.ok(source.includes("writeFile"), "must write server edits to disk")
     assert.ok(source.includes("config.mcp = servers") && source.includes("\\\"mcp\\\""), "new config files must contain an mcp object")
   })
+
+  it("validates MCP server config before persisting or loading it", () => {
+    assert.ok(source.includes("sanitizeMcpServerConfig"), "must sanitize server config")
+    assert.ok(source.includes("assertValidServerName"), "must validate server names")
+    assert.ok(source.includes("MCP_COMMAND_PATTERN"), "must reject unsafe command strings")
+    assert.ok(source.includes("MCP remote server URL must use HTTPS"), "must reject insecure remote MCP URLs")
+  })
+
+  it("sanitizes tool names reported by MCP servers", () => {
+    assert.ok(source.includes("sanitizeToolNames"), "must sanitize tool names")
+    assert.ok(source.includes("MCP_TOOL_NAME_PATTERN"), "must define a safe tool-name pattern")
+    assert.ok(source.includes("Rejected unsafe MCP tool name"), "must log rejected unsafe tool names")
+  })
 })

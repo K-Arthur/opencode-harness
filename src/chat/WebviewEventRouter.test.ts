@@ -50,6 +50,20 @@ describe("WebviewEventRouter context usage routing", () => {
   })
 })
 
+describe("WebviewMessageValidator MCP config", () => {
+  it("rejects unsafe MCP server names and command strings", () => {
+    assert.equal(validate({ name: "safe-server", config: { command: "node", args: ["server.js"] } }, "add_mcp_server"), true)
+    assert.equal(validate({ name: "../bad", config: { command: "node" } }, "add_mcp_server"), false)
+    assert.equal(validate({ name: "safe", config: { command: "node; rm -rf ." } }, "add_mcp_server"), false)
+  })
+
+  it("rejects non-loopback HTTP MCP URLs", () => {
+    assert.equal(validate({ name: "remote", config: { url: "https://mcp.example.com" } }, "add_mcp_server"), true)
+    assert.equal(validate({ name: "local", config: { url: "http://localhost:8080" } }, "add_mcp_server"), true)
+    assert.equal(validate({ name: "remote", config: { url: "http://mcp.example.com" } }, "add_mcp_server"), false)
+  })
+})
+
 function validate(msg: Record<string, unknown>, msgType: string): boolean {
   return validateWebviewMessage(msg, msgType, {
     hasPromptContent: (payload) => {
