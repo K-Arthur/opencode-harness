@@ -149,7 +149,9 @@ describe("stream.ts", () => {
 
   it("has handleToolUpdate method", () => {
     assert.ok(sourceIncludes("handleToolUpdate("), "handleToolUpdate must exist")
-    assert.ok(sourceIncludes("tool-call--${update.state}"), "must update tool call class dynamically")
+    // m1: the dynamic class swap is centralized in setToolStateClass.
+    assert.ok(sourceIncludes("setToolStateClass(toolEl, update.state)"), "must update tool call class via the centralized helper")
+    assert.ok(sourceIncludes("tool-call--${state}"), "centralized helper must set the dynamic tool-call class")
   })
 
   it("has handleToolEnd method", () => {
