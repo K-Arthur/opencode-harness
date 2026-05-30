@@ -102,6 +102,31 @@ both UIs from being visible simultaneously.
 These replace the previous behavior where these messages were logged as "unknown host
 message type" and silently dropped.
 
+### Context And Token Usage
+
+Context-window fill and API token spend are separate concepts:
+
+- `context_usage`: `{ type, sessionId, percent, tokens, maxTokens, breakdown? }`
+  describes the current context-window fill for one session. The webview persists the
+  payload on the addressed session and updates the visible bar/dropdown only when
+  `sessionId` matches the active tab. Background-session updates must never repaint the
+  active tab's context bar.
+- `context_window_known`: `{ type, sessionId, maxTokens, source }` resolves the denominator
+  for one session. If the target session is active, the webview hides the override chip and
+  re-computes the visible percentage from that session's stored context fill.
+- `context_window_unknown`: `{ type, sessionId, modelId }` shows the override affordance only
+  for the active target session. Unknown-window events for background sessions are ignored
+  by the visible UI.
+- `token_usage`: `{ type, sessionId, usage }`, where `usage` is
+  `{ prompt, completion, total, reasoning?, cacheRead?, cacheWrite? }`, records API token
+  spend. The webview accepts legacy `tokens` payloads defensively, but the canonical wire
+  contract is `usage`.
+
+The backend sends session-scoped context events from `ContextMonitor`/`ChatProvider`.
+`ContextMonitor.setTokenLimit()` must not emit sessionless stale usage. Final SDK usage in
+`StreamCoordinator` is an accumulation fallback only; full-history summaries from session
+backfill replace the stored session summary.
+
 ### Remote Command Execution
 
 When a slash command targets a server session that doesn't exist yet (e.g., first command
@@ -213,6 +238,10 @@ The relevant coverage lives in:
 - `src/chat/SessionLifecycleService.test.ts` for session resume message freshness.
 - `src/chat/ChatProvider.test.ts` for backfill retry budget, stale session handling, and
   `refresh_session_messages` / `request_more_messages` server fallback.
+- `src/chat/handlers/StreamCoordinator.test.ts`, `src/monitor/ContextMonitor.test.ts`, and
+  `tests/webview/message-contract.test.ts` for final SDK usage accumulation,
+  session-scoped context monitor updates, and the canonical `token_usage.usage` contract.
+- `tests/webview/chat-e2e.spec.ts` for cross-tab context usage isolation.
 - `src/chat/webview/main.test.ts` and `src/chat/webview/theme.test.ts` for prompt context-chip
   wiring, safe webview ids, changed-file scoping, and missing-chip-container hardening.
 - `src/session/SessionStore.test.ts` for empty placeholder cleanup and persistence rules.

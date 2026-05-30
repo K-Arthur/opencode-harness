@@ -85,6 +85,38 @@ See `docs/adrs/ADR-009-pending-event-buffer.md` for the full motivation and alte
 
 `ChatProvider.backfillRecoveredSessions` uses a 4-step exponential backoff (`BACKFILL_RETRY_DELAYS_MS = [1500, 4000, 8000, 16000]`) when the opencode server returns an empty messages array on `session.messages()`. After the last attempt, `SessionStore.clearNeedsBackfill(sessionId)` is called for any session that is still empty, so subsequent `sessions_recovered` events stop re-trying and stop spamming "Empty response …" log lines. The session is treated as genuinely empty on the server.
 
+### Context And Token Usage Accounting
+
+The extension tracks two related but distinct quantities:
+
+- **Context-window fill**: current prompt/session context occupancy. This is owned by
+  `ContextMonitor` and sent to the webview as session-scoped `context_usage`,
+  `context_window_known`, and `context_window_unknown` messages.
+- **API token spend**: cumulative provider usage for the session. This is owned by
+  `SessionStore.tokenUsage` and surfaced through `token_usage` messages with a
+  `UsageDelta` payload.
+
+Context events must always carry a target `sessionId` when one is known. The webview stores
+context usage on the addressed session and only repaints the visible context bar/dropdown when
+the target session is active. This prevents background tabs from polluting the active tab's
+context indicator.
+
+`ContextMonitor.setTokenLimit(limit, sessionId?)` updates the denominator for the active
+session without emitting sessionless stale usage. If that session already has recorded context
+fill, the monitor re-emits the latest usage for that session with the new denominator.
+
+Token usage has two write modes:
+
+- `SessionStore.updateTokenUsage(sessionId, summary)` replaces stored totals with a
+  full-history summary. Use this for backfill/refresh paths that read assistant messages from
+  the opencode SDK/server.
+- `SessionStore.accumulateTokenUsage(sessionId, delta)` adds a live per-turn delta. Use this
+  for streaming events and final SDK fallback accounting.
+
+`StreamCoordinator` records token/cost baselines at prompt start. During final fetch it only
+accumulates final assistant tokens if step-finish accounting has not already advanced the
+session totals, preventing duplicate live deltas while preserving older-session backfill data.
+
 ## API Contracts
 
 ### OpenCode SDK Contracts
