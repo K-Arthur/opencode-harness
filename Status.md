@@ -1,7 +1,27 @@
 # Status.md
 
-## Last Updated: 2026-05-22
-## Project State: V7 STREAMING & UI OVERHAUL — Critical fixes applied, 306/307 tests passing
+## Last Updated: 2026-05-29
+## Project State: Context/token usage accounting fix applied and verified
+
+### Recent Fix (2026-05-29): Session-scoped context usage + cumulative token accounting
+- **Backend token totals no longer reset after multi-turn sessions** — final SDK assistant
+  usage is now a live accumulation fallback only. Full-history summaries from opencode
+  SDK/server backfill continue to use replacement semantics so older sessions can recover
+  complete totals from persisted server history.
+- **Frontend context usage is session-scoped** — `context_usage`,
+  `context_window_known`, and `context_window_unknown` update the addressed session and only
+  repaint the visible context bar/dropdown when that session is active.
+- **Context window updates no longer emit stale sessionless usage** —
+  `ContextMonitor.setTokenLimit(limit, sessionId?)` re-emits latest known usage for the target
+  session instead of falling back to active-tab interpretation in the webview.
+- **`token_usage` wire contract aligned** — canonical host messages now send
+  `usage: { prompt, completion, total, reasoning?, cacheRead?, cacheWrite? }`; legacy `tokens`
+  payloads are still accepted defensively by the webview handler.
+- **Tests**: focused regressions cover final SDK accumulation, sessionless context-limit
+  emissions, the `token_usage.usage` contract, and cross-tab context bar isolation.
+- **Verification**: `npm run test:unit` passed (`2138` pass, `7` skipped, `0` fail);
+  `npm run typecheck`, `npm run build`, the focused Node regressions, and the targeted
+  Playwright context-usage test all passed.
 
 ### Recent Fix (2026-05-22): Show-thinking visibility + codex-style compact tool blocks
 - **Show-thinking now actually hides blocks** — previously the toggle only flipped each `<details>` element to closed, which still left the summary chip in the layout. Now the toggle drives a `hide-thinking` body class that CSS uses to `display: none` every `.thinking-block`. `setupThinkingToggle()` calls `toggleAllThinkingBlocks()` at boot so the persisted pref applies immediately instead of after a double-click. (`src/chat/webview/dom.ts:395`, `src/chat/webview/main.ts:3065`, `src/chat/webview/css/components.css:44`).

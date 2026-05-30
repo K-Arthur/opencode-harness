@@ -189,7 +189,7 @@ export interface SessionState {
   isStreaming: boolean
   cost?: number
   tokenUsage?: TokenUsage
-  contextUsage?: { percent: number; tokens: number; maxTokens: number }
+  contextUsage?: { percent: number; tokens: number; maxTokens: number; breakdown?: ContextBreakdown }
   changedFiles?: string[]
   lastActiveAt?: number
   instructions?: string
@@ -335,13 +335,17 @@ export interface ContextBreakdown {
   system: number
   history: number
   workspace: number
+  queued?: number
+  steer?: number
 }
 
 export interface ContextUsage {
+  percent: number
   tokens: number
-  total: number
-  percentage?: number
+  maxTokens: number
+  sessionId?: string
   breakdown?: ContextBreakdown
+  cost?: number
 }
 
 export interface UsageDelta {
@@ -425,7 +429,7 @@ export type HostMessage =
   | { type: "compact_banner_dismissed"; sessionId: string }
   | { type: "step_tokens"; sessionId: string; tokens: number | TokenBreakdown; turnIndex?: number }
   | { type: "cost_update"; sessionId?: string; cost: number }
-  | { type: "token_usage"; sessionId: string; tokens: number | TokenBreakdown }
+  | { type: "token_usage"; sessionId: string; usage: UsageDelta; tokens?: number | TokenBreakdown }
   | { type: "stream_start"; sessionId: string; messageId: string; resumed?: StreamResumedInfo; isSteerPrompt?: boolean }
   | { type: "stream_chunk"; sessionId: string; text: string; messageId?: string; seq?: number }
   | { type: "stream_end"; sessionId: string; reason?: string; blocks?: Block[]; partial?: boolean; seq?: number }
