@@ -9,12 +9,25 @@ import { renderToolGroup } from "./toolCallRenderer"
 import type { ScrollAnchor } from "./scrollAnchor"
 import { CHECK_SVG, SUCCESS_SVG, SPINNER_SVG } from "./icons"
 import { RenderQueue } from "./renderQueue"
+import { LiveTextRenderer } from "./liveTextRenderer"
 import { handleStreamEnd as handleStreamEndImpl } from "./streamEndHandler"
 import { getErrorHandler } from "./errorHandler"
 import { getErrorDisplay } from "./errorComponents"
 import { getQuotaMonitor } from "./quotaMonitor"
 
+// Stateless (no /g) so it is safe to reuse across calls without lastIndex drift.
+const HAS_CONTEXT_MARKER = /<context>/i
+
+// M6: soft cap for the live render buffer — diagnostics only, never truncated.
+const LIVE_BUFFER_SOFT_CAP = 2 * 1024 * 1024
+
 export function stripContextFromText(text: string): string {
+  if (!text) return ""
+  // M1: skip the lazy [\s\S]*? strip regex entirely when there is no marker.
+  // A non-backtracking case-insensitive existence test is linear and cheap;
+  // the trim is preserved to keep the function's contract unchanged.
+  if (!HAS_CONTEXT_MARKER.test(text)) return text.trim()
+
   const contextRegex = /<context>[\s\S]*?<\/context>/gi
   let cleaned = text.replace(contextRegex, "").trim()
   const partialStart = cleaned.indexOf("<context>")
@@ -24,14 +37,21 @@ export function stripContextFromText(text: string): string {
   return cleaned
 }
 
-function mergeStreamText(existing: string, chunk: string): string {
+/**
+ * M4: the prefix/suffix overlap probe is capped to a small window. A streamed
+ * retransmission only ever overlaps by at most the last chunk, so scanning the
+ * full accumulated length was needless O(N²) work on the recovery path.
+ */
+const MAX_OVERLAP_PROBE = 256
+
+export function mergeStreamText(existing: string, chunk: string): string {
   if (!chunk) return stripContextFromText(existing)
   if (!existing) return stripContextFromText(chunk)
 
   const strippedChunk = stripContextFromText(chunk)
   if (strippedChunk && existing.includes(strippedChunk)) return existing
 
-  const maxOverlap = Math.min(existing.length, chunk.length)
+  const maxOverlap = Math.min(existing.length, chunk.length, MAX_OVERLAP_PROBE)
   for (let overlap = maxOverlap; overlap > 0; overlap--) {
     if (existing.endsWith(chunk.slice(0, overlap))) {
       return stripContextFromText(existing + chunk.slice(overlap))
@@ -165,6 +185,8 @@ export interface StreamState {
   rafPending: boolean
   renderQueue: RenderQueue | null
   chunkSeq: number
+  /** M6: set once when the live buffer crosses the soft cap (diagnostics only). */
+  bufferCapWarned?: boolean
 }
 
 let _vscode: any = null
@@ -218,8 +240,22 @@ export function handleStreamStart(
   messageId?: string
 ): void {
   if (state.isStreaming) {
-    webviewLog(`handleStreamStart: already streaming (msgId=${state.streamingMessageId}), skipping duplicate start`, "warn")
-    return
+    // Idempotent re-emit for the SAME id → ignore.
+    if (messageId && state.streamingMessageId === messageId) {
+      webviewLog(`handleStreamStart: already streaming (msgId=${state.streamingMessageId}), skipping duplicate start`, "warn")
+      return
+    }
+    // C2: a start for a DIFFERENT id is a genuine restart (e.g. error-recovered
+    // resume). Finalize the prior bubble so nothing is left "running", then fall
+    // through to begin the new stream — otherwise the new id's chunks would be
+    // routed into the previous bubble.
+    webviewLog(`handleStreamStart: restarting stream ${state.streamingMessageId} → ${messageId ?? "<new>"}`, "warn")
+    const prior = state.streamingMessageId
+    if (prior) {
+      const priorMsg = messages.find((m) => m.id === prior)
+      if (priorMsg) finishUnresolvedToolCalls(priorMsg.blocks)
+    }
+    resetStreamState(state)
   }
 
   state.streamingMessageId = messageId || `stream-${crypto.randomUUID()}`
@@ -270,6 +306,10 @@ export function handleStreamStart(
   els.scrollAnchor.scrollIfAnchored()
 
   const streamId = state.streamingMessageId
+  // P1/A: one renderer per stream freezes closed blocks and re-parses only the
+  // tail. It reattaches automatically when a new text block is created after a
+  // tool boundary, so a single instance spans the whole stream.
+  const liveRenderer = new LiveTextRenderer()
   state.renderQueue = new RenderQueue((_text: string) => {
     // Guard: if tool-start cleared the buffer between enqueue and flush, skip
     // so we don't create a spurious empty text block after each tool call.
@@ -292,7 +332,7 @@ export function handleStreamStart(
     if (!textEl) return
 
     const displayText = stripContextFromText(state.currentBlockBuffer)
-    textEl.innerHTML = renderMarkdown(displayText, true)
+    liveRenderer.renderInto(textEl, displayText)
 
      const msgObj = messages.find((m) => m.id === streamId)
      if (msgObj && state.currentBlockIndex >= 0) {
@@ -354,6 +394,16 @@ export function handleStreamToken(
   state.streamingBuffer += chunk
   state.currentBlockBuffer += chunk
   state.chunkSeq++
+
+  // M6: the live buffer is unbounded by design (it backs the message model and
+  // the server blocks are authoritative at stream_end). The frozen-prefix
+  // renderer keeps the per-flush PARSE cost bounded regardless of length, so we
+  // do not truncate — but surface a single warning if a stream grows
+  // pathologically large so it is visible in diagnostics.
+  if (state.currentBlockBuffer.length > LIVE_BUFFER_SOFT_CAP && !state.bufferCapWarned) {
+    state.bufferCapWarned = true
+    webviewLog(`handleStreamToken: live buffer exceeded ${LIVE_BUFFER_SOFT_CAP} chars (len=${state.currentBlockBuffer.length})`, "warn")
+  }
 
   if (state.renderQueue) {
     state.renderQueue.enqueue(chunk)
@@ -465,6 +515,12 @@ function prepareForToolBlock(
   messages: ChatMessage[],
   toolCallId: string,
 ): void {
+  // C3: drain any queued-but-unflushed bytes into the DOM/model FIRST. Between
+  // two consecutive tools the previous prepare left currentBlockEl === null, so
+  // finalizeCurrentTextBlock would early-return and the inter-tool text would
+  // be lost when we zero the buffer below. forceFlush re-establishes the text
+  // element (via the queue callback) so finalize can persist it.
+  state.renderQueue?.forceFlush()
   finalizeCurrentTextBlock(state, els, messages)
   state.streamingToolCallId = toolCallId
   state.currentBlockBuffer = ""
@@ -770,6 +826,8 @@ export function handleDiff(
   const id = state.streamingMessageId
   if (!id) return
 
+  // C3: drain queued bytes before clearing the buffer (see prepareForToolBlock).
+  state.renderQueue?.forceFlush()
   finalizeCurrentTextBlock(state, els, messages)
   state.currentBlockBuffer = ""
   state.currentBlockEl = null
@@ -1006,6 +1064,10 @@ export function resetStreamState(state: StreamState): void {
   state.currentBlockIndex = -1
   state.rafPending = false
   state.chunkSeq = 0
+  state.bufferCapWarned = false
+  // M5: defensively bound the per-stream event dedup set so it can never grow
+  // unboundedly across a long-lived webview if a future code path adds to it.
+  state.seenEventIds.clear()
 }
 
 export function setupToolKeyboardNav(): () => void {

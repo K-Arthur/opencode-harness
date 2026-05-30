@@ -9,6 +9,7 @@ import { setupMentions } from "./mentions"
 import { setupCommandsModal, type CommandEntry } from "./commands-modal"
 import { toCommandEntries } from "./slash-commands"
 import { createStreamHandlers, type StreamHandlers } from "./stream"
+import { upsertMessageById } from "./messageUpsert"
 import { createTabBar, createTabContent, switchToTab, removeTabContent } from "./tabs"
 import { setupModelDropdown } from "./model-dropdown"
 import { setVsCodeApi, setupToolKeyboardNav, webviewLog } from "./streamHandlers"
@@ -1402,7 +1403,9 @@ function getVsCodeApi() {
     // Any message arriving means we're past the welcome state.
     hideWelcomeView()
 
-    session.messages.push(msg)
+    // C1: upsert by id so a stream_end re-adding the same id that streaming
+    // already created does not leave a duplicate in session.messages.
+    upsertMessageById(session.messages, msg)
 
     // Auto-generate title from first user message
     if (msg.role === "user" && isAutoSessionName(session.name)) {
