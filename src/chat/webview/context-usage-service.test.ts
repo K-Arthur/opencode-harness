@@ -10,6 +10,7 @@ import {
   computeBreakdownWidths,
   buildSummaryText,
   clampPercent,
+  formatUsagePercent,
 } from "./context-usage-service"
 
 describe("deriveUsageColor", () => {
@@ -149,6 +150,12 @@ describe("buildSummaryText", () => {
     assert.ok(result.includes("110%"), `expected 110% in: ${result}`)
   })
 
+  it("renders non-zero sub-1% usage as <1% instead of 0%", () => {
+    const result = buildSummaryText(121730, 1_000_000_000, 0.012173)
+    assert.ok(result.includes("<1%"), `expected <1% in: ${result}`)
+    assert.ok(!result.includes("0% used"), `must not collapse non-zero usage to 0% in: ${result}`)
+  })
+
   it("does not inject raw HTML from token count values", () => {
     // XSS guard: values that look like HTML should never appear raw
     const result = buildSummaryText(0, 0, 0)
@@ -157,6 +164,10 @@ describe("buildSummaryText", () => {
 })
 
 describe("clampPercent", () => {
+  it("clamps NaN to 0", () => {
+    assert.equal(clampPercent(NaN), 0)
+  })
+
   it("clamps negative to 0", () => {
     assert.equal(clampPercent(-5), 0)
   })
@@ -179,5 +190,23 @@ describe("clampPercent", () => {
 
   it("clamps large overflow to 100", () => {
     assert.equal(clampPercent(999), 100)
+  })
+})
+
+describe("formatUsagePercent", () => {
+  it("formats exact zero as 0%", () => {
+    assert.equal(formatUsagePercent(0), "0%")
+  })
+
+  it("formats non-zero values below 1% as <1%", () => {
+    assert.equal(formatUsagePercent(0.012173), "<1%")
+  })
+
+  it("keeps whole-number percentages compact", () => {
+    assert.equal(formatUsagePercent(25), "25%")
+  })
+
+  it("keeps one decimal place only when it carries useful detail", () => {
+    assert.equal(formatUsagePercent(12.5), "12.5%")
   })
 })

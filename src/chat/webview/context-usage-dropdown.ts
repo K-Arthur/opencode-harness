@@ -10,6 +10,7 @@ import {
   buildSummaryText,
   clampPercent,
   formatCost,
+  formatUsagePercent,
   type ContextBreakdown,
 } from "./context-usage-service"
 
@@ -27,6 +28,7 @@ interface ContextUsage {
   percent: number
   tokens: number
   maxTokens: number
+  sessionId?: string
   breakdown?: ContextBreakdown
   projected?: { withQueue: number; overflow: boolean }
   cost?: number
@@ -90,18 +92,33 @@ export function setupContextUsageDropdown(opts: ContextUsageDropdownOptions): vo
 
 export function updateUsage(data: Record<string, unknown>): void {
   if (data.type === "context_usage" || data.type === "context_window_unknown") {
-    _currentUsage = data as unknown as ContextUsage
+    _currentUsage = normalizeUsage(data)
     const pct = _currentUsage?.percent ?? 0
     _updateBadge(pct)
     if (_btn) {
       _btn.classList.toggle("hidden", false)
       _btn.classList.toggle("ctx-btn--active", pct > 0)
-      _btn.setAttribute("aria-label", `Context usage (${pct}%)`)
+      _btn.setAttribute("aria-label", `Context usage (${formatUsagePercent(pct)})`)
     }
     if (_isOpen && _content) {
       _render(_content, _currentUsage)
     }
   }
+}
+
+function normalizeUsage(data: Record<string, unknown>): ContextUsage {
+  const percent = typeof data.percent === "number" && Number.isFinite(data.percent) ? data.percent : 0
+  const tokens = typeof data.tokens === "number" && Number.isFinite(data.tokens) ? Math.max(0, data.tokens) : 0
+  const maxTokens = typeof data.maxTokens === "number" && Number.isFinite(data.maxTokens) ? Math.max(0, data.maxTokens) : 0
+  const cost = typeof data.cost === "number" && Number.isFinite(data.cost) ? data.cost : undefined
+  const sessionId = typeof data.sessionId === "string" ? data.sessionId : undefined
+  const breakdown = data.breakdown && typeof data.breakdown === "object"
+    ? data.breakdown as ContextBreakdown
+    : undefined
+  const projected = data.projected && typeof data.projected === "object"
+    ? data.projected as { withQueue: number; overflow: boolean }
+    : undefined
+  return { percent, tokens, maxTokens, sessionId, breakdown, projected, cost }
 }
 
 function _toggle(): void {
@@ -138,7 +155,10 @@ function _open(): void {
     window.addEventListener("resize", _resizeHandler!)
   })
 
-  _postMessage?.({ type: "get_context_usage" })
+  _postMessage?.({
+    type: "get_context_usage",
+    sessionId: _currentUsage?.sessionId,
+  })
 }
 
 function positionPanel(anchor: Element): void {
@@ -184,7 +204,7 @@ function _close(): void {
 
 function _updateBadge(pct: number): void {
   if (!_badge) return
-  _badge.textContent = pct > 0 ? `${pct}%` : ""
+  _badge.textContent = pct > 0 ? formatUsagePercent(pct) : ""
   _badge.classList.toggle("hidden", pct === 0)
 }
 
@@ -200,7 +220,7 @@ function _render(container: HTMLElement, usage: ContextUsage | null): void {
   let criticalHtml = ""
   if (color === "critical") {
     criticalHtml = `<div class="ctx-critical-banner" role="alert">
-      <span aria-hidden="true">⚠</span> Context nearly full (${usage.percent}%) — consider compacting or starting a new session.
+      <span aria-hidden="true">⚠</span> Context nearly full (${escapeHtml(formatUsagePercent(usage.percent))}) — consider compacting or starting a new session.
     </div>`
   }
 
@@ -265,7 +285,7 @@ function _render(container: HTMLElement, usage: ContextUsage | null): void {
           stroke-dasharray="${circumference.toFixed(2)}"
           stroke-dashoffset="${dashOffset.toFixed(2)}"
           transform="rotate(-90 28 28)"/>
-        <text class="cup-ring-label" x="28" y="33" text-anchor="middle" font-size="10">${pct}%</text>
+        <text class="cup-ring-label" x="28" y="33" text-anchor="middle" font-size="10">${escapeHtml(formatUsagePercent(usage.percent))}</text>
       </svg>
       <div class="cup-header-text">
         <div class="cup-summary-text">${escapeHtml(summaryText)}</div>

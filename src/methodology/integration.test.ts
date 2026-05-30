@@ -110,7 +110,14 @@ describe('Methodology Integration — classification → selection → routing',
     const advisory = router.recommendModel(
       task,
       'bmad-lite',
-      { recommendedTier: 'S' },
+      {
+        methodology: 'bmad-lite',
+        recommendedTier: 'S',
+        promptStrategy: 'plan-then-execute',
+        executionPattern: 'hybrid',
+        confidence: 0.9,
+        matchedRule: null,
+      },
       mockProfiles,
       { S: ['test/model-s'], A: ['test/model-a'], B: ['test/model-b'], C: ['test/model-c'] },
     );
@@ -118,6 +125,66 @@ describe('Methodology Integration — classification → selection → routing',
     assert.equal(advisory.recommendedTier, 'S');
     assert.equal(advisory.recommendedModel, 'test/model-s');
     assert.deepEqual(advisory.fallbackChain.map((entry) => entry.tier), ['S']);
+  });
+
+  it('recommends a C-tier model when start tier is C', () => {
+    const router = new CascadeRouter(
+      { maxEscalations: 2, qualityThresholds: { explain: 0.6 }, maxTokensPerRequest: 50000, maxCostPerRequest: 5, fallbackChain: [] },
+    );
+    const advisory = router.recommendModel(
+      {
+        type: 'explain',
+        complexity: { depth: 0.2, width: 0.2, ambiguity: 0.1, fileScope: 0.1 },
+        modalities: { needsVision: false, needsDiagram: false, needsCodeExec: false },
+        constraints: { speedPreferred: false, qualityPreferred: false },
+        signals: { queryLength: 20, hasCodeSnippet: false, hasFilePath: false, hasAmbiguityMarkers: false, hasImageAttachment: false, subQuestionCount: 1 },
+      },
+      'direct-execution',
+      {
+        methodology: 'direct-execution',
+        recommendedTier: 'C',
+        promptStrategy: 'direct',
+        executionPattern: 'sequential',
+        confidence: 0.6,
+        matchedRule: null,
+      },
+      mockProfiles,
+      { S: ['test/model-s'], A: ['test/model-a'], B: ['test/model-b'], C: ['test/model-c'] },
+    );
+
+    assert.notEqual(advisory.recommendedModel, '');
+    assert.equal(advisory.recommendedTier, 'C');
+    assert.ok(advisory.recommendedModel.includes('model-c'), `expected C-tier model, got ${advisory.recommendedModel}`);
+  });
+
+  it('returns empty recommendation when no models exist for tier', () => {
+    const router = new CascadeRouter(
+      { maxEscalations: 2, qualityThresholds: { explain: 0.6 }, maxTokensPerRequest: 50000, maxCostPerRequest: 5, fallbackChain: [] },
+    );
+    const advisory = router.recommendModel(
+      {
+        type: 'explain',
+        complexity: { depth: 0.2, width: 0.2, ambiguity: 0.1, fileScope: 0.1 },
+        modalities: { needsVision: false, needsDiagram: false, needsCodeExec: false },
+        constraints: { speedPreferred: false, qualityPreferred: false },
+        signals: { queryLength: 20, hasCodeSnippet: false, hasFilePath: false, hasAmbiguityMarkers: false, hasImageAttachment: false, subQuestionCount: 1 },
+      },
+      'direct-execution',
+      {
+        methodology: 'direct-execution',
+        recommendedTier: 'S',
+        promptStrategy: 'direct',
+        executionPattern: 'sequential',
+        confidence: 0.6,
+        matchedRule: null,
+      },
+      [],
+      { S: [], A: [], B: [], C: [] },
+    );
+
+    assert.equal(advisory.recommendedModel, '');
+    assert.equal(advisory.recommendedTier, 'S');
+    assert.equal(advisory.fallbackChain.length, 0);
   });
 
   it('updateConfig applies cascade changes to future recommendations', () => {

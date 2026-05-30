@@ -522,6 +522,7 @@ export interface RenderOptions {
   messageId?: string
   postMessage?: (msg: Record<string, unknown>) => void
   mode?: string
+  role?: string
   turnIndex?: number
   sessionId?: string
   skipHeader?: boolean
@@ -635,7 +636,7 @@ function renderTextBlock(block: Block, opts: RenderOptions): HTMLElement | null 
   if (text.startsWith("[methodology]")) return null
   if (!text.trim()) return null
 
-  const isPlanModePlan = opts?.mode === "plan" && detectPlanProse(text)
+  const isPlanModePlan = opts?.mode === "plan" && opts?.role === "assistant" && detectPlanProse(text)
   const div = createTextBlockContainer(isPlanModePlan)
   if (appendMentionRichText(div, text, opts)) return div
   appendMarkdownText(div, text, isPlanModePlan, opts)
@@ -1585,6 +1586,8 @@ function renderDiffBlock(block: Block, opts: RenderOptions): HTMLElement | null 
 function renderPermissionBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
   const wrapper = document.createElement("div")
   wrapper.className = "permission-block"
+  wrapper.role = "region"
+  wrapper.ariaLabel = "Permission request"
 
   const text = document.createElement("div")
   text.className = "permission-text"
@@ -1593,13 +1596,17 @@ function renderPermissionBlock(block: Block, _opts: RenderOptions): HTMLElement 
 
   const actions = document.createElement("div")
   actions.className = "permission-actions"
+  actions.role = "group"
+  actions.ariaLabel = "Permission response options"
 
   if (block.permissionId) {
     const allowBtn = document.createElement("button")
     allowBtn.className = "permission-btn permission-btn--allow"
     allowBtn.textContent = "Allow"
+    allowBtn.ariaLabel = "Allow this action once"
     allowBtn.addEventListener("click", () => {
       window.dispatchEvent(new CustomEvent("oc-permission", { detail: { sessionId: block.sessionId, permissionId: block.permissionId, response: "once", permissionType: block.permissionType, pattern: block.pattern } }))
+      wrapper.ariaLive = "polite"
       actions.replaceChildren(document.createTextNode("Allowed"))
     })
     actions.appendChild(allowBtn)
@@ -1608,8 +1615,10 @@ function renderPermissionBlock(block: Block, _opts: RenderOptions): HTMLElement 
       const alwaysBtn = document.createElement("button")
       alwaysBtn.className = "permission-btn permission-btn--allow"
       alwaysBtn.textContent = "Always"
+      alwaysBtn.ariaLabel = "Always allow this pattern"
       alwaysBtn.addEventListener("click", () => {
         window.dispatchEvent(new CustomEvent("oc-permission", { detail: { sessionId: block.sessionId, permissionId: block.permissionId, response: "always", permissionType: block.permissionType, pattern: block.pattern } }))
+        wrapper.ariaLive = "polite"
         actions.replaceChildren(document.createTextNode("Always allowed"))
       })
       actions.appendChild(alwaysBtn)
@@ -1618,8 +1627,10 @@ function renderPermissionBlock(block: Block, _opts: RenderOptions): HTMLElement 
     const denyBtn = document.createElement("button")
     denyBtn.className = "permission-btn permission-btn--deny"
     denyBtn.textContent = "Deny"
+    denyBtn.ariaLabel = "Deny this action"
     denyBtn.addEventListener("click", () => {
       window.dispatchEvent(new CustomEvent("oc-permission", { detail: { sessionId: block.sessionId, permissionId: block.permissionId, response: "reject", permissionType: block.permissionType, pattern: block.pattern } }))
+      wrapper.ariaLive = "polite"
       actions.replaceChildren(document.createTextNode("Denied"))
     })
     actions.appendChild(denyBtn)

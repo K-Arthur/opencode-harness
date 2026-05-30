@@ -18,6 +18,7 @@ import {
   AuditEntry,
   ClassifiedError,
   ErrorClass,
+  MethodologySelection,
 } from './types.js';
 import { QualityEvaluator } from './QualityEvaluator.js';
 
@@ -103,52 +104,55 @@ export class CascadeRouter {
   recommendModel(
     task: TaskClassification,
     methodology: MethodologyId,
-    selection: { recommendedTier: ModelTier },
+    selection: MethodologySelection,
     modelProfiles: ModelProfile[],
     modelTiers: Record<ModelTier, string[]>
   ): AdvisoryResult {
-    const chain = this.buildRecommendationChain(task, modelProfiles, modelTiers);
+    const chain = this.buildChain(task, modelProfiles, modelTiers);
     const startTier = selection.recommendedTier;
-    const eligibleChain = chain.filter((entry) => TIER_RANK[entry.tier] >= TIER_RANK[startTier]);
+    const startRank = TIER_RANK[startTier] ?? 0;
+    const eligibleChain = chain.filter((entry) => TIER_RANK[entry.tier] >= startRank);
 
-    let recommendedModel = eligibleChain.length > 0 ? eligibleChain[0]!.modelId : '';
-    let recommendedTier = startTier;
-    let reasoning = `Task type "${task.type}" with methodology "${methodology}" suggests tier ${startTier}.`;
-
-    if (eligibleChain.length > 0) {
-      const entry = eligibleChain[0]!;
-      recommendedModel = entry.modelId;
-      recommendedTier = entry.tier;
-      reasoning = `Task "${task.type}" recommends tier ${startTier}. Selected ${entry.modelId} (tier ${entry.tier}) based on capability matching.`;
+    if (eligibleChain.length === 0) {
+      return {
+        recommendedModel: '',
+        recommendedTier: startTier,
+        reasoning: `Task "${task.type}" with methodology "${methodology}" suggests tier ${startTier}. No matching models available in this or higher tiers.`,
+        fallbackChain: [],
+        estimatedCostPer1kTokens: 0,
+      };
     }
 
-    if (task.modalities.needsVision) {
-      reasoning += ' Vision capability required — models without vision excluded.';
-    }
+    let chosen = eligibleChain[0]!;
 
     if (task.constraints.speedPreferred) {
+      let bestSpeed = -1;
       for (const entry of eligibleChain) {
         const profile = modelProfiles.find(p => p.id === entry.modelId);
-        if (profile && profile.performance.tokensPerSecond > 100) {
-          recommendedModel = entry.modelId;
-          recommendedTier = entry.tier;
-          reasoning += ' Speed-preferred constraint applied — selected faster model.';
-          break;
+        if (profile && profile.performance.tokensPerSecond > bestSpeed) {
+          bestSpeed = profile.performance.tokensPerSecond;
+          chosen = entry;
         }
       }
     }
 
-    const profile = modelProfiles.find(p => p.id === recommendedModel);
+    const profile = modelProfiles.find(p => p.id === chosen.modelId);
     const estimatedCostPer1kTokens = profile
       ? (profile.performance.costPerInputToken + profile.performance.costPerOutputToken) * 1000
       : 0;
+
+    let reasoning = `Task "${task.type}" recommends tier ${startTier}. Selected ${chosen.modelId} (tier ${chosen.tier}) based on`;
+    reasoning += task.constraints.speedPreferred ? ' maximum throughput.' : ' capability matching.';
+    if (task.modalities.needsVision) {
+      reasoning += ' Vision capability required — models without vision excluded.';
+    }
 
     this.logAudit({
       traceId: this.generateTraceId(),
       timestamp: new Date(),
       intent: `${task.type}:${methodology}`,
       methodology,
-      model: recommendedModel,
+      model: chosen.modelId,
       planHash: '',
       status: 'success',
       quality: 0,
@@ -159,8 +163,8 @@ export class CascadeRouter {
     });
 
     return {
-      recommendedModel,
-      recommendedTier,
+      recommendedModel: chosen.modelId,
+      recommendedTier: chosen.tier,
       reasoning,
       fallbackChain: eligibleChain.slice(0, this.config.maxEscalations + 1),
       estimatedCostPer1kTokens,
@@ -172,7 +176,7 @@ export class CascadeRouter {
     modelProfiles: ModelProfile[],
     modelTiers: Record<ModelTier, string[]>
   ): Array<{ modelId: string; tier: ModelTier; reason: string }> {
-    const tierOrder: ModelTier[] = ['B', 'A', 'S'];
+    const tierOrder: ModelTier[] = ['C', 'B', 'A', 'S'];
     const chain: Array<{ modelId: string; tier: ModelTier; reason: string }> = [];
 
     for (const tier of tierOrder) {
@@ -184,7 +188,7 @@ export class CascadeRouter {
         chain.push({
           modelId,
           tier,
-          reason: `Tier ${tier} — ${profile.name} (capability: ${((profile.capabilities.reasoning + profile.capabilities.coding) / 2 * 100).toFixed(0)}%)`,
+          reason: `Tier ${tier} — ${profile.name} (capability: ${((profile.capabilities.reasoning + profile.capabilities.coding) / 2 * 100).toFixed(1)}%)`,
         });
       }
     }
@@ -192,13 +196,7 @@ export class CascadeRouter {
     return chain;
   }
 
-  private buildRecommendationChain(
-    task: TaskClassification,
-    modelProfiles: ModelProfile[],
-    modelTiers: Record<ModelTier, string[]>
-  ): Array<{ modelId: string; tier: ModelTier; reason: string }> {
-    return this.buildChain(task, modelProfiles, modelTiers);
-  }
+  // ─── Route (requires ModelExecutor) ────────────────────────────────────────
 
   /**
    * Route a task through the cascade routing pipeline.
@@ -225,12 +223,7 @@ export class CascadeRouter {
     const startTime = Date.now();
 
     // 1. Build escalation chain from model tiers
-    const escalationChain = this.buildEscalationChain(
-      task,
-      methodology,
-      modelProfiles,
-      modelTiers
-    );
+    const escalationChain = this.buildChain(task, modelProfiles, modelTiers).map(e => e.modelId);
 
     if (escalationChain.length === 0) {
       throw this.classifyError(
@@ -379,15 +372,6 @@ export class CascadeRouter {
    * Build the escalation chain: ordered list of models to try.
    * Starts with the recommended tier, escalates upward.
    */
-  private buildEscalationChain(
-    task: TaskClassification,
-    _methodology: MethodologyId,
-    modelProfiles: ModelProfile[],
-    modelTiers: Record<ModelTier, string[]>
-  ): string[] {
-    return this.buildChain(task, modelProfiles, modelTiers).map(e => e.modelId);
-  }
-
   // ─── Audit Logging ──────────────────────────────────────────────────────
 
   private static readonly MAX_AUDIT_ENTRIES = 1000;

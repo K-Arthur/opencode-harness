@@ -130,8 +130,13 @@ export class QuotaMonitor {
     const tokenPercentage = this.calculateTokenPercentage(state);
     const requestPercentage = this.calculateRequestPercentage(state);
 
+    const knownPercentages = [tokenPercentage, requestPercentage].filter(
+      (v): v is number => v !== undefined
+    );
+    if (knownPercentages.length === 0) return warnings;
+
     // Use the more restrictive percentage
-    const percentage = Math.min(tokenPercentage, requestPercentage);
+    const percentage = Math.min(...knownPercentages);
 
     // Check each warning threshold
     for (const threshold of this.config.warningThresholds) {
@@ -151,16 +156,16 @@ export class QuotaMonitor {
   /**
    * Calculate token usage percentage
    */
-  private calculateTokenPercentage(state: QuotaState): number {
-    if (!state.limitTokens || state.limitTokens <= 0) return 100;
+  private calculateTokenPercentage(state: QuotaState): number | undefined {
+    if (!state.limitTokens || state.limitTokens <= 0) return undefined;
     return (state.remainingTokens / state.limitTokens) * 100;
   }
 
   /**
    * Calculate request usage percentage
    */
-  private calculateRequestPercentage(state: QuotaState): number {
-    if (!state.limitRequests || state.limitRequests <= 0 || state.remainingRequests === undefined) return 100;
+  private calculateRequestPercentage(state: QuotaState): number | undefined {
+    if (!state.limitRequests || state.limitRequests <= 0 || state.remainingRequests === undefined) return undefined;
     return (state.remainingRequests / state.limitRequests) * 100;
   }
 
@@ -283,7 +288,12 @@ export class QuotaMonitor {
   private getCurrentWarningLevel(state: EnhancedQuotaState): number {
     const tokenPercentage = this.calculateTokenPercentage(state);
     const requestPercentage = this.calculateRequestPercentage(state);
-    const percentage = Math.min(tokenPercentage, requestPercentage);
+    const knownPercentages = [tokenPercentage, requestPercentage].filter(
+      (v): v is number => v !== undefined
+    );
+    if (knownPercentages.length === 0) return 100;
+
+    const percentage = Math.min(...knownPercentages);
 
     for (let i = 0; i < this.config.warningThresholds.length; i++) {
       const threshold = this.config.warningThresholds[i];

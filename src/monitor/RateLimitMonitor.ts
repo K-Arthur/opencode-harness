@@ -1,120 +1,15 @@
 import * as vscode from "vscode"
+import {
+  safeParseInt,
+  parseDuration,
+  ADAPTERS,
+  RateLimitState,
+  SerializableRateLimitState,
+  type RateLimitAdapter,
+} from "./rateLimitCore"
 
-export interface RateLimitState {
-  provider: string
-  remainingTokens?: number
-  limitTokens?: number
-  remainingRequests?: number
-  limitRequests?: number
-  remainingInputTokens?: number
-  limitInputTokens?: number
-  remainingOutputTokens?: number
-  limitOutputTokens?: number
-  usedInputTokens?: number
-  usedOutputTokens?: number
-  usedTokens?: number
-  usedCost?: number
-  resetAt?: Date
-  lastUpdated: Date
-}
-
-export interface SerializableRateLimitState extends Omit<RateLimitState, "resetAt" | "lastUpdated"> {
-  resetAt?: string
-  lastUpdated: string
-}
-
-export interface RateLimitAdapter {
-  name: string
-  parseFromHeaders(headers: Record<string, string>): RateLimitState | null
-}
-
-export const OPENAI_ADAPTER: RateLimitAdapter = {
-  name: "openai",
-  parseFromHeaders(headers): RateLimitState | null {
-    const remainingReqs = headers["x-ratelimit-remaining-requests"]
-    const remainingTokens = headers["x-ratelimit-remaining-tokens"]
-    const limitReqs = headers["x-ratelimit-limit-requests"]
-    const limitToks = headers["x-ratelimit-limit-tokens"]
-    const resetReqs = headers["x-ratelimit-reset-requests"]
-
-    if (!remainingReqs && !remainingTokens) return null
-
-    return {
-      provider: "openai",
-      remainingRequests: remainingReqs ? parseInt(remainingReqs, 10) : undefined,
-      limitRequests: limitReqs ? parseInt(limitReqs, 10) : undefined,
-      remainingTokens: remainingTokens ? parseInt(remainingTokens, 10) : undefined,
-      limitTokens: limitToks ? parseInt(limitToks, 10) : undefined,
-      resetAt: resetReqs ? parseDuration(resetReqs) : undefined,
-      lastUpdated: new Date(),
-    }
-  },
-}
-
-export const ANTHROPIC_ADAPTER: RateLimitAdapter = {
-  name: "anthropic",
-  parseFromHeaders(headers): RateLimitState | null {
-    const remainingReqs = headers["anthropic-ratelimit-requests-remaining"]
-    const remainingTokens = headers["anthropic-ratelimit-tokens-remaining"]
-    const limitReqs = headers["anthropic-ratelimit-requests-limit"]
-    const limitToks = headers["anthropic-ratelimit-tokens-limit"]
-    const resetReqs = headers["anthropic-ratelimit-requests-reset"]
-    const remainingInput = headers["anthropic-ratelimit-input-tokens-remaining"]
-    const remainingOutput = headers["anthropic-ratelimit-output-tokens-remaining"]
-    const limitInput = headers["anthropic-ratelimit-input-tokens-limit"]
-    const limitOutput = headers["anthropic-ratelimit-output-tokens-limit"]
-
-    if (!remainingReqs && !remainingTokens && !remainingInput) return null
-
-    return {
-      provider: "anthropic",
-      remainingRequests: remainingReqs ? parseInt(remainingReqs, 10) : undefined,
-      limitRequests: limitReqs ? parseInt(limitReqs, 10) : undefined,
-      remainingTokens: remainingTokens ? parseInt(remainingTokens, 10) : undefined,
-      limitTokens: limitToks ? parseInt(limitToks, 10) : undefined,
-      remainingInputTokens: remainingInput ? parseInt(remainingInput, 10) : undefined,
-      remainingOutputTokens: remainingOutput ? parseInt(remainingOutput, 10) : undefined,
-      limitInputTokens: limitInput ? parseInt(limitInput, 10) : undefined,
-      limitOutputTokens: limitOutput ? parseInt(limitOutput, 10) : undefined,
-      resetAt: resetReqs ? new Date(resetReqs) : undefined,
-      lastUpdated: new Date(),
-    }
-  },
-}
-
-export const GENERIC_ADAPTER: RateLimitAdapter = {
-  name: "generic",
-  parseFromHeaders(headers): RateLimitState | null {
-    const remaining = headers["ratelimit-remaining"]
-    const limit = headers["ratelimit-limit"]
-    const reset = headers["ratelimit-reset"]
-
-    if (!remaining && !limit) return null
-
-    return {
-      provider: "generic",
-      remainingRequests: remaining ? parseInt(remaining, 10) : undefined,
-      limitRequests: limit ? parseInt(limit, 10) : undefined,
-      resetAt: reset ? new Date(reset) : undefined,
-      lastUpdated: new Date(),
-    }
-  },
-}
-
-export const ADAPTERS: RateLimitAdapter[] = [
-  ANTHROPIC_ADAPTER,
-  OPENAI_ADAPTER,
-  GENERIC_ADAPTER,
-]
-
-function parseDuration(duration: string): Date {
-  const match = duration.match(/^(\d+)([smhd])$/)
-  if (!match) return new Date(Date.now() + 60000)
-  const val = parseInt(match[1]!, 10)
-  const unit = match[2]!
-  const ms = { s: 1000, m: 60000, h: 3600000, d: 86400000 }[unit] || 60000
-  return new Date(Date.now() + val * ms)
-}
+export { safeParseInt, parseDuration, ADAPTERS, type RateLimitAdapter, type RateLimitState, type SerializableRateLimitState }
+export { OPENAI_ADAPTER, ANTHROPIC_ADAPTER, GENERIC_ADAPTER } from "./rateLimitCore"
 
 export class RateLimitMonitor {
   private _onStateChanged = new vscode.EventEmitter<RateLimitState | null>()
@@ -130,7 +25,6 @@ export class RateLimitMonitor {
   private cumulativeInputTokens = 0
   private cumulativeOutputTokens = 0
   private cumulativeCost = 0
-  private lastResetTime = Date.now()
   private cumulativeProvider = ""
   private warnedLowTokens = false
   private warnedExhausted = false
@@ -223,7 +117,6 @@ export class RateLimitMonitor {
       this.cumulativeInputTokens = 0
       this.cumulativeOutputTokens = 0
       this.cumulativeCost = 0
-      this.lastResetTime = Date.now()
       this.warnedLowTokens = false
       this.warnedExhausted = false
     }
@@ -232,17 +125,6 @@ export class RateLimitMonitor {
     this.cumulativeOutputTokens += outputTokens
     if (typeof cost === "number" && Number.isFinite(cost)) {
       this.cumulativeCost += cost
-    }
-
-    const elapsed = (Date.now() - this.lastResetTime) / 1000
-    const windowSeconds = 60
-    if (elapsed > windowSeconds) {
-      this.cumulativeInputTokens = inputTokens
-      this.cumulativeOutputTokens = outputTokens
-      this.cumulativeCost = typeof cost === "number" && Number.isFinite(cost) ? cost : 0
-      this.lastResetTime = Date.now()
-      this.warnedLowTokens = false
-      this.warnedExhausted = false
     }
 
     const limits = this.providerLimits[resolvedProvider]

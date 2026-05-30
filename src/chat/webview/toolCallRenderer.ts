@@ -12,6 +12,7 @@ export interface RenderOptions {
   messageId?: string
   postMessage?: (msg: Record<string, unknown>) => void
   mode?: string
+  role?: string
   collapseConfig?: import("./types").ToolCollapseConfig
 }
 
@@ -641,11 +642,17 @@ export function renderToolGroup(blocks: Block[], opts: RenderOptions): HTMLEleme
      return s === 'error' || b.error
    })
 
-  // Edge case: Collapse by default for groups with 2+ tools, unless error
-  const shouldCollapse = config.defaultCollapsed && !hasError && blocks.length >= config.collapseThreshold
+  // Edge case: Auto-expand if any tool is still running or pending
+  const hasActive = blocks.some(b => {
+    const s = b.state
+    return s === 'running' || s === 'pending'
+  })
+
+  // Edge case: Collapse by default for groups with 2+ tools, unless error or active
+  const shouldCollapse = config.defaultCollapsed && !hasError && !hasActive && blocks.length >= config.collapseThreshold
 
   const group = document.createElement("details")
-  group.className = `tool-call tool-group tool-call--${toolClass}${config.compactMode ? ' tool-group--compact' : ''}`
+  group.className = `tool-call tool-group tool-call--${toolClass} tool-group--${hasActive ? 'active' : 'idle'}${config.compactMode ? ' tool-group--compact' : ''}`
   group.dataset.blockId = `group-${tc?.id || Date.now()}`
   group.open = !shouldCollapse
 
@@ -694,7 +701,13 @@ export function renderToolGroup(blocks: Block[], opts: RenderOptions): HTMLEleme
 
   const count = document.createElement("span")
   count.className = "tool-group-count"
-  count.textContent = `${blocks.length} call${blocks.length > 1 ? 's' : ''}`
+  count.setAttribute("aria-live", "polite")
+  const runningCount = blocks.filter(b => {
+    const s = b.state
+    return s === 'running' || s === 'pending'
+  }).length
+  const baseCount = `${blocks.length} call${blocks.length > 1 ? 's' : ''}`
+  count.textContent = runningCount > 0 ? `${baseCount} (${runningCount} running)` : baseCount
   summary.appendChild(count)
 
    const completed = blocks.filter(b => {

@@ -302,4 +302,32 @@ describe("stream.ts", () => {
       restore()
     }
   })
+
+  it("preserves authoritative stream_end block order across text and tool runs", async () => {
+    const restore = installDom()
+    try {
+      const { handleStreamStart, handleStreamEnd } = await import("./streamHandlers")
+      const harness = createHarness()
+      const saveState = () => {}
+
+      handleStreamStart(harness.state, harness.els as any, harness.messages, "resp-ordered")
+      handleStreamEnd(harness.state, harness.els as any, harness.messages, saveState, "resp-ordered", [
+        { type: "text", text: "First I ran a command." },
+        { type: "tool-call", id: "tool-1", name: "bash", class: "exec", state: "result", result: "ok" },
+        { type: "text", text: "Then I edited the file." },
+        { type: "tool-call", id: "tool-2", name: "edit", class: "write", state: "result", result: "ok" },
+      ])
+
+      const assistant = harness.messages.find((message) => message.id === "resp-ordered")
+      assert.deepEqual(
+        assistant?.blocks.map((block: any) => block.type),
+        ["text", "tool-call", "text", "tool-call"],
+        "final server blocks must keep text/tool/text/tool order",
+      )
+      assert.equal(assistant?.blocks[0]?.text, "First I ran a command.")
+      assert.equal(assistant?.blocks[2]?.text, "Then I edited the file.")
+    } finally {
+      restore()
+    }
+  })
 })

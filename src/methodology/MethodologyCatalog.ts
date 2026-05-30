@@ -120,6 +120,19 @@ export const METHODOLOGY_RULES: MethodologyRule[] = [
     executionPattern: 'sequential',
   },
 
+  // ── Complex but contained generation (high complexity, low file scope) ─
+  {
+    when: {
+      taskTypes: ['generate'],
+      minComplexity: 0.6,
+      maxFileScope: 0.4,
+    },
+    methodology: 'bmad-lite',
+    recommendedTier: 'S',
+    promptStrategy: 'plan-then-execute',
+    executionPattern: 'hybrid',
+  },
+
   // ── Simple generation (low complexity, single file) ───────────────────
   {
     when: {
@@ -298,6 +311,14 @@ export const PROMPT_TEMPLATES: Record<PromptStrategy, {
   },
 };
 
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const CONFIDENCE_BOUNDARY_THRESHOLD = 0.1;
+const BASE_CONFIDENCE = 0.8;
+const AMBIGUITY_PENALTY_FACTOR = 0.2;
+const MIN_CONFIDENCE = 0.3;
+const MAX_CONFIDENCE = 1.0;
+
 // ─── Methodology Catalog ────────────────────────────────────────────────────
 
 export class MethodologyCatalog {
@@ -408,22 +429,22 @@ export class MethodologyCatalog {
     classification: TaskClassification
   ): number {
     const overall = this.calculateOverallComplexity(classification);
-    let confidence = 0.8; // base confidence for a match
+    let confidence = BASE_CONFIDENCE;
 
     // Reduce confidence if task is near a boundary
     if (rule.when.minComplexity !== undefined) {
       const distance = overall - rule.when.minComplexity;
-      if (distance < 0.1) confidence -= 0.1;
+      if (distance < CONFIDENCE_BOUNDARY_THRESHOLD) confidence -= CONFIDENCE_BOUNDARY_THRESHOLD;
     }
     if (rule.when.maxComplexity !== undefined) {
       const distance = rule.when.maxComplexity - overall;
-      if (distance < 0.1) confidence -= 0.1;
+      if (distance < CONFIDENCE_BOUNDARY_THRESHOLD) confidence -= CONFIDENCE_BOUNDARY_THRESHOLD;
     }
 
     // Reduce confidence for ambiguous tasks
-    confidence -= classification.complexity.ambiguity * 0.2;
+    confidence -= classification.complexity.ambiguity * AMBIGUITY_PENALTY_FACTOR;
 
-    return Math.max(0.3, Math.min(1.0, confidence));
+    return Math.max(MIN_CONFIDENCE, Math.min(MAX_CONFIDENCE, confidence));
   }
 
   /**
@@ -438,28 +459,44 @@ export class MethodologyCatalog {
 
   /**
    * Add or update a rule at runtime.
+   * Only removes an existing rule that shares the exact same `when` conditions,
+   * preventing destruction of sibling rules with the same methodology.
    */
   setRule(rule: MethodologyRule): void {
-    // Remove existing rule with same methodology
-    this.rules = this.rules.filter((r) => r.methodology !== rule.methodology);
-    // Insert in sorted position (by specificity)
+    const whenKey = JSON.stringify(rule.when);
+    this.rules = this.rules.filter((r) => JSON.stringify(r.when) !== whenKey);
     this.rules.push(rule);
     this.rules.sort((a, b) => {
       const aSpecificity = this.ruleSpecificity(a);
       const bSpecificity = this.ruleSpecificity(b);
-      return bSpecificity - aSpecificity; // most specific first
+      return bSpecificity - aSpecificity;
     });
   }
 
   private ruleSpecificity(rule: MethodologyRule): number {
     let score = 0;
     if (rule.when.taskTypes && rule.when.taskTypes.length > 0) score += 2;
-    if (rule.when.minComplexity !== undefined) score += 1;
-    if (rule.when.maxComplexity !== undefined) score += 1;
-    if (rule.when.needsVision !== undefined) score += 1;
-    if (rule.when.minFileScope !== undefined) score += 1;
-    if (rule.when.maxFileScope !== undefined) score += 1;
     if (rule.when.taskTypes && rule.when.taskTypes.length > 1) score += 1;
+    if (rule.when.needsVision !== undefined) score += 1;
+
+    const hasMinC = rule.when.minComplexity !== undefined;
+    const hasMaxC = rule.when.maxComplexity !== undefined;
+    if (hasMinC && hasMaxC) {
+      const range = rule.when.maxComplexity! - rule.when.minComplexity!;
+      score += 2 + Math.max(0, 1 - range);
+    } else if (hasMinC || hasMaxC) {
+      score += 1.5;
+    }
+
+    const hasMinFS = rule.when.minFileScope !== undefined;
+    const hasMaxFS = rule.when.maxFileScope !== undefined;
+    if (hasMinFS && hasMaxFS) {
+      const range = rule.when.maxFileScope! - rule.when.minFileScope!;
+      score += 2 + Math.max(0, 1 - range);
+    } else if (hasMinFS || hasMaxFS) {
+      score += 1.5;
+    }
+
     return score;
   }
 }

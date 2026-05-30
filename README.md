@@ -25,7 +25,7 @@ OpenCode includes advanced features like cost tracking, theme customization, gra
 - **Multi-Model Support:** Use Claude, GPT, Gemini, or 75+ other providers
 - **Cost Tracking:** Monitor your AI usage and optimize spending
 - **Theme Customization:** Match your editor's look or choose from presets
-- **Permission Modes:** Choose how much autonomy the AI has (Plan, Auto, Build)
+- **Permission Modes:** Choose how much autonomy the AI has (Plan, Build, Auto)
 - **Privacy-First:** Your code stays local, no data storage
 - **Open Source:** Fully transparent, customizable, and free
 
@@ -37,7 +37,7 @@ OpenCode includes advanced features like cost tracking, theme customization, gra
 | **Multi-Model Support** | ✅ 75+ providers | ❌ GitHub only | ❌ Claude only | ✅ Multiple |
 | **Cost Tracking** | ✅ Built-in | ❌ No | ❌ No | ❌ No |
 | **Theme Customization** | ✅ Full control | ❌ No | ❌ No | ❌ No |
-| **Permission Modes** | ✅ Plan/Auto/Build | ⚠️ Limited | ⚠️ Limited | ❌ No |
+| **Permission Modes** | ✅ Plan/Build/Auto | ⚠️ Limited | ⚠️ Limited | ❌ No |
 | **Privacy-First** | ✅ No code storage | ⚠️ Data sent to GitHub | ⚠️ Data sent to Anthropic | ⚠️ Varies |
 | **VS Code Integration** | ✅ Native | ✅ Native | ✅ Native | ✅ Native |
 | **Free to Use** | ✅ Yes (pay for API) | ❌ Subscription | ❌ Subscription | ✅ Yes (pay for API) |
@@ -62,7 +62,7 @@ OpenCode includes advanced features like cost tracking, theme customization, gra
 - **Session History** — Searchable conversation history with resume support in the chat surface
 - **@-Mentions** — Reference files, folders, problems, URLs, and terminal output in your prompts, including path-aware file search such as `@src/util`
 - **Secure Context Attachments** — Add files or editor selections from VS Code context menus with sensitive-file and prompt-injection warnings
-- **Permission Modes** — Normal (ask per action), Plan (review-only), Auto (apply without asking)
+- **Permission Modes** — Build (standard approval flow), Plan (review-only), Auto (apply without asking after confirmation)
 
 ### Phase 1: MCP Server Management
 - **MCP Server Manager** — Add, update, remove, and toggle MCP servers directly from the chat interface
@@ -124,6 +124,9 @@ OpenCode now supports multiple concurrent AI workers through a tabbed interface:
 | `Ctrl+Shift+Tab` | Previous tab |
 | `Ctrl+Alt+O` | Toggle OpenCode chat focus |
 | `Ctrl+Alt+N` | Start a new conversation |
+| `Ctrl/Cmd+Alt+1` | Switch active tab to Plan mode |
+| `Ctrl/Cmd+Alt+2` | Switch active tab to Build mode |
+| `Ctrl/Cmd+Alt+3` | Switch active tab to Auto mode |
 | `Alt+K` | Insert file reference (@-mention) |
 | `Escape` | Close dropdowns/modals, stop active AI session |
 | `Ctrl+Shift+Escape` | Stop active AI session |
@@ -391,9 +394,9 @@ OpenCode supports Claude (Anthropic), GPT (OpenAI), Gemini (Google), and 75+ oth
 Yes. OpenCode does not store your code or context data. Your code is processed by the AI provider you configure according to their privacy policy. OpenCode itself has zero-knowledge of your code.
 
 ### What are the permission modes?
-- **Plan Mode:** Review all changes before applying (safe for exploration)
-- **Auto Mode:** Agent applies changes automatically (faster but less control)
-- **Build Mode:** Full agent access to read, write, and execute (use with caution)
+- **Plan Mode:** Uses the planning agent and blocks mutating permissions except direct writes to `.opencode/plans/*.md`; assistant planning output is visually marked as a proposed plan.
+- **Build Mode:** Uses the build agent with the standard approval flow for mutating actions.
+- **Auto Mode:** Uses the build agent and auto-approves permissions after a one-time confirmation.
 
 ## AI Safety & Limitations
 
@@ -408,8 +411,8 @@ OpenCode uses AI models to assist with coding tasks. Please note:
 
 ### Best Practices
 - Use Plan mode for exploratory work and learning
-- Review changes in Auto mode before applying
-- Use Build mode only in trusted environments with version control
+- Use Build mode when you want normal review/approval checkpoints
+- Use Auto mode only in trusted repositories with version control
 - Always test AI-generated code before deployment
 - Keep sensitive data (API keys, secrets) out of conversations
 - Use checkpoints for extension-managed diff accepts, and use message revert for OpenCode server-managed tool edits
@@ -816,6 +819,7 @@ The `.vsix` file will be created in the project root. It contains:
 OpenCode is built with accessibility as a first-class concern:
 
 - **Keyboard navigation**: Full support for Tab, Enter, Escape, arrow keys, and shortcuts
+- **Mode selector affordances**: Plan/Build/Auto entries include tooltips, ARIA labels, and `Ctrl/Cmd+Alt+1/2/3` shortcuts
 - **Focus management**: Visible `focus-visible` rings on all interactive elements (2px solid, offset 2px)
 - **Touch targets**: All interactive elements meet WCAG 2.5.5 minimum (24×24px)
 - **Reduced motion**: Respects `prefers-reduced-motion` — animations become instant fades

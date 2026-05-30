@@ -46,6 +46,17 @@ The welcome-page prompt path is covered as a first-class contract:
 The context-chip renderer must never throw from a partial element-ref object. If chip
 containers are unavailable, it logs and skips chip rendering so prompt submission can continue.
 
+## Plan Mode Rendering
+
+Plan-mode visual treatment is role-aware:
+
+- User messages always render as normal user prompts, even when their text contains
+  headings like "Proposed plan", numbered steps, or task-review instructions.
+- Assistant text may receive the `PROPOSED PLAN` treatment only when the session mode is
+  `plan` and the prose shape looks like a plan.
+- Diff review affordances remain separate from text styling: Plan-mode diffs show the
+  review label and "Approve & Apply" action, while Build and Auto use the normal diff flow.
+
 ## Markdown Styling
 
 Markdown is rendered with `markdown-it`, sanitized through DOMPurify, and constrained for
@@ -113,6 +124,9 @@ The host-to-webview `command_list` payload is partitioned before it reaches the 
 - `push_all_state`: Host tells the webview to perform a full state sync. The webview
   responds by sending `request_state_sync` (debounced at 300ms).
 - `push_visible_state`: Same as `push_all_state` — triggers a debounced state sync.
+- `mode_change_result`: Host acknowledgement for a `change_mode` request. When
+  `accepted` is false, the payload carries the previous mode so the webview can keep the
+  visible selector in sync after invalid payloads or cancelled Auto-mode confirmation.
 
 These replace the previous behavior where these messages were logged as "unknown host
 message type" and silently dropped.

@@ -74,7 +74,7 @@ export function buildSummaryText(tokens: number, maxTokens: number, pct: number)
     return `${tokStr} tok · set limit`
   }
   const maxStr = formatTokenCount(maxTokens)
-  return `${pct}% used · ${tokStr} / ${maxStr}`
+  return `${formatUsagePercent(pct)} used · ${tokStr} / ${maxStr}`
 }
 
 /**
@@ -82,7 +82,16 @@ export function buildSummaryText(tokens: number, maxTokens: number, pct: number)
  * Used when driving CSS widths and SVG arcs (overflow would break layout).
  */
 export function clampPercent(pct: number): number {
+  if (!Number.isFinite(pct)) return 0
   return Math.max(0, Math.min(100, pct))
+}
+
+export function formatUsagePercent(pct: number): string {
+  const p = typeof pct === "number" && Number.isFinite(pct) ? pct : 0
+  if (p <= 0) return "0%"
+  if (p < 1) return "<1%"
+  const rounded = Math.round(p * 10) / 10
+  return Number.isInteger(rounded) ? `${rounded.toFixed(0)}%` : `${rounded.toFixed(1)}%`
 }
 
 /**

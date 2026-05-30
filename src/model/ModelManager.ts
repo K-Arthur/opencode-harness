@@ -273,9 +273,14 @@ export class ModelManager {
       }
 
       const models: ModelInfo[] = []
-      const providers = Array.isArray(data) ? data : data.providers || []
+      const providersRaw = Array.isArray(data) ? data : data?.providers
+      if (!Array.isArray(providersRaw)) {
+        throw new Error(`Unexpected server response shape: expected array or { providers: [...] }, got ${typeof data}`)
+      }
+      const providers = providersRaw
       let unresolvedContextWindowCount = 0
       for (const provider of providers) {
+        if (!provider || typeof provider !== 'object' || !provider.id) continue
         const providerModels = Array.isArray(provider.models)
           ? provider.models
           : Object.entries(provider.models || {}).map(([id, model]: [string, any]) => ({
@@ -368,8 +373,18 @@ export class ModelManager {
         clearTimeout(timeout)
         if (code === 0 && stdout.trim()) {
           try {
-            const lines = stdout.trim().split("\n").filter(l => l.trim())
-             this._models = lines.map((line) => {
+            const rawLines = stdout.trim().split("\n").filter(l => l.trim())
+            const validLines: string[] = []
+            for (const line of rawLines) {
+              const trimmed = line.trim()
+              // Accept "provider/modelId" or bare "modelId" format
+              const hasValidFormat = trimmed.includes("/")
+                ? /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(trimmed)
+                : /^[a-zA-Z0-9_.-]+$/.test(trimmed)
+              if (hasValidFormat) validLines.push(trimmed)
+              else log.warn(`Skipping malformed CLI model line: "${trimmed.slice(0, 60)}"`)
+            }
+            this._models = validLines.map((line) => {
               const trimmed = line.trim()
               const slashIdx = trimmed.indexOf("/")
               if (slashIdx >= 0) {

@@ -654,6 +654,12 @@ function appendOrFoldToolDOM(bubble: HTMLElement, newToolBlock: Block, allBlocks
       if (blockEl) {
         blockEl.classList.add("tool-group-child")
         childrenContainer.appendChild(blockEl)
+        // Auto-expand the group if the new tool is running/pending
+        const newState = (newToolBlock as ToolCallBlock).state
+        const groupDetails = lastEl as HTMLDetailsElement
+        if ((newState === 'running' || newState === 'pending') && !groupDetails.open) {
+          groupDetails.open = true
+        }
         updateToolGroupHeader(lastEl)
         return
       }
@@ -697,8 +703,30 @@ function appendOrFoldToolDOM(bubble: HTMLElement, newToolBlock: Block, allBlocks
 function updateToolGroupHeader(groupEl: HTMLElement): void {
   const children = groupEl.querySelectorAll<HTMLElement>(".tool-group-children > .tool-group-child")
   const count = children.length
+
+  // Count running/pending tools for header display and auto-expand
+  const runningCount = Array.from(children).filter((child) =>
+    child.classList.contains("tool-call--running") || child.classList.contains("tool-call--pending")
+  ).length
+
   const countEl = groupEl.querySelector(".tool-group-count")
-  if (countEl) countEl.textContent = `${count} call${count > 1 ? "s" : ""}`
+  if (countEl) {
+    const base = `${count} call${count > 1 ? "s" : ""}`
+    countEl.textContent = runningCount > 0 ? `${base} (${runningCount} running)` : base
+    countEl.setAttribute("aria-live", "polite")
+  }
+
+  // Auto-expand the group if any child is still active
+  const details = groupEl as HTMLDetailsElement
+  if (runningCount > 0 && !details.open) {
+    details.open = true
+    groupEl.classList.remove("tool-group--idle")
+    groupEl.classList.add("tool-group--active")
+  } else if (runningCount === 0 && groupEl.classList.contains("tool-group--active")) {
+    groupEl.classList.remove("tool-group--active")
+    groupEl.classList.add("tool-group--idle")
+  }
+
   // Refresh breakdown: count tool-class variants present in the group.
   const breakdownEl = groupEl.querySelector(".tool-group-breakdown")
   if (breakdownEl) {
@@ -747,6 +775,9 @@ export function handleToolUpdate(
       const text = toolBadgeText(update.state, update.error !== undefined)
       if (text) badge.textContent = text
     }
+    // Re-evaluate parent group header after tool state change
+    const parentGroup = toolEl.closest(".tool-group") as HTMLElement | null
+    if (parentGroup) updateToolGroupHeader(parentGroup)
   }
 
   if (update.args !== undefined) {
@@ -850,6 +881,10 @@ export function handleToolEnd(
   }
 
   if (!result.ok) toolEl.classList.add("tool-call--error")
+
+  // Re-evaluate parent group header after tool state change
+  const parentGroup = toolEl.closest(".tool-group") as HTMLElement | null
+  if (parentGroup) updateToolGroupHeader(parentGroup)
 }
 
 export function handleDiff(

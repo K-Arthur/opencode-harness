@@ -40,6 +40,16 @@ describe("WebviewEventRouter prompt validation", () => {
   })
 })
 
+describe("WebviewEventRouter context usage routing", () => {
+  it("registers a get_context_usage handler instead of only allowing the message type", () => {
+    assert.match(
+      source,
+      /\["get_context_usage",\s*\(/,
+      "get_context_usage must have a webview handler that posts the latest usage back to the frontend",
+    )
+  })
+})
+
 function validate(msg: Record<string, unknown>, msgType: string): boolean {
   return validateWebviewMessage(msg, msgType, {
     hasPromptContent: (payload) => {

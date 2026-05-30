@@ -44,7 +44,7 @@ OpenCode Harness is a VS Code extension that deeply integrates the opencode AI c
 - **FR-010**: Extension must track and display skill performance metrics (usage count, effectiveness score)
 - **FR-011**: Extension must handle URI scheme `vscode://opencode-harness/open` for deep linking
 - **FR-012**: Extension must gracefully degrade when opencode server is unavailable
-- **FR-013**: Extension must support keyboard shortcuts for tab management
+- **FR-013**: Extension must support keyboard shortcuts for tab and mode management
 - **FR-014**: Extension must persist chat history to workspace state
 
 ### Non-Functional Requirements

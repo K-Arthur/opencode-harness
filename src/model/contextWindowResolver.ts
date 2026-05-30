@@ -27,6 +27,21 @@ import { lookupContextWindow } from "./openRouterMetadata"
  */
 export const KNOWN_CONTEXT_WINDOWS: Readonly<Record<string, number>> = Object.freeze({})
 
+const UNBOUNDED_CONTEXT_WINDOW_SENTINEL = 1_000_000_000
+
+function isUsableServerContextWindow(value: unknown): value is number {
+  return typeof value === "number"
+    && Number.isFinite(value)
+    && value > 0
+    && value < UNBOUNDED_CONTEXT_WINDOW_SENTINEL
+}
+
+function isPlaceholderContextWindow(value: unknown): value is number {
+  return typeof value === "number"
+    && Number.isFinite(value)
+    && value >= UNBOUNDED_CONTEXT_WINDOW_SENTINEL
+}
+
 /**
  * Always returns undefined — there is no hardcoded fallback table. This
  * function is kept for backward source-compat with callers/tests; new
@@ -73,7 +88,7 @@ export function resolveContextWindow(
   serverValue?: number,
   options?: ResolveOptions,
 ): number | undefined {
-  if (typeof serverValue === "number" && serverValue > 0) return serverValue
+  if (isUsableServerContextWindow(serverValue)) return serverValue
 
   // Try the OpenRouter cache before logging a miss — same model weights
   // typically have the same window regardless of which provider hosts
@@ -84,8 +99,11 @@ export function resolveContextWindow(
   }
 
   if (modelKey) {
+    const reason = isPlaceholderContextWindow(serverValue)
+      ? `server reported placeholder limit.context=${serverValue}`
+      : "server did not report limit.context"
     options?.log?.(
-      `Context window for ${modelKey}: server did not report limit.context and no OpenRouter fallback hit — UI will hide the context bar until a manual override is set`,
+      `Context window for ${modelKey}: ${reason} and no OpenRouter fallback hit — UI will hide the context bar until a manual override is set`,
     )
   }
   return undefined

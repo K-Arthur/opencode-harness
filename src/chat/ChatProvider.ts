@@ -38,6 +38,7 @@ import { SkillPreferencesStore } from "../skills/SkillPreferencesStore"
 import { SkillTriggerEngine } from "../skills/SkillTriggerEngine"
 import { MethodologyAdvisor } from "../methodology/MethodologyAdvisor"
 import { BackfillService } from "./BackfillService"
+import { isPlanDocumentPattern, resolvePlanPermission } from "./modePolicy"
 
 type ServerEvent = { type: string; sessionId?: string; data?: unknown }
 
@@ -229,6 +230,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       handleConnectProvider: () => this.handleConnectProvider(),
       openOpenCodeConfigOrSettings: () => this.openOpenCodeConfigOrSettings(),
       hasAutoModeConfirmed: () => this.hasAutoModeConfirmed(),
+      setAutoModeConfirmed: (value) => this.setAutoModeConfirmed(value),
       showAutoModeConfirmation: (sid) => this.showAutoModeConfirmation(sid),
       replayLiveStreamsToWebview: () => this.replayLiveStreamsToWebview(),
       exportChat: () => { void vscode.commands.executeCommand("opencode-harness.exportConversation") },
@@ -972,22 +974,11 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
   }
 
   private shouldAutoRejectPlanPermission(data: { type?: string; pattern?: string | string[] }): boolean {
-    if (data.pattern && this.isPlanDocumentPattern(data.pattern)) return false
-    if (!data.type) return true
-
-    const type = data.type.toLowerCase()
-    return type === "edit" ||
-      type === "write" ||
-      type === "patch" ||
-      type === "apply_patch" ||
-      type === "multiedit" ||
-      type === "bash" ||
-      type === "external_directory"
+    return resolvePlanPermission(data) === "reject"
   }
 
   private isPlanDocumentPattern(pattern: string | string[]): boolean {
-    const patterns = Array.isArray(pattern) ? pattern : [pattern]
-    return patterns.some((p) => p.startsWith(".opencode/plans/") && p.endsWith(".md"))
+    return isPlanDocumentPattern(pattern)
   }
 
   private async handleAcceptDiff(blockId: string, sessionId?: string): Promise<void> {
@@ -1580,6 +1571,10 @@ private toUserErrorMessage(message: string): string {
 
   private hasAutoModeConfirmed(): boolean {
     return this.context.globalState.get<boolean>(this.AUTO_MODE_CONFIRMED_KEY, false)
+  }
+
+  private async setAutoModeConfirmed(value: boolean): Promise<void> {
+    await this.context.globalState.update(this.AUTO_MODE_CONFIRMED_KEY, value)
   }
 
   /** H6: One-time auto mode confirmation with "Don't show again" option */

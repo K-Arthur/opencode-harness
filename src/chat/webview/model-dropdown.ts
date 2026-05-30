@@ -249,6 +249,20 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     updateList()
   }
 
+  function getDisplayModels(): ModelInfo[] {
+    const enabledModels = models.filter((m) => m.enabled !== false)
+    const filteredModels = searchQuery
+      ? enabledModels.filter(
+          (m) =>
+            m.displayName.toLowerCase().includes(searchQuery) ||
+            m.provider.toLowerCase().includes(searchQuery) ||
+            m.id.toLowerCase().includes(searchQuery)
+        )
+      : enabledModels
+    const sortedModels = sortModels(filteredModels)
+    return sortedModels.slice(0, 40)
+  }
+
   function updateList() {
     els.modelDropdown.replaceChildren()
 
@@ -287,20 +301,7 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     searchContainer.appendChild(searchInput)
     els.modelDropdown.appendChild(searchContainer)
 
-    const enabledModels = models.filter((m) => m.enabled !== false)
-    const filteredModels = searchQuery
-      ? enabledModels.filter(
-          (m) =>
-            m.displayName.toLowerCase().includes(searchQuery) ||
-            m.provider.toLowerCase().includes(searchQuery) ||
-            m.id.toLowerCase().includes(searchQuery)
-        )
-      : enabledModels
-
-    const sortedModels = sortModels(filteredModels)
-    
-    // Performance limit for very large catalogs
-    const limitedModels = sortedModels.slice(0, 40)
+    const limitedModels = getDisplayModels()
     const byProvider = groupByProvider(limitedModels)
 
     let optionIndex = 0
@@ -325,23 +326,14 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     els.modelLabel.textContent = short || "Default"
     els.modelSelectorBtn.title = `Model: ${modelId || "Default"}`
 
-    // Re-sync .selected class on dropdown items to match the current model
+    const limitedModels = getDisplayModels()
+    if (limitedModels.length === 0) return
+
     const options = getOptions()
-    for (const opt of options) {
+    for (const opt of options) {  // Re-sync .selected class
       const optionIndexStr = opt.id?.replace("model-option-", "")
       if (optionIndexStr) {
         const optionIdx = Number(optionIndexStr)
-        const enabledModels = models.filter((m) => m.enabled !== false)
-        const filteredModels = searchQuery
-          ? enabledModels.filter(
-              (m) =>
-                m.displayName.toLowerCase().includes(searchQuery) ||
-                m.provider.toLowerCase().includes(searchQuery) ||
-                m.id.toLowerCase().includes(searchQuery)
-            )
-          : enabledModels
-        const sortedModels = sortModels(filteredModels)
-        const limitedModels = sortedModels.slice(0, 40)
         const model = limitedModels[optionIdx]
         if (model) {
           const optionFullId = `${model.provider}/${model.id}`

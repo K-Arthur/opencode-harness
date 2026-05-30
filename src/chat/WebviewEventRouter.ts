@@ -27,6 +27,8 @@ import type { SkillPreferencesStoreLike } from "../skills/SkillPreferencesStore"
 import { log } from "../utils/outputChannel"
 import { handleWebviewError } from "./utils/errorHandler"
 import { validateWebviewMessage } from "./WebviewMessageValidator"
+import { normalizeSessionMode, resolvePlanPermission } from "./modePolicy"
+import { normalizeTodoList } from "../session/eventHandlers/TodoUpdatedHandler"
 
 const crypto = globalThis.crypto
 
@@ -65,6 +67,7 @@ export interface WebviewEventRouterOptions {
   handleConnectProvider: () => Promise<void>
   openOpenCodeConfigOrSettings: () => Promise<void>
   hasAutoModeConfirmed: () => boolean
+  setAutoModeConfirmed?: (value: boolean) => Promise<void> | void
   showAutoModeConfirmation: (sessionId: string) => Promise<boolean>
   replayLiveStreamsToWebview: () => void
   exportChat: () => void
@@ -114,7 +117,7 @@ export class WebviewEventRouter {
     "toggle_diff_wrap", "toggle_thinking", "revert_diff",
     "context_history_request", "context_cost_estimate", "context_suggestions_request",
     "send_steer_prompt", "add_to_queue",
-    "get_todos", "toggle_todo", "delete_todo",
+    "get_todos",
     "get_skills", "toggle_skill", "search_skills",
     "get_changed_files", "open_file", "open_folder", "open_url",
     "get_subagent_activities", "cancel_subagent",
@@ -259,14 +262,28 @@ export class WebviewEventRouter {
     }],
     ["change_mode", async (msg: Record<string, unknown>, sessionId?: string) => {
       if (sessionId) {
-        const mode = msg.mode as string
+        const previousMode = normalizeSessionMode(
+          this.opts.tabManager.getTab(sessionId)?.mode ?? this.opts.sessionStore.get(sessionId)?.mode
+        ) ?? "build"
+        const mode = normalizeSessionMode(msg.mode)
+        if (!mode) {
+          this.opts.postMessage({ type: "mode_change_result", accepted: false, sessionId, mode: previousMode, reason: "invalid_mode" })
+          return
+        }
         if (mode === "auto" && !this.opts.hasAutoModeConfirmed()) {
           const confirmed = await this.opts.showAutoModeConfirmation(sessionId)
-          if (!confirmed) return
+          if (!confirmed) {
+            this.opts.postMessage({ type: "mode_change_result", accepted: false, sessionId, mode: previousMode, reason: "cancelled" })
+            return
+          }
         }
         this.opts.ensureLocalTab(sessionId)
-        this.opts.tabManager.setMode(sessionId, mode)
+        if (!this.opts.tabManager.setMode(sessionId, mode)) {
+          this.opts.postMessage({ type: "mode_change_result", accepted: false, sessionId, mode: previousMode, reason: "tab_not_found" })
+          return
+        }
         this.opts.sessionStore.updateMode(sessionId, mode)
+        this.opts.postMessage({ type: "mode_change_result", accepted: true, sessionId, mode })
       }
     }],
     ["set_model", (msg: Record<string, unknown>, sessionId?: string) => {
@@ -785,11 +802,12 @@ export class WebviewEventRouter {
         value: visible,
       })
     }],
-    ["update_setting", (msg: Record<string, unknown>) => {
+    ["update_setting", async (msg: Record<string, unknown>) => {
       const key = msg.key as string
       const value = msg.value
-      if (key === "skipModeWarning" && value === true) {
-        this.opts.postMessage({ type: "display_pref_update", pref: "skipModeWarning", value: true })
+      if ((key === "skipModeWarning" || key === "autoModeConfirmed") && value === true) {
+        await this.opts.setAutoModeConfirmed?.(true)
+        this.opts.postMessage({ type: "display_pref_update", pref: key, value: true })
       }
     }],
     ["model_favorite", (msg: Record<string, unknown>) => {
@@ -854,6 +872,28 @@ export class WebviewEventRouter {
         })
       }
     }],
+    ["get_context_usage", (msg: Record<string, unknown>, sessionId?: string) => {
+      const requestedId = typeof msg.sessionId === "string" && msg.sessionId.length > 0 ? msg.sessionId : undefined
+      const targetId = requestedId ?? sessionId ?? this.opts.sessionStore.activeId
+      if (!targetId) return
+
+      const usage = this.opts.contextMonitor.getCurrentUsage(targetId)
+      if (usage) {
+        this.opts.postMessage({ type: "context_usage", ...usage, sessionId: targetId })
+        return
+      }
+
+      const maxTokens = this.opts.contextMonitor.limit
+      if (maxTokens > 0) {
+        this.opts.postMessage({ type: "context_usage", sessionId: targetId, percent: 0, tokens: 0, maxTokens })
+      } else {
+        this.opts.postMessage({
+          type: "context_window_unknown",
+          sessionId: targetId,
+          modelId: this.opts.modelManager.model,
+        })
+      }
+    }],
     ["context_history_request", (msg: Record<string, unknown>) => {
       const days = typeof msg.days === "number" ? msg.days : 7
       const sessionId = msg.sessionId as string | undefined
@@ -906,35 +946,12 @@ export class WebviewEventRouter {
       }
       try {
         const raw = await this.opts.sessionManager.getSessionTodos(cliSessionId)
-        const todos = raw.map((t) => ({
-          id: t.id,
-          content: t.content,
-          status: t.status === "in_progress" ? "in-progress" : t.status,
-          createdAt: 0,
-        }))
+        const todos = normalizeTodoList(raw)
         this.opts.postMessage({ type: "todos_update", todos, sessionId })
       } catch (err) {
         log.error("Failed to fetch todos", err)
         this.opts.postMessage({ type: "todos_update", todos: [], sessionId })
       }
-    }],
-    ["toggle_todo", (msg: Record<string, unknown>, sessionId?: string) => {
-      if (!sessionId) return
-      this.opts.postMessage({
-        type: "todo_operation_denied",
-        reason: "Server-managed todos are read-only",
-        todoId: msg.todoId,
-        sessionId,
-      })
-    }],
-    ["delete_todo", (msg: Record<string, unknown>, sessionId?: string) => {
-      if (!sessionId) return
-      this.opts.postMessage({
-        type: "todo_operation_denied",
-        reason: "Server-managed todos are read-only",
-        todoId: msg.todoId,
-        sessionId,
-      })
     }],
     ["get_changed_files", (msg: Record<string, unknown>, sessionId?: string) => {
       if (!sessionId) return
@@ -1348,25 +1365,7 @@ export class WebviewEventRouter {
   private shouldRejectPlanPermissionResponse(msg: Record<string, unknown>): boolean {
     const permissionType = typeof msg.permissionType === "string" ? msg.permissionType : undefined
     const pattern = typeof msg.pattern === "string" || Array.isArray(msg.pattern) ? msg.pattern : undefined
-    if (permissionType && !this.isMutatingPlanPermission(permissionType)) return false
-    if (this.isPlanDocumentPattern(pattern)) return false
-    return permissionType ? this.isMutatingPlanPermission(permissionType) : true
-  }
-
-  private isMutatingPlanPermission(permissionType: string): boolean {
-    const type = permissionType.toLowerCase()
-    return type === "edit" ||
-      type === "write" ||
-      type === "patch" ||
-      type === "apply_patch" ||
-      type === "multiedit" ||
-      type === "bash" ||
-      type === "external_directory"
-  }
-
-  private isPlanDocumentPattern(pattern: string | string[] | undefined): boolean {
-    const patterns = Array.isArray(pattern) ? pattern : pattern ? [pattern] : []
-    return patterns.some((p) => p.startsWith(".opencode/plans/") && p.endsWith(".md"))
+    return resolvePlanPermission({ type: permissionType, pattern }) === "reject"
   }
 
   private async resolveOpenFileTarget(rawPath: string, sessionId?: string): Promise<{ uri: vscode.Uri; lineNumber?: number }> {

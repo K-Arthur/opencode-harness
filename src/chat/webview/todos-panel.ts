@@ -1,4 +1,5 @@
 import type { Todo } from "./types"
+import type { ElementRefs } from "./dom"
 import { calculateProgress, applyTodoFilter } from "./todos-logic"
 
 export { calculateProgress, applyTodoFilter }
@@ -11,6 +12,22 @@ export interface TodosPanelOptions {
   postMessage?: (msg: Record<string, unknown>) => void
   getActiveFilter?: () => 'all' | 'active' | 'completed' | 'in-progress'
   setActiveFilter?: (filter: 'all' | 'active' | 'completed' | 'in-progress') => void
+}
+
+export type TodosPanelEls = Pick<ElementRefs,
+  | "todosPanel"
+  | "todosList"
+  | "closeTodosBtn"
+  | "todoAddForm"
+  | "todoAddInput"
+>
+
+export interface TodosPanelApi {
+  renderTodos: (todos: Todo[]) => void
+  open: () => void
+  close: () => void
+  showToast: (message: string, variant?: 'warning' | 'info', durationMs?: number) => void
+  dispose: () => void
 }
 
 /* NOTE: Changed files rendering is handled exclusively by
@@ -91,24 +108,38 @@ function createEmptyState(): HTMLElement {
   return empty
 }
 
+function isUserTodo(todo: Todo): boolean {
+  return todo.id.startsWith("todo-")
+}
+
 function createTodoItem(todo: Todo, options: TodosPanelOptions): HTMLElement {
   const item = document.createElement("li")
-  item.className = `todo-item todo-item--${todo.status}`
+  const userClass = isUserTodo(todo) ? " todo-item--user" : " todo-item--server"
+  item.className = `todo-item todo-item--${todo.status}${userClass}`
   item.dataset.todoId = todo.id
 
   const isCompleted = todo.status === "completed"
+  const interactive = isUserTodo(todo)
   const checkbox = document.createElement("div")
-  checkbox.className = `todo-checkbox${isCompleted ? " todo-checkbox--checked" : ""}`
+  const readonlyCls = interactive ? "" : " todo-checkbox--readonly"
+  checkbox.className = `todo-checkbox${isCompleted ? " todo-checkbox--checked" : ""}${readonlyCls}`
   checkbox.setAttribute("role", "checkbox")
   checkbox.setAttribute("aria-checked", String(isCompleted))
   checkbox.setAttribute("aria-label", `Todo: ${todo.content}`)
-  checkbox.setAttribute("tabindex", "0")
+  if (interactive) {
+    checkbox.setAttribute("tabindex", "0")
+  } else {
+    checkbox.setAttribute("aria-readonly", "true")
+    checkbox.title = "Server-managed task — read-only"
+  }
   checkbox.innerHTML = isCompleted ? `<svg class="todo-checkbox-svg" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>` : ""
 
-  checkbox.addEventListener("click", () => options.onToggleTodo(todo))
-  checkbox.addEventListener("keydown", (e: KeyboardEvent) => {
-    if (e.key === " " || e.key === "Enter") { e.preventDefault(); options.onToggleTodo(todo) }
-  })
+  if (interactive) {
+    checkbox.addEventListener("click", () => options.onToggleTodo(todo))
+    checkbox.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === " " || e.key === "Enter") { e.preventDefault(); options.onToggleTodo(todo) }
+    })
+  }
 
   const statusContainer = document.createElement("div")
   statusContainer.className = "todo-status-container"
@@ -125,7 +156,7 @@ function createTodoItem(todo: Todo, options: TodosPanelOptions): HTMLElement {
 
   const tagContainer = document.createElement("div")
   tagContainer.className = "todo-tags"
-  if (todo.id.startsWith("todo-")) {
+  if (interactive) {
     const tag = document.createElement("span")
     tag.className = "todo-tag todo-tag--user"
     tag.textContent = "User"
@@ -133,17 +164,20 @@ function createTodoItem(todo: Todo, options: TodosPanelOptions): HTMLElement {
     tagContainer.appendChild(tag)
   }
 
-  const deleteBtn = document.createElement("button")
-  deleteBtn.className = "todo-delete-btn"
-  deleteBtn.setAttribute("aria-label", "Delete todo")
-  deleteBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
-  deleteBtn.addEventListener("click", () => options.onDeleteTodo(todo.id))
-
   item.appendChild(checkbox)
   item.appendChild(statusContainer)
   item.appendChild(content)
   item.appendChild(tagContainer)
-  item.appendChild(deleteBtn)
+
+  if (interactive) {
+    const deleteBtn = document.createElement("button")
+    deleteBtn.className = "todo-delete-btn"
+    deleteBtn.setAttribute("aria-label", "Delete todo")
+    deleteBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
+    deleteBtn.addEventListener("click", () => options.onDeleteTodo(todo.id))
+    item.appendChild(deleteBtn)
+  }
+
   return item
 }
 
@@ -175,13 +209,15 @@ function updateTodoList(
     const el = existingMap.get(todo.id)
     if (el) {
       // Update status class if changed
-      const expectedClass = `todo-item todo-item--${todo.status}`
+      const userClass = isUserTodo(todo) ? " todo-item--user" : " todo-item--server"
+      const expectedClass = `todo-item todo-item--${todo.status}${userClass}`
       if (el.className !== expectedClass) {
         el.className = expectedClass
         const checkbox = el.querySelector('.todo-checkbox') as HTMLElement
         if (checkbox) {
           const isCompleted = todo.status === "completed"
-          checkbox.className = `todo-checkbox${isCompleted ? " todo-checkbox--checked" : ""}`
+          const readonlyCls = isUserTodo(todo) ? "" : " todo-checkbox--readonly"
+          checkbox.className = `todo-checkbox${isCompleted ? " todo-checkbox--checked" : ""}${readonlyCls}`
           checkbox.setAttribute("aria-checked", String(isCompleted))
           checkbox.innerHTML = isCompleted ? `<svg class="todo-checkbox-svg" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>` : ""
         }
@@ -201,17 +237,16 @@ function updateTodoList(
 
 // ─── Panel setup ─────────────────────────────────────────────────────────────
 
-export function setupTodosPanel(els: any, options: TodosPanelOptions) {
+export function setupTodosPanel(els: TodosPanelEls, options: TodosPanelOptions): TodosPanelApi | undefined {
   const todosPanel = els.todosPanel
   const todosList = els.todosList
-  const changedFilesList = els.changedFilesPanelList
   const closeBtn = els.closeTodosBtn
   const addForm = els.todoAddForm
   const addInput = els.todoAddInput
 
-  if (!todosPanel || !todosList || !changedFilesList || !closeBtn) {
+  if (!todosPanel || !todosList || !closeBtn) {
     console.warn("Todos panel elements not found")
-    return
+    return undefined
   }
 
   let activeFilter: 'all' | 'active' | 'completed' | 'in-progress' = 'all'
@@ -225,23 +260,27 @@ export function setupTodosPanel(els: any, options: TodosPanelOptions) {
     if (options.setActiveFilter) options.setActiveFilter(filter)
   }
 
-  closeBtn.addEventListener("click", () => { todosPanel.classList.add("hidden") })
+  const onCloseClick = () => { todosPanel.classList.add("hidden") }
+  closeBtn.addEventListener("click", onCloseClick)
 
-  document.addEventListener("keydown", (e) => {
+  const onEscape = (e: KeyboardEvent) => {
     if (e.key === "Escape" && !todosPanel.classList.contains("hidden")) {
       todosPanel.classList.add("hidden")
     }
-  })
+  }
+  document.addEventListener("keydown", onEscape)
 
+  const onAddSubmit = (e: Event) => {
+    e.preventDefault()
+    if (!addInput) return
+    const content = addInput.value.trim()
+    if (content && options.onAddTodo) {
+      options.onAddTodo(content)
+      addInput.value = ""
+    }
+  }
   if (addForm && addInput) {
-    addForm.addEventListener("submit", (e: Event) => {
-      e.preventDefault()
-      const content = (addInput as HTMLInputElement).value.trim()
-      if (content && options.onAddTodo) {
-        options.onAddTodo(content)
-        ;(addInput as HTMLInputElement).value = ""
-      }
-    })
+    addForm.addEventListener("submit", onAddSubmit)
   }
 
   function renderFilteredTodos(container: HTMLElement, todos: Todo[]) {
@@ -249,21 +288,28 @@ export function setupTodosPanel(els: any, options: TodosPanelOptions) {
     const progress = calculateProgress(todos)
     const filtered = applyTodoFilter(todos, filter)
 
-    // Rebuild static sections (progress + filters)
-    container.innerHTML = ""
-    container.appendChild(createProgressGauge(progress))
-    container.appendChild(createFilterTabs(filter, (newFilter) => {
-      setFilter(newFilter)
-      renderFilteredTodos(container, todos)
-    }))
+    // Rebuild progress + filter tabs (cheap, no interactive state to preserve).
+    container.querySelectorAll('.todo-progress-container, .todo-filters, .todos-empty')
+      .forEach(el => el.remove())
+    container.insertBefore(
+      createFilterTabs(filter, (newFilter) => {
+        setFilter(newFilter)
+        renderFilteredTodos(container, todos)
+      }),
+      container.firstChild,
+    )
+    container.insertBefore(createProgressGauge(progress), container.firstChild)
 
+    // Reuse the existing <ul> so updateTodoList can preserve focus/scroll across
+    // renders. Only fall back to creating a new list if the container has none.
+    const existingList = container.querySelector<HTMLElement>('.todos-list')
     if (filtered.length === 0) {
+      if (existingList) existingList.remove()
       container.appendChild(createEmptyState())
       return
     }
-
-    const list = updateTodoList(null, filtered, options)
-    container.appendChild(list)
+    const list = updateTodoList(existingList, filtered, options)
+    if (!existingList) container.appendChild(list)
   }
 
   let toastTimeout: ReturnType<typeof setTimeout> | null = null
@@ -292,7 +338,16 @@ export function setupTodosPanel(els: any, options: TodosPanelOptions) {
       renderFilteredTodos(todosList, todos)
     },
     open: () => { todosPanel.classList.remove("hidden") },
-    close: () => { todosPanel.classList.add("hidden") },
+    close: () => {
+      todosPanel.classList.add("hidden")
+      if (toastTimeout) { clearTimeout(toastTimeout); toastTimeout = null }
+    },
     showToast,
+    dispose: () => {
+      document.removeEventListener("keydown", onEscape)
+      closeBtn.removeEventListener("click", onCloseClick)
+      if (addForm && addInput) addForm.removeEventListener("submit", onAddSubmit)
+      if (toastTimeout) { clearTimeout(toastTimeout); toastTimeout = null }
+    },
   }
 }

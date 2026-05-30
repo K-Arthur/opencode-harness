@@ -109,8 +109,7 @@ private currentTokens = 0
 
   /** Current usage as percent of limit, safe for limit === 0 (returns 0). */
   get percent(): number {
-    if (this.tokenLimit <= 0) return 0
-    return Math.min(100, Math.max(0, Math.round((this.currentTokens / this.tokenLimit) * 100)))
+    return this.calculatePercent(this.currentTokens)
   }
 
   constructor() {
@@ -170,6 +169,20 @@ private currentTokens = 0
     }
   }
 
+  getCurrentUsage(sessionId?: string): ContextUsage | undefined {
+    if (sessionId) {
+      const usage = this.latestUsageBySession.get(sessionId)
+      return usage ? this.cloneUsage(usage) : undefined
+    }
+    if (this.currentTokens <= 0) return undefined
+    return {
+      percent: this.percent,
+      tokens: this.currentTokens,
+      maxTokens: this.tokenLimit,
+      cost: this.calculateCost(this.currentTokens),
+    }
+  }
+
   /**
    * Read the autoCompact setting from VS Code configuration.
    */
@@ -220,9 +233,7 @@ private currentTokens = 0
     // dividing by a fake safeLimit of 1, which would produce percent:100 for
     // any non-zero token count and trigger a false critical-red ring in the UI.
     const usage: ContextUsage = {
-      percent: this.tokenLimit > 0
-        ? Math.min(100, Math.round((this.currentTokens / this.tokenLimit) * 100))
-        : 0,
+      percent: this.calculatePercent(this.currentTokens),
       tokens: this.currentTokens,
       maxTokens: this.tokenLimit,
       sessionId,
@@ -250,9 +261,7 @@ private currentTokens = 0
     this.currentTokens = tokens
     const usage: ContextUsage = {
       ...latest,
-      percent: this.tokenLimit > 0
-        ? Math.min(100, Math.round((tokens / this.tokenLimit) * 100))
-        : 0,
+      percent: this.calculatePercent(tokens),
       tokens,
       maxTokens: this.tokenLimit,
     }
@@ -273,9 +282,7 @@ private currentTokens = 0
     // Guard against tokenLimit === 0 (unknown context window) to prevent
     // NaN/Infinity in the emitted percent field.
     const usage: ContextUsage = {
-      percent: this.tokenLimit > 0
-        ? Math.min(100, Math.round((this.currentTokens / this.tokenLimit) * 100))
-        : 0,
+      percent: this.calculatePercent(this.currentTokens),
       tokens: this.currentTokens,
       maxTokens: this.tokenLimit,
       sessionId,
@@ -307,6 +314,25 @@ private currentTokens = 0
     const outputCost = (outputTokens / 1_000_000) * pricing.outputPricePerMillion
 
     return inputCost + outputCost
+  }
+
+  private calculatePercent(tokens: number): number {
+    if (this.tokenLimit <= 0) return 0
+    const raw = (Math.max(0, tokens) / this.tokenLimit) * 100
+    if (!Number.isFinite(raw)) return 0
+    const clamped = Math.min(100, Math.max(0, raw))
+    if (clamped > 0 && clamped < 1) {
+      return Math.max(0.01, Math.round(clamped * 100) / 100)
+    }
+    return Math.round(clamped)
+  }
+
+  private cloneUsage(usage: ContextUsage): ContextUsage {
+    return {
+      ...usage,
+      breakdown: usage.breakdown ? { ...usage.breakdown } : undefined,
+      projected: usage.projected ? { ...usage.projected } : undefined,
+    }
   }
 
   private trackUsage(sessionId: string, tokens: number, breakdown: { system: number; history: number; workspace: number; queued?: number; steer?: number }, cost: number): void {

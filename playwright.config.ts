@@ -19,7 +19,7 @@ export default defineConfig({
     command: 'npx serve dist/chat/webview -p 3000 -s',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
-    timeout: 10000,
+    timeout: 30000,
   },
   use: {
     baseURL: 'http://localhost:3000',

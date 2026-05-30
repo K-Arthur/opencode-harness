@@ -2,6 +2,8 @@ import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
+import { JSDOM } from "jsdom"
+import { updateContextBarFromSession, type TokenCostDeps } from "./tokenCostDisplay"
 
 const source = readFileSync(path.join(__dirname, "tokenCostDisplay.ts"), "utf8")
 
@@ -20,5 +22,72 @@ describe("tokenCostDisplay context status UI", () => {
     assert.ok(source.includes("statusModel"), "must update the status model label")
     assert.ok(source.includes("statusCost"), "must update the session cost label")
     assert.ok(source.includes("showStatusStrip()"), "context/status updates must reveal the status strip")
+  })
+
+  it("renders long model names and large context values into bounded status-strip slots", () => {
+    const dom = new JSDOM(`<!doctype html><body>
+      <div id="status-strip" hidden>
+        <span id="status-tokens"></span>
+        <span id="status-model"></span>
+        <div id="context-usage" class="context-usage-bar hidden">
+          <div id="context-progress-bar" class="context-usage-percent"></div>
+          <span id="context-label"></span>
+          <span id="context-cost" class="context-cost hidden"></span>
+        </div>
+        <span id="status-cost" class="hidden"></span>
+      </div>
+      <div id="quota-bar"></div>
+      <div id="quota-progress-bar"></div>
+      <div id="quota-label"></div>
+      <div id="quota-detail"></div>
+    </body>`)
+    const doc = dom.window.document
+    const longModel = "provider/supercalifragilistic-context-rendering-model-with-a-very-long-suffix"
+    const statusStrip = doc.getElementById("status-strip")!
+    const contextUsage = doc.getElementById("context-usage")!
+    const contextLabel = doc.getElementById("context-label")!
+    const contextProgress = doc.getElementById("context-progress-bar")!
+    const contextCost = doc.getElementById("context-cost")!
+    const statusModel = doc.getElementById("status-model")!
+    const statusCost = doc.getElementById("status-cost")!
+
+    const deps: TokenCostDeps = {
+      els: {
+        tokenDisplay: null,
+        statusTokens: doc.getElementById("status-tokens")!,
+        statusModel,
+        costDisplay: null,
+        statusCost,
+        contextUsage,
+        statusStrip,
+        quotaBar: doc.getElementById("quota-bar")!,
+        quotaProgressBar: doc.getElementById("quota-progress-bar")!,
+        quotaLabel: doc.getElementById("quota-label")!,
+        quotaDetail: doc.getElementById("quota-detail")!,
+      },
+      getSession: () => ({
+        model: longModel,
+        cost: 12.3456,
+        tokenUsage: { prompt: 900_000_000, completion: 87_654_321, total: 987_654_321 },
+      }),
+      getActiveSessionId: () => "session-a",
+      save: () => {},
+      getContextWindow: () => 1_000_000_000,
+      showStatusStrip: () => statusStrip.removeAttribute("hidden"),
+      getActiveMessageList: () => null,
+      timers: { setTimeout },
+    }
+
+    updateContextBarFromSession(deps, "session-a")
+
+    assert.equal(statusStrip.hasAttribute("hidden"), false)
+    assert.equal(contextUsage.classList.contains("hidden"), false)
+    assert.equal(statusModel.textContent, "supercalifragilistic-context-rendering-model-with-a-very-long-suffix")
+    assert.match(contextLabel.textContent ?? "", /98\.8% used/)
+    assert.ok((contextLabel.textContent ?? "").includes("987,654,321 tokens / 1,000,000,000"))
+    assert.equal(contextProgress.style.width, "98.7654321%")
+    assert.equal(contextCost.textContent, "$12.3456")
+    assert.equal(contextCost.classList.contains("hidden"), false)
+    assert.equal(contextUsage.querySelector("#context-label"), contextLabel)
   })
 })

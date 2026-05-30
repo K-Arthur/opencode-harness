@@ -2,6 +2,7 @@ import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
+import { ContextMonitor } from "./ContextMonitor"
 
 const source = readFileSync(path.join(__dirname, "ContextMonitor.ts"), "utf8")
 
@@ -65,6 +66,40 @@ describe("ContextMonitor.ts", () => {
       !block.includes("this.updateTokens(this.currentTokens)"),
       "setTokenLimit must not re-emit currentTokens without a sessionId"
     )
+  })
+
+  it("returns the latest usage for a requested session so the webview can refresh the dropdown on open", () => {
+    const monitor = new ContextMonitor()
+    monitor.setTokenLimit(200_000, "session-a")
+    monitor.updateTokens(50_000, "session-a", {
+      system: 500,
+      history: 40_000,
+      workspace: 9_500,
+      queued: 0,
+      steer: 0,
+    })
+
+    const usage = monitor.getCurrentUsage("session-a")
+    assert.equal(usage?.sessionId, "session-a")
+    assert.equal(usage?.percent, 25)
+    assert.equal(usage?.tokens, 50_000)
+    assert.equal(usage?.maxTokens, 200_000)
+  })
+
+  it("preserves non-zero fractional percentages instead of collapsing them to 0", () => {
+    const monitor = new ContextMonitor()
+    monitor.setTokenLimit(1_000_000, "session-a")
+    monitor.updateTokens(100, "session-a", {
+      system: 0,
+      history: 100,
+      workspace: 0,
+      queued: 0,
+      steer: 0,
+    })
+
+    const usage = monitor.getCurrentUsage("session-a")
+    assert.ok((usage?.percent ?? 0) > 0, "non-zero usage should have a non-zero percent")
+    assert.ok((usage?.percent ?? 1) < 1, "tiny usage should remain below 1%")
   })
 
   it("reads autoCompact setting", () => {
