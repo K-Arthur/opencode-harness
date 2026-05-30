@@ -4,6 +4,7 @@ import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
 import { isLocalPlaceholderSessionId } from "../session/sessionUtils"
 import { TabManager } from "./TabManager"
 import { log } from "../utils/outputChannel"
+import { selectPendingBackfill, SingleFlight } from "./backfillPlanner"
 import type { Message, Part } from "@opencode-ai/sdk"
 
 interface BackfillDeps {
@@ -20,8 +21,27 @@ export class BackfillService {
   private readonly BACKFILL_RETRY_DELAYS_MS = [1500, 4000, 8000, 16000]
   private readonly BACKFILL_CONCURRENCY = 5
   private restoredTabsHydrated = false
+  // B3: coalesce concurrent fetches for the same CLI session id so a recovered
+  // session and a tab-created backfill never double-fetch the same history.
+  private readonly fetchFlight = new SingleFlight<Array<{ info: Message; parts: Part[] }>>()
 
   constructor(private readonly deps: BackfillDeps) {}
+
+  /**
+   * Fetch (deduped by cliSessionId) → convert → apply → auto-title for one
+   * session. Returns the number of messages applied. Single source of truth for
+   * both backfill entry points (B1).
+   */
+  private async hydrate(session: OpenCodeSession): Promise<number> {
+    const cliId = session.cliSessionId
+    if (!cliId || isLocalPlaceholderSessionId(cliId)) return 0
+    const rows = await this.fetchFlight.run(cliId, () => this.deps.getSessionMessages(cliId))
+    const messages = sdkMessagesToChatMessages(rows)
+    if (messages.length === 0) return 0
+    this.deps.sessionStore.applyBackfilledMessages(session.id, messages, summarizeOpencodeMessageUsage(rows))
+    this.deps.sessionStore.autoTitleFromMessages(session.id)
+    return messages.length
+  }
 
   get isHydrated(): boolean {
     return this.restoredTabsHydrated
@@ -32,9 +52,9 @@ export class BackfillService {
   }
 
   async backfillRecoveredSessions(sessions: OpenCodeSession[], isRetry: boolean = false): Promise<boolean> {
-    const sessionsNeedingBackfill = sessions
-      .filter((s) => s.needsBackfill === true && s.cliSessionId && !isLocalPlaceholderSessionId(s.cliSessionId) && s.messages.length === 0)
-      .slice(0, 10)
+    // B2: process ALL pending sessions (chunked by BACKFILL_CONCURRENCY below)
+    // rather than a fixed slice(0, 10) that silently abandoned the 11th+.
+    const sessionsNeedingBackfill = selectPendingBackfill(sessions)
 
     if (sessionsNeedingBackfill.length === 0) {
       const tabs = this.deps.tabManager.getAllTabs()
@@ -59,13 +79,9 @@ export class BackfillService {
 
       this.backfillInProgress.add(session.id)
       try {
-        if (!session.cliSessionId || isLocalPlaceholderSessionId(session.cliSessionId)) return
-        const rows = await this.deps.getSessionMessages(session.cliSessionId)
-        const messages = sdkMessagesToChatMessages(rows)
-        if (messages.length > 0) {
-          this.deps.sessionStore.applyBackfilledMessages(session.id, messages, summarizeOpencodeMessageUsage(rows))
-          this.deps.sessionStore.autoTitleFromMessages(session.id)
-          log.info(`[sessions_recovered] Backfilled ${messages.length} messages for session ${session.id}`)
+        const applied = await this.hydrate(session)
+        if (applied > 0) {
+          log.info(`[sessions_recovered] Backfilled ${applied} messages for session ${session.id}`)
           didBackfill = true
         } else {
           log.debug(`[sessions_recovered] Empty response for ${session.id}; leaving needsBackfill set for retry`)
@@ -163,12 +179,9 @@ export class BackfillService {
 
     this.backfillInProgress.add(tabId)
     try {
-      const rows = await this.deps.getSessionMessages(session.cliSessionId)
-      const messages = sdkMessagesToChatMessages(rows)
-      if (messages.length > 0) {
-        this.deps.sessionStore.applyBackfilledMessages(session.id, messages, summarizeOpencodeMessageUsage(rows))
-        this.deps.sessionStore.autoTitleFromMessages(session.id)
-        log.info(`[tab_created] Backfilled ${messages.length} messages for session ${session.id}`)
+      const applied = await this.hydrate(session)
+      if (applied > 0) {
+        log.info(`[tab_created] Backfilled ${applied} messages for session ${session.id}`)
         const tabAfter = this.deps.tabManager.getTab(tabId)
         if (tabAfter?.isStreaming) {
           log.info(`[tab_created] Skipping pushInitState for ${session.id} because streaming started during backfill`)

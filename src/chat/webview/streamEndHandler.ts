@@ -118,12 +118,20 @@ export function handleStreamEnd(
   }
 
   state.rafPending = false
-  if (state.renderQueue) {
-    state.renderQueue.forceFlush()
-  }
 
   const blockList = Array.isArray(blocks) ? blocks as Block[] : []
   finishUnresolvedToolCalls(blockList)
+
+  // M3: when the server provides authoritative blocks, mergeServerBlocks +
+  // reRenderMessage rebuild the whole bubble below — a forceFlush here would be
+  // discarded a tick later, wasting a full parse/sanitize on the heaviest
+  // message. Drain only on the empty-blocks path where the live text is what we
+  // keep; otherwise destroy() the queue so its bytes are dropped and the later
+  // safety-net forceFlush in resetStreamState becomes a guarded no-op.
+  if (state.renderQueue) {
+    if (blockList.length === 0) state.renderQueue.forceFlush()
+    else state.renderQueue.destroy()
+  }
 
   if (blockList.length === 0) {
     handleEmptyStreamEnd(els, messages, resolved.id, resolved.lookupId, webviewLog)
