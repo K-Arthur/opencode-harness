@@ -18,7 +18,7 @@ import { MethodologyAdvisor, type MethodologyAdvice } from "../../methodology/Me
 import { classifyTool } from "./toolClassifier"
 import { parseQuestionArgs, parseAllowFreeText } from "../webview/questionModel"
 import type { AdvisoryOrchestrationResult } from "../../methodology/MethodologyOrchestrator"
-import { updateMethodologyStatus, getMethodologyOrchestrator } from "../../extension"
+import { updateMethodologyStatus, getMethodologyOrchestrator } from "../../methodology/registry"
 
 import type { StreamCallbacks, ToolEndResult, StreamLifecycleState } from "./StreamCoordinatorTypes"
 export type { StreamCallbacks, ToolEndResult, StreamLifecycleState }
