@@ -14,6 +14,7 @@ import {
 } from "./changed-files-dropdown"
 
 function setupDom() {
+  resetChangedFilesDropdown()
   const dom = new JSDOM(`<!doctype html>
     <html>
       <body>

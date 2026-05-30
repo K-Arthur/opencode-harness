@@ -55,15 +55,17 @@ let chatProviderInstance: ChatProvider | undefined
 let methodologyOrchestrator: MethodologyOrchestrator | undefined
 let outcomeTracker: OutcomeTracker | undefined
 let methodologyStatusItem: vscode.StatusBarItem | undefined
+let unhandledRejectionCount = 0
+let unhandledRejectionWindowStart = 0
+
+const UNHANDLED_REJECTION_WINDOW_MS = 5 * 60 * 1000
+const INLINE_CODE_LANGUAGES = ["typescript", "javascript", "python", "rust", "go", "typescriptreact", "javascriptreact"] as const
 
 export async function activate(context: vscode.ExtensionContext) {
   try {
     log.info("OpenCode Harness extension activating…")
 
-    // Global unhandled promise rejection handler
-    process.on("unhandledRejection", (reason) => {
-      log.error("Unhandled promise rejection", reason)
-    })
+    installUnhandledRejectionDiagnostics(context)
 
     // Expose output channel for other modules
     context.subscriptions.push(log.outputChannel)
@@ -72,10 +74,10 @@ export async function activate(context: vscode.ExtensionContext) {
     const mcpServerManager = new McpServerManager(context)
     context.subscriptions.push(mcpServerManager)
 
-sessionManager = new SessionManager(mcpServerManager)
+    sessionManager = new SessionManager(mcpServerManager)
     // Apply remote-attach config if set; otherwise restore stored port for local-spawn reuse
     const remoteUrl = vscode.workspace.getConfiguration("opencode").get<string>("serverUrl") || ""
-    // Read auth token from SecretStorage (secure) with fallback to settings (legacy)
+    // Read auth token from SecretStorage; legacy plaintext settings are migrated and cleared once.
     const remoteToken = await resolveAuthToken(context)
     if (remoteUrl.trim().length > 0) {
       sessionManager.setRemoteServer(remoteUrl, remoteToken)
@@ -94,7 +96,7 @@ sessionManager = new SessionManager(mcpServerManager)
     const themeManager = new ThemeManager()
     context.subscriptions.push(themeManager)
 
-    const rateLimitMonitor = new RateLimitMonitor()
+    const rateLimitMonitor = new RateLimitMonitor(context.globalState)
     context.subscriptions.push(rateLimitMonitor)
 
     const terminalBridge = new TerminalBridge()
@@ -138,15 +140,18 @@ sessionManager = new SessionManager(mcpServerManager)
     // Auto-start server so user doesn't see disconnected state after reload
     void sessionManager.start().catch(err => log.warn("Auto-start server failed", err))
 
-    // When a workspace folder is added after the server already started in ~/,
-    // offer to restart the server in the new project directory.
+    // When workspace folders are added after the server already started in ~/,
+    // offer one restart that covers the full batch.
     context.subscriptions.push(
       vscode.workspace.onDidChangeWorkspaceFolders(async (e) => {
         if (e.added.length === 0 || !sessionManager.isRunning) return
-        const newDir = e.added[0]?.uri.fsPath
-        if (!newDir) return
+        const addedDirs = e.added.map((folder) => folder.uri.fsPath).filter(Boolean)
+        if (addedDirs.length === 0) return
+        const label = addedDirs.length === 1
+          ? addedDirs[0]!.split(/[\\/]/).pop() ?? addedDirs[0]!
+          : `${addedDirs.length} workspace folders`
         const choice = await vscode.window.showInformationMessage(
-          `Workspace opened: ${newDir.split("/").pop() ?? newDir}. Restart OpenCode server to use this workspace?`,
+          `Workspace opened: ${label}. Restart OpenCode server to use the updated workspace set?`,
           "Restart Server",
           "Keep Current"
         )
@@ -189,6 +194,30 @@ sessionManager = new SessionManager(mcpServerManager)
 // ---------------------------------------------------------------------------
 // Initialization helpers
 // ---------------------------------------------------------------------------
+
+function installUnhandledRejectionDiagnostics(context: vscode.ExtensionContext): void {
+  const handler = (reason: unknown) => {
+    const now = Date.now()
+    if (now - unhandledRejectionWindowStart > UNHANDLED_REJECTION_WINDOW_MS) {
+      unhandledRejectionWindowStart = now
+      unhandledRejectionCount = 0
+    }
+    unhandledRejectionCount += 1
+    log.error(`Unhandled promise rejection (${unhandledRejectionCount} in the last 5 minutes)`, reason)
+
+    if (unhandledRejectionCount === 3) {
+      void vscode.window.showWarningMessage(
+        "OpenCode Harness observed repeated internal errors. Open the output channel for diagnostics.",
+        "Show Logs"
+      ).then((choice) => {
+        if (choice === "Show Logs") log.outputChannel.show()
+      })
+    }
+  }
+
+  process.on("unhandledRejection", handler)
+  context.subscriptions.push({ dispose: () => process.off("unhandledRejection", handler) })
+}
 
 function initContextEngine(context: vscode.ExtensionContext): ContextEngine {
   const adapter = new VSCodeWorkspaceAdapter()
@@ -283,7 +312,9 @@ function registerInlineProviders(context: vscode.ExtensionContext, chatProvider:
   const completionProvider = new InlineCompletionProvider()
   context.subscriptions.push(completionProvider)
 
-  for (const lang of ["typescript", "javascript", "python", "rust", "go", "typescriptreact", "javascriptreact"]) {
+  const codeDocumentSelectors: vscode.DocumentSelector = INLINE_CODE_LANGUAGES.map((language) => ({ scheme: "file", language }))
+
+  for (const lang of INLINE_CODE_LANGUAGES) {
     context.subscriptions.push(
       vscode.languages.registerCodeLensProvider({ scheme: "file", language: lang }, inlineProvider)
     )
@@ -291,7 +322,7 @@ function registerInlineProviders(context: vscode.ExtensionContext, chatProvider:
 
   context.subscriptions.push(
     vscode.languages.registerInlineCompletionItemProvider(
-      { pattern: "**" },
+      codeDocumentSelectors,
       completionProvider,
     )
   )

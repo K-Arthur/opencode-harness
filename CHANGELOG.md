@@ -5,6 +5,23 @@ All notable changes to the **OpenCode Harness** extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.21] - 2026-05-30
+
+### Security
+- Hardened remote attach and MCP configuration: non-loopback remote server URLs now require HTTPS, legacy plaintext remote auth settings migrate into SecretStorage and are cleared, MCP server names/configs/tool names are validated, and prompt-injection scanning now covers full file contents with basic homoglyph normalization. (`src/utils/security.ts`, `src/migrations/authTokenMigration.ts`, `src/mcp/McpServerManager.ts`, `src/chat/WebviewMessageValidator.ts`)
+- Documented the already-enforced nonce-based webview CSP and updated configuration guidance for remote auth and MCP validation. (`docs/configuration.md`, `docs/TechSpec.md`, `README.md`)
+
+### Fixed
+- Activation now explicitly declares `onStartupFinished`/chat-view activation, and unhandled promise rejections are counted, logged with diagnostics, and detached on dispose instead of being only one-off log lines. (`package.json`, `src/extension.ts`)
+- Workspace-folder changes now handle all folders added in a single event instead of only the first. (`src/extension.ts`)
+- Inline completions no longer register for every file or display a placeholder TODO ghost text; they are limited to code document selectors and disabled by default until server-backed completions are wired end-to-end. (`src/extension.ts`, `src/inline/InlineCompletionProvider.ts`, `package.json`)
+- Rate-limit observed token/cost usage now persists across extension reloads, preserving the quota/cost picture for the active provider. (`src/monitor/RateLimitMonitor.ts`)
+- Subagent cancellation now reports an explicit unsupported request error instead of carrying TODO stubs. (`src/chat/WebviewEventRouter.ts`)
+
+### Build / Tooling
+- Removed tracked local scratch/repair artifacts and expanded ignore rules for generated VSIX files, reports, scratch output, typecheck dumps, and local agent configuration directories. (`.gitignore`)
+- Tightened Playwright screenshot thresholds to catch smaller visual regressions. (`playwright.config.ts`)
+
 ## [0.2.20] - 2026-05-30
 
 ### Changed

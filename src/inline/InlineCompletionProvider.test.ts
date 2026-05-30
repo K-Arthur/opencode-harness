@@ -28,9 +28,9 @@ describe("InlineCompletionProvider.ts", () => {
     assert.ok(source.includes("triggerDelay"))
   })
 
-  it("returns InlineCompletionItem with insertText", () => {
-    assert.ok(source.includes("vscode.InlineCompletionItem"))
-    assert.ok(source.includes("insertText"))
+  it("does not emit placeholder TODO completions", () => {
+    assert.ok(!source.includes("TODO: implement completion"), "must not show implementation placeholders as ghost text")
+    assert.ok(source.includes("return null"), "until server-backed completions exist, provider should stay silent")
   })
 
   it("has debounce with setTimeout pattern", () => {

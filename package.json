@@ -9,7 +9,7 @@
   },
   "description": "AI-powered coding assistant integrated into VS Code. Chat, refactor, debug, and write code with the OpenCode agent while staying in your editor. Supports multiple AI models (Claude, GPT, Gemini), custom themes, cost tracking, and granular permission controls.",
   "icon": "media/opencode-icon-256.png",
-  "version": "0.2.20",
+  "version": "0.2.21",
   "engines": {
     "vscode": "^1.98.0"
   },
@@ -19,9 +19,11 @@
       "description": "Requires workspace access to read and modify files"
     }
   },
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:opencode-harness.chatView"
+  ],
   "categories": [
-    "Other",
     "Programming Languages"
   ],
   "keywords": [
@@ -296,7 +298,7 @@
           "type": "string",
           "default": "",
           "scope": "machine",
-          "description": "Optional bearer token sent with requests to the remote opencode server. Only used when 'opencode.serverUrl' is set."
+          "description": "Deprecated plaintext fallback for remote server auth. Use the 'OpenCode: Attach Remote Server' command so the token is stored in SecretStorage."
         },
         "opencode.mcpServers": {
           "type": "object",
@@ -674,9 +676,9 @@
         },
         "opencode.inlineSuggestions.enabled": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "scope": "window",
-          "description": "Enable inline ghost-text completions as you type."
+          "description": "Enable server-backed inline ghost-text completions when available. Disabled by default until completions are implemented end-to-end."
         },
         "opencode.inlineSuggestions.triggerDelay": {
           "type": "number",

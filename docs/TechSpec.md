@@ -159,6 +159,9 @@ The debug Extension Development Host must open the intended workspace folder. If
 ## Security & Compliance
 - Extension does NOT handle API keys directly (opencode server manages auth)
 - All communication is local (HTTP on localhost:4096)
+- Chat webviews use a nonce-based Content Security Policy with `default-src 'none'`, nonce-restricted scripts/styles, constrained image/font sources, and no frame/form/base navigation.
+- Remote server auth tokens are read from VS Code SecretStorage. Legacy plaintext settings are migrated and cleared.
+- Non-loopback remote server URLs must use HTTPS.
 - Extension gracefully degrades when server is unavailable
 - No telemetry/analytics without user consent
 - VS Code's built-in security model is used for webview sandboxing
@@ -294,6 +297,7 @@ Welcome-page session search and pasted-image attachments share a webview-side co
 - **Legacy fallback**: `opencode.mcpServers` remains a fallback for older extension installs but does not override OpenCode config entries.
 - **Write target**: Add/update/remove/toggle operations write the primary OpenCode config file and create `{ "mcp": {} }` when the file does not exist.
 - **Remote MCP support**: MCP config rows accept command-based and URL-based server definitions; disabled state treats `disabled: true` and `enabled: false` consistently.
+- **Validation**: Server names, stdio commands, args, env, headers, remote URLs, `when` filters, and reported tool names are validated. Non-loopback remote MCP URLs must use HTTPS.
 - **Configuration schema**: `opencode.mcpServers` documents stdio, HTTP, and SSE fallback entries with `command`/`args`/`env` plus `url`/`headers` remote fields.
 
 ### Message Rendering & Timeline
@@ -348,7 +352,7 @@ Welcome-page session search and pasted-image attachments share a webview-side co
 - **Narrowed retry policy**: `isRetryableError` uses targeted patterns (`econnrefused`, `econnreset`, `enotfound`, `enetunreach`, `socket hang up`) instead of broad `/socket/i`.
 - **Stored-port auth verification**: Port reuse now verifies authentication via SDK API call before reconnecting.
 - **User-configured password respected**: `OPENCODE_SERVER_PASSWORD` in parent environment is used instead of generating one.
-- **Remote URL validation**: Remote attach validates URL format and warns on non-HTTPS remote URLs outside localhost.
+- **Remote URL validation**: Remote attach validates URL format and rejects non-HTTPS remote URLs outside localhost/loopback.
 
 ### Unified Session Modal (Feature 21 — New)
 - **Single list**: Replaced the LOCAL/SERVER two-tab modal with a unified list that merges `SessionStore` sessions and server sessions.
