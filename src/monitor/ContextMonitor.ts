@@ -84,6 +84,7 @@ private currentTokens = 0
   // limit.context). setTokenLimit() is called once the model resolves.
   private tokenLimit = 0
   private onContextChangedEmitter = new SimpleEventEmitter<ContextUsage>()
+  private latestUsageBySession = new Map<string, ContextUsage>()
   private usageHistory: ContextUsageHistory[] = []
   private historyRetentionDays = 30
   private readonly MAX_HISTORY_ENTRIES = 1000
@@ -162,11 +163,10 @@ private currentTokens = 0
   /**
    * Update the token limit dynamically based on the active model.
    */
-  setTokenLimit(limit: number): void {
+  setTokenLimit(limit: number, sessionId?: string): void {
     if (limit >= 0 && limit !== this.tokenLimit) {
       this.tokenLimit = limit
-      // Re-evaluate current usage with new limit
-      this.updateTokens(this.currentTokens)
+      if (sessionId) this.reemitLatestUsageForSession(sessionId)
     }
   }
 
@@ -235,10 +235,29 @@ private currentTokens = 0
       } : undefined,
       cost,
     }
+    if (sessionId) this.latestUsageBySession.set(sessionId, usage)
     this.onContextChangedEmitter.fire(usage)
     if (sessionId !== undefined && breakdown) {
       this.trackUsage(sessionId, this.currentTokens, breakdown, cost)
     }
+  }
+
+  private reemitLatestUsageForSession(sessionId: string): void {
+    const latest = this.latestUsageBySession.get(sessionId)
+    if (!latest) return
+
+    const tokens = Math.max(0, latest.tokens)
+    this.currentTokens = tokens
+    const usage: ContextUsage = {
+      ...latest,
+      percent: this.tokenLimit > 0
+        ? Math.min(100, Math.round((tokens / this.tokenLimit) * 100))
+        : 0,
+      tokens,
+      maxTokens: this.tokenLimit,
+    }
+    this.latestUsageBySession.set(sessionId, usage)
+    this.onContextChangedEmitter.fire(usage)
   }
 
   /**
@@ -268,6 +287,7 @@ private currentTokens = 0
         steer: safeSteerTokens,
       },
     }
+    if (sessionId) this.latestUsageBySession.set(sessionId, usage)
     this.onContextChangedEmitter.fire(usage)
   }
 
@@ -462,6 +482,7 @@ private currentTokens = 0
   }
 
   dispose(): void {
+    this.latestUsageBySession.clear()
     this.onContextChangedEmitter.dispose()
     this.onHistoryUpdatedEmitter.dispose()
   }

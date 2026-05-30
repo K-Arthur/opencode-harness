@@ -1703,19 +1703,25 @@ function getVsCodeApi() {
         const tokens = msg.tokens as number
         const maxTokens = msg.maxTokens as number
         const activeId = stateManager.getState().activeSessionId
+        const targetId = isValidSessionId(msg.sessionId as string) ? msg.sessionId as string : activeId
+        if (!targetId) return
         // Persist per-session so it survives tab switches
-        if (activeId) {
-          const sess = stateManager.getSession(activeId)
-          if (sess) {
-            sess.contextUsage = { percent: pct, tokens, maxTokens }
-            stateManager.save()
-          }
+        const sess = stateManager.getSession(targetId)
+        if (sess) {
+          sess.contextUsage = { percent: pct, tokens, maxTokens, breakdown: msg.breakdown as any }
+          stateManager.save()
+        }
+        if (targetId !== activeId) {
+          return
         }
         // Update both the floating dropdown detail view and the always-visible status strip bar
-        ctxDropdownApi?.updateUsage(msg as Record<string, unknown>)
+        ctxDropdownApi?.updateUsage({ ...msg, sessionId: targetId } as Record<string, unknown>)
         updateContextUsageBar(pct, tokens, maxTokens)
       }],
       ["context_window_unknown", (msg) => {
+        const activeId = stateManager.getState().activeSessionId
+        const targetId = isValidSessionId(msg.sessionId as string) ? msg.sessionId as string : activeId
+        if (!targetId || targetId !== activeId) return
         // Hide the context bar and show the "Set override" chip so the user
         // knows the model's context window is unavailable rather than seeing
         // a misleading fabricated denominator.
@@ -1733,23 +1739,31 @@ function getVsCodeApi() {
             })
           }
         }
-        ctxDropdownApi?.updateUsage(msg as Record<string, unknown>)
+        ctxDropdownApi?.updateUsage({ ...msg, sessionId: targetId } as Record<string, unknown>)
       }],
       ["context_window_known", (msg) => {
         // Context window resolved — hide the override chip.
-        const chip = document.getElementById("ctx-window-unknown-chip")
-        if (chip) chip.classList.add("hidden")
         // Re-derive percent using the persisted context FILL (msg.tokens from ContextMonitor),
         // not tokenUsage.total which is cumulative spend and can be orders of magnitude larger.
         const activeId = stateManager.getState().activeSessionId
-        if (activeId && typeof msg.maxTokens === "number" && (msg.maxTokens as number) > 0) {
-          const session = stateManager.getSession(activeId)
+        const targetId = isValidSessionId(msg.sessionId as string) ? msg.sessionId as string : activeId
+        const isActiveTarget = targetId === activeId
+        if (isActiveTarget) {
+          const chip = document.getElementById("ctx-window-unknown-chip")
+          if (chip) chip.classList.add("hidden")
+        }
+        if (targetId && typeof msg.maxTokens === "number" && (msg.maxTokens as number) > 0) {
+          const session = stateManager.getSession(targetId)
           const fill = session?.contextUsage  // set by context_usage handler, represents current fill
           if (fill) {
             const pct = Math.min(100, Math.round((fill.tokens / (msg.maxTokens as number)) * 100))
-            const updatedUsage = { type: "context_usage", percent: pct, tokens: fill.tokens, maxTokens: msg.maxTokens as number }
-            ctxDropdownApi?.updateUsage(updatedUsage as Record<string, unknown>)
-            updateContextUsageBar(pct, fill.tokens, msg.maxTokens as number)
+            const updatedUsage = { type: "context_usage", sessionId: targetId, percent: pct, tokens: fill.tokens, maxTokens: msg.maxTokens as number, breakdown: fill.breakdown }
+            session.contextUsage = { ...fill, percent: pct, maxTokens: msg.maxTokens as number }
+            stateManager.save()
+            if (isActiveTarget) {
+              ctxDropdownApi?.updateUsage(updatedUsage as Record<string, unknown>)
+              updateContextUsageBar(pct, fill.tokens, msg.maxTokens as number)
+            }
           }
           // If no fill data yet, the next context_usage message will update the display correctly.
         }
@@ -2103,8 +2117,43 @@ function getVsCodeApi() {
         }
       }],
       ["token_usage", (msg, sid) => {
-        if (isValidSessionId(sid) && msg.usage) {
-          const usage = msg.usage as UsageDelta
+        if (isValidSessionId(sid)) {
+          const rawUsage = msg.usage as Partial<UsageDelta> | undefined
+          const rawTokens = msg.tokens as number | { input?: number; output?: number; reasoning?: number; cacheRead?: number; cacheWrite?: number } | undefined
+          let usage: UsageDelta | null = null
+          if (
+            rawUsage
+            && typeof rawUsage === "object"
+            && typeof rawUsage.prompt === "number"
+            && Number.isFinite(rawUsage.prompt)
+            && typeof rawUsage.completion === "number"
+            && Number.isFinite(rawUsage.completion)
+          ) {
+            const prompt = rawUsage.prompt as number
+            const completion = rawUsage.completion as number
+            usage = {
+              prompt,
+              completion,
+              total: typeof rawUsage.total === "number" && Number.isFinite(rawUsage.total) ? rawUsage.total : prompt + completion + (rawUsage.reasoning ?? 0) + (rawUsage.cacheRead ?? 0) + (rawUsage.cacheWrite ?? 0),
+              reasoning: rawUsage.reasoning ?? 0,
+              cacheRead: rawUsage.cacheRead ?? 0,
+              cacheWrite: rawUsage.cacheWrite ?? 0,
+            }
+          } else if (typeof rawTokens === "number" && Number.isFinite(rawTokens)) {
+            usage = { prompt: rawTokens, completion: 0, total: rawTokens, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
+          } else if (rawTokens && typeof rawTokens === "object") {
+            const input = rawTokens.input ?? 0
+            const output = rawTokens.output ?? 0
+            usage = {
+              prompt: input,
+              completion: output,
+              total: input + output + (rawTokens.reasoning ?? 0) + (rawTokens.cacheRead ?? 0) + (rawTokens.cacheWrite ?? 0),
+              reasoning: rawTokens.reasoning ?? 0,
+              cacheRead: rawTokens.cacheRead ?? 0,
+              cacheWrite: rawTokens.cacheWrite ?? 0,
+            }
+          }
+          if (!usage) return
           if (!isDuplicateRecentStepUsage(sid, usage)) {
             handleTokenUsage(sid, usage)
           }

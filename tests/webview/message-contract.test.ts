@@ -82,6 +82,19 @@ void describe("Message Contract Tests", () => {
     assert.ok(message.tokens > 0)
   })
 
+  void it("validates token_usage message structure", () => {
+    const message: HostMessage = {
+      type: "token_usage",
+      sessionId: "test-123",
+      usage: { prompt: 100, completion: 20, total: 120, reasoning: 5, cacheRead: 10, cacheWrite: 3 }
+    }
+
+    assert.strictEqual(typeof message.sessionId, "string")
+    assert.strictEqual(typeof message.usage.prompt, "number")
+    assert.strictEqual(typeof message.usage.completion, "number")
+    assert.strictEqual(typeof message.usage.total, "number")
+  })
+
   void it("validates host_message_batch structure", () => {
     const message: HostMessage = {
       type: "host_message_batch",
