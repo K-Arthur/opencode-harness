@@ -3,6 +3,7 @@ import {
   isToolCallBlock,
   renderBlock,
   renderToolGroup,
+  groupConsecutiveToolCalls,
   formatRelativeTime,
   RenderOptions,
 } from "./renderer"
@@ -145,29 +146,29 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
   }
 
   if (msg.blocks && Array.isArray(msg.blocks)) {
-    let renderedToolGroup = false
-    for (const block of msg.blocks) {
-      if (role === "assistant" && isToolCallBlock(block)) {
-        if (!renderedToolGroup) {
-          const groupEl = renderToolGroup(toolBlocks, {
-            messageId: msg.id,
-            mode: opts?.mode,
-            postMessage: opts?.postMessage,
-            collapseConfig: config,
-          })
-          if (groupEl) bubble.appendChild(groupEl)
-          renderedToolGroup = true
-        }
+    const renderOpts = {
+      messageId: msg.id,
+      mode: opts?.mode,
+      role,
+      postMessage: opts?.postMessage,
+      collapseConfig: config,
+    }
+
+    for (const group of groupConsecutiveToolCalls(msg.blocks, config.groupBy)) {
+      const firstBlock = group[0]
+      if (!firstBlock) continue
+
+      const isAssistantToolRun = role === "assistant" && group.every(isToolCallBlock)
+      if (isAssistantToolRun && group.length > 1) {
+        const groupEl = renderToolGroup(group, renderOpts)
+        if (groupEl) bubble.appendChild(groupEl)
         continue
       }
 
-      const el = renderBlock(block, {
-          messageId: msg.id, 
-          mode: opts?.mode, 
-          postMessage: opts?.postMessage,
-          collapseConfig: config
-      })
-      if (el) bubble.appendChild(el)
+      for (const block of group) {
+        const el = renderBlock(block, renderOpts)
+        if (el) bubble.appendChild(el)
+      }
     }
   }
 

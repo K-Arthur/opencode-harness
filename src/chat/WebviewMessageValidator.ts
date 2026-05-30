@@ -1,3 +1,5 @@
+import { normalizeSessionMode } from "./modePolicy"
+
 export interface WebviewMessageValidatorDeps {
   hasPromptContent: (msg: Record<string, unknown>) => boolean
   isValidThemeConfigPayload: (theme: unknown) => boolean
@@ -86,7 +88,7 @@ function validateMentionSearch(msg: Record<string, unknown>, _msgType: string, d
 
 function validateChangeMode(msg: Record<string, unknown>, _msgType: string, deps: WebviewMessageValidatorDeps): boolean {
   const mode = msg.mode
-  if (mode !== undefined && (typeof mode !== "string" || !MODE_VALUES.has(mode))) {
+  if (typeof mode !== "string" || !MODE_VALUES.has(mode) || !normalizeSessionMode(mode)) {
     return reject(deps, `Invalid mode: ${String(mode)}`)
   }
   return true

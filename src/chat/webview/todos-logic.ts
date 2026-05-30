@@ -47,5 +47,5 @@ export function generateTodoId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `todo-${crypto.randomUUID()}`
   }
-  return `todo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  return `todo-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
 }

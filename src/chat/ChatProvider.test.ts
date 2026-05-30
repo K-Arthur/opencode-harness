@@ -11,6 +11,7 @@ const commandExecSource = readFileSync(resolve(__dirname, "CommandExecutionServi
 const eventRouterSource = readFileSync(resolve(__dirname, "WebviewEventRouter.ts"), "utf8")
 const validatorSource = readFileSync(resolve(__dirname, "WebviewMessageValidator.ts"), "utf8")
 const backfillSource = readFileSync(resolve(__dirname, "BackfillService.ts"), "utf8")
+const modePolicySource = readFileSync(resolve(__dirname, "modePolicy.ts"), "utf8")
 
 void describe("ChatProvider.ts", () => {
   void it("exports ChatProvider class with correct interfaces", () => {
@@ -339,8 +340,8 @@ void it("change_mode handler reads mode from msg.mode", () => {
   assert.ok(changeIdx >= 0 || eventRouterSource.indexOf('["change_mode"') >= 0, "change_mode handler must exist")
   const block = findChangeModeBlock(changeIdx >= 0 ? source : eventRouterSource)
   assert.ok(
-    /msg\.mode\s+as\s+string/.test(block),
-    "change_mode handler must read mode from msg.mode (the webview sends mode, not tools)"
+    /normalizeSessionMode\(msg\.mode\)/.test(block),
+    "change_mode handler must read and validate mode from msg.mode (the webview sends mode, not tools)"
   )
   assert.ok(
     !block.includes("msg.tools"),
@@ -380,9 +381,10 @@ void it("accept_permission rejects mutating requests while the session is in pla
 
 void it("accept_permission allows plan document permission responses in plan mode", () => {
   assert.ok(
-    eventRouterSource.includes('startsWith(".opencode/plans/")') &&
-      eventRouterSource.includes('endsWith(".md")'),
-    "plan mode must allow OpenCode's .opencode/plans/*.md permission exception"
+    eventRouterSource.includes("resolvePlanPermission") &&
+      modePolicySource.includes('startsWith(".opencode/plans/")') &&
+      modePolicySource.includes('endsWith(".md")'),
+    "plan mode must allow OpenCode's .opencode/plans/*.md permission exception through the shared policy"
   )
 })
 

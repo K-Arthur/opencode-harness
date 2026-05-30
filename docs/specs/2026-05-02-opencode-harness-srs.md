@@ -88,7 +88,7 @@ The primary interaction point is a rich webview chat panel. It must display:
 | FR-ID | Requirement |
 |-------|------------|
 | FR-KEY-01 | All major commands must have customizable keyboard shortcuts |
-| FR-KEY-02 | Default shortcuts: `Ctrl+Esc` toggle chat focus, `Ctrl+Shift+Esc` new session, `Alt+K` insert @-mention reference |
+| FR-KEY-02 | Default shortcuts include `Ctrl+Alt+O` chat focus, `Ctrl+Alt+N` new conversation, `Alt+K` insert @-mention reference, and `Ctrl/Cmd+Alt+1/2/3` for Plan/Build/Auto mode switching |
 | FR-KEY-03 | All actions accessible via Command Palette (`Ctrl+Shift+P`) |
 | FR-KEY-04 | Keyboard navigation within the chat webview (arrow keys, Tab for @-mention cycling) |
 

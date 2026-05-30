@@ -112,18 +112,14 @@ it("has type guards for discriminated blocks", () => {
     assert.ok(source.includes("tool-status--${toolState}") || toolCallRendererSource.includes("tool-status--${toolState}"), "must have dynamic status badge")
   })
 
-  it("assistant tool calls render as one grouped expandable row per message", () => {
+  it("assistant tool rendering respects block order instead of grouping the whole message", () => {
     assert.ok(
-      messageRendererSource.includes("const toolBlocks = (msg.blocks || []).filter(isToolCallBlock)"),
-      "messageRenderer must collect all assistant tool calls before rendering",
+      messageRendererSource.includes("groupConsecutiveToolCalls(msg.blocks"),
+      "messageRenderer must group only consecutive tool runs from the original block order",
     )
     assert.ok(
-      messageRendererSource.includes("renderToolGroup(toolBlocks"),
-      "messageRenderer must render one grouped tool row for the collected tools",
-    )
-    assert.ok(
-      !messageRendererSource.includes("group.length === 1 || !isToolCallBlock(firstBlock)"),
-      "single tool calls must not bypass the grouped expandable row",
+      !messageRendererSource.includes("renderToolGroup(toolBlocks"),
+      "messageRenderer must not render every assistant tool call as one message-wide group",
     )
   })
 

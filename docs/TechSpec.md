@@ -304,10 +304,12 @@ Welcome-page session search and pasted-image attachments share a webview-side co
 - **Codex-style compact tool blocks**: Tool calls render as one-line entries (`min-height: var(--size-target-min)` = 24 px) with no card border — only the existing left accent stripe survives so tool class is still color-coded at a glance. Expanded args / result panels keep their full styling when the user opens the `<details>`. This replaces the prior bordered-card treatment that produced a "wall of cards" for multi-tool turns.
 
 ### Permission Modes (Feature 6 — Enhanced)
-- **3 modes**: Plan (review before apply), Auto (apply without asking), Normal (ask per action).
-- **Mode selector**: Button group in webview header; disabled during streaming; updates immediately.
-- **Plan mode enforcement**: Diffs show "Review" label; accept button becomes "Approve & Apply".
-- **Auto mode warning**: One-time confirmation with "Don't show again" persisted to `globalState`.
+- **3 modes**: Plan (planning agent + review-only policy), Build (build agent + standard approval flow), Auto (build agent + permission auto-approval after confirmation). Legacy `"normal"` webview payloads normalize to Build.
+- **Mode selector**: Webview header control with tooltips, ARIA labels, and `Ctrl/Cmd+Alt+1/2/3` shortcuts; disabled during streaming. The webview posts `change_mode` and waits for host `mode_change_result` before updating the visible mode.
+- **Plan mode enforcement**: Diffs show "Review" label; accept button becomes "Approve & Apply". Mutating permission requests are rejected except direct file mutations targeting `.opencode/plans/*.md`.
+- **Plan prose rendering**: Assistant prose that looks like a plan receives the `PROPOSED PLAN` treatment only when the session is in Plan mode. User messages are never formatted as proposed plans.
+- **Auto mode warning**: One-time confirmation with "Don't show again" persisted to `globalState` as `opencode.autoModeConfirmed`; warning close/confirm paths use the modal focus cleanup flow.
+- **Validation**: `change_mode` requires a known mode value and invalid/cancelled transitions return `mode_change_result` with the previous mode.
 
 ### Prompt Queue (Feature 17 — New)
 - **Per-tab queue**: Each tab gets its own `PromptQueue` instance. Items auto-advance on `stream_end` (unless aborted).

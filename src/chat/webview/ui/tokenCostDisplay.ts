@@ -1,5 +1,6 @@
 import type { TokenUsageSnapshot, UsageDelta } from "../types"
 import { shouldRefreshOnUpdate, selectDisplayedUsage } from "../tokenDisplayPolicy"
+import { formatUsagePercent } from "../context-usage-service"
 
 export type RateLimitWebviewState = {
   provider?: string
@@ -284,7 +285,7 @@ export function updateContextBarFromSession(deps: TokenCostDeps, sessionId: stri
     }
     return
   }
-  const pct = Math.min(100, Math.round((totalApiTokens / contextWindow) * 100))
+  const pct = Math.min(100, Math.max(0, (totalApiTokens / contextWindow) * 100))
 
   ctxBar.classList.remove("hidden")
   const model = session.model ? session.model.split("/").pop() || session.model : ""
@@ -297,15 +298,15 @@ export function updateContextBarFromSession(deps: TokenCostDeps, sessionId: stri
   const detailText = `${totalApiTokens.toLocaleString()} tokens / ${contextWindow.toLocaleString()}`
 
   if (labelEl) {
-    labelEl.textContent = `${pct}% used · ${detailText}`
+    labelEl.textContent = `${formatUsagePercent(pct)} used · ${detailText}`
   } else {
-    ctxBar.textContent = `${pct}% used · ${detailText}`
+    ctxBar.textContent = `${formatUsagePercent(pct)} used · ${detailText}`
   }
   ctxBar.title = `${model ? `${model} · ` : ""}API tokens used: ${totalApiTokens.toLocaleString()} · Context window: ${contextWindow.toLocaleString()}`
 
   if (pctEl) {
     pctEl.value = pct
-    pctEl.style.width = `${pct}%`
+    pctEl.style.width = `${Math.min(100, Math.max(0, pct))}%`
     pctEl.classList.toggle("context-usage-percent--warning", pct >= 60 && pct < 85)
     pctEl.classList.toggle("context-usage-percent--critical", pct >= 85)
   }

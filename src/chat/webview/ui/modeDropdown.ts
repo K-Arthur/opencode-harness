@@ -1,3 +1,5 @@
+import { normalizeSessionMode } from "../../modePolicy"
+
 export interface ModeDropdownElements {
   modeDropdown: HTMLElement
   modeDropdownBtn: HTMLButtonElement
@@ -14,7 +16,6 @@ export interface ModeDropdownDeps {
   getActiveSession: () => { id: string; isStreaming?: boolean; mode?: string } | undefined
   setSessionMode: (sessionId: string, mode: string) => void
   postMessage: (msg: Record<string, unknown>) => void
-  showAutoModeWarning: () => void
 }
 
 const MODE_ICONS: Record<string, string> = {
@@ -24,26 +25,38 @@ const MODE_ICONS: Record<string, string> = {
 }
 
 const MODE_LABELS: Record<string, string> = { plan: "Plan", auto: "Auto", build: "Build" }
-
-let currentMode = "build"
+const MODE_DESCRIPTIONS: Record<string, string> = {
+  plan: "Plan mode: review and propose changes before applying them.",
+  build: "Build mode: apply changes with normal permission prompts.",
+  auto: "Auto mode: apply changes without stopping for each permission prompt.",
+}
+const MODE_SHORTCUTS: Record<string, string> = {
+  plan: "Ctrl/Cmd+Alt+1",
+  build: "Ctrl/Cmd+Alt+2",
+  auto: "Ctrl/Cmd+Alt+3",
+}
 
 export function getCurrentMode(): string {
-  return currentMode
+  return "build"
 }
 
 export function updateModeDropdown(mode: string, els: ModeDropdownElements): void {
-  currentMode = mode
-  els.modeCurrentText.textContent = MODE_LABELS[mode] || mode
-  els.modeDropdownBtn.dataset.mode = mode
+  const normalized = normalizeSessionMode(mode) || "build"
+  els.modeCurrentText.textContent = MODE_LABELS[normalized] || normalized
+  els.modeDropdownBtn.dataset.mode = normalized
+  els.modeDropdownBtn.title = `${MODE_DESCRIPTIONS[normalized]} Shortcut: ${MODE_SHORTCUTS[normalized]}.`
+  els.modeDropdownBtn.setAttribute("aria-label", `Mode: ${MODE_LABELS[normalized]}. ${MODE_DESCRIPTIONS[normalized]} Shortcut: ${MODE_SHORTCUTS[normalized]}.`)
 
-  const iconSvg = MODE_ICONS[mode] || MODE_ICONS["build"] || ""
+  const iconSvg = MODE_ICONS[normalized] || MODE_ICONS["build"] || ""
   const iconEl = els.modeDropdownLabel.querySelector(".mode-icon") as HTMLElement | null
   if (iconEl) iconEl.outerHTML = iconSvg
 
   for (const key of ["plan", "auto", "build"]) {
     const opt = els[`modeOpt${key.charAt(0).toUpperCase() + key.slice(1)}` as keyof ModeDropdownElements] as HTMLButtonElement
-    const isSelected = key === mode
+    const isSelected = key === normalized
     opt.setAttribute("aria-selected", String(isSelected))
+    opt.title = `${MODE_DESCRIPTIONS[key]} Shortcut: ${MODE_SHORTCUTS[key]}.`
+    opt.setAttribute("aria-label", `${MODE_LABELS[key]} mode. ${MODE_DESCRIPTIONS[key]} Shortcut: ${MODE_SHORTCUTS[key]}.`)
     opt.classList.toggle("selected", isSelected)
   }
 }
@@ -70,7 +83,7 @@ export function updateModeSelectorState(els: ModeDropdownElements, getActiveSess
 }
 
 export function setupModeToggle(deps: ModeDropdownDeps): void {
-  const { els, getActiveSession, setSessionMode, postMessage, showAutoModeWarning: warnAuto } = deps
+  const { els, getActiveSession, postMessage } = deps
 
   function toggleDropdown() {
     const active = getActiveSession()
@@ -86,15 +99,24 @@ export function setupModeToggle(deps: ModeDropdownDeps): void {
     }
   }
 
-  function setMode(mode: string) {
-    if (currentMode === mode) { closeModeDropdown(els); return }
-    updateModeDropdown(mode, els)
-    closeModeDropdown(els)
+  function requestMode(mode: string) {
+    const normalized = normalizeSessionMode(mode)
+    if (!normalized) return
     const active = getActiveSession()
+    if (active?.isStreaming) return
+    const currentSessionMode = normalizeSessionMode(active?.mode) || "build"
+    if (currentSessionMode === normalized) { closeModeDropdown(els); return }
+    closeModeDropdown(els)
     if (active) {
-      setSessionMode(active.id, mode)
-      postMessage({ type: "change_mode", mode, sessionId: active.id })
+      postMessage({ type: "change_mode", mode: normalized, sessionId: active.id })
     }
+  }
+
+  function isTextEntryTarget(target: EventTarget | null): boolean {
+    const el = target as HTMLElement | null
+    if (!el) return false
+    const tag = el.tagName?.toLowerCase()
+    return Boolean(el.isContentEditable || tag === "input" || tag === "textarea" || tag === "select")
   }
 
   els.modeDropdownBtn.addEventListener("click", toggleDropdown)
@@ -110,10 +132,7 @@ export function setupModeToggle(deps: ModeDropdownDeps): void {
     opt.addEventListener("click", () => {
       const mode = opt.dataset.mode
       if (!mode) return
-      const active = getActiveSession()
-      if (active?.isStreaming) return
-      if (currentMode === "plan" && mode === "auto") { warnAuto(); return }
-      setMode(mode)
+      requestMode(mode)
     })
 
     opt.addEventListener("keydown", (e) => {
@@ -136,12 +155,20 @@ export function setupModeToggle(deps: ModeDropdownDeps): void {
     const target = e.target as Node
     if (!els.modeDropdown.contains(target)) closeModeDropdown(els)
   })
+
+  document.addEventListener("keydown", (e) => {
+    if (!e.altKey || e.shiftKey || (!e.ctrlKey && !e.metaKey) || isTextEntryTarget(e.target)) return
+    const modeByKey: Record<string, string> = { "1": "plan", "2": "build", "3": "auto" }
+    const mode = modeByKey[e.key]
+    if (!mode) return
+    e.preventDefault()
+    requestMode(mode)
+  })
 }
 
 export function syncModeUI(els: ModeDropdownElements, getActiveSession: ModeDropdownDeps["getActiveSession"]): void {
   const active = getActiveSession()
-  const rawMode = active?.mode || "plan"
-  const mode = rawMode === "normal" ? "build" : rawMode
+  const mode = normalizeSessionMode(active?.mode) || "build"
   updateModeDropdown(mode, els)
   updateModeSelectorState(els, getActiveSession)
 }

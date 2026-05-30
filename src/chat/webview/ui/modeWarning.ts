@@ -20,7 +20,9 @@ let focusTrap: ((e: KeyboardEvent) => void) | null = null
 let lastFocus: HTMLElement | null = null
 
 export function showAutoModeWarning(deps: ModeWarningDeps): void {
+  if (!deps.els.modeWarningModal.classList.contains("hidden")) closeModeWarning(deps.els)
   pendingAutoMode = "auto"
+  deps.els.modeWarningDontShow.checked = false
   deps.els.modeWarningTitle.textContent = "Switch to Auto mode?"
   deps.els.modeWarningDescription.textContent =
     "Auto mode will allow the agent to apply changes without asking. The agent will have full autonomy to read, write, and execute commands. Use with caution."
@@ -48,15 +50,15 @@ export function closeModeWarning(els: ModeWarningEls): void {
 export function setupModeWarning(deps: ModeWarningDeps): void {
   deps.els.modeWarningCancel.addEventListener("click", () => closeModeWarning(deps.els))
   deps.els.modeWarningConfirm.addEventListener("click", () => {
-    if (pendingAutoMode) {
+    const mode = pendingAutoMode
+    if (mode) {
       const dontShow = deps.els.modeWarningDontShow.checked
       if (dontShow) {
-        deps.postMessage({ type: "update_setting", key: "skipModeWarning", value: true })
+        deps.postMessage({ type: "update_setting", key: "autoModeConfirmed", value: true })
       }
-      deps.setMode(pendingAutoMode)
-      pendingAutoMode = null
+      deps.setMode(mode)
     }
-    deps.els.modeWarningModal.classList.add("hidden")
+    closeModeWarning(deps.els)
   })
   deps.els.modeWarningModal.addEventListener("click", (e) => {
     if (e.target === deps.els.modeWarningModal) closeModeWarning(deps.els)

@@ -1,9 +1,18 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-05-29
-**Version:** v0.2.19 (Streaming correctness + stable-tail render perf + backfill dedup; branch consolidation)
+**Last Updated:** 2026-05-30
+**Version:** v0.2.20 (Rate-limit/error-handler hardening; permission-mode UX fixes)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
+
+## v0.2.20 Highlights
+
+- **Rate-limit/error-handler hardening** — four Critical-severity bugs closed in `errorHandler.ts` (jitter compounding, weak correlation IDs, repeated `acquireVsCodeApi`, mapper whitelist bypass); NaN-propagation eliminated in `RateLimitMonitor.ts` via `safeParseInt`; sliding-window data loss removed; division-by-zero in `quotaMonitor.ts` now returns `undefined` instead of 100%/`NaN`.
+- **Pure-function extraction** — `rateLimitCore.ts` now hosts `safeParseInt`, `parseDuration`, all three rate-limit adapters, and their interfaces, separate from the `vscode`-dependent `RateLimitMonitor` class. Zero-impact on callers via re-exports.
+- **Test coverage** — 43 new tests across `RateLimitMonitor.test.ts` (17 tests: helpers + adapters + NaN rejection) and `errorHandler.test.ts` (24 tests: classification, retry, jitter, correlation IDs, history, stats, config).
+- **Plan / Build / Auto reliability** — user prompts no longer render as `PROPOSED PLAN`; Plan-mode prose styling is assistant-only. Mode changes are host-acknowledged before the dropdown updates, invalid modes are rejected, Auto warning persistence writes `opencode.autoModeConfirmed`, and the selector exposes tooltips plus `Ctrl/Cmd+Alt+1/2/3` shortcuts.
+- **Plan-mode permission guard** — only direct edits/writes to `.opencode/plans/*.md` are allowed in Plan mode. Shell and external-directory permission requests remain rejected even if their pattern mentions a plan file.
+- **Changed-Files dropdown no longer freezes during streaming** — rapid `changed_files_update` events are coalesced into one `requestAnimationFrame` render (was a full `innerHTML` tree rebuild per event); expand/collapse mutates only the affected row; the strip skips unchanged rebuilds; resize is rAF-throttled; previews build via `DocumentFragment`. Review finding: the inline diff accept/reject/apply pipeline is currently unreachable dead code (opencode applies edits server-side) — documented in CHANGELOG, left unwired pending a wire-or-remove decision. (`src/chat/webview/changed-files-dropdown.ts`)
 
 ## v0.2.18 Highlights
 
@@ -71,7 +80,7 @@ The single failing test in v0.2.7 (`main.test.ts › timeline jumps use exact me
 | 3 | Model Selection | ✅ | Server fetch + globalState cache, provider grouping, per-tab persistence, favorites/recents |
 | 4 | Session History | ✅ | Auto-title, rename validation, delete confirmation, Markdown export |
 | 5 | Slash Commands | ✅ | Unified autocomplete, 10 local commands, runtime server command routing, custom prompts |
-| 6 | Permission Modes | ✅ | 3-mode selector (Plan/Auto/Normal), plan enforcement, auto mode warning |
+| 6 | Permission Modes | ✅ | 3-mode selector (Plan/Build/Auto), host-acknowledged mode changes, Plan permission policy, assistant-only proposed-plan styling, Auto mode warning persistence, tooltips + `Ctrl/Cmd+Alt+1/2/3` shortcuts |
 | 7 | Rate Limits | ✅ | OpenAI/Anthropic/Generic adapters, webview quota bar, VS Code status bar, observed usage fallback, configurable provider limits |
 | 8 | Checkpoints | ✅ | VS Code file snapshots for extension-managed diff accepts, 20-checkpoint cap, `WorkspaceEdit` restore; OpenCode server-managed edits revert through `session.revert(messageID)` |
 | 9 | UI Reliability | ✅ | Guarded stream finalization, late chunk recovery, right-side conversation timeline, markdown normalization, adaptive RenderQueue, tool deduplication, webview heartbeat, event stream reconnection, "Retry from here", tool grouping + keyboard nav |

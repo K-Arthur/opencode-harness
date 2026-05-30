@@ -20,11 +20,11 @@ import { renderFileChipListHtml } from "./file-chip-list"
 
 // ─── Per-session state ────────────────────────────────────────────────────────
 
+const DIFF_CACHE_MAX = 50
+
 interface ChangedFilesState {
   sortMode: "changes" | "alpha"
-  compact: boolean
   expandedFiles: Set<string>
-  collapsedDirs: Set<string>
   diffCache: Map<string, DiffLine[] | null | string>
   lastFiles: FileChange[]
 }
@@ -32,9 +32,7 @@ interface ChangedFilesState {
 function _createState(): ChangedFilesState {
   return {
     sortMode: "changes",
-    compact: false,
     expandedFiles: new Set<string>(),
-    collapsedDirs: new Set<string>(),
     diffCache: new Map<string, DiffLine[] | null | string>(),
     lastFiles: [],
   }
@@ -63,12 +61,26 @@ let _isOpen = false
 let _outsideClickHandler: ((e: MouseEvent) => void) | null = null
 let _keyHandler: ((e: KeyboardEvent) => void) | null = null
 let _resizeHandler: (() => void) | null = null
+let _refreshScheduled = false
+let _resizeScheduled = false
+
+/**
+ * Schedule a callback on the next animation frame, falling back to a macrotask
+ * when rAF is unavailable (non-browser test envs without a stub).
+ */
+function _raf(cb: () => void): void {
+  const r = (globalThis as { requestAnimationFrame?: (cb: FrameRequestCallback) => number }).requestAnimationFrame
+  if (typeof r === "function") r(() => cb())
+  else setTimeout(cb, 0)
+}
 
 /** Reset all state — for unit-test isolation and port-change resilience */
 export function resetChangedFilesDropdown(): void {
   _sessionStates.clear()
   _currentSessionId = null
   _isOpen = false
+  _refreshScheduled = false
+  _resizeScheduled = false
 }
 
 /** Drop one session's state (e.g. on session deletion) */
@@ -123,6 +135,17 @@ export function setupChangedFilesDropdown(opts: ChangedFilesDropdownOptions): vo
   if (closeBtn) {
     closeBtn.addEventListener("click", () => _close())
   }
+
+  // Bind the strip's click-to-open handler ONCE. The strip container element is
+  // stable across re-renders (only its innerHTML changes), so rebinding it on
+  // every render — as the old code did — was pure churn.
+  const strip = document.getElementById("changed-files-strip")
+  if (strip) {
+    strip.addEventListener("click", (e) => {
+      e.stopPropagation()
+      _toggle()
+    })
+  }
 }
 
 /**
@@ -144,13 +167,25 @@ export function setCurrentSession(sessionId: string | null): void {
   _refreshUI(sessionId, state.lastFiles)
 }
 
-/** Called by main.ts when changed_files_update arrives. sessionId is REQUIRED. */
+/**
+ * Called by main.ts when changed_files_update arrives. sessionId is REQUIRED.
+ *
+ * Renders are COALESCED: during streaming the host emits many file_edited events
+ * in quick succession. Rendering synchronously on each one rebuilt the whole tree
+ * (and strip) dozens of times per second, freezing the webview. Instead we store
+ * the latest payload and schedule a single render on the next frame.
+ */
 export function updateChangedFiles(sessionId: string, files: FileChange[]): void {
   const state = _stateFor(sessionId)
   state.lastFiles = files
-  if (sessionId === _currentSessionId) {
-    _refreshUI(sessionId, files)
-  }
+  if (sessionId !== _currentSessionId) return // off-screen session: store only
+  if (_refreshScheduled) return // a render is already queued; it will read lastFiles
+  _refreshScheduled = true
+  _raf(() => {
+    _refreshScheduled = false
+    const cur = _currentSessionId
+    if (cur) _refreshUI(cur, _stateFor(cur).lastFiles)
+  })
 }
 
 function _refreshUI(sessionId: string, files: FileChange[]): void {
@@ -189,25 +224,39 @@ function _renderStrip(_sessionId: string, files: FileChange[]): void {
   if (files.length === 0) {
     strip.classList.add("hidden")
     strip.innerHTML = ""
+    strip.removeAttribute("data-cf-sig")
     return
   }
   strip.classList.remove("hidden")
+  const paths = files.map((f) => f.path ?? "").filter((p) => p.length > 0)
+  // Skip the innerHTML rebuild when the visible content is unchanged — the strip
+  // shows basenames + a count, so paths + length fully determine its markup.
+  const sig = `${files.length}|${paths.join("|")}`
+  if (strip.getAttribute("data-cf-sig") === sig) return
+  strip.setAttribute("data-cf-sig", sig)
   strip.innerHTML = renderFileChipListHtml(
-    files.map((f) => f.path ?? "").filter((p) => p.length > 0),
+    paths,
     { maxVisible: CF_STRIP_MAX, showLeadingIcon: true, showCountLabel: true, countLabelSuffix: "changed" },
   )
-  // Single click anywhere on the strip opens the full dropdown
-  strip.onclick = (e) => {
-    e.stopPropagation()
-    _toggle()
-  }
+  // NOTE: the click-to-open handler is bound once in setupChangedFilesDropdown;
+  // it survives innerHTML updates because it lives on the stable strip element.
   strip.setAttribute("aria-label", `${files.length} changed file${files.length !== 1 ? "s" : ""} — click to view`)
+}
+
+function _setDiffCache(cache: Map<string, DiffLine[] | null | string>, path: string, value: DiffLine[] | null | string): void {
+  if (cache.has(path)) {
+    cache.delete(path)
+  } else if (cache.size >= DIFF_CACHE_MAX) {
+    const oldest = cache.keys().next().value
+    if (oldest !== undefined) cache.delete(oldest)
+  }
+  cache.set(path, value)
 }
 
 /** Called by main.ts when file_diff_response arrives. sessionId is REQUIRED. */
 export function handleDiffResponse(sessionId: string, path: string, lines: DiffLine[] | null, error?: string): void {
   const state = _stateFor(sessionId)
-  state.diffCache.set(path, error ? error : (lines ?? []))
+  _setDiffCache(state.diffCache, path, error ? error : (lines ?? []))
   if (sessionId !== _currentSessionId) return
   document.querySelectorAll<HTMLElement>(".cf-hunk-preview--open[data-path]").forEach((el) => {
     if (el.dataset.path === path) _renderHunk(el, sessionId, path)
@@ -245,9 +294,16 @@ function _open(): void {
   }
   _keyHandler = (e: KeyboardEvent) => { if (e.key === "Escape") _close() }
   _resizeHandler = () => {
-    const trigger: Element | null =
-      (_btn && _btn.isConnected) ? _btn : document.getElementById("changed-files-strip")
-    if (_isOpen && trigger) positionPanel(trigger)
+    // Coalesce resize bursts to one reposition per frame — positionPanel reads
+    // layout (getBoundingClientRect) and must not run on every resize event.
+    if (_resizeScheduled) return
+    _resizeScheduled = true
+    _raf(() => {
+      _resizeScheduled = false
+      const trigger: Element | null =
+        (_btn && _btn.isConnected) ? _btn : document.getElementById("changed-files-strip")
+      if (_isOpen && trigger) positionPanel(trigger)
+    })
   }
   requestAnimationFrame(() => {
     document.addEventListener("click", _outsideClickHandler!)
@@ -318,22 +374,37 @@ function _inferStatus(added: number, removed: number): "A" | "M" | "D" {
   return "M"
 }
 
-function _fileIconSVG(fileName: string): string {
-  const ext = fileName.split(".").pop()?.toLowerCase()
-  const colors: Record<string, string> = {
-    ts: "#3178C6", tsx: "#3178C6", js: "#F7DF1E", jsx: "#F7DF1E",
-    css: "#1572B6", html: "#E34F26", json: "#F1C40F", md: "#4A90E2",
-    py: "#3776AB", rs: "#CE422B", go: "#00ADD8", yaml: "#CB171E", yml: "#CB171E",
-  }
-  const color = (ext && colors[ext]) || "currentColor"
-  return `<svg class="cf-file-icon-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`
+function _expandIcon(expanded: boolean): string {
+  return `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="${expanded ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"}"/></svg>`
+}
+
+/**
+ * Toggle a single file row's expansion in place — no full-tree rebuild.
+ * Mutating only the affected row keeps expand/collapse O(1) instead of
+ * O(files × lines), which is what made large changesets jank on every click.
+ */
+function _renderRowExpansion(
+  row: HTMLElement,
+  preview: HTMLElement,
+  expandBtn: HTMLElement,
+  expanded: boolean,
+  sessionId: string,
+  path: string,
+): void {
+  row.classList.toggle("cf-file-row--expanded", expanded)
+  expandBtn.setAttribute("aria-expanded", String(expanded))
+  expandBtn.setAttribute("aria-label", expanded ? "Collapse diff" : "Expand diff")
+  expandBtn.innerHTML = _expandIcon(expanded)
+  preview.classList.toggle("cf-hunk-preview--open", expanded)
+  if (expanded) _renderHunk(preview, sessionId, path)
+  else preview.innerHTML = ""
 }
 
 function _renderTree(container: HTMLElement, files: FileChange[]): void {
   container.innerHTML = ""
 
   if (files.length === 0) {
-    container.innerHTML = `<div class="cf-empty"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M12 18v-6"/><path d="M12 8h.01"/></svg><span>No changed files in this session.</span></div>`
+    container.innerHTML = `<div class="cf-empty">No changed files in this session.</div>`
     return
   }
 
@@ -348,124 +419,89 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       : (b.added + b.removed) - (a.added + a.removed)
   )
 
-  const totalAdded = sorted.reduce((s, f) => s + f.added, 0)
-  const totalRemoved = sorted.reduce((s, f) => s + f.removed, 0)
-  const maxChange = Math.max(1, ...sorted.map((f) => f.added + f.removed))
-  const totalChange = totalAdded + totalRemoved
-  const addedPct = totalChange > 0 ? Math.round((totalAdded / totalChange) * 100) : 50
-
-  // Summary bar
+  // Summary bar — file count + aggregate added/removed across the changeset.
+  const totalAdded = safe.reduce((s, f) => s + f.added, 0)
+  const totalRemoved = safe.reduce((s, f) => s + f.removed, 0)
   const summary = document.createElement("div")
   summary.className = "cf-summary-bar"
-  summary.innerHTML = `
-    <span class="cf-summary-count">${sorted.length} file${sorted.length !== 1 ? "s" : ""}</span>
-    <span class="cf-summary-stats"><span class="cf-stat-added">+${totalAdded}</span> <span class="cf-stat-removed">−${totalRemoved}</span></span>
-    <div class="cf-summary-diffbar" aria-hidden="true">
-      <div class="cf-summary-diffbar-added" style="--p:${(addedPct / 100).toFixed(3)}"></div>
-      <div class="cf-summary-diffbar-removed" style="--p:${((100 - addedPct) / 100).toFixed(3)}"></div>
-    </div>
-  `
+  const countSpan = document.createElement("span")
+  countSpan.className = "cf-summary-count"
+  countSpan.textContent = `${files.length} file${files.length !== 1 ? "s" : ""}`
+  const totals = document.createElement("span")
+  totals.className = "cf-summary-stats"
+  const addEl = document.createElement("span"); addEl.className = "cf-stat-added"; addEl.textContent = `+${totalAdded}`
+  const remEl = document.createElement("span"); remEl.className = "cf-stat-removed"; remEl.textContent = `−${totalRemoved}`
+  totals.appendChild(addEl); totals.appendChild(document.createTextNode(" ")); totals.appendChild(remEl)
+  summary.appendChild(countSpan)
+  summary.appendChild(totals)
   container.appendChild(summary)
 
-  // Controls
+  // Controls — sort toggle + collapse-all.
   const controls = document.createElement("div")
   controls.className = "cf-controls"
   controls.innerHTML = `
-    <button class="cf-sort-btn icon-btn" data-action="toggle-sort" title="Sort: ${state.sortMode === "changes" ? "most changed" : "alphabetical"}" aria-label="Toggle sort order">
-      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
+    <button class="cf-sort-btn" data-action="toggle-sort" title="Sort: ${state.sortMode === "changes" ? "most changed" : "alphabetical"}" aria-label="Toggle sort order">
+      <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
       ${state.sortMode === "changes" ? "By changes" : "A–Z"}
     </button>
-    <button class="cf-compact-btn icon-btn" data-action="toggle-compact" title="Compact mode" aria-label="Toggle compact mode" aria-pressed="${state.compact}">
-      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-    </button>
-    <button class="icon-btn" data-action="collapse-all" title="Collapse all" aria-label="Collapse all groups">
-      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 15l7-7 7 7"/></svg>
-    </button>
-    <button class="icon-btn" data-action="expand-all" title="Expand all" aria-label="Expand all groups">
-      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 9l-7 7-7-7"/></svg>
+    <button class="cf-collapse-all-btn" data-action="collapse-all" title="Collapse all" aria-label="Collapse all diffs">
+      <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 15l7-7 7 7"/></svg>
+      Collapse all
     </button>
   `
   controls.querySelector('[data-action="toggle-sort"]')!.addEventListener("click", () => {
     state.sortMode = state.sortMode === "changes" ? "alpha" : "changes"
     _renderTree(container, files)
   })
-  controls.querySelector('[data-action="toggle-compact"]')!.addEventListener("click", () => {
-    state.compact = !state.compact
-    _renderTree(container, files)
-  })
   controls.querySelector('[data-action="collapse-all"]')!.addEventListener("click", () => {
-    sorted.forEach((f) => { const d = f.path.split("/").slice(0, -1).join("/") || "."; state.collapsedDirs.add(d) })
-    _renderTree(container, files)
-  })
-  controls.querySelector('[data-action="expand-all"]')!.addEventListener("click", () => {
-    state.collapsedDirs.clear()
+    state.expandedFiles.clear()
     _renderTree(container, files)
   })
   container.appendChild(controls)
 
-  // Group by directory
-  const dirMap = new Map<string, FileChange[]>()
-  sorted.forEach((f) => {
-    const parts = f.path.split("/")
-    const dir = parts.length > 1 ? parts.slice(0, -1).join("/") : "."
-    if (!dirMap.has(dir)) dirMap.set(dir, [])
-    dirMap.get(dir)!.push(f)
-  })
+  // File list, grouped by parent directory. Files at the repo root group
+  // under "/". Grouping is a layout concern only — per-row expand/collapse
+  // stays incremental (no full-tree rebuild) via _renderRowExpansion.
+  const list = document.createElement("div")
+  list.className = "cf-file-list"
 
-  dirMap.forEach((dirFiles, dir) => {
-    const isCollapsed = state.collapsedDirs.has(dir)
+  const groups = new Map<string, typeof sorted>()
+  for (const file of sorted) {
+    const slash = file.path.lastIndexOf("/")
+    const dir = slash > 0 ? file.path.slice(0, slash) : ""
+    let bucket = groups.get(dir)
+    if (!bucket) { bucket = []; groups.set(dir, bucket) }
+    bucket.push(file)
+  }
+
+  for (const [dir, groupFiles] of groups) {
     const group = document.createElement("div")
     group.className = "cf-dir-group"
-
-    const header = document.createElement("button")
+    const header = document.createElement("div")
     header.className = "cf-dir-header"
-    header.setAttribute("aria-expanded", String(!isCollapsed))
-    header.innerHTML = `
-      <svg class="cf-dir-chevron" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="${isCollapsed ? "M9 18l6-6-6-6" : "M6 9l6 6 6-6"}"/></svg>
-      <span class="cf-dir-name">${dir === "." ? "(root)" : dir}</span>
-      <span class="cf-dir-count">${dirFiles.length}</span>
-    `
-    header.addEventListener("click", () => {
-      if (isCollapsed) state.collapsedDirs.delete(dir)
-      else state.collapsedDirs.add(dir)
-      _renderTree(container, files)
-    })
+    header.textContent = dir === "" ? "/" : dir
     group.appendChild(header)
 
-    const body = document.createElement("div")
-    body.className = `cf-dir-body${isCollapsed ? " cf-dir-body--collapsed" : ""}`
-
-    dirFiles.forEach((file) => {
+    groupFiles.forEach((file) => {
       const parts = file.path.split("/")
-      const fileName: string = parts[parts.length - 1] ?? file.path
+      const fileName = parts[parts.length - 1] ?? file.path
       const status = _inferStatus(file.added, file.removed)
-      const fileChange = file.added + file.removed
-      const barWidth = Math.round((fileChange / maxChange) * 100)
-      const addedBarPct = fileChange > 0 ? Math.round((file.added / fileChange) * 100) : 50
       const isExpanded = state.expandedFiles.has(file.path)
 
       const row = document.createElement("div")
-      row.className = `cf-file-row${state.compact ? " cf-file-row--compact" : ""}${isExpanded ? " cf-file-row--expanded" : ""}`
+      row.className = `cf-file-row${isExpanded ? " cf-file-row--expanded" : ""}`
       row.setAttribute("data-path", file.path)
+      row.tabIndex = 0
 
       const badge = document.createElement("span")
       badge.className = `cf-status-badge cf-status-badge--${status}`
       badge.textContent = status
       badge.title = status === "A" ? "Added" : status === "D" ? "Deleted" : "Modified"
 
-      const icon = document.createElement("span")
-      icon.className = "cf-file-icon"
-      icon.innerHTML = _fileIconSVG(fileName)
-
       const name = document.createElement("span")
       name.className = "cf-file-name"
       name.textContent = fileName
       name.title = file.path
-
-      const diffBarWrap = document.createElement("div")
-      diffBarWrap.className = "cf-diffbar"
-      diffBarWrap.style.width = `${Math.max(barWidth, 4)}%`
-      diffBarWrap.innerHTML = `<div class="cf-diffbar-added" style="width:${addedBarPct}%"></div><div class="cf-diffbar-removed" style="width:${100 - addedBarPct}%"></div>`
 
       const stats = document.createElement("span")
       stats.className = "cf-file-stats"
@@ -476,51 +512,66 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
         const r = document.createElement("span"); r.className = "cf-stat-removed"; r.textContent = `−${file.removed}`; stats.appendChild(r)
       }
 
+      const openBtn = document.createElement("button")
+      openBtn.className = "cf-open-btn"
+      openBtn.setAttribute("aria-label", "Open file")
+      openBtn.title = "Open file"
+      openBtn.innerHTML = `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 3h7v7M21 3l-9 9M5 7v12h12"/></svg>`
+      openBtn.addEventListener("click", (e) => {
+        e.stopPropagation()
+        _onOpenFile(file.path)
+      })
+
       const expandBtn = document.createElement("button")
-      expandBtn.className = "cf-expand-btn icon-btn"
+      expandBtn.className = "cf-expand-btn"
       expandBtn.setAttribute("aria-label", isExpanded ? "Collapse diff" : "Expand diff")
       expandBtn.setAttribute("aria-expanded", String(isExpanded))
-      expandBtn.innerHTML = `<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="${isExpanded ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"}"/></svg>`
-
-      const openBtn = document.createElement("button")
-      openBtn.className = "cf-open-btn icon-btn"
-      openBtn.setAttribute("aria-label", `Open ${file.path}`)
-      openBtn.innerHTML = `<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`
-      openBtn.addEventListener("click", (e) => { e.stopPropagation(); _onOpenFile(file.path) })
+      expandBtn.innerHTML = _expandIcon(isExpanded)
 
       const preview = document.createElement("div")
       preview.className = `cf-hunk-preview${isExpanded ? " cf-hunk-preview--open" : ""}`
       preview.setAttribute("data-path", file.path)
       if (isExpanded) _renderHunk(preview, sessionId, file.path)
 
+      row.addEventListener("click", (e) => {
+        const target = e.target as HTMLElement
+        if (target.closest(".cf-expand-btn") || target.closest(".cf-open-btn")) return
+        _onOpenFile(file.path)
+      })
+
+      row.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { _onOpenFile(file.path) }
+      })
+
       expandBtn.addEventListener("click", (e) => {
         e.stopPropagation()
-        if (state.expandedFiles.has(file.path)) {
-          state.expandedFiles.delete(file.path)
-        } else {
+        const willExpand = !state.expandedFiles.has(file.path)
+        if (willExpand) {
           state.expandedFiles.add(file.path)
           if (!state.diffCache.has(file.path)) {
-            state.diffCache.set(file.path, null)
+            _setDiffCache(state.diffCache, file.path, null)
             _postMessage?.({ type: "get_file_diff", path: file.path, sessionId })
           }
+        } else {
+          state.expandedFiles.delete(file.path)
         }
-        _renderTree(container, files)
+        // Mutate only this row — never rebuild the whole tree on expand/collapse.
+        _renderRowExpansion(row, preview, expandBtn, willExpand, sessionId, file.path)
       })
 
       row.appendChild(badge)
-      row.appendChild(icon)
       row.appendChild(name)
-      row.appendChild(diffBarWrap)
       row.appendChild(stats)
-      row.appendChild(expandBtn)
       row.appendChild(openBtn)
-      body.appendChild(row)
-      body.appendChild(preview)
+      row.appendChild(expandBtn)
+      group.appendChild(row)
+      group.appendChild(preview)
     })
 
-    group.appendChild(body)
-    container.appendChild(group)
-  })
+    list.appendChild(group)
+  }
+
+  container.appendChild(list)
 }
 
 function _renderHunk(el: HTMLElement, sessionId: string, path: string): void {
@@ -542,19 +593,23 @@ function _renderHunk(el: HTMLElement, sessionId: string, path: string): void {
   el.innerHTML = ""
   const pre = document.createElement("pre")
   pre.className = "cf-hunk-code"
+  // Build into a fragment and attach once — appending each span+newline directly
+  // to a live node triggers a layout pass per line.
+  const frag = document.createDocumentFragment()
   lines.forEach((line) => {
     const span = document.createElement("span")
     span.className = `cf-hunk-line cf-hunk-line--${line.type}`
     const prefix = line.type === "added" ? "+" : line.type === "removed" ? "-" : " "
     span.textContent = prefix + line.content
-    pre.appendChild(span)
-    pre.appendChild(document.createTextNode("\n"))
+    frag.appendChild(span)
+    frag.appendChild(document.createTextNode("\n"))
   })
   if (data.length > 60) {
     const more = document.createElement("span")
     more.className = "cf-hunk-more"
     more.textContent = `… ${data.length - 60} more lines`
-    pre.appendChild(more)
+    frag.appendChild(more)
   }
+  pre.appendChild(frag)
   el.appendChild(pre)
 }

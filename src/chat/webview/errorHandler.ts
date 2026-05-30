@@ -25,6 +25,7 @@ export interface ErrorHandlerConfig {
   enableLogging?: boolean;
   enableRetry?: boolean;
   maxRetryAttempts?: number;
+  maxHistorySize?: number;
   logToConsole?: boolean;
   logToExtension?: boolean;
   enableAnalytics?: boolean;
@@ -70,17 +71,35 @@ export class ErrorHandler {
   private errorHistory: ErrorLogEntry[] = [];
   private maxHistorySize = 100;
   private retryRegistry = new Map<string, number>(); // Track retry attempts per error code
+  private vscodeApi: { postMessage: (message: unknown) => void } | null = null;
 
   constructor(config: ErrorHandlerConfig = {}) {
     this.config = {
       enableLogging: true,
       enableRetry: true,
       maxRetryAttempts: 3,
+      maxHistorySize: 100,
       logToConsole: true,
       logToExtension: true,
       enableAnalytics: false,
       ...config
     };
+    if (this.config.maxHistorySize) {
+      this.maxHistorySize = this.config.maxHistorySize;
+    }
+
+    // Cache VS Code API reference once
+    try {
+      const acquire = (globalThis as { acquireVsCodeApi?: unknown }).acquireVsCodeApi;
+      if (typeof acquire === 'function') {
+        const api = acquire();
+        if (api && typeof api === 'object' && 'postMessage' in api) {
+          this.vscodeApi = api as { postMessage: (message: unknown) => void };
+        }
+      }
+    } catch {
+      // Not running in a VS Code webview — swallow silently
+    }
   }
 
   /**
@@ -109,7 +128,11 @@ export class ErrorHandler {
   private shouldUseOpencodeMapper(error: unknown): boolean {
     if (!error || typeof error !== "object") return false
     const e = error as Record<string, unknown>
-    return typeof e.name === "string" || typeof e.statusCode === "number" || typeof e.isRetryable === "boolean"
+    // Plain Error objects have name="Error" — only route SDK errors with
+    // known opencode error names or explicit HTTP status codes through the mapper.
+    const name = e.name
+    if (typeof name === "string" && name !== "Error") return true
+    return typeof e.statusCode === "number" || typeof e.isRetryable === "boolean"
   }
 
   private applyOptions(ctx: ErrorContext, options: ErrorHandlerOptions): ErrorContext {
@@ -355,15 +378,14 @@ export class ErrorHandler {
           currentDelay = Math.min(currentDelay * multiplier, maxDelay);
         }
 
-        // Add jitter if enabled
-        if (useJitter) {
-          currentDelay = currentDelay * (0.5 + Math.random() * 0.5);
-        }
+        // Add jitter if enabled — apply on a copy so currentDelay stays clean
+        const jitterFactor = useJitter ? (0.5 + Math.random() * 0.5) : 1;
+        const actualDelay = currentDelay * jitterFactor;
 
-        totalDelayMs += currentDelay;
+        totalDelayMs += actualDelay;
 
         // Wait before retry
-        await this.delay(currentDelay);
+        await this.delay(actualDelay);
       }
     }
 
@@ -390,20 +412,12 @@ export class ErrorHandler {
       console.error(`[${errorContext.category.toUpperCase()}] ${errorContext.code}: ${errorContext.userMessage}`, errorContext);
     }
 
-    if (this.config.logToExtension) {
-      // Log to extension host via VS Code API
+    if (this.config.logToExtension && this.vscodeApi) {
       try {
-        // Check if acquireVsCodeApi exists in global scope
-        const globalAcquireVsCodeApi = (globalThis as { acquireVsCodeApi?: unknown }).acquireVsCodeApi;
-        if (typeof globalAcquireVsCodeApi === 'function') {
-          const vscode = globalAcquireVsCodeApi();
-          if (vscode && typeof vscode === 'object' && 'postMessage' in vscode) {
-            (vscode as { postMessage: (message: unknown) => void }).postMessage({
-              type: 'error_log',
-              errorContext
-            });
-          }
-        }
+        this.vscodeApi.postMessage({
+          type: 'error_log',
+          errorContext
+        });
       } catch (error) {
         console.warn('Failed to log error to extension:', error);
       }
@@ -526,13 +540,21 @@ export class ErrorHandler {
    * Generate unique correlation ID for error tracking
    */
   private generateCorrelationId(): string {
-    return `err_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const g = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto
+    if (g?.randomUUID) return g.randomUUID()
+    return `err-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
   }
 
   /**
    * Update configuration
    */
   updateConfig(config: Partial<ErrorHandlerConfig>): void {
+    if (config.maxRetryAttempts !== undefined) {
+      this.retryRegistry.clear()
+    }
+    if (config.enableLogging !== undefined && config.enableLogging === false) {
+      this.errorHistory = []
+    }
     this.config = { ...this.config, ...config };
   }
 

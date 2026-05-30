@@ -130,7 +130,7 @@ export class MethodologyOrchestrator {
   }
 
   getConfig(): MethodologyConfig {
-    return mergeMethodologyConfig(DEFAULT_CONFIG, this.config);
+    return mergeMethodologyConfig(this.config, undefined);
   }
 
   private createRouter(): CascadeRouter {
@@ -138,9 +138,6 @@ export class MethodologyOrchestrator {
       {
         maxEscalations: this.config.cascade.maxEscalations,
         qualityThresholds: this.config.cascade.qualityThresholds,
-        maxTokensPerRequest: 50000,
-        maxCostPerRequest: 5.0,
-        fallbackChain: [],
       },
       this.modelExecutor
     );

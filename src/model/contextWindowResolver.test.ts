@@ -96,6 +96,24 @@ describe("resolveContextWindow — OpenRouter cache fallback (0.2.15)", () => {
     )
   })
 
+  it("treats a 1B server value as an unbounded placeholder and uses the OpenRouter cache", () => {
+    const cache = new Map<string, number>([["deepseek-v4-flash-free", 128_000]])
+    assert.equal(
+      resolveContextWindow("opencode/deepseek-v4-flash-free", 1_000_000_000, { openRouterCache: cache }),
+      128_000,
+    )
+  })
+
+  it("logs and returns undefined for a 1B placeholder when no fallback is available", () => {
+    const lines: string[] = []
+    const out = resolveContextWindow("opencode/deepseek-v4-flash-free", 1_000_000_000, {
+      log: (m) => lines.push(m),
+    })
+    assert.equal(out, undefined)
+    assert.equal(lines.length, 1)
+    assert.match(lines[0]!, /placeholder limit\.context/)
+  })
+
   it("returns undefined and logs when both server and cache come up empty", () => {
     const lines: string[] = []
     const cache = new Map<string, number>([["totally-different/model", 1]])

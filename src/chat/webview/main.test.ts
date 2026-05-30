@@ -83,12 +83,10 @@ describe("main.ts", () => {
     assert.ok(source.includes('dataset.testid = els.sendBtn.dataset.testid || "send-button"'))
   })
 
-  it("auto-mode warning confirmation updates UI state and notifies the host", () => {
-    const setModeIdx = source.indexOf("function setMode(mode: string): void")
-    assert.ok(setModeIdx >= 0, "auto-mode warning setMode helper must exist")
-    const block = source.slice(setModeIdx, source.indexOf("const modeWarningDeps", setModeIdx))
-    assert.ok(block.includes("updateModeDropdownLocal(mode)"), "confirming auto mode must update the visible dropdown")
-    assert.ok(block.includes('vscode.postMessage({ type: "change_mode", mode, sessionId: active.id })'), "confirming auto mode must notify the extension host")
+  it("mode_change_result host acknowledgement updates the visible dropdown", () => {
+    assert.ok(source.includes('"mode_change_result"'), "host acknowledgement must update the visible dropdown")
+    assert.ok(source.includes("updateModeDropdownLocal(mode)"), "mode_change_result must update the visible dropdown after host acknowledges")
+    assert.ok(source.includes("updateModeSelectorStateLocal()"), "mode_change_result must update the selector state after host acknowledges")
   })
 
   it("condenses very long local history without mutating server history", () => {
@@ -384,6 +382,60 @@ it("unified modal: server session items send resume_server_session on click", ()
       block.includes("includes(") || block.includes("indexOf(") || block.includes("Set("),
       "file_edited handler must deduplicate files (not add the same file twice)"
     )
+  })
+
+  // ── todos streaming guards ────────────────────────────────────────────────
+  // Regression guards for C1 (cross-tab leakage), C3 (dead deny route),
+  // and the recommendation to warn on unknown sessionId.
+
+  it("todos_update handler is per-session (uses sessionId from message, not active fallback)", () => {
+    const idx = source.indexOf('"todos_update"')
+    assert.ok(idx >= 0, "todos_update handler must exist")
+    const block = source.slice(idx, idx + 800)
+    assert.ok(
+      !block.includes("|| stateManager.getState().activeSessionId"),
+      "todos_update must not silently fall back to active session — that path poisons cross-tab state"
+    )
+    assert.ok(block.includes("setServerTodos("), "todos_update must store per-session via setServerTodos")
+  })
+
+  it("todos_update warns and drops events for unknown sessionId (recommendation)", () => {
+    const idx = source.indexOf('"todos_update"')
+    const block = source.slice(idx, idx + 800)
+    assert.ok(
+      block.includes("dropped todos_update for unknown sessionId") ||
+      block.includes("dropped todos_update without sessionId"),
+      "todos_update must log when it drops an event so ChatProvider routing bugs are visible"
+    )
+  })
+
+  it("triggerTodosRender reads from per-session map, not a module-scoped variable (C1 regression)", () => {
+    assert.ok(source.includes("serverTodosBySession"),
+      "main.ts must keep todos in a Map<sid, Todo[]> — not a single `currentTodosList`")
+    assert.ok(!source.includes("let currentTodosList"),
+      "the legacy `currentTodosList` global must be gone (it was the C1 cross-tab leak source)")
+    assert.ok(source.includes("getServerTodos("),
+      "triggerTodosRender must read through getServerTodos(sid)")
+  })
+
+  it("closeTab cleans up per-session server todos", () => {
+    assert.ok(source.includes("serverTodosBySession.delete(tabId)"),
+      "closeTab must drop cached server todos for the closed tab")
+  })
+
+  it("toggle_todo / delete_todo are no longer posted to the host for server todos (C3 regression)", () => {
+    assert.ok(!source.includes('type: "toggle_todo"'),
+      "main.ts must not post toggle_todo — server todos are read-only at the UI")
+    assert.ok(!source.includes('type: "delete_todo"'),
+      "main.ts must not post delete_todo — server todos are read-only at the UI")
+    assert.ok(!source.includes('"todo_operation_denied"'),
+      "the todo_operation_denied handler must be removed (denied route no longer exists)")
+    // Ensure the host VALID_WEBVIEW_TYPES set also no longer accepts the dead routes.
+    const routerSource = readFileSync(path.join(__dirname, "..", "WebviewEventRouter.ts"), "utf8")
+    assert.ok(!routerSource.includes('"toggle_todo"'),
+      "WebviewEventRouter must not whitelist toggle_todo anymore")
+    assert.ok(!routerSource.includes('"delete_todo"'),
+      "WebviewEventRouter must not whitelist delete_todo anymore")
   })
 
   it("changed_files_update is canonical sync for chip bar and todos panel", () => {

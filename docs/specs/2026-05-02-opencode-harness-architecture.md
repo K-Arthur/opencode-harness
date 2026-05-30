@@ -224,6 +224,7 @@ class ChatProvider implements vscode.WebviewViewProvider {
 | `token_usage` | `{ sessionId, percentage, tokens, limit }` | Token usage update |
 | `model_changed` | `{ sessionId, model }` | Model changed for tab |
 | `mode_changed` | `{ sessionId, mode }` | Mode changed for tab |
+| `mode_change_result` | `{ sessionId, mode, accepted, reason? }` | Host acknowledgement for mode-change requests; rejected/cancelled transitions echo the previous mode |
 | `task_complete` | `{ sessionId, status, message }` | Task completion banner |
 | `request_error` | `{ sessionId, error, canRetry }` | Error with retry option |
 | `diff` | `{ sessionId, messageId, blockId, diff }` | Diff block to display |
@@ -240,7 +241,7 @@ class ChatProvider implements vscode.WebviewViewProvider {
 | `abort` | `{ sessionId }` | Abort streaming for tab |
 | `switch_tab` | `{ sessionId }` | Switch to tab |
 | `close_tab` | `{ sessionId }` | Close tab (stops worker, keeps history) |
-| `change_mode` | `{ sessionId, mode }` | Change mode for tab |
+| `change_mode` | `{ sessionId, mode }` | Request a Plan, Build, or Auto mode change for tab |
 | `set_model` | `{ sessionId, model }` | Set model for tab |
 | `accept_diff` | `{ sessionId, blockId, edits }` | Accept diff |
 | `reject_diff` | `{ sessionId, blockId }` | Reject diff |
@@ -351,7 +352,8 @@ class MessageRouter {
 - `abort` → `streamCoordinator.abort()`
 - `close_tab` → abort if streaming, then `tabManager.closeTab()`
 - `switch_tab` → `tabManager.switchTab()`, sync state
-- `change_mode` / `set_model` → update TabManager + SessionStore
+- `change_mode` → validate/normalize mode, run Auto confirmation if needed, update TabManager + SessionStore, then post `mode_change_result`
+- `set_model` → update TabManager + SessionStore
 - `accept_diff` / `reject_diff` → delegate to `DiffHandler`
 
 ---

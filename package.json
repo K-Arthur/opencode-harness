@@ -9,7 +9,7 @@
   },
   "description": "AI-powered coding assistant integrated into VS Code. Chat, refactor, debug, and write code with the OpenCode agent while staying in your editor. Supports multiple AI models (Claude, GPT, Gemini), custom themes, cost tracking, and granular permission controls.",
   "icon": "media/opencode-icon-256.png",
-  "version": "0.2.19",
+  "version": "0.2.20",
   "engines": {
     "vscode": "^1.98.0"
   },
@@ -874,6 +874,7 @@
     "coverage": "c8 --reporter=text --include='**' --exclude='node_modules/**' --exclude='tests/**' --exclude='.git/**' --exclude='*.json' --exclude='*.md' --exclude='*.yaml' node --test tests/unit/*.test.mjs",
     "test:integration": "vscode-test",
     "test:visual": "playwright test",
+    "test:visual:context": "playwright test tests/visual/chat-context-usage.spec.ts --project=chromium",
     "test:visual:update": "playwright test --update-snapshots",
     "test:webview": "playwright test --project=chromium-webview",
     "test:message-contract": "npx tsx --test tests/webview/message-contract.test.ts",
@@ -901,6 +902,7 @@
     "husky": "^9.1.7",
     "jsdom": "^29.1.1",
     "mocha": "^11.3.0",
+    "tsx": "^4.22.3",
     "typescript": "^5.7.0"
   },
   "overrides": {

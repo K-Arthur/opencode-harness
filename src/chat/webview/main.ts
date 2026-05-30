@@ -25,6 +25,7 @@ import { setupChangedFilesDropdown, updateChangedFiles, handleDiffResponse as ha
 import type { DiffLine } from "./types"
 import { mergeEditBannerFiles } from "./file-chip-list"
 import { setupContextUsageDropdown as setupCtxDropdown, updateUsage as updateCtxDropdown, resetContextUsageDropdown, openContextUsageDropdown } from "./context-usage-dropdown"
+import { buildSummaryText, formatUsagePercent } from "./context-usage-service"
 import { showCompactBanner, hideCompactBanner } from "./compact-banner"
 import { setupPromptStash } from "./prompt-stash"
 import { prepareHostRecentSessions, prepareLocalRecentSessions, renderRecentSessions } from "./recent-sessions"
@@ -46,7 +47,7 @@ import { setupThemeCustomizer, openThemeCustomizer, closeThemeCustomizer, popula
 import { setupModeToggle, updateModeDropdown, closeModeDropdown, updateModeSelectorState, syncModeUI as syncModeUIModule, getCurrentMode } from "./ui/modeDropdown"
 import { setupInstructionsEditor } from "./ui/instructionsEditor"
 import { setupSessionModal as setupSessionModalModule, openSessionModal as openSessionModalModule, closeSessionModal as closeSessionModalModule, trapModalFocus } from "./ui/sessionModal"
-import { setupModeWarning as setupModeWarningModule, showAutoModeWarning as showAutoModeWarningModule, closeModeWarning as closeModeWarningModule, isModeWarningOpen, type ModeWarningEls } from "./ui/modeWarning"
+
 import { handleTokenUsage as handleTokenUsageModule, accumulateTokenUsage as accumulateTokenUsageModule, accumulateCost as accumulateCostModule, rememberStepUsage, isDuplicateRecentStepUsage, handleRateLimitState as handleRateLimitStateModule, recordUsageSnapshot as recordUsageSnapshotModule, updateCostDisplay as updateCostDisplayModule, updateTokenDisplay as updateTokenDisplayModule, clearTokenDisplay as clearTokenDisplayModule, updateContextBarFromSession as updateContextBarFromSessionModule, checkOverflowWarnings as checkOverflowWarningsModule, formatTokenCount as formatTokenCountModule, type TokenCostDeps, type RateLimitWebviewState } from "./ui/tokenCostDisplay"
 import { createAttachmentManager, parsePromptMentions, removePromptToken } from "./ui/attachments"
 import { showWelcomeView as showWelcomeViewModule, hideWelcomeView as hideWelcomeViewModule, renderWelcomeContext as renderWelcomeContextModule, setupWelcomeActions as setupWelcomeActionsModule, setupWelcomeSuggestions as setupWelcomeSuggestionsModule, setupWelcomeResponsive as setupWelcomeResponsiveModule, type WelcomeViewDeps } from "./ui/welcomeView"
@@ -57,6 +58,7 @@ import { updateScrollMarkers as updateScrollMarkersModule, setupJumpToBottom as 
 import { createStreamOrchestrator, type StreamOrchestratorAPI } from "./streamOrchestrator"
 import { createTimeline, type TimelineAPI } from "./timeline"
 import { createComposer, type ComposerAPI } from "./composer"
+import { normalizeSessionMode } from "../modePolicy"
 
 declare const acquireVsCodeApi: (() => {
   postMessage(message: Record<string, unknown>): void
@@ -134,7 +136,17 @@ function getVsCodeApi() {
   
   // Panel APIs
   let todosPanelApi: any = null
-  let currentTodosList: Todo[] = []
+  // Per-session server-side todos. Single source of truth keyed by sessionId
+  // so a background tab's todos.updated event cannot poison the active tab.
+  const serverTodosBySession = new Map<string, Todo[]>()
+
+  function getServerTodos(sessionId: string): Todo[] {
+    return serverTodosBySession.get(sessionId) ?? []
+  }
+
+  function setServerTodos(sessionId: string, todos: Todo[]): void {
+    serverTodosBySession.set(sessionId, todos)
+  }
 
   function getMergedTodos(sessionId: string, serverTodos: Todo[]): Todo[] {
     const session = stateManager.getSession(sessionId)
@@ -143,7 +155,7 @@ function getVsCodeApi() {
 
   function triggerTodosRender(sessionId: string) {
     if (todosPanelApi && todosPanelApi.renderTodos) {
-      const merged = getMergedTodos(sessionId, currentTodosList)
+      const merged = getMergedTodos(sessionId, getServerTodos(sessionId))
       todosPanelApi.renderTodos(merged)
     }
   }
@@ -437,7 +449,7 @@ function getVsCodeApi() {
     },
     closeModelManager: () => modelManager.close(),
     closeThemeCustomizer,
-    closeModeWarning: () => closeModeWarning(),
+    closeModeWarning: () => els.modeWarningModal.classList.add("hidden"),
     closeMcpConfig: () => mcpConfig.close(),
     closeSessionModal: () => closeSessionModal(),
   }
@@ -463,7 +475,6 @@ function getVsCodeApi() {
       getActiveSession: () => stateManager.getActiveSession(),
       setSessionMode: (id, mode) => stateManager.setSessionMode(id, mode),
       postMessage: (msg) => vscode.postMessage(msg),
-      showAutoModeWarning,
     })
     wireComposer()
     composer.setupInput()
@@ -527,52 +538,33 @@ function getVsCodeApi() {
     })
   }
 
+  function isUserTodoId(todoId: string): boolean {
+    return todoId.startsWith("todo-")
+  }
+
   function toggleTodo(todoOrId: string | Todo): void {
     const todoId = typeof todoOrId === "string" ? todoOrId : todoOrId.id
+    if (!isUserTodoId(todoId)) return
     const activeSid = stateManager.getState().activeSessionId
     if (!activeSid) return
     const session = stateManager.getSession(activeSid)
     if (!session) return
-
-    if (todoId.startsWith("todo-")) {
-      const todo = session.userTodos?.find(t => t.id === todoId)
-      if (todo) {
-        todo.status = todo.status === "completed" ? "pending" : "completed"
-        stateManager.save()
-        triggerTodosRender(activeSid)
-      }
-      return
-    }
-
-    session.todoOverrides ??= {}
-    const currentStatus = session.todoOverrides[todoId] ||
-      (typeof todoOrId === "object" ? todoOrId.status : "pending")
-    session.todoOverrides[todoId] = currentStatus === "completed" ? "pending" : "completed"
+    const todo = session.userTodos?.find(t => t.id === todoId)
+    if (!todo) return
+    todo.status = todo.status === "completed" ? "pending" : "completed"
     stateManager.save()
     triggerTodosRender(activeSid)
-    vscode.postMessage({ type: "toggle_todo", todoId })
   }
 
   function deleteTodo(todoId: string): void {
+    if (!isUserTodoId(todoId)) return
     const activeSid = stateManager.getState().activeSessionId
     if (!activeSid) return
     const session = stateManager.getSession(activeSid)
     if (!session) return
-
-    if (todoId.startsWith("todo-")) {
-      session.userTodos = session.userTodos?.filter(t => t.id !== todoId) || []
-      stateManager.save()
-      triggerTodosRender(activeSid)
-      return
-    }
-
-    session.deletedTodoIds ??= []
-    if (!session.deletedTodoIds.includes(todoId)) {
-      session.deletedTodoIds.push(todoId)
-    }
+    session.userTodos = session.userTodos?.filter(t => t.id !== todoId) || []
     stateManager.save()
     triggerTodosRender(activeSid)
-    vscode.postMessage({ type: "delete_todo", todoId })
   }
 
   function addUserTodo(content: string): void {
@@ -581,7 +573,7 @@ function getVsCodeApi() {
     const session = stateManager.getSession(activeSid)
     if (!session) return
 
-    const normalized = content.trim()
+    const normalized = content.trim().normalize("NFC")
     if (!normalized) return
     if (normalized.length > 500) {
       console.warn("Todo content exceeds 500 character limit")
@@ -589,8 +581,9 @@ function getVsCodeApi() {
     }
 
     session.userTodos ??= []
+    const dupKey = normalized.toLowerCase()
     const exists = session.userTodos.some(
-      t => t.content.trim().toLowerCase() === normalized.toLowerCase()
+      t => t.content.trim().normalize("NFC").toLowerCase() === dupKey
     )
     if (exists) {
       console.warn("Duplicate todo ignored")
@@ -995,6 +988,10 @@ function getVsCodeApi() {
     // Delete stream handler after cleanup
     streamHandlers.delete(tabId)
 
+    // Drop cached server-side todos for the closed tab so they cannot be
+    // re-rendered into a re-used session id later.
+    serverTodosBySession.delete(tabId)
+
     // Clean up tool timing data
     toolElapsedTracker.clearForPrefix(tabId)
 
@@ -1163,37 +1160,6 @@ function getVsCodeApi() {
 
   function undoRedoPush(state: { themePreset: string; themeOverrides: Record<string, string> }): void {
     pushUndoRedo(state)
-  }
-
-  function setMode(mode: string): void {
-    const active = stateManager.getActiveSession()
-    if (active) {
-      updateModeDropdownLocal(mode)
-      stateManager.setSessionMode(active.id, mode)
-      vscode.postMessage({ type: "change_mode", mode, sessionId: active.id })
-    }
-  }
-
-  const modeWarningDeps = {
-    els: {
-      modeWarningTitle: els.modeWarningTitle,
-      modeWarningDescription: els.modeWarningDescription,
-      modeWarningModal: els.modeWarningModal,
-      modeWarningCancel: els.modeWarningCancel,
-      modeWarningConfirm: els.modeWarningConfirm,
-      modeWarningDontShow: els.modeWarningDontShow,
-    } as ModeWarningEls,
-    postMessage: (msg: Record<string, unknown>) => vscode.postMessage(msg),
-    setMode,
-  }
-  setupModeWarningModule(modeWarningDeps)
-
-  function showAutoModeWarning() {
-    showAutoModeWarningModule(modeWarningDeps)
-  }
-
-  function closeModeWarning() {
-    closeModeWarningModule(modeWarningDeps.els)
   }
 
   /* ─── INPUT ─── */
@@ -1542,6 +1508,16 @@ function getVsCodeApi() {
         }
       }],
       ["mention_results", (msg) => { mention.renderResults(msg.items as MentionItem[] | undefined) }],
+      ["mode_change_result", (msg, sid) => {
+        const sessionId = typeof msg.sessionId === "string" ? msg.sessionId : sid
+        const mode = normalizeSessionMode(msg.mode)
+        if (!sessionId || !mode) return
+        stateManager.setSessionMode(sessionId, mode)
+        if (stateManager.getState().activeSessionId === sessionId) {
+          updateModeDropdownLocal(mode)
+          updateModeSelectorStateLocal()
+        }
+      }],
       ["session_list", (msg) => {
         const sessions = (msg.sessions || []) as SessionSummary[]
         const isWelcomeVisible = !els.welcomeView.classList.contains("hidden")
@@ -1718,16 +1694,23 @@ function getVsCodeApi() {
         debouncedUpdateScrollMarkers(sid)
       }],
       ["context_usage", (msg) => {
-        const pct = msg.percent as number
-        const tokens = msg.tokens as number
-        const maxTokens = msg.maxTokens as number
+        const pct = typeof msg.percent === "number" && Number.isFinite(msg.percent) ? msg.percent : 0
+        const tokens = typeof msg.tokens === "number" && Number.isFinite(msg.tokens) ? Math.max(0, msg.tokens) : 0
+        const maxTokens = typeof msg.maxTokens === "number" && Number.isFinite(msg.maxTokens) ? Math.max(0, msg.maxTokens) : 0
         const activeId = stateManager.getState().activeSessionId
         const targetId = isValidSessionId(msg.sessionId as string) ? msg.sessionId as string : activeId
         if (!targetId) return
         // Persist per-session so it survives tab switches
         const sess = stateManager.getSession(targetId)
         if (sess) {
-          sess.contextUsage = { percent: pct, tokens, maxTokens, breakdown: msg.breakdown as any }
+          sess.contextUsage = {
+            percent: pct,
+            tokens,
+            maxTokens,
+            breakdown: msg.breakdown as any,
+            cost: typeof msg.cost === "number" && Number.isFinite(msg.cost) ? msg.cost : undefined,
+            projected: msg.projected as any,
+          } as any
           stateManager.save()
         }
         if (targetId !== activeId) {
@@ -1775,7 +1758,7 @@ function getVsCodeApi() {
           const session = stateManager.getSession(targetId)
           const fill = session?.contextUsage  // set by context_usage handler, represents current fill
           if (fill) {
-            const pct = Math.min(100, Math.round((fill.tokens / (msg.maxTokens as number)) * 100))
+            const pct = Math.min(100, Math.max(0, (fill.tokens / (msg.maxTokens as number)) * 100))
             const updatedUsage = { type: "context_usage", sessionId: targetId, percent: pct, tokens: fill.tokens, maxTokens: msg.maxTokens as number, breakdown: fill.breakdown }
             session.contextUsage = { ...fill, percent: pct, maxTokens: msg.maxTokens as number }
             stateManager.save()
@@ -2433,20 +2416,20 @@ function getVsCodeApi() {
         }
       }],
       ["todos_update", (msg) => {
-        const sid = typeof msg.sessionId === "string" ? msg.sessionId : stateManager.getState().activeSessionId
-        const activeSid = stateManager.getState().activeSessionId
-        if (sid) {
-          currentTodosList = (msg.todos as Todo[]) || []
-          const merged = getMergedTodos(sid, currentTodosList)
-          if (sid === activeSid && todosPanelApi && todosPanelApi.renderTodos) {
-            todosPanelApi.renderTodos(merged)
-          }
+        const sid = typeof msg.sessionId === "string" ? msg.sessionId : null
+        if (!sid) {
+          webviewLog(`[main] dropped todos_update without sessionId`)
+          return
         }
-      }],
-      ["todo_operation_denied", (msg) => {
-        const reason = typeof msg.reason === "string" ? msg.reason : "Operation not allowed"
-        if (todosPanelApi && todosPanelApi.showToast) {
-          todosPanelApi.showToast(reason, "warning")
+        // Ignore updates for sessions the webview has no tab for; this catches
+        // ChatProvider routing bugs that would otherwise silently pollute state.
+        if (!stateManager.getSession(sid)) {
+          webviewLog(`[main] dropped todos_update for unknown sessionId=${sid}`)
+          return
+        }
+        setServerTodos(sid, (msg.todos as Todo[]) || [])
+        if (sid === stateManager.getState().activeSessionId) {
+          triggerTodosRender(sid)
         }
       }],
       ["changed_files_update", (msg) => {
@@ -2534,6 +2517,8 @@ function getVsCodeApi() {
 
     window.addEventListener("beforeunload", () => {
       stateManager.flush()
+      todosPanelApi?.dispose?.()
+      subagentPanelApi?.dispose?.()
     })
 
     let stateSyncDebounce: ReturnType<typeof setTimeout> | undefined
@@ -2698,17 +2683,23 @@ function getVsCodeApi() {
     try {
       const safePct = Number.isFinite(pct) ? Math.min(100, Math.max(0, pct)) : 0
       const safeTokens = Number.isFinite(tokens) ? Math.max(0, tokens) : 0
+      const safeMaxTokens = Number.isFinite(maxTokens) ? Math.max(0, maxTokens) : 0
       const bar = els.contextUsage
-      const prog = els.contextProgressBar as HTMLProgressElement | null
+      const prog = els.contextProgressBar as HTMLElement | null
       const label = els.contextLabel
 
-      if (prog && "value" in prog) {
-        (prog as HTMLProgressElement).value = safePct
+      if (prog) {
+        if ("value" in prog) {
+          (prog as HTMLProgressElement).value = safePct
+        }
+        prog.style.width = `${safePct}%`
+        prog.setAttribute("aria-valuenow", String(Math.round(safePct)))
       }
       if (label) {
-        const tokStr = formatTokenCount(safeTokens)
-        const maxStr = maxTokens > 0 ? ` · ${formatTokenCount(maxTokens)}` : ""
-        label.textContent = `${safePct}%${maxStr !== "" ? ` · ${tokStr}` : ` · ${tokStr} tok`}`
+        label.textContent = buildSummaryText(safeTokens, safeMaxTokens, safePct)
+        label.title = safeMaxTokens > 0
+          ? `${formatUsagePercent(safePct)} used · ${safeTokens.toLocaleString()} / ${safeMaxTokens.toLocaleString()} tokens`
+          : `${safeTokens.toLocaleString()} tokens · context window unknown`
       }
       const shouldHide = safePct === 0 && safeTokens === 0
       bar.classList.toggle("hidden", shouldHide)

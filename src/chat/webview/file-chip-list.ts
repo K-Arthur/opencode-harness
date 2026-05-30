@@ -1,17 +1,17 @@
 /**
- * Single source of truth for "render a horizontal list of file chips".
+ * Single source of truth for rendering a compact inline file list.
  *
  * Used by:
  *  - the persistent bottom `#changed-files-strip` (aggregate, all session edits)
  *  - the inline `task-banner` (ephemeral, what just got edited)
  *
- * One helper keeps the two surfaces visually consistent and prevents drift
- * — adding a chip variant (e.g. status icon, hover behavior) only needs to
- * happen once.
+ * Produces a single-line text string with dot separators — no chip
+ * backgrounds, no borders, no card-like styling. Files are just text
+ * spans, keeping the UI minimal and fast for high-frequency updates.
  */
 
 export interface FileChipListOptions {
-  /** Max chips to show before collapsing the rest into a `+N more` pill. */
+  /** Max file names to show before collapsing into `+N more`. */
   maxVisible?: number
   /** Show a leading file/document icon. */
   showLeadingIcon?: boolean
@@ -19,8 +19,6 @@ export interface FileChipListOptions {
   showCountLabel?: boolean
   /** Optional verb after the count, e.g. "changed" → "13 files changed". */
   countLabelSuffix?: string
-  /** Render compact (smaller font, less padding). */
-  compact?: boolean
 }
 
 const DEFAULT_MAX = 5
@@ -34,9 +32,8 @@ export function escapeHtml(s: string): string {
 }
 
 /**
- * Render an HTML string for a horizontal file-chip list.
- * Caller is responsible for installing it (via .innerHTML) and wiring click
- * handlers via event delegation on `.cf-strip-chip[data-path]` elements.
+ * Render an inline text-based file list.
+ * Click handlers should use event delegation on `.cf-strip-chip[data-path]`.
  */
 export function renderFileChipListHtml(files: string[], opts: FileChipListOptions = {}): string {
   const maxVisible = opts.maxVisible ?? DEFAULT_MAX
@@ -52,7 +49,6 @@ export function renderFileChipListHtml(files: string[], opts: FileChipListOption
           `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>` +
           `<polyline points="14 2 14 8 20 8"/>` +
           `<line x1="9" y1="15" x2="15" y2="15"/>` +
-          `<line x1="12" y1="12" x2="12" y2="18"/>` +
         `</svg>` +
       `</span>`
     )
@@ -73,6 +69,9 @@ export function renderFileChipListHtml(files: string[], opts: FileChipListOption
         escapeHtml(name) +
       `</span>`
     )
+    if (fpath !== visible[visible.length - 1] || overflow > 0) {
+      parts.push(`<span class="cf-strip-divider" aria-hidden="true">·</span>`)
+    }
   }
 
   if (overflow > 0) {

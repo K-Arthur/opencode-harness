@@ -81,33 +81,38 @@ export function sameToolBlock(
 }
 
 function mergeServerBlocks(msgObj: ChatMessage, blockList: Block[]): void {
-  const existingTextIdx = msgObj.blocks.findIndex((b) => b.type === "text")
+  const merged: Block[] = []
+  const usedExisting = new Set<number>()
+
   for (const sb of blockList) {
-    if (sb.type === "text") {
-      if (existingTextIdx >= 0) {
-        msgObj.blocks[existingTextIdx] = sb
-      } else {
-        msgObj.blocks.push(sb)
-      }
-    } else if (sb.type === "tool-call") {
+    if (sb.type === "tool-call") {
       const existingIdx = msgObj.blocks.findIndex(
-        (b) => b.type === "tool-call" && sameToolBlock(b, sb),
+        (b, idx) => !usedExisting.has(idx) && b.type === "tool-call" && sameToolBlock(b, sb),
       )
 
       if (existingIdx >= 0) {
-        if (sb.state === "result" || sb.result || sb.error) {
-          msgObj.blocks[existingIdx] = sb
-        }
+        usedExisting.add(existingIdx)
+        merged.push({ ...msgObj.blocks[existingIdx], ...sb } as Block)
       } else {
-        msgObj.blocks.push(sb)
+        merged.push(sb)
       }
     } else if (sb.type === "skill_badge") {
-      const exists = msgObj.blocks.some(b => b.type === "skill_badge" && b.skillName === sb.skillName)
+      const exists = merged.some(b => b.type === "skill_badge" && b.skillName === sb.skillName)
       if (!exists) {
-        msgObj.blocks.push(sb)
+        merged.push(sb)
       }
+    } else {
+      merged.push(sb)
     }
   }
+
+  for (const existing of msgObj.blocks) {
+    if (existing.type !== "skill_badge") continue
+    const exists = merged.some(b => b.type === "skill_badge" && b.skillName === existing.skillName)
+    if (!exists) merged.push(existing)
+  }
+
+  msgObj.blocks = merged
 }
 
 export function handleStreamEnd(
