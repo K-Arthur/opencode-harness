@@ -289,6 +289,19 @@ export class SessionClient {
     return resp.data
   }
 
+  /**
+   * Read a workspace file from the server, including its diff vs the original.
+   * opencode applies edits server-side; this is how the extension obtains the
+   * authoritative per-file diff (structured `patch.hunks` and/or unified
+   * `diff` string) for the changed-files view.
+   */
+  async readFile(path: string, directory?: string): Promise<unknown> {
+    const client = this.guard()
+    const resp = await client.file.read({ query: { path, directory } })
+    if (resp.error) throw new Error(`Failed to read file '${path}': ${JSON.stringify(resp.error)}`)
+    return resp.data
+  }
+
   async revertMessage(sessionId: string, messageId: string): Promise<boolean> {
     const client = this.guard()
     await client.session.revert({ path: { id: sessionId }, body: { messageID: messageId } })

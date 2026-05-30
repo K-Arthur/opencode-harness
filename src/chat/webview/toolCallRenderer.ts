@@ -6,7 +6,7 @@ import {
   TOOL_META_SVG,
   CHEVRON_RIGHT_SVG,
 } from "./icons"
-import { sanitizeHtml, highlightSyntax } from "./renderer"
+import { sanitizeHtml, highlightSyntax } from "./syntaxHighlighter"
 
 export interface RenderOptions {
   messageId?: string

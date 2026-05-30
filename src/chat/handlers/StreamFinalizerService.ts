@@ -1,4 +1,4 @@
-import type { StreamCallbacks, ToolEndResult, StreamLifecycleState } from "./StreamCoordinator"
+import type { StreamCallbacks, ToolEndResult, StreamLifecycleState } from "./StreamCoordinatorTypes"
 import type { TabManager } from "../TabManager"
 import type { Block } from "../types"
 import { log } from "../../utils/outputChannel"

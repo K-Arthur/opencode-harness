@@ -1,80 +1,119 @@
-## Code Exploration Policy
+# AGENTS.md — OpenCode Harness
 
-Always use jCodemunch-MCP tools for code navigation. Never fall back to Read, Grep, Glob, or Bash for code exploration.
-**Exception:** Use `Read` when you need to edit a file — the agent harness requires a `Read` before `Edit`/`Write` will succeed. Use jCodemunch tools to *find and understand* code, then `Read` only the specific file you're about to modify.
+## What This Is
+
+VS Code extension that integrates the opencode AI agent into VS Code. TypeScript/Node.js, built with esbuild. Client-server architecture: extension connects to an opencode HTTP server (localhost:4096) via `@opencode-ai/sdk`. Does not embed or spawn the CLI directly for chat.
+
+## Commands
+
+```bash
+npm run build        # esbuild bundle (extension + webview + CSS + markdownWorker)
+npm run typecheck    # tsc --noEmit (strict + noUncheckedIndexedAccess)
+npm run test:unit    # behavioral tests (tests/unit/*.test.mjs) + structural tests (src/**/*.test.ts)
+npm run lint         # alias for typecheck
+npx eslint src/      # ESLint (separate from typecheck in CI)
+```
+
+**Verification order before any commit:** `typecheck → build → test:unit`
+
+CI also runs `npx eslint src/` and `node scripts/check-architecture.mjs` as separate steps.
+
+## Build System
+
+esbuild bundles 4 entry points into `dist/`:
+- `src/extension.ts` → `dist/extension.js` (CJS, Node, vscode external)
+- `src/chat/webview/main.ts` → `dist/chat/webview/main.js` (IIFE, browser)
+- `src/chat/webview/markdownWorker.ts` → `dist/chat/webview/markdownWorker.js` (IIFE, browser)
+- `src/chat/webview/css/styles.css` → `dist/chat/webview/styles.css`
+
+Assets copied: `index.html`, `media/opencode-wordmark-dark.svg`.
+
+**CI bundle size limits:** extension.js < 500KB, main.js < 600KB.
+
+## Test Layers
+
+| Layer | What | Command |
+|---|---|---|
+| Behavioral unit | Real function-calling tests for SessionStore, EventNormalizer, DiffApplier, etc. | `node --test tests/unit/*.test.mjs` |
+| Structural unit | Source code pattern checks (being migrated to behavioral) | `npx tsx --test "src/**/*.test.ts"` |
+| Message contract | Webview message type contracts | `npx tsx --test tests/webview/message-contract.test.ts` |
+| Roundtrip | Integration roundtrip tests | `node --test tests/integration/message-roundtrip.test.mjs` |
+| Integration | VS Code Extension Dev Host (requires xvfb on Linux) | `npm run test:integration` |
+| Visual | Playwright screenshot regression | `npm run test:visual` |
+
+Run all unit+contract+roundtrip: `npm test`
+
+## Architecture
+
+- **Entry point:** `src/extension.ts`
+- **Webview provider:** `src/chat/ChatProvider.ts` — thin orchestrator, delegates to services
+- **Per-tab state:** `TabManager.ts`, **streaming:** `StreamCoordinator.ts`, **routing:** `MessageRouter.ts`
+- **Server lifecycle:** `src/session/SessionManager.ts`
+- **Theme system:** `src/theme/ThemeManager.ts` — CSS_VAR_MAP maps OpencodeTheme properties to CSS vars
+- **Max 3 concurrent AI streams** enforced by TabManager
+
+### ChatProvider Services (delegated from ChatProvider.ts)
+
+| Service | File | Responsibility |
+|---------|------|---------------|
+| `RetryQueueService` | `src/chat/RetryQueueService.ts` | Message retry with exponential backoff |
+| `StashService` | `src/chat/StashService.ts` | Prompt stash CRUD |
+| `ProviderManagementService` | `src/chat/ProviderManagementService.ts` | AI provider config CRUD |
+| `MessagePostService` | `src/chat/MessagePostService.ts` | Webview message posting |
+| `SlashCommandService` | `src/chat/SlashCommandService.ts` | Built-in slash commands |
+| `SessionSyncService` | `src/chat/SessionSyncService.ts` | Push model/MCP/rate-limit state |
+| `DiffAcceptService` | `src/chat/DiffAcceptService.ts` | Diff accept + plan permission |
+| `CodeInsertionService` | `src/chat/CodeInsertionService.ts` | Insert-at-cursor + create-file-from-code |
+| `AutoModeService` | `src/chat/AutoModeService.ts` | Auto-mode confirmation gate |
+
+### Webview Composer Modules (delegated from composer.ts)
+
+| Module | File | Responsibility |
+|--------|------|---------------|
+| `slashCommands` | `src/chat/webview/slashCommands.ts` | /command dispatching |
+| `queueRenderer` | `src/chat/webview/queueRenderer.ts` | Queue chip UI + drag-reorder |
+| `sendLogic` | `src/chat/webview/sendLogic.ts` | Send/abort/steer + stream capacity |
+| `inputHandlers` | `src/chat/webview/inputHandlers.ts` | Keyboard + paste + resize handlers |
+
+### Horizontal Scaling (Phase 2)
+
+- Interface stub: `src/session/SessionProcessManager.ts`
+- ADR: `docs/adrs/ADR-010-horizontal-scaling.md`
+
+## Key Constraints
+
+- VS Code engine: `^1.98.0`, Node.js: `20.x+`
+- `tsconfig.json`: `strict: true` AND `noUncheckedIndexedAccess: true` — both required
+- No mocks in source code (only in tests)
+- Circular imports forbidden (acyclic module graph)
+- All disposables must be pushed to `context.subscriptions`
+- Extension activation must be fast (<500ms target)
+
+## Code Navigation
+
+Use jCodemunch-MCP tools for code exploration. Use `Read` only when editing a file (harness requires Read before Edit/Write).
 
 **Start any session:**
-1. `resolve_repo { "path": "." }` — confirm the project is indexed. If not: `index_folder { "path": "." }`
-2. `suggest_queries` — when the repo is unfamiliar
+1. `resolve_repo { "path": "." }` — confirm indexed; if not: `index_folder { "path": "." }`
+2. `suggest_queries` — when repo is unfamiliar
 
-**Finding code:**
-- symbol by name → `search_symbols` (add `kind=`, `language=`, `file_pattern=`, `decorator=` to narrow)
-- decorator-aware queries → `search_symbols(decorator="X")` to find symbols with a specific decorator (e.g. `@property`, `@route`); combine with set-difference to find symbols *lacking* a decorator (e.g. "which endpoints lack CSRF protection?")
-- string, comment, config value → `search_text` (supports regex, `context_lines`)
-- database columns (dbt/SQLMesh) → `search_columns`
-- theme-related symbols → `search_symbols(query="theme")` to find ThemeManager, previewTheme, BUILT_IN_PRESETS, CSS_VAR_MAP, etc.
-- CSS variable mapping → ThemeManager.CSS_VAR_MAP maps OpencodeTheme properties to CSS vars consumed by `tokens.css` and `blocks.css`. Variable names must match exactly (e.g. `--oc-syn-keyword` not `--oc-syntax-keyword`, `--tool-read-color` not `--oc-tool-read`). Canvas-level vars (`--oc-bg`, `--oc-fg`, `--oc-editor-bg`, `--oc-editor-fg`, `--oc-glass-bg`, `--bg-primary`, `--oc-border`, `--oc-muted`, `--oc-description`) map to `panelBg`/`panelFg`/`editorBg`/`editorFg`/`borderColor`/`mutedFg` — these override the `tokens.css` defaults that point to `var(--vscode-sideBar-background)`.
-- theme presets only style the chat webview — they must NOT contribute VS Code workbench themes or call `workbench.action.setTheme`
-- `cli-default` preset uses `var(--vscode-*)` references for canvas colors; other presets (`light`, `dark`, `high-contrast`) use explicit hex values
-- `FIELD_MAP` maps CLI theme fields to OpencodeTheme properties: `background` → `panelBg`, `text` → `panelFg`, `backgroundPanel` → `editorBg`, `textMuted` → `mutedFg`, `border` → `borderColor`
-- `applyThemeContent()` reads `dark`/`light` variant from CLI theme files based on VS Code's current `ColorThemeKind`
+**Key patterns:**
+- Symbol by name → `search_symbols`
+- String/config/comment → `search_text` (supports regex)
+- Before opening any file → `get_file_outline` first
+- What imports this file → `find_importers`
+- What breaks if I change X → `get_blast_radius`
 
-**Reading code:**
-- before opening any file → `get_file_outline` first
-- one or more symbols → `get_symbol_source` (single ID → flat object; array → batch)
-- symbol + its imports → `get_context_bundle`
-- specific line range only → `get_file_content` (last resort)
+**Session-aware routing:**
+- Open with `plan_turn { "repo": "...", "query": "...", "model": "<model-id>" }`
+- `high` confidence → go directly, max 2 supplementary reads
+- `medium` → explore recommended files, max 5 supplementary reads
+- `low` → feature likely doesn't exist; report the gap, don't search further
+- After edits: call `register_edit` with edited file paths to invalidate caches
 
-**Repo structure:**
-- `get_repo_outline` → dirs, languages, symbol counts
-- `get_file_tree` → file layout, filter with `path_prefix`
+## CSS / Theme
 
-**Relationships & impact:**
-- what imports this file → `find_importers`
-- where is this name used → `find_references`
-- is this identifier used anywhere → `check_references`
-- file dependency graph → `get_dependency_graph`
-- what breaks if I change X → `get_blast_radius`
-- what symbols actually changed since last commit → `get_changed_symbols`
-- find unreachable/dead code → `find_dead_code`
-- class hierarchy → `get_class_hierarchy`
+CSS variables defined in `src/chat/webview/css/tokens.css` with VS Code token fallbacks. ThemeManager overrides injected via `applyThemeVars()`. Theme presets only style the chat webview — must NOT contribute VS Code workbench themes or call `workbench.action.setTheme`.
 
-## Session-Aware Routing
-
-**Opening move for any task:**
-1. `plan_turn { "repo": "...", "query": "your task description", "model": "<your-model-id>" }` — get confidence + recommended files; the `model` parameter narrows the exposed tool list to match your capabilities at zero extra requests.
-2. Obey the confidence level:
-   - `high` → go directly to recommended symbols, max 2 supplementary reads
-   - `medium` → explore recommended files, max 5 supplementary reads
-   - `low` → the feature likely doesn't exist. Report the gap to the user. Do NOT search further hoping to find it.
-
-**Interpreting search results:**
-- If `search_symbols` returns `negative_evidence` with `verdict: "no_implementation_found"`:
-  - Do NOT re-search with different terms hoping to find it
-  - Do NOT assume a related file (e.g. auth middleware) implements the missing feature (e.g. CSRF)
-  - DO report: "No existing implementation found for X. This would need to be created."
-  - DO check `related_existing` files — they show what's nearby, not what exists
-- If `verdict: "low_confidence_matches"`: examine the matches critically before assuming they implement the feature
-
-**After editing files:**
-- If PostToolUse hooks are installed (Claude Code only), edited files are auto-reindexed
-- Otherwise, call `register_edit` with edited file paths to invalidate caches and keep the index fresh
-- For bulk edits (5+ files), always use `register_edit` with all paths to batch-invalidate
-
-**Token efficiency:**
-- If `_meta` contains `budget_warning`: stop exploring and work with what you have
-- If `auto_compacted: true` appears: results were automatically compressed due to turn budget
-- Use `get_session_context` to check what you've already read — avoid re-reading the same files
-
-## Model-Driven Tool Tiering
-
-Your jcodemunch-mcp server narrows the exposed tool list based on the model you are running as. To avoid wasting requests on primitives when a composite would do, always include `model="<your-model-id>"` in your opening `plan_turn` call.
-
-Replace `<your-model-id>` with your active model:
-- Claude Opus variants → `claude-opus-4-7` (or any `claude-opus-*`)
-- Claude Sonnet variants → `claude-sonnet-4-6`
-- Claude Haiku variants → `claude-haiku-4-5`
-- GPT-4o / GPT-5 / o1 / Llama → use the model id as printed by your runner
-
-The `model=` parameter rides on the existing `plan_turn` call — it does **not** add a separate tool invocation. If `plan_turn` is not appropriate for a non-code task, call `announce_model(model="...")` once instead.
-
+`cli-default` uses `var(--vscode-*)` for canvas colors; other presets use explicit hex.
+`FIELD_MAP`: `background` → `panelBg`, `text` → `panelFg`, `backgroundPanel` → `editorBg`, `textMuted` → `mutedFg`, `border` → `borderColor`.

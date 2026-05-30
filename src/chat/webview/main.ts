@@ -1090,6 +1090,10 @@ function getVsCodeApi() {
 
     const stream = createStreamHandlers(streamEls, session.messages, () => {
       stateManager.save()
+    }, {
+      // Enables interactive blocks (e.g. question_answer) to post to the host
+      // while a stream is still running, instead of waiting for stream_end.
+      postMessage: (m) => vscode.postMessage(m),
     })
 
     // WARNING: Class methods live on the prototype, not as own properties.

@@ -16,19 +16,12 @@ import { partsToBlocks as sdkConvertPartsToBlocks } from "../../session/sdkMessa
 import { StreamFinalizerService } from "./StreamFinalizerService"
 import { MethodologyAdvisor, type MethodologyAdvice } from "../../methodology/MethodologyAdvisor"
 import { classifyTool } from "./toolClassifier"
+import { parseQuestionArgs, parseAllowFreeText } from "../webview/questionModel"
 import type { AdvisoryOrchestrationResult } from "../../methodology/MethodologyOrchestrator"
 import { updateMethodologyStatus, getMethodologyOrchestrator } from "../../extension"
 
-export interface StreamCallbacks {
-  postMessage: (msg: Record<string, unknown>) => void
-  postRequestError: (message: string, sessionId?: string) => void
-  toolCallId?: string
-}
-
-export type ToolEndResult = { id: string; ok: boolean; result?: string; durationMs?: number; stale?: boolean }
-
-/** Explicit lifecycle states for a streaming session */
-export type StreamLifecycleState = "idle" | "sending" | "streaming" | "completing" | "error" | "timeout"
+import type { StreamCallbacks, ToolEndResult, StreamLifecycleState } from "./StreamCoordinatorTypes"
+export type { StreamCallbacks, ToolEndResult, StreamLifecycleState }
 
 export class StreamCoordinator {
   private diffHandler: DiffHandler
@@ -1076,8 +1069,11 @@ export class StreamCoordinator {
     }
 
     const stableId = toolCall.id || this.getStableToolId(tabId)
+    const isQuestion = (toolCall.name || "").toLowerCase() === "question"
     const pending = this.getOrCreatePendingToolIds(tabId)
-    const existingBlock = tab.blocksBuffer.find(b => b.type === "tool-call" && b.id === stableId)
+    const existingBlock = tab.blocksBuffer.find(
+      b => (b.type === "tool-call" || b.type === "question") && b.id === stableId
+    )
     if (pending.has(stableId) || existingBlock) {
       log.info(`appendToolStart: duplicate start for ${stableId} on ${tabId}; updating existing tool call`)
       this.trackToolActivity(tabId, stableId)
@@ -1088,9 +1084,14 @@ export class StreamCoordinator {
         seq: this.nextSeq(tabId),
       })
       if (existingBlock) {
-        if (toolCall.args !== undefined) existingBlock.args = toolCall.args
-         if (toolCall.class) existingBlock.class = toolCall.class
-        if (toolCall.name) existingBlock.name = toolCall.name
+        if (existingBlock.type === "question") {
+          // Keep the persisted question current as its input finishes streaming.
+          this.applyQuestionArgs(existingBlock, toolCall.args)
+        } else {
+          if (toolCall.args !== undefined) existingBlock.args = toolCall.args
+          if (toolCall.class) existingBlock.class = toolCall.class
+          if (toolCall.name) existingBlock.name = toolCall.name
+        }
       }
       return
     }
@@ -1103,15 +1104,41 @@ export class StreamCoordinator {
       toolCall: { ...toolCall, id: stableId },
     })
 
-    // Persist tool block
-    tab.blocksBuffer.push({
-      type: "tool-call",
-      id: stableId,
-      name: toolCall.name,
-       class: toolCall.class || this.toolClass(toolCall.name),
-      state: toolCall.state === "pending" ? "pending" : "running",
-      args: toolCall.args,
-    })
+    // Persist the block. Question tools persist as an interactive `question`
+    // block (not a generic tool card) so stream_end / backfill re-render the
+    // question UI rather than a tool args panel.
+    if (isQuestion) {
+      const qBlock: Block = {
+        type: "question",
+        id: stableId,
+        toolCallId: stableId,
+        groups: [],
+        text: "",
+        options: [],
+        allowFreeText: true,
+      }
+      this.applyQuestionArgs(qBlock, toolCall.args)
+      tab.blocksBuffer.push(qBlock)
+    } else {
+      tab.blocksBuffer.push({
+        type: "tool-call",
+        id: stableId,
+        name: toolCall.name,
+        class: toolCall.class || this.toolClass(toolCall.name),
+        state: toolCall.state === "pending" ? "pending" : "running",
+        args: toolCall.args,
+      })
+    }
+  }
+
+  /** Re-parse question-tool args into a persisted question block (in place). */
+  private applyQuestionArgs(block: Block, args: unknown): void {
+    const groups = parseQuestionArgs(args)
+    if (groups.length === 0) return // partial/empty input — keep what we have
+    block.groups = groups
+    block.text = groups[0]!.question
+    block.options = groups[0]!.options
+    block.allowFreeText = parseAllowFreeText(args)
   }
 
   appendSkill(tabId: string, skillName: string, callbacks: StreamCallbacks): void {
@@ -1146,11 +1173,17 @@ export class StreamCoordinator {
     })
 
     // Update persisted tool block
-    const block = tab.blocksBuffer.find(b => b.type === "tool-call" && b.id === toolId)
+    const block = tab.blocksBuffer.find(
+      b => (b.type === "tool-call" || b.type === "question") && b.id === toolId
+    )
     if (block) {
-      if (toolCall.args) block.args = toolCall.args
-       if (toolCall.class) block.class = toolCall.class
-      if (toolCall.state === "pending" || toolCall.state === "running") block.state = toolCall.state
+      if (block.type === "question") {
+        this.applyQuestionArgs(block, toolCall.args)
+      } else {
+        if (toolCall.args) block.args = toolCall.args
+        if (toolCall.class) block.class = toolCall.class
+        if (toolCall.state === "pending" || toolCall.state === "running") block.state = toolCall.state
+      }
     }
   }
 

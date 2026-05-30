@@ -74,12 +74,26 @@ export interface ErrorBlock {
   retryable: boolean
 }
 
+/** One question group within a `QuestionBlock` (a model question may ask several). */
+export interface QuestionGroup {
+  question: string
+  header?: string
+  options: string[]
+  multiSelect: boolean
+}
+
 export interface QuestionBlock {
   [key: string]: unknown
   type: 'question'
   id: string
   toolCallId: string
   sessionId?: string
+  /**
+   * One or more question groups. `text`/`options` are retained as a derived,
+   * single-group view for backward compatibility with the `stream_end` blocks
+   * contract and existing render paths.
+   */
+  groups: QuestionGroup[]
   text: string
   options: string[]
   allowFreeText: boolean

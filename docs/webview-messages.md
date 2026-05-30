@@ -255,20 +255,35 @@ extension has already restored local state. Six fixes address this:
 
 ## Question Tool Block
 
-The `question` tool lets the model ask the user a multiple-choice or free-text question inline. It displays as an interactive block within the assistant message bubble.
+The `question` tool lets the model ask the user one or more multiple-choice or free-text questions inline. It displays as an interactive block within the assistant message bubble.
+
+### Input schema (defensive)
+
+The tool's `args` are normalized by the pure parser `parseQuestionArgs` (`src/chat/webview/questionModel.ts`) into a `QuestionGroup[]`. Two shapes are accepted:
+
+- **Flat single question** — `{ question | prompt | message | text, options | choices | select, allowFreeText? }`.
+- **Nested groups** (Claude-style) — `{ questions: [ { question, header?, options: (string | { label, description })[], multiSelect? } ] }`.
+
+`parseQuestionArgs` returns `[]` for empty/partial args, which signals callers to keep whatever was already rendered (the tool input often finishes streaming after the block first appears).
 
 ### Rendering
 
-A question block is rendered in two phases:
+The block is **interactive as soon as it appears**, including mid-stream. `postMessage` is threaded through the streaming handler chain (`StreamCallbacks.postMessage` → `handleToolStart`/`refreshQuestionBlock` → `renderBlock`'s `RenderOptions`), so option clicks and textarea submits work without waiting for `stream_end`. This matters because a pending question can block `stream_end` entirely.
 
-1. **Streaming phase** — `stream_tool_start` with `name: "question"` and `args: { question, options, allowFreeText }` renders the block immediately via `appendStreamingToolBlock` → `renderBlock`. The DOM is populated with options (`.question-option`) and optionally a textarea (`.question-freetext`). During streaming, the block's answer submission is silently dropped because `postMessage` from `acquireVsCodeApi()` is not available in the streaming handler chain — interactivity is deferred until `stream_end`.
+1. **Streaming phase** — `stream_tool_start` with `name: "question"` builds a `QuestionBlock` (via `parseQuestionArgs`) and renders it immediately. The `.question-block` wrapper carries `data-block-id` (the tool-call id) so it can be refreshed in place.
+2. **Live refresh** — when the tool input finishes streaming, `stream_tool_update` (or a duplicate `stream_tool_start`) routes through `refreshQuestionBlock`, which re-parses the args, updates the persisted block, and re-renders the `.question-block` DOM in place — filling in the question text and options that were empty at start.
+3. **Re-render phase** — `stream_end` carries the persisted `question` block (from the host `blocksBuffer`); `mergeServerBlocks` merges it with the live block (preferring non-empty `groups` so a late/empty copy can't wipe the displayed question), then `reRenderMessage` rebuilds the bubble.
 
-2. **Re-render phase** — `stream_end` with a `blocks` entry of `type: "question"` triggers `reRenderMessage` → `renderMessage` → `renderBlock`. At this point `postMessage` is threaded through `RenderOptions`, making option clicks and textarea submits functional. Answers post `{ type: "question_answer", sessionId, value, source, toolCallId }` back to the host.
+#### Single vs. multiple questions
+
+- **One single-select group** → "simple mode": clicking an option submits immediately; a textarea + Submit appear when `allowFreeText` is set.
+- **Multiple groups and/or any `multiSelect` group** → "multi mode": each group renders its own `.question-group` (with optional `.question-group-header`) and `.question-option` toggles; a single Submit aggregates one line per group (`"<header|question>: choice[, choice]"`, newline-separated), with any free-text appended.
 
 ### Host-to-Webview Messages
 
-- `stream_tool_start`: `{ type: "stream_tool_start", sessionId, toolCall: { id, name: "question", class: "meta", state: "running", args: { question: string, options: string[], allowFreeText: boolean } } }` — renders the question block during streaming.
-- `stream_end`: `{ type: "stream_end", sessionId, messageId, blocks: Array<{ type: "question", id, toolCallId, sessionId, text, options, allowFreeText }> }` — finalizes the question block with full interactivity.
+- `stream_tool_start`: `{ type: "stream_tool_start", sessionId, toolCall: { id, name: "question", class: "meta", state: "running", args } }` — renders the question block during streaming. `args` may be flat or nested (see Input schema); it is often empty at start and filled by a later update.
+- `stream_tool_update`: `{ type: "stream_tool_update", sessionId, toolCall: { id, args } }` — refreshes the question block in place as the input streams in.
+- `stream_end`: `{ type: "stream_end", sessionId, messageId, blocks: Array<{ type: "question", id, toolCallId, sessionId, groups, text, options, allowFreeText }> }` — finalizes the question. `groups` is authoritative; `text`/`options` are the derived single-group view kept for backward compatibility.
 
 ### Webview-to-Host Messages
 
@@ -286,7 +301,8 @@ The `toolCallId` (the tool call's `id` from `stream_tool_start`) flows through t
 
 The question block implements these ARIA attributes:
 - Outer wrapper: `role="form"`, `aria-label="Question from model"`
-- Options container: `role="group"`, `aria-label="Answer options"`
+- Options container: `role="group"`, `aria-label="Answer options"` (or `"Options: <header>"` per group)
+- Option toggles (multi mode): `aria-pressed` reflects selection state
 - Textarea: `aria-label="Type a custom answer"`, `maxlength="10000"`
 
 After the user answers, all inputs are disabled (buttons get `disabled`, textarea gets `readonly` + `disabled`) to prevent double-submits.
@@ -303,8 +319,10 @@ After the user answers, all inputs are disabled (buttons get `disabled`, textare
 
 The relevant coverage lives in:
 
-- `tests/webview/question-block-e2e.spec.ts` for 17 E2E tests covering static render, edge cases, accessibility, streaming phase, and message contract.
-- `src/chat/webview/question-block.test.ts` for 5 unit tests covering messageId correlation, empty fallback, maxlength, and aria-labels.
+- `tests/webview/question-block-e2e.spec.ts` for E2E tests covering static render, edge cases, accessibility, streaming phase, and message contract.
+- `src/chat/webview/questionModel.test.ts` for the pure `parseQuestionArgs` normalizer (flat + nested shapes, option-label extraction, empty/partial input).
+- `src/chat/webview/question-block.test.ts` for unit tests covering messageId correlation, empty fallback, maxlength, aria-labels, multi-group rendering, and multi-select submit aggregation.
+- `src/chat/webview/question-refresh.test.ts` for the live in-place refresh (empty start → args arrive → text/options appear and stay interactive).
 - `src/chat/WebviewEventRouter.questionAnswer.test.ts` for 11 integration tests covering routing, validation, double-submit guard, toolCallId forwarding, error handling, and observability.
 - `src/chat/webview/stream.test.ts` for late chunk recovery and tool-call finalization.
 - `src/chat/webview/messages-css.test.ts` for markdown density, overflow, focus, and control transitions.

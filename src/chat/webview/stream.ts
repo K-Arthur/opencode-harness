@@ -17,6 +17,7 @@ import {
   handleToolStart,
   handleToolUpdate,
   handleToolEnd,
+  refreshQuestionBlock,
   handleDiff,
   handleDiffResult,
   handleServerStatus,
@@ -27,6 +28,7 @@ import {
   reRenderMessage,
   handleSkillIndicator,
 } from "./streamHandlers"
+import "./streamEndHandler"
 
 // Re-export for backward compatibility with tests
 export type { StreamState, StreamElements, StreamCallbacks }
@@ -156,10 +158,27 @@ class StreamSession implements StreamHandlers {
   }
 
   handleToolStart(toolCall: { id: string; name: string; class?: string; args?: unknown; state?: ToolCallState }): void {
-    handleToolStart(this.state, this.els, this.messages, toolCall)
+    handleToolStart(this.state, this.els, this.messages, toolCall, this.callbacks?.postMessage)
   }
 
   handleToolUpdate(toolId: string, update: { state?: ToolCallState; result?: string; error?: string; args?: unknown }): void {
+    // A question tool's input often finishes streaming after its block was
+    // first rendered (empty). Refresh the question block in place so its text
+    // and options appear and stay interactive; only fall back to the generic
+    // tool-update path for non-question blocks.
+    if (
+      update.args !== undefined &&
+      refreshQuestionBlock(
+        this.els,
+        this.messages,
+        toolId,
+        update.args,
+        this.callbacks?.postMessage,
+        this.state.streamingMessageId ?? undefined,
+      )
+    ) {
+      return
+    }
     handleToolUpdate(this.els, toolId, update)
   }
 

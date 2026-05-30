@@ -1,5 +1,5 @@
 import * as vscode from "vscode"
-import { ChatProvider } from "../chat/ChatProvider"
+import type { PromptSender } from "./types"
 import { SessionStore } from "../session/SessionStore"
 import { SessionManager } from "../session/SessionManager"
 import { SessionDbReader } from "../session/SessionDbReader"
@@ -262,7 +262,7 @@ export function registerContinueLastSessionCommand(
 
 export function registerAddFileToSessionCommand(
   context: vscode.ExtensionContext,
-  chatProvider: ChatProvider
+  chatProvider: PromptSender
 ): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -326,7 +326,7 @@ export function registerAddFileToSessionCommand(
 
 export function registerAddSelectionToSessionCommand(
   context: vscode.ExtensionContext,
-  chatProvider: ChatProvider
+  chatProvider: PromptSender
 ): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(

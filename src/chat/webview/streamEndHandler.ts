@@ -1,7 +1,7 @@
 import type { Block, ChatMessage } from "./types"
 import { createTextBlock } from "./blocks"
 import type { StreamState, StreamElements } from "./streamHandlers"
-import { hideTypingIndicator, finishUnresolvedToolCalls, reRenderMessage, resetStreamState, webviewLog } from "./streamHandlers"
+import { hideTypingIndicator, finishUnresolvedToolCalls, reRenderMessage, resetStreamState, webviewLog, registerStreamEndHandler } from "./streamHandlers"
 
 function ensureRenderedTextFallback(messageId: string, msgObj: ChatMessage, els: StreamElements): void {
   const text = (msgObj.blocks || [])
@@ -96,6 +96,30 @@ function mergeServerBlocks(msgObj: ChatMessage, blockList: Block[]): void {
       } else {
         merged.push(sb)
       }
+    } else if (sb.type === "question") {
+      // Match the live question block by tool-call id and merge, preferring
+      // whichever side has non-empty groups so a late/empty server copy can't
+      // wipe the interactive question the user is looking at.
+      const sbKey = (sb.toolCallId as string) || (sb.id as string)
+      const existingIdx = msgObj.blocks.findIndex(
+        (b, idx) => !usedExisting.has(idx) && b.type === "question" &&
+          (((b.toolCallId as string) || (b.id as string)) === sbKey),
+      )
+      if (existingIdx >= 0) {
+        usedExisting.add(existingIdx)
+        const existing = msgObj.blocks[existingIdx]!
+        const mergedBlock = { ...existing, ...sb } as Block
+        const sbGroups = Array.isArray(sb.groups) ? (sb.groups as unknown[]) : []
+        const exGroups = Array.isArray(existing.groups) ? (existing.groups as unknown[]) : []
+        if (sbGroups.length === 0 && exGroups.length > 0) {
+          mergedBlock.groups = existing.groups
+          mergedBlock.text = existing.text
+          mergedBlock.options = existing.options
+        }
+        merged.push(mergedBlock)
+      } else {
+        merged.push(sb)
+      }
     } else if (sb.type === "skill_badge") {
       const exists = merged.some(b => b.type === "skill_badge" && b.skillName === sb.skillName)
       if (!exists) {
@@ -171,3 +195,5 @@ export function handleStreamEnd(
   resetStreamState(state)
   saveState()
 }
+
+registerStreamEndHandler(handleStreamEnd)
