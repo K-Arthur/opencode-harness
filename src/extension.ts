@@ -47,6 +47,7 @@ import {
   registerGenerateAgentsMdCommand,
 } from "./commands"
 import { MethodologyOrchestrator, OutcomeTracker, type AdvisoryOrchestrationResult } from "./methodology"
+import { setMethodologyOrchestrator, setMethodologyStatusUpdater } from "./methodology/registry"
 import { resolveAuthToken } from "./migrations/authTokenMigration"
 
 let sessionManager: SessionManager
@@ -448,6 +449,8 @@ function initMethodology(context: vscode.ExtensionContext): vscode.StatusBarItem
     },
   })
 
+  setMethodologyOrchestrator(methodologyOrchestrator)
+
   methodologyOrchestrator.getCatalog().setOutcomeTracker(outcomeTracker)
 
   const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 98)
@@ -462,11 +465,12 @@ function initMethodology(context: vscode.ExtensionContext): vscode.StatusBarItem
   statusItem.show()
   context.subscriptions.push(statusItem)
   methodologyStatusItem = statusItem
+  setMethodologyStatusUpdater(updateMethodologyStatusImpl)
 
   return statusItem
 }
 
-export function updateMethodologyStatus(result: AdvisoryOrchestrationResult): void {
+function updateMethodologyStatusImpl(result: AdvisoryOrchestrationResult): void {
   if (!methodologyStatusItem) return
   const conf = result.methodology.confidence
   const label = `${result.methodology.methodology}`
@@ -474,6 +478,10 @@ export function updateMethodologyStatus(result: AdvisoryOrchestrationResult): vo
   methodologyStatusItem.text = `$(lightbulb) ${label} · ${tier}`
   const confPct = (conf * 100).toFixed(0)
   methodologyStatusItem.tooltip = `Methodology: ${label}\nConfidence: ${confPct}%\nRecommended tier: ${tier}\n${result.advisory.reasoning}\n\nClick to configure`
+}
+
+export function updateMethodologyStatus(result: AdvisoryOrchestrationResult): void {
+  updateMethodologyStatusImpl(result)
 }
 
 export function getMethodologyOrchestrator(): MethodologyOrchestrator | undefined {

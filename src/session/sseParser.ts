@@ -1,4 +1,4 @@
-import type { SdkEventLike } from "./types"
+import type { SdkEventLike } from "./eventHandlers/types"
 
 export interface SseParseResult {
   events: SdkEventLike[]

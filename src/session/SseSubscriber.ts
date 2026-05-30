@@ -2,10 +2,10 @@ import * as vscode from "vscode"
 import type { OpencodeClient } from "@opencode-ai/sdk"
 import { log } from "../utils/outputChannel"
 import { createSdkEventNormalizer } from "./EventNormalizer"
-import type { SdkEventLike } from "./types"
+import type { SdkEventLike } from "./eventHandlers/types"
 import { SseEventParser } from "./sseParser"
 import { IdleWatchdog } from "./IdleWatchdog"
-import type { EventStreamLifecycleState, EventStreamStatus, OpencodeEvent, OpencodeEventType } from "./SessionManager"
+import type { EventStreamLifecycleState, EventStreamStatus, OpencodeEvent, OpencodeEventType } from "./sessionTypes"
 
 export class SseSubscriber {
   private eventStreamController: AbortController | null = null

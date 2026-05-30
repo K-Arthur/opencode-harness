@@ -16,7 +16,7 @@ import * as fsPromises from "fs/promises"
 import * as path from "path"
 import { log } from "../utils/outputChannel"
 import type { McpServerManager } from "../mcp/McpServerManager"
-import type { SdkEventLike } from "./types"
+import type { SdkEventLike } from "./eventHandlers/types"
 import { AuthProvider } from "./AuthProvider"
 import { ServerLifecycle } from "./ServerLifecycle"
 import { SseSubscriber } from "./SseSubscriber"
@@ -26,27 +26,8 @@ import { SessionClient } from "./SessionClient"
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-export type OpencodeEventType =
-  | "tool_start"
-  | "tool_end"
-  | "skill_load"
-  | "thinking"
-  | "text_chunk"
-  | "message_complete"
-  | "session_status"
-  | "session_updated"
-  | "server_connected"
-  | "server_disconnected"
-  | "server_error"
-  | "file_edited"
-  | "permission_request"
-  | "permission_replied"
-
-export interface OpencodeEvent {
-  type: OpencodeEventType | string
-  sessionId?: string
-  data?: unknown
-}
+export type { OpencodeEventType, OpencodeEvent, ModelRef, PromptOptions, EventStreamLifecycleState, EventStreamStatus } from "./sessionTypes"
+import type { OpencodeEventType, OpencodeEvent, ModelRef, PromptOptions, EventStreamLifecycleState, EventStreamStatus } from "./sessionTypes"
 
 export interface ContextPackage {
   openFiles: {
@@ -61,33 +42,6 @@ export interface ContextPackage {
   gitStatus: { branch: string; modified: string[]; staged: string[]; recentDiff?: string }
   terminalOutput?: { name: string; text: string }
   explicitContext?: { type: string; content: string }[]
-}
-
-export interface ModelRef {
-  providerID: string
-  modelID: string
-}
-
-export interface PromptOptions {
-  model?: ModelRef
-  agent?: string
-  tools?: Record<string, boolean>
-  variant?: string
-  signal?: AbortSignal
-}
-
-export type EventStreamLifecycleState =
-  | "disconnected"
-  | "connecting"
-  | "connected"
-  | "reconnecting"
-  | "failed"
-
-export interface EventStreamStatus {
-  state: EventStreamLifecycleState
-  lastRawEventType?: string
-  lastRawEventAt?: number
-  reconnectAttempts: number
 }
 
 function parseSkillFrontmatter(content: string): { name?: string; description?: string } {

@@ -12,7 +12,7 @@ import { randomUUID } from "crypto"
 import * as vscode from "vscode"
 import { log } from "../utils/outputChannel"
 import type { McpServerManager } from "../mcp/McpServerManager"
-import type { ModelRef, PromptOptions as BasePromptOptions } from "./SessionManager"
+import type { ModelRef, PromptOptions as BasePromptOptions } from "./sessionTypes"
 import { isLocalPlaceholderSessionId } from "./sessionUtils"
 
 const MAX_RESPONSE_SIZE = 50 * 1024 * 1024
