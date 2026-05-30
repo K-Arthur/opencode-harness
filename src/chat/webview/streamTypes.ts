@@ -15,6 +15,8 @@ export interface StreamState {
   rafPending: boolean
   renderQueue: RenderQueue | null
   chunkSeq: number
+  /** M6: set once when the live buffer crosses the soft cap (diagnostics only). */
+  bufferCapWarned?: boolean
 }
 
 export interface StreamElements {

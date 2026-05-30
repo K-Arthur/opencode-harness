@@ -799,7 +799,7 @@ void it("backfillRecoveredSessions guards in-progress and skips local placeholde
     "must clear in-progress flag in a finally block"
   )
   assert.ok(
-    block.includes("isLocalPlaceholderSessionId(session.cliSessionId)"),
-    "must skip local placeholder ids that are not real server sessions"
+    block.includes("selectPendingBackfill(sessions)"),
+    "must skip local placeholder ids (now delegated to selectPendingBackfill, which filters them out)"
   )
 })
