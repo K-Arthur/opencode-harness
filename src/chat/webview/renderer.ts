@@ -54,23 +54,26 @@ export function normalizeMarkdownText(text: string): string {
  * Handles partial markdown artifacts during streaming, such as unclosed code fences.
  */
 export function normalizeStreamingMarkdown(text: string): string {
-  let normalized = normalizeMarkdownText(text)
-  
-  // Close unclosed code fences to prevent markdown-it from treating the rest as code
-  const codeFenceMatches = normalized.match(/^```[\s\S]*?```/gm) || []
-  const openFences = (normalized.match(/```/g) || []).length
-  if (openFences % 2 !== 0) {
-    normalized += "\n```"
+  const normalized = normalizeMarkdownText(text)
+
+  let fenceCount = 0
+  let inInlineCode = false
+  for (let i = 0; i < normalized.length; i++) {
+    const ch = normalized[i]
+    if (ch !== "`") continue
+    if (!inInlineCode && normalized.slice(i, i + 3) === "```") {
+      fenceCount++
+      i += 2
+      continue
+    }
+    inInlineCode = !inInlineCode
   }
-  
-  // Close unclosed inline code
-  const inlineCodeMatches = normalized.match(/`[^`\n]*`/g) || []
-  const openInline = (normalized.match(/`/g) || []).length
-  if (openInline % 2 !== 0) {
-    normalized += "`"
-  }
-  
-  return normalized
+
+  let result = normalized
+  if (fenceCount % 2 !== 0) result += "\n```"
+  if (inInlineCode) result += "`"
+
+  return result
 }
 
 class LruStringCache {
@@ -171,7 +174,8 @@ class MarkdownWorkerClient {
     const worker = await this.getWorker()
     if (!worker) return undefined
 
-    const id = this.nextId++
+    const id = this.nextId
+    this.nextId = (this.nextId % 0x7fffffff) + 1
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(id)
@@ -240,6 +244,9 @@ class MarkdownWorkerClient {
       if (!entry) return
       clearTimeout(entry.timer)
       this.pending.delete(message.id)
+      if ("error" in message) {
+        console.warn("[opencode] Markdown worker render error:", message.error)
+      }
       entry.resolve("html" in message && typeof message.html === "string" ? message.html : undefined)
     }
     worker.onerror = () => {
@@ -307,7 +314,7 @@ const md = new MarkdownIt({
   linkify: true,
   typographer: false,
   breaks: false,
-  highlight: (str, lang) => highlightSyntax(str, normalizeMarkdownLanguage(lang)),
+  highlight: (str, lang) => highlightSyntax(str, lang || ""),
 }).use(taskLists, { label: false })
 
 const defaultLinkOpen = md.renderer.rules.link_open || ((tokens, idx, options, _env, self) =>
@@ -812,17 +819,16 @@ function renderCodeBlock(block: Block, _opts: RenderOptions): HTMLElement | null
   if (showLineNums) {
     const grid = document.createElement("div")
     grid.className = "code-block-lines"
-    lines.forEach((line, i) => {
-      // Line number
+    const fullHighlighted = sanitizeHtml(highlightSyntax(code, block.language || ""))
+    const highlightedLines = fullHighlighted.split("\n")
+    lines.forEach((_, i) => {
       const numEl = document.createElement("span")
       numEl.className = "code-line-num"
       numEl.textContent = String(i + 1)
       grid.appendChild(numEl)
-      // Line content
       const codeEl = document.createElement("span")
       codeEl.className = "code-line-content"
-      const highlighted = highlightSyntax(line, block.language || "")
-      codeEl.innerHTML = sanitizeHtml(highlighted) || "&nbsp;"
+      codeEl.innerHTML = highlightedLines[i] || "&nbsp;"
       grid.appendChild(codeEl)
     })
     outerWrapper.appendChild(grid)
