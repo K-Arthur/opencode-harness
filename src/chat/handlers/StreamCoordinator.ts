@@ -75,6 +75,8 @@ export class StreamCoordinator {
   private appendCallbacks = new Map<string, (() => Promise<void>)[]>()
   /** Per-tab message sequence counter — monotonically increasing, attached to every streaming message */
   private msgSeqs = new Map<string, number>()
+  /** Per-tab token/cost totals at prompt start, used to dedupe final SDK usage fallback */
+  private finalUsageBaselines = new Map<string, { total: number; cost: number }>()
   private tabCloseDisposable: vscode.Disposable | null = null
   /** Methodology classifier/selector — pluggable so tests can stub it */
   private readonly methodologyAdvisor: MethodologyAdvisor
@@ -448,6 +450,11 @@ export class StreamCoordinator {
     // Now set streaming state AFTER atomic reservation
     this.tabManager.setStreaming(tabId, true)
     this.setStreamState(tabId, "sending", { model: tab.model, sessionId: tab.cliSessionId })
+    const baselineSession = this.sessionStore.get(tabId)
+    this.finalUsageBaselines.set(tabId, {
+      total: baselineSession?.tokenUsage?.total ?? 0,
+      cost: baselineSession?.cost ?? 0,
+    })
 
     try {
       this.refreshContextTokenEstimate(tabId)
@@ -603,10 +610,6 @@ export class StreamCoordinator {
       if (lastAssistant) {
         blocks = this.partsToBlocks(lastAssistant.parts)
         const info = lastAssistant.info as { cost?: number; tokens?: { total?: number; input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } } }
-        if (typeof info.cost === "number") {
-          this.sessionStore.updateCost(tabId, info.cost)
-          callbacks.postMessage({ type: "cost_update", sessionId: tabId, cost: info.cost, seq: this.nextSeq(tabId) })
-        }
         if (info.tokens) {
           const input = info.tokens.input ?? 0
           const output = info.tokens.output ?? 0
@@ -614,19 +617,25 @@ export class StreamCoordinator {
           const cacheRead = info.tokens.cache?.read ?? 0
           const cacheWrite = info.tokens.cache?.write ?? 0
           sdkTokenTotal = info.tokens.total ?? input + output + reasoning + cacheRead + cacheWrite
-          this.sessionStore.updateTokenUsage(tabId, {
+          const usage = {
             prompt: input,
             completion: output,
             total: sdkTokenTotal,
             reasoning,
             cacheRead,
             cacheWrite,
-          })
-          callbacks.postMessage({
-            type: "token_usage",
-            sessionId: tabId,
-            usage: { prompt: input, completion: output, total: sdkTokenTotal, reasoning, cacheRead, cacheWrite },
-          })
+          }
+          if (this.recordFinalUsageFallback(tabId, usage, info.cost)) {
+            const cumulativeCost = this.sessionStore.get(tabId)?.cost
+            if (typeof cumulativeCost === "number" && Number.isFinite(cumulativeCost) && cumulativeCost > 0) {
+              callbacks.postMessage({ type: "cost_update", sessionId: tabId, cost: cumulativeCost, seq: this.nextSeq(tabId) })
+            }
+            callbacks.postMessage({
+              type: "token_usage",
+              sessionId: tabId,
+              usage,
+            })
+          }
           const tab = this.tabManager.getTab(tabId)
           const selectedModel = tab?.model || this.modelManager.model
           const provider = parseModelRef(selectedModel).providerID || parseModelRef(this.modelManager.model).providerID || undefined
@@ -647,6 +656,27 @@ export class StreamCoordinator {
     }
 
     return { blocks, sdkTokenTotal }
+  }
+
+  private recordFinalUsageFallback(
+    tabId: string,
+    usage: { prompt: number; completion: number; total: number; reasoning?: number; cacheRead?: number; cacheWrite?: number },
+    cost?: number
+  ): boolean {
+    const baseline = this.finalUsageBaselines.get(tabId)
+    const session = this.sessionStore.get(tabId)
+    const currentTotal = session?.tokenUsage?.total ?? 0
+    const currentCost = session?.cost ?? 0
+    const stepFinishAlreadyRecorded = baseline !== undefined
+      && (currentTotal > baseline.total || currentCost > baseline.cost)
+
+    if (stepFinishAlreadyRecorded) return false
+
+    this.sessionStore.accumulateTokenUsage(tabId, usage)
+    if (typeof cost === "number" && Number.isFinite(cost) && cost > 0) {
+      this.sessionStore.accumulateCost(tabId, cost)
+    }
+    return true
   }
 
   private mergeFinalBlocks(tabId: string, serverBlocks: Block[]): Block[] {
@@ -1147,6 +1177,7 @@ private cleanupTab(tabId: string): void {
     const cliSessionId = this.tabManager.getTab(tabId)?.cliSessionId
     if (cliSessionId) this.injectedInstructionsSessions.delete(cliSessionId)
     this.msgSeqs.delete(tabId)
+    this.finalUsageBaselines.delete(tabId)
   }
 
   private refreshContextTokenEstimate(tabId: string): void {

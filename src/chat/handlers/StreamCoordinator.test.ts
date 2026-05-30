@@ -197,6 +197,22 @@ describe("StreamCoordinator.ts", () => {
     )
   })
 
+  it("final SDK token usage accumulates instead of replacing session totals", () => {
+    const fetchIdx = source.indexOf("private async fetchFinalBlocks(")
+    assert.ok(fetchIdx >= 0, "fetchFinalBlocks must exist")
+    const fetchEnd = source.indexOf("\n  private mergeFinalBlocks(", fetchIdx)
+    const block = source.slice(fetchIdx, fetchEnd > fetchIdx ? fetchEnd : fetchIdx + 5000)
+
+    assert.ok(
+      block.includes("this.sessionStore.accumulateTokenUsage(tabId"),
+      "final SDK token usage must add to cumulative session totals"
+    )
+    assert.ok(
+      !block.includes("this.sessionStore.updateTokenUsage(tabId"),
+      "final SDK token usage must not replace cumulative session totals"
+    )
+  })
+
   it("has TTFB_TIMEOUT_MS configured for first-byte timeout", () => {
     assert.ok(source.includes("TTFB_TIMEOUT_MS"), "TTFB_TIMEOUT_MS constant must exist")
     assert.ok(/TTFB_TIMEOUT_MS\s*=\s*\d+/.test(source), "TTFB_TIMEOUT_MS must be assigned a number")

@@ -34,6 +34,20 @@ The modal renders a single unified list from local `SessionStore` rows plus `Ses
 
 The store also performs the same consolidation on load/recovery, so the modal-level dedupe is a defensive UI layer rather than the primary data repair mechanism.
 
+## Usage Backfill
+
+Older sessions can recover token usage from the opencode server/SDK message history, including
+server-listed sessions originally created by the opencode CLI. Backfill uses
+`getSessionMessages(...)`/`session.messages({ path })`, converts SDK messages into local chat
+messages, and summarizes assistant `info.tokens` through `summarizeOpencodeMessageUsage`. That
+summary is a full-history value, so `SessionStore.updateTokenUsage()` remains the correct
+replacement operation for backfill and refresh flows.
+
+Live stream finalization uses different semantics. `StreamCoordinator` treats the final SDK
+assistant tokens as a per-turn fallback and calls `SessionStore.accumulateTokenUsage()` only
+when the normal step-finish path has not already advanced the session totals. This prevents a
+late final-fetch event from replacing cumulative totals restored from older history.
+
 ## Session Titles
 
 OpenCode server titles are the source of truth for synced sessions. Local rename commands call `SessionStore.setTitle()`, which persists the local cache and propagates to the server via `SessionManager.updateSessionTitle()` / SDK `client.session.update({ path: { id }, body: { title } })`. Incoming `session.updated` SSE events apply `info.title` back into the local cache through `SessionStore.applyServerTitle()`.
