@@ -13,6 +13,13 @@ export function normalizeMarkdownLanguage(language: string): string {
   if (normalized === "tsx" || normalized === "jsx") return "typescript"
   if (normalized === "shell" || normalized === "sh" || normalized === "zsh") return "bash"
   if (normalized === "yml") return "yaml"
-  if (normalized === "html") return "xml"
+  if (normalized === "html" || normalized === "htm") return "xml"
+  if (normalized === "c#" || normalized === "cs") return "cpp"
+  if (normalized === "c++") return "cpp"
+  if (normalized === "rb") return "ruby"
+  if (normalized === "kt") return "kotlin"
+  if (normalized === "py") return "python"
+  if (normalized === "js" || normalized === "node") return "javascript"
+  if (normalized === "ts") return "typescript"
   return normalized
 }
