@@ -243,6 +243,45 @@ describe("sdkMessageConverter — Layer 1 RED (canonical CanonicalBlock projecti
     assert.equal(f(b).error, "err!")
   })
 
+  it("L1-T11b: partToBlock returns an interactive question block for the question tool (flat args)", () => {
+    const part = {
+      ...baseIds,
+      type: "tool",
+      callID: "call-q",
+      tool: "question",
+      state: { status: "running", input: { question: "Pick a DB", options: ["Postgres", "MySQL"] }, time: { start: 1 } },
+    } as Part
+    const b = expectType(partToBlock(part), "question")
+    assert.equal(f(b).toolCallId, "call-q")
+    assert.equal(f(b).text, "Pick a DB")
+    assert.deepEqual(f(b).options, ["Postgres", "MySQL"])
+    const groups = f(b).groups as Array<Record<string, unknown>>
+    assert.equal(groups.length, 1)
+    assert.deepEqual(groups[0]!.options, ["Postgres", "MySQL"])
+  })
+
+  it("L1-T11c: question tool with nested questions[] yields multiple groups", () => {
+    const part = {
+      ...baseIds,
+      type: "tool",
+      callID: "call-q2",
+      tool: "question",
+      state: {
+        status: "completed",
+        input: { questions: [{ question: "DB?", header: "Database", options: ["PG"] }, { question: "Feat?", options: ["Auth"], multiSelect: true }] },
+        output: "answered",
+        title: "question",
+        metadata: {},
+        time: { start: 1, end: 2 },
+      },
+    } as Part
+    const b = expectType(partToBlock(part), "question")
+    const groups = f(b).groups as Array<Record<string, unknown>>
+    assert.equal(groups.length, 2)
+    assert.equal(groups[0]!.header, "Database")
+    assert.equal(groups[1]!.multiSelect, true)
+  })
+
   it("L1-T12: partToBlock returns step-start block", () => {
     const b = expectType(partToBlock(stepStartPart("snap")), "step-start")
     assert.equal(f(b).snapshot, "snap")

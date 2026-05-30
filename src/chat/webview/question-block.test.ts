@@ -234,6 +234,93 @@ describe("renderQuestionBlock", () => {
     assert.equal(ta!.maxLength, 10000, "textarea must have maxlength=10000")
   })
 
+  it("renders groups from block.groups when present", async () => {
+    const { renderBlock } = await import("./renderer")
+    const block = {
+      type: "question",
+      sessionId: "sess-A",
+      toolCallId: "tool-q-1",
+      groups: [{ question: "Single?", options: ["Yes", "No"], multiSelect: false }],
+      text: "Single?",
+      options: ["Yes", "No"],
+      allowFreeText: false,
+    }
+    const el = renderBlock(block, { postMessage: () => {} })
+    assert.ok(el!.textContent!.includes("Single?"))
+    assert.equal(el!.querySelectorAll(".question-option").length, 2)
+  })
+
+  it("renders multiple question groups, each with its header", async () => {
+    const { renderBlock } = await import("./renderer")
+    const block = {
+      type: "question",
+      sessionId: "sess-A",
+      toolCallId: "tool-q-1",
+      groups: [
+        { question: "Which DB?", header: "Database", options: ["Postgres", "Mongo"], multiSelect: false },
+        { question: "Which features?", header: "Features", options: ["Auth", "Billing"], multiSelect: true },
+      ],
+      text: "Which DB?",
+      options: ["Postgres", "Mongo"],
+      allowFreeText: false,
+    }
+    const el = renderBlock(block, { postMessage: () => {} }) as HTMLElement
+    assert.equal(el.querySelectorAll(".question-group").length, 2)
+    const headers = Array.from(el.querySelectorAll(".question-group-header")).map((h) => h.textContent)
+    assert.deepEqual(headers, ["Database", "Features"])
+    assert.equal(el.querySelectorAll(".question-option").length, 4)
+    // Multi-group requires an explicit Submit (options don't auto-submit).
+    assert.ok(el.querySelector(".question-submit"), "multi-group renders a Submit button")
+  })
+
+  it("multi-group submit aggregates one selection per group with headers", async () => {
+    const { renderBlock } = await import("./renderer")
+    const block = {
+      type: "question",
+      sessionId: "sess-A",
+      toolCallId: "tool-q-1",
+      groups: [
+        { question: "Which DB?", header: "Database", options: ["Postgres", "Mongo"], multiSelect: false },
+        { question: "Which features?", header: "Features", options: ["Auth", "Billing"], multiSelect: true },
+      ],
+      allowFreeText: false,
+    }
+    const posted: Array<Record<string, unknown>> = []
+    const el = renderBlock(block, { postMessage: (m) => posted.push(m) }) as HTMLElement
+    const opts = Array.from(el.querySelectorAll<HTMLButtonElement>(".question-option"))
+    opts.find((b) => b.textContent === "Postgres")!.click()
+    opts.find((b) => b.textContent === "Auth")!.click()
+    opts.find((b) => b.textContent === "Billing")!.click()
+    ;(el.querySelector(".question-submit") as HTMLButtonElement).click()
+
+    const answer = posted.find((m) => m.type === "question_answer")
+    assert.ok(answer)
+    assert.equal(answer!.value, "Database: Postgres\nFeatures: Auth, Billing")
+    assert.equal(answer!.source, "option")
+  })
+
+  it("single-select group in multi mode keeps only the last choice", async () => {
+    const { renderBlock } = await import("./renderer")
+    const block = {
+      type: "question",
+      sessionId: "sess-A",
+      toolCallId: "tool-q-1",
+      groups: [
+        { question: "Which DB?", header: "Database", options: ["Postgres", "Mongo"], multiSelect: false },
+        { question: "Extras?", options: ["A"], multiSelect: true },
+      ],
+      allowFreeText: false,
+    }
+    const posted: Array<Record<string, unknown>> = []
+    const el = renderBlock(block, { postMessage: (m) => posted.push(m) }) as HTMLElement
+    const opts = Array.from(el.querySelectorAll<HTMLButtonElement>(".question-option"))
+    opts.find((b) => b.textContent === "Postgres")!.click()
+    opts.find((b) => b.textContent === "Mongo")!.click() // replaces Postgres
+    ;(el.querySelector(".question-submit") as HTMLButtonElement).click()
+    const answer = posted.find((m) => m.type === "question_answer")
+    assert.equal(answer!.value, "Database: Mongo")
+  })
+
   it("textarea and options have aria-label for accessibility", async () => {
     const { renderBlock } = await import("./renderer")
     const block = {

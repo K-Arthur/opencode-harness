@@ -4,17 +4,21 @@ import { timers } from "./timerRegistry"
 import type { SdkMessageEvent, DiffChunk } from "../../types"
 import type { ErrorContext } from "./errorTypes"
 import { renderMessage } from "./messageRenderer"
-import { renderBlock, renderMarkdown, sanitizeHtml, highlightSyntax } from "./renderer"
+import { renderBlock, renderMarkdown } from "./renderer"
+import { sanitizeHtml, highlightSyntax } from "./syntaxHighlighter"
 import type { RenderOptions } from "./renderer"
 import { renderToolGroup } from "./toolCallRenderer"
 import type { ScrollAnchor } from "./scrollAnchor"
 import { CHECK_SVG, SUCCESS_SVG, SPINNER_SVG } from "./icons"
 import { RenderQueue } from "./renderQueue"
 import { LiveTextRenderer } from "./liveTextRenderer"
-import { handleStreamEnd as handleStreamEndImpl } from "./streamEndHandler"
+type HandleStreamEndFn = (state: StreamState, els: StreamElements, messages: ChatMessage[], saveState: () => void, messageId?: string, blocks?: unknown) => void
+let _handleStreamEndImpl: HandleStreamEndFn | undefined
+export function registerStreamEndHandler(fn: HandleStreamEndFn): void { _handleStreamEndImpl = fn }
 import { getErrorHandler } from "./errorHandler"
 import { getErrorDisplay } from "./errorComponents"
 import { getQuotaMonitor } from "./quotaMonitor"
+import { parseQuestionArgs, parseAllowFreeText } from "./questionModel"
 
 // Stateless (no /g) so it is safe to reuse across calls without lastIndex drift.
 const HAS_CONTEXT_MARKER = /<context>/i
@@ -216,6 +220,8 @@ export interface StreamElements {
 
 export interface StreamCallbacks {
   onStreamingChange?: (isStreaming: boolean) => void
+  /** Posts webview→host messages (e.g. `question_answer`); enables interactive blocks mid-stream. */
+  postMessage?: (msg: Record<string, unknown>) => void
 }
 
 const TYPING_INDICATOR_ICON = `<span class="premium-spinner-container">${SPINNER_SVG}</span>`
@@ -483,13 +489,14 @@ export function handleToolStart(
   state: StreamState,
   els: StreamElements,
   messages: ChatMessage[],
-  toolCall: ToolStartPayload
+  toolCall: ToolStartPayload,
+  postMessage?: (msg: Record<string, unknown>) => void,
 ): void {
   const id = state.streamingMessageId
   if (!id) return
 
   const msgObj = messages.find((m) => m.id === id)
-  if (updateExistingToolStart(state, els, msgObj, toolCall)) return
+  if (updateExistingToolStart(state, els, msgObj, toolCall, postMessage, id)) return
 
   prepareForToolBlock(state, els, messages, toolCall.id)
   appendStreamingToolBlock(
@@ -497,7 +504,7 @@ export function handleToolStart(
     id,
     msgObj,
     isQuestionTool(toolCall) ? createQuestionToolBlock(toolCall, msgObj) : createToolCallBlock(toolCall) as Block,
-    { messageId: id },
+    { messageId: id, postMessage },
   )
   els.scrollAnchor.scrollIfAnchored()
 }
@@ -507,11 +514,25 @@ function updateExistingToolStart(
   els: StreamElements,
   msgObj: ChatMessage | undefined,
   toolCall: ToolStartPayload,
+  postMessage?: (msg: Record<string, unknown>) => void,
+  messageId?: string,
 ): boolean {
-  const existing = msgObj?.blocks.findIndex(
+  if (!msgObj) return false
+
+  // A question that already exists: re-parse the (now fuller) args and
+  // re-render it in place rather than treating it as a generic tool card.
+  if (isQuestionTool(toolCall) && msgObj.blocks.some(
+    (b) => b.type === "question" && ((b.toolCallId as string) === toolCall.id || (b.id as string) === toolCall.id)
+  )) {
+    state.streamingToolCallId = toolCall.id
+    refreshQuestionBlock(els, msgObj.blocks ? [msgObj] : [], toolCall.id, toolCall.args, postMessage, messageId)
+    return true
+  }
+
+  const existing = msgObj.blocks.findIndex(
     (b) => b.type === "tool-call" && (b as ToolCallBlock).id === toolCall.id
-  ) ?? -1
-  if (existing < 0 || !msgObj) return false
+  )
+  if (existing < 0) return false
 
   state.streamingToolCallId = toolCall.id
   webviewLog(`handleToolStart: updating existing tool_start id=${toolCall.id}`)
@@ -544,38 +565,61 @@ function isQuestionTool(toolCall: ToolStartPayload): boolean {
 }
 
 function createQuestionToolBlock(toolCall: ToolStartPayload, msgObj: ChatMessage | undefined): Block {
-  const args = toolCall.args as Record<string, unknown> | undefined
+  const args = toolCall.args
+  // One-time visibility into the real emitted schema (helps confirm whether the
+  // model sends flat {question,options} or nested {questions:[...]}).
+  try { webviewLog(`question tool start id=${toolCall.id} args=${JSON.stringify(args)}`) } catch { /* circular/oversized args */ }
+  return buildQuestionBlock(toolCall.id, msgObj?.sessionId, args)
+}
+
+function buildQuestionBlock(id: string, sessionId: string | undefined, args: unknown): Block {
+  const groups = parseQuestionArgs(args)
+  const first = groups[0]
   return {
     type: "question",
-    id: toolCall.id,
-    toolCallId: toolCall.id,
-    sessionId: msgObj?.sessionId,
-    text: getQuestionText(args),
-    options: getQuestionOptions(args),
-    allowFreeText: args?.allowFreeText !== false,
+    id,
+    toolCallId: id,
+    sessionId,
+    groups,
+    text: first?.question ?? "",
+    options: first?.options ?? [],
+    allowFreeText: parseAllowFreeText(args),
   } satisfies QuestionBlock as Block
 }
 
-function getQuestionText(args: Record<string, unknown> | undefined): string {
-  return (typeof args?.question === "string" && args.question) ||
-    (typeof args?.prompt === "string" && args.prompt) ||
-    (typeof args?.message === "string" && args.message) ||
-    (typeof args?.text === "string" && args.text) ||
-    ""
-}
+/**
+ * Re-parse a question tool's (now more complete) args into the existing
+ * question block and re-render it in place. Returns true when a question block
+ * for `toolId` was found and handled — even if the new args were still empty —
+ * so the generic tool-update path doesn't turn it into a tool-args card.
+ */
+export function refreshQuestionBlock(
+  els: StreamElements,
+  messages: ChatMessage[],
+  toolId: string,
+  args: unknown,
+  postMessage?: (msg: Record<string, unknown>) => void,
+  messageId?: string,
+): boolean {
+  for (const msg of messages) {
+    const idx = msg.blocks.findIndex(
+      (b) => b.type === "question" && ((b.toolCallId as string) === toolId || (b.id as string) === toolId)
+    )
+    if (idx < 0) continue
+    const block = msg.blocks[idx] as QuestionBlock
+    const groups = parseQuestionArgs(args)
+    if (groups.length === 0) return true // partial/empty update — keep what we have
+    block.groups = groups
+    block.text = groups[0]!.question
+    block.options = groups[0]!.options
+    block.allowFreeText = parseAllowFreeText(args)
 
-function getQuestionOptions(args: Record<string, unknown> | undefined): string[] {
-  const a = args ?? {}
-  const optionsRaw: unknown[] =
-    (Array.isArray(a.options) && a.options as unknown[]) ||
-    (Array.isArray(a.choices) && a.choices as unknown[]) ||
-    (Array.isArray(a.select) && a.select as unknown[]) ||
-    []
-  return optionsRaw.map((o) =>
-    typeof o === "string" ? o : typeof o === "object" && o && "label" in (o as Record<string, unknown>)
-      ? String((o as { label?: unknown }).label ?? "")
-      : String(o)
-  ).filter(Boolean)
+    const oldEl = els.messageList.querySelector(`.question-block[data-block-id="${toolId}"]`)
+    const freshEl = renderBlock(block as Block, { messageId: messageId ?? "", postMessage })
+    if (oldEl && freshEl) oldEl.replaceWith(freshEl)
+    return true
+  }
+  return false
 }
 
 function createToolCallBlock(toolCall: ToolStartPayload): ToolCallBlock {
@@ -973,7 +1017,8 @@ export function handleStreamEnd(
   messageId?: string,
   blocks?: unknown
 ): void {
-  handleStreamEndImpl(state, els, messages, saveState, messageId, blocks)
+  if (!_handleStreamEndImpl) throw new Error("Stream end handler not registered — import streamEndHandler before calling handleStreamEnd")
+  _handleStreamEndImpl(state, els, messages, saveState, messageId, blocks)
 }
 
 export function handleStreamError(

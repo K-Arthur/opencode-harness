@@ -6,6 +6,8 @@ import type { SessionLifecycleService } from "./SessionLifecycleService"
 import type { CommandExecutionService } from "./CommandExecutionService"
 import type { SessionStore } from "../session/SessionStore"
 import type { SessionManager } from "../session/SessionManager"
+import type { DiffLine } from "./webview/types"
+import { sdkFileContentToDiffLines, type SdkFileContentLike } from "./diff/sdkFileContentToDiffLines"
 import type { ModelManager } from "../model/ModelManager"
 import type { DiffApplier } from "../diff/DiffApplier"
 import type { StreamCoordinator } from "./handlers/StreamCoordinator"
@@ -119,7 +121,7 @@ export class WebviewEventRouter {
     "send_steer_prompt", "add_to_queue",
     "get_todos",
     "get_skills", "toggle_skill", "search_skills",
-    "get_changed_files", "open_file", "open_folder", "open_url",
+    "get_changed_files", "get_file_diff", "open_file", "open_folder", "open_url",
     "get_subagent_activities", "cancel_subagent",
     "update_setting", "show_error", "get_context_usage", "record_stash_usage",
     "open_context_window_override_dialog", "model_favorite", "model_toggle",
@@ -966,6 +968,27 @@ export class WebviewEventRouter {
         removed: stats[path]?.removed ?? 0,
       }))
       this.opts.postMessage({ type: "changed_files_update", files, sessionId })
+    }],
+    ["get_file_diff", async (msg: Record<string, unknown>, sessionId?: string) => {
+      // Per-file diff for the changed-files dropdown's inline expansion. opencode
+      // applies edits server-side, so we read the file (with its diff) from the
+      // server and normalize it into DiffLine[] for the webview. Previously
+      // unhandled — expansion silently showed nothing.
+      const path = typeof msg.path === "string" ? msg.path : ""
+      if (!path) return
+      const respond = (lines: DiffLine[] | null, error?: string) =>
+        this.opts.postMessage({ type: "file_diff_response", sessionId, path, lines, error })
+      if (!this.opts.sessionManager.isRunning) {
+        respond(null, "opencode server is not running")
+        return
+      }
+      try {
+        const content = await this.opts.sessionManager.getFileContent(path)
+        respond(sdkFileContentToDiffLines(content as SdkFileContentLike))
+      } catch (err) {
+        log.warn(`get_file_diff failed for ${path}`, err)
+        respond(null, err instanceof Error ? err.message : "Failed to load diff")
+      }
     }],
     ["open_file", async (msg: Record<string, unknown>, sessionId?: string) => {
       const rawPath = msg.path as string | undefined

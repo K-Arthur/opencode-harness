@@ -1,8 +1,7 @@
-import hljs from "highlight.js/lib/core"
 import MarkdownIt from "markdown-it"
 import taskLists from "markdown-it-task-lists"
-import DOMPurify from "dompurify"
-import { escapeHtml, normalizeMarkdownLanguage } from "./htmlUtils"
+import { escapeHtml } from "./htmlUtils"
+import { sanitizeHtml, highlightSyntax, clearHighlightCache, getHighlightCacheSize } from "./syntaxHighlighter"
 import {
   BRAIN_SVG,
   WARNING_SVG,
@@ -127,7 +126,6 @@ class LruStringCache {
 }
 
 const markdownCache = new LruStringCache(250, 2 * 1024 * 1024)
-const highlightCache = new LruStringCache(500, 1024 * 1024)
 
 export const MARKDOWN_WORKER_MIN_CHARS = 8_000
 export const MARKDOWN_WORKER_MIN_CODE_CHARS = 4_000
@@ -297,7 +295,7 @@ export async function renderMarkdownAsync(text: string, isStreaming: boolean = f
 
 export function clearRendererCaches(): void {
   markdownCache.clear()
-  highlightCache.clear()
+  clearHighlightCache()
   markdownWorkerClient?.dispose()
   markdownWorkerClient = undefined
 }
@@ -305,7 +303,7 @@ export function clearRendererCaches(): void {
 export function getRendererCacheStats(): { markdownEntries: number; highlightEntries: number } {
   return {
     markdownEntries: markdownCache.size,
-    highlightEntries: highlightCache.size,
+    highlightEntries: getHighlightCacheSize(),
   }
 }
 
@@ -341,86 +339,7 @@ md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
 // but not installed. Install them for enhanced markdown rendering.
 
 
-// ---------------------------------------------------------------------------
-// DOMPurify configuration — strict allowlist, no XSS surface
-// ---------------------------------------------------------------------------
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface PurifyConfig {
-  ALLOWED_TAGS: string[]
-  ALLOWED_ATTR: string[]
-  ALLOWED_URI_REGEXP: RegExp
-  FORBID_CONTENTS: string[]
-  FORBID_TAGS: string[]
-  SAFE_FOR_TEMPLATES: boolean
-  SAFE_FOR_XML: boolean
-}
-
-const PURIFY_CONFIG: PurifyConfig = {
-  ALLOWED_TAGS: [
-    "b", "i", "em", "strong", "a", "p", "br", "ul", "ol", "li",
-    "code", "pre", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6",
-    "hr", "img", "span", "div", "table", "thead", "tbody", "tr", "th", "td",
-    "del", "sup", "sub", "input", "label"
-  ],
-  ALLOWED_ATTR: [
-    "href", "src", "alt", "title", "target", "rel", "class", "language", "width", "height",
-    "aria-label", "role", "tabindex", "data-kind", "data-tab-id", "data-message-id",
-    "data-block-id", "data-code", "data-lang", "type", "checked", "disabled", "id", "for"
-  ],
-  ALLOWED_URI_REGEXP: /^(?:(?:https?|ftp):|\/)/i,
-  FORBID_CONTENTS: ["script", "style", "iframe", "frame", "object", "embed"],
-  FORBID_TAGS: ["script", "style", "iframe", "frame", "object", "embed", "form"],
-  SAFE_FOR_TEMPLATES: true,
-  SAFE_FOR_XML: true,
-}
-
-export function sanitizeHtml(html: string): string {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return DOMPurify.sanitize(html, PURIFY_CONFIG as any) as unknown as string
-}
-
-// ---------------------------------------------------------------------------
-// Language registration for highlight.js
-// ---------------------------------------------------------------------------
-
-import javascript from "highlight.js/lib/languages/javascript"
-import typescript from "highlight.js/lib/languages/typescript"
-import python from "highlight.js/lib/languages/python"
-import rust from "highlight.js/lib/languages/rust"
-import go from "highlight.js/lib/languages/go"
-import bash from "highlight.js/lib/languages/bash"
-import json from "highlight.js/lib/languages/json"
-import cssLang from "highlight.js/lib/languages/css"
-import markdown from "highlight.js/lib/languages/markdown"
-import sql from "highlight.js/lib/languages/sql"
-import diffLang from "highlight.js/lib/languages/diff"
-import java from "highlight.js/lib/languages/java"
-import cpp from "highlight.js/lib/languages/cpp"
-import yaml from "highlight.js/lib/languages/yaml"
-import xml from "highlight.js/lib/languages/xml"
-
-hljs.registerLanguage("javascript", javascript)
-hljs.registerLanguage("typescript", typescript)
-hljs.registerLanguage("python", python)
-hljs.registerLanguage("rust", rust)
-hljs.registerLanguage("go", go)
-hljs.registerLanguage("bash", bash)
-hljs.registerLanguage("json", json)
-hljs.registerLanguage("css", cssLang)
-hljs.registerLanguage("markdown", markdown)
-hljs.registerLanguage("sql", sql)
-hljs.registerLanguage("diff", diffLang)
-hljs.registerLanguage("java", java)
-hljs.registerLanguage("cpp", cpp)
-hljs.registerLanguage("yaml", yaml)
-hljs.registerLanguage("xml", xml)
-
-hljs.registerAliases(["js", "node"], { languageName: "javascript" })
-hljs.registerAliases(["ts"], { languageName: "typescript" })
-hljs.registerAliases(["sh", "zsh"], { languageName: "bash" })
-hljs.registerAliases(["html", "htm"], { languageName: "xml" })
-hljs.registerAliases(["py"], { languageName: "python" })
+export { sanitizeHtml, highlightSyntax } from "./syntaxHighlighter"
 
 
 // ---------------------------------------------------------------------------
@@ -843,28 +762,6 @@ function renderCodeBlock(block: Block, _opts: RenderOptions): HTMLElement | null
   return outerWrapper
 }
 
-export function highlightSyntax(code: string, language: string): string {
-  const normalizedLanguage = normalizeMarkdownLanguage(language || "")
-  const cacheKey = `${normalizedLanguage}\u0000${code}`
-  const cached = highlightCache.get(cacheKey)
-  if (cached !== undefined) return cached
-
-  let highlighted: string
-  if (normalizedLanguage && hljs.getLanguage(normalizedLanguage)) {
-    try {
-      highlighted = hljs.highlight(code, { language: normalizedLanguage }).value
-      highlightCache.set(cacheKey, highlighted)
-      return highlighted
-    } catch {}
-  }
-  try {
-    highlighted = hljs.highlightAuto(code).value
-  } catch {
-    highlighted = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-  }
-  highlightCache.set(cacheKey, highlighted)
-  return highlighted
-}
 
 // ---------------------------------------------------------------------------
 // Turn grouping — Phase 4.1: Group user+assistant exchanges into collapsible turns
@@ -1339,26 +1236,78 @@ function appendDiffBody(wrapper: HTMLElement, block: Block, diffBlock: DiffBlock
   if (block.diffText) wrapper.appendChild(createRawDiffContent(block.diffText))
 }
 
+// A large diff (e.g. a whole-file rewrite) would otherwise build one DOM row
+// per line synchronously on the webview's only thread — freezing input and the
+// prompt queue. Mirror the changed-files dropdown's cap: render up to this many
+// lines eagerly, then defer the remainder behind a one-click expander.
+export const MAX_DIFF_LINES_RENDERED = 500
+
 function createDiffTableWrapper(diffBlock: DiffBlock, opts: RenderOptions): HTMLElement {
   const tableWrapper = document.createElement("div")
   tableWrapper.className = "diff-table-wrapper"
 
   const table = document.createElement("table")
   table.className = "diff-table"
-  diffBlock.hunks.forEach((hunk, hunkIndex) => appendHunkRows(table, diffBlock, hunk, hunkIndex, opts))
+
+  let budget = MAX_DIFF_LINES_RENDERED
+  diffBlock.hunks.forEach((hunk, hunkIndex) => {
+    budget = appendHunkRows(table, diffBlock, hunk, hunkIndex, opts, budget)
+  })
+
+  const remaining = diffBlock.hunks.reduce((sum, h) => sum + h.lines.length, 0) - countRenderedLines(table)
+  if (remaining > 0) {
+    const showAll = document.createElement("button")
+    showAll.type = "button"
+    showAll.className = "diff-show-all"
+    showAll.textContent = `Show all changes (${remaining} more line${remaining === 1 ? "" : "s"})`
+    showAll.addEventListener("click", () => {
+      showAll.remove()
+      // Re-render every hunk with no budget. Cheap relative to the click — the
+      // user explicitly opted into the full diff.
+      while (table.firstChild) table.removeChild(table.firstChild)
+      diffBlock.hunks.forEach((hunk, hunkIndex) => appendHunkRows(table, diffBlock, hunk, hunkIndex, opts, Infinity))
+    })
+    tableWrapper.appendChild(table)
+    tableWrapper.appendChild(showAll)
+    return tableWrapper
+  }
 
   tableWrapper.appendChild(table)
   return tableWrapper
 }
 
-function appendHunkRows(table: HTMLElement, diffBlock: DiffBlock, hunk: DiffHunk, hunkIndex: number, opts: RenderOptions): void {
+function countRenderedLines(table: HTMLElement): number {
+  return table.querySelectorAll("tr.diff-line").length
+}
+
+/**
+ * Append a hunk's header plus up to `budget` of its lines. Returns the budget
+ * left for the next hunk. `Infinity` renders everything (the expander path).
+ */
+function appendHunkRows(
+  table: HTMLElement,
+  diffBlock: DiffBlock,
+  hunk: DiffHunk,
+  hunkIndex: number,
+  opts: RenderOptions,
+  budget: number = Infinity,
+): number {
   const oldCount = hunk.lines.filter((l) => l.type === "removed" || l.type === "context").length
   const newCount = hunk.lines.filter((l) => l.type === "added" || l.type === "context").length
   const hunkId = hunk.id || `${diffBlock.diffId}:${hunkIndex}`
   const hunkState = hunk.state || "pending"
 
+  // Skip the header entirely when there's no budget left for any of its lines.
+  if (budget <= 0) return budget
+
   table.appendChild(createHunkHeaderRow(diffBlock, hunk, hunkId, hunkState, oldCount, newCount, opts))
-  hunk.lines.forEach((line) => table.appendChild(createDiffLineRow(line)))
+  let left = budget
+  for (const line of hunk.lines) {
+    if (left <= 0) break
+    table.appendChild(createDiffLineRow(line))
+    left--
+  }
+  return left
 }
 
 function createHunkHeaderRow(
@@ -1723,6 +1672,37 @@ const FILE_CHIP_VISIBLE = 4
 // Question block — interactive UI for the opencode `question` tool
 // ---------------------------------------------------------------------------
 
+interface RenderQuestionGroup {
+  question: string
+  header?: string
+  options: string[]
+  multiSelect: boolean
+}
+
+/**
+ * Derive question groups for rendering. Prefers the normalized `block.groups`
+ * (set by the stream handler via parseQuestionArgs); falls back to the legacy
+ * flat `text`/`options` fields so the `stream_end` contract and existing
+ * single-question renders keep working.
+ */
+function questionGroupsFromBlock(block: Block): RenderQuestionGroup[] {
+  const raw = block.groups
+  if (Array.isArray(raw) && raw.length > 0) {
+    return (raw as unknown[]).map((g) => {
+      const o = (g && typeof g === "object" ? g : {}) as Record<string, unknown>
+      return {
+        question: typeof o.question === "string" ? o.question : "",
+        header: typeof o.header === "string" && o.header ? o.header : undefined,
+        options: Array.isArray(o.options) ? (o.options as unknown[]).map(String) : [],
+        multiSelect: o.multiSelect === true,
+      }
+    })
+  }
+  const question = (block.text as string | undefined) || (block.question as string | undefined) || ""
+  const options = Array.isArray(block.options) ? (block.options as unknown[]).map(String) : []
+  return [{ question, options, multiSelect: block.multiSelect === true }]
+}
+
 function renderQuestionBlock(block: Block, opts: RenderOptions): HTMLElement | null {
   const wrapper = document.createElement("div")
   wrapper.className = "question-block"
@@ -1732,8 +1712,11 @@ function renderQuestionBlock(block: Block, opts: RenderOptions): HTMLElement | n
   const sessionId = (block.sessionId as string | undefined) || ""
   const toolCallId = (block.toolCallId as string | undefined) || (block.id as string | undefined) || ""
   const messageId = (opts.messageId as string | undefined) || ""
-  const questionText = (block.text as string | undefined) || (block.question as string | undefined) || ""
-  const options = Array.isArray(block.options) ? (block.options as unknown[]).map(String) : []
+  // Stable handle so the live stream can re-render this block in place when the
+  // tool input finishes streaming (initial start often carries empty args).
+  if (toolCallId) wrapper.setAttribute("data-block-id", toolCallId)
+
+  const groups = questionGroupsFromBlock(block)
   const allowFreeText = block.allowFreeText !== false
 
   let answered = false
@@ -1751,12 +1734,7 @@ function renderQuestionBlock(block: Block, opts: RenderOptions): HTMLElement | n
   header.appendChild(label)
   wrapper.appendChild(header)
 
-  const text = document.createElement("div")
-  text.className = "question-text"
-  text.textContent = questionText
-  wrapper.appendChild(text)
-
-  function submit(value: string, source: "option" | "freetext") {
+  function postAnswer(value: string, source: "option" | "freetext") {
     if (answered) return
     if (!value) return
     answered = true
@@ -1782,50 +1760,148 @@ function renderQuestionBlock(block: Block, opts: RenderOptions): HTMLElement | n
     })
   }
 
-  if (options.length > 0) {
-    const optionsList = document.createElement("div")
-    optionsList.className = "question-options"
-    optionsList.setAttribute("role", "group")
-    optionsList.setAttribute("aria-label", "Answer options")
-    for (const opt of options) {
-      const btn = document.createElement("button")
-      btn.type = "button"
-      btn.className = "question-option"
-      btn.textContent = opt
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation()
-        submit(opt, "option")
-      })
-      optionsList.appendChild(btn)
-    }
-    wrapper.appendChild(optionsList)
-  }
-
-  if (allowFreeText) {
+  function appendFreeText(): HTMLTextAreaElement {
     const ta = document.createElement("textarea")
     ta.className = "question-freetext"
     ta.rows = 2
     ta.maxLength = 10000
     ta.placeholder = "Or type a custom answer…"
     ta.setAttribute("aria-label", "Type a custom answer")
-    ta.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault()
-        submit(ta.value.trim(), "freetext")
+    wrapper.appendChild(ta)
+    return ta
+  }
+
+  // ── Simple path: a single, single-select question. Clicking an option
+  //    submits immediately. This preserves the original DOM/behaviour. ──
+  const simpleMode = groups.length <= 1 && !groups.some((g) => g.multiSelect)
+  if (simpleMode) {
+    const g = groups[0] ?? { question: "", options: [], multiSelect: false }
+
+    const text = document.createElement("div")
+    text.className = "question-text"
+    text.textContent = g.question
+    wrapper.appendChild(text)
+
+    if (g.options.length > 0) {
+      const optionsList = document.createElement("div")
+      optionsList.className = "question-options"
+      optionsList.setAttribute("role", "group")
+      optionsList.setAttribute("aria-label", "Answer options")
+      for (const opt of g.options) {
+        const btn = document.createElement("button")
+        btn.type = "button"
+        btn.className = "question-option"
+        btn.textContent = opt
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation()
+          postAnswer(opt, "option")
+        })
+        optionsList.appendChild(btn)
+      }
+      wrapper.appendChild(optionsList)
+    }
+
+    if (allowFreeText) {
+      const ta = appendFreeText()
+      ta.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault()
+          postAnswer(ta.value.trim(), "freetext")
+        }
+      })
+      const submitBtn = document.createElement("button")
+      submitBtn.type = "button"
+      submitBtn.className = "question-submit"
+      submitBtn.textContent = "Submit"
+      submitBtn.addEventListener("click", (e) => {
+        e.stopPropagation()
+        postAnswer(ta.value.trim(), "freetext")
+      })
+      wrapper.appendChild(submitBtn)
+    }
+
+    return wrapper
+  }
+
+  // ── Multi path: several groups and/or multi-select. Selections are gathered
+  //    and submitted together via a single Submit button. ──
+  const selections: Array<Set<string>> = groups.map(() => new Set<string>())
+
+  groups.forEach((g, gi) => {
+    const section = document.createElement("div")
+    section.className = "question-group"
+
+    if (g.header) {
+      const hdr = document.createElement("div")
+      hdr.className = "question-group-header"
+      hdr.textContent = g.header
+      section.appendChild(hdr)
+    }
+
+    if (g.question) {
+      const text = document.createElement("div")
+      text.className = "question-text"
+      text.textContent = g.question
+      section.appendChild(text)
+    }
+
+    if (g.options.length > 0) {
+      const optionsList = document.createElement("div")
+      optionsList.className = "question-options"
+      optionsList.setAttribute("role", "group")
+      optionsList.setAttribute("aria-label", g.header ? `Options: ${g.header}` : "Answer options")
+      const sel = selections[gi]!
+      const buttons: HTMLButtonElement[] = []
+      for (const opt of g.options) {
+        const btn = document.createElement("button")
+        btn.type = "button"
+        btn.className = "question-option"
+        btn.setAttribute("aria-pressed", "false")
+        btn.textContent = opt
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation()
+          if (answered) return
+          if (g.multiSelect) {
+            if (sel.has(opt)) { sel.delete(opt); btn.classList.remove("selected"); btn.setAttribute("aria-pressed", "false") }
+            else { sel.add(opt); btn.classList.add("selected"); btn.setAttribute("aria-pressed", "true") }
+          } else {
+            sel.clear(); sel.add(opt)
+            for (const b of buttons) { b.classList.remove("selected"); b.setAttribute("aria-pressed", "false") }
+            btn.classList.add("selected"); btn.setAttribute("aria-pressed", "true")
+          }
+        })
+        buttons.push(btn)
+        optionsList.appendChild(btn)
+      }
+      section.appendChild(optionsList)
+    }
+
+    wrapper.appendChild(section)
+  })
+
+  const ta = allowFreeText ? appendFreeText() : null
+
+  const submitBtn = document.createElement("button")
+  submitBtn.type = "button"
+  submitBtn.className = "question-submit"
+  submitBtn.textContent = "Submit"
+  submitBtn.addEventListener("click", (e) => {
+    e.stopPropagation()
+    const parts: string[] = []
+    let hasSelection = false
+    groups.forEach((g, gi) => {
+      const chosen = Array.from(selections[gi] ?? [])
+      if (chosen.length > 0) {
+        hasSelection = true
+        const heading = g.header || g.question || `Answer ${gi + 1}`
+        parts.push(`${heading}: ${chosen.join(", ")}`)
       }
     })
-    wrapper.appendChild(ta)
-
-    const submitBtn = document.createElement("button")
-    submitBtn.type = "button"
-    submitBtn.className = "question-submit"
-    submitBtn.textContent = "Submit"
-    submitBtn.addEventListener("click", (e) => {
-      e.stopPropagation()
-      submit(ta.value.trim(), "freetext")
-    })
-    wrapper.appendChild(submitBtn)
-  }
+    const free = ta?.value.trim()
+    if (free) parts.push(free)
+    postAnswer(parts.join("\n"), hasSelection ? "option" : "freetext")
+  })
+  wrapper.appendChild(submitBtn)
 
   return wrapper
 }

@@ -18,7 +18,8 @@ import { StreamCoordinator } from "./handlers/StreamCoordinator"
 import { PromptManager } from "../prompts/PromptManager"
 import { PromptStashManager } from "../prompts/PromptStashManager"
 import { ProviderConfigManager } from "../model/ProviderConfigManager"
-import { toUserErrorMessage as toUserErrorMessagePure, errorValueToMessage as errorValueToMessagePure, mapToolType as mapToolTypePure, isSessionInCurrentWorkspace as isSessionInCurrentWorkspacePure } from "./chatUtils"
+import { mapToolType as mapToolTypePure, isSessionInCurrentWorkspace as isSessionInCurrentWorkspacePure } from "./chatUtils"
+import { RetryQueueService, CRITICAL_MESSAGE_TYPES } from "./RetryQueueService"
 import { ChatMessage } from "./types"
 import { log } from "../utils/outputChannel"
 import { MessageRouter } from "./handlers/MessageRouter"
@@ -38,7 +39,14 @@ import { SkillPreferencesStore } from "../skills/SkillPreferencesStore"
 import { SkillTriggerEngine } from "../skills/SkillTriggerEngine"
 import { MethodologyAdvisor } from "../methodology/MethodologyAdvisor"
 import { BackfillService } from "./BackfillService"
-import { isPlanDocumentPattern, resolvePlanPermission } from "./modePolicy"
+import { MessagePostService } from "./MessagePostService"
+import { StashService } from "./StashService"
+import { ProviderManagementService } from "./ProviderManagementService"
+import { DiffAcceptService } from "./DiffAcceptService"
+import { CodeInsertionService } from "./CodeInsertionService"
+import { SlashCommandService } from "./SlashCommandService"
+import { SessionSyncService } from "./SessionSyncService"
+import { AutoModeService } from "./AutoModeService"
 
 type ServerEvent = { type: string; sessionId?: string; data?: unknown }
 
@@ -67,8 +75,25 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private steerPromptHandler: SteerPromptHandler
   private promptStashManager: PromptStashManager
   private providerConfigManager: ProviderConfigManager
+  private stashService: StashService
+  private providerManagementService: ProviderManagementService
+  private slashCommands: SlashCommandService
+  private sessionSync: SessionSyncService
+  private autoModeService!: AutoModeService
+  private diffAcceptService!: DiffAcceptService
+  private codeInsertionService!: CodeInsertionService
 
-  
+  private messagePostService = new MessagePostService({
+    getWebview: () => this._view?.webview,
+    log,
+    onRejected: (msg) => this.recordPostMessageRejected(msg),
+  })
+
+  private retryQueueService = new RetryQueueService({
+    postRawMessage: (msg) => this._view?.webview.postMessage(msg),
+    resumeSession: (sid) => this.messageBatcher.resumeSession(sid),
+    pauseSession: (sid) => this.messageBatcher.pauseSession(sid),
+  })
 
   /** Buffers host updates and stream chunks behind one priority-aware protocol boundary. */
   private messageBatcher = this.createHostMessageBatcher()
@@ -83,22 +108,6 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     maxPerSession: 200,
     log: { warn: (m) => log.warn(m), info: (m) => log.info(m) },
   })
-
-  /** P2: Retry queue for critical messages with exponential backoff */
-  private messageRetryQueue: Array<{ msg: Record<string, unknown>; attempts: number; lastAttempt: number }> = []
-  /**
-   * O3: Stream lifecycle messages must arrive in order. Adding the start/tool messages here means
-   * a failed start no longer races ahead of a subsequent batched stream_chunk for the same session.
-   */
-  private static readonly CRITICAL_MESSAGE_TYPES = new Set([
-    "stream_start", "stream_end", "stream_chunk", "stream_tool_start", "stream_tool_end",
-    "stream_error", "streaming_state",
-    "error", "webview_ready", "request_error",
-  ])
-  private static readonly MAX_RETRIES = 3
-  private static readonly RETRY_DELAYS_MS = [100, 500, 1000]
-  private static readonly MAX_RETRY_QUEUE_SIZE = 50
-  private retryTimer?: NodeJS.Timeout
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -150,6 +159,15 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     this.usageAnalytics.setHistory(contextMonitor.getHistory())
     this.promptStashManager = new PromptStashManager({ context })
     this.providerConfigManager = new ProviderConfigManager({ context })
+    this.stashService = new StashService({
+      promptStashManager: this.promptStashManager,
+      tabManager: this.tabManager,
+      postMessage: (msg) => this.postMessage(msg),
+    })
+    this.providerManagementService = new ProviderManagementService({
+      providerConfigManager: this.providerConfigManager,
+      postMessage: (msg) => this.postMessage(msg),
+    })
     this.modelManager.setProviderConfigManager(this.providerConfigManager)
     this.steerPromptHandler = new SteerPromptHandler(
       this.streamCoordinator,
@@ -188,6 +206,37 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       postRequestError: (message, sessionId) => this.postRequestError(message, sessionId),
       sendPromptToWebview: (text, autoSend) => this.sendPromptToWebview(text, autoSend),
     })
+
+    this.slashCommands = new SlashCommandService({
+      sessionManager,
+      sessionStore: this.sessionStore,
+      commandExec: this.commandExec,
+      tabManager: this.tabManager,
+      postMessage: (msg) => this.postMessage(msg),
+      getActiveSessionId: () => this.tabManager.getActiveTab()?.id,
+    })
+    this.autoModeService = new AutoModeService({ context })
+    this.sessionSync = new SessionSyncService({
+      sessionStore: this.sessionStore,
+      modelManager: this.modelManager,
+      sessionManager,
+      sessionLifecycle: this.sessionLifecycle,
+      mcpServerManager: this.mcpServerManager,
+      rateLimitMonitor: this.rateLimitMonitor,
+      statePush: this.statePush,
+      messageRouter: this.messageRouter,
+      postMessage: (msg) => this.postMessage(msg),
+      getActiveTabId: () => this.tabManager.getActiveTab()?.id,
+    })
+
+    this.diffAcceptService = new DiffAcceptService({
+      sessionLifecycle: this.sessionLifecycle,
+      autoCompactor: this.autoCompactor,
+      postMessage: (msg) => this.postMessage(msg),
+      postRequestError: (m) => this.postRequestError(m),
+    })
+
+    this.codeInsertionService = new CodeInsertionService(this.fileOps)
 
     // Hook into tab creation to backfill tabs that need it
     this.tabManager.onTabCreated((tabId) => {
@@ -229,9 +278,9 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       ensureLocalTab: (sId, name, model, mode) => this.ensureLocalTab(sId, name, model, mode),
       handleConnectProvider: () => this.handleConnectProvider(),
       openOpenCodeConfigOrSettings: () => this.openOpenCodeConfigOrSettings(),
-      hasAutoModeConfirmed: () => this.hasAutoModeConfirmed(),
-      setAutoModeConfirmed: (value) => this.setAutoModeConfirmed(value),
-      showAutoModeConfirmation: (sid) => this.showAutoModeConfirmation(sid),
+      hasAutoModeConfirmed: () => this.autoModeService.hasAutoModeConfirmed(),
+      setAutoModeConfirmed: (value) => this.autoModeService.setAutoModeConfirmed(value),
+      showAutoModeConfirmation: (sid) => this.autoModeService.showAutoModeConfirmation(sid),
       replayLiveStreamsToWebview: () => this.replayLiveStreamsToWebview(),
       exportChat: () => { void vscode.commands.executeCommand("opencode-harness.exportConversation") },
       exportChatJson: () => { void vscode.commands.executeCommand("opencode-harness.exportConversationJson") },
@@ -272,7 +321,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
 
   private createHostMessageBatcher(): HostMessageBatcher {
     return new HostMessageBatcher(
-      (msg) => this.postRawMessage(msg),
+      (msg) => this.messagePostService.postRawMessage(msg),
       (msg) => log.info(msg),
     )
   }
@@ -293,11 +342,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     this.messageBatcher = this.createHostMessageBatcher()
 
     // P2: Clear retry queue on webview recreation
-    if (this.retryTimer) {
-      clearTimeout(this.retryTimer)
-      this.retryTimer = undefined
-    }
-    this.messageRetryQueue = []
+    this.retryQueueService.clear()
 
     this._view = webviewView
     // H15: Reset ready state on re-solve to handle webview recreation
@@ -429,11 +474,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       this.eventRouter.webviewReady = false
       // O4: Dispose the batcher and clear retry/early state so nothing fires on the dead view.
       try { this.messageBatcher.dispose() } catch (err) { log.warn("HostMessageBatcher dispose on view disposal failed", err) }
-      if (this.retryTimer) {
-        clearTimeout(this.retryTimer)
-        this.retryTimer = undefined
-      }
-      this.messageRetryQueue = []
+      this.retryQueueService.clear()
       this.eventRouter.clearReadyTimeout()
       this.eventRouter.earlyMessageQueue = []
       // Abort any active streams when the panel is closed
@@ -539,7 +580,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
   }
 
   private async handleCompactSession(sessionId?: string): Promise<void> {
-    return this.sessionLifecycle.handleCompactSession(sessionId)
+    return this.diffAcceptService.handleCompactSession(sessionId)
   }
 
   private async handleExecuteCommand(sessionId?: string, command?: string, args?: string): Promise<void> {
@@ -974,23 +1015,23 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
   }
 
   private shouldAutoRejectPlanPermission(data: { type?: string; pattern?: string | string[] }): boolean {
-    return resolvePlanPermission(data) === "reject"
+    return this.diffAcceptService.shouldAutoRejectPlanPermission(data)
   }
 
   private isPlanDocumentPattern(pattern: string | string[]): boolean {
-    return isPlanDocumentPattern(pattern)
+    return this.diffAcceptService.isPlanDocumentPattern(pattern)
   }
 
   private async handleAcceptDiff(blockId: string, sessionId?: string): Promise<void> {
-    return this.sessionLifecycle.handleAcceptDiff(blockId, sessionId)
+    return this.diffAcceptService.handleAcceptDiff(blockId, sessionId)
   }
 
   private syncActiveSession(): void {
-    return this.sessionLifecycle.syncActiveSession()
+    return this.sessionSync.syncActiveSession()
   }
 
   private pushModelToWebview(model?: string): void {
-    this.statePush.pushModelToWebview(model || this.modelManager.model)
+    return this.sessionSync.pushModelToWebview(model)
   }
 
   /**
@@ -1030,20 +1071,15 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
   }
 
   private pushModelListToWebview(): void {
-    this.messageRouter.getModelList({
-      postMessage: (m) => this.statePush.postMessage(m),
-      postRequestError: (m) => this.statePush.postRequestError(m),
-    })
+    return this.sessionSync.pushModelListToWebview()
   }
 
   private pushMcpServersToWebview(): void {
-    this.mcpServerManager.refresh()
-    const servers = this.mcpServerManager.getServers()
-    this.statePush.pushMcpServersToWebview(servers)
+    return this.sessionSync.pushMcpServersToWebview()
   }
 
   private pushRateLimitStateToWebview(): void {
-    this.statePush.pushRateLimitStateToWebview(this.rateLimitMonitor.getSerializableState())
+    return this.sessionSync.pushRateLimitStateToWebview()
   }
 
   private pushInitStateToWebview(): void {
@@ -1224,179 +1260,50 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
   }
 
   private postRawMessage(msg: Record<string, unknown>): boolean | Thenable<boolean> | undefined {
-    if (!this._view) return false
-    try {
-      // O5: VS Code's postMessage returns Thenable<boolean> — false signals the webview's
-      // internal queue refused the message (saturation, disposed, hidden). We previously
-      // discarded this signal entirely. Observe it and surface sustained backpressure.
-      const result = this._view.webview.postMessage(msg) as boolean | Thenable<boolean> | undefined
-      if (result && typeof (result as Thenable<boolean>).then === "function") {
-        ;(result as Thenable<boolean>).then(ok => { if (ok === false) this.recordPostMessageRejected(msg) }, () => { /* ignore */ })
-      } else if (result === false) {
-        this.recordPostMessageRejected(msg)
-      }
-      return result
-    } catch (err) {
-      log.error("Failed to post message to webview", err)
-      // P2: Retry critical messages
-      if (ChatProvider.CRITICAL_MESSAGE_TYPES.has(msg.type as string)) {
-        // O3: While a stream lifecycle message is being retried, pause chunk delivery for the same
-        // session so a batched stream_chunk cannot overtake the not-yet-delivered stream_start.
-        const sid = typeof msg.sessionId === "string" ? msg.sessionId : undefined
-        if (sid && (msg.type === "stream_start" || msg.type === "stream_tool_start")) {
-          this.messageBatcher.pauseSession(sid)
-        }
-        this.scheduleRetry(msg)
-      }
-      return false
-    }
+    return this.messagePostService.postRawMessage(msg)
   }
 
   private postRequestError(message: string, sessionId?: string): void {
-    this.statePush.postRequestError(this.toUserErrorMessage(message), sessionId)
+    this.messagePostService.postRequestError(message, sessionId)
   }
-
-  /** O5: Backpressure observability — counters for consecutive rejected postMessage results. */
-  private postMessageRejectedConsecutive = 0
-  private postMessageRejectedTotal = 0
-  private lastBackpressureLogAt = 0
 
   /** O5: Called when webview.postMessage resolves to false (saturation / refused). */
   private recordPostMessageRejected(msg: Record<string, unknown>): void {
-    this.postMessageRejectedConsecutive++
-    this.postMessageRejectedTotal++
-    const now = Date.now()
-    // Throttle to once per second to avoid log spam under sustained pressure.
-    if (now - this.lastBackpressureLogAt > 1000) {
-      this.lastBackpressureLogAt = now
-      log.warn(`Webview postMessage refused ${this.postMessageRejectedConsecutive} message(s) (total ${this.postMessageRejectedTotal}); latest type=${String(msg.type)}`)
-    }
-    // Re-route critical messages through retry so they aren't lost to a silent false.
-    if (ChatProvider.CRITICAL_MESSAGE_TYPES.has(msg.type as string)) {
-      this.scheduleRetry(msg)
-    }
+    this.retryQueueService.recordPostMessageRejected(msg)
   }
 
   /** P2: Schedule a retry for a failed critical message with exponential backoff */
   private scheduleRetry(msg: Record<string, unknown>): void {
-    if (this.messageRetryQueue.length >= ChatProvider.MAX_RETRY_QUEUE_SIZE) {
-      const oldestNonCriticalIdx = this.messageRetryQueue.findIndex(
-        item => !ChatProvider.CRITICAL_MESSAGE_TYPES.has(item.msg.type as string)
-      )
-      if (oldestNonCriticalIdx >= 0) {
-        this.messageRetryQueue.splice(oldestNonCriticalIdx, 1)
-        log.warn(`Retry queue at capacity (${ChatProvider.MAX_RETRY_QUEUE_SIZE}), dropped oldest non-critical retry`)
-      } else {
-        log.warn(`Retry queue at capacity with all critical messages — dropping oldest to enqueue ${String(msg.type)}`)
-        this.messageRetryQueue.shift()
-      }
-    }
-    const retryItem = { msg, attempts: 0, lastAttempt: Date.now() }
-    this.messageRetryQueue.push(retryItem)
-    this.processRetryQueue()
+    this.retryQueueService.scheduleRetry(msg)
   }
 
   /** P2: Process retry queue with exponential backoff */
   private processRetryQueue(): void {
-    if (this.retryTimer) {
-      clearTimeout(this.retryTimer)
-    }
-
-    while (this.messageRetryQueue.length > 0) {
-      const now = Date.now()
-      const nextRetry = this.messageRetryQueue.find(item => {
-        const delayIndex = Math.min(item.attempts, ChatProvider.RETRY_DELAYS_MS.length - 1)
-        const delayMs = ChatProvider.RETRY_DELAYS_MS[delayIndex] ?? 1000
-        return now - item.lastAttempt >= delayMs
-      })
-
-      if (!nextRetry) {
-        const firstItem = this.messageRetryQueue[0]
-        if (firstItem) {
-          const delayIndex = Math.min(firstItem.attempts, ChatProvider.RETRY_DELAYS_MS.length - 1)
-          const delayMs = ChatProvider.RETRY_DELAYS_MS[delayIndex] ?? 1000
-          const timeUntilNext = delayMs - (now - firstItem.lastAttempt)
-          this.retryTimer = setTimeout(() => this.processRetryQueue(), timeUntilNext)
-        }
-        return
-      }
-
-      // O6: posting to a disposed view used to silently no-op via optional chaining.
-      // Treat absent _view as a failure so a hide/show cycle can recover, then bail.
-      if (!this._view) {
-        log.warn(`Retry skipped — webview disposed; type=${String(nextRetry.msg.type)}`)
-        nextRetry.attempts++
-        nextRetry.lastAttempt = Date.now()
-        if (nextRetry.attempts >= ChatProvider.MAX_RETRIES) {
-          log.error(`Max retries exceeded (no view) for message type: ${nextRetry.msg.type}`)
-          const index = this.messageRetryQueue.indexOf(nextRetry)
-          if (index > -1) this.messageRetryQueue.splice(index, 1)
-        }
-        // Reschedule and break — the disposed view will not flip mid-tick.
-        const firstItem = this.messageRetryQueue[0]
-        if (firstItem) {
-          const delayIndex = Math.min(firstItem.attempts, ChatProvider.RETRY_DELAYS_MS.length - 1)
-          const delayMs = ChatProvider.RETRY_DELAYS_MS[delayIndex] ?? 1000
-          this.retryTimer = setTimeout(() => this.processRetryQueue(), delayMs)
-        }
-        return
-      }
-
-      try {
-        this._view.webview.postMessage(nextRetry.msg)
-        const index = this.messageRetryQueue.indexOf(nextRetry)
-        if (index > -1) {
-          this.messageRetryQueue.splice(index, 1)
-        }
-        // O3: a successful stream_start / stream_tool_start retry releases the paused chunk buffer.
-        const sid = typeof nextRetry.msg.sessionId === "string" ? nextRetry.msg.sessionId : undefined
-        if (sid && (nextRetry.msg.type === "stream_start" || nextRetry.msg.type === "stream_tool_start")) {
-          this.messageBatcher.resumeSession(sid)
-        }
-        log.info(`Successfully retried message of type: ${nextRetry.msg.type}`)
-      } catch (err) {
-        log.warn(`Retry post failed for ${String(nextRetry.msg.type)}: ${err instanceof Error ? err.message : String(err)}`)
-        nextRetry.attempts++
-        nextRetry.lastAttempt = Date.now()
-        if (nextRetry.attempts >= ChatProvider.MAX_RETRIES) {
-          log.error(`Max retries exceeded for message type: ${nextRetry.msg.type}`)
-          const index = this.messageRetryQueue.indexOf(nextRetry)
-          if (index > -1) {
-            this.messageRetryQueue.splice(index, 1)
-          }
-          // O3: give up gracefully — unblock the batcher so subsequent chunks for the session
-          // are not orphaned in memory. The webview will simply miss the start; better than a leak.
-          const sid = typeof nextRetry.msg.sessionId === "string" ? nextRetry.msg.sessionId : undefined
-          if (sid && (nextRetry.msg.type === "stream_start" || nextRetry.msg.type === "stream_tool_start")) {
-            this.messageBatcher.resumeSession(sid)
-          }
-        }
-      }
-    }
+    this.retryQueueService.processRetryQueue()
   }
 
-private toUserErrorMessage(message: string): string {
-    return toUserErrorMessagePure(message)
+  private toUserErrorMessage(message: string): string {
+    return this.retryQueueService.toUserErrorMessage(message)
   }
 
   private errorValueToMessage(value: unknown): string {
-    return errorValueToMessagePure(value)
+    return this.retryQueueService.errorValueToMessage(value)
   }
 
   private mapToolType(tool: string): string {
-    return mapToolTypePure(tool)
+    return this.messagePostService.mapToolType(tool)
   }
 
-  private async handleInsertAtCursor(code: string, _language: string): Promise<void> {
-    await this.fileOps.insertAtCursor(code)
+  private async handleInsertAtCursor(code: string, language: string): Promise<void> {
+    await this.codeInsertionService.handleInsertAtCursor(code, language)
   }
 
   private async handleCreateFileFromCode(code: string, language: string): Promise<void> {
-    await this.fileOps.createFromCode(code, language)
+    await this.codeInsertionService.handleCreateFileFromCode(code, language)
   }
 
   private languageExtension(language: string): string {
-    return ChatFileOps.extensionForLanguage(language)
+    return this.codeInsertionService.languageExtension(language)
   }
 
   private handleEditMessage(sessionId: string, messageId: string, text: string): void {
@@ -1420,102 +1327,35 @@ private toUserErrorMessage(message: string): string {
   }
 
   private async handleStashPrompt(name: string, content: string, isGlobal: boolean): Promise<void> {
-    try {
-      const active = this.tabManager.getActiveTab()
-      if (isGlobal) {
-        await this.promptStashManager.stashGlobal(name, content)
-      } else if (active) {
-        await this.promptStashManager.stashForSession(name, content, active.cliSessionId || active.id)
-      }
-      this.postMessage({ type: "stash_success", name })
-    } catch (err) {
-      log.error("Stash prompt failed", err)
-      this.postMessage({ type: "stash_error", error: "Failed to stash prompt" })
-    }
+    return this.stashService.handleStashPrompt(name, content, isGlobal)
   }
 
   private handleListStashes(): void {
-    try {
-      const active = this.tabManager.getActiveTab()
-      const stashes = active
-        ? this.promptStashManager.getSessionStashes(active.cliSessionId || active.id)
-        : this.promptStashManager.getGlobalStashes()
-      this.postMessage({ type: "stash_list", stashes })
-    } catch (err) {
-      log.error("List stashes failed", err)
-      this.postMessage({ type: "stash_error", error: "Failed to list stashes" })
-    }
+    return this.stashService.handleListStashes()
   }
 
   private async handleDeleteStash(id: string): Promise<void> {
-    try {
-      await this.promptStashManager.deleteStash(id)
-      this.postMessage({ type: "stash_deleted", id })
-    } catch (err) {
-      log.error("Delete stash failed", err)
-      this.postMessage({ type: "stash_error", error: "Failed to delete stash" })
-    }
+    return this.stashService.handleDeleteStash(id)
   }
 
   private async handleAddProvider(name: string, apiKey: string, baseUrl?: string): Promise<void> {
-    try {
-      const id = await this.providerConfigManager.upsertConfig({
-        name,
-        apiKey,
-        baseUrl,
-        enabled: true,
-        models: [],
-      })
-      this.postMessage({ type: "provider_added", id, name })
-    } catch (err) {
-      log.error("Add provider failed", err)
-      this.postMessage({ type: "provider_error", error: "Failed to add provider" })
-    }
+    return this.providerManagementService.handleAddProvider(name, apiKey, baseUrl)
   }
 
   private handleListProviders(): void {
-    try {
-      const providers = this.providerConfigManager.getAllConfigs()
-      this.postMessage({ type: "provider_list", providers })
-    } catch (err) {
-      log.error("List providers failed", err)
-      this.postMessage({ type: "provider_error", error: "Failed to list providers" })
-    }
+    return this.providerManagementService.handleListProviders()
   }
 
   private async handleUpdateProvider(id: string, updates: Record<string, unknown>): Promise<void> {
-    try {
-      const config = this.providerConfigManager.getConfig(id)
-      if (!config) {
-        this.postMessage({ type: "provider_error", error: "Provider not found" })
-        return
-      }
-      await this.providerConfigManager.upsertConfig({
-        ...config,
-        ...updates,
-      } as unknown as Omit<import("../model/ProviderConfigManager").ProviderConfig, "id">)
-      this.postMessage({ type: "provider_updated", id })
-    } catch (err) {
-      log.error("Update provider failed", err)
-      this.postMessage({ type: "provider_error", error: "Failed to update provider" })
-    }
+    return this.providerManagementService.handleUpdateProvider(id, updates)
   }
 
   private async handleDeleteProvider(id: string): Promise<void> {
-    try {
-      await this.providerConfigManager.deleteConfig(id)
-      this.postMessage({ type: "provider_deleted", id })
-    } catch (err) {
-      log.error("Delete provider failed", err)
-      this.postMessage({ type: "provider_error", error: "Failed to delete provider" })
-    }
+    return this.providerManagementService.handleDeleteProvider(id)
   }
 
   private async handleCompactBannerAction(sessionId: string | undefined, action: string): Promise<void> {
-    await this.autoCompactor.handleBannerAction(sessionId, action, {
-      postMessage: (m) => this.postMessage(m),
-      postRequestError: (m) => this.postRequestError(m),
-    })
+    await this.diffAcceptService.handleCompactBannerAction(sessionId, action)
   }
 
   // F15: Notification when stream completes and webview is not focused
@@ -1533,79 +1373,38 @@ private toUserErrorMessage(message: string): string {
 
   /** Public façade: run a local slash command on the active tab (used by VS Code commands). */
   async runSlashCommandOnActiveTab(commandName: string): Promise<void> {
-    const sid = this.tabManager.getActiveTab()?.id
-    if (!sid) {
-      vscode.window.showInformationMessage("Open a chat session before running this command.")
-      return
-    }
-    await this.commandExec.handleLocalSlashCommand(sid, commandName)
+    return this.slashCommands.runSlashCommandOnActiveTab(commandName)
   }
 
   /** Open the in-webview commands palette. */
   openCommandsPalette(): void {
-    if (!this._view) return
-    this.postMessage({ type: "open_commands_palette" })
+    return this.slashCommands.openCommandsPalette()
   }
 
   async handleClearCommand(sessionId: string): Promise<void> {
-    await this.commandExec.handleLocalSlashCommand(sessionId, "clear")
+    return this.slashCommands.handleClearCommand(sessionId)
   }
 
   async handleCostCommand(sessionId: string): Promise<void> {
-    await this.commandExec.handleLocalSlashCommand(sessionId, "cost")
+    return this.slashCommands.handleCostCommand(sessionId)
   }
 
   async handleContinueCommand(sessionId: string): Promise<void> {
-    await this.commandExec.handleLocalSlashCommand(sessionId, "continue")
+    return this.slashCommands.handleContinueCommand(sessionId)
   }
 
   async abortCurrentSession(): Promise<void> {
-    return this.commandExec.abortCurrentSession()
+    return this.slashCommands.abortCurrentSession()
   }
 
   handleHelpCommand(sessionId: string): void {
-    void this.commandExec.handleLocalSlashCommand(sessionId, "help")
+    return this.slashCommands.handleHelpCommand(sessionId)
   }
 
-  private readonly AUTO_MODE_CONFIRMED_KEY = "opencode.autoModeConfirmed"
-
-  private hasAutoModeConfirmed(): boolean {
-    return this.context.globalState.get<boolean>(this.AUTO_MODE_CONFIRMED_KEY, false)
-  }
-
-  private async setAutoModeConfirmed(value: boolean): Promise<void> {
-    await this.context.globalState.update(this.AUTO_MODE_CONFIRMED_KEY, value)
-  }
-
-  /** H6: One-time auto mode confirmation with "Don't show again" option */
-  private async showAutoModeConfirmation(sessionId: string): Promise<boolean> {
-    const DONT_SHOW = "Don't show again"
-    const PROCEED = "Proceed"
-    const CANCEL = "Cancel"
-
-    const result = await vscode.window.showWarningMessage(
-      "Auto mode will apply all changes without asking.",
-      { modal: true },
-      PROCEED,
-      DONT_SHOW,
-      CANCEL
-    )
-
-    if (result === DONT_SHOW) {
-      await this.context.globalState.update(this.AUTO_MODE_CONFIRMED_KEY, true)
-      return true
-    }
-    return result === PROCEED
-  }
 
   dispose(): void {
     this.backfillService.dispose()
-    // P2: Clear retry timer and queue on disposal
-    if (this.retryTimer) {
-      clearTimeout(this.retryTimer)
-      this.retryTimer = undefined
-    }
-    this.messageRetryQueue = []
+    this.retryQueueService.dispose()
     this.messageBatcher.dispose()
     for (const d of this.disposables) d.dispose()
     this.disposables = []

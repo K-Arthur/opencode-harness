@@ -282,6 +282,11 @@ export class SessionManager {
     return this.sessionClient.listSessions()
   }
 
+  /** Read a workspace file (and its server-computed diff) for the changed-files view. */
+  async getFileContent(path: string, directory?: string): Promise<unknown> {
+    return this.sessionClient.readFile(path, directory)
+  }
+
   async sendPrompt(
     sessionId: string,
     parts: (TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput)[],

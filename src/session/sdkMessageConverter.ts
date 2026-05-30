@@ -1,5 +1,6 @@
 import type { Message, Part } from "@opencode-ai/sdk"
 import type { ChatMessage, Block } from "../types"
+import { parseQuestionArgs, parseAllowFreeText } from "../chat/webview/questionModel"
 
 /**
  * SDK → CanonicalBlock converter. Single source of truth for projecting the
@@ -89,6 +90,23 @@ export function partToBlock(part: Part, opts: { streaming?: boolean } = {}): Blo
 
     case "tool": {
       const state = part.state
+      // The `question` tool re-renders as an interactive question block (not a
+      // generic tool card) so reloaded/backfilled sessions keep the question UI.
+      if ((part.tool || "").toLowerCase() === "question") {
+        const input = "input" in state ? state.input : undefined
+        const groups = parseQuestionArgs(input)
+        const first = groups[0]
+        const qBlock: Block = {
+          id: part.id,
+          type: "question",
+          toolCallId: part.callID || part.id,
+          groups,
+          text: first?.question ?? "",
+          options: first?.options ?? [],
+          allowFreeText: parseAllowFreeText(input),
+        }
+        return qBlock
+      }
       const block: Block = {
         id: part.id,
         type: "tool",
