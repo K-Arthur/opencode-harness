@@ -145,9 +145,9 @@ export function createComposer(deps: ComposerDeps): ComposerAPI {
   function runCommandEntry(entry: CommandEntry): void {
     const active = stateManager.getActiveSession()
     if (!active) return
-    if (entry.name === "clear") {
-      els.promptInput.value = ""
-      autoResizeTextarea()
+    if (entry.source === "local") {
+      runSlashCommandText(entry.insertText || `/${entry.name}`, active)
+      return
     }
     if ((entry as any).run) {
       ;(entry as any).run()
@@ -565,6 +565,108 @@ export function createComposer(deps: ComposerDeps): ComposerAPI {
     updateSendButton()
   }
 
+  function clearPromptInput(): void {
+    els.promptInput.value = ""
+    autoResizeTextarea()
+    updateSendButton()
+  }
+
+  function runSlashCommandText(
+    text: string,
+    active: NonNullable<ReturnType<ComposerDeps["stateManager"]["getActiveSession"]>>,
+  ): void {
+    const parts = text.split(/\s+/)
+    const cmd = (parts[0] || "").toLowerCase()
+    const commandArgs = parts.slice(1).join(" ")
+    switch (cmd) {
+      case "/clear":
+        vscode.postMessage({ type: "execute_command", command: "/clear", sessionId: active.id })
+        clearPromptInput()
+        return
+      case "/model":
+        if (commandArgs) {
+          stateManager.setSessionModel(active.id, commandArgs)
+          stateManager.setGlobalModel(commandArgs)
+          modelDropdown.setCurrentModel(commandArgs)
+          syncModelViews()
+          vscode.postMessage({ type: "set_model", model: commandArgs, sessionId: active.id })
+          clearPromptInput()
+          return
+        }
+        vscode.postMessage({ type: "get_models" })
+        modelDropdown.open()
+        clearPromptInput()
+        return
+      case "/cost":
+        vscode.postMessage({ type: "execute_command", command: "/cost", sessionId: active.id })
+        clearPromptInput()
+        return
+      case "/new":
+        createNewTab()
+        clearPromptInput()
+        return
+      case "/help":
+        vscode.postMessage({ type: "execute_command", command: "/help", sessionId: active.id })
+        clearPromptInput()
+        return
+      case "/export":
+      case "/export-md":
+        vscode.postMessage({ type: "export_chat" })
+        clearPromptInput()
+        return
+      case "/export-json":
+        vscode.postMessage({ type: "export_chat_json" })
+        clearPromptInput()
+        return
+      case "/export-text":
+        vscode.postMessage({ type: "export_chat_text" })
+        clearPromptInput()
+        return
+      case "/copy":
+        vscode.postMessage({ type: "copy_chat" })
+        clearPromptInput()
+        return
+      case "/stash": {
+        const stashName = (parts[1] && parts[1].trim()) ? parts[1] : "Untitled"
+        const inlineContent = parts.slice(2).join(" ").trim()
+        const stashContent = inlineContent || text.replace(/^\/stash(?:\s+\S+)?\s*/i, "").trim()
+        if (!stashContent) {
+          showSystemMessage(active.id, "Usage: /stash <name> <content>")
+        } else {
+          vscode.postMessage({ type: "stash_prompt", name: stashName, content: stashContent, isGlobal: true })
+        }
+        clearPromptInput()
+        return
+      }
+      case "/stashes":
+        vscode.postMessage({ type: "list_stashes" })
+        clearPromptInput()
+        return
+      case "/compact":
+        vscode.postMessage({ type: "compact_session", sessionId: active.id })
+        showSystemMessage(active.id, "Compacting session...")
+        clearPromptInput()
+        return
+      case "/commands":
+        commandsModal.open()
+        vscode.postMessage({ type: "list_commands" })
+        clearPromptInput()
+        return
+      case "/queue":
+        renderQueue(active.id)
+        clearPromptInput()
+        return
+      case "/continue":
+        vscode.postMessage({ type: "execute_command", command: "/continue", sessionId: active.id })
+        clearPromptInput()
+        return
+      default:
+        vscode.postMessage({ type: "execute_command", command: cmd, arguments: commandArgs, sessionId: active.id })
+        clearPromptInput()
+        return
+    }
+  }
+
   function abortStream() {
     const active = stateManager.getActiveSession()
     if (!active) return
@@ -619,134 +721,8 @@ export function createComposer(deps: ComposerDeps): ComposerAPI {
     }
 
     if (text.startsWith("/")) {
-      const parts = text.split(/\s+/)
-      const cmd = (parts[0] || "").toLowerCase()
-      const commandArgs = parts.slice(1).join(" ")
-      switch (cmd) {
-        case "/clear":
-          vscode.postMessage({ type: "execute_command", command: "/clear", sessionId: active.id })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/model":
-          if (commandArgs) {
-            stateManager.setSessionModel(active.id, commandArgs)
-            stateManager.setGlobalModel(commandArgs)
-            modelDropdown.setCurrentModel(commandArgs)
-            syncModelViews()
-            vscode.postMessage({ type: "set_model", model: commandArgs, sessionId: active.id })
-            els.promptInput.value = ""
-            autoResizeTextarea()
-            updateSendButton()
-            return
-          }
-          vscode.postMessage({ type: "get_models" })
-          modelDropdown.open()
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/cost":
-          vscode.postMessage({ type: "execute_command", command: "/cost", sessionId: active.id })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/new":
-          createNewTab()
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/help":
-          vscode.postMessage({ type: "execute_command", command: "/help", sessionId: active.id })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/export":
-          vscode.postMessage({ type: "export_chat" })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/export-md":
-          vscode.postMessage({ type: "export_chat" })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/export-json":
-          vscode.postMessage({ type: "export_chat_json" })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/export-text":
-          vscode.postMessage({ type: "export_chat_text" })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/copy":
-          vscode.postMessage({ type: "copy_chat" })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/stash":
-          const stashName = (parts[1] && parts[1].trim()) ? parts[1] : "Untitled"
-          const inlineContent = parts.slice(2).join(" ").trim()
-          const stashContent = inlineContent || text.replace(/^\/stash(?:\s+\S+)?\s*/i, "").trim()
-          if (!stashContent) {
-            showSystemMessage(active.id, "Usage: /stash <name> <content>")
-          } else {
-            vscode.postMessage({ type: "stash_prompt", name: stashName, content: stashContent, isGlobal: true })
-          }
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/stashes":
-          vscode.postMessage({ type: "list_stashes" })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/compact":
-          vscode.postMessage({ type: "compact_session", sessionId: active.id })
-          showSystemMessage(active.id, "Compacting session...")
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/commands":
-          commandsModal.open()
-          vscode.postMessage({ type: "list_commands" })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/queue":
-          renderQueue(active.id)
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        case "/continue":
-          vscode.postMessage({ type: "execute_command", command: "/continue", sessionId: active.id })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-        default:
-          vscode.postMessage({ type: "execute_command", command: cmd, arguments: commandArgs, sessionId: active.id })
-          els.promptInput.value = ""
-          autoResizeTextarea()
-          updateSendButton()
-          return
-      }
+      runSlashCommandText(text, active)
+      return
     }
 
     const attachments = attachmentManager.getAttachments()

@@ -81,7 +81,8 @@ export class PromptManager implements vscode.Disposable {
   }
 
   getPrompt(name: string): CustomPrompt | undefined {
-    return this.prompts.find((p) => p.name === name)
+    const normalized = name.toLowerCase()
+    return this.prompts.find((p) => p.name.toLowerCase() === normalized)
   }
 
   onChanged(callback: () => void): void {
