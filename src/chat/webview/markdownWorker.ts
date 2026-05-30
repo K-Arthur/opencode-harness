@@ -66,7 +66,7 @@ const md = new MarkdownIt({
   linkify: true,
   typographer: false,
   breaks: false,
-  highlight: (str, lang) => highlightSyntax(str, normalizeMarkdownLanguage(lang || "")),
+  highlight: (str, lang) => highlightSyntax(str, lang || ""),
 }).use(taskLists, { label: false })
 
 const defaultLinkOpen = md.renderer.rules.link_open || ((tokens, idx, options, _env, self) =>
