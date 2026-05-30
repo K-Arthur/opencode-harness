@@ -65,6 +65,21 @@ function handleEmptyStreamEnd(
   }
 }
 
+/**
+ * m3: decide whether two tool-call blocks are the same call. When BOTH carry an
+ * id, the id is authoritative — two distinct calls with identical args (e.g.
+ * reading the same file twice) must NOT be merged, and we avoid the
+ * `JSON.stringify(args)` comparison entirely. Structural matching is only a
+ * fallback for when an id is missing on either side.
+ */
+export function sameToolBlock(
+  a: { id?: string; name?: string; args?: unknown },
+  b: { id?: string; name?: string; args?: unknown },
+): boolean {
+  if (a.id && b.id) return a.id === b.id
+  return a.name === b.name && JSON.stringify(a.args) === JSON.stringify(b.args)
+}
+
 function mergeServerBlocks(msgObj: ChatMessage, blockList: Block[]): void {
   const existingTextIdx = msgObj.blocks.findIndex((b) => b.type === "text")
   for (const sb of blockList) {
@@ -75,12 +90,9 @@ function mergeServerBlocks(msgObj: ChatMessage, blockList: Block[]): void {
         msgObj.blocks.push(sb)
       }
     } else if (sb.type === "tool-call") {
-      const existingIdx = msgObj.blocks.findIndex((b) => {
-        if (b.type !== "tool-call") return false
-        if (b.id === sb.id) return true
-        return b.name === sb.name &&
-               JSON.stringify(b.args) === JSON.stringify(sb.args)
-      })
+      const existingIdx = msgObj.blocks.findIndex(
+        (b) => b.type === "tool-call" && sameToolBlock(b, sb),
+      )
 
       if (existingIdx >= 0) {
         if (sb.state === "result" || sb.result || sb.error) {
