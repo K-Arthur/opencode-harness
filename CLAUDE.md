@@ -7,8 +7,8 @@
 - **Type**: VS Code extension (library/package for VS Code marketplace)
 - **Runtime**: TypeScript / Node.js with VS Code Extension API ^1.98.0
 - **Server**: Client to opencode HTTP server (localhost:4096) via @opencode-ai/sdk
-- **Version**: 0.2.15
-- **Status**: Production audit complete — typecheck clean, 356 total tests passing (61 behavioral), 0 failing, noUncheckedIndexedAccess enforced
+- **Version**: 0.2.18
+- **Status**: Production audit complete — typecheck clean, 2197 unit tests passing (+9 message-contract, +7 roundtrip), 0 failing, noUncheckedIndexedAccess enforced
 
 ## Hardening Milestone (2026-05-04)
 - Full production-readiness audit completed: **151 issues identified across 5 phases**
