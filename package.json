@@ -9,7 +9,7 @@
   },
   "description": "AI-powered coding assistant integrated into VS Code. Chat, refactor, debug, and write code with the OpenCode agent while staying in your editor. Supports multiple AI models (Claude, GPT, Gemini), custom themes, cost tracking, and granular permission controls.",
   "icon": "media/opencode-icon-256.png",
-  "version": "0.2.17",
+  "version": "0.2.15",
   "engines": {
     "vscode": "^1.98.0"
   },
@@ -296,7 +296,7 @@
           "type": "string",
           "default": "",
           "scope": "machine",
-          "description": "Optional HTTP Basic auth password sent with requests to the remote opencode server. Only used when 'opencode.serverUrl' is set. Values explicitly prefixed with 'Basic ' or 'Bearer ' are passed through for custom deployments."
+          "description": "Optional bearer token sent with requests to the remote opencode server. Only used when 'opencode.serverUrl' is set."
         },
         "opencode.mcpServers": {
           "type": "object",

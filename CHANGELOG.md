@@ -5,71 +5,20 @@ All notable changes to the **OpenCode Harness** extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.17] - 2026-05-26
-
-> Supersedes the unreleased 0.2.16 draft. All 0.2.16 work (streaming
-> interleave, changed-files toolbar dropdown, context-usage singleton)
-> ships together with the 2026-05-26 webview audit under 0.2.17 since
-> 0.2.16 was never tagged or published.
-
-### Performance
-- **Replaced 56× `transition: all`** with explicit cheap-property lists across `components.css`, `layout.css`, `messages.css`, `welcome.css`, `blocks.css` so hover state no longer animates layout-affecting properties (padding, border-width, font-size, etc.). Lower paint cost on every interaction.
-- **Replaced 8 layout-thrashing `transition: width|height`** with `transform: scaleX/Y(var(--p))`. JS callers (`timeline.ts`, `subagent-panel.ts`, `todos-panel.ts`, `changed-files-dropdown.ts`, `ui/tokenCostDisplay.ts`) now set the `--p` custom property (0..1) instead of a width string. The per-scroll timeline progress bar no longer triggers layout each frame.
-- **Tokenised backdrop-filter scope** with two new tokens in `tokens.css`: `--blur-bubble` (per-message, defaults to `none`) and `--blur-surface` (floating top-layer surfaces only). Both disable automatically under `prefers-reduced-motion` / `prefers-reduced-data`. 19 sites converted; long chats no longer pay one compositor layer per bubble.
-- **Added `--shadow-glow` token** (previously undefined → `.btn-primary` was rendering with no shadow at all).
-
-### Accessibility
-- **CSS cascade layers** introduced in `styles.css`: `@layer tokens, base, layout, components, messages, blocks, animations, themes, utilities, accessibility`. The accessibility layer wins regardless of selector specificity or import order, so the focus ring (`*:focus-visible { outline: 2px … }`) cannot be stripped by component CSS.
-- **mode-warning modal** title is now `<h2>` with proper `aria-labelledby` + `aria-describedby` (was a `<span>` inside `role="alertdialog"`). (`src/chat/webview/index.html`)
-- **`&times;` close glyphs** wrapped in `aria-hidden` spans so screen readers no longer announce "multiplication sign".
-- **Welcome wordmark** gets explicit `height="32"` (was invalid `height="auto"`), eliminating CLS on first paint.
-- **Display toggles** use `class="hidden"` + `<span class="toggle-label-text">` with `for` association (was inline `style="display:none"` + bare text node).
-- **Prompt textarea** gets full combobox semantics (`role="combobox" aria-autocomplete="list" aria-expanded="false"`) toggled from `mentions.ts` when the slash/mention dropdown opens/closes.
-- **Replaced emoji search icon** (`🔍`) with stroke-1.75 SVG for cross-platform consistency.
-- **Removed `text-transform: uppercase`** from `.btn-primary` (slows reading speed by ~10–15%). New `.oc-eyebrow` utility retained for ≤3-word tracked-out labels.
-
-### Tokens & system
-- **Replaced raw px font-sizes** (8 / 9 / 10 / 11 / 12 / 13 / 14 / 20) with the `--text-*` scale.
-- **Replaced hardcoded z-indices** (9000 / 200 / 30 / 100 / 20 / 10) with the `--z-*` scale.
-- **Removed duplicate `blocks.css` `@import`** in `styles.css`.
-- **New `.oc-btn` primitive** in `components.css` with `data-variant="primary|secondary|ghost|danger"` and `data-size="sm|lg|icon"`. State coverage (hover/active/disabled) in one place. Legacy variants retained for incremental migration.
-
-### Fixed
-- **Streaming text/tool interleave disorder** — text chunks that arrived before a tool call were being rendered all at once after the stream completed instead of appearing live. Two root causes:
-  1. `handleToolStart` cleared `state.currentBlockBuffer` and `state.currentBlockEl` before the RenderQueue had flushed its pending text chunks. Any RAF-scheduled or 50ms-fallback flush fired after the clear, found no current element, and created a spurious empty text block. Fix: `finalizeCurrentTextBlock()` is now called first (converting the live streaming element to a finalized markdown block with the full buffer), then the buffer/element refs are cleared. Both the RenderQueue callback and the RAF `doUpdate` path gained matching guards that bail when the buffer is empty, preventing spurious empty block creation.
-  2. `insertStreamingTextAfterLastBlock()` placed the new text element at the bubble tail rather than after the last tool/diff block. Fix: the helper now scans `bubble.children` in reverse to find the last `details.tool-call`, `details.tool-group`, `.diff-block`, or `.skill-badge` element and inserts the text element immediately after it using `insertBefore`. A new text block entry is pushed to `msgObj.blocks` and `state.currentBlockIndex` is updated so subsequent chunks accumulate in the right slot.
-  3. `handleDiff` was not finalizing the current text block before appending a diff block, causing the same visual reordering. Fix: `finalizeCurrentTextBlock()` call added at the start of `handleDiff`.
-  (`src/chat/webview/streamHandlers.ts`)
-- **Chat bar streaming state not session-scoped** — opening a new tab while another session was streaming showed the "Stop" button in the new (idle) tab. Root cause: `createNewTab()` called the CSS-only `switchToTab()` but not the full `switchTab()` sync path, so `updateSendButton()` never ran for the new tab. Fix: explicit `updateSendButton()` call added to `createNewTab()`. (`src/chat/webview/main.ts`)
-- **Context usage shown in two places simultaneously** — the per-tab `.context-monitor` bar inside each tab panel and the `#context-usage` status strip were both updated by the `context_usage` handler, producing two visible context displays at once. Fix: the handler now routes exclusively to the toolbar `#context-usage-btn` dropdown via `ctxDropdownApi.updateUsage()` and no longer touches the per-tab bar. The `context_window_known` handler was similarly updated. (`src/chat/webview/main.ts`)
-- **Context usage lost on session switch** — switching tabs wiped the context usage display because `SessionState` had no field to persist the data between switches. Fix: `SessionState.contextUsage` field (`{ percent, tokens, maxTokens }`) added; the `context_usage` handler writes to it and `switchTab()` restores it via `ctxDropdownApi.updateUsage()` when activating a session that already has stored usage data. (`src/chat/webview/types.ts`, `src/chat/webview/main.ts`)
-
-### Changed
-- **Changed-files display: chip bar → toolbar dropdown** — the inline `.changed-file-chip` strip rendered inside each tab's message list area has been replaced by a `#changed-files-btn` toolbar button (with `#cf-count-badge` file count) that opens a floating `#changed-files-dropdown` panel. The dropdown groups files by directory, shows per-file diff stats via a mini summary bar, supports sorting (alpha / most-changed) and compact mode, and dispatches `file_diff_response` requests per file for inline diff preview. The old inline chip rendering path (`renderChangedFilesList` in `fileTracking.ts`) is now inert (`changedFilesList: null` in deps) — all updates go through `cfDropdownApi.updateChangedFiles()` on `changed_files_update` messages. (`src/chat/webview/changed-files-dropdown.ts`, `src/chat/webview/main.ts`)
-
-### Tests
-- `tests/webview/streaming-interleave.spec.ts` — 3 Playwright tests verifying streaming text/tool interleave at the DOM level: text before a tool is finalized (loses `streaming-text` class) when the tool starts; text after a tool is positioned as the last child of the bubble; new-tab chat bar shows idle state even when another session is streaming.
-- `src/chat/webview/stream-interleave.test.ts` — 9 unit tests (source-structure assertions) confirming `finalizeCurrentTextBlock` ordering in `handleToolStart`, `handleDiff`, the guard conditions, and `insertStreamingTextAfterLastBlock` insertion semantics.
-- `tests/webview/chat-e2e.spec.ts` — updated two tests to drive the new `#changed-files-btn` / `#cf-count-badge` / `#cf-dropdown-tree` dropdown UI via `changed_files_update` messages (previously tested the now-inert `.changed-file-chip` strip). Updated context usage test to check the toolbar `#context-usage-btn` and `.cup-summary-text` instead of the removed `.context-monitor` bar.
-
 ## [0.2.15] - 2026-05-23
 
 ### Fixed
 - **Context window now resolves for models the opencode server doesn't report `limit.context` for** — the 0.2.13 fix only papered over the bug. The `opencode.contextWindowOverride` setting was only consulted inside an `if (ctxWindow)` guard, so when the server returned no window (kimi-k2.5, deepseek-v4-flash-free, most OSS / free-tier models) the override was silently ignored. `ChatProvider.applyContextWindowFor` now applies the override regardless, plus reacts live to `onDidChangeConfiguration` so a new override value takes effect without an extension reload. (`src/chat/ChatProvider.ts`)
-- **Session history duplicate rows** — legacy local-keyed sessions that already pointed at a server session through `cliSessionId` are now merged into the server-keyed record during migration/recovery. The Session History modal also dedupes by `cliSessionId || id` as a defensive UI layer and prefers the server title for synced rows. (`src/session/sessionMigration.ts`, `src/session/SessionStore.ts`, `src/chat/webview/sessionListRenderer.ts`)
-- **Session renaming now uses the OpenCode SDK/server** — local renames call `SessionManager.updateSessionTitle()` / SDK `client.session.update`, and incoming `session.updated` SSE events apply server titles back into the local cache. (`src/session/SessionManager.ts`, `src/session/EventNormalizer.ts`, `src/extension.ts`, `src/commands/session.ts`)
 
 ### Added
 - **Cross-provider context-window fallback via OpenRouter's `/api/v1/models`** — when the opencode server doesn't report `limit.context` for a model, `resolveContextWindow` now consults a cached catalogue from OpenRouter. Same model weights typically share the same window regardless of which provider hosts them, so kimi-k2.5 served by any host hits OpenRouter's canonical `200_000` entry. The catalogue is fetched on first model-refresh, persisted to `globalState` with a 24h TTL, and refreshed in the background. Resolution order: server → OpenRouter → user override → unknown. No hand-curated tables; no provider drift.
 - **Clickable "set limit ⚙" affordance on the per-tab context monitor** — when both the server and OpenRouter come up empty, the monitor row now reads `N tok · set limit ⚙` and clicking it opens the `Set Context Window Override` dialog directly. Previously the user got a tooltip that told them to find the command in the palette.
 - **`open_context_window_override_dialog` webview message type** — routes the click above through the established webview-event-router validation path.
-- **Search inside the Session History modal** — the modal now includes a search field that filters cached local/synced sessions immediately and refreshes server-only results through `list_server_sessions` with the active query. (`src/chat/webview/ui/sessionModal.ts`, `src/chat/webview/sessionListRenderer.ts`)
 
 ### Tests
 - New `src/model/openRouterMetadata.test.ts` — 9 behavioral tests covering payload parsing, short-id cross-provider lookup, case-insensitive matching, cache-freshness TTL, and graceful degradation on missing/junk data.
 - Extended `src/model/contextWindowResolver.test.ts` with 5 tests pinning the OpenRouter fallback path: cache consultation, short-id fallback, server-still-wins, miss-then-log behaviour, happy-path silence.
 - Updated `src/chat/webview/theme.test.ts` to assert the new "set limit" hint and `needs-override` click marker.
-- Added focused regression coverage for session identity/title/search: duplicate local/server merge, SDK-backed title update, `session.updated` normalization, modal dedupe, server-title precedence, and modal search.
 
 ## [0.2.14] - 2026-05-23
 

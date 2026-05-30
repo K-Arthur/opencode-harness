@@ -1,70 +1,9 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-05-26
-**Version:** v0.2.17 (Webview accessibility & performance audit + streaming/dropdown fixes)
+**Last Updated:** 2026-05-23
+**Version:** v0.2.15 (Context window resolves via OpenRouter cross-provider fallback + override fix)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
-
-> 0.2.16 was drafted but never tagged or published; everything intended for
-> 0.2.16 (streaming interleave, changed-files toolbar dropdown, context-usage
-> singleton) ships together with the 2026-05-26 audit under 0.2.17.
-
-## v0.2.17 Highlights — Webview a11y & perf audit (2026-05-26)
-
-Closes 13 audit items spanning critical, major, and maintainability concerns.
-End-user behaviour unchanged; measurable perf gains under streaming and long
-sessions; WCAG 2.2 AA posture strengthened.
-
-**Performance**
-- Replaced 56× `transition: all` with explicit cheap-property lists.
-- Replaced 8 layout-thrashing `transition: width|height` (timeline scroll
-  progress, todo/subagent/quota/diff bars) with `transform: scaleX/Y(var(--p))`.
-  Per-scroll work no longer triggers layout.
-- Tokenised backdrop-filter scope: `--blur-bubble` (per-message, defaults
-  `none`) vs `--blur-surface` (floating surfaces). Both disable under
-  `prefers-reduced-motion` / `prefers-reduced-data`. 19 sites converted.
-- Added `--shadow-glow` token (previously undefined → primary buttons had no
-  shadow at all).
-
-**Accessibility**
-- Introduced CSS cascade layers (`@layer tokens, base, layout, components,
-  messages, blocks, animations, themes, utilities, accessibility`) so the
-  focus ring is provably ungrieftable by deeper component CSS.
-- mode-warning modal title is now `<h2>` with proper aria-labelledby /
-  aria-describedby. `&times;` close glyphs wrapped in `aria-hidden` spans.
-- Welcome wordmark gets explicit `height="32"` (was `height="auto"`),
-  eliminating CLS on first paint.
-- Display toggles use class + `<span class="toggle-label-text">` with `for`
-  association (was inline style + bare text node).
-- Prompt textarea gets full combobox semantics (role / aria-autocomplete /
-  aria-expanded), toggled from `mentions.ts`.
-- Replaced emoji search icon with stroke-1.75 SVG for cross-platform
-  consistency.
-
-**Tokens & system**
-- Raw px font-sizes (8/9/10/11/12/13/14/20) replaced with `--text-*` scale.
-- Hardcoded z-indices (9000 / 200 / 30 / 100 / 20 / 10) replaced with
-  `--z-*` scale.
-- Removed duplicate `blocks.css` `@import` in `styles.css`.
-- New `.oc-btn` primitive with primary/secondary/ghost/danger × sm/lg/icon.
-  Legacy `.btn` / `.icon-btn` / `.send-btn` etc. retained for incremental
-  migration; new buttons should use `.oc-btn`.
-
-**Testability**
-- New `tests/unit/css-design-tokens.test.mjs` (9 assertions) fails the build
-  on: raw px font-sizes, `transition: all`, width/height transitions, raw
-  z-indices ≥ 10, raw `backdrop-filter: blur()`, duplicate imports, removal
-  of critical tokens, removal of `.oc-btn` variants, or breaking cascade-layer
-  order.
-
-Verified: typecheck clean · esbuild clean · **2097 unit tests pass / 0 fail / 7 skipped**.
-
-## v0.2.17 Highlights — streaming interleave + UI centralization (earlier work, also in 0.2.17)
-
-- **Streaming text/tool interleave fixed** — text chunks streamed before a tool call are now finalized immediately when the tool starts (`finalizeCurrentTextBlock` before clearing buffer), rendered live during streaming (not bunched up at end), and positioned correctly before/between tool elements. Spurious empty blocks from deferred RAF flushes after buffer clear are guarded. Diff blocks also finalize text first. New `stream-interleave.test.ts` and `streaming-interleave.spec.ts` cover the DOM behavior.
-- **Changed-files chip bar → toolbar dropdown** — the inline chip strip (`changed-file-chip`) is replaced by a `#changed-files-btn` toolbar button with a count badge opening a floating panel. Files are grouped by directory, show diff stat bars, support sort/compact modes, and load per-file inline diffs on demand.
-- **Context usage centralized to single toolbar dropdown** — the per-tab `.context-monitor` bar and `#context-usage` status strip are replaced by a single `#context-usage-btn` toolbar button. Usage data persists per-session in `SessionState.contextUsage` and is restored on tab switch.
-- **Chat bar session-scoped** — `createNewTab()` now calls `updateSendButton()` so new idle tabs never inherit the "Stop" button state from a concurrently streaming session.
 
 ## v0.2.15 Highlights
 
@@ -104,15 +43,14 @@ Verified: typecheck clean · esbuild clean · **2097 unit tests pass / 0 fail / 
 
 ## Test Summary
 
-| Metric | v0.2.12 | v0.2.14 | v0.2.15 | v0.2.17 (pre-audit) | v0.2.17 (audit) | Delta |
-|--------|---------|---------|---------|---------------------|-----------------|-------|
-| Unit tests | 1746 | 1877 | 1877 | 1877 | 2104 | +227 |
-| Passing | 1739 | 1870 | 1870 | 1870 | 2097 | +227 |
-| Failing | 0 | 0 | 0 | 0 | 0 | — |
-| Skipped | 7 | 7 | 7 | 7 | 7 | — |
-| Playwright E2E | 8 | 14 | 14 | 14 | 14 | — |
-| Typecheck | ✅ | ✅ | ✅ | ✅ | ✅ | — |
-| Build | ✅ | ✅ | ✅ | ✅ | — |
+| Metric | v0.2.6 | v0.2.7 | v0.2.8 | v0.2.10 | v0.2.11 | v0.2.12 | Delta |
+|--------|--------|--------|--------|---------|---------|---------|-------|
+| Tests | 894 | 1466 | 1466 | 1585 | 1604 | 1746 | +142 |
+| Passing | 893 | 1465 | 1466 | 1578 | 1597 | 1739 | +142 |
+| Failing | 0 | 1 | 0 | 0 | 0 | 0 | — |
+| Skipped | 1 | 7 | 7 | 7 | 7 | 7 | — |
+| Typecheck | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+| Build | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
 
 The single failing test in v0.2.7 (`main.test.ts › timeline jumps use exact message-list scroll positioning`) was a stale source-grep assertion left over from the extraction of `scrollToTurn`/`scrollMessageToTop` into `src/chat/webview/ui/scrollMarkers.ts`. The test now reads from `scrollMarkersSource` where the implementation actually lives.
 
@@ -148,7 +86,7 @@ The single failing test in v0.2.7 (`main.test.ts › timeline jumps use exact me
 | 21 | Secure Context Attachments | ✅ | Explorer/editor context commands, styled input chips, sensitive-file warnings, prompt-injection checks, read-only context provider |
 | 22 | Path-Aware Mentions | ✅ | Debounced file search with path-aware globs and expanded result limit |
 | 23 | Unified Session Modal | ✅ | Single list merging local + server sessions, workspace badges, `resume_server_session`, `importOneServerSession` |
-| 24 | Changed-Files Toolbar Dropdown | ✅ | Backend `SessionStore.addChangedFiles()` persists normalized paths; `changed_files_update` drives `#changed-files-btn` toolbar button with count badge and floating dropdown panel (file tree, diff stats, sort/compact, inline diff via `file_diff_response`). Old inline chip strip removed. |
+| 24 | Changed-Files Chip Bar | ✅ | Backend `SessionStore.addChangedFiles()` persists normalized paths; `changed_files_update` is canonical for chip bar + todos panel, with active-session scoped rendering and `file_edited` merged live |
 | 25 | Token & Cost Display | ✅ | `StreamCoordinator.finalizeStream` forwards `AssistantMessage.cost` and `.tokens` to webview on every stream completion |
 | 26 | Welcome Dashboard | ✅ | Workspace context row, model name, "Continue last session" + "New session" quick actions, recent sessions sorted by recency, 2×2 prompt-starter grid; host-created empty sessions now open a tab immediately |
 | 27 | Header Consolidation | ✅ | Status strip below tab bar (model/tokens/cost); settings overflow menu (`#settings-menu`) with MCP + theme entries; 4-button header; `aria-pressed` on all toggles |
