@@ -42,6 +42,7 @@ flowchart TD
     R -->|renderTaskBanner| DOM
     R -->|renderContextBlock| DOM
     R -->|renderSkillBadge| DOM
+    R -->|renderQuestionBlock| DOM
 
     DOM -->|click events| DH
     DH -->|accept/reject/openFile| SC

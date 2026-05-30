@@ -240,7 +240,7 @@ export class WebviewEventRouter {
         const userMsg: ChatMessage = {
           role: "user",
           id: userMessageId,
-          blocks: [{ type: "text", text: value }],
+          blocks: [{ type: "text", text: value, toolCallId }],
           timestamp: Date.now(),
           sessionId,
         }
@@ -248,6 +248,7 @@ export class WebviewEventRouter {
         await this.opts.streamCoordinator.startPrompt(sessionId, value, {
           postMessage: (m) => this.opts.postMessage(m),
           postRequestError: (m) => this.opts.postRequestError(m),
+          toolCallId,
         })
       } catch (err) {
         log.error("question_answer failed", err)
@@ -917,13 +918,23 @@ export class WebviewEventRouter {
         this.opts.postMessage({ type: "todos_update", todos: [], sessionId })
       }
     }],
-    ["toggle_todo", (_: Record<string, unknown>, sessionId?: string) => {
-      // Server-managed todos are read-only; the AI agent controls their state.
+    ["toggle_todo", (msg: Record<string, unknown>, sessionId?: string) => {
       if (!sessionId) return
+      this.opts.postMessage({
+        type: "todo_operation_denied",
+        reason: "Server-managed todos are read-only",
+        todoId: msg.todoId,
+        sessionId,
+      })
     }],
-    ["delete_todo", (_: Record<string, unknown>, sessionId?: string) => {
-      // Server-managed todos are read-only; the AI agent controls their state.
+    ["delete_todo", (msg: Record<string, unknown>, sessionId?: string) => {
       if (!sessionId) return
+      this.opts.postMessage({
+        type: "todo_operation_denied",
+        reason: "Server-managed todos are read-only",
+        todoId: msg.todoId,
+        sessionId,
+      })
     }],
     ["get_changed_files", (msg: Record<string, unknown>, sessionId?: string) => {
       if (!sessionId) return

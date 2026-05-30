@@ -12,7 +12,9 @@ import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const source = readFileSync(path.join(__dirname, "WebviewEventRouter.ts"), "utf8")
 
 function blockBetween(startNeedle: string, endNeedle: string): string {
@@ -60,6 +62,18 @@ describe("WebviewEventRouter — question_answer routing", () => {
       "must record the answer as a user message")
     assert.ok(handler.includes("this.opts.streamCoordinator.startPrompt(sessionId, value,"),
       "must forward via startPrompt so opencode can resolve the pending question tool")
+  })
+
+  it("stores toolCallId in the user message block for downstream correlation", () => {
+    assert.ok(handler.includes("toolCallId,") || handler.includes("toolCallId:"),
+      "must include toolCallId in user message block metadata so opencode can resolve the correct pending tool")
+  })
+
+  it("passes toolCallId in the startPrompt callbacks for stream-level correlation", () => {
+    assert.ok(
+      handler.includes("toolCallId,") && handler.includes("postRequestError:"),
+      "must include toolCallId in the StreamCallbacks passed to startPrompt"
+    )
   })
 
   it("requires a selected model before sending (preserves send_prompt's contract)", () => {

@@ -33,6 +33,7 @@ import { createScrollAnchor, type ScrollAnchor } from "./scrollAnchor"
 import { createChunkedLoader, prependMessagesPreservingScroll, createLoadEarlierBanner, throttleScrollMarkers } from "./messageLoader"
 import { createVirtualList, getVirtualList, disposeVirtualList } from "./virtualList"
 import { setupTodosPanel } from "./todos-panel"
+import { mergeTodos, generateTodoId } from "./todos-logic"
 import { setupSkillsModal } from "./skills-modal"
 import { setupSubagentPanel } from "./subagent-panel"
 import { shouldRefreshOnUpdate, selectDisplayedUsage } from "./tokenDisplayPolicy"
@@ -137,24 +138,7 @@ function getVsCodeApi() {
 
   function getMergedTodos(sessionId: string, serverTodos: Todo[]): Todo[] {
     const session = stateManager.getSession(sessionId)
-    if (!session) return serverTodos
-
-    currentTodosList = serverTodos
-
-    const overrides = session.todoOverrides || {}
-    const userTodos = session.userTodos || []
-
-    const mergedServerTodos = serverTodos
-      .map(todo => {
-        const overrideStatus = overrides[todo.id]
-        if (overrideStatus) {
-          return { ...todo, status: overrideStatus }
-        }
-        return todo
-      })
-      .filter(todo => todo.status !== ('deleted' as any))
-
-    return [...mergedServerTodos, ...userTodos]
+    return mergeTodos(session, serverTodos)
   }
 
   function triggerTodosRender(sessionId: string) {
@@ -520,6 +504,19 @@ function getVsCodeApi() {
       onAddTodo: addUserTodo,
       onOpenFile: (filePath: string) => vscode.postMessage({ type: "open_file", path: filePath }),
       postMessage: (msg: Record<string, unknown>) => vscode.postMessage(msg),
+      getActiveFilter: () => {
+        const sid = stateManager.getState().activeSessionId
+        const session = sid ? stateManager.getSession(sid) : undefined
+        return session?.todoFilter ?? 'all'
+      },
+      setActiveFilter: (filter) => {
+        const sid = stateManager.getState().activeSessionId
+        const session = sid ? stateManager.getSession(sid) : undefined
+        if (session) {
+          session.todoFilter = filter
+          stateManager.save()
+        }
+      },
     })
     skillsModalApi = setupSkillsModal(els, {
       onToggleSkill: (skillId: string, enabled: boolean) => vscode.postMessage({ type: "toggle_skill", skillId, enabled }),
@@ -530,7 +527,8 @@ function getVsCodeApi() {
     })
   }
 
-  function toggleTodo(todoId: string): void {
+  function toggleTodo(todoOrId: string | Todo): void {
+    const todoId = typeof todoOrId === "string" ? todoOrId : todoOrId.id
     const activeSid = stateManager.getState().activeSessionId
     if (!activeSid) return
     const session = stateManager.getSession(activeSid)
@@ -548,7 +546,7 @@ function getVsCodeApi() {
 
     session.todoOverrides ??= {}
     const currentStatus = session.todoOverrides[todoId] ||
-      (currentTodosList.find(t => t.id === todoId)?.status ?? "pending")
+      (typeof todoOrId === "object" ? todoOrId.status : "pending")
     session.todoOverrides[todoId] = currentStatus === "completed" ? "pending" : "completed"
     stateManager.save()
     triggerTodosRender(activeSid)
@@ -568,8 +566,10 @@ function getVsCodeApi() {
       return
     }
 
-    session.todoOverrides ??= {}
-    session.todoOverrides[todoId] = "deleted" as any
+    session.deletedTodoIds ??= []
+    if (!session.deletedTodoIds.includes(todoId)) {
+      session.deletedTodoIds.push(todoId)
+    }
     stateManager.save()
     triggerTodosRender(activeSid)
     vscode.postMessage({ type: "delete_todo", todoId })
@@ -581,10 +581,26 @@ function getVsCodeApi() {
     const session = stateManager.getSession(activeSid)
     if (!session) return
 
+    const normalized = content.trim()
+    if (!normalized) return
+    if (normalized.length > 500) {
+      console.warn("Todo content exceeds 500 character limit")
+      return
+    }
+
     session.userTodos ??= []
+    const exists = session.userTodos.some(
+      t => t.content.trim().toLowerCase() === normalized.toLowerCase()
+    )
+    if (exists) {
+      console.warn("Duplicate todo ignored")
+      return
+    }
+
+    const id = generateTodoId()
     session.userTodos.push({
-      id: `todo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      content,
+      id,
+      content: normalized,
       status: "pending",
       createdAt: Date.now()
     })
@@ -2420,10 +2436,17 @@ function getVsCodeApi() {
         const sid = typeof msg.sessionId === "string" ? msg.sessionId : stateManager.getState().activeSessionId
         const activeSid = stateManager.getState().activeSessionId
         if (sid) {
-          const merged = getMergedTodos(sid, (msg.todos as Todo[]) || [])
+          currentTodosList = (msg.todos as Todo[]) || []
+          const merged = getMergedTodos(sid, currentTodosList)
           if (sid === activeSid && todosPanelApi && todosPanelApi.renderTodos) {
             todosPanelApi.renderTodos(merged)
           }
+        }
+      }],
+      ["todo_operation_denied", (msg) => {
+        const reason = typeof msg.reason === "string" ? msg.reason : "Operation not allowed"
+        if (todosPanelApi && todosPanelApi.showToast) {
+          todosPanelApi.showToast(reason, "warning")
         }
       }],
       ["changed_files_update", (msg) => {

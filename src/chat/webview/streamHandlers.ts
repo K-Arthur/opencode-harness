@@ -1,10 +1,11 @@
-import type { Block, ChatMessage, ToolCallBlock, DiffBlock, ErrorBlock, ToolCallState, DiffHunk } from "./types"
+import type { Block, ChatMessage, ToolCallBlock, DiffBlock, ErrorBlock, QuestionBlock, ToolCallState, DiffHunk } from "./types"
 import { createTextBlock, createErrorBlock, createTaskBannerBlock } from "./blocks"
 import { timers } from "./timerRegistry"
 import type { SdkMessageEvent, DiffChunk } from "../../types"
 import type { ErrorContext } from "./errorTypes"
 import { renderMessage } from "./messageRenderer"
 import { renderBlock, renderMarkdown, sanitizeHtml, highlightSyntax } from "./renderer"
+import type { RenderOptions } from "./renderer"
 import { renderToolGroup } from "./toolCallRenderer"
 import type { ScrollAnchor } from "./scrollAnchor"
 import { CHECK_SVG, SUCCESS_SVG, SPINNER_SVG } from "./icons"
@@ -146,7 +147,7 @@ export function finishUnresolvedToolCalls(blocks: Block[]): void {
     if (block.type !== "tool-call") continue
     const tool = block as ToolCallBlock
     if (tool.state === "pending" || tool.state === "running") {
-      blocks[i] = { ...tool, state: "result" } as Block
+      blocks[i] = { ...tool, state: "unresolved", error: "Tool did not complete before stream ended" } as Block
     }
   }
 }
@@ -496,6 +497,7 @@ export function handleToolStart(
     id,
     msgObj,
     isQuestionTool(toolCall) ? createQuestionToolBlock(toolCall, msgObj) : createToolCallBlock(toolCall) as Block,
+    { messageId: id },
   )
   els.scrollAnchor.scrollIfAnchored()
 }
@@ -551,7 +553,7 @@ function createQuestionToolBlock(toolCall: ToolStartPayload, msgObj: ChatMessage
     text: getQuestionText(args),
     options: getQuestionOptions(args),
     allowFreeText: args?.allowFreeText !== false,
-  } as unknown as Block
+  } satisfies QuestionBlock as Block
 }
 
 function getQuestionText(args: Record<string, unknown> | undefined): string {
@@ -563,12 +565,13 @@ function getQuestionText(args: Record<string, unknown> | undefined): string {
 }
 
 function getQuestionOptions(args: Record<string, unknown> | undefined): string[] {
-  const optionsRaw =
-    (Array.isArray(args?.options) && args!.options) ||
-    (Array.isArray(args?.choices) && args!.choices) ||
-    (Array.isArray(args?.select) && args!.select) ||
+  const a = args ?? {}
+  const optionsRaw: unknown[] =
+    (Array.isArray(a.options) && a.options as unknown[]) ||
+    (Array.isArray(a.choices) && a.choices as unknown[]) ||
+    (Array.isArray(a.select) && a.select as unknown[]) ||
     []
-  return (optionsRaw as unknown[]).map((o) =>
+  return optionsRaw.map((o) =>
     typeof o === "string" ? o : typeof o === "object" && o && "label" in (o as Record<string, unknown>)
       ? String((o as { label?: unknown }).label ?? "")
       : String(o)
@@ -591,12 +594,13 @@ function appendStreamingToolBlock(
   messageId: string,
   msgObj: ChatMessage | undefined,
   block: Block,
+  opts?: RenderOptions,
 ): void {
   if (msgObj) msgObj.blocks.push(block)
 
   const msgEl = els.messageList.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement | null
   const bubble = msgEl?.querySelector(".message-bubble") as HTMLElement | null
-  if (bubble && msgObj) appendOrFoldToolDOM(bubble, block, msgObj.blocks)
+  if (bubble && msgObj) appendOrFoldToolDOM(bubble, block, msgObj.blocks, opts)
 }
 
 /**
@@ -615,7 +619,8 @@ function appendStreamingToolBlock(
  * non-silent block to decide whether to extend an existing group, wrap
  * the prior tool into a new group, or just append a fresh row.
  */
-function appendOrFoldToolDOM(bubble: HTMLElement, newToolBlock: Block, allBlocks: Block[]): void {
+function appendOrFoldToolDOM(bubble: HTMLElement, newToolBlock: Block, allBlocks: Block[], opts?: RenderOptions): void {
+  const renderOpts = opts ?? {}
   // Find the previous block that the renderer would have produced visible
   // DOM for. Skip silent step-start / normal step-finish blocks — they
   // don't render, so they don't appear in the bubble's child list.
@@ -645,7 +650,7 @@ function appendOrFoldToolDOM(bubble: HTMLElement, newToolBlock: Block, allBlocks
   if (prevIsTool && lastEl && lastEl.matches("details.tool-group")) {
     const childrenContainer = lastEl.querySelector(".tool-group-children")
     if (childrenContainer) {
-      const blockEl = renderBlock(newToolBlock, {})
+      const blockEl = renderBlock(newToolBlock, renderOpts)
       if (blockEl) {
         blockEl.classList.add("tool-group-child")
         childrenContainer.appendChild(blockEl)
@@ -666,7 +671,7 @@ function appendOrFoldToolDOM(bubble: HTMLElement, newToolBlock: Block, allBlocks
   // would silently lose all of that state. Moving the existing element
   // into the new group keeps every progressive update intact.
   if (prevIsTool && lastEl && lastEl.matches("details.tool-call") && !lastEl.classList.contains("tool-group") && prevBlock) {
-    const groupEl = renderToolGroup([prevBlock, newToolBlock], {}) as HTMLElement | null
+    const groupEl = renderToolGroup([prevBlock, newToolBlock], renderOpts) as HTMLElement | null
     if (groupEl) {
       const children = groupEl.querySelector(".tool-group-children") as HTMLElement | null
       if (children) {
@@ -685,7 +690,7 @@ function appendOrFoldToolDOM(bubble: HTMLElement, newToolBlock: Block, allBlocks
   }
 
   // Case 3: nothing to fold into → append the tool individually.
-  const blockEl = renderBlock(newToolBlock, {})
+  const blockEl = renderBlock(newToolBlock, renderOpts)
   if (blockEl) bubble.appendChild(blockEl)
 }
 
@@ -721,6 +726,7 @@ export function toolBadgeText(state?: string, hasError?: boolean): string | null
   if (state === "pending") return "\u25cb Pending"
   if (state === "running") return "\u25c9 Running"
   if (state === "stale") return "Stale"
+  if (state === "unresolved") return "\u26a0 Incomplete"
   if (hasError || state === "error") return "\u2717 Error"
   if (state === "completed" || state === "result") return "\u2713 Done"
   return null
@@ -819,11 +825,14 @@ export function handleToolEnd(
   if (result.durationMs) {
     const nameEl = toolEl.querySelector(".tool-name") as HTMLElement | null
     if (nameEl) {
-      const dur = document.createElement("span")
-      dur.className = "tool-duration"
+      let dur = nameEl.parentElement?.querySelector(".tool-duration") as HTMLElement | null
+      if (!dur) {
+        dur = document.createElement("span")
+        dur.className = "tool-duration"
+        dur.style.marginLeft = 'auto'
+        nameEl.parentElement?.appendChild(dur)
+      }
       dur.textContent = `${result.durationMs}ms`
-      dur.style.marginLeft = 'auto'
-      nameEl.parentElement?.appendChild(dur)
     }
   }
 
@@ -952,6 +961,9 @@ export function handleStreamError(
         emptyEl.remove()
         const idx = messages.findIndex((m) => m.id === id)
         if (idx !== -1) messages.splice(idx, 1)
+      } else {
+        const msgObj = messages.find((m) => m.id === id)
+        if (msgObj) finishUnresolvedToolCalls(msgObj.blocks)
       }
     }
   }

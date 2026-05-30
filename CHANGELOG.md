@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.19] - 2026-05-29
 
+### Fixed
+- **Methodology module: audit-log memory leak** — `CascadeRouter` audit log now capped at `MAX_AUDIT_ENTRIES = 1000` entries, preventing unbounded memory growth in long-lived sessions. (`src/methodology/CascadeRouter.ts`)
+- **Methodology module: `compiles` metric accepted markdown-fenced non-code** — `QualityEvaluator.compiles` now requires `looksSyntacticallyValid()` (balanced-brace heuristic) instead of only checking for markdown code fences. (`src/methodology/QualityEvaluator.ts`)
+- **Methodology module: non-deterministic task-type detection on ties** — `TaskClassifier.detectTaskType()` now uses a `TASK_TYPE_PRIORITY` map for deterministic tie-breaking when multiple task types score equally. (`src/methodology/TaskClassifier.ts`)
+- **Methodology module: specificity scoring inflated by raw threshold values** — `MethodologyCatalog.ruleSpecificity()` now counts constraint *presence* only, not raw `minComplexity`/`minFileScope` threshold values. (`src/methodology/MethodologyCatalog.ts`)
+- **Methodology module: low-complexity generate tasks matched over-broad rules** — Added a dedicated low-complexity generate rule (`direct-execution`, tier B) and reordered `bmad-full` before `bmad-lite` so the more restrictive rule matches first. (`src/methodology/MethodologyCatalog.ts`)
+- **Methodology module: duplicated chain-building logic in CascadeRouter** — Extracted shared `buildChain()` helper, removing ~40 lines of duplicated logic from `buildRecommendationChain`/`buildEscalationChain`. (`src/methodology/CascadeRouter.ts`)
+- **Methodology module: unnecessary async on PlanValidator.validate()** — `PlanValidator.validate()` is now synchronous; removed all `async`/`Promise` wrappers. (`src/methodology/PlanValidator.ts`)
+- **Methodology module: sub-question count inflated by code blocks** — `TaskClassifier` now strips code blocks before counting semicolons for sub-question estimation. (`src/methodology/TaskClassifier.ts`)
+
 ### Changed
 - Streaming "minors" cleanup: centralized the tool-call state → CSS-class / badge-text map (`setToolStateClass` + `toolBadgeText`) so `handleToolUpdate` and `handleToolEnd` share one source of truth; tool-block dedup at `stream_end` is now id-authoritative (`sameToolBlock` — two distinct calls with identical args no longer merge, and the `JSON.stringify(args)` comparison is skipped when ids are present); the server-status `error` path now persists onto the real session messages instead of an empty array + no-op save; typed the webview log API handle (removed an `any`); added an observability warning when a stream bubble is unexpectedly absent.
 

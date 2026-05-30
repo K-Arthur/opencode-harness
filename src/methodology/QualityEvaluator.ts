@@ -101,12 +101,24 @@ export class QualityEvaluator {
     const hasDuplicateBlocks = this.hasDuplicateCodeBlocks(response);
 
     return {
-      compiles: hasCodeBlock,
+      compiles: hasCodeBlock && this.looksSyntacticallyValid(response),
       testsPass: task.type === 'test' ? /describe|it\(|test\(|assert|expect/.test(response) : hasCodeBlock,
       complexityOk: true,
       noDuplication: !hasDuplicateBlocks,
       importsValid: hasCodeBlock && !hasImports ? true : hasImports,
     };
+  }
+
+  private looksSyntacticallyValid(response: string): boolean {
+    const codeBlocks = response.match(/```[\s\S]*?```/g);
+    if (!codeBlocks || codeBlocks.length === 0) return false;
+    for (const block of codeBlocks) {
+      const code = block.replace(/```\w*\n?/, '').replace(/\n?```$/, '');
+      const openBraces = (code.match(/\{/g) || []).length;
+      const closeBraces = (code.match(/\}/g) || []).length;
+      if (openBraces > 0 && Math.abs(openBraces - closeBraces) > openBraces * 0.5) return false;
+    }
+    return true;
   }
 
   private hasDuplicateCodeBlocks(response: string): boolean {

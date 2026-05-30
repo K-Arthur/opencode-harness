@@ -275,7 +275,8 @@ describe("stream.ts", () => {
 
       const assistant = harness.messages.find((message) => message.id === "resp-tools")
       const tool = assistant?.blocks.find((block: any) => block.type === "tool-call")
-      assert.equal(tool?.state, "result")
+      assert.equal(tool?.state, "unresolved")
+      assert.ok((tool as any)?.error, "unresolved tool must have an error message")
     } finally {
       restore()
     }

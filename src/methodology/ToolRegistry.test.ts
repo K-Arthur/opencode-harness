@@ -102,7 +102,7 @@ describe('ToolRegistry', () => {
     assert.equal(approvals[0]!.input, 'item');
   });
 
-  it('skips approval when handler not set', async () => {
+  it('side-effect tools requiring approval fail closed without a handler', async () => {
     const tool: ToolDefinition<string, number> = {
       name: 'delete',
       description: 'Deletes something',
@@ -113,8 +113,10 @@ describe('ToolRegistry', () => {
       requiresApproval: true,
     };
     registry.register(tool);
-    const result = await registry.invoke('delete', 'item');
-    assert.equal(result, 4);
+    await assert.rejects(
+      () => registry.invoke('delete', 'item'),
+      /approval handler/i,
+    );
   });
 
   it('lists registered tools', () => {

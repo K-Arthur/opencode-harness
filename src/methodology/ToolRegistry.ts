@@ -53,8 +53,9 @@ export class ToolRegistry {
   }
 
   private async requestApproval(name: string, input: unknown): Promise<void> {
-    if (this.approvalHandler) {
-      await this.approvalHandler(name, input);
+    if (!this.approvalHandler) {
+      throw new Error(`Tool "${name}" requires approval but no approval handler is configured`);
     }
+    await this.approvalHandler(name, input);
   }
 }
