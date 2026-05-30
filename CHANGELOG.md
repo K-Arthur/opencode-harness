@@ -5,6 +5,23 @@ All notable changes to the **OpenCode Harness** extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.18] - 2026-05-29
+
+### Added
+- **Stable-tail streaming renderer** (`LiveTextRenderer` + `streamTail.splitAtStableBoundary`): freezes closed markdown blocks and re-parses only the unstable tail, replacing the per-flush full-buffer re-parse (O(N·k) → near-linear). Frozen blocks are cache- and worker-eligible; text selection and `<details>` open-state survive mid-stream. ADR: `docs/adrs/2026-05-29-stable-tail-streaming-render.md`.
+- Pure modules with unit/property/bench tests: `streamTail`, `liveTextRenderer`, `messageUpsert`, `placeholderContent`, `backfillPlanner` (+ shared `streamHarness`, `streamBench`).
+
+### Fixed
+- **Streaming correctness**: no more duplicate persisted assistant message at `stream_end` (upsert-by-id); `stream_start` is restartable for a new message id; inter-tool streamed text is no longer dropped at tool boundaries; `stream_end` placeholder removal preserves tool-only turns.
+- **Backfill**: concurrent history fetches deduped by `cliSessionId` via a single `hydrate()` single-flight; all pending sessions processed instead of `slice(0, 10)`.
+- **Repository consolidation**: resolved leftover merge-conflict markers committed by an earlier botched `fix/show-thinking-and-compact-tools` merge (`ModelManager.ts`, `main.ts`, `toolGrouping.test.ts`), restoring a typecheckable tree; fixed a stale renderer streaming-markdown test to match the corrected single-pass fence/inline-code scanner.
+
+### Merged
+- `fix/commands-palette-routing` (command-palette slash routing). Other feature branches (`markdown-renderer-correctness`, `conversation-history-live-search`, `context-usage-counter`, `show-thinking-and-compact-tools`, `chat-webview-performance`) were already absorbed into `master`.
+
+### Performance
+- Streaming markdown: `stripContextFromText` skips the lazy strip regex when no `<context>` marker is present; `mergeStreamText` overlap probe bounded to 256 chars; `seenEventIds` trimmed per stream; live buffer soft-cap diagnostics.
+
 ## [0.2.15] - 2026-05-23
 
 ### Fixed

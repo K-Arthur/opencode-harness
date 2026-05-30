@@ -1,9 +1,17 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-05-23
-**Version:** v0.2.15 (Context window resolves via OpenRouter cross-provider fallback + override fix)
+**Last Updated:** 2026-05-29
+**Version:** v0.2.18 (Streaming correctness + stable-tail render perf + backfill dedup; branch consolidation)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
+
+## v0.2.18 Highlights
+
+- **Frontend streaming correctness** — duplicate persisted assistant messages eliminated (upsert-by-id); `stream_start` is now restartable for a new message id; inter-tool streamed text is no longer dropped at tool boundaries; placeholder removal no longer nukes tool-only turns.
+- **Stable-tail streaming render (perf)** — the webview previously re-parsed the entire accumulated buffer on every flush (O(N·k), main thread, cache- and worker-bypassed). A new `LiveTextRenderer` freezes closed markdown blocks (rendered once, cache/worker-eligible) and re-parses only the unstable tail — near-linear, with text selection and `<details>` state surviving mid-stream. See ADR `docs/adrs/2026-05-29-stable-tail-streaming-render.md`.
+- **Backfill dedup** — a single `hydrate()` path coalesces concurrent history fetches by `cliSessionId` (no double-fetch across tab-created + session-recovery paths); all pending sessions are processed instead of a fixed `slice(0, 10)`.
+- **Branch consolidation** — merged `fix/commands-palette-routing`; resolved leftover merge-conflict markers committed by an earlier botched `show-thinking` merge (ModelManager / main.ts / toolGrouping); fixed a stale renderer streaming-markdown test.
+- **Holds:** the syntect→WASM syntax highlighter remains scaffolded-but-inert (activates only when a Rust-enabled CI builds the `.wasm`).
 
 ## v0.2.15 Highlights
 
