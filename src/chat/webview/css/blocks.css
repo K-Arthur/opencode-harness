@@ -313,6 +313,10 @@
   border-left-color: var(--color-muted);
   background: color-mix(in srgb, var(--color-muted) 3%, var(--oc-editor-bg));
 }
+.tool-call--unresolved {
+  border-left-color: var(--tool-meta-color, #a78bfa);
+  background: color-mix(in srgb, var(--tool-meta-color, #a78bfa) 3%, var(--oc-editor-bg));
+}
 
 /* Tool header row — codex-style one-liner. */
 .tool-header {
@@ -353,6 +357,7 @@
 .tool-call--meta .tool-icon { color: var(--tool-meta-color, #a78bfa); }
 .tool-call--mixed .tool-icon { color: var(--oc-accent, #4db6ff); }
 .tool-call--error .tool-icon { color: var(--tool-error-color, #e07070); }
+.tool-call--unresolved .tool-icon { color: var(--tool-meta-color, #a78bfa); }
 
 .tool-name {
   font-weight: 600;

@@ -22,6 +22,7 @@ import { updateMethodologyStatus, getMethodologyOrchestrator } from "../../exten
 export interface StreamCallbacks {
   postMessage: (msg: Record<string, unknown>) => void
   postRequestError: (message: string, sessionId?: string) => void
+  toolCallId?: string
 }
 
 export type ToolEndResult = { id: string; ok: boolean; result?: string; durationMs?: number; stale?: boolean }
@@ -291,7 +292,17 @@ export class StreamCoordinator {
     const pending = this.activeToolCallIds.get(tabId)
     let toolId = result.id && result.id !== "unknown" ? result.id : undefined
     if (!toolId || (pending && !pending.has(toolId))) {
-      toolId = pending?.values().next().value
+      if (pending && pending.size === 1) {
+        toolId = pending.values().next().value
+      } else if (pending && pending.size > 1) {
+        log.warn(`postToolEnd: ambiguous ID "${result.id}" with ${pending.size} pending tools — picking most recently active`)
+        const activity = this.toolActivityAt.get(tabId)
+        let latestTime = 0
+        for (const id of pending) {
+          const t = activity?.get(id) ?? 0
+          if (t > latestTime) { latestTime = t; toolId = id }
+        }
+      }
     }
     if (!toolId) return false
 
@@ -353,7 +364,7 @@ export class StreamCoordinator {
 
         const resolvedId = this.stableToolPartId(part, messageInfo.id)
         const currentPending = this.activeToolCallIds.get(tabId)
-        if (!currentPending || currentPending.size === 0) return
+        if (!currentPending || currentPending.size === 0) break
 
         const fallbackId = currentPending.size === 1 ? currentPending.values().next().value : undefined
         const toolId = resolvedId && currentPending.has(resolvedId) ? resolvedId : fallbackId
@@ -560,6 +571,9 @@ export class StreamCoordinator {
       }
 
       const abortSignal = this.ttfbAbortControllers.get(tabId)?.signal
+      if (callbacks.toolCallId) {
+        log.info(`startPrompt forwarding question_answer toolCallId=${callbacks.toolCallId} for tab ${tabId}`)
+      }
       await this.sessionManager.sendPromptAsync(cliSessionId, parts, { model: modelRef, agent, variant, signal: abortSignal })
 
       this.startHeartbeat(tabId, callbacks)

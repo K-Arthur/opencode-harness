@@ -239,10 +239,59 @@ extension has already restored local state. Six fixes address this:
 - Host → Webview: `{ type: "session_messages_refreshed", sessionId, messages, totalCount }` —
   contains the refreshed message array. The webview re-renders the message list.
 
+## Question Tool Block
+
+The `question` tool lets the model ask the user a multiple-choice or free-text question inline. It displays as an interactive block within the assistant message bubble.
+
+### Rendering
+
+A question block is rendered in two phases:
+
+1. **Streaming phase** — `stream_tool_start` with `name: "question"` and `args: { question, options, allowFreeText }` renders the block immediately via `appendStreamingToolBlock` → `renderBlock`. The DOM is populated with options (`.question-option`) and optionally a textarea (`.question-freetext`). During streaming, the block's answer submission is silently dropped because `postMessage` from `acquireVsCodeApi()` is not available in the streaming handler chain — interactivity is deferred until `stream_end`.
+
+2. **Re-render phase** — `stream_end` with a `blocks` entry of `type: "question"` triggers `reRenderMessage` → `renderMessage` → `renderBlock`. At this point `postMessage` is threaded through `RenderOptions`, making option clicks and textarea submits functional. Answers post `{ type: "question_answer", sessionId, value, source, toolCallId }` back to the host.
+
+### Host-to-Webview Messages
+
+- `stream_tool_start`: `{ type: "stream_tool_start", sessionId, toolCall: { id, name: "question", class: "meta", state: "running", args: { question: string, options: string[], allowFreeText: boolean } } }` — renders the question block during streaming.
+- `stream_end`: `{ type: "stream_end", sessionId, messageId, blocks: Array<{ type: "question", id, toolCallId, sessionId, text, options, allowFreeText }> }` — finalizes the question block with full interactivity.
+
+### Webview-to-Host Messages
+
+- `question_answer`: `{ type: "question_answer", sessionId: string, value: string, source: "option" | "freetext", toolCallId: string }` — posted when the user clicks an option or submits the textarea. The `source` field distinguishes pre-defined options from free-text input.
+
+### toolCallId Contract
+
+The `toolCallId` (the tool call's `id` from `stream_tool_start`) flows through three layers:
+
+1. **Question block** — stored on the `QuestionBlock` interface and included in the `stream_end` blocks payload.
+2. **User message metadata** — `WebviewEventRouter` copies `toolCallId` into the user message block's metadata for downstream correlation.
+3. **StreamCallbacks** — `StreamCoordinator.startPrompt` receives `toolCallId` via the `StreamCallbacks` interface and logs it for observability.
+
+### Accessibility
+
+The question block implements these ARIA attributes:
+- Outer wrapper: `role="form"`, `aria-label="Question from model"`
+- Options container: `role="group"`, `aria-label="Answer options"`
+- Textarea: `aria-label="Type a custom answer"`, `maxlength="10000"`
+
+After the user answers, all inputs are disabled (buttons get `disabled`, textarea gets `readonly` + `disabled`) to prevent double-submits.
+
+### Edge Cases
+
+- **Double-click**: Option clicks use `dispatchEvent` (not `click()`) so the second click is rejected by the `disabled` guard before the DOM toggle propagates.
+- **XSS**: Question text and options are escaped via `textContent` assignment scoped to `.question-block` — HTML injection is blocked.
+- **Empty submit**: Textarea submit with empty/whitespace-only input is silently dropped.
+- **Options-only mode**: When `allowFreeText: false`, the textarea is not rendered; only option buttons are shown.
+- **Free-text-only mode**: When `options` is empty, only the textarea and submit button are rendered.
+
 ## Tests
 
 The relevant coverage lives in:
 
+- `tests/webview/question-block-e2e.spec.ts` for 17 E2E tests covering static render, edge cases, accessibility, streaming phase, and message contract.
+- `src/chat/webview/question-block.test.ts` for 5 unit tests covering messageId correlation, empty fallback, maxlength, and aria-labels.
+- `src/chat/WebviewEventRouter.questionAnswer.test.ts` for 11 integration tests covering routing, validation, double-submit guard, toolCallId forwarding, error handling, and observability.
 - `src/chat/webview/stream.test.ts` for late chunk recovery and tool-call finalization.
 - `src/chat/webview/messages-css.test.ts` for markdown density, overflow, focus, and control transitions.
 - `src/chat/webview/renderer.test.ts` for sanitizer and external-link hardening.

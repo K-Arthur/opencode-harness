@@ -139,6 +139,57 @@ Frontend command availability and session creation edge cases:
 - **File**: `src/chat/CommandExecutionService.test.ts` (new), `src/chat/webview/main.test.ts` (extended)
 - **Added**: 7 tests for `CommandExecutionService` (session ensure flow, ID persistence, error handling). 4 regression tests in `main.test.ts` for message handlers, proactive loading, and button wiring.
 
+### Phase 4: Methodology module bugfix audit ✅ (2026-05-29)
+
+SADD-based review of `src/methodology/` (22 source files, 11 test files, ~150 tests). All 150 tests green after fixes; zero new type errors.
+
+#### 16. CascadeRouter audit-log memory leak ✅ (C2)
+- **File**: `src/methodology/CascadeRouter.ts`
+- **Issue**: Audit log array grew without bound in long-lived sessions.
+- **Fix**: Added `MAX_AUDIT_ENTRIES = 1000` cap; oldest entries evicted via `.shift()` when exceeded.
+- **Follow-up**: Consider exposing cap via `MethodologyConfig` instead of hardcoding.
+
+#### 17. QualityEvaluator `compiles` metric accepted non-code ✅ (C4)
+- **File**: `src/methodology/QualityEvaluator.ts`
+- **Issue**: `compiles` metric returned `true` for any text inside a markdown fence, even prose.
+- **Fix**: Added `looksSyntacticallyValid()` (balanced-brace heuristic) as a prerequisite check.
+
+#### 18. TaskClassifier non-deterministic tie-breaking ✅ (C5)
+- **File**: `src/methodology/TaskClassifier.ts`
+- **Issue**: When multiple task types scored equally, `detectTaskType()` depended on `Object.entries` insertion order.
+- **Fix**: Added `TASK_TYPE_PRIORITY` map for deterministic tie-breaking.
+
+#### 19. MethodologyCatalog specificity scoring inflated ✅ (M1)
+- **File**: `src/methodology/MethodologyCatalog.ts`
+- **Issue**: `ruleSpecificity()` added raw `minComplexity` and `minFileScope` values to the specificity score, causing high-threshold rules to always win.
+- **Fix**: Specificity now counts constraint *presence* only, not threshold values.
+
+#### 20. Low-complexity generate tasks over-matched ✅ (M2)
+- **File**: `src/methodology/MethodologyCatalog.ts`
+- **Issue**: Simple generate tasks (e.g. "generate a hello world") matched `bmad-lite` or `spec-first` instead of a lightweight methodology.
+- **Fix**: Added low-complexity generate rule (`direct-execution`, tier B); reordered `bmad-full` before `bmad-lite` so more restrictive rule matches first.
+- **Test update**: `methodology.test.ts` expectation changed: low-complexity generate now returns `direct-execution` (not `spec-first`).
+
+#### 21. CascadeRouter duplicated chain-building logic ✅ (M6)
+- **File**: `src/methodology/CascadeRouter.ts`
+- **Issue**: `buildRecommendationChain` and `buildEscalationChain` contained ~40 lines of near-identical logic.
+- **Fix**: Extracted shared `buildChain()` helper; both methods delegate to it.
+
+#### 22. PlanValidator unnecessary async ✅ (M7)
+- **File**: `src/methodology/PlanValidator.ts`
+- **Issue**: `validate()` was declared `async` and returned `Promise<ValidationResult>` despite containing no asynchronous operations.
+- **Fix**: Removed `async`/`Promise` wrappers; `validate()` is now synchronous.
+
+#### 23. TaskClassifier sub-question count inflated by code blocks ✅ (m2)
+- **File**: `src/methodology/TaskClassifier.ts`
+- **Issue**: Sub-question count heuristic counted semicolons inside code blocks, inflating complexity scores for requests containing code snippets.
+- **Fix**: Code blocks are now stripped before counting semicolons.
+
+### Known follow-ups (not blocking)
+- `CascadeRouter.MAX_AUDIT_ENTRIES` should be configurable via `MethodologyConfig`.
+- `OutcomeTracker.getConfidenceAdjustment()` has a 7-day prune window but no recency weighting — confidence adjustments treat 6-day-old outcomes the same as 1-day-old ones.
+- `looksSyntacticallyValid()` is a lightweight heuristic (brace-balance), not a full parser — consider integrating a real syntax checker for non-JS/TS languages.
+
 ## Remaining Work
 
 ### Integrate TaskDecomposer with Spec System ⏳

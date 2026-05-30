@@ -32,13 +32,13 @@ export interface ValidationResult {
 }
 
 export class PlanValidator {
-  private async checkNodesExist(plan: ExecutionPlan): Promise<void> {
+  private checkNodesExist(plan: ExecutionPlan): void {
     if (plan.nodes.length === 0) {
       throw new Error('Plan must contain at least one node');
     }
   }
 
-  private async checkEdgesTypeCompatible(plan: ExecutionPlan): Promise<void> {
+  private checkEdgesTypeCompatible(plan: ExecutionPlan): void {
     const nodeIds = new Set(plan.nodes.map((n) => n.id));
     for (const edge of plan.edges) {
       if (!nodeIds.has(edge.from)) {
@@ -50,7 +50,7 @@ export class PlanValidator {
     }
   }
 
-  private async checkDagAcyclic(plan: ExecutionPlan): Promise<void> {
+  private checkDagAcyclic(plan: ExecutionPlan): void {
     const adj = new Map<string, Set<string>>();
     for (const node of plan.nodes) {
       adj.set(node.id, new Set());
@@ -90,7 +90,7 @@ export class PlanValidator {
     }
   }
 
-  private async checkParamsPresent(plan: ExecutionPlan): Promise<void> {
+  private checkParamsPresent(plan: ExecutionPlan): void {
     for (const node of plan.nodes) {
       if (node.tool !== undefined && node.params === undefined) {
         throw new Error(`Node "${node.id}" has tool "${node.tool}" but no params`);
@@ -98,7 +98,7 @@ export class PlanValidator {
     }
   }
 
-  private async checkBudgetSatisfied(plan: ExecutionPlan): Promise<void> {
+  private checkBudgetSatisfied(plan: ExecutionPlan): void {
     if (plan.totalBudget === undefined) return;
     const sum = plan.nodes.reduce((acc, n) => acc + (n.budget ?? 0), 0);
     if (sum > plan.totalBudget) {
@@ -108,7 +108,7 @@ export class PlanValidator {
     }
   }
 
-  private async checkSafetyCompliant(plan: ExecutionPlan): Promise<void> {
+  private checkSafetyCompliant(plan: ExecutionPlan): void {
     const mutating = new Set(['write', 'delete']);
     for (const node of plan.nodes) {
       if (mutating.has(node.type) && node.idempotencyKey === undefined) {
@@ -119,7 +119,7 @@ export class PlanValidator {
     }
   }
 
-  private async checkIdempotencyKeys(plan: ExecutionPlan): Promise<void> {
+  private checkIdempotencyKeys(plan: ExecutionPlan): void {
     const seen = new Set<string>();
     for (const node of plan.nodes) {
       if (node.idempotencyKey !== undefined) {
@@ -133,8 +133,8 @@ export class PlanValidator {
     }
   }
 
-  async validate(plan: ExecutionPlan): Promise<ValidationResult> {
-    const checks: [string, (p: ExecutionPlan) => Promise<void>][] = [
+  validate(plan: ExecutionPlan): ValidationResult {
+    const checks: [string, (p: ExecutionPlan) => void][] = [
       ['nodes_exist', (p) => this.checkNodesExist(p)],
       ['edges_type_compatible', (p) => this.checkEdgesTypeCompatible(p)],
       ['dag_acyclic', (p) => this.checkDagAcyclic(p)],
@@ -144,16 +144,14 @@ export class PlanValidator {
       ['idempotency_keys', (p) => this.checkIdempotencyKeys(p)],
     ];
 
-    const results = await Promise.all(
-      checks.map(async ([name, fn]): Promise<CheckResult> => {
-        try {
-          await fn(plan);
-          return { name, passed: true, error: null };
-        } catch (error: unknown) {
-          return { name, passed: false, error: String(error) };
-        }
-      }),
-    );
+    const results: CheckResult[] = checks.map(([name, fn]): CheckResult => {
+      try {
+        fn(plan);
+        return { name, passed: true, error: null };
+      } catch (error: unknown) {
+        return { name, passed: false, error: String(error) };
+      }
+    });
 
     return {
       valid: results.every((r) => r.passed),

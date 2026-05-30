@@ -635,6 +635,35 @@ body.hide-thinking .thinking-block { display: none; }
   background: color-mix(in srgb, var(--oc-accent) 80%, black);
 }
 
+.todo-toast {
+  position: absolute;
+  bottom: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--oc-editor-bg, #1e1e2e);
+  color: var(--color-fg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: var(--z-popover, 100);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms ease-in;
+  max-width: 280px;
+  text-align: center;
+}
+
+.todo-toast.visible {
+  opacity: 1;
+}
+
+.todo-toast--warning {
+  border-color: var(--oc-accent, #E2C044);
+  background: rgba(226, 192, 68, 0.1);
+}
+
 /* Explorer tree changed files layout */
 .changed-files-list-explorer {
   list-style: none;

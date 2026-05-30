@@ -179,4 +179,76 @@ describe("renderQuestionBlock", () => {
     assert.equal(el!.querySelectorAll("script").length, 0, "no script injection")
     assert.ok(el!.textContent!.includes("<img"), "raw text shown as text")
   })
+
+  it("question_answer message does not conflate messageId with toolCallId", async () => {
+    const { renderBlock } = await import("./renderer")
+    const block = {
+      type: "question",
+      sessionId: "sess-A",
+      toolCallId: "tool-q-1",
+      text: "Pick one",
+      options: ["A"],
+      allowFreeText: false,
+    }
+    const posted: Array<Record<string, unknown>> = []
+    const el = renderBlock(block, { postMessage: (m) => posted.push(m), messageId: "msg-42" }) as HTMLElement
+    const btn = el.querySelector(".question-option") as HTMLButtonElement
+    btn.click()
+    const answer = posted.find((m) => m.type === "question_answer")
+    assert.ok(answer)
+    assert.equal(answer!.toolCallId, "tool-q-1", "toolCallId must come from block.toolCallId")
+    assert.equal(answer!.messageId, "msg-42", "messageId must come from opts.messageId, not block.id")
+  })
+
+  it("question_answer with no opts.messageId sends empty messageId", async () => {
+    const { renderBlock } = await import("./renderer")
+    const block = {
+      type: "question",
+      sessionId: "sess-A",
+      toolCallId: "tool-q-1",
+      text: "Pick one",
+      options: ["A"],
+      allowFreeText: false,
+    }
+    const posted: Array<Record<string, unknown>> = []
+    const el = renderBlock(block, { postMessage: (m) => posted.push(m) }) as HTMLElement
+    const btn = el.querySelector(".question-option") as HTMLButtonElement
+    btn.click()
+    const answer = posted.find((m) => m.type === "question_answer")
+    assert.ok(answer)
+    assert.equal(answer!.messageId, "", "messageId must be empty when opts.messageId is not provided")
+  })
+
+  it("textarea has maxlength attribute", async () => {
+    const { renderBlock } = await import("./renderer")
+    const block = {
+      type: "question",
+      sessionId: "sess-A",
+      toolCallId: "tool-q-1",
+      text: "Free response",
+      allowFreeText: true,
+    }
+    const el = renderBlock(block, { postMessage: () => {} })
+    const ta = el!.querySelector(".question-freetext") as HTMLTextAreaElement | null
+    assert.ok(ta, "textarea must exist")
+    assert.equal(ta!.maxLength, 10000, "textarea must have maxlength=10000")
+  })
+
+  it("textarea and options have aria-label for accessibility", async () => {
+    const { renderBlock } = await import("./renderer")
+    const block = {
+      type: "question",
+      sessionId: "sess-A",
+      toolCallId: "tool-q-1",
+      text: "Pick one",
+      options: ["A", "B"],
+      allowFreeText: true,
+    }
+    const el = renderBlock(block, { postMessage: () => {} })
+    assert.ok(el!.getAttribute("aria-label"), "wrapper must have aria-label")
+    const optionsList = el!.querySelector(".question-options")
+    assert.ok(optionsList?.getAttribute("aria-label"), "options container must have aria-label")
+    const ta = el!.querySelector(".question-freetext")
+    assert.ok(ta?.getAttribute("aria-label"), "textarea must have aria-label")
+  })
 })

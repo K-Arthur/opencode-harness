@@ -535,14 +535,39 @@ function isSilentLifecycleBlock(block: Block): boolean {
   return false
 }
 
+function getToolInfo(block: Block): { isTool: boolean; toolName: string; toolClass: ToolCallClass | null } {
+  const isTool = block.type === "tool-call" || block.type === "tool_call" || block.type === "tool"
+  const canonicalToolName = typeof block.tool === "string" ? block.tool : ""
+  const toolName: string = isTool ? (canonicalToolName || block.name || block.toolName || "tool") : ""
+  const toolClass = isTool ? (block.class as ToolCallClass) || 'read' : null
+  return { isTool, toolName, toolClass }
+}
+
+type GroupStrategy = (toolName: string, toolClass: ToolCallClass | null, lastToolName: string | null, lastToolClass: ToolCallClass | null, hasCurrentGroup: boolean) => boolean
+
+function consecutiveStrategy(_name: string, _cls: ToolCallClass | null, _lastName: string | null, _lastCls: ToolCallClass | null, hasGroup: boolean): boolean {
+  return hasGroup
+}
+
+function nameStrategy(name: string, _cls: ToolCallClass | null, lastName: string | null, _lastCls: ToolCallClass | null, hasGroup: boolean): boolean {
+  return name === lastName && hasGroup
+}
+
+function typeStrategy(_name: string, cls: ToolCallClass | null, _lastName: string | null, lastCls: ToolCallClass | null, hasGroup: boolean): boolean {
+  return cls === lastCls && hasGroup
+}
+
+function getGroupStrategy(groupBy: 'consecutive' | 'name' | 'type'): GroupStrategy {
+  if (groupBy === 'name') return nameStrategy
+  if (groupBy === 'type') return typeStrategy
+  return consecutiveStrategy
+}
+
 export function groupConsecutiveToolCalls(blocks: Block[], groupBy: 'consecutive' | 'name' | 'type' = 'consecutive'): Block[][] {
   const groups: Block[][] = []
   let currentGroup: Block[] = []
   let lastToolName: string | null = null
   let lastToolClass: ToolCallClass | null = null
-  // Lifecycle blocks encountered while a tool group is open. We hold them
-  // here so they don't break the group, then emit them as their own
-  // single-element groups when the run finally closes.
   const pendingLifecycle: Block[] = []
 
   const flushLifecycle = () => {
@@ -550,30 +575,27 @@ export function groupConsecutiveToolCalls(blocks: Block[], groupBy: 'consecutive
     pendingLifecycle.length = 0
   }
 
-  for (const block of blocks) {
-    const isTool = block.type === "tool-call" || block.type === "tool_call" || block.type === "tool"
-     // Canonical `tool` blocks (post Layer 1) carry the tool name in `block.tool`;
-     // legacy shapes used `block.name` or `block.toolName`.
-     const canonicalToolName = typeof block.tool === "string" ? block.tool : ""
-     const toolName: string = isTool ? (canonicalToolName || block.name || block.toolName || "tool") : ""
-     const toolClass = isTool ? (block.class as ToolCallClass) || 'read' : null
+  const flushCurrentGroup = () => {
+    if (currentGroup.length > 0) groups.push(currentGroup)
+    flushLifecycle()
+  }
 
-    // Silent lifecycle blocks (step-start, normal step-finish): defer until
-    // the current tool group closes. Don't touch lastToolName/lastToolClass.
+  const strategy = getGroupStrategy(groupBy)
+
+  for (const block of blocks) {
+    const { isTool, toolName, toolClass } = getToolInfo(block)
+
     if (!isTool && isSilentLifecycleBlock(block)) {
       if (currentGroup.length > 0) {
         pendingLifecycle.push(block)
       } else {
-        // Not inside a tool run — emit immediately so order is preserved.
         groups.push([block])
       }
       continue
     }
 
-    // Edge case: Non-tool blocks always break groups
     if (!isTool) {
-      if (currentGroup.length > 0) groups.push(currentGroup)
-      flushLifecycle()
+      flushCurrentGroup()
       groups.push([block])
       currentGroup = []
       lastToolName = null
@@ -581,24 +603,10 @@ export function groupConsecutiveToolCalls(blocks: Block[], groupBy: 'consecutive
       continue
     }
 
-    // Group based on specified mode
-    let shouldGroup = false
-    if (groupBy === 'consecutive') {
-      // Group all consecutive tool calls regardless of name/type
-      shouldGroup = currentGroup.length > 0
-    } else if (groupBy === 'name') {
-      // Group by tool name (original behavior)
-      shouldGroup = toolName === lastToolName && currentGroup.length > 0
-    } else if (groupBy === 'type') {
-      // Group by tool class (read, write, exec, meta)
-      shouldGroup = toolClass === lastToolClass && currentGroup.length > 0
-    }
-
-    if (shouldGroup) {
+    if (strategy(toolName, toolClass, lastToolName, lastToolClass, currentGroup.length > 0)) {
       currentGroup.push(block)
     } else {
-      if (currentGroup.length > 0) groups.push(currentGroup)
-      flushLifecycle()
+      flushCurrentGroup()
       currentGroup = [block]
       lastToolName = toolName
       lastToolClass = toolClass

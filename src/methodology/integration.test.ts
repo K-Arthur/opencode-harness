@@ -8,7 +8,8 @@ import { QualityEvaluator } from './QualityEvaluator.js';
 import { QualityGateRunner, createDefaultGates } from './QualityGate.js';
 import { PlanValidator } from './PlanValidator.js';
 import { AuditTrail } from './AuditTrail.js';
-import type { ModelProfile, TaskType, ModelTier, TaskClassification, CodeDiff } from './types.js';
+import { MethodologyOrchestrator } from './MethodologyOrchestrator.js';
+import { DEFAULT_CONFIG, type ModelProfile, type TaskType, type ModelTier, type TaskClassification, type CodeDiff } from './types.js';
 
 function mockModelProfile(tier: ModelTier, id: string): ModelProfile {
   return {
@@ -98,6 +99,36 @@ describe('Methodology Integration — classification → selection → routing',
     );
     assert.ok(advisory.recommendedTier.length > 0);
     assert.ok(advisory.recommendedModel.includes('model-'));
+  });
+
+  it('does not downgrade an S-tier methodology recommendation', () => {
+    const classifier = new TaskClassifier();
+    const task = classifier.classify('Build a full authentication system with JWT, OAuth, session management, database schema, and frontend screens');
+    const router = new CascadeRouter(
+      { maxEscalations: 2, qualityThresholds: { generate: 0.7 }, maxTokensPerRequest: 50000, maxCostPerRequest: 5, fallbackChain: [] },
+    );
+    const advisory = router.recommendModel(
+      task,
+      'bmad-lite',
+      { recommendedTier: 'S' },
+      mockProfiles,
+      { S: ['test/model-s'], A: ['test/model-a'], B: ['test/model-b'], C: ['test/model-c'] },
+    );
+
+    assert.equal(advisory.recommendedTier, 'S');
+    assert.equal(advisory.recommendedModel, 'test/model-s');
+    assert.deepEqual(advisory.fallbackChain.map((entry) => entry.tier), ['S']);
+  });
+
+  it('updateConfig applies cascade changes to future recommendations', () => {
+    const orchestrator = new MethodologyOrchestrator();
+    orchestrator.updateConfig({
+      cascade: { ...DEFAULT_CONFIG.cascade, maxEscalations: 0 },
+    });
+
+    const result = orchestrator.advise('Build a full authentication system with JWT, OAuth, session management, database schema, and frontend screens');
+
+    assert.equal(result.advisory.fallbackChain.length, 1);
   });
 
   it('cascade escalates from B to A to S when quality is insufficient', async () => {

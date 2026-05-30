@@ -29,6 +29,19 @@ const AMBIGUITY_MARKERS = [
   'sort of',
 ];
 
+const TASK_TYPE_PRIORITY: Record<TaskType, number> = {
+  'ui-from-image': 10,
+  'quick-fix': 9,
+  'debug': 8,
+  'refactor': 7,
+  'architect': 6,
+  'review': 5,
+  'test': 4,
+  'document': 3,
+  'explain': 2,
+  'generate': 1,
+};
+
 const TASK_TYPE_PATTERNS: Record<TaskType, RegExp[]> = {
   'quick-fix': [
     /fix\s+(this\s+)?(bug|error|issue|typo)/i,
@@ -151,9 +164,10 @@ export class TaskClassifier {
       query.toLowerCase().includes(marker)
     );
 
-    // Count sub-questions (question marks or semicolons separating clauses)
+    // Count sub-questions (question marks; semicolons only outside code blocks)
+    const codeBlockFree = query.replace(/```[\s\S]*?```/g, '');
     const subQuestionCount = (query.match(/\?/g) || []).length +
-      (query.split(';').length - 1);
+      (codeBlockFree.split(';').length - 1);
 
     return {
       queryLength: query.length,
@@ -209,7 +223,7 @@ export class TaskClassifier {
           score += 1;
         }
       }
-      if (score > bestScore) {
+      if (score > bestScore || (score === bestScore && TASK_TYPE_PRIORITY[type as TaskType] > TASK_TYPE_PRIORITY[bestType])) {
         bestScore = score;
         bestType = type as TaskType;
       }

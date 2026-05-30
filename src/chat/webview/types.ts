@@ -7,7 +7,7 @@ export type MessageRole = "user" | "assistant" | "system"
 // ---------------------------------------------------------------------------
 
 export type ToolCallClass = 'read' | 'write' | 'exec' | 'error' | 'meta' | 'mixed'
-export type ToolCallState = 'pending' | 'running' | 'result' | 'error' | 'completed' | 'stale'
+export type ToolCallState = 'pending' | 'running' | 'result' | 'error' | 'completed' | 'stale' | 'unresolved'
 
 export interface ToolCollapseConfig {
   groupBy: 'consecutive' | 'name' | 'type'
@@ -72,6 +72,17 @@ export interface ErrorBlock {
   message: string
   detail?: string
   retryable: boolean
+}
+
+export interface QuestionBlock {
+  [key: string]: unknown
+  type: 'question'
+  id: string
+  toolCallId: string
+  sessionId?: string
+  text: string
+  options: string[]
+  allowFreeText: boolean
 }
 
 // Legacy block type — kept for backward compatibility with existing renders
@@ -197,6 +208,8 @@ export interface SessionState {
   subagentActivities?: SubagentActivity[]
   userTodos?: Todo[]
   todoOverrides?: Record<string, 'pending' | 'in-progress' | 'completed'>
+  deletedTodoIds?: string[]
+  todoFilter?: 'all' | 'active' | 'completed' | 'in-progress'
 }
 
 export interface RevertEntry {
@@ -415,6 +428,7 @@ export type HostMessage =
   | { type: "server_status"; sessionId?: string; status: string; errorContext?: unknown }
   | { type: "permission_request"; sessionId: string; permissionId?: string; title: string; permissionType?: string; pattern?: string | string[]; metadata?: Record<string, unknown> }
   | { type: "todos_update"; sessionId: string; todos: unknown[] }
+  | { type: "todo_operation_denied"; sessionId: string; reason: string; todoId?: string }
   | { type: "changed_files_update"; sessionId: string; files: FileChange[] }
   | { type: "file_edited"; sessionId: string; file: string }
   | { type: "message"; sessionId: string; message: ChatMessage }

@@ -183,6 +183,26 @@ suite('MethodologyCatalog', () => {
     assert.strictEqual(result.methodology, 'bmad-lite');
   });
 
+  test('selects bmad-full for high-complexity multi-file generation', () => {
+    const result = catalog.select(
+      makeClassification({
+        type: 'generate',
+        complexity: { depth: 0.9, width: 0.8, ambiguity: 0.1, fileScope: 0.8 },
+      })
+    );
+    assert.strictEqual(result.methodology, 'bmad-full');
+  });
+
+  test('does not select quick-flow when file scope exceeds maxFileScope', () => {
+    const result = catalog.select(
+      makeClassification({
+        type: 'quick-fix',
+        complexity: { depth: 0.1, width: 0.1, ambiguity: 0.1, fileScope: 0.9 },
+      })
+    );
+    assert.notStrictEqual(result.methodology, 'quick-flow');
+  });
+
   test('selects spec-first for medium complexity generation', () => {
     const result = catalog.select(
       makeClassification({
@@ -198,12 +218,11 @@ suite('MethodologyCatalog', () => {
     assert.strictEqual(result.methodology, 'direct-execution');
   });
 
-  test('falls back to spec-first for unclassified tasks', () => {
+  test('falls back to direct-execution for low-complexity generate tasks', () => {
     const result = catalog.select(
       makeClassification({ type: 'generate', complexity: { depth: 0.1, width: 0.1, ambiguity: 0.1, fileScope: 0.1 } })
     );
-    // Very low complexity generate should fall through to default
-    assert.strictEqual(result.methodology, 'spec-first');
+    assert.strictEqual(result.methodology, 'direct-execution');
   });
 
   test('provides prompt templates for all strategies', () => {

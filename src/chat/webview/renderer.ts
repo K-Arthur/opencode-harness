@@ -1716,10 +1716,11 @@ function renderQuestionBlock(block: Block, opts: RenderOptions): HTMLElement | n
   const wrapper = document.createElement("div")
   wrapper.className = "question-block"
   wrapper.setAttribute("role", "form")
+  wrapper.setAttribute("aria-label", "Question from model")
 
   const sessionId = (block.sessionId as string | undefined) || ""
   const toolCallId = (block.toolCallId as string | undefined) || (block.id as string | undefined) || ""
-  const messageId = (opts.messageId as string | undefined) || (block.id as string | undefined) || ""
+  const messageId = (opts.messageId as string | undefined) || ""
   const questionText = (block.text as string | undefined) || (block.question as string | undefined) || ""
   const options = Array.isArray(block.options) ? (block.options as unknown[]).map(String) : []
   const allowFreeText = block.allowFreeText !== false
@@ -1773,6 +1774,8 @@ function renderQuestionBlock(block: Block, opts: RenderOptions): HTMLElement | n
   if (options.length > 0) {
     const optionsList = document.createElement("div")
     optionsList.className = "question-options"
+    optionsList.setAttribute("role", "group")
+    optionsList.setAttribute("aria-label", "Answer options")
     for (const opt of options) {
       const btn = document.createElement("button")
       btn.type = "button"
@@ -1791,7 +1794,9 @@ function renderQuestionBlock(block: Block, opts: RenderOptions): HTMLElement | n
     const ta = document.createElement("textarea")
     ta.className = "question-freetext"
     ta.rows = 2
+    ta.maxLength = 10000
     ta.placeholder = "Or type a custom answer…"
+    ta.setAttribute("aria-label", "Type a custom answer")
     ta.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault()

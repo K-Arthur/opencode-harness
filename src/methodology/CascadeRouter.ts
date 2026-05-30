@@ -13,15 +13,15 @@ import {
   ModelProfile,
   RouterResult,
   TaskClassification,
-  TaskType,
-  QualityMetrics,
   MethodologyId,
-  PromptStrategy,
   ModelTier,
   AuditEntry,
   ClassifiedError,
   ErrorClass,
 } from './types.js';
+import { QualityEvaluator } from './QualityEvaluator.js';
+
+export { QualityEvaluator } from './QualityEvaluator.js';
 
 // ─── Default Configuration ──────────────────────────────────────────────────
 
@@ -44,146 +44,7 @@ const DEFAULT_CONFIG: CascadeRouterConfig = {
   fallbackChain: [], // Populated at runtime from model profiles
 };
 
-// ─── Quality Evaluator ──────────────────────────────────────────────────────
-
-/**
- * Lightweight quality evaluation (not LLM-as-judge).
- * Uses structural and task-specific metrics.
- */
-export class QualityEvaluator {
-  /**
-   * Evaluate the quality of a model response.
-   * Returns a score between 0.0 and 1.0.
-   */
-  evaluate(
-    response: string,
-    task: TaskClassification
-  ): QualityMetrics {
-    const schemaCompliance = this.checkSchemaCompliance(response);
-    const completeness = this.checkCompleteness(response, task);
-    const specificity = this.checkSpecificity(response);
-    const consistencyScore = this.checkConsistency(response);
-
-    return {
-      schemaCompliance,
-      completeness,
-      specificity,
-      consistencyScore,
-    };
-  }
-
-  /**
-   * Calculate overall quality score from metrics.
-   */
-  overallScore(metrics: QualityMetrics): number {
-    const weights = {
-      schemaCompliance: 0.3,
-      completeness: 0.25,
-      specificity: 0.25,
-      consistencyScore: 0.2,
-    };
-
-    return (
-      (metrics.schemaCompliance ? 1 : 0) * weights.schemaCompliance +
-      metrics.completeness * weights.completeness +
-      metrics.specificity * weights.specificity +
-      metrics.consistencyScore * weights.consistencyScore
-    );
-  }
-
-  private checkSchemaCompliance(response: string): boolean {
-    // Check if response looks like valid JSON when schema is expected
-    const trimmed = response.trim();
-    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-      try {
-        JSON.parse(trimmed);
-        return true;
-      } catch {
-        return false;
-      }
-    }
-    // Non-JSON responses are considered compliant (no schema expected)
-    return true;
-  }
-
-  private checkCompleteness(
-    response: string,
-    task: TaskClassification
-  ): number {
-    // Heuristic: longer responses for complex tasks are more complete
-    const expectedLength = this.estimateExpectedLength(task);
-    const actualLength = response.length;
-
-    if (actualLength >= expectedLength) return 1.0;
-    return actualLength / expectedLength;
-  }
-
-  private estimateExpectedLength(task: TaskClassification): number {
-    const base = 200; // minimum response length
-    const complexityMultiplier =
-      (task.complexity.depth + task.complexity.width) / 2;
-
-    switch (task.type) {
-      case 'quick-fix':
-        return base * 2;
-      case 'explain':
-        return base * 5;
-      case 'generate':
-        return base * 10 * (1 + complexityMultiplier);
-      case 'review':
-        return base * 8;
-      case 'architect':
-        return base * 15 * (1 + complexityMultiplier);
-      case 'debug':
-        return base * 6 * (1 + complexityMultiplier);
-      default:
-        return base * 5;
-    }
-  }
-
-  private checkSpecificity(response: string): number {
-    // Check for vague language
-    const vaguePatterns = [
-      /\b(maybe|perhaps|possibly|might|could|should|try)\b/gi,
-      /\b(something|somehow|somewhat)\b/gi,
-      /\b(it depends|varies|hard to say)\b/gi,
-    ];
-
-    let vagueCount = 0;
-    for (const pattern of vaguePatterns) {
-      const matches = response.match(pattern);
-      if (matches) vagueCount += matches.length;
-    }
-
-    const totalWords = response.split(/\s+/).length;
-    if (totalWords === 0) return 0;
-
-    const vagueRatio = vagueCount / totalWords;
-    return Math.max(0, 1 - vagueRatio * 10); // Penalize heavily for vague language
-  }
-
-  private checkConsistency(response: string): number {
-    // Check for self-contradiction (simple heuristic)
-    const lowerResponse = response.toLowerCase();
-
-    // Detect contradictory statements
-    const contradictions = [
-      { a: 'should', b: 'should not' },
-      { a: 'must', b: 'must not' },
-      { a: 'always', b: 'never' },
-      { a: 'is required', b: 'is optional' },
-    ];
-
-    let contradictionCount = 0;
-    for (const { a, b } of contradictions) {
-      if (lowerResponse.includes(a) && lowerResponse.includes(b)) {
-        contradictionCount++;
-      }
-    }
-
-    return Math.max(0, 1 - contradictionCount * 0.25);
-  }
-}
+const TIER_RANK: Record<ModelTier, number> = { C: 0, B: 1, A: 2, S: 3 };
 
 // ─── Cascade Router ─────────────────────────────────────────────────────────
 
@@ -247,21 +108,18 @@ export class CascadeRouter {
     modelTiers: Record<ModelTier, string[]>
   ): AdvisoryResult {
     const chain = this.buildRecommendationChain(task, modelProfiles, modelTiers);
-    const tierOrder: ModelTier[] = ['S', 'A', 'B', 'C'];
     const startTier = selection.recommendedTier;
-    const startIdx = tierOrder.indexOf(startTier);
+    const eligibleChain = chain.filter((entry) => TIER_RANK[entry.tier] >= TIER_RANK[startTier]);
 
-    let recommendedModel = chain.length > 0 ? chain[0]!.modelId : '';
+    let recommendedModel = eligibleChain.length > 0 ? eligibleChain[0]!.modelId : '';
     let recommendedTier = startTier;
     let reasoning = `Task type "${task.type}" with methodology "${methodology}" suggests tier ${startTier}.`;
 
-    for (const entry of chain) {
-      if (tierOrder.indexOf(entry.tier) >= startIdx) {
-        recommendedModel = entry.modelId;
-        recommendedTier = entry.tier;
-        reasoning = `Task "${task.type}" recommends tier ${startTier}. Selected ${entry.modelId} (tier ${entry.tier}) based on capability matching.`;
-        break;
-      }
+    if (eligibleChain.length > 0) {
+      const entry = eligibleChain[0]!;
+      recommendedModel = entry.modelId;
+      recommendedTier = entry.tier;
+      reasoning = `Task "${task.type}" recommends tier ${startTier}. Selected ${entry.modelId} (tier ${entry.tier}) based on capability matching.`;
     }
 
     if (task.modalities.needsVision) {
@@ -269,7 +127,7 @@ export class CascadeRouter {
     }
 
     if (task.constraints.speedPreferred) {
-      for (const entry of chain) {
+      for (const entry of eligibleChain) {
         const profile = modelProfiles.find(p => p.id === entry.modelId);
         if (profile && profile.performance.tokensPerSecond > 100) {
           recommendedModel = entry.modelId;
@@ -304,12 +162,12 @@ export class CascadeRouter {
       recommendedModel,
       recommendedTier,
       reasoning,
-      fallbackChain: chain.slice(0, this.config.maxEscalations + 1),
+      fallbackChain: eligibleChain.slice(0, this.config.maxEscalations + 1),
       estimatedCostPer1kTokens,
     };
   }
 
-  private buildRecommendationChain(
+  private buildChain(
     task: TaskClassification,
     modelProfiles: ModelProfile[],
     modelTiers: Record<ModelTier, string[]>
@@ -332,6 +190,14 @@ export class CascadeRouter {
     }
 
     return chain;
+  }
+
+  private buildRecommendationChain(
+    task: TaskClassification,
+    modelProfiles: ModelProfile[],
+    modelTiers: Record<ModelTier, string[]>
+  ): Array<{ modelId: string; tier: ModelTier; reason: string }> {
+    return this.buildChain(task, modelProfiles, modelTiers);
   }
 
   /**
@@ -515,38 +381,22 @@ export class CascadeRouter {
    */
   private buildEscalationChain(
     task: TaskClassification,
-    methodology: MethodologyId,
+    _methodology: MethodologyId,
     modelProfiles: ModelProfile[],
     modelTiers: Record<ModelTier, string[]>
   ): string[] {
-    // Get models for each tier
-    const tierOrder: ModelTier[] = ['B', 'A', 'S'];
-    const chain: string[] = [];
-
-    for (const tier of tierOrder) {
-      const models = modelTiers[tier] || [];
-      for (const modelId of models) {
-        // Check if model is available (has a profile)
-        const profile = modelProfiles.find((p) => p.id === modelId);
-        if (!profile) continue;
-
-        // Check if model has required capabilities for the task
-        if (task.modalities.needsVision && profile.capabilities.vision < 0.5) {
-          continue; // Skip models without vision capability
-        }
-
-        chain.push(modelId);
-      }
-    }
-
-    return chain;
+    return this.buildChain(task, modelProfiles, modelTiers).map(e => e.modelId);
   }
 
   // ─── Audit Logging ──────────────────────────────────────────────────────
 
+  private static readonly MAX_AUDIT_ENTRIES = 1000;
+
   private logAudit(entry: AuditEntry): void {
     this.auditLog.push(entry);
-    // In production, send to OpenTelemetry or persistent storage
+    if (this.auditLog.length > CascadeRouter.MAX_AUDIT_ENTRIES) {
+      this.auditLog = this.auditLog.slice(-CascadeRouter.MAX_AUDIT_ENTRIES);
+    }
   }
 
   getAuditLog(): AuditEntry[] {

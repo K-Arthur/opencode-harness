@@ -29,10 +29,29 @@ import { ModelProfileRegistry } from './ModelProfileRegistry.js';
 // ─── Orchestrator ───────────────────────────────────────────────────────────
 
 export interface OrchestratorOptions {
-  config?: Partial<MethodologyConfig>;
+  config?: MethodologyConfigPatch;
   modelExecutor?: ModelExecutor;
   modelProfiles?: ModelProfile[];
 }
+
+type MethodologyConfigPatch = Partial<{
+  enabled: MethodologyConfig['enabled'];
+  defaultMethodology: MethodologyConfig['defaultMethodology'];
+  modelTiers: Partial<MethodologyConfig['modelTiers']>;
+  cascade: Partial<MethodologyConfig['cascade']>;
+  prompting: Partial<MethodologyConfig['prompting']>;
+  qualityGates: {
+    enabled?: MethodologyConfig['qualityGates']['enabled'];
+    gates?: Partial<MethodologyConfig['qualityGates']['gates']>;
+  };
+  protocols: {
+    mcp?: Partial<MethodologyConfig['protocols']['mcp']>;
+    a2a?: Partial<MethodologyConfig['protocols']['a2a']>;
+    agui?: Partial<MethodologyConfig['protocols']['agui']>;
+  };
+  multimodal: Partial<MethodologyConfig['multimodal']>;
+  refactoring: Partial<MethodologyConfig['refactoring']>;
+}>;
 
 export interface AdvisoryOrchestrationResult {
   methodology: MethodologySelection;
@@ -48,24 +67,17 @@ export class MethodologyOrchestrator {
   private router: CascadeRouter;
   private registry: ModelProfileRegistry;
   private modelProfiles: ModelProfile[];
+  private modelExecutor?: ModelExecutor;
 
   constructor(options: OrchestratorOptions = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...options.config };
+    this.config = mergeMethodologyConfig(DEFAULT_CONFIG, options.config);
     this.classifier = new TaskClassifier();
     this.catalog = new MethodologyCatalog();
     this.registry = new ModelProfileRegistry();
     this.modelProfiles = options.modelProfiles ?? this.registry.getAllProfiles();
+    this.modelExecutor = options.modelExecutor;
 
-    this.router = new CascadeRouter(
-      {
-        maxEscalations: this.config.cascade.maxEscalations,
-        qualityThresholds: this.config.cascade.qualityThresholds,
-        maxTokensPerRequest: 50000,
-        maxCostPerRequest: 5.0,
-        fallbackChain: [],
-      },
-      options.modelExecutor
-    );
+    this.router = this.createRouter();
   }
 
   /**
@@ -112,12 +124,26 @@ export class MethodologyOrchestrator {
     this.modelProfiles = profiles;
   }
 
-  updateConfig(config: Partial<MethodologyConfig>): void {
-    this.config = { ...this.config, ...config };
+  updateConfig(config: MethodologyConfigPatch): void {
+    this.config = mergeMethodologyConfig(this.config, config);
+    this.router = this.createRouter();
   }
 
   getConfig(): MethodologyConfig {
-    return { ...this.config };
+    return mergeMethodologyConfig(DEFAULT_CONFIG, this.config);
+  }
+
+  private createRouter(): CascadeRouter {
+    return new CascadeRouter(
+      {
+        maxEscalations: this.config.cascade.maxEscalations,
+        qualityThresholds: this.config.cascade.qualityThresholds,
+        maxTokensPerRequest: 50000,
+        maxCostPerRequest: 5.0,
+        fallbackChain: [],
+      },
+      this.modelExecutor
+    );
   }
 
   private mergeTierMaps(): Record<ModelTier, string[]> {
@@ -130,4 +156,53 @@ export class MethodologyOrchestrator {
       C: [...new Set([...(configMap.C ?? []), ...staticMap.C])],
     };
   }
+}
+
+function mergeMethodologyConfig(
+  base: MethodologyConfig,
+  patch: MethodologyConfigPatch | undefined
+): MethodologyConfig {
+  if (!patch) {
+    return {
+      ...base,
+      modelTiers: { ...base.modelTiers },
+      cascade: { ...base.cascade, qualityThresholds: { ...base.cascade.qualityThresholds } },
+      prompting: { ...base.prompting },
+      qualityGates: { ...base.qualityGates, gates: { ...base.qualityGates.gates } },
+      protocols: {
+        mcp: { ...base.protocols.mcp, servers: [...base.protocols.mcp.servers] },
+        a2a: { ...base.protocols.a2a, agents: [...base.protocols.a2a.agents] },
+        agui: { ...base.protocols.agui },
+      },
+      multimodal: { ...base.multimodal },
+      refactoring: { ...base.refactoring },
+    };
+  }
+
+  return {
+    ...base,
+    ...patch,
+    modelTiers: { ...base.modelTiers, ...patch.modelTiers },
+    cascade: {
+      ...base.cascade,
+      ...patch.cascade,
+      qualityThresholds: {
+        ...base.cascade.qualityThresholds,
+        ...patch.cascade?.qualityThresholds,
+      },
+    },
+    prompting: { ...base.prompting, ...patch.prompting },
+    qualityGates: {
+      ...base.qualityGates,
+      ...patch.qualityGates,
+      gates: { ...base.qualityGates.gates, ...patch.qualityGates?.gates },
+    },
+    protocols: {
+      mcp: { ...base.protocols.mcp, ...patch.protocols?.mcp },
+      a2a: { ...base.protocols.a2a, ...patch.protocols?.a2a },
+      agui: { ...base.protocols.agui, ...patch.protocols?.agui },
+    },
+    multimodal: { ...base.multimodal, ...patch.multimodal },
+    refactoring: { ...base.refactoring, ...patch.refactoring },
+  };
 }

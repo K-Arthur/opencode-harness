@@ -81,6 +81,19 @@ export const METHODOLOGY_RULES: MethodologyRule[] = [
     executionPattern: 'hybrid',
   },
 
+  // ── Greenfield complex generation (bmad-full) ─────────────────────────
+  {
+    when: {
+      taskTypes: ['generate'],
+      minComplexity: 0.7,
+      minFileScope: 0.6,
+    },
+    methodology: 'bmad-full',
+    recommendedTier: 'S',
+    promptStrategy: 'plan-then-execute',
+    executionPattern: 'parallel',
+  },
+
   // ── Complex feature generation (multi-file, high complexity) ──────────
   {
     when: {
@@ -94,19 +107,6 @@ export const METHODOLOGY_RULES: MethodologyRule[] = [
     executionPattern: 'hybrid',
   },
 
-  // ── Greenfield complex generation (bmad-full) ─────────────────────────
-  {
-    when: {
-      taskTypes: ['generate', 'architect'],
-      minComplexity: 0.7,
-      minFileScope: 0.6,
-    },
-    methodology: 'bmad-full',
-    recommendedTier: 'S',
-    promptStrategy: 'plan-then-execute',
-    executionPattern: 'parallel',
-  },
-
   // ── Refactoring with existing spec (spec-anchored) ────────────────────
   {
     when: {
@@ -117,6 +117,19 @@ export const METHODOLOGY_RULES: MethodologyRule[] = [
     methodology: 'spec-anchored',
     recommendedTier: 'A',
     promptStrategy: 'hierarchical-cot',
+    executionPattern: 'sequential',
+  },
+
+  // ── Simple generation (low complexity, single file) ───────────────────
+  {
+    when: {
+      taskTypes: ['generate'],
+      maxComplexity: 0.3,
+      maxFileScope: 0.3,
+    },
+    methodology: 'direct-execution',
+    recommendedTier: 'B',
+    promptStrategy: 'direct',
     executionPattern: 'sequential',
   },
 
@@ -301,28 +314,30 @@ export class MethodologyCatalog {
 
   /**
    * Select the best methodology for a given task classification.
-   * Returns the first matching rule (rules are ordered by specificity).
+   * Returns the most specific matching rule.
    * Applies adaptive confidence adjustment based on historical outcomes.
    */
   select(classification: TaskClassification): MethodologySelection {
-    for (const rule of this.rules) {
-      if (this.matchesRule(rule, classification)) {
-        let confidence = this.calculateConfidence(rule, classification);
+    const rule = this.rules
+      .filter((candidate) => this.matchesRule(candidate, classification))
+      .sort((a, b) => this.ruleSpecificity(b) - this.ruleSpecificity(a))[0];
 
-        if (this.outcomeTracker) {
-          confidence += this.outcomeTracker.getConfidenceAdjustment(rule.methodology, classification.type);
-          confidence = Math.max(0.1, Math.min(1.0, confidence));
-        }
+    if (rule) {
+      let confidence = this.calculateConfidence(rule, classification);
 
-        return {
-          methodology: rule.methodology,
-          promptStrategy: rule.promptStrategy,
-          executionPattern: rule.executionPattern,
-          recommendedTier: rule.recommendedTier,
-          confidence,
-          matchedRule: rule,
-        };
+      if (this.outcomeTracker) {
+        confidence += this.outcomeTracker.getConfidenceAdjustment(rule.methodology, classification.type);
+        confidence = Math.max(0.1, Math.min(1.0, confidence));
       }
+
+      return {
+        methodology: rule.methodology,
+        promptStrategy: rule.promptStrategy,
+        executionPattern: rule.executionPattern,
+        recommendedTier: rule.recommendedTier,
+        confidence,
+        matchedRule: rule,
+      };
     }
 
     return {
@@ -366,6 +381,10 @@ export class MethodologyCatalog {
 
     if (when.minFileScope !== undefined) {
       if (complexity.fileScope < when.minFileScope) return false;
+    }
+
+    if (when.maxFileScope !== undefined) {
+      if (complexity.fileScope > when.maxFileScope) return false;
     }
 
     return true;
@@ -439,6 +458,8 @@ export class MethodologyCatalog {
     if (rule.when.maxComplexity !== undefined) score += 1;
     if (rule.when.needsVision !== undefined) score += 1;
     if (rule.when.minFileScope !== undefined) score += 1;
+    if (rule.when.maxFileScope !== undefined) score += 1;
+    if (rule.when.taskTypes && rule.when.taskTypes.length > 1) score += 1;
     return score;
   }
 }
