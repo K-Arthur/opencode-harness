@@ -1,7 +1,7 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-05-29
-**Version:** v0.2.18 (Streaming correctness + stable-tail render perf + backfill dedup; branch consolidation)
+**Version:** v0.2.19 (Streaming correctness + stable-tail render perf + backfill dedup; branch consolidation)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
 

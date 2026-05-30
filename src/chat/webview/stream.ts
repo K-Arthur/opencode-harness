@@ -181,7 +181,7 @@ class StreamSession implements StreamHandlers {
   }
 
   handleServerStatus(status?: string, errorContext?: unknown): void {
-    handleServerStatus(this.state, this.els, status, errorContext as any)
+    handleServerStatus(this.state, this.els, this.messages, this.saveState, status, errorContext as any)
   }
 
   showTypingIndicator(label?: string): void {

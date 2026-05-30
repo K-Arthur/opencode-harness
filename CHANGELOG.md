@@ -5,6 +5,11 @@ All notable changes to the **OpenCode Harness** extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.19] - 2026-05-29
+
+### Changed
+- Streaming "minors" cleanup: centralized the tool-call state → CSS-class / badge-text map (`setToolStateClass` + `toolBadgeText`) so `handleToolUpdate` and `handleToolEnd` share one source of truth; tool-block dedup at `stream_end` is now id-authoritative (`sameToolBlock` — two distinct calls with identical args no longer merge, and the `JSON.stringify(args)` comparison is skipped when ids are present); the server-status `error` path now persists onto the real session messages instead of an empty array + no-op save; typed the webview log API handle (removed an `any`); added an observability warning when a stream bubble is unexpectedly absent.
+
 ## [0.2.18] - 2026-05-29
 
 ### Added
