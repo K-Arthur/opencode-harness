@@ -136,6 +136,41 @@ export class ModelManager {
       await this._globalState.update(OPENROUTER_CACHE_TS_KEY, Date.now())
     } catch (err) {
       log.warn("Failed to persist OpenRouter context-window cache", err)
+  }
+
+  toggleModelFavorite(modelId: string): boolean {
+    if (this._favoriteModels.has(modelId)) {
+      this._favoriteModels.delete(modelId)
+    } else {
+      this._favoriteModels.add(modelId)
+    }
+    this.savePreferences()
+    this.updateModelProperties(modelId, { favorite: this._favoriteModels.has(modelId) })
+    return this._favoriteModels.has(modelId)
+  }
+
+  setModelEnabled(modelId: string, enabled: boolean): void {
+    if (enabled) {
+      this._disabledModels.delete(modelId)
+    } else {
+      this._disabledModels.add(modelId)
+    }
+    this.savePreferences()
+    this.updateModelProperties(modelId, { enabled })
+  }
+
+  private savePreferences(): void {
+    if (!this._globalState) return
+    this._globalState.update("opencode-harness.favoriteModels", Array.from(this._favoriteModels))
+    this._globalState.update("opencode-harness.disabledModels", Array.from(this._disabledModels))
+  }
+
+  private updateModelProperties(modelId: string, props: Partial<ModelInfo>): void {
+    const model = this._models.find(m => `${m.provider}/${m.id}` === modelId)
+    if (model) {
+      Object.assign(model, props)
+      this.saveCachedModels()
+      this._onModelsRefreshed.fire()
     }
   }
 
@@ -173,6 +208,8 @@ export class ModelManager {
       this.saveCachedModels()
       this._onModelsRefreshed.fire()
     }
+=======
+>>>>>>> origin/fix/show-thinking-and-compact-tools
   }
 
   private saveCachedModels(): void {

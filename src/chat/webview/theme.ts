@@ -40,10 +40,70 @@ export function updateContextChips(els: ElementRefs, chips?: ContextChip[]) {
   })
 }
 
-/* NOTE: Context usage rendering is handled exclusively by
- * context-usage-dropdown.ts (breakdown panel) and main.ts
- * updateContextUsageBar() (status strip). All pure logic
- * lives in context-usage-service.ts. */
+export function updateContextUsage(contextMonitorEl: HTMLElement, usage?: { percent: number; tokens: number; maxTokens: number; breakdown?: { system: number; history: number; workspace: number; queued?: number; steer?: number }; cost?: number }) {
+  if (usage && usage.tokens > 0) {
+    contextMonitorEl.classList.remove("hidden")
+    const progressFill = contextMonitorEl.querySelector(".context-progress-fill") as HTMLElement
+    const contextText = contextMonitorEl.querySelector(".context-text") as HTMLElement
+    const costText = contextMonitorEl.querySelector(".context-cost") as HTMLElement
+
+    if (usage.maxTokens > 0) {
+      // Full display with percentage when maxTokens is known
+      if (progressFill) {
+        progressFill.style.width = `${usage.percent}%`
+        // Update color based on percent
+        progressFill.classList.remove("context-warning", "context-critical", "context-good")
+        if (usage.percent >= 95) {
+          progressFill.classList.add("context-critical")
+        } else if (usage.percent >= 80) {
+          progressFill.classList.add("context-warning")
+        } else if (usage.percent >= 50) {
+          progressFill.classList.add("context-good")
+        }
+      }
+
+      if (contextText) {
+        contextText.textContent = `${usage.percent}% (${usage.tokens.toLocaleString()} / ${usage.maxTokens.toLocaleString()})`
+        if (usage.breakdown) {
+          const breakdownText = [
+            `System: ${usage.breakdown.system.toLocaleString()} tok`,
+            `History: ${usage.breakdown.history.toLocaleString()} tok`,
+            `Workspace: ${usage.breakdown.workspace.toLocaleString()} tok`,
+          ]
+          if (usage.breakdown.queued) breakdownText.push(`Queued: ${usage.breakdown.queued.toLocaleString()} tok`)
+          if (usage.breakdown.steer) breakdownText.push(`Steer: ${usage.breakdown.steer.toLocaleString()} tok`)
+          contextText.title = breakdownText.join("\n")
+        }
+      }
+    } else {
+      // Tokens-only display when maxTokens is unknown.
+      // Make the row clickable so the user can fix it with one click —
+      // the previous version dropped a tooltip pointing them at a
+      // command they had to find via the palette themselves.
+      if (progressFill) {
+        progressFill.style.width = "0%"
+        progressFill.classList.remove("context-warning", "context-critical", "context-good")
+      }
+      if (contextText) {
+        contextText.textContent = `${usage.tokens.toLocaleString()} tok · set limit ⚙`
+        contextText.title = "Context window limit not reported by server or OpenRouter cache. Click to set a manual override."
+        contextText.classList.add("context-text--unknown-limit")
+        contextMonitorEl.classList.add("context-monitor--needs-override")
+        contextMonitorEl.dataset.needsOverride = "true"
+      } else {
+        contextMonitorEl.classList.remove("context-monitor--needs-override")
+        delete contextMonitorEl.dataset.needsOverride
+      }
+    }
+
+    if (costText && usage.cost !== undefined) {
+      costText.textContent = `$${usage.cost.toFixed(4)}`
+      costText.title = `Estimated cost for current context: $${usage.cost.toFixed(4)}`
+    }
+  } else {
+    contextMonitorEl.classList.add("hidden")
+  }
+}
 
 export function applyThemeVars(vars?: Record<string, string>) {
   if (!vars || typeof vars !== "object") return

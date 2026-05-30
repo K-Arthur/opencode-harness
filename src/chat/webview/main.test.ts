@@ -167,6 +167,16 @@ describe("main.ts", () => {
     assert.ok(!withComposer.includes("Unknown command: ${cmd}"), "must not reject server-discovered commands in the webview")
   })
 
+  it("command palette local entries route through the slash dispatcher", () => {
+    const idx = composerSource.indexOf("function runCommandEntry(")
+    assert.ok(idx >= 0, "runCommandEntry must exist")
+    const nextFn = composerSource.indexOf("\n  function ", idx + 1)
+    const block = composerSource.slice(idx, nextFn > idx ? nextFn : composerSource.length)
+
+    assert.ok(block.includes('entry.source === "local"'), "palette local commands must be identified")
+    assert.ok(block.includes("runSlashCommandText("), "palette local commands must use the same path as typed slash commands")
+  })
+
   it("mode_selector_disabled_during_stream", () => {
     assert.ok(allSource.includes("isStreaming"), "must reference isStreaming state")
     assert.ok(allSource.includes("updateModeSelectorState"), "must have updateModeSelectorState function")
@@ -612,6 +622,19 @@ it("unified modal: server session items send resume_server_session on click", ()
     it("wires commands palette button to open modal and request commands", () => {
       assert.ok(withComposer.includes("commandsPaletteBtn"), "must reference commandsPaletteBtn element")
       assert.ok(withComposer.includes("commandsPaletteBtn.addEventListener"), "must wire click handler on commands palette button")
+    })
+
+    it("splits custom prompt commands from remote commands before updating command surfaces", () => {
+      const idx = source.indexOf('["command_list"')
+      assert.ok(idx >= 0, "command_list handler must exist")
+      const nextHandler = source.indexOf('["stash_success"', idx)
+      const block = source.slice(idx, nextHandler > idx ? nextHandler : idx + 700)
+
+      assert.ok(block.includes("promptCommands"), "command_list must derive custom prompt commands")
+      assert.ok(block.includes("remoteCommands"), "command_list must derive remote server/MCP/skill commands")
+      assert.ok(block.includes("commandsModal.updatePromptCommands(promptCommands)"), "custom prompts must update the modal custom-command list")
+      assert.ok(block.includes("commandsModal.updateServerCommands(remoteCommands)"), "remote commands must update the remote-command list")
+      assert.ok(block.includes("mention.updateServerCommands(commandSuggestions)"), "inline slash suggestions must still include custom prompt commands")
     })
 
     it("passes session search query from session_list into the modal", () => {

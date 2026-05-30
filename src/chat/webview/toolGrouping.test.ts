@@ -162,3 +162,6 @@ describe("groupConsecutiveToolCalls — lifecycle blocks must not break tool gro
     }
   })
 })
+=======
+>>>>>>> origin/fix/show-thinking-and-compact-tools
+})
