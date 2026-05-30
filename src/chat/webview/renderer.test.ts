@@ -63,8 +63,11 @@ it("has type guards for discriminated blocks", () => {
 
   it("handles_streaming_markdown_artifacts", () => {
     assert.ok(source.includes("export function normalizeStreamingMarkdown"), "must have streaming-aware normalization")
-    assert.ok(source.includes("openFences % 2 !== 0"), "must detect unclosed code fences")
-    assert.ok(source.includes("openInline % 2 !== 0"), "must detect unclosed inline code")
+    // The corrected single-pass scanner tracks fences and inline code separately
+    // (fixes the old double-counting where backticks inside a fence were
+    // miscounted as inline code).
+    assert.ok(source.includes("fenceCount % 2 !== 0"), "must detect unclosed code fences")
+    assert.ok(source.includes("if (inInlineCode) result"), "must detect unclosed inline code")
   })
 
   it("renderMarkdown_accepts_isStreaming_flag", () => {
