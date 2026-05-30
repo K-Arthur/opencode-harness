@@ -189,8 +189,13 @@ export interface StreamState {
   bufferCapWarned?: boolean
 }
 
-let _vscode: any = null
-export function setVsCodeApi(api: any) { _vscode = api }
+// m7: typed module singleton (set once at webview init via setVsCodeApi). Kept
+// as a module-level handle because webviewLog is a fire-and-forget logging
+// side-effect used pervasively; a typed handle removes the `any` without the
+// churn of threading the API through every caller.
+interface VsCodeLogApi { postMessage(msg: { type: string; level: string; message: string }): void }
+let _vscode: VsCodeLogApi | null = null
+export function setVsCodeApi(api: VsCodeLogApi): void { _vscode = api }
 
 export function webviewLog(msg: string, level: "info" | "warn" | "error" | string = "info") {
   if (_vscode) {
@@ -297,6 +302,11 @@ export function handleStreamStart(
 
     streamMsg.blocks.push(createTextBlock(""))
     state.currentBlockIndex = 0
+  } else {
+    // m2: renderMessage should always produce a .message-bubble; if it ever
+    // doesn't, leave currentBlockIndex at -1 (no block to point at) and surface
+    // it so the token path's recovery re-render is the only thing relied upon.
+    webviewLog(`handleStreamStart: no .message-bubble for ${state.streamingMessageId ?? "<unknown>"}; deferring to token-path recovery`, "warn")
   }
 
   const welcome = els.messageList.querySelector(".welcome-container")
@@ -698,6 +708,24 @@ function updateToolGroupHeader(groupEl: HTMLElement): void {
   }
 }
 
+// m1: single source of truth for tool-call state \u2192 CSS class / badge text. The
+// regex is exhaustive over the known states; a new state is added in ONE place
+// and both the class-swap and badge mapping stay in sync.
+const TOOL_STATE_CLASS_RE = /tool-call--(?:pending|running|result|completed|error|stale)/g
+
+export function setToolStateClass(el: HTMLElement, state: string): void {
+  el.className = el.className.replace(TOOL_STATE_CLASS_RE, `tool-call--${state}`)
+}
+
+export function toolBadgeText(state?: string, hasError?: boolean): string | null {
+  if (state === "pending") return "\u25cb Pending"
+  if (state === "running") return "\u25c9 Running"
+  if (state === "stale") return "Stale"
+  if (hasError || state === "error") return "\u2717 Error"
+  if (state === "completed" || state === "result") return "\u2713 Done"
+  return null
+}
+
 export function handleToolUpdate(
   els: StreamElements,
   toolId: string,
@@ -707,14 +735,11 @@ export function handleToolUpdate(
   if (!toolEl) return
 
   if (update.state) {
-    toolEl.className = toolEl.className.replace(/tool-call--(?:pending|running|result|completed|error|stale)/g, `tool-call--${update.state}`)
+    setToolStateClass(toolEl, update.state)
     const badge = toolEl.querySelector(".tool-status")
     if (badge) {
-      if (update.state === 'pending') badge.textContent = '\u25cb Pending'
-      else if (update.state === 'running') badge.textContent = '\u25c9 Running'
-      else if (update.state === 'stale') badge.textContent = 'Stale'
-      else if (update.error || update.state === 'error') badge.textContent = '\u2717 Error'
-      else if (update.state === 'completed' || update.state === 'result') badge.textContent = '\u2713 Done'
+      const text = toolBadgeText(update.state, update.error !== undefined)
+      if (text) badge.textContent = text
     }
   }
 
@@ -783,11 +808,12 @@ export function handleToolEnd(
   if (!toolEl) return
 
   const state = result.stale ? 'stale' : result.ok ? 'completed' : 'error'
-  toolEl.className = toolEl.className.replace(/tool-call--(?:pending|running|result|completed|error|stale)/g, `tool-call--${state}`)
-  
+  setToolStateClass(toolEl, state)
+
   const badge = toolEl.querySelector(".tool-status")
   if (badge) {
-    badge.textContent = result.stale ? 'Stale' : result.ok ? '\u2713 Done' : '\u2717 Error'
+    const text = toolBadgeText(state)
+    if (text) badge.textContent = text
   }
 
   if (result.durationMs) {
@@ -1017,6 +1043,8 @@ export function handleDiffResult(
 export function handleServerStatus(
   state: StreamState,
   els: StreamElements,
+  messages: ChatMessage[],
+  saveState: () => void,
   status?: string,
   errorContext?: ErrorContext
 ): void {
@@ -1026,7 +1054,9 @@ export function handleServerStatus(
     hideTypingIndicator(els)
     // Use mapped error context if available, otherwise fall back to generic message
     const errorMessage = errorContext?.userMessage || "An error occurred. Please try again."
-    handleRequestError(state, els, [], () => {}, errorMessage)
+    // m5: operate on the real session messages and persist, instead of passing
+    // an empty array and a no-op save (which dropped the partial + skipped save).
+    handleRequestError(state, els, messages, saveState, errorMessage)
   } else if (status === "idle") {
     hideTypingIndicator(els)
   } else if (status && (status.includes("tool") || status.includes("running"))) {
