@@ -2277,9 +2277,13 @@ function getVsCodeApi() {
         }
       }],
       ["command_list", (msg) => {
-        const commands = (msg.commands || []) as Array<{ name: string; description?: string; template: string }>
-        mention.updateServerCommands(commands)
-        commandsModal.updateServerCommands(commands)
+        const commands = (msg.commands || []) as Array<{ name: string; description?: string; template?: string; isCustom?: boolean; source?: string }>
+        const promptCommands = commands.filter((c) => c.isCustom)
+        const remoteCommands = commands.filter((c) => !c.isCustom)
+        const commandSuggestions = [...remoteCommands, ...promptCommands]
+        mention.updateServerCommands(commandSuggestions)
+        commandsModal.updateServerCommands(remoteCommands)
+        commandsModal.updatePromptCommands(promptCommands)
         if (msg.showInChat !== true) return
         // /commands now opens a real modal instead of dumping into chat history.
         commandsModal.open()

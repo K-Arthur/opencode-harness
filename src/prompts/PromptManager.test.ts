@@ -48,6 +48,14 @@ describe("PromptManager.ts", () => {
     assert.ok(source.includes("getPrompt(name: string): CustomPrompt | undefined"), "must have getPrompt method")
   })
 
+  it("looks up prompt commands case-insensitively", () => {
+    const idx = source.indexOf("getPrompt(name: string): CustomPrompt | undefined")
+    assert.ok(idx >= 0, "getPrompt must exist")
+    const nextMethod = source.indexOf("\n  onChanged(", idx)
+    const block = source.slice(idx, nextMethod > idx ? nextMethod : idx + 500)
+    assert.ok(block.includes("toLowerCase()"), "getPrompt must tolerate lowercased slash command execution")
+  })
+
   it("has resolvePrompt method", () => {
     assert.ok(source.includes("resolvePrompt(name: string, variables: Record<string, string>): string | null"), "must have resolvePrompt method")
   })

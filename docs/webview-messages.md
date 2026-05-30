@@ -66,20 +66,27 @@ the narrow VS Code side-panel viewport. The message styles intentionally keep rh
 
 Slash commands use the same mention dropdown surface as `@` context mentions:
 
-- Local commands live in `LOCAL_COMMANDS` in `src/chat/webview/mentions.ts`.
-- The dropdown is triggered only when `/` is the first character before the cursor.
+- Local commands live in `LOCAL_SLASH_COMMANDS` in `src/chat/webview/slash-commands.ts`.
+  `mentions.ts` and the commands palette both adapt this registry so command labels and
+  descriptions stay in sync.
+- The dropdown is triggered when `/` starts the current token, either at the beginning of
+  the input or after whitespace.
 - Rows use `command-item` markup with an SVG icon, monospace command label, and muted
   description text.
 - The webview handles UI-only commands such as `/model`, `/new`, `/export`, `/compact`,
   `/queue`, and `/commands` directly.
+- Typed local slash commands and local commands selected from the commands palette route
+  through the same webview dispatcher in `composer.ts`.
 - The host intercepts `/clear`, `/cost`, `/continue`, and `/help` before server dispatch.
 - Custom prompt commands resolve after local commands.
 - Runtime OpenCode server commands are forwarded without the leading slash, because the
   OpenCode server command API expects names like `init` or `review`, not `/init`.
 
-Server and skill/prompt commands are proactively loaded on webview boot via `list_commands`,
-so the inline dropdown is populated immediately without requiring the user to type
-`/commands` first.
+Server, MCP, skill, and custom prompt commands are proactively loaded on webview boot via
+`list_commands`, so the inline dropdown is populated immediately without requiring the user
+to type `/commands` first. The host sends custom prompt commands with `isCustom: true`;
+the webview keeps them in inline slash suggestions while rendering them under the commands
+palette's Custom filter instead of the Server filter.
 
 ### Commands Palette
 
@@ -92,6 +99,14 @@ The commands palette is a full-screen overlay modal (`#commands-modal`) accessib
 
 Opening the commands palette automatically hides the inline slash dropdown to prevent
 both UIs from being visible simultaneously.
+
+The host-to-webview `command_list` payload is partitioned before it reaches the modal:
+
+- `isCustom: true` entries update `commandsModal.updatePromptCommands(...)`.
+- Other entries update `commandsModal.updateServerCommands(...)`, preserving `source`
+  values such as `mcp` and `skill` for badges and filters.
+- Inline slash suggestions receive the combined command list so custom prompt commands
+  remain discoverable while typing.
 
 ### Host-to-Webview State Messages
 
