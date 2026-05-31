@@ -55,8 +55,8 @@
 | Check | Status |
 |-------|--------|
 | Typecheck (`tsc --noEmit`) | ✅ Zero errors |
-| Build (`node esbuild.js`) | ✅ Extension 792KB, Webview 1.1MB |
-| Unit tests | ✅ 445 pass, 0 fail |
+| Build (`node esbuild.js`) | ✅ Extension 796KB, Webview 1.1MB |
+| Unit tests | ✅ 447 pass, 0 fail |
 | Integration tests | ✅ Extension Dev Host |
 | CI | ✅ 3 jobs (typecheck+unit, integration, visual) |
 | VSIX package | ✅ packaging |

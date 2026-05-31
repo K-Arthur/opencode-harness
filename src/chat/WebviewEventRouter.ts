@@ -124,7 +124,7 @@ export class WebviewEventRouter {
     "get_changed_files", "get_file_diff", "open_file", "open_folder", "open_url",
     "get_subagent_activities", "cancel_subagent",
     "update_setting", "show_error", "get_context_usage", "record_stash_usage",
-    "open_context_window_override_dialog", "model_favorite", "model_toggle",
+    "model_favorite", "model_toggle",
     "question_answer",
     "resume_stream", "decline_resume",
   ])
@@ -391,6 +391,10 @@ export class WebviewEventRouter {
     ["resume_session", async (msg: Record<string, unknown>) => { if (msg.sessionId) await this.opts.sessionLifecycle.handleResumeSession(msg.sessionId as string) }],
     ["new_session", async () => {
       const session = this.opts.sessionStore.create()
+      const currentModel = this.opts.modelManager.model
+      if (currentModel) {
+        this.opts.sessionStore.updateModel(session.id, currentModel)
+      }
       await this.opts.sessionLifecycle.openSessionInWebview(session.id)
     }],
     ["get_models", () => { this.pushModelListToWebview() }],
@@ -440,13 +444,6 @@ export class WebviewEventRouter {
       this.opts.streamCoordinator.handleStreamAck(sessionId, seq ?? 0, lastRenderedChunkSeq)
     }],
     ["open_settings", async () => { await this.opts.openOpenCodeConfigOrSettings() }],
-    ["open_context_window_override_dialog", async () => {
-      // Fires from the context-monitor row when the window limit is
-      // unknown. Invoking the registered command keeps a single source
-      // of truth for the dialog UX — also lets users hit it via the
-      // command palette.
-      await vscode.commands.executeCommand("opencode-harness.setContextWindowOverride")
-    }],
     ["connect_provider", async () => { await this.opts.handleConnectProvider() }],
     ["open_mcp_settings", async () => { await this.opts.mcpServerManager.openPrimaryConfigFile() }],
     ["open_mcp_config", () => { this.pushMcpServersToWebview() }],
