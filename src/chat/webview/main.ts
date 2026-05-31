@@ -194,13 +194,14 @@ function getVsCodeApi() {
   modelManager = setupModelManager(els, {
 	    onToggleModel: (modelId, enabled) => {
 	      modelManager.updateModelEnabled(modelId, enabled)
-	      // Persist disabled state to webview state
 	      stateManager.setModelDisabled(modelId, !enabled)
+	      vscode.postMessage({ type: "model_toggle", modelId, enabled })
 	      syncModelViews()
 	    },
 	    onToggleFavorite: (modelId) => {
 	      const favorite = stateManager.toggleModelFavorite(modelId)
 	      modelManager.updateModelFavorite(modelId, favorite)
+	      vscode.postMessage({ type: "model_favorite", modelId })
 	      syncModelViews()
 	    },
 	    onSelectModel: (modelId) => {
@@ -216,10 +217,10 @@ function getVsCodeApi() {
 	      vscode.postMessage({ type: "set_model", model: modelId, sessionId: active?.id })
 	      modelManager.close()
 	    },
-    onConnectProvider: () => {
-      vscode.postMessage({ type: "connect_provider" })
-    },
-  })
+		onConnectProvider: () => {
+			vscode.postMessage({ type: "connect_provider" })
+		},
+	})
 
 	  const variantSelector = setupVariantSelector(els, {
     onSelect: (variant) => {
