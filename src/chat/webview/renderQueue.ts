@@ -10,7 +10,7 @@ export class RenderQueue {
   static readonly MAX_BUFFER_SIZE = 1024 * 1024
   private static readonly FALLBACK_MS = 50
 
-  constructor(renderCallback: (text: string) => void) {
+  constructor(renderCallback: (text: string) => void, private readonly onFlush?: () => void) {
     this.renderCallback = renderCallback
   }
 
@@ -77,6 +77,7 @@ export class RenderQueue {
     this.buffer = ""
     this.flushCount++
     this.renderCallback(text)
+    this.onFlush?.()
   }
 
   private cancelPending(): void {

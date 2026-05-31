@@ -90,6 +90,54 @@ void describe("BatchEngine behavioral", () => {
     localEngine.dispose()
   })
 
+  void it("retains entries when async flushEach resolves false", async () => {
+    let resolvePost
+    let accepting = false
+    const delivered = []
+    const localEngine = new BatchEngine(
+      (existing, value) => [...(existing ?? []), value],
+      (key, values) => {
+        if (accepting) {
+          delivered.push({ key, values })
+          return true
+        }
+        return new Promise((resolve) => { resolvePost = resolve })
+      },
+      undefined,
+      { flushMs: 100000 },
+    )
+
+    localEngine.add("k1", "retry me")
+    localEngine.flush()
+    resolvePost(false)
+    await Promise.resolve()
+
+    assert.equal(localEngine.size, 1)
+    accepting = true
+    localEngine.flush()
+    assert.equal(localEngine.size, 0)
+    assert.deepEqual(delivered, [{ key: "k1", values: ["retry me"] }])
+    localEngine.dispose()
+  })
+
+  void it("retains entries when async flushEach rejects", async () => {
+    let rejectPost
+    const localEngine = new BatchEngine(
+      (existing, value) => [...(existing ?? []), value],
+      () => new Promise((_, reject) => { rejectPost = reject }),
+      undefined,
+      { flushMs: 100000 },
+    )
+
+    localEngine.add("k1", "retry me")
+    localEngine.flush()
+    rejectPost(new Error("post failed"))
+    await Promise.resolve()
+
+    assert.equal(localEngine.size, 1)
+    localEngine.dispose()
+  })
+
   void it("supports maxBatchSize trigger flush", () => {
     const smallEngine = new BatchEngine(
       (existing, value) => [...(existing ?? []), value],

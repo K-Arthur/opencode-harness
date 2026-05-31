@@ -130,20 +130,22 @@ class StreamSession implements StreamHandlers {
   }
 
   handleStreamStart(messageId?: string): void {
-    handleStreamStart(this.state, this.els, this.messages, messageId)
+    handleStreamStart(this.state, this.els, this.messages, messageId, this.callbacks)
     this.callbacks?.onStreamingChange?.(true)
   }
 
   handleStreamToken(text?: string): void {
-    handleStreamToken(this.state, this.els, this.messages, text)
+    handleStreamToken(this.state, this.els, this.messages, text, undefined, undefined, this.callbacks)
   }
 
   handleStreamChunk(text?: string, messageId?: string): void {
-    handleStreamChunk(this.state, this.els, this.messages, text, this.saveState, messageId)
+    handleStreamChunk(this.state, this.els, this.messages, text, this.saveState, messageId, this.callbacks)
   }
 
   handleStreamEnd(messageId?: string, blocks?: unknown): void {
+    const lastRenderedChunkSeq = this.state.chunkSeq
     handleStreamEnd(this.state, this.els, this.messages, this.saveState, messageId, blocks)
+    this.callbacks?.onRenderFlush?.(lastRenderedChunkSeq, true)
     this.callbacks?.onStreamingChange?.(false)
   }
 

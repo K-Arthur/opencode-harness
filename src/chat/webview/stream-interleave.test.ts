@@ -68,16 +68,18 @@ describe("streaming text-tool interleave", () => {
     assert.ok(diffFinalizeCall > handleDiffIdx, "handleDiff must call finalizeCurrentTextBlock")
   })
 
-  it("handleStreamToken doUpdate uses insertStreamingTextAfterLastBlock for recovery", () => {
-    const doUpdateIdx = handlersSource.indexOf("const doUpdate = () => {")
-    assert.ok(doUpdateIdx > 0)
+  it("handleStreamToken routes live updates through RenderQueue", () => {
+    const tokenIdx = handlersSource.indexOf("export function handleStreamToken(")
+    assert.ok(tokenIdx > 0)
 
-    const insertInDoUpdate = handlersSource.indexOf("insertStreamingTextAfterLastBlock(bubble, state, messages)", doUpdateIdx)
-    assert.ok(insertInDoUpdate > doUpdateIdx, "doUpdate must use insertStreamingTextAfterLastBlock")
+    const queueCreateIdx = handlersSource.indexOf("createLiveRenderQueue(state, els, messages, id, callbacks)", tokenIdx)
+    const enqueueIdx = handlersSource.indexOf("state.renderQueue.enqueue(chunk)", tokenIdx)
+    assert.ok(queueCreateIdx > tokenIdx, "handleStreamToken must create a live render queue when missing")
+    assert.ok(enqueueIdx > queueCreateIdx, "handleStreamToken must enqueue chunks through RenderQueue")
   })
 
-  it("renderQueue callback in handleStreamStart uses insertStreamingTextAfterLastBlock", () => {
-    const renderQueueIdx = handlersSource.indexOf("state.renderQueue = new RenderQueue(")
+  it("live render queue callback uses insertStreamingTextAfterLastBlock", () => {
+    const renderQueueIdx = handlersSource.indexOf("function createLiveRenderQueue(")
     assert.ok(renderQueueIdx > 0)
 
     const insertInQueue = handlersSource.indexOf("insertStreamingTextAfterLastBlock(bubble, state, messages)", renderQueueIdx)
@@ -101,10 +103,10 @@ describe("streaming text-tool interleave", () => {
 })
 
 describe("streaming text rendering during active stream", () => {
-  it("uses renderMarkdown with streaming=true during live updates", () => {
+  it("uses LiveTextRenderer during live updates", () => {
     assert.ok(
-      handlersSource.includes("renderMarkdown(displayText, true)"),
-      "live streaming must use renderMarkdown with isStreaming=true"
+      handlersSource.includes("liveRenderer.renderInto(textEl, displayText)"),
+      "live streaming must use LiveTextRenderer via RenderQueue"
     )
   })
 

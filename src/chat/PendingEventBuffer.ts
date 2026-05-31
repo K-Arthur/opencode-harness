@@ -56,7 +56,9 @@ export class PendingEventBuffer {
       this.byCli.set(cliSessionId, entry)
     }
 
-    entry.events.push(event)
+    if (!this.coalesceWithLastEvent(entry, event)) {
+      entry.events.push(event)
+    }
     if (entry.events.length > this.maxPerSession) {
       entry.events.splice(0, entry.events.length - this.maxPerSession)
     }
@@ -104,4 +106,28 @@ export class PendingEventBuffer {
       )
     }
   }
+
+  private coalesceWithLastEvent(entry: Entry, event: BufferedServerEvent): boolean {
+    if (event.type !== "text_chunk") return false
+    const last = entry.events[entry.events.length - 1]
+    if (!last || last.type !== "text_chunk") return false
+
+    const lastData = last.data
+    const nextData = event.data
+    if (!isTextChunkData(lastData) || !isTextChunkData(nextData)) return false
+
+    last.data = {
+      ...lastData,
+      ...nextData,
+      text: lastData.text + nextData.text,
+      messageId: nextData.messageId ?? lastData.messageId,
+    }
+    return true
+  }
+}
+
+function isTextChunkData(data: unknown): data is { text: string; messageId?: string } {
+  return typeof data === "object" &&
+    data !== null &&
+    typeof (data as { text?: unknown }).text === "string"
 }

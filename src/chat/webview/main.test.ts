@@ -73,6 +73,14 @@ describe("main.ts", () => {
     assert.ok(source.includes("dispatchHostMessage(item as LegacyHostMessage)"), "must dispatch each batched message through normal handlers")
   })
 
+  it("rate-limits rendered stream ACKs and forces a final ACK", () => {
+    assert.ok(source.includes("STREAM_ACK_MIN_INTERVAL_MS = 200"), "render ACKs must be rate-limited")
+    assert.ok(source.includes("function createStreamHandlersForTab"), "stream handler factory must exist")
+    assert.ok(source.includes("const postRenderAck = (chunkSeq: number, force = false)"), "must define render ACK callback")
+    assert.ok(source.includes('type: "stream_ack", sessionId: tabId, lastRenderedChunkSeq: chunkSeq'), "render ACK must include lastRenderedChunkSeq")
+    assert.ok(source.includes("onRenderFlush: postRenderAck"), "stream handlers must wire render ACK callback")
+  })
+
   it("coalesces frequent tool update messages and clears progress state", () => {
     const combined = source + orchestratorSource
     assert.ok(combined.includes("pendingToolUpdates"), "must buffer frequent tool updates")

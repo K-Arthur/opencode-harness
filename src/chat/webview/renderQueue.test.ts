@@ -186,4 +186,22 @@ describe("RenderQueue", () => {
 
     assert.deepEqual(calls, [])
   })
+
+  it("calls onFlush only after a rendered batch", () => {
+    let flushes = 0
+    queue.destroy()
+    queue = new RenderQueue((text: string) => {
+      calls.push(text)
+    }, () => {
+      flushes++
+    })
+
+    fireAllPending()
+    assert.equal(flushes, 0)
+
+    queue.enqueue("ack me")
+    fireAllPending()
+    assert.deepEqual(calls, ["ack me"])
+    assert.equal(flushes, 1)
+  })
 })

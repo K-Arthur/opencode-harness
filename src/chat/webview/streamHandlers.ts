@@ -18,7 +18,7 @@ export function registerStreamEndHandler(fn: HandleStreamEndFn): void { _handleS
 import { getErrorHandler } from "./errorHandler"
 import { getErrorDisplay } from "./errorComponents"
 import { getQuotaMonitor } from "./quotaMonitor"
-import { parseQuestionArgs, parseAllowFreeText } from "./questionModel"
+import { parseQuestionArgs, parseAllowFreeText } from "../../session/questionModel"
 
 // Stateless (no /g) so it is safe to reuse across calls without lastIndex drift.
 const HAS_CONTEXT_MARKER = /<context>/i
@@ -222,9 +222,54 @@ export interface StreamCallbacks {
   onStreamingChange?: (isStreaming: boolean) => void
   /** Posts webview→host messages (e.g. `question_answer`); enables interactive blocks mid-stream. */
   postMessage?: (msg: Record<string, unknown>) => void
+  /** Called after live text is actually flushed to the DOM so the host can apply backpressure. */
+  onRenderFlush?: (chunkSeq: number, force?: boolean) => void
 }
 
 const TYPING_INDICATOR_ICON = `<span class="premium-spinner-container">${SPINNER_SVG}</span>`
+
+function createLiveRenderQueue(
+  state: StreamState,
+  els: StreamElements,
+  messages: ChatMessage[],
+  streamId: string,
+  callbacks?: StreamCallbacks,
+): RenderQueue {
+  const liveRenderer = new LiveTextRenderer()
+  return new RenderQueue((_text: string) => {
+    // Guard: if tool-start cleared the buffer between enqueue and flush, skip
+    // so we don't create a spurious empty text block after each tool call.
+    if (!state.currentBlockBuffer.trim()) return
+
+    let textEl = state.currentBlockEl
+    if (!textEl || !els.messageList.contains(textEl)) {
+      const bubble = els.messageList.querySelector(`[data-message-id="${streamId}"] .message-bubble`) as HTMLElement
+      if (bubble) {
+        textEl = bubble.querySelector(".streaming-text") as HTMLElement
+        if (!textEl) {
+          textEl = insertStreamingTextAfterLastBlock(bubble, state, messages)
+        }
+        if (textEl) {
+          state.currentBlockEl = textEl
+          state.lastStreamTextEl = textEl
+        }
+      }
+    }
+    if (!textEl) return
+
+    const displayText = stripContextFromText(state.currentBlockBuffer)
+    liveRenderer.renderInto(textEl, displayText)
+
+    const msgObj = messages.find((m) => m.id === streamId)
+    if (msgObj && state.currentBlockIndex >= 0) {
+      const block = msgObj.blocks[state.currentBlockIndex]
+      if (block && block.type === "text") {
+        block.text = displayText
+      }
+    }
+    els.scrollAnchor.scrollIfAnchored()
+  }, () => callbacks?.onRenderFlush?.(state.chunkSeq))
+}
 
 export function showTypingIndicator(
   els: StreamElements,
@@ -249,7 +294,8 @@ export function handleStreamStart(
   state: StreamState,
   els: StreamElements,
   messages: ChatMessage[],
-  messageId?: string
+  messageId?: string,
+  callbacks?: StreamCallbacks,
 ): void {
   if (state.isStreaming) {
     // Idempotent re-emit for the SAME id → ignore.
@@ -326,40 +372,7 @@ export function handleStreamStart(
   // P1/A: one renderer per stream freezes closed blocks and re-parses only the
   // tail. It reattaches automatically when a new text block is created after a
   // tool boundary, so a single instance spans the whole stream.
-  const liveRenderer = new LiveTextRenderer()
-  state.renderQueue = new RenderQueue((_text: string) => {
-    // Guard: if tool-start cleared the buffer between enqueue and flush, skip
-    // so we don't create a spurious empty text block after each tool call.
-    if (!state.currentBlockBuffer.trim()) return
-
-    let textEl = state.currentBlockEl
-    if (!textEl || !els.messageList.contains(textEl)) {
-      const bubble = els.messageList.querySelector(`[data-message-id="${streamId}"] .message-bubble`) as HTMLElement
-      if (bubble) {
-        textEl = bubble.querySelector(".streaming-text") as HTMLElement
-        if (!textEl) {
-          textEl = insertStreamingTextAfterLastBlock(bubble, state, messages)
-        }
-        if (textEl) {
-          state.currentBlockEl = textEl
-          state.lastStreamTextEl = textEl
-        }
-      }
-    }
-    if (!textEl) return
-
-    const displayText = stripContextFromText(state.currentBlockBuffer)
-    liveRenderer.renderInto(textEl, displayText)
-
-     const msgObj = messages.find((m) => m.id === streamId)
-     if (msgObj && state.currentBlockIndex >= 0) {
-       const block = msgObj.blocks[state.currentBlockIndex]
-       if (block && block.type === "text") {
-         block.text = displayText
-       }
-     }
-    els.scrollAnchor.scrollIfAnchored()
-  })
+  state.renderQueue = createLiveRenderQueue(state, els, messages, streamId, callbacks)
 
   state.isStreaming = true
   state.rafPending = false
@@ -373,6 +386,7 @@ export function handleStreamToken(
   text?: string,
   saveState?: () => void,
   messageId?: string,
+  callbacks?: StreamCallbacks,
 ): void {
   let id = state.streamingMessageId
   if (!id) {
@@ -385,7 +399,7 @@ export function handleStreamToken(
       } else {
         webviewLog(`handleStreamToken: restarting stream for messageId=${messageId} (recovered after error)`, "warn")
         state.isStreaming = false
-        handleStreamStart(state, els, messages, messageId)
+        handleStreamStart(state, els, messages, messageId, callbacks)
         id = state.streamingMessageId
         if (!id) return
       }
@@ -422,65 +436,10 @@ export function handleStreamToken(
     webviewLog(`handleStreamToken: live buffer exceeded ${LIVE_BUFFER_SOFT_CAP} chars (len=${state.currentBlockBuffer.length})`, "warn")
   }
 
-  if (state.renderQueue) {
-    state.renderQueue.enqueue(chunk)
-    return
+  if (!state.renderQueue) {
+    state.renderQueue = createLiveRenderQueue(state, els, messages, id, callbacks)
   }
-
-  const doUpdate = () => {
-    state.rafPending = false
-    // Guard: if tool-start cleared the buffer, nothing to render
-    if (!state.currentBlockBuffer.trim()) return
-
-    let textEl = state.currentBlockEl
-    if (!textEl || !els.messageList.contains(textEl)) {
-      const bubble = els.messageList.querySelector(`[data-message-id="${id}"] .message-bubble`) as HTMLElement
-      if (bubble) {
-        textEl = bubble.querySelector(".streaming-text") as HTMLElement
-        if (!textEl) {
-          textEl = insertStreamingTextAfterLastBlock(bubble, state, messages)
-        }
-        if (textEl) {
-          state.currentBlockEl = textEl
-          state.lastStreamTextEl = textEl
-        }
-      } else {
-        webviewLog(`handleStreamToken: bubble missing for ${id}, triggering recovery re-render`, "warn")
-        reRenderMessage(id, els, messages)
-        return doUpdate()
-      }
-    }
-    
-    if (!textEl || !textEl.classList.contains("msg-text")) {
-      const bubble = els.messageList.querySelector(`[data-message-id="${id}"] .message-bubble`) as HTMLElement
-      if (bubble) {
-        textEl = insertStreamingTextAfterLastBlock(bubble, state, messages)
-      }
-    }
-
-    const displayText = stripContextFromText(state.currentBlockBuffer)
-    if (textEl) {
-      textEl.innerHTML = renderMarkdown(displayText, true)
-    }
-
-     const msgObj = messages.find((m: ChatMessage) => m.id === id)
-     if (msgObj && state.currentBlockIndex >= 0) {
-       const block = msgObj.blocks[state.currentBlockIndex]
-       if (block && block.type === "text") {
-         block.text = displayText
-       }
-     }
-
-    els.scrollAnchor.scrollIfAnchored()
-  }
-
-  if (!state.rafPending) {
-    state.rafPending = true
-    requestAnimationFrame(doUpdate)
-    timers.setTimeout(() => {
-      if (state.rafPending) doUpdate()
-    }, 50)
-  }
+  state.renderQueue.enqueue(chunk)
 }
 
 type ToolStartPayload = { id: string; name: string; class?: string; args?: unknown; state?: ToolCallState }
@@ -978,8 +937,9 @@ export function handleStreamChunk(
   text?: string,
   saveState?: () => void,
   messageId?: string,
+  callbacks?: StreamCallbacks,
 ): void {
-  handleStreamToken(state, els, messages, text, saveState, messageId)
+  handleStreamToken(state, els, messages, text, saveState, messageId, callbacks)
 }
 
 export function handleSkillIndicator(

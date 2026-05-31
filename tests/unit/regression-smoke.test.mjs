@@ -134,9 +134,9 @@ describe("Regression: Send Prompt & Streamed Response", () => {
     assert.ok(combined.includes('"timeout"'), "must handle timeout reason")
   })
 
-  it("chunk batching uses requestAnimationFrame in streamHandlers", () => {
-    assert.ok(files.streamHandlers.includes("requestAnimationFrame"),
-      "stream token updates must be rAF-batched")
+  it("chunk batching uses RenderQueue in streamHandlers", () => {
+    assert.ok(files.streamHandlers.includes("state.renderQueue.enqueue(chunk)"),
+      "stream token updates must be RenderQueue-batched")
   })
 })
 

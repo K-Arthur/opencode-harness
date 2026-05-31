@@ -72,6 +72,8 @@ const log = {
   error: (...args: unknown[]) => console.error("[opencode-harness]", ...args),
 }
 
+const STREAM_ACK_MIN_INTERVAL_MS = 200
+
 function createWebviewId(prefix: string): string {
   const randomUUID = (globalThis.crypto as { randomUUID?: () => string } | undefined)?.randomUUID
   const id = randomUUID
@@ -1087,6 +1089,17 @@ function getVsCodeApi() {
       typingLabel: (typingInd?.querySelector(".typing-text") || document.createElement("span")) as HTMLSpanElement,
       scrollAnchor: scrollAnchor || createScrollAnchor(document.createElement("div")),
     }
+    let lastRenderAckAt = 0
+    let lastRenderAckSeq = 0
+    const postRenderAck = (chunkSeq: number, force = false): void => {
+      if (chunkSeq <= 0) return
+      const now = Date.now()
+      if (!force && chunkSeq <= lastRenderAckSeq) return
+      if (!force && now - lastRenderAckAt < STREAM_ACK_MIN_INTERVAL_MS) return
+      lastRenderAckAt = now
+      lastRenderAckSeq = Math.max(lastRenderAckSeq, chunkSeq)
+      vscode.postMessage({ type: "stream_ack", sessionId: tabId, lastRenderedChunkSeq: chunkSeq })
+    }
 
     const stream = createStreamHandlers(streamEls, session.messages, () => {
       stateManager.save()
@@ -1094,6 +1107,7 @@ function getVsCodeApi() {
       // Enables interactive blocks (e.g. question_answer) to post to the host
       // while a stream is still running, instead of waiting for stream_end.
       postMessage: (m) => vscode.postMessage(m),
+      onRenderFlush: postRenderAck,
     })
 
     // WARNING: Class methods live on the prototype, not as own properties.

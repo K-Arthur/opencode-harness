@@ -2,6 +2,7 @@ import { splitAtStableBoundary } from "./streamTail"
 import { renderMarkdown } from "./renderer"
 
 export type RenderFn = (text: string, isStreaming: boolean) => string
+export const MAX_LIVE_TAIL_RENDER_CHARS = 64_000
 
 /**
  * Renders a growing streaming-text buffer into a container by freezing closed
@@ -47,7 +48,11 @@ export class LiveTextRenderer {
       frozenEl.insertAdjacentHTML("beforeend", this.render(delta, false))
       this.frozenLen = stable.length
     }
-    tailEl.innerHTML = this.render(tail, true)
+    if (tail.length > MAX_LIVE_TAIL_RENDER_CHARS) {
+      tailEl.textContent = tail
+    } else {
+      tailEl.innerHTML = this.render(tail, true)
+    }
   }
 
   /** Forget all DOM/frozen state so the next renderInto starts fresh. */

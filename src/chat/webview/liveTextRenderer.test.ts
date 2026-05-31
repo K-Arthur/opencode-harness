@@ -1,7 +1,7 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { installDom } from "./streamHarness"
-import { LiveTextRenderer } from "./liveTextRenderer"
+import { LiveTextRenderer, MAX_LIVE_TAIL_RENDER_CHARS } from "./liveTextRenderer"
 
 // Deterministic fake render: wraps text so we can count invocations and see
 // exactly which substrings were (re)parsed.
@@ -90,6 +90,24 @@ describe("LiveTextRenderer (P1/A: freeze stable prefix, re-render only tail)", (
       r.renderInto(container, "Keep.\n\nmore")
       r.renderInto(container, "Short tail") // stable shrank to empty
       assert.equal(container.textContent, "Short tail")
+    } finally {
+      dom.restore()
+    }
+  })
+
+  it("renders pathological live tails as escaped plain text until stream end", () => {
+    const dom = installDom()
+    try {
+      const spy = spyRender()
+      const r = new LiveTextRenderer(spy.fn)
+      const container = document.createElement("div")
+      const giantTail = "x".repeat(MAX_LIVE_TAIL_RENDER_CHARS + 1)
+
+      r.renderInto(container, giantTail)
+
+      assert.equal(spy.calls.length, 0, "giant live tail must not enter markdown render")
+      assert.equal(container.textContent, giantTail)
+      assert.equal(container.innerHTML.includes("<span"), false)
     } finally {
       dom.restore()
     }

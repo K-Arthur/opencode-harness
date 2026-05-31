@@ -1,5 +1,5 @@
 import { SdkEventLike, NormalizedOpencodeEvent, NormalizerContext, EventHandler } from "./types"
-import { extractSessionStatusError, mapSessionStatusError } from "../../chat/webview/sessionStatusMapper"
+import { extractSessionStatusError, mapSessionStatusError } from "./sessionStatusMapper"
 
 export class SessionStatusHandler implements EventHandler {
   canHandle(eventType: string): boolean {

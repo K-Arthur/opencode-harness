@@ -1,7 +1,7 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { installDom } from "./streamHarness"
-import { LiveTextRenderer } from "./liveTextRenderer"
+import { LiveTextRenderer, MAX_LIVE_TAIL_RENDER_CHARS } from "./liveTextRenderer"
 
 /**
  * P1/A bench — proves the streaming render is no longer O(N·k).
@@ -88,6 +88,49 @@ describe("streamBench: stable-tail keeps streaming render near-linear", () => {
       const beta = (frozenJoined.match(/Beta block\./g) || []).length
       assert.equal(alpha, 1, "Alpha frozen-parsed exactly once")
       assert.equal(beta, 1, "Beta frozen-parsed exactly once")
+    } finally {
+      dom.restore()
+    }
+  })
+
+  it("keeps a giant single paragraph bounded by bypassing live markdown parsing", () => {
+    const dom = installDom()
+    try {
+      let maxParsed = 0
+      const renderFn = (text: string) => {
+        maxParsed = Math.max(maxParsed, text.length)
+        return text
+      }
+      const r = new LiveTextRenderer(renderFn)
+      const container = document.createElement("div")
+      const doc = "a".repeat(MAX_LIVE_TAIL_RENDER_CHARS + 20_000)
+
+      r.renderInto(container, doc)
+
+      assert.equal(maxParsed, 0, "giant live paragraph must not go through markdown render")
+      assert.equal(container.textContent, doc)
+    } finally {
+      dom.restore()
+    }
+  })
+
+  it("keeps a giant unclosed code fence bounded by bypassing live markdown parsing", () => {
+    const dom = installDom()
+    try {
+      let totalParsed = 0
+      const renderFn = (text: string) => {
+        totalParsed += text.length
+        return text
+      }
+      const r = new LiveTextRenderer(renderFn)
+      const container = document.createElement("div")
+      const doc = "```ts\n" + "const value = 1;\n".repeat(5_000)
+
+      r.renderInto(container, doc)
+
+      assert.ok(doc.length > MAX_LIVE_TAIL_RENDER_CHARS)
+      assert.equal(totalParsed, 0, "giant unclosed fence must not go through markdown render")
+      assert.match(container.textContent || "", /const value = 1;/)
     } finally {
       dom.restore()
     }

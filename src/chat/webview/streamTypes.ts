@@ -28,4 +28,5 @@ export interface StreamElements {
 
 export interface StreamCallbacks {
   onStreamingChange?: (isStreaming: boolean) => void
+  onRenderFlush?: (chunkSeq: number, force?: boolean) => void
 }
