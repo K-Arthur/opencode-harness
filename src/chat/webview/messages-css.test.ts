@@ -83,7 +83,7 @@ describe("messages.css", () => {
 
 	  it("reserves space for the right-side conversation timeline only when visible", () => {
 	    assert.match(cssSource, /\.message-list\.timeline-visible\s*{[^}]*padding-right:\s*152px;/s)
-	    assert.match(cssSource, /\.conversation-timeline\.visible\s*{[^}]*display:\s*flex;/s)
+	    assert.match(cssSource, /\.conversation-timeline\.visible\s*{[^}]*opacity:\s*1/s)
 	  })
 
   it("avoids transition all in markdown-adjacent code controls", () => {

@@ -1,29 +1,7 @@
 import * as vscode from "vscode"
 import { ThemeManager, type OpencodeTheme, type ThemePreset } from "../theme/ThemeManager"
+import { isValidCssColor } from "../utils/colorValidation"
 import { log } from "../utils/outputChannel"
-
-/**
- * Validates color values in hex, rgba, or CSS variable format
- */
-function isValidColorValue(value: string): boolean {
-  if (!value || typeof value !== "string") return false
-  
-  const trimmed = value.trim()
-  
-  // Allow CSS variable references
-  if (/^var\(--[\w-]+\)$/.test(trimmed)) return true
-  
-  // Allow transparent keyword
-  if (trimmed === "transparent") return true
-  
-  // Validate hex format (#RGB or #RRGGBB)
-  if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(trimmed)) return true
-  
-  // Validate rgba/rgb format
-  if (/^rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*(,\s*[\d.]+\s*)?\)$/.test(trimmed)) return true
-  
-  return false
-}
 
 export class ThemeController {
   constructor(
@@ -90,7 +68,7 @@ export class ThemeController {
         if (/^[A-Za-z][A-Za-z0-9]*$/.test(key) && typeof value === "string") {
           const trimmed = value.trim()
           // Only include non-empty values that are valid colors
-          if (trimmed && isValidColorValue(trimmed)) {
+          if (trimmed && isValidCssColor(trimmed)) {
             overrides[key] = trimmed
           }
         }

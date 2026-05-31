@@ -5,6 +5,14 @@ All notable changes to the **OpenCode Harness** extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.23] - 2026-05-31
+
+### Fixed
+- **Model variant selector now actually sends the variant with prompts.** The variant was stored in session state but silently dropped when building the `send_prompt` message — no variant was ever passed to the server. The message now reads the variant from the active session (falling back to `globalVariant`) and includes it in the payload. (`src/chat/webview/sendLogic.ts`)
+- **Variant selection persisted locally before host roundtrip.** The `onSelect` callback only posted a `set_variant` message to the host without updating local state, creating a window where the webview state was inconsistent until the host echoed back. Selection now calls `setSessionVariant` and `setGlobalVariant` synchronously before posting. (`src/chat/webview/main.ts`)
+- **Variant selector restored on tab switch.** Switching tabs synced the model dropdown but left the variant selector showing the previous tab's value. `switchTab()` now restores the variant from the active session (falling back to global, then "Default"). (`src/chat/webview/main.ts`)
+- **New sessions inherit global variant.** `createSession()` now spreads `globalVariant` into new sessions, matching the pattern already used for `globalModel`. (`src/chat/webview/state.ts`)
+
 ## [0.2.22] - 2026-05-30
 
 ### Added

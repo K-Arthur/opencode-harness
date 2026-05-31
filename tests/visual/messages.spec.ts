@@ -89,7 +89,7 @@ test.describe('Chat Messages', () => {
     await expect(markdownContent.locator('em')).toHaveText('italic')
   })
 
-  test('assistant tool calls collapse into one grouped expandable row', async ({ page }) => {
+  test('assistant tool calls render as individual tool-call details via init_state', async ({ page }) => {
     await dispatchHostMessage(page, {
       type: 'init_state',
       sessions: [{
@@ -114,10 +114,10 @@ test.describe('Chat Messages', () => {
       activeSessionId: 's',
     })
 
-    const grouped = page.locator('.message.assistant details.tool-group')
-    await expect(grouped).toHaveCount(1)
-    await expect(page.locator('.message.assistant details.tool-group > summary').first()).toContainText('2 calls')
-    await expect(page.locator('.message.assistant .message-bubble > details.tool-call:not(.tool-group)')).toHaveCount(0)
+    const toolCalls = page.locator('.message.assistant details.tool-call')
+    await expect(toolCalls).toHaveCount(2)
+    await expect(toolCalls.nth(0)).toContainText('rg')
+    await expect(toolCalls.nth(1)).toContainText('sed')
   })
 
   test('should have proper message spacing and layout', async ({ page }) => {

@@ -281,6 +281,7 @@ export function createState(vscode: VsCodeApi) {
       mode: "build",
       messages: [],
       isStreaming: false,
+      ...(state.globalVariant ? { variant: state.globalVariant } : {}),
     }
     state.sessions[id] = session
 

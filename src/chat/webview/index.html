@@ -160,7 +160,9 @@
         <div id="context-usage" class="context-usage-bar hidden" role="button" tabindex="0"
           aria-label="Context usage — click for details" aria-haspopup="true" aria-controls="context-usage-dropdown">
           <span class="context-usage-label">Context</span>
-          <progress id="context-progress-bar" class="context-usage-percent" max="100" value="0"></progress>
+          <div id="context-progress-track" class="context-usage-track" aria-hidden="true">
+            <div id="context-progress-fill" class="context-usage-fill"></div>
+          </div>
           <span id="context-label" class="context-usage-detail">0%</span>
           <span id="context-cost" class="context-usage-detail hidden"></span>
         </div>

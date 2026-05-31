@@ -13,6 +13,7 @@ import { upsertMessageById } from "./messageUpsert"
 import { createTabBar, createTabContent, switchToTab, removeTabContent } from "./tabs"
 import { setupModelDropdown } from "./model-dropdown"
 import { setVsCodeApi, setupToolKeyboardNav, webviewLog } from "./streamHandlers"
+import { setErrorActionHandler } from "./errorComponents"
 import { setMaxConcurrentStreams } from "./sendLogic"
 import { setupModelManager } from "./model-manager"
 import { setupVariantSelector } from "./variant-selector"
@@ -24,7 +25,6 @@ import { updateContextChips, applyThemeVars, handleRateLimitExhausted } from "./
 // context-usage-panel.ts removed — canonical UI is now context-usage-dropdown.ts
 import { setupChangedFilesDropdown, updateChangedFiles, handleDiffResponse as handleCfDiffResponse, resetChangedFilesDropdown, setCurrentSession as setCfCurrentSession } from "./changed-files-dropdown"
 import type { DiffLine } from "./types"
-import { mergeEditBannerFiles } from "./file-chip-list"
 import { setupContextUsageDropdown as setupCtxDropdown, updateUsage as updateCtxDropdown, resetContextUsageDropdown, openContextUsageDropdown } from "./context-usage-dropdown"
 import { buildSummaryText, formatUsagePercent } from "./context-usage-service"
 import { showCompactBanner, hideCompactBanner } from "./compact-banner"
@@ -42,7 +42,6 @@ import { shouldRefreshOnUpdate, selectDisplayedUsage } from "./tokenDisplayPolic
 import { setThinkingVisible, getThinkingVisible } from "./displayPrefs"
 import { setupSearch } from "./ui/messageSearch"
 import { ToolElapsedTracker } from "./ui/toolElapsed"
-import { FileEditBatcher } from "./ui/fileEditBatcher"
 import { setupDisplayToggles } from "./ui/displayToggles"
 import { setupThemeCustomizer, openThemeCustomizer, closeThemeCustomizer, populateCliList, applyThemeCustomizerConfig, collectThemeCustomizerConfig, type ThemeCustomizerConfig } from "./ui/themeCustomizer"
 import { setupModeToggle, updateModeDropdown, closeModeDropdown, updateModeSelectorState, syncModeUI as syncModeUIModule, getCurrentMode } from "./ui/modeDropdown"
@@ -222,10 +221,38 @@ function getVsCodeApi() {
 		},
 	})
 
+	  // Make the error-display action buttons functional. Previously these clicks
+	  // only hit a console.log; now they dispatch to real host/local behaviour.
+	  setErrorActionHandler((action) => {
+	    const url = action.metadata && typeof action.metadata.url === "string" ? action.metadata.url : undefined
+	    if (url) {
+	      vscode.postMessage({ type: "open_url", url })
+	      return
+	    }
+	    switch (action.action) {
+	      case "retry":
+	      case "regenerate":
+	      case "wait_for_reset": {
+	        const sid = stateManager.getState().activeSessionId
+	        if (sid) vscode.postMessage({ type: "retry_stream", sessionId: sid })
+	        break
+	      }
+	      case "switch_model":
+	        modelManager.open()
+	        break
+	      case "edit":
+	        vscode.postMessage({ type: "connect_provider" })
+	        break
+	      // contact_support / view_details / dismiss carry no host action today.
+	    }
+	  })
+
 	  const variantSelector = setupVariantSelector(els, {
     onSelect: (variant) => {
+      stateManager.setGlobalVariant(variant)
       const active = stateManager.getActiveSession()
       if (active) {
+        stateManager.setSessionVariant(active.id, variant)
         vscode.postMessage({ type: "set_variant", variant, sessionId: active.id })
       }
     },
@@ -376,7 +403,6 @@ function getVsCodeApi() {
       debouncedTimelineRefresh,
       refreshConversationTimeline,
       toolElapsedTracker,
-      fileEditBatcher: fileEditBatcherRef,
       promptQueues,
       renderQueue: (tabId: string) => composer.renderQueue(tabId),
       syncModeUI,
@@ -456,8 +482,6 @@ function getVsCodeApi() {
     closeMcpConfig: () => mcpConfig.close(),
     closeSessionModal: () => closeSessionModal(),
   }
-
-  let fileEditBatcherRef!: FileEditBatcher
 
   function init() {
     try {
@@ -899,6 +923,11 @@ function getVsCodeApi() {
     const activeSession = stateManager.getActiveSession()
     if (activeSession?.model) {
       modelDropdown.setCurrentModel(activeSession.model)
+    }
+    if (activeSession?.variant) {
+      variantSelector.setVariant(activeSession.variant)
+    } else {
+      variantSelector.setVariant(stateManager.getGlobalVariant() || "Default")
     }
     
     // Restore the toolbar dropdown to this session's persisted context usage data.
@@ -1976,6 +2005,8 @@ function getVsCodeApi() {
         }
       }],
       ["file_edited", (msg, sid) => {
+        // Record the edit for the changed-files dropdown. (The inline transcript
+        // banner was removed; ChatProvider drops edits it can't tie to a session.)
         const filePath = typeof msg.file === "string" ? msg.file : undefined
         if (sid && filePath) {
           const session = stateManager.getSession(sid)
@@ -1986,7 +2017,6 @@ function getVsCodeApi() {
               stateManager.save()
             }
           }
-          fileEditBatcherRef.add(sid, filePath)
         }
       }],
       ["theme_vars", (msg) => { applyThemeVars(msg.vars as Record<string, string> | undefined) }],
@@ -2173,7 +2203,7 @@ function getVsCodeApi() {
       ["webview_request_error", (msg, sid) => {
         handleRequestError(sid, typeof msg.error === "string" ? msg.error : undefined)
       }],
-      ["request_error", (msg, sid) => { handleRequestError(sid, typeof msg.message === "string" ? msg.message : undefined) }],
+      ["request_error", (msg, sid) => { handleRequestError(sid, typeof msg.message === "string" ? msg.message : undefined, msg.errorContext) }],
       ["diff_result", (msg) => {
         handleDiffResult(msg.blockId as string, msg.ok as boolean, typeof msg.message === "string" ? msg.message : undefined, Boolean(msg.checkpointCreated))
       }],
@@ -2681,8 +2711,8 @@ function getVsCodeApi() {
     streamOrchestrator.handleServerStatus(sessionId, status, errorContext)
   }
 
-  function handleRequestError(sessionId: string | undefined, message?: string) {
-    streamOrchestrator.handleRequestError(sessionId, message)
+  function handleRequestError(sessionId: string | undefined, message?: string, errorContext?: unknown) {
+    streamOrchestrator.handleRequestError(sessionId, message, errorContext)
   }
 
   function handleDiffResult(blockId?: string, ok?: boolean, message?: string, checkpointCreated?: boolean) {
@@ -2751,16 +2781,13 @@ function getVsCodeApi() {
       const safeTokens = Number.isFinite(tokens) ? Math.max(0, tokens) : 0
       const safeMaxTokens = Number.isFinite(maxTokens) ? Math.max(0, maxTokens) : 0
       const bar = els.contextUsage
-      const prog = els.contextProgressBar as HTMLElement | null
+      const fill = els.contextProgressFill
       const label = els.contextLabel
 
-      if (prog) {
-        if ("value" in prog) {
-          (prog as HTMLProgressElement).value = safePct
-        }
-        prog.style.width = `${safePct}%`
-        prog.setAttribute("aria-valuenow", String(Math.round(safePct)))
+      if (fill) {
+        fill.style.setProperty("--usage-pct", String(Math.min(1, Math.max(0, safePct / 100))))
       }
+      bar.setAttribute("aria-valuenow", String(Math.round(safePct)))
       if (label) {
         label.textContent = buildSummaryText(safeTokens, safeMaxTokens, safePct)
         label.title = safeMaxTokens > 0
@@ -2781,6 +2808,8 @@ function getVsCodeApi() {
     }
   }
 
+
+
   function checkOverflowWarnings(sessionId: string) {
     checkOverflowWarningsModule(tokenCostDeps, sessionId)
   }
@@ -2795,62 +2824,6 @@ function getVsCodeApi() {
     els.statusTokens.classList.add("hidden")
     els.quotaBar.classList.add("hidden")
   }
-
-  const TASK_BANNER_COALESCE_MS = 5000
-
-  /**
-   * Coalesce successive "Edited N files" task banners that arrive within a
-   * short window of each other. Without this, every 500ms FileEditBatcher
-   * flush spawns a fresh banner row — three rapid edits = three stacked
-   * cards. With it, we merge the new files into the latest existing banner
-   * and re-render that one node in place. Falls back to a fresh banner if
-   * the previous message is something else or older than the window.
-   */
-  function appendOrCoalesceEditBanner(sessionId: string, text: string) {
-    const session = stateManager.getSession(sessionId)
-    const last = session?.messages?.[session.messages.length - 1]
-    const lastBlock = last?.blocks?.[0]
-    const isRecentEditBanner =
-      last &&
-      last.role === "system" &&
-      lastBlock?.type === "task_banner" &&
-      lastBlock?.status === "success" &&
-      typeof lastBlock?.text === "string" &&
-      /^Edited /.test(lastBlock.text) &&
-      typeof last.timestamp === "number" &&
-      Date.now() - last.timestamp < TASK_BANNER_COALESCE_MS
-
-    if (isRecentEditBanner && last && lastBlock) {
-      const mergedFiles = mergeEditBannerFiles(lastBlock.text as string, text)
-      lastBlock.text = mergedFiles
-      last.timestamp = Date.now()
-      stateManager.save()
-      // Re-render the affected message in place
-      const msgList = getMessageList(sessionId)
-      const node = last.id ? msgList?.querySelector(`[data-message-id="${CSS.escape(last.id)}"]`) : null
-      if (node && msgList) {
-        const session2 = stateManager.getSession(sessionId)
-        const fresh = renderMessage(last, {
-          mode: session2?.mode || "build",
-          postMessage: (m) => vscode.postMessage(m),
-        } as Parameters<typeof renderMessage>[1])
-        if (fresh) node.replaceWith(fresh)
-      }
-      return
-    }
-
-    addMessage(sessionId, {
-      role: "system",
-      id: createWebviewId("file"),
-      blocks: [{ type: "task_banner", status: "success", text }],
-      timestamp: Date.now(),
-      sessionId,
-    })
-  }
-
-  fileEditBatcherRef = new FileEditBatcher((sessionId, text) => {
-    appendOrCoalesceEditBanner(sessionId, text)
-  })
 
   const fileTrackingDeps: FileTrackingDeps = {
     getSession: (id) => stateManager.getSession(id),

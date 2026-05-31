@@ -1,9 +1,11 @@
 /**
- * Behavioral tests for the compact "Edited N files" task banner.
+ * Behavioral tests for "Edited N files" task-banner handling.
  *
- * Replaces the tall multi-row card (which stacked vertically and consumed
- * a whole viewport when the model made repeated edit batches) with a single
- * compact row that shares the file-chip helper with the bottom strip.
+ * These inline edit banners were removed from the transcript: they duplicated
+ * the persistent bottom changed-files strip + header dropdown, rendered
+ * out-of-flow, stacked one card per edit batch, and surfaced disk edits the
+ * originating session never made. renderTaskBanner now returns null for them.
+ * Non-edit banners (errors/warnings/auto-compact notices) still render.
  */
 import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
@@ -18,110 +20,55 @@ function setupDom() {
   ;(globalThis as any).HTMLElement = dom.window.HTMLElement
 }
 
-describe("renderTaskBanner — compact single-row layout", () => {
+describe("renderTaskBanner — inline 'Edited N files' banners are suppressed", () => {
   beforeEach(() => setupDom())
 
-  it("renders a single .task-banner element (no nested card)", async () => {
-    const { renderBlock } = await import("./renderer-test-shim.js" as any)
-      .catch(async () => await import("./renderer"))
-    const block = {
-      type: "task_banner",
-      status: "success",
-      text: "Edited 3 files: a.ts, b.ts, c.ts",
-    }
-    const el = renderBlock(block, { postMessage: () => {} })
-    assert.ok(el, "renderTaskBanner must return an element")
-    assert.ok(el!.classList.contains("task-banner"), "must have task-banner class")
-    assert.ok(el!.classList.contains("task-banner--compact"), "must opt into compact variant")
+  it("returns null for a multi-file edit banner (no inline card)", async () => {
+    const { renderBlock } = await import("./renderer")
+    const el = renderBlock(
+      { type: "task_banner", status: "success", text: "Edited 3 files: a.ts, b.ts, c.ts" },
+      { postMessage: () => {} },
+    )
+    assert.equal(el, null, "multi-file edit banner must not render inline — the changed-files strip is canonical")
   })
 
-  it("renders chips using the shared cf-strip-chip class for consistency with the bottom strip", async () => {
+  it("returns null for a single-file edit banner", async () => {
     const { renderBlock } = await import("./renderer")
-    const block = {
-      type: "task_banner",
-      status: "success",
-      text: "Edited 3 files: src/a.ts, src/b.ts, src/c.ts",
-    }
-    const el = renderBlock(block, { postMessage: () => {} })
-    assert.ok(el)
-    const chips = el!.querySelectorAll(".cf-strip-chip")
-    assert.equal(chips.length, 3, "must render 3 chips for 3 files")
-    // Inline banner shares chip style with the strip
-    assert.ok(chips[0]?.getAttribute("data-path")?.includes("a.ts"))
+    const el = renderBlock(
+      { type: "task_banner", status: "success", text: "Edited src/StreamCoordinator.ts" },
+      { postMessage: () => {} },
+    )
+    assert.equal(el, null, "single-file edit banner must not render inline")
   })
 
-  it("collapses to a single closed row by default (expanded chip area is hidden)", async () => {
+  it("still renders non-edit success banners (e.g. auto-compact notice)", async () => {
     const { renderBlock } = await import("./renderer")
-    const block = {
-      type: "task_banner",
-      status: "success",
-      text: "Edited 13 files: " + Array.from({ length: 13 }, (_, i) => `f${i}.ts`).join(", "),
-    }
-    const el = renderBlock(block, { postMessage: () => {} })
-    assert.ok(el)
-    // The compact row shows up to maxVisible chips + an overflow pill
-    const overflow = el!.querySelector(".cf-strip-overflow")
-    assert.ok(overflow, "must render +N more pill when files exceed maxVisible")
-    assert.ok(overflow!.textContent!.includes("+"), "overflow pill text")
+    const el = renderBlock(
+      { type: "task_banner", status: "success", text: "Session auto-compacted (context was >= 80%)" },
+      { postMessage: () => {} },
+    )
+    assert.ok(el, "non-edit informational banners must still render")
+    assert.ok(el!.classList.contains("task-banner"), "uses the task-banner card")
   })
 
-  it("click toggles task-banner--expanded class to reveal all chips", async () => {
+  it("preserves error styling for failed tasks (keeps the alert card for non-edit alerts)", async () => {
     const { renderBlock } = await import("./renderer")
-    const block = {
-      type: "task_banner",
-      status: "success",
-      text: "Edited 13 files: " + Array.from({ length: 13 }, (_, i) => `f${i}.ts`).join(", "),
-    }
-    const el = renderBlock(block, { postMessage: () => {} }) as HTMLElement
-    assert.ok(!el.classList.contains("task-banner--expanded"), "starts collapsed")
-    el.click()
-    assert.ok(el.classList.contains("task-banner--expanded"), "click expands")
-    el.click()
-    assert.ok(!el.classList.contains("task-banner--expanded"), "second click collapses")
-  })
-
-  it("handles single-file edits (no comma-separated list)", async () => {
-    const { renderBlock } = await import("./renderer")
-    const block = {
-      type: "task_banner",
-      status: "success",
-      text: "Edited src/StreamCoordinator.ts",
-    }
-    const el = renderBlock(block, { postMessage: () => {} })
-    assert.ok(el)
-    const chips = el!.querySelectorAll(".cf-strip-chip")
-    assert.equal(chips.length, 1, "single-file edit produces one chip")
-    assert.ok(chips[0]?.getAttribute("data-path") === "src/StreamCoordinator.ts")
-  })
-
-  it("preserves error styling for failed tasks (keeps existing card for non-edit alerts)", async () => {
-    const { renderBlock } = await import("./renderer")
-    const block = {
-      type: "task_banner",
-      status: "error",
-      text: "Task failed",
-    }
-    const el = renderBlock(block, { postMessage: () => {} })
-    assert.ok(el)
+    const el = renderBlock(
+      { type: "task_banner", status: "error", text: "Task failed" },
+      { postMessage: () => {} },
+    )
+    assert.ok(el, "error banners must still render")
     assert.ok(el!.classList.contains("task-banner"), "error path still uses task-banner")
-    // The compact variant is only for edits; errors keep their alert styling.
     assert.equal(el!.getAttribute("role"), "alert")
   })
 
-  it("emits open_file postMessage when a chip is clicked", async () => {
+  it("does not surface a chip list or open_file affordance for edits anymore", async () => {
     const { renderBlock } = await import("./renderer")
-    const block = {
-      type: "task_banner",
-      status: "success",
-      text: "Edited src/x.ts",
-    }
     const posted: Array<Record<string, unknown>> = []
-    const el = renderBlock(block, { postMessage: (m) => posted.push(m) }) as HTMLElement
-    const chip = el.querySelector(".cf-strip-chip") as HTMLElement | null
-    assert.ok(chip)
-    chip!.click()
-    const openMsg = posted.find((m) => m.type === "open_file")
-    assert.ok(openMsg, "expected open_file postMessage")
-    assert.equal(openMsg!.path, "src/x.ts")
+    const el = renderBlock(
+      { type: "task_banner", status: "success", text: "Edited src/x.ts" },
+      { postMessage: (m) => posted.push(m) },
+    )
+    assert.equal(el, null, "no element, hence no chips and no click affordance")
   })
 })

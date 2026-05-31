@@ -292,8 +292,7 @@ export function updateContextBarFromSession(deps: TokenCostDeps, sessionId: stri
   if (model) deps.els.statusModel.textContent = model
 
   const labelEl = ctxBar.querySelector<HTMLElement>("#context-label")
-  const pctEl = ctxBar.querySelector<HTMLProgressElement>("#context-progress-bar")
-    || ctxBar.querySelector<HTMLProgressElement>(".context-usage-percent")
+  const fillEl = ctxBar.querySelector<HTMLElement>("#context-progress-fill")
   const costEl = ctxBar.querySelector<HTMLElement>("#context-cost")
   const detailText = `${totalApiTokens.toLocaleString()} tokens / ${contextWindow.toLocaleString()}`
 
@@ -304,11 +303,8 @@ export function updateContextBarFromSession(deps: TokenCostDeps, sessionId: stri
   }
   ctxBar.title = `${model ? `${model} · ` : ""}API tokens used: ${totalApiTokens.toLocaleString()} · Context window: ${contextWindow.toLocaleString()}`
 
-  if (pctEl) {
-    pctEl.value = pct
-    pctEl.style.width = `${Math.min(100, Math.max(0, pct))}%`
-    pctEl.classList.toggle("context-usage-percent--warning", pct >= 60 && pct < 85)
-    pctEl.classList.toggle("context-usage-percent--critical", pct >= 85)
+  if (fillEl) {
+    fillEl.style.setProperty("--usage-pct", String(Math.min(1, Math.max(0, pct / 100))))
   }
   if (costEl && typeof session.cost === "number" && Number.isFinite(session.cost) && session.cost > 0) {
     costEl.textContent = `$${session.cost.toFixed(4)}`

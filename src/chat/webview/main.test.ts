@@ -6,6 +6,7 @@ import path from "node:path"
 const source = readFileSync(path.join(__dirname, "main.ts"), "utf8")
 const orchestratorSource = (() => { try { return readFileSync(path.join(__dirname, "streamOrchestrator.ts"), "utf8") } catch { return "" } })()
 const timelineSource = (() => { try { return readFileSync(path.join(__dirname, "timeline.ts"), "utf8") } catch { return "" } })()
+const thinkingToggleSource = (() => { try { return readFileSync(path.join(__dirname, "thinkingToggle.ts"), "utf8") } catch { return "" } })()
 const composerSource = (() => { try { return readFileSync(path.join(__dirname, "composer.ts"), "utf8") } catch { return "" } })()
 const slashCommandsSource = (() => { try { return readFileSync(path.join(__dirname, "slashCommands.ts"), "utf8") } catch { return "" } })()
 const inputHandlersSource = (() => { try { return readFileSync(path.join(__dirname, "inputHandlers.ts"), "utf8") } catch { return "" } })()
@@ -104,7 +105,7 @@ describe("main.ts", () => {
     const combined = source + orchestratorSource + timelineSource
     assert.ok(combined.includes("function applyHistoryCondensation") || combined.includes("applyHistoryCondensation"), "must define history condensation")
     assert.ok(combined.includes("history-condensed-summary"), "must render deterministic local summary controls")
-    assert.ok(combined.includes("session.messages.length <= 140"), "must only condense long sessions")
+    assert.ok(combined.includes("HISTORY_CONDENSATION_THRESHOLD") || combined.includes("session.messages.length <= 140"), "must only condense long sessions")
   })
 
   it("keeps send button state synchronized across input event variants", () => {
@@ -212,7 +213,7 @@ describe("main.ts", () => {
     // Block ends at the next top-level export, or end of file.
     const after = scrollMarkersSource.indexOf("\nexport function ", idx + 1)
     const block = scrollMarkersSource.slice(idx, after >= 0 ? after : scrollMarkersSource.length)
-    assert.ok(block.includes("scrollMessageToTop(msgList, target)"), "timeline jumps must use the message list scroller directly")
+    assert.ok(block.includes("scrollMessageToTop(msgList, target") && block.includes("deps.timers"), "timeline jumps must use the message list scroller directly with timers injection")
     assert.ok(!block.includes("scrollIntoView"), "timeline jumps must not rely on scrollIntoView/focus side effects")
   })
 
@@ -768,9 +769,9 @@ it("unified modal: server session items send resume_server_session on click", ()
   // explicitly hid in their last session.
   describe("setupThinkingToggle — boot-time sync", () => {
     it("calls toggleAllThinkingBlocks at boot with the persisted preference", () => {
-      const combined = source + timelineSource
-      const fnIdx = combined.indexOf("function setupThinkingToggle()")
-      assert.ok(fnIdx >= 0, "setupThinkingToggle must exist")
+      const combined = source + timelineSource + thinkingToggleSource
+      const fnIdx = combined.indexOf("function setup()")
+      assert.ok(fnIdx >= 0, "setup function must exist in thinkingToggle")
       const clickIdx = combined.indexOf("addEventListener(\"click\"", fnIdx)
       const bootBlock = combined.slice(fnIdx, clickIdx)
       assert.ok(

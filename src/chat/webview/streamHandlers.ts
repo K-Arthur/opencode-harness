@@ -986,7 +986,7 @@ export function handleStreamError(
   els: StreamElements,
   messages: ChatMessage[],
   saveState: () => void,
-  error: { code: string; message: string; detail?: string; retryable?: boolean }
+  error: { code: string; message: string; detail?: string; retryable?: boolean; errorContext?: ErrorContext }
 ): void {
   state.isStreaming = false
   hideTypingIndicator(els)
@@ -1010,8 +1010,25 @@ export function handleStreamError(
   resetStreamState(state)
   state.rafPending = false
 
-  const errorHandler = getErrorHandler({ logToConsole: true, logToExtension: false })
-  const errorContext = errorHandler.handleError(error)
+  // Prefer the structured context the host already mapped (full fidelity:
+  // category, severity, actions, technical detail). Only re-classify the raw
+  // string when no context was carried across the wire.
+  const errorContext = error.errorContext
+    ?? getErrorHandler({ logToConsole: true, logToExtension: false }).handleError(error)
+
+  // Coalesce duplicate error cards: the same failure can arrive several times
+  // (stream retries, repeated server "error" statuses for one fault). If the
+  // most recent message is already an identical error card, refresh it in place
+  // instead of stacking another out-of-flow copy for the same thing.
+  const lastMsg = messages[messages.length - 1]
+  const lastBlock = lastMsg?.role === "system" ? lastMsg.blocks?.[0] : undefined
+  const lastErrMessage = lastBlock?.type === "error" ? (lastBlock as { message?: string }).message : undefined
+  if (lastMsg && lastErrMessage !== undefined && lastErrMessage === errorContext.userMessage) {
+    lastMsg.timestamp = Date.now()
+    saveState()
+    return
+  }
+
   const errorDisplay = getErrorDisplay()
   const errorElement = errorDisplay.render(errorContext)
 
@@ -1043,11 +1060,13 @@ export function handleRequestError(
   els: StreamElements,
   messages: ChatMessage[],
   saveState: () => void,
-  message?: string
+  message?: string,
+  errorContext?: ErrorContext
 ): void {
   handleStreamError(state, els, messages, saveState, {
     code: 'request_failed',
     message: typeof message === "string" ? message : "The request failed. Please try again.",
+    errorContext,
   })
 }
 
@@ -1104,11 +1123,13 @@ export function handleServerStatus(
     showTypingIndicator(els, "Thinking...")
   } else if (status === "error") {
     hideTypingIndicator(els)
-    // Use mapped error context if available, otherwise fall back to generic message
+    // Carry the host-mapped context through unchanged so its category, severity,
+    // suggested actions (e.g. "Upgrade Plan" + URL) and technical detail survive,
+    // instead of collapsing to a string the renderer would re-classify by regex.
     const errorMessage = errorContext?.userMessage || "An error occurred. Please try again."
     // m5: operate on the real session messages and persist, instead of passing
     // an empty array and a no-op save (which dropped the partial + skipped save).
-    handleRequestError(state, els, messages, saveState, errorMessage)
+    handleRequestError(state, els, messages, saveState, errorMessage, errorContext)
   } else if (status === "idle") {
     hideTypingIndicator(els)
   } else if (status && (status.includes("tool") || status.includes("running"))) {

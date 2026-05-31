@@ -75,6 +75,14 @@ Run all unit+contract+roundtrip: `npm test`
 | `sendLogic` | `src/chat/webview/sendLogic.ts` | Send/abort/steer + stream capacity |
 | `inputHandlers` | `src/chat/webview/inputHandlers.ts` | Keyboard + paste + resize handlers |
 
+### Webview Timeline Modules (delegated from timeline.ts)
+
+| Module | File | Responsibility |
+|--------|------|---------------|
+| `timeline` | `src/chat/webview/timeline.ts` | Conversation timeline sidebar: toggle, render, keyboard nav, progress, history condensation |
+| `thinkingToggle` | `src/chat/webview/thinkingToggle.ts` | Global thinking block visibility toggle (extracted from timeline for SRP) |
+| `scrollMarkers` | `src/chat/webview/ui/scrollMarkers.ts` | Scroll marker dots, jump-to-bottom, scrollToTurn with injected timers |
+
 ### Horizontal Scaling (ADR-010 Complete)
 
 - Interface: `src/session/SessionProcessManager.ts` (ADR-aligned with `onCrash` events)
@@ -121,5 +129,13 @@ Use jCodemunch-MCP tools for code exploration. Use `Read` only when editing a fi
 
 CSS variables defined in `src/chat/webview/css/tokens.css` with VS Code token fallbacks. ThemeManager overrides injected via `applyThemeVars()`. Theme presets only style the chat webview — must NOT contribute VS Code workbench themes or call `workbench.action.setTheme`.
 
-`cli-default` uses `var(--vscode-*)` for canvas colors; other presets use explicit hex.
+- **Theme state:** `src/theme/ThemeManager.ts` — presets, CLI file discovery, merge (preset → CLI → user), 30s TTL cache, FS watchers
+- **Theme controller:** `src/chat/ThemeController.ts` — config persistence, validation, webview push (uses `isValidCssColor`)
+- **Color validation:** `src/utils/colorValidation.ts` — shared `isValidCssColor()` accepting hex (#RGB/#RRGGBB/#RRGGBBAA), rgba, hsla, var(), transparent, color-mix()
+- **Webview apply:** `src/chat/webview/theme.ts` — `applyThemeVars()` with XSS protection (blocks url/expression/javascript/data:text-html)
+- **Webview customizer:** `src/chat/webview/ui/themeCustomizer.ts` — preset cards, CLI theme browser, color pickers, preview swatch
+- **XDG paths:** `getXdgConfigDir()` / `getHomeDir()` module-level helpers in ThemeManager.ts (single source of truth)
+- **CLI theme dedup:** `discoverCliThemes()` canonicalizes paths via `fs.realpathSync` to skip symlinked duplicates
+
+`cli-default` uses `var(--vscode-*)` for canvas colors; other presets use explicit hex. All 6 presets (cli-default, light, dark, high-contrast, high-contrast-dark, high-contrast-light) define complete property sets including diff, markdown, and syntax fields.
 `FIELD_MAP`: `background` → `panelBg`, `text` → `panelFg`, `backgroundPanel` → `editorBg`, `textMuted` → `mutedFg`, `border` → `borderColor`.

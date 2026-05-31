@@ -17,7 +17,6 @@ import {
   GEAR_SVG,
 } from "./icons"
 import { renderToolCallBlock, isToolCallBlock, groupConsecutiveToolCalls } from "./toolCallRenderer"
-import { renderFileChipListHtml } from "./file-chip-list"
 import { getThinkingVisible } from "./displayPrefs"
 import type {
   Block,
@@ -798,8 +797,8 @@ export function groupMessagesIntoTurns(messages: import("./types").ChatMessage[]
         currentTurn.assistantMessageId = msg.id || ""
         // Count tool calls and diffs in this assistant message
         const blocks = msg.blocks || []
-        currentTurn.toolCount = blocks.filter(b => b.type === "tool-call" || b.type === "tool_call" || b.type === "tool").length
-        currentTurn.patchCount = blocks.filter(b => b.type === "diff" || b.type === "diff_block").length
+        currentTurn.toolCount += blocks.filter(b => b.type === "tool-call" || b.type === "tool_call" || b.type === "tool").length
+        currentTurn.patchCount += blocks.filter(b => b.type === "diff" || b.type === "diff_block").length
         if (!currentTurn.snippet || currentTurn.snippet === "...") {
           currentTurn.snippet = extractSnippet(msg)
         }
@@ -847,7 +846,7 @@ function extractSnippet(msg: import("./types").ChatMessage): string {
       }
     }
   }
-  return msg.role === "user" ? "Sent a message" : "Thinking..."
+  return msg.role === "user" ? "Sent a message" : "Response"
 }
 
 function renderThinkingBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
@@ -1600,73 +1599,21 @@ function renderTaskBanner(block: Block, _opts: RenderOptions): HTMLElement | nul
   const multiMatch = textVal.match(/^Edited (\d+) files:\s*(.*)$/)
   const singleMatch = !multiMatch ? textVal.match(/^Edited (?!.*files:)(.*)$/) : null
 
-  // Non-edit banners (errors, warnings, generic status) keep the original
-  // card layout — those carry alert weight and benefit from the larger
-  // visual footprint. Edit banners get a compact single-row layout that
-  // shares the file-chip helper with the bottom strip.
-  if (status !== "success" || (!multiMatch && !singleMatch)) {
-    return renderLegacyTaskBanner(block, _opts, status, textVal)
+  // Inline "Edited N files" banners are no longer surfaced in the transcript.
+  // They duplicated the persistent bottom changed-files strip + header dropdown,
+  // rendered out-of-flow, stacked one card per 500ms edit batch, and — because
+  // opencode's file watcher emits file.edited for disk changes it cannot
+  // attribute to the originating session — leaked edits made outside the session
+  // (even by tools other than opencode) into whichever tab was active. The
+  // changed-files strip is the single, session-scoped source of truth. Returning
+  // null here also retires any such banners persisted in older session state.
+  // Non-edit banners (errors, warnings, auto-compact notices) keep the card.
+  if (status === "success" && (multiMatch || singleMatch)) {
+    return null
   }
 
-  const files: string[] = multiMatch
-    ? multiMatch[2]!.split(",").map((f) => f.trim()).filter(Boolean)
-    : [singleMatch![1]!.trim()]
-
-  const wrapper = document.createElement("div")
-  wrapper.className = `task-banner task-banner--success task-banner--compact`
-  wrapper.setAttribute("role", "status")
-  wrapper.setAttribute("aria-label", `Edited ${files.length} file${files.length !== 1 ? "s" : ""} — click to expand`)
-  wrapper.style.cursor = files.length > FILE_CHIP_VISIBLE ? "pointer" : "default"
-
-  const chevron = document.createElement("span")
-  chevron.className = "task-banner-chevron"
-  chevron.setAttribute("aria-hidden", "true")
-  chevron.innerHTML = `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`
-  wrapper.appendChild(chevron)
-
-  const checkmark = document.createElement("span")
-  checkmark.className = "task-banner-check"
-  checkmark.setAttribute("aria-hidden", "true")
-  checkmark.innerHTML = SUCCESS_SVG
-  wrapper.appendChild(checkmark)
-
-  // Inline chip list — shares the same helper (and therefore the same look)
-  // as the persistent #changed-files-strip at the bottom of the composer.
-  const chipHost = document.createElement("span")
-  chipHost.className = "task-banner-chips"
-  chipHost.innerHTML = renderFileChipListHtml(files, {
-    maxVisible: FILE_CHIP_VISIBLE,
-    showLeadingIcon: false,
-    showCountLabel: true,
-  })
-  wrapper.appendChild(chipHost)
-
-  // Wire chip-click and toggle-expand. Click on a chip opens the file;
-  // click anywhere else on the banner toggles the expanded chip list.
-  wrapper.addEventListener("click", (e) => {
-    const target = e.target as HTMLElement | null
-    const chip = target?.closest?.(".cf-strip-chip") as HTMLElement | null
-    if (chip && chipHost.contains(chip)) {
-      e.stopPropagation()
-      const path = chip.getAttribute("data-path") || ""
-      if (path) _opts.postMessage?.({ type: "open_file", path })
-      return
-    }
-    if (files.length > FILE_CHIP_VISIBLE) {
-      const isExpanded = wrapper.classList.toggle("task-banner--expanded")
-      // Re-render chips in expanded mode (no overflow pill, all chips shown)
-      chipHost.innerHTML = renderFileChipListHtml(files, {
-        maxVisible: isExpanded ? files.length : FILE_CHIP_VISIBLE,
-        showLeadingIcon: false,
-        showCountLabel: true,
-      })
-    }
-  })
-
-  return wrapper
+  return renderLegacyTaskBanner(block, _opts, status, textVal)
 }
-
-const FILE_CHIP_VISIBLE = 4
 
 // ---------------------------------------------------------------------------
 // Question block — interactive UI for the opencode `question` tool

@@ -85,13 +85,13 @@ describe("StreamCoordinator error handling", () => {
 
 describe("ChatProvider event routing", () => {
   it("postRequestError includes sessionId for tab-scoped errors", () => {
-    assert.ok(providerSource.includes("private postRequestError(message: string, sessionId?: string)"), "postRequestError must accept sessionId")
+    assert.ok(providerSource.includes("private postRequestError(message: string, sessionId?: string"), "postRequestError must accept sessionId")
     assert.ok(providerSource.includes("sessionId,"), "must pass sessionId in postMessage")
   })
 
   it("routes server_error to active tab when sessionId is unknown", () => {
     assert.ok(providerSource.includes("const activeTab = this.tabManager.getActiveTab()"), "must fall back to active tab")
-    assert.ok(providerSource.includes("this.postRequestError(errorMsg, activeTab.id)"), "must post error to active tab")
+    assert.ok(providerSource.includes("this.postRequestError(errorMsg, activeTab.id, errorContext)"), "must post error (with structured context) to active tab")
   })
 
   it("prevents double finalizeStream from message_complete + idle", () => {

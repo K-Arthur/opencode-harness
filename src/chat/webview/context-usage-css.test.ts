@@ -14,6 +14,11 @@ describe("context usage status strip CSS", () => {
     assert.match(css, /\.context-usage-bar\s*{[^}]*flex:\s*0 1 auto/s)
   })
 
+  it("uses a custom div track+fill bar instead of native progress element", () => {
+    assert.match(css, /\.context-usage-track\s*{[^}]*width:\s*80px/s)
+    assert.match(css, /\.context-usage-fill\s*{[^}]*transform:\s*scaleX/s)
+  })
+
   it("gives the dropdown header a wrapping layout for long token values", () => {
     assert.match(css, /\.cup-header-row\s*{[^}]*min-width:\s*0/s)
     assert.match(css, /\.cup-summary-text\s*{[^}]*overflow-wrap:\s*anywhere/s)

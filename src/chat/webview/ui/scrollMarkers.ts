@@ -35,7 +35,7 @@ export function updateScrollMarkers(deps: ScrollMarkerDeps, sessionId: string): 
     const firstText = m.blocks?.find((b) => b.type === "text")
     dot.title = (firstText?.text as string)?.slice(0, 60) || "User message"
     dot.addEventListener("click", () => {
-      scrollMessageToTop(msgList, msgEl)
+      scrollMessageToTop(msgList, msgEl, deps.timers)
     })
     markersEl.appendChild(dot)
   })
@@ -65,10 +65,11 @@ export function setupJumpToBottom(deps: ScrollMarkerDeps, sessionId: string): vo
   onScroll()
 }
 
-export function scrollMessageToTop(msgList: HTMLElement, target: HTMLElement): void {
+export function scrollMessageToTop(msgList: HTMLElement, target: HTMLElement, timers?: { setTimeout: (fn: () => void, ms: number) => ReturnType<typeof setTimeout> }): void {
+  const _setTimeout = timers?.setTimeout ?? setTimeout
   msgList.scrollTo({ top: Math.max(0, target.offsetTop), behavior: "smooth" })
   target.classList.add("message-flash")
-  setTimeout(() => target.classList.remove("message-flash"), 1500)
+  _setTimeout(() => target.classList.remove("message-flash"), 1500)
   target.setAttribute("tabindex", "-1")
   target.focus({ preventScroll: true })
 }
@@ -78,6 +79,6 @@ export function scrollToTurn(deps: ScrollMarkerDeps, messageId: string): void {
   if (!msgList) return
   const target = msgList.querySelector(`[data-message-id="${CSS.escape(messageId)}"]`) as HTMLElement | null
   if (target) {
-    scrollMessageToTop(msgList, target)
+    scrollMessageToTop(msgList, target, deps.timers)
   }
 }

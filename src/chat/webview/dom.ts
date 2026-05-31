@@ -73,6 +73,7 @@ export interface ElementRefs {
   contextChips: HTMLDivElement
   contextUsage: HTMLDivElement
   contextProgressBar: HTMLElement
+  contextProgressFill: HTMLElement
   contextLabel: HTMLSpanElement
   contextUsageBtn: HTMLButtonElement | null
   contextUsageDropdown: HTMLElement | null
@@ -244,7 +245,8 @@ export function getElementRefs(): ElementRefs {
     contextBar: requireElement<HTMLDivElement>("context-bar"),
     contextChips: requireElement<HTMLDivElement>("context-chips"),
     contextUsage: requireElement<HTMLDivElement>("context-usage"),
-    contextProgressBar: requireElement("context-progress-bar"),
+    contextProgressBar: requireElement("context-progress-track"),
+    contextProgressFill: requireElement("context-progress-fill"),
     contextLabel: requireElement<HTMLSpanElement>("context-label"),
     contextUsageBtn: document.getElementById("context-usage-btn") as HTMLButtonElement | null,
     contextUsageDropdown: document.getElementById("context-usage-dropdown"),

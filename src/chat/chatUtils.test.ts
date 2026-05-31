@@ -1,6 +1,6 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { toUserErrorMessage, errorValueToMessage, mapToolType, isSessionInCurrentWorkspace } from "./chatUtils"
+import { toUserErrorMessage, errorValueToMessage, mapToolType, isSessionInCurrentWorkspace, looksLikeSdkError } from "./chatUtils"
 
 void describe("toUserErrorMessage", () => {
   void it("returns message as-is for non-matching messages", () => {
@@ -68,6 +68,27 @@ void describe("errorValueToMessage", () => {
 
   void it("defaults for undefined", () => {
     assert.equal(errorValueToMessage(undefined), "Server error")
+  })
+})
+
+void describe("looksLikeSdkError", () => {
+  void it("recognises a known SDK error name", () => {
+    assert.equal(looksLikeSdkError({ name: "ProviderAuthError", data: { message: "x" } }), true)
+    assert.equal(looksLikeSdkError({ name: "APIError", data: { statusCode: 429 } }), true)
+  })
+
+  void it("recognises a nested statusCode even without a known name", () => {
+    assert.equal(looksLikeSdkError({ name: "Whatever", data: { statusCode: 500 } }), true)
+  })
+
+  void it("rejects plain connection-error strings", () => {
+    assert.equal(looksLikeSdkError("OpenCode event stream connection timed out after 30s"), false)
+  })
+
+  void it("rejects null/undefined/non-SDK objects", () => {
+    assert.equal(looksLikeSdkError(null), false)
+    assert.equal(looksLikeSdkError(undefined), false)
+    assert.equal(looksLikeSdkError({ message: "generic" }), false)
   })
 })
 

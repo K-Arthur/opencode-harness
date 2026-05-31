@@ -33,13 +33,14 @@ export class MessagePostService {
     }
   }
 
-  postRequestError(message: string, sessionId?: string): void {
+  postRequestError(message: string, sessionId?: string, errorContext?: unknown): void {
     const webview = this.deps.getWebview()
     if (!webview) return
     webview.postMessage({
       type: "request_error",
       message: toUserErrorMessage(message),
       sessionId,
+      ...(errorContext ? { errorContext } : {}),
     })
   }
 

@@ -4,7 +4,6 @@ import type { ToolCallState } from "./types"
 import type { StreamHandlers } from "./stream"
 import { timers } from "./timerRegistry"
 import type { ToolElapsedTracker } from "./ui/toolElapsed"
-import type { FileEditBatcher } from "./ui/fileEditBatcher"
 import type { PromptQueue } from "./queue"
 import { placeholderHasRenderedContent } from "./placeholderContent"
 
@@ -35,7 +34,6 @@ export interface StreamOrchestratorDeps {
   debouncedTimelineRefresh: (sessionId: string) => void
   refreshConversationTimeline: (sessionId: string) => void
   toolElapsedTracker: ToolElapsedTracker
-  fileEditBatcher: FileEditBatcher
   promptQueues: Map<string, PromptQueue>
   renderQueue: (tabId: string) => void
   syncModeUI: () => void
@@ -48,7 +46,7 @@ export interface StreamOrchestratorAPI {
   handleStreamChunk: (sessionId: string, text?: string, messageId?: string) => void
   handleStreamEnd: (sessionId: string, messageId?: string, blocks?: unknown, reason?: string, partial?: boolean) => void
   handleServerStatus: (sessionId: string, status?: string, errorContext?: unknown) => void
-  handleRequestError: (sessionId: string | undefined, message?: string) => void
+  handleRequestError: (sessionId: string | undefined, message?: string, errorContext?: unknown) => void
   handleDiffResult: (blockId?: string, ok?: boolean, message?: string, checkpointCreated?: boolean) => void
   handleHostMessage: (msg: ChatMessage) => void
   handleCostUpdate: (sessionId: string, cost: number) => void
@@ -89,7 +87,6 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     debouncedTimelineRefresh,
     refreshConversationTimeline,
     toolElapsedTracker,
-    fileEditBatcher,
     promptQueues,
     renderQueue,
     syncModeUI,
@@ -226,13 +223,8 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     updateTabBar()
     updateModeSelectorStateLocal()
     updateAgentStatus("thinking")
-    fileEditBatcher.cancelAll()
     const activeMsgList = getMessageList(sessionId)
     if (activeMsgList) {
-      const staleBanners = activeMsgList.querySelectorAll(".task-banner")
-      staleBanners.forEach(b => {
-        if (b.textContent?.includes("Edited")) b.remove()
-      })
       if (!activeMsgList.querySelector(".jump-to-bottom")) {
         setupJumpToBottom(sessionId)
       }
@@ -424,7 +416,7 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     }
   }
 
-  function handleRequestError(sessionId: string | undefined, message?: string) {
+  function handleRequestError(sessionId: string | undefined, message?: string, errorContext?: unknown) {
     if (!sessionId) {
       const sessions = getAllSessions()
       const streaming = sessions.find(s => s.isStreaming)
@@ -438,7 +430,7 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
 
     const stream = streamHandlers.get(sessionId)
     if (stream) {
-      stream.handleRequestError(message)
+      stream.handleRequestError(message, errorContext)
     }
 
     if (sessionId === getState().activeSessionId) {

@@ -286,5 +286,6 @@ function isValidColorFormat(value: string): boolean {
   if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(trimmed)) return true
   if (/^rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*(,\s*[\d.]+\s*)?\)$/.test(trimmed)) return true
   if (/^hsla?\(\s*\d+\s*,\s*\d+%\s*,\s*\d+%\s*(,\s*[\d.]+\s*)?\)$/i.test(trimmed)) return true
+  if (/^color-mix\(\s*in\s+srgb\s*,/i.test(trimmed)) return true
   return false
 }

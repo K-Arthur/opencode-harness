@@ -137,16 +137,16 @@
   position: absolute;
   top: var(--space-8);
   right: var(--space-1);
-  width: 140px; /* Narrower for compact view */
+  width: 140px;
   max-height: calc(100% - var(--space-16));
-  display: none; /* Hidden by default, toggled via button */
+  display: flex;
   flex-direction: column;
   gap: var(--space-2);
   z-index: var(--z-sticky);
-  pointer-events: auto;
-  opacity: 1;
-  transform: translateX(0);
-  transition: background-color var(--duration-normal) var(--ease-in-out), color var(--duration-normal) var(--ease-in-out), border-color var(--duration-normal) var(--ease-in-out), transform var(--duration-normal) var(--ease-in-out), opacity var(--duration-normal) var(--ease-in-out), box-shadow var(--duration-normal) var(--ease-in-out);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(8px);
+  transition: opacity var(--duration-normal) var(--ease-in-out), transform var(--duration-normal) var(--ease-in-out), background-color var(--duration-normal) var(--ease-in-out), color var(--duration-normal) var(--ease-in-out), border-color var(--duration-normal) var(--ease-in-out), box-shadow var(--duration-normal) var(--ease-in-out);
   padding: var(--space-2);
   background: var(--oc-glass-bg);
   backdrop-filter: var(--blur-surface);
@@ -154,10 +154,14 @@
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-lg);
   overflow-y: auto;
+  visibility: hidden;
 }
 
 .conversation-timeline.visible {
-  display: flex;
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+  visibility: visible;
 }
 
 .conversation-timeline:hover {
@@ -546,6 +550,14 @@
   width: 100%;
   display: flex;
   margin: var(--space-3) 0;
+}
+
+/* Collapse system rows whose bubble rendered no content — e.g. an "Edited N
+   files" banner suppressed by renderTaskBanner, or one persisted in older
+   session state. Without this the empty amber .system-bubble (with its
+   ::before/::after decoration) would linger as a ghost card. */
+.message.system:has(.system-bubble:empty) {
+  display: none;
 }
 
 .message.system .system-bubble {

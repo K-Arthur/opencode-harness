@@ -1,11 +1,16 @@
-import type { WebviewState } from "./types"
+import type { WebviewState, ChatMessage } from "./types"
 import type { ElementRefs } from "./dom"
 import { groupMessagesIntoTurns } from "./renderer"
+import { createThinkingToggle, type ThinkingToggleDeps } from "./thinkingToggle"
+
+const HISTORY_CONDENSATION_THRESHOLD = 140
+const HISTORY_PRESERVE_LAST = 80
+const HISTORY_GROUP_SIZE = 20
 
 export interface TimelineDeps {
   els: ElementRefs
   getState: () => WebviewState
-  getSession: (id: string) => { messages: any[]; isStreaming: boolean } | undefined
+  getSession: (id: string) => { messages: ChatMessage[]; isStreaming: boolean } | undefined
   isTimelineVisible: () => boolean
   setTimelineVisible: (visible: boolean) => void
   getMessageList: (tabId: string) => HTMLDivElement | null
@@ -16,6 +21,8 @@ export interface TimelineDeps {
   vscodeSetState: (state: WebviewState) => void
   debouncedUpdateScrollMarkers: (sessionId: string) => void
 }
+
+export { type ThinkingToggleDeps }
 
 export interface TimelineAPI {
   setupTimelineToggle: () => void
@@ -41,6 +48,15 @@ export function createTimeline(deps: TimelineDeps): TimelineAPI {
     debouncedUpdateScrollMarkers,
   } = deps
 
+  const thinkingToggle = createThinkingToggle({
+    els,
+    getState,
+    setThinkingVisible,
+    getThinkingVisible,
+    toggleAllThinkingBlocks,
+    vscodeSetState,
+  })
+
   function setupTimelineToggle() {
     els.timelineToggleBtn.setAttribute("aria-pressed", String(isTimelineVisible()))
     els.timelineToggleBtn.addEventListener("click", () => {
@@ -52,47 +68,7 @@ export function createTimeline(deps: TimelineDeps): TimelineAPI {
   }
 
   function setupThinkingToggle() {
-    const state = getState()
-    const thinkingVisible = state.displayPrefs?.thinkingVisible ?? true
-    setThinkingVisible(thinkingVisible)
-    toggleAllThinkingBlocks(thinkingVisible)
-    els.thinkingToggleMenuItem.setAttribute("aria-checked", String(thinkingVisible))
-    els.thinkingToggleMenuItem.classList.toggle("active", thinkingVisible)
-    if (els.thinkingCheckmark) {
-      els.thinkingCheckmark.style.visibility = thinkingVisible ? "visible" : "hidden"
-    }
-
-    els.thinkingToggleMenuItem.addEventListener("click", () => {
-      const newVisible = !getThinkingVisible()
-      const currentState = getState()
-      const updatedState: WebviewState = {
-        ...currentState,
-        displayPrefs: {
-          text: currentState.displayPrefs?.text ?? true,
-          tools: currentState.displayPrefs?.tools ?? true,
-          diffs: currentState.displayPrefs?.diffs ?? true,
-          errors: currentState.displayPrefs?.errors ?? true,
-          diffWrapEnabled: currentState.displayPrefs?.diffWrapEnabled ?? false,
-          thinkingVisible: newVisible,
-        },
-      }
-      currentState.displayPrefs = updatedState.displayPrefs
-      vscodeSetState(updatedState)
-      setThinkingVisible(newVisible)
-      els.thinkingToggleMenuItem.setAttribute("aria-checked", String(newVisible))
-      els.thinkingToggleMenuItem.classList.toggle("active", newVisible)
-      if (els.thinkingCheckmark) {
-        els.thinkingCheckmark.style.visibility = newVisible ? "visible" : "hidden"
-      }
-      toggleAllThinkingBlocks(newVisible)
-    })
-
-    document.addEventListener("keydown", (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "t") {
-        e.preventDefault()
-        els.thinkingToggleMenuItem.click()
-      }
-    })
+    thinkingToggle.setup()
   }
 
   function applyTimelineVisibility(sessionId?: string) {
@@ -109,6 +85,18 @@ export function createTimeline(deps: TimelineDeps): TimelineAPI {
 
     if (!visible || !targetId) return
     refreshConversationTimeline(targetId)
+  }
+
+  let progressRafId: number | null = null
+
+  function scheduleProgressUpdate(sessionId: string) {
+    if (progressRafId !== null) {
+      cancelAnimationFrame(progressRafId)
+    }
+    progressRafId = requestAnimationFrame(() => {
+      progressRafId = null
+      updateTimelineProgress(sessionId)
+    })
   }
 
   function refreshConversationTimeline(sessionId?: string) {
@@ -159,7 +147,7 @@ export function createTimeline(deps: TimelineDeps): TimelineAPI {
 
       item.addEventListener("click", () => {
         scrollToTurn(turn.userMessageId)
-        updateTimelineProgress(targetId)
+        scheduleProgressUpdate(targetId)
       })
       timeline.appendChild(item)
     })
@@ -189,9 +177,9 @@ export function createTimeline(deps: TimelineDeps): TimelineAPI {
 
     if (!msgList.dataset.timelineListener) {
       msgList.dataset.timelineListener = "true"
-      msgList.addEventListener("scroll", () => updateTimelineProgress(targetId), { passive: true })
+      msgList.addEventListener("scroll", () => scheduleProgressUpdate(targetId), { passive: true })
     }
-    updateTimelineProgress(targetId)
+    scheduleProgressUpdate(targetId)
   }
 
   function ensureTimeline(sessionId: string): HTMLElement | null {
@@ -231,25 +219,23 @@ export function createTimeline(deps: TimelineDeps): TimelineAPI {
   function applyHistoryCondensation(sessionId: string): void {
     const session = getSession(sessionId)
     const msgList = getMessageList(sessionId)
-    if (!session || !msgList || session.isStreaming || session.messages.length <= 140) return
-    if (msgList.dataset.historyCondensed === "true") return
+    if (!session || !msgList || session.isStreaming || session.messages.length <= HISTORY_CONDENSATION_THRESHOLD) return
+    if (msgList.dataset.historyCondensed === "true" || msgList.dataset.historyCondensed === "expanded") return
 
-    const preserveLast = 80
-    const groupSize = 20
-    const candidates = session.messages.slice(0, Math.max(0, session.messages.length - preserveLast))
-    for (let i = Math.floor(Math.max(0, candidates.length - 1) / groupSize) * groupSize; i >= 0; i -= groupSize) {
-      const group = candidates.slice(i, Math.min(candidates.length, i + groupSize))
+    const candidates = session.messages.slice(0, Math.max(0, session.messages.length - HISTORY_PRESERVE_LAST))
+    for (let i = Math.floor(Math.max(0, candidates.length - 1) / HISTORY_GROUP_SIZE) * HISTORY_GROUP_SIZE; i >= 0; i -= HISTORY_GROUP_SIZE) {
+      const group = candidates.slice(i, Math.min(candidates.length, i + HISTORY_GROUP_SIZE))
       const elements = group
-        .map((m: any) => m.id ? msgList.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(m.id)}"]`) : null)
+        .map((m) => m.id ? msgList.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(m.id)}"]`) : null)
         .filter((el: HTMLElement | null): el is HTMLElement => Boolean(el && !el.matches(":focus-within") && !el.querySelector(".streaming-text")))
-      if (elements.length < groupSize / 2) continue
+      if (elements.length < HISTORY_GROUP_SIZE / 2) continue
 
       const summary = document.createElement("button")
       summary.type = "button"
       summary.className = "history-condensed-summary"
-      const userCount = group.filter((m: any) => m.role === "user").length
-      const assistantCount = group.filter((m: any) => m.role === "assistant").length
-      const toolCount = group.reduce((count: number, m: any) => count + (m.blocks || []).filter((b: any) => b.type === "tool-call" || b.type === "tool_call" || b.type === "tool").length, 0)
+      const userCount = group.filter((m) => m.role === "user").length
+      const assistantCount = group.filter((m) => m.role === "assistant").length
+      const toolCount = group.reduce((count: number, m) => count + (m.blocks || []).filter((b) => b.type === "tool-call" || b.type === "tool_call" || b.type === "tool").length, 0)
       summary.textContent = `${group.length} earlier messages: ${userCount} user, ${assistantCount} assistant${toolCount ? `, ${toolCount} tools` : ""}`
       summary.setAttribute("aria-expanded", "false")
 

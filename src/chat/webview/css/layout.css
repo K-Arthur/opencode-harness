@@ -507,10 +507,14 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, #10b981 15%, transparent);
 }
 
-/* Focus ring: must come after steer rules so focus always wins (same specificity). */
-#input-area:focus-within {
+/* Composer-active ring: scoped to the textarea via :has() so the mode/model/
+   send buttons show only their own focus ring — never this container ring AND a
+   button ring at the same time. :has(#prompt-input:focus) also outranks the
+   steer/drag-over states above on specificity, so focus always wins. */
+#input-area:has(#prompt-input:focus) {
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 2px var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent),
+              0 0 0 4px color-mix(in srgb, var(--color-accent) 16%, transparent);
 }
 
 #input-wrapper {
@@ -678,11 +682,6 @@
 
 .mode-dropdown-btn:hover {
   opacity: 0.85;
-}
-
-.mode-dropdown-btn:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
 }
 
 .mode-dropdown-btn[aria-expanded="true"] {
@@ -3048,6 +3047,16 @@ button.modal-session-item:focus {
 .status-strip-model {
   font-weight: 500;
   color: var(--color-fg);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+}
+
+/* Allow all status-strip flex children to shrink when space is tight */
+#status-strip > * {
+  min-width: 0;
 }
 
 .status-strip-cost,
@@ -3064,10 +3073,11 @@ button.modal-session-item:focus {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  min-width: 180px;
-  max-width: min(360px, 45vw);
+  min-width: 120px;
+  max-width: min(280px, 40vw);
   color: var(--color-muted);
   font-variant-numeric: tabular-nums;
+  flex: 0 1 auto;
 }
 
 .quota-bar.hidden {

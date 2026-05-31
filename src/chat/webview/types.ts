@@ -471,7 +471,7 @@ export type HostMessage =
   | { type: "stream_tool_unresolved"; sessionId: string; toolCall: ToolCallData }
   | { type: "force_rerender"; sessionId: string }
   | { type: "skill_indicator"; sessionId: string; skillName: string }
-  | { type: "request_error"; error: string; errorContext?: unknown; sessionId?: string }
+  | { type: "request_error"; message: string; errorContext?: unknown; sessionId?: string }
   | { type: "webview_request_error"; error: string; requestType?: string; sessionId?: string }
   | { type: "prompt_rejected"; reason: string; sessionId?: string }
   | { type: "rate_limit_state"; state?: unknown }

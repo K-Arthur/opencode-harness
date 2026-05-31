@@ -20,6 +20,18 @@ import {
 import { escapeHtml } from "./htmlUtils"
 
 /**
+ * Sink for error-action button clicks. Wired once by the webview entrypoint
+ * (main.ts) to dispatch to the host (open_url / retry_stream / connect_provider)
+ * or to local UI (model picker). Without it the buttons are inert, so we keep a
+ * single injected handler instead of the old per-button console.log.
+ */
+export type ErrorActionHandler = (action: ErrorAction) => void
+let _actionHandler: ErrorActionHandler | null = null
+export function setErrorActionHandler(handler: ErrorActionHandler | null): void {
+  _actionHandler = handler
+}
+
+/**
  * Error display configuration
  */
 export interface ErrorDisplayConfig {
@@ -372,39 +384,13 @@ export class ErrorDisplay {
    * Handle action button click
    */
   private handleAction(action: ErrorAction): void {
-    console.log('Action clicked:', action.action, action.label);
-    
-    // This would integrate with the actual action handling logic
-    // For now, we'll just log the action
-    switch (action.action) {
-      case 'retry':
-        console.log('Retrying operation...');
-        break;
-      case 'edit':
-        console.log('Editing content...');
-        break;
-      case 'contact_support':
-        console.log('Opening support...');
-        break;
-      case 'view_details':
-        console.log('Showing details...');
-        break;
-      case 'dismiss':
-        console.log('Dismissing error...');
-        break;
-      case 'regenerate':
-        console.log('Regenerating response...');
-        break;
-      case 'switch_model':
-        console.log('Switching model...', action.metadata);
-        break;
-      case 'upgrade_plan':
-        console.log('Opening upgrade options...');
-        break;
-      case 'wait_for_reset':
-        console.log('Waiting for quota reset...');
-        break;
+    if (_actionHandler) {
+      _actionHandler(action);
+      return;
     }
+    // No handler wired (e.g. unit/browser test context) — stay silent rather
+    // than pretending to act.
+    console.warn('Error action ignored — no handler registered:', action.action);
   }
 
   /**

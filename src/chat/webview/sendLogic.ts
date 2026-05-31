@@ -282,6 +282,8 @@ export function createSendLogic(deps: SendLogicDeps) {
     if (stream) stream.showTypingIndicator("Thinking...")
     updateAgentStatus("thinking")
 
+    const sendVariant = stateManager.getState().sessions[active.id]?.variant || stateManager.getState().globalVariant || undefined
+
     vscode.postMessage({
       type: "send_prompt",
       text,
@@ -289,6 +291,7 @@ export function createSendLogic(deps: SendLogicDeps) {
       messageId: msgObj.id,
       model: sendModel,
       mode: active.mode,
+      ...(sendVariant ? { variant: sendVariant } : {}),
       ...(attachments.length > 0 ? { attachments } : {}),
     })
   }

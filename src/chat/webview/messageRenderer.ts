@@ -175,5 +175,15 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
   contentWrapper.appendChild(bubble)
   div.appendChild(contentWrapper)
 
+  // A system message whose blocks all render to nothing leaves an empty card.
+  // This happens for "Edited N files" banners persisted in older session state,
+  // which are now intentionally suppressed (see renderTaskBanner). System rows
+  // have no header, so an empty bubble has zero content — collapse the row so no
+  // ghost card remains. (Non-system rows always carry a header, so we leave them.)
+  if (role === "system" && bubble.childElementCount === 0) {
+    div.style.display = "none"
+    div.dataset.empty = "true"
+  }
+
   return div
 }

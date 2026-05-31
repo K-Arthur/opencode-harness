@@ -55,6 +55,32 @@ async function mountTodosPanel(page: Page, visible: boolean = true) {
     const host = document.querySelector('.tab-panel.active') || document.querySelector('.chat-main') || document.body
     let panel = document.getElementById('todos-panel')
     if (panel) {
+      panel.className = `todos-panel ${isVisible ? '' : 'hidden'}`
+      panel.setAttribute('aria-label', 'Todos and changed files')
+      panel.innerHTML = `
+        <div class="todos-panel-header">
+          <h2 class="todos-panel-title">Todos & Files</h2>
+          <button class="icon-btn" id="close-todos-btn" title="Close panel" aria-label="Close todos panel">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div class="todos-panel-content">
+          <div class="todos-section">
+              <h3 class="todos-section-title">Todos</h3>
+            <div id="todos-list"></div>
+            <form class="todo-add-form" id="todo-add-form">
+              <input type="text" class="todo-add-input" id="todo-add-input" placeholder="Add a task or reminder..." aria-label="New todo">
+              <button type="submit" class="todo-add-btn">Add</button>
+            </form>
+          </div>
+          <div class="todos-section">
+            <h3 class="todos-section-title">Changed Files</h3>
+            <div id="changed-files-panel-list"></div>
+          </div>
+        </div>
+      `
       seedPanel(panel)
       return
     }
