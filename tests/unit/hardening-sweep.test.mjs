@@ -13,6 +13,7 @@ const outputChannel = readFileSync(path.join(root, "src", "utils", "outputChanne
 const indexHtml = readFileSync(path.join(root, "src", "chat", "webview", "index.html"), "utf8")
 const mainTs = readFileSync(path.join(root, "src", "chat", "webview", "main.ts"), "utf8")
 const rendererTs = readFileSync(path.join(root, "src", "chat", "webview", "renderer.ts"), "utf8")
+const syntaxHighlighterTs = readFileSync(path.join(root, "src", "chat", "webview", "syntaxHighlighter.ts"), "utf8")
 
 describe("Security hardening", () => {
   it("CSP uses default-src 'none' with specific allowlist", () => {
@@ -29,7 +30,7 @@ describe("Security hardening", () => {
     // All innerHTML assignments should use either SVG constants from icons.ts
     // or hardcoded strings, never unsanitized user content.
     // Markdown-rendered content goes through DOMPurify.sanitize()
-    assert.ok(rendererTs.includes("DOMPurify.sanitize"), "markdown must be sanitized via DOMPurify")
+    assert.ok(rendererTs.includes("DOMPurify.sanitize") || syntaxHighlighterTs.includes("DOMPurify.sanitize"), "markdown must be sanitized via DOMPurify")
   })
 
   it("console.debug perf logging is gated behind debug flag", () => {

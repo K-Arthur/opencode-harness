@@ -7,7 +7,8 @@ import { fileURLToPath } from "node:url"
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const coordinatorSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "handlers", "StreamCoordinator.ts"), "utf8")
 const sessionClientSource = readFileSync(path.join(__dirname, "..", "..", "src", "session", "SessionClient.ts"), "utf8")
-const sessionManagerTypes = readFileSync(path.join(__dirname, "..", "..", "src", "session", "SessionManager.ts"), "utf8")
+const sessionManagerTypes = readFileSync(path.join(__dirname, "..", "..", "src", "session", "sessionTypes.ts"), "utf8")
+const sessionTypesSource = readFileSync(path.join(__dirname, "..", "..", "src", "session", "sessionTypes.ts"), "utf8")
 
 describe("T1.1 — TTFB timeout cancels in-flight request", () => {
   it("creates an AbortController per tab before calling sendPromptAsync", () => {
@@ -37,7 +38,7 @@ describe("T1.1 — TTFB timeout cancels in-flight request", () => {
   })
 
   it("sendPromptAsync accepts signal in PromptOptions", () => {
-    assert.ok(sessionManagerTypes.includes("signal?: AbortSignal"), "PromptOptions must have signal property")
+    assert.ok(sessionManagerTypes.includes("signal?: AbortSignal") || sessionTypesSource.includes("signal?: AbortSignal"), "PromptOptions must have signal property")
   })
 
   it("sendPromptAsync checks signal.aborted at entry and per-retry", () => {

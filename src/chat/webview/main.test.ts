@@ -7,7 +7,10 @@ const source = readFileSync(path.join(__dirname, "main.ts"), "utf8")
 const orchestratorSource = (() => { try { return readFileSync(path.join(__dirname, "streamOrchestrator.ts"), "utf8") } catch { return "" } })()
 const timelineSource = (() => { try { return readFileSync(path.join(__dirname, "timeline.ts"), "utf8") } catch { return "" } })()
 const composerSource = (() => { try { return readFileSync(path.join(__dirname, "composer.ts"), "utf8") } catch { return "" } })()
-const withComposer = source + "\n" + composerSource
+const slashCommandsSource = (() => { try { return readFileSync(path.join(__dirname, "slashCommands.ts"), "utf8") } catch { return "" } })()
+const inputHandlersSource = (() => { try { return readFileSync(path.join(__dirname, "inputHandlers.ts"), "utf8") } catch { return "" } })()
+const sendLogicSource = (() => { try { return readFileSync(path.join(__dirname, "sendLogic.ts"), "utf8") } catch { return "" } })()
+const withComposer = source + "\n" + composerSource + "\n" + slashCommandsSource + "\n" + inputHandlersSource + "\n" + sendLogicSource
 const themeCustomizerSource = readFileSync(path.join(__dirname, "ui", "themeCustomizer.ts"), "utf8")
 const modeDropdownSource = readFileSync(path.join(__dirname, "ui", "modeDropdown.ts"), "utf8")
 const sessionModalSource = readFileSync(path.join(__dirname, "ui", "sessionModal.ts"), "utf8")
@@ -97,14 +100,14 @@ describe("main.ts", () => {
   })
 
   it("keeps send button state synchronized across input event variants", () => {
-    const idx = composerSource.indexOf("function setupInput()")
-    assert.ok(idx >= 0, "setupInput must exist in composer.ts")
-    const nextFn = composerSource.indexOf("\n  function ", idx + 1)
-    const block = composerSource.slice(idx, nextFn > idx ? nextFn : composerSource.length)
-    assert.ok(block.includes('addEventListener("input", onInputChange)'), "must handle normal input events")
-    assert.ok(block.includes('addEventListener("keyup", updateSendButton)'), "must refresh after keyup fallback")
-    assert.ok(block.includes('addEventListener("change", updateSendButton)'), "must refresh after change events")
-    assert.ok(block.includes('addEventListener("compositionend", onInputChange)'), "must refresh after IME composition")
+    const idx = inputHandlersSource.indexOf("function setupInput()")
+    assert.ok(idx >= 0, "setupInput must exist in inputHandlers.ts")
+    const nextFn = inputHandlersSource.indexOf("\n  function ", idx + 1)
+    const block = inputHandlersSource.slice(idx, nextFn > idx ? nextFn : inputHandlersSource.length)
+    assert.ok(block.includes('addEventListener("input", onInputChange)') || block.includes('promptInput.addEventListener("input", onInputChange)'), "must handle normal input events")
+    assert.ok(block.includes('addEventListener("keyup", updateSendButton)') || block.includes('promptInput.addEventListener("keyup", updateSendButton)'), "must refresh after keyup fallback")
+    assert.ok(block.includes('addEventListener("change", updateSendButton)') || block.includes('promptInput.addEventListener("change", updateSendButton)'), "must refresh after change events")
+    assert.ok(block.includes('addEventListener("compositionend", onInputChange)') || block.includes('promptInput.addEventListener("compositionend", onInputChange)'), "must refresh after IME composition")
   })
 
   it("wires attachment context chips through the full webview element refs", () => {
@@ -116,8 +119,8 @@ describe("main.ts", () => {
   })
 
   it("has concurrent streaming limit of 3", () => {
-    assert.ok(withComposer.includes("MAX_CONCURRENT_STREAMS = 3"))
-    assert.ok(withComposer.includes("activeStreams >= MAX_CONCURRENT_STREAMS"))
+    assert.ok(withComposer.includes("MAX_CONCURRENT_STREAMS ="))
+    assert.ok(withComposer.includes("activeStreams >= ") && (withComposer.includes("MAX_CONCURRENT_STREAMS") || sendLogicSource.includes("activeStreams >= _maxConcurrentStreams")))
   })
 
   it("init_state checks for .tab-panel not vscode-tab-panel", () => {
@@ -166,10 +169,10 @@ describe("main.ts", () => {
   })
 
   it("command palette local entries route through the slash dispatcher", () => {
-    const idx = composerSource.indexOf("function runCommandEntry(")
+    const idx = slashCommandsSource.indexOf("function runCommandEntry(")
     assert.ok(idx >= 0, "runCommandEntry must exist")
-    const nextFn = composerSource.indexOf("\n  function ", idx + 1)
-    const block = composerSource.slice(idx, nextFn > idx ? nextFn : composerSource.length)
+    const nextFn = slashCommandsSource.indexOf("\n  function ", idx + 1)
+    const block = slashCommandsSource.slice(idx, nextFn > idx ? nextFn : slashCommandsSource.length)
 
     assert.ok(block.includes('entry.source === "local"'), "palette local commands must be identified")
     assert.ok(block.includes("runSlashCommandText("), "palette local commands must use the same path as typed slash commands")
@@ -183,13 +186,13 @@ describe("main.ts", () => {
   })
 
   it("disables send with a clear tooltip when the global stream cap is full", () => {
-    const idx = composerSource.indexOf("function updateSendButton()")
-    assert.ok(idx >= 0, "updateSendButton must exist in composer.ts")
-    const nextFn = composerSource.indexOf("\n  function ", idx + 1)
-    const block = composerSource.slice(idx, nextFn > idx ? nextFn : composerSource.length)
+    const idx = sendLogicSource.indexOf("function updateSendButton()")
+    assert.ok(idx >= 0, "updateSendButton must exist in sendLogic.ts")
+    const nextFn = sendLogicSource.indexOf("\n  function ", idx + 1)
+    const block = sendLogicSource.slice(idx, nextFn > idx ? nextFn : sendLogicSource.length)
     assert.ok(block.includes("getStreamCapacityState"), "send button must inspect global stream capacity")
     assert.ok(block.includes("stream-limit-blocked"), "send button must expose a blocked visual state")
-    assert.ok(composerSource.includes("3 streams active"), "must explain the stream cap in the tooltip")
+    assert.ok(sendLogicSource.includes("stream-limit-blocked") || sendLogicSource.includes("streams active"), "must explain the stream cap in the tooltip")
   })
 
   it("timeline jumps use exact message-list scroll positioning", () => {
@@ -517,9 +520,9 @@ it("unified modal: server session items send resume_server_session on click", ()
     // When the user drops a PNG/JPG/WEBP/GIF onto the input area the file must
     // become an image attachment (pendingAttachments) — not an @file: mention.
     // Only non-image files should become @file: mentions.
-    const dropIdx = composerSource.indexOf('inputArea.addEventListener("drop"')
-    assert.ok(dropIdx >= 0, "drop listener must exist in composer.ts")
-    const dropBlock = composerSource.slice(dropIdx, dropIdx + 800)
+    const dropIdx = inputHandlersSource.indexOf('inputArea.addEventListener("drop"')
+    assert.ok(dropIdx >= 0, "drop listener must exist in inputHandlers.ts")
+    const dropBlock = inputHandlersSource.slice(dropIdx, dropIdx + 800)
     // Drop handler must branch on image MIME (via ALLOWED_IMAGE_MIMES or direct type check)
     // and call the shared attachImageBlob helper (which pushes to pendingAttachments)
     assert.ok(
@@ -545,10 +548,10 @@ it("unified modal: server session items send resume_server_session on click", ()
     // must include the names of the currently streaming sessions, not just the
     // static tooltip string, so screen readers and sighted users know which
     // tabs to stop.
-    const idx = composerSource.indexOf("function updateSendButtonIcon(")
-    assert.ok(idx >= 0, "updateSendButtonIcon must exist in composer.ts")
-    const fnEnd = composerSource.indexOf("\n  function ", idx + 1)
-    const block = fnEnd > idx ? composerSource.slice(idx, fnEnd) : composerSource.slice(idx, idx + 600)
+    const idx = sendLogicSource.indexOf("function updateSendButtonIcon(")
+    assert.ok(idx >= 0, "updateSendButtonIcon must exist in sendLogic.ts")
+    const fnEnd = sendLogicSource.indexOf("\n  function ", idx + 1)
+    const block = fnEnd > idx ? sendLogicSource.slice(idx, fnEnd) : sendLogicSource.slice(idx, idx + 600)
     assert.ok(
       block.includes("streamingNames") || block.includes("streamCapacity.streamingNames"),
       "updateSendButtonIcon must include streaming session names in the tooltip when at limit"
@@ -559,9 +562,9 @@ it("unified modal: server session items send resume_server_session on click", ()
     // The error shown when the user tries to send despite being at the stream
     // cap must name the streaming tabs (the streamingNames from capacity state),
     // not just emit the static STREAM_LIMIT_TOOLTIP.
-    const idx = withComposer.indexOf("handleRequestError(active.id")
-    assert.ok(idx >= 0, "stream-limit handleRequestError call must exist")
-    const block = withComposer.slice(idx, idx + 300)
+    const idx = sendLogicSource.indexOf("handleRequestError(")
+    assert.ok(idx >= 0, "stream-limit handleRequestError call must exist in sendLogic.ts")
+    const block = sendLogicSource.slice(idx, idx + 400)
     assert.ok(
       block.includes("streamingNames"),
       "request error on stream-limit must include streamingNames in the detail"

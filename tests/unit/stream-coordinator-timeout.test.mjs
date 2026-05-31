@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const coordinatorSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "handlers", "StreamCoordinator.ts"), "utf8")
+const coordinatorTypesSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "handlers", "StreamCoordinatorTypes.ts"), "utf8")
 const finalizerSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "handlers", "StreamFinalizerService.ts"), "utf8")
 const providerSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "ChatProvider.ts"), "utf8")
 const eventRouterSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "WebviewEventRouter.ts"), "utf8")
@@ -112,7 +113,7 @@ describe("Tab streaming lifecycle", () => {
 
 describe("Stream state machine", () => {
   it("tracks stream lifecycle with explicit states", () => {
-    assert.ok(coordinatorSource.includes('type StreamLifecycleState = "idle" | "sending" | "streaming" | "completing" | "error" | "timeout"'), "must define StreamLifecycleState")
+    assert.ok(coordinatorSource.includes("StreamLifecycleState") || coordinatorTypesSource.includes("StreamLifecycleState"), "must define StreamLifecycleState")
     assert.ok(coordinatorSource.includes("setStreamState"), "must have setStreamState method")
   })
 

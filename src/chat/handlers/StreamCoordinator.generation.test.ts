@@ -5,10 +5,11 @@ import path from "node:path"
 
 const __dirname = path.dirname(new URL(import.meta.url).pathname)
 const source = readFileSync(path.join(__dirname, "StreamCoordinator.ts"), "utf8")
+const typesSource = readFileSync(path.join(__dirname, "StreamCoordinatorTypes.ts"), "utf8")
 
 describe("StreamCoordinator.ts", () => {
   it("exports StreamCallbacks interface", () => {
-    assert.ok(source.includes("export interface StreamCallbacks"), "StreamCallbacks interface must be exported")
+    assert.ok(source.includes("export type { StreamCallbacks") || source.includes("export interface StreamCallbacks") || typesSource.includes("export interface StreamCallbacks"), "StreamCallbacks interface must be exported")
   })
 
   it("exports StreamCoordinator class", () => {

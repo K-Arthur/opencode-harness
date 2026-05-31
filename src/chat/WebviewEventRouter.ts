@@ -126,6 +126,7 @@ export class WebviewEventRouter {
     "update_setting", "show_error", "get_context_usage", "record_stash_usage",
     "open_context_window_override_dialog", "model_favorite", "model_toggle",
     "question_answer",
+    "resume_stream", "decline_resume",
   ])
 
   private readonly webviewHandlers: Map<string, (msg: Record<string, unknown>, sessionId?: string) => void | Promise<void>> = new Map([
@@ -346,6 +347,20 @@ export class WebviewEventRouter {
           postMessage: (m) => this.opts.postMessage(m),
           postRequestError: (m) => this.opts.postRequestError(m),
         }).catch(err => log.error("Retry stream failed", err))
+      }
+    }],
+    ["resume_stream", (_: Record<string, unknown>, sessionId?: string) => {
+      if (sessionId) {
+        this.opts.tabManager.clearRestorationState(sessionId)
+        void this.opts.streamCoordinator.retryFromHere(sessionId, {
+          postMessage: (m) => this.opts.postMessage(m),
+          postRequestError: (m) => this.opts.postRequestError(m),
+        }).catch(err => log.error("Resume stream failed", err))
+      }
+    }],
+    ["decline_resume", (_: Record<string, unknown>, sessionId?: string) => {
+      if (sessionId) {
+        this.opts.tabManager.clearRestorationState(sessionId)
       }
     }],
     ["close_tab", (_: Record<string, unknown>, sessionId?: string) => {

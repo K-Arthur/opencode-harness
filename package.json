@@ -862,6 +862,28 @@
           "minimum": 0,
           "maximum": 5,
           "description": "Maximum number of validation retry attempts before accepting an invalid response."
+        },
+        "opencode.sessions.maxConcurrentStreams": {
+          "type": "number",
+          "scope": "window",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Maximum number of concurrent AI streams across all tabs."
+        },
+        "opencode.sessions.processStrategy": {
+          "type": "string",
+          "scope": "window",
+          "default": "shared",
+          "enum": [
+            "shared",
+            "per-tab"
+          ],
+          "enumDescriptions": [
+            "All tabs share one opencode serve process (safe, low memory).",
+            "Each tab gets its own opencode serve process (full crash isolation, higher memory)."
+          ],
+          "description": "Process isolation strategy. 'shared' = one server for all tabs (default). 'per-tab' = each tab gets its own server process."
         }
       }
     }

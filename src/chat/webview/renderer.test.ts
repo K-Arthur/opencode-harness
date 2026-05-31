@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 
 const source = readFileSync(path.join(__dirname, "renderer.ts"), "utf8")
+const syntaxHighlighterSource = readFileSync(path.join(__dirname, "syntaxHighlighter.ts"), "utf8")
 const toolCallRendererSource = readFileSync(path.join(__dirname, "toolCallRenderer.ts"), "utf8")
 const messageRendererSource = readFileSync(path.join(__dirname, "messageRenderer.ts"), "utf8")
 
@@ -47,17 +48,17 @@ it("has type guards for discriminated blocks", () => {
 	  })
 
   it("sanitizes_xss_with_dompurify", () => {
-    assert.ok(source.includes("function sanitizeHtml"), "must call sanitizeHtml")
+    assert.ok(source.includes("function sanitizeHtml") || syntaxHighlighterSource.includes("function sanitizeHtml"), "must call sanitizeHtml")
     assert.ok(source.includes("const rendered = sanitizeHtml(md.render(normalized))") || source.includes("return sanitizeHtml(md.render(normalized))"), "renderMarkdown must sanitize output")
-    assert.ok(source.includes("DOMPurify.sanitize"), "must use DOMPurify")
-    assert.ok(source.includes("FORBID_TAGS"), "must forbid dangerous tags")
-    assert.ok(source.includes("FORBID_CONTENTS"), "must forbid dangerous content")
+    assert.ok(source.includes("DOMPurify.sanitize") || syntaxHighlighterSource.includes("DOMPurify.sanitize"), "must use DOMPurify")
+    assert.ok(source.includes("FORBID_TAGS") || syntaxHighlighterSource.includes("FORBID_TAGS"), "must forbid dangerous tags")
+    assert.ok(source.includes("FORBID_CONTENTS") || syntaxHighlighterSource.includes("FORBID_CONTENTS"), "must forbid dangerous content")
   })
 
   it("caches sanitized markdown and highlighted code with bounded LRU caches", () => {
-    assert.ok(source.includes("class LruStringCache"), "must define a bounded cache")
+    assert.ok(source.includes("class LruStringCache") || syntaxHighlighterSource.includes("class LruStringCache") || syntaxHighlighterSource.includes("class HighlightCache"), "must define a bounded cache")
     assert.ok(source.includes("markdownCache"), "must cache non-streaming markdown")
-    assert.ok(source.includes("highlightCache"), "must cache syntax highlighting")
+    assert.ok(source.includes("highlightCache") || syntaxHighlighterSource.includes("highlightCache"), "must cache syntax highlighting")
     assert.ok(source.includes("if (isStreaming) return sanitizeHtml"), "streaming markdown must skip the markdown cache")
   })
 
@@ -178,7 +179,7 @@ it("has type guards for discriminated blocks", () => {
   })
 
   it("imports highlight.js", () => {
-    assert.ok(source.includes('import hljs from "highlight.js/lib/core"'))
+    assert.ok(source.includes('import hljs from "highlight.js/lib/core"') || syntaxHighlighterSource.includes('import hljs from "highlight.js/lib/core"'))
   })
 
   it("imports markdown-it", () => {
@@ -186,22 +187,22 @@ it("has type guards for discriminated blocks", () => {
   })
 
   it("imports DOMPurify", () => {
-    assert.ok(source.includes('import DOMPurify from "dompurify"'))
+    assert.ok(source.includes('import DOMPurify from "dompurify"') || syntaxHighlighterSource.includes('import DOMPurify from "dompurify"'))
   })
 
   it("configures PURIFY_CONFIG with allowed tags", () => {
-    assert.ok(source.includes("ALLOWED_TAGS"))
-    assert.ok(source.includes("FORBID_TAGS"))
+    assert.ok(source.includes("ALLOWED_TAGS") || syntaxHighlighterSource.includes("ALLOWED_TAGS"))
+    assert.ok(source.includes("FORBID_TAGS") || syntaxHighlighterSource.includes("FORBID_TAGS"))
   })
 
   it("defines sanitizeHtml function", () => {
-    assert.ok(source.includes("function sanitizeHtml"))
+    assert.ok(source.includes("function sanitizeHtml") || syntaxHighlighterSource.includes("function sanitizeHtml"))
   })
 
   it("registers 15 highlight.js languages", () => {
     const languages = ["javascript", "typescript", "python", "rust", "go", "bash", "json", "css", "markdown", "sql", "diff", "java", "cpp", "yaml", "xml"]
     languages.forEach(lang => {
-      assert.ok(source.includes(`"${lang}", ${lang}`), `Missing ${lang} language registration`)
+      assert.ok(source.includes(`"${lang}", ${lang}`) || syntaxHighlighterSource.includes(`"${lang}", ${lang}`), `Missing ${lang} language registration`)
     })
   })
 

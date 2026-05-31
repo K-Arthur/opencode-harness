@@ -619,6 +619,25 @@
   transform: translateY(0);
 }
 
+.interrupted-btn-row {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.retry-btn.dismissed {
+  background: transparent;
+  border-color: var(--oc-border, rgba(128, 128, 128, 0.3));
+  color: var(--oc-muted-fg, rgba(128, 128, 128, 0.7));
+}
+
+.retry-btn.dismissed:hover {
+  background: var(--oc-border, rgba(128, 128, 128, 0.15));
+  color: var(--oc-muted-fg, rgba(128, 128, 128, 0.9));
+  box-shadow: none;
+  transform: none;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════════╛
    ERROR MESSAGE
    ═══════════════════════════════════════════════════════════════════════════════╛ */

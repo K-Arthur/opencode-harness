@@ -1,6 +1,7 @@
 import * as vscode from "vscode"
 import { log } from "../utils/outputChannel"
 import { Block } from "./types"
+import type { TabRestorationState } from "../session/sessionTypes"
 
 export interface TabState {
   id: string
@@ -18,13 +19,16 @@ export interface TabState {
 
 const OPEN_TABS_STORAGE_KEY = "opencode-harness.openTabs"
 const ACTIVE_TAB_STORAGE_KEY = "opencode-harness.activeTab"
+const RESTORATION_STATE_KEY = "opencode-harness.tabRestoration"
 
 export class TabManager {
   private tabs = new Map<string, TabState>()
   private cliSessionIndex = new Map<string, TabState>()
   private activeTabId = ""
-  private readonly MAX_CONCURRENT_STREAMS = 3
+  private maxConcurrentStreams: number
   private readonly MAX_TABS = 20
+
+  private restorationStates = new Map<string, TabRestorationState>()
 
   private _onTabCreated = new vscode.EventEmitter<string>()
   private _onTabClosed = new vscode.EventEmitter<string>()
@@ -53,6 +57,16 @@ export class TabManager {
     const saved = storage?.get<string[]>(OPEN_TABS_STORAGE_KEY, []) ?? []
     this.restoredTabIds = Object.freeze(saved.filter((id) => typeof id === "string" && id.length > 0).slice(0, this.MAX_TABS))
     this.restoredActiveId = storage?.get<string>(ACTIVE_TAB_STORAGE_KEY, "") ?? ""
+
+    const config = vscode.workspace.getConfiguration("opencode")
+    this.maxConcurrentStreams = config.get<number>("sessions.maxConcurrentStreams", 5)
+
+    const raw = storage?.get<Record<string, TabRestorationState>>(RESTORATION_STATE_KEY, {}) ?? {}
+    for (const [tabId, state] of Object.entries(raw)) {
+      if (tabId && state && typeof state.interruptedAt === "number") {
+        this.restorationStates.set(tabId, state)
+      }
+    }
   }
 
   /** Tab IDs that were open the last time the extension ran. Read-only snapshot. */
@@ -70,6 +84,49 @@ export class TabManager {
     void this.storage.update(OPEN_TABS_STORAGE_KEY, Array.from(this.tabs.keys()))
     void this.storage.update(ACTIVE_TAB_STORAGE_KEY, this.activeTabId)
   }
+
+  private persistRestorationState(): void {
+    if (!this.storage) return
+    const obj: Record<string, TabRestorationState> = {}
+    for (const [tabId, state] of this.restorationStates) {
+      obj[tabId] = state
+    }
+    void this.storage.update(RESTORATION_STATE_KEY, obj)
+  }
+
+  captureStreamingSnapshot(): void {
+    this.restorationStates.clear()
+    const now = Date.now()
+    for (const tab of this.tabs.values()) {
+      if (tab.isStreaming) {
+        this.restorationStates.set(tab.id, {
+          tabId: tab.id,
+          cliSessionId: tab.cliSessionId,
+          wasStreaming: true,
+          interruptedAt: now,
+        })
+      }
+    }
+    this.persistRestorationState()
+    if (this.restorationStates.size > 0) {
+      log.info(`Captured streaming snapshot for ${this.restorationStates.size} tab(s)`)
+    }
+  }
+
+  getInterruptedTabs(): TabRestorationState[] {
+    return Array.from(this.restorationStates.values()).filter(s => s.wasStreaming)
+  }
+
+  clearRestorationState(tabId: string): void {
+    this.restorationStates.delete(tabId)
+    this.persistRestorationState()
+  }
+
+  clearAllRestorationStates(): void {
+    this.restorationStates.clear()
+    this.persistRestorationState()
+  }
+
 
   createTab(id: string, cliSessionId?: string, model?: string, mode?: string, options?: { setActive?: boolean }): TabState | null {
     if (this.tabs.has(id)) {
@@ -176,11 +233,11 @@ export class TabManager {
 
   canStartStreaming(): { ok: boolean; reason?: string } {
     const streamingTabs = Array.from(this.tabs.values()).filter((t) => t.isStreaming)
-    if (streamingTabs.length >= this.MAX_CONCURRENT_STREAMS) {
+    if (streamingTabs.length >= this.maxConcurrentStreams) {
       const names = streamingTabs.map((t) => `"${t.id}"`).join(", ")
       return {
         ok: false,
-        reason: `Maximum ${this.MAX_CONCURRENT_STREAMS} concurrent streams reached. Currently streaming: ${names}`,
+        reason: `Maximum ${this.maxConcurrentStreams} concurrent streams reached. Currently streaming: ${names}`,
       }
     }
     return { ok: true }
@@ -191,9 +248,9 @@ export class TabManager {
     if (!tab) return false
     if (isStreaming && !tab.isStreaming) {
       const streamingCount = this.getStreamingCount()
-      if (streamingCount >= this.MAX_CONCURRENT_STREAMS) {
+      if (streamingCount >= this.maxConcurrentStreams) {
         const names = Array.from(this.tabs.values()).filter((t) => t.isStreaming).map((t) => `"${t.id}"`).join(", ")
-        log.warn(`Cannot set streaming — limit ${this.MAX_CONCURRENT_STREAMS} reached. Currently streaming: ${names}`)
+        log.warn(`Cannot set streaming — limit ${this.maxConcurrentStreams} reached. Currently streaming: ${names}`)
         return false
       }
     }

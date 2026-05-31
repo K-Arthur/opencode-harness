@@ -2,14 +2,24 @@ import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
-
-const { JSDOM } = require("jsdom") as { JSDOM: any }
+import { JSDOM } from "jsdom"
 
 const streamSource = readFileSync(path.join(__dirname, "stream.ts"), "utf8")
 const handlersSource = readFileSync(path.join(__dirname, "streamHandlers.ts"), "utf8")
 
 function sourceIncludes(str: string): boolean {
   return streamSource.includes(str) || handlersSource.includes(str)
+}
+
+/** Load streamHandlers after bootstrapping a DOMPurify instance for JSDOM. */
+async function loadStreamHandlers(): Promise<typeof import("./streamHandlers")> {
+  const { JSDOM: JSDom } = await import("jsdom")
+  const purifyDom = new JSDom("", { url: "https://opencode-harness.test" })
+  const createPurify = require("dompurify")
+  const purify = createPurify(purifyDom.window)
+  ;(globalThis as any).import_dompurify = { default: purify, ...purify }
+  await import("./streamEndHandler")
+  return import("./streamHandlers")
 }
 
 function installDom(): () => void {
@@ -237,7 +247,7 @@ describe("stream.ts", () => {
   it("recovers late text chunks after stream_end clears the active stream id", async () => {
     const restore = installDom()
     try {
-      const { handleStreamStart, handleStreamEnd, handleStreamChunk } = await import("./streamHandlers")
+      const { handleStreamStart, handleStreamEnd, handleStreamChunk } = await loadStreamHandlers()
       const harness = createHarness()
       const saveState = () => {}
       let lateSaveCount = 0

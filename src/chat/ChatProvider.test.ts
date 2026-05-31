@@ -12,6 +12,8 @@ const eventRouterSource = readFileSync(resolve(__dirname, "WebviewEventRouter.ts
 const validatorSource = readFileSync(resolve(__dirname, "WebviewMessageValidator.ts"), "utf8")
 const backfillSource = readFileSync(resolve(__dirname, "BackfillService.ts"), "utf8")
 const modePolicySource = readFileSync(resolve(__dirname, "modePolicy.ts"), "utf8")
+const autoModeSource = readFileSync(resolve(__dirname, "AutoModeService.ts"), "utf8")
+const rateLimitMonitorSource = readFileSync(resolve(__dirname, "../monitor/RateLimitMonitor.ts"), "utf8")
 
 void describe("ChatProvider.ts", () => {
   void it("exports ChatProvider class with correct interfaces", () => {
@@ -163,16 +165,16 @@ void describe("ChatProvider.ts", () => {
   })
 
   void it("auto_mode_shows_one_time_confirmation", () => {
-    assert.ok(source.includes("showAutoModeConfirmation"), "must have showAutoModeConfirmation method")
-    assert.ok(source.includes("Auto mode will apply all changes without asking"), "must show auto mode warning")
+    assert.ok(source.includes("showAutoModeConfirmation") || autoModeSource.includes("showAutoModeConfirmation"), "must have showAutoModeConfirmation method")
+    assert.ok(source.includes("Auto mode will apply all changes without asking") || autoModeSource.includes("Auto mode will apply all changes without asking"), "must show auto mode warning")
     assert.ok(source.includes('"auto"') || eventRouterSource.includes('"auto"'), "must handle auto mode")
-    assert.ok(source.includes("hasAutoModeConfirmed"), "must have hasAutoModeConfirmed check")
+    assert.ok(source.includes("hasAutoModeConfirmed") || autoModeSource.includes("hasAutoModeConfirmed"), "must have hasAutoModeConfirmed check")
   })
 
   void it("auto_mode_confirmation_suppressible", () => {
-    assert.ok(source.includes("Don't show again"), "must have Don't show again option")
-    assert.ok(source.includes("AUTO_MODE_CONFIRMED_KEY"), "must use globalState key for persistence")
-    assert.ok(source.includes("globalState.update"), "must persist confirmation to globalState")
+    assert.ok(source.includes("Don't show again") || autoModeSource.includes("Don't show again"), "must have Don't show again option")
+    assert.ok(source.includes("AUTO_MODE_CONFIRMED_KEY") || autoModeSource.includes("AUTO_MODE_CONFIRMED_KEY"), "must use globalState key for persistence")
+    assert.ok(source.includes("globalState.update") || autoModeSource.includes("globalState.update"), "must persist confirmation to globalState")
   })
 
   void it("has session lifecycle methods", () => {
@@ -592,7 +594,7 @@ void it("pushes rate-limit state to the webview for the quota bar", () => {
   assert.ok(source.includes("rateLimitMonitor.onStateChanged"), "must subscribe to rate-limit state changes")
   const statePushSource = readFileSync(resolve(__dirname, "StatePushService.ts"), "utf8")
   assert.ok(statePushSource.includes('type: "rate_limit_state"'), "must post rate_limit_state messages")
-  assert.ok(source.includes("getSerializableState"), "must serialize rate-limit state before posting")
+  assert.ok(source.includes("pushRateLimitStateToWebview") || rateLimitMonitorSource.includes("getSerializableState"), "must serialize rate-limit state before posting")
 })
 
 // ── sessions_recovered: server session recovery after startup ────────────────

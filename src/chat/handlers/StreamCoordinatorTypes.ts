@@ -6,4 +6,4 @@ export interface StreamCallbacks {
 
 export type ToolEndResult = { id: string; ok: boolean; result?: string; durationMs?: number; stale?: boolean }
 
-export type StreamLifecycleState = "idle" | "sending" | "streaming" | "completing" | "error" | "timeout"
+export type StreamLifecycleState = "idle" | "sending" | "streaming" | "completing" | "error" | "timeout" | "interrupted"

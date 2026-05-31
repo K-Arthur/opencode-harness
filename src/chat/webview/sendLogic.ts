@@ -7,7 +7,13 @@ export interface StreamCapacityState {
   activeStreams: number
 }
 
-export const MAX_CONCURRENT_STREAMS = 3
+let _maxConcurrentStreams = 5
+export function setMaxConcurrentStreams(max: number): void {
+  if (max >= 1 && max <= 10) _maxConcurrentStreams = max
+}
+export function getMaxConcurrentStreams(): number { return _maxConcurrentStreams }
+/** @deprecated Use getMaxConcurrentStreams() for runtime checks */
+export const MAX_CONCURRENT_STREAMS = 5
 
 export interface SendLogicDeps {
   els: ElementRefs
@@ -87,7 +93,7 @@ export function createSendLogic(deps: SendLogicDeps) {
   function getStreamCapacityState(): StreamCapacityState {
     const streamingSessions = stateManager.getAllSessions().filter((s) => s.isStreaming)
     const activeStreams = streamingSessions.length
-    const isFull = activeStreams >= MAX_CONCURRENT_STREAMS
+    const isFull = activeStreams >= _maxConcurrentStreams
     const streamingNames = streamingSessions
       .map((s) => {
         const session = stateManager.getSession(s.id)

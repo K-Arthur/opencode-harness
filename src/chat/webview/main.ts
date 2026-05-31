@@ -13,6 +13,7 @@ import { upsertMessageById } from "./messageUpsert"
 import { createTabBar, createTabContent, switchToTab, removeTabContent } from "./tabs"
 import { setupModelDropdown } from "./model-dropdown"
 import { setVsCodeApi, setupToolKeyboardNav, webviewLog } from "./streamHandlers"
+import { setMaxConcurrentStreams } from "./sendLogic"
 import { setupModelManager } from "./model-manager"
 import { setupVariantSelector } from "./variant-selector"
 import { setupMcpConfig } from "./mcp-config"
@@ -260,8 +261,7 @@ function getVsCodeApi() {
   // Streaming state per session
   const streamHandlers = new Map<string, ReturnType<typeof createStreamHandlers>>()
   let streamChunkLogCount = 0
-  const MAX_CONCURRENT_STREAMS = 3
-  const STREAM_LIMIT_TOOLTIP = "3 streams active — wait or stop another tab first"
+  const STREAM_LIMIT_TOOLTIP = "Concurrent stream limit reached — wait or stop another tab first"
 
   // Scroll anchors per tab — disposed on tab close
   const scrollAnchors = new Map<string, ScrollAnchor>()
@@ -1495,6 +1495,48 @@ function getVsCodeApi() {
       }],
       ["stream_chunk", (_msg, sid) => { if (sid) handleStreamChunk(sid, _msg.text as string, _msg.messageId as string | undefined) }],
       ["stream_end", (_msg, sid) => { if (sid) handleStreamEnd(sid, _msg.messageId as string, _msg.blocks, _msg.reason as string | undefined, Boolean(_msg.partial)) }],
+      ["stream_interrupted", (_msg, sid) => {
+        if (!sid) return
+        const interruptedAt = typeof _msg.interruptedAt === "number" ? _msg.interruptedAt : Date.now()
+        const elapsed = Math.round((Date.now() - interruptedAt) / 1000)
+        const timeAgo = elapsed < 60 ? `${elapsed}s ago` : `${Math.round(elapsed / 60)}m ago`
+        const msg: ChatMessage = {
+          role: "system",
+          id: createWebviewId("sys"),
+          blocks: [{ type: "text", text: `Stream interrupted ${timeAgo}. The server connection was lost while this tab was actively streaming.` }],
+          timestamp: Date.now(),
+          sessionId: sid,
+        }
+        addMessage(sid, msg)
+        const msgList = getMessageList(sid)
+        if (msgList) {
+          const lastMsg = msgList.querySelector(`[data-message-id="${msg.id}"]`)
+          if (lastMsg) {
+            const bubble = lastMsg.querySelector(".message-bubble, .system-bubble")
+            if (bubble) {
+              const btnRow = document.createElement("div")
+              btnRow.className = "interrupted-btn-row"
+              const resumeBtn = document.createElement("button")
+              resumeBtn.className = "retry-btn"
+              resumeBtn.textContent = "Resume Stream"
+              resumeBtn.addEventListener("click", () => {
+                btnRow.remove()
+                vscode.postMessage({ type: "resume_stream", sessionId: sid })
+              })
+              const dismissBtn = document.createElement("button")
+              dismissBtn.className = "retry-btn dismissed"
+              dismissBtn.textContent = "Dismiss"
+              dismissBtn.addEventListener("click", () => {
+                btnRow.remove()
+                vscode.postMessage({ type: "decline_resume", sessionId: sid })
+              })
+              btnRow.appendChild(resumeBtn)
+              btnRow.appendChild(dismissBtn)
+              bubble.appendChild(btnRow)
+            }
+          }
+        }
+      }],
 ["stream_ping", (_msg, sid) => {
         if (sid) {
           const stream = streamHandlers.get(sid)
@@ -2004,6 +2046,11 @@ function getVsCodeApi() {
 
         if (msg.globalModel) {
           modelDropdown.setCurrentModel(msg.globalModel as string)
+        }
+
+        // Update configurable stream cap from extension
+        if (typeof msg.maxConcurrentStreams === "number") {
+          setMaxConcurrentStreams(msg.maxConcurrentStreams)
         }
 
         // Create tab UI for every session in our state (post-merge), not just
