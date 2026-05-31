@@ -462,6 +462,7 @@ export type HostMessage =
   | { type: "stream_start"; sessionId: string; messageId: string; resumed?: StreamResumedInfo; isSteerPrompt?: boolean }
   | { type: "stream_chunk"; sessionId: string; text: string; messageId?: string; seq?: number }
   | { type: "stream_end"; sessionId: string; reason?: string; blocks?: Block[]; partial?: boolean; seq?: number }
+  | { type: "stream_interrupted"; sessionId: string; cliSessionId?: string; interruptedAt: number }
   | { type: "stream_ping"; sessionId: string; seq?: number }
   | { type: "stream_ack"; sessionId: string; seq?: number }
   | { type: "stream_tool_start"; sessionId: string; toolCall: ToolCallData }
@@ -640,6 +641,8 @@ export type WebviewMessage =
   | { type: "request_more_messages"; sessionId: string; beforeIndex: number; limit?: number }
   | { type: "stream_ack"; sessionId: string; seq?: number; lastRenderedChunkSeq?: number }
   | { type: "retry_stream"; sessionId: string }
+  | { type: "resume_stream"; sessionId: string }
+  | { type: "decline_resume"; sessionId: string }
   | { type: "request_state_sync" }
   | { type: "set_instructions"; sessionId: string; instructions: string }
   | { type: "fork_session"; sessionId: string }

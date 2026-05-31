@@ -21,6 +21,8 @@ const files = {
   tabManager: readFileSync(path.join(root, "src", "chat", "TabManager.ts"), "utf8"),
   mainTs: readFileSync(path.join(root, "src", "chat", "webview", "main.ts"), "utf8"),
   composerTs: (() => { try { return readFileSync(path.join(root, "src", "chat", "webview", "composer.ts"), "utf8") } catch { return "" } })(),
+  sendLogicTs: (() => { try { return readFileSync(path.join(root, "src", "chat", "webview", "sendLogic.ts"), "utf8") } catch { return "" } })(),
+  inputHandlersTs: (() => { try { return readFileSync(path.join(root, "src", "chat", "webview", "inputHandlers.ts"), "utf8") } catch { return "" } })(),
   streamOrchestrator: (() => { try { return readFileSync(path.join(root, "src", "chat", "webview", "streamOrchestrator.ts"), "utf8") } catch { return "" } })(),
   renderer: readFileSync(path.join(root, "src", "chat", "webview", "renderer.ts"), "utf8"),
   messageRenderer: readFileSync(path.join(root, "src", "chat", "webview", "messageRenderer.ts"), "utf8"),
@@ -161,13 +163,13 @@ describe("Regression: Session Persistence & Resume", () => {
 })
 
 describe("Regression: Tabs & Concurrency", () => {
-  it("TabManager enforces MAX_CONCURRENT_STREAMS = 3", () => {
-    assert.ok(files.tabManager.includes("MAX_CONCURRENT_STREAMS = 3"),
-      "must limit concurrent streams to 3")
+  it("TabManager enforces concurrent stream limit", () => {
+    assert.ok(files.tabManager.includes("maxConcurrentStreams") || files.tabManager.includes("MAX_CONCURRENT_STREAMS"),
+      "must enforce a concurrent stream limit")
   })
 
   it("sendMessage checks streaming count before sending", () => {
-    assert.ok(files.mainTs.includes("streamingCount >= 3") || files.mainTs.includes("concurrent stream") || files.composerTs.includes("concurrent stream") || files.composerTs.includes("streamCapacity.isFull"),
+    assert.ok(files.mainTs.includes("streamingCount >= 3") || files.mainTs.includes("concurrent stream") || files.composerTs.includes("concurrent stream") || files.composerTs.includes("streamCapacity.isFull") || files.sendLogicTs.includes("streamCapacity.isFull") || files.sendLogicTs.includes("MAX_CONCURRENT_STREAMS"),
       "webview must check concurrent stream limit")
   })
 })
@@ -190,7 +192,7 @@ describe("Regression: Slash Commands", () => {
 
 describe("Regression: Context & References", () => {
   it("mention button triggers @ mention search", () => {
-    assert.ok(files.mainTs.includes("mention.handleTrigger()") || files.composerTs.includes("mention.handleTrigger()"), "must trigger mention from @ button")
+    assert.ok(files.mainTs.includes("mention.handleTrigger()") || files.composerTs.includes("mention.handleTrigger()") || files.inputHandlersTs.includes("mention.handleTrigger()"), "must trigger mention from @ button")
   })
 })
 

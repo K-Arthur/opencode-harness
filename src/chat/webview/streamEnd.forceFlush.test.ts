@@ -2,6 +2,17 @@ import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { installDom, createHarness } from "./streamHarness"
 
+/** Load streamHandlers after bootstrapping a DOMPurify instance for JSDOM. */
+async function loadStreamHandlers(): Promise<typeof import("./streamHandlers")> {
+  const { JSDOM: JSDom } = await import("jsdom")
+  const purifyDom = new JSDom("", { url: "https://opencode-harness.test" })
+  const createPurify = require("dompurify")
+  const purify = createPurify(purifyDom.window)
+  ;(globalThis as any).import_dompurify = { default: purify, ...purify }
+  await import("./streamEndHandler")
+  return import("./streamHandlers")
+}
+
 /**
  * M3 — stream_end must not force-flush the RenderQueue when the server provides
  * authoritative blocks. mergeServerBlocks + reRenderMessage rebuild the whole
@@ -12,7 +23,7 @@ describe("M3: stream_end skips wasted queue flush when blocks are provided", () 
   it("does not flush the queue when non-empty blocks are supplied", async () => {
     const dom = installDom({ manualRaf: true })
     try {
-      const { handleStreamStart, handleStreamChunk, handleStreamEnd } = await import("./streamHandlers")
+      const { handleStreamStart, handleStreamChunk, handleStreamEnd } = await loadStreamHandlers()
       const h = createHarness()
 
       handleStreamStart(h.state, h.els, h.messages, "m1")
@@ -42,7 +53,7 @@ describe("M3: stream_end skips wasted queue flush when blocks are provided", () 
   it("still force-flushes when blocks are empty (live text is authoritative)", async () => {
     const dom = installDom({ manualRaf: true })
     try {
-      const { handleStreamStart, handleStreamChunk, handleStreamEnd } = await import("./streamHandlers")
+      const { handleStreamStart, handleStreamChunk, handleStreamEnd } = await loadStreamHandlers()
       const h = createHarness()
 
       handleStreamStart(h.state, h.els, h.messages, "m2")

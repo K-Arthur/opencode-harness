@@ -15,6 +15,7 @@ export class BatchEngine<K, V, T = V> {
   private readonly now: () => number
   private scheduledFlushAt = 0
   private disposed = false
+  private inFlight = new Set<K>()
 
   private readonly skipKey?: (key: K, value: V) => boolean
 
@@ -50,19 +51,38 @@ export class BatchEngine<K, V, T = V> {
 
     const succeeded: K[] = []
     for (const [key, value] of this.buffer) {
+      if (this.inFlight.has(key)) continue
       if (this.skipKey?.(key, value)) continue
       try {
         const result = this.flushEach(key, value)
         if (result === false) continue
         if (result && typeof (result as PromiseLike<boolean | void>).then === "function") {
+          this.inFlight.add(key)
           ;(result as PromiseLike<boolean | void>).then(
             (ok) => {
-              if (ok === false) this.log?.(`[BatchEngine] flushEach returned false for ${String(key)}`)
+              this.inFlight.delete(key)
+              if (this.disposed) return
+              if (ok === false) {
+                this.log?.(`[BatchEngine] flushEach returned false for ${String(key)}`)
+                this.scheduleFlush(this.flushMs)
+                return
+              }
+              if (Object.is(this.buffer.get(key), value)) {
+                this.buffer.delete(key)
+              }
+              if (this.buffer.size > 0) {
+                this.scheduleFlush(this.flushMs)
+              }
             },
             (err) => {
+              this.inFlight.delete(key)
               this.log?.(`[BatchEngine] flushEach rejected for ${String(key)}: ${String(err)}`)
+              if (!this.disposed) {
+                this.scheduleFlush(this.flushMs)
+              }
             },
           )
+          continue
         }
         succeeded.push(key)
       } catch (err) {
@@ -99,6 +119,7 @@ export class BatchEngine<K, V, T = V> {
 
   clear(): void {
     this.buffer.clear()
+    this.inFlight.clear()
     if (this.timer) {
       clearTimeout(this.timer)
       this.timer = null

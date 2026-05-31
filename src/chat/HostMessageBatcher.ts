@@ -15,10 +15,11 @@ export interface HostMessageBatcherOptions {
 }
 
 export type BatchableHostMessage = Record<string, unknown> & { type: string }
-type StreamChunkMessage = Record<string, unknown> & { type: "stream_chunk"; sessionId: string; text: string; messageId?: string }
+type StreamChunkMessage = Record<string, unknown> & { type: "stream_chunk"; sessionId: string; text: string; messageId?: string; seq?: number }
 interface BufferedChunk {
   text: string
   messageId?: string
+  seq?: number
 }
 
 const IMMEDIATE_TYPES = new Set([
@@ -55,6 +56,7 @@ function chunkReducer(existing: BufferedChunk | undefined, value: StreamChunkMes
   return {
     text: `${existing?.text ?? ""}${value.text}`,
     messageId: value.messageId ?? existing?.messageId,
+    seq: typeof value.seq === "number" ? value.seq : existing?.seq,
   }
 }
 
@@ -125,7 +127,7 @@ export class HostMessageBatcher {
     }
 
     if (!HostMessageBatcher.isBatchable(msg)) {
-      return this.dispatch(msg)
+      return this.dispatch(msg) !== false
     }
 
     this.engine.add("main", msg)
@@ -165,11 +167,8 @@ export class HostMessageBatcher {
 
   resumeSession(sessionId: string): void {
     if (!this.pausedSessions.delete(sessionId)) return
-    const chunk = this.chunkQueue.get(sessionId)
-    if (!chunk) return
-    if (this.dispatchChunk(sessionId, chunk)) {
-      this.chunkQueue.delete(sessionId)
-    } else {
+    this.chunkQueue.flush()
+    if (this.chunkQueue.size > 0) {
       this.scheduleChunkFlush(this.baseChunkFlushMs)
     }
   }
@@ -184,12 +183,37 @@ export class HostMessageBatcher {
 
     const existing = this.chunkQueue.get(msg.sessionId)
     if (existing && existing.text.length + msg.text.length > this.maxChunkBatchSize) {
-      if (!this.dispatchChunk(msg.sessionId, existing)) {
+      const combined = chunkReducer(existing, msg)
+      const result = this.dispatchChunk(msg.sessionId, combined)
+      if (result === false) {
+        this.chunkQueue.add(msg.sessionId, msg)
         this.log?.(`[HostMessageBatcher] size-limit chunk flush failed for ${msg.sessionId}; retaining chunk for retry`)
         this.scheduleChunkFlush(this.computeChunkFlushDelay(now))
         return
       }
-      this.chunkQueue.delete(msg.sessionId)
+      if (result && typeof (result as PromiseLike<boolean | void>).then === "function") {
+        ;(result as PromiseLike<boolean | void>).then(
+          (ok) => {
+            if (ok === false) {
+              this.chunkQueue.add(msg.sessionId, msg)
+              this.scheduleChunkFlush(this.computeChunkFlushDelay(this.now()))
+              return
+            }
+            if (Object.is(this.chunkQueue.get(msg.sessionId), existing)) {
+              this.chunkQueue.delete(msg.sessionId)
+            }
+          },
+          () => {
+            this.chunkQueue.add(msg.sessionId, msg)
+            this.scheduleChunkFlush(this.computeChunkFlushDelay(this.now()))
+          },
+        )
+        return
+      }
+      if (Object.is(this.chunkQueue.get(msg.sessionId), existing)) {
+        this.chunkQueue.delete(msg.sessionId)
+      }
+      return
     }
 
     this.chunkQueue.add(msg.sessionId, msg)
@@ -248,16 +272,17 @@ export class HostMessageBatcher {
     this.chunkFlushTimer = setTimeout(() => this.flushChunks(), delayMs)
   }
 
-  private dispatchChunk(sessionId: string, chunk: BufferedChunk): boolean {
+  private dispatchChunk(sessionId: string, chunk: BufferedChunk): MaybeThenable<boolean | void> {
     return this.dispatch({
       type: "stream_chunk",
       sessionId,
       text: chunk.text,
       messageId: chunk.messageId,
+      seq: chunk.seq,
     })
   }
 
-  private dispatch(msg: Record<string, unknown>): boolean {
+  private dispatch(msg: Record<string, unknown>): MaybeThenable<boolean | void> {
     try {
       const result = this.delegate(msg)
       if (result === false) return false
@@ -268,7 +293,7 @@ export class HostMessageBatcher {
           this.log?.(`[HostMessageBatcher] delegate rejected for ${String(msg.type)}: ${String(err)}`)
         })
       }
-      return true
+      return result ?? true
     } catch (err) {
       this.log?.(`[HostMessageBatcher] delegate threw for ${String(msg.type)}: ${String(err)}`)
       return false

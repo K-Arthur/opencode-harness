@@ -5,6 +5,20 @@ All notable changes to the **OpenCode Harness** extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.22] - 2026-05-30
+
+### Added
+- **Crash resilience (ADR-010 Phase 1.5):** Tabs survive CLI crashes. On server disconnect, streaming tab state is captured as `TabRestorationState` and persisted to `globalState`. On reconnect, interrupted tabs receive `stream_interrupted` messages with "Resume Stream" / "Dismiss" buttons. (`src/session/sessionTypes.ts`, `src/chat/TabManager.ts`, `src/chat/ChatProvider.ts`, `src/chat/webview/main.ts`, `src/chat/webview/types.ts`, `src/chat/webview/css/messages.css`)
+- **Multi-process infrastructure (ADR-010 Phase 2):** `LocalSessionProcessManager` wraps N `ServerLifecycle` instances with crash detection. `SessionManagerRegistry` provides tab→process routing. `PortPool` allocates ports atomically without TOCTOU races. (`src/session/LocalSessionProcessManager.ts`, `src/session/SessionManagerRegistry.ts`, `src/utils/portPool.ts`)
+- **Configurable stream cap:** `opencode.sessions.maxConcurrentStreams` setting (default 5, range 1-10). Replaces hardcoded 3-stream limit. Webview receives value via `init_state` and updates at runtime. (`package.json`, `src/chat/TabManager.ts`, `src/chat/webview/sendLogic.ts`, `src/chat/webview/main.ts`)
+
+### Changed
+- **ADR-010 status updated** from "Proposed" to "Partially implemented" with detailed Phase 1.5 and Phase 2 documentation. (`docs/adrs/ADR-010-horizontal-scaling.md`)
+- **SessionProcessManager interface aligned** with ADR: added `onCrash` events, `Disposable` compliance, `isolatedDataDir` config. (`src/session/SessionProcessManager.ts`)
+
+### Fixed
+- 5 pre-existing structural test failures resolved (DOMPurify check, mention button, StreamLifecycleState, TabManager stream cap, TTFB signal property). (`tests/unit/hardening-sweep.test.mjs`, `tests/unit/regression-smoke.test.mjs`, `tests/unit/stream-coordinator-timeout.test.mjs`, `tests/unit/tab-manager.test.mjs`, `tests/unit/ttfb-abort.test.mjs`)
+
 ## [0.2.21] - 2026-05-30
 
 ### Security

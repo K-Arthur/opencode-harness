@@ -22,9 +22,11 @@ describe("TabManager — class structure", () => {
     assert.ok(source.includes("lastActivityTime:"), "TabState must have lastActivityTime")
   })
 
-  it("enforces max 3 concurrent streams", () => {
-    assert.ok(source.includes("MAX_CONCURRENT_STREAMS"), "must limit concurrent streams")
-    assert.ok(source.includes("3"), "max concurrent streams must be 3")
+  it("enforces configurable concurrent stream limit", () => {
+    assert.ok(source.includes("maxConcurrentStreams") || source.includes("MAX_CONCURRENT_STREAMS"),
+      "must enforce a concurrent stream limit")
+    assert.ok(source.includes("get<number>(\"sessions.maxConcurrentStreams\")") || source.includes(">= this.maxConcurrentStreams") || source.includes(">= this.MAX_CONCURRENT_STREAMS"),
+      "stream limit must be configurable or enforced")
   })
 })
 
@@ -104,7 +106,7 @@ describe("TabManager — accessors", () => {
 describe("TabManager — streaming control", () => {
   it("canStartStreaming enforces max concurrent limit", () => {
     assert.ok(source.includes("canStartStreaming("), "canStartStreaming method must exist")
-    assert.ok(source.includes("MAX_CONCURRENT_STREAMS"), "must check max streams")
+    assert.ok(source.includes("maxConcurrentStreams") || source.includes("MAX_CONCURRENT_STREAMS"), "must check max streams")
     assert.ok(source.includes("{ ok: true }"), "must return success object")
     assert.ok(source.includes("ok: false"), "must return failure object when at limit")
   })

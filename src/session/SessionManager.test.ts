@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 
 const source = readFileSync(path.join(__dirname, "SessionManager.ts"), "utf8")
+const typesSource = readFileSync(path.join(__dirname, "sessionTypes.ts"), "utf8")
 const authSource = readFileSync(path.join(__dirname, "AuthProvider.ts"), "utf8")
 const clientSource = readFileSync(path.join(__dirname, "SessionClient.ts"), "utf8")
 const lifecycleSource = readFileSync(path.join(__dirname, "ServerLifecycle.ts"), "utf8")
@@ -12,11 +13,11 @@ const allSource = source + authSource + clientSource + lifecycleSource + sseSour
 
 describe("SessionManager.ts", () => {
   it("exports OpencodeEventType union type", () => {
-    assert.ok(source.includes("export type OpencodeEventType"))
+    assert.ok(source.includes("OpencodeEventType") || typesSource.includes("export type OpencodeEventType"), "must export OpencodeEventType union type")
   })
 
   it("exports OpencodeEvent interface", () => {
-    assert.ok(source.includes("export interface OpencodeEvent"))
+    assert.ok(source.includes("OpencodeEvent") || typesSource.includes("export interface OpencodeEvent"), "must export OpencodeEvent interface")
   })
 
   it("exports ContextPackage interface", () => {

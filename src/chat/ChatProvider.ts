@@ -874,7 +874,8 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       }
     }],
     ["server_disconnected", () => {
-      log.info("Server disconnected — resetting all streaming states")
+      log.info("Server disconnected — capturing streaming snapshot and resetting states")
+      this.tabManager.captureStreamingSnapshot()
       for (const t of this.tabManager.getAllTabs()) {
         if (t.isStreaming) {
           this.tabManager.setStreaming(t.id, false)
@@ -887,13 +888,25 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     }],
     ["server_connected", () => { this.pushModelListToWebview() }],
     ["event_stream_reconnected", () => {
-      log.info("Event stream reconnected — reconciling active streaming sessions")
+      log.info("Event stream reconnected — reconciling active streaming sessions and checking for interrupted tabs")
       for (const t of this.tabManager.getAllTabs()) {
         if (t.isStreaming) {
           this.streamCoordinator.reconcileAfterReconnect(t.id, {
             postMessage: (m) => this.postMessage(m),
             postRequestError: (m) => this.postRequestError(m),
           }).catch(err => log.error("Reconcile after reconnect failed", err))
+        }
+      }
+      const interrupted = this.tabManager.getInterruptedTabs()
+      if (interrupted.length > 0) {
+        log.info(`Found ${interrupted.length} interrupted tab(s) — offering resume`)
+        for (const state of interrupted) {
+          this.postMessage({
+            type: "stream_interrupted",
+            sessionId: state.tabId,
+            cliSessionId: state.cliSessionId,
+            interruptedAt: state.interruptedAt,
+          })
         }
       }
     }],
@@ -1179,12 +1192,14 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     }))
 
     const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name ?? ""
+    const maxConcurrentStreams = vscode.workspace.getConfiguration("opencode").get<number>("sessions.maxConcurrentStreams", 5)
     this.postMessage({
       type: "init_state",
       sessions: sessionsToSend,
       activeSessionId: activeId,
       globalModel: this.modelManager.model || "",
       workspaceName,
+      maxConcurrentStreams,
     })
     this.backfillService.setHydrated(true)
   }

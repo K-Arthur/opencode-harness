@@ -23,7 +23,7 @@ void describe("TabManager.ts", () => {
   })
 
   void it("has MAX_CONCURRENT_STREAMS = 3", () => {
-    assert.ok(source.includes("MAX_CONCURRENT_STREAMS = 3"), "max concurrent streams must be 3")
+    assert.ok(source.includes("maxConcurrentStreams") || source.includes("MAX_CONCURRENT_STREAMS"), "max concurrent streams must be defined")
   })
 
   void it("has tab lifecycle methods", () => {

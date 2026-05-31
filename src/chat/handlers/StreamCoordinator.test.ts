@@ -4,13 +4,14 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 
 const source = readFileSync(resolve(__dirname, "StreamCoordinator.ts"), "utf8")
+const typesSource = readFileSync(resolve(__dirname, "StreamCoordinatorTypes.ts"), "utf8")
 
 describe("StreamCoordinator.ts", () => {
   it("exports StreamCallbacks interface", () => {
-    assert.ok(source.includes("export interface StreamCallbacks"), "StreamCallbacks must be exported")
-    assert.ok(source.includes("postMessage: (msg: Record<string, unknown>) => void"),
+    assert.ok(source.includes("export type { StreamCallbacks") || source.includes("export interface StreamCallbacks") || typesSource.includes("export interface StreamCallbacks"), "StreamCallbacks must be exported")
+    assert.ok(source.includes("postMessage: (msg: Record<string, unknown>) => void") || typesSource.includes("postMessage: (msg: Record<string, unknown>) => void"),
       "StreamCallbacks must have postMessage")
-    assert.ok(source.includes("postRequestError: (message: string, sessionId?: string) => void"),
+    assert.ok(source.includes("postRequestError: (message: string, sessionId?: string) => void") || typesSource.includes("postRequestError: (message: string, sessionId?: string) => void"),
       "StreamCallbacks must have postRequestError with optional sessionId")
   })
 

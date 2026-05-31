@@ -50,7 +50,7 @@ Run all unit+contract+roundtrip: `npm test`
 - **Per-tab state:** `TabManager.ts`, **streaming:** `StreamCoordinator.ts`, **routing:** `MessageRouter.ts`
 - **Server lifecycle:** `src/session/SessionManager.ts`
 - **Theme system:** `src/theme/ThemeManager.ts` — CSS_VAR_MAP maps OpencodeTheme properties to CSS vars
-- **Max 3 concurrent AI streams** enforced by TabManager
+- **Max concurrent AI streams** configurable via `opencode.sessions.maxConcurrentStreams` (default 5)
 
 ### ChatProvider Services (delegated from ChatProvider.ts)
 
@@ -75,9 +75,15 @@ Run all unit+contract+roundtrip: `npm test`
 | `sendLogic` | `src/chat/webview/sendLogic.ts` | Send/abort/steer + stream capacity |
 | `inputHandlers` | `src/chat/webview/inputHandlers.ts` | Keyboard + paste + resize handlers |
 
-### Horizontal Scaling (Phase 2)
+### Horizontal Scaling (ADR-010 Complete)
 
-- Interface stub: `src/session/SessionProcessManager.ts`
+- Interface: `src/session/SessionProcessManager.ts` (ADR-aligned with `onCrash` events)
+- Implementation: `src/session/LocalSessionProcessManager.ts` (wraps N `ServerLifecycle` instances)
+- Routing: `src/session/SessionManagerRegistry.ts` (tab→process mapping, wired into extension.ts)
+- Port allocation: `src/utils/portPool.ts` (atomic reservation, no TOCTOU race)
+- Crash resilience: `TabRestorationState` in `src/session/sessionTypes.ts`, persisted via `TabManager`
+- Process strategy: `opencode.sessions.processStrategy` setting (`"shared"` or `"per-tab"`)
+- Configurable stream cap: `opencode.sessions.maxConcurrentStreams` (default 5)
 - ADR: `docs/adrs/ADR-010-horizontal-scaling.md`
 
 ## Key Constraints

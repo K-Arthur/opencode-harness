@@ -1,7 +1,19 @@
 # Status.md
 
-## Last Updated: 2026-05-29
-## Project State: Context/token usage accounting fix applied and verified
+## Last Updated: 2026-05-30
+## Project State: ADR-010 complete — horizontal scaling, crash resilience, configurable stream cap
+
+### Recent Feature (2026-05-30): ADR-010 Complete — Horizontal Scaling, Crash Resilience, Configurable Streams
+- **Crash resilience (Phase 1.5):** Tabs survive CLI crashes. On `server_disconnected`, streaming tab state is captured as `TabRestorationState` and persisted to `globalState`. On reconnect, interrupted tabs receive `stream_interrupted` messages with "Resume Stream" / "Dismiss" buttons. `resume_stream` clears restoration state and re-sends the last prompt via `retryFromHere`.
+- **Multi-process infrastructure (Phase 2):** `LocalSessionProcessManager` wraps N `ServerLifecycle` instances with crash detection. `SessionManagerRegistry` provides tab→process routing. `PortPool` allocates ports atomically (no TOCTOU race). Default model is shared-process (all tabs → 1 server) to avoid SQLite contention.
+- **Configurable stream cap:** `opencode.sessions.maxConcurrentStreams` setting (default 5, range 1-10). `TabManager` reads the setting; webview receives value via `init_state` and updates at runtime via `setMaxConcurrentStreams()`.
+- **Process strategy:** `opencode.sessions.processStrategy` setting (`"shared"` default, `"per-tab"` option). Shared mode uses one server for all tabs. Per-tab mode gives each tab its own process with isolated `OPENCODE_DATA_DIR`.
+- **SessionManagerRegistry wired:** `extension.ts` creates registry, passes to `ChatProvider`. `StreamCoordinator.startPrompt` resolves per-tab SessionManager via registry.
+- **Research findings:** SDK is fully stateless (safe for N instances). `opencode serve` supports multiple ports. SQLite is shared (`~/.local/share/opencode/opencode.db`, WAL mode) — multiple writers cause `SQLITE_BUSY`. Extension handles 5+ concurrent streams efficiently (per-session chunk batching, O(1) event routing).
+- **Files added:** `LocalSessionProcessManager.ts`, `SessionManagerRegistry.ts`, `portPool.ts`
+- **Files modified:** `SessionProcessManager.ts`, `TabManager.ts`, `ChatProvider.ts`, `WebviewEventRouter.ts`, `StreamCoordinatorTypes.ts`, `sessionTypes.ts`, `main.ts`, `sendLogic.ts`, `types.ts`, `messages.css`, `package.json`, `extension.ts`
+- **Tests:** 445/445 unit tests pass, 2403/2403 structural tests pass.
+- **Verification:** `npm run typecheck` clean, `npm run build` clean, `npm run test:unit` 445/445 pass.
 
 ### Recent Fix (2026-05-29): Session-scoped context usage + cumulative token accounting
 - **Backend token totals no longer reset after multi-turn sessions** — final SDK assistant
@@ -43,8 +55,8 @@
 | Check | Status |
 |-------|--------|
 | Typecheck (`tsc --noEmit`) | ✅ Zero errors |
-| Build (`node esbuild.js`) | ✅ Extension 454KB, Webview 668KB, CSS 99KB |
-| Unit tests | ✅ 306 pass, 1 known pre-existing (DeltaHandler messageId format) |
+| Build (`node esbuild.js`) | ✅ Extension 792KB, Webview 1.1MB |
+| Unit tests | ✅ 445 pass, 0 fail |
 | Integration tests | ✅ Extension Dev Host |
 | CI | ✅ 3 jobs (typecheck+unit, integration, visual) |
 | VSIX package | ✅ packaging |
@@ -73,6 +85,9 @@
 | Scroll markers + jump-to-bottom | ✅ | P09 — content-visibility, rAF batching, scroll markers |
 | Hardening sweep | ✅ | P10 — CSP, a11y aria-labels, packaging, regression tests |
 | Regression suite | ✅ | P11 — 14 suites covering all 22 user flows |
+| Crash resilience | ✅ | ADR-010 Phase 1.5 — TabRestorationState, auto-resume, stream_interrupted |
+| Multi-process infrastructure | ✅ | ADR-010 Phase 2 — LocalSessionProcessManager, SessionManagerRegistry, PortPool |
+| Configurable stream cap | ✅ | opencode.sessions.maxConcurrentStreams (default 5, was hardcoded 3) |
 
 ## Regression Coverage
 | # | Flow | Test Suite | Status |
