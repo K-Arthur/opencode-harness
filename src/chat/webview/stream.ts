@@ -3,6 +3,7 @@ import type { ScrollAnchor } from "./scrollAnchor"
 import { renderMessage } from "./messageRenderer"
 import type { SdkMessageEvent } from "../../types"
 import type { DiffHunk, ToolCallState } from "./types"
+import type { ErrorContext } from "./errorTypes"
 
 import {
   StreamState,
@@ -40,7 +41,7 @@ export interface StreamHandlers {
   handleStreamChunk: (text?: string, messageId?: string) => void
   handleStreamEnd: (messageId?: string, blocks?: unknown) => void
   handleStreamError: (error: { code: string; message: string; detail?: string; retryable?: boolean }) => void
-  handleRequestError: (message?: string) => void
+  handleRequestError: (message?: string, errorContext?: unknown) => void
   handleToolStart: (toolCall: { id: string; name: string; class?: string; args?: unknown; state?: ToolCallState }) => void
   handleToolUpdate: (toolId: string, update: { state?: ToolCallState; result?: string; error?: string; args?: unknown }) => void
   handleToolEnd: (toolId: string, result: { ok: boolean; result?: string; durationMs?: number; stale?: boolean }) => void
@@ -154,8 +155,8 @@ class StreamSession implements StreamHandlers {
     this.callbacks?.onStreamingChange?.(false)
   }
 
-  handleRequestError(message?: string): void {
-    handleRequestError(this.state, this.els, this.messages, this.saveState, message)
+  handleRequestError(message?: string, errorContext?: unknown): void {
+    handleRequestError(this.state, this.els, this.messages, this.saveState, message, errorContext as ErrorContext | undefined)
     this.callbacks?.onStreamingChange?.(false)
   }
 

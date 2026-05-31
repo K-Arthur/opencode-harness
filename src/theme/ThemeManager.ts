@@ -130,7 +130,10 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
     panelFg: "#24292f",
     editorBg: "#f6f8fa",
     editorFg: "#1f2328",
+    elementBg: "#f0f0f0",
     borderColor: "#8b949e",
+    borderActive: "#58a6ff",
+    borderSubtle: "#d0d7de",
     mutedFg: "#656d76",
     userMessageBg: "#f3f3f3",
     userMessageFg: "#333333",
@@ -147,26 +150,50 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
     warningColor: "#9a6700",
     errorColor: "#cf222e",
     successColor: "#116329",
+    infoColor: "#0550ae",
     accentColor: "#0969da",
+    primaryColor: "#0969da",
     diffAdded: "rgba(45, 164, 78, 0.15)",
     diffRemoved: "rgba(207, 34, 46, 0.1)",
+    diffContext: "rgba(36, 41, 47, 0.5)",
+    diffHunkHeader: "rgba(5, 80, 174, 0.7)",
+    diffAddedBg: "rgba(45, 164, 78, 0.08)",
+    diffRemovedBg: "rgba(207, 34, 46, 0.06)",
+    diffLineNumber: "rgba(101, 109, 118, 0.4)",
     inputBg: "#ffffff",
     inputBorder: "#8b949e",
     mentionBg: "#ddf4ff",
+    markdownText: "#24292f",
+    markdownHeading: "#0969da",
+    markdownLink: "#0550ae",
+    markdownLinkText: "#0550ae",
+    markdownCode: "#0550ae",
+    markdownBlockQuote: "#656d76",
+    markdownEmph: "#24292f",
+    markdownStrong: "#24292f",
+    markdownHorizontalRule: "#d0d7de",
+    markdownListItem: "#24292f",
+    markdownListEnumeration: "#656d76",
+    markdownCodeBlock: "#24292f",
     syntaxComment: "#67707a",
     syntaxKeyword: "#0550ae",
     syntaxString: "#0a3069",
     syntaxNumber: "#0550ae",
     syntaxFunction: "#8250df",
+    syntaxVariable: "#24292f",
     syntaxType: "#116329",
     syntaxOperator: "#1e1e1e",
+    syntaxPunctuation: "#24292f",
   },
   dark: {
     panelBg: "#1e1e2e",
     panelFg: "#c9d1d9",
     editorBg: "#161b22",
     editorFg: "#e6edf3",
+    elementBg: "#21262d",
     borderColor: "#30363d",
+    borderActive: "#58a6ff",
+    borderSubtle: "#21262d",
     mutedFg: "#8b949e",
     userMessageBg: "#2d2d2d",
     userMessageFg: "#e0e0e0",
@@ -183,26 +210,50 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
     warningColor: "#ffab00",
     errorColor: "#ff5252",
     successColor: "#00e676",
+    infoColor: "#58a6ff",
     accentColor: "#00e5ff",
+    primaryColor: "#58a6ff",
     diffAdded: "rgba(63, 185, 80, 0.15)",
     diffRemoved: "rgba(248, 81, 73, 0.1)",
+    diffContext: "rgba(201, 209, 217, 0.5)",
+    diffHunkHeader: "rgba(88, 166, 255, 0.7)",
+    diffAddedBg: "rgba(63, 185, 80, 0.08)",
+    diffRemovedBg: "rgba(248, 81, 73, 0.06)",
+    diffLineNumber: "rgba(139, 148, 158, 0.4)",
     inputBg: "#161b22",
     inputBorder: "#70767d",
     mentionBg: "#1f6feb",
+    markdownText: "#c9d1d9",
+    markdownHeading: "#00e5ff",
+    markdownLink: "#58a6ff",
+    markdownLinkText: "#58a6ff",
+    markdownCode: "#58a6ff",
+    markdownBlockQuote: "#8b949e",
+    markdownEmph: "#c9d1d9",
+    markdownStrong: "#c9d1d9",
+    markdownHorizontalRule: "#30363d",
+    markdownListItem: "#c9d1d9",
+    markdownListEnumeration: "#8b949e",
+    markdownCodeBlock: "#c9d1d9",
     syntaxComment: "#8c959f",
     syntaxKeyword: "#ff7b72",
     syntaxString: "#a5d6ff",
     syntaxNumber: "#d2a8ff",
     syntaxFunction: "#d2a8ff",
+    syntaxVariable: "#c9d1d9",
     syntaxType: "#ffa657",
     syntaxOperator: "#79c0ff",
+    syntaxPunctuation: "#c9d1d9",
   },
   "high-contrast-dark": {
     panelBg: "#000000",
     panelFg: "#ffffff",
     editorBg: "#000000",
     editorFg: "#ffffff",
+    elementBg: "#1a1a1a",
     borderColor: "#ffff00",
+    borderActive: "#ffff00",
+    borderSubtle: "#888888",
     mutedFg: "#cccccc",
     userMessageBg: "#1a1a1a",
     userMessageFg: "#ffffff",
@@ -219,26 +270,50 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
     warningColor: "#ffff00",
     errorColor: "#ff5252",
     successColor: "#00e676",
+    infoColor: "#00bfff",
     accentColor: "#ffff00",
+    primaryColor: "#00bfff",
     diffAdded: "rgba(0, 230, 118, 0.2)",
     diffRemoved: "rgba(255, 82, 82, 0.2)",
+    diffContext: "rgba(255, 255, 255, 0.5)",
+    diffHunkHeader: "rgba(0, 191, 255, 0.7)",
+    diffAddedBg: "rgba(0, 230, 118, 0.1)",
+    diffRemovedBg: "rgba(255, 82, 82, 0.1)",
+    diffLineNumber: "rgba(255, 255, 255, 0.4)",
     inputBg: "#0a0a0a",
     inputBorder: "#ffff00",
     mentionBg: "rgba(0, 191, 255, 0.2)",
+    markdownText: "#ffffff",
+    markdownHeading: "#ffff00",
+    markdownLink: "#00bfff",
+    markdownLinkText: "#00bfff",
+    markdownCode: "#00e676",
+    markdownBlockQuote: "#cccccc",
+    markdownEmph: "#ffffff",
+    markdownStrong: "#ffffff",
+    markdownHorizontalRule: "#888888",
+    markdownListItem: "#ffffff",
+    markdownListEnumeration: "#cccccc",
+    markdownCodeBlock: "#ffffff",
     syntaxComment: "#888888",
     syntaxKeyword: "#ff7b72",
     syntaxString: "#a5d6ff",
     syntaxNumber: "#d2a8ff",
     syntaxFunction: "#d2a8ff",
+    syntaxVariable: "#ffffff",
     syntaxType: "#ffa657",
     syntaxOperator: "#79c0ff",
+    syntaxPunctuation: "#ffffff",
   },
   "high-contrast-light": {
     panelBg: "#ffffff",
     panelFg: "#000000",
     editorBg: "#f5f5f5",
     editorFg: "#000000",
+    elementBg: "#e8e8e8",
     borderColor: "#cc0000",
+    borderActive: "#cc0000",
+    borderSubtle: "#888888",
     mutedFg: "#555555",
     userMessageBg: "#f0f0f0",
     userMessageFg: "#000000",
@@ -255,19 +330,40 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
     warningColor: "#cc6600",
     errorColor: "#cc0000",
     successColor: "#006400",
+    infoColor: "#0000cc",
     accentColor: "#0000cc",
+    primaryColor: "#0000cc",
     diffAdded: "rgba(0, 100, 0, 0.15)",
     diffRemoved: "rgba(204, 0, 0, 0.15)",
+    diffContext: "rgba(0, 0, 0, 0.5)",
+    diffHunkHeader: "rgba(0, 0, 204, 0.7)",
+    diffAddedBg: "rgba(0, 100, 0, 0.08)",
+    diffRemovedBg: "rgba(204, 0, 0, 0.08)",
+    diffLineNumber: "rgba(0, 0, 0, 0.4)",
     inputBg: "#ffffff",
     inputBorder: "#cc0000",
     mentionBg: "rgba(0, 0, 255, 0.1)",
+    markdownText: "#000000",
+    markdownHeading: "#0000cc",
+    markdownLink: "#0000cc",
+    markdownLinkText: "#0000cc",
+    markdownCode: "#006400",
+    markdownBlockQuote: "#555555",
+    markdownEmph: "#000000",
+    markdownStrong: "#000000",
+    markdownHorizontalRule: "#888888",
+    markdownListItem: "#000000",
+    markdownListEnumeration: "#555555",
+    markdownCodeBlock: "#000000",
     syntaxComment: "#555555",
     syntaxKeyword: "#0000cc",
     syntaxString: "#006400",
     syntaxNumber: "#8b008b",
     syntaxFunction: "#7b0099",
+    syntaxVariable: "#000000",
     syntaxType: "#006400",
     syntaxOperator: "#000000",
+    syntaxPunctuation: "#000000",
   },
   "high-contrast": {
     panelBg: "var(--vscode-sideBar-background, var(--vscode-editor-background, #000000))",
@@ -316,6 +412,17 @@ export interface ThemeVariables {
 
 const CLI_THEME_CACHE_TTL_MS = 30_000 // 30 seconds
 
+function getXdgConfigDir(): string {
+  const home = process.env.HOME || process.env.USERPROFILE || ""
+  const isWindows = process.platform === "win32"
+  return process.env.XDG_CONFIG_HOME
+    || (isWindows ? path.join(process.env.APPDATA || home, "opencode") : path.join(home, ".config"))
+}
+
+function getHomeDir(): string {
+  return process.env.HOME || process.env.USERPROFILE || ""
+}
+
 export class ThemeManager {
   private _onThemeChanged = new vscode.EventEmitter<ThemeVariables>()
   private disposables: vscode.Disposable[] = []
@@ -325,11 +432,9 @@ export class ThemeManager {
   private currentPreset: ThemePreset = "cli-default"
   private userOverrides: OpencodeTheme = {}
 
-  // Cache for CLI theme file reads to avoid synchronous FS calls on every render
   private cliThemeCache: OpencodeTheme | null = null
   private cliThemeCacheTimestamp = 0
 
-  // File system watchers for CLI theme files
   private fileWatchers: vscode.FileSystemWatcher[] = []
 
   constructor() {
@@ -340,7 +445,6 @@ export class ThemeManager {
     this.disposables.push(
       vscode.window.onDidChangeActiveColorTheme((theme) => {
         this.currentKind = theme.kind
-        // Invalidate CLI cache on theme change in case files changed
         this.invalidateCliCache()
         this.emitUpdate()
       })
@@ -356,22 +460,15 @@ export class ThemeManager {
     )
   }
 
-  /**
-   * Watch tui.json and theme files for changes.
-   * When a CLI theme file changes, invalidate cache and re-emit theme update.
-   */
   private setupFileWatchers(): void {
-    // Dispose old watchers
     for (const watcher of this.fileWatchers) {
       watcher.dispose()
     }
     this.fileWatchers = []
 
     const folders = vscode.workspace.workspaceFolders
-    const home = process.env.HOME || process.env.USERPROFILE || ""
-    const isWindows = process.platform === "win32"
-    const xdgConfig = process.env.XDG_CONFIG_HOME
-      || (isWindows ? path.join(process.env.APPDATA || home, "opencode") : path.join(home, ".config"))
+    const home = getHomeDir()
+    const xdgConfig = getXdgConfigDir()
 
     const patterns: vscode.GlobPattern[] = []
 
@@ -454,16 +551,16 @@ export class ThemeManager {
     if (picked.preset) {
       await config.update("theme", { preset: picked.preset, overrides: {} }, vscode.ConfigurationTarget.Global)
     } else if (picked.themeFile) {
-      await config.update("theme", { preset: "cli-default", overrides: {} }, vscode.ConfigurationTarget.Global)
+      const themeName = path.basename(picked.themeFile, ".json")
+      const overrides = this.readThemeFileOverrides([path.dirname(picked.themeFile)], themeName)
+      await config.update("theme", { preset: "cli-default", overrides }, vscode.ConfigurationTarget.Global)
     }
   }
 
   discoverCliThemes(): Array<{ name: string; path: string; source: string }> {
     const themes: Array<{ name: string; path: string; source: string }> = []
-    const home = process.env.HOME || process.env.USERPROFILE || ""
-    const isWindows = process.platform === "win32"
-    const xdgConfig = process.env.XDG_CONFIG_HOME
-      || (isWindows ? path.join(process.env.APPDATA || home, "opencode") : path.join(home, ".config"))
+    const home = getHomeDir()
+    const xdgConfig = getXdgConfigDir()
 
     const workspaceThemeDir: string | null = (() => {
       const folders = vscode.workspace.workspaceFolders
@@ -480,8 +577,12 @@ export class ThemeManager {
     themeDirs.push({ dir: path.join(xdgConfig, "opencode", "themes"), source: "global" })
     themeDirs.push({ dir: path.join(home, ".opencode", "themes"), source: "global" })
 
+    const seenPaths = new Set<string>()
     for (const { dir, source } of themeDirs) {
       try {
+        const canonical = fs.realpathSync(dir)
+        if (seenPaths.has(canonical)) continue
+        seenPaths.add(canonical)
         if (fs.existsSync(dir)) {
           const files = fs.readdirSync(dir)
           for (const file of files) {
@@ -517,10 +618,8 @@ export class ThemeManager {
   }
 
   private getCliPaths(): { tuiJsonPaths: string[]; themeDirs: string[] } {
-    const home = process.env.HOME || process.env.USERPROFILE || ""
-    const isWindows = process.platform === "win32"
-    const xdgConfig = process.env.XDG_CONFIG_HOME
-      || (isWindows ? path.join(process.env.APPDATA || home, "opencode") : path.join(home, ".config"))
+    const home = getHomeDir()
+    const xdgConfig = getXdgConfigDir()
 
     const tuiJsonPaths: string[] = []
     const themeDirs: string[] = []
@@ -541,7 +640,7 @@ export class ThemeManager {
   }
 
   private readActiveThemeName(tuiJsonPaths: string[]): string {
-    let activeTheme = "tokyonight"
+    let activeTheme = ""
     for (const tuiPath of tuiJsonPaths) {
       try {
         if (fs.existsSync(tuiPath)) {
@@ -561,6 +660,7 @@ export class ThemeManager {
 
   private readThemeFileOverrides(themeDirs: string[], activeTheme: string): OpencodeTheme {
     const overrides: OpencodeTheme = {}
+    if (!activeTheme) return overrides
     const safeThemeName = activeTheme.replace(/[^\w.-]/g, "_")
 
     for (const dir of themeDirs) {

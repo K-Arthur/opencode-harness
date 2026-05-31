@@ -29,16 +29,28 @@ function safeJsonParse(value: string): unknown {
 }
 
 export function normalizeToolBlock(block: Block): ToolCallBlock {
-  if (isToolCallBlock(block)) return block
+  if (!isToolCallBlock(block)) {
+    return {
+      type: 'tool-call',
+      id: block.id || `tool-${Date.now()}`,
+      name: (typeof block.tool === "string" ? block.tool : undefined) || block.toolName || block.name || "tool",
+      class: (block.class as ToolCallClass) || (block.toolType as ToolCallClass) || 'read',
+      state: (block.state as ToolCallState) || 'running',
+      args: block.args ? (typeof block.args === 'string' ? safeJsonParse(block.args) : block.args) : undefined,
+      result: block.result,
+      durationMs: (block.durationMs as number | undefined),
+    } as ToolCallBlock
+  }
+  const tb = block as ToolCallBlock
   return {
     type: 'tool-call',
-    id: block.id || `tool-${Date.now()}`,
-    name: (typeof block.tool === "string" ? block.tool : undefined) || block.toolName || block.name || "tool",
-    class: (block.class as ToolCallClass) || (block.toolType as ToolCallClass) || 'read',
-    state: (block.state as ToolCallState) || 'running',
-    args: block.args ? (typeof block.args === 'string' ? safeJsonParse(block.args) : block.args) : undefined,
-    result: block.result,
-    durationMs: (block.durationMs as number | undefined),
+    id: tb.id || `tool-${Date.now()}`,
+    name: tb.name || (typeof (tb as any).tool === "string" ? (tb as any).tool : undefined) || tb.toolName || "tool",
+    class: tb.class || (tb as any).toolType || 'read',
+    state: tb.state || 'running',
+    args: tb.args ? (typeof tb.args === 'string' ? safeJsonParse(tb.args) : tb.args) : undefined,
+    result: tb.result,
+    durationMs: tb.durationMs,
   } as ToolCallBlock
 }
 

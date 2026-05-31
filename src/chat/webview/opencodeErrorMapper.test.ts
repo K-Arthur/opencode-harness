@@ -102,3 +102,65 @@ describe("mapOpencodeError — grounded in actual @opencode-ai/sdk error types",
     assert.equal(ctx.retryable, false)
   })
 })
+
+describe("mapOpencodeError — real @opencode-ai/sdk nested .data shape", () => {
+  // The SDK emits { name, data: { statusCode, isRetryable, message, providerID } }
+  // (see node_modules/@opencode-ai/sdk/dist/gen/types.gen.d.ts). The mapper must
+  // read from .data, not only the top level, or every ApiError collapses to status 0.
+  it("ApiError 429 nested under .data → RATE_LIMITED, not NETWORK_UNREACHABLE", () => {
+    const ctx = mapOpencodeError({
+      name: "APIError",
+      data: { message: "Too Many Requests", statusCode: 429, isRetryable: true },
+    })
+    assert.equal(ctx.code, "RATE_LIMITED")
+    assert.equal(ctx.category, ErrorCategory.USAGE)
+    assert.equal(ctx.retryable, true)
+  })
+
+  it("ApiError 401 nested under .data → AUTH_FAILED", () => {
+    const ctx = mapOpencodeError({ name: "APIError", data: { message: "Unauthorized", statusCode: 401, isRetryable: false } })
+    assert.equal(ctx.code, "AUTH_FAILED")
+    assert.equal(ctx.retryable, false)
+  })
+
+  it("ApiError 500 honours nested isRetryable=false", () => {
+    const ctx = mapOpencodeError({ name: "APIError", data: { message: "boom", statusCode: 500, isRetryable: false } })
+    assert.equal(ctx.code, "SERVER_ERROR")
+    assert.equal(ctx.retryable, false)
+  })
+
+  it("ProviderAuthError nested .data → names the provider", () => {
+    const ctx = mapOpencodeError({
+      name: "ProviderAuthError",
+      data: { providerID: "anthropic", message: "401 invalid token" },
+    })
+    assert.equal(ctx.code, "AUTH_FAILED")
+    assert.match(ctx.userMessage, /anthropic/)
+  })
+
+  it("nested .data message is matched by the auth/network regex fallbacks", () => {
+    const ctx = mapOpencodeError({ name: "UnknownError", data: { message: "fetch failed: ECONNREFUSED" } })
+    assert.equal(ctx.code, "NETWORK_UNREACHABLE")
+  })
+
+  // ── technicalDetails preserved for progressive disclosure ──────────────────
+  it("preserves the raw technical message in technicalDetails when the userMessage is canned", () => {
+    const ctx = mapOpencodeError({ name: "APIError", data: { message: "stack trace: boom", statusCode: 500, isRetryable: true } })
+    assert.equal(ctx.technicalDetails, "stack trace: boom")
+  })
+
+  it("prefers responseBody as technicalDetails when present", () => {
+    const ctx = mapOpencodeError({
+      name: "APIError",
+      data: { message: "Bad Request", statusCode: 400, isRetryable: false, responseBody: '{"error":"detail"}' },
+    })
+    assert.equal(ctx.technicalDetails, '{"error":"detail"}')
+  })
+
+  it("does not duplicate userMessage in technicalDetails on the generic fallback", () => {
+    // Fallback sets userMessage = message; there is nothing extra to disclose.
+    const ctx = mapOpencodeError({ name: "WeirdError", message: "something odd" })
+    assert.equal(ctx.userMessage, "something odd")
+    assert.equal(ctx.technicalDetails, undefined)
+  })
+})

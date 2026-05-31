@@ -159,7 +159,7 @@
 }
 
 .thinking-block > .thinking-body {
-  transition: opacity var(--duration-normal) var(--ease-smooth);
+  transition: max-height var(--duration-normal) var(--ease-smooth), opacity var(--duration-normal) var(--ease-smooth);
   max-height: 2000px;
   opacity: 1;
   overflow: hidden;

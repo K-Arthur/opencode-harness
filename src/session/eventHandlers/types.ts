@@ -58,7 +58,24 @@ export interface MessageInfoLike {
   timestamp?: number;
   sessionId?: string;
   sessionID?: string;
-  error?: string;
+  /**
+   * The SDK emits a structured error union here
+   * (ProviderAuthError | ApiError | MessageOutputLengthError | …), each with a
+   * `name` discriminator and a nested `data` payload — see
+   * @opencode-ai/sdk types.gen.d.ts. Typing it as a string erased that structure
+   * at the pipeline boundary; the host (mapOpencodeError) needs `name`/`data`.
+   * A plain string is still accepted for non-SDK/legacy producers.
+   */
+  error?: string | {
+    name?: string;
+    data?: {
+      message?: string;
+      providerID?: string;
+      statusCode?: number;
+      isRetryable?: boolean;
+      responseBody?: string;
+    };
+  };
   time?: {
     completed?: number;
   };

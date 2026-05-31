@@ -185,6 +185,14 @@ describe("stream.ts", () => {
     assert.ok(sourceIncludes("renderMessage(errMsg)"), "must render error message")
   })
 
+  it("coalesces duplicate error cards instead of stacking the same failure", () => {
+    // The same fault can arrive multiple times (stream retries, repeated server
+    // "error" statuses). handleStreamError must compare against the latest
+    // message and skip re-appending an identical error card.
+    assert.ok(sourceIncludes("lastErrMessage === errorContext.userMessage"), "must dedupe error cards by user message")
+    assert.ok(sourceIncludes("lastBlock?.type === \"error\""), "must inspect the previous message's error block")
+  })
+
   it("has handleRequestError method", () => {
     assert.ok(sourceIncludes("handleRequestError("), "handleRequestError must exist")
     assert.ok(sourceIncludes("handleStreamError(state"), "must delegate to handleStreamError")

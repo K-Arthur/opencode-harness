@@ -39,7 +39,7 @@ test.describe('Webview host contract', () => {
     await page.locator('#prompt-input').fill('review')
     await dispatchHostMessage(page, {
       type: 'insert_text',
-      text: '@file:src/chat/ChatProvider.ts ',
+      text: ' @file:src/chat/ChatProvider.ts ',
     })
 
     await expect(page.locator('#prompt-input')).toHaveValue('review @file:src/chat/ChatProvider.ts ')

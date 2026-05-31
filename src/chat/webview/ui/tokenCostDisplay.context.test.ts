@@ -10,7 +10,7 @@ const source = readFileSync(path.join(__dirname, "tokenCostDisplay.ts"), "utf8")
 describe("tokenCostDisplay context status UI", () => {
   it("renders context as percent plus tokens/limit instead of overwriting the strip root", () => {
     assert.ok(source.includes("context-label"), "must target the context-label element")
-    assert.ok(source.includes("context-progress-bar"), "must target the progress element")
+    assert.ok(source.includes("context-progress-fill"), "must target the custom progress fill")
     assert.ok(source.includes("tokens /"), "must render tokens/limit detail text")
     assert.ok(
       !source.includes("ctxBar.textContent = `${totalApiTokens.toLocaleString()} / ${contextWindow.toLocaleString()} tok (${pct}%)`"),
@@ -30,7 +30,9 @@ describe("tokenCostDisplay context status UI", () => {
         <span id="status-tokens"></span>
         <span id="status-model"></span>
         <div id="context-usage" class="context-usage-bar hidden">
-          <div id="context-progress-bar" class="context-usage-percent"></div>
+          <div id="context-progress-track" class="context-usage-track">
+            <div id="context-progress-fill" class="context-usage-fill"></div>
+          </div>
           <span id="context-label"></span>
           <span id="context-cost" class="context-cost hidden"></span>
         </div>
@@ -46,7 +48,7 @@ describe("tokenCostDisplay context status UI", () => {
     const statusStrip = doc.getElementById("status-strip")!
     const contextUsage = doc.getElementById("context-usage")!
     const contextLabel = doc.getElementById("context-label")!
-    const contextProgress = doc.getElementById("context-progress-bar")!
+    const contextFill = doc.getElementById("context-progress-fill")!
     const contextCost = doc.getElementById("context-cost")!
     const statusModel = doc.getElementById("status-model")!
     const statusCost = doc.getElementById("status-cost")!
@@ -85,7 +87,7 @@ describe("tokenCostDisplay context status UI", () => {
     assert.equal(statusModel.textContent, "supercalifragilistic-context-rendering-model-with-a-very-long-suffix")
     assert.match(contextLabel.textContent ?? "", /98\.8% used/)
     assert.ok((contextLabel.textContent ?? "").includes("987,654,321 tokens / 1,000,000,000"))
-    assert.equal(contextProgress.style.width, "98.7654321%")
+    assert.equal(contextFill.style.getPropertyValue("--usage-pct"), "0.987654321")
     assert.equal(contextCost.textContent, "$12.3456")
     assert.equal(contextCost.classList.contains("hidden"), false)
     assert.equal(contextUsage.querySelector("#context-label"), contextLabel)

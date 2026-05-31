@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 
 const source = readFileSync(path.join(__dirname, "ThemeController.ts"), "utf8")
+const sharedSource = readFileSync(path.join(__dirname, "..", "utils", "colorValidation.ts"), "utf8")
 
 void describe("ThemeController.ts", () => {
   void it("exports ThemeController class", () => {
@@ -45,28 +46,38 @@ void describe("ThemeController.ts", () => {
 
   void it("normalizeThemeConfig validates preset and overrides", () => {
     assert.ok(source.includes("validPresets"))
-    assert.ok(source.includes("\"cli-default\""))
-    assert.ok(source.includes("\"light\""))
-    assert.ok(source.includes("\"dark\""))
-    assert.ok(source.includes("\"high-contrast\""))
-    assert.ok(source.includes("isValidColorValue(trimmed)"))
+    assert.ok(source.includes('"cli-default"'))
+    assert.ok(source.includes('"light"'))
+    assert.ok(source.includes('"dark"'))
+    assert.ok(source.includes('"high-contrast"'))
+    assert.ok(source.includes("isValidCssColor(trimmed)"))
   })
 
-  void it("isValidColorValue validates hex format", () => {
-    assert.ok(source.includes("isValidColorValue"))
-    assert.ok(source.includes("/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/"))
+  void it("imports shared isValidCssColor for color validation", () => {
+    assert.ok(source.includes("isValidCssColor"), "must import isValidCssColor")
+    assert.ok(source.includes('from "../utils/colorValidation"'), "must import from shared module")
   })
 
-  void it("isValidColorValue validates rgba format", () => {
-    assert.ok(source.includes("/^rgba?\\(\\s*\\d+\\s*,\\s*\\d+\\s*,\\s*\\d+\\s*(,\\s*[\\d.]+\\s*)?\\)$/"))
+  void it("isValidCssColor validates hex format including #RRGGBBAA", () => {
+    assert.ok(sharedSource.includes("#RRGGBBAA") || sharedSource.includes("[0-9a-fA-F]{8}"), "must accept 8-digit hex")
+    assert.ok(sharedSource.includes("[0-9a-fA-F]{3}") || sharedSource.includes("#RGB"), "must accept 3-digit hex")
+    assert.ok(sharedSource.includes("[0-9a-fA-F]{6}") || sharedSource.includes("#RRGGBB"), "must accept 6-digit hex")
   })
 
-  void it("isValidColorValue allows CSS variable references", () => {
-    assert.ok(source.includes("/^var\\(--[\\w-]+\\)$/"))
+  void it("isValidCssColor validates rgba format", () => {
+    assert.ok(sharedSource.includes("rgba?"), "must validate rgb/rgba format")
   })
 
-  void it("isValidColorValue allows transparent keyword", () => {
-    assert.ok(source.includes('trimmed === "transparent"'))
+  void it("isValidCssColor allows CSS variable references", () => {
+    assert.ok(sharedSource.includes("var\\(") || sharedSource.includes("var("), "must allow var() references")
+  })
+
+  void it("isValidCssColor allows transparent keyword", () => {
+    assert.ok(sharedSource.includes("transparent"), "must allow transparent")
+  })
+
+  void it("isValidCssColor supports color-mix()", () => {
+    assert.ok(sharedSource.includes("color-mix"), "must allow color-mix() values")
   })
 
   void it("handleUpdateThemeConfig has error handling", () => {
@@ -80,6 +91,6 @@ void describe("ThemeController.ts", () => {
   })
 
   void it("normalizeThemeConfig filters empty values", () => {
-    assert.ok(source.includes("if (trimmed && isValidColorValue(trimmed))"))
+    assert.ok(source.includes("if (trimmed && isValidCssColor(trimmed))"))
   })
 })

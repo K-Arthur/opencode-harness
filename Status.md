@@ -1,7 +1,24 @@
 # Status.md
 
-## Last Updated: 2026-05-30
+## Last Updated: 2026-05-31
 ## Project State: ADR-010 complete — horizontal scaling, crash resilience, configurable stream cap
+
+### Recent Fix (2026-05-31): Model variant selector — variant now actually sent with prompts, persisted locally, restored on tab switch
+- **Variant was silently dropped from `send_prompt`.** `sendLogic.ts` built the prompt message without reading the session's variant — no variant was ever sent to the server. Now reads `session.variant` (fallback `globalVariant`) and includes it in the payload. (`src/chat/webview/sendLogic.ts`)
+- **Selection not persisted locally.** `onSelect` in `main.ts` posted to host but didn't call `setSessionVariant`/`setGlobalVariant`, creating a stale-race window. Now updates local state synchronously before posting. (`src/chat/webview/main.ts`)
+- **Tab switch left selector stale.** `switchTab()` now restores the variant from the active session (fallback global → "Default"). (`src/chat/webview/main.ts`)
+- **New sessions didn't inherit global variant.** `createSession()` now spreads `state.globalVariant` into new sessions, matching the `globalModel` pattern. (`src/chat/webview/state.ts`)
+- **Tests:** typecheck clean, build clean, 16/16 structural state tests pass, 41/41 regression smoke tests pass.
+
+### Recent Fix (2026-05-31): Error message fidelity — structured errors preserved end-to-end
+- **`mapOpencodeError` read the wrong field locations.** The @opencode-ai/sdk error union nests its payload under `.data` (`ApiError = { name, data: { statusCode, isRetryable } }`), but the mapper read top-level `err.statusCode`/`err.providerID`. Result: a real `429` mapped to `NETWORK_UNREACHABLE` ("Can't reach the server") and auth errors lost the provider name. Mapper now normalizes both nested and flat shapes; `technicalDetails` is populated from `responseBody`/message for progressive disclosure. (`src/chat/webview/opencodeErrorMapper.ts`)
+- **The rich mapper was dead in the live path.** Host flattened SDK errors to a bare string in `errorValueToMessage` before posting, so `mapOpencodeError` was never reached and the webview re-classified by regex. Host now maps genuine SDK errors (`looksLikeSdkError` guard) and carries the full `ErrorContext` over the wire via `request_error.errorContext`; connection strings / command failures keep the friendly string path. (`ChatProvider` server_error handler, `MessagePostService`, `chatUtils.looksLikeSdkError`)
+- **Webview stopped discarding structured context.** `handleStreamError`/`handleRequestError` now prefer a carried `ErrorContext` over re-classifying; `handleServerStatus` threads the host-mapped context (category/severity/actions/URL) through instead of collapsing to `userMessage`. (`streamHandlers.ts`, `stream.ts`, `streamOrchestrator.ts`, `main.ts`)
+- **Error-display action buttons are functional.** Replaced the per-button `console.log` with an injected dispatcher: URL-bearing actions → `open_url`, retry/regenerate/wait → `retry_stream`, switch_model → model picker, edit → `connect_provider`. (`errorComponents.ts` `setErrorActionHandler`, wired in `main.ts`)
+- **Collapsed the duplicate `sessionStatusMapper`.** Deleted the dead webview copy (only its own test consumed it); the live host copy is the single source and now also sets `technicalDetails`. Test moved beside it. (`src/session/eventHandlers/sessionStatusMapper.ts` + test)
+- **Wire-contract + type drift fixed.** `request_error` type now declares `message` (was a mismatched `error`); `MessageInfoLike.error` typed as the SDK union (was `string`).
+- **Tests:** +18 mapper/guard/status assertions (RED→GREEN); updated 2 brittle structural assertions for the new signatures.
+- **Verification:** `npm run typecheck` clean; `test:unit` 447 + 2426 pass / 0 fail; `test:message-contract` 9/9; `test:roundtrip` 7/7; `npm run build` clean.
 
 ### Recent Feature (2026-05-30): ADR-010 Complete — Horizontal Scaling, Crash Resilience, Configurable Streams
 - **Crash resilience (Phase 1.5):** Tabs survive CLI crashes. On `server_disconnected`, streaming tab state is captured as `TabRestorationState` and persisted to `globalState`. On reconnect, interrupted tabs receive `stream_interrupted` messages with "Resume Stream" / "Dismiss" buttons. `resume_stream` clears restoration state and re-sends the last prompt via `retryFromHere`.

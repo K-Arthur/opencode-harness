@@ -478,14 +478,23 @@ void it("file_edited server events register changed files in backend store befor
   assert.ok(!block.includes("if (!tab?.isStreaming) return"), "backend changed-file registration must not be streaming-only")
 })
 
-void it("sessionless file_edited events are attributed to an active or streaming tab", () => {
-  const idx = source.indexOf("private handleServerEvent(")
-  assert.ok(idx >= 0, "handleServerEvent must exist")
-  const block = source.slice(idx, idx + 2400)
-  assert.ok(block.includes('event.type === "file_edited"'), "sessionless file_edited handling must be explicit")
-  assert.ok(block.includes("getAllTabs().filter"), "must inspect live tabs before dropping sessionless file edits")
-  assert.ok(block.includes("getActiveTab()"), "must fall back to the active tab for global file.edited events")
-  assert.ok(block.includes("Dropping sessionless file_edited"), "must log rather than silently writing to an empty session id")
+void it("sessionless file_edited events are credited only to a uniquely streaming tab (no idle-active-tab fallback)", () => {
+  // Session-exclusivity: a file.edited event with no sessionID can't be
+  // attributed by the server. Crediting it to a merely-active (idle) tab is how
+  // edits made outside opencode (another tool/model writing files on disk)
+  // leaked into whichever session was open, polluting its changed-files
+  // dropdown. We now only credit it when exactly one session is streaming.
+  const idx = source.indexOf("private resolveSessionlessFileEditTab(")
+  assert.ok(idx >= 0, "resolveSessionlessFileEditTab must exist")
+  const block = source.slice(idx, idx + 1400)
+  assert.ok(block.includes('event.type !== "file_edited"'), "guards to file_edited events")
+  assert.ok(block.includes("getAllTabs().filter"), "must inspect streaming tabs")
+  assert.ok(
+    block.includes("liveTabs.length === 1 ? liveTabs[0] : undefined"),
+    "attribute only when exactly one session is streaming",
+  )
+  assert.ok(!block.includes("getActiveTab()"), "must NOT fall back to the active tab — that was the cross-session leak")
+  assert.ok(block.includes("Dropping sessionless file_edited"), "must log+drop ambiguous/idle sessionless edits")
 })
 
 // ── resume_server_session: open any server session from the modal ─────────

@@ -7,26 +7,10 @@
   cursor: pointer;
   flex: 0 1 auto;
   min-width: 0;
-  max-width: min(36vw, 340px);
   overflow: hidden;
   border-radius: var(--radius-sm, 4px);
   transition: background var(--duration-fast, 0.2s), outline-color var(--duration-fast, 0.2s);
   outline: 1px solid transparent;
-}
-
-#context-label {
-  display: block;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-#context-progress-bar {
-  flex: 0 0 auto;
-  max-width: 100%;
 }
 
 .context-usage-bar:hover {
@@ -39,13 +23,114 @@
 
 .context-usage-bar.hidden { display: none; }
 
-.context-usage-bar--warning .context-usage-percent,
+#context-label {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.context-usage-label {
+  font-size: 0.75rem;
+  color: var(--oc-muted);
+  font-weight: 500;
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+.ctx-mode-compact .context-usage-label,
+.ctx-mode-minimal .context-usage-label {
+  display: none;
+}
+
+/* Status dot: visible only in minimal mode */
+.context-usage-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: none;
+  background: var(--usage-green, #4caf50);
+}
+.context-usage-bar--warning .context-usage-dot {
+  background: var(--usage-warning, #ff9800);
+}
+.context-usage-bar--critical .context-usage-dot {
+  background: var(--usage-critical, #f44336);
+  animation: dot-pulse 1.5s ease-in-out infinite;
+}
+.ctx-mode-minimal .context-usage-dot {
+  display: inline-block;
+}
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Track: visible in full+compact, hidden in minimal */
+.ctx-mode-minimal .context-usage-track {
+  display: none;
+}
+
+/* Custom progress track + fill — replaces native <progress> */
+.context-usage-track {
+  width: 80px;
+  min-width: 40px;
+  height: 6px;
+  border-radius: var(--radius-full, 999px);
+  background: var(--oc-editor-bg, rgba(128, 128, 128, 0.2));
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.context-usage-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--usage-green, #4caf50);
+  transform-origin: left center;
+  transform: scaleX(var(--usage-pct, 0));
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              background-color 0.2s ease;
+  will-change: transform;
+}
+
+/* Bar-level warning/override the fill color */
+.context-usage-bar--warning .context-usage-fill {
+  background: var(--usage-warning, #ff9800);
+}
+.context-usage-bar--critical .context-usage-fill {
+  background: var(--usage-critical, #f44336);
+  animation: bar-pulse 1s ease-in-out infinite;
+}
+@keyframes bar-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.context-usage-detail {
+  font-size: 0.75rem;
+  color: var(--oc-muted);
+  font-family: var(--font-mono);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .context-usage-bar--warning #context-label {
   color: var(--usage-warning, #ff9800);
 }
-.context-usage-bar--critical .context-usage-percent,
 .context-usage-bar--critical #context-label {
   color: var(--usage-critical, #f44336);
+}
+
+/* Cost: hidden in minimal mode */
+.ctx-mode-minimal #context-cost {
+  display: none;
 }
 
 /* Changed Files Always-Visible Strip */
@@ -91,38 +176,6 @@
   opacity: 0.6;
 }
 
-.context-usage-label {
-  font-size: 0.75rem;
-  color: var(--oc-muted);
-  font-weight: 500;
-  flex: 0 1 auto;
-  min-width: 0;
-  white-space: nowrap;
-}
-
-.context-usage-detail {
-  font-size: 0.75rem;
-  color: var(--oc-muted);
-  font-family: var(--font-mono);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Context progress fill colors */
-.context-progress-fill.context-good { background: var(--usage-green, #4caf50); }
-.context-progress-fill.context-warning { background: var(--usage-yellow, #ff9800); }
-.context-progress-fill.context-critical {
-  background: var(--usage-red, #f44336);
-  animation: pulse 1s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
 /* Context cost display in status strip */
 .context-cost {
   margin-left: var(--spacing-sm);
@@ -141,7 +194,7 @@
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.42), 0 0 0 1px var(--oc-border);
 }
 
-/* COLOR states for per-tab monitor */
+/* COLOR states for per-tab monitor (tabs.ts) */
 .context-monitor--good .context-progress-fill    { background: var(--usage-green, #4caf50); }
 .context-monitor--warning .context-progress-fill { background: var(--usage-yellow, #ff9800); }
 .context-monitor--critical .context-progress-fill {
@@ -213,10 +266,6 @@
   margin-bottom: var(--spacing-sm);
 }
 .cup-segment {
-  /* Width is still set inline by JS (so the segments share the chart row width
-     proportionally) but the visual update on data change is animated via a
-     transform-only effect to avoid triggering layout on the parent chart.
-     The segment's own width allocates space; opacity fades in cleanly. */
   transition: opacity var(--duration-normal) var(--ease-smooth),
               transform var(--duration-normal) var(--ease-smooth);
   position: relative;

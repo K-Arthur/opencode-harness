@@ -41,6 +41,16 @@ textarea:focus-visible,
   outline-offset: -1px;
 }
 
+/* The composer's keyboard focus is shown by the #input-area :has() ring
+   (layout.css), which is drawn for both pointer and keyboard focus — so focus
+   stays clearly visible. Suppress this element's own outline so the composer
+   shows a single ring, not two. This MUST live in the accessibility layer
+   (it is last); an ID selector is needed to beat textarea:focus-visible
+   within the same layer. */
+#prompt-input:focus-visible {
+  outline: none;
+}
+
 .tab:focus-visible {
   outline-offset: -2px;
   border-radius: var(--radius-md);

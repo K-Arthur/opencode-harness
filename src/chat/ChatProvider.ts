@@ -18,7 +18,8 @@ import { StreamCoordinator } from "./handlers/StreamCoordinator"
 import { PromptManager } from "../prompts/PromptManager"
 import { PromptStashManager } from "../prompts/PromptStashManager"
 import { ProviderConfigManager } from "../model/ProviderConfigManager"
-import { mapToolType as mapToolTypePure, isSessionInCurrentWorkspace as isSessionInCurrentWorkspacePure } from "./chatUtils"
+import { mapToolType as mapToolTypePure, isSessionInCurrentWorkspace as isSessionInCurrentWorkspacePure, looksLikeSdkError } from "./chatUtils"
+import { mapOpencodeError, type OpencodeError } from "./webview/opencodeErrorMapper"
 import { RetryQueueService, CRITICAL_MESSAGE_TYPES } from "./RetryQueueService"
 import { ChatMessage } from "./types"
 import { log } from "../utils/outputChannel"
@@ -849,10 +850,16 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     }],
     ["server_error", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean }) => {
       const data = event.data as { error?: unknown } | undefined
-      const errorMsg = this.errorValueToMessage(data?.error ?? event.data ?? "Server error")
+      const raw = data?.error ?? event.data ?? "Server error"
+      // Preserve structured fidelity for genuine SDK errors (ProviderAuthError,
+      // ApiError, …): map once on the host and carry the full ErrorContext to the
+      // webview. Non-SDK values (SSE connection strings, command failures) keep the
+      // existing friendly string path.
+      const errorContext = looksLikeSdkError(raw) ? mapOpencodeError(raw as OpencodeError) : undefined
+      const errorMsg = errorContext?.userMessage ?? this.errorValueToMessage(raw)
       log.error("Server error during streaming", errorMsg)
       if (tab) {
-        this.postRequestError(errorMsg, tab.id)
+        this.postRequestError(errorMsg, tab.id, errorContext)
         this.tabManager.setStreaming(tab.id, false)
         this.tabManager.setWaitingForCompletion(tab.id, false)
         this.tabManager.clearCompletionTimeout(tab.id)
@@ -861,13 +868,13 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         const activeTab = this.tabManager.getActiveTab()
         if (activeTab && activeTab.isStreaming) {
           log.warn(`server_error for unknown session ${event.sessionId || tabId} — routing to active tab ${activeTab.id}`)
-          this.postRequestError(errorMsg, activeTab.id)
+          this.postRequestError(errorMsg, activeTab.id, errorContext)
           this.tabManager.setStreaming(activeTab.id, false)
           this.tabManager.setWaitingForCompletion(activeTab.id, false)
           this.tabManager.clearCompletionTimeout(activeTab.id)
         } else if (activeTab) {
           log.warn(`server_error for unknown session ${event.sessionId || tabId} — active tab ${activeTab.id} is not streaming, skipping state reset`)
-          this.postRequestError(errorMsg, activeTab.id)
+          this.postRequestError(errorMsg, activeTab.id, errorContext)
         } else {
           log.warn(`server_error for unknown session ${event.sessionId || tabId} — no active tab, dropping`)
         }
@@ -990,18 +997,21 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
   private resolveSessionlessFileEditTab(event: ServerEvent): TabState | undefined {
     if (event.sessionId || event.type !== "file_edited") return undefined
 
-    const activeTab = this.tabManager.getActiveTab()
+    // A file.edited event with no sessionID cannot be attributed by the server.
+    // Credit it ONLY to a session whose agent is actively streaming right now —
+    // a live edit produced by that running session. We deliberately do NOT fall
+    // back to a merely-active (idle) tab: that fallback is how edits made outside
+    // opencode (another tool/model writing files on disk) leaked into whichever
+    // session happened to be open, polluting its changed-files dropdown. If zero
+    // or several sessions are streaming, attribution is ambiguous — drop it
+    // rather than guess, so the dropdown only ever shows this session's edits.
     const liveTabs = this.tabManager.getAllTabs().filter((t) => t.isStreaming || t.waitingForCompletion)
-    const tab = liveTabs.length === 1
-      ? liveTabs[0]
-      : activeTab && (activeTab.isStreaming || activeTab.waitingForCompletion || liveTabs.length === 0)
-        ? activeTab
-        : undefined
+    const tab = liveTabs.length === 1 ? liveTabs[0] : undefined
 
     if (tab) {
-      log.debug(`Attributed sessionless file_edited event to tab: ${tab.id}`)
+      log.debug(`Attributed sessionless file_edited event to streaming tab: ${tab.id}`)
     } else {
-      log.warn("Dropping sessionless file_edited event: no active or streaming tab could be resolved")
+      log.warn(`Dropping sessionless file_edited event: ${liveTabs.length === 0 ? "no streaming session" : "ambiguous (multiple streaming sessions)"}`)
     }
     return tab
   }
@@ -1278,8 +1288,8 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     return this.messagePostService.postRawMessage(msg)
   }
 
-  private postRequestError(message: string, sessionId?: string): void {
-    this.messagePostService.postRequestError(message, sessionId)
+  private postRequestError(message: string, sessionId?: string, errorContext?: unknown): void {
+    this.messagePostService.postRequestError(message, sessionId, errorContext)
   }
 
   /** O5: Called when webview.postMessage resolves to false (saturation / refused). */

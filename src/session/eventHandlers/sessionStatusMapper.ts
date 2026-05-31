@@ -11,6 +11,7 @@ interface ErrorContextLike {
   code: string
   message: string
   userMessage: string
+  technicalDetails?: string
   suggestedActions: ErrorAction[]
   retryable: boolean
   timestamp: number
@@ -206,6 +207,9 @@ function makeContext(p: {
     code: p.code,
     message: p.message,
     userMessage: p.userMessage,
+    // Surface the raw server message behind progressive disclosure when it
+    // differs from the (possibly augmented) user-facing message.
+    technicalDetails: p.message && p.message !== p.userMessage ? p.message : undefined,
     suggestedActions: p.actions,
     retryable: p.retryable,
     timestamp: Date.now(),

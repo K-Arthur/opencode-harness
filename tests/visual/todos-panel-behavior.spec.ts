@@ -19,8 +19,10 @@ async function setupLiveTodosPanel(page: Page, initialTodos: Todo[] = SAMPLE_TOD
 
     const host = document.querySelector('.tab-panel.active') || document.querySelector('.chat-main') || document.body
 
-    let panel = document.getElementById('todos-panel')
-    if (!panel) {
+    let panel = document.getElementById('todos-panel') as HTMLElement | null
+    if (panel) {
+      panel.classList.remove('hidden')
+    } else {
       panel = document.createElement('div')
       panel.id = 'todos-panel'
       panel.className = 'todos-panel'
@@ -136,6 +138,11 @@ async function setupLiveTodosPanel(page: Page, initialTodos: Todo[] = SAMPLE_TOD
 
     ;(window as any).__todosPanelApi = api
     api.renderTodos(todos)
+
+    document.getElementById('close-todos-btn')!.addEventListener('click', () => api.close())
+    document.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Escape') api.close()
+    })
   }, initialTodos)
 }
 
@@ -186,10 +193,10 @@ test.describe('Todos Panel — Dynamic Rendering', () => {
 
   test('filter tabs have correct ARIA roles', async ({ page }) => {
     await setupLiveTodosPanel(page)
-    const tablist = page.locator('[role="tablist"]')
+    const tablist = page.locator('#todos-panel [role="tablist"]')
     await expect(tablist).toHaveAttribute('aria-label', 'Todo filters')
 
-    const tabs = page.locator('[role="tab"]')
+    const tabs = page.locator('#todos-panel [role="tab"]')
     await expect(tabs).toHaveCount(4)
     await expect(tabs.first()).toHaveAttribute('aria-selected', 'true')
     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'false')

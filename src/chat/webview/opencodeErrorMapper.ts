@@ -32,6 +32,36 @@ export interface OpencodeError {
   isRetryable?: boolean
   /** Cause / fetch failure context. */
   cause?: unknown
+  /**
+   * The actual SDK error union nests its payload here, e.g.
+   *   ApiError          = { name, data: { message, statusCode?, isRetryable, responseBody? } }
+   *   ProviderAuthError = { name, data: { providerID, message } }
+   * (see node_modules/@opencode-ai/sdk/dist/gen/types.gen.d.ts). We accept both
+   * the nested and the flat shapes so callers can pass either.
+   */
+  data?: {
+    message?: string
+    providerID?: string
+    statusCode?: number
+    isRetryable?: boolean
+    responseBody?: string
+  }
+}
+
+/** Flatten the SDK error (top-level OR nested under `.data`) into one shape. */
+function normalize(err: OpencodeError) {
+  const d = err.data ?? {}
+  const message = err.message ?? d.message ?? ""
+  // Prefer the richest raw detail available for the disclosure panel.
+  const technical = d.responseBody ?? message
+  return {
+    name: err.name ?? "",
+    message,
+    technical,
+    providerID: err.providerID ?? d.providerID,
+    statusCode: err.statusCode ?? d.statusCode,
+    isRetryable: err.isRetryable ?? d.isRetryable,
+  }
 }
 
 /** Minimal action descriptor — keep in sync with errorTypes.ErrorAction. */
@@ -59,12 +89,11 @@ export function mapOpencodeError(err: OpencodeError | undefined | null): ErrorCo
     })
   }
 
-  const name = err.name || ""
-  const message = err.message || ""
+  const { name, message, technical, providerID, statusCode, isRetryable } = normalize(err)
 
   // ── 1. Auth ────────────────────────────────────────────────────────────────
   if (name === "ProviderAuthError" || /unauthori[sz]ed|invalid api key|missing credential/i.test(message)) {
-    const provider = err.providerID || "the provider"
+    const provider = providerID || "the provider"
     return makeContext({
       code: "AUTH_FAILED",
       category: ErrorCategory.AUTH,
@@ -76,6 +105,7 @@ export function mapOpencodeError(err: OpencodeError | undefined | null): ErrorCo
         { label: "Switch provider", action: "switch_model" },
       ],
       retryable: false,
+      technical,
     })
   }
 
@@ -92,6 +122,7 @@ export function mapOpencodeError(err: OpencodeError | undefined | null): ErrorCo
         { label: "Switch model", action: "switch_model" },
       ],
       retryable: true,
+      technical,
     })
   }
 
@@ -105,12 +136,13 @@ export function mapOpencodeError(err: OpencodeError | undefined | null): ErrorCo
       userMessage: "The request was cancelled.",
       actions: [{ label: "Retry", action: "retry", primary: true }],
       retryable: true,
+      technical,
     })
   }
 
   // ── 4. APIError (HTTP-level) ──────────────────────────────────────────────
-  if (name === "APIError" || typeof err.statusCode === "number") {
-    return mapApiError(err)
+  if (name === "APIError" || typeof statusCode === "number") {
+    return mapApiError(statusCode ?? 0, message, isRetryable, technical)
   }
 
   // ── 5. Network / connection (no statusCode means we never reached the wire) ─
@@ -123,6 +155,7 @@ export function mapOpencodeError(err: OpencodeError | undefined | null): ErrorCo
       userMessage: "Can't reach the OpenCode server. Make sure it's running on localhost:4096, then retry.",
       actions: [{ label: "Retry", action: "retry", primary: true }],
       retryable: true,
+      technical,
     })
   }
 
@@ -134,14 +167,14 @@ export function mapOpencodeError(err: OpencodeError | undefined | null): ErrorCo
     message,
     userMessage: message || "An unexpected error occurred.",
     actions: [{ label: "Retry", action: "retry", primary: true }],
-    retryable: err.isRetryable ?? true,
+    retryable: isRetryable ?? true,
+    technical,
   })
 }
 
-function mapApiError(err: OpencodeError): ErrorContext {
-  const status = err.statusCode ?? 0
-  const message = err.message || `HTTP ${status}`
-  const retryable = err.isRetryable ?? (status >= 500 || status === 429 || status === 0)
+function mapApiError(status: number, rawMessage: string, isRetryable: boolean | undefined, technical: string): ErrorContext {
+  const message = rawMessage || `HTTP ${status}`
+  const retryable = isRetryable ?? (status >= 500 || status === 429 || status === 0)
 
   // 401 / 403 → auth
   if (status === 401 || status === 403) {
@@ -153,6 +186,7 @@ function mapApiError(err: OpencodeError): ErrorContext {
       userMessage: "The server rejected the request as unauthorised. Re-check your provider credentials.",
       actions: [{ label: "Open auth settings", action: "edit", primary: true }],
       retryable: false,
+      technical,
     })
   }
 
@@ -169,6 +203,7 @@ function mapApiError(err: OpencodeError): ErrorContext {
         { label: "Open billing", action: "upgrade_plan" },
       ],
       retryable: false,
+      technical,
     })
   }
 
@@ -185,6 +220,7 @@ function mapApiError(err: OpencodeError): ErrorContext {
         { label: "Switch model", action: "switch_model" },
       ],
       retryable: true,
+      technical,
     })
   }
 
@@ -200,6 +236,7 @@ function mapApiError(err: OpencodeError): ErrorContext {
         : "The OpenCode server returned an error. Retry, or check its logs.",
       actions: [{ label: "Retry", action: "retry", primary: true }],
       retryable,
+      technical,
     })
   }
 
@@ -212,6 +249,7 @@ function mapApiError(err: OpencodeError): ErrorContext {
     userMessage: `Request failed: ${message}`,
     actions: [{ label: "Retry", action: "retry", primary: true }],
     retryable,
+    technical,
   })
 }
 
@@ -223,13 +261,17 @@ function makeContext(p: {
   userMessage: string
   actions: MapperAction[]
   retryable: boolean
+  /** Raw technical detail for the disclosure panel; omitted when it would duplicate userMessage. */
+  technical?: string
 }): ErrorContext {
+  const technicalDetails = p.technical && p.technical !== p.userMessage ? p.technical : undefined
   return {
     category: p.category,
     severity: p.severity,
     code: p.code,
     message: p.message,
     userMessage: p.userMessage,
+    technicalDetails,
     suggestedActions: p.actions,
     retryable: p.retryable,
     timestamp: Date.now(),

@@ -35,6 +35,28 @@ export function errorValueToMessage(value: unknown): string {
   return String(value || "Server error")
 }
 
+/** The error-union discriminators emitted by @opencode-ai/sdk (types.gen.d.ts). */
+const SDK_ERROR_NAMES = new Set([
+  "ProviderAuthError",
+  "MessageOutputLengthError",
+  "MessageAbortedError",
+  "APIError",
+  "UnknownError",
+])
+
+/**
+ * True when `value` is a structured opencode SDK error worth routing through
+ * `mapOpencodeError` (rich category/severity/actions). Plain strings and generic
+ * objects (e.g. SSE connection-failure messages) return false so the legacy
+ * string-cleanup path (`errorValueToMessage` + `toUserErrorMessage`) still applies.
+ */
+export function looksLikeSdkError(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false
+  const e = value as { name?: unknown; data?: { statusCode?: unknown } }
+  if (typeof e.name === "string" && SDK_ERROR_NAMES.has(e.name)) return true
+  return typeof e.data?.statusCode === "number"
+}
+
 export function mapToolType(tool: string): string {
   if (!tool) return "read"
   const t = tool.toLowerCase()
