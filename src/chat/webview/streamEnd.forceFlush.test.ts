@@ -68,4 +68,25 @@ describe("M3: stream_end skips wasted queue flush when blocks are provided", () 
       dom.restore()
     }
   })
+
+  it("emits a forced render ACK on stream end", async () => {
+    const dom = installDom({ manualRaf: true })
+    try {
+      await loadStreamHandlers()
+      const { createStreamHandlers } = await import("./stream")
+      const h = createHarness()
+      const acks: Array<{ seq: number; force?: boolean }> = []
+      const stream = createStreamHandlers(h.els, h.messages, () => {}, {
+        onRenderFlush: (seq, force) => acks.push({ seq, force }),
+      })
+
+      stream.handleStreamStart("m3")
+      stream.handleStreamChunk("live text")
+      stream.handleStreamEnd("m3", [])
+
+      assert.deepEqual(acks.at(-1), { seq: 1, force: true })
+    } finally {
+      dom.restore()
+    }
+  })
 })

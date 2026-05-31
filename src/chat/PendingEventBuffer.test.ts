@@ -83,6 +83,30 @@ void describe("PendingEventBuffer", () => {
     )
   })
 
+  void it("coalesces adjacent text chunks for the same pending session", () => {
+    buf.add("ses_stream", evt("text_chunk", "ses_stream", { data: { text: "hel", messageId: "m1" } }))
+    buf.add("ses_stream", evt("text_chunk", "ses_stream", { data: { text: "lo", messageId: "m1" } }))
+
+    const replayed = buf.drain("ses_stream")
+    assert.equal(replayed.length, 1)
+    assert.equal(replayed[0]!.type, "text_chunk")
+    assert.deepEqual(replayed[0]!.data, { text: "hello", messageId: "m1" })
+  })
+
+  void it("does not coalesce text chunks across tool boundaries", () => {
+    buf.add("ses_stream", evt("text_chunk", "ses_stream", { data: { text: "before" } }))
+    buf.add("ses_stream", evt("tool_start", "ses_stream", { data: { id: "tool-1" } }))
+    buf.add("ses_stream", evt("text_chunk", "ses_stream", { data: { text: "after" } }))
+
+    const replayed = buf.drain("ses_stream")
+    assert.deepEqual(
+      replayed.map((event) => event.type),
+      ["text_chunk", "tool_start", "text_chunk"],
+    )
+    assert.deepEqual(replayed[0]!.data, { text: "before" })
+    assert.deepEqual(replayed[2]!.data, { text: "after" })
+  })
+
   void it("ignores events without a sessionId rather than crashing", () => {
     assert.doesNotThrow(() => buf.add("", evt("noop", "")))
     assert.equal(buf.drain("").length, 0)

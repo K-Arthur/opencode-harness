@@ -973,7 +973,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
   }
 
   private isHighFrequencyServerEvent(event: ServerEvent): boolean {
-    return event.type === "text_chunk" || event.type === "tool_end" || event.type === "tool_start"
+    return event.type === "text_chunk" || event.type === "tool_update" || event.type === "tool_end" || event.type === "tool_start"
   }
 
   private logIncomingServerEvent(event: ServerEvent, isHighFrequency: boolean): void {

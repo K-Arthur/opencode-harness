@@ -9,7 +9,7 @@ const typesSource = readFileSync(resolve(__dirname, "StreamCoordinatorTypes.ts")
 describe("StreamCoordinator.ts", () => {
   it("exports StreamCallbacks interface", () => {
     assert.ok(source.includes("export type { StreamCallbacks") || source.includes("export interface StreamCallbacks") || typesSource.includes("export interface StreamCallbacks"), "StreamCallbacks must be exported")
-    assert.ok(source.includes("postMessage: (msg: Record<string, unknown>) => void") || typesSource.includes("postMessage: (msg: Record<string, unknown>) => void"),
+    assert.ok(source.includes("postMessage: (msg: Record<string, unknown>) => void") || typesSource.includes("postMessage: (msg: Record<string, unknown>) => void | boolean | Thenable<boolean | void>"),
       "StreamCallbacks must have postMessage")
     assert.ok(source.includes("postRequestError: (message: string, sessionId?: string) => void") || typesSource.includes("postRequestError: (message: string, sessionId?: string) => void"),
       "StreamCallbacks must have postRequestError with optional sessionId")
@@ -118,6 +118,15 @@ describe("StreamCoordinator.ts", () => {
     )
     assert.ok(source.includes("getDiffHandler(): DiffHandler"), "getDiffHandler must exist")
     assert.ok(source.includes("this.diffHandler"), "getDiffHandler must return this.diffHandler")
+  })
+
+  it("uses rendered chunk ACKs for streaming backpressure", () => {
+    assert.ok(source.includes("MAX_UNACKED_STREAM_CHUNKS = 8"), "must cap unacked stream chunks")
+    assert.ok(source.includes("MAX_STREAM_DEFER_MS = 250"), "must bound deferred chunk latency")
+    assert.ok(source.includes("postedChunkSeqs"), "must track chunk seq separately from heartbeat seq")
+    assert.ok(source.includes("deferredChunks"), "must coalesce deferred chunks")
+    assert.ok(source.includes("postOrDeferChunk"), "appendChunk must route through backpressure gate")
+    assert.ok(source.includes("this.drainDeferredChunk(tabId)"), "ACKs must drain deferred chunks")
   })
 
   it("has cleanupTab and no implicit context builder in the prompt path", () => {

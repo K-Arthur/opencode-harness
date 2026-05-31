@@ -1,6 +1,6 @@
 import type { Message, Part } from "@opencode-ai/sdk"
 import type { ChatMessage, Block } from "../types"
-import { parseQuestionArgs, parseAllowFreeText } from "../chat/webview/questionModel"
+import { parseQuestionArgs, parseAllowFreeText } from "./questionModel"
 
 /**
  * SDK → CanonicalBlock converter. Single source of truth for projecting the

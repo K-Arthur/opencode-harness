@@ -16,7 +16,7 @@ import { partsToBlocks as sdkConvertPartsToBlocks } from "../../session/sdkMessa
 import { StreamFinalizerService } from "./StreamFinalizerService"
 import { MethodologyAdvisor, type MethodologyAdvice } from "../../methodology/MethodologyAdvisor"
 import { classifyTool } from "./toolClassifier"
-import { parseQuestionArgs, parseAllowFreeText } from "../webview/questionModel"
+import { parseQuestionArgs, parseAllowFreeText } from "../../session/questionModel"
 import type { AdvisoryOrchestrationResult } from "../../methodology/MethodologyOrchestrator"
 import { updateMethodologyStatus, getMethodologyOrchestrator } from "../../methodology/registry"
 
@@ -32,6 +32,8 @@ export class StreamCoordinator {
   readonly TTFB_TIMEOUT_MS = 45000
   /** Short grace window for terminal status to be followed by late tool_end events */
   readonly TOOL_FINALIZE_GRACE_MS = 30000
+  private readonly MAX_UNACKED_STREAM_CHUNKS = 8
+  private readonly MAX_STREAM_DEFER_MS = 250
   private streamWatchdog: ReturnType<typeof setInterval> | null = null
   private stuckStreamHandlers: Map<string, StreamCallbacks> = new Map()
   private ttfbTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
@@ -69,6 +71,14 @@ export class StreamCoordinator {
   private appendCallbacks = new Map<string, (() => Promise<void>)[]>()
   /** Per-tab message sequence counter — monotonically increasing, attached to every streaming message */
   private msgSeqs = new Map<string, number>()
+  /** Per-tab chunk sequence counter — used for rendered-chunk ACK backpressure. */
+  private postedChunkSeqs = new Map<string, number>()
+  private deferredChunks = new Map<string, {
+    text: string
+    messageId?: string
+    callbacks: StreamCallbacks
+    timer: ReturnType<typeof setTimeout>
+  }>()
   /** Per-tab token/cost totals at prompt start, used to dedupe final SDK usage fallback */
   private finalUsageBaselines = new Map<string, { total: number; cost: number }>()
   private tabCloseDisposable: vscode.Disposable | null = null
@@ -117,6 +127,12 @@ export class StreamCoordinator {
   private nextSeq(tabId: string): number {
     const seq = (this.msgSeqs.get(tabId) || 0) + 1
     this.msgSeqs.set(tabId, seq)
+    return seq
+  }
+
+  private nextChunkSeq(tabId: string): number {
+    const seq = (this.postedChunkSeqs.get(tabId) || 0) + 1
+    this.postedChunkSeqs.set(tabId, seq)
     return seq
   }
 
@@ -742,6 +758,7 @@ export class StreamCoordinator {
   }
 
   async finalizeStream(tabId: string, callbacks: StreamCallbacks): Promise<void> {
+    this.drainDeferredChunk(tabId, true)
     await this.finalizerService.finalizeStream(tabId, callbacks)
     
     // Execute append callbacks after stream finalization
@@ -908,9 +925,66 @@ export class StreamCoordinator {
   }
 
   handleStreamAck(tabId: string, seq: number, lastRenderedChunkSeq?: number): void {
-    this.heartbeatAckedSeqs.set(tabId, seq)
+    if (seq > 0) this.heartbeatAckedSeqs.set(tabId, seq)
     if (lastRenderedChunkSeq !== undefined) {
       this.heartbeatAckedChunkSeqs.set(tabId, lastRenderedChunkSeq)
+    }
+    this.drainDeferredChunk(tabId)
+  }
+
+  private unackedStreamChunkCount(tabId: string): number {
+    const posted = this.postedChunkSeqs.get(tabId) || 0
+    const rendered = this.heartbeatAckedChunkSeqs.get(tabId) || 0
+    return Math.max(0, posted - rendered)
+  }
+
+  private shouldDeferStreamChunk(tabId: string): boolean {
+    return this.unackedStreamChunkCount(tabId) >= this.MAX_UNACKED_STREAM_CHUNKS
+  }
+
+  private postChunkToWebview(tabId: string, text: string, callbacks: StreamCallbacks, messageId?: string): void {
+    callbacks.postMessage({
+      type: "stream_chunk",
+      sessionId: tabId,
+      text,
+      messageId,
+      seq: this.nextChunkSeq(tabId),
+    })
+  }
+
+  private postOrDeferChunk(tabId: string, text: string, callbacks: StreamCallbacks, messageId?: string): void {
+    if (!this.shouldDeferStreamChunk(tabId)) {
+      this.postChunkToWebview(tabId, text, callbacks, messageId)
+      return
+    }
+
+    const existing = this.deferredChunks.get(tabId)
+    if (existing) {
+      existing.text += text
+      existing.callbacks = callbacks
+      existing.messageId = messageId ?? existing.messageId
+      return
+    }
+
+    const timer = setTimeout(() => this.drainDeferredChunk(tabId, true), this.MAX_STREAM_DEFER_MS)
+    this.deferredChunks.set(tabId, { text, messageId, callbacks, timer })
+  }
+
+  private drainDeferredChunk(tabId: string, force = false): void {
+    const deferred = this.deferredChunks.get(tabId)
+    if (!deferred) return
+    if (!force && this.shouldDeferStreamChunk(tabId)) return
+
+    clearTimeout(deferred.timer)
+    this.deferredChunks.delete(tabId)
+    this.postChunkToWebview(tabId, deferred.text, deferred.callbacks, deferred.messageId)
+  }
+
+  private clearDeferredChunk(tabId: string): void {
+    const deferred = this.deferredChunks.get(tabId)
+    if (deferred) {
+      clearTimeout(deferred.timer)
+      this.deferredChunks.delete(tabId)
     }
   }
 
@@ -1049,11 +1123,12 @@ export class StreamCoordinator {
     }
 
     if (cbs) {
-      cbs.postMessage({ type: "stream_chunk", sessionId: tabId, text, messageId: uiMessageId, seq: this.nextSeq(tabId) })
+      this.postOrDeferChunk(tabId, text, cbs, uiMessageId)
     }
   }
 
   appendToolStart(tabId: string, toolCall: { id?: string; name: string; class?: string; args?: unknown; state?: string }, callbacks: StreamCallbacks): void {
+    this.drainDeferredChunk(tabId, true)
     if (this.ttfbTimeouts.has(tabId)) {
       this.clearTtfbTimeout(tabId)
       log.info(`TTFB: first tool call received for tab ${tabId}`)
@@ -1142,6 +1217,7 @@ export class StreamCoordinator {
   }
 
   appendSkill(tabId: string, skillName: string, callbacks: StreamCallbacks): void {
+    this.drainDeferredChunk(tabId, true)
     const tab = this.tabManager.getTab(tabId)
     if (!tab) return
 
@@ -1158,6 +1234,7 @@ export class StreamCoordinator {
   }
 
   appendToolUpdate(tabId: string, toolCall: { id?: string; name: string; class?: string; args?: unknown; state?: string }, callbacks: StreamCallbacks): void {
+    this.drainDeferredChunk(tabId, true)
     const tab = this.tabManager.getTab(tabId)
     if (!tab) return
     this.tabManager.touchActivity(tabId)
@@ -1194,6 +1271,7 @@ export class StreamCoordinator {
   }
 
   appendToolEnd(tabId: string, result: ToolEndResult, callbacks: StreamCallbacks): void {
+    this.drainDeferredChunk(tabId, true)
     const tab = this.tabManager.getTab(tabId)
     if (!tab) return
     this.tabManager.touchActivity(tabId)
@@ -1224,6 +1302,8 @@ private cleanupTab(tabId: string): void {
     const cliSessionId = this.tabManager.getTab(tabId)?.cliSessionId
     if (cliSessionId) this.injectedInstructionsSessions.delete(cliSessionId)
     this.msgSeqs.delete(tabId)
+    this.postedChunkSeqs.delete(tabId)
+    this.clearDeferredChunk(tabId)
     this.finalUsageBaselines.delete(tabId)
   }
 
@@ -1356,6 +1436,11 @@ private cleanupTab(tabId: string): void {
     this.heartbeatAckedChunkSeqs.clear()
     this.lastForceRerenderSeqs.clear()
     this.msgSeqs.clear()
+    this.postedChunkSeqs.clear()
+    for (const deferred of this.deferredChunks.values()) {
+      clearTimeout(deferred.timer)
+    }
+    this.deferredChunks.clear()
     this.diffHandler.dispose()
   }
 }

@@ -37,6 +37,13 @@ void describe("ChatProvider.ts", () => {
     assert.ok(source.includes("private postRequestError("), "must have postRequestError")
   })
 
+  void it("treats tool_update as a high-frequency server event", () => {
+    assert.ok(
+      source.includes('event.type === "tool_update"'),
+      "tool_update bursts must use high-frequency buffering/logging rules",
+    )
+  })
+
   void it("contains VALID_WEBVIEW_TYPES static set with known message types", () => {
     assert.ok(source.includes("static readonly VALID_WEBVIEW_TYPES") || eventRouterSource.includes("static readonly VALID_WEBVIEW_TYPES"), "VALID_WEBVIEW_TYPES must exist")
     assert.ok(source.includes("send_prompt") || eventRouterSource.includes("send_prompt"), "must include send_prompt")

@@ -431,6 +431,14 @@ export class WebviewEventRouter {
     ["request_state_sync", () => {
       this.pushVisibleStateToWebview()
     }],
+    ["stream_ack", (msg: Record<string, unknown>, sessionId?: string) => {
+      if (!sessionId) return
+      const seq = typeof msg.seq === "number" && Number.isFinite(msg.seq) ? msg.seq : undefined
+      const lastRenderedChunkSeq = typeof msg.lastRenderedChunkSeq === "number" && Number.isFinite(msg.lastRenderedChunkSeq)
+        ? msg.lastRenderedChunkSeq
+        : undefined
+      this.opts.streamCoordinator.handleStreamAck(sessionId, seq ?? 0, lastRenderedChunkSeq)
+    }],
     ["open_settings", async () => { await this.opts.openOpenCodeConfigOrSettings() }],
     ["open_context_window_override_dialog", async () => {
       // Fires from the context-monitor row when the window limit is

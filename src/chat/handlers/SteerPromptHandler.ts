@@ -4,7 +4,7 @@ import type { SteerPrompt } from "../webview/types"
 import { log } from "../../utils/outputChannel"
 
 export interface StreamCallbacks {
-  postMessage: (msg: Record<string, unknown>) => void
+  postMessage: (msg: Record<string, unknown>) => void | boolean | Thenable<boolean | void>
   postRequestError: (message: string, sessionId?: string) => void
 }
 

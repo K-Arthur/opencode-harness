@@ -76,4 +76,52 @@ void describe("HostMessageBatcher", () => {
     assert.equal(posted[0]!.type, "stream_chunk")
     assert.equal(posted[0]!.text, "held")
   })
+
+  void it("retains stream chunks when async webview post resolves false", async () => {
+    let resolvePost: ((ok: boolean) => void) | undefined
+    const posted: Record<string, unknown>[] = []
+    let failOnce = true
+    const batcher = new HostMessageBatcher((msg) => {
+      posted.push(msg)
+      if (!failOnce) return true
+      failOnce = false
+      return new Promise<boolean>((resolve) => { resolvePost = resolve })
+    })
+
+    batcher.post({ type: "stream_chunk", sessionId: "s1", text: "retry" })
+    batcher.flush()
+    assert.equal(posted.length, 1)
+    resolvePost?.(false)
+    await Promise.resolve()
+
+    batcher.flush()
+    assert.equal(posted.length, 2)
+    assert.equal(posted[1]!.type, "stream_chunk")
+    assert.equal(posted[1]!.text, "retry")
+    batcher.dispose()
+  })
+
+  void it("retains stream chunks when async webview post rejects", async () => {
+    let rejectPost: ((err: Error) => void) | undefined
+    const posted: Record<string, unknown>[] = []
+    let failOnce = true
+    const batcher = new HostMessageBatcher((msg) => {
+      posted.push(msg)
+      if (!failOnce) return true
+      failOnce = false
+      return new Promise<boolean>((_, reject) => { rejectPost = reject })
+    })
+
+    batcher.post({ type: "stream_chunk", sessionId: "s1", text: "retry" })
+    batcher.flush()
+    assert.equal(posted.length, 1)
+    rejectPost?.(new Error("webview closed"))
+    await Promise.resolve()
+
+    batcher.flush()
+    assert.equal(posted.length, 2)
+    assert.equal(posted[1]!.type, "stream_chunk")
+    assert.equal(posted[1]!.text, "retry")
+    batcher.dispose()
+  })
 })
