@@ -87,6 +87,8 @@ export interface WebviewEventRouterOptions {
   deleteProvider: (id: string) => void
   showOpenFolderDialog: (dir: string) => void
   skillPreferences: SkillPreferencesStoreLike
+  pushAllStateToWebview: () => void
+  pushVisibleStateToWebview: () => void
 }
 
 export class WebviewEventRouter {
@@ -366,9 +368,15 @@ export class WebviewEventRouter {
     ["close_tab", (_: Record<string, unknown>, sessionId?: string) => {
       if (sessionId) {
         const tab = this.opts.tabManager.getTab(sessionId)
+        const wasActive = this.opts.tabManager.getActiveId() === sessionId || this.opts.sessionStore.activeId === sessionId
         if (tab?.isStreaming) void this.opts.streamCoordinator.abort(sessionId, { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) }).catch(err => log.warn("Abort on close failed", err))
         this.opts.tabManager.closeTab(sessionId)
         this.opts.sessionStore.deleteIfEmpty(sessionId)
+        if (wasActive) {
+          const nextActiveId = this.opts.tabManager.getActiveId()
+          if (nextActiveId) this.opts.sessionStore.setActive(nextActiveId)
+          else this.opts.sessionStore.clearActive()
+        }
       }
     }],
     ["switch_tab", (msg: Record<string, unknown>, sessionId?: string) => {
@@ -414,7 +422,7 @@ export class WebviewEventRouter {
     ["webview_ready", async () => {
       this.clearReadyTimeout()
       this.webviewReady = true
-      this.opts.statePush.pushAllStateToWebview()
+      this.opts.pushAllStateToWebview()
       if (this.earlyMessageQueue.length > 0) {
         const queue = this.earlyMessageQueue
         this.earlyMessageQueue = []
@@ -433,7 +441,7 @@ export class WebviewEventRouter {
       this.webviewFullyInitialized = true
     }],
     ["request_state_sync", () => {
-      this.pushVisibleStateToWebview()
+      this.opts.pushVisibleStateToWebview()
     }],
     ["stream_ack", (msg: Record<string, unknown>, sessionId?: string) => {
       if (!sessionId) return
@@ -1397,10 +1405,6 @@ export class WebviewEventRouter {
     this.opts.mcpServerManager.refresh()
     const servers = this.opts.mcpServerManager.getServers()
     this.opts.statePush.pushMcpServersToWebview(servers)
-  }
-
-  private pushVisibleStateToWebview(): void {
-    this.opts.statePush.pushVisibleStateToWebview()
   }
 
   private isPlanModeSession(sessionId: string | undefined): boolean {

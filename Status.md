@@ -3,6 +3,11 @@
 ## Last Updated: 2026-05-31
 ## Project State: ADR-010 complete — horizontal scaling, crash resilience, configurable stream cap
 
+### Recent Feature (2026-05-31): Automatic opencode CLI install on activation
+- **The required opencode CLI is now installed for the user.** VS Code has no install-time hook, so detect-and-install runs on activation. Default is **prompt-once** (Install / Manual Instructions / Not Now); declines are remembered in `globalState` to avoid nagging. macOS/Linux use the official installer (downloaded, validated, run as `bash <file>` with `shell:false` — no `curl | bash`; installs to `~/.opencode/bin`); Windows uses `npm i -g opencode-ai` (or manual). New `opencode.autoInstall` setting (`prompt`|`auto`|`off`) and `OpenCode: Install CLI` command. (`src/install/installPlan.ts`, `src/install/OpencodeInstaller.ts`, `src/extension.ts`, `src/commands/misc.ts`, `package.json`)
+- **Binary detection probes known install dirs.** `ServerLifecycle.findOpencodeBinary()` now falls back from PATH to `~/.opencode/bin/opencode` etc., fixing "installed but not detected" for GUI-launched editors. (`src/session/ServerLifecycle.ts`)
+- **ADR:** `docs/adrs/2026-05-31-cli-auto-install.md`. **Tests:** typecheck clean, build clean; new behavioral tests (`installPlan`), string-assertion tests (`OpencodeInstaller`), ServerLifecycle fallback + config-schema assertions — full suite passing, 0 failures.
+
 ### Recent Fix (2026-05-31): Model variant selector — variant now actually sent with prompts, persisted locally, restored on tab switch
 - **Variant was silently dropped from `send_prompt`.** `sendLogic.ts` built the prompt message without reading the session's variant — no variant was ever sent to the server. Now reads `session.variant` (fallback `globalVariant`) and includes it in the payload. (`src/chat/webview/sendLogic.ts`)
 - **Selection not persisted locally.** `onSelect` in `main.ts` posted to host but didn't call `setSessionVariant`/`setGlobalVariant`, creating a stale-race window. Now updates local state synchronously before posting. (`src/chat/webview/main.ts`)

@@ -593,6 +593,13 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
     return session
   }
 
+  clearActive(): void {
+    if (!this.activeSessionId) return
+    this.activeSessionId = ""
+    this._onActiveSessionChanged.fire("")
+    this.fireChangeEvent({ kind: "active_changed", sessionId: "" })
+  }
+
   appendMessage(sessionId: string, msg: ChatMessage): void {
     const session = this.sessions.get(sessionId)
     if (!session) return

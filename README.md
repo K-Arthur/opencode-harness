@@ -366,7 +366,7 @@ The extension warns you before you hit limits:
 
 - **VS Code** 1.98.0 or higher
 - **Node.js** 20.x or later
-- **opencode CLI** — the agent runtime (see Setup below)
+- **opencode CLI** — the agent runtime. **You usually don't need to install this yourself:** on first activation the extension detects a missing CLI and offers to install it for you (official installer on macOS/Linux, npm on Windows). This is controlled by the [`opencode.autoInstall`](docs/configuration.md) setting (`prompt` by default; set to `auto` for silent install or `off` to manage it yourself). You can also run **`OpenCode: Install CLI`** from the Command Palette at any time. Manual install instructions are below.
 
 ## Frequently Asked Questions
 
@@ -452,11 +452,17 @@ code .
 
 1. **opencode CLI** — The agent backend that this extension connects to.
 
+   > **The extension installs this for you by default.** On first activation
+   > without a CLI present, it prompts to install (see the
+   > [`opencode.autoInstall`](docs/configuration.md) setting, or run
+   > **`OpenCode: Install CLI`**). The commands below are for manual setup or if
+   > you prefer a different install method.
+
    ```bash
-   # Official install:
+   # Official install (macOS/Linux) — installs to ~/.opencode/bin, no sudo:
    curl -fsSL https://opencode.ai/install | bash
 
-   # Or via npm:
+   # Or via npm (also used on Windows):
    npm install -g opencode-ai
 
    # Or via Homebrew (macOS):
@@ -645,7 +651,7 @@ npm run test:lint      # lint with tsc --noEmit
 | `opencode.autoCompact` | `"ask"` | window | Auto-compact behavior: `"ask"` (prompt before compacting), `"auto"` (compact without asking), `"off"` (never auto-compact) |
 | `opencode.sessions.emptySessionTtlMinutes` | `60` | window | Prune completely empty inactive sessions after this many minutes |
 | `opencode.sessions.cleanupIntervalMinutes` | `15` | window | Interval for periodic empty-session pruning |
-| `opencode.sessions.restoreOpenTabs` | `true` | window | Restore previously open non-empty tabs in the same workspace on reload |
+| `opencode.sessions.restoreOpenTabs` | `true` | window | Restore previously open tabs in the same workspace on reload; closed historical sessions stay in history |
 | `opencode.rateLimits` | `{}` | window | Per-provider rate limit configuration (tokensPerMin, requestsPerMin) |
 | `opencode.rateLimitWarningThreshold` | `0.1` | window | Fraction of remaining rate limit that triggers a warning notification (0.0-1.0) |
 | `opencode.rateLimitCriticalThreshold` | `0.05` | window | Fraction of remaining rate limit that triggers a critical warning (0.0-1.0) |
@@ -666,7 +672,8 @@ npm run test:lint      # lint with tsc --noEmit
 | `opencode-harness.rollback` | OpenCode: Rollback Changes |
 | `opencode-harness.selectModel` | OpenCode: Select Model |
 | `opencode-harness.showRateLimits` | OpenCode: Show Rate Limits |
-| `opencode-harness.checkCli` | OpenCode: Check CLI Communication |
+| `opencode-harness.checkCli` | OpenCode: Test CLI Connection |
+| `opencode-harness.installCli` | OpenCode: Install CLI |
 | `opencode-harness.listSessions` | OpenCode: List Sessions |
 | `opencode-harness.deleteSession` | OpenCode: Delete Session |
 | `opencode-harness.renameSession` | OpenCode: Rename Session |

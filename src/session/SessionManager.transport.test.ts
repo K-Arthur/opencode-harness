@@ -48,4 +48,12 @@ describe("SessionManager event transport", () => {
     assert.ok(block.includes("eventStreamStableTimer"), "must delay reconnect notification")
     assert.ok(block.includes('type: "event_stream_reconnected"'), "must keep existing reconnect event")
   })
+
+  it("bridges process disconnects into normalized server_disconnected events", () => {
+    assert.ok(managerSource.includes("lifecycleDisposables"), "must retain lifecycle event subscriptions for disposal")
+    assert.ok(managerSource.includes("this.serverLifecycle.onDisconnected((data) =>"), "must subscribe to ServerLifecycle disconnects")
+    assert.ok(managerSource.includes("this.sseSubscriber.disconnect()"), "must stop stale SSE transport on process disconnect")
+    assert.ok(managerSource.includes("this.client = null"), "must clear the stale client so reconnect can create a fresh one")
+    assert.ok(managerSource.includes('type: "server_disconnected", data'), "must publish normalized server_disconnected events")
+  })
 })

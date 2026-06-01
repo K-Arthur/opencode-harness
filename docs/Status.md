@@ -1,9 +1,14 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-05-30
-**Version:** v0.2.20 (Rate-limit/error-handler hardening; permission-mode UX fixes)
+**Last Updated:** 2026-05-31
+**Version:** v0.2.23 (+ Unreleased: opencode CLI auto-install)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
+
+## Unreleased Highlights
+
+- **Automatic opencode CLI install** — the CLI is a hard requirement, but VS Code has no install-time hook, so the extension now detects a missing binary on activation and installs it. Default is **prompt-once** (Install / Manual Instructions / Not Now), with the choice remembered to avoid nagging; `opencode.autoInstall` (`prompt`|`auto`|`off`) controls it, and `OpenCode: Install CLI` triggers it on demand. macOS/Linux use the official installer (downloaded → validated → `bash <file>` with `shell:false`, no `curl | bash`; lands in `~/.opencode/bin`); Windows uses npm. See ADR `docs/adrs/2026-05-31-cli-auto-install.md`. (`src/install/`, `src/extension.ts`, `src/commands/misc.ts`)
+- **Binary detection probes known install dirs** — `ServerLifecycle.findOpencodeBinary()` falls back from PATH to `~/.opencode/bin/opencode` and other common locations, fixing "installed but not detected" for GUI-launched editors whose PATH doesn't include the installer's directory. (`src/session/ServerLifecycle.ts`, `src/install/installPlan.ts`)
 
 ## v0.2.20 Highlights
 
@@ -110,12 +115,12 @@ The single failing test in v0.2.7 (`main.test.ts › timeline jumps use exact me
 | 27 | Header Consolidation | ✅ | Status strip below tab bar (model/tokens/cost); settings overflow menu (`#settings-menu`) with MCP + theme entries; 4-button header; `aria-pressed` on all toggles |
 | 28 | CLI Session Sharing | ✅ | `OPENCODE_DATA_DIR`/`XDG_DATA_HOME` passed through env-var allowlist; `recoverSessions` no longer workspace-scoped |
 | 29 | Theme Customizer + CLI Theme Parity | ✅ | Webview modal with color pickers + Preview button; 7 override fields incl. user message bg; `--bg-secondary`/`--bg-tertiary` removed from CSS_VAR_MAP to preserve `color-mix()` depth; `.vscode-light` body overrides fix light-theme bubble rendering |
-| 30 | Empty Session Cleanup + Restore | ✅ | Empty unused sessions and local `pendingServerLink` placeholders are transient, pruned periodically, deleted on close, and non-empty open tabs restore per workspace when enabled; server imports awaiting backfill remain exempt |
+| 30 | Empty Session Cleanup + Restore | ✅ | Empty unused sessions and local `pendingServerLink` placeholders are transient, pruned periodically, deleted on close, and open tabs restore per workspace when enabled; closed historical sessions are not revived on focus sync; server imports awaiting backfill remain exempt |
 | 31 | Session Load Performance + Scroll Fixes | ✅ | `resume_session_data` truncated to last 50 msgs + `request_more_messages` pagination; chunked rAF rendering (`CHUNK_SIZE=20`); load-earlier banner; scroll-to-bottom after load; debounced scroll markers + timeline refresh; `content-visibility: auto; contain-intrinsic-size: auto 120px` on messages; `will-change: scroll-position` on message list |
 | 32 | Back Button + Modal Focus Traps | ✅ | Back button in header when any modal is open; Tab/Shift+Tab focus cycling within all modals; return-focus-to-trigger on close |
 | 33 | Settings Menu Keyboard Nav | ✅ | ArrowUp/Down, Home, End, Escape navigation |
 | 34 | Theme Customizer Undo State | ✅ | Save/reset push theme state onto undo stack |
-| 35 | Session Recovery Re-push | ✅ | `sessions_recovered` event triggers `pushInitStateToWebview` |
+| 35 | Session Recovery Re-push | ✅ | `sessions_recovered` event triggers `pushInitStateToWebview`; process disconnects clear stale server state and emit `server_disconnected` before reconnect |
 | 36 | Context Optimization Suggestions | ✅ | `ContextMonitor.generateOptimizationSuggestions()` exposed via webview; WebviewEventRouter now calls it on context_suggestions_request |
 | 37 | Skills Performance Tracking UI | ✅ | `SkillInfo` extended with `performanceScore`, `usageCount`, `lastUsed`; skills modal displays metrics when available |
 | 38 | Context Optimization UI Display | ⏳ | Backend exposed, pending webview panel integration to display suggestions to users |

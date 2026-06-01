@@ -62,6 +62,7 @@ OpenCode Harness is a VS Code extension that integrates the opencode AI coding a
 - **Password/security**: Auto-generated `OPENCODE_SERVER_PASSWORD` per local server session, HTTP Basic auth via SDK client headers, environment allowlist for child processes
 
 ### Data Flow
+0. On activation → `ensureOpencodeAndStart` checks the opencode CLI is present (`OpencodeInstaller`). If missing and not in remote-attach mode, it installs per the `opencode.autoInstall` setting (prompt-once by default) before starting the server. See ADR `docs/adrs/2026-05-31-cli-auto-install.md`.
 1. User opens chat panel → Extension activates ChatProvider with TabManager
 2. First chat open → Extension starts opencode server (`opencode serve`)
 3. User sends message in webview → MessageRouter routes to appropriate handler
@@ -382,7 +383,8 @@ Welcome-page session search and pasted-image attachments share a webview-side co
 - **`clearAll()` with dry-run**: Returns per-category counts (empty, test-named, orphaned, archived, corrupted); produces JSON backup log before deletion.
 - **Resume re-attaches server session**: `handleResumeSession` is async and calls `ensureSession(cliSessionId)`.
 - **Empty-session cleanup**: `SessionStore.deleteIfEmpty()` removes opened-but-unused sessions and empty local `pendingServerLink` placeholders on tab close; `pruneEmptySessions()` periodically removes inactive empty sessions using `opencode.sessions.emptySessionTtlMinutes` and `opencode.sessions.cleanupIntervalMinutes`. Only server-imported sessions with `needsBackfill` are exempt while empty.
-- **Open-tab restore**: `ChatProvider.pushInitStateToWebview()` restores previously open non-empty tabs for the current workspace when `opencode.sessions.restoreOpenTabs` is enabled.
+- **Open-tab restore**: `ChatProvider.pushInitStateToWebview()` restores the previously open tabs for the current workspace when `opencode.sessions.restoreOpenTabs` is enabled. Closed historical sessions remain in the session list but are not auto-selected during visibility/focus sync; closing the last active tab clears the host active-session pointer.
+- **Crash restore signal**: `ServerLifecycle` clears stale process/port state on unexpected exit before scheduling reconnect, and `SessionManager` emits `server_disconnected` so streaming tabs can snapshot restoration state before recovery.
 
 ### Webview Send Flow (Feature 24 — Fixed)
 - **Context-chip safety**: Prompt context chips render through full webview `ElementRefs`, not the attachment-only refs used by the attachment manager. Missing chip containers are handled as a logged no-op instead of throwing.
@@ -462,6 +464,8 @@ Welcome-page session search and pasted-image attachments share a webview-side co
 | `TabManager` | `src/chat/TabManager.ts` | Multi-tab state (max 3 concurrent streams) |
 | `SessionStore` | `src/session/SessionStore.ts` | Persistent session storage in VS Code globalState |
 | `SessionManager` | `src/session/SessionManager.ts` | opencode server lifecycle, SDK client, session CRUD |
+| `OpencodeInstaller` | `src/install/OpencodeInstaller.ts` | Detects a missing opencode CLI on activation and installs it (prompt-once / auto / off); locates the binary in known dirs + PATH |
+| `installPlan` (pure) | `src/install/installPlan.ts` | vscode-free planning: per-platform install strategy + known binary locations (`~/.opencode/bin`, npm-global, Homebrew) |
 | `SessionExporter` | `src/session/SessionExporter.ts` | Markdown export of session conversations |
 | `StreamCoordinator` | `src/chat/handlers/StreamCoordinator.ts` | Per-tab SSE streaming with watchdog, TTFB/completion timeout split, idempotent finalize guard, stream state machine |
 | `MessageRouter` | `src/chat/handlers/MessageRouter.ts` | Webview-to-handler message dispatch |

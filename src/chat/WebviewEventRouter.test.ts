@@ -50,6 +50,34 @@ describe("WebviewEventRouter context usage routing", () => {
   })
 })
 
+describe("WebviewEventRouter host state sync", () => {
+  it("webview_ready asks ChatProvider to push full init state directly", () => {
+    const handler = blockBetween('["webview_ready"', '["init_ack"')
+
+    assert.ok(
+      handler.includes("this.opts.pushAllStateToWebview()"),
+      "webview_ready must call the host pushAllStateToWebview callback so init_state is sent immediately",
+    )
+    assert.ok(
+      !handler.includes("statePush.pushAllStateToWebview()"),
+      "webview_ready must not send a push_all_state message back to the webview",
+    )
+  })
+
+  it("request_state_sync asks ChatProvider to push visible host state directly", () => {
+    const handler = blockBetween('["request_state_sync"', '["stream_ack"')
+
+    assert.ok(
+      handler.includes("this.opts.pushVisibleStateToWebview()"),
+      "request_state_sync must call the host pushVisibleStateToWebview callback",
+    )
+    assert.ok(
+      !handler.includes("this.pushVisibleStateToWebview()"),
+      "request_state_sync must not send another push_visible_state roundtrip",
+    )
+  })
+})
+
 describe("WebviewMessageValidator MCP config", () => {
   it("rejects unsafe MCP server names and command strings", () => {
     assert.equal(validate({ name: "safe-server", config: { command: "node", args: ["server.js"] } }, "add_mcp_server"), true)

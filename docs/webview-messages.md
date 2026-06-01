@@ -119,11 +119,15 @@ The host-to-webview `command_list` payload is partitioned before it reaches the 
 - Inline slash suggestions receive the combined command list so custom prompt commands
   remain discoverable while typing.
 
-### Host-to-Webview State Messages
+### State Sync Messages
 
-- `push_all_state`: Host tells the webview to perform a full state sync. The webview
-  responds by sending `request_state_sync` (debounced at 300ms).
-- `push_visible_state`: Same as `push_all_state` — triggers a debounced state sync.
+- `webview_ready`: Webview announces that it can receive host state. The host responds
+  directly with `init_state` plus model, theme, rate-limit, and command state.
+- `request_state_sync`: Webview requests a fresh visible-state snapshot after a visibility
+  or focus change. The host responds directly through `pushVisibleStateToWebview()`.
+- `push_all_state` / `push_visible_state`: Legacy host message types retained as a
+  defensive webview fallback. Normal restoration must not route through these messages,
+  because host → webview → `request_state_sync` ping-pong can delay or repeat restore.
 - `mode_change_result`: Host acknowledgement for a `change_mode` request. When
   `accepted` is false, the payload carries the previous mode so the webview can keep the
   visible selector in sync after invalid payloads or cancelled Auto-mode confirmation.
@@ -207,6 +211,9 @@ Changed-file state is synchronized from the extension host:
   or restored until a user message exists, and closing an empty placeholder deletes it.
 - Empty server-imported sessions waiting for history (`needsBackfill`) remain exempt while the
   extension retries backfill.
+- Closing the active tab clears the host active-session pointer when no other tab remains.
+  Historical sessions stay available in the session list, but they are not reopened by a later
+  `request_state_sync` when focus returns to the webview.
 
 ## Diff & Checkpoint Messages
 

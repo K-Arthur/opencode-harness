@@ -42,6 +42,21 @@ void describe("ServerLifecycle", () => {
     })
   })
 
+  void describe("findOpencodeBinary() known-location fallback", () => {
+    void it("falls back to known install dirs when PATH lookup fails", () => {
+      assert.ok(source.includes("if (fromPath) return fromPath"), "returns PATH hit first")
+      assert.ok(
+        source.includes("knownOpencodeBinaryPaths(process.platform, os.homedir(), process.env)"),
+        "probes the shared known-locations list",
+      )
+      assert.ok(source.includes("if (existsSync(candidate))"), "checks candidate existence on disk")
+    })
+
+    void it("returns null when neither PATH nor known dirs contain the binary", () => {
+      assert.ok(source.includes("return null"), "returns null when nothing is found")
+    })
+  })
+
   void describe("spawn()", () => {
     void it("uses shell: false", () => {
       assert.ok(source.includes("shell: false"), "spawn disables shell")
@@ -98,6 +113,10 @@ void describe("ServerLifecycle", () => {
   })
 
   void describe("scheduleReconnect()", () => {
+    void it("does not schedule reconnect after disposal", () => {
+      assert.ok(source.includes("if (this.disposed) return"), "bails out when disposed")
+    })
+
     void it("caps at 5 attempts", () => {
       assert.ok(source.includes("this.reconnectAttempts >= 5"), "checks max attempts")
     })
@@ -125,8 +144,15 @@ void describe("ServerLifecycle", () => {
     })
 
     void it("fires _onDisconnected on process exit", () => {
-      assert.ok(source.includes('this.serverProcess.on("exit"'), "listens for exit event")
+      assert.ok(source.includes('proc.on("exit"'), "listens for exit event")
       assert.ok(source.includes("this._onDisconnected.fire({ code, signal })"), "fires onDisconnected with code and signal")
+    })
+
+    void it("clears stale process and port before reconnecting after an unexpected exit", () => {
+      assert.ok(source.includes("const intentional = this.serverProcess !== proc || this.disposed"), "detects intentional stops")
+      assert.ok(source.includes("if (this.serverProcess === proc) this.serverProcess = null"), "clears the exited process")
+      assert.ok(source.includes("this.port = 0"), "clears stale port so reconnect start does not no-op")
+      assert.ok(source.includes("if (!intentional) this.scheduleReconnect(onReady)"), "only reconnects unexpected exits")
     })
 
     void it("fires _onConnected on successful connection", () => {
