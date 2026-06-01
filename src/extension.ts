@@ -18,6 +18,7 @@ import { RateLimitMonitor } from "./monitor/RateLimitMonitor"
 import { ModelManager } from "./model/ModelManager"
 import { CliDiagnostics } from "./diagnostics/CliDiagnostics"
 import { McpServerManager } from "./mcp/McpServerManager"
+import { OpencodeInstaller, type AutoInstallMode } from "./install/OpencodeInstaller"
 import { log } from "./utils/outputChannel"
 import {
   registerRollbackCommand,
@@ -41,6 +42,7 @@ import {
   registerSetContextWindowOverrideCommand,
   registerShowRateLimitsCommand,
   registerCheckCliCommand,
+  registerInstallCliCommand,
   registerExportCommand,
   registerStopCommand,
   registerSlashCommandShortcuts,
@@ -110,6 +112,13 @@ export async function activate(context: vscode.ExtensionContext) {
     const cliDiagnostics = new CliDiagnostics()
     context.subscriptions.push(cliDiagnostics)
 
+    // OpenCode CLI is a hard requirement. VS Code has no install-time hook, so
+    // detect-and-install runs on activation (see ensureOpencodeAndStart below).
+    const installer = new OpencodeInstaller(context.globalState)
+    registerInstallCliCommand(context, installer, () => {
+      void sessionManager.start().catch((err) => log.warn("Start after install failed", err))
+    })
+
     // Context file provider for viewing session context files
     const contextFileProvider = new ContextFileProvider()
     context.subscriptions.push(contextFileProvider)
@@ -138,8 +147,10 @@ export async function activate(context: vscode.ExtensionContext) {
     // Methodology system — orchestrator + outcome tracker + status bar
     const methStatus = initMethodology(context)
 
-    // Auto-start server so user doesn't see disconnected state after reload
-    void sessionManager.start().catch(err => log.warn("Auto-start server failed", err))
+    // Auto-start server so user doesn't see disconnected state after reload.
+    // Ensures the opencode CLI is present first (prompting/installing per the
+    // opencode.autoInstall setting), since it's a hard requirement.
+    void ensureOpencodeAndStart(sessionManager, installer).catch(err => log.warn("Auto-start server failed", err))
 
     // When workspace folders are added after the server already started in ~/,
     // offer one restart that covers the full batch.
@@ -195,6 +206,30 @@ export async function activate(context: vscode.ExtensionContext) {
 // ---------------------------------------------------------------------------
 // Initialization helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Ensure the opencode CLI is available, then start the server.
+ *
+ * Remote-attach mode talks to a server elsewhere and needs no local binary, so
+ * we skip the install check there. Otherwise we honor the opencode.autoInstall
+ * setting ("prompt" by default), and only start once a binary is available.
+ */
+async function ensureOpencodeAndStart(
+  sessionManager: SessionManager,
+  installer: OpencodeInstaller
+): Promise<void> {
+  const config = vscode.workspace.getConfiguration("opencode")
+  const remoteUrl = (config.get<string>("serverUrl") || "").trim()
+  if (remoteUrl.length === 0) {
+    const mode = config.get<AutoInstallMode>("autoInstall", "prompt")
+    const ready = await installer.ensureInstalled(mode)
+    if (!ready) {
+      log.warn("OpenCode CLI is not available; skipping server auto-start. Use 'OpenCode: Install CLI'.")
+      return
+    }
+  }
+  await sessionManager.start()
+}
 
 function installUnhandledRejectionDiagnostics(context: vscode.ExtensionContext): void {
   const handler = (reason: unknown) => {

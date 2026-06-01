@@ -10,12 +10,30 @@ All settings are under the `opencode.*` namespace and can be configured in VS Co
 - **Type**: `string`
 - **Default**: `""`
 - **Scope**: `machine`
-- **Description**: Path to the opencode binary. If not set, the extension will search for `opencode` in your system PATH.
+- **Description**: Path to the opencode binary. If not set, the extension searches for `opencode` in your system PATH **and** in the default install locations (e.g. `~/.opencode/bin/opencode`, common npm-global and Homebrew dirs). The known-location fallback matters because the official installer appends `~/.opencode/bin` to your shell rc files, which a GUI-launched VS Code does not see until restart.
 - **Validation**: Must be an absolute path with no shell metacharacters (`;&|`$(){}!#~<>`)
 - **Example**:
   ```json
   {
     "opencode.binaryPath": "/usr/local/bin/opencode"
+  }
+  ```
+
+### `opencode.autoInstall`
+- **Type**: `string` (enum)
+- **Values**: `"prompt"` | `"auto"` | `"off"`
+- **Default**: `"prompt"`
+- **Scope**: `machine`
+- **Description**: Controls how the extension installs the required opencode CLI when it is not found on activation. VS Code has no install-time hook, so this runs the first time the extension activates without a binary present.
+  - **`prompt`** (default): Ask before installing. The prompt offers **Install / Manual Instructions / Not Now** and is shown **once** — if you decline, the choice is remembered (in `globalState`) so you aren't asked again on every reload. Re-trigger any time with the `OpenCode: Install CLI` command.
+  - **`auto`**: Install automatically and silently (behind a progress notification) whenever the binary is missing.
+  - **`off`**: Never install automatically. Use the `OpenCode: Install CLI` command to install on demand.
+- **Install mechanism**: macOS/Linux use the official install script (`https://opencode.ai/install`), which installs to `~/.opencode/bin` without sudo. For safety the script is downloaded, content-validated, written to a `0o700` temp file, and run as `bash <file>` with `shell: false` (no `curl | bash` pipe). Windows uses `npm install -g opencode-ai` when npm is available, otherwise shows manual instructions (npm / scoop / choco).
+- **Note**: Remote-attach mode (`opencode.serverUrl` set) does not require a local binary, so the install check is skipped there.
+- **Example**:
+  ```json
+  {
+    "opencode.autoInstall": "prompt"
   }
   ```
 

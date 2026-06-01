@@ -41,6 +41,32 @@ export function registerCheckCliCommand(
   )
 }
 
+/**
+ * Register the "OpenCode: Install CLI" command. Lets the user trigger the
+ * opencode CLI install on demand (command palette, or the not-connected
+ * affordance). On success, `onInstalled` is invoked to start the server.
+ */
+export function registerInstallCliCommand(
+  context: vscode.ExtensionContext,
+  installer: { install: () => Promise<boolean> },
+  onInstalled: () => void
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.installCli", async () => {
+      try {
+        const ok = await installer.install()
+        if (ok) {
+          vscode.window.showInformationMessage("OpenCode CLI installed. Starting the server…")
+          onInstalled()
+        }
+      } catch (err) {
+        log.error("Install CLI command failed", err)
+        vscode.window.showErrorMessage("Failed to install the OpenCode CLI. Check the OpenCode Harness output channel for details.")
+      }
+    })
+  )
+}
+
 export function registerStopCommand(
   context: vscode.ExtensionContext,
   chatProvider: { abortCurrentSession: () => Promise<void> }

@@ -1,7 +1,10 @@
 import { spawn, type ChildProcess } from "child_process"
+import { existsSync } from "fs"
+import * as os from "os"
 import * as vscode from "vscode"
 import { findFreePort } from "../utils/portFinder"
 import { log } from "../utils/outputChannel"
+import { knownOpencodeBinaryPaths } from "../install/installPlan"
 import type { AuthProvider } from "./AuthProvider"
 
 export class ServerLifecycle {
@@ -132,7 +135,7 @@ export class ServerLifecycle {
 
     const opencodePath = await this.findOpencodeBinary()
     if (!opencodePath) {
-      throw new Error("OpenCode is not installed. Install it from https://opencode.ai, then reload the window.")
+      throw new Error("OpenCode CLI not found. Run the 'OpenCode: Install CLI' command, or install it from https://opencode.ai, then reload the window.")
     }
 
     log.info(`Starting opencode server on port ${this.port} (${opencodePath})`)
@@ -165,22 +168,26 @@ export class ServerLifecycle {
       shell: false,
       cwd,
     })
+    const proc = this.serverProcess
 
-    this.serverProcess.stdout?.on("data", (data: Buffer) => {
+    proc.stdout?.on("data", (data: Buffer) => {
       log.info(`[opencode:stdout] ${data.toString().trimEnd()}`)
     })
 
-    this.serverProcess.stderr?.on("data", (data: Buffer) => {
+    proc.stderr?.on("data", (data: Buffer) => {
       log.warn(`[opencode:stderr] ${data.toString().trimEnd()}`)
     })
 
-    this.serverProcess.on("exit", (code, signal) => {
+    proc.on("exit", (code, signal) => {
+      const intentional = this.serverProcess !== proc || this.disposed
+      if (this.serverProcess === proc) this.serverProcess = null
+      this.port = 0
       log.warn(`opencode server exited (code=${code}, signal=${signal})`)
       this._onDisconnected.fire({ code, signal })
-      this.scheduleReconnect(onReady)
+      if (!intentional) this.scheduleReconnect(onReady)
     })
 
-    this.serverProcess.on("error", (err) => {
+    proc.on("error", (err) => {
       log.error("opencode server process error", err)
     })
 
@@ -234,15 +241,28 @@ export class ServerLifecycle {
     const isWindows = process.platform === "win32"
     const cmd = isWindows ? "where" : "which"
     const which = spawn(cmd, ["opencode"], { shell: false })
-    return new Promise((resolve) => {
+    const fromPath = await new Promise<string | null>((resolve) => {
       let output = ""
       which.stdout?.on("data", (d: Buffer) => { output += d.toString() })
       which.on("close", () => { resolve(output.trim() || null) })
       which.on("error", () => resolve(null))
     })
+    if (fromPath) return fromPath
+
+    // PATH lookup failed. The official install script writes to ~/.opencode/bin
+    // and updates shell rc files, but the running extension host won't see that
+    // PATH change until VS Code restarts — so probe the known locations directly.
+    for (const candidate of knownOpencodeBinaryPaths(process.platform, os.homedir(), process.env)) {
+      if (existsSync(candidate)) {
+        log.info(`Found opencode binary at ${candidate} (not on PATH)`)
+        return candidate
+      }
+    }
+    return null
   }
 
   private scheduleReconnect(onReady: (port: number) => Promise<void>): void {
+    if (this.disposed) return
     if (this.reconnectAttempts >= 5) {
       log.error("Max reconnect attempts reached. Please restart the extension.")
       return

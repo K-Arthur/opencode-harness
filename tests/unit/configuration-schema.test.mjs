@@ -21,4 +21,19 @@ describe("package configuration schema", () => {
     assert.ok(properties["opencode.sessions.cleanupIntervalMinutes"])
     assert.ok(properties["opencode.sessions.restoreOpenTabs"])
   })
+
+  it("exposes the autoInstall setting with prompt/auto/off and a prompt default", () => {
+    const schema = properties["opencode.autoInstall"]
+    assert.ok(schema, "opencode.autoInstall must be contributed so users can control CLI install")
+    assert.deepEqual(schema.enum, ["prompt", "auto", "off"], "autoInstall must offer prompt/auto/off")
+    assert.equal(schema.default, "prompt", "autoInstall must default to prompt-once")
+  })
+
+  it("contributes the Install CLI command", () => {
+    const commands = pkg.contributes.commands
+    assert.ok(
+      commands.some((c) => c.command === "opencode-harness.installCli"),
+      "must contribute opencode-harness.installCli for manual installs",
+    )
+  })
 })

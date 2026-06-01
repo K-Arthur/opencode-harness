@@ -62,6 +62,7 @@ describe("OpenCode Harness — Integration Tests", function () {
       "opencode-harness.showRateLimits",
       "opencode-harness.selectModel",
       "opencode-harness.checkCli",
+      "opencode-harness.installCli",
       "opencode-harness.listSessions",
       "opencode-harness.openStoredSession",
       "opencode-harness.deleteSession",

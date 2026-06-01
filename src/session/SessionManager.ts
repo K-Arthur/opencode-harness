@@ -66,6 +66,7 @@ export class SessionManager {
   private client: OpencodeClient | null = null
   private disposed = false
   private _onEvent = new vscode.EventEmitter<OpencodeEvent>()
+  private readonly lifecycleDisposables: vscode.Disposable[] = []
 
   readonly authProvider: AuthProvider
   readonly serverLifecycle: ServerLifecycle
@@ -85,6 +86,13 @@ export class SessionManager {
       () => this.serverBaseUrl(),
       () => this.authHeader,
       (event) => this._onEvent.fire(event),
+    )
+    this.lifecycleDisposables.push(
+      this.serverLifecycle.onDisconnected((data) => {
+        this.sseSubscriber.disconnect()
+        this.client = null
+        this._onEvent.fire({ type: "server_disconnected", data })
+      }),
     )
   }
 
@@ -195,6 +203,8 @@ export class SessionManager {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
+    for (const disposable of this.lifecycleDisposables) disposable.dispose()
+    this.lifecycleDisposables.length = 0
     this.sseSubscriber.dispose()
     this._onEvent.dispose()
     this.serverLifecycle.dispose()

@@ -5,6 +5,14 @@ All notable changes to the **OpenCode Harness** extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Automatic opencode CLI install.** The opencode CLI is a hard requirement, but VS Code has no install-time hook, so the extension now detects a missing binary on activation and installs it. Default behavior is **prompt-once** (Install / Manual Instructions / Not Now); a decline is remembered in `globalState` so the user isn't nagged on every reload. macOS/Linux use the official install script (downloaded, validated, then run as `bash <file>` with `shell:false` — no `curl | bash` pipe; lands in `~/.opencode/bin`); Windows uses `npm i -g opencode-ai` when npm is present, otherwise shows manual instructions. New `opencode.autoInstall` setting (`prompt` | `auto` | `off`, default `prompt`) and `OpenCode: Install CLI` command. See ADR `docs/adrs/2026-05-31-cli-auto-install.md`. (`src/install/installPlan.ts`, `src/install/OpencodeInstaller.ts`, `src/extension.ts`, `src/commands/misc.ts`, `package.json`)
+
+### Changed
+- **Binary detection now probes known install locations.** `ServerLifecycle.findOpencodeBinary()` falls back from the PATH lookup to `~/.opencode/bin/opencode` and other common install dirs. This fixes "installed but not detected" cases for GUI-launched editors, where the installer's shell-rc PATH change isn't visible to the running extension host. (`src/session/ServerLifecycle.ts`, `src/install/installPlan.ts`)
+
 ## [0.2.23] - 2026-05-31
 
 ### Fixed

@@ -308,6 +308,16 @@ void describe("ChatProvider.ts", () => {
     assert.ok(block.includes("closeTab(sessionId)"), "close_tab must still close the visual tab")
   })
 
+  void it("close_tab clears SessionStore active state when the last active tab is closed", () => {
+    const idx = eventRouterSource.indexOf('["close_tab"')
+    assert.ok(idx >= 0, "close_tab handler must exist")
+    const block = eventRouterSource.slice(idx, eventRouterSource.indexOf('["switch_tab"', idx))
+
+    assert.ok(block.includes("wasActive"), "close_tab must capture whether the closing tab was active")
+    assert.ok(block.includes("tabManager.getActiveId()"), "close_tab must inspect the next open tab after close")
+    assert.ok(block.includes("sessionStore.clearActive()"), "close_tab must clear active session when no open tab remains")
+  })
+
   void it("pushInitStateToWebview scopes restored open tabs to the current workspace", () => {
     const idx = source.indexOf("private pushInitStateToWebview(")
     assert.ok(idx >= 0, "pushInitStateToWebview must exist")
@@ -323,6 +333,21 @@ void describe("ChatProvider.ts", () => {
     assert.ok(block.includes("markRestorableSession"), "restored sessions must be marked through a single alias-aware helper")
     assert.ok(block.includes("aliasToSessionId"), "restored active tab aliases must resolve to canonical session ids")
     assert.ok(block.includes("tab.cliSessionId"), "open tabs must be de-duped by CLI session id as well as local tab id")
+  })
+
+  void it("pushInitStateToWebview does not auto-select a closed historical active session", () => {
+    const idx = source.indexOf("private pushInitStateToWebview(")
+    assert.ok(idx >= 0, "pushInitStateToWebview must exist")
+    const block = source.slice(idx, source.indexOf("private pushAllStateToWebview", idx))
+
+    assert.ok(
+      !block.includes("this.sessionStore.getActive()"),
+      "init restore must not call getActive(), because getActive() auto-selects history and can reopen a closed tab",
+    )
+    assert.ok(
+      block.includes("this.sessionStore.activeId") && block.includes("this.sessionStore.get("),
+      "init restore should only read the explicitly active session id",
+    )
   })
 
   void it("handles personalized theme customizer messages", () => {

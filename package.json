@@ -114,6 +114,10 @@
         "title": "OpenCode: Test CLI Connection"
       },
       {
+        "command": "opencode-harness.installCli",
+        "title": "OpenCode: Install CLI"
+      },
+      {
         "command": "opencode-harness.listSessions",
         "title": "OpenCode: View Sessions"
       },
@@ -286,7 +290,23 @@
           "type": "string",
           "default": "",
           "scope": "machine",
-          "description": "Path to the opencode binary. If not set, the extension will search for 'opencode' in your PATH."
+          "description": "Path to the opencode binary. If not set, the extension will search for 'opencode' in your PATH and the default install locations (e.g. ~/.opencode/bin)."
+        },
+        "opencode.autoInstall": {
+          "type": "string",
+          "enum": [
+            "prompt",
+            "auto",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Ask before installing the opencode CLI when it is missing (asks once; remembers if you decline).",
+            "Install the opencode CLI automatically and silently when it is missing.",
+            "Never install automatically. Use the 'OpenCode: Install CLI' command instead."
+          ],
+          "default": "prompt",
+          "scope": "machine",
+          "description": "Controls how the extension installs the required opencode CLI when it is not found. The official installer is used (~/.opencode/bin on macOS/Linux; npm on Windows)."
         },
         "opencode.serverUrl": {
           "type": "string",

@@ -296,6 +296,8 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       deleteProvider: (id) => { this.handleDeleteProvider(id) },
       showOpenFolderDialog: (dir) => { void vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(dir)) },
       skillPreferences: this.skillPreferences,
+      pushAllStateToWebview: () => this.pushAllStateToWebview(),
+      pushVisibleStateToWebview: () => this.pushVisibleStateToWebview(),
     })
 
     // Subscribe to session store changes to keep webview and server in sync
@@ -1166,7 +1168,8 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       }
     }
 
-    const storeActive = this.sessionStore.getActive()
+    const explicitActiveId = this.sessionStore.activeId
+    const storeActive = explicitActiveId ? this.sessionStore.get(explicitActiveId) : undefined
     if (storeActive && !hasSeenRestorableSession(storeActive) && !storeActive.archived && this.isSessionInCurrentWorkspace(storeActive)) {
       restorable.push(storeActive)
       markRestorableSession(storeActive)

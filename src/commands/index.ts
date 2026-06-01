@@ -18,6 +18,6 @@ export {
   registerAddSelectionToSessionCommand,
 } from "./session"
 export { registerSelectModelCommand, registerSetContextWindowOverrideCommand } from "./model"
-export { registerShowRateLimitsCommand, registerCheckCliCommand } from "./misc"
+export { registerShowRateLimitsCommand, registerCheckCliCommand, registerInstallCliCommand } from "./misc"
 export { registerExportCommand } from "./export"
 export { registerStopCommand, registerSlashCommandShortcuts } from "./misc"

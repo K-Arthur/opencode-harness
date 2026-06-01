@@ -7,7 +7,12 @@ flowchart TD
     
     Start --> CheckServer{Server running?}
     
-    CheckServer -->|No| StartServer[Start opencode server]
+    CheckServer -->|No| CheckCli{opencode CLI present?}
+    CheckCli -->|No| AutoInstall{opencode.autoInstall}
+    AutoInstall -->|prompt / auto| InstallCli[OpencodeInstaller installs CLI]
+    InstallCli --> CheckCli
+    AutoInstall -->|off / declined| NotConnected([Not connected — run 'OpenCode: Install CLI'])
+    CheckCli -->|Yes| StartServer[Start opencode server]
     StartServer --> WaitServer[Wait for server ready]
     WaitServer --> CheckServer
     
