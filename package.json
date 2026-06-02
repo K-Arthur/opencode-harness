@@ -9,7 +9,7 @@
   },
   "description": "AI-powered coding assistant integrated into VS Code. Chat, refactor, debug, and write code with the OpenCode agent while staying in your editor. Supports multiple AI models (Claude, GPT, Gemini), custom themes, cost tracking, and granular permission controls.",
   "icon": "media/opencode-icon-256.png",
-  "version": "0.2.23",
+  "version": "0.3.0",
   "engines": {
     "vscode": "^1.98.0"
   },
@@ -196,6 +196,26 @@
       {
         "command": "opencode-harness.showHelp",
         "title": "OpenCode: Show Slash Commands"
+      },
+      {
+        "command": "opencode-harness.cycleMode",
+        "title": "OpenCode: Cycle Session Mode (Plan → Build → Auto)"
+      },
+      {
+        "command": "opencode-harness.setBuildMode",
+        "title": "OpenCode: Set Session Mode to Build"
+      },
+      {
+        "command": "opencode-harness.setPlanMode",
+        "title": "OpenCode: Set Session Mode to Plan"
+      },
+      {
+        "command": "opencode-harness.setVoiceInputApiKey",
+        "title": "OpenCode: Set Voice Input OpenAI API Key"
+      },
+      {
+        "command": "opencode-harness.setAutoMode",
+        "title": "OpenCode: Set Session Mode to Auto"
       }
     ],
     "keybindings": [
@@ -231,6 +251,11 @@
         "command": "opencode-harness.openCommandsPalette",
         "key": "ctrl+shift+/",
         "when": "focusedView == 'opencode-harness.chat'"
+      },
+      {
+        "command": "opencode-harness.cycleMode",
+        "key": "alt+shift+tab",
+        "when": "focusedView == 'opencode-harness.chatView'"
       }
     ],
     "viewsContainers": {
@@ -891,6 +916,59 @@
           "maximum": 10,
           "description": "Maximum number of concurrent AI streams across all tabs."
         },
+        "opencode.defaultMode": {
+          "type": "string",
+          "default": "build",
+          "enum": [
+            "plan",
+            "build",
+            "auto"
+          ],
+          "scope": "window",
+          "description": "Default session mode for new chat sessions."
+        },
+        "opencode.voiceInput.enabled": {
+          "type": "boolean",
+          "scope": "window",
+          "default": true,
+          "description": "Show the microphone button in the chat composer. Recording starts only after an explicit click and transcripts are inserted into the prompt without auto-sending."
+        },
+        "opencode.voiceInput.provider": {
+          "type": "string",
+          "scope": "window",
+          "default": "browser",
+          "enum": [
+            "browser",
+            "openai"
+          ],
+          "enumDescriptions": [
+            "Use the webview/browser speech recognition API when available. Audio is not sent through the extension host.",
+            "Use OpenAI audio transcription. Requires 'OpenCode: Set Voice Input OpenAI API Key' and sends the current recording for transcription only after you stop recording."
+          ],
+          "description": "Speech-to-text provider for the chat composer. Cloud transcription is opt-in and API keys are stored in VS Code SecretStorage."
+        },
+        "opencode.voiceInput.maxDurationSeconds": {
+          "type": "number",
+          "scope": "window",
+          "default": 60,
+          "minimum": 1,
+          "maximum": 300,
+          "description": "Maximum duration for one voice input recording."
+        },
+        "opencode.voiceInput.maxUploadBytes": {
+          "type": "number",
+          "scope": "window",
+          "default": 10485760,
+          "minimum": 1024,
+          "maximum": 26214400,
+          "description": "Maximum raw audio bytes for cloud speech-to-text uploads. OpenAI transcription accepts files up to 25 MB."
+        },
+        "opencode.voiceInput.openaiModel": {
+          "type": "string",
+          "scope": "window",
+          "default": "gpt-4o-mini-transcribe",
+          "description": "OpenAI transcription model used when opencode.voiceInput.provider is 'openai'."
+        },
         "opencode.sessions.processStrategy": {
           "type": "string",
           "scope": "window",
@@ -909,13 +987,15 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run typecheck && node esbuild.js --production",
+    "vscode:prepublish": "npm run typecheck && node esbuild.js --production && node scripts/check-bundle-size.mjs",
     "build": "node esbuild.js",
     "watch": "node esbuild.js --watch",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
+    "bundle:check": "node scripts/check-bundle-size.mjs",
+    "bundle:attribute": "node scripts/bundle-attribution.mjs",
     "test:unit": "node --test tests/unit/*.test.mjs && npx tsx --test \"src/**/*.test.ts\"",
-    "coverage": "c8 --reporter=text --include='**' --exclude='node_modules/**' --exclude='tests/**' --exclude='.git/**' --exclude='*.json' --exclude='*.md' --exclude='*.yaml' node --test tests/unit/*.test.mjs",
+    "coverage": "c8 --reporter=text --include='**' --exclude='node_modules/**' --exclude='tests/**' --exclude='.git/**' --exclude='*.json' --exclude='*.md' --exclude='*.yaml' --exclude='*.html' node --test tests/unit/*.test.mjs",
     "test:integration": "vscode-test",
     "test:visual": "playwright test",
     "test:visual:context": "playwright test tests/visual/chat-context-usage.spec.ts --project=chromium",

@@ -2333,4 +2333,413 @@ textarea {
   font-size: 0.78rem;
 }
 
+/* ── Subagent Detail View ─────────────────────────────────── */
+
+.subagent-detail-view {
+  display: flex;
+  flex-direction: column;
+  background: var(--oc-panel-bg);
+  border-left: 1px solid var(--oc-border);
+  overflow: hidden;
+  animation: slideIn 150ms ease-out;
+}
+
+.subagent-detail-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--oc-border);
+  flex-shrink: 0;
+}
+
+.subagent-detail-title {
+  flex: 1;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  margin: 0;
+}
+
+.subagent-detail-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3);
+}
+
+.subagent-detail-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.subagent-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.subagent-detail-section-title {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--oc-muted);
+  margin: 0;
+}
+
+.subagent-detail-status-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.subagent-detail-status-badge {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+}
+
+.subagent-detail-progress {
+  font-size: var(--text-xs);
+  color: var(--oc-muted);
+}
+
+.subagent-detail-duration {
+  font-size: var(--text-xs);
+  color: var(--oc-muted);
+  font-family: var(--font-mono);
+}
+
+.subagent-detail-time {
+  font-size: var(--text-xs);
+  color: var(--oc-muted);
+  font-family: var(--font-mono);
+}
+
+.subagent-detail-text {
+  font-size: var(--text-sm);
+  color: var(--oc-text);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.subagent-detail-error-title {
+  color: var(--oc-error);
+}
+
+.subagent-detail-error,
+.subagent-detail-command-error {
+  font-size: var(--text-xs);
+  color: var(--oc-error);
+  background: var(--oc-error-subtle);
+  padding: var(--space-2);
+  border-radius: var(--radius-xs);
+  white-space: pre-wrap;
+  font-family: var(--font-mono);
+  margin: 0;
+}
+
+.subagent-detail-output,
+.subagent-detail-prompt {
+  font-size: var(--text-xs);
+  color: var(--oc-text-secondary);
+  background: var(--oc-input-bg);
+  padding: var(--space-2);
+  border-radius: var(--radius-xs);
+  white-space: pre-wrap;
+  font-family: var(--font-mono);
+  max-height: 200px;
+  overflow-y: auto;
+  margin: 0;
+}
+
+.subagent-detail-code {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: var(--oc-input-bg);
+  padding: var(--space-2);
+  border-radius: var(--radius-xs);
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.subagent-detail-code--diff {
+  color: var(--oc-text-secondary);
+}
+
+.subagent-detail-toggle {
+  background: none;
+  border: 1px solid var(--oc-border);
+  border-radius: var(--radius-xs);
+  color: var(--oc-accent);
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.subagent-detail-toggle:hover {
+  background: var(--oc-hover-bg);
+}
+
+.subagent-detail-section + .subagent-detail-section {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--oc-border);
+}
+
+.subagent-detail-tool-list,
+.subagent-detail-command-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.subagent-detail-tool-item,
+.subagent-detail-command-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  background: var(--oc-input-bg);
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--oc-border);
+}
+
+.subagent-detail-tool-header,
+.subagent-detail-command-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.tool-name,
+.cmd-command {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  flex: 1;
+}
+
+.tool-status-success,
+.cmd-status-success {
+  color: var(--oc-testing-passed);
+  font-size: var(--text-xs);
+}
+
+.tool-status-error,
+.cmd-status-error {
+  color: var(--oc-testing-failed);
+  font-size: var(--text-xs);
+}
+
+.tool-status-running,
+.cmd-status-running {
+  color: var(--oc-accent);
+  font-size: var(--text-xs);
+}
+
+.tool-status-unknown {
+  color: var(--oc-muted);
+  font-size: var(--text-xs);
+}
+
+.tool-duration,
+.cmd-duration {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--oc-muted);
+}
+
+.subagent-detail-tool-args,
+.subagent-detail-tool-error,
+.subagent-detail-command-output,
+.subagent-detail-command-error {
+  font-size: var(--text-2xs);
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+  padding: var(--space-1);
+  background: var(--oc-canvas-bg);
+  border-radius: var(--radius-xs);
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.subagent-detail-tool-error,
+.subagent-detail-command-error {
+  color: var(--oc-error);
+  background: var(--oc-error-subtle);
+}
+
+.subagent-detail-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.subagent-detail-file-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  border-radius: var(--radius-xs);
+  background: var(--oc-input-bg);
+}
+
+.subagent-detail-file-item:hover {
+  background: var(--oc-hover-bg);
+}
+
+.file-icon {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  width: 14px;
+  text-align: center;
+}
+
+.file-icon.file-type-added { color: var(--oc-testing-passed); }
+.file-icon.file-type-deleted { color: var(--oc-testing-failed); }
+.file-icon.file-type-modified { color: var(--oc-accent); }
+
+.file-path {
+  flex: 1;
+  font-family: var(--font-mono);
+}
+
+.file-stats {
+  font-size: var(--text-2xs);
+  color: var(--oc-muted);
+  font-family: var(--font-mono);
+}
+
+.subagent-detail-metadata {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+
+.subagent-detail-metadata td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--oc-border);
+}
+
+.subagent-detail-metadata .meta-label {
+  color: var(--oc-muted);
+  font-weight: 500;
+  width: 40%;
+  white-space: nowrap;
+}
+
+.subagent-detail-metadata .meta-value {
+  font-family: var(--font-mono);
+}
+
+.subagent-detail-messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.subagent-detail-message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  background: var(--oc-input-bg);
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--oc-border);
+}
+
+.subagent-detail-msg-role {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--oc-accent);
+}
+
+.subagent-detail-msg-text {
+  font-size: var(--text-xs);
+  color: var(--oc-text);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.subagent-detail-debug {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.subagent-detail-actions {
+  display: flex;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+.subagent-detail-cancel-btn {
+  background: var(--oc-error-subtle);
+  color: var(--oc-error);
+  border: 1px solid var(--oc-error);
+  border-radius: var(--radius-xs);
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+}
+
+.subagent-detail-cancel-btn:hover {
+  background: var(--oc-error);
+  color: white;
+}
+
+.subagent-detail-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  color: var(--oc-muted);
+  font-size: var(--text-sm);
+  justify-content: center;
+}
+
+.subagent-detail-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--oc-border);
+  border-top-color: var(--oc-accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.subagent-detail-error-state {
+  padding: var(--space-4);
+  color: var(--oc-error);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.subagent-detail-activity-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+  color: var(--oc-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 

@@ -1,5 +1,6 @@
 import type { WebviewState } from "./types"
 import type { ElementRefs } from "./dom"
+import { TOOLTIPS } from "./tooltips"
 
 export interface InputHandlerDeps {
   els: ElementRefs
@@ -57,6 +58,7 @@ export function createInputHandlers(deps: InputHandlerDeps): InputHandlers {
       if (e.key === "1") { e.preventDefault(); setSteerMode("interrupt"); return }
       if (e.key === "2") { e.preventDefault(); setSteerMode("append"); return }
       if (e.key === "3") { e.preventDefault(); setSteerMode("queue"); return }
+      if (e.key === "k") { e.preventDefault(); commandsModal.open(); vscode.postMessage({ type: "list_commands" }); return }
     }
     if (!els.mentionDropdown.classList.contains("hidden")) { mention.handleKeydown(e); return }
     if (e.key === "Enter" && !e.shiftKey && !(e as any).isComposing) { e.preventDefault(); dispatchSendOrSteer() }
@@ -96,7 +98,7 @@ export function createInputHandlers(deps: InputHandlerDeps): InputHandlers {
     if (interruptBtn) interruptBtn.addEventListener("click", () => setSteerMode("interrupt"))
     if (appendBtn) appendBtn.addEventListener("click", () => setSteerMode("append"))
     if (queueBtn) queueBtn.addEventListener("click", () => setSteerMode("queue"))
-    els.sendBtn?.setAttribute("title", "Send (Ctrl+Enter)")
+    els.sendBtn?.setAttribute("title", TOOLTIPS.chat.send)
     window.addEventListener("oc-input-changed", () => { autoResizeTextarea(); updateSendButton() })
     els.inputArea.addEventListener("dragover", (e) => { e.preventDefault(); e.stopPropagation(); els.inputArea.classList.add("drag-over") })
     els.inputArea.addEventListener("dragleave", (e) => { e.preventDefault(); e.stopPropagation(); els.inputArea.classList.remove("drag-over") })

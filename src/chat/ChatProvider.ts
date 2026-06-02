@@ -19,6 +19,7 @@ import { PromptManager } from "../prompts/PromptManager"
 import { PromptStashManager } from "../prompts/PromptStashManager"
 import { ProviderConfigManager } from "../model/ProviderConfigManager"
 import { mapToolType as mapToolTypePure, isSessionInCurrentWorkspace as isSessionInCurrentWorkspacePure, looksLikeSdkError } from "./chatUtils"
+import { shouldIncludeStoreActiveFallback } from "./restorablePolicy"
 import { mapOpencodeError, type OpencodeError } from "./webview/opencodeErrorMapper"
 import { RetryQueueService, CRITICAL_MESSAGE_TYPES } from "./RetryQueueService"
 import { ChatMessage } from "./types"
@@ -48,6 +49,7 @@ import { CodeInsertionService } from "./CodeInsertionService"
 import { SlashCommandService } from "./SlashCommandService"
 import { SessionSyncService } from "./SessionSyncService"
 import { AutoModeService } from "./AutoModeService"
+import { VoiceInputService } from "./VoiceInputService"
 
 type ServerEvent = { type: string; sessionId?: string; data?: unknown }
 
@@ -83,6 +85,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private autoModeService!: AutoModeService
   private diffAcceptService!: DiffAcceptService
   private codeInsertionService!: CodeInsertionService
+  private voiceInputService!: VoiceInputService
 
   private messagePostService = new MessagePostService({
     getWebview: () => this._view?.webview,
@@ -238,6 +241,11 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     })
 
     this.codeInsertionService = new CodeInsertionService(this.fileOps)
+    this.voiceInputService = new VoiceInputService({
+      getRawConfig: () => this.getVoiceInputRawConfig(),
+      secrets: context.secrets,
+      postMessage: (msg) => this.postMessage(msg),
+    })
 
     // Hook into tab creation to backfill tabs that need it
     this.tabManager.onTabCreated((tabId) => {
@@ -266,6 +274,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       contextMonitor: this.contextMonitor,
       usageAnalytics: this.usageAnalytics,
       steerPromptHandler: this.steerPromptHandler,
+      voiceInputService: this.voiceInputService,
       postMessage: (msg) => this.postMessage(msg),
       postRequestError: (message, sessionId) => this.postRequestError(message, sessionId),
       showWarningMessage: (message, options, ...items) => vscode.window.showWarningMessage(message, options, ...items),
@@ -320,6 +329,34 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
           break
       }
     })
+  }
+
+  async setVoiceInputOpenAiApiKey(): Promise<void> {
+    const apiKey = await vscode.window.showInputBox({
+      title: "OpenCode Voice Input",
+      prompt: "Enter an OpenAI API key for cloud speech-to-text. It is stored in VS Code SecretStorage.",
+      password: true,
+      ignoreFocusOut: true,
+      placeHolder: "sk-...",
+    })
+    if (apiKey === undefined) return
+    if (!apiKey.trim()) {
+      await vscode.window.showWarningMessage("OpenAI API key was not changed.")
+      return
+    }
+    await this.voiceInputService.setOpenAiApiKey(apiKey)
+    await vscode.window.showInformationMessage("OpenCode voice input API key saved.")
+  }
+
+  private getVoiceInputRawConfig(): Record<string, unknown> {
+    const config = vscode.workspace.getConfiguration("opencode.voiceInput")
+    return {
+      enabled: config.get("enabled"),
+      provider: config.get("provider"),
+      maxDurationSeconds: config.get("maxDurationSeconds"),
+      maxUploadBytes: config.get("maxUploadBytes"),
+      openaiModel: config.get("openaiModel"),
+    }
   }
 
   private createHostMessageBatcher(): HostMessageBatcher {
@@ -535,6 +572,20 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       return
     }
     this.postMessage({ type: "prefill_prompt", text, autoSend })
+  }
+
+  cycleMode(): void {
+    const activeTab = this.tabManager.getActiveTab()
+    if (activeTab) {
+      this.postMessage({ type: "cycle_mode", sessionId: activeTab.id })
+    }
+  }
+
+  setModeForActiveSession(mode: string): void {
+    const activeTab = this.tabManager.getActiveTab()
+    if (activeTab) {
+      this.postMessage({ type: "set_mode", mode, sessionId: activeTab.id })
+    }
   }
 
   async openSessionInWebview(sessionId: string): Promise<void> {
@@ -957,6 +1008,8 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         messageCount: s.messages.filter((m) => m.role === "user").length,
         cost: s.cost || 0,
         workspacePath: s.workspacePath,
+        pinned: s.pinned === true,
+        tags: Array.isArray(s.tags) ? s.tags : [],
       })),
     })
   }
@@ -1115,7 +1168,8 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     // order. The persisted list lives in globalState (TabManager.persist).
     // Treat it as a startup import only. Runtime state syncs must not revive a
     // tab the user already closed in this extension session.
-    const shouldHydrateRestoredTabs = restoreOpenTabs && !this.backfillService.isHydrated
+    const isFirstHydration = !this.backfillService.isHydrated
+    const shouldHydrateRestoredTabs = restoreOpenTabs && isFirstHydration
     const restoredIds = shouldHydrateRestoredTabs ? this.tabManager.getRestoredTabIds() : []
     const restoredActiveId = shouldHydrateRestoredTabs ? this.tabManager.getRestoredActiveId() : ""
 
@@ -1170,7 +1224,17 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
 
     const explicitActiveId = this.sessionStore.activeId
     const storeActive = explicitActiveId ? this.sessionStore.get(explicitActiveId) : undefined
-    if (storeActive && !hasSeenRestorableSession(storeActive) && !storeActive.archived && this.isSessionInCurrentWorkspace(storeActive)) {
+    // Force-include the store's active session so it always has a tab — but on
+    // a live refresh only if it still has an open tab. Otherwise a session
+    // whose tab the user already closed (yet still lingers as the store's
+    // active id) would be resurrected on the next visibility refresh.
+    const includeStoreActive =
+      !!storeActive &&
+      shouldIncludeStoreActiveFallback({
+        hydrating: isFirstHydration,
+        activeHasOpenTab: !!storeActive && !!this.tabManager.getTab(storeActive.id),
+      })
+    if (includeStoreActive && storeActive && !hasSeenRestorableSession(storeActive) && !storeActive.archived && this.isSessionInCurrentWorkspace(storeActive)) {
       restorable.push(storeActive)
       markRestorableSession(storeActive)
     }

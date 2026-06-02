@@ -7,7 +7,16 @@ export type ServerSessionEntry = {
   deletions?: number; isCurrentWorkspace?: boolean
 }
 
-type LocalSessionEntry = { id: string; cliSessionId?: string; title?: string; messageCount?: number; cost?: number; time?: number }
+type LocalSessionEntry = {
+  id: string
+  cliSessionId?: string
+  title?: string
+  messageCount?: number
+  cost?: number
+  time?: number
+  pinned?: boolean
+  tags?: string[]
+}
 type UnifiedSessionItem = {
   type: "synced" | "local" | "remote"
   localId?: string
@@ -19,6 +28,8 @@ type UnifiedSessionItem = {
   time?: number
   cost?: number
   files?: number
+  pinned?: boolean
+  tags?: string[]
 }
 
 let _unifiedServerSessions: ServerSessionEntry[] | null = null
@@ -83,6 +94,8 @@ function buildUnifiedSessionItems(): UnifiedSessionItem[] {
         time: local.time ?? server.updated,
         cost: local.cost,
         files: server.files,
+        pinned: local.pinned,
+        tags: local.tags,
       })
     } else {
       items.push({
@@ -92,6 +105,8 @@ function buildUnifiedSessionItems(): UnifiedSessionItem[] {
         messageCount: local.messageCount,
         time: local.time,
         cost: local.cost,
+        pinned: local.pinned,
+        tags: local.tags,
       })
     }
   }
@@ -132,9 +147,40 @@ function renderEmptySessionState(container: HTMLElement): void {
   container.appendChild(empty)
 }
 
+function parseTags(value: string): string[] {
+  return value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .filter((tag, index, all) => all.indexOf(tag) === index)
+}
+
+function renderTagChips(container: HTMLElement, tags: readonly string[] | undefined): void {
+  container.replaceChildren()
+  for (const tag of tags ?? []) {
+    const chip = document.createElement("span")
+    chip.className = "modal-session-tag"
+    chip.textContent = tag
+    container.appendChild(chip)
+  }
+}
+
+function addTextAction(label: string, className: string, title: string, onClick: (event: MouseEvent) => void): HTMLButtonElement {
+  const button = document.createElement("button")
+  button.type = "button"
+  button.className = `${className} icon-btn`
+  button.title = title
+  button.setAttribute("aria-label", title)
+  button.textContent = label
+  button.addEventListener("click", onClick)
+  return button
+}
+
 function createSessionRowActions(
   row: HTMLButtonElement,
-  item: ReturnType<typeof buildUnifiedSessionItems>[number]
+  item: ReturnType<typeof buildUnifiedSessionItems>[number],
+  nameEl: HTMLElement,
+  tagsEl: HTMLElement,
 ): HTMLDivElement {
   const actions = document.createElement("div")
   actions.className = "modal-session-actions"
@@ -155,7 +201,74 @@ function createSessionRowActions(
     }
   })
 
-  if (item.localId) {
+  const localId = item.localId
+  if (localId) {
+    const pinBtn = addTextAction(item.pinned ? "Unpin" : "Pin", "modal-session-pin", item.pinned ? "Unpin" : "Pin", (e) => {
+      e.stopPropagation()
+      _postMessage({ type: "pin_session", targetSessionId: localId, pinned: !item.pinned })
+    })
+    pinBtn.setAttribute("aria-pressed", String(item.pinned === true))
+    actions.appendChild(pinBtn)
+
+    const renameBtn = addTextAction("Rename", "modal-session-rename", "Rename", (e) => {
+      e.stopPropagation()
+      const input = document.createElement("input")
+      input.className = "modal-session-rename-input"
+      input.value = nameEl.textContent || ""
+      input.setAttribute("aria-label", "Session name")
+      const restore = () => input.replaceWith(nameEl)
+      input.addEventListener("click", (event) => event.stopPropagation())
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault()
+          restore()
+          return
+        }
+        if (event.key !== "Enter") return
+        event.preventDefault()
+        const nextName = input.value.trim()
+        if (!nextName) {
+          restore()
+          return
+        }
+        nameEl.textContent = nextName
+        input.replaceWith(nameEl)
+        _postMessage({ type: "rename_session", sessionId: localId, name: nextName })
+      })
+      nameEl.replaceWith(input)
+      input.focus()
+      input.select()
+    })
+    actions.appendChild(renameBtn)
+
+    const tagBtn = addTextAction("Tags", "modal-session-tag-btn", "Edit tags", (e) => {
+      e.stopPropagation()
+      const input = document.createElement("input")
+      input.className = "modal-session-tags-input"
+      input.value = (item.tags ?? []).join(", ")
+      input.setAttribute("aria-label", "Session tags")
+      const restore = () => input.replaceWith(tagsEl)
+      input.addEventListener("click", (event) => event.stopPropagation())
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault()
+          restore()
+          return
+        }
+        if (event.key !== "Enter") return
+        event.preventDefault()
+        const tags = parseTags(input.value)
+        item.tags = tags
+        renderTagChips(tagsEl, tags)
+        input.replaceWith(tagsEl)
+        _postMessage({ type: "set_session_tags", targetSessionId: localId, tags })
+      })
+      tagsEl.replaceWith(input)
+      input.focus()
+      input.select()
+    })
+    actions.appendChild(tagBtn)
+
     const archiveBtn = document.createElement("button")
     archiveBtn.className = "modal-session-archive icon-btn"
     archiveBtn.title = "Archive"
@@ -191,9 +304,17 @@ function createSessionRowActions(
 function createSessionRow(item: ReturnType<typeof buildUnifiedSessionItems>[number]): HTMLButtonElement {
   const row = document.createElement("button")
   row.className = "modal-session-item"
+  row.classList.toggle("modal-session-item--pinned", item.pinned === true)
   row.setAttribute("role", "option")
   row.setAttribute("aria-label", `Open session: ${item.title}`)
   if (item.serverId) row.dataset.serverId = item.serverId
+
+  if (item.pinned) {
+    const pinMarker = document.createElement("span")
+    pinMarker.className = "modal-session-pin-marker"
+    pinMarker.textContent = "Pinned"
+    row.appendChild(pinMarker)
+  }
 
   const badge = document.createElement("span")
   badge.className = `session-workspace-badge ${item.type === "local" ? "local" : item.isCurrentWorkspace !== false ? "current" : "other"}`
@@ -218,6 +339,11 @@ function createSessionRow(item: ReturnType<typeof buildUnifiedSessionItems>[numb
   meta.textContent = parts.join(" \u00b7 ")
   info.appendChild(meta)
 
+  const tagsEl = document.createElement("div")
+  tagsEl.className = "modal-session-tags"
+  renderTagChips(tagsEl, item.tags)
+  info.appendChild(tagsEl)
+
   row.appendChild(info)
 
   if (item.cost && item.cost > 0) {
@@ -227,7 +353,7 @@ function createSessionRow(item: ReturnType<typeof buildUnifiedSessionItems>[numb
     row.appendChild(costEl)
   }
 
-  const actions = createSessionRowActions(row, item)
+  const actions = createSessionRowActions(row, item, nameEl, tagsEl)
   row.appendChild(actions)
 
   return row
@@ -246,7 +372,7 @@ export function renderUnifiedSessionList() {
     return
   }
 
-  items.sort((a, b) => (b.time ?? 0) - (a.time ?? 0))
+  items.sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true) || (b.time ?? 0) - (a.time ?? 0))
 
   for (const item of items) {
     const row = createSessionRow(item)

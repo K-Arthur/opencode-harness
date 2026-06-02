@@ -18,6 +18,7 @@ export function registerStreamEndHandler(fn: HandleStreamEndFn): void { _handleS
 import { getErrorHandler } from "./errorHandler"
 import { getErrorDisplay } from "./errorComponents"
 import { getQuotaMonitor } from "./quotaMonitor"
+import type { ErrorActionButton } from "./types"
 import { parseQuestionArgs, parseAllowFreeText } from "../../session/questionModel"
 
 // Stateless (no /g) so it is safe to reuse across calls without lastIndex drift.
@@ -224,6 +225,12 @@ export interface StreamCallbacks {
   postMessage?: (msg: Record<string, unknown>) => void
   /** Called after live text is actually flushed to the DOM so the host can apply backpressure. */
   onRenderFlush?: (chunkSeq: number, force?: boolean) => void
+  /**
+   * Fired when a question tool block is created or refreshed. Main.ts wires
+   * this into the input-area question bar so the user can answer without
+   * scrolling back through the transcript.
+   */
+  onQuestionBlock?: (block: QuestionBlock, messageId: string) => void
 }
 
 const TYPING_INDICATOR_ICON = `<span class="premium-spinner-container">${SPINNER_SVG}</span>`
@@ -450,19 +457,24 @@ export function handleToolStart(
   messages: ChatMessage[],
   toolCall: ToolStartPayload,
   postMessage?: (msg: Record<string, unknown>) => void,
+  callbacks?: StreamCallbacks,
 ): void {
   const id = state.streamingMessageId
   if (!id) return
 
   const msgObj = messages.find((m) => m.id === id)
-  if (updateExistingToolStart(state, els, msgObj, toolCall, postMessage, id)) return
+  if (updateExistingToolStart(state, els, msgObj, toolCall, postMessage, id, callbacks)) return
 
   prepareForToolBlock(state, els, messages, toolCall.id)
+  const block = isQuestionTool(toolCall) ? createQuestionToolBlock(toolCall, msgObj) : createToolCallBlock(toolCall) as Block
+  if (block.type === "question" && callbacks?.onQuestionBlock) {
+    callbacks.onQuestionBlock(block as QuestionBlock, id)
+  }
   appendStreamingToolBlock(
     els,
     id,
     msgObj,
-    isQuestionTool(toolCall) ? createQuestionToolBlock(toolCall, msgObj) : createToolCallBlock(toolCall) as Block,
+    block,
     { messageId: id, postMessage },
   )
   els.scrollAnchor.scrollIfAnchored()
@@ -475,6 +487,7 @@ function updateExistingToolStart(
   toolCall: ToolStartPayload,
   postMessage?: (msg: Record<string, unknown>) => void,
   messageId?: string,
+  callbacks?: StreamCallbacks,
 ): boolean {
   if (!msgObj) return false
 
@@ -484,7 +497,13 @@ function updateExistingToolStart(
     (b) => b.type === "question" && ((b.toolCallId as string) === toolCall.id || (b.id as string) === toolCall.id)
   )) {
     state.streamingToolCallId = toolCall.id
-    refreshQuestionBlock(els, msgObj.blocks ? [msgObj] : [], toolCall.id, toolCall.args, postMessage, messageId)
+    const refreshed = refreshQuestionBlock(els, msgObj.blocks ? [msgObj] : [], toolCall.id, toolCall.args, postMessage, messageId)
+    if (refreshed && callbacks?.onQuestionBlock) {
+      const block = msgObj.blocks.find(
+        (b) => b.type === "question" && ((b.toolCallId as string) === toolCall.id || (b.id as string) === toolCall.id)
+      )
+      if (block) callbacks.onQuestionBlock(block as QuestionBlock, messageId ?? "")
+    }
     return true
   }
 
@@ -566,6 +585,8 @@ export function refreshQuestionBlock(
     )
     if (idx < 0) continue
     const block = msg.blocks[idx] as QuestionBlock
+    // Never overwrite a user-answered question
+    if (block.answered) return true
     const groups = parseQuestionArgs(args)
     if (groups.length === 0) return true // partial/empty update — keep what we have
     block.groups = groups
@@ -1032,11 +1053,22 @@ export function handleStreamError(
   const errorDisplay = getErrorDisplay()
   const errorElement = errorDisplay.render(errorContext)
 
+  // Convert ErrorContext.suggestedActions to ErrorActionButton[]
+  const actionButtons: ErrorActionButton[] | undefined = errorContext.suggestedActions?.length
+    ? errorContext.suggestedActions.map(a => ({
+        label: a.label,
+        action: a.action,
+        primary: a.primary,
+        disabled: a.disabled,
+        metadata: a.metadata,
+      }))
+    : undefined
+
   // Create a wrapper message for the error
    const errMsg: ChatMessage = {
      role: "system",
      id: `error-${crypto.randomUUID()}`,
-     blocks: [createErrorBlock("stream_error", errorContext.userMessage, false)],
+     blocks: [createErrorBlock("stream_error", errorContext.userMessage, errorContext.retryable ?? false, errorContext.technicalDetails, actionButtons)],
      timestamp: Date.now(),
    }
   messages.push(errMsg)

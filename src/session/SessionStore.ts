@@ -35,6 +35,8 @@ export interface OpenCodeSession {
   /** True when the session was imported from the server and its messages have not yet been backfilled. */
   needsBackfill?: boolean
   archived?: boolean
+  pinned?: boolean
+  tags?: string[]
   messages: ChatMessage[]
   cost: number
   tokenUsage: { prompt: number; completion: number; total: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }
@@ -60,7 +62,7 @@ export interface CreateSessionOptions {
 export type ServerSessionForImport = ServerSessionSnapshot
 
 export interface SessionChangeEvent {
-  kind: "deleted" | "renamed" | "active_changed" | "archived" | "unarchived"
+  kind: "deleted" | "renamed" | "active_changed" | "archived" | "unarchived" | "pinned" | "tags_changed"
   sessionId: string
   name?: string
 }
@@ -257,6 +259,28 @@ export class SessionStore {
     this.save()
     this._onSessionsChanged.fire()
     this.fireChangeEvent({ kind: "unarchived", sessionId: id })
+    return true
+  }
+
+  setPinned(id: string, pinned: boolean): boolean {
+    const session = this.sessions.get(id)
+    if (!session) return false
+    session.pinned = pinned
+    session.lastActiveAt = Date.now()
+    this.save()
+    this._onSessionsChanged.fire()
+    this.fireChangeEvent({ kind: "pinned", sessionId: id })
+    return true
+  }
+
+  setTags(id: string, tags: readonly string[]): boolean {
+    const session = this.sessions.get(id)
+    if (!session) return false
+    session.tags = Array.from(new Set(tags.map((tag) => tag.trim()).filter(Boolean)))
+    session.lastActiveAt = Date.now()
+    this.save()
+    this._onSessionsChanged.fire()
+    this.fireChangeEvent({ kind: "tags_changed", sessionId: id })
     return true
   }
 

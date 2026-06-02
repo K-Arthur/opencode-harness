@@ -329,6 +329,19 @@ export class SessionClient {
     return (resp.data ?? []) as Array<{ id: string; content: string; status: string; priority: string }>
   }
 
+  async getChildSessions(parentId: string): Promise<Session[]> {
+    const client = this.guard()
+    const resp = await client.session.children({ path: { id: parentId } })
+    if (resp.error) throw new Error(`Failed to get child sessions: ${JSON.stringify(resp.error)}`)
+    const data = (resp.data as Session[]) ?? []
+    this.assertResponseSize(data, "getChildSessions")
+    return data
+  }
+
+  async getSessionDetails(id: string): Promise<Session> {
+    return this.getSession(id)
+  }
+
   async listAgents(directory?: string): Promise<Array<{ name: string; description?: string; mode: string; builtIn: boolean }>> {
     const client = this.guard()
     const resp = await client.app.agents(directory ? { query: { directory } } : undefined)

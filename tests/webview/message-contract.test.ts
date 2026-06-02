@@ -118,4 +118,44 @@ void describe("Message Contract Tests", () => {
     assert.strictEqual(typeof message.sessionId, "string")
     assert.ok(message.sessionId.length > 0)
   })
+
+  void it("validates speech-to-text settings message structure", () => {
+    const message: HostMessage = {
+      type: "stt_settings",
+      settings: {
+        enabled: true,
+        provider: "browser",
+        maxDurationSeconds: 60,
+        maxUploadBytes: 25 * 1024 * 1024,
+        openaiModel: "gpt-4o-mini-transcribe",
+        hasOpenAiApiKey: false,
+      },
+    }
+
+    assert.strictEqual(typeof message.settings.enabled, "boolean")
+    assert.strictEqual(message.settings.provider, "browser")
+    assert.strictEqual(typeof message.settings.maxDurationSeconds, "number")
+    assert.strictEqual(typeof message.settings.maxUploadBytes, "number")
+    assert.strictEqual(typeof message.settings.openaiModel, "string")
+    assert.strictEqual(typeof message.settings.hasOpenAiApiKey, "boolean")
+  })
+
+  void it("validates speech-to-text transcript and error messages", () => {
+    const transcript: HostMessage = {
+      type: "stt_transcript",
+      requestId: "voice-1",
+      text: "Summarize this file",
+    }
+    const error: HostMessage = {
+      type: "stt_error",
+      requestId: "voice-2",
+      reason: "missing_api_key",
+      message: "Speech-to-text requires an OpenAI API key.",
+    }
+
+    assert.strictEqual(typeof transcript.requestId, "string")
+    assert.strictEqual(typeof transcript.text, "string")
+    assert.strictEqual(error.reason, "missing_api_key")
+    assert.strictEqual(typeof error.message, "string")
+  })
 })

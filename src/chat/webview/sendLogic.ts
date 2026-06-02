@@ -1,5 +1,6 @@
 import type { WebviewState, ChatMessage } from "./types"
 import type { ElementRefs } from "./dom"
+import { TOOLTIPS } from "./tooltips"
 
 export interface StreamCapacityState {
   isFull: boolean
@@ -111,12 +112,12 @@ export function createSendLogic(deps: SendLogicDeps) {
       els.sendBtn?.classList.add("stopping")
       els.sendBtn?.classList.remove("stream-limit-blocked")
       els.sendBtn?.setAttribute("aria-label", "Stop generation")
-      els.sendBtn?.setAttribute("title", "Stop generation")
+      els.sendBtn?.setAttribute("title", TOOLTIPS.chat.stop)
     } else if (streamCapacity.isFull) {
       els.sendBtn?.classList.remove("stopping")
       els.sendBtn?.classList.add("stream-limit-blocked")
       const limitLabel = streamCapacity.streamingNames
-        ? `3 streams active (${streamCapacity.streamingNames}) — stop one to continue`
+        ? TOOLTIPS.chat.sendBlockedByLimit(streamCapacity.streamingNames)
         : STREAM_LIMIT_TOOLTIP
       els.sendBtn?.setAttribute("aria-label", limitLabel)
       els.sendBtn?.setAttribute("title", limitLabel)
@@ -124,7 +125,7 @@ export function createSendLogic(deps: SendLogicDeps) {
       els.sendBtn?.classList.remove("stopping")
       els.sendBtn?.classList.remove("stream-limit-blocked")
       els.sendBtn?.setAttribute("aria-label", "Send message")
-      els.sendBtn?.setAttribute("title", "Send (Ctrl+Enter)")
+      els.sendBtn?.setAttribute("title", TOOLTIPS.chat.send)
     }
   }
 
@@ -144,13 +145,26 @@ export function createSendLogic(deps: SendLogicDeps) {
 
   function setSteerMode(mode: "interrupt" | "append" | "queue") {
     currentSteerMode = mode
-    ;(els as any).steerModeSelector
-      ?.querySelectorAll(".steer-option")
-      .forEach((btn: Element) => btn.classList.remove("active"))
+    document.querySelectorAll<HTMLElement>(".steer-mode-btn").forEach((btn) => {
+      const isActive = btn.dataset.mode === mode
+      btn.classList.toggle("active", isActive)
+      btn.setAttribute("aria-pressed", String(isActive))
+    })
     const btn = document.getElementById(`steer-mode-${mode}`)
-    if (btn) btn.classList.add("active")
+    if (btn) {
+      btn.classList.add("active")
+      btn.setAttribute("aria-pressed", "true")
+    }
     els.inputArea.classList.remove("steer-interrupt", "steer-append", "steer-queue")
     els.inputArea.classList.add(`steer-${mode}`)
+  }
+
+  function syncSteerModeUI() {
+    setSteerMode(currentSteerMode)
+  }
+
+  function getSteerMode(): "interrupt" | "append" | "queue" {
+    return currentSteerMode
   }
 
   function sendSteerPrompt() {
@@ -226,7 +240,7 @@ export function createSendLogic(deps: SendLogicDeps) {
       handleRequestError(
         active.id,
         streamCapacity.streamingNames
-          ? `${STREAM_LIMIT_TOOLTIP}. Currently streaming: ${streamCapacity.streamingNames}. Stop one to continue.`
+          ? TOOLTIPS.limits.streamCapWithNames(streamCapacity.streamingNames)
           : `${STREAM_LIMIT_TOOLTIP}. Stop a streaming tab to free a slot.`,
       )
       return
@@ -306,5 +320,7 @@ export function createSendLogic(deps: SendLogicDeps) {
     isAutoSessionName,
     sendSteerPrompt,
     setSteerMode,
+    syncSteerModeUI,
+    getSteerMode,
   }
 }

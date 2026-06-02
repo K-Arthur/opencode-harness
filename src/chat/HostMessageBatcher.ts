@@ -11,6 +11,8 @@ export interface HostMessageBatcherOptions {
   lowVelocityCharsPerMs?: number
   highVelocityCharsPerMs?: number
   maxChunkBatchSize?: number
+  maxPayloadBytes?: number
+  dedupWindow?: number
   now?: () => number
 }
 
@@ -70,6 +72,8 @@ export class HostMessageBatcher {
   private readonly lowVelocityCharsPerMs: number
   private readonly highVelocityCharsPerMs: number
   private readonly maxChunkBatchSize: number
+  private readonly maxPayloadBytes: number
+  private readonly dedupWindow: number
   private readonly now: () => number
   private firstChunkBufferedAt = 0
   private charsInWindow = 0
@@ -77,6 +81,8 @@ export class HostMessageBatcher {
   private scheduledChunkFlushAt = 0
   private disposed = false
   private pausedSessions = new Set<string>()
+  private dedupCount = 0
+  private dedupFingerprint = ""
 
   constructor(
     private readonly delegate: (msg: Record<string, unknown>) => MaybeThenable<boolean | void>,
@@ -89,6 +95,8 @@ export class HostMessageBatcher {
     this.lowVelocityCharsPerMs = options.lowVelocityCharsPerMs ?? 0.08
     this.highVelocityCharsPerMs = options.highVelocityCharsPerMs ?? 2
     this.maxChunkBatchSize = options.maxChunkBatchSize ?? 10 * 1024
+    this.maxPayloadBytes = options.maxPayloadBytes ?? 256 * 1024
+    this.dedupWindow = options.dedupWindow ?? 16
     this.now = options.now ?? (() => Date.now())
 
     this.engine = new BatchEngine(
@@ -128,6 +136,37 @@ export class HostMessageBatcher {
 
     if (!HostMessageBatcher.isBatchable(msg)) {
       return this.dispatch(msg) !== false
+    }
+
+    // F8: per-payload size guard. A single batchable message bigger than
+    // maxPayloadBytes is dropped with a warning — it would otherwise
+    // dominate the webview's message queue and stall the UI.
+    if (this.maxPayloadBytes > 0) {
+      const size = payloadSize(msg)
+      if (size > this.maxPayloadBytes) {
+        this.log?.(
+          `[HostMessageBatcher] dropped oversized payload type=${String(msg.type)} size=${size}B > maxPayloadBytes=${this.maxPayloadBytes}B`,
+        )
+        return false
+      }
+    }
+
+    // F8: dedup identical consecutive batched payloads beyond dedupWindow.
+    // Identical-fingerprint batching is rare in practice but a single bug
+    // (e.g. an emitter that posts the same context_usage every tick) can
+    // flood the queue; this guard limits the damage.
+    const fp = stableFingerprint(msg)
+    if (fp === this.dedupFingerprint) {
+      this.dedupCount++
+      if (this.dedupCount > this.dedupWindow) {
+        this.log?.(
+          `[HostMessageBatcher] dropped duplicate type=${String(msg.type)} (window=${this.dedupWindow})`,
+        )
+        return false
+      }
+    } else {
+      this.dedupFingerprint = fp
+      this.dedupCount = 1
     }
 
     this.engine.add("main", msg)
@@ -299,4 +338,22 @@ export class HostMessageBatcher {
       return false
     }
   }
+}
+
+// ── F8 helpers ─────────────────────────────────────────────────────────────
+
+function payloadSize(msg: Record<string, unknown>): number {
+  try {
+    return JSON.stringify(msg).length
+  } catch {
+    return Number.POSITIVE_INFINITY
+  }
+}
+
+function stableFingerprint(msg: Record<string, unknown>): string {
+  // Cheap fingerprint: type + JSON length. Enough to detect a runaway loop
+  // emitting the same payload every tick (the dominant failure mode in
+  // practice). NOT cryptographic; collision-acceptable for dedup.
+  const len = payloadSize(msg)
+  return `${String(msg.type)}\u0000${len}`
 }

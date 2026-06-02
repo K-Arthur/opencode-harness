@@ -253,6 +253,8 @@ export class MessageRouter {
         messageCount: s.messages.filter((m: { role: string }) => m.role === "user").length,
         cost: s.cost || 0,
         workspacePath: s.workspacePath,
+        pinned: s.pinned === true,
+        tags: Array.isArray(s.tags) ? s.tags : [],
       })),
     })
   }

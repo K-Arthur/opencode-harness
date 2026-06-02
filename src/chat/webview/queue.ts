@@ -43,6 +43,8 @@ export interface PromptQueue {
   persist: () => QueueItem[]
   /** Hydrate from a previously persisted snapshot (e.g. after webview reload). */
   restore: (items: QueueItem[]) => void
+  /** Reset any items stuck in "sending" state back to "queued" so they can be retried. */
+  markStuckSendingAsQueued: () => void
 }
 
 // Approximate: 1 token ≈ 4 characters for English text. Cheap heuristic
@@ -170,6 +172,14 @@ export function createPromptQueue(): PromptQueue {
     return { text: next.text, attachments: next.attachments }
   }
 
+  function markStuckSendingAsQueued(): void {
+    for (const item of items) {
+      if (item.state === "sending") {
+        item.state = "queued"
+      }
+    }
+  }
+
   function clear(): void {
     items.length = 0
   }
@@ -189,5 +199,6 @@ export function createPromptQueue(): PromptQueue {
     markAsSteer,
     persist,
     restore,
+    markStuckSendingAsQueued,
   }
 }

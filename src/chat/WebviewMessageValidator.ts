@@ -1,4 +1,5 @@
 import { normalizeSessionMode } from "./modePolicy"
+import { VOICE_INPUT_MAX_UPLOAD_BYTES, validateVoiceAudioPayload } from "./voiceInputCore"
 
 export interface WebviewMessageValidatorDeps {
   hasPromptContent: (msg: Record<string, unknown>) => boolean
@@ -273,6 +274,39 @@ function validateOptionalEnabled(msg: Record<string, unknown>, msgType: string, 
   return true
 }
 
+function validatePinSession(msg: Record<string, unknown>, msgType: string, deps: WebviewMessageValidatorDeps): boolean {
+  if (!requiredStringValidator("targetSessionId", (type) => `Invalid targetSessionId in ${type}`)(msg, msgType, deps)) {
+    return false
+  }
+  if (typeof msg.pinned !== "boolean") {
+    return reject(deps, "Invalid pinned flag in pin_session")
+  }
+  return true
+}
+
+function validateSessionTags(msg: Record<string, unknown>, msgType: string, deps: WebviewMessageValidatorDeps): boolean {
+  if (!requiredStringValidator("targetSessionId", (type) => `Invalid targetSessionId in ${type}`)(msg, msgType, deps)) {
+    return false
+  }
+  if (!Array.isArray(msg.tags) || msg.tags.some((tag) => typeof tag !== "string") || msg.tags.length > 20) {
+    return reject(deps, "Invalid tags in set_session_tags")
+  }
+  return true
+}
+
+function validateOpenTerminal(msg: Record<string, unknown>, _msgType: string, deps: WebviewMessageValidatorDeps): boolean {
+  if (typeof msg.command !== "string" || !msg.command.trim()) {
+    return reject(deps, "Invalid command in open_terminal")
+  }
+  if (msg.cwd !== undefined && typeof msg.cwd !== "string") {
+    return reject(deps, "Invalid cwd in open_terminal")
+  }
+  if (msg.autorun !== undefined && typeof msg.autorun !== "boolean") {
+    return reject(deps, "Invalid autorun flag in open_terminal")
+  }
+  return true
+}
+
 function validateSendSteerPrompt(msg: Record<string, unknown>, _msgType: string, deps: WebviewMessageValidatorDeps): boolean {
   if (msg.text !== undefined && typeof msg.text !== "string") {
     return reject(deps, "Invalid text in send_steer_prompt")
@@ -283,6 +317,20 @@ function validateSendSteerPrompt(msg: Record<string, unknown>, _msgType: string,
   const mode = msg.mode
   if (mode !== undefined && (typeof mode !== "string" || !STEER_MODE_VALUES.has(mode))) {
     return reject(deps, "Invalid mode in send_steer_prompt")
+  }
+  return true
+}
+
+function validateVoiceAudio(msg: Record<string, unknown>, _msgType: string, deps: WebviewMessageValidatorDeps): boolean {
+  const result = validateVoiceAudioPayload({
+    requestId: msg.requestId,
+    mimeType: msg.mimeType,
+    data: msg.data,
+    sizeBytes: msg.sizeBytes,
+  }, VOICE_INPUT_MAX_UPLOAD_BYTES)
+  if (!result.ok) return reject(deps, `Rejected speech-to-text audio: ${result.reason}`)
+  if (msg.durationMs !== undefined && (typeof msg.durationMs !== "number" || !Number.isFinite(msg.durationMs) || msg.durationMs < 0)) {
+    return reject(deps, "Invalid durationMs in stt_transcribe_audio")
   }
   return true
 }
@@ -328,6 +376,9 @@ const WEBVIEW_MESSAGE_VALIDATORS: Record<string, MessageValidator> = {
   request_more_messages: validateRequestMoreMessages,
   delete_session: requiredStringValidator("targetSessionId", (msgType) => `Invalid targetSessionId in ${msgType}`),
   archive_session: requiredStringValidator("targetSessionId", (msgType) => `Invalid targetSessionId in ${msgType}`),
+  pin_session: validatePinSession,
+  set_session_tags: validateSessionTags,
+  open_terminal: validateOpenTerminal,
   resume_server_session: requiredStringValidator("serverSessionId", () => "Invalid serverSessionId in resume_server_session"),
   delete_server_session: requiredStringValidator("serverSessionId", () => "Invalid serverSessionId in delete_server_session"),
   update_cost: validateUpdateCost,
@@ -335,6 +386,7 @@ const WEBVIEW_MESSAGE_VALIDATORS: Record<string, MessageValidator> = {
   toggle_thinking: validateOptionalEnabled,
   update_setting: requiredStringValidator("key", () => "Invalid key in update_setting"),
   send_steer_prompt: validateSendSteerPrompt,
+  stt_transcribe_audio: validateVoiceAudio,
 }
 
 export function validateWebviewMessage(

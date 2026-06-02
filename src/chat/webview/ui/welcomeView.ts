@@ -14,6 +14,13 @@ export interface WelcomeViewDeps {
   getAllSessions: () => Array<{ id: string; name?: string; messages: Array<{ timestamp?: number }>; cost?: number }>
   getState: () => { globalModel?: string; activeSessionId?: string }
   openModelManager: () => void
+  /**
+   * Resolve the model to show on the welcome card when `globalModel` has not
+   * arrived yet — falls back to the active session model or the model the
+   * picker is currently displaying. Keeps the card from being stuck on
+   * "No model selected" during the init/model-list race.
+   */
+  getResolvedModel?: () => string | undefined
   renderRecentSessionsList: (query?: string) => void
   hideStatusStrip: () => void
   applyTimelineVisibility: (sessionId?: string) => void
@@ -35,10 +42,17 @@ export function hideWelcomeView(els: WelcomeViewEls): void {
 }
 
 export function renderWelcomeContext(deps: WelcomeViewDeps): void {
-  const globalModel = deps.getState().globalModel
-  if (globalModel && deps.els.welcomeModelName) {
-    const parts = globalModel.split("/")
-    deps.els.welcomeModelName.textContent = parts[parts.length - 1] ?? globalModel
+  // Prefer the global model, but fall back to whatever the picker/active
+  // session resolves to so the card is never stuck on "No model selected"
+  // when init_state arrives before the model list (or carries an empty model).
+  const model = deps.getState().globalModel || deps.getResolvedModel?.() || ""
+  if (deps.els.welcomeModelName) {
+    if (model) {
+      const parts = model.split("/")
+      deps.els.welcomeModelName.textContent = parts[parts.length - 1] ?? model
+    } else {
+      deps.els.welcomeModelName.textContent = "No model selected"
+    }
   }
   const hasSessions = deps.getAllSessions().some((s) => s.messages.length > 0)
   if (deps.els.welcomeContinueBtn) {

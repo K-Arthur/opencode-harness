@@ -232,4 +232,60 @@ describe("createPromptQueue", () => {
       assert.equal(q.getTotalEstimatedTokens(), 0)
     })
   })
+
+  describe("markStuckSendingAsQueued", () => {
+    it("resets sending items back to queued", () => {
+      const q = createPromptQueue()
+      const a = q.enqueue("a")!
+      const b = q.enqueue("b")!
+      a.state = "sending"
+      b.state = "sending"
+      q.markStuckSendingAsQueued()
+      assert.equal(a.state, "queued")
+      assert.equal(b.state, "queued")
+    })
+
+    it("does not affect already-queued items", () => {
+      const q = createPromptQueue()
+      q.enqueue("a")
+      const b = q.enqueue("b")!
+      b.state = "sending"
+      q.markStuckSendingAsQueued()
+      const items = q.getItems()
+      assert.equal(items[0]!.state, "queued")
+      assert.equal(items[1]!.state, "queued")
+    })
+
+    it("is idempotent when called multiple times", () => {
+      const q = createPromptQueue()
+      const a = q.enqueue("a")!
+      a.state = "sending"
+      q.markStuckSendingAsQueued()
+      q.markStuckSendingAsQueued()
+      assert.equal(a.state, "queued")
+    })
+
+    it("is safe on an empty queue", () => {
+      const q = createPromptQueue()
+      q.markStuckSendingAsQueued()
+      assert.equal(q.getItems().length, 0)
+    })
+
+    it("does not affect completed, failed, streaming, or queued items", () => {
+      const q = createPromptQueue()
+      const a = q.enqueue("a")!; a.state = "queued"
+      const b = q.enqueue("b")!; b.state = "sending"
+      const c = q.enqueue("c")!; c.state = "streaming"
+      const d = q.enqueue("d")!; d.state = "completed"
+      const e = q.enqueue("e")!; e.state = "failed"
+
+      q.markStuckSendingAsQueued()
+
+      assert.equal(a.state, "queued")
+      assert.equal(b.state, "queued") // was sending → queued
+      assert.equal(c.state, "streaming")
+      assert.equal(d.state, "completed")
+      assert.equal(e.state, "failed")
+    })
+  })
 })

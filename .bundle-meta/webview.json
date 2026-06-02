@@ -1,0 +1,2864 @@
+{
+  "inputs": {
+    "src/chat/webview/timerRegistry.ts": {
+      "bytes": 1147,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/state.ts": {
+      "bytes": 20901,
+      "imports": [
+        {
+          "path": "src/chat/webview/timerRegistry.ts",
+          "kind": "import-statement",
+          "original": "./timerRegistry"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/dom.ts": {
+      "bytes": 19704,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/mdurl/lib/decode.mjs": {
+      "bytes": 2843,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/mdurl/lib/encode.mjs": {
+      "bytes": 2211,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/mdurl/lib/format.mjs": {
+      "bytes": 485,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/mdurl/lib/parse.mjs": {
+      "bytes": 9733,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/mdurl/index.mjs": {
+      "bytes": 200,
+      "imports": [
+        {
+          "path": "node_modules/mdurl/lib/decode.mjs",
+          "kind": "import-statement",
+          "original": "./lib/decode.mjs"
+        },
+        {
+          "path": "node_modules/mdurl/lib/encode.mjs",
+          "kind": "import-statement",
+          "original": "./lib/encode.mjs"
+        },
+        {
+          "path": "node_modules/mdurl/lib/format.mjs",
+          "kind": "import-statement",
+          "original": "./lib/format.mjs"
+        },
+        {
+          "path": "node_modules/mdurl/lib/parse.mjs",
+          "kind": "import-statement",
+          "original": "./lib/parse.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/uc.micro/properties/Any/regex.mjs": {
+      "bytes": 145,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/uc.micro/categories/Cc/regex.mjs": {
+      "bytes": 35,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/uc.micro/categories/Cf/regex.mjs": {
+      "bytes": 264,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/uc.micro/categories/P/regex.mjs": {
+      "bytes": 2042,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/uc.micro/categories/S/regex.mjs": {
+      "bytes": 2551,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/uc.micro/categories/Z/regex.mjs": {
+      "bytes": 73,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/uc.micro/index.mjs": {
+      "bytes": 302,
+      "imports": [
+        {
+          "path": "node_modules/uc.micro/properties/Any/regex.mjs",
+          "kind": "import-statement",
+          "original": "./properties/Any/regex.mjs"
+        },
+        {
+          "path": "node_modules/uc.micro/categories/Cc/regex.mjs",
+          "kind": "import-statement",
+          "original": "./categories/Cc/regex.mjs"
+        },
+        {
+          "path": "node_modules/uc.micro/categories/Cf/regex.mjs",
+          "kind": "import-statement",
+          "original": "./categories/Cf/regex.mjs"
+        },
+        {
+          "path": "node_modules/uc.micro/categories/P/regex.mjs",
+          "kind": "import-statement",
+          "original": "./categories/P/regex.mjs"
+        },
+        {
+          "path": "node_modules/uc.micro/categories/S/regex.mjs",
+          "kind": "import-statement",
+          "original": "./categories/S/regex.mjs"
+        },
+        {
+          "path": "node_modules/uc.micro/categories/Z/regex.mjs",
+          "kind": "import-statement",
+          "original": "./categories/Z/regex.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/entities/lib/esm/generated/decode-data-html.js": {
+      "bytes": 47724,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/entities/lib/esm/generated/decode-data-xml.js": {
+      "bytes": 279,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/entities/lib/esm/decode_codepoint.js": {
+      "bytes": 2112,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/entities/lib/esm/decode.js": {
+      "bytes": 19810,
+      "imports": [
+        {
+          "path": "node_modules/entities/lib/esm/generated/decode-data-html.js",
+          "kind": "import-statement",
+          "original": "./generated/decode-data-html.js"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/generated/decode-data-xml.js",
+          "kind": "import-statement",
+          "original": "./generated/decode-data-xml.js"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/decode_codepoint.js",
+          "kind": "import-statement",
+          "original": "./decode_codepoint.js"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/decode_codepoint.js",
+          "kind": "import-statement",
+          "original": "./decode_codepoint.js"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/entities/lib/esm/generated/encode-html.js": {
+      "bytes": 27039,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/entities/lib/esm/escape.js": {
+      "bytes": 3965,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/entities/lib/esm/encode.js": {
+      "bytes": 2569,
+      "imports": [
+        {
+          "path": "node_modules/entities/lib/esm/generated/encode-html.js",
+          "kind": "import-statement",
+          "original": "./generated/encode-html.js"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/escape.js",
+          "kind": "import-statement",
+          "original": "./escape.js"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/entities/lib/esm/index.js": {
+      "bytes": 4057,
+      "imports": [
+        {
+          "path": "node_modules/entities/lib/esm/decode.js",
+          "kind": "import-statement",
+          "original": "./decode.js"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/encode.js",
+          "kind": "import-statement",
+          "original": "./encode.js"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/escape.js",
+          "kind": "import-statement",
+          "original": "./escape.js"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/escape.js",
+          "kind": "import-statement",
+          "original": "./escape.js"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/encode.js",
+          "kind": "import-statement",
+          "original": "./encode.js"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/decode.js",
+          "kind": "import-statement",
+          "original": "./decode.js"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/common/utils.mjs": {
+      "bytes": 7897,
+      "imports": [
+        {
+          "path": "node_modules/mdurl/index.mjs",
+          "kind": "import-statement",
+          "original": "mdurl"
+        },
+        {
+          "path": "node_modules/uc.micro/index.mjs",
+          "kind": "import-statement",
+          "original": "uc.micro"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/index.js",
+          "kind": "import-statement",
+          "original": "entities"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/helpers/parse_link_label.mjs": {
+      "bytes": 985,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/helpers/parse_link_destination.mjs": {
+      "bytes": 1543,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/helpers/parse_link_title.mjs": {
+      "bytes": 1851,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/helpers/index.mjs": {
+      "bytes": 275,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/helpers/parse_link_label.mjs",
+          "kind": "import-statement",
+          "original": "./parse_link_label.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/helpers/parse_link_destination.mjs",
+          "kind": "import-statement",
+          "original": "./parse_link_destination.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/helpers/parse_link_title.mjs",
+          "kind": "import-statement",
+          "original": "./parse_link_title.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/renderer.mjs": {
+      "bytes": 8929,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "./common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/ruler.mjs": {
+      "bytes": 8478,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/token.mjs": {
+      "bytes": 3799,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_core/state_core.mjs": {
+      "bytes": 325,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/token.mjs",
+          "kind": "import-statement",
+          "original": "../token.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_core/normalize.mjs": {
+      "bytes": 351,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_core/block.mjs": {
+      "bytes": 333,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_core/inline.mjs": {
+      "bytes": 289,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_core/linkify.mjs": {
+      "bytes": 4248,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_core/replacements.mjs": {
+      "bytes": 2633,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_core/smartquotes.mjs": {
+      "bytes": 5724,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_core/text_join.mjs": {
+      "bytes": 1147,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/parser_core.mjs": {
+      "bytes": 1509,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/ruler.mjs",
+          "kind": "import-statement",
+          "original": "./ruler.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_core/state_core.mjs",
+          "kind": "import-statement",
+          "original": "./rules_core/state_core.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_core/normalize.mjs",
+          "kind": "import-statement",
+          "original": "./rules_core/normalize.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_core/block.mjs",
+          "kind": "import-statement",
+          "original": "./rules_core/block.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_core/inline.mjs",
+          "kind": "import-statement",
+          "original": "./rules_core/inline.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_core/linkify.mjs",
+          "kind": "import-statement",
+          "original": "./rules_core/linkify.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_core/replacements.mjs",
+          "kind": "import-statement",
+          "original": "./rules_core/replacements.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_core/smartquotes.mjs",
+          "kind": "import-statement",
+          "original": "./rules_core/smartquotes.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_core/text_join.mjs",
+          "kind": "import-statement",
+          "original": "./rules_core/text_join.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/state_block.mjs": {
+      "bytes": 5895,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/token.mjs",
+          "kind": "import-statement",
+          "original": "../token.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/table.mjs": {
+      "bytes": 7087,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/code.mjs": {
+      "bytes": 686,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/fence.mjs": {
+      "bytes": 2412,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/blockquote.mjs": {
+      "bytes": 6056,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/hr.mjs": {
+      "bytes": 1070,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/list.mjs": {
+      "bytes": 9103,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/reference.mjs": {
+      "bytes": 5829,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/common/html_blocks.mjs": {
+      "bytes": 799,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/common/html_re.mjs": {
+      "bytes": 992,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/html_block.mjs": {
+      "bytes": 2200,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/html_blocks.mjs",
+          "kind": "import-statement",
+          "original": "../common/html_blocks.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/common/html_re.mjs",
+          "kind": "import-statement",
+          "original": "../common/html_re.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/heading.mjs": {
+      "bytes": 1497,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/lheading.mjs": {
+      "bytes": 2487,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/paragraph.mjs": {
+      "bytes": 1458,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/parser_block.mjs": {
+      "bytes": 3986,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/ruler.mjs",
+          "kind": "import-statement",
+          "original": "./ruler.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/state_block.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/state_block.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/table.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/table.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/code.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/code.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/fence.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/fence.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/blockquote.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/blockquote.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/hr.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/hr.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/list.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/list.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/reference.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/reference.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/html_block.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/html_block.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/heading.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/heading.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/lheading.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/lheading.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/paragraph.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/paragraph.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/state_inline.mjs": {
+      "bytes": 3493,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/token.mjs",
+          "kind": "import-statement",
+          "original": "../token.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/text.mjs": {
+      "bytes": 2101,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/linkify.mjs": {
+      "bytes": 1904,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/newline.mjs": {
+      "bytes": 1199,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/escape.mjs": {
+      "bytes": 1419,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/backticks.mjs": {
+      "bytes": 1674,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/strikethrough.mjs": {
+      "bytes": 2935,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/emphasis.mjs": {
+      "bytes": 3520,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/link.mjs": {
+      "bytes": 3724,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/image.mjs": {
+      "bytes": 3638,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/autolink.mjs": {
+      "bytes": 2012,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/html_inline.mjs": {
+      "bytes": 1163,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/html_re.mjs",
+          "kind": "import-statement",
+          "original": "../common/html_re.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/entity.mjs": {
+      "bytes": 1488,
+      "imports": [
+        {
+          "path": "node_modules/entities/lib/esm/index.js",
+          "kind": "import-statement",
+          "original": "entities"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/balance_pairs.mjs": {
+      "bytes": 4084,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/fragments_join.mjs": {
+      "bytes": 1267,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/parser_inline.mjs": {
+      "bytes": 5434,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/ruler.mjs",
+          "kind": "import-statement",
+          "original": "./ruler.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/state_inline.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/state_inline.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/text.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/text.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/linkify.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/linkify.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/newline.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/newline.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/escape.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/escape.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/backticks.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/backticks.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/strikethrough.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/strikethrough.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/emphasis.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/emphasis.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/link.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/link.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/image.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/image.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/autolink.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/autolink.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/html_inline.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/html_inline.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/entity.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/entity.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/balance_pairs.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/balance_pairs.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/fragments_join.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/fragments_join.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/linkify-it/lib/re.mjs": {
+      "bytes": 5556,
+      "imports": [
+        {
+          "path": "node_modules/uc.micro/index.mjs",
+          "kind": "import-statement",
+          "original": "uc.micro"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/linkify-it/index.mjs": {
+      "bytes": 17602,
+      "imports": [
+        {
+          "path": "node_modules/linkify-it/lib/re.mjs",
+          "kind": "import-statement",
+          "original": "./lib/re.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/punycode.js/punycode.es6.js": {
+      "bytes": 12780,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/presets/default.mjs": {
+      "bytes": 1281,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/presets/zero.mjs": {
+      "bytes": 1652,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/presets/commonmark.mjs": {
+      "bytes": 1909,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/index.mjs": {
+      "bytes": 17899,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "./common/utils.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/helpers/index.mjs",
+          "kind": "import-statement",
+          "original": "./helpers/index.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/renderer.mjs",
+          "kind": "import-statement",
+          "original": "./renderer.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/parser_core.mjs",
+          "kind": "import-statement",
+          "original": "./parser_core.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/parser_block.mjs",
+          "kind": "import-statement",
+          "original": "./parser_block.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/parser_inline.mjs",
+          "kind": "import-statement",
+          "original": "./parser_inline.mjs"
+        },
+        {
+          "path": "node_modules/linkify-it/index.mjs",
+          "kind": "import-statement",
+          "original": "linkify-it"
+        },
+        {
+          "path": "node_modules/mdurl/index.mjs",
+          "kind": "import-statement",
+          "original": "mdurl"
+        },
+        {
+          "path": "node_modules/punycode.js/punycode.es6.js",
+          "kind": "import-statement",
+          "original": "punycode.js"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/presets/default.mjs",
+          "kind": "import-statement",
+          "original": "./presets/default.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/presets/zero.mjs",
+          "kind": "import-statement",
+          "original": "./presets/zero.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/presets/commonmark.mjs",
+          "kind": "import-statement",
+          "original": "./presets/commonmark.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/index.mjs": {
+      "bytes": 42,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/index.mjs",
+          "kind": "import-statement",
+          "original": "./lib/index.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it-task-lists/index.js": {
+      "bytes": 3832,
+      "imports": [],
+      "format": "cjs"
+    },
+    "src/chat/webview/htmlUtils.ts": {
+      "bytes": 1017,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/lib/core.js": {
+      "bytes": 75941,
+      "imports": [],
+      "format": "cjs"
+    },
+    "node_modules/highlight.js/es/core.js": {
+      "bytes": 202,
+      "imports": [
+        {
+          "path": "node_modules/highlight.js/lib/core.js",
+          "kind": "import-statement",
+          "original": "../lib/core.js"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/dompurify/dist/purify.es.mjs": {
+      "bytes": 68879,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/javascript.js": {
+      "bytes": 17756,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/typescript.js": {
+      "bytes": 21359,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/python.js": {
+      "bytes": 9190,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/rust.js": {
+      "bytes": 6130,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/go.js": {
+      "bytes": 3195,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/bash.js": {
+      "bytes": 6523,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/json.js": {
+      "bytes": 1343,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/css.js": {
+      "bytes": 18884,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/markdown.js": {
+      "bytes": 5253,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/sql.js": {
+      "bytes": 11990,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/diff.js": {
+      "bytes": 1214,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/java.js": {
+      "bytes": 6233,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/cpp.js": {
+      "bytes": 12689,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/yaml.js": {
+      "bytes": 5022,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/xml.js": {
+      "bytes": 7007,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/syntaxHighlighter.ts": {
+      "bytes": 4949,
+      "imports": [
+        {
+          "path": "node_modules/highlight.js/es/core.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/core"
+        },
+        {
+          "path": "node_modules/dompurify/dist/purify.es.mjs",
+          "kind": "import-statement",
+          "original": "dompurify"
+        },
+        {
+          "path": "src/chat/webview/htmlUtils.ts",
+          "kind": "import-statement",
+          "original": "./htmlUtils"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/javascript.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/javascript"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/typescript.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/typescript"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/python.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/python"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/rust.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/rust"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/go.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/go"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/bash.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/bash"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/json.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/json"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/css.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/css"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/markdown.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/markdown"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/sql.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/sql"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/diff.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/diff"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/java.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/java"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/cpp.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/cpp"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/yaml.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/yaml"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/xml.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/xml"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/icons.ts": {
+      "bytes": 9299,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/toolCallRenderer.ts": {
+      "bytes": 31633,
+      "imports": [
+        {
+          "path": "src/chat/webview/icons.ts",
+          "kind": "import-statement",
+          "original": "./icons"
+        },
+        {
+          "path": "src/chat/webview/syntaxHighlighter.ts",
+          "kind": "import-statement",
+          "original": "./syntaxHighlighter"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/displayPrefs.ts": {
+      "bytes": 795,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/renderer.ts": {
+      "bytes": 76908,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/index.mjs",
+          "kind": "import-statement",
+          "original": "markdown-it"
+        },
+        {
+          "path": "node_modules/markdown-it-task-lists/index.js",
+          "kind": "import-statement",
+          "original": "markdown-it-task-lists"
+        },
+        {
+          "path": "src/chat/webview/htmlUtils.ts",
+          "kind": "import-statement",
+          "original": "./htmlUtils"
+        },
+        {
+          "path": "src/chat/webview/syntaxHighlighter.ts",
+          "kind": "import-statement",
+          "original": "./syntaxHighlighter"
+        },
+        {
+          "path": "src/chat/webview/icons.ts",
+          "kind": "import-statement",
+          "original": "./icons"
+        },
+        {
+          "path": "src/chat/webview/toolCallRenderer.ts",
+          "kind": "import-statement",
+          "original": "./toolCallRenderer"
+        },
+        {
+          "path": "src/chat/webview/displayPrefs.ts",
+          "kind": "import-statement",
+          "original": "./displayPrefs"
+        },
+        {
+          "path": "src/chat/webview/syntaxHighlighter.ts",
+          "kind": "import-statement",
+          "original": "./syntaxHighlighter"
+        },
+        {
+          "path": "src/chat/webview/toolCallRenderer.ts",
+          "kind": "import-statement",
+          "original": "./toolCallRenderer"
+        },
+        {
+          "path": "src/chat/webview/toolCallRenderer.ts",
+          "kind": "import-statement",
+          "original": "./toolCallRenderer"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/utils/tokenCounter.ts": {
+      "bytes": 3750,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/messageRenderer.ts": {
+      "bytes": 7997,
+      "imports": [
+        {
+          "path": "src/chat/webview/renderer.ts",
+          "kind": "import-statement",
+          "original": "./renderer"
+        },
+        {
+          "path": "src/chat/webview/toolCallRenderer.ts",
+          "kind": "import-statement",
+          "original": "./toolCallRenderer"
+        },
+        {
+          "path": "src/utils/tokenCounter.ts",
+          "kind": "import-statement",
+          "original": "../../utils/tokenCounter"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/slash-commands.ts": {
+      "bytes": 4965,
+      "imports": [
+        {
+          "path": "src/chat/webview/icons.ts",
+          "kind": "import-statement",
+          "original": "./icons"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/mentions.ts": {
+      "bytes": 10458,
+      "imports": [
+        {
+          "path": "src/chat/webview/icons.ts",
+          "kind": "import-statement",
+          "original": "./icons"
+        },
+        {
+          "path": "src/chat/webview/slash-commands.ts",
+          "kind": "import-statement",
+          "original": "./slash-commands"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/commands-modal.ts": {
+      "bytes": 15185,
+      "imports": [
+        {
+          "path": "src/chat/webview/slash-commands.ts",
+          "kind": "import-statement",
+          "original": "./slash-commands"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/blocks.ts": {
+      "bytes": 1839,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/renderQueue.ts": {
+      "bytes": 2316,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/streamTail.ts": {
+      "bytes": 3104,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/liveTextRenderer.ts": {
+      "bytes": 2909,
+      "imports": [
+        {
+          "path": "src/chat/webview/streamTail.ts",
+          "kind": "import-statement",
+          "original": "./streamTail"
+        },
+        {
+          "path": "src/chat/webview/renderer.ts",
+          "kind": "import-statement",
+          "original": "./renderer"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/errorTypes.ts": {
+      "bytes": 16459,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/opencodeErrorMapper.ts": {
+      "bytes": 10634,
+      "imports": [
+        {
+          "path": "src/chat/webview/errorTypes.ts",
+          "kind": "import-statement",
+          "original": "./errorTypes"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/errorHandler.ts": {
+      "bytes": 16951,
+      "imports": [
+        {
+          "path": "src/chat/webview/errorTypes.ts",
+          "kind": "import-statement",
+          "original": "./errorTypes"
+        },
+        {
+          "path": "src/chat/webview/opencodeErrorMapper.ts",
+          "kind": "import-statement",
+          "original": "./opencodeErrorMapper"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/errorComponents.ts": {
+      "bytes": 19453,
+      "imports": [
+        {
+          "path": "src/chat/webview/errorTypes.ts",
+          "kind": "import-statement",
+          "original": "./errorTypes"
+        },
+        {
+          "path": "src/chat/webview/htmlUtils.ts",
+          "kind": "import-statement",
+          "original": "./htmlUtils"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/session/questionModel.ts": {
+      "bytes": 2709,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/streamHandlers.ts": {
+      "bytes": 46184,
+      "imports": [
+        {
+          "path": "src/chat/webview/blocks.ts",
+          "kind": "import-statement",
+          "original": "./blocks"
+        },
+        {
+          "path": "./timerRegistry",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/chat/webview/messageRenderer.ts",
+          "kind": "import-statement",
+          "original": "./messageRenderer"
+        },
+        {
+          "path": "src/chat/webview/renderer.ts",
+          "kind": "import-statement",
+          "original": "./renderer"
+        },
+        {
+          "path": "src/chat/webview/syntaxHighlighter.ts",
+          "kind": "import-statement",
+          "original": "./syntaxHighlighter"
+        },
+        {
+          "path": "src/chat/webview/toolCallRenderer.ts",
+          "kind": "import-statement",
+          "original": "./toolCallRenderer"
+        },
+        {
+          "path": "src/chat/webview/icons.ts",
+          "kind": "import-statement",
+          "original": "./icons"
+        },
+        {
+          "path": "src/chat/webview/renderQueue.ts",
+          "kind": "import-statement",
+          "original": "./renderQueue"
+        },
+        {
+          "path": "src/chat/webview/liveTextRenderer.ts",
+          "kind": "import-statement",
+          "original": "./liveTextRenderer"
+        },
+        {
+          "path": "src/chat/webview/errorHandler.ts",
+          "kind": "import-statement",
+          "original": "./errorHandler"
+        },
+        {
+          "path": "src/chat/webview/errorComponents.ts",
+          "kind": "import-statement",
+          "original": "./errorComponents"
+        },
+        {
+          "path": "./quotaMonitor",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/session/questionModel.ts",
+          "kind": "import-statement",
+          "original": "../../session/questionModel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/streamEndHandler.ts": {
+      "bytes": 7375,
+      "imports": [
+        {
+          "path": "src/chat/webview/blocks.ts",
+          "kind": "import-statement",
+          "original": "./blocks"
+        },
+        {
+          "path": "src/chat/webview/streamHandlers.ts",
+          "kind": "import-statement",
+          "original": "./streamHandlers"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/stream.ts": {
+      "bytes": 7615,
+      "imports": [
+        {
+          "path": "./messageRenderer",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/chat/webview/streamHandlers.ts",
+          "kind": "import-statement",
+          "original": "./streamHandlers"
+        },
+        {
+          "path": "src/chat/webview/streamEndHandler.ts",
+          "kind": "import-statement",
+          "original": "./streamEndHandler"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/messageUpsert.ts": {
+      "bytes": 1048,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/tabs.ts": {
+      "bytes": 9663,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/model-dropdown.ts": {
+      "bytes": 11925,
+      "imports": [
+        {
+          "path": "src/chat/webview/icons.ts",
+          "kind": "import-statement",
+          "original": "./icons"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/tooltips.ts": {
+      "bytes": 19754,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/sendLogic.ts": {
+      "bytes": 10773,
+      "imports": [
+        {
+          "path": "src/chat/webview/tooltips.ts",
+          "kind": "import-statement",
+          "original": "./tooltips"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/model-manager.ts": {
+      "bytes": 8934,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/variant-selector.ts": {
+      "bytes": 4989,
+      "imports": [
+        {
+          "path": "src/chat/webview/icons.ts",
+          "kind": "import-statement",
+          "original": "./icons"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/mcp-config.ts": {
+      "bytes": 10399,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/theme.ts": {
+      "bytes": 6815,
+      "imports": [
+        {
+          "path": "src/chat/webview/timerRegistry.ts",
+          "kind": "import-statement",
+          "original": "./timerRegistry"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/quotaMonitor.ts": {
+      "bytes": 14503,
+      "imports": [
+        {
+          "path": "src/chat/webview/errorTypes.ts",
+          "kind": "import-statement",
+          "original": "./errorTypes"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/file-chip-list.ts": {
+      "bytes": 5070,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/changed-files-dropdown.ts": {
+      "bytes": 24348,
+      "imports": [
+        {
+          "path": "src/chat/webview/file-chip-list.ts",
+          "kind": "import-statement",
+          "original": "./file-chip-list"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/context-usage-service.ts": {
+      "bytes": 3473,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/context-usage-dropdown.ts": {
+      "bytes": 10693,
+      "imports": [
+        {
+          "path": "src/chat/webview/context-usage-service.ts",
+          "kind": "import-statement",
+          "original": "./context-usage-service"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/compact-banner.ts": {
+      "bytes": 4084,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/prompt-stash.ts": {
+      "bytes": 5647,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/recent-sessions.ts": {
+      "bytes": 6923,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/sessionListRenderer.ts": {
+      "bytes": 12636,
+      "imports": [
+        {
+          "path": "src/chat/webview/dom.ts",
+          "kind": "import-statement",
+          "original": "./dom"
+        },
+        {
+          "path": "src/chat/webview/icons.ts",
+          "kind": "import-statement",
+          "original": "./icons"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/scrollAnchor.ts": {
+      "bytes": 3356,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/messageLoader.ts": {
+      "bytes": 8563,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/virtualList.ts": {
+      "bytes": 10276,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/todos-logic.ts": {
+      "bytes": 1694,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/todos-panel.ts": {
+      "bytes": 13688,
+      "imports": [
+        {
+          "path": "src/chat/webview/todos-logic.ts",
+          "kind": "import-statement",
+          "original": "./todos-logic"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/activityModel.ts": {
+      "bytes": 12925,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/activity-panel.ts": {
+      "bytes": 10499,
+      "imports": [
+        {
+          "path": "src/chat/webview/activityModel.ts",
+          "kind": "import-statement",
+          "original": "./activityModel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/commandModel.ts": {
+      "bytes": 4671,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/tasks-panel.ts": {
+      "bytes": 10635,
+      "imports": [
+        {
+          "path": "src/chat/webview/commandModel.ts",
+          "kind": "import-statement",
+          "original": "./commandModel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/focus-trap.ts": {
+      "bytes": 1008,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/skills-modal.ts": {
+      "bytes": 7174,
+      "imports": [
+        {
+          "path": "src/chat/webview/focus-trap.ts",
+          "kind": "import-statement",
+          "original": "./focus-trap"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/subagent-panel.ts": {
+      "bytes": 7862,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/subagentDetailView.ts": {
+      "bytes": 12618,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/tokenDisplayPolicy.ts": {
+      "bytes": 1187,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/ui/messageSearch.ts": {
+      "bytes": 6395,
+      "imports": [
+        {
+          "path": "src/chat/webview/timerRegistry.ts",
+          "kind": "import-statement",
+          "original": "../timerRegistry"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/ui/toolElapsed.ts": {
+      "bytes": 1930,
+      "imports": [
+        {
+          "path": "src/chat/webview/timerRegistry.ts",
+          "kind": "import-statement",
+          "original": "../timerRegistry"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/ui/displayToggles.ts": {
+      "bytes": 2187,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/ui/themeCustomizer.ts": {
+      "bytes": 11352,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/modePolicy.ts": {
+      "bytes": 1751,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/ui/modeDropdown.ts": {
+      "bytes": 10910,
+      "imports": [
+        {
+          "path": "src/chat/modePolicy.ts",
+          "kind": "import-statement",
+          "original": "../../modePolicy"
+        },
+        {
+          "path": "src/chat/webview/tooltips.ts",
+          "kind": "import-statement",
+          "original": "../tooltips"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/ui/instructionsEditor.ts": {
+      "bytes": 3045,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/ui/sessionModal.ts": {
+      "bytes": 4261,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/ui/tokenCostDisplay.ts": {
+      "bytes": 15941,
+      "imports": [
+        {
+          "path": "src/chat/webview/tokenDisplayPolicy.ts",
+          "kind": "import-statement",
+          "original": "../tokenDisplayPolicy"
+        },
+        {
+          "path": "src/chat/webview/context-usage-service.ts",
+          "kind": "import-statement",
+          "original": "../context-usage-service"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/ui/attachments.ts": {
+      "bytes": 6323,
+      "imports": [
+        {
+          "path": "src/chat/webview/icons.ts",
+          "kind": "import-statement",
+          "original": "../icons"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/ui/welcomeView.ts": {
+      "bytes": 8388,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/sessionFocus.ts": {
+      "bytes": 4477,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/ui/settingsMenu.ts": {
+      "bytes": 2280,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/ui/fileTracking.ts": {
+      "bytes": 6831,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/ui/buttonSetup.ts": {
+      "bytes": 3786,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/ui/scrollMarkers.ts": {
+      "bytes": 3526,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/placeholderContent.ts": {
+      "bytes": 969,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/streamOrchestrator.ts": {
+      "bytes": 20294,
+      "imports": [
+        {
+          "path": "src/chat/webview/timerRegistry.ts",
+          "kind": "import-statement",
+          "original": "./timerRegistry"
+        },
+        {
+          "path": "src/chat/webview/placeholderContent.ts",
+          "kind": "import-statement",
+          "original": "./placeholderContent"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/thinkingToggle.ts": {
+      "bytes": 2409,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/timeline.ts": {
+      "bytes": 10521,
+      "imports": [
+        {
+          "path": "src/chat/webview/renderer.ts",
+          "kind": "import-statement",
+          "original": "./renderer"
+        },
+        {
+          "path": "src/chat/webview/thinkingToggle.ts",
+          "kind": "import-statement",
+          "original": "./thinkingToggle"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/queue.ts": {
+      "bytes": 6125,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/queueRenderer.ts": {
+      "bytes": 13722,
+      "imports": [
+        {
+          "path": "src/chat/webview/queue.ts",
+          "kind": "import-statement",
+          "original": "./queue"
+        },
+        {
+          "path": "src/chat/webview/icons.ts",
+          "kind": "import-statement",
+          "original": "./icons"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/inputHandlers.ts": {
+      "bytes": 7141,
+      "imports": [
+        {
+          "path": "src/chat/webview/tooltips.ts",
+          "kind": "import-statement",
+          "original": "./tooltips"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/slashCommands.ts": {
+      "bytes": 4835,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/composer.ts": {
+      "bytes": 9275,
+      "imports": [
+        {
+          "path": "src/chat/webview/queueRenderer.ts",
+          "kind": "import-statement",
+          "original": "./queueRenderer"
+        },
+        {
+          "path": "src/chat/webview/inputHandlers.ts",
+          "kind": "import-statement",
+          "original": "./inputHandlers"
+        },
+        {
+          "path": "src/chat/webview/slashCommands.ts",
+          "kind": "import-statement",
+          "original": "./slashCommands"
+        },
+        {
+          "path": "src/chat/webview/sendLogic.ts",
+          "kind": "import-statement",
+          "original": "./sendLogic"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/voiceInputCore.ts": {
+      "bytes": 6401,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/voiceInput.ts": {
+      "bytes": 13240,
+      "imports": [
+        {
+          "path": "src/chat/voiceInputCore.ts",
+          "kind": "import-statement",
+          "original": "../voiceInputCore"
+        },
+        {
+          "path": "src/chat/webview/tooltips.ts",
+          "kind": "import-statement",
+          "original": "./tooltips"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/webview/main.ts": {
+      "bytes": 129920,
+      "imports": [
+        {
+          "path": "src/chat/webview/timerRegistry.ts",
+          "kind": "import-statement",
+          "original": "./timerRegistry"
+        },
+        {
+          "path": "src/chat/webview/state.ts",
+          "kind": "import-statement",
+          "original": "./state"
+        },
+        {
+          "path": "src/chat/webview/dom.ts",
+          "kind": "import-statement",
+          "original": "./dom"
+        },
+        {
+          "path": "src/chat/webview/messageRenderer.ts",
+          "kind": "import-statement",
+          "original": "./messageRenderer"
+        },
+        {
+          "path": "./renderer",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/chat/webview/mentions.ts",
+          "kind": "import-statement",
+          "original": "./mentions"
+        },
+        {
+          "path": "src/chat/webview/commands-modal.ts",
+          "kind": "import-statement",
+          "original": "./commands-modal"
+        },
+        {
+          "path": "src/chat/webview/slash-commands.ts",
+          "kind": "import-statement",
+          "original": "./slash-commands"
+        },
+        {
+          "path": "src/chat/webview/stream.ts",
+          "kind": "import-statement",
+          "original": "./stream"
+        },
+        {
+          "path": "src/chat/webview/messageUpsert.ts",
+          "kind": "import-statement",
+          "original": "./messageUpsert"
+        },
+        {
+          "path": "src/chat/webview/tabs.ts",
+          "kind": "import-statement",
+          "original": "./tabs"
+        },
+        {
+          "path": "src/chat/webview/model-dropdown.ts",
+          "kind": "import-statement",
+          "original": "./model-dropdown"
+        },
+        {
+          "path": "src/chat/webview/streamHandlers.ts",
+          "kind": "import-statement",
+          "original": "./streamHandlers"
+        },
+        {
+          "path": "src/chat/webview/errorComponents.ts",
+          "kind": "import-statement",
+          "original": "./errorComponents"
+        },
+        {
+          "path": "src/chat/webview/renderer.ts",
+          "kind": "import-statement",
+          "original": "./renderer"
+        },
+        {
+          "path": "src/chat/webview/sendLogic.ts",
+          "kind": "import-statement",
+          "original": "./sendLogic"
+        },
+        {
+          "path": "src/chat/webview/model-manager.ts",
+          "kind": "import-statement",
+          "original": "./model-manager"
+        },
+        {
+          "path": "src/chat/webview/variant-selector.ts",
+          "kind": "import-statement",
+          "original": "./variant-selector"
+        },
+        {
+          "path": "src/chat/webview/mcp-config.ts",
+          "kind": "import-statement",
+          "original": "./mcp-config"
+        },
+        {
+          "path": "./icons",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "./queue",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/chat/webview/theme.ts",
+          "kind": "import-statement",
+          "original": "./theme"
+        },
+        {
+          "path": "src/chat/webview/quotaMonitor.ts",
+          "kind": "import-statement",
+          "original": "./quotaMonitor"
+        },
+        {
+          "path": "src/chat/webview/tooltips.ts",
+          "kind": "import-statement",
+          "original": "./tooltips"
+        },
+        {
+          "path": "src/chat/webview/changed-files-dropdown.ts",
+          "kind": "import-statement",
+          "original": "./changed-files-dropdown"
+        },
+        {
+          "path": "src/chat/webview/context-usage-dropdown.ts",
+          "kind": "import-statement",
+          "original": "./context-usage-dropdown"
+        },
+        {
+          "path": "src/chat/webview/context-usage-service.ts",
+          "kind": "import-statement",
+          "original": "./context-usage-service"
+        },
+        {
+          "path": "src/chat/webview/compact-banner.ts",
+          "kind": "import-statement",
+          "original": "./compact-banner"
+        },
+        {
+          "path": "src/chat/webview/prompt-stash.ts",
+          "kind": "import-statement",
+          "original": "./prompt-stash"
+        },
+        {
+          "path": "src/chat/webview/recent-sessions.ts",
+          "kind": "import-statement",
+          "original": "./recent-sessions"
+        },
+        {
+          "path": "src/chat/webview/sessionListRenderer.ts",
+          "kind": "import-statement",
+          "original": "./sessionListRenderer"
+        },
+        {
+          "path": "src/chat/webview/scrollAnchor.ts",
+          "kind": "import-statement",
+          "original": "./scrollAnchor"
+        },
+        {
+          "path": "src/chat/webview/messageLoader.ts",
+          "kind": "import-statement",
+          "original": "./messageLoader"
+        },
+        {
+          "path": "src/chat/webview/virtualList.ts",
+          "kind": "import-statement",
+          "original": "./virtualList"
+        },
+        {
+          "path": "src/chat/webview/todos-panel.ts",
+          "kind": "import-statement",
+          "original": "./todos-panel"
+        },
+        {
+          "path": "src/chat/webview/activity-panel.ts",
+          "kind": "import-statement",
+          "original": "./activity-panel"
+        },
+        {
+          "path": "src/chat/webview/tasks-panel.ts",
+          "kind": "import-statement",
+          "original": "./tasks-panel"
+        },
+        {
+          "path": "src/chat/webview/todos-logic.ts",
+          "kind": "import-statement",
+          "original": "./todos-logic"
+        },
+        {
+          "path": "src/chat/webview/skills-modal.ts",
+          "kind": "import-statement",
+          "original": "./skills-modal"
+        },
+        {
+          "path": "src/chat/webview/subagent-panel.ts",
+          "kind": "import-statement",
+          "original": "./subagent-panel"
+        },
+        {
+          "path": "src/chat/webview/subagentDetailView.ts",
+          "kind": "import-statement",
+          "original": "./subagentDetailView"
+        },
+        {
+          "path": "src/chat/webview/tokenDisplayPolicy.ts",
+          "kind": "import-statement",
+          "original": "./tokenDisplayPolicy"
+        },
+        {
+          "path": "src/chat/webview/displayPrefs.ts",
+          "kind": "import-statement",
+          "original": "./displayPrefs"
+        },
+        {
+          "path": "src/chat/webview/ui/messageSearch.ts",
+          "kind": "import-statement",
+          "original": "./ui/messageSearch"
+        },
+        {
+          "path": "src/chat/webview/ui/toolElapsed.ts",
+          "kind": "import-statement",
+          "original": "./ui/toolElapsed"
+        },
+        {
+          "path": "src/chat/webview/ui/displayToggles.ts",
+          "kind": "import-statement",
+          "original": "./ui/displayToggles"
+        },
+        {
+          "path": "src/chat/webview/ui/themeCustomizer.ts",
+          "kind": "import-statement",
+          "original": "./ui/themeCustomizer"
+        },
+        {
+          "path": "src/chat/webview/ui/modeDropdown.ts",
+          "kind": "import-statement",
+          "original": "./ui/modeDropdown"
+        },
+        {
+          "path": "src/chat/webview/ui/instructionsEditor.ts",
+          "kind": "import-statement",
+          "original": "./ui/instructionsEditor"
+        },
+        {
+          "path": "src/chat/webview/ui/sessionModal.ts",
+          "kind": "import-statement",
+          "original": "./ui/sessionModal"
+        },
+        {
+          "path": "src/chat/webview/ui/tokenCostDisplay.ts",
+          "kind": "import-statement",
+          "original": "./ui/tokenCostDisplay"
+        },
+        {
+          "path": "src/chat/webview/ui/attachments.ts",
+          "kind": "import-statement",
+          "original": "./ui/attachments"
+        },
+        {
+          "path": "src/chat/webview/ui/welcomeView.ts",
+          "kind": "import-statement",
+          "original": "./ui/welcomeView"
+        },
+        {
+          "path": "src/chat/webview/sessionFocus.ts",
+          "kind": "import-statement",
+          "original": "./sessionFocus"
+        },
+        {
+          "path": "src/chat/webview/ui/settingsMenu.ts",
+          "kind": "import-statement",
+          "original": "./ui/settingsMenu"
+        },
+        {
+          "path": "src/chat/webview/ui/fileTracking.ts",
+          "kind": "import-statement",
+          "original": "./ui/fileTracking"
+        },
+        {
+          "path": "src/chat/webview/ui/buttonSetup.ts",
+          "kind": "import-statement",
+          "original": "./ui/buttonSetup"
+        },
+        {
+          "path": "src/chat/webview/ui/scrollMarkers.ts",
+          "kind": "import-statement",
+          "original": "./ui/scrollMarkers"
+        },
+        {
+          "path": "src/chat/webview/streamOrchestrator.ts",
+          "kind": "import-statement",
+          "original": "./streamOrchestrator"
+        },
+        {
+          "path": "src/chat/webview/timeline.ts",
+          "kind": "import-statement",
+          "original": "./timeline"
+        },
+        {
+          "path": "src/chat/webview/composer.ts",
+          "kind": "import-statement",
+          "original": "./composer"
+        },
+        {
+          "path": "src/chat/webview/voiceInput.ts",
+          "kind": "import-statement",
+          "original": "./voiceInput"
+        },
+        {
+          "path": "src/chat/modePolicy.ts",
+          "kind": "import-statement",
+          "original": "../modePolicy"
+        }
+      ],
+      "format": "esm"
+    }
+  },
+  "outputs": {
+    "dist/chat/webview/main.js": {
+      "imports": [],
+      "exports": [],
+      "entryPoint": "src/chat/webview/main.ts",
+      "inputs": {
+        "node_modules/markdown-it-task-lists/index.js": {
+          "bytesInOutput": 1850
+        },
+        "node_modules/highlight.js/lib/core.js": {
+          "bytesInOutput": 20841
+        },
+        "src/chat/webview/timerRegistry.ts": {
+          "bytesInOutput": 564
+        },
+        "src/chat/webview/state.ts": {
+          "bytesInOutput": 8522
+        },
+        "src/chat/webview/dom.ts": {
+          "bytesInOutput": 6971
+        },
+        "node_modules/markdown-it/lib/common/utils.mjs": {
+          "bytesInOutput": 2571
+        },
+        "node_modules/mdurl/index.mjs": {
+          "bytesInOutput": 74
+        },
+        "node_modules/mdurl/lib/decode.mjs": {
+          "bytesInOutput": 1311
+        },
+        "node_modules/mdurl/lib/encode.mjs": {
+          "bytesInOutput": 828
+        },
+        "node_modules/mdurl/lib/format.mjs": {
+          "bytesInOutput": 249
+        },
+        "node_modules/mdurl/lib/parse.mjs": {
+          "bytesInOutput": 2380
+        },
+        "node_modules/uc.micro/index.mjs": {
+          "bytesInOutput": 77
+        },
+        "node_modules/uc.micro/properties/Any/regex.mjs": {
+          "bytesInOutput": 138
+        },
+        "node_modules/uc.micro/categories/Cc/regex.mjs": {
+          "bytesInOutput": 28
+        },
+        "node_modules/uc.micro/categories/Cf/regex.mjs": {
+          "bytesInOutput": 257
+        },
+        "node_modules/uc.micro/categories/P/regex.mjs": {
+          "bytesInOutput": 2035
+        },
+        "node_modules/uc.micro/categories/S/regex.mjs": {
+          "bytesInOutput": 2544
+        },
+        "node_modules/uc.micro/categories/Z/regex.mjs": {
+          "bytesInOutput": 66
+        },
+        "node_modules/entities/lib/esm/generated/decode-data-html.js": {
+          "bytesInOutput": 47190
+        },
+        "node_modules/entities/lib/esm/generated/decode-data-xml.js": {
+          "bytesInOutput": 133
+        },
+        "node_modules/entities/lib/esm/decode_codepoint.js": {
+          "bytesInOutput": 605
+        },
+        "node_modules/entities/lib/esm/decode.js": {
+          "bytesInOutput": 4995
+        },
+        "node_modules/entities/lib/esm/generated/encode-html.js": {
+          "bytesInOutput": 23424
+        },
+        "node_modules/entities/lib/esm/escape.js": {
+          "bytesInOutput": 619
+        },
+        "node_modules/entities/lib/esm/index.js": {
+          "bytesInOutput": 223
+        },
+        "node_modules/markdown-it/lib/helpers/index.mjs": {
+          "bytesInOutput": 91
+        },
+        "node_modules/markdown-it/lib/helpers/parse_link_label.mjs": {
+          "bytesInOutput": 270
+        },
+        "node_modules/markdown-it/lib/helpers/parse_link_destination.mjs": {
+          "bytesInOutput": 501
+        },
+        "node_modules/markdown-it/lib/helpers/parse_link_title.mjs": {
+          "bytesInOutput": 431
+        },
+        "node_modules/markdown-it/lib/renderer.mjs": {
+          "bytesInOutput": 2545
+        },
+        "node_modules/markdown-it/lib/ruler.mjs": {
+          "bytesInOutput": 2005
+        },
+        "node_modules/markdown-it/lib/token.mjs": {
+          "bytesInOutput": 770
+        },
+        "node_modules/markdown-it/lib/rules_core/state_core.mjs": {
+          "bytesInOutput": 117
+        },
+        "node_modules/markdown-it/lib/rules_core/normalize.mjs": {
+          "bytesInOutput": 106
+        },
+        "node_modules/markdown-it/lib/rules_core/block.mjs": {
+          "bytesInOutput": 168
+        },
+        "node_modules/markdown-it/lib/rules_core/inline.mjs": {
+          "bytesInOutput": 144
+        },
+        "node_modules/markdown-it/lib/rules_core/linkify.mjs": {
+          "bytesInOutput": 1492
+        },
+        "node_modules/markdown-it/lib/rules_core/replacements.mjs": {
+          "bytesInOutput": 1076
+        },
+        "node_modules/markdown-it/lib/rules_core/smartquotes.mjs": {
+          "bytesInOutput": 1667
+        },
+        "node_modules/markdown-it/lib/rules_core/text_join.mjs": {
+          "bytesInOutput": 348
+        },
+        "node_modules/markdown-it/lib/parser_core.mjs": {
+          "bytesInOutput": 354
+        },
+        "node_modules/markdown-it/lib/rules_block/state_block.mjs": {
+          "bytesInOutput": 2020
+        },
+        "node_modules/markdown-it/lib/rules_block/table.mjs": {
+          "bytesInOutput": 2489
+        },
+        "node_modules/markdown-it/lib/rules_block/code.mjs": {
+          "bytesInOutput": 285
+        },
+        "node_modules/markdown-it/lib/rules_block/fence.mjs": {
+          "bytesInOutput": 707
+        },
+        "node_modules/markdown-it/lib/rules_block/blockquote.mjs": {
+          "bytesInOutput": 1550
+        },
+        "node_modules/markdown-it/lib/rules_block/hr.mjs": {
+          "bytesInOutput": 394
+        },
+        "node_modules/markdown-it/lib/rules_block/list.mjs": {
+          "bytesInOutput": 2620
+        },
+        "node_modules/markdown-it/lib/rules_block/reference.mjs": {
+          "bytesInOutput": 1801
+        },
+        "node_modules/markdown-it/lib/common/html_blocks.mjs": {
+          "bytesInOutput": 489
+        },
+        "node_modules/markdown-it/lib/common/html_re.mjs": {
+          "bytesInOutput": 469
+        },
+        "node_modules/markdown-it/lib/rules_block/html_block.mjs": {
+          "bytesInOutput": 832
+        },
+        "node_modules/markdown-it/lib/rules_block/heading.mjs": {
+          "bytesInOutput": 658
+        },
+        "node_modules/markdown-it/lib/rules_block/lheading.mjs": {
+          "bytesInOutput": 866
+        },
+        "node_modules/markdown-it/lib/rules_block/paragraph.mjs": {
+          "bytesInOutput": 508
+        },
+        "node_modules/markdown-it/lib/parser_block.mjs": {
+          "bytesInOutput": 1226
+        },
+        "node_modules/markdown-it/lib/rules_inline/state_inline.mjs": {
+          "bytesInOutput": 1260
+        },
+        "node_modules/markdown-it/lib/rules_inline/text.mjs": {
+          "bytesInOutput": 385
+        },
+        "node_modules/markdown-it/lib/rules_inline/linkify.mjs": {
+          "bytesInOutput": 843
+        },
+        "node_modules/markdown-it/lib/rules_inline/newline.mjs": {
+          "bytesInOutput": 458
+        },
+        "node_modules/markdown-it/lib/rules_inline/escape.mjs": {
+          "bytesInOutput": 613
+        },
+        "node_modules/markdown-it/lib/rules_inline/backticks.mjs": {
+          "bytesInOutput": 582
+        },
+        "node_modules/markdown-it/lib/rules_inline/strikethrough.mjs": {
+          "bytesInOutput": 1116
+        },
+        "node_modules/markdown-it/lib/rules_inline/emphasis.mjs": {
+          "bytesInOutput": 1116
+        },
+        "node_modules/markdown-it/lib/rules_inline/link.mjs": {
+          "bytesInOutput": 1150
+        },
+        "node_modules/markdown-it/lib/rules_inline/image.mjs": {
+          "bytesInOutput": 1179
+        },
+        "node_modules/markdown-it/lib/rules_inline/autolink.mjs": {
+          "bytesInOutput": 1079
+        },
+        "node_modules/markdown-it/lib/rules_inline/html_inline.mjs": {
+          "bytesInOutput": 505
+        },
+        "node_modules/markdown-it/lib/rules_inline/entity.mjs": {
+          "bytesInOutput": 631
+        },
+        "node_modules/markdown-it/lib/rules_inline/balance_pairs.mjs": {
+          "bytesInOutput": 795
+        },
+        "node_modules/markdown-it/lib/rules_inline/fragments_join.mjs": {
+          "bytesInOutput": 263
+        },
+        "node_modules/markdown-it/lib/parser_inline.mjs": {
+          "bytesInOutput": 1406
+        },
+        "node_modules/linkify-it/lib/re.mjs": {
+          "bytesInOutput": 2511
+        },
+        "node_modules/linkify-it/index.mjs": {
+          "bytesInOutput": 6613
+        },
+        "node_modules/punycode.js/punycode.es6.js": {
+          "bytesInOutput": 2389
+        },
+        "node_modules/markdown-it/lib/presets/default.mjs": {
+          "bytesInOutput": 202
+        },
+        "node_modules/markdown-it/lib/presets/zero.mjs": {
+          "bytesInOutput": 324
+        },
+        "node_modules/markdown-it/lib/presets/commonmark.mjs": {
+          "bytesInOutput": 512
+        },
+        "node_modules/markdown-it/lib/index.mjs": {
+          "bytesInOutput": 2769
+        },
+        "node_modules/markdown-it/index.mjs": {
+          "bytesInOutput": 0
+        },
+        "src/chat/webview/renderer.ts": {
+          "bytesInOutput": 35322
+        },
+        "src/chat/webview/htmlUtils.ts": {
+          "bytesInOutput": 471
+        },
+        "node_modules/highlight.js/es/core.js": {
+          "bytesInOutput": 36
+        },
+        "node_modules/dompurify/dist/purify.es.mjs": {
+          "bytesInOutput": 24351
+        },
+        "node_modules/highlight.js/es/languages/javascript.js": {
+          "bytesInOutput": 6470
+        },
+        "node_modules/highlight.js/es/languages/typescript.js": {
+          "bytesInOutput": 7743
+        },
+        "node_modules/highlight.js/es/languages/python.js": {
+          "bytesInOutput": 3422
+        },
+        "node_modules/highlight.js/es/languages/rust.js": {
+          "bytesInOutput": 2855
+        },
+        "node_modules/highlight.js/es/languages/go.js": {
+          "bytesInOutput": 1383
+        },
+        "node_modules/highlight.js/es/languages/bash.js": {
+          "bytesInOutput": 3135
+        },
+        "node_modules/highlight.js/es/languages/json.js": {
+          "bytesInOutput": 392
+        },
+        "node_modules/highlight.js/es/languages/css.js": {
+          "bytesInOutput": 13188
+        },
+        "node_modules/highlight.js/es/languages/markdown.js": {
+          "bytesInOutput": 2055
+        },
+        "node_modules/highlight.js/es/languages/sql.js": {
+          "bytesInOutput": 6465
+        },
+        "node_modules/highlight.js/es/languages/diff.js": {
+          "bytesInOutput": 483
+        },
+        "node_modules/highlight.js/es/languages/java.js": {
+          "bytesInOutput": 2614
+        },
+        "node_modules/highlight.js/es/languages/cpp.js": {
+          "bytesInOutput": 5898
+        },
+        "node_modules/highlight.js/es/languages/yaml.js": {
+          "bytesInOutput": 1831
+        },
+        "node_modules/highlight.js/es/languages/xml.js": {
+          "bytesInOutput": 1878
+        },
+        "src/chat/webview/syntaxHighlighter.ts": {
+          "bytesInOutput": 2243
+        },
+        "src/chat/webview/icons.ts": {
+          "bytesInOutput": 7052
+        },
+        "src/chat/webview/toolCallRenderer.ts": {
+          "bytesInOutput": 15591
+        },
+        "src/chat/webview/displayPrefs.ts": {
+          "bytesInOutput": 54
+        },
+        "src/utils/tokenCounter.ts": {
+          "bytesInOutput": 694
+        },
+        "src/chat/webview/messageRenderer.ts": {
+          "bytesInOutput": 4125
+        },
+        "src/chat/webview/slash-commands.ts": {
+          "bytesInOutput": 1853
+        },
+        "src/chat/webview/mentions.ts": {
+          "bytesInOutput": 5302
+        },
+        "src/chat/webview/commands-modal.ts": {
+          "bytesInOutput": 6135
+        },
+        "src/chat/webview/blocks.ts": {
+          "bytesInOutput": 140
+        },
+        "src/chat/webview/renderQueue.ts": {
+          "bytesInOutput": 1354
+        },
+        "src/chat/webview/streamTail.ts": {
+          "bytesInOutput": 732
+        },
+        "src/chat/webview/liveTextRenderer.ts": {
+          "bytesInOutput": 887
+        },
+        "src/chat/webview/errorTypes.ts": {
+          "bytesInOutput": 4665
+        },
+        "src/chat/webview/opencodeErrorMapper.ts": {
+          "bytesInOutput": 4082
+        },
+        "src/chat/webview/errorHandler.ts": {
+          "bytesInOutput": 5608
+        },
+        "src/chat/webview/errorComponents.ts": {
+          "bytesInOutput": 6604
+        },
+        "src/session/questionModel.ts": {
+          "bytesInOutput": 1269
+        },
+        "src/chat/webview/streamHandlers.ts": {
+          "bytesInOutput": 16880
+        },
+        "src/chat/webview/streamEndHandler.ts": {
+          "bytesInOutput": 2472
+        },
+        "src/chat/webview/stream.ts": {
+          "bytesInOutput": 2319
+        },
+        "src/chat/webview/messageUpsert.ts": {
+          "bytesInOutput": 105
+        },
+        "src/chat/webview/tabs.ts": {
+          "bytesInOutput": 4663
+        },
+        "src/chat/webview/model-dropdown.ts": {
+          "bytesInOutput": 6276
+        },
+        "src/chat/webview/tooltips.ts": {
+          "bytesInOutput": 11069
+        },
+        "src/chat/webview/sendLogic.ts": {
+          "bytesInOutput": 4431
+        },
+        "src/chat/webview/model-manager.ts": {
+          "bytesInOutput": 4288
+        },
+        "src/chat/webview/variant-selector.ts": {
+          "bytesInOutput": 2487
+        },
+        "src/chat/webview/mcp-config.ts": {
+          "bytesInOutput": 5192
+        },
+        "src/chat/webview/theme.ts": {
+          "bytesInOutput": 1769
+        },
+        "src/chat/webview/quotaMonitor.ts": {
+          "bytesInOutput": 5479
+        },
+        "src/chat/webview/file-chip-list.ts": {
+          "bytesInOutput": 1135
+        },
+        "src/chat/webview/changed-files-dropdown.ts": {
+          "bytesInOutput": 10041
+        },
+        "src/chat/webview/context-usage-service.ts": {
+          "bytesInOutput": 1032
+        },
+        "src/chat/webview/context-usage-dropdown.ts": {
+          "bytesInOutput": 5596
+        },
+        "src/chat/webview/compact-banner.ts": {
+          "bytesInOutput": 1549
+        },
+        "src/chat/webview/prompt-stash.ts": {
+          "bytesInOutput": 2791
+        },
+        "src/chat/webview/recent-sessions.ts": {
+          "bytesInOutput": 3404
+        },
+        "src/chat/webview/sessionListRenderer.ts": {
+          "bytesInOutput": 6419
+        },
+        "src/chat/webview/scrollAnchor.ts": {
+          "bytesInOutput": 793
+        },
+        "src/chat/webview/messageLoader.ts": {
+          "bytesInOutput": 1922
+        },
+        "src/chat/webview/virtualList.ts": {
+          "bytesInOutput": 4304
+        },
+        "src/chat/webview/todos-logic.ts": {
+          "bytesInOutput": 719
+        },
+        "src/chat/webview/todos-panel.ts": {
+          "bytesInOutput": 6588
+        },
+        "src/chat/webview/activityModel.ts": {
+          "bytesInOutput": 4743
+        },
+        "src/chat/webview/activity-panel.ts": {
+          "bytesInOutput": 4846
+        },
+        "src/chat/webview/commandModel.ts": {
+          "bytesInOutput": 1853
+        },
+        "src/chat/webview/tasks-panel.ts": {
+          "bytesInOutput": 5251
+        },
+        "src/chat/webview/focus-trap.ts": {
+          "bytesInOutput": 455
+        },
+        "src/chat/webview/skills-modal.ts": {
+          "bytesInOutput": 3609
+        },
+        "src/chat/webview/subagent-panel.ts": {
+          "bytesInOutput": 3900
+        },
+        "src/chat/webview/subagentDetailView.ts": {
+          "bytesInOutput": 8123
+        },
+        "src/chat/webview/tokenDisplayPolicy.ts": {
+          "bytesInOutput": 173
+        },
+        "src/chat/webview/ui/messageSearch.ts": {
+          "bytesInOutput": 3118
+        },
+        "src/chat/webview/ui/toolElapsed.ts": {
+          "bytesInOutput": 1050
+        },
+        "src/chat/webview/ui/displayToggles.ts": {
+          "bytesInOutput": 986
+        },
+        "src/chat/webview/ui/themeCustomizer.ts": {
+          "bytesInOutput": 6525
+        },
+        "src/chat/modePolicy.ts": {
+          "bytesInOutput": 245
+        },
+        "src/chat/webview/ui/modeDropdown.ts": {
+          "bytesInOutput": 4739
+        },
+        "src/chat/webview/ui/instructionsEditor.ts": {
+          "bytesInOutput": 1517
+        },
+        "src/chat/webview/ui/sessionModal.ts": {
+          "bytesInOutput": 1999
+        },
+        "src/chat/webview/ui/tokenCostDisplay.ts": {
+          "bytesInOutput": 7620
+        },
+        "src/chat/webview/ui/attachments.ts": {
+          "bytesInOutput": 2438
+        },
+        "src/chat/webview/ui/welcomeView.ts": {
+          "bytesInOutput": 3078
+        },
+        "src/chat/webview/sessionFocus.ts": {
+          "bytesInOutput": 335
+        },
+        "src/chat/webview/ui/settingsMenu.ts": {
+          "bytesInOutput": 1017
+        },
+        "src/chat/webview/ui/fileTracking.ts": {
+          "bytesInOutput": 3853
+        },
+        "src/chat/webview/ui/buttonSetup.ts": {
+          "bytesInOutput": 2137
+        },
+        "src/chat/webview/ui/scrollMarkers.ts": {
+          "bytesInOutput": 1721
+        },
+        "src/chat/webview/placeholderContent.ts": {
+          "bytesInOutput": 223
+        },
+        "src/chat/webview/streamOrchestrator.ts": {
+          "bytesInOutput": 8042
+        },
+        "src/chat/webview/thinkingToggle.ts": {
+          "bytesInOutput": 1105
+        },
+        "src/chat/webview/timeline.ts": {
+          "bytesInOutput": 5183
+        },
+        "src/chat/webview/queue.ts": {
+          "bytesInOutput": 1781
+        },
+        "src/chat/webview/queueRenderer.ts": {
+          "bytesInOutput": 7043
+        },
+        "src/chat/webview/inputHandlers.ts": {
+          "bytesInOutput": 3437
+        },
+        "src/chat/webview/slashCommands.ts": {
+          "bytesInOutput": 2052
+        },
+        "src/chat/webview/composer.ts": {
+          "bytesInOutput": 2990
+        },
+        "src/chat/voiceInputCore.ts": {
+          "bytesInOutput": 779
+        },
+        "src/chat/webview/voiceInput.ts": {
+          "bytesInOutput": 5500
+        },
+        "src/chat/webview/main.ts": {
+          "bytesInOutput": 49339
+        }
+      },
+      "bytes": 651981
+    }
+  }
+}

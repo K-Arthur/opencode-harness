@@ -41,6 +41,8 @@ export interface ElementRefs {
   mentionBtn: HTMLElement
   commandsPaletteBtn: HTMLElement
   attachBtn: HTMLElement
+  voiceInputBtn: HTMLButtonElement
+  voiceInputStatus: HTMLElement
   modeDropdown: HTMLDivElement
   modeDropdownBtn: HTMLButtonElement
   modeDropdownMenu: HTMLDivElement
@@ -179,6 +181,16 @@ export interface ElementRefs {
   todoAddForm: HTMLFormElement
   todoAddInput: HTMLInputElement
   todosToggleBtn: HTMLElement
+  activityToggleBtn: HTMLElement
+  activityPanel: HTMLElement
+  activityClose: HTMLElement
+  activityFilters: HTMLElement
+  activityList: HTMLElement
+  tasksToggleBtn: HTMLElement
+  tasksPanel: HTMLElement
+  tasksClose: HTMLElement
+  tasksFilters: HTMLElement
+  tasksList: HTMLElement
   skillsBtn: HTMLElement
   skillsModal: HTMLElement
   skillsModalCloseBtn: HTMLElement
@@ -195,6 +207,10 @@ export interface ElementRefs {
   subagentPanel: HTMLElement
   closeSubagentBtn: HTMLElement
   subagentList: HTMLElement
+  subagentDetailView: HTMLElement
+  subagentDetailBackBtn: HTMLElement
+  subagentDetailCloseBtn: HTMLElement
+  subagentDetailContent: HTMLElement
 }
 
 export function getElementRefs(): ElementRefs {
@@ -214,6 +230,8 @@ export function getElementRefs(): ElementRefs {
     mentionBtn: requireElement("mention-btn"),
     commandsPaletteBtn: requireElement("commands-palette-btn"),
     attachBtn: requireElement("attach-btn"),
+    voiceInputBtn: requireElement<HTMLButtonElement>("voice-input-btn"),
+    voiceInputStatus: requireElement("voice-input-status"),
     modeDropdown: requireElement<HTMLDivElement>("mode-dropdown"),
     modeDropdownBtn: requireElement<HTMLButtonElement>("mode-dropdown-btn"),
     modeDropdownMenu: requireElement<HTMLDivElement>("mode-dropdown-menu"),
@@ -351,6 +369,16 @@ export function getElementRefs(): ElementRefs {
     todoAddForm: requireElement<HTMLFormElement>("todo-add-form"),
     todoAddInput: requireElement<HTMLInputElement>("todo-add-input"),
     todosToggleBtn: requireElement("todos-toggle-btn"),
+    activityToggleBtn: requireElement("activity-toggle-btn"),
+    activityPanel: requireElement("activity-panel"),
+    activityClose: requireElement("activity-close-btn"),
+    activityFilters: requireElement("activity-filters"),
+    activityList: requireElement("activity-list"),
+    tasksToggleBtn: requireElement("tasks-toggle-btn"),
+    tasksPanel: requireElement("tasks-panel"),
+    tasksClose: requireElement("tasks-close-btn"),
+    tasksFilters: requireElement("tasks-filters"),
+    tasksList: requireElement("tasks-list"),
     skillsBtn: requireElement("skills-btn"),
     skillsModal: requireElement("skills-modal"),
     skillsModalCloseBtn: requireElement("skills-modal-close-btn"),
@@ -360,6 +388,10 @@ export function getElementRefs(): ElementRefs {
     subagentPanel: requireElement("subagent-panel"),
     closeSubagentBtn: requireElement("close-subagent-btn"),
     subagentList: requireElement("subagent-list"),
+    subagentDetailView: requireElement("subagent-detail-view"),
+    subagentDetailBackBtn: requireElement("subagent-detail-back-btn"),
+    subagentDetailCloseBtn: requireElement("subagent-detail-close-btn"),
+    subagentDetailContent: requireElement("subagent-detail-content"),
     // Commands modal: optional lookup so older HTML bundles still load.
     commandsModal: document.getElementById("commands-modal"),
     commandsModalCloseBtn: document.getElementById("commands-modal-close-btn"),

@@ -46,6 +46,34 @@ The welcome-page prompt path is covered as a first-class contract:
 The context-chip renderer must never throw from a partial element-ref object. If chip
 containers are unavailable, it logs and skips chip rendering so prompt submission can continue.
 
+## Voice Input Contract
+
+Voice input is a prompt-composer feature. It inserts text into `#prompt-input`
+and never posts `send_prompt` on its own.
+
+Webview → host:
+
+- `get_stt_settings`: requests the current voice-input settings. The host answers
+  with `stt_settings`.
+- `stt_transcribe_audio`: `{ type, requestId, mimeType, data, sizeBytes?, durationMs? }`.
+  This message is sent only for the OpenAI provider after an explicit recording
+  gesture and stop action. `data` is base64 audio, bounded by
+  `opencode.voiceInput.maxUploadBytes`.
+
+Host → webview:
+
+- `stt_settings`: `{ type, settings }`, where `settings` includes `enabled`,
+  `provider`, `maxDurationSeconds`, `maxUploadBytes`, `openaiModel`, and
+  `hasOpenAiApiKey`. The API key value is never sent to the webview.
+- `stt_transcript`: `{ type, requestId, text }`. The webview inserts the transcript
+  only if `requestId` matches the current pending request, then clears the request.
+- `stt_error`: `{ type, requestId?, reason, message }`. The webview ignores stale
+  request-scoped errors and surfaces current errors in the input-area live region.
+
+The host validator rejects missing request IDs, unsupported audio MIME types,
+invalid base64, and oversized payloads before decoding. Browser speech recognition
+does not use `stt_transcribe_audio`.
+
 ## Plan Mode Rendering
 
 Plan-mode visual treatment is role-aware:
@@ -135,6 +163,35 @@ The host-to-webview `command_list` payload is partitioned before it reaches the 
 These replace the previous behavior where these messages were logged as "unknown host
 message type" and silently dropped.
 
+#### Focus ownership (the webview decides which tab is visible)
+
+The host's `sessionStore.activeId` is only a **hint**; the webview owns which tab is
+visible. Two host channels broadcast the active id, and both are now reconciled through
+pure helpers (`src/chat/webview/sessionFocus.ts`) so a background change never steals focus
+from the tab the user is reading:
+
+- `active_session_changed`: fired on *every* host-side `setActive` (server-side session-id
+  promotion, cleanup, command-palette open). The webview follows it only when doing so is
+  safe — when the welcome view is showing, when the current tab no longer exists, or when
+  it targets the tab already in focus. It will **not** switch onto a session that is
+  mid-stream while the user is viewing a different, valid tab. User-intended opens of a
+  session still switch explicitly through `resume_session_data`.
+- `init_state` is re-sent on **every** visibility change, not just first load. First
+  hydration honours the host's restored `activeSessionId`; every later refresh
+  **preserves the user's current tab** (or keeps them on the welcome screen) rather than
+  snapping back to the host's active id. The host also only re-includes its active session
+  in the restorable set on a refresh if that session still has an open tab
+  (`src/chat/restorablePolicy.ts`), so a tab the user closed is never resurrected.
+
+#### Welcome-screen mode selection
+
+The mode selector lives in the input area, which is visible on the welcome screen where no
+session is active. Choosing a mode (click, `Ctrl/Cmd+Alt+1/2/3`, or `Alt+Shift+Tab`) with no
+active session updates a persisted **pending mode** (`state.pendingMode`) and the selector
+UI instead of dropping the request. The next session created (`createSession`, new tab,
+or first prompt) adopts that mode, which then travels to the host via `send_prompt.mode` /
+`create_tab.mode`.
+
 ### Context And Token Usage
 
 Context-window fill and API token spend are separate concepts:
@@ -179,6 +236,12 @@ JSON or `[object Object]` output.
   break the prompt send path.
 - The conversation timeline is a right-side `conversation-timeline` aside toggled from the
   header button. It reserves message-list padding only while visible.
+- The Activity panel (`#activity-panel`) and Tasks panel (`#tasks-panel`) are separate
+  transcript read-models wired from real `ElementRefs`. Their filters are stored per session
+  (`activityFilter`, `commandFilter`) and refresh only for the active session.
+- Tasks panel terminal actions post `open_terminal`: `{ type, command, cwd?, autorun? }`.
+  The host validates the command, opens a VS Code terminal at `cwd` when provided, and sends
+  the command with `autorun` controlling whether Enter is submitted.
 
 ## Changed Files
 
@@ -205,8 +268,12 @@ Changed-file state is synchronized from the extension host:
 
 ## Session Deletion & Empty Sessions
 
-- Local session delete/archive messages use `targetSessionId`, matching
+- Local session delete/archive/pin/tag messages use `targetSessionId`, matching
   `WebviewEventRouter` validation and the unified session modal contract.
+- Session pinning posts `{ type: "pin_session", targetSessionId, pinned }`; tag edits post
+  `{ type: "set_session_tags", targetSessionId, tags }`. Both are extension-local metadata
+  persisted by `SessionStore` and surfaced back through `session_list` /
+  `session_list_update`.
 - Empty local placeholder sessions (`pendingServerLink`) are transient. They are not persisted
   or restored until a user message exists, and closing an empty placeholder deletes it.
 - Empty server-imported sessions waiting for history (`needsBackfill`) remain exempt while the
@@ -262,7 +329,7 @@ extension has already restored local state. Six fixes address this:
 
 ## Question Tool Block
 
-The `question` tool lets the model ask the user one or more multiple-choice or free-text questions inline. It displays as an interactive block within the assistant message bubble.
+The `question` tool lets the model ask the user one or more multiple-choice or free-text questions. The question block in the assistant transcript renders as a **non-interactive record** (pending chip or answered echo). Interactive option selection and answer submission is handled by the input-area `#question-bar` (`questionBar.ts`).
 
 ### Input schema (defensive)
 
@@ -275,60 +342,112 @@ The tool's `args` are normalized by the pure parser `parseQuestionArgs` (`src/ch
 
 ### Rendering
 
-The block is **interactive as soon as it appears**, including mid-stream. `postMessage` is threaded through the streaming handler chain (`StreamCallbacks.postMessage` → `handleToolStart`/`refreshQuestionBlock` → `renderBlock`'s `RenderOptions`), so option clicks and textarea submits work without waiting for `stream_end`. This matters because a pending question can block `stream_end` entirely.
+The question block renders in one of two visual states:
 
-1. **Streaming phase** — `stream_tool_start` with `name: "question"` builds a `QuestionBlock` (via `parseQuestionArgs`) and renders it immediately. The `.question-block` wrapper carries `data-block-id` (the tool-call id) so it can be refreshed in place.
-2. **Live refresh** — when the tool input finishes streaming, `stream_tool_update` (or a duplicate `stream_tool_start`) routes through `refreshQuestionBlock`, which re-parses the args, updates the persisted block, and re-renders the `.question-block` DOM in place — filling in the question text and options that were empty at start.
-3. **Re-render phase** — `stream_end` carries the persisted `question` block (from the host `blocksBuffer`); `mergeServerBlocks` merges it with the live block (preferring non-empty `groups` so a late/empty copy can't wipe the displayed question), then `reRenderMessage` rebuilds the bubble.
+1. **Pending** (`.question-block--pending`): Shows the question text and a subtle `"Answer in input bar"` chip. The user answers via the `#question-bar` in the input area, not by interacting with the block itself.
+2. **Answered** (`.question-block--answered`): Shows the question text, a `"Your answer:"` or `"Selected:"` label, and the user's answer text. The block is rendered at reduced opacity (0.7) and decorated with a green left border to distinguish it visually. The `answer`/`answerSource` fields come from the persisted `QuestionBlock` type.
 
-#### Single vs. multiple questions
+Both states use the same `.question-block` wrapper with `aria-label="Question from model"`. The wrapper carries `data-block-id` (the tool-call id) so it can be refreshed in place. Neither state includes interactive controls (buttons, textareas, submit) — those live exclusively in the question bar (`questionBar.ts`).
 
-- **One single-select group** → "simple mode": clicking an option submits immediately; a textarea + Submit appear when `allowFreeText` is set.
-- **Multiple groups and/or any `multiSelect` group** → "multi mode": each group renders its own `.question-group` (with optional `.question-group-header`) and `.question-option` toggles; a single Submit aggregates one line per group (`"<header|question>: choice[, choice]"`, newline-separated), with any free-text appended.
+#### Live refresh
+
+When the tool input finishes streaming, `stream_tool_update` (or a duplicate `stream_tool_start`) routes through `refreshQuestionBlock`, which re-parses the args, updates the persisted block, and re-renders the `.question-block` DOM in place — filling in the question text that was empty at start.
+
+`stream_end` carries the persisted `question` block (from the host `blocksBuffer`); `mergeServerBlocks` merges it with the live block (preferring non-empty `groups` so a late/empty copy can't wipe the displayed question), then `reRenderMessage` rebuilds the bubble.
 
 ### Host-to-Webview Messages
 
 - `stream_tool_start`: `{ type: "stream_tool_start", sessionId, toolCall: { id, name: "question", class: "meta", state: "running", args } }` — renders the question block during streaming. `args` may be flat or nested (see Input schema); it is often empty at start and filled by a later update.
 - `stream_tool_update`: `{ type: "stream_tool_update", sessionId, toolCall: { id, args } }` — refreshes the question block in place as the input streams in.
-- `stream_end`: `{ type: "stream_end", sessionId, messageId, blocks: Array<{ type: "question", id, toolCallId, sessionId, groups, text, options, allowFreeText }> }` — finalizes the question. `groups` is authoritative; `text`/`options` are the derived single-group view kept for backward compatibility.
+- `stream_end`: `{ type: "stream_end", sessionId, messageId, blocks: Array<{ type: "question", id, toolCallId, sessionId, groups, text, options, allowFreeText, answered?, answer?, answerSource? }> }` — finalizes the question. `groups` is authoritative; `text`/`options` are the derived single-group view kept for backward compatibility. The `answered`, `answer`, and `answerSource` fields are set from the persisted server state when the question has already been answered.
 
 ### Webview-to-Host Messages
 
-- `question_answer`: `{ type: "question_answer", sessionId: string, value: string, source: "option" | "freetext", toolCallId: string }` — posted when the user clicks an option or submits the textarea. The `source` field distinguishes pre-defined options from free-text input.
+- `question_answer`: `{ type: "question_answer", sessionId: string, value: string, source: "option" | "freetext", toolCallId: string, messageId?: string }` — posted by the question bar when the user submits selections or free-text input. The `source` field distinguishes pre-defined options from free-text input. `messageId` is included for server-side correlation.
 
 ### toolCallId Contract
 
 The `toolCallId` (the tool call's `id` from `stream_tool_start`) flows through three layers:
 
-1. **Question block** — stored on the `QuestionBlock` interface and included in the `stream_end` blocks payload.
+1. **Question block** — stored on the `QuestionBlock` interface (`toolCallId` field) and included in the `stream_end` blocks payload.
 2. **User message metadata** — `WebviewEventRouter` copies `toolCallId` into the user message block's metadata for downstream correlation.
-3. **StreamCallbacks** — `StreamCoordinator.startPrompt` receives `toolCallId` via the `StreamCallbacks` interface and logs it for observability.
+3. **Question bar** — `questionBar.ts` uses `toolCallId` as the key to track `QuestionBarItem` state and includes it in `question_answer` for server-side correlation.
 
 ### Accessibility
 
-The question block implements these ARIA attributes:
-- Outer wrapper: `role="form"`, `aria-label="Question from model"`
-- Options container: `role="group"`, `aria-label="Answer options"` (or `"Options: <header>"` per group)
-- Option toggles (multi mode): `aria-pressed` reflects selection state
-- Textarea: `aria-label="Type a custom answer"`, `maxlength="10000"`
+The non-interactive question block implements these ARIA attributes:
+- Outer wrapper: `aria-label="Question from model"`
+- Answered record: the answer text is rendered as plain text in `.q-answer-text`
 
-After the user answers, all inputs are disabled (buttons get `disabled`, textarea gets `readonly` + `disabled`) to prevent double-submits.
+The question bar (interactive) implements separate ARIA attributes documented under the Question Bar section below.
 
 ### Edge Cases
 
-- **Double-click**: Option clicks use `dispatchEvent` (not `click()`) so the second click is rejected by the `disabled` guard before the DOM toggle propagates.
 - **XSS**: Question text and options are escaped via `textContent` assignment scoped to `.question-block` — HTML injection is blocked.
-- **Empty submit**: Textarea submit with empty/whitespace-only input is silently dropped.
-- **Options-only mode**: When `allowFreeText: false`, the textarea is not rendered; only option buttons are shown.
-- **Free-text-only mode**: When `options` is empty, only the textarea and submit button are rendered.
+- **Empty question text**: When `groups[0].question` is empty, the `question-text` div renders as blank (still present but empty).
+- **Late-arriving question text**: The live refresh path handles empty-at-start question blocks where text streams in after the block first renders.
+- **Answered state persistence**: When the server sends back a `question` block with `answered: true`, the block renders as an answered record with the answer text and source label, even if the question bar entry has already been cleared.
+
+### Question Bar (`questionBar.ts`)
+
+The `#question-bar` sits in the input area and provides the interactive UI for answering pending questions. It is managed by `questionBar.ts`.
+
+#### Initialization
+
+`initQuestionBar(postMessage)` is called once during webview boot. It locates the `#question-bar`, `#question-bar-items`, `#question-bar-count`, and `#question-bar-submit` DOM elements and wires the submit button click handler.
+
+#### Question Lifecycle
+
+1. **Adding**: `stream_tool_start` for a `question` tool triggers `addQuestion(block, messageId)`, which creates a `QuestionBarItem` with parsed groups, an empty selections map (`Map<number, Set<string>>`), and `answered: false`. It calls `renderBarItem()` to append the question UI and updates visibility.
+2. **Updating**: `updateQuestion(toolCallId, block)` replaces the item's groups and `allowFreeText` flag, re-renders the bar item in place, and refreshes submit state.
+3. **Removing**: `removeQuestion(toolCallId)` deletes the item and removes its DOM element (called when the question is no longer relevant, e.g. stream cancelled).
+4. **Marking answered**: `markQuestionAnswered(toolCallId)` adds an `"Answered"` badge to the bar item, adds the `.question-bar-item--answered` class, and disables all interaction.
+5. **Clearing**: `clearAllQuestions()` removes all items and hides the bar.
+
+#### Rendering
+
+Each `QuestionBarItem` renders as a `.question-bar-item` with:
+- **Section header**: The group's `header` text, if present.
+- **Question text**: The group's `question` text.
+- **Option buttons**: One `.question-bar-option` button per option. Single-select groups use exclusive selection (clicking one deselects others). `multiSelect` groups allow toggling multiple options.
+- **Free-text textarea**: A `.question-bar-freetext` textarea with `maxlength="10000"` and placeholder `"Type a custom answer…"`.
+- **Answered badge**: When `item.answered`, a green `"Answered"` badge is appended and all inputs are disabled.
+
+#### Querying State
+
+- `hasActiveQuestions()`: Returns `true` if any item is unanswered.
+- `getActiveQuestionCount()`: Returns the number of unanswered items. When > 1, the bar displays a count label (e.g. `"3 questions"`).
+- `clearAllQuestions()` called from `stream_end` or tab switch resets the bar.
+
+#### Submit Flow
+
+The submit button (`#question-bar-submit`) posts a `question_answer` message to the host for each unanswered item, aggregating group selections (formatted as `"<header|question>: choice[, choice]"`, newline-separated) and free-text into a single `value` string. After submission, each item is marked answered and after 1500ms — if all items are answered — the bar is automatically cleared.
+
+#### Accessibility
+
+The question bar uses these ARIA attributes:
+- Bar container: `role="region"`, `aria-label="Question from model"`
+- Options groups: `role="group"`, `aria-label="Answer options"` (or `"Options: <header>"` per group)
+- Option buttons: `aria-pressed` reflects selection state
+- Free-text textarea: `aria-label="Custom answer"`, `maxlength="10000"`
+- Submit button: disabled when no selections or text have been made
+
+#### Edge Cases
+
+- **Double-click**: Option click handlers check `item.answered` before processing, so a second click after submission is rejected.
+- **Empty submit**: The submit loop skips items with no selections and no free-text; the submit button is disabled when nothing can be submitted.
+- **Multi-question aggregation**: When multiple groups exist, the bar aggregates one selection line per group. If a group has `multiSelect`, chosen options are comma-separated within that line.
+- **Stream-end cleanup**: When `stream_end` arrives, the streaming handler calls `clearAllQuestions()` to reset the bar for the next turn.
 
 ## Tests
 
 The relevant coverage lives in:
 
 - `tests/webview/question-block-e2e.spec.ts` for E2E tests covering static render, edge cases, accessibility, streaming phase, and message contract.
+- `src/chat/webview/questionBar.test.ts` for question bar unit tests (show/hide, option rendering, submit aggregation, multi-question state, clear on stream-end).
 - `src/chat/webview/questionModel.test.ts` for the pure `parseQuestionArgs` normalizer (flat + nested shapes, option-label extraction, empty/partial input).
 - `src/chat/webview/question-block.test.ts` for unit tests covering messageId correlation, empty fallback, maxlength, aria-labels, multi-group rendering, and multi-select submit aggregation.
+- `src/chat/webview/question-merge.test.ts` for `stream_end` merge survival — ensures the question block is not clobbered into a tool card and late/empty server copies do not wipe displayed groups.
 - `src/chat/webview/question-refresh.test.ts` for the live in-place refresh (empty start → args arrive → text/options appear and stay interactive).
 - `src/chat/WebviewEventRouter.questionAnswer.test.ts` for 11 integration tests covering routing, validation, double-submit guard, toolCallId forwarding, error handling, and observability.
 - `src/chat/webview/stream.test.ts` for late chunk recovery and tool-call finalization.

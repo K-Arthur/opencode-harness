@@ -3,6 +3,7 @@ import type { ElementRefs } from "./dom"
 import { timers } from "./timerRegistry"
 
 const warnTheme = (...args: unknown[]) => console.warn("[opencode-harness]", ...args)
+const appliedThemeVarKeys = new Set<string>()
 
 export function updateContextChips(els: ElementRefs, chips?: ContextChip[]) {
   if (!els.contextBar || !els.contextChips) {
@@ -108,6 +109,7 @@ export function updateContextUsage(contextMonitorEl: HTMLElement, usage?: { perc
 export function applyThemeVars(vars?: Record<string, string>) {
   if (!vars || typeof vars !== "object") return
   const root = document.documentElement
+  const nextKeys = new Set<string>()
   for (const [key, val] of Object.entries(vars)) {
     if (typeof val !== "string") continue
     // Only allow valid CSS custom properties (must start with --)
@@ -120,8 +122,14 @@ export function applyThemeVars(vars?: Record<string, string>) {
       warnTheme("[OpenCode] Blocked unsafe CSS value for:", key)
       continue
     }
+    nextKeys.add(key)
     root.style.setProperty(key, val)
   }
+  for (const key of appliedThemeVarKeys) {
+    if (!nextKeys.has(key)) root.style.removeProperty(key)
+  }
+  appliedThemeVarKeys.clear()
+  for (const key of nextKeys) appliedThemeVarKeys.add(key)
 }
 
 export function updateModelIndicator(model?: string) {

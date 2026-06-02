@@ -47,7 +47,7 @@ export interface StreamOrchestratorAPI {
   handleStreamEnd: (sessionId: string, messageId?: string, blocks?: unknown, reason?: string, partial?: boolean) => void
   handleServerStatus: (sessionId: string, status?: string, errorContext?: unknown) => void
   handleRequestError: (sessionId: string | undefined, message?: string, errorContext?: unknown) => void
-  handleDiffResult: (blockId?: string, ok?: boolean, message?: string, checkpointCreated?: boolean) => void
+  handleDiffResult: (sessionId?: string, blockId?: string, ok?: boolean, message?: string, checkpointCreated?: boolean) => void
   handleHostMessage: (msg: ChatMessage) => void
   handleCostUpdate: (sessionId: string, cost: number) => void
   sendQueuedPrompt: (sessionId: string, text: string, attachments?: Array<{ data: string; mimeType: string }>) => void
@@ -287,7 +287,12 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
   function processQueueIfReady(sessionId: string, reason?: string) {
     if (reason === "aborted") return
     const queue = promptQueues.get(sessionId)
-    if (queue && queue.isNextReady()) {
+    if (!queue) return
+
+    // Mark any stuck "sending" items as "queued" so they can be retried
+    queue.markStuckSendingAsQueued()
+
+    if (queue.isNextReady()) {
       const next = queue.processNext()
       if (next) {
         persistQueues()
@@ -356,15 +361,25 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
       processQueueIfReady(sessionId, reason)
     } catch (err) {
       vscode.postMessage({ type: "webview_log", level: "error", message: `handleStreamEnd error: ${err instanceof Error ? err.message : String(err)}` })
-      try { setStreaming(sessionId, false) } catch {}
-      try { updateTabBar() } catch {}
-      try { updateModeSelectorStateLocal() } catch {}
-      try { updateAgentStatus("idle") } catch {}
+      try { setStreaming(sessionId, false) } catch (e) {
+        vscode.postMessage({ type: "webview_log", level: "warn", message: `setStreaming recovery failed: ${e instanceof Error ? e.message : e}` })
+      }
+      try { updateTabBar() } catch (e) {
+        vscode.postMessage({ type: "webview_log", level: "warn", message: `updateTabBar recovery failed: ${e instanceof Error ? e.message : e}` })
+      }
+      try { updateModeSelectorStateLocal() } catch (e) {
+        vscode.postMessage({ type: "webview_log", level: "warn", message: `updateModeSelector recovery failed: ${e instanceof Error ? e.message : e}` })
+      }
+      try { updateAgentStatus("idle") } catch (e) {
+        vscode.postMessage({ type: "webview_log", level: "warn", message: `updateAgentStatus recovery failed: ${e instanceof Error ? e.message : e}` })
+      }
       const msg = reason === "ttfb_timeout" ? "Model took too long. Try a different model."
         : reason === "timeout" ? "Response timed out."
         : reason === "error" ? "An error occurred."
         : "Unexpected error."
-      try { showSystemMessage(sessionId, msg) } catch {}
+      try { showSystemMessage(sessionId, msg) } catch (e) {
+        vscode.postMessage({ type: "webview_log", level: "warn", message: `showSystemMessage recovery failed: ${e instanceof Error ? e.message : e}` })
+      }
     }
   }
 
@@ -439,9 +454,15 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     }
   }
 
-  function handleDiffResult(blockId?: string, ok?: boolean, message?: string, checkpointCreated?: boolean) {
-    for (const [sid, stream] of streamHandlers) {
-      stream.handleDiffResult(blockId, ok, message)
+  function handleDiffResult(sessionId: string | undefined, blockId?: string, ok?: boolean, message?: string, checkpointCreated?: boolean) {
+    if (sessionId) {
+      const stream = streamHandlers.get(sessionId)
+      if (stream) stream.handleDiffResult(blockId, ok, message)
+    } else {
+      // Fallback: broadcast to all sessions only when sessionId is unknown
+      for (const [, stream] of streamHandlers) {
+        stream.handleDiffResult(blockId, ok, message)
+      }
     }
     if (ok && checkpointCreated) {
       const activeId = getState().activeSessionId

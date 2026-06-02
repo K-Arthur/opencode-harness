@@ -20,6 +20,9 @@
 @import url("./welcome.css")             layer(components);
 @import url("./queue-panel.css")         layer(components);
 @import url("./context-usage.css")       layer(components);
+@import url("./activity.css")            layer(components);
+@import url("./tasks.css")               layer(components);
+@import url("./voice-input.css")         layer(components);
 @import url("./blocks.css")              layer(blocks);
 @import url("./animations.css")          layer(animations);
 @import url("./accessibility.css")       layer(accessibility);

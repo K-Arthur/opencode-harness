@@ -26,7 +26,7 @@ void describe("subagent-panel", () => {
 
     const api = setupSubagentPanel(
       { subagentPanel: container, subagentList: list, closeSubagentBtn: closeBtn },
-      { onCancelSubagent: () => {} },
+      { onOpenDetail: () => {}, onCancelSubagent: () => {} },
     )
 
     assert.ok(api, "api must be returned")
@@ -51,7 +51,7 @@ void describe("subagent-panel", () => {
 
     const api = setupSubagentPanel(
       { subagentPanel: container, subagentList: list, closeSubagentBtn: closeBtn },
-      { onCancelSubagent: () => {} },
+      { onOpenDetail: () => {}, onCancelSubagent: () => {} },
     )!
 
     assert.ok(container.classList.contains("hidden"))
@@ -76,7 +76,7 @@ void describe("subagent-panel", () => {
 
     const api = setupSubagentPanel(
       { subagentPanel: container, subagentList: list, closeSubagentBtn: closeBtn },
-      { onCancelSubagent: () => {} },
+      { onOpenDetail: () => {}, onCancelSubagent: () => {} },
     )!
 
     api.renderActivities([
@@ -103,7 +103,7 @@ void describe("subagent-panel", () => {
 
     const api = setupSubagentPanel(
       { subagentPanel: container, subagentList: list, closeSubagentBtn: closeBtn },
-      { onCancelSubagent: () => {} },
+      { onOpenDetail: () => {}, onCancelSubagent: () => {} },
     )!
 
     api.renderActivities([])
@@ -126,7 +126,7 @@ void describe("subagent-panel", () => {
     let cancelledId = ""
     const api = setupSubagentPanel(
       { subagentPanel: container, subagentList: list, closeSubagentBtn: closeBtn },
-      { onCancelSubagent: (id: string) => { cancelledId = id } },
+      { onOpenDetail: () => {}, onCancelSubagent: (id: string) => { cancelledId = id } },
     )!
 
     api.renderActivities([

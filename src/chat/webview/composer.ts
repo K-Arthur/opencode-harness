@@ -98,6 +98,8 @@ export interface ComposerAPI {
   runCommandEntry: (entry: CommandEntry) => void
   insertIntoPrompt: (text: string) => void
   setSteerMode: (mode: "interrupt" | "append" | "queue") => void
+  syncSteerModeUI: () => void
+  getSteerMode: () => "interrupt" | "append" | "queue"
   onInputChange: () => void
   onInputKeydown: (e: KeyboardEvent) => void
   onPaste: (e: ClipboardEvent) => void
@@ -259,6 +261,8 @@ export function createComposer(deps: ComposerDeps): ComposerAPI {
     runCommandEntry,
     insertIntoPrompt,
     setSteerMode: sendLogic.setSteerMode,
+    syncSteerModeUI: sendLogic.syncSteerModeUI,
+    getSteerMode: sendLogic.getSteerMode,
     onInputChange,
     onInputKeydown,
     onPaste,

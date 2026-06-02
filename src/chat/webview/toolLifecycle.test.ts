@@ -75,6 +75,42 @@ describe("handleStreamError — tool finalization", () => {
 })
 
 // ---------------------------------------------------------------------------
+// C4: handleStreamError carries actionButtons from ErrorContext
+// ---------------------------------------------------------------------------
+
+describe("handleStreamError — actionButtons passthrough", () => {
+  it("passes suggestedActions from errorContext to createErrorBlock as actionButtons", () => {
+    const source = readFileSync(path.join(__dirname, "streamHandlers.ts"), "utf8")
+    const fnStart = source.indexOf("export function handleStreamError(")
+    const fnEnd = source.indexOf("}\n\nexport function handleRequestError(", fnStart)
+    const fnBody = source.slice(fnStart, fnEnd)
+
+    assert.ok(fnBody.includes("errorContext.suggestedActions"), "must read suggestedActions from errorContext")
+    assert.ok(fnBody.includes(".map(a => ("), "must map ErrorAction to ErrorActionButton shape")
+    assert.ok(fnBody.includes("actionButtons:"), "must pass actionButtons to createErrorBlock")
+  })
+
+  it("includes technicalDetails from errorContext in createErrorBlock detail field", () => {
+    const source = readFileSync(path.join(__dirname, "streamHandlers.ts"), "utf8")
+    const fnStart = source.indexOf("export function handleStreamError(")
+    const fnEnd = source.indexOf("}\n\nexport function handleRequestError(", fnStart)
+    const fnBody = source.slice(fnStart, fnEnd)
+
+    assert.ok(fnBody.includes("errorContext.technicalDetails"), "must read technicalDetails from errorContext")
+    assert.ok(fnBody.includes("createErrorBlock("), "technicalDetails must be passed to createErrorBlock")
+  })
+
+  it("passes errorContext.retryable to createErrorBlock", () => {
+    const source = readFileSync(path.join(__dirname, "streamHandlers.ts"), "utf8")
+    const fnStart = source.indexOf("export function handleStreamError(")
+    const fnEnd = source.indexOf("}\n\nexport function handleRequestError(", fnStart)
+    const fnBody = source.slice(fnStart, fnEnd)
+
+    assert.ok(fnBody.includes("errorContext.retryable"), "must pass retryable through from errorContext")
+  })
+})
+
+// ---------------------------------------------------------------------------
 // M5: handleToolEnd prevents duplicate duration spans
 // ---------------------------------------------------------------------------
 
