@@ -36,6 +36,34 @@ import { normalizeTodoList } from "../session/eventHandlers/TodoUpdatedHandler"
 
 const crypto = globalThis.crypto
 
+type ChildSessionLike = {
+  id?: unknown
+  parentID?: unknown
+  title?: unknown
+  summary?: unknown
+  time?: unknown
+}
+
+function asNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined
+}
+
+function findAuthorizedSubagentChild(
+  children: unknown[],
+  parentSessionId: string,
+  subagentId: string,
+): ChildSessionLike | undefined {
+  for (const raw of children) {
+    if (!raw || typeof raw !== "object") continue
+    const child = raw as ChildSessionLike
+    if (asNonEmptyString(child.id) !== subagentId) continue
+    const childParentId = asNonEmptyString(child.parentID)
+    if (childParentId && childParentId !== parentSessionId) continue
+    return child
+  }
+  return undefined
+}
+
 export interface WebviewEventRouterOptions {
   tabManager: TabManager
   statePush: StatePushService
@@ -1135,8 +1163,11 @@ export class WebviewEventRouter {
       try {
         const children = await this.opts.sessionManager.sessionClient.getChildSessions(cliSessionId)
         const activities: unknown[] = []
-        for (const child of children) {
-          const childSid = typeof child.id === "string" ? child.id : child.id
+        for (const rawChild of children) {
+          if (!rawChild || typeof rawChild !== "object") continue
+          const child = rawChild as ChildSessionLike
+          const childSid = asNonEmptyString(child.id)
+          if (!childSid) continue
           const time = child.time as { created?: number; updated?: number } | undefined
           const title = typeof child.title === "string" ? child.title : ""
           const summary = child.summary as { additions?: number; deletions?: number; files?: number } | undefined
@@ -1166,7 +1197,21 @@ export class WebviewEventRouter {
     ["get_subagent_detail", async (msg: Record<string, unknown>, sessionId?: string) => {
       const subagentId = msg.subagentId as string | undefined
       if (!sessionId || !subagentId) return
+      const cliSessionId = this.opts.tabManager.getTab(sessionId)?.cliSessionId
+      if (!cliSessionId) return
       try {
+        const children = await this.opts.sessionManager.sessionClient.getChildSessions(cliSessionId)
+        const authorizedChild = findAuthorizedSubagentChild(children, cliSessionId, subagentId)
+        if (!authorizedChild) {
+          this.opts.postMessage({
+            type: "webview_request_error",
+            requestType: "get_subagent_detail",
+            sessionId,
+            error: "Subagent does not belong to the active session.",
+            reason: "unauthorized_subagent",
+          })
+          return
+        }
         const sessionData = await this.opts.sessionManager.sessionClient.getSessionDetails(subagentId)
         const messages = await this.opts.sessionManager.sessionClient.getSessionMessages(subagentId).catch(() => [])
         const time = sessionData.time as { created?: number; updated?: number } | undefined
@@ -1211,8 +1256,22 @@ export class WebviewEventRouter {
       if (!sessionId) return
       const subagentId = msg.subagentId as string | undefined
       if (!subagentId) return
+      const cliSessionId = this.opts.tabManager.getTab(sessionId)?.cliSessionId
+      if (!cliSessionId) return
       log.info(`Cancel subagent ${subagentId} in session ${sessionId}`)
       try {
+        const children = await this.opts.sessionManager.sessionClient.getChildSessions(cliSessionId)
+        const authorizedChild = findAuthorizedSubagentChild(children, cliSessionId, subagentId)
+        if (!authorizedChild) {
+          this.opts.postMessage({
+            type: "webview_request_error",
+            requestType: "cancel_subagent",
+            sessionId,
+            error: "Subagent does not belong to the active session.",
+            reason: "unauthorized_subagent",
+          })
+          return
+        }
         await this.opts.sessionManager.sessionClient.abortSession(subagentId)
         log.info(`Subagent ${subagentId} aborted`)
       } catch (err) {

@@ -382,6 +382,9 @@ const WEBVIEW_MESSAGE_VALIDATORS: Record<string, MessageValidator> = {
   toggle_thinking: validateOptionalEnabled,
   update_setting: requiredStringValidator("key", () => "Invalid key in update_setting"),
   send_steer_prompt: validateSendSteerPrompt,
+  get_subagent_detail: requiredStringValidator("subagentId", () => "Invalid subagentId in get_subagent_detail"),
+  cancel_subagent: requiredStringValidator("subagentId", () => "Invalid subagentId in cancel_subagent"),
+  mark_subagent_read: requiredStringValidator("subagentId", () => "Invalid subagentId in mark_subagent_read"),
   stt_open_helper: validateVoiceHelperOpen,
 }
 

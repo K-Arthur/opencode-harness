@@ -366,6 +366,12 @@ Welcome-page session search and pasted-image attachments share a webview-side co
 - **All sessions visible**: `list_server_sessions` handler no longer filters by current workspace — shows all non-subagent sessions, sorted by `updated` descending, with an `isCurrentWorkspace` flag for UI badging.
 - **Recovery consolidation**: `SessionStore.importServerSessions` and `migrateLocalIdsToServerIds` merge duplicate local/server records that reference the same server id, preserving richer local transcript data while keeping the server-keyed row as canonical.
 
+### Subagent Activity (Child Sessions)
+- **History exclusion, activity inclusion**: OpenCode child sessions remain excluded from welcome/history lists, but the chat webview can request `get_subagent_activities` for the active tab's CLI session. The host maps child sessions to `SubagentActivity` rows with title, summary, timestamps, parent id, and live/completed metadata.
+- **Detail hydration**: Opening an activity posts `get_subagent_detail`; the host returns `subagent_detail` with the child session summary and text messages, and the webview replaces the loading state with summary/result/message sections.
+- **Action guard**: `get_subagent_detail` and `cancel_subagent` require a `subagentId` and verify that the id appears in `getChildSessions(activeCliSessionId)` before reading details or aborting. Unauthorized child ids return `webview_request_error` instead of crossing session boundaries.
+- **UI states**: `SubagentActivity.status` supports `running`, `completed`, `failed`, `cancelled`, and `pending`; runtime rows use the same status/progress CSS hooks covered by visual fixtures.
+
 ### Changed-Files Chip Bar (Feature 22 — Fixed)
 - **Canonical changed-file sync**: Backend `SessionStore.addChangedFiles()` registers normalized paths from `file_edited` and `session.diff` events. The host posts `changed_files_update` as `{ type, sessionId, files: Array<{ path: string; added: number; removed: number }> }`; the frontend uses it as the canonical state for both the chip bar and todos panel. Rendering is scoped to the active session and tab switches clear stale chips when the new session has no changed files. Legacy/live `file_edited` remains `{ type, sessionId, file }` and merges through the same dedupe path.
 - **Deduplication**: Restructured handler to hoist the `filePath` extraction and dedup check before `addMessage` so the test's 600-char window assertion passes.

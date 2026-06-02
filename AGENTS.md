@@ -83,14 +83,11 @@ Run all unit+contract+roundtrip: `npm test`
 | `thinkingToggle` | `src/chat/webview/thinkingToggle.ts` | Global thinking block visibility toggle (extracted from timeline for SRP) |
 | `scrollMarkers` | `src/chat/webview/ui/scrollMarkers.ts` | Scroll marker dots, jump-to-bottom, scrollToTurn with injected timers |
 
-### Horizontal Scaling (ADR-010 Complete)
+### Horizontal Scaling (ADR-010 — Proposed)
 
 - Interface: `src/session/SessionProcessManager.ts` (ADR-aligned with `onCrash` events)
-- Implementation: `src/session/LocalSessionProcessManager.ts` (wraps N `ServerLifecycle` instances)
-- Routing: `src/session/SessionManagerRegistry.ts` (tab→process mapping, wired into extension.ts)
 - Port allocation: `src/utils/portPool.ts` (atomic reservation, no TOCTOU race)
 - Crash resilience: `TabRestorationState` in `src/session/sessionTypes.ts`, persisted via `TabManager`
-- Process strategy: `opencode.sessions.processStrategy` setting (`"shared"` or `"per-tab"`)
 - Configurable stream cap: `opencode.sessions.maxConcurrentStreams` (default 5)
 - ADR: `docs/adrs/ADR-010-horizontal-scaling.md`
 

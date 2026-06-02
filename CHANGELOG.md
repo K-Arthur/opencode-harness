@@ -34,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Subagent activity/detail UI now hydrates and is keyboard-accessible.** `subagent_detail`
+  responses now replace the loading spinner with summary/result/message content; runtime-rendered
+  activity rows use the CSS hooks already defined for status badges and progress bars; rows can be
+  opened with Enter/Space; and child-session detail/cancel requests are validated and authorized
+  against the active tab's child-session list before SDK detail or abort calls run. (`src/chat/webview/subagentDetailView.ts`,
+  `src/chat/webview/subagent-panel.ts`, `src/chat/WebviewEventRouter.ts`, `src/chat/WebviewMessageValidator.ts`)
 - **Mode switching now works on the welcome screen.** The mode selector lives in the input
   area, which is visible on the welcome screen, but `requestMode`/`cycleModeForward`
   silently no-op'd because there was no active session to target with `change_mode`.
@@ -61,6 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `src/chat/ChatProvider.ts`)
 
 ### Tests
+- Added subagent regression coverage for detail hydration, status/progress CSS hooks,
+  keyboard-open behavior, required subagent IDs, and active-session child authorization.
+  (`src/chat/webview/subagentDetailView.test.ts`, `src/chat/webview/subagent-panel.test.ts`,
+  `src/chat/WebviewEventRouter.test.ts`)
 - Added pure-function coverage for focus reconciliation and restorable policy
   (`src/chat/webview/sessionFocus.test.ts`, `src/chat/restorablePolicy.test.ts`) and
   behavioural coverage for welcome-screen mode selection and the welcome model card

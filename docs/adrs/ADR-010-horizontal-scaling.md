@@ -1,7 +1,7 @@
 # ADR-010: Horizontal Scaling & Process Isolation
 
 **Date:** 2026-05-30
-**Status:** Complete
+**Status:** Proposed
 
 ## Context
 
@@ -85,10 +85,9 @@ class SessionManagerRegistry {
 - ~~SQLite session DB may have write contention with multiple processes~~ → Confirmed: WAL mode = 1 writer; addressed via shared-process default
 - ~~Need to coordinate port allocation for multiple server instances~~ → Resolved: `PortPool` utility with atomic reservation
 
-### Completed
-- `processStrategy` config: `"shared"` (default) or `"per-tab"`
-- `SessionManagerRegistry` wired into `extension.ts` and `ChatProvider`
-- `StreamCoordinator.startPrompt` resolves per-tab SessionManager via registry
-- Per-process `OPENCODE_DATA_DIR` support in `LocalSessionProcessManager`
-- Configurable stream cap: `opencode.sessions.maxConcurrentStreams` (default 5)
-- Crash resilience: `TabRestorationState`, auto-resume, `stream_interrupted` UI
+### Not Yet Implemented
+- `processStrategy` config: `"shared"` (default) or `"per-tab"` — not wired in `extension.ts`
+- `SessionManagerRegistry` + `LocalSessionProcessManager` — defined but never imported from `extension.ts`
+- `StreamCoordinator.startPrompt` — still uses shared `SessionManager` only
+- Per-process `OPENCODE_DATA_DIR` support — requires `LocalSessionProcessManager` to be wired
+- Crash resilience: `TabRestorationState`, auto-resume, `stream_interrupted` UI ✅ completed

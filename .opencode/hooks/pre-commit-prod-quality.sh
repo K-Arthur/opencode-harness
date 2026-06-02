@@ -110,6 +110,20 @@ for file in $SOURCE_FILES; do
     fi
   fi
 rm -f /tmp/violations
+# Dead code check: detect staged .ts files in src/ with zero importers
+for file in $SOURCE_FILES; do
+  if echo "$file" | grep -qE '^src/.*\.ts$' && ! echo "$file" | grep -qE '(extension\.ts$|/main\.ts$|markdownWorker\.ts$|\.d\.ts$|/index\.ts$)'; then
+    stem="$(basename "$file" .ts)"
+    importers="$(rg -l "from ['\"][^'\"]*${stem}(['\"/]|\.)" src/ -g '!**/*.test.ts' -g '!**/*.test.mjs' -g '!**/*.spec.ts' -g "!${file}" 2>/dev/null | wc -l)"
+    if [ "$importers" -eq 0 ]; then
+      importers="$(rg -l "require\(['\"][^'\"]*${stem}" src/ -g '!**/*.test.ts' -g '!**/*.test.mjs' -g '!**/*.spec.ts' -g "!${file}" 2>/dev/null | wc -l)"
+    fi
+    if [ "$importers" -eq 0 ]; then
+      echo "  ❌ $file — zero importers (dead code)"
+      VIOLATIONS=$((VIOLATIONS + 1))
+    fi
+  fi
+done
 if [ $VIOLATIONS -gt 0 ]; then
   echo "❌ $VIOLATIONS violation(s) found — commit blocked."
   _fc_write_violation "pre-commit-anti-patterns" "error" "Anti-patterns detected in staged files — see output above"

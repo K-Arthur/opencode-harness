@@ -71,7 +71,7 @@ describe('Webview Type Definitions', () => {
   })
 
   it('should accept valid SubagentActivity status values', () => {
-    const validStatuses: Array<SubagentActivity['status']> = ['running', 'completed', 'failed']
+    const validStatuses: Array<SubagentActivity['status']> = ['running', 'completed', 'failed', 'cancelled', 'pending']
     validStatuses.forEach(status => {
       const activity: SubagentActivity = {
         id: 'test',

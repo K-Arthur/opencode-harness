@@ -91,6 +91,67 @@ void describe("subagent-panel", () => {
     document.body.removeChild(container)
   })
 
+  void it("renderActivities uses styled status and progress hooks", async () => {
+    const { setupSubagentPanel } = await import("./subagent-panel")
+
+    const container = document.createElement("div")
+    container.className = "subagent-panel hidden"
+    const list = document.createElement("div")
+    const closeBtn = document.createElement("button")
+    container.append(list, closeBtn)
+    document.body.appendChild(container)
+
+    const api = setupSubagentPanel(
+      { subagentPanel: container, subagentList: list, closeSubagentBtn: closeBtn },
+      { onOpenDetail: () => {}, onCancelSubagent: () => {} },
+    )!
+
+    api.renderActivities([
+      { id: "a1", name: "Styled Agent", status: "running", progress: 45 },
+    ])
+
+    assert.ok(list.querySelector(".subagent-item-header"), "header must use the class styled by components.css")
+    assert.ok(list.querySelector(".subagent-item-status--running"), "status badge must use the styled status class")
+    assert.ok(list.querySelector(".subagent-item-progress"), "progress track must use the styled progress wrapper")
+    assert.equal(
+      (list.querySelector(".subagent-item-progress-bar") as HTMLElement | null)?.style.getPropertyValue("--p"),
+      "0.45",
+    )
+
+    api.dispose()
+    document.body.removeChild(container)
+  })
+
+  void it("opens detail from keyboard activation", async () => {
+    const { setupSubagentPanel } = await import("./subagent-panel")
+
+    const container = document.createElement("div")
+    container.className = "subagent-panel hidden"
+    const list = document.createElement("div")
+    const closeBtn = document.createElement("button")
+    container.append(list, closeBtn)
+    document.body.appendChild(container)
+
+    let openedId = ""
+    const api = setupSubagentPanel(
+      { subagentPanel: container, subagentList: list, closeSubagentBtn: closeBtn },
+      { onOpenDetail: (activity) => { openedId = activity.id }, onCancelSubagent: () => {} },
+    )!
+
+    api.renderActivities([
+      { id: "agent-keyboard", name: "Keyboard Agent", status: "completed" },
+    ])
+
+    const item = list.querySelector(".subagent-item") as HTMLElement
+    assert.equal(item.getAttribute("role"), "button")
+    assert.equal(item.tabIndex, 0)
+    item.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
+    assert.equal(openedId, "agent-keyboard")
+
+    api.dispose()
+    document.body.removeChild(container)
+  })
+
   void it("renderActivities with empty list shows empty state", async () => {
     const { setupSubagentPanel } = await import("./subagent-panel")
 

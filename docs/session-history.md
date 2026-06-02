@@ -8,6 +8,7 @@ The welcome screen search box provides live access to previous OpenCode sessions
 - The extension host handles that request in `MessageRouter.handleListSessions`.
 - When the OpenCode server is running, the host uses the SDK-backed `SessionManager.listSessions()` path, which calls `client.session.list()`.
 - Unknown top-level server sessions are imported into `SessionStore` with `needsBackfill: true`; child/subagent sessions are excluded from the history list.
+- Child/subagent sessions for the active chat tab are exposed through the Subagent Activity panel instead. Detail and cancel actions must target a child returned by `getChildSessions(activeCliSessionId)` before the host reads messages or aborts the child session.
 - Session identity is canonicalized around the OpenCode server session id (`ses_...`). Legacy local entries that already point at the same server id through `cliSessionId` are merged into the server-keyed record during migration/recovery.
 - The filtered `session_list` response is sent back to the webview and rendered in the welcome recent-sessions area.
 

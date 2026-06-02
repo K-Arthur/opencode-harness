@@ -283,7 +283,7 @@ export interface SkillInfo {
 export interface SubagentActivity {
   id: string
   name: string
-  status: 'running' | 'completed' | 'failed'
+  status: 'running' | 'completed' | 'failed' | 'cancelled' | 'pending'
   output?: string
   progress?: number
   // SADD/TDD fields (Phase 1+)
