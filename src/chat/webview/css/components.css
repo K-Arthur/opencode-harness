@@ -983,6 +983,12 @@ body.hide-thinking .thinking-block { display: none; }
   border-color: var(--oc-accent);
 }
 
+.subagent-item:focus-visible {
+  outline: 2px solid var(--oc-accent);
+  outline-offset: 2px;
+  border-color: var(--oc-accent);
+}
+
 .subagent-item-header {
   display: flex;
   justify-content: space-between;
@@ -1015,6 +1021,13 @@ body.hide-thinking .thinking-block { display: none; }
 .subagent-item-status--failed {
   background: var(--oc-error-subtle);
   color: var(--oc-error);
+}
+
+.subagent-item-status--cancelled,
+.subagent-item-status--pending,
+.subagent-item-status--unknown {
+  background: var(--oc-muted-subtle);
+  color: var(--color-muted);
 }
 
 .subagent-item-progress {
@@ -2403,6 +2416,32 @@ textarea {
   align-items: center;
 }
 
+.subagent-detail-status-badge--running {
+  background: var(--oc-success-subtle);
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
+}
+
+.subagent-detail-status-badge--completed {
+  background: var(--oc-success-subtle);
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
+}
+
+.subagent-detail-status-badge--failed {
+  background: var(--oc-error-subtle);
+  color: var(--oc-error);
+  border: 1px solid var(--oc-error);
+}
+
+.subagent-detail-status-badge--cancelled,
+.subagent-detail-status-badge--pending,
+.subagent-detail-status-badge--unknown {
+  background: var(--oc-muted-subtle);
+  color: var(--oc-muted);
+  border: 1px solid var(--oc-border);
+}
+
 .subagent-detail-progress {
   font-size: var(--text-xs);
   color: var(--oc-muted);
@@ -2741,5 +2780,4 @@ textarea {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 

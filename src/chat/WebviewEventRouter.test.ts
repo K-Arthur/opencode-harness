@@ -50,6 +50,39 @@ describe("WebviewEventRouter context usage routing", () => {
   })
 })
 
+describe("WebviewEventRouter subagent routing", () => {
+  it("requires subagent identifiers on detail, cancel, and read messages", () => {
+    assert.equal(validate({ sessionId: "tab-1", subagentId: "child-1" }, "get_subagent_detail"), true)
+    assert.equal(validate({ sessionId: "tab-1" }, "get_subagent_detail"), false)
+    assert.equal(validate({ subagentId: "child-1" }, "cancel_subagent"), true)
+    assert.equal(validate({}, "cancel_subagent"), false)
+    assert.equal(validate({ sessionId: "tab-1", subagentId: "child-1" }, "mark_subagent_read"), true)
+    assert.equal(validate({ sessionId: "tab-1" }, "mark_subagent_read"), false)
+  })
+
+  it("authorizes subagent detail and cancel against the active tab child-session list", () => {
+    const detailHandler = blockBetween('["get_subagent_detail"', '["cancel_subagent"')
+    const cancelHandler = blockBetween('["cancel_subagent"', '["mark_subagent_read"')
+
+    assert.ok(
+      detailHandler.includes("findAuthorizedSubagentChild"),
+      "detail requests must prove the requested subagent belongs to the active tab before loading messages",
+    )
+    assert.ok(
+      detailHandler.indexOf("findAuthorizedSubagentChild") < detailHandler.indexOf("getSessionDetails"),
+      "detail authorization must happen before getSessionDetails",
+    )
+    assert.ok(
+      cancelHandler.includes("findAuthorizedSubagentChild"),
+      "cancel requests must prove the requested subagent belongs to the active tab before aborting",
+    )
+    assert.ok(
+      cancelHandler.indexOf("findAuthorizedSubagentChild") < cancelHandler.indexOf("abortSession"),
+      "cancel authorization must happen before abortSession",
+    )
+  })
+})
+
 describe("WebviewEventRouter host state sync", () => {
   it("webview_ready asks ChatProvider to push full init state directly", () => {
     const handler = blockBetween('["webview_ready"', '["init_ack"')

@@ -19,19 +19,18 @@ export interface SubagentDetailViewApi {
   close: () => void
   renderLoading: () => void
   renderError: (message: string) => void
+  showDetail: (activity: SubagentActivity, detail: Record<string, unknown>) => void
   dispose: () => void
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  running: "var(--vscode-testing-iconPassed, #4ec48b)",
-  completed: "var(--vscode-testing-iconPassed, #4ec48b)",
-  failed: "var(--vscode-testing-iconFailed, #f14c4c)",
-  cancelled: "var(--vscode-testing-iconSkipped, #cca700)",
-  pending: "var(--vscode-testing-iconQueued, #888)",
-}
+const SUBAGENT_STATUSES = new Set(["running", "completed", "failed", "cancelled", "pending"])
 
 function statusText(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+function safeStatusClass(status: string): string {
+  return SUBAGENT_STATUSES.has(status) ? status : "unknown"
 }
 
 function formatDuration(ms?: number): string {
@@ -101,16 +100,39 @@ export function setupSubagentDetailView(
     renderSummary(content, activity)
   }
 
+  function showDetail(activity: SubagentActivity, detail: Record<string, unknown>) {
+    container.classList.remove("hidden")
+    content.innerHTML = ""
+    const hydrated = mergeActivityDetail(activity, detail)
+    renderSummary(content, hydrated)
+    renderMessages(content, detail.messages)
+  }
+
+  function mergeActivityDetail(activity: SubagentActivity, detail: Record<string, unknown>): SubagentActivity {
+    const rawStatus = typeof detail.status === "string" ? detail.status : activity.status
+    const rawName = typeof detail.agentName === "string"
+      ? detail.agentName
+      : typeof detail.name === "string"
+        ? detail.name
+        : activity.name
+    return {
+      ...activity,
+      ...detail,
+      id: typeof detail.id === "string" ? detail.id : activity.id,
+      name: rawName,
+      status: SUBAGENT_STATUSES.has(rawStatus) ? rawStatus as SubagentActivity["status"] : activity.status,
+    } as SubagentActivity
+  }
+
   function renderSummary(el: HTMLElement, activity: SubagentActivity) {
     const card = document.createElement("div")
     card.className = "subagent-detail-card"
-
-    const statusColor = STATUS_COLORS[activity.status] || "#888"
+    const statusClass = safeStatusClass(activity.status)
 
     card.innerHTML = `
       <div class="subagent-detail-section">
         <div class="subagent-detail-status-row">
-          <span class="subagent-detail-status-badge" style="background:${statusColor}20;color:${statusColor};border:1px solid ${statusColor}40;">
+          <span class="subagent-detail-status-badge subagent-detail-status-badge--${statusClass}">
             ${sanitizeHtml(statusText(activity.status))}
           </span>
           ${activity.progress !== undefined ? `<span class="subagent-detail-progress">${Math.round(activity.progress)}%</span>` : ""}
@@ -167,6 +189,35 @@ export function setupSubagentDetailView(
       cancelRow.appendChild(cancelBtn)
       el.appendChild(cancelRow)
     }
+  }
+
+  function renderMessages(el: HTMLElement, rawMessages: unknown) {
+    if (!Array.isArray(rawMessages) || rawMessages.length === 0) return
+    const section = document.createElement("div")
+    section.className = "subagent-detail-section"
+    section.innerHTML = `<h3 class="subagent-detail-section-title">Messages (${rawMessages.length})</h3>`
+    const list = document.createElement("div")
+    list.className = "subagent-detail-messages"
+    for (const raw of rawMessages) {
+      if (!raw || typeof raw !== "object") continue
+      const msg = raw as Record<string, unknown>
+      const role = typeof msg.role === "string" ? msg.role : "assistant"
+      const text = typeof msg.text === "string" ? msg.text : ""
+      if (!text) continue
+      const item = document.createElement("div")
+      item.className = "subagent-detail-message"
+      const roleEl = document.createElement("div")
+      roleEl.className = "subagent-detail-msg-role"
+      roleEl.textContent = role
+      const textEl = document.createElement("div")
+      textEl.className = "subagent-detail-msg-text"
+      textEl.textContent = text
+      item.append(roleEl, textEl)
+      list.appendChild(item)
+    }
+    if (list.childElementCount === 0) return
+    section.appendChild(list)
+    el.appendChild(section)
   }
 
   function renderToolCalls(el: HTMLElement, toolCalls?: SubagentActivity["toolCalls"]) {
@@ -297,5 +348,5 @@ export function setupSubagentDetailView(
     document.removeEventListener("keydown", onKeydown)
   }
 
-  return { open, close, renderLoading, renderError, dispose }
+  return { open, close, renderLoading, renderError, showDetail, dispose }
 }

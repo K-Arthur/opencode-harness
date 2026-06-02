@@ -77,6 +77,18 @@ Leverage existing infrastructure:
 - **TaskDecomposer**: Can be used for task breakdown when spec is available (not yet integrated)
 - **MethodologyOrchestrator**: Routes through cascade router based on methodology selection
 
+### Subagent UI/runtime hardening ✅ (2026-06-02)
+
+Child-session subagent visibility is now treated as an inspectable activity surface:
+
+- `get_subagent_activities` lists active-tab child sessions and skips malformed child records.
+- `get_subagent_detail` and `cancel_subagent` validate `subagentId` and authorize it against the active tab's child-session list before calling SDK detail/abort APIs.
+- The webview detail view now exposes `showDetail()`, replacing the spinner with hydrated summary/result/message content.
+- Activity rows now use the existing status/progress CSS hooks and support keyboard open via Enter/Space.
+- `SubagentActivity.status` now covers `running`, `completed`, `failed`, `cancelled`, and `pending`.
+
+Remaining scope: full automatic SADD task decomposition/parallel dispatch is still represented by methodology hints and TDD infrastructure; wiring `TaskDecomposer` + concrete subagent dispatch into the prompt lifecycle remains future work.
+
 ### Phase 2: Methodology ↔ Skills runtime integration ✅ (2026-05-17)
 
 After auditing the chat pipeline the following gaps were closed:

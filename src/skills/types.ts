@@ -236,7 +236,7 @@ export interface StrategyRefinement {
 export interface SubagentActivity {
   id: string;
   name: string;
-  status: 'running' | 'completed' | 'failed';
+  status: 'running' | 'completed' | 'failed' | 'cancelled' | 'pending';
   output?: string;
   progress?: number;
   tddPhase?: 'red' | 'green' | 'refactor' | 'coverage';
