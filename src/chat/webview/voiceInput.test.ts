@@ -29,7 +29,7 @@ void describe("voice input webview UI", () => {
     ;(globalThis as any).KeyboardEvent = dom.window.KeyboardEvent
   })
 
-  it("requests settings and disables browser mode when SpeechRecognition is unavailable", () => {
+  it("requests settings and enables browser helper mode without in-webview SpeechRecognition", () => {
     const posted: Record<string, unknown>[] = []
     const api = setupVoiceInput({
       els: {
@@ -46,9 +46,72 @@ void describe("voice input webview UI", () => {
     api.applySettings(settings())
 
     assert.deepEqual(posted[0], { type: "get_stt_settings" })
-    assert.equal(api.getState(), "disabled")
-    assert.equal((document.getElementById("voice-input-btn") as HTMLButtonElement).disabled, true)
-    assert.match(document.getElementById("voice-input-status")!.textContent || "", /unavailable/i)
+    assert.equal(api.getState(), "idle")
+    assert.equal((document.getElementById("voice-input-btn") as HTMLButtonElement).disabled, false)
+    assert.match(document.getElementById("voice-input-status")!.textContent || "", /ready/i)
+  })
+
+  it("opens the host browser helper instead of recording inside the VS Code webview", async () => {
+    const posted: Record<string, unknown>[] = []
+    let getUserMediaCalled = false
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: {
+      mediaDevices: {
+        getUserMedia: async () => {
+          getUserMediaCalled = true
+          throw new Error("webview microphone should not be used")
+        },
+      },
+      },
+    })
+    ;(globalThis as any).MediaRecorder = class {
+      static isTypeSupported() { return true }
+    }
+
+    const api = setupVoiceInput({
+      els: {
+        promptInput: document.getElementById("prompt-input") as HTMLTextAreaElement,
+        voiceInputBtn: document.getElementById("voice-input-btn") as HTMLButtonElement,
+        voiceInputStatus: document.getElementById("voice-input-status") as HTMLElement,
+      },
+      postMessage: (msg) => posted.push(msg),
+      insertTextAtCursor: () => {},
+      autoResizeTextarea: () => {},
+      updateSendButton: () => {},
+    })
+    api.applySettings(settings({ provider: "openai", hasOpenAiApiKey: true }))
+
+    ;(document.getElementById("voice-input-btn") as HTMLButtonElement).click()
+    await Promise.resolve()
+
+    const openMessage = posted.find((msg) => msg.type === "stt_open_helper")
+    assert.equal(getUserMediaCalled, false)
+    assert.equal(typeof openMessage?.requestId, "string")
+    assert.equal(api.getState(), "requesting-permission")
+  })
+
+  it("marks the helper request active after the host opens the external recorder", () => {
+    const posted: Record<string, unknown>[] = []
+    const api = setupVoiceInput({
+      els: {
+        promptInput: document.getElementById("prompt-input") as HTMLTextAreaElement,
+        voiceInputBtn: document.getElementById("voice-input-btn") as HTMLButtonElement,
+        voiceInputStatus: document.getElementById("voice-input-status") as HTMLElement,
+      },
+      postMessage: (msg) => posted.push(msg),
+      insertTextAtCursor: () => {},
+      autoResizeTextarea: () => {},
+      updateSendButton: () => {},
+    })
+
+    api.applySettings(settings({ provider: "openai", hasOpenAiApiKey: true }))
+    ;(document.getElementById("voice-input-btn") as HTMLButtonElement).click()
+    const openMessage = posted.find((msg) => msg.type === "stt_open_helper")
+    api.handleHelperOpened({ requestId: openMessage?.requestId })
+
+    assert.equal(api.getState(), "recording")
+    assert.match(document.getElementById("voice-input-status")!.textContent || "", /browser/i)
   })
 
   it("inserts only the current transcript request into the prompt", () => {

@@ -158,4 +158,22 @@ void describe("Message Contract Tests", () => {
     assert.strictEqual(error.reason, "missing_api_key")
     assert.strictEqual(typeof error.message, "string")
   })
+
+  void it("validates speech-to-text helper request and acknowledgement messages", () => {
+    const request: WebviewMessage = {
+      type: "stt_open_helper",
+      requestId: "voice-1",
+      provider: "openai",
+    }
+    const opened: HostMessage = {
+      type: "stt_helper_opened",
+      requestId: "voice-1",
+      helperUri: "http://127.0.0.1:49152/voice-helper.html?requestId=voice-1",
+      provider: "openai",
+    }
+
+    assert.strictEqual(request.provider, "openai")
+    assert.strictEqual(typeof opened.helperUri, "string")
+    assert.strictEqual(opened.provider, "openai")
+  })
 })

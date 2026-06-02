@@ -73,3 +73,30 @@ void describe("syntaxHighlighter.ts (F3-style lazy registration)", () => {
     }
   })
 })
+
+void describe("syntaxHighlighter.ts — large-block highlight cap", () => {
+  // highlightAuto() tests the input against every registered grammar, so it is
+  // materially slower than a targeted highlight; an unbounded large block can
+  // become a main-thread long task during a finalization re-render. A size cap
+  // returns escaped plaintext past a threshold. These tests guard against the
+  // cap being removed.
+
+  void it("defines a MAX_HIGHLIGHT_CHARS cap constant", () => {
+    assert.match(
+      source,
+      /const\s+MAX_HIGHLIGHT_CHARS\s*=\s*[\d_]+/,
+      "MAX_HIGHLIGHT_CHARS constant must exist",
+    )
+  })
+
+  void it("short-circuits highlightSyntax for oversized input before hljs runs", () => {
+    const body = source.match(/export function highlightSyntax[\s\S]*?\n\}/m)
+    assert.ok(body, "highlightSyntax function must exist")
+    const fn = body[0]
+    const guardIdx = fn.search(/code\.length\s*>\s*MAX_HIGHLIGHT_CHARS/)
+    assert.ok(guardIdx >= 0, "highlightSyntax must guard on code.length > MAX_HIGHLIGHT_CHARS")
+    const autoIdx = fn.search(/highlightAuto/)
+    assert.ok(autoIdx >= 0, "highlightSyntax must still have a highlightAuto fallback")
+    assert.ok(guardIdx < autoIdx, "the size guard must precede the highlightAuto fallback")
+  })
+})

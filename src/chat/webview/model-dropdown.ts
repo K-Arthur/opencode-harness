@@ -139,7 +139,8 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
   }
 
   function toggle() {
-    isOpen ? close() : open()
+    if (isOpen) close()
+    else open()
   }
 
   function open() {

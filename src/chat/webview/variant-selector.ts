@@ -72,7 +72,8 @@ export function setupVariantSelector(els: ElementRefs, callbacks: VariantSelecto
   }
 
   function toggle() {
-    isOpen ? close() : open()
+    if (isOpen) close()
+    else open()
   }
 
   function setVariant(variant: string) {

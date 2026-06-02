@@ -6,7 +6,9 @@
 .claude/**
 .windsurf/**
 .coverage-bundles/**
+.bundle-meta/**
 .jcodemunch.jsonc
+eslint.config.mjs
 .vscode-test.mjs
 coverage/**
 src/**

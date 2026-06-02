@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark light">
+  <title>OpenCode Voice Input</title>
+  <style>
+    :root {
+      color-scheme: dark light;
+      --bg: #1f2428;
+      --fg: #f3f5f7;
+      --muted: #a8b0b8;
+      --panel: #2a3036;
+      --border: #4a535d;
+      --accent: #2f80ed;
+      --accent-fg: #ffffff;
+      --danger: #e05d44;
+      --danger-bg: #451f1b;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f7f8fa;
+        --fg: #1c2127;
+        --muted: #5b6570;
+        --panel: #ffffff;
+        --border: #d6dce2;
+        --danger-bg: #fdebea;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--fg);
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    main {
+      width: min(720px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 32px 0 48px;
+    }
+    header {
+      margin-bottom: 20px;
+    }
+    h1 {
+      margin: 0 0 4px;
+      font-size: 20px;
+      font-weight: 650;
+    }
+    .subtle {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .surface {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    button {
+      appearance: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--fg);
+      cursor: pointer;
+      font: inherit;
+      min-height: 36px;
+      padding: 7px 14px;
+    }
+    button:hover:not(:disabled) {
+      border-color: var(--accent);
+    }
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--accent-fg);
+    }
+    button.record {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+    button.record.active {
+      background: var(--danger);
+      color: #ffffff;
+    }
+    .status {
+      min-height: 24px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    .status.error {
+      color: var(--danger);
+    }
+    textarea {
+      width: 100%;
+      min-height: 180px;
+      resize: vertical;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--fg);
+      font: inherit;
+      padding: 12px;
+    }
+    textarea:focus {
+      border-color: var(--accent);
+      outline: none;
+    }
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .notice {
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .notice strong {
+      color: var(--fg);
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>OpenCode Voice Input</h1>
+      <div id="mode-label" class="subtle">Preparing voice helper.</div>
+    </header>
+
+    <section class="surface">
+      <div class="controls">
+        <button id="record" class="record" type="button">Start recording</button>
+        <button id="use" class="primary" type="button" disabled>Use transcript</button>
+        <button id="clear" type="button" disabled>Clear</button>
+      </div>
+      <div id="status" class="status" aria-live="polite">Idle.</div>
+      <textarea id="transcript" spellcheck="true"></textarea>
+      <div class="meta">
+        <span id="length">0 characters</span>
+        <span id="details"></span>
+      </div>
+      <div class="notice">
+        <p><strong>Review first:</strong> OpenCode inserts the transcript into the VS Code prompt. It does not send the prompt until you do.</p>
+        <p id="privacy-copy"></p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    "use strict";
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var requestId = params.get("requestId") || "";
+      var token = params.get("token") || "";
+      var provider = params.get("provider") === "browser" ? "browser" : "openai";
+      var maxDurationSeconds = Math.max(1, Number(params.get("maxDurationSeconds")) || 60);
+      var maxUploadBytes = Math.max(1024, Number(params.get("maxUploadBytes")) || 10485760);
+
+      var recordBtn = document.getElementById("record");
+      var useBtn = document.getElementById("use");
+      var clearBtn = document.getElementById("clear");
+      var statusEl = document.getElementById("status");
+      var transcriptEl = document.getElementById("transcript");
+      var lengthEl = document.getElementById("length");
+      var detailsEl = document.getElementById("details");
+      var modeLabel = document.getElementById("mode-label");
+      var privacyCopy = document.getElementById("privacy-copy");
+
+      var recognition = null;
+      var mediaStream = null;
+      var mediaRecorder = null;
+      var chunks = [];
+      var finalTranscript = "";
+      var interimTranscript = "";
+      var recording = false;
+      var startedAt = 0;
+      var maxDurationTimer = 0;
+
+      function setStatus(text, isError) {
+        statusEl.textContent = text;
+        statusEl.classList.toggle("error", Boolean(isError));
+      }
+
+      function setRecording(next) {
+        recording = next;
+        recordBtn.classList.toggle("active", next);
+        recordBtn.textContent = next ? "Stop recording" : "Start recording";
+      }
+
+      function updateLength() {
+        var count = transcriptEl.value.length;
+        lengthEl.textContent = count + (count === 1 ? " character" : " characters");
+        clearBtn.disabled = count === 0 && chunks.length === 0;
+        if (provider === "browser") {
+          useBtn.disabled = count === 0;
+        } else {
+          useBtn.disabled = chunks.length === 0 || recording;
+        }
+      }
+
+      function chooseAudioMimeType() {
+        var candidates = [
+          "audio/webm;codecs=opus",
+          "audio/webm",
+          "audio/ogg;codecs=opus",
+          "audio/ogg",
+          "audio/mp4"
+        ];
+        if (typeof MediaRecorder === "undefined" || typeof MediaRecorder.isTypeSupported !== "function") {
+          return "";
+        }
+        return candidates.find(function (mime) { return MediaRecorder.isTypeSupported(mime); }) || "";
+      }
+
+      function releaseMedia() {
+        if (mediaStream) {
+          mediaStream.getTracks().forEach(function (track) { track.stop(); });
+        }
+        mediaStream = null;
+        mediaRecorder = null;
+      }
+
+      function resetRecording() {
+        chunks = [];
+        finalTranscript = "";
+        interimTranscript = "";
+        transcriptEl.value = "";
+        detailsEl.textContent = "";
+        updateLength();
+      }
+
+      function stopTimer() {
+        if (maxDurationTimer) window.clearTimeout(maxDurationTimer);
+        maxDurationTimer = 0;
+      }
+
+      function blobToBase64(blob) {
+        return blob.arrayBuffer().then(function (buffer) {
+          var bytes = new Uint8Array(buffer);
+          var binary = "";
+          var chunkSize = 0x8000;
+          for (var i = 0; i < bytes.length; i += chunkSize) {
+            var chunk = bytes.subarray(i, i + chunkSize);
+            binary += String.fromCharCode.apply(null, chunk);
+          }
+          return btoa(binary);
+        });
+      }
+
+      function postJson(path, body) {
+        body.requestId = requestId;
+        body.token = token;
+        return fetch(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        }).then(function (response) {
+          if (!response.ok) throw new Error("Request failed with status " + response.status);
+          return response.json();
+        });
+      }
+
+      function startBrowserRecognition() {
+        var Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!Ctor) {
+          setStatus("This browser does not support Web Speech recognition. Try OpenAI mode in OpenCode settings.", true);
+          return;
+        }
+        recognition = new Ctor();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = "";
+        recognition.onstart = function () {
+          startedAt = Date.now();
+          setRecording(true);
+          setStatus("Listening in your browser. Stop when you are done.");
+          maxDurationTimer = window.setTimeout(stopRecording, maxDurationSeconds * 1000);
+        };
+        recognition.onresult = function (event) {
+          var interim = "";
+          for (var i = event.resultIndex; i < event.results.length; i += 1) {
+            var result = event.results[i];
+            var text = result && result[0] ? result[0].transcript : "";
+            if (result && result.isFinal) finalTranscript += text;
+            else interim += text;
+          }
+          interimTranscript = interim;
+          transcriptEl.value = (finalTranscript + " " + interimTranscript).replace(/\s+/g, " ").trim();
+          updateLength();
+        };
+        recognition.onerror = function (event) {
+          setRecording(false);
+          stopTimer();
+          setStatus(event.error === "not-allowed" || event.error === "permission-denied"
+            ? "Microphone permission was denied in your browser."
+            : "Browser speech recognition failed.", true);
+        };
+        recognition.onend = function () {
+          setRecording(false);
+          stopTimer();
+          detailsEl.textContent = startedAt ? Math.round((Date.now() - startedAt) / 1000) + "s" : "";
+          setStatus(transcriptEl.value ? "Review the transcript, then use it in VS Code." : "No speech was detected.");
+          updateLength();
+        };
+        recognition.start();
+      }
+
+      function startOpenAiRecording() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") {
+          setStatus("This browser cannot record microphone audio. Try Chrome, Edge, or Safari.", true);
+          return;
+        }
+        chunks = [];
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+          mediaStream = stream;
+          var mimeType = chooseAudioMimeType();
+          mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType: mimeType }) : new MediaRecorder(stream);
+          mediaRecorder.ondataavailable = function (event) {
+            if (event.data && event.data.size > 0) chunks.push(event.data);
+          };
+          mediaRecorder.onstop = function () {
+            releaseMedia();
+            stopTimer();
+            setRecording(false);
+            detailsEl.textContent = startedAt ? Math.round((Date.now() - startedAt) / 1000) + "s" : "";
+            if (chunks.length === 0) {
+              setStatus("No audio was recorded.", true);
+            } else {
+              setStatus("Recording ready. Send it to VS Code for transcription.");
+            }
+            updateLength();
+          };
+          startedAt = Date.now();
+          mediaRecorder.start();
+          setRecording(true);
+          setStatus("Recording in your browser. Stop when you are done.");
+          maxDurationTimer = window.setTimeout(stopRecording, maxDurationSeconds * 1000);
+          updateLength();
+        }).catch(function (err) {
+          releaseMedia();
+          setRecording(false);
+          setStatus(err && err.name === "NotAllowedError"
+            ? "Microphone permission was denied in your browser."
+            : "Microphone recording is unavailable.", true);
+        });
+      }
+
+      function stopRecording() {
+        if (provider === "browser" && recognition) {
+          try { recognition.stop(); } catch (_) {}
+          return;
+        }
+        if (provider === "openai" && mediaRecorder && mediaRecorder.state !== "inactive") {
+          mediaRecorder.stop();
+          return;
+        }
+        setRecording(false);
+        stopTimer();
+      }
+
+      function startRecording() {
+        setStatus("Requesting microphone permission.");
+        if (provider === "browser") startBrowserRecognition();
+        else startOpenAiRecording();
+      }
+
+      function useTranscript() {
+        useBtn.disabled = true;
+        if (provider === "browser") {
+          var text = transcriptEl.value.replace(/\s+/g, " ").trim();
+          if (!text) {
+            setStatus("No transcript to use.", true);
+            updateLength();
+            return;
+          }
+          setStatus("Sending transcript to VS Code.");
+          postJson("/api/browser-transcript", { text: text })
+            .then(function () { setStatus("Transcript sent to VS Code."); })
+            .catch(function () {
+              setStatus("Could not send transcript to VS Code. Return to OpenCode and try again.", true);
+              updateLength();
+            });
+          return;
+        }
+
+        var blob = new Blob(chunks, { type: chunks[0] && chunks[0].type ? chunks[0].type : "audio/webm" });
+        if (blob.size === 0) {
+          setStatus("No audio was recorded.", true);
+          updateLength();
+          return;
+        }
+        if (blob.size > maxUploadBytes) {
+          setStatus("Recording is larger than the configured upload limit.", true);
+          updateLength();
+          return;
+        }
+        setStatus("Sending recording to VS Code for transcription.");
+        blobToBase64(blob).then(function (data) {
+          return postJson("/api/transcribe", {
+            mimeType: blob.type || "audio/webm",
+            data: data,
+            sizeBytes: blob.size,
+            durationMs: startedAt ? Date.now() - startedAt : undefined
+          });
+        }).then(function () {
+          setStatus("Recording sent to VS Code. You can return to OpenCode.");
+          chunks = [];
+          updateLength();
+        }).catch(function () {
+          setStatus("Could not send recording to VS Code. Return to OpenCode and try again.", true);
+          updateLength();
+        });
+      }
+
+      recordBtn.addEventListener("click", function () {
+        if (recording) stopRecording();
+        else startRecording();
+      });
+      useBtn.addEventListener("click", useTranscript);
+      clearBtn.addEventListener("click", function () {
+        resetRecording();
+        setStatus("Cleared.");
+      });
+      transcriptEl.addEventListener("input", updateLength);
+      window.addEventListener("beforeunload", function () {
+        stopTimer();
+        releaseMedia();
+        if (recognition) {
+          try { recognition.abort(); } catch (_) {}
+        }
+      });
+
+      if (!requestId || !token) {
+        recordBtn.disabled = true;
+        setStatus("This voice helper link is invalid. Return to VS Code and try again.", true);
+        return;
+      }
+
+      modeLabel.textContent = provider === "browser"
+        ? "Browser speech recognition mode"
+        : "OpenAI transcription mode";
+      transcriptEl.placeholder = provider === "browser"
+        ? "Transcript will appear here as you speak. Edit it before sending it back to VS Code."
+        : "Record audio, then choose Use transcript to send the recording to VS Code for transcription.";
+      useBtn.textContent = provider === "browser" ? "Use transcript" : "Transcribe recording";
+      privacyCopy.textContent = provider === "browser"
+        ? "Browser mode uses your browser's speech recognition. Chrome and Edge may send audio to the browser vendor's recognition service; OpenCode receives only the final text you choose to use."
+        : "OpenAI mode records in your browser, sends the recording to the OpenCode extension host on localhost, then the extension host sends it to OpenAI using the API key stored in VS Code SecretStorage.";
+      setStatus("Idle.");
+      updateLength();
+    })();
+  </script>
+</body>
+</html>

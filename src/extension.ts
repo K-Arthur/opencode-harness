@@ -592,10 +592,11 @@ function registerUriHandler(context: vscode.ExtensionContext, chatProvider: Chat
         try {
           const params = new URLSearchParams(uri.query)
           const prompt = params.get("prompt")
+          const isVoiceResult = Boolean(params.get("voiceRequestId"))
           vscode.commands.executeCommand("opencode-harness.chat.focus")
           if (prompt) {
             log.info(`URI handler: pre-fill prompt received`)
-            chatProvider.sendPromptToWebview(prompt)
+            chatProvider.sendPromptToWebview(prompt, !isVoiceResult)
           }
         } catch (err) {
           log.error("URI handler failed", err)

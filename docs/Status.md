@@ -128,12 +128,12 @@ The single failing test in v0.2.7 (`main.test.ts › timeline jumps use exact me
 | 40 | Skills Modal Wiring Repair | ✅ | Fixed stale-closure on `skillsModalOpen` (`main.ts` passed `skillsModalApi?.open` before the API was constructed) by switching to a thunk so the lookup happens at click time; modal now opens reliably |
 | 41 | Skill Preferences Persistence | ✅ | New `SkillPreferencesStore` (`globalState`-backed) persists per-skill enable/disable; `toggle_skill` writes through the store and re-emits `skills_list`; `resolveAllSkills` reflects user preference on every list |
 | 42 | Methodology ↔ Skills Integration | ✅ | `MethodologyAdvisor` now accepts a `skillHinter`; `ChatProvider` wires `SkillTriggerEngine.getTriggeredSkills(text)` (filtered by enabled skills) into the addendum so the model receives a `Relevant skills: …` line on every classified prompt |
+| 43 | Voice Input Browser Helper | ✅ | Mic button opens a tokenized localhost helper in the user's default browser via `asExternalUri`/`openExternal`; browser mode posts final Web Speech text, OpenAI mode posts audio to the host for SecretStorage-backed transcription |
 
 ## Deferred (P2 — High Effort / Niche)
 
 | # | Feature | Reason |
 |---|---------|--------|
-| 17 | Voice Input | Niche (P2), requires Web Speech API or VS Code speech extension |
 | 18 | Workspace Indexing | Very High effort — needs persistent embedding index, server-side support |
 | 38 | Context Optimization UI Display | Backend exposed via WebviewEventRouter, pending webview panel integration to display suggestions |
 | 39 | Skill Usage Recording Integration | ConfidenceScorer infrastructure exists, requires architectural work to identify and integrate with actual skill invocation points |

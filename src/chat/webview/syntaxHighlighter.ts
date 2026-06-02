@@ -81,6 +81,20 @@ const PURIFY_CONFIG: PurifyConfig = {
 
 const highlightCache = new HighlightCache(500)
 
+// Perf cap. highlightAuto() tests the input against every registered grammar,
+// so it is materially slower than a targeted highlight(); even a targeted
+// highlight of a very large block can become a main-thread long task during a
+// finalization re-render. Past this size we return escaped plaintext rather
+// than risk jank — chat code blocks this large gain little from colour, and
+// editors (incl. VS Code) disable tokenization for very large inputs for the
+// same reason. The live streaming tail is bounded separately by
+// MAX_LIVE_TAIL_RENDER_CHARS in liveTextRenderer.ts.
+const MAX_HIGHLIGHT_CHARS = 50_000
+
+function escapeHtml(code: string): string {
+  return code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+}
+
 let languagesRegistered = false
 
 function ensureLanguagesRegistered() {
@@ -120,6 +134,12 @@ export function highlightSyntax(code: string, language: string): string {
   const cached = highlightCache.get(cacheKey)
   if (cached !== undefined) return cached
 
+  // Oversized blocks: skip highlighting and skip caching (the cache key alone
+  // would retain the full source) to avoid a main-thread long task.
+  if (code.length > MAX_HIGHLIGHT_CHARS) {
+    return escapeHtml(code)
+  }
+
   let highlighted: string
   if (normalizedLanguage && hljs.getLanguage(normalizedLanguage)) {
     try {
@@ -131,7 +151,7 @@ export function highlightSyntax(code: string, language: string): string {
   try {
     highlighted = hljs.highlightAuto(code).value
   } catch {
-    highlighted = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    highlighted = escapeHtml(code)
   }
   highlightCache.set(cacheKey, highlighted)
   return highlighted

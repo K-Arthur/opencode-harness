@@ -528,6 +528,7 @@ export type HostMessage =
   | { type: "webview_request_error"; error: string; requestType?: string; sessionId?: string }
   | { type: "prompt_rejected"; reason: string; sessionId?: string }
   | { type: "stt_settings"; settings: VoiceInputSettings }
+  | { type: "stt_helper_opened"; requestId: string; helperUri: string; provider: VoiceInputSettings["provider"] }
   | { type: "stt_transcript"; requestId: string; text: string }
   | { type: "stt_error"; requestId?: string; reason: string; message: string }
   | { type: "rate_limit_state"; state?: unknown }
@@ -706,7 +707,7 @@ export type WebviewMessage =
   | { type: "decline_resume"; sessionId: string }
   | { type: "request_state_sync" }
   | { type: "get_stt_settings" }
-  | { type: "stt_transcribe_audio"; requestId: string; mimeType: string; data: string; sizeBytes?: number; durationMs?: number }
+  | { type: "stt_open_helper"; requestId: string; provider: VoiceInputSettings["provider"] }
   | { type: "set_instructions"; sessionId: string; instructions: string }
   | { type: "fork_session"; sessionId: string }
   | { type: "toggle_diff_wrap"; sessionId?: string }

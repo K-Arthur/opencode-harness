@@ -38,7 +38,8 @@
   display: flex;
   justify-content: center;
   padding: var(--space-1) 0 var(--space-2);
-  /* Keep the banner outside the content-visibility skip region */
+  /* Always render the banner, even if a content-visibility skip region is
+     ever added to message rows (none today — large lists use windowing). */
   content-visibility: visible;
 }
 
