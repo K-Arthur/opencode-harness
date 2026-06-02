@@ -327,7 +327,7 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
     skillBadgeFg: "#0000cc",
     thinkingBg: "rgba(204, 0, 0, 0.06)",
     thinkingBorder: "#cc0000",
-    warningColor: "#cc6600",
+    warningColor: "#994d00",
     errorColor: "#cc0000",
     successColor: "#006400",
     infoColor: "#0000cc",

@@ -42,6 +42,16 @@
               <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
             </svg>
           </button>
+          <button class="icon-btn" id="activity-toggle-btn" title="Toggle activity timeline" aria-label="Toggle activity timeline" aria-pressed="false" aria-controls="activity-panel">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 19V5"/><path d="M8 17V7"/><path d="M12 21V3"/><path d="M16 15V9"/><path d="M20 18V6"/>
+            </svg>
+          </button>
+          <button class="icon-btn" id="tasks-toggle-btn" title="Toggle command tasks" aria-label="Toggle command tasks" aria-pressed="false" aria-controls="tasks-panel">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10"/><path d="M7 13h6"/><path d="m15 16 2 2 4-4"/>
+            </svg>
+          </button>
           <!-- badge sinks for backward-compat — invisible, no toolbar buttons -->
           <span id="cf-count-badge" class="hidden" aria-hidden="true"></span>
           <span id="ctx-pct-badge" class="hidden" aria-hidden="true"></span>
@@ -202,6 +212,30 @@
           </div>
         </div>
       </div>
+      <div id="activity-panel" class="activity-panel hidden" role="region" aria-label="Agent activity timeline">
+        <div class="activity-panel-header">
+          <h2 class="activity-panel-title">Activity</h2>
+          <button class="icon-btn" id="activity-close-btn" title="Close activity timeline" aria-label="Close activity timeline">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div id="activity-filters" class="activity-filters"></div>
+        <div id="activity-list" class="activity-panel-content" aria-live="polite"></div>
+      </div>
+      <div id="tasks-panel" class="tasks-panel hidden" role="region" aria-label="Command tasks">
+        <div class="tasks-panel-header">
+          <h2 class="tasks-panel-title">Commands</h2>
+          <button class="icon-btn" id="tasks-close-btn" title="Close command tasks" aria-label="Close command tasks">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div id="tasks-filters" class="tasks-filters"></div>
+        <div id="tasks-list" class="tasks-panel-content" aria-live="polite"></div>
+      </div>
       <div id="subagent-panel" class="subagent-panel hidden" aria-label="Subagent activity">
         <div class="subagent-panel-header">
           <h2 class="subagent-panel-title">Subagent Activity</h2>
@@ -213,6 +247,24 @@
         </div>
         <div class="subagent-panel-content" id="subagent-list">
           <!-- Subagent activities will be rendered dynamically -->
+        </div>
+      </div>
+      <div id="subagent-detail-view" class="subagent-detail-view hidden" aria-label="Subagent detail">
+        <div class="subagent-detail-header">
+          <button class="icon-btn" id="subagent-detail-back-btn" title="Back to list" aria-label="Back to subagent list">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
+          <h2 class="subagent-detail-title">Subagent Detail</h2>
+          <button class="icon-btn" id="subagent-detail-close-btn" title="Close detail" aria-label="Close subagent detail">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div class="subagent-detail-content" id="subagent-detail-content">
+          <!-- Subagent detail will be rendered dynamically -->
         </div>
       </div>
       <!-- #context-usage-panel removed — canonical UI is now #context-usage-dropdown -->
@@ -267,6 +319,7 @@
         <div id="mention-dropdown" class="dropdown hidden" role="listbox" aria-label="File mentions"></div>
         <div id="slash-autocomplete" class="slash-autocomplete hidden" role="listbox" aria-label="Slash commands"></div>
       </div>
+      <div id="voice-input-status" class="voice-input-status" aria-live="polite" aria-atomic="true"></div>
 
       <div id="input-bottom-bar">
         <div class="bottom-bar-left">
@@ -286,6 +339,14 @@
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M6 7.5a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4v7a6 6 0 0 1-12 0v-4"/>
               <path d="M12 15V7.5"/>
+            </svg>
+          </button>
+          <button class="icon-btn voice-input-btn" id="voice-input-btn" title="Start voice input" aria-label="Start voice input" aria-pressed="false" type="button">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <path d="M12 19v3"/>
+              <path d="M8 22h8"/>
             </svg>
           </button>
           <button class="instructions-gear-btn icon-btn" id="instructions-gear-btn" title="Custom instructions for this tab" aria-label="Edit tab instructions" aria-expanded="false">

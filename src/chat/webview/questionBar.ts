@@ -39,6 +39,10 @@ export function initQuestionBar(postMessage: (msg: Record<string, unknown>) => v
 
   els = { bar, items: items as HTMLDivElement, count: count as HTMLSpanElement, submitBtn: submitBtn as HTMLButtonElement }
   state.postMessage = postMessage
+  state.items.clear()
+  els.items.innerHTML = ""
+  updateVisibility()
+  updateSubmitState()
 
   submitBtn.addEventListener("click", () => submitAllAnswers())
 }

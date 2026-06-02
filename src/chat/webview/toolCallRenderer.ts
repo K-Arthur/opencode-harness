@@ -385,6 +385,13 @@ export interface PlanData {
   filePath: string
 }
 
+function normalizePlanTodoStatus(status: string): "pending" | "in-progress" | "completed" {
+  const normalized = status.trim().toLowerCase().replace(/_/g, "-")
+  if (normalized === "done" || normalized === "complete" || normalized === "completed") return "completed"
+  if (normalized === "running" || normalized === "active" || normalized === "in-progress") return "in-progress"
+  return "pending"
+}
+
 /**
  * Detect if a tool call's args represent a plan file (markdown with YAML frontmatter containing todos).
  */
@@ -410,16 +417,17 @@ export function detectPlanFile(toolBlock: ToolCallBlock): PlanData | null {
 
   const frontmatter = frontmatterMatch[1]
   if (!frontmatter) return null
-  const todosMatch = frontmatter.match(/todos:\s*\n((?:\s+-[\s\S]*?)+)/)
-  if (!todosMatch || !todosMatch[1]) return null
+  const todosIndex = frontmatter.search(/^todos:\s*$/m)
+  if (todosIndex === -1) return null
 
   const nameMatch = frontmatter.match(/name:\s*(.+)/)
   const overviewMatch = frontmatter.match(/overview:\s*(.+)/)
 
   const todos: PlanData['todos'] = []
-  const todoLines = todosMatch[1].split('\n')
+  const todoLines = frontmatter.slice(todosIndex).split('\n').slice(1)
   let currentTodo: PlanData['todos'][0] | null = null
   for (const line of todoLines) {
+    if (/^\S/.test(line)) break
     const todoStart = line.match(/^\s+-\s+id:\s*(.+)/)
     const contentMatch = line.match(/^\s+(?:-\s+)?content:\s*(.+)/)
     const statusMatch = line.match(/^\s+(?:-\s+)?status:\s*(.+)/)
@@ -428,7 +436,7 @@ export function detectPlanFile(toolBlock: ToolCallBlock): PlanData | null {
       currentTodo = { id: todoStart[1]?.trim() ?? '', content: '', status: 'pending' }
     } else if (currentTodo) {
       if (contentMatch) currentTodo.content = contentMatch[1]?.trim() ?? ''
-      if (statusMatch) currentTodo.status = statusMatch[1]?.trim() ?? 'pending'
+      if (statusMatch) currentTodo.status = normalizePlanTodoStatus(statusMatch[1]?.trim() ?? 'pending')
     }
   }
   if (currentTodo) todos.push(currentTodo)
@@ -481,15 +489,32 @@ export function renderPlanCard(plan: PlanData, opts: RenderOptions): HTMLElement
     card.appendChild(overview)
   }
 
+  const completed = plan.todos.filter(t => normalizePlanTodoStatus(t.status) === 'completed').length
+  const total = plan.todos.length
+  const progressValue = total > 0 ? completed / total : 0
+  const progress = document.createElement("div")
+  progress.className = "plan-card-progress"
+  progress.setAttribute("role", "progressbar")
+  progress.setAttribute("aria-valuemin", "0")
+  progress.setAttribute("aria-valuenow", String(completed))
+  progress.setAttribute("aria-valuemax", String(total))
+  progress.setAttribute("aria-label", `Plan progress: ${completed} of ${total} completed`)
+  const progressFill = document.createElement("div")
+  progressFill.className = "plan-card-progress-fill"
+  progressFill.style.setProperty("--p", progressValue.toFixed(3).replace(/\.?0+$/, ""))
+  progress.appendChild(progressFill)
+  card.appendChild(progress)
+
   const todosList = document.createElement("div")
   todosList.className = "plan-card-todos"
 
   for (const todo of plan.todos) {
+    const statusValue = normalizePlanTodoStatus(todo.status)
     const item = document.createElement("div")
-    item.className = `plan-card-todo plan-card-todo--${todo.status}`
+    item.className = `plan-card-todo plan-card-todo--${statusValue}`
     const checkbox = document.createElement("span")
     checkbox.className = "plan-card-todo-checkbox"
-    checkbox.textContent = todo.status === 'completed' ? '✓' : '○'
+    checkbox.textContent = statusValue === 'completed' ? '✓' : '○'
     item.appendChild(checkbox)
 
     const text = document.createElement("span")
@@ -498,8 +523,8 @@ export function renderPlanCard(plan: PlanData, opts: RenderOptions): HTMLElement
     item.appendChild(text)
 
     const status = document.createElement("span")
-    status.className = "plan-card-todo-status"
-    status.textContent = todo.status
+    status.className = `plan-card-todo-status plan-card-todo-status--${statusValue}`
+    status.textContent = statusValue
     item.appendChild(status)
 
     todosList.appendChild(item)
@@ -507,9 +532,27 @@ export function renderPlanCard(plan: PlanData, opts: RenderOptions): HTMLElement
 
   card.appendChild(todosList)
 
+  const actions = document.createElement("div")
+  actions.className = "plan-card-actions"
+  const approveBtn = document.createElement("button")
+  approveBtn.className = "plan-card-action-btn plan-card-action-btn--approve"
+  approveBtn.textContent = "Approve"
+  approveBtn.addEventListener("click", () => {
+    opts.postMessage?.({ type: "plan_action", action: "approve", filePath: plan.filePath })
+  })
+  const reviseBtn = document.createElement("button")
+  reviseBtn.className = "plan-card-action-btn plan-card-action-btn--revise"
+  reviseBtn.textContent = "Revise"
+  reviseBtn.addEventListener("click", () => {
+    opts.postMessage?.({ type: "plan_action", action: "revise", filePath: plan.filePath })
+  })
+  actions.appendChild(approveBtn)
+  actions.appendChild(reviseBtn)
+  card.appendChild(actions)
+
   const footer = document.createElement("div")
   footer.className = "plan-card-footer"
-  footer.textContent = `${plan.todos.filter(t => t.status === 'completed').length}/${plan.todos.length} completed · ${plan.filePath}`
+  footer.textContent = `${completed}/${plan.todos.length} completed · ${plan.filePath}`
   card.appendChild(footer)
 
   return card

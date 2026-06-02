@@ -81,33 +81,40 @@ const PURIFY_CONFIG: PurifyConfig = {
 
 const highlightCache = new HighlightCache(500)
 
-hljs.registerLanguage("javascript", javascript)
-hljs.registerLanguage("typescript", typescript)
-hljs.registerLanguage("python", python)
-hljs.registerLanguage("rust", rust)
-hljs.registerLanguage("go", go)
-hljs.registerLanguage("bash", bash)
-hljs.registerLanguage("json", json)
-hljs.registerLanguage("css", cssLang)
-hljs.registerLanguage("markdown", markdown)
-hljs.registerLanguage("sql", sql)
-hljs.registerLanguage("diff", diffLang)
-hljs.registerLanguage("java", java)
-hljs.registerLanguage("cpp", cpp)
-hljs.registerLanguage("yaml", yaml)
-hljs.registerLanguage("xml", xml)
+let languagesRegistered = false
 
-hljs.registerAliases(["js", "node"], { languageName: "javascript" })
-hljs.registerAliases(["ts"], { languageName: "typescript" })
-hljs.registerAliases(["sh", "zsh"], { languageName: "bash" })
-hljs.registerAliases(["html", "htm"], { languageName: "xml" })
-hljs.registerAliases(["py"], { languageName: "python" })
+function ensureLanguagesRegistered() {
+  if (languagesRegistered) return
+  languagesRegistered = true
+  hljs.registerLanguage("javascript", javascript)
+  hljs.registerLanguage("typescript", typescript)
+  hljs.registerLanguage("python", python)
+  hljs.registerLanguage("rust", rust)
+  hljs.registerLanguage("go", go)
+  hljs.registerLanguage("bash", bash)
+  hljs.registerLanguage("json", json)
+  hljs.registerLanguage("css", cssLang)
+  hljs.registerLanguage("markdown", markdown)
+  hljs.registerLanguage("sql", sql)
+  hljs.registerLanguage("diff", diffLang)
+  hljs.registerLanguage("java", java)
+  hljs.registerLanguage("cpp", cpp)
+  hljs.registerLanguage("yaml", yaml)
+  hljs.registerLanguage("xml", xml)
+
+  hljs.registerAliases(["js", "node"], { languageName: "javascript" })
+  hljs.registerAliases(["ts"], { languageName: "typescript" })
+  hljs.registerAliases(["sh", "zsh"], { languageName: "bash" })
+  hljs.registerAliases(["html", "htm"], { languageName: "xml" })
+  hljs.registerAliases(["py"], { languageName: "python" })
+}
 
 export function sanitizeHtml(html: string): string {
   return DOMPurify.sanitize(html, PURIFY_CONFIG as any) as unknown as string
 }
 
 export function highlightSyntax(code: string, language: string): string {
+  ensureLanguagesRegistered()
   const normalizedLanguage = normalizeMarkdownLanguage(language || "")
   const cacheKey = `${normalizedLanguage}\u0000${code}`
   const cached = highlightCache.get(cacheKey)

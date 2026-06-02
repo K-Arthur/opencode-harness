@@ -26,6 +26,7 @@ import type { ChatMessage, Block } from "./types"
 import type { ContextMonitor } from "../monitor/ContextMonitor"
 import type { UsageAnalytics } from "../monitor/UsageAnalytics"
 import type { SkillPreferencesStoreLike } from "../skills/SkillPreferencesStore"
+import type { VoiceInputService } from "./VoiceInputService"
 import { log } from "../utils/outputChannel"
 import { handleWebviewError } from "./utils/errorHandler"
 import { validateWebviewMessage } from "./WebviewMessageValidator"
@@ -55,6 +56,7 @@ export interface WebviewEventRouterOptions {
   contextMonitor: ContextMonitor
   usageAnalytics: UsageAnalytics
   steerPromptHandler: SteerPromptHandler
+  voiceInputService: VoiceInputService
   postMessage: (msg: Record<string, unknown>) => void
   postRequestError: (message: string, sessionId?: string) => void
   showWarningMessage: (message: string, options: vscode.MessageOptions, ...items: string[]) => Thenable<string | undefined>
@@ -108,10 +110,10 @@ export class WebviewEventRouter {
     "accept_permission", "mention_search", "list_sessions", "resume_session",
     "new_session", "get_models", "update_cost", "webview_ready", "init_ack", "rename_session", "webview_log",
     "open_settings", "connect_provider", "open_mcp_settings", "open_mcp_config", "attach_files", "export_chat", "export_chat_json", "export_chat_text", "copy_chat", "stash_prompt", "list_stashes", "delete_stash", "add_provider", "list_providers", "update_provider", "delete_provider",
-    "compact_session", "execute_command", "list_commands",
+    "compact_session", "execute_command", "open_terminal", "list_commands",
     "insert_at_cursor", "create_file_from_code", "compact_banner_action",
     "edit_message", "attach_image",
-    "delete_session", "archive_session", "revert_message",
+    "delete_session", "archive_session", "pin_session", "set_session_tags", "revert_message",
     "list_server_sessions", "delete_server_session", "resume_server_session",
     "add_mcp_server", "update_mcp_server", "remove_mcp_server", "toggle_mcp_server", "get_mcp_servers",
     "show_diff", "list_checkpoints", "restore_checkpoint",
@@ -124,11 +126,12 @@ export class WebviewEventRouter {
     "get_todos",
     "get_skills", "toggle_skill", "search_skills",
     "get_changed_files", "get_file_diff", "open_file", "open_folder", "open_url",
-    "get_subagent_activities", "cancel_subagent",
+    "get_subagent_activities", "get_subagent_detail", "cancel_subagent", "mark_subagent_read",
     "update_setting", "show_error", "get_context_usage", "record_stash_usage",
     "model_favorite", "model_toggle",
     "question_answer",
     "resume_stream", "decline_resume",
+    "get_stt_settings", "stt_transcribe_audio",
   ])
 
   private readonly webviewHandlers: Map<string, (msg: Record<string, unknown>, sessionId?: string) => void | Promise<void>> = new Map([
@@ -141,6 +144,17 @@ export class WebviewEventRouter {
           typeof msg.mode === "string" ? msg.mode : undefined
         )
       }
+    }],
+    ["get_stt_settings", async () => {
+      await this.opts.voiceInputService.postSettings()
+    }],
+    ["stt_transcribe_audio", async (msg: Record<string, unknown>) => {
+      await this.opts.voiceInputService.transcribeAudio({
+        requestId: msg.requestId,
+        mimeType: msg.mimeType,
+        data: msg.data,
+        sizeBytes: msg.sizeBytes,
+      })
     }],
     ["show_diff", async (msg: Record<string, unknown>, sessionId?: string) => {
       const diffId = msg.diffId as string | undefined
@@ -570,6 +584,29 @@ export class WebviewEventRouter {
         this.opts.sessionStore.archive(targetId)
         log.info(`Session archived: ${targetId}`)
       }
+    }],
+    ["pin_session", (msg: Record<string, unknown>) => {
+      const targetId = msg.targetSessionId as string | undefined
+      if (targetId && typeof msg.pinned === "boolean") {
+        this.opts.sessionStore.setPinned(targetId, msg.pinned)
+        log.info(`Session ${msg.pinned ? "pinned" : "unpinned"}: ${targetId}`)
+      }
+    }],
+    ["set_session_tags", (msg: Record<string, unknown>) => {
+      const targetId = msg.targetSessionId as string | undefined
+      if (targetId && Array.isArray(msg.tags)) {
+        const tags = msg.tags.filter((tag): tag is string => typeof tag === "string")
+        this.opts.sessionStore.setTags(targetId, tags)
+        log.info(`Session tags updated: ${targetId}`)
+      }
+    }],
+    ["open_terminal", (msg: Record<string, unknown>) => {
+      const command = typeof msg.command === "string" ? msg.command : ""
+      if (!command.trim()) return
+      const cwd = typeof msg.cwd === "string" && msg.cwd.trim() ? msg.cwd : undefined
+      const terminal = vscode.window.createTerminal({ name: "OpenCode Task", cwd })
+      terminal.show()
+      terminal.sendText(command, msg.autorun === true)
     }],
     ["revert_message", async (msg: Record<string, unknown>, sessionId?: string) => {
       if (sessionId && typeof msg.messageId === "string") {
@@ -1094,22 +1131,106 @@ export class WebviewEventRouter {
         this.opts.postMessage({ type: "skills_search_results", results: [], query })
       }
     }],
-    ["get_subagent_activities", (msg: Record<string, unknown>, sessionId?: string) => {
+    ["get_subagent_activities", async (msg: Record<string, unknown>, sessionId?: string) => {
       if (!sessionId) return
-      const activities: unknown[] = []
-      this.opts.postMessage({ type: "subagent_activities", activities, sessionId })
+      const cliSessionId = this.opts.tabManager.getTab(sessionId)?.cliSessionId
+      if (!cliSessionId) return
+      try {
+        const children = await this.opts.sessionManager.sessionClient.getChildSessions(cliSessionId)
+        const activities: unknown[] = []
+        for (const child of children) {
+          const childSid = typeof child.id === "string" ? child.id : child.id
+          const time = child.time as { created?: number; updated?: number } | undefined
+          const title = typeof child.title === "string" ? child.title : ""
+          const summary = child.summary as { additions?: number; deletions?: number; files?: number } | undefined
+          let parentId = ""
+          if (child.parentID && typeof child.parentID === "string") {
+            parentId = child.parentID as string
+          }
+          const activity: Record<string, unknown> = {
+            id: childSid,
+            name: title || "subagent",
+            status: "completed",
+            summary: summary ? `${summary.additions ?? 0}+ / ${summary.deletions ?? 0}- (${summary.files ?? 0} files)` : undefined,
+            createdAt: time?.created,
+            updatedAt: time?.updated,
+            sessionId: childSid,
+            parentSessionId: parentId,
+            isLive: false,
+          }
+          activities.push(activity)
+        }
+        this.opts.postMessage({ type: "subagent_activities", activities, sessionId })
+      } catch (err) {
+        log.error(`Failed to get subagent activities for ${cliSessionId}`, err)
+        this.opts.postMessage({ type: "subagent_activities", activities: [], sessionId })
+      }
     }],
-    ["cancel_subagent", (msg: Record<string, unknown>, sessionId?: string) => {
+    ["get_subagent_detail", async (msg: Record<string, unknown>, sessionId?: string) => {
+      const subagentId = msg.subagentId as string | undefined
+      if (!sessionId || !subagentId) return
+      try {
+        const sessionData = await this.opts.sessionManager.sessionClient.getSessionDetails(subagentId)
+        const messages = await this.opts.sessionManager.sessionClient.getSessionMessages(subagentId).catch(() => [])
+        const time = sessionData.time as { created?: number; updated?: number } | undefined
+        const title = typeof sessionData.title === "string" ? sessionData.title : ""
+        const summary = sessionData.summary as { additions?: number; deletions?: number; files?: number } | undefined
+        let parentId = ""
+        if (sessionData.parentID && typeof sessionData.parentID === "string") {
+          parentId = sessionData.parentID as string
+        }
+        const detail: Record<string, unknown> = {
+          id: subagentId,
+          sessionId: subagentId,
+          parentSessionId: parentId,
+          agentName: title || "subagent",
+          status: "completed",
+          title,
+          createdAt: time?.created,
+          updatedAt: time?.updated,
+          summary: title,
+          result: summary ? `${summary.additions ?? 0} additions, ${summary.deletions ?? 0} deletions` : undefined,
+          messages: messages.map((m: { info?: { role?: string; id?: string; time?: { created?: number } }; parts?: Array<{ type: string; text?: string }> }) => {
+            const role = m.info?.role ?? "assistant"
+            const text = (m.parts ?? []).map((p: { type: string; text?: string }) => p.type === "text" ? (p.text ?? "") : "").filter(Boolean).join("\n")
+            return { role, text, timestamp: m.info?.time?.created }
+          }),
+          toolCalls: [],
+          commands: [],
+          fileChanges: [],
+          isLive: false,
+          unreadActivityCount: 0,
+        }
+        this.opts.postMessage({ type: "subagent_detail", sessionId, subagentId, detail })
+      } catch (err) {
+        log.error(`Failed to get subagent detail for ${subagentId}`, err)
+        this.opts.postMessage({
+          type: "webview_request_error", sessionId,
+          error: `Failed to load subagent detail: ${err instanceof Error ? err.message : String(err)}`,
+        })
+      }
+    }],
+    ["cancel_subagent", async (msg: Record<string, unknown>, sessionId?: string) => {
       if (!sessionId) return
       const subagentId = msg.subagentId as string | undefined
       if (!subagentId) return
       log.info(`Cancel subagent ${subagentId} in session ${sessionId}`)
-      this.opts.postMessage({
-        type: "webview_request_error",
-        requestType: "cancel_subagent",
-        sessionId,
-        error: "Subagent cancellation is not available for the current OpenCode server.",
-      })
+      try {
+        await this.opts.sessionManager.sessionClient.abortSession(subagentId)
+        log.info(`Subagent ${subagentId} aborted`)
+      } catch (err) {
+        log.error(`Failed to cancel subagent ${subagentId}`, err)
+        this.opts.postMessage({
+          type: "webview_request_error",
+          requestType: "cancel_subagent",
+          sessionId,
+          error: err instanceof Error ? err.message : "Failed to cancel subagent",
+        })
+      }
+    }],
+    ["mark_subagent_read", (msg: Record<string, unknown>, sessionId?: string) => {
+      // No-op in the host: read state is managed in the webview.
+      // Host-side, this could be used to reset unread counts for SSE tracking.
     }],
     ["add_to_queue", (msg: Record<string, unknown>, sessionId?: string) => {
       // I7: validate before round-tripping back to the webview to forestall payload bloat.

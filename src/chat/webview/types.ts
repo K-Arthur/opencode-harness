@@ -1,5 +1,7 @@
 /** Webview type definitions */
 
+import type { VoiceInputSettings } from "../voiceInputCore"
+
 export type MessageRole = "user" | "assistant" | "system"
 
 // ---------------------------------------------------------------------------
@@ -65,6 +67,14 @@ export interface ThinkingBlock {
   streaming: boolean
 }
 
+export interface ErrorActionButton {
+  label: string
+  action: string
+  primary?: boolean
+  disabled?: boolean
+  metadata?: Record<string, unknown>
+}
+
 export interface ErrorBlock {
   [key: string]: unknown
   type: 'error'
@@ -72,6 +82,7 @@ export interface ErrorBlock {
   message: string
   detail?: string
   retryable: boolean
+  actionButtons?: ErrorActionButton[]
 }
 
 /** One question group within a `QuestionBlock` (a model question may ask several). */
@@ -97,6 +108,13 @@ export interface QuestionBlock {
   text: string
   options: string[]
   allowFreeText: boolean
+  /**
+   * Persisted answer state. When true, the transcript renders as a
+   * non-interactive record instead of a pending pointer.
+   */
+  answered?: boolean
+  answer?: string
+  answerSource?: 'option' | 'freetext'
 }
 
 // Legacy block type — kept for backward compatibility with existing renders
@@ -220,10 +238,15 @@ export interface SessionState {
   instructions?: string
   revertHistory?: RevertEntry[]
   subagentActivities?: SubagentActivity[]
+  subagentDetail?: unknown
   userTodos?: Todo[]
   todoOverrides?: Record<string, 'pending' | 'in-progress' | 'completed'>
   deletedTodoIds?: string[]
   todoFilter?: 'all' | 'active' | 'completed' | 'in-progress'
+  activityFilter?: 'all' | 'messages' | 'plans' | 'commands' | 'files' | 'errors' | 'approvals'
+  commandFilter?: 'all' | 'running' | 'failed' | 'succeeded'
+  pinned?: boolean
+  tags?: string[]
 }
 
 export interface RevertEntry {
@@ -269,6 +292,28 @@ export interface SubagentActivity {
   testsPassing?: number
   dependencies?: string[]
   domain?: 'frontend' | 'backend' | 'database' | 'api' | 'shared'
+  // Enhanced detail fields
+  summary?: string
+  currentActivity?: string
+  durationMs?: number
+  startedAt?: number
+  completedAt?: number
+  error?: string
+  isLive?: boolean
+  unreadActivityCount?: number
+  sessionId?: string
+  parentSessionId?: string
+  agentMode?: string
+  model?: string
+  provider?: string
+  inputPrompt?: string
+  result?: string
+  toolCalls?: Array<{ id: string; name: string; status: string; args?: string; result?: string; error?: string; durationMs?: number }>
+  commands?: Array<{ command: string; status: string; output?: string; durationMs?: number; error?: string }>
+  fileChanges?: Array<{ path: string; type: string; additions?: number; deletions?: number; diff?: string }>
+  tokenUsage?: { input: number; output: number; total: number }
+  cost?: number
+  metadata?: Record<string, unknown>
 }
 
 export interface TokenUsageSnapshot {
@@ -291,6 +336,11 @@ export interface WebviewState {
   nextSessionNum: number
   globalModel: string
   globalVariant?: string
+  /**
+   * Mode the next session will start in, chosen on the welcome screen where no
+   * session exists to receive a `change_mode`. Applied by `createSession`.
+   */
+  pendingMode?: string
   initialized?: boolean
   disabledModels?: string[]
   favoriteModels?: string[]
@@ -332,6 +382,10 @@ export interface SessionSummary {
   time?: number
   messageCount?: number
   cost?: number
+  cliSessionId?: string
+  workspacePath?: string
+  pinned?: boolean
+  tags?: string[]
 }
 
 export interface ContextChip {
@@ -443,7 +497,6 @@ export type HostMessage =
   | { type: "server_status"; sessionId?: string; status: string; errorContext?: unknown }
   | { type: "permission_request"; sessionId: string; permissionId?: string; title: string; permissionType?: string; pattern?: string | string[]; metadata?: Record<string, unknown> }
   | { type: "todos_update"; sessionId: string; todos: unknown[] }
-  | { type: "todo_operation_denied"; sessionId: string; reason: string; todoId?: string }
   | { type: "changed_files_update"; sessionId: string; files: FileChange[] }
   | { type: "file_edited"; sessionId: string; file: string }
   | { type: "message"; sessionId: string; message: ChatMessage }
@@ -474,6 +527,9 @@ export type HostMessage =
   | { type: "request_error"; message: string; errorContext?: unknown; sessionId?: string }
   | { type: "webview_request_error"; error: string; requestType?: string; sessionId?: string }
   | { type: "prompt_rejected"; reason: string; sessionId?: string }
+  | { type: "stt_settings"; settings: VoiceInputSettings }
+  | { type: "stt_transcript"; requestId: string; text: string }
+  | { type: "stt_error"; requestId?: string; reason: string; message: string }
   | { type: "rate_limit_state"; state?: unknown }
   | { type: "rate_limit_exhausted"; info?: RateLimitInfo }
   | { type: "theme_vars"; vars: Record<string, string> }
@@ -517,7 +573,9 @@ export type HostMessage =
   | { type: "open_commands_palette" }
   | { type: "skills_list"; skills: unknown[] }
   | { type: "skills_search_results"; results: unknown[] }
-  | { type: "subagent_activities"; activities: unknown[] }
+  | { type: "subagent_activities"; activities: unknown[]; sessionId: string }
+  | { type: "subagent_detail"; sessionId: string; subagentId: string; detail: unknown }
+  | { type: "subagent_update"; sessionId: string; subagent: unknown }
   | { type: "show_error"; message: string }
   /** Response to get_file_diff — carries unified diff lines for a given path. */
   | { type: "file_diff_response"; path: string; sessionId?: string; lines: DiffLine[]; error?: string }
@@ -597,6 +655,9 @@ export type WebviewMessage =
   | { type: "rename_session"; sessionId: string; name: string }
   | { type: "delete_session"; targetSessionId: string }
   | { type: "archive_session"; targetSessionId: string }
+  | { type: "pin_session"; targetSessionId: string; pinned: boolean }
+  | { type: "set_session_tags"; targetSessionId: string; tags: string[] }
+  | { type: "open_terminal"; command: string; cwd?: string; autorun?: boolean }
   | { type: "open_settings" }
   | { type: "connect_provider" }
   | { type: "open_mcp_settings" }
@@ -644,6 +705,8 @@ export type WebviewMessage =
   | { type: "resume_stream"; sessionId: string }
   | { type: "decline_resume"; sessionId: string }
   | { type: "request_state_sync" }
+  | { type: "get_stt_settings" }
+  | { type: "stt_transcribe_audio"; requestId: string; mimeType: string; data: string; sizeBytes?: number; durationMs?: number }
   | { type: "set_instructions"; sessionId: string; instructions: string }
   | { type: "fork_session"; sessionId: string }
   | { type: "toggle_diff_wrap"; sessionId?: string }
@@ -653,15 +716,15 @@ export type WebviewMessage =
   | { type: "context_suggestions_request" }
   | { type: "add_to_queue"; item: unknown }
   | { type: "get_todos"; sessionId: string }
-  | { type: "toggle_todo"; todoId: string }
-  | { type: "delete_todo"; todoId: string }
   | { type: "get_skills" }
   | { type: "toggle_skill"; skillId: string; enabled: boolean }
   | { type: "search_skills"; query: string }
   | { type: "get_changed_files"; sessionId: string }
   | { type: "open_file"; path: string }
   | { type: "get_subagent_activities"; sessionId?: string }
+  | { type: "get_subagent_detail"; sessionId: string; subagentId: string }
   | { type: "cancel_subagent"; subagentId: string }
+  | { type: "mark_subagent_read"; sessionId: string; subagentId: string }
   | { type: "update_setting"; key: string; value: unknown }
   | { type: "show_error"; message: string }
   | { type: "get_context_usage"; sessionId: string }

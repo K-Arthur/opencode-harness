@@ -3,6 +3,7 @@ import { SessionManager } from "./session/SessionManager"
 import { SessionStore } from "./session/SessionStore"
 import { SessionExporter } from "./session/SessionExporter"
 import { ContextEngine } from "./context/ContextEngine"
+import { STATUS_BAR_TOOLTIPS } from "./statusBarTooltips"
 import { VSCodeWorkspaceAdapter } from "./context/VSCodeWorkspaceAdapter"
 import { ContextFileProvider } from "./context/ContextFileProvider"
 import { ContextMonitor } from "./monitor/ContextMonitor"
@@ -281,7 +282,7 @@ function initConnectionStatusBar(
   const connectionStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99)
   connectionStatus.name = "OpenCode Connection"
   connectionStatus.text = "$(circle-slash) OpenCode: Not connected"
-  connectionStatus.tooltip = "OpenCode server is not running. Click to start."
+  connectionStatus.tooltip = STATUS_BAR_TOOLTIPS.connection.notConnected
   connectionStatus.command = "opencode-harness.openChat"
   connectionStatus.show()
   context.subscriptions.push(connectionStatus)
@@ -290,7 +291,7 @@ function initConnectionStatusBar(
     switch (event.type) {
       case "server_connected":
         connectionStatus.text = "$(check-all) OpenCode: Connected"
-        connectionStatus.tooltip = `OpenCode server running on port ${sessionManager.currentPort}`
+        connectionStatus.tooltip = STATUS_BAR_TOOLTIPS.connection.connected(sessionManager.currentPort)
         connectionStatus.command = "opencode-harness.openChat"
         void modelManager.refreshModels(sessionManager.currentPort, sessionManager.authHeader).catch(err => log.warn("Refresh models on connect failed", err))
         // Persist port for potential reuse after reload
@@ -298,7 +299,7 @@ function initConnectionStatusBar(
         break
       case "server_disconnected":
         connectionStatus.text = "$(circle-slash) OpenCode: Not connected"
-        connectionStatus.tooltip = "OpenCode server is not running. Click to retry."
+        connectionStatus.tooltip = STATUS_BAR_TOOLTIPS.connection.disconnected
         connectionStatus.command = "opencode-harness.openChat"
         // Invalidate stale CLI session IDs so next prompt creates fresh server sessions
         sessionStore.invalidateAllCliSessionIds()
@@ -307,7 +308,7 @@ function initConnectionStatusBar(
         break
       case "server_error":
         connectionStatus.text = "$(error) OpenCode: Connection error"
-        connectionStatus.tooltip = "OpenCode encountered an error. Check output channel for details."
+        connectionStatus.tooltip = STATUS_BAR_TOOLTIPS.connection.error
         connectionStatus.command = "opencode-harness.openChat"
         break
       case "sessions_recovered": {
@@ -456,6 +457,49 @@ function registerCoreCommands(
   registerStopCommand(context, chatProvider)
   registerSlashCommandShortcuts(context, chatProvider)
   registerGenerateAgentsMdCommand(context)
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.setVoiceInputApiKey", () => {
+      void chatProvider.setVoiceInputOpenAiApiKey().catch((err) => log.error("setVoiceInputApiKey command failed", err))
+    })
+  )
+
+  // Mode switching commands
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.cycleMode", () => {
+      try {
+        chatProvider.cycleMode()
+      } catch (err) {
+        log.error("cycleMode command failed", err)
+      }
+    })
+  )
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.setBuildMode", () => {
+      try {
+        chatProvider.setModeForActiveSession("build")
+      } catch (err) {
+        log.error("setBuildMode command failed", err)
+      }
+    })
+  )
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.setPlanMode", () => {
+      try {
+        chatProvider.setModeForActiveSession("plan")
+      } catch (err) {
+        log.error("setPlanMode command failed", err)
+      }
+    })
+  )
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.setAutoMode", () => {
+      try {
+        chatProvider.setModeForActiveSession("auto")
+      } catch (err) {
+        log.error("setAutoMode command failed", err)
+      }
+    })
+  )
 }
 
 function initMethodology(context: vscode.ExtensionContext): vscode.StatusBarItem {
@@ -491,7 +535,7 @@ function initMethodology(context: vscode.ExtensionContext): vscode.StatusBarItem
   const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 98)
   statusItem.name = 'OpenCode Methodology'
   statusItem.text = '$(lightbulb) —'
-  statusItem.tooltip = 'OpenCode Methodology — click to configure'
+  statusItem.tooltip = STATUS_BAR_TOOLTIPS.methodology.idle
   statusItem.command = {
     command: 'workbench.action.openSettings',
     title: 'Open Settings',
@@ -512,7 +556,12 @@ function updateMethodologyStatusImpl(result: AdvisoryOrchestrationResult): void 
   const tier = result.advisory.recommendedTier
   methodologyStatusItem.text = `$(lightbulb) ${label} · ${tier}`
   const confPct = (conf * 100).toFixed(0)
-  methodologyStatusItem.tooltip = `Methodology: ${label}\nConfidence: ${confPct}%\nRecommended tier: ${tier}\n${result.advisory.reasoning}\n\nClick to configure`
+  methodologyStatusItem.tooltip = STATUS_BAR_TOOLTIPS.methodology.active(
+    label,
+    tier,
+    confPct,
+    result.advisory.reasoning,
+  )
 }
 
 export function updateMethodologyStatus(result: AdvisoryOrchestrationResult): void {

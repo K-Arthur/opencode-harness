@@ -23,6 +23,7 @@ const settingsMenuSource = readFileSync(path.join(__dirname, "ui", "settingsMenu
 const fileTrackingSource = readFileSync(path.join(__dirname, "ui", "fileTracking.ts"), "utf8")
 const buttonSetupSource = readFileSync(path.join(__dirname, "ui", "buttonSetup.ts"), "utf8")
 const scrollMarkersSource = readFileSync(path.join(__dirname, "ui", "scrollMarkers.ts"), "utf8")
+const indexHtml = readFileSync(path.join(__dirname, "index.html"), "utf8")
 const allSource = source + "\n" + themeCustomizerSource + "\n" + modeDropdownSource + "\n" + sessionModalSource + "\n" + tokenCostDisplaySource + "\n" + attachmentsSource + "\n" + modeWarningSource + "\n" + welcomeViewSource + "\n" + settingsMenuSource + "\n" + fileTrackingSource + "\n" + buttonSetupSource + "\n" + scrollMarkersSource
 const sessionListRendererSource = readFileSync(path.join(__dirname, "sessionListRenderer.ts"), "utf8")
 const messagesCss = readFileSync(path.join(__dirname, "css", "messages.css"), "utf8")
@@ -239,6 +240,33 @@ describe("main.ts", () => {
     assert.ok(allSource.includes('"get_theme_config"'), "must request current theme config")
     assert.ok(allSource.includes('"update_theme_config"'), "must save personalized theme overrides")
     assert.ok(allSource.includes('"theme_config"'), "must handle theme config responses")
+  })
+
+  it("wires Activity and Tasks panels to real HTML elements", () => {
+    for (const id of [
+      "activity-toggle-btn",
+      "activity-panel",
+      "activity-filters",
+      "activity-list",
+      "activity-close-btn",
+      "tasks-toggle-btn",
+      "tasks-panel",
+      "tasks-filters",
+      "tasks-list",
+      "tasks-close-btn",
+    ]) {
+      assert.ok(indexHtml.includes(`id="${id}"`), `index.html must expose #${id}`)
+    }
+    assert.ok(source.includes("setupActivityPanel"), "main.ts must initialize the activity panel")
+    assert.ok(source.includes("setupTasksPanel"), "main.ts must initialize the tasks panel")
+  })
+
+  it("rate_limit_exhausted reads resetAt from the structured info payload", () => {
+    const idx = source.indexOf('"rate_limit_exhausted"')
+    assert.ok(idx >= 0, "rate_limit_exhausted handler must exist")
+    const block = source.slice(idx, idx + 500)
+    assert.ok(block.includes("msg.info"), "handler must read resetAt from msg.info.resetAt")
+    assert.ok(block.includes("handleRateLimitExhausted(els, resetAt)"), "input banner must receive the extracted resetAt")
   })
 
   // ===== RED PHASE: New tests for features that should exist but don't yet =====
@@ -746,6 +774,55 @@ it("unified modal: server session items send resume_server_session on click", ()
         /activeSession\?\.\s*model|sessionModel/.test(block),
         "model_list must reference the session's model so a restored session keeps its own model"
       )
+    })
+
+    // ── Compaction / push-state model-overwrite bug ──────────────────────
+    // Background: StatePushService.pushModelToWebview() is called from many
+    // host-side paths (init, pushAllStateToWebview, resume_session after
+    // compaction, onModelChanged etc.). The webview's model_update handler
+    // used to unconditionally overwrite the active session's model with the
+    // pushed global model — which meant: pick a per-session model → start a
+    // compaction → session is silently switched back to the global model
+    // without any user-visible signal. Same bug for variant_update.
+    // The fix: model_update / variant_update must only update the GLOBAL
+    // preference and the dropdown UI, never the active session's per-session
+    // model/variant. Per-session values are owned by the user (set_model
+    // message) or by server restore (resume_session_data).
+
+    function getHandlerBlock(type: string): string {
+      const idx = source.indexOf(`["${type}"`)
+      assert.ok(idx >= 0, `${type} handler must exist in main.ts`)
+      // Each handler is a 2-tuple [type, fn]. Slice up to the next 2-tuple.
+      const rest = source.slice(idx + 1)
+      const nextTuple = rest.search(/\],\s*\["/)
+      return nextTuple === -1 ? rest : rest.slice(0, nextTuple)
+    }
+
+    it("model_update handler does not silently overwrite active session's model", () => {
+      const block = getHandlerBlock("model_update")
+      // The handler may legitimately call setGlobalModel + setCurrentModel
+      // (those are global-preference / dropdown UI updates). It must NOT
+      // call setSessionModel, which would clobber the user's per-session
+      // choice on every host push (e.g. resume_session after compaction).
+      assert.ok(
+        !/setSessionModel\s*\(/.test(block),
+        "model_update handler must not call setSessionModel — host pushes must not clobber per-session model"
+      )
+    })
+
+    it("model_update handler still updates the global model and dropdown", () => {
+      const block = getHandlerBlock("model_update")
+      assert.ok(/setGlobalModel\s*\(/.test(block), "model_update must update the global model")
+      assert.ok(/setCurrentModel\s*\(/.test(block), "model_update must update the dropdown UI")
+    })
+
+    it("variant_update handler does not silently overwrite active session's variant", () => {
+      const block = getHandlerBlock("variant_update")
+      assert.ok(
+        !/setSessionVariant\s*\(/.test(block),
+        "variant_update handler must not call setSessionVariant — host pushes must not clobber per-session variant"
+      )
+      assert.ok(/setGlobalVariant\s*\(/.test(block), "variant_update must update the global variant")
     })
 
     it("switchTab restores the session's model on the dropdown", () => {

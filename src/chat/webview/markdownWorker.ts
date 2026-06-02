@@ -27,27 +27,79 @@ type RenderResponse =
   | { id: number; html: string }
   | { id: number; error: string }
 
-hljs.registerLanguage("javascript", javascript)
-hljs.registerLanguage("typescript", typescript)
-hljs.registerLanguage("python", python)
-hljs.registerLanguage("rust", rust)
-hljs.registerLanguage("go", go)
-hljs.registerLanguage("bash", bash)
-hljs.registerLanguage("json", json)
-hljs.registerLanguage("css", cssLang)
-hljs.registerLanguage("markdown", markdown)
-hljs.registerLanguage("sql", sql)
-hljs.registerLanguage("diff", diffLang)
-hljs.registerLanguage("java", java)
-hljs.registerLanguage("cpp", cpp)
-hljs.registerLanguage("yaml", yaml)
-hljs.registerLanguage("xml", xml)
+let registered = false
+let md: MarkdownIt | undefined
 
-hljs.registerAliases(["js", "node"], { languageName: "javascript" })
-hljs.registerAliases(["ts"], { languageName: "typescript" })
-hljs.registerAliases(["sh", "zsh"], { languageName: "bash" })
-hljs.registerAliases(["html", "htm"], { languageName: "xml" })
-hljs.registerAliases(["py"], { languageName: "python" })
+function ensureLanguagesRegistered() {
+  if (registered) return
+  registered = true
+  registerAllLanguages()
+}
+
+self.onmessage = (event: MessageEvent<RenderRequest>) => {
+  const id = Number(event.data?.id)
+  const text = typeof event.data?.text === "string" ? event.data.text : ""
+  if (!Number.isFinite(id)) return
+
+  try {
+    ensureLanguagesRegistered()
+    const response: RenderResponse = { id, html: getMarkdown().render(text) }
+    self.postMessage(response)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Markdown worker render failed"
+    const response: RenderResponse = { id, error: message }
+    self.postMessage(response)
+  }
+}
+
+function registerAllLanguages() {
+  hljs.registerLanguage("javascript", javascript)
+  hljs.registerLanguage("typescript", typescript)
+  hljs.registerLanguage("python", python)
+  hljs.registerLanguage("rust", rust)
+  hljs.registerLanguage("go", go)
+  hljs.registerLanguage("bash", bash)
+  hljs.registerLanguage("json", json)
+  hljs.registerLanguage("css", cssLang)
+  hljs.registerLanguage("markdown", markdown)
+  hljs.registerLanguage("sql", sql)
+  hljs.registerLanguage("diff", diffLang)
+  hljs.registerLanguage("java", java)
+  hljs.registerLanguage("cpp", cpp)
+  hljs.registerLanguage("yaml", yaml)
+  hljs.registerLanguage("xml", xml)
+
+  hljs.registerAliases(["js", "node"], { languageName: "javascript" })
+  hljs.registerAliases(["ts"], { languageName: "typescript" })
+  hljs.registerAliases(["sh", "zsh"], { languageName: "bash" })
+  hljs.registerAliases(["html", "htm"], { languageName: "xml" })
+  hljs.registerAliases(["py"], { languageName: "python" })
+}
+
+function getMarkdown(): MarkdownIt {
+  if (md) return md
+  md = new MarkdownIt/* lazy */({
+    html: false,
+    linkify: true,
+    typographer: false,
+    breaks: false,
+    highlight: (str, lang) => highlightSyntax(str, lang || ""),
+  }).use(taskLists, { label: false })
+
+  const defaultLinkOpen = md.renderer.rules.link_open || ((tokens, idx, options, _env, self) =>
+    self.renderToken(tokens, idx, options))
+  md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
+    const token = tokens[idx]
+    if (!token) return defaultLinkOpen(tokens, idx, options, env, self)
+    const href = token.attrGet("href") ?? ""
+    if (/^(https?|ftp):/i.test(href)) {
+      token.attrSet("target", "_blank")
+      token.attrSet("rel", "noopener noreferrer")
+    }
+    return defaultLinkOpen(tokens, idx, options, env, self)
+  }
+  return md
+}
 
 function highlightSyntax(code: string, language: string): string {
   const normalized = normalizeMarkdownLanguage(language)
@@ -58,44 +110,5 @@ function highlightSyntax(code: string, language: string): string {
     return hljs.highlightAuto(code).value
   } catch {
     return escapeHtml(code)
-  }
-}
-
-const md = new MarkdownIt({
-  html: false,
-  linkify: true,
-  typographer: false,
-  breaks: false,
-  highlight: (str, lang) => highlightSyntax(str, lang || ""),
-}).use(taskLists, { label: false })
-
-const defaultLinkOpen = md.renderer.rules.link_open || ((tokens, idx, options, _env, self) =>
-  self.renderToken(tokens, idx, options))
-
-md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
-  const token = tokens[idx]
-  if (!token) return defaultLinkOpen(tokens, idx, options, env, self)
-
-  const href = token.attrGet("href") ?? ""
-  if (/^(https?|ftp):/i.test(href)) {
-    token.attrSet("target", "_blank")
-    token.attrSet("rel", "noopener noreferrer")
-  }
-
-  return defaultLinkOpen(tokens, idx, options, env, self)
-}
-
-self.onmessage = (event: MessageEvent<RenderRequest>) => {
-  const id = Number(event.data?.id)
-  const text = typeof event.data?.text === "string" ? event.data.text : ""
-  if (!Number.isFinite(id)) return
-
-  try {
-    const response: RenderResponse = { id, html: md.render(text) }
-    self.postMessage(response)
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Markdown worker render failed"
-    const response: RenderResponse = { id, error: message }
-    self.postMessage(response)
   }
 }

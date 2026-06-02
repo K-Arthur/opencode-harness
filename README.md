@@ -58,6 +58,7 @@ OpenCode includes advanced features like cost tracking, theme customization, gra
 - **Smart Diffs** — AI-suggested code changes shown as unified diffs with Accept/Discard controls
 - **Checkpoints** — VS Code-safe file snapshots for extension-managed diff accepts, plus OpenCode-native message revert for server-managed edits
 - **Slash Commands** — `/clear`, `/model`, `/cost`, `/new`, `/export`, `/compact`, `/continue`, `/help`, `/queue`
+- **Voice Input** — Click the microphone in the composer to dictate a prompt. Transcripts are inserted for review and never auto-sent; cloud transcription is opt-in and uses SecretStorage for the API key.
 - **Export Conversation** — Save current session as Markdown file
 - **Session History** — Searchable conversation history with resume support in the chat surface
 - **@-Mentions** — Reference files, folders, problems, URLs, and terminal output in your prompts, including path-aware file search such as `@src/util`
@@ -142,6 +143,19 @@ All commands are also available via the Command Palette (`Ctrl+Shift+P`).
 - File attachments warn before sending sensitive paths such as `.env`, credentials, private keys, and files containing common prompt-injection phrases.
 - Image attachments larger than 10 MB are rejected before they reach the chat.
 - Open-file context is budgeted by estimated tokens, not raw character count, and truncated with an inline marker when the configured context limit is reached.
+
+## Voice Input
+
+The chat composer includes a microphone button for speech-to-text prompt entry.
+Click once to start recording and click again, press Escape, or wait for the
+duration cap to stop. The transcript is inserted into the prompt textarea for
+editing; it is not sent automatically.
+
+By default, voice input uses browser speech recognition when the webview supports
+it. To use OpenAI transcription instead, set `opencode.voiceInput.provider` to
+`"openai"` and run **OpenCode: Set Voice Input OpenAI API Key**. The key is stored
+in VS Code SecretStorage, not settings JSON. See [docs/voice-input.md](docs/voice-input.md)
+for settings, privacy behavior, and provider details.
 
 ## Design System
 

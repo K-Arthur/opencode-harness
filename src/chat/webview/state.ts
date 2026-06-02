@@ -16,6 +16,7 @@ const DEFAULT_STATE: WebviewState = {
   nextSessionNum: 1,
   globalModel: "",
   globalVariant: "",
+  pendingMode: "build",
   initialized: false,
   isTimelineVisible: false,
   disabledModels: [],
@@ -272,13 +273,13 @@ export function createState(vscode: VsCodeApi) {
     return state
   }
 
-  function createSession(name?: string, model?: string): SessionState {
+  function createSession(name?: string, model?: string, mode?: string): SessionState {
     const id = `session-${generateId()}`
     const session: SessionState = {
       id,
       name: name || "",
       model: model || state.globalModel || "",
-      mode: "build",
+      mode: mode || state.pendingMode || "build",
       messages: [],
       isStreaming: false,
       ...(state.globalVariant ? { variant: state.globalVariant } : {}),
@@ -499,6 +500,16 @@ export function createState(vscode: VsCodeApi) {
     return state.globalVariant || ""
   }
 
+  /** Mode the next created session will start in (chosen on the welcome screen). */
+  function getPendingMode(): string {
+    return state.pendingMode || "build"
+  }
+
+  function setPendingMode(mode: string) {
+    state.pendingMode = mode
+    save()
+  }
+
   function setInitialized() {
     state.initialized = true
     save()
@@ -610,6 +621,8 @@ export function createState(vscode: VsCodeApi) {
     setGlobalModel,
     setGlobalVariant,
     getGlobalVariant,
+    getPendingMode,
+    setPendingMode,
     setSessionVariant,
     loadSessions,
     setInitialized,
@@ -638,6 +651,18 @@ export function createState(vscode: VsCodeApi) {
       if (!session) return
       session.tokenUsage = usage
       save()
-    }
+    },
+    setSubagentActivities(id: string, activities: import("./types").SubagentActivity[]) {
+      const session = state.sessions[id]
+      if (!session) return
+      session.subagentActivities = activities
+      save()
+    },
+    setSubagentDetail(id: string, detail: unknown) {
+      const session = state.sessions[id]
+      if (!session) return
+      session.subagentDetail = detail
+      save()
+    },
   }
 }

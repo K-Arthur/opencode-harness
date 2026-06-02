@@ -24,6 +24,7 @@ import type {
   DiffBlock,
   ThinkingBlock,
   ErrorBlock,
+  ErrorActionButton,
   DiffHunk,
   DiffLine,
   ToolCollapseConfig,
@@ -446,6 +447,7 @@ export interface RenderOptions {
   skipHeader?: boolean
   collapseConfig?: ToolCollapseConfig
   isStreaming?: boolean
+  onAnswered?: (block: Block) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -1045,11 +1047,22 @@ function renderRetryBlock(block: Block, _opts: RenderOptions): HTMLElement | nul
 }
 
 function renderCompactionBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
-  const marker = document.createElement("div")
-  marker.className = "compaction-marker"
-  const auto = block.auto === true
-  marker.textContent = auto ? "Auto-compacted" : "Compacted"
-  return marker
+  const card = document.createElement("div")
+  card.className = "compaction-card"
+  card.setAttribute("role", "status")
+
+  const icon = document.createElement("span")
+  icon.className = "compaction-card-icon"
+  icon.setAttribute("aria-hidden", "true")
+  icon.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1.5 6h9M6 1.5v9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`
+
+  const label = document.createElement("span")
+  label.className = "compaction-card-label"
+  label.textContent = block.auto === true ? "Session auto-compacted" : "Session compacted"
+
+  card.appendChild(icon)
+  card.appendChild(label)
+  return card
 }
 
 function renderSubtaskBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
@@ -1653,26 +1666,56 @@ function questionGroupsFromBlock(block: Block): RenderQuestionGroup[] {
 function renderQuestionBlock(block: Block, opts: RenderOptions): HTMLElement | null {
   const wrapper = document.createElement("div")
   wrapper.className = "question-block"
-  wrapper.setAttribute("role", "form")
   wrapper.setAttribute("aria-label", "Question from model")
 
   const sessionId = (block.sessionId as string | undefined) || ""
   const toolCallId = (block.toolCallId as string | undefined) || (block.id as string | undefined) || ""
-  const messageId = (opts.messageId as string | undefined) || ""
-  // Stable handle so the live stream can re-render this block in place when the
-  // tool input finishes streaming (initial start often carries empty args).
   if (toolCallId) wrapper.setAttribute("data-block-id", toolCallId)
 
+  const isAnswered = block.answered === true
+  const answer = block.answer as string | undefined
+  const answerSource = block.answerSource as string | undefined
   const groups = questionGroupsFromBlock(block)
-  const allowFreeText = block.allowFreeText !== false
 
-  let answered = false
+  if (isAnswered && answer) {
+    // ── Answered record — show what the user chose, no interactive UI ──
+    wrapper.classList.add("question-block--answered")
+    const header = document.createElement("div")
+    header.className = "question-block-header"
+    const icon = document.createElement("span")
+    icon.className = "question-block-icon"
+    icon.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`
+    header.appendChild(icon)
+    const label = document.createElement("span")
+    label.className = "question-block-label"
+    label.textContent = "Question from model"
+    header.appendChild(label)
+    wrapper.appendChild(header)
 
+    const record = document.createElement("div")
+    record.className = "question-answered-record"
+    const textDiv = document.createElement("div")
+    textDiv.className = "q-text"
+    textDiv.textContent = groups[0]?.question ?? (block.text as string) ?? ""
+    record.appendChild(textDiv)
+    const ansLabel = document.createElement("div")
+    ansLabel.className = "q-answer-label"
+    ansLabel.textContent = answerSource === "freetext" ? "Your answer:" : "Selected:"
+    record.appendChild(ansLabel)
+    const ansText = document.createElement("div")
+    ansText.className = "q-answer-text"
+    ansText.textContent = answer
+    record.appendChild(ansText)
+    wrapper.appendChild(record)
+    return wrapper
+  }
+
+  // ── Pending question — keep the transcript block interactive too ──
+  wrapper.classList.add("question-block--pending")
   const header = document.createElement("div")
   header.className = "question-block-header"
   const icon = document.createElement("span")
   icon.className = "question-block-icon"
-  icon.setAttribute("aria-hidden", "true")
   icon.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`
   header.appendChild(icon)
   const label = document.createElement("span")
@@ -1681,174 +1724,138 @@ function renderQuestionBlock(block: Block, opts: RenderOptions): HTMLElement | n
   header.appendChild(label)
   wrapper.appendChild(header)
 
-  function postAnswer(value: string, source: "option" | "freetext") {
-    if (answered) return
-    if (!value) return
-    answered = true
+  const selections = new Map<number, Set<string>>()
+  const controls: Array<HTMLButtonElement | HTMLTextAreaElement> = []
+  let freeText: HTMLTextAreaElement | null = null
+  let submitted = false
+
+  const markAnswered = (value: string, source: "option" | "freetext") => {
+    const trimmed = value.trim()
+    if (submitted || !trimmed) return
+    submitted = true
+    block.answered = true
+    block.answer = trimmed
+    block.answerSource = source
+    wrapper.classList.remove("question-block--pending")
     wrapper.classList.add("question-block--answered")
-    wrapper.querySelectorAll<HTMLButtonElement>(".question-option, .question-submit").forEach((b) => {
-      b.disabled = true
-    })
-    const ta = wrapper.querySelector(".question-freetext") as HTMLTextAreaElement | null
-    if (ta) ta.disabled = true
-
-    const echo = document.createElement("div")
-    echo.className = "question-answer"
-    echo.textContent = `Answered: ${value}`
-    wrapper.appendChild(echo)
-
+    for (const control of controls) control.disabled = true
     opts.postMessage?.({
       type: "question_answer",
       sessionId,
       toolCallId,
-      messageId,
-      value,
+      messageId: opts.messageId ?? "",
+      value: trimmed,
       source,
     })
+    opts.onAnswered?.(block)
   }
 
-  function appendFreeText(): HTMLTextAreaElement {
-    const ta = document.createElement("textarea")
-    ta.className = "question-freetext"
-    ta.rows = 2
-    ta.maxLength = 10000
-    ta.placeholder = "Or type a custom answer…"
-    ta.setAttribute("aria-label", "Type a custom answer")
-    wrapper.appendChild(ta)
-    return ta
-  }
-
-  // ── Simple path: a single, single-select question. Clicking an option
-  //    submits immediately. This preserves the original DOM/behaviour. ──
-  const simpleMode = groups.length <= 1 && !groups.some((g) => g.multiSelect)
-  if (simpleMode) {
-    const g = groups[0] ?? { question: "", options: [], multiSelect: false }
-
-    const text = document.createElement("div")
-    text.className = "question-text"
-    text.textContent = g.question
-    wrapper.appendChild(text)
-
-    if (g.options.length > 0) {
-      const optionsList = document.createElement("div")
-      optionsList.className = "question-options"
-      optionsList.setAttribute("role", "group")
-      optionsList.setAttribute("aria-label", "Answer options")
-      for (const opt of g.options) {
-        const btn = document.createElement("button")
-        btn.type = "button"
-        btn.className = "question-option"
-        btn.textContent = opt
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation()
-          postAnswer(opt, "option")
-        })
-        optionsList.appendChild(btn)
-      }
-      wrapper.appendChild(optionsList)
-    }
-
-    if (allowFreeText) {
-      const ta = appendFreeText()
-      ta.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-          e.preventDefault()
-          postAnswer(ta.value.trim(), "freetext")
-        }
-      })
-      const submitBtn = document.createElement("button")
-      submitBtn.type = "button"
-      submitBtn.className = "question-submit"
-      submitBtn.textContent = "Submit"
-      submitBtn.addEventListener("click", (e) => {
-        e.stopPropagation()
-        postAnswer(ta.value.trim(), "freetext")
-      })
-      wrapper.appendChild(submitBtn)
-    }
-
-    return wrapper
-  }
-
-  // ── Multi path: several groups and/or multi-select. Selections are gathered
-  //    and submitted together via a single Submit button. ──
-  const selections: Array<Set<string>> = groups.map(() => new Set<string>())
-
-  groups.forEach((g, gi) => {
-    const section = document.createElement("div")
-    section.className = "question-group"
-
-    if (g.header) {
-      const hdr = document.createElement("div")
-      hdr.className = "question-group-header"
-      hdr.textContent = g.header
-      section.appendChild(hdr)
-    }
-
-    if (g.question) {
-      const text = document.createElement("div")
-      text.className = "question-text"
-      text.textContent = g.question
-      section.appendChild(text)
-    }
-
-    if (g.options.length > 0) {
-      const optionsList = document.createElement("div")
-      optionsList.className = "question-options"
-      optionsList.setAttribute("role", "group")
-      optionsList.setAttribute("aria-label", g.header ? `Options: ${g.header}` : "Answer options")
-      const sel = selections[gi]!
-      const buttons: HTMLButtonElement[] = []
-      for (const opt of g.options) {
-        const btn = document.createElement("button")
-        btn.type = "button"
-        btn.className = "question-option"
-        btn.setAttribute("aria-pressed", "false")
-        btn.textContent = opt
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation()
-          if (answered) return
-          if (g.multiSelect) {
-            if (sel.has(opt)) { sel.delete(opt); btn.classList.remove("selected"); btn.setAttribute("aria-pressed", "false") }
-            else { sel.add(opt); btn.classList.add("selected"); btn.setAttribute("aria-pressed", "true") }
-          } else {
-            sel.clear(); sel.add(opt)
-            for (const b of buttons) { b.classList.remove("selected"); b.setAttribute("aria-pressed", "false") }
-            btn.classList.add("selected"); btn.setAttribute("aria-pressed", "true")
-          }
-        })
-        buttons.push(btn)
-        optionsList.appendChild(btn)
-      }
-      section.appendChild(optionsList)
-    }
-
-    wrapper.appendChild(section)
-  })
-
-  const ta = allowFreeText ? appendFreeText() : null
-
-  const submitBtn = document.createElement("button")
-  submitBtn.type = "button"
-  submitBtn.className = "question-submit"
-  submitBtn.textContent = "Submit"
-  submitBtn.addEventListener("click", (e) => {
-    e.stopPropagation()
+  const buildGroupedAnswer = (): { value: string; source: "option" | "freetext" } => {
     const parts: string[] = []
     let hasSelection = false
-    groups.forEach((g, gi) => {
-      const chosen = Array.from(selections[gi] ?? [])
-      if (chosen.length > 0) {
-        hasSelection = true
-        const heading = g.header || g.question || `Answer ${gi + 1}`
-        parts.push(`${heading}: ${chosen.join(", ")}`)
-      }
+    groups.forEach((group, groupIndex) => {
+      const chosen = Array.from(selections.get(groupIndex) ?? [])
+      if (chosen.length === 0) return
+      hasSelection = true
+      const heading = group.header || group.question || `Answer ${groupIndex + 1}`
+      parts.push(`${heading}: ${chosen.join(", ")}`)
     })
-    const free = ta?.value.trim()
-    if (free) parts.push(free)
-    postAnswer(parts.join("\n"), hasSelection ? "option" : "freetext")
+    const custom = freeText?.value.trim() ?? ""
+    if (custom) parts.push(custom)
+    return { value: parts.join("\n"), source: hasSelection ? "option" : "freetext" }
+  }
+
+  groups.forEach((group, groupIndex) => {
+    selections.set(groupIndex, new Set())
+    const groupEl = document.createElement("div")
+    groupEl.className = "question-group"
+
+    if (group.header) {
+      const groupHeader = document.createElement("div")
+      groupHeader.className = "question-group-header"
+      groupHeader.textContent = group.header
+      groupEl.appendChild(groupHeader)
+    }
+
+    if (group.question) {
+      const text = document.createElement("div")
+      text.className = "question-text"
+      text.textContent = group.question
+      groupEl.appendChild(text)
+    }
+
+    if (group.options.length > 0) {
+      const optionsRow = document.createElement("div")
+      optionsRow.className = "question-options"
+      optionsRow.setAttribute("role", "group")
+      optionsRow.setAttribute("aria-label", group.header || group.question || "Answer options")
+
+      for (const option of group.options) {
+        const button = document.createElement("button")
+        button.type = "button"
+        button.className = "question-option"
+        button.textContent = option
+        button.setAttribute("aria-pressed", "false")
+        controls.push(button)
+        button.addEventListener("click", () => {
+          if (submitted) return
+          const selected = selections.get(groupIndex) ?? new Set<string>()
+          if (group.multiSelect) {
+            if (selected.has(option)) {
+              selected.delete(option)
+              button.classList.remove("selected")
+              button.setAttribute("aria-pressed", "false")
+            } else {
+              selected.add(option)
+              button.classList.add("selected")
+              button.setAttribute("aria-pressed", "true")
+            }
+          } else {
+            selected.clear()
+            selected.add(option)
+            for (const peer of optionsRow.querySelectorAll<HTMLButtonElement>(".question-option")) {
+              peer.classList.remove("selected")
+              peer.setAttribute("aria-pressed", "false")
+            }
+            button.classList.add("selected")
+            button.setAttribute("aria-pressed", "true")
+          }
+          selections.set(groupIndex, selected)
+          if (groups.length === 1 && !group.multiSelect) markAnswered(option, "option")
+        })
+        optionsRow.appendChild(button)
+      }
+
+      groupEl.appendChild(optionsRow)
+    }
+
+    wrapper.appendChild(groupEl)
   })
-  wrapper.appendChild(submitBtn)
+
+  const allowFreeText = block.allowFreeText !== false
+  if (allowFreeText) {
+    freeText = document.createElement("textarea")
+    freeText.className = "question-freetext"
+    freeText.rows = 2
+    freeText.maxLength = 10000
+    freeText.setAttribute("aria-label", "Custom answer")
+    controls.push(freeText)
+    wrapper.appendChild(freeText)
+  }
+
+  const needsSubmit = allowFreeText || groups.length > 1 || groups.some((group) => group.multiSelect)
+  if (needsSubmit) {
+    const submit = document.createElement("button")
+    submit.type = "button"
+    submit.className = "question-submit"
+    submit.textContent = "Submit"
+    controls.push(submit)
+    submit.addEventListener("click", () => {
+      const answerPayload = buildGroupedAnswer()
+      markAnswered(answerPayload.value, answerPayload.source)
+    })
+    wrapper.appendChild(submit)
+  }
 
   return wrapper
 }
@@ -1956,8 +1963,75 @@ function renderErrorBlock(block: Block, _opts: RenderOptions): HTMLElement | nul
     content.appendChild(detail)
   }
 
+  // Action buttons
+  const actions = document.createElement("div")
+  actions.className = "error-actions"
+
+  function addKeyboardSupport(button: HTMLButtonElement, handler: () => void): void {
+    button.setAttribute("tabindex", "0")
+    button.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault()
+        handler()
+      }
+    })
+  }
+
+  if (errorBlock.actionButtons && errorBlock.actionButtons.length > 0) {
+    for (const btn of errorBlock.actionButtons) {
+      const button = document.createElement("button")
+      button.className = `error-action-btn ${btn.primary ? "error-action-btn--primary" : "error-action-btn--secondary"}`
+      if (btn.disabled) {
+        button.disabled = true
+        button.className += " error-action-btn--disabled"
+      }
+      button.textContent = btn.label
+      if (btn.action) button.dataset.action = btn.action
+      if (btn.metadata) button.dataset.metadata = JSON.stringify(btn.metadata)
+      const handleClick = () => { if (!btn.disabled) handleErrorAction(btn) }
+      button.addEventListener("click", handleClick)
+      addKeyboardSupport(button, handleClick)
+      actions.appendChild(button)
+    }
+  } else {
+    if (errorBlock.retryable) {
+      const retryBtn = document.createElement("button")
+      retryBtn.className = "error-action-btn error-action-btn--primary"
+      retryBtn.textContent = "Retry"
+      retryBtn.dataset.action = "retry"
+      const handleRetry = () => handleErrorAction({ label: "Retry", action: "retry", primary: true })
+      retryBtn.addEventListener("click", handleRetry)
+      addKeyboardSupport(retryBtn, handleRetry)
+      actions.appendChild(retryBtn)
+    }
+    const dismissBtn = document.createElement("button")
+    dismissBtn.className = "error-action-btn error-action-btn--secondary"
+    dismissBtn.textContent = "Dismiss"
+    dismissBtn.dataset.action = "dismiss"
+    const handleDismiss = () => handleErrorAction({ label: "Dismiss", action: "dismiss" })
+    dismissBtn.addEventListener("click", handleDismiss)
+    addKeyboardSupport(dismissBtn, handleDismiss)
+    actions.appendChild(dismissBtn)
+  }
+
+  content.appendChild(actions)
   wrapper.appendChild(content)
   return wrapper
+}
+
+let _errorActionHandler: ((btn: ErrorActionButton) => void) | null = null
+
+export function setErrorActionHandler(handler: ((btn: ErrorActionButton) => void) | null): void {
+  _errorActionHandler = handler
+}
+
+function handleErrorAction(btn: ErrorActionButton): void {
+  if (_errorActionHandler) {
+    _errorActionHandler(btn)
+    return
+  }
+  if (btn.action === "dismiss") return
+  console.warn("No error action handler registered for:", btn.action)
 }
 
 function renderImageBlock(block: Block, _opts: RenderOptions): HTMLElement | null {

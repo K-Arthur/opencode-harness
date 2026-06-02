@@ -1,4 +1,4 @@
-import type { Block, ToolCallClass, ToolCallState, DiffHunk, DiffBlock, ThinkingBlock, ErrorBlock } from "./types"
+import type { Block, ToolCallClass, ToolCallState, DiffHunk, DiffBlock, ThinkingBlock, ErrorBlock, ErrorActionButton } from "./types"
 
 export function createTextBlock(text: string): Block {
   return { type: "text", text }
@@ -35,8 +35,8 @@ export function createThinkingBlock(content: string, streaming: boolean, tokenCo
   return { type: "thinking", content, streaming, tokenCount }
 }
 
-export function createErrorBlock(code: string, message: string, retryable: boolean, detail?: string): Block {
-  return { type: "error", code, message, retryable, detail }
+export function createErrorBlock(code: string, message: string, retryable: boolean, detail?: string, actionButtons?: ErrorActionButton[]): Block {
+  return { type: "error", code, message, retryable, detail, actionButtons }
 }
 
 export function createImageBlock(data: string, mimeType: string): Block {

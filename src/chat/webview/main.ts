@@ -13,7 +13,8 @@ import { upsertMessageById } from "./messageUpsert"
 import { createTabBar, createTabContent, switchToTab, removeTabContent } from "./tabs"
 import { setupModelDropdown } from "./model-dropdown"
 import { setVsCodeApi, setupToolKeyboardNav, webviewLog } from "./streamHandlers"
-import { setErrorActionHandler } from "./errorComponents"
+import { setErrorActionHandler as setCompsErrorActionHandler } from "./errorComponents"
+import { setErrorActionHandler as setRendererErrorActionHandler } from "./renderer"
 import { setMaxConcurrentStreams } from "./sendLogic"
 import { setupModelManager } from "./model-manager"
 import { setupVariantSelector } from "./variant-selector"
@@ -22,6 +23,8 @@ import type { McpServerInfo } from "../../mcp/McpServerManager"
 import { REMOVE_SVG } from "./icons"
 import { createPromptQueue, type PromptQueue, type QueueItem } from "./queue"
 import { updateContextChips, applyThemeVars, handleRateLimitExhausted } from "./theme"
+import { getQuotaMonitor } from "./quotaMonitor"
+import { STREAM_LIMIT_TOOLTIP, getContextUsageTooltip, initStaticButtonTooltips } from "./tooltips"
 // context-usage-panel.ts removed — canonical UI is now context-usage-dropdown.ts
 import { setupChangedFilesDropdown, updateChangedFiles, handleDiffResponse as handleCfDiffResponse, resetChangedFilesDropdown, setCurrentSession as setCfCurrentSession } from "./changed-files-dropdown"
 import type { DiffLine } from "./types"
@@ -35,22 +38,26 @@ import { createScrollAnchor, type ScrollAnchor } from "./scrollAnchor"
 import { createChunkedLoader, prependMessagesPreservingScroll, createLoadEarlierBanner, throttleScrollMarkers } from "./messageLoader"
 import { createVirtualList, getVirtualList, disposeVirtualList } from "./virtualList"
 import { setupTodosPanel } from "./todos-panel"
+import { setupActivityPanel } from "./activity-panel"
+import { setupTasksPanel } from "./tasks-panel"
 import { mergeTodos, generateTodoId } from "./todos-logic"
 import { setupSkillsModal } from "./skills-modal"
 import { setupSubagentPanel } from "./subagent-panel"
+import { setupSubagentDetailView } from "./subagentDetailView"
 import { shouldRefreshOnUpdate, selectDisplayedUsage } from "./tokenDisplayPolicy"
 import { setThinkingVisible, getThinkingVisible } from "./displayPrefs"
 import { setupSearch } from "./ui/messageSearch"
 import { ToolElapsedTracker } from "./ui/toolElapsed"
 import { setupDisplayToggles } from "./ui/displayToggles"
 import { setupThemeCustomizer, openThemeCustomizer, closeThemeCustomizer, populateCliList, applyThemeCustomizerConfig, collectThemeCustomizerConfig, type ThemeCustomizerConfig } from "./ui/themeCustomizer"
-import { setupModeToggle, updateModeDropdown, closeModeDropdown, updateModeSelectorState, syncModeUI as syncModeUIModule, getCurrentMode } from "./ui/modeDropdown"
+import { setupModeToggle, updateModeDropdown, closeModeDropdown, updateModeSelectorState, syncModeUI as syncModeUIModule, getCurrentMode, cycleModeForward, isModalOrDialogOpen } from "./ui/modeDropdown"
 import { setupInstructionsEditor } from "./ui/instructionsEditor"
 import { setupSessionModal as setupSessionModalModule, openSessionModal as openSessionModalModule, closeSessionModal as closeSessionModalModule, trapModalFocus } from "./ui/sessionModal"
 
 import { handleTokenUsage as handleTokenUsageModule, accumulateTokenUsage as accumulateTokenUsageModule, accumulateCost as accumulateCostModule, rememberStepUsage, isDuplicateRecentStepUsage, handleRateLimitState as handleRateLimitStateModule, recordUsageSnapshot as recordUsageSnapshotModule, updateCostDisplay as updateCostDisplayModule, updateTokenDisplay as updateTokenDisplayModule, clearTokenDisplay as clearTokenDisplayModule, updateContextBarFromSession as updateContextBarFromSessionModule, checkOverflowWarnings as checkOverflowWarningsModule, formatTokenCount as formatTokenCountModule, type TokenCostDeps, type RateLimitWebviewState } from "./ui/tokenCostDisplay"
 import { createAttachmentManager, parsePromptMentions, removePromptToken } from "./ui/attachments"
 import { showWelcomeView as showWelcomeViewModule, hideWelcomeView as hideWelcomeViewModule, renderWelcomeContext as renderWelcomeContextModule, setupWelcomeActions as setupWelcomeActionsModule, setupWelcomeSuggestions as setupWelcomeSuggestionsModule, setupWelcomeResponsive as setupWelcomeResponsiveModule, type WelcomeViewDeps } from "./ui/welcomeView"
+import { shouldHonorActiveSessionChange, resolveInitStateTarget } from "./sessionFocus"
 import { closeSettingsMenu as closeSettingsMenuModule, closeCurrentModal as closeCurrentModalModule, setupSettingsMenuKeyboardNav as setupSettingsMenuKeyboardNavModule, type SettingsMenuDeps } from "./ui/settingsMenu"
 import { trackFileChange as trackFileChangeModule, undoMessage as undoMessageModule, handleChangedFiles as handleChangedFilesModule, renderCheckpointPanel as renderCheckpointPanelModule, handleClearMessages as handleClearMessagesModule, type FileTrackingDeps } from "./ui/fileTracking"
 import { setupButtons as setupButtonsModule, type ButtonSetupDeps } from "./ui/buttonSetup"
@@ -58,7 +65,9 @@ import { updateScrollMarkers as updateScrollMarkersModule, setupJumpToBottom as 
 import { createStreamOrchestrator, type StreamOrchestratorAPI } from "./streamOrchestrator"
 import { createTimeline, type TimelineAPI } from "./timeline"
 import { createComposer, type ComposerAPI } from "./composer"
+import { setupVoiceInput } from "./voiceInput"
 import { normalizeSessionMode } from "../modePolicy"
+import type { VoiceInputSettings } from "../voiceInputCore"
 
 declare const acquireVsCodeApi: (() => {
   postMessage(message: Record<string, unknown>): void
@@ -104,17 +113,28 @@ function getVsCodeApi() {
   "use strict"
 
   // Global error boundary - prevent white screen crashes
+  // Must remove the .hidden class (display:none !important) since inline
+  // style can't override !important.
   window.addEventListener("error", (event) => {
     log.error("Unhandled error:", event.error || event.message)
     const errorDiv = document.getElementById("error-boundary")
     if (errorDiv) {
-      errorDiv.style.display = "block"
+      errorDiv.classList.remove("hidden")
       errorDiv.textContent = "An error occurred. Please reload the panel."
     }
   })
 
   window.addEventListener("unhandledrejection", (event) => {
     log.error("Unhandled promise rejection:", event.reason)
+    const errorDiv = document.getElementById("error-boundary")
+    if (errorDiv && !errorDiv.classList.contains("hidden")) return
+    if (errorDiv) {
+      errorDiv.classList.remove("hidden")
+      errorDiv.textContent = "A background operation failed. Check the console for details."
+      setTimeout(() => {
+        errorDiv.classList.add("hidden")
+      }, 8000)
+    }
   })
 
 // Flush state when page becomes hidden (tab switch, minimize, etc.)
@@ -138,6 +158,9 @@ function getVsCodeApi() {
   
   // Panel APIs
   let todosPanelApi: any = null
+  let activityPanelApi: ReturnType<typeof setupActivityPanel> | undefined
+  let tasksPanelApi: ReturnType<typeof setupTasksPanel> | undefined
+  let voiceInputApi: ReturnType<typeof setupVoiceInput> | undefined
   // Per-session server-side todos. Single source of truth keyed by sessionId
   // so a background tab's todos.updated event cannot poison the active tab.
   const serverTodosBySession = new Map<string, Todo[]>()
@@ -161,8 +184,14 @@ function getVsCodeApi() {
       todosPanelApi.renderTodos(merged)
     }
   }
+
+  function refreshActivityAndTasks(sessionId?: string): void {
+    activityPanelApi?.refresh(sessionId)
+    tasksPanelApi?.refresh(sessionId)
+  }
   let skillsModalApi: any = null
   let subagentPanelApi: any = null
+  let subagentDetailViewApi: any = null
 
   const modelDropdown = setupModelDropdown(els, {
     onOpen: () => {
@@ -223,7 +252,7 @@ function getVsCodeApi() {
 
 	  // Make the error-display action buttons functional. Previously these clicks
 	  // only hit a console.log; now they dispatch to real host/local behaviour.
-	  setErrorActionHandler((action) => {
+	  const errorActionHandler = (action: { label: string; action: string; primary?: boolean; metadata?: Record<string, unknown> }) => {
 	    const url = action.metadata && typeof action.metadata.url === "string" ? action.metadata.url : undefined
 	    if (url) {
 	      vscode.postMessage({ type: "open_url", url })
@@ -243,9 +272,29 @@ function getVsCodeApi() {
 	      case "edit":
 	        vscode.postMessage({ type: "connect_provider" })
 	        break
-	      // contact_support / view_details / dismiss carry no host action today.
+	      case "dismiss": {
+	        const sid = stateManager.getState().activeSessionId
+	        if (sid) {
+	          const session = stateManager.getSession(sid)
+	          if (session) {
+	            const errIdx = session.messages.findIndex(m => m.role === "system" && m.blocks?.[0]?.type === "error")
+	            if (errIdx >= 0) {
+	              session.messages.splice(errIdx, 1)
+	              stateManager.save()
+	              const msgList = getActiveMessageList(els)
+	              if (msgList) {
+	                const errEl = msgList.querySelector(".msg-error")?.closest("[data-message-id]") as HTMLElement | null
+	                if (errEl) errEl.remove()
+	              }
+	            }
+	          }
+	        }
+	        break
+	      }
 	    }
-	  })
+	  }
+	  setCompsErrorActionHandler(errorActionHandler)
+	  setRendererErrorActionHandler(errorActionHandler)
 
 	  const variantSelector = setupVariantSelector(els, {
     onSelect: (variant) => {
@@ -291,7 +340,6 @@ function getVsCodeApi() {
   // Streaming state per session
   const streamHandlers = new Map<string, ReturnType<typeof createStreamHandlers>>()
   let streamChunkLogCount = 0
-  const STREAM_LIMIT_TOOLTIP = "Concurrent stream limit reached — wait or stop another tab first"
 
   // Scroll anchors per tab — disposed on tab close
   const scrollAnchors = new Map<string, ScrollAnchor>()
@@ -496,15 +544,85 @@ function getVsCodeApi() {
     }
   }
 
+  function setupGlobalKeyboardShortcuts(): void {
+    document.addEventListener("keydown", (e) => {
+      const isTextInput = (el: EventTarget | null): boolean => {
+        const target = el as HTMLElement | null
+        if (!target) return false
+        const tag = target.tagName?.toLowerCase()
+        return Boolean(target.isContentEditable || tag === "input" || tag === "textarea" || tag === "select")
+      }
+
+      if (isModalOrDialogOpen()) return
+
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        if (e.key === "l" && !isTextInput(e.target)) {
+          e.preventDefault()
+          els.promptInput.focus()
+          return
+        }
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.altKey) {
+        switch (e.key) {
+          case "L":
+          case "l":
+            e.preventDefault()
+            els.timelineToggleBtn.click()
+            break
+          case "T":
+          case "t":
+            e.preventDefault()
+            els.todosToggleBtn.click()
+            break
+          case "K":
+          case "k":
+            e.preventDefault()
+            els.checkpointToggleBtn.click()
+            break
+          case "S":
+          case "s":
+            e.preventDefault()
+            els.skillsBtn.click()
+            break
+          case "N":
+          case "n":
+            e.preventDefault()
+            vscode.postMessage({ type: "create_tab" })
+            break
+          case "H":
+          case "h":
+            e.preventDefault()
+            els.historyBtn.click()
+            break
+        }
+      }
+    })
+  }
+
   function setupCoreInteractionControls(): void {
     setupModeToggle({
       els,
       getActiveSession: () => stateManager.getActiveSession(),
       setSessionMode: (id, mode) => stateManager.setSessionMode(id, mode),
       postMessage: (msg) => vscode.postMessage(msg),
+      getDefaultMode: () => stateManager.getPendingMode(),
+      setDefaultMode: (mode) => stateManager.setPendingMode(mode),
     })
+    setupGlobalKeyboardShortcuts()
     wireComposer()
     composer.setupInput()
+    voiceInputApi = setupVoiceInput({
+      els: {
+        promptInput: els.promptInput,
+        voiceInputBtn: els.voiceInputBtn,
+        voiceInputStatus: els.voiceInputStatus,
+      },
+      postMessage: (msg) => vscode.postMessage(msg),
+      insertTextAtCursor: (text) => composer.insertTextAtCursor(text),
+      autoResizeTextarea: () => composer.autoResizeTextarea(),
+      updateSendButton: () => composer.updateSendButton(),
+    })
     setupButtonsModule({
       els: {
         historyBtn: els.historyBtn,
@@ -556,12 +674,60 @@ function getVsCodeApi() {
         }
       },
     })
+    activityPanelApi = setupActivityPanel(els, {
+      getMessages: (sessionId) => stateManager.getSession(sessionId)?.messages,
+      isStreaming: (sessionId) => stateManager.getSession(sessionId)?.isStreaming ?? false,
+      getActiveSessionId: () => stateManager.getState().activeSessionId ?? undefined,
+      getFilter: (sessionId) => stateManager.getSession(sessionId)?.activityFilter ?? "all",
+      setFilter: (sessionId, filter) => {
+        const session = stateManager.getSession(sessionId)
+        if (!session) return
+        session.activityFilter = filter
+        stateManager.save()
+      },
+      onJump: (anchorMessageId) => scrollToTurnModule(scrollMarkerDeps, anchorMessageId),
+    })
+    els.activityToggleBtn.addEventListener("click", () => activityPanelApi?.toggle())
+
+    tasksPanelApi = setupTasksPanel(els, {
+      getMessages: (sessionId) => stateManager.getSession(sessionId)?.messages,
+      isStreaming: (sessionId) => stateManager.getSession(sessionId)?.isStreaming ?? false,
+      getActiveSessionId: () => stateManager.getState().activeSessionId ?? undefined,
+      getFilter: (sessionId) => stateManager.getSession(sessionId)?.commandFilter ?? "all",
+      setFilter: (sessionId, filter) => {
+        const session = stateManager.getSession(sessionId)
+        if (!session) return
+        session.commandFilter = filter
+        stateManager.save()
+      },
+      onJump: (anchorMessageId) => scrollToTurnModule(scrollMarkerDeps, anchorMessageId),
+      onCopy: (text) => {
+        void navigator.clipboard?.writeText(text).catch(() => {
+          const sid = stateManager.getState().activeSessionId
+          if (sid) showSystemMessage(sid, "Could not copy command text to the clipboard.")
+        })
+      },
+      onOpenTerminal: (command, cwd, autorun) => vscode.postMessage({ type: "open_terminal", command, cwd, autorun }),
+      onCancel: () => abortStream(),
+    })
+    els.tasksToggleBtn.addEventListener("click", () => tasksPanelApi?.toggle())
+
     skillsModalApi = setupSkillsModal(els, {
       onToggleSkill: (skillId: string, enabled: boolean) => vscode.postMessage({ type: "toggle_skill", skillId, enabled }),
       onSearchSkills: (query: string) => vscode.postMessage({ type: "search_skills", query }),
     })
+    subagentDetailViewApi = setupSubagentDetailView(els, {
+      onBack: () => { subagentPanelApi?.open?.() },
+      onClose: () => {},
+      onCancelSubagent: (subagentId: string) => vscode.postMessage({ type: "cancel_subagent", subagentId }),
+    })
     subagentPanelApi = setupSubagentPanel(els, {
       onCancelSubagent: (subagentId: string) => vscode.postMessage({ type: "cancel_subagent", subagentId }),
+      onOpenDetail: (activity: import("./types").SubagentActivity) => {
+        vscode.postMessage({ type: "get_subagent_detail", sessionId: stateManager.getState().activeSessionId ?? "", subagentId: activity.id })
+        subagentDetailViewApi?.open(activity)
+        subagentDetailViewApi?.renderLoading?.()
+      },
     })
   }
 
@@ -681,6 +847,7 @@ function getVsCodeApi() {
   }
 
   function finishWebviewInitialization(): void {
+    initStaticButtonTooltips()
     setupWelcomeSuggestions()
     setupWelcomeActions()
     wireStreamOrchestrator()
@@ -709,6 +876,7 @@ function getVsCodeApi() {
     log.error("Initialization error:", err)
     const errorDiv = document.createElement("div")
     errorDiv.className = "error-boundary"
+    errorDiv.classList.add("error-boundary--visible")
     errorDiv.textContent = "Failed to initialize. Please reload."
     document.body.appendChild(errorDiv)
   }
@@ -730,6 +898,11 @@ function getVsCodeApi() {
       return { ...s, activeSessionId: s.activeSessionId ?? undefined }
     },
     openModelManager: () => modelManager.open(),
+    getResolvedModel: () =>
+      stateManager.getState().globalModel ||
+      stateManager.getActiveSession()?.model ||
+      modelDropdown.getCurrentModel() ||
+      undefined,
     renderRecentSessionsList,
     onDeleteRecentSession: (sessionId) => {
       vscode.postMessage({ type: "delete_session", targetSessionId: sessionId })
@@ -832,7 +1005,8 @@ function getVsCodeApi() {
   /* ─── TAB MANAGEMENT ─── */
 
   function createNewTab(name?: string) {
-    const session = stateManager.createSession(name)
+    // Adopt the pending mode chosen on the welcome screen (defaults to "build").
+    const session = stateManager.createSession(name, undefined, stateManager.getPendingMode())
     createTabUI(session.id, session.name)
 
     // Always switch to the newly created tab — it's the user's current focus
@@ -840,6 +1014,9 @@ function getVsCodeApi() {
     switchToTab(els, session.id)
     hideWelcomeView()
 
+    // Reflect the new session's mode in the selector (it may differ from the
+    // previously-active session's mode or the welcome-screen pending mode).
+    syncModeUI()
     updateTabBar()
     renderRecentSessionsList()
     // New tab is never streaming — sync chat bar so it doesn't inherit the
@@ -968,6 +1145,7 @@ function getVsCodeApi() {
     vscode.postMessage({ type: "get_todos", sessionId: tabId })
     vscode.postMessage({ type: "get_changed_files", sessionId: tabId })
     triggerTodosRender(tabId)
+    refreshActivityAndTasks(tabId)
     
     // Scroll to bottom of active tab using anchor if available
     const anchor = scrollAnchors.get(tabId)
@@ -1177,7 +1355,7 @@ function getVsCodeApi() {
   }
 
   function syncModeUI() {
-    syncModeUIModule(els, () => stateManager.getActiveSession())
+    syncModeUIModule(els, () => stateManager.getActiveSession(), () => stateManager.getPendingMode())
   }
 
   /* ─── PER-TAB INSTRUCTIONS (GEAR) ─── */
@@ -1457,6 +1635,8 @@ function getVsCodeApi() {
         // This ensures the final Markdown is correctly applied and avoids double messages.
         const el = renderMessage(msg, { mode: session.mode, postMessage: (m) => vscode.postMessage(m), skipHeader: true })
         existing.replaceWith(el)
+        stateManager.save()
+        refreshActivityAndTasks(sessionId)
         return
       }
 
@@ -1485,6 +1665,7 @@ function getVsCodeApi() {
       }
     }
     stateManager.save()
+    refreshActivityAndTasks(sessionId)
 
     // Set up jump-to-bottom button on first message
     if (msgList && !msgList.querySelector(".jump-to-bottom")) {
@@ -1607,6 +1788,20 @@ function getVsCodeApi() {
           updateModeDropdownLocal(mode)
           updateModeSelectorStateLocal()
         }
+      }],
+      ["cycle_mode", (_msg, _sid) => {
+        cycleModeForward({
+          els,
+          getActiveSession: () => stateManager.getActiveSession(),
+          setSessionMode: (_id, _mode) => {},
+          postMessage: (m) => vscode.postMessage(m),
+        })
+      }],
+      ["set_mode", (msg, sid) => {
+        const sessionId = typeof msg.sessionId === "string" ? msg.sessionId : sid
+        const mode = normalizeSessionMode(msg.mode)
+        if (!mode || !sessionId) return
+        vscode.postMessage({ type: "change_mode", mode, sessionId })
       }],
       ["session_list", (msg) => {
         const sessions = (msg.sessions || []) as SessionSummary[]
@@ -1927,7 +2122,20 @@ function getVsCodeApi() {
       }],
       ["active_session_changed", (_msg, sid) => {
         if (!sid || !stateManager.getSession(sid)) return
-        switchTab(sid, false)
+        // The host fires this on every server-side setActive (id promotion,
+        // cleanup, command-palette open). Only follow it when doing so cannot
+        // steal focus from a tab the user is deliberately viewing — in
+        // particular, never yank focus onto a session that is mid-stream.
+        const currentActiveId = stateManager.getState().activeSessionId
+        const target = stateManager.getSession(sid)
+        const honor = shouldHonorActiveSessionChange({
+          welcomeVisible: !els.welcomeView.classList.contains("hidden"),
+          currentActiveId,
+          currentActiveValid: Boolean(currentActiveId && stateManager.getSession(currentActiveId)),
+          targetId: sid,
+          targetIsStreaming: Boolean(target?.isStreaming),
+        })
+        if (honor) switchTab(sid, false)
       }],
       ["stream_tool_start", (msg, sid) => {
         if (sid) {
@@ -2028,13 +2236,47 @@ function getVsCodeApi() {
         alert(`Failed to save theme: ${error || "Unknown error"}`)
       }],
       ["cli_themes_list", (msg) => { populateCliList(els, msg.themes as Array<{ name: string; source: string }>, (m) => vscode.postMessage(m)) }],
-      ["rate_limit_state", (msg) => { handleRateLimitState(msg.state as RateLimitWebviewState | null | undefined) }],
+      ["rate_limit_state", (msg) => {
+        handleRateLimitState(msg.state as RateLimitWebviewState | null | undefined)
+        const state = msg.state as RateLimitWebviewState | undefined
+        if (state && typeof state.remainingTokens === "number" && typeof state.limitTokens === "number") {
+          getQuotaMonitor().updateQuotaState({
+            remainingTokens: state.remainingTokens,
+            limitTokens: state.limitTokens,
+            remainingRequests: state.remainingRequests ?? 0,
+            limitRequests: state.limitRequests ?? 0,
+            resetAt: state.resetAt ?? new Date().toISOString(),
+          })
+        }
+      }],
+      ["stt_settings", (msg) => {
+        const settings = (msg as Record<string, unknown>).settings as VoiceInputSettings | undefined
+        if (settings) voiceInputApi?.applySettings(settings)
+      }],
+      ["stt_transcript", (msg) => {
+        voiceInputApi?.handleTranscript({
+          requestId: (msg as Record<string, unknown>).requestId,
+          text: (msg as Record<string, unknown>).text,
+        })
+      }],
+      ["stt_error", (msg) => {
+        voiceInputApi?.handleError({
+          requestId: (msg as Record<string, unknown>).requestId,
+          message: (msg as Record<string, unknown>).message,
+        })
+      }],
       ["model_update", (msg) => {
+        // The host pushes the GLOBAL default model here (e.g. after a model
+        // change in another webview, on init, or after resume_session during
+        // compaction). Per-session model is owned by:
+        //   - the explicit user pick in the model dropdown (-> set_model), or
+        //   - the server's resume_session_data / session restore.
+        // Updating the active session's model here would silently switch the
+        // session off the user's chosen model whenever compaction or any
+        // other state-push fires — the bug we are fixing.
         modelDropdown.setCurrentModel(msg.model as string)
         if (msg.model) {
           stateManager.setGlobalModel(msg.model as string)
-          const active = stateManager.getActiveSession()
-          if (active) stateManager.setSessionModel(active.id, msg.model as string)
           syncModelViews()
           const modelParts = (msg.model as string).split("/")
           els.statusModel.textContent = modelParts[modelParts.length - 1] ?? (msg.model as string)
@@ -2042,11 +2284,12 @@ function getVsCodeApi() {
         }
       }],
       ["variant_update", (msg) => {
+        // Same contract as model_update: only the GLOBAL default is pushed.
+        // Per-session variant is owned by the user pick (-> set_variant) and
+        // by session restore; host pushes must not clobber it.
         variantSelector.setVariant(msg.variant as string)
         if (msg.variant) {
           stateManager.setGlobalVariant(msg.variant as string)
-          const active = stateManager.getActiveSession()
-          if (active) stateManager.setSessionVariant(active.id, msg.variant as string)
         }
       }],
       ["model_list", (msg) => {
@@ -2069,6 +2312,10 @@ function getVsCodeApi() {
             const model = modelsWithState.find((m) => `${m.provider}/${m.id}` === currentModel)
             variantSelector.setModel(model || null)
           }
+          // The model list often resolves after init_state, so refresh the
+          // welcome card here too — otherwise it can stay on "No model
+          // selected" even once a model is known.
+          renderWelcomeContext()
         }
       }],
       ["init_state", (msg) => {
@@ -2076,6 +2323,13 @@ function getVsCodeApi() {
           timers.clearTimeout(window.__opencodeInitTimeout)
           window.__opencodeInitTimeout = undefined
         }
+        // The host re-sends init_state on every visibility change. Capture the
+        // pre-merge focus context BEFORE setInitialized()/loadSessions() mutate
+        // it, so a refresh can preserve the tab the user is currently on
+        // instead of snapping back to the host's active session.
+        const isFirstInit = !stateManager.getState().initialized
+        const priorActiveId = stateManager.getState().activeSessionId
+        const welcomeVisibleBefore = !els.welcomeView.classList.contains("hidden")
         if (!stateManager.getState().initialized) {
           stateManager.setInitialized()
         }
@@ -2168,16 +2422,18 @@ function getVsCodeApi() {
           updateTabBar()
         }
 
-        // Decide what to display:
-        // 1. If init_state's active session is known → switch + hide welcome
-        // 2. Else if our merged state has an active session → switch to it
-        // 3. Else if we have ANY session → switch to the first one
-        // 4. Otherwise → show welcome
-        const stateActive = stateManager.getState().activeSessionId
-        const targetActive =
-          (msg.activeSessionId && stateManager.getSession(msg.activeSessionId as string)) ? msg.activeSessionId as string :
-          (stateActive && stateManager.getSession(stateActive)) ? stateActive :
-          (allSessions.length > 0 ? allSessions[0]!.id : null)
+        // Decide what to display. First hydration honours the host's restored
+        // active session; every later refresh preserves the user's current tab
+        // (or keeps them on the welcome screen) so a re-push never steals focus
+        // onto a session the user deliberately switched away from.
+        const targetActive = resolveInitStateTarget({
+          isFirstInit,
+          welcomeVisibleBefore,
+          priorActiveId,
+          hostActiveId: (msg.activeSessionId as string | null | undefined) ?? null,
+          isKnownSession: (id) => Boolean(id && stateManager.getSession(id)),
+          firstSessionId: allSessions.length > 0 ? allSessions[0]!.id : null,
+        })
 
         if (targetActive) {
           switchTab(targetActive, false)
@@ -2186,9 +2442,17 @@ function getVsCodeApi() {
         }
 
         vscode.postMessage({ type: "init_ack" })
+        getQuotaMonitor().startMonitoring()
       }],
-      ["rate_limit_exhausted", (msg) => { handleRateLimitExhausted(els, msg.resetAt as string) }],
-      ["prompt_rejected", (_msg, sid) => {
+      ["rate_limit_exhausted", (msg) => {
+        const info = msg.info as { resetAt?: unknown } | undefined
+        const resetAt = typeof info?.resetAt === "string" ? info.resetAt : undefined
+        handleRateLimitExhausted(els, resetAt)
+        const sid = stateManager.getState().activeSessionId ?? undefined
+        const resetMsg = resetAt ? ` Resets at ${resetAt}.` : ""
+        handleRequestError(sid, `Rate limit exceeded.${resetMsg} Please wait and try again.`)
+      }],
+      ["prompt_rejected", (msg, sid) => {
         if (sid) {
           stateManager.setStreaming(sid, false)
           updateTabBar()
@@ -2198,14 +2462,30 @@ function getVsCodeApi() {
           if (sid === stateManager.getState().activeSessionId) {
             updateSendButtonIcon(false)
           }
+          const reason = typeof (msg as Record<string, unknown>).reason === "string"
+            ? (msg as Record<string, unknown>).reason as string
+            : "Your request could not be processed."
+          handleRequestError(sid, reason)
         }
       }],
       ["webview_request_error", (msg, sid) => {
-        handleRequestError(sid, typeof msg.error === "string" ? msg.error : undefined)
+        handleRequestError(sid, typeof msg.error === "string" ? msg.error : undefined, (msg as Record<string, unknown>).errorContext)
+      }],
+      ["show_error", (msg) => {
+        const msgText = typeof (msg as Record<string, unknown>).message === "string"
+          ? (msg as Record<string, unknown>).message as string
+          : "An error occurred."
+        handleRequestError(stateManager.getState().activeSessionId ?? undefined, msgText)
+      }],
+      ["provider_error", (msg) => {
+        const errText = typeof (msg as Record<string, unknown>).error === "string"
+          ? (msg as Record<string, unknown>).error as string
+          : "Provider configuration error."
+        handleRequestError(stateManager.getState().activeSessionId ?? undefined, `Provider error: ${errText}`)
       }],
       ["request_error", (msg, sid) => { handleRequestError(sid, typeof msg.message === "string" ? msg.message : undefined, msg.errorContext) }],
       ["diff_result", (msg) => {
-        handleDiffResult(msg.blockId as string, msg.ok as boolean, typeof msg.message === "string" ? msg.message : undefined, Boolean(msg.checkpointCreated))
+        handleDiffResult(typeof msg.sessionId === "string" ? msg.sessionId : undefined, msg.blockId as string, msg.ok as boolean, typeof msg.message === "string" ? msg.message : undefined, Boolean(msg.checkpointCreated))
       }],
       ["cost_update", (msg) => {
         const cost = msg.cost
@@ -2570,6 +2850,27 @@ function getVsCodeApi() {
           subagentPanelApi.renderActivities(msg.activities || [])
         }
       }],
+      ["subagent_detail", (msg: Record<string, unknown>) => {
+        const sessionId = msg.sessionId as string | undefined
+        if (subagentDetailViewApi && msg.detail && sessionId) {
+          if (subagentDetailViewApi.showDetail) {
+            const sessions = stateManager.getState().sessions
+            const session = sessions[sessionId]
+            const activities: import("./types").SubagentActivity[] = (session?.subagentActivities as import("./types").SubagentActivity[]) ?? []
+            const sid = msg.subagentId as string ?? ""
+            const activity = activities.find((a) => a.id === sid) ?? { id: sid, name: "subagent", status: "completed" as const }
+            subagentDetailViewApi.showDetail(activity, msg.detail as Record<string, unknown>)
+          }
+        }
+      }],
+      ["subagent_update", (msg) => {
+        if (subagentDetailViewApi && msg.subagent) {
+          const subagent = msg.subagent as Record<string, unknown>
+          if (subagentDetailViewApi.showDetail) {
+            subagentDetailViewApi.showDetail(subagent as unknown as import("./types").SubagentActivity, subagent)
+          }
+        }
+      }],
       ["push_all_state", () => {
         requestStateSyncDebounced()
       }],
@@ -2614,7 +2915,10 @@ function getVsCodeApi() {
     window.addEventListener("beforeunload", () => {
       stateManager.flush()
       todosPanelApi?.dispose?.()
+      activityPanelApi?.dispose?.()
+      tasksPanelApi?.dispose?.()
       subagentPanelApi?.dispose?.()
+      voiceInputApi?.dispose()
     })
 
     let stateSyncDebounce: ReturnType<typeof setTimeout> | undefined
@@ -2715,8 +3019,8 @@ function getVsCodeApi() {
     streamOrchestrator.handleRequestError(sessionId, message, errorContext)
   }
 
-  function handleDiffResult(blockId?: string, ok?: boolean, message?: string, checkpointCreated?: boolean) {
-    streamOrchestrator.handleDiffResult(blockId, ok, message, checkpointCreated)
+  function handleDiffResult(sessionId: string | undefined, blockId?: string, ok?: boolean, message?: string, checkpointCreated?: boolean) {
+    streamOrchestrator.handleDiffResult(sessionId, blockId, ok, message, checkpointCreated)
   }
 
   /* ─── TOKEN/COST DISPLAY ─── */
@@ -2790,9 +3094,12 @@ function getVsCodeApi() {
       bar.setAttribute("aria-valuenow", String(Math.round(safePct)))
       if (label) {
         label.textContent = buildSummaryText(safeTokens, safeMaxTokens, safePct)
-        label.title = safeMaxTokens > 0
-          ? `${formatUsagePercent(safePct)} used · ${safeTokens.toLocaleString()} / ${safeMaxTokens.toLocaleString()} tokens`
-          : `${safeTokens.toLocaleString()} tokens · context window unknown`
+        label.title = getContextUsageTooltip({
+          percent: safePct,
+          tokens: safeTokens,
+          maxTokens: safeMaxTokens,
+          unknownWindow: safeMaxTokens <= 0,
+        })
       }
       const shouldHide = safePct === 0 && safeTokens === 0
       bar.classList.toggle("hidden", shouldHide)
@@ -2803,8 +3110,8 @@ function getVsCodeApi() {
       // Apply colour class based on utilisation
       bar.classList.toggle("context-usage-bar--warning", safePct >= 70 && safePct < 90)
       bar.classList.toggle("context-usage-bar--critical", safePct >= 90)
-    } catch {
-      // Non-fatal — bar stays in its previous state
+    } catch (e) {
+      console.warn("[opencode-harness] Context usage bar update failed:", e instanceof Error ? e.message : String(e))
     }
   }
 

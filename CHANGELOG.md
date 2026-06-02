@@ -5,7 +5,66 @@ All notable changes to the **OpenCode Harness** extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-06-02
+
+### Added
+- **Input-area question dock (`questionBar.ts`).** The interactive question-answering surface (options, free-text, submit) now lives in the input bar instead of inline in the message transcript. When the model asks a `question` tool call, the input bar shows the question with option buttons and a Submit button. The transcript shows either a pending chip ("Answer in input bar") or an answered record. (`src/chat/webview/index.html`, `src/chat/webview/questionBar.ts`, `src/chat/webview/css/components.css`, wiring in `main.ts`)
+- **Question answer persistence.** Answers are stored on the `QuestionBlock` as `answered`/`answer`/`answerSource` fields, persisted in the session's message array so returning to a session shows what was chosen. (`src/chat/webview/types.ts`)
+- **`onQuestionBlock` callback on `StreamCallbacks`.** Main.ts wires this into the input-area question dock whenever a question tool block is created or refreshed mid-stream. (`src/chat/webview/streamHandlers.ts`)
+- **Session-switch question bar re-hydration.** `switchTab()` now clears the question bar and re-populates it from the switched session's unanswered question blocks. (`src/chat/webview/main.ts`)
+- **Speech-to-text prompt input.** The composer now has a microphone button with browser SpeechRecognition support and opt-in OpenAI transcription. Transcripts insert into the prompt for review and never auto-send. OpenAI keys are stored in VS Code SecretStorage. (`src/chat/webview/voiceInput.ts`, `src/chat/VoiceInputService.ts`, `src/chat/voiceInputCore.ts`, `package.json`)
+
+### Changed
+- **Steer-mode selector now uses correct CSS class.** The old `setSteerMode` queried `.steer-option` (nonexistent) on an undefined element ref, so previously-active buttons were never deselected and several modes appeared selected at once. Fixed with `applySteerModeUI()` that queries `.steer-mode-btn` and syncs both `active` class and `aria-pressed`. (`src/chat/webview/sendLogic.ts`)
+- **`syncSteerModeUI()` exposed on `ComposerAPI`.** Re-asserts the current steer mode's visual state when the selector reappears mid-stream. (`src/chat/webview/composer.ts`)
+- **Question block in transcript is now a non-interactive record.** The `renderQuestionBlock` function no longer renders option buttons, textarea, or submit. Pending questions show a "Answer in input bar" chip; answered questions show an echo card with the question text and user's answer. (`src/chat/webview/renderer.ts`)
+- **`renderer.ts` `RenderOptions` now has an `onAnswered` callback** for persisting answer state on the block. (`src/chat/webview/renderer.ts`)
+- **`refreshQuestionBlock` guarded against overwriting answered blocks.** A mid-stream refresh after the user answered no longer wipes the answer. (`src/chat/webview/streamHandlers.ts`)
+
+### Fixed
+- **Activity and Tasks panels are now actually wired.** Their toolbar buttons, panel roots, `ElementRefs`, CSS imports, initialization, active-session refresh, and unload disposal are all connected. This fixes both strict type failures and the runtime no-op where the modules existed but the bundled HTML had no matching nodes. (`src/chat/webview/index.html`, `src/chat/webview/dom.ts`, `src/chat/webview/main.ts`, `src/chat/webview/css/styles.css`)
+- **Rate-limit exhausted messages preserve structured reset time.** The webview now reads `rate_limit_exhausted.info.resetAt` and passes it to both the input-area banner and in-stream error text. (`src/chat/webview/main.ts`)
+- **Unified session list pin/rename/tags completed end-to-end.** Pinned sessions sort first, render a marker, pin buttons post `pin_session`, inline rename posts `rename_session`, tags post `set_session_tags`, and the host persists pin/tag metadata in `SessionStore`. (`src/chat/webview/sessionListRenderer.ts`, `src/session/SessionStore.ts`, `src/chat/WebviewEventRouter.ts`, `src/chat/WebviewMessageValidator.ts`)
+- **Provider config commands no longer call a nonexistent `SessionManager.updateConfig`.** Local config writes still refresh models; when a local server is already running, the user gets a restart/reconnect warning instead of an impossible live patch attempt. (`src/commands/addProvider.ts`, `src/commands/ollama.ts`)
+
+### Tests
+- Added regression coverage for Activity/Tasks HTML wiring, `rate_limit_exhausted.info.resetAt`, provider command config boundaries, steer-mode UI sync, and session pin/rename/tag behavior. (`src/chat/webview/main.test.ts`, `src/commands/providerConfigCommands.test.ts`, `src/chat/webview/steerMode.test.ts`, `src/chat/webview/sessionListRenderer.pin.test.ts`)
+- Added STT coverage for settings normalization, state transitions, MIME/base64/size validation, stale request handling, missing API key errors, disabled-provider errors, transcript cleanup, unsupported browser fallback, and message contracts. (`src/chat/voiceInputCore.test.ts`, `src/chat/VoiceInputService.test.ts`, `src/chat/WebviewMessageValidator.voiceInput.test.ts`, `src/chat/webview/voiceInput.test.ts`, `tests/webview/message-contract.test.ts`)
+
 ## [Unreleased]
+
+### Fixed
+- **Mode switching now works on the welcome screen.** The mode selector lives in the input
+  area, which is visible on the welcome screen, but `requestMode`/`cycleModeForward`
+  silently no-op'd because there was no active session to target with `change_mode`.
+  Choosing a mode with no active session (click, `Ctrl/Cmd+Alt+1/2/3`, or `Alt+Shift+Tab`)
+  now updates a persisted **pending mode** and the selector UI, and the next created
+  session adopts it. (`src/chat/webview/ui/modeDropdown.ts`, `src/chat/webview/state.ts`,
+  `src/chat/webview/types.ts`, `src/chat/webview/main.ts`)
+- **Welcome card no longer stuck on "No model selected".** `renderWelcomeContext` only
+  wrote the model name when `globalModel` was already populated, so the model-list race on
+  startup left the card blank. It now falls back to the active-session model and the
+  picker's current model, and refreshes when `model_list` resolves. (`src/chat/webview/ui/welcomeView.ts`,
+  `src/chat/webview/main.ts`)
+- **Extension no longer steals focus to a session "doing a task".** The host broadcasts its
+  active session via `active_session_changed` (on every `setActive`, including server-side
+  id promotion) and via `init_state` (re-sent on every visibility change). The webview
+  obeyed both unconditionally, yanking the user back to a streaming session they had
+  deliberately switched away from. Reconciliation now runs through pure helpers: the webview
+  refuses to follow a host-driven switch onto a mid-stream session while viewing another
+  valid tab, and an `init_state` refresh preserves the user's current tab instead of the
+  host's active id. (`src/chat/webview/sessionFocus.ts`, `src/chat/webview/main.ts`)
+- **Closed tabs are no longer resurrected on refresh.** `pushInitStateToWebview` is reused
+  for live visibility refreshes; its "force-include the store's active session" fallback
+  re-added a session whose tab the user had already closed. On a refresh it now only
+  re-includes the active session when it still has an open tab. (`src/chat/restorablePolicy.ts`,
+  `src/chat/ChatProvider.ts`)
+
+### Tests
+- Added pure-function coverage for focus reconciliation and restorable policy
+  (`src/chat/webview/sessionFocus.test.ts`, `src/chat/restorablePolicy.test.ts`) and
+  behavioural coverage for welcome-screen mode selection and the welcome model card
+  (`src/chat/webview/welcome-mode-model.test.ts`).
 
 ### Added
 - **Automatic opencode CLI install.** The opencode CLI is a hard requirement, but VS Code has no install-time hook, so the extension now detects a missing binary on activation and installs it. Default behavior is **prompt-once** (Install / Manual Instructions / Not Now); a decline is remembered in `globalState` so the user isn't nagged on every reload. macOS/Linux use the official install script (downloaded, validated, then run as `bash <file>` with `shell:false` — no `curl | bash` pipe; lands in `~/.opencode/bin`); Windows uses `npm i -g opencode-ai` when npm is present, otherwise shows manual instructions. New `opencode.autoInstall` setting (`prompt` | `auto` | `off`, default `prompt`) and `OpenCode: Install CLI` command. See ADR `docs/adrs/2026-05-31-cli-auto-install.md`. (`src/install/installPlan.ts`, `src/install/OpencodeInstaller.ts`, `src/extension.ts`, `src/commands/misc.ts`, `package.json`)

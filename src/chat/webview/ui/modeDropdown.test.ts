@@ -4,7 +4,12 @@ import { JSDOM } from "jsdom"
 import {
   setupModeToggle,
   updateModeDropdown,
+  cycleModeForward,
+  isModalOrDialogOpen,
+  resetCycleTimer,
+  MODE_ORDER,
   type ModeDropdownElements,
+  type ModeDropdownDeps,
 } from "./modeDropdown"
 
 let cleanupDom: (() => void) | null = null
@@ -23,6 +28,7 @@ function installDom(): TestModeDropdownElements {
         <button id="mode-opt-auto" class="mode-option" data-mode="auto"></button>
       </div>
     </div>
+    <div id="modal-1" aria-modal="true" class="hidden"></div>
   `)
 
   const previous = {
@@ -57,6 +63,16 @@ function installDom(): TestModeDropdownElements {
     modeOptAuto: dom.window.document.getElementById("mode-opt-auto") as HTMLButtonElement,
     modeOptBuild: dom.window.document.getElementById("mode-opt-build") as HTMLButtonElement,
     modeOptions: Array.from(dom.window.document.querySelectorAll<HTMLButtonElement>(".mode-option")),
+  }
+}
+
+function makeDeps(els: ModeDropdownElements, overrides?: Partial<ModeDropdownDeps>): ModeDropdownDeps {
+  return {
+    els,
+    getActiveSession: () => ({ id: "s1", isStreaming: false }),
+    setSessionMode: () => {},
+    postMessage: () => {},
+    ...overrides,
   }
 }
 
@@ -109,7 +125,190 @@ void describe("mode dropdown", () => {
 
     assert.match(els.modeDropdownBtn.title, /Build mode/)
     assert.match(els.modeDropdownBtn.getAttribute("aria-label") ?? "", /Ctrl/)
+    assert.match(els.modeDropdownBtn.getAttribute("aria-label") ?? "", /Alt\+Shift\+Tab/)
     assert.match(els.modeOptions.find((option) => option.dataset.mode === "plan")?.title ?? "", /Plan mode/)
     assert.match(els.modeOptions.find((option) => option.dataset.mode === "auto")?.getAttribute("aria-label") ?? "", /Auto mode/)
+  })
+
+  void describe("cycleModeForward", () => {
+    void it("cycles from plan to build", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const posted: Record<string, unknown>[] = []
+      const deps = makeDeps(els, {
+        getActiveSession: () => ({ id: "s1", isStreaming: false, mode: "plan" }),
+        postMessage: (msg) => posted.push(msg),
+      })
+      cycleModeForward(deps)
+      assert.equal(posted.length, 1)
+      assert.deepEqual(posted[0], { type: "change_mode", mode: "build", sessionId: "s1" })
+    })
+
+    void it("cycles from build to auto", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const posted: Record<string, unknown>[] = []
+      const deps = makeDeps(els, {
+        getActiveSession: () => ({ id: "s1", isStreaming: false, mode: "build" }),
+        postMessage: (msg) => posted.push(msg),
+      })
+      cycleModeForward(deps)
+      assert.equal(posted.length, 1)
+      assert.deepEqual(posted[0], { type: "change_mode", mode: "auto", sessionId: "s1" })
+    })
+
+    void it("cycles from auto to plan (wrap around)", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const posted: Record<string, unknown>[] = []
+      const deps = makeDeps(els, {
+        getActiveSession: () => ({ id: "s1", isStreaming: false, mode: "auto" }),
+        postMessage: (msg) => posted.push(msg),
+      })
+      cycleModeForward(deps)
+      assert.equal(posted.length, 1)
+      assert.deepEqual(posted[0], { type: "change_mode", mode: "plan", sessionId: "s1" })
+    })
+
+    void it("defaults to build when no session mode is set", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const posted: Record<string, unknown>[] = []
+      const deps = makeDeps(els, {
+        getActiveSession: () => ({ id: "s1", isStreaming: false }),
+        postMessage: (msg) => posted.push(msg),
+      })
+      cycleModeForward(deps)
+      assert.equal(posted.length, 1)
+      assert.deepEqual(posted[0], { type: "change_mode", mode: "auto", sessionId: "s1" })
+    })
+
+    void it("does not cycle when session is streaming", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const posted: Record<string, unknown>[] = []
+      const deps = makeDeps(els, {
+        getActiveSession: () => ({ id: "s1", isStreaming: true, mode: "plan" }),
+        postMessage: (msg) => posted.push(msg),
+      })
+      cycleModeForward(deps)
+      assert.equal(posted.length, 0, "should not post change_mode when streaming")
+    })
+
+    void it("does not fire twice within debounce window", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const posted: Record<string, unknown>[] = []
+      const deps = makeDeps(els, {
+        getActiveSession: () => ({ id: "s1", isStreaming: false, mode: "plan" }),
+        postMessage: (msg) => posted.push(msg),
+      })
+      cycleModeForward(deps)
+      cycleModeForward(deps)
+      assert.equal(posted.length, 1, "second call within debounce window should be ignored")
+    })
+
+    void it("fires again after debounce window elapses", async () => {
+      const els = installDom()
+      resetCycleTimer()
+      const posted: Record<string, unknown>[] = []
+      const deps = makeDeps(els, {
+        getActiveSession: () => ({ id: "s1", isStreaming: false, mode: "plan" }),
+        postMessage: (msg) => posted.push(msg),
+      })
+      cycleModeForward(deps)
+      await new Promise((r) => setTimeout(r, 250))
+      cycleModeForward(deps)
+      assert.equal(posted.length, 2, "should fire again after debounce expires")
+    })
+
+    void it("falls back to build for unknown mode then cycles to auto", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const posted: Record<string, unknown>[] = []
+      const deps = makeDeps(els, {
+        getActiveSession: () => ({ id: "s1", isStreaming: false, mode: "unknown" }),
+        postMessage: (msg) => posted.push(msg),
+      })
+      cycleModeForward(deps)
+      assert.equal(posted.length, 1, "unknown mode falls back to build, then cycles to auto")
+      assert.deepEqual(posted[0], { type: "change_mode", mode: "auto", sessionId: "s1" })
+    })
+  })
+
+  void describe("isModalOrDialogOpen", () => {
+    void it("returns false when no modals are visible", () => {
+      installDom()
+      assert.equal(isModalOrDialogOpen(), false)
+    })
+
+    void it("returns true when a visible modal exists", () => {
+      installDom()
+      const modal = document.getElementById("modal-1")
+      if (modal) modal.classList.remove("hidden")
+      assert.equal(isModalOrDialogOpen(), true)
+    })
+
+    void it("returns false when modal is hidden", () => {
+      installDom()
+      const modal = document.getElementById("modal-1")
+      if (modal) modal.classList.add("hidden")
+      assert.equal(isModalOrDialogOpen(), false)
+    })
+  })
+
+  void describe("Alt+Shift+Tab mode cycling", () => {
+    void it("posts change_mode when Alt+Shift+Tab is pressed", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const posted: Record<string, unknown>[] = []
+      updateModeDropdown("build", els)
+      setupModeToggle({
+        els,
+        getActiveSession: () => ({ id: "s1", isStreaming: false }),
+        setSessionMode: () => {},
+        postMessage: (msg) => posted.push(msg),
+      })
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", altKey: true, shiftKey: true, bubbles: true }))
+      assert.equal(posted.length, 1)
+    })
+
+    void it("does not fire for plain Tab without Alt", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const posted: Record<string, unknown>[] = []
+      updateModeDropdown("build", els)
+      setupModeToggle({
+        els,
+        getActiveSession: () => ({ id: "s1", isStreaming: false }),
+        setSessionMode: () => {},
+        postMessage: (msg) => posted.push(msg),
+      })
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }))
+      assert.equal(posted.length, 0, "plain Tab should not trigger mode cycle")
+    })
+
+    void it("does not fire when a modal is open", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const modal = document.getElementById("modal-1")
+      if (modal) modal.classList.remove("hidden")
+      const posted: Record<string, unknown>[] = []
+      updateModeDropdown("build", els)
+      setupModeToggle({
+        els,
+        getActiveSession: () => ({ id: "s1", isStreaming: false }),
+        setSessionMode: () => {},
+        postMessage: (msg) => posted.push(msg),
+      })
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", altKey: true, shiftKey: true, bubbles: true }))
+      assert.equal(posted.length, 0, "should not cycle when modal is open")
+    })
+  })
+
+  void describe("MODE_ORDER", () => {
+    void it("has expected order", () => {
+      assert.deepEqual([...MODE_ORDER], ["plan", "build", "auto"])
+    })
   })
 })

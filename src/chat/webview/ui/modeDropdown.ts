@@ -1,4 +1,5 @@
 import { normalizeSessionMode } from "../../modePolicy"
+import { getModeOptionTooltip, getModeSelectorTooltip } from "../tooltips"
 
 export interface ModeDropdownElements {
   modeDropdown: HTMLElement
@@ -16,7 +17,22 @@ export interface ModeDropdownDeps {
   getActiveSession: () => { id: string; isStreaming?: boolean; mode?: string } | undefined
   setSessionMode: (sessionId: string, mode: string) => void
   postMessage: (msg: Record<string, unknown>) => void
+  /**
+   * Read the "pending" mode applied to the next session created while no
+   * session is active (i.e. on the welcome screen). When omitted the dropdown
+   * falls back to "build".
+   */
+  getDefaultMode?: () => string | undefined
+  /**
+   * Persist the pending mode chosen on the welcome screen so the next created
+   * session adopts it. Called instead of `change_mode` when there is no active
+   * session to target.
+   */
+  setDefaultMode?: (mode: string) => void
 }
+
+export const MODE_ORDER = ["plan", "build", "auto"] as const
+const CYCLE_DEBOUNCE_MS = 200
 
 const MODE_ICONS: Record<string, string> = {
   plan: '<svg class="mode-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3v18"/><path d="M7 3v18"/><path d="M3 7.5h18"/><path d="M3 16.5h18"/><path d="M17 3a2 2 0 0 1 2 2"/><path d="M17 21a2 2 0 0 0 2-2"/><path d="M7 3a2 2 0 0 0-2 2"/><path d="M7 21a2 2 0 0 1-2-2"/></svg>',
@@ -25,27 +41,78 @@ const MODE_ICONS: Record<string, string> = {
 }
 
 const MODE_LABELS: Record<string, string> = { plan: "Plan", auto: "Auto", build: "Build" }
-const MODE_DESCRIPTIONS: Record<string, string> = {
-  plan: "Plan mode: review and propose changes before applying them.",
-  build: "Build mode: apply changes with normal permission prompts.",
-  auto: "Auto mode: apply changes without stopping for each permission prompt.",
-}
-const MODE_SHORTCUTS: Record<string, string> = {
-  plan: "Ctrl/Cmd+Alt+1",
-  build: "Ctrl/Cmd+Alt+2",
-  auto: "Ctrl/Cmd+Alt+3",
-}
 
 export function getCurrentMode(): string {
   return "build"
+}
+
+let _lastCycleTime = 0
+
+export function isModalOrDialogOpen(): boolean {
+  const modals = document.querySelectorAll<HTMLElement>('[aria-modal="true"]')
+  for (const m of modals) {
+    if (!m.classList.contains("hidden")) return true
+  }
+  return false
+}
+
+/** Reset the cycle debounce timer. Exposed for testing. */
+export function resetCycleTimer(): void {
+  _lastCycleTime = 0
+}
+
+export function cycleModeForward(deps: ModeDropdownDeps): void {
+  const now = Date.now()
+  if (now - _lastCycleTime < CYCLE_DEBOUNCE_MS) return
+  _lastCycleTime = now
+  const { els, getActiveSession, postMessage } = deps
+  const active = getActiveSession()
+  if (active?.isStreaming) return
+
+  // Welcome screen / no active session: cycle the pending default mode the
+  // next session will adopt, and reflect it in the selector immediately.
+  if (!active) {
+    cyclePendingMode(deps)
+    return
+  }
+
+  const currentMode = normalizeSessionMode(active?.mode) || "build"
+  const idx = MODE_ORDER.indexOf(currentMode as typeof MODE_ORDER[number])
+  if (idx === -1) {
+    console.warn("[opencode-harness] Unknown mode for cycling:", currentMode)
+    return
+  }
+  const nextMode = MODE_ORDER[(idx + 1) % MODE_ORDER.length]
+  if (nextMode === currentMode) return
+  closeModeDropdown(els)
+  postMessage({ type: "change_mode", mode: nextMode, sessionId: active.id })
+}
+
+/**
+ * Advance the pending "default mode" (used on the welcome screen, where no
+ * session exists to receive a `change_mode`). Updates the selector UI and
+ * persists the choice via `setDefaultMode` so the next created session adopts
+ * it. No-op when the host did not wire the default-mode callbacks.
+ */
+function cyclePendingMode(deps: ModeDropdownDeps): void {
+  const { els, getDefaultMode, setDefaultMode } = deps
+  if (!getDefaultMode || !setDefaultMode) return
+  const current = normalizeSessionMode(getDefaultMode()) || "build"
+  const idx = MODE_ORDER.indexOf(current as typeof MODE_ORDER[number])
+  const base = idx === -1 ? MODE_ORDER.indexOf("build") : idx
+  const next = MODE_ORDER[(base + 1) % MODE_ORDER.length]!
+  setDefaultMode(next)
+  updateModeDropdown(next, els)
+  closeModeDropdown(els)
 }
 
 export function updateModeDropdown(mode: string, els: ModeDropdownElements): void {
   const normalized = normalizeSessionMode(mode) || "build"
   els.modeCurrentText.textContent = MODE_LABELS[normalized] || normalized
   els.modeDropdownBtn.dataset.mode = normalized
-  els.modeDropdownBtn.title = `${MODE_DESCRIPTIONS[normalized]} Shortcut: ${MODE_SHORTCUTS[normalized]}.`
-  els.modeDropdownBtn.setAttribute("aria-label", `Mode: ${MODE_LABELS[normalized]}. ${MODE_DESCRIPTIONS[normalized]} Shortcut: ${MODE_SHORTCUTS[normalized]}.`)
+  const selectorCopy = getModeSelectorTooltip(normalized as "plan" | "build" | "auto")
+  els.modeDropdownBtn.title = selectorCopy.title
+  els.modeDropdownBtn.setAttribute("aria-label", selectorCopy.ariaLabel)
 
   const iconSvg = MODE_ICONS[normalized] || MODE_ICONS["build"] || ""
   const iconEl = els.modeDropdownLabel.querySelector(".mode-icon") as HTMLElement | null
@@ -55,8 +122,9 @@ export function updateModeDropdown(mode: string, els: ModeDropdownElements): voi
     const opt = els[`modeOpt${key.charAt(0).toUpperCase() + key.slice(1)}` as keyof ModeDropdownElements] as HTMLButtonElement
     const isSelected = key === normalized
     opt.setAttribute("aria-selected", String(isSelected))
-    opt.title = `${MODE_DESCRIPTIONS[key]} Shortcut: ${MODE_SHORTCUTS[key]}.`
-    opt.setAttribute("aria-label", `${MODE_LABELS[key]} mode. ${MODE_DESCRIPTIONS[key]} Shortcut: ${MODE_SHORTCUTS[key]}.`)
+    const optionCopy = getModeOptionTooltip(key as "plan" | "build" | "auto")
+    opt.title = optionCopy.title
+    opt.setAttribute("aria-label", optionCopy.ariaLabel)
     opt.classList.toggle("selected", isSelected)
   }
 }
@@ -104,12 +172,20 @@ export function setupModeToggle(deps: ModeDropdownDeps): void {
     if (!normalized) return
     const active = getActiveSession()
     if (active?.isStreaming) return
+
+    // Welcome screen / no active session: record the pending default mode and
+    // reflect it in the selector instead of dropping the request on the floor.
+    if (!active) {
+      deps.setDefaultMode?.(normalized)
+      updateModeDropdown(normalized, els)
+      closeModeDropdown(els)
+      return
+    }
+
     const currentSessionMode = normalizeSessionMode(active?.mode) || "build"
     if (currentSessionMode === normalized) { closeModeDropdown(els); return }
     closeModeDropdown(els)
-    if (active) {
-      postMessage({ type: "change_mode", mode: normalized, sessionId: active.id })
-    }
+    postMessage({ type: "change_mode", mode: normalized, sessionId: active.id })
   }
 
   function isTextEntryTarget(target: EventTarget | null): boolean {
@@ -164,11 +240,32 @@ export function setupModeToggle(deps: ModeDropdownDeps): void {
     e.preventDefault()
     requestMode(mode)
   })
+
+  document.addEventListener("keydown", (e) => {
+    if (isModalOrDialogOpen()) return
+    if (!e.altKey || !e.shiftKey || e.key !== "Tab") return
+    if (e.ctrlKey || e.metaKey) return
+    if (isTextEntryTarget(e.target)) return
+    e.preventDefault()
+    try {
+      cycleModeForward(deps)
+    } catch (err) {
+      console.error("[opencode-harness] Alt+Shift+Tab cycle failed:", err)
+    }
+  })
 }
 
-export function syncModeUI(els: ModeDropdownElements, getActiveSession: ModeDropdownDeps["getActiveSession"]): void {
+export function syncModeUI(
+  els: ModeDropdownElements,
+  getActiveSession: ModeDropdownDeps["getActiveSession"],
+  getDefaultMode?: () => string | undefined,
+): void {
   const active = getActiveSession()
-  const mode = normalizeSessionMode(active?.mode) || "build"
+  // With no active session (welcome screen) the selector reflects the pending
+  // default mode the next session will start in, not a hardcoded "build".
+  const mode = active
+    ? normalizeSessionMode(active.mode) || "build"
+    : normalizeSessionMode(getDefaultMode?.()) || "build"
   updateModeDropdown(mode, els)
   updateModeSelectorState(els, getActiveSession)
 }

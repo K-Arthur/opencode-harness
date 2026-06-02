@@ -25,16 +25,16 @@ export function detectPlanFile(toolBlock: ToolCallBlock): PlanData | null {
 
   const frontmatter = frontmatterMatch[1]
   if (!frontmatter) return null
-  const todosMatch = frontmatter.match(/todos:\s*\n((?:\s+-[\s\S]*?)+)/)
-  if (!todosMatch || !todosMatch[1]) return null
-
   const nameMatch = frontmatter.match(/name:\s*(.+)/)
   const overviewMatch = frontmatter.match(/overview:\s*(.+)/)
+  const todosIndex = frontmatter.search(/^todos:\s*$/m)
+  if (todosIndex === -1) return null
 
   const todos: PlanData['todos'] = []
-  const todoLines = todosMatch[1].split('\n')
+  const todoLines = frontmatter.slice(todosIndex).split('\n').slice(1)
   let currentTodo: PlanData['todos'][0] | null = null
   for (const line of todoLines) {
+    if (/^\S/.test(line)) break
     const todoStart = line.match(/^\s+-\s+id:\s*(.+)/)
     const contentMatch = line.match(/^\s+(?:-\s+)?content:\s*(.+)/)
     const statusMatch = line.match(/^\s+(?:-\s+)?status:\s*(.+)/)

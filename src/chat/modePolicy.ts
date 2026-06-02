@@ -1,5 +1,6 @@
 export const SESSION_MODES = ["plan", "build", "auto"] as const
 export type SessionMode = (typeof SESSION_MODES)[number]
+export const DEFAULT_MODE: SessionMode = "build"
 
 const SESSION_MODE_SET = new Set<string>(SESSION_MODES)
 const FILE_MUTATION_PERMISSION_TYPES = new Set(["edit", "write", "patch", "apply_patch", "multiedit"])
