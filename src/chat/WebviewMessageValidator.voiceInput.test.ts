@@ -15,46 +15,31 @@ function validate(msg: Record<string, unknown>): { ok: boolean; warnings: string
 }
 
 void describe("WebviewMessageValidator voice input", () => {
-  void it("accepts bounded speech-to-text audio payloads", () => {
+  void it("accepts helper-open requests with a request id and provider", () => {
     const result = validate({
-      type: "stt_transcribe_audio",
+      type: "stt_open_helper",
       requestId: "voice-1",
-      mimeType: "audio/webm;codecs=opus",
-      data: Buffer.from("audio").toString("base64"),
-      durationMs: 1200,
-      sizeBytes: 5,
+      provider: "openai",
     })
 
     assert.equal(result.ok, true)
     assert.deepEqual(result.warnings, [])
   })
 
-  void it("rejects invalid speech-to-text mime and oversized payloads", () => {
-    const invalidMime = validate({
-      type: "stt_transcribe_audio",
-      requestId: "voice-1",
-      mimeType: "text/html",
-      data: Buffer.from("audio").toString("base64"),
-    })
-    assert.equal(invalidMime.ok, false)
-
-    const oversized = validate({
-      type: "stt_transcribe_audio",
-      requestId: "voice-1",
-      mimeType: "audio/webm",
-      data: Buffer.alloc(26 * 1024 * 1024).toString("base64"),
-    })
-    assert.equal(oversized.ok, false)
-  })
-
-  void it("requires a non-empty request id for speech-to-text messages", () => {
-    const result = validate({
-      type: "stt_transcribe_audio",
+  void it("rejects helper-open requests without a valid request id or provider", () => {
+    const missingRequest = validate({
+      type: "stt_open_helper",
       requestId: "",
-      mimeType: "audio/webm",
-      data: Buffer.from("audio").toString("base64"),
+      provider: "openai",
+    })
+    const invalidProvider = validate({
+      type: "stt_open_helper",
+      requestId: "voice-1",
+      provider: "native",
     })
 
-    assert.equal(result.ok, false)
+    assert.equal(missingRequest.ok, false)
+    assert.equal(invalidProvider.ok, false)
   })
+
 })

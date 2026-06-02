@@ -931,7 +931,7 @@
           "type": "boolean",
           "scope": "window",
           "default": true,
-          "description": "Show the microphone button in the chat composer. Recording starts only after an explicit click and transcripts are inserted into the prompt without auto-sending."
+          "description": "Show the microphone button in the chat composer. Voice input opens a browser helper after an explicit click and inserts transcripts into the prompt without auto-sending."
         },
         "opencode.voiceInput.provider": {
           "type": "string",
@@ -942,10 +942,10 @@
             "openai"
           ],
           "enumDescriptions": [
-            "Use the webview/browser speech recognition API when available. Audio is not sent through the extension host.",
-            "Use OpenAI audio transcription. Requires 'OpenCode: Set Voice Input OpenAI API Key' and sends the current recording for transcription only after you stop recording."
+            "Open a browser helper that uses the browser's speech recognition API. OpenCode receives only the final text you choose to use.",
+            "Open a browser helper that records audio and sends it to the extension host for OpenAI transcription. Requires 'OpenCode: Set Voice Input OpenAI API Key'."
           ],
-          "description": "Speech-to-text provider for the chat composer. Cloud transcription is opt-in and API keys are stored in VS Code SecretStorage."
+          "description": "Speech-to-text provider for the chat composer. Microphone capture happens in a browser helper; cloud transcription is opt-in and API keys are stored in VS Code SecretStorage."
         },
         "opencode.voiceInput.maxDurationSeconds": {
           "type": "number",
@@ -953,7 +953,7 @@
           "default": 60,
           "minimum": 1,
           "maximum": 300,
-          "description": "Maximum duration for one voice input recording."
+          "description": "Maximum duration for one browser-helper voice input recording/listening session."
         },
         "opencode.voiceInput.maxUploadBytes": {
           "type": "number",
@@ -961,7 +961,7 @@
           "default": 10485760,
           "minimum": 1024,
           "maximum": 26214400,
-          "description": "Maximum raw audio bytes for cloud speech-to-text uploads. OpenAI transcription accepts files up to 25 MB."
+          "description": "Maximum raw audio bytes for browser-helper cloud speech-to-text uploads. OpenAI transcription accepts files up to 25 MB."
         },
         "opencode.voiceInput.openaiModel": {
           "type": "string",

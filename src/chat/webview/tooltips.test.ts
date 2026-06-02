@@ -1,13 +1,16 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
+import { JSDOM } from "jsdom"
 import {
   STREAM_LIMIT_TOOLTIP,
   TOOLTIPS,
+  getContextUsageTooltip,
   getDisabledReasonTooltip,
   getModeOptionTooltip,
   getModeSelectorTooltip,
   getSendTooltip,
   getVoiceTooltip,
+  initStaticButtonTooltips,
 } from "./tooltips"
 
 void describe("TOOLTIPS map", () => {
@@ -126,5 +129,69 @@ void describe("getDisabledReasonTooltip", () => {
     const result = getDisabledReasonTooltip("No active session")
     assert.equal(result.title, "Unavailable: No active session")
     assert.equal(result.ariaLabel, "Unavailable: No active session")
+  })
+})
+
+void describe("getContextUsageTooltip", () => {
+  void it("includes percent and tokens when both are provided", () => {
+    const result = getContextUsageTooltip({ percent: 42, tokens: 1234, maxTokens: 2940 })
+    assert.match(result, /42%/)
+    assert.match(result, /1,234/)
+    assert.match(result, /2,940/)
+    assert.match(result, /breakdown/i)
+  })
+
+  void it("includes a label prefix when provided", () => {
+    const result = getContextUsageTooltip({ percent: 75, label: "GPT-4o" })
+    assert.match(result, /GPT-4o/)
+    assert.match(result, /75%/)
+  })
+
+  void it("falls back to percent-only when tokens and maxTokens are missing", () => {
+    const result = getContextUsageTooltip({ percent: 60 })
+    assert.match(result, /60%/)
+    assert.match(result, /breakdown/i)
+  })
+
+  void it("uses the unknown-window copy when maxTokens is 0", () => {
+    const result = getContextUsageTooltip({ percent: 0, tokens: 500, maxTokens: 0, unknownWindow: true })
+    assert.match(result, /500/)
+    assert.match(result, /unknown/)
+  })
+
+  void it("clamps percent to [0, 100]", () => {
+    assert.match(getContextUsageTooltip({ percent: -10 }), /0%/)
+    assert.match(getContextUsageTooltip({ percent: 250 }), /100%/)
+  })
+})
+
+void describe("initStaticButtonTooltips", () => {
+  void it("applies tooltips to declared buttons in the live document", () => {
+    const dom = new JSDOM(`<!doctype html><body>
+      <button id="history-btn">H</button>
+      <button id="checkpoint-toggle-btn">C</button>
+      <button id="send-btn">S</button>
+    </body>`)
+    const count = initStaticButtonTooltips(dom.window.document)
+    assert.ok(count >= 3)
+    assert.match(dom.window.document.getElementById("history-btn")!.getAttribute("title") ?? "", /session history/i)
+    assert.match(dom.window.document.getElementById("checkpoint-toggle-btn")!.getAttribute("title") ?? "", /checkpoint panel/i)
+    assert.match(dom.window.document.getElementById("send-btn")!.getAttribute("title") ?? "", /Send message/)
+  })
+
+  void it("replaces newlines with '. ' in aria-label for screen reader clarity", () => {
+    const dom = new JSDOM(`<!doctype html><body>
+      <button id="history-btn">H</button>
+    </body>`)
+    initStaticButtonTooltips(dom.window.document)
+    const el = dom.window.document.getElementById("history-btn")!
+    const aria = el.getAttribute("aria-label") ?? ""
+    assert.ok(!aria.includes("\n"), "aria-label should not contain newlines")
+  })
+
+  void it("returns 0 when no matching buttons exist", () => {
+    const dom = new JSDOM(`<!doctype html><body></body>`)
+    const count = initStaticButtonTooltips(dom.window.document)
+    assert.equal(count, 0)
   })
 })

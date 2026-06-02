@@ -1,39 +1,71 @@
 # Voice Input
 
 OpenCode Harness supports speech-to-text in the chat composer. The microphone
-button inserts a transcript into the existing prompt textarea so you can review
-or edit it before sending. It never sends a prompt automatically.
+button opens a small helper page in the user's default browser, then inserts the
+resulting transcript into the existing prompt textarea for review. It never
+posts `send_prompt` or sends a prompt automatically.
+
+## Architecture
+
+VS Code extension webviews are not used for microphone capture. As of June 2,
+2026, current VS Code/Electron behavior still does not expose a public extension
+API for granting `microphone` Permission Policy to an extension webview. Current
+reports show `navigator.mediaDevices.getUserMedia({ audio: true })` failing with
+`Permissions policy violation: microphone is not allowed in this document`:
+
+- VS Code webview issue: https://github.com/microsoft/vscode/issues/250568
+- VS Code integrated browser permission request: https://github.com/microsoft/vscode/issues/299521
+- MDN `getUserMedia()` permission/security rules: https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
+- MDN `Permissions-Policy: microphone`: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Permissions-Policy/microphone
+
+The extension therefore uses this flow:
+
+1. The webview sends `stt_open_helper` with a request id and provider.
+2. The extension host starts an ephemeral `127.0.0.1` helper server and creates a
+   one-time token.
+3. The host opens the helper with `vscode.env.openExternal(await vscode.env.asExternalUri(...))`,
+   which keeps remote SSH/WSL/container scenarios compatible.
+4. The helper page records or recognizes speech in the user's real browser, where
+   normal browser microphone permission prompts work.
+5. The helper POSTs the result back to the token-gated localhost endpoint.
+6. The host posts `stt_transcript` to the webview. The webview inserts it only if
+   the request id still matches the active voice request.
+
+Remote-safe localhost forwarding is based on VS Code's remote extension guidance:
+https://code.visualstudio.com/api/advanced-topics/remote-extensions
 
 ## Providers
 
 ### Browser
 
-`opencode.voiceInput.provider = "browser"` uses the webview/browser speech
-recognition API when it is available. This path does not send recorded audio
-through the extension host. Some browser engines may use platform speech
-services behind their Web Speech implementation; use the OpenAI provider only
-when you want explicit extension-managed cloud transcription.
+`opencode.voiceInput.provider = "browser"` opens the helper in browser speech
+recognition mode. The helper uses the browser's Web Speech API and sends only
+the final text back to the extension host.
+
+This mode avoids OpenAI/API-key setup, but browser support is uneven and Chrome
+or Edge may use a server-backed recognition service. MDN marks
+`SpeechRecognition` as limited availability:
+https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition
 
 ### OpenAI
 
-`opencode.voiceInput.provider = "openai"` records audio with `MediaRecorder`
-after you click the microphone button, stops on a second click, Escape, unload,
-or the configured duration cap, then sends that one recording to OpenAI's
-`/v1/audio/transcriptions` endpoint. The default model is
-`gpt-4o-mini-transcribe`.
+`opencode.voiceInput.provider = "openai"` opens the helper in recording mode.
+The helper records audio with `getUserMedia` and `MediaRecorder`, then sends the
+recording to the extension-host localhost endpoint only after the user chooses
+**Transcribe recording**. The extension host validates the request and calls
+OpenAI's `/v1/audio/transcriptions` endpoint with the API key stored in VS Code
+SecretStorage. The key is never sent to the webview or helper page.
 
-Set the key with the command:
+The default model is `gpt-4o-mini-transcribe`. OpenAI's speech-to-text docs list
+the transcription endpoint, compatible models, supported audio formats, and the
+25 MB upload cap:
+https://developers.openai.com/api/docs/guides/speech-to-text
+
+Set the key with:
 
 ```text
 OpenCode: Set Voice Input OpenAI API Key
 ```
-
-The key is stored in VS Code SecretStorage. It is never written to settings,
-sent to the webview, logged, or included in webview messages.
-
-OpenAI's speech-to-text docs list the transcription endpoint, current compatible
-models, supported audio formats, and upload cap:
-https://platform.openai.com/docs/guides/speech-to-text
 
 ## Settings
 
@@ -48,16 +80,18 @@ https://platform.openai.com/docs/guides/speech-to-text
 ```
 
 `maxUploadBytes` is capped at 25 MB. The default is lower (10 MB) to avoid large
-webview-to-host payloads.
+helper-to-host uploads.
 
 ## Privacy And Safety
 
-- Recording starts only from an explicit microphone-button click.
-- Stopping/canceling a recording releases media tracks and clears in-memory blobs.
-- Raw audio is not persisted.
+- Recording starts only after an explicit microphone-button click and browser
+  permission prompt.
+- The VS Code webview never captures microphone audio.
+- Helper callbacks are token-gated and request-scoped.
+- Raw audio is not persisted or logged.
 - Transcripts are inserted into the prompt; the user still chooses whether to send.
-- Audio, transcripts, API keys, and full provider responses are not logged.
-- The webview validates request IDs and ignores stale transcription responses.
-- The host validates MIME type, base64 shape, request ID, and size before decoding.
-- Cloud transcription is disabled unless `provider` is `"openai"` and a SecretStorage
-  API key exists.
+- OpenAI API keys stay in VS Code SecretStorage and are never sent to the helper.
+- Cloud transcription is disabled unless `provider` is `"openai"` and a
+  SecretStorage API key exists.
+- Browser mode may rely on browser-vendor recognition services; the helper page
+  discloses this before use.

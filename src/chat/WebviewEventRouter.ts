@@ -27,6 +27,7 @@ import type { ContextMonitor } from "../monitor/ContextMonitor"
 import type { UsageAnalytics } from "../monitor/UsageAnalytics"
 import type { SkillPreferencesStoreLike } from "../skills/SkillPreferencesStore"
 import type { VoiceInputService } from "./VoiceInputService"
+import type { VoiceInputHelperService } from "./VoiceInputHelperService"
 import { log } from "../utils/outputChannel"
 import { handleWebviewError } from "./utils/errorHandler"
 import { validateWebviewMessage } from "./WebviewMessageValidator"
@@ -57,6 +58,7 @@ export interface WebviewEventRouterOptions {
   usageAnalytics: UsageAnalytics
   steerPromptHandler: SteerPromptHandler
   voiceInputService: VoiceInputService
+  voiceInputHelperService: VoiceInputHelperService
   postMessage: (msg: Record<string, unknown>) => void
   postRequestError: (message: string, sessionId?: string) => void
   showWarningMessage: (message: string, options: vscode.MessageOptions, ...items: string[]) => Thenable<string | undefined>
@@ -131,7 +133,7 @@ export class WebviewEventRouter {
     "model_favorite", "model_toggle",
     "question_answer",
     "resume_stream", "decline_resume",
-    "get_stt_settings", "stt_transcribe_audio",
+    "get_stt_settings", "stt_open_helper",
   ])
 
   private readonly webviewHandlers: Map<string, (msg: Record<string, unknown>, sessionId?: string) => void | Promise<void>> = new Map([
@@ -148,13 +150,8 @@ export class WebviewEventRouter {
     ["get_stt_settings", async () => {
       await this.opts.voiceInputService.postSettings()
     }],
-    ["stt_transcribe_audio", async (msg: Record<string, unknown>) => {
-      await this.opts.voiceInputService.transcribeAudio({
-        requestId: msg.requestId,
-        mimeType: msg.mimeType,
-        data: msg.data,
-        sizeBytes: msg.sizeBytes,
-      })
+    ["stt_open_helper", async (msg: Record<string, unknown>) => {
+      await this.opts.voiceInputHelperService.openBrowserHelper(msg.requestId)
     }],
     ["show_diff", async (msg: Record<string, unknown>, sessionId?: string) => {
       const diffId = msg.diffId as string | undefined

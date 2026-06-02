@@ -1,5 +1,4 @@
 import { normalizeSessionMode } from "./modePolicy"
-import { VOICE_INPUT_MAX_UPLOAD_BYTES, validateVoiceAudioPayload } from "./voiceInputCore"
 
 export interface WebviewMessageValidatorDeps {
   hasPromptContent: (msg: Record<string, unknown>) => boolean
@@ -15,6 +14,7 @@ type MessageValidator = (
 
 const MODE_VALUES = new Set(["normal", "plan", "build", "auto"])
 const STEER_MODE_VALUES = new Set(["interrupt", "append", "queue"])
+const VOICE_PROVIDER_VALUES = new Set(["browser", "openai"])
 const MCP_SERVER_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/
 const MCP_COMMAND_PATTERN = /^[A-Za-z0-9@._/\\:-]+$/
 const MCP_HEADER_NAME_PATTERN = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/
@@ -321,16 +321,12 @@ function validateSendSteerPrompt(msg: Record<string, unknown>, _msgType: string,
   return true
 }
 
-function validateVoiceAudio(msg: Record<string, unknown>, _msgType: string, deps: WebviewMessageValidatorDeps): boolean {
-  const result = validateVoiceAudioPayload({
-    requestId: msg.requestId,
-    mimeType: msg.mimeType,
-    data: msg.data,
-    sizeBytes: msg.sizeBytes,
-  }, VOICE_INPUT_MAX_UPLOAD_BYTES)
-  if (!result.ok) return reject(deps, `Rejected speech-to-text audio: ${result.reason}`)
-  if (msg.durationMs !== undefined && (typeof msg.durationMs !== "number" || !Number.isFinite(msg.durationMs) || msg.durationMs < 0)) {
-    return reject(deps, "Invalid durationMs in stt_transcribe_audio")
+function validateVoiceHelperOpen(msg: Record<string, unknown>, _msgType: string, deps: WebviewMessageValidatorDeps): boolean {
+  if (typeof msg.requestId !== "string" || msg.requestId.trim().length === 0 || msg.requestId.length > 120) {
+    return reject(deps, "Invalid requestId in stt_open_helper")
+  }
+  if (typeof msg.provider !== "string" || !VOICE_PROVIDER_VALUES.has(msg.provider)) {
+    return reject(deps, "Invalid provider in stt_open_helper")
   }
   return true
 }
@@ -386,7 +382,7 @@ const WEBVIEW_MESSAGE_VALIDATORS: Record<string, MessageValidator> = {
   toggle_thinking: validateOptionalEnabled,
   update_setting: requiredStringValidator("key", () => "Invalid key in update_setting"),
   send_steer_prompt: validateSendSteerPrompt,
-  stt_transcribe_audio: validateVoiceAudio,
+  stt_open_helper: validateVoiceHelperOpen,
 }
 
 export function validateWebviewMessage(

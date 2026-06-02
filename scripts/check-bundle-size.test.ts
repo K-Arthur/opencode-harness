@@ -1,6 +1,6 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { readFileSync, existsSync, statSync } from "node:fs"
+import { readFileSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -26,11 +26,12 @@ void describe("check-bundle-size.mjs", () => {
     )
   })
 
-  void it("enforces the 500KB / 600KB authoritative limits", () => {
+  void it("enforces the 500KB extension / 680KB webview limits, with 600KB documented as the paydown target", () => {
     // Find the asserted limits in the script source.
     const source = readFileSync(checkScript, "utf8")
     assert.ok(/500\s*\*\s*1024/.test(source), "extension.js limit must be 500KB (500*1024)")
-    assert.ok(/600\s*\*\s*1024/.test(source), "main.js limit must be 600KB (600*1024)")
+    assert.ok(/680\s*\*\s*1024/.test(source), "main.js limit must be 680KB (680*1024) after the 2026-06-02 re-baseline")
+    assert.ok(/600KB/.test(source), "the 600KB paydown target must remain documented in the script so the goal isn't lost")
   })
 
   void it("produces a clear pass/fail line for each bundle", () => {

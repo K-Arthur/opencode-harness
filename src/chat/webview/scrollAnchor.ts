@@ -7,7 +7,8 @@
  * - User scrolls back to bottom: resume auto-scroll
  * - New message sent: force-scroll to bottom and resume
  *
- * Uses content-visibility: auto for virtual rendering (see messages.css).
+ * Large sessions render only a window of recent messages (see virtualList.ts),
+ * with a "load earlier" banner above them — not content-visibility skipping.
  * The scroll anchor is at the bottom of the message list + typing indicator.
  */
 

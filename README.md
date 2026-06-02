@@ -147,15 +147,17 @@ All commands are also available via the Command Palette (`Ctrl+Shift+P`).
 ## Voice Input
 
 The chat composer includes a microphone button for speech-to-text prompt entry.
-Click once to start recording and click again, press Escape, or wait for the
-duration cap to stop. The transcript is inserted into the prompt textarea for
-editing; it is not sent automatically.
+Clicking it opens a small helper page in your default browser so microphone
+permission is handled by the real browser rather than the VS Code webview. The
+transcript is inserted into the prompt textarea for editing; it is not sent
+automatically.
 
-By default, voice input uses browser speech recognition when the webview supports
-it. To use OpenAI transcription instead, set `opencode.voiceInput.provider` to
+By default, voice input uses browser speech recognition in the helper page. To
+use OpenAI transcription instead, set `opencode.voiceInput.provider` to
 `"openai"` and run **OpenCode: Set Voice Input OpenAI API Key**. The key is stored
-in VS Code SecretStorage, not settings JSON. See [docs/voice-input.md](docs/voice-input.md)
-for settings, privacy behavior, and provider details.
+in VS Code SecretStorage, not settings JSON or the helper page. See
+[docs/voice-input.md](docs/voice-input.md) for settings, privacy behavior, and
+provider details.
 
 ## Design System
 

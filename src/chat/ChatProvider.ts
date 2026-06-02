@@ -50,6 +50,7 @@ import { SlashCommandService } from "./SlashCommandService"
 import { SessionSyncService } from "./SessionSyncService"
 import { AutoModeService } from "./AutoModeService"
 import { VoiceInputService } from "./VoiceInputService"
+import { VoiceInputHelperService } from "./VoiceInputHelperService"
 
 type ServerEvent = { type: string; sessionId?: string; data?: unknown }
 
@@ -86,6 +87,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private diffAcceptService!: DiffAcceptService
   private codeInsertionService!: CodeInsertionService
   private voiceInputService!: VoiceInputService
+  private voiceInputHelperService!: VoiceInputHelperService
 
   private messagePostService = new MessagePostService({
     getWebview: () => this._view?.webview,
@@ -246,6 +248,20 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       secrets: context.secrets,
       postMessage: (msg) => this.postMessage(msg),
     })
+    this.voiceInputHelperService = new VoiceInputHelperService({
+      extensionPath: context.extensionUri.fsPath,
+      parseUri: (value) => vscode.Uri.parse(value),
+      asExternalUri: (uri) => vscode.env.asExternalUri(uri as vscode.Uri),
+      openExternal: (uri) => vscode.env.openExternal(uri as vscode.Uri),
+      getSettings: () => this.voiceInputService.getSettings(),
+      transcribeAudio: (payload) => this.voiceInputService.transcribeAudio(payload),
+      postMessage: (msg) => this.postMessage(msg),
+      log: (level, message, err) => {
+        if (level === "error") log.error(message, err)
+        else if (level === "warn") log.warn(message, err)
+        else log.info(message)
+      },
+    })
 
     // Hook into tab creation to backfill tabs that need it
     this.tabManager.onTabCreated((tabId) => {
@@ -275,6 +291,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       usageAnalytics: this.usageAnalytics,
       steerPromptHandler: this.steerPromptHandler,
       voiceInputService: this.voiceInputService,
+      voiceInputHelperService: this.voiceInputHelperService,
       postMessage: (msg) => this.postMessage(msg),
       postRequestError: (message, sessionId) => this.postRequestError(message, sessionId),
       showWarningMessage: (message, options, ...items) => vscode.window.showWarningMessage(message, options, ...items),
@@ -1507,6 +1524,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     this.chatCommands?.dispose()
     this.autoCompactor?.dispose()
     this.fileOps?.dispose()
+    this.voiceInputHelperService?.dispose()
     this.eventRouter.clearReadyTimeout()
     this.webviewContent?.dispose()
   }

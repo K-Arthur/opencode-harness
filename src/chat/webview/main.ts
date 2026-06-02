@@ -2253,6 +2253,11 @@ function getVsCodeApi() {
         const settings = (msg as Record<string, unknown>).settings as VoiceInputSettings | undefined
         if (settings) voiceInputApi?.applySettings(settings)
       }],
+      ["stt_helper_opened", (msg) => {
+        voiceInputApi?.handleHelperOpened({
+          requestId: (msg as Record<string, unknown>).requestId,
+        })
+      }],
       ["stt_transcript", (msg) => {
         voiceInputApi?.handleTranscript({
           requestId: (msg as Record<string, unknown>).requestId,

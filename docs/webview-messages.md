@@ -55,24 +55,26 @@ Webview → host:
 
 - `get_stt_settings`: requests the current voice-input settings. The host answers
   with `stt_settings`.
-- `stt_transcribe_audio`: `{ type, requestId, mimeType, data, sizeBytes?, durationMs? }`.
-  This message is sent only for the OpenAI provider after an explicit recording
-  gesture and stop action. `data` is base64 audio, bounded by
-  `opencode.voiceInput.maxUploadBytes`.
+- `stt_open_helper`: `{ type, requestId, provider }`. The host starts a
+  token-gated localhost helper server and opens the helper in the user's default
+  browser via `asExternalUri` + `openExternal`. The webview never sends audio.
 
 Host → webview:
 
 - `stt_settings`: `{ type, settings }`, where `settings` includes `enabled`,
   `provider`, `maxDurationSeconds`, `maxUploadBytes`, `openaiModel`, and
   `hasOpenAiApiKey`. The API key value is never sent to the webview.
+- `stt_helper_opened`: `{ type, requestId, helperUri, provider }`. The webview
+  marks the active request as pending in the browser helper and ignores stale
+  acknowledgements.
 - `stt_transcript`: `{ type, requestId, text }`. The webview inserts the transcript
   only if `requestId` matches the current pending request, then clears the request.
 - `stt_error`: `{ type, requestId?, reason, message }`. The webview ignores stale
   request-scoped errors and surfaces current errors in the input-area live region.
 
-The host validator rejects missing request IDs, unsupported audio MIME types,
-invalid base64, and oversized payloads before decoding. Browser speech recognition
-does not use `stt_transcribe_audio`.
+The helper server rejects missing/invalid one-time tokens. OpenAI helper uploads
+are validated by `VoiceInputService` for request id, MIME type, base64 shape, and
+size before decoding or calling the transcription provider.
 
 ## Plan Mode Rendering
 

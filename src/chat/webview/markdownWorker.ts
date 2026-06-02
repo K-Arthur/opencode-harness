@@ -101,7 +101,14 @@ function getMarkdown(): MarkdownIt {
   return md
 }
 
+// Mirror of MAX_HIGHLIGHT_CHARS in syntaxHighlighter.ts. Off-thread here, so it
+// does not jank the UI, but it still avoids wasted CPU and a delayed worker
+// response when a pathological large block (e.g. a huge no-language paste) would
+// otherwise hit highlightAuto() against every registered grammar.
+const MAX_HIGHLIGHT_CHARS = 50_000
+
 function highlightSyntax(code: string, language: string): string {
+  if (code.length > MAX_HIGHLIGHT_CHARS) return escapeHtml(code)
   const normalized = normalizeMarkdownLanguage(language)
   try {
     if (normalized && hljs.getLanguage(normalized)) {

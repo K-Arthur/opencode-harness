@@ -42,18 +42,14 @@ jobs:
           test -f dist/chat/webview/styles.css || { echo "Missing dist/chat/webview/styles.css"; exit 1; }
           echo "All build artifacts verified"
 
-      - name: Check bundle sizes
+      # The gate measures the PRODUCTION (minified) build. The previous inline
+      # check ran against `npm run build` (dev, unminified ~840KB/1.2MB) and so
+      # never reflected real bundle sizes. Build --production, then defer to the
+      # single source of truth (scripts/check-bundle-size.mjs).
+      - name: Check bundle sizes (production)
         run: |
-          node -e "
-          const fs = require('fs');
-          const extSize = fs.statSync('dist/extension.js').size;
-          const webSize = fs.statSync('dist/chat/webview/main.js').size;
-          console.log('Extension bundle: ' + (extSize / 1024).toFixed(1) + ' KB');
-          console.log('Webview bundle:  ' + (webSize / 1024).toFixed(1) + ' KB');
-          if (extSize > 512000) { console.error('Extension bundle exceeds 500KB limit!'); process.exit(1); }
-          if (webSize > 614400) { console.error('Webview bundle exceeds 600KB limit!'); process.exit(1); }
-          console.log('Bundle sizes within limits');
-          "
+          node esbuild.js --production
+          node scripts/check-bundle-size.mjs
 
       - name: Unit tests
         run: npm run test:unit

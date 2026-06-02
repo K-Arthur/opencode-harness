@@ -54,7 +54,8 @@ export function setupModelManager(els: ElementRefs, callbacks: ModelManagerCallb
   }
 
   function toggle() {
-    isOpen ? close() : open()
+    if (isOpen) close()
+    else open()
   }
 
   function setModels(newModels: ModelInfo[]) {

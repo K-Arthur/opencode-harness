@@ -15,7 +15,6 @@
 
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { ErrorCategory, ErrorSeverity } from "../../chat/webview/errorTypes"
 import { extractSessionStatusError, mapSessionStatusError } from "./sessionStatusMapper"
 
 describe("Session Status Mapper — based on actual server events", () => {
@@ -104,8 +103,8 @@ describe("Session Status Mapper — based on actual server events", () => {
       const userMessage = mapSessionStatusError(error)
 
       assert.equal(userMessage.code, "FREE_TIER_LIMIT")
-      assert.equal(userMessage.category, ErrorCategory.USAGE)
-      assert.equal(userMessage.severity, ErrorSeverity.HIGH)
+      assert.equal(userMessage.category, "usage")
+      assert.equal(userMessage.severity, "high")
       assert.equal(userMessage.retryable, false)
       assert.match(userMessage.userMessage, /Free usage exceeded/)
       assert.match(userMessage.userMessage, /Subscribe to Go/)
@@ -125,7 +124,7 @@ describe("Session Status Mapper — based on actual server events", () => {
       const userMessage = mapSessionStatusError(error)
 
       assert.equal(userMessage.code, "RATE_LIMITED")
-      assert.equal(userMessage.category, ErrorCategory.USAGE)
+      assert.equal(userMessage.category, "usage")
       assert.equal(userMessage.retryable, true)
       assert.match(userMessage.userMessage.toLowerCase(), /rate/)
       assert.ok(userMessage.suggestedActions.some(a => a.action === "wait_for_reset"))
@@ -144,8 +143,8 @@ describe("Session Status Mapper — based on actual server events", () => {
       const userMessage = mapSessionStatusError(error)
 
       assert.equal(userMessage.code, "AUTH_REQUIRED")
-      assert.equal(userMessage.category, ErrorCategory.AUTH)
-      assert.equal(userMessage.severity, ErrorSeverity.HIGH)
+      assert.equal(userMessage.category, "auth")
+      assert.equal(userMessage.severity, "high")
       assert.equal(userMessage.retryable, false)
       assert.match(userMessage.userMessage.toLowerCase(), /auth/)
       assert.ok(userMessage.suggestedActions.some(a => a.action === "edit"))
@@ -164,7 +163,7 @@ describe("Session Status Mapper — based on actual server events", () => {
       const userMessage = mapSessionStatusError(error)
 
       assert.equal(userMessage.code, "MODEL_UNAVAILABLE")
-      assert.equal(userMessage.category, ErrorCategory.MODEL)
+      assert.equal(userMessage.category, "model")
       assert.equal(userMessage.retryable, true)
       assert.match(userMessage.userMessage, /model/)
       assert.ok(userMessage.suggestedActions.some(a => a.action === "switch_model"))
@@ -179,7 +178,7 @@ describe("Session Status Mapper — based on actual server events", () => {
       const userMessage = mapSessionStatusError(error)
 
       assert.equal(userMessage.code, "TIMEOUT")
-      assert.equal(userMessage.category, ErrorCategory.NETWORK)
+      assert.equal(userMessage.category, "network")
       assert.equal(userMessage.retryable, true)
       assert.match(userMessage.userMessage, /timeout/)
     })
@@ -193,7 +192,7 @@ describe("Session Status Mapper — based on actual server events", () => {
       const userMessage = mapSessionStatusError(error)
 
       assert.equal(userMessage.code, "NETWORK_ERROR")
-      assert.equal(userMessage.category, ErrorCategory.NETWORK)
+      assert.equal(userMessage.category, "network")
       assert.equal(userMessage.retryable, true)
       assert.match(userMessage.userMessage.toLowerCase(), /network/)
     })
@@ -207,7 +206,7 @@ describe("Session Status Mapper — based on actual server events", () => {
       const userMessage = mapSessionStatusError(error)
 
       assert.equal(userMessage.code, "UNKNOWN_STATUS")
-      assert.equal(userMessage.category, ErrorCategory.SYSTEM)
+      assert.equal(userMessage.category, "system")
       assert.match(userMessage.userMessage.toLowerCase(), /unknown/)
     })
 
@@ -241,7 +240,7 @@ describe("Session Status Mapper — based on actual server events", () => {
       const userMessage = mapSessionStatusError(error)
 
       assert.equal(userMessage.code, "RETRY_UNKNOWN_REASON")
-      assert.equal(userMessage.category, ErrorCategory.SYSTEM)
+      assert.equal(userMessage.category, "system")
       assert.ok(userMessage.suggestedActions.length > 0)
     })
 
@@ -251,7 +250,7 @@ describe("Session Status Mapper — based on actual server events", () => {
       const userMessage = mapSessionStatusError(error)
 
       assert.equal(userMessage.code, "UNKNOWN_STATUS")
-      assert.equal(userMessage.category, ErrorCategory.SYSTEM)
+      assert.equal(userMessage.category, "system")
       assert.match(userMessage.userMessage.toLowerCase(), /unknown/)
     })
 

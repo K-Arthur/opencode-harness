@@ -5,14 +5,24 @@
 // load synchronously into the host process or the chat webview:
 //
 //   dist/extension.js                  ≤ 500KB
-//   dist/chat/webview/main.js          ≤ 600KB
+//   dist/chat/webview/main.js          ≤ 680KB  (paydown target: 600KB)
 //   dist/chat/webview/markdownWorker.js ≤ 500KB  (advisory)
 //
-// The 500/600KB limits are authoritative per repo policy; if attribution
-// shows they're structurally unrealistic, raise the limits here and in
-// package.json (not silently elsewhere).
+// IMPORTANT: these limits describe the **production (minified) build**
+// (`node esbuild.js --production`). The dev build (`node esbuild.js`) is
+// unminified + sourcemapped (~840KB / ~1.2MB) and must NOT be measured here.
+//
+// 2026-06-02 re-baseline: the webview limit was 600KB but the minified bundle
+// is ~637KB of legitimate code — ~224KB is irreducible third-party for a
+// markdown chat UI (markdown-it + entities + highlight.js + dompurify) and the
+// rest is app code that grew with shipped features. A limit set below reality
+// is a perpetually-red gate, not a regression guard. Re-baselined to 680KB
+// (current + ~7% headroom) so it still trips on a real regression. The 600KB
+// PAYDOWN TARGET is retained as a goal: reachable by moving syntax highlighting
+// fully off the synchronous main-thread path so highlight.js (78.8KB) can leave
+// main.js (see docs/performance-audit.md follow-ups). Adjust deliberately here.
 
-import { statSync, readFileSync, existsSync } from "node:fs"
+import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -21,7 +31,7 @@ const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
   { path: "dist/extension.js", limitBytes: 500 * 1024, label: "extension host" },
-  { path: "dist/chat/webview/main.js", limitBytes: 600 * 1024, label: "chat webview" },
+  { path: "dist/chat/webview/main.js", limitBytes: 680 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
 
