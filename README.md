@@ -53,6 +53,7 @@ OpenCode includes advanced features like cost tracking, theme customization, gra
 - **Model Manager Panel** — Searchable model list with per-model toggle switches, provider grouping, and "Connect provider" integration
 - **Branded Welcome Screen** — OpenCode wordmark with workspace-oriented prompt starter cards featuring icon + label + description layout
 - **Agent Visibility** — See exactly what the agent is doing in real-time (reading files, running commands, loading skills)
+- **Subagent Visibility** — Delegated `task` work renders as first-class subagent cards (agent, purpose, status, duration, result) and in an "Active Subagents" side panel, instead of leaking raw prompts as a generic tool call
 - **Context-Aware** — Automatically includes open files, diagnostics, git status, and workspace structure
 - **Inline Code Actions** — CodeLens on functions for Explain, Refactor, and Generate Tests
 - **Smart Diffs** — AI-suggested code changes shown as unified diffs with Accept/Discard controls
@@ -117,24 +118,88 @@ OpenCode now supports multiple concurrent AI workers through a tabbed interface:
 
 ## Keyboard Shortcuts
 
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+T` | New tab |
-| `Ctrl+W` | Close active tab |
-| `Ctrl+Tab` | Next tab |
-| `Ctrl+Shift+Tab` | Previous tab |
-| `Ctrl+Alt+O` | Toggle OpenCode chat focus |
-| `Ctrl+Alt+N` | Start a new conversation |
-| `Ctrl/Cmd+Alt+1` | Switch active tab to Plan mode |
-| `Ctrl/Cmd+Alt+2` | Switch active tab to Build mode |
-| `Ctrl/Cmd+Alt+3` | Switch active tab to Auto mode |
-| `Alt+K` | Insert file reference (@-mention) |
-| `Escape` | Close dropdowns/modals, stop active AI session |
-| `Ctrl+Shift+Escape` | Stop active AI session |
-| `Ctrl+F` | Search within conversation |
-| `Ctrl+Shift+F` | Global search |
+| Shortcut | Action | Context |
+|---|---|---|
+| `Ctrl+Alt+O` | Toggle OpenCode chat focus | Global |
+| `Ctrl+Alt+N` | New session | Global |
+| `Ctrl+I` | Quick chat | Editor focused |
+| `Alt+K` | Insert file reference (@) | Editor focused |
+| `Escape` | Stop / close modal / close dropdown | Chat view / modals |
+| `Ctrl+Shift+Esc` | Stop active session | Chat view |
+| `Ctrl+Shift+/` | Open commands palette | Chat view |
+| `Shift+Tab` | Cycle mode (Plan → Build → Auto) | Mode button focused |
+| `Alt+Shift+Tab` | Cycle mode (Plan → Build → Auto) | Chat view |
+| `Ctrl+Shift+M` | Cycle mode (Plan → Build → Auto) | Chat view |
+| `Ctrl/Cmd+Alt+1` | Set Plan mode | Chat view |
+| `Ctrl/Cmd+Alt+2` | Set Build mode | Chat view |
+| `Ctrl/Cmd+Alt+3` | Set Auto mode | Chat view |
+| `Ctrl/Cmd+L` | Focus prompt input | Chat view |
+| `Ctrl/Cmd+Enter` | Send or steer | Prompt focused |
+| `Enter` | Send | Prompt focused |
+| `Ctrl/Cmd+T` | New tab | Prompt focused |
+| `Ctrl/Cmd+W` | Close tab | Prompt focused |
+| `Ctrl/Cmd+Tab` / `Ctrl+Shift+Tab` | Next / previous tab | Prompt focused |
+| `Ctrl+Alt+]` | Next tab | Chat view |
+| `Ctrl+Alt+[` | Previous tab | Chat view |
+| `Ctrl/Cmd+1/2/3` | Steer mode: Interrupt / Append / Queue | Prompt focused |
+| `Ctrl/Cmd+K` | Open commands palette | Prompt focused |
+| `Ctrl/Cmd+Shift+T` | Toggle thinking blocks | Chat view |
+| `Ctrl+Shift+E` | Toggle errors | Chat view |
+| `Ctrl+Shift+D` | Toggle diffs / changed files | Chat view |
+| `Ctrl+Shift+O` | Toggle tools visibility | Chat view |
+| `Ctrl+Shift+Alt+L` | Toggle timeline sidebar | Chat view |
+| `Ctrl+Shift+Alt+T` | Toggle todos panel | Chat view |
+| `Ctrl+Shift+Alt+K` | Toggle checkpoint panel | Chat view |
+| `Ctrl+Shift+Alt+A` | Toggle activity / subagent panel | Chat view |
+| `Ctrl+Shift+Alt+S` | Open skills modal | Chat view |
+| `Ctrl+Shift+Alt+H` | Open session history | Chat view |
+| `Ctrl+Shift+Alt+N` | New session (alt) | Chat view |
+| `Ctrl+Alt+R` | Retry last failed run | Chat view |
+| `?` (Shift+/) | Open keyboard shortcuts help | Chat view |
+| `E` / `Space` | Expand / collapse current tool call | Tool call focused |
+| `C` | Copy current tool output | Tool call focused |
+| `Ctrl+F` | Search within conversation | Chat view |
+| `Ctrl+Shift+F` | Global search | Global |
+| `Ctrl/Cmd+Shift+T` | Toggle thinking blocks | Chat view |
 
 All commands are also available via the Command Palette (`Ctrl+Shift+P`).
+
+### Why not plain `Shift+Tab` for mode cycling everywhere?
+
+Plain `Shift+Tab` is the universal keyboard shortcut for **reverse focus navigation** — it moves focus to the previous interactive element on the page (equivalent to `Tab` but backwards). Rebinding it globally would:
+
+1. **Break reverse-focus navigation** in the webview, making it harder for keyboard-only and screen-reader users to navigate form controls, buttons, and menus.
+2. **Break modal focus traps** — modals rely on `Shift+Tab` at the first focusable element to wrap focus to the last.
+3. **Interfere with text editing** — in textareas and contenteditable elements, pressing `Shift+Tab` can involve the browser's or screen-reader's navigation.
+
+Instead, `Shift+Tab` cycles modes **only when the mode selector button is already focused** — a safe context where the user is confirming they want to interact with the mode control. For global mode cycling, use `Alt+Shift+Tab` (existing) or `Ctrl+Shift+M` (new, with `M` for Mode).
+
+### Customizing shortcuts
+
+All OpenCode commands can be rebound in VS Code:
+
+1. Open **File → Preferences → Keyboard Shortcuts** (`Ctrl+K Ctrl+S`).
+2. Search for `OpenCode:` or the specific command you want to rebind (e.g., `opencode-harness.cycleMode`).
+3. Click the pencil icon and press your preferred key combination.
+4. Press `Enter` to save.
+
+The "context" column in the table above maps to VS Code `when` clauses you can use for context-specific bindings (`focusedView == 'opencode-harness.chat'`, `focusedView == 'opencode-harness.chatView'`, `editorTextFocus`).
+
+### Known Shortcut Conflicts
+
+Some OpenCode shortcuts reuse key combinations that VS Code uses for other features. These are intentional design choices (the extension takes priority when the OpenCode view is focused) but are documented here for transparency:
+
+| Shortcut | OpenCode Command | VS Code Command Overridden | When Overridden |
+|---|---|---|---|
+| `Ctrl+I` | Quick Chat | `inlineChat.start` (Open editor inline chat) | `editorTextFocus` |
+| `Ctrl+Alt+O` | Toggle OpenCode focus | `workbench.action.toggleOutline` | Global |
+| `Ctrl+Shift+M` | Cycle mode (Plan → Build → Auto) | `workbench.actions.view.problems` (Show Problems) | `focusedView == opencode-harness.chatView` |
+| `F1` | Open Commands Palette (webview) | `workbench.action.showCommands` (VS Code Command Palette) | `focusedView == opencode-harness.chat` |
+
+**Notes on resolution:**
+- All conflicts are scoped by `when` clause — the VS Code default behavior is preserved when the OpenCode view is not focused.
+- `Ctrl+I` is the most impactful conflict. VS Code uses `Ctrl+I` for editor inline chat (`inlineChat.start`). OpenCode's Quick Chat takes priority in `editorTextFocus`. To restore the original VS Code inline chat, reassign `opencode-harness.quickChat` to a different shortcut in the Keyboard Shortcuts editor.
+- `Ctrl+Shift+M` was chosen for mode cycling because `M` = **M**ode. The Problems panel can still be opened by clicking the error count in the Status Bar or by reassigning the shortcut.
 
 ## Context Attachments
 
@@ -165,10 +230,15 @@ Voice input works when a local recorder **and** a local STT engine are available
   (`whisper-cli`, with a model set via `opencode.voice.model`).
 - Or bring your own with `opencode.voice.localCommand` / `opencode.voice.recordCommand`.
 
-If neither is found, the mic button degrades gracefully to a clear "not available"
-state — you can still type, or use your OS's built-in dictation (macOS Dictation /
-Windows `Win+H`), which types directly into the focused prompt box. See
-[docs/voice-input.md](docs/voice-input.md) for setup, settings, and privacy details.
+If neither is found, the mic button stays clickable and launches a guided,
+opt-in setup (also **OpenCode: Set Up Voice Input** in the palette) that installs
+the engine + recorder locally with your confirmation. You can also type, or use
+your OS's built-in dictation (macOS Dictation / Windows `Win+H`).
+
+> Note on VS Code's own speech extension: it's local but only dictates into
+> Monaco editors / the built-in Chat, its provider API is proposed-only, and its
+> model isn't redistributable — so it can't feed this custom composer. Details in
+> [docs/voice-input.md](docs/voice-input.md).
 
 ## Design System
 

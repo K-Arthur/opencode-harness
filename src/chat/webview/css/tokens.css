@@ -301,6 +301,7 @@
   --modal-width-sm: 320px;
   --modal-width-md: 480px;
   --modal-width-lg: 640px;
+  --modal-width-xl: 680px;
   --modal-max-height: 80vh;
   --modal-bg: var(--oc-glass-bg);
   --modal-border: var(--oc-glass-border);

@@ -166,6 +166,13 @@ The host-to-webview `command_list` payload is partitioned before it reaches the 
 - `mode_change_result`: Host acknowledgement for a `change_mode` request. When
   `accepted` is false, the payload carries the previous mode so the webview can keep the
   visible selector in sync after invalid payloads or cancelled Auto-mode confirmation.
+- `plan_complete`: Host notification that the agent wrote a plan document in Plan mode.
+  The webview renders a "Planning Complete" banner with "Switch to Build" and "Stay in Plan"
+  buttons. The sessionId identifies the tab. Payload: `{ type, sessionId, planName? }`.
+- `mode_switch_request`: Webview→Host request to switch a session's mode. Sent when the
+  user clicks "Switch to Build" on the plan-complete card. The host normalizes the mode,
+  logs the transition, and applies it through the existing `change_mode` flow.
+  Payload: `{ type, targetMode, sessionId }`.
 
 These replace the previous behavior where these messages were logged as "unknown host
 message type" and silently dropped.
@@ -193,7 +200,7 @@ from the tab the user is reading:
 #### Welcome-screen mode selection
 
 The mode selector lives in the input area, which is visible on the welcome screen where no
-session is active. Choosing a mode (click, `Ctrl/Cmd+Alt+1/2/3`, or `Alt+Shift+Tab`) with no
+session is active. Choosing a mode (click, `Ctrl/Cmd+Alt+1/2/3`, `Alt+Shift+Tab`, `Ctrl+Shift+M`, or `Shift+Tab` when the mode button is focused) with no
 active session updates a persisted **pending mode** (`state.pendingMode`) and the selector
 UI instead of dropping the request. The next session created (`createSession`, new tab,
 or first prompt) adopts that mode, which then travels to the host via `send_prompt.mode` /
@@ -340,7 +347,7 @@ The `question` tool lets the model ask the user one or more multiple-choice or f
 
 ### Input schema (defensive)
 
-The tool's `args` are normalized by the pure parser `parseQuestionArgs` (`src/chat/webview/questionModel.ts`) into a `QuestionGroup[]`. Two shapes are accepted:
+The tool's `args` are normalized by the pure parser `parseQuestionArgs` (`src/session/questionModel.ts`) into a `QuestionGroup[]`. Two shapes are accepted:
 
 - **Flat single question** — `{ question | prompt | message | text, options | choices | select, allowFreeText? }`.
 - **Nested groups** (Claude-style) — `{ questions: [ { question, header?, options: (string | { label, description })[], multiSelect? } ] }`.
@@ -452,7 +459,7 @@ The relevant coverage lives in:
 
 - `tests/webview/question-block-e2e.spec.ts` for E2E tests covering static render, edge cases, accessibility, streaming phase, and message contract.
 - `src/chat/webview/questionBar.test.ts` for question bar unit tests (show/hide, option rendering, submit aggregation, multi-question state, clear on stream-end).
-- `src/chat/webview/questionModel.test.ts` for the pure `parseQuestionArgs` normalizer (flat + nested shapes, option-label extraction, empty/partial input).
+- `src/session/questionModel.test.ts` for the pure `parseQuestionArgs` normalizer (flat + nested shapes, option-label extraction, empty/partial input). The `src/chat/webview/questionModel.ts` re-export shim was removed since production code imports directly from `src/session/questionModel`.
 - `src/chat/webview/question-block.test.ts` for unit tests covering messageId correlation, empty fallback, maxlength, aria-labels, multi-group rendering, and multi-select submit aggregation.
 - `src/chat/webview/question-merge.test.ts` for `stream_end` merge survival — ensures the question block is not clobbered into a tool card and late/empty server copies do not wipe displayed groups.
 - `src/chat/webview/question-refresh.test.ts` for the live in-place refresh (empty start → args arrive → text/options appear and stay interactive).

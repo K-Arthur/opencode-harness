@@ -11,6 +11,7 @@ import {
   type ModeDropdownElements,
   type ModeDropdownDeps,
 } from "./modeDropdown"
+import { isTextEntryTarget, resetShortcutRegistry } from "../keyboardShortcuts"
 
 let cleanupDom: (() => void) | null = null
 
@@ -309,6 +310,155 @@ void describe("mode dropdown", () => {
   void describe("MODE_ORDER", () => {
     void it("has expected order", () => {
       assert.deepEqual([...MODE_ORDER], ["plan", "build", "auto"])
+    })
+  })
+
+  void describe("Shift+Tab on mode button", () => {
+    void it("cycles mode when mode button is focused", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const posted: Record<string, unknown>[] = []
+      updateModeDropdown("build", els)
+      setupModeToggle({
+        els,
+        getActiveSession: () => ({ id: "s1", isStreaming: false }),
+        setSessionMode: () => {},
+        postMessage: (msg) => posted.push(msg),
+      })
+      els.modeDropdownBtn.focus()
+      els.modeDropdownBtn.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true }))
+      assert.equal(posted.length, 1, "Shift+Tab on mode button should cycle mode")
+    })
+
+    void it("does not cycle when a modal is open", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const modal = document.getElementById("modal-1")
+      if (modal) modal.classList.remove("hidden")
+      const posted: Record<string, unknown>[] = []
+      updateModeDropdown("build", els)
+      setupModeToggle({
+        els,
+        getActiveSession: () => ({ id: "s1", isStreaming: false }),
+        setSessionMode: () => {},
+        postMessage: (msg) => posted.push(msg),
+      })
+      els.modeDropdownBtn.focus()
+      els.modeDropdownBtn.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true }))
+      assert.equal(posted.length, 0, "should not cycle when modal is open")
+    })
+
+    void it("does not cycle when session is streaming", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const posted: Record<string, unknown>[] = []
+      updateModeDropdown("build", els)
+      setupModeToggle({
+        els,
+        getActiveSession: () => ({ id: "s1", isStreaming: true }),
+        setSessionMode: () => {},
+        postMessage: (msg) => posted.push(msg),
+      })
+      els.modeDropdownBtn.focus()
+      els.modeDropdownBtn.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true }))
+      assert.equal(posted.length, 0, "should not cycle while streaming")
+    })
+
+    void it("does not cycle when the mode button is not focused", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const posted: Record<string, unknown>[] = []
+      updateModeDropdown("build", els)
+      setupModeToggle({
+        els,
+        getActiveSession: () => ({ id: "s1", isStreaming: false }),
+        setSessionMode: () => {},
+        postMessage: (msg) => posted.push(msg),
+      })
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true }))
+      assert.equal(posted.length, 0, "plain Shift+Tab should not cycle mode")
+    })
+  })
+
+  void describe("Ctrl+Shift+M mode cycling", () => {
+    void it("posts change_mode when Ctrl+Shift+M is pressed", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const posted: Record<string, unknown>[] = []
+      updateModeDropdown("build", els)
+      setupModeToggle({
+        els,
+        getActiveSession: () => ({ id: "s1", isStreaming: false }),
+        setSessionMode: () => {},
+        postMessage: (msg) => posted.push(msg),
+      })
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "m", ctrlKey: true, shiftKey: true, bubbles: true }))
+      assert.equal(posted.length, 1)
+    })
+
+    void it("does not fire for Ctrl+Shift without M", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const posted: Record<string, unknown>[] = []
+      updateModeDropdown("build", els)
+      setupModeToggle({
+        els,
+        getActiveSession: () => ({ id: "s1", isStreaming: false }),
+        setSessionMode: () => {},
+        postMessage: (msg) => posted.push(msg),
+      })
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "n", ctrlKey: true, shiftKey: true, bubbles: true }))
+      assert.equal(posted.length, 0, "Ctrl+Shift+N should not trigger mode cycle")
+    })
+
+    void it("does not fire when a modal is open", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const modal = document.getElementById("modal-1")
+      if (modal) modal.classList.remove("hidden")
+      const posted: Record<string, unknown>[] = []
+      updateModeDropdown("build", els)
+      setupModeToggle({
+        els,
+        getActiveSession: () => ({ id: "s1", isStreaming: false }),
+        setSessionMode: () => {},
+        postMessage: (msg) => posted.push(msg),
+      })
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "m", ctrlKey: true, shiftKey: true, bubbles: true }))
+      assert.equal(posted.length, 0, "should not cycle when modal is open")
+    })
+
+    void it("does not fire in text input", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const posted: Record<string, unknown>[] = []
+      updateModeDropdown("build", els)
+      setupModeToggle({
+        els,
+        getActiveSession: () => ({ id: "s1", isStreaming: false }),
+        setSessionMode: () => {},
+        postMessage: (msg) => posted.push(msg),
+      })
+      const textarea = document.createElement("textarea")
+      document.body.appendChild(textarea)
+      textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "m", ctrlKey: true, shiftKey: true, bubbles: true }))
+      assert.equal(posted.length, 0, "should not cycle in text input")
+      document.body.removeChild(textarea)
+    })
+
+    void it("does not fire when session is streaming", () => {
+      const els = installDom()
+      resetCycleTimer()
+      const posted: Record<string, unknown>[] = []
+      updateModeDropdown("build", els)
+      setupModeToggle({
+        els,
+        getActiveSession: () => ({ id: "s1", isStreaming: true }),
+        setSessionMode: () => {},
+        postMessage: (msg) => posted.push(msg),
+      })
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "m", ctrlKey: true, shiftKey: true, bubbles: true }))
+      assert.equal(posted.length, 0, "should not cycle while streaming")
     })
   })
 })

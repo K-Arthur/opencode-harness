@@ -21,7 +21,7 @@ export const TOOLTIPS = {
   chat: {
     send: "Send message (Ctrl+Enter)",
     sendPlain: "Send message",
-    stop: "Stop the current model response",
+    stop: "Stop the current model response (Ctrl+Shift+Esc)",
     sendEmpty: "Type a message to enable Send",
     sendEmptyHint: "Type a message or attach an image to enable Send",
     sendBlockedByLimit: (streamingNames: string) =>
@@ -32,7 +32,7 @@ export const TOOLTIPS = {
     attach: "Attach image or file to your message",
     commandsPalette: "Open the commands palette (Ctrl+Shift+/)",
     voiceStart: "Voice input: dictate a prompt locally when supported",
-    voiceStop: "Stop recording and transcribe",
+    voiceStop: "Stop recording and transcribe (Esc)",
     instructionsGear: "Edit custom instructions for this tab",
     sendWhenStreamingHint: "Send this prompt — the agent will continue from here",
   },
@@ -66,13 +66,13 @@ export const TOOLTIPS = {
   mode: {
     selector: "Pick the session mode — controls how the agent is allowed to act",
     selectorActive: (label: string) =>
-      `Mode: ${label}. Click to change. Alt+Shift+Tab to cycle.`,
+      `Mode: ${label}. Click to change. Shift+Tab · Alt+Shift+Tab · Ctrl+Shift+M to cycle.`,
     disabledDuringStream: "Mode is locked while the agent is responding",
     build:
       "Build mode: full access including running shell commands and editing files",
     plan: "Plan mode: agent proposes changes; nothing is applied without your approval",
     auto: "Auto mode: agent applies changes without per-action prompts — review output carefully",
-    cycleHint: "Alt+Shift+Tab to cycle plan → build → auto",
+    cycleHint: "Shift+Tab · Alt+Shift+Tab · Ctrl+Shift+M to cycle plan → build → auto",
   },
   server: {
     start: "Start the OpenCode server",
@@ -341,7 +341,7 @@ const MODE_SHORTCUTS: Record<SessionMode, string> = {
   auto: "Ctrl/Cmd+Alt+3",
 }
 
-const CYCLE_SHORTCUT_LABEL = "Alt+Shift+Tab to cycle modes"
+const CYCLE_SHORTCUT_LABEL = "Shift+Tab · Alt+Shift+Tab · Ctrl+Shift+M to cycle modes"
 
 /**
  * Build the tooltip / aria-label for the mode selector dropdown trigger.

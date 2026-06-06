@@ -50,7 +50,10 @@ function nonTokenBody() {
 describe("design-token discipline", () => {
   it("font-size uses the --text-* scale (no raw pixel font-sizes outside tokens.css)", () => {
     const body = nonTokenBody()
-    const offenders = [...body.matchAll(/font-size:\s*([0-9]+(?:\.[0-9]+)?)px/g)]
+    // Exclude clamp() expressions which use px values for min/max bounds but
+    // are legitimate for responsive/fluid typography (messages-responsive.css,
+    // welcome.css). The negative lookahead checks we are not inside a clamp().
+    const offenders = [...body.matchAll(/font-size:\s*(?!clamp\()([0-9]+(?:\.[0-9]+)?)px/g)]
     if (offenders.length > 0) {
       const samples = offenders.slice(0, 5).map(m => m[0]).join(", ")
       assert.fail(
