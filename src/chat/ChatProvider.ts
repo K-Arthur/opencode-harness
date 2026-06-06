@@ -45,6 +45,7 @@ import { MessagePostService } from "./MessagePostService"
 import { StashService } from "./StashService"
 import { ProviderManagementService } from "./ProviderManagementService"
 import { DiffAcceptService } from "./DiffAcceptService"
+import { normalizeSessionMode, resolvePermissionForMode } from "./modePolicy"
 import { CodeInsertionService } from "./CodeInsertionService"
 import { SlashCommandService } from "./SlashCommandService"
 import { SessionSyncService } from "./SessionSyncService"
@@ -619,6 +620,38 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     }
   }
 
+  setupVoiceInput(): Promise<void> {
+    if (this._view) {
+      this.postMessage({ type: "voice_open_settings" })
+    }
+    return Promise.resolve()
+  }
+
+  nextTab(): void {
+    if (this._view) {
+      this.postMessage({ type: "next_tab" })
+    }
+  }
+
+  prevTab(): void {
+    if (this._view) {
+      this.postMessage({ type: "prev_tab" })
+    }
+  }
+
+  retryLast(): void {
+    const activeTab = this.tabManager.getActiveTab()
+    if (activeTab) {
+      this.postMessage({ type: "retry_last", sessionId: activeTab.id })
+    }
+  }
+
+  openSettings(): void {
+    if (this._view) {
+      vscode.commands.executeCommand("workbench.action.openSettings", "opencode")
+    }
+  }
+
   async openSessionInWebview(sessionId: string): Promise<void> {
     if (!this._view) {
       this.eventRouter.pendingOpenSessionId = sessionId
@@ -808,22 +841,31 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     }],
     ["permission_request", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean }) => {
       const data = event.data as { id?: string; title?: string; type?: string; pattern?: string | string[]; metadata?: Record<string, unknown> } | undefined
+      const provider = this
       const currentTab = this.tabManager.getTab(tabId)
-      if (data?.id && currentTab?.mode === "auto") {
+      if (data?.id && currentTab?.mode) {
         const cliSessionId = event.sessionId || currentTab.cliSessionId || tabId
-        log.info(`Auto-approving permission ${data.id} in auto mode for session ${tabId}`)
-        void this.sessionManager.respondToPermission(cliSessionId, data.id, "once")
-          .catch(err => log.warn(`Failed to approve auto-mode permission ${data.id}`, err))
-        return
+        const decision = resolvePermissionForMode(
+          normalizeSessionMode(currentTab.mode),
+          { type: data.type, permissionType: data.type, pattern: data.pattern },
+        )
+        if (decision === "once" || decision === "reject") {
+          log.info(`${decision === "once" ? "Auto-approving" : "Auto-rejecting"} permission ${data.id} in ${currentTab.mode} mode for session ${tabId}`)
+          void this.sessionManager.respondToPermission(cliSessionId, data.id, decision)
+            .catch(err => log.warn(`Failed to ${decision} mode permission ${data.id}`, err))
+          recordPermissionActivity()
+          return
+        }
       }
-      if (data?.id && currentTab?.mode === "plan") {
-        const cliSessionId = event.sessionId || currentTab.cliSessionId || tabId
-        const response = this.shouldAutoRejectPlanPermission(data) ? "reject" : "once"
-        log.info(`Auto-${response === "reject" ? "rejecting" : "approving"} permission ${data.id} in plan mode for session ${tabId}`)
-        void this.sessionManager.respondToPermission(cliSessionId, data.id, response)
-          .catch(err => log.warn(`Failed to ${response} plan-mode permission ${data.id}`, err))
-        return
+      function recordPermissionActivity(): void {
+        if (tab?.id || tabId) {
+          provider.streamCoordinator.recordExternalActivity(tab?.id || tabId, {
+            kind: "permission",
+            label: data?.title || `Waiting for ${data?.type || "permission"}`,
+          }, { postMessage: (m) => provider.postMessage(m), postRequestError: (m) => provider.postRequestError(m) })
+        }
       }
+      recordPermissionActivity()
       this.postMessage({
         type: "permission_request",
         sessionId: tabId,
@@ -885,6 +927,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
             path,
             added: current?.added ?? stored?.added ?? 0,
             removed: current?.removed ?? stored?.removed ?? 0,
+            isPlanDocument: this.isPlanDocumentPattern(path),
           }
         }),
       })

@@ -46,3 +46,37 @@ export function resolvePlanPermission(data: {
 
   return isMutatingPermissionType(type) ? "reject" : "once"
 }
+
+export const PROTECTED_PATH_PATTERNS = [
+  ".git/",
+  ".vscode/",
+  ".opencode/",
+  "node_modules/",
+  ".env",
+  ".env.local",
+  ".env.production",
+  "package-lock.json",
+  "yarn.lock",
+  "pnpm-lock.yaml",
+] as const
+
+export function isProtectedPath(filePath: string | string[] | undefined): boolean {
+  if (!filePath) return false
+  const paths = Array.isArray(filePath) ? filePath : [filePath]
+  return paths.some((p) =>
+    PROTECTED_PATH_PATTERNS.some(
+      (pattern) => p === pattern || p.startsWith(pattern),
+    ),
+  )
+}
+
+export function resolvePermissionForMode(
+  mode: SessionMode | null | undefined,
+  data: { type?: string; permissionType?: string; pattern?: string | string[] },
+): "once" | "reject" | "prompt" {
+  if (!mode) return "prompt"
+  if (mode === "auto") return "once"
+  if (mode === "plan") return resolvePlanPermission(data)
+  if (mode === "build" && isProtectedPath(data.pattern)) return "reject"
+  return "prompt"
+}

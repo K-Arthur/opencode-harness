@@ -5,9 +5,11 @@
 **Methodology:** TDD (red→green), structural source-level assertions where functional tests were infeasible, verify-before-completion. Build mode, no new product features.
 
 **Authoritative limits (per repo):**
-- `dist/extension.js` ≤ 500KB
-- `dist/chat/webview/main.js` ≤ 600KB
+- `dist/extension.js` ≤ 510KB
+- `dist/chat/webview/main.js` ≤ 680KB (paydown target: 600KB; see `docs/plans/highlight-worker-separation.md`)
 - `dist/chat/webview/markdownWorker.js` ≤ 500KB (advisory)
+
+> Re-baseline 2026-06-02: webview limit was raised 600 → 680KB (see `scripts/check-bundle-size.mjs` and §F1 below). The pre-rebaseline limits in this document's body are historical; the script is the source of truth.
 
 ---
 

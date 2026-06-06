@@ -663,8 +663,8 @@ function getVsCodeApi() {
     todosPanelApi = setupTodosPanel(els, {
       onToggleTodo: toggleTodo,
       onDeleteTodo: deleteTodo,
+      onEditTodo: editUserTodo,
       onAddTodo: addUserTodo,
-      onOpenFile: (filePath: string) => vscode.postMessage({ type: "open_file", path: filePath }),
       postMessage: (msg: Record<string, unknown>) => vscode.postMessage(msg),
       getActiveFilter: () => {
         const sid = stateManager.getState().activeSessionId
@@ -796,6 +796,24 @@ function getVsCodeApi() {
       status: "pending",
       createdAt: Date.now()
     })
+    stateManager.save()
+    triggerTodosRender(activeSid)
+  }
+
+  function editUserTodo(todoId: string, newContent: string): void {
+    const activeSid = stateManager.getState().activeSessionId
+    if (!activeSid) return
+    const session = stateManager.getSession(activeSid)
+    if (!session) return
+
+    const normalized = newContent.trim().normalize("NFC")
+    if (!normalized || normalized.length > 500) return
+
+    const todo = session.userTodos?.find(t => t.id === todoId)
+    if (!todo) return
+
+    todo.content = normalized
+    webviewLog(`[todos] edited user todo ${todoId}`)
     stateManager.save()
     triggerTodosRender(activeSid)
   }
@@ -1411,6 +1429,12 @@ function getVsCodeApi() {
 
   function updateModeDropdownLocal(mode: string) {
     updateModeDropdown(mode, els)
+    const app = document.getElementById("app")
+    if (app) {
+      app.classList.toggle("mode-plan", mode === "plan")
+      app.classList.toggle("mode-build", mode === "build")
+      app.classList.toggle("mode-auto", mode === "auto")
+    }
   }
 
   function closeModeDropdownLocal() {
@@ -1423,6 +1447,14 @@ function getVsCodeApi() {
 
   function syncModeUI() {
     syncModeUIModule(els, () => stateManager.getActiveSession(), () => stateManager.getPendingMode())
+    const active = stateManager.getActiveSession()
+    const app = document.getElementById("app")
+    if (app) {
+      const mode = normalizeSessionMode(active?.mode) || normalizeSessionMode(stateManager.getPendingMode()) || "build"
+      app.classList.toggle("mode-plan", mode === "plan")
+      app.classList.toggle("mode-build", mode === "build")
+      app.classList.toggle("mode-auto", mode === "auto")
+    }
   }
 
   /* ─── PER-TAB INSTRUCTIONS (GEAR) ─── */

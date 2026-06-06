@@ -35,6 +35,7 @@ export class TabManager {
   private _onTabSwitched = new vscode.EventEmitter<string>()
   private _onStreamingStateChanged = new vscode.EventEmitter<{ tabId: string; isStreaming: boolean }>()
   private _onInstructionsChanged = new vscode.EventEmitter<{ tabId: string; instructions: string }>()
+  private _onModeChanged = new vscode.EventEmitter<{ tabId: string; mode: string }>()
   private _onCliSessionIdRegistered = new vscode.EventEmitter<{ tabId: string; cliSessionId: string }>()
 
   readonly onTabCreated = this._onTabCreated.event
@@ -42,6 +43,7 @@ export class TabManager {
   readonly onTabSwitched = this._onTabSwitched.event
   readonly onStreamingStateChanged = this._onStreamingStateChanged.event
   readonly onInstructionsChanged = this._onInstructionsChanged.event
+  readonly onModeChanged = this._onModeChanged.event
   readonly onCliSessionIdRegistered = this._onCliSessionIdRegistered.event
 
   /**
@@ -149,7 +151,7 @@ export class TabManager {
       completionTimeout: null,
       isStreaming: false,
       model: model || "",
-      mode: mode || "normal",
+      mode: mode || "build",
       lastActivityTime: Date.now(),
       blocksBuffer: [],
     }
@@ -270,7 +272,9 @@ export class TabManager {
   setMode(id: string, mode: string): boolean {
     const tab = this.tabs.get(id)
     if (!tab) return false
+    if (tab.mode === mode) return true
     tab.mode = mode
+    this._onModeChanged.fire({ tabId: id, mode })
     return true
   }
 

@@ -7,6 +7,12 @@ export interface ChatMessage {
   timestamp?: number
   sessionId?: string
   tokenCount?: number
+  /**
+   * The session mode (plan / build / auto) when this message was produced.
+   * Enables per-turn mode badges in session history (like Copilot Session
+   * Insights) and mode-tracking in analytics.
+   */
+  mode?: string
 }
 
 export interface Block {

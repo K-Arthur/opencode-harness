@@ -210,6 +210,15 @@ export class ModelManager {
     }
   }
 
+  getModeModel(mode: string, fallbackModel?: string): string {
+    const modeModels = vscode.workspace.getConfiguration("opencode").get<Record<string, string>>("modeModels", {})
+    const override = modeModels?.[mode]
+    if (override && typeof override === "string" && override.trim()) {
+      return override
+    }
+    return (fallbackModel && fallbackModel.trim()) || this._current
+  }
+
   /**
    * Fetch available models from the opencode server's config endpoint.
    * The caller must provide the port (from SessionManager) or we fall back

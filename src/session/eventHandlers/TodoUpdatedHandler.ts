@@ -10,18 +10,24 @@ export function normalizeTodoStatus(status: unknown): CanonicalTodoStatus {
   return "pending"
 }
 
-export function normalizeTodoList(todos: unknown): Array<{ id: string; content: string; status: CanonicalTodoStatus; createdAt: number }> {
+type NormalizedTodo = { id: string; content: string; status: CanonicalTodoStatus; createdAt: number; priority?: string }
+
+export function normalizeTodoList(todos: unknown): NormalizedTodo[] {
   if (!Array.isArray(todos)) return []
   return todos
-    .map((raw): { id: string; content: string; status: CanonicalTodoStatus; createdAt: number } | null => {
+    .map((raw): NormalizedTodo | null => {
       if (!raw || typeof raw !== "object") return null
-      const t = raw as RawTodo
+      const t = raw as RawTodo & { priority?: unknown }
       const id = typeof t.id === "string" ? t.id : ""
       const content = typeof t.content === "string" ? t.content : ""
       if (!id) return null
-      return { id, content, status: normalizeTodoStatus(t.status), createdAt: 0 }
+      const result: NormalizedTodo = { id, content, status: normalizeTodoStatus(t.status), createdAt: 0 }
+      if (typeof t.priority === "string" && ["low", "medium", "high"].includes(t.priority)) {
+        result.priority = t.priority as "low" | "medium" | "high"
+      }
+      return result
     })
-    .filter((x): x is { id: string; content: string; status: CanonicalTodoStatus; createdAt: number } => x !== null)
+    .filter((x): x is NormalizedTodo => x !== null)
 }
 
 export class TodoUpdatedHandler implements EventHandler {

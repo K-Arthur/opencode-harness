@@ -28,7 +28,7 @@ esbuild bundles 4 entry points into `dist/`:
 
 Assets copied: `index.html`, `media/opencode-wordmark-dark.svg`.
 
-**CI bundle size limits:** extension.js < 500KB, main.js < 600KB.
+**CI bundle size limits:** extension.js ≤ 510KB, main.js ≤ 680KB (paydown target: 600KB by moving `highlight.js` into the worker; see `docs/plans/highlight-worker-separation.md` and `scripts/check-bundle-size.mjs`).
 
 ## Test Layers
 

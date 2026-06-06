@@ -160,6 +160,7 @@ export class WebviewEventRouter {
     "question_answer",
     "resume_stream", "decline_resume",
     "get_voice_settings", "voice_start", "voice_stop", "voice_cancel",
+    "mode_switch_request",
   ])
 
   private readonly webviewHandlers: Map<string, (msg: Record<string, unknown>, sessionId?: string) => void | Promise<void>> = new Map([
@@ -239,7 +240,8 @@ export class WebviewEventRouter {
           const attachments = validatedAttachments
           const textBlocks: Block[] = text.trim() ? [{ type: "text", text }] : []
           const imageBlocks: Block[] = attachments.map((a) => ({ type: "image", data: a.data, mimeType: a.mimeType }))
-          const userMsg: ChatMessage = { role: "user", id: userMessageId, blocks: [...textBlocks, ...imageBlocks], timestamp: Date.now(), sessionId }
+          const currentTabForMode = this.opts.tabManager.getTab(sessionId)
+          const userMsg: ChatMessage = { role: "user", id: userMessageId, blocks: [...textBlocks, ...imageBlocks], timestamp: Date.now(), sessionId, mode: currentTabForMode?.mode }
           this.opts.sessionStore.appendMessage(sessionId, userMsg)
           await this.opts.streamCoordinator.startPrompt(sessionId, text, {
             postMessage: (m) => this.opts.postMessage(m),
@@ -288,17 +290,31 @@ export class WebviewEventRouter {
         if (!model) throw new Error("No model selected. Please select a model and try again.")
         this.opts.ensureLocalTab(sessionId)
         const userMessageId = (msg.messageId as string) || `user-${crypto.randomUUID()}`
+        const textForPrompt = source === "response"
+          ? `The user responded: ${value}`
+          : value
         const userMsg: ChatMessage = {
           role: "user",
           id: userMessageId,
-          blocks: [{ type: "text", text: value, toolCallId }],
+          blocks: [{ type: "text", text: textForPrompt, toolCallId }],
           timestamp: Date.now(),
           sessionId,
         }
         this.opts.sessionStore.appendMessage(sessionId, userMsg)
+        if (toolCallId) {
+          const answerSource: "option" | "freetext" | "skip" | "response" =
+            source === "freetext" || source === "skip" || source === "response" ? source : "option"
+          this.opts.sessionStore.markQuestionAnswered(sessionId, toolCallId, textForPrompt, answerSource)
+        }
         await this.opts.streamCoordinator.startPrompt(sessionId, value, {
           postMessage: (m) => this.opts.postMessage(m),
           postRequestError: (m) => this.opts.postRequestError(m),
+          toolCallId,
+          clearPromptsInFlight: () => this.promptsInFlight.delete(sessionId),
+        })
+        this.opts.postMessage({
+          type: "question_acknowledged",
+          sessionId,
           toolCallId,
         })
       } catch (err) {
@@ -348,6 +364,18 @@ export class WebviewEventRouter {
         this.opts.ensureLocalTab(sessionId)
         this.opts.sessionStore.updateVariant(sessionId, msg.variant as string)
       }
+    }],
+    ["mode_switch_request", async (msg: Record<string, unknown>, sessionId?: string) => {
+      const sid = typeof msg.sessionId === "string" ? msg.sessionId : sessionId
+      const targetMode = typeof msg.targetMode === "string" ? msg.targetMode : undefined
+      if (!sid || !targetMode || !["plan", "build", "auto"].includes(targetMode)) {
+        log.warn("mode_switch_request: missing sessionId or invalid targetMode")
+        return
+      }
+      log.info(`mode_switch_request: session=${sid}, targetMode=${targetMode}`)
+      // Forward as a standard change_mode message, reusing the existing handler
+      const handler = this.webviewHandlers.get("change_mode")
+      if (handler) await handler({ type: "change_mode", mode: targetMode, sessionId: sid }, sid)
     }],
     ["set_instructions", (msg: Record<string, unknown>, sessionId?: string) => {
       if (sessionId && typeof msg.instructions === "string") {

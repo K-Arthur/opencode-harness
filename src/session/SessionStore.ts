@@ -138,7 +138,7 @@ export class SessionStore {
         log.warn(`Skipping invalid session entry: ${id}`)
         continue
       }
-      if (!sess.mode) sess.mode = "normal"
+      if (!sess.mode) sess.mode = "build"
       if (typeof sess.lastActiveAt !== "number") sess.lastActiveAt = Date.now()
       if (typeof sess.model !== "string") sess.model = ""
       if (typeof sess.cost !== "number") sess.cost = 0
@@ -669,6 +669,37 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
   }
 
   /**
+   * Mark a question block as answered so the transcript renders the answered
+   * record and a reload doesn't re-prompt. Matches by toolCallId within the
+   * session's messages. Returns true when a block was found and updated.
+   */
+  markQuestionAnswered(
+    sessionId: string,
+    toolCallId: string,
+    answer: string,
+    source: "option" | "freetext" | "skip" | "response",
+  ): boolean {
+    const session = this.sessions.get(sessionId)
+    if (!session) return false
+    for (const msg of session.messages) {
+      for (const block of msg.blocks) {
+        const b = block as Record<string, unknown>
+        if (b.type !== "question" || b.answered === true) continue
+        if (b.toolCallId !== toolCallId && b.id !== toolCallId) continue
+        b.answered = true
+        b.answer = answer
+        b.answerSource = source
+        session.lastActiveAt = Date.now()
+        this.save()
+        this._onSessionsChanged.fire()
+        return true
+      }
+    }
+    return false
+  }
+
+
+  /**
    * Public-facing display name for a session. Empty/auto-generated names
    * fall back to "Untitled session" so we never leak internals like
    * "Session owSyH" into the UI.
@@ -842,7 +873,7 @@ validateSessionName(name: string): string | null {
   updateMode(id: string, mode: string): void {
     const session = this.sessions.get(id)
     if (!session) return
-    session.mode = mode
+    session.mode = mode === "normal" ? "build" : mode
     this.save()
   }
 

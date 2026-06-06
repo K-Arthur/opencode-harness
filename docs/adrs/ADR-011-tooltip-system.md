@@ -218,6 +218,12 @@ Findings the cascade review caught are listed under "Findings" below.
   0.1mb increase comes from the centralized `TOOLTIPS` map +
   helpers. Not a regression to fix here, but worth filing as a
   separate "tree-shake / split chunks" ADR.
+
+  > **Update 2026-06-02:** the webview limit was re-baselined 600 → 680KB in
+  > `scripts/check-bundle-size.mjs`. The 600KB paydown target is retained as a
+  > goal reachable by moving `highlight.js` (78.8KB) off the synchronous
+  > main-thread path. See `docs/performance-audit.md` for current bundle
+  > sizes.
 - `STREAM_LIMIT_TOOLTIP` is still threaded through
   `composer.ts:79,123,161` as a parameter for the
   `steerMode.test.ts:61` test seam. A future cleanup could

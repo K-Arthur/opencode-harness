@@ -48,7 +48,6 @@ function noopOptions(): TodosPanelOptions {
   return {
     onToggleTodo: () => {},
     onDeleteTodo: () => {},
-    onOpenFile: () => {},
   }
 }
 

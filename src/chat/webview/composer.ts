@@ -2,7 +2,7 @@ import type { WebviewState, ChatMessage } from "./types"
 import type { CommandEntry } from "./commands-modal"
 import type { PromptQueue } from "./queue"
 import type { ElementRefs } from "./dom"
-import { createQueueRenderer, formatTokenCount } from "./queueRenderer"
+import { createQueueRenderer } from "./queueRenderer"
 import { createInputHandlers, type InputHandlerDeps } from "./inputHandlers"
 import { createSlashCommandHandler } from "./slashCommands"
 import { createSendLogic, type StreamCapacityState } from "./sendLogic"
@@ -106,7 +106,6 @@ export interface ComposerAPI {
   updatePromptContextChips: () => void
   renderAttachmentChips: () => void
   generateTitle: (text: string) => string
-  formatTokenCount: (n: number) => string
   wireChipReorderHandlers: (chip: HTMLElement, itemId: string, tabId: string, queue: PromptQueue) => void
 }
 
@@ -269,7 +268,6 @@ export function createComposer(deps: ComposerDeps): ComposerAPI {
     updatePromptContextChips,
     renderAttachmentChips,
     generateTitle: sendLogic.generateTitle,
-    formatTokenCount,
     wireChipReorderHandlers: (
       chip: HTMLElement,
       itemId: string,

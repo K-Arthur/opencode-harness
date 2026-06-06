@@ -855,6 +855,36 @@
   border: 1px solid color-mix(in srgb, var(--vscode-notificationsWarningIcon-foreground, #ffb74d) 40%, transparent);
 }
 
+/* Per-turn mode badge in message header (like Copilot Session Insights) */
+.message-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 5px;
+  height: var(--space-3-5);
+  margin-left: var(--space-1);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-2xs, 10px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+.message-mode-badge--plan {
+  background: color-mix(in srgb, var(--vscode-notificationsWarningIcon-foreground, #ffb74d) 18%, transparent);
+  color: var(--vscode-notificationsWarningIcon-foreground, #ffb74d);
+  border-color: color-mix(in srgb, var(--vscode-notificationsWarningIcon-foreground, #ffb74d) 35%, transparent);
+}
+.message-mode-badge--build {
+  background: color-mix(in srgb, var(--vscode-editorInfo-foreground, #4fc3f7) 18%, transparent);
+  color: var(--vscode-editorInfo-foreground, #4fc3f7);
+  border-color: color-mix(in srgb, var(--vscode-editorInfo-foreground, #4fc3f7) 35%, transparent);
+}
+.message-mode-badge--auto {
+  background: color-mix(in srgb, #4caf50 18%, transparent);
+  color: #4caf50;
+  border-color: color-mix(in srgb, #4caf50 35%, transparent);
+}
+
 /* Plan-shaped prose: when detectPlanProse() flags a text block as a plan,
    it wraps the body in .plan-prose so we can give it a richer treatment. */
 .plan-prose {
