@@ -119,61 +119,51 @@ void describe("Message Contract Tests", () => {
     assert.ok(message.sessionId.length > 0)
   })
 
-  void it("validates speech-to-text settings message structure", () => {
+  void it("validates voice settings message structure", () => {
     const message: HostMessage = {
-      type: "stt_settings",
+      type: "voice_settings",
       settings: {
         enabled: true,
-        provider: "browser",
-        maxDurationSeconds: 60,
-        maxUploadBytes: 25 * 1024 * 1024,
-        openaiModel: "gpt-4o-mini-transcribe",
-        hasOpenAiApiKey: false,
+        autoSend: false,
+        language: "auto",
+        insertMode: "append",
+        maxRecordingSeconds: 60,
+        available: true,
       },
     }
 
     assert.strictEqual(typeof message.settings.enabled, "boolean")
-    assert.strictEqual(message.settings.provider, "browser")
-    assert.strictEqual(typeof message.settings.maxDurationSeconds, "number")
-    assert.strictEqual(typeof message.settings.maxUploadBytes, "number")
-    assert.strictEqual(typeof message.settings.openaiModel, "string")
-    assert.strictEqual(typeof message.settings.hasOpenAiApiKey, "boolean")
+    assert.strictEqual(typeof message.settings.autoSend, "boolean")
+    assert.strictEqual(typeof message.settings.language, "string")
+    assert.strictEqual(message.settings.insertMode, "append")
+    assert.strictEqual(typeof message.settings.maxRecordingSeconds, "number")
+    assert.strictEqual(message.settings.available, true)
   })
 
-  void it("validates speech-to-text transcript and error messages", () => {
+  void it("validates voice transcript and error messages", () => {
     const transcript: HostMessage = {
-      type: "stt_transcript",
+      type: "voice_transcript",
       requestId: "voice-1",
       text: "Summarize this file",
     }
     const error: HostMessage = {
-      type: "stt_error",
+      type: "voice_error",
       requestId: "voice-2",
-      reason: "missing_api_key",
-      message: "Speech-to-text requires an OpenAI API key.",
+      reason: "no_speech",
+      message: "No speech was detected.",
     }
 
     assert.strictEqual(typeof transcript.requestId, "string")
     assert.strictEqual(typeof transcript.text, "string")
-    assert.strictEqual(error.reason, "missing_api_key")
+    assert.strictEqual(error.reason, "no_speech")
     assert.strictEqual(typeof error.message, "string")
   })
 
-  void it("validates speech-to-text helper request and acknowledgement messages", () => {
-    const request: WebviewMessage = {
-      type: "stt_open_helper",
-      requestId: "voice-1",
-      provider: "openai",
-    }
-    const opened: HostMessage = {
-      type: "stt_helper_opened",
-      requestId: "voice-1",
-      helperUri: "http://127.0.0.1:49152/voice-helper.html?requestId=voice-1",
-      provider: "openai",
-    }
+  void it("validates voice lifecycle (recording-started / transcribing) messages", () => {
+    const started: HostMessage = { type: "voice_recording_started", requestId: "voice-1" }
+    const transcribing: HostMessage = { type: "voice_transcribing", requestId: "voice-1" }
 
-    assert.strictEqual(request.provider, "openai")
-    assert.strictEqual(typeof opened.helperUri, "string")
-    assert.strictEqual(opened.provider, "openai")
+    assert.strictEqual(started.requestId, "voice-1")
+    assert.strictEqual(transcribing.type, "voice_transcribing")
   })
 })

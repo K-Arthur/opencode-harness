@@ -59,26 +59,33 @@ All settings are under the `opencode.*` namespace and can be configured in VS Co
   }
   ```
 
-### `opencode.voiceInput.*`
-- **Scope**: `window`
-- **Description**: Controls the microphone button in the chat composer. The
-  button opens a localhost helper page in the user's default browser so the
-  browser, not the VS Code webview, owns microphone permission. The resulting
-  transcript is inserted into the prompt without auto-sending.
-- **Settings**:
+### `opencode.voice.*`
+- **Description**: Controls the microphone button in the chat composer. Recording
+  and transcription happen **locally in the extension host** — no cloud service and
+  no API key. A VS Code webview cannot access the microphone (sandboxed iframe), so
+  the host records the default mic with a local CLI tool and transcribes it with a
+  local speech-to-text engine. The transcript is inserted into the prompt for review.
+- **Behavior settings** (scope `window`):
   | Setting | Type | Default | Description |
   |---------|------|---------|-------------|
-  | `opencode.voiceInput.enabled` | boolean | `true` | Show and enable the voice-input control. |
-  | `opencode.voiceInput.provider` | `"browser"` \| `"openai"` | `"browser"` | Browser-helper Web Speech recognition, or opt-in helper recording plus OpenAI transcription. |
-  | `opencode.voiceInput.maxDurationSeconds` | number | `60` | Maximum helper recording/listening duration, clamped to 1-300 seconds. |
-  | `opencode.voiceInput.maxUploadBytes` | number | `10485760` | Maximum raw audio bytes for helper-to-host OpenAI uploads, capped at 25 MB. |
-  | `opencode.voiceInput.openaiModel` | string | `"gpt-4o-mini-transcribe"` | OpenAI transcription model for the cloud provider. |
-- **Secret storage**: OpenAI keys are set with **OpenCode: Set Voice Input OpenAI
-  API Key** and stored in VS Code SecretStorage. They are not stored in settings
-  or sent to the webview.
-- **Privacy**: The VS Code webview never records microphone audio. OpenAI mode
-  keeps raw audio in memory for the current helper request and discards it after
-  transcription/cancel. Browser mode may use browser-vendor recognition services.
+  | `opencode.voice.enabled` | boolean | `true` | Show and enable the voice-input control. |
+  | `opencode.voice.autoSend` | boolean | `false` | Send the prompt automatically once a transcript is inserted. |
+  | `opencode.voice.language` | string | `"auto"` | Spoken language passed to the engine (e.g. `en-US`); `auto` lets it detect. |
+  | `opencode.voice.insertMode` | `"append"` \| `"replace"` | `"append"` | Append the transcript to the prompt or replace its contents. |
+  | `opencode.voice.maxRecordingSeconds` | number | `60` | Maximum recording length, clamped to 1–300 seconds. |
+- **Engine settings** (scope `machine` — cannot be set by a workspace, for security):
+  | Setting | Type | Default | Description |
+  |---------|------|---------|-------------|
+  | `opencode.voice.model` | string | `""` | Whisper model: a size for openai-whisper (e.g. `base`), or a `.bin` path for whisper.cpp. |
+  | `opencode.voice.localCommand` | string | `""` | Override transcription command. Placeholders `{input}`, `{output}`, `{language}`. |
+  | `opencode.voice.recordCommand` | string | `""` | Override recorder command. Placeholders `{output}`, `{duration}`. |
+- **Auto-detection**: with no overrides, the recorder is `rec` (sox) → `arecord` →
+  `ffmpeg`, and the engine is openai-whisper (`whisper`) or whisper.cpp when a model
+  is set. If neither is found, the button shows a graceful "not available" state.
+- **Security**: `model`, `localCommand`, and `recordCommand` are machine-scoped so an
+  untrusted workspace cannot inject a command for the host to run.
+- **Privacy**: Audio is written to a temp WAV, transcribed locally, and deleted. No
+  audio or transcript is uploaded, persisted, or logged.
   Transcripts are not logged and are never sent as prompts until the user presses
   Send.
 

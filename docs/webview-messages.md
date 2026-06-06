@@ -49,32 +49,37 @@ containers are unavailable, it logs and skips chip rendering so prompt submissio
 ## Voice Input Contract
 
 Voice input is a prompt-composer feature. It inserts text into `#prompt-input`
-and never posts `send_prompt` on its own.
+and never posts `send_prompt` on its own (unless `opencode.voice.autoSend` is set,
+in which case the webview clicks the existing Send button after insertion).
+
+The microphone is recorded and transcribed entirely in the extension host (the
+webview cannot access the mic). The webview is just the UI and drives state via the
+`requestId` it generates for each take.
 
 Webview → host:
 
-- `get_stt_settings`: requests the current voice-input settings. The host answers
-  with `stt_settings`.
-- `stt_open_helper`: `{ type, requestId, provider }`. The host starts a
-  token-gated localhost helper server and opens the helper in the user's default
-  browser via `asExternalUri` + `openExternal`. The webview never sends audio.
+- `get_voice_settings`: requests the current voice settings. The host answers with
+  `voice_settings`.
+- `voice_start`: `{ type, requestId }`. The host starts recording the default mic.
+- `voice_stop`: `{ type, requestId }`. The host stops recording and transcribes.
+- `voice_cancel`: `{ type, requestId }`. The host kills the recorder and discards.
 
 Host → webview:
 
-- `stt_settings`: `{ type, settings }`, where `settings` includes `enabled`,
-  `provider`, `maxDurationSeconds`, `maxUploadBytes`, `openaiModel`, and
-  `hasOpenAiApiKey`. The API key value is never sent to the webview.
-- `stt_helper_opened`: `{ type, requestId, helperUri, provider }`. The webview
-  marks the active request as pending in the browser helper and ignores stale
-  acknowledgements.
-- `stt_transcript`: `{ type, requestId, text }`. The webview inserts the transcript
-  only if `requestId` matches the current pending request, then clears the request.
-- `stt_error`: `{ type, requestId?, reason, message }`. The webview ignores stale
+- `voice_settings`: `{ type, settings }`, where `settings` includes `enabled`,
+  `autoSend`, `language`, `insertMode`, `maxRecordingSeconds`, and the runtime
+  `available` / `unavailableReason` flags used to gate the button.
+- `voice_recording_started`: `{ type, requestId }`. The webview moves to the
+  recording state once capture is confirmed.
+- `voice_transcribing`: `{ type, requestId }`. The webview shows the transcribing
+  state while the local engine runs.
+- `voice_transcript`: `{ type, requestId, text }`. The webview inserts the transcript
+  only if `requestId` matches the current request, then clears it.
+- `voice_error`: `{ type, requestId?, reason, message }`. The webview ignores stale
   request-scoped errors and surfaces current errors in the input-area live region.
 
-The helper server rejects missing/invalid one-time tokens. OpenAI helper uploads
-are validated by `VoiceInputService` for request id, MIME type, base64 shape, and
-size before decoding or calling the transcription provider.
+All `voice_*` request messages are validated for a non-empty `requestId` (≤120
+chars). The host deletes the temporary audio file after every take.
 
 ## Plan Mode Rendering
 

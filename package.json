@@ -210,10 +210,6 @@
         "title": "OpenCode: Set Session Mode to Plan"
       },
       {
-        "command": "opencode-harness.setVoiceInputApiKey",
-        "title": "OpenCode: Set Voice Input OpenAI API Key"
-      },
-      {
         "command": "opencode-harness.setAutoMode",
         "title": "OpenCode: Set Session Mode to Auto"
       }
@@ -927,47 +923,63 @@
           "scope": "window",
           "description": "Default session mode for new chat sessions."
         },
-        "opencode.voiceInput.enabled": {
+        "opencode.voice.enabled": {
           "type": "boolean",
           "scope": "window",
           "default": true,
-          "description": "Show the microphone button in the chat composer. Voice input opens a browser helper after an explicit click and inserts transcripts into the prompt without auto-sending."
+          "description": "Show the microphone button in the chat composer. Voice input records the microphone and transcribes it locally on your machine — no cloud service or API key. The transcript is inserted into the prompt for review and is never auto-sent unless opencode.voice.autoSend is enabled."
         },
-        "opencode.voiceInput.provider": {
+        "opencode.voice.autoSend": {
+          "type": "boolean",
+          "scope": "window",
+          "default": false,
+          "description": "Automatically send the prompt as soon as a voice transcript is inserted. Off by default so you can edit before sending."
+        },
+        "opencode.voice.language": {
           "type": "string",
           "scope": "window",
-          "default": "browser",
+          "default": "auto",
+          "description": "Spoken language passed to the local speech-to-text engine (e.g. 'en-US', 'es', 'fr'). Use 'auto' to let the engine detect the language."
+        },
+        "opencode.voice.insertMode": {
+          "type": "string",
+          "scope": "window",
+          "default": "append",
           "enum": [
-            "browser",
-            "openai"
+            "append",
+            "replace"
           ],
           "enumDescriptions": [
-            "Open a browser helper that uses the browser's speech recognition API. OpenCode receives only the final text you choose to use.",
-            "Open a browser helper that records audio and sends it to the extension host for OpenAI transcription. Requires 'OpenCode: Set Voice Input OpenAI API Key'."
+            "Append the transcript to whatever is already in the prompt.",
+            "Replace the prompt contents with the transcript."
           ],
-          "description": "Speech-to-text provider for the chat composer. Microphone capture happens in a browser helper; cloud transcription is opt-in and API keys are stored in VS Code SecretStorage."
+          "description": "How a voice transcript is placed into the prompt box."
         },
-        "opencode.voiceInput.maxDurationSeconds": {
+        "opencode.voice.maxRecordingSeconds": {
           "type": "number",
           "scope": "window",
           "default": 60,
           "minimum": 1,
           "maximum": 300,
-          "description": "Maximum duration for one browser-helper voice input recording/listening session."
+          "description": "Maximum length of a single voice recording. Recording stops automatically at this limit."
         },
-        "opencode.voiceInput.maxUploadBytes": {
-          "type": "number",
-          "scope": "window",
-          "default": 10485760,
-          "minimum": 1024,
-          "maximum": 26214400,
-          "description": "Maximum raw audio bytes for browser-helper cloud speech-to-text uploads. OpenAI transcription accepts files up to 25 MB."
-        },
-        "opencode.voiceInput.openaiModel": {
+        "opencode.voice.model": {
           "type": "string",
-          "scope": "window",
-          "default": "gpt-4o-mini-transcribe",
-          "description": "OpenAI transcription model used when opencode.voiceInput.provider is 'openai'."
+          "scope": "machine",
+          "default": "",
+          "markdownDescription": "Local speech-to-text model. For openai-whisper this is a model size (e.g. `base`, `small`); for whisper.cpp this is the path to a `.bin` model file (required to use whisper.cpp). Leave blank to use the openai-whisper `base` model. Machine-scoped so it cannot be set by an untrusted workspace."
+        },
+        "opencode.voice.localCommand": {
+          "type": "string",
+          "scope": "machine",
+          "default": "",
+          "markdownDescription": "Optional override command for local transcription (bring-your-own engine). Placeholders: `{input}` (audio WAV path), `{output}` (a .txt path the command may write the transcript to), `{language}`. If `{output}` is used the file is read; otherwise stdout is used. Example: `whisper-ctranslate2 {input} --language {language} --output_dir /tmp --output_format txt`. Machine-scoped for security: an untrusted workspace cannot set the command the host runs."
+        },
+        "opencode.voice.recordCommand": {
+          "type": "string",
+          "scope": "machine",
+          "default": "",
+          "markdownDescription": "Optional override command to record the microphone to a WAV file. Placeholders: `{output}` (target WAV path), `{duration}` (max seconds). The command should record the default input device and stop on SIGINT. Leave blank to auto-detect `rec` (sox), `arecord`, or `ffmpeg`. Machine-scoped for security."
         },
         "opencode.sessions.processStrategy": {
           "type": "string",

@@ -14,7 +14,6 @@ type MessageValidator = (
 
 const MODE_VALUES = new Set(["normal", "plan", "build", "auto"])
 const STEER_MODE_VALUES = new Set(["interrupt", "append", "queue"])
-const VOICE_PROVIDER_VALUES = new Set(["browser", "openai"])
 const MCP_SERVER_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/
 const MCP_COMMAND_PATTERN = /^[A-Za-z0-9@._/\\:-]+$/
 const MCP_HEADER_NAME_PATTERN = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/
@@ -321,12 +320,9 @@ function validateSendSteerPrompt(msg: Record<string, unknown>, _msgType: string,
   return true
 }
 
-function validateVoiceHelperOpen(msg: Record<string, unknown>, _msgType: string, deps: WebviewMessageValidatorDeps): boolean {
+function validateVoiceRequest(msg: Record<string, unknown>, msgType: string, deps: WebviewMessageValidatorDeps): boolean {
   if (typeof msg.requestId !== "string" || msg.requestId.trim().length === 0 || msg.requestId.length > 120) {
-    return reject(deps, "Invalid requestId in stt_open_helper")
-  }
-  if (typeof msg.provider !== "string" || !VOICE_PROVIDER_VALUES.has(msg.provider)) {
-    return reject(deps, "Invalid provider in stt_open_helper")
+    return reject(deps, `Invalid requestId in ${msgType}`)
   }
   return true
 }
@@ -385,7 +381,9 @@ const WEBVIEW_MESSAGE_VALIDATORS: Record<string, MessageValidator> = {
   get_subagent_detail: requiredStringValidator("subagentId", () => "Invalid subagentId in get_subagent_detail"),
   cancel_subagent: requiredStringValidator("subagentId", () => "Invalid subagentId in cancel_subagent"),
   mark_subagent_read: requiredStringValidator("subagentId", () => "Invalid subagentId in mark_subagent_read"),
-  stt_open_helper: validateVoiceHelperOpen,
+  voice_start: validateVoiceRequest,
+  voice_stop: validateVoiceRequest,
+  voice_cancel: validateVoiceRequest,
 }
 
 export function validateWebviewMessage(

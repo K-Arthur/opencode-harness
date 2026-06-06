@@ -31,7 +31,7 @@ export const TOOLTIPS = {
     mention: "Add a file or context mention (@)",
     attach: "Attach image or file to your message",
     commandsPalette: "Open the commands palette (Ctrl+Shift+/)",
-    voiceStart: "Start voice input — transcribe speech to text",
+    voiceStart: "Voice input: dictate a prompt locally when supported",
     voiceStop: "Stop recording and transcribe",
     instructionsGear: "Edit custom instructions for this tab",
     sendWhenStreamingHint: "Send this prompt — the agent will continue from here",
@@ -124,20 +124,15 @@ export const TOOLTIPS = {
   },
   voice: {
     unavailable:
-      "Voice input is unavailable in this webview — use your host browser/OS for dictation",
+      "Voice input is not available in this VS Code environment. You can still type your prompt normally.",
     disabledBySetting:
       "Voice input is disabled — enable it in OpenCode settings",
-    permissionDenied:
-      "Microphone permission was denied — allow access in your browser to use voice input",
     noSpeech: "No speech was detected — try again closer to the microphone",
+    starting: "Starting microphone — click again to cancel",
     recording: "Recording — press Escape or the microphone button to stop",
     transcribing: "Transcribing your recording…",
     stopped: "Voice input stopped",
     error: "Voice input failed — see status for details",
-    keyMissing:
-      "OpenAI speech-to-text requires an API key. Configure one in settings to use this provider.",
-    unsupportedBrowser:
-      "Browser speech recognition is not available in this webview",
   },
   status: {
     thinking: "OpenCode is thinking",
@@ -274,9 +269,8 @@ export function getSendTooltip(opts: SendTooltipOptions): { title: string; ariaL
 export type VoiceState =
   | "disabled"
   | "idle"
-  | "requesting-permission"
+  | "starting"
   | "recording"
-  | "stopping"
   | "transcribing"
   | "inserted"
   | "error"
@@ -292,15 +286,10 @@ export function getVoiceTooltip(state: VoiceState): { title: string; ariaLabel: 
         title: TOOLTIPS.voice.recording,
         ariaLabel: TOOLTIPS.chat.voiceStop,
       }
-    case "requesting-permission":
+    case "starting":
       return {
-        title: "Requesting microphone permission…",
-        ariaLabel: "Requesting microphone permission",
-      }
-    case "stopping":
-      return {
-        title: TOOLTIPS.voice.stopped,
-        ariaLabel: "Stop voice input",
+        title: TOOLTIPS.voice.starting,
+        ariaLabel: "Starting microphone — click to cancel",
       }
     case "transcribing":
       return {

@@ -1,12 +1,13 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-05-31
-**Version:** v0.2.23 (+ Unreleased: opencode CLI auto-install)
+**Last Updated:** 2026-06-05
+**Version:** v0.2.23 (+ Unreleased: opencode CLI auto-install, native local voice input)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
 
 ## Unreleased Highlights
 
+- **Native, fully local voice input** — the composer mic now records and transcribes **in the panel, on your machine** — no browser tab, no cloud, no API key (supersedes the ADR-012 browser-helper + OpenAI design). Because a VS Code webview can't access the mic (sandboxed iframe; `SpeechRecognition` is dead in Electron), the host records the default mic with an auto-detected tool (`rec`/sox → `arecord` → `ffmpeg`) and transcribes with a local engine (openai-whisper, or whisper.cpp with a model), both overridable via machine-scoped `opencode.voice.localCommand`/`recordCommand`. Lifecycle states (idle → starting → recording → transcribing → inserted/error), Escape/second-click to stop/cancel, append/replace insert, opt-in `autoSend`, and a graceful "not available" fallback. Capture sits behind injected `Recorder`/`Transcriber` interfaces so the flow is unit-tested with mocks. New settings `opencode.voice.*` (replacing `opencode.voiceInput.*`); removed the OpenAI key command, SecretStorage key, localhost helper server, and `media/voice-helper.html`. See ADR `docs/adrs/ADR-013-native-local-voice-input.md`, `docs/voice-input.md`. (`src/chat/voiceInputCore.ts`, `src/chat/voiceCapture.ts`, `src/chat/VoiceInputService.ts`, `src/chat/webview/voiceInput.ts`)
 - **Automatic opencode CLI install** — the CLI is a hard requirement, but VS Code has no install-time hook, so the extension now detects a missing binary on activation and installs it. Default is **prompt-once** (Install / Manual Instructions / Not Now), with the choice remembered to avoid nagging; `opencode.autoInstall` (`prompt`|`auto`|`off`) controls it, and `OpenCode: Install CLI` triggers it on demand. macOS/Linux use the official installer (downloaded → validated → `bash <file>` with `shell:false`, no `curl | bash`; lands in `~/.opencode/bin`); Windows uses npm. See ADR `docs/adrs/2026-05-31-cli-auto-install.md`. (`src/install/`, `src/extension.ts`, `src/commands/misc.ts`)
 - **Binary detection probes known install dirs** — `ServerLifecycle.findOpencodeBinary()` falls back from PATH to `~/.opencode/bin/opencode` and other common locations, fixing "installed but not detected" for GUI-launched editors whose PATH doesn't include the installer's directory. (`src/session/ServerLifecycle.ts`, `src/install/installPlan.ts`)
 

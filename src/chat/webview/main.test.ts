@@ -828,7 +828,7 @@ it("unified modal: server session items send resume_server_session on click", ()
     it("switchTab restores the session's model on the dropdown", () => {
       const idx = source.indexOf("function switchTab(")
       assert.ok(idx >= 0, "switchTab must exist")
-      const block = source.slice(idx, idx + 2000)
+      const block = source.slice(idx, idx + 3600)
       assert.ok(
         block.includes("modelDropdown.setCurrentModel"),
         "switchTab must call setCurrentModel so the dropdown reflects the active session's model"
@@ -837,6 +837,26 @@ it("unified modal: server session items send resume_server_session on click", ()
         block.includes("resetContextUsagePanel"),
         "switchTab must reset the context usage panel so per-session counters don't bleed across tabs"
       )
+      assert.ok(
+        block.includes("} else if (notifyHost) {"),
+        "switchTab must not auto-scroll to bottom for host-driven state syncs when there is no saved position"
+      )
+    })
+
+    it("context_usage handler preserves valid session usage when host sends empty fallback data", () => {
+      const block = getHandlerBlock("context_usage")
+      assert.ok(block.includes("const existingUsage = sess?.contextUsage"), "handler must inspect prior per-session context usage")
+      assert.ok(block.includes("contextUsageHasFill(existingUsage)"), "handler must identify valid prior context fill")
+      assert.ok(block.includes("contextUsageHasFill(incomingUsage)"), "handler must identify empty incoming context updates")
+      assert.ok(block.includes("source:"), "handler must persist usage source")
+      assert.ok(block.includes("updatedAt:"), "handler must persist usage timestamp")
+    })
+
+    it("init_state hydrates messages without replacing unchanged DOM or losing scroll", () => {
+      const block = getHandlerBlock("init_state")
+      assert.ok(block.includes("attachScrollPersistence(s.id, msgList)"), "init_state must attach scroll persistence to hydrated lists")
+      assert.ok(block.includes("shouldRenderHydratedMessages(s.id, msgList, s.messages)"), "init_state must skip unchanged message-list renders")
+      assert.ok(block.includes("restoreScrollPosition(s.id, msgList"), "init_state must restore saved scroll position after hydration")
     })
   })
 

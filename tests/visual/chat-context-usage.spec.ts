@@ -6,6 +6,29 @@ import {
   captureErrors,
 } from "./webviewTestHarness"
 
+function contextSession(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "s",
+    name: "T",
+    model: "anthropic/claude-3-5-sonnet-20241022",
+    messages: [],
+    tokenUsage: { prompt: 0, completion: 0, total: 0 },
+    ...overrides,
+  }
+}
+
+function buildScrollableMessages(count = 80) {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `msg-${i}`,
+    role: i % 2 === 0 ? "user" : "assistant",
+    timestamp: 1700000000000 + i,
+    blocks: [{
+      type: "text",
+      text: `Message ${i + 1}\n${"This message has enough text to make the transcript scroll. ".repeat(5)}`,
+    }],
+  }))
+}
+
 // Behavioral coverage for the context-usage bar and changed-files list.
 // These replace earlier screenshot-only assertions whose mocks didn't
 // install before page load — meaning the previous tests never exercised
@@ -107,6 +130,149 @@ test.describe("Context Usage", () => {
 
     const bar = page.locator("#context-usage")
     await expect(bar).toHaveClass(/hidden/, { timeout: 5000 })
+
+    expectNoBrowserErrors(captured)
+  })
+
+  test("restores context usage from init_state session payload", async ({ page }) => {
+    const captured = captureErrors(page)
+    await page.goto("/")
+
+    await dispatchHostMessage(page, {
+      type: "init_state",
+      sessions: [
+        contextSession({
+          contextUsage: {
+            tokens: 33000,
+            maxTokens: 100000,
+            percent: 33,
+            source: "actual",
+            updatedAt: 2000,
+          },
+        }),
+      ],
+      activeSessionId: "s",
+    })
+
+    const bar = page.locator("#context-usage")
+    await expect(bar).not.toHaveClass(/hidden/, { timeout: 5000 })
+    await expect(page.locator("#context-label")).toContainText("33%")
+    await expect(page.locator("#context-label")).toContainText(/33k|33K|33,000/)
+
+    expectNoBrowserErrors(captured)
+  })
+
+  test("keeps context usage visible after stream_end", async ({ page }) => {
+    const captured = captureErrors(page)
+    await page.goto("/")
+
+    await dispatchHostMessage(page, {
+      type: "init_state",
+      sessions: [contextSession()],
+      activeSessionId: "s",
+    })
+
+    await dispatchHostMessage(page, {
+      type: "context_usage",
+      sessionId: "s",
+      tokens: 50000,
+      maxTokens: 200000,
+      percent: 25,
+      source: "actual",
+      updatedAt: 3000,
+    })
+    await dispatchHostMessage(page, {
+      type: "stream_end",
+      sessionId: "s",
+    })
+
+    const bar = page.locator("#context-usage")
+    await expect(bar).not.toHaveClass(/hidden/, { timeout: 5000 })
+    await expect(page.locator("#context-label")).toContainText("25%")
+
+    expectNoBrowserErrors(captured)
+  })
+
+  test("zero fallback context_usage does not erase prior valid usage", async ({ page }) => {
+    const captured = captureErrors(page)
+    await page.goto("/")
+
+    await dispatchHostMessage(page, {
+      type: "init_state",
+      sessions: [contextSession()],
+      activeSessionId: "s",
+    })
+
+    await dispatchHostMessage(page, {
+      type: "context_usage",
+      sessionId: "s",
+      tokens: 64000,
+      maxTokens: 200000,
+      percent: 32,
+      source: "actual",
+      updatedAt: 4000,
+    })
+    await dispatchHostMessage(page, {
+      type: "context_usage",
+      sessionId: "s",
+      tokens: 0,
+      maxTokens: 200000,
+      percent: 0,
+      source: "estimated",
+      updatedAt: 5000,
+    })
+
+    const bar = page.locator("#context-usage")
+    await expect(bar).not.toHaveClass(/hidden/, { timeout: 5000 })
+    await expect(page.locator("#context-label")).toContainText("32%")
+    await expect(page.locator("#context-label")).toContainText(/64k|64K|64,000/)
+
+    expectNoBrowserErrors(captured)
+  })
+
+  test("scroll position survives repeated init_state hydration", async ({ page }) => {
+    const captured = captureErrors(page)
+    await page.setViewportSize({ width: 900, height: 520 })
+    await page.goto("/")
+
+    const messages = buildScrollableMessages()
+    const initState = {
+      type: "init_state",
+      sessions: [
+        contextSession({
+          messages,
+          contextUsage: {
+            tokens: 21000,
+            maxTokens: 100000,
+            percent: 21,
+            source: "actual",
+            updatedAt: 6000,
+          },
+        }),
+      ],
+      activeSessionId: "s",
+    }
+
+    await dispatchHostMessage(page, initState)
+    const msgList = page.locator('.tab-panel[data-tab-id="s"] .message-list')
+    await expect(msgList).toBeVisible({ timeout: 5000 })
+    await page.waitForFunction(() => {
+      const list = document.querySelector('.tab-panel[data-tab-id="s"] .message-list')
+      return !!list && list.scrollHeight > list.clientHeight + 200
+    })
+
+    await msgList.evaluate((el) => {
+      const list = el as HTMLElement
+      list.scrollTop = 420
+      list.dispatchEvent(new Event("scroll", { bubbles: true }))
+    })
+    await page.waitForTimeout(250)
+    await dispatchHostMessage(page, initState)
+    await page.waitForTimeout(250)
+
+    const scrollTop = await msgList.evaluate((el) => Math.round((el as HTMLElement).scrollTop))
+    expect(scrollTop).toBeGreaterThanOrEqual(360)
+    expect(scrollTop).toBeLessThanOrEqual(480)
 
     expectNoBrowserErrors(captured)
   })

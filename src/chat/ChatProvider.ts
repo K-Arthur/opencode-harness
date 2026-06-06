@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 import { SessionManager } from "../session/SessionManager"
-import { SessionStore } from "../session/SessionStore"
+import { SessionStore, type SessionContextUsage } from "../session/SessionStore"
 import { ContextEngine } from "../context/ContextEngine"
 import { ContextMonitor } from "../monitor/ContextMonitor"
 import { UsageAnalytics } from "../monitor/UsageAnalytics"
@@ -50,7 +50,7 @@ import { SlashCommandService } from "./SlashCommandService"
 import { SessionSyncService } from "./SessionSyncService"
 import { AutoModeService } from "./AutoModeService"
 import { VoiceInputService } from "./VoiceInputService"
-import { VoiceInputHelperService } from "./VoiceInputHelperService"
+import { createDefaultVoiceCapture, type VoiceCaptureConfig } from "./voiceCapture"
 
 type ServerEvent = { type: string; sessionId?: string; data?: unknown }
 
@@ -87,7 +87,6 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private diffAcceptService!: DiffAcceptService
   private codeInsertionService!: CodeInsertionService
   private voiceInputService!: VoiceInputService
-  private voiceInputHelperService!: VoiceInputHelperService
 
   private messagePostService = new MessagePostService({
     getWebview: () => this._view?.webview,
@@ -243,24 +242,20 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     })
 
     this.codeInsertionService = new CodeInsertionService(this.fileOps)
+    const voiceLog = (level: "info" | "warn" | "error", message: string, err?: unknown) => {
+      if (level === "error") log.error(message, err)
+      else if (level === "warn") log.warn(message, err)
+      else log.info(message)
+    }
+    const voiceCapture = createDefaultVoiceCapture(() => this.getVoiceCaptureConfig(), voiceLog)
     this.voiceInputService = new VoiceInputService({
       getRawConfig: () => this.getVoiceInputRawConfig(),
-      secrets: context.secrets,
+      recorder: voiceCapture.recorder,
+      transcriber: voiceCapture.transcriber,
+      createTempAudioPath: voiceCapture.createTempAudioPath,
+      removeFile: voiceCapture.removeFile,
       postMessage: (msg) => this.postMessage(msg),
-    })
-    this.voiceInputHelperService = new VoiceInputHelperService({
-      extensionPath: context.extensionUri.fsPath,
-      parseUri: (value) => vscode.Uri.parse(value),
-      asExternalUri: (uri) => vscode.env.asExternalUri(uri as vscode.Uri),
-      openExternal: (uri) => vscode.env.openExternal(uri as vscode.Uri),
-      getSettings: () => this.voiceInputService.getSettings(),
-      transcribeAudio: (payload) => this.voiceInputService.transcribeAudio(payload),
-      postMessage: (msg) => this.postMessage(msg),
-      log: (level, message, err) => {
-        if (level === "error") log.error(message, err)
-        else if (level === "warn") log.warn(message, err)
-        else log.info(message)
-      },
+      log: voiceLog,
     })
 
     // Hook into tab creation to backfill tabs that need it
@@ -291,7 +286,6 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       usageAnalytics: this.usageAnalytics,
       steerPromptHandler: this.steerPromptHandler,
       voiceInputService: this.voiceInputService,
-      voiceInputHelperService: this.voiceInputHelperService,
       postMessage: (msg) => this.postMessage(msg),
       postRequestError: (message, sessionId) => this.postRequestError(message, sessionId),
       showWarningMessage: (message, options, ...items) => vscode.window.showWarningMessage(message, options, ...items),
@@ -348,31 +342,32 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     })
   }
 
-  async setVoiceInputOpenAiApiKey(): Promise<void> {
-    const apiKey = await vscode.window.showInputBox({
-      title: "OpenCode Voice Input",
-      prompt: "Enter an OpenAI API key for cloud speech-to-text. It is stored in VS Code SecretStorage.",
-      password: true,
-      ignoreFocusOut: true,
-      placeHolder: "sk-...",
-    })
-    if (apiKey === undefined) return
-    if (!apiKey.trim()) {
-      await vscode.window.showWarningMessage("OpenAI API key was not changed.")
-      return
-    }
-    await this.voiceInputService.setOpenAiApiKey(apiKey)
-    await vscode.window.showInformationMessage("OpenCode voice input API key saved.")
-  }
-
   private getVoiceInputRawConfig(): Record<string, unknown> {
-    const config = vscode.workspace.getConfiguration("opencode.voiceInput")
+    const config = vscode.workspace.getConfiguration("opencode.voice")
     return {
       enabled: config.get("enabled"),
-      provider: config.get("provider"),
-      maxDurationSeconds: config.get("maxDurationSeconds"),
-      maxUploadBytes: config.get("maxUploadBytes"),
-      openaiModel: config.get("openaiModel"),
+      autoSend: config.get("autoSend"),
+      language: config.get("language"),
+      insertMode: config.get("insertMode"),
+      maxRecordingSeconds: config.get("maxRecordingSeconds"),
+    }
+  }
+
+  /**
+   * Override commands for the local capture pipeline. These are read from the
+   * machine/global config scope only (see package.json `scope: "machine"`) so
+   * a malicious workspace cannot inject a command for the host to spawn.
+   */
+  private getVoiceCaptureConfig(): VoiceCaptureConfig {
+    const config = vscode.workspace.getConfiguration("opencode.voice")
+    const asString = (key: string): string | undefined => {
+      const value = config.get(key)
+      return typeof value === "string" && value.trim() ? value.trim() : undefined
+    }
+    return {
+      recordCommand: asString("recordCommand"),
+      localCommand: asString("localCommand"),
+      model: asString("model"),
     }
   }
 
@@ -456,13 +451,31 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         for (const ev of buffered) this.handleServerEvent(ev)
       }),
       this.contextMonitor.onContextChanged?.((usage) => {
+        const sessionId = typeof usage.sessionId === "string" && usage.sessionId.length > 0 ? usage.sessionId : undefined
+        const contextUsage: SessionContextUsage = {
+          percent: usage.percent,
+          tokens: usage.tokens,
+          maxTokens: usage.maxTokens,
+          breakdown: usage.breakdown,
+          projected: usage.projected,
+          cost: usage.cost,
+          source: usage.source,
+          updatedAt: usage.updatedAt,
+        }
+        if (sessionId) {
+          this.sessionStore.updateContextUsage(sessionId, contextUsage)
+        }
         this.postMessage({
           type: "context_usage",
           percent: usage.percent,
           tokens: usage.tokens,
           maxTokens: usage.maxTokens,
-          sessionId: usage.sessionId,
+          sessionId,
           breakdown: usage.breakdown,
+          projected: usage.projected,
+          cost: usage.cost,
+          source: usage.source,
+          updatedAt: usage.updatedAt,
         })
         // Coarse pre-gate: any usage above the lowest sensible threshold
         // (10) gets handed to AutoCompactor, which does the model-aware
@@ -488,6 +501,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     this.disposables.push(
       webviewView.onDidChangeVisibility(() => {
         if (!webviewView.visible || !this.eventRouter.webviewReady) return
+        log.debug("Webview became visible — running lightweight visible-state sync")
         this.pushVisibleStateToWebview()
       })
     )
@@ -1146,9 +1160,10 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     const resolvedWindow = this.modelManager.getContextWindow(model)
     const override = vscode.workspace.getConfiguration("opencode").get<number>("contextWindowOverride", 0)
     const effectiveWindow = override > 0 ? override : resolvedWindow
-    const activeSessionId = this.sessionStore.activeId
+    const activeSessionId = this.sessionStore.activeId || this.tabManager.getActiveId() || ""
     if (effectiveWindow && effectiveWindow > 0) {
       this.contextMonitor.setTokenLimit(effectiveWindow, activeSessionId)
+      this.updateStoredContextWindow(activeSessionId, effectiveWindow)
       this.statePush.postMessage({
         type: "context_window_known",
         sessionId: activeSessionId,
@@ -1175,6 +1190,31 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
 
   private pushRateLimitStateToWebview(): void {
     return this.sessionSync.pushRateLimitStateToWebview()
+  }
+
+  private updateStoredContextWindow(sessionId: string, maxTokens: number): void {
+    if (!sessionId || maxTokens <= 0) return
+    const existing = this.sessionStore.getContextUsage(sessionId)
+    if (!existing || existing.tokens <= 0) return
+    const percent = Math.min(100, Math.max(0, (existing.tokens / maxTokens) * 100))
+    this.sessionStore.updateContextUsage(sessionId, {
+      ...existing,
+      maxTokens,
+      percent,
+      updatedAt: Date.now(),
+    })
+  }
+
+  private pushContextUsageForSession(sessionId?: string): void {
+    if (!sessionId) return
+    const usage = this.contextMonitor.getCurrentUsage(sessionId) ?? this.sessionStore.getContextUsage(sessionId)
+    if (!usage) return
+    log.debug(`Pushing context usage for ${sessionId}: ${usage.tokens}/${usage.maxTokens} (${usage.percent}%, ${usage.source ?? "estimated"})`)
+    this.postMessage({
+      type: "context_usage",
+      ...usage,
+      sessionId,
+    })
   }
 
   private pushInitStateToWebview(): void {
@@ -1282,6 +1322,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       messages: s.messages.slice(-MAX_MESSAGES_PER_TAB),
       cost: s.cost || 0,
       tokenUsage: s.tokenUsage,
+      contextUsage: this.sessionStore.getContextUsage(s.id),
       totalMessages: s.messages.length,
     }))
 
@@ -1319,7 +1360,12 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
 
   private pushVisibleStateToWebview(): void {
     this.messageBatcher.flush()
-    this.pushAllStateToWebview()
+    log.debug("pushVisibleStateToWebview: lightweight sync")
+    this.pushModelToWebview()
+    this.pushRateLimitStateToWebview()
+    const activeSessionId = this.sessionStore.activeId || this.tabManager.getActiveId()
+    this.applyContextWindowFor()
+    this.pushContextUsageForSession(activeSessionId)
     this.replayLiveStreamsToWebview()
   }
 
@@ -1524,7 +1570,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     this.chatCommands?.dispose()
     this.autoCompactor?.dispose()
     this.fileOps?.dispose()
-    this.voiceInputHelperService?.dispose()
+    this.voiceInputService?.dispose()
     this.eventRouter.clearReadyTimeout()
     this.webviewContent?.dispose()
   }

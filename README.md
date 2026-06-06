@@ -47,7 +47,7 @@ OpenCode includes advanced features like cost tracking, theme customization, gra
 ### Core Features
 - **Multi-Tab Workers** — Run multiple AI sessions concurrently. Each tab is an independent worker with its own model, mode, and conversation history. Up to 3 concurrent streams.
 - **Per-Tab Model Selection** — Each conversation can use a different AI model. Switch models without restarting the server.
-- **Token & Cost Tracking** — Real-time token usage indicator in the header with color-coded progress (green/yellow/red).
+- **Token, Cost, and Context Tracking** — Real-time status-strip usage shows spend totals plus per-session context-window fill, restored across reloads and tab switches.
 - **Task Completion Banners** — Visual success/error/warning banners for completed operations.
 - **Rich Chat Interface** — Premium message bubbles with tail accents, typing indicators, skill badges, and expandable tool call timelines with status pills
 - **Model Manager Panel** — Searchable model list with per-model toggle switches, provider grouping, and "Connect provider" integration
@@ -58,7 +58,7 @@ OpenCode includes advanced features like cost tracking, theme customization, gra
 - **Smart Diffs** — AI-suggested code changes shown as unified diffs with Accept/Discard controls
 - **Checkpoints** — VS Code-safe file snapshots for extension-managed diff accepts, plus OpenCode-native message revert for server-managed edits
 - **Slash Commands** — `/clear`, `/model`, `/cost`, `/new`, `/export`, `/compact`, `/continue`, `/help`, `/queue`
-- **Voice Input** — Click the microphone in the composer to dictate a prompt. Transcripts are inserted for review and never auto-sent; cloud transcription is opt-in and uses SecretStorage for the API key.
+- **Voice Input** — Click the microphone in the composer to dictate a prompt. Recording and transcription are 100% local (no cloud, no API key); transcripts are inserted for review and never auto-sent unless you opt in.
 - **Export Conversation** — Save current session as Markdown file
 - **Session History** — Searchable conversation history with resume support in the chat surface
 - **@-Mentions** — Reference files, folders, problems, URLs, and terminal output in your prompts, including path-aware file search such as `@src/util`
@@ -146,18 +146,29 @@ All commands are also available via the Command Palette (`Ctrl+Shift+P`).
 
 ## Voice Input
 
-The chat composer includes a microphone button for speech-to-text prompt entry.
-Clicking it opens a small helper page in your default browser so microphone
-permission is handled by the real browser rather than the VS Code webview. The
-transcript is inserted into the prompt textarea for editing; it is not sent
-automatically.
+The chat composer has a microphone button for speech-to-text prompt entry. It is
+**fully native and fully local** — click the mic, speak, click again to stop, and
+the transcript appears in the prompt box for you to edit and send. There is no
+browser redirect, no cloud service, and no API key.
 
-By default, voice input uses browser speech recognition in the helper page. To
-use OpenAI transcription instead, set `opencode.voiceInput.provider` to
-`"openai"` and run **OpenCode: Set Voice Input OpenAI API Key**. The key is stored
-in VS Code SecretStorage, not settings JSON or the helper page. See
-[docs/voice-input.md](docs/voice-input.md) for settings, privacy behavior, and
-provider details.
+Because a VS Code webview cannot access the microphone (it is a sandboxed iframe),
+the extension host records the default microphone with a local command-line tool
+and transcribes it with a local speech-to-text engine on your machine. Audio never
+leaves your computer and the temporary recording is deleted after transcription.
+
+Voice input works when a local recorder **and** a local STT engine are available:
+
+- **Recorder** (auto-detected): [`sox`](http://sox.sourceforge.net/) (`rec`),
+  `arecord` (Linux/ALSA), or `ffmpeg`.
+- **Engine** (auto-detected): [openai-whisper](https://github.com/openai/whisper)
+  (`pip install -U openai-whisper`), or [whisper.cpp](https://github.com/ggerganov/whisper.cpp)
+  (`whisper-cli`, with a model set via `opencode.voice.model`).
+- Or bring your own with `opencode.voice.localCommand` / `opencode.voice.recordCommand`.
+
+If neither is found, the mic button degrades gracefully to a clear "not available"
+state — you can still type, or use your OS's built-in dictation (macOS Dictation /
+Windows `Win+H`), which types directly into the focused prompt box. See
+[docs/voice-input.md](docs/voice-input.md) for setup, settings, and privacy details.
 
 ## Design System
 
@@ -344,6 +355,8 @@ When exact quota data is unavailable, the bar switches to an observed-usage mode
 Different providers expose different quota signals. Header adapters parse OpenAI, Anthropic, and generic `ratelimit-*` headers when those headers are available. If the OpenCode SDK response path only exposes assistant `tokens`/`cost`, the extension records observed usage and can estimate a per-minute quota only when `opencode.rateLimits` includes the selected provider.
 
 Observed token and cost usage is persisted in VS Code `globalState`, so a window reload no longer clears the quota/cost picture for the active provider.
+
+Per-session context-window fill is also persisted with session history. The status strip restores the last valid non-zero fill on reload/resume, while live estimates are replaced by SDK-reported actual input tokens when available.
 
 OpenCode Zen uses the provider id `opencode` and currently works like any other OpenCode provider. Zen is pay-as-you-go, supports auto-reload, and can have monthly workspace/member limits; those billing limits are not exposed through the prompt token metadata, so the extension does not infer remaining Zen balance/monthly budget unless the server exposes quota headers or you configure fallback limits.
 

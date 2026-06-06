@@ -27,7 +27,6 @@ import type { ContextMonitor } from "../monitor/ContextMonitor"
 import type { UsageAnalytics } from "../monitor/UsageAnalytics"
 import type { SkillPreferencesStoreLike } from "../skills/SkillPreferencesStore"
 import type { VoiceInputService } from "./VoiceInputService"
-import type { VoiceInputHelperService } from "./VoiceInputHelperService"
 import { log } from "../utils/outputChannel"
 import { handleWebviewError } from "./utils/errorHandler"
 import { validateWebviewMessage } from "./WebviewMessageValidator"
@@ -86,7 +85,6 @@ export interface WebviewEventRouterOptions {
   usageAnalytics: UsageAnalytics
   steerPromptHandler: SteerPromptHandler
   voiceInputService: VoiceInputService
-  voiceInputHelperService: VoiceInputHelperService
   postMessage: (msg: Record<string, unknown>) => void
   postRequestError: (message: string, sessionId?: string) => void
   showWarningMessage: (message: string, options: vscode.MessageOptions, ...items: string[]) => Thenable<string | undefined>
@@ -161,7 +159,7 @@ export class WebviewEventRouter {
     "model_favorite", "model_toggle",
     "question_answer",
     "resume_stream", "decline_resume",
-    "get_stt_settings", "stt_open_helper",
+    "get_voice_settings", "voice_start", "voice_stop", "voice_cancel",
   ])
 
   private readonly webviewHandlers: Map<string, (msg: Record<string, unknown>, sessionId?: string) => void | Promise<void>> = new Map([
@@ -175,11 +173,17 @@ export class WebviewEventRouter {
         )
       }
     }],
-    ["get_stt_settings", async () => {
-      await this.opts.voiceInputService.postSettings()
+    ["get_voice_settings", () => {
+      this.opts.voiceInputService.postSettings()
     }],
-    ["stt_open_helper", async (msg: Record<string, unknown>) => {
-      await this.opts.voiceInputHelperService.openBrowserHelper(msg.requestId)
+    ["voice_start", async (msg: Record<string, unknown>) => {
+      await this.opts.voiceInputService.start(msg.requestId)
+    }],
+    ["voice_stop", async (msg: Record<string, unknown>) => {
+      await this.opts.voiceInputService.stop(msg.requestId)
+    }],
+    ["voice_cancel", (msg: Record<string, unknown>) => {
+      this.opts.voiceInputService.cancel(msg.requestId)
     }],
     ["show_diff", async (msg: Record<string, unknown>, sessionId?: string) => {
       const diffId = msg.diffId as string | undefined
@@ -975,9 +979,15 @@ export class WebviewEventRouter {
         return
       }
 
+      const storedUsage = this.opts.sessionStore.getContextUsage(targetId)
+      if (storedUsage) {
+        this.opts.postMessage({ type: "context_usage", ...storedUsage, sessionId: targetId })
+        return
+      }
+
       const maxTokens = this.opts.contextMonitor.limit
       if (maxTokens > 0) {
-        this.opts.postMessage({ type: "context_usage", sessionId: targetId, percent: 0, tokens: 0, maxTokens })
+        this.opts.postMessage({ type: "context_window_known", sessionId: targetId, maxTokens, source: "monitor" })
       } else {
         this.opts.postMessage({
           type: "context_window_unknown",

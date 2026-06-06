@@ -127,6 +127,60 @@ describe("state.ts — per-session token usage isolation (Batch 2d)", () => {
     assert.equal(sm.getSession(s1.id)?.tokenUsage?.total, 15)
     assert.equal(sm.getSession(s1.id)?.cost, 0.1234)
   })
+
+  it("loadSessions preserves local contextUsage when host data is missing", () => {
+    const sm = createState(makeVsCodeStub())
+    const s1 = sm.createSession("Tab 1")
+    sm.getSession(s1.id)!.contextUsage = { percent: 40, tokens: 400, maxTokens: 1000, source: "actual", updatedAt: 2000 }
+
+    sm.loadSessions([{ ...s1, messages: [], contextUsage: undefined }], s1.id, "anthropic/claude-opus-4-7")
+
+    assert.equal(sm.getSession(s1.id)?.contextUsage?.tokens, 400)
+    assert.equal(sm.getSession(s1.id)?.contextUsage?.source, "actual")
+  })
+
+  it("loadSessions does not clobber valid contextUsage with zero fallback host data", () => {
+    const sm = createState(makeVsCodeStub())
+    const s1 = sm.createSession("Tab 1")
+    sm.getSession(s1.id)!.contextUsage = { percent: 65, tokens: 650, maxTokens: 1000, source: "actual", updatedAt: 3000 }
+
+    sm.loadSessions([{
+      ...s1,
+      messages: [],
+      contextUsage: { percent: 0, tokens: 0, maxTokens: 1000, source: "estimated", updatedAt: 4000 },
+    }], s1.id, "anthropic/claude-opus-4-7")
+
+    assert.equal(sm.getSession(s1.id)?.contextUsage?.tokens, 650)
+    assert.equal(sm.getSession(s1.id)?.contextUsage?.percent, 65)
+    assert.equal(sm.getSession(s1.id)?.contextUsage?.source, "actual")
+  })
+
+  it("loadSessions accepts meaningful host contextUsage updates", () => {
+    const sm = createState(makeVsCodeStub())
+    const s1 = sm.createSession("Tab 1")
+    sm.getSession(s1.id)!.contextUsage = { percent: 20, tokens: 200, maxTokens: 1000, source: "estimated", updatedAt: 1000 }
+
+    sm.loadSessions([{
+      ...s1,
+      messages: [],
+      contextUsage: { percent: 55, tokens: 550, maxTokens: 1000, source: "actual", updatedAt: 5000 },
+    }], s1.id, "anthropic/claude-opus-4-7")
+
+    assert.equal(sm.getSession(s1.id)?.contextUsage?.tokens, 550)
+    assert.equal(sm.getSession(s1.id)?.contextUsage?.source, "actual")
+  })
+
+  it("tracks per-session scroll positions in webview state", () => {
+    const sm = createState(makeVsCodeStub())
+    const s1 = sm.createSession("Tab 1")
+    const s2 = sm.createSession("Tab 2")
+
+    assert.equal(sm.setScrollPosition(s1.id, 123.6), true)
+    assert.equal(sm.setScrollPosition(s2.id, 44), true)
+
+    assert.equal(sm.getScrollPosition(s1.id), 124)
+    assert.equal(sm.getScrollPosition(s2.id), 44)
+  })
 })
 
 describe("state.ts — restore() must not resurrect stale isStreaming flags", () => {

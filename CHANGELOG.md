@@ -34,6 +34,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Context usage now persists with sessions and survives webview refresh.** `SessionStore` owns
+  durable `contextUsage` (tokens, maxTokens, percent, source, timestamp, optional breakdown/cost)
+  and ignores invalid, stale, or zero fallback updates when a valid reading already exists. Host
+  hydration now includes context usage in `init_state` and `resume_session_data`; live estimates
+  are marked `estimated`, final SDK input-token readings are marked `actual`, and stale async
+  estimates cannot overwrite newer actual data. (`src/session/SessionStore.ts`,
+  `src/monitor/ContextMonitor.ts`, `src/chat/ChatProvider.ts`,
+  `src/chat/handlers/StreamCoordinator.ts`, `src/chat/SessionLifecycleService.ts`)
+- **Visibility refreshes no longer re-render entire sessions.** Focus/visibility state sync now
+  pushes lightweight model/rate-limit/context state and replays live streams instead of sending a
+  full `init_state`; repeated hydration skips unchanged message DOM and restores saved
+  per-session scroll positions. (`src/chat/ChatProvider.ts`, `src/chat/webview/main.ts`,
+  `src/chat/webview/state.ts`)
+- **Bottom status controls stay clickable in narrow panes.** The context status strip and changed
+  files strip now stack above the sticky composer, so the prompt textarea cannot intercept their
+  clicks. (`src/chat/webview/css/layout.css`, `src/chat/webview/css/context-usage.css`)
 - **Subagent activity/detail UI now hydrates and is keyboard-accessible.** `subagent_detail`
   responses now replace the loading spinner with summary/result/message content; runtime-rendered
   activity rows use the CSS hooks already defined for status badges and progress bars; rows can be
@@ -67,6 +83,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `src/chat/ChatProvider.ts`)
 
 ### Tests
+- Added behavioral SessionStore context-usage tests, webview state preservation tests, lightweight
+  visibility-sync guards, and visual context regressions for stream end, session restore,
+  background-tab usage, zero fallback preservation, scroll stability, and narrow-pane click
+  targets. (`tests/unit/session-store-context-usage-behavioral.test.mjs`,
+  `src/chat/webview/state.test.ts`, `src/chat/ChatProvider.test.ts`,
+  `src/chat/webview/main.test.ts`, `tests/visual/chat-context-usage.spec.ts`)
 - Added subagent regression coverage for detail hydration, status/progress CSS hooks,
   keyboard-open behavior, required subagent IDs, and active-session child authorization.
   (`src/chat/webview/subagentDetailView.test.ts`, `src/chat/webview/subagent-panel.test.ts`,

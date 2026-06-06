@@ -38,7 +38,14 @@ describe("StreamCoordinator transport awareness", () => {
     assert.ok(block.includes("attachments:"), "startPrompt must accept attachments")
     assert.ok(block.includes('type: "file"'), "image attachments must be emitted as file parts")
     assert.ok(block.includes("mime:"), "file parts must carry the image MIME type")
-    assert.ok(block.includes("data:${attachment.mimeType};base64,${attachment.data}"), "file parts must carry the pasted image data URL")
+    // File parts must point at a materialised file:// URL (via
+    // attachmentStorage) rather than an inline data: URL. data: URLs trigger
+    // the opencode server's clipboard probe (which fails on Linux without
+    // wl-clipboard/xclip) and have documented failures with some
+    // MCP/non-vision models.
+    assert.ok(block.includes("this.attachmentStorage.materialize"), "file parts must materialise via attachmentStorage")
+    assert.ok(block.includes("result.url"), "file parts must use the materialised URL")
+    assert.ok(!block.includes("data:${attachment.mimeType};base64,${attachment.data}"), "inline data: URLs must not be used anymore")
   })
 
   it("uses the local first-message title when creating the SDK session", () => {

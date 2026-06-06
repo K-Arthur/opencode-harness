@@ -19,6 +19,22 @@ export interface MigratableSession {
   messages: unknown[]
   cost: number
   tokenUsage: { prompt: number; completion: number; total: number }
+  contextUsage?: {
+    percent: number
+    tokens: number
+    maxTokens: number
+    source?: "estimated" | "actual"
+    updatedAt?: number
+    breakdown?: {
+      system: number
+      history: number
+      workspace: number
+      queued?: number
+      steer?: number
+    }
+    projected?: { withQueue: number; overflow: boolean }
+    cost?: number
+  }
   workspacePath?: string
 }
 
@@ -102,6 +118,9 @@ function mergeSessionIntoTarget(target: MigratableSession, source: MigratableSes
   }
   if (source.messages.length > target.messages.length) target.messages = source.messages
   target.cost = Math.max(target.cost || 0, source.cost || 0)
+  if (!target.contextUsage || ((source.contextUsage?.updatedAt ?? 0) > (target.contextUsage.updatedAt ?? 0))) {
+    target.contextUsage = source.contextUsage
+  }
   if (!target.model && source.model) target.model = source.model
   if (!target.workspacePath && source.workspacePath) target.workspacePath = source.workspacePath
   target.createdAt = Math.min(target.createdAt || source.createdAt, source.createdAt || target.createdAt)

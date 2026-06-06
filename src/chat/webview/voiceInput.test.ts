@@ -1,20 +1,53 @@
 import { beforeEach, describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { JSDOM } from "jsdom"
-import { setupVoiceInput } from "./voiceInput"
+import { setupVoiceInput, type VoiceInputDeps } from "./voiceInput"
 import type { VoiceInputSettings } from "../voiceInputCore"
 
 function settings(overrides: Partial<VoiceInputSettings> = {}): VoiceInputSettings {
   return {
     enabled: true,
-    provider: "browser",
-    maxDurationSeconds: 60,
-    maxUploadBytes: 1024,
-    openaiModel: "gpt-4o-mini-transcribe",
-    hasOpenAiApiKey: false,
+    autoSend: false,
+    language: "auto",
+    insertMode: "append",
+    maxRecordingSeconds: 60,
+    available: true,
     ...overrides,
   }
 }
+
+function els() {
+  return {
+    promptInput: document.getElementById("prompt-input") as HTMLTextAreaElement,
+    voiceInputBtn: document.getElementById("voice-input-btn") as HTMLButtonElement,
+    voiceInputStatus: document.getElementById("voice-input-status") as HTMLElement,
+  }
+}
+
+function setup(overrides: Partial<VoiceInputDeps> = {}) {
+  const posted: Record<string, unknown>[] = []
+  const inserted: string[] = []
+  let submitCount = 0
+  const api = setupVoiceInput({
+    els: els(),
+    postMessage: (msg) => posted.push(msg),
+    insertTextAtCursor: (text) => {
+      const input = els().promptInput
+      input.value += text
+      inserted.push(text)
+    },
+    autoResizeTextarea: () => {},
+    updateSendButton: () => {},
+    submitPrompt: () => {
+      submitCount++
+    },
+    ...overrides,
+  })
+  return { api, posted, inserted, getSubmitCount: () => submitCount }
+}
+
+const btn = () => document.getElementById("voice-input-btn") as HTMLButtonElement
+const status = () => document.getElementById("voice-input-status")!.textContent || ""
 
 void describe("voice input webview UI", () => {
   beforeEach(() => {
@@ -29,110 +62,162 @@ void describe("voice input webview UI", () => {
     ;(globalThis as any).KeyboardEvent = dom.window.KeyboardEvent
   })
 
-  it("requests settings and enables browser helper mode without in-webview SpeechRecognition", () => {
-    const posted: Record<string, unknown>[] = []
-    const api = setupVoiceInput({
-      els: {
-        promptInput: document.getElementById("prompt-input") as HTMLTextAreaElement,
-        voiceInputBtn: document.getElementById("voice-input-btn") as HTMLButtonElement,
-        voiceInputStatus: document.getElementById("voice-input-status") as HTMLElement,
-      },
-      postMessage: (msg) => posted.push(msg),
-      insertTextAtCursor: () => {},
-      autoResizeTextarea: () => {},
-      updateSendButton: () => {},
-    })
-
+  it("requests voice settings on init and becomes idle when available", () => {
+    const { api, posted } = setup()
     api.applySettings(settings())
-
-    assert.deepEqual(posted[0], { type: "get_stt_settings" })
+    assert.deepEqual(posted[0], { type: "get_voice_settings" })
     assert.equal(api.getState(), "idle")
-    assert.equal((document.getElementById("voice-input-btn") as HTMLButtonElement).disabled, false)
-    assert.match(document.getElementById("voice-input-status")!.textContent || "", /ready/i)
+    assert.equal(btn().disabled, false)
+    assert.match(status(), /ready/i)
   })
 
-  it("opens the host browser helper instead of recording inside the VS Code webview", async () => {
-    const posted: Record<string, unknown>[] = []
+  it("disables the button when the feature is off", () => {
+    const { api } = setup()
+    api.applySettings(settings({ enabled: false }))
+    assert.equal(api.getState(), "disabled")
+    assert.equal(btn().disabled, true)
+    assert.match(status(), /disabled/i)
+  })
+
+  it("disables with a graceful message when no local engine is available", () => {
+    const { api } = setup()
+    api.applySettings(settings({ available: false, unavailableReason: "No engine found." }))
+    assert.equal(api.getState(), "disabled")
+    assert.equal(btn().disabled, true)
+    assert.match(status(), /No engine found\./)
+  })
+
+  it("starts recording via the host (no in-webview mic) on click", async () => {
     let getUserMediaCalled = false
     Object.defineProperty(globalThis, "navigator", {
       configurable: true,
-      value: {
-      mediaDevices: {
-        getUserMedia: async () => {
-          getUserMediaCalled = true
-          throw new Error("webview microphone should not be used")
-        },
-      },
-      },
+      value: { mediaDevices: { getUserMedia: async () => { getUserMediaCalled = true; throw new Error("no") } } },
     })
-    ;(globalThis as any).MediaRecorder = class {
-      static isTypeSupported() { return true }
-    }
-
-    const api = setupVoiceInput({
-      els: {
-        promptInput: document.getElementById("prompt-input") as HTMLTextAreaElement,
-        voiceInputBtn: document.getElementById("voice-input-btn") as HTMLButtonElement,
-        voiceInputStatus: document.getElementById("voice-input-status") as HTMLElement,
-      },
-      postMessage: (msg) => posted.push(msg),
-      insertTextAtCursor: () => {},
-      autoResizeTextarea: () => {},
-      updateSendButton: () => {},
-    })
-    api.applySettings(settings({ provider: "openai", hasOpenAiApiKey: true }))
-
-    ;(document.getElementById("voice-input-btn") as HTMLButtonElement).click()
-    await Promise.resolve()
-
-    const openMessage = posted.find((msg) => msg.type === "stt_open_helper")
-    assert.equal(getUserMediaCalled, false)
-    assert.equal(typeof openMessage?.requestId, "string")
-    assert.equal(api.getState(), "requesting-permission")
+    const { api, posted } = setup()
+    api.applySettings(settings())
+    btn().click()
+    const startMsg = posted.find((m) => m.type === "voice_start")
+    assert.equal(getUserMediaCalled, false) // webview never touches the mic
+    assert.equal(typeof startMsg?.requestId, "string")
+    assert.equal(api.getState(), "starting")
   })
 
-  it("marks the helper request active after the host opens the external recorder", () => {
-    const posted: Record<string, unknown>[] = []
-    const api = setupVoiceInput({
-      els: {
-        promptInput: document.getElementById("prompt-input") as HTMLTextAreaElement,
-        voiceInputBtn: document.getElementById("voice-input-btn") as HTMLButtonElement,
-        voiceInputStatus: document.getElementById("voice-input-status") as HTMLElement,
-      },
-      postMessage: (msg) => posted.push(msg),
-      insertTextAtCursor: () => {},
-      autoResizeTextarea: () => {},
-      updateSendButton: () => {},
-    })
-
-    api.applySettings(settings({ provider: "openai", hasOpenAiApiKey: true }))
-    ;(document.getElementById("voice-input-btn") as HTMLButtonElement).click()
-    const openMessage = posted.find((msg) => msg.type === "stt_open_helper")
-    api.handleHelperOpened({ requestId: openMessage?.requestId })
-
+  it("transitions to recording once the host confirms capture started", () => {
+    const { api, posted } = setup()
+    api.applySettings(settings())
+    btn().click()
+    const requestId = posted.find((m) => m.type === "voice_start")?.requestId
+    api.handleRecordingStarted({ requestId })
     assert.equal(api.getState(), "recording")
-    assert.match(document.getElementById("voice-input-status")!.textContent || "", /browser/i)
+    assert.match(status(), /recording/i)
   })
 
-  it("inserts only the current transcript request into the prompt", () => {
-    const inserted: string[] = []
-    const api = setupVoiceInput({
-      els: {
-        promptInput: document.getElementById("prompt-input") as HTMLTextAreaElement,
-        voiceInputBtn: document.getElementById("voice-input-btn") as HTMLButtonElement,
-        voiceInputStatus: document.getElementById("voice-input-status") as HTMLElement,
-      },
-      postMessage: () => {},
-      insertTextAtCursor: (text) => inserted.push(text),
-      autoResizeTextarea: () => {},
-      updateSendButton: () => {},
-    })
+  it("stops and transcribes on a second click", () => {
+    const { api, posted } = setup()
+    api.applySettings(settings())
+    btn().click()
+    const requestId = posted.find((m) => m.type === "voice_start")?.requestId
+    api.handleRecordingStarted({ requestId })
+    btn().click()
+    assert.equal(posted.some((m) => m.type === "voice_stop" && m.requestId === requestId), true)
+    assert.equal(api.getState(), "transcribing")
+    assert.equal(btn().disabled, true)
+  })
 
-    api.setCurrentRequestId("voice-current")
-    api.handleTranscript({ requestId: "voice-old", text: "old text" })
-    api.handleTranscript({ requestId: "voice-current", text: "  new\ntext  " })
-
-    assert.deepEqual(inserted, ["new text"])
+  it("inserts the transcript (append) and lands in inserted state", () => {
+    const { api, posted, inserted } = setup()
+    api.applySettings(settings())
+    btn().click()
+    const requestId = posted.find((m) => m.type === "voice_start")?.requestId
+    api.handleRecordingStarted({ requestId })
+    api.handleTranscribing({ requestId })
+    api.handleTranscript({ requestId, text: "  hello\nthere  " })
+    assert.deepEqual(inserted, ["hello there"])
     assert.equal(api.getState(), "inserted")
+  })
+
+  it("appends after existing text with a separating space", () => {
+    els().promptInput.value = "draft"
+    const { api, posted } = setup()
+    api.applySettings(settings())
+    btn().click()
+    const requestId = posted.find((m) => m.type === "voice_start")?.requestId
+    api.handleRecordingStarted({ requestId })
+    api.handleTranscript({ requestId, text: "spoken" })
+    assert.equal(els().promptInput.value, "draft spoken")
+  })
+
+  it("replaces existing text in replace mode", () => {
+    els().promptInput.value = "old draft"
+    const { api, posted } = setup()
+    api.applySettings(settings({ insertMode: "replace" }))
+    btn().click()
+    const requestId = posted.find((m) => m.type === "voice_start")?.requestId
+    api.handleRecordingStarted({ requestId })
+    api.handleTranscript({ requestId, text: "fresh" })
+    assert.equal(els().promptInput.value, "fresh")
+  })
+
+  it("auto-sends only when autoSend is enabled", () => {
+    const { api, posted, getSubmitCount } = setup()
+    api.applySettings(settings({ autoSend: true }))
+    btn().click()
+    const requestId = posted.find((m) => m.type === "voice_start")?.requestId
+    api.handleRecordingStarted({ requestId })
+    api.handleTranscript({ requestId, text: "go" })
+    assert.equal(getSubmitCount(), 1)
+  })
+
+  it("does not auto-send by default", () => {
+    const { api, posted, getSubmitCount } = setup()
+    api.applySettings(settings())
+    btn().click()
+    const requestId = posted.find((m) => m.type === "voice_start")?.requestId
+    api.handleRecordingStarted({ requestId })
+    api.handleTranscript({ requestId, text: "go" })
+    assert.equal(getSubmitCount(), 0)
+  })
+
+  it("ignores transcripts for a stale request id", () => {
+    const { api, posted, inserted } = setup()
+    api.applySettings(settings())
+    btn().click()
+    const requestId = posted.find((m) => m.type === "voice_start")?.requestId
+    api.handleRecordingStarted({ requestId })
+    api.handleTranscript({ requestId: "voice-old", text: "stale" })
+    assert.deepEqual(inserted, [])
+    api.handleTranscript({ requestId, text: "fresh" })
+    assert.deepEqual(inserted, ["fresh"])
+  })
+
+  it("cancels with Escape while recording and posts voice_cancel", () => {
+    const { api, posted } = setup()
+    api.applySettings(settings())
+    btn().click()
+    const requestId = posted.find((m) => m.type === "voice_start")?.requestId
+    api.handleRecordingStarted({ requestId })
+    window.dispatchEvent(new (globalThis as any).KeyboardEvent("keydown", { key: "Escape" }))
+    assert.equal(posted.some((m) => m.type === "voice_cancel" && m.requestId === requestId), true)
+    assert.equal(api.getState(), "idle")
+  })
+
+  it("cancels a pending start on a second click before capture begins", () => {
+    const { api, posted } = setup()
+    api.applySettings(settings())
+    btn().click() // starting
+    btn().click() // cancel
+    assert.equal(posted.some((m) => m.type === "voice_cancel"), true)
+    assert.equal(api.getState(), "idle")
+  })
+
+  it("surfaces host errors and returns to an actionable state", () => {
+    const { api, posted } = setup()
+    api.applySettings(settings())
+    btn().click()
+    const requestId = posted.find((m) => m.type === "voice_start")?.requestId
+    api.handleError({ requestId, message: "Mic not found" })
+    assert.equal(api.getState(), "error")
+    assert.match(status(), /Mic not found/)
+    assert.equal(btn().disabled, false) // can retry
   })
 })

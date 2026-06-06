@@ -40,6 +40,7 @@ export interface OpenCodeSession {
   messages: ChatMessage[]
   cost: number
   tokenUsage: { prompt: number; completion: number; total: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }
+  contextUsage?: SessionContextUsage
   changedFiles?: string[]
   /** Per-file cumulative diff stats, keyed by normalized path. */
   changedFileStats?: Record<string, { added: number; removed: number }>
@@ -48,6 +49,25 @@ export interface OpenCodeSession {
   parentSessionId?: string
   /** Index of the last turn included in the fork (0-based). */
   forkedAtTurn?: number
+}
+
+export interface SessionContextBreakdown {
+  system: number
+  history: number
+  workspace: number
+  queued?: number
+  steer?: number
+}
+
+export interface SessionContextUsage {
+  percent: number
+  tokens: number
+  maxTokens: number
+  breakdown?: SessionContextBreakdown
+  projected?: { withQueue: number; overflow: boolean }
+  cost?: number
+  source?: "estimated" | "actual"
+  updatedAt?: number
 }
 
 export interface CreateSessionOptions {
@@ -123,6 +143,9 @@ export class SessionStore {
       if (typeof sess.model !== "string") sess.model = ""
       if (typeof sess.cost !== "number") sess.cost = 0
       if (typeof sess.tokenUsage !== "object") sess.tokenUsage = { prompt: 0, completion: 0, total: 0 }
+      if (sess.contextUsage && !SessionStore.isValidContextUsage(sess.contextUsage)) {
+        delete sess.contextUsage
+      }
       // Skip sessions with no messages — empty sessions serve no purpose
       // on restore (they were never interacted with). Imported server
       // sessions are exempt: they are intentionally empty until backfill.
@@ -871,6 +894,102 @@ validateSessionName(name: string): string | null {
     this.save()
   }
 
+  getContextUsage(id: string): SessionContextUsage | undefined {
+    const usage = this.sessions.get(id)?.contextUsage
+    return usage ? SessionStore.cloneContextUsage(usage) : undefined
+  }
+
+  updateContextUsage(id: string, usage: SessionContextUsage): boolean {
+    const session = this.sessions.get(id)
+    if (!session) return false
+
+    const merged = SessionStore.mergeContextUsage(session.contextUsage, usage)
+    if (!merged) {
+      log.debug(`Ignored empty context usage update for ${id}; keeping previous value`)
+      return false
+    }
+    const previous = session.contextUsage
+    if (previous && SessionStore.contextUsageEquals(previous, merged)) {
+      return true
+    }
+
+    session.contextUsage = merged
+    session.lastActiveAt = Date.now()
+    this.save()
+    log.debug(`Persisted context usage for ${id}: ${merged.tokens}/${merged.maxTokens} (${merged.percent}%, ${merged.source ?? "estimated"})`)
+    return true
+  }
+
+  private static mergeContextUsage(existing: SessionContextUsage | undefined, incoming: SessionContextUsage): SessionContextUsage | undefined {
+    if (!SessionStore.isValidContextUsage(incoming)) {
+      return existing ? SessionStore.cloneContextUsage(existing) : undefined
+    }
+
+    const normalized = SessionStore.normalizeContextUsage(incoming)
+    const incomingIsEmpty = normalized.tokens <= 0 && normalized.percent <= 0
+    const existingHasFill = existing !== undefined && (existing.tokens > 0 || existing.percent > 0)
+    if (incomingIsEmpty && existingHasFill) {
+      return SessionStore.cloneContextUsage(existing)
+    }
+
+    if (existing) {
+      const existingTime = existing.updatedAt ?? 0
+      const incomingTime = normalized.updatedAt ?? 0
+      const incomingOlder = incomingTime > 0 && existingTime > 0 && incomingTime < existingTime
+      const wouldDowngradeActual = existing.source === "actual" && normalized.source === "estimated" && incomingOlder
+      if (incomingOlder || wouldDowngradeActual) {
+        return SessionStore.cloneContextUsage(existing)
+      }
+    }
+
+    return normalized
+  }
+
+  private static isValidContextUsage(value: unknown): value is SessionContextUsage {
+    if (!value || typeof value !== "object") return false
+    const candidate = value as Partial<SessionContextUsage>
+    return (
+      typeof candidate.percent === "number" &&
+      Number.isFinite(candidate.percent) &&
+      typeof candidate.tokens === "number" &&
+      Number.isFinite(candidate.tokens) &&
+      typeof candidate.maxTokens === "number" &&
+      Number.isFinite(candidate.maxTokens)
+    )
+  }
+
+  private static normalizeContextUsage(usage: SessionContextUsage): SessionContextUsage {
+    const safeTokens = Math.max(0, usage.tokens)
+    const safeMaxTokens = Math.max(0, usage.maxTokens)
+    const computedPercent = safeMaxTokens > 0 ? (safeTokens / safeMaxTokens) * 100 : usage.percent
+    const safePercent = Number.isFinite(usage.percent) && usage.percent > 0
+      ? usage.percent
+      : computedPercent
+    const normalized: SessionContextUsage = {
+      percent: Math.min(100, Math.max(0, Number.isFinite(safePercent) ? safePercent : 0)),
+      tokens: safeTokens,
+      maxTokens: safeMaxTokens,
+      updatedAt: Number.isFinite(usage.updatedAt ?? NaN) ? usage.updatedAt : Date.now(),
+      source: usage.source === "actual" ? "actual" : "estimated",
+    }
+    if (usage.breakdown) normalized.breakdown = { ...usage.breakdown }
+    if (usage.projected) normalized.projected = { ...usage.projected }
+    if (typeof usage.cost === "number" && Number.isFinite(usage.cost)) normalized.cost = usage.cost
+    return normalized
+  }
+
+  private static cloneContextUsage(usage: SessionContextUsage): SessionContextUsage {
+    return {
+      ...usage,
+      breakdown: usage.breakdown ? { ...usage.breakdown } : undefined,
+      projected: usage.projected ? { ...usage.projected } : undefined,
+    }
+  }
+
+  private static contextUsageEquals(a: SessionContextUsage, b: SessionContextUsage): boolean {
+    return JSON.stringify(SessionStore.cloneContextUsage(a)) === JSON.stringify(SessionStore.cloneContextUsage(b))
+  }
+
   private normalizeChangedFilePath(filePath: string): string | undefined {
     const normalized = filePath.trim().replace(/\\/g, "/")
     return normalized.length > 0 ? normalized : undefined
@@ -1058,6 +1177,7 @@ validateSessionName(name: string): string | null {
       forkedAtTurn: clampedTurn,
       cost: 0,
       tokenUsage: { prompt: 0, completion: 0, total: 0 },
+      contextUsage: undefined,
     }
     this.sessions.set(forked.id, forked)
     this.activeSessionId = forked.id

@@ -207,6 +207,20 @@ void describe("ChatProvider.ts", () => {
     assert.ok(source.includes("pushCommandListToWebview("), "must have pushCommandListToWebview")
   })
 
+  void it("pushVisibleStateToWebview uses lightweight sync instead of re-sending init_state", () => {
+    const idx = source.indexOf("private pushVisibleStateToWebview(")
+    assert.ok(idx >= 0, "pushVisibleStateToWebview must exist")
+    const block = source.slice(idx, source.indexOf("private replayLiveStreamsToWebview", idx))
+    assert.ok(block.includes("this.messageBatcher.flush()"), "visibility sync must flush queued messages")
+    assert.ok(block.includes("this.pushModelToWebview()"), "visibility sync must refresh model state")
+    assert.ok(block.includes("this.pushRateLimitStateToWebview()"), "visibility sync must refresh rate-limit state")
+    assert.ok(block.includes("this.applyContextWindowFor()"), "visibility sync must refresh context window state")
+    assert.ok(block.includes("this.pushContextUsageForSession(activeSessionId)"), "visibility sync must refresh current context usage")
+    assert.ok(block.includes("this.replayLiveStreamsToWebview()"), "visibility sync must replay live streams")
+    assert.ok(!block.includes("pushAllStateToWebview"), "visibility sync must not send a full init_state refresh")
+    assert.ok(!block.includes("pushInitStateToWebview"), "visibility sync must not send a full init_state refresh")
+  })
+
   void it("has command handler methods", () => {
     assert.ok(source.includes("handleExecuteCommand("), "must have handleExecuteCommand")
     // The user-initiated list_commands flow now lives in WebviewEventRouter

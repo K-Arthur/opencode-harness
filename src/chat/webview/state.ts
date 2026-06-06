@@ -1,4 +1,4 @@
-import type { WebviewState, SessionState, ChatMessage, VsCodeApi, ToolCollapseConfig } from "./types"
+import type { WebviewState, SessionState, ChatMessage, VsCodeApi, ToolCollapseConfig, ContextUsage } from "./types"
 import { timers } from "./timerRegistry"
 
 const DEFAULT_TOOL_COLLAPSE_CONFIG: ToolCollapseConfig = {
@@ -22,6 +22,7 @@ const DEFAULT_STATE: WebviewState = {
   disabledModels: [],
   favoriteModels: [],
   recentModels: [],
+  scrollPositions: {},
   toolCollapseConfig: DEFAULT_TOOL_COLLAPSE_CONFIG,
 }
 
@@ -34,6 +35,7 @@ function withDefaults(candidate: Partial<WebviewState>): WebviewState {
     disabledModels: candidate.disabledModels || [],
     favoriteModels: candidate.favoriteModels || [],
     recentModels: candidate.recentModels || [],
+    scrollPositions: candidate.scrollPositions || {},
     displayPrefs: candidate.displayPrefs,
     toolCollapseConfig: candidate.toolCollapseConfig || DEFAULT_TOOL_COLLAPSE_CONFIG,
   }
@@ -170,6 +172,24 @@ function generateId(): string {
   return (typeof crypto !== "undefined" && crypto.randomUUID)
     ? crypto.randomUUID().slice(0, 8)
     : (() => { const chars = "0123456789abcdef"; let r = ""; for (let i = 0; i < 8; i++) r += chars[Math.floor(Math.random() * 16)]; return r })()
+}
+
+function hasContextFill(usage: ContextUsage | undefined): boolean {
+  return !!usage && ((Number.isFinite(usage.tokens) && usage.tokens > 0) || (Number.isFinite(usage.percent) && usage.percent > 0))
+}
+
+function chooseContextUsage(hostUsage: ContextUsage | undefined, localUsage: ContextUsage | undefined): ContextUsage | undefined {
+  if (!hostUsage) return localUsage
+  if (!localUsage) return hostUsage
+  if (!hasContextFill(hostUsage) && hasContextFill(localUsage)) {
+    return localUsage
+  }
+  const hostUpdatedAt = Number.isFinite(hostUsage.updatedAt ?? NaN) ? (hostUsage.updatedAt ?? 0) : 0
+  const localUpdatedAt = Number.isFinite(localUsage.updatedAt ?? NaN) ? (localUsage.updatedAt ?? 0) : 0
+  if (hostUpdatedAt > 0 && localUpdatedAt > 0 && hostUpdatedAt < localUpdatedAt && hasContextFill(localUsage)) {
+    return localUsage
+  }
+  return hostUsage
 }
 
 export function createState(vscode: VsCodeApi) {
@@ -310,6 +330,9 @@ export function createState(vscode: VsCodeApi) {
         existing.messages.push(...session.messages)
       }
       existing.isStreaming = session.isStreaming
+      existing.tokenUsage = session.tokenUsage ?? existing.tokenUsage
+      existing.cost = typeof session.cost === "number" && session.cost > 0 ? session.cost : existing.cost
+      existing.contextUsage = chooseContextUsage(session.contextUsage, existing.contextUsage)
       state.activeSessionId = session.id
       save()
       return existing
@@ -350,6 +373,9 @@ export function createState(vscode: VsCodeApi) {
     }
     if (state.activeSessionId === id) {
       state.activeSessionId = state.sessionOrder.length > 0 ? (state.sessionOrder[0] ?? null) : null
+    }
+    if (state.scrollPositions) {
+      delete state.scrollPositions[id]
     }
     save()
     return true
@@ -410,6 +436,7 @@ export function createState(vscode: VsCodeApi) {
           isStreaming: existing.isStreaming,
           tokenUsage: s.tokenUsage ?? existing?.tokenUsage,
           cost: typeof s.cost === "number" && s.cost > 0 ? s.cost : existing?.cost ?? s.cost,
+          contextUsage: chooseContextUsage(s.contextUsage, existing.contextUsage),
         }
       } else if (existing) {
         state.sessions[s.id] = {
@@ -418,6 +445,7 @@ export function createState(vscode: VsCodeApi) {
           isStreaming: existing.isStreaming,
           tokenUsage: s.tokenUsage ?? existing?.tokenUsage,
           cost: typeof s.cost === "number" && s.cost > 0 ? s.cost : existing?.cost ?? s.cost,
+          contextUsage: chooseContextUsage(s.contextUsage, existing.contextUsage),
         }
       } else {
         state.sessions[s.id] = {
@@ -526,6 +554,21 @@ export function createState(vscode: VsCodeApi) {
 
   function isTimelineVisible(): boolean {
     return state.isTimelineVisible || false
+  }
+
+  function setScrollPosition(id: string, scrollTop: number): boolean {
+    if (!state.sessions[id]) return false
+    if (!Number.isFinite(scrollTop)) return false
+    if (!state.scrollPositions) state.scrollPositions = {}
+    const next = Math.max(0, Math.round(scrollTop))
+    if (state.scrollPositions[id] === next) return true
+    state.scrollPositions[id] = next
+    save()
+    return true
+  }
+
+  function getScrollPosition(id: string): number {
+    return state.scrollPositions?.[id] ?? 0
   }
 
   function isModelDisabled(modelId: string): boolean {
@@ -637,6 +680,8 @@ export function createState(vscode: VsCodeApi) {
     applyDisabledState,
     setTimelineVisible,
     isTimelineVisible,
+    setScrollPosition,
+    getScrollPosition,
     addChangedFile(id: string, filePath: string) {
       const session = state.sessions[id]
       if (!session) return

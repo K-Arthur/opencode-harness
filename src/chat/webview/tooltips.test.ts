@@ -76,9 +76,8 @@ void describe("getVoiceTooltip", () => {
     const states = [
       "disabled",
       "idle",
-      "requesting-permission",
+      "starting",
       "recording",
-      "stopping",
       "transcribing",
       "inserted",
       "error",

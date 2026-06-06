@@ -15,31 +15,22 @@ function validate(msg: Record<string, unknown>): { ok: boolean; warnings: string
 }
 
 void describe("WebviewMessageValidator voice input", () => {
-  void it("accepts helper-open requests with a request id and provider", () => {
-    const result = validate({
-      type: "stt_open_helper",
-      requestId: "voice-1",
-      provider: "openai",
-    })
-
-    assert.equal(result.ok, true)
-    assert.deepEqual(result.warnings, [])
+  void it("accepts voice control messages with a valid request id", () => {
+    for (const type of ["voice_start", "voice_stop", "voice_cancel"]) {
+      const result = validate({ type, requestId: "voice-1" })
+      assert.equal(result.ok, true, `${type} should be accepted`)
+      assert.deepEqual(result.warnings, [])
+    }
   })
 
-  void it("rejects helper-open requests without a valid request id or provider", () => {
-    const missingRequest = validate({
-      type: "stt_open_helper",
-      requestId: "",
-      provider: "openai",
-    })
-    const invalidProvider = validate({
-      type: "stt_open_helper",
-      requestId: "voice-1",
-      provider: "native",
-    })
-
-    assert.equal(missingRequest.ok, false)
-    assert.equal(invalidProvider.ok, false)
+  void it("rejects voice control messages with a missing/invalid request id", () => {
+    assert.equal(validate({ type: "voice_start", requestId: "" }).ok, false)
+    assert.equal(validate({ type: "voice_stop", requestId: 123 }).ok, false)
+    assert.equal(validate({ type: "voice_cancel", requestId: "x".repeat(200) }).ok, false)
   })
 
+  void it("does not validate get_voice_settings (no payload required)", () => {
+    // Unregistered types pass through; this message carries no fields.
+    assert.equal(validate({ type: "get_voice_settings" }).ok, true)
+  })
 })

@@ -3029,6 +3029,8 @@ button.modal-session-item:focus {
 /* ─── STATUS STRIP ─── */
 
 .status-strip {
+  position: relative;
+  z-index: calc(var(--z-sticky) + 20);
   display: flex;
   align-items: center;
   gap: var(--space-3);

@@ -2,7 +2,12 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR-013](ADR-013-native-local-voice-input.md) (2026-06-05).
+
+The browser-helper + OpenAI architecture below was removed: it routed users to an
+external browser tab and offered a cloud (API-key) transcription path. ADR-013
+replaces it with native, fully local capture + transcription in the extension
+host. This document is retained for historical context only.
 
 ## Date
 

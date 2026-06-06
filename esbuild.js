@@ -67,10 +67,6 @@ function copyWebviewAssets() {
     path.join("media", "opencode-wordmark-dark.svg"),
     path.join(mediaDir, "opencode-wordmark-dark.svg")
   )
-  fs.copyFileSync(
-    path.join("media", "voice-helper.html"),
-    path.join(mediaDir, "voice-helper.html")
-  )
 }
 
 if (watch) {

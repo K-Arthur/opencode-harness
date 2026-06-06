@@ -1,97 +1,116 @@
 # Voice Input
 
-OpenCode Harness supports speech-to-text in the chat composer. The microphone
-button opens a small helper page in the user's default browser, then inserts the
-resulting transcript into the existing prompt textarea for review. It never
-posts `send_prompt` or sends a prompt automatically.
+OpenCode Harness supports **native, fully local** speech-to-text in the chat
+composer. Click the microphone button, speak, click again to stop, and the
+transcript appears in the prompt box for you to edit and send.
 
-## Architecture
+- No browser redirect — everything happens inside the VS Code panel.
+- No cloud service and no API key — recording and transcription are local.
+- Audio never leaves your machine; the temporary recording is deleted afterward.
 
-VS Code extension webviews are not used for microphone capture. As of June 2,
-2026, current VS Code/Electron behavior still does not expose a public extension
-API for granting `microphone` Permission Policy to an extension webview. Current
-reports show `navigator.mediaDevices.getUserMedia({ audio: true })` failing with
-`Permissions policy violation: microphone is not allowed in this document`:
+## Why capture happens in the extension host
 
-- VS Code webview issue: https://github.com/microsoft/vscode/issues/250568
-- VS Code integrated browser permission request: https://github.com/microsoft/vscode/issues/299521
-- MDN `getUserMedia()` permission/security rules: https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
-- MDN `Permissions-Policy: microphone`: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Permissions-Policy/microphone
+A VS Code extension webview is a sandboxed iframe that does **not** get the
+`microphone` Permissions-Policy, so `navigator.mediaDevices.getUserMedia()` fails
+with `Permissions policy violation: microphone is not allowed in this document`.
+The Electron renderer also can't use the Web Speech API (`SpeechRecognition`
+throws a `network` error because Electron ships no Google Speech key, and it is a
+cloud service anyway). References:
 
-The extension therefore uses this flow:
+- VS Code webview mic limitation: https://github.com/microsoft/vscode/issues/250568
+- Extension webview media permission: https://github.com/microsoft/vscode/issues/113916
+- MDN `getUserMedia()` security/permission rules: https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
+- Electron `webkitSpeechRecognition` network error: https://github.com/electron/electron/issues/7749
 
-1. The webview sends `stt_open_helper` with a request id and provider.
-2. The extension host starts an ephemeral `127.0.0.1` helper server and creates a
-   one-time token.
-3. The host opens the helper with `vscode.env.openExternal(await vscode.env.asExternalUri(...))`,
-   which keeps remote SSH/WSL/container scenarios compatible.
-4. The helper page records or recognizes speech in the user's real browser, where
-   normal browser microphone permission prompts work.
-5. The helper POSTs the result back to the token-gated localhost endpoint.
-6. The host posts `stt_transcript` to the webview. The webview inserts it only if
-   the request id still matches the active voice request.
+So the webview is only the UI. The extension host records the default microphone
+with a local command-line tool and transcribes it with a local engine.
 
-Remote-safe localhost forwarding is based on VS Code's remote extension guidance:
-https://code.visualstudio.com/api/advanced-topics/remote-extensions
+## Flow
 
-## Providers
+1. The webview sends `voice_start` with a request id.
+2. The host starts the recorder (auto-detected) writing a 16 kHz mono WAV to a
+   temp file, and posts `voice_recording_started`.
+3. On stop (button/Escape, or the max-duration limit) the webview sends
+   `voice_stop`; the host stops the recorder, posts `voice_transcribing`, and runs
+   the local engine.
+4. The host posts `voice_transcript`; the webview inserts it if the request id
+   still matches, then deletes the temp audio file.
+5. `voice_cancel` kills the recorder and discards the take.
 
-### Browser
+## Requirements
 
-`opencode.voiceInput.provider = "browser"` opens the helper in browser speech
-recognition mode. The helper uses the browser's Web Speech API and sends only
-the final text back to the extension host.
+Voice input is available when the host can find **both** a recorder and an engine.
 
-This mode avoids OpenAI/API-key setup, but browser support is uneven and Chrome
-or Edge may use a server-backed recognition service. MDN marks
-`SpeechRecognition` as limited availability:
-https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition
+### Recorder (auto-detected, in order)
 
-### OpenAI
+- **sox** (`rec`) — cross-platform, uses the default input device. Recommended.
+  - macOS: `brew install sox` · Debian/Ubuntu: `sudo apt install sox` · Windows: install sox and add it to PATH.
+- **arecord** — Linux/ALSA (`alsa-utils`).
+- **ffmpeg** — macOS (`avfoundation`) and Linux (`alsa`). Not auto-used on Windows
+  (dshow needs an explicit device name; use `opencode.voice.recordCommand`).
 
-`opencode.voiceInput.provider = "openai"` opens the helper in recording mode.
-The helper records audio with `getUserMedia` and `MediaRecorder`, then sends the
-recording to the extension-host localhost endpoint only after the user chooses
-**Transcribe recording**. The extension host validates the request and calls
-OpenAI's `/v1/audio/transcriptions` endpoint with the API key stored in VS Code
-SecretStorage. The key is never sent to the webview or helper page.
+### Engine (auto-detected, in order)
 
-The default model is `gpt-4o-mini-transcribe`. OpenAI's speech-to-text docs list
-the transcription endpoint, compatible models, supported audio formats, and the
-25 MB upload cap:
-https://developers.openai.com/api/docs/guides/speech-to-text
+- **openai-whisper** (`whisper` on PATH) — `pip install -U openai-whisper`. Uses
+  the `base` model by default (set another with `opencode.voice.model`, e.g.
+  `small`). The model downloads on first use.
+- **whisper.cpp** (`whisper-cli`, legacy `main`) — requires a model file path in
+  `opencode.voice.model`, e.g. `/path/to/ggml-base.en.bin`.
 
-Set the key with:
+### Bring your own
 
-```text
-OpenCode: Set Voice Input OpenAI API Key
-```
+Override either step with a command template:
+
+- `opencode.voice.localCommand` — placeholders `{input}` (WAV path), `{output}`
+  (a `.txt` path the command may write to), `{language}`. If `{output}` is present
+  the file is read; otherwise stdout is used.
+- `opencode.voice.recordCommand` — placeholders `{output}` (WAV path),
+  `{duration}` (max seconds). The command should record the default device and
+  stop on `SIGINT`.
+
+If nothing is detected, the mic button is disabled with a clear message. You can
+still type, or use your OS dictation (macOS Dictation, Windows `Win+H`), which
+inserts directly into the focused prompt box.
 
 ## Settings
 
-```json
+```jsonc
 {
-  "opencode.voiceInput.enabled": true,
-  "opencode.voiceInput.provider": "browser",
-  "opencode.voiceInput.maxDurationSeconds": 60,
-  "opencode.voiceInput.maxUploadBytes": 10485760,
-  "opencode.voiceInput.openaiModel": "gpt-4o-mini-transcribe"
+  // Behavior (window scope)
+  "opencode.voice.enabled": true,
+  "opencode.voice.autoSend": false,
+  "opencode.voice.language": "auto",
+  "opencode.voice.insertMode": "append", // or "replace"
+  "opencode.voice.maxRecordingSeconds": 60,
+
+  // Engine (machine scope — cannot be set by a workspace, for security)
+  "opencode.voice.model": "",         // "base" / "small" (openai-whisper) or .bin path (whisper.cpp)
+  "opencode.voice.localCommand": "",  // custom transcriber: {input} {output} {language}
+  "opencode.voice.recordCommand": ""  // custom recorder: {output} {duration}
 }
 ```
 
-`maxUploadBytes` is capped at 25 MB. The default is lower (10 MB) to avoid large
-helper-to-host uploads.
+## Privacy and safety
 
-## Privacy And Safety
+- Recording starts only after an explicit microphone-button click.
+- All capture and transcription happen on your machine. No network calls, no API
+  keys, no cloud STT.
+- Audio is written to a temp WAV, transcribed, and deleted after each take.
+- Raw audio and transcripts are not persisted or logged.
+- Transcripts are inserted into the prompt for review; nothing is sent unless you
+  send it (or enable `opencode.voice.autoSend`).
+- `model`, `localCommand`, and `recordCommand` are machine-scoped so an untrusted
+  workspace cannot make the host run an arbitrary command.
 
-- Recording starts only after an explicit microphone-button click and browser
-  permission prompt.
-- The VS Code webview never captures microphone audio.
-- Helper callbacks are token-gated and request-scoped.
-- Raw audio is not persisted or logged.
-- Transcripts are inserted into the prompt; the user still chooses whether to send.
-- OpenAI API keys stay in VS Code SecretStorage and are never sent to the helper.
-- Cloud transcription is disabled unless `provider` is `"openai"` and a
-  SecretStorage API key exists.
-- Browser mode may rely on browser-vendor recognition services; the helper page
-  discloses this before use.
+## Troubleshooting
+
+- **Button is disabled / "not available"**: install a recorder (`sox`) and an
+  engine (`openai-whisper`), or set the override commands. Reload the window so the
+  host re-detects them.
+- **macOS asks for microphone permission**: grant Visual Studio Code microphone
+  access in System Settings → Privacy & Security → Microphone.
+- **"No speech was detected"**: speak closer to the mic, or raise
+  `maxRecordingSeconds`.
+- **First transcription is slow**: openai-whisper downloads the model on first run.
+- Diagnostics are written to the OpenCode output channel (audio/transcripts are not
+  logged).
