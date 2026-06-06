@@ -259,4 +259,19 @@ describe("SessionStore.ts", () => {
       "forkSession must return undefined when the source session does not exist"
     )
   })
+
+  it("load_fallback_mode_is_build_not_normal", () => {
+    const block = source.slice(source.indexOf("private load()"), source.indexOf("save()"))
+    assert.ok(block.includes('"build"'), "load must fall back to 'build' not 'normal' when mode is missing")
+  })
+
+  it("updateMode_normalizes_normal_to_build", () => {
+    const block = source.slice(source.indexOf("updateMode("), source.indexOf("updateMode(") + 200)
+    assert.ok(block.includes('mode === "normal" ? "build" : mode'), "updateMode must normalize 'normal' to 'build'")
+  })
+
+  it("ensure_normalizes_normal_to_build", () => {
+    const block = source.slice(source.indexOf("ensure(id: string"), source.indexOf("ensure(id: string") + 1200)
+    assert.ok(block.includes('mode === "normal" ? "build"'), "ensure must normalize 'normal' to 'build'")
+  })
 })

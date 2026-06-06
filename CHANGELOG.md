@@ -5,6 +5,36 @@ All notable changes to the **OpenCode Harness** extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-06-06
+
+### Changed
+- **`formatTokenCount` consolidated to one canonical implementation.** The three independent copies in `context-usage-service.ts` (locale-aware), `tokenCostDisplay.ts` (compact lowercase `k`, **buggy at ≥1M**), and `queueRenderer.ts` (compact uppercase `K`) were unified into a single `formatTokenCount(n, { compact?: boolean })` in `context-usage-service.ts`. The old `tokenCostDisplay.ts` version returned `"1234.6k"` for 1.2M inputs (a real bug) and is now dead code. The dead import in `main.ts:59` and the dead `formatTokenCount` wrapper at `main.ts:1615` were removed. (`src/chat/webview/context-usage-service.ts`, `src/chat/webview/queueRenderer.ts`, `src/chat/webview/composer.ts`, `src/chat/webview/main.ts`, `src/chat/webview/ui/tokenCostDisplay.ts`)
+- **`quotaMonitor.ts` reduced from 527 lines to 90.** The class was a 30-second-interval timer with threshold-based warning generation and a callback subscription API, but **no consumer ever subscribed to `onQuotaWarning`** — the entire callback infrastructure, `EnhancedQuotaState` historical-usage fields, `createQuotaError`, `formatTimeUntilReset`, `getQuotaBarColor`, `getQuotaState`, `getWarnings`, `updateConfig`, `getConfig`, `clearState`, and `destroy` were dead. Replaced with a simple state holder that retains the same public API (`updateQuotaState`, `startMonitoring`, `stopMonitoring`, `getState`, `destroy`) for the two callers in `main.ts` that actually use it. The dead import in `streamHandlers.ts:21` was removed. (`src/chat/webview/quotaMonitor.ts`, `src/chat/webview/main.ts`, `src/chat/webview/streamHandlers.ts`)
+- **Bundle size documented in `AGENTS.md` now matches the authoritative `scripts/check-bundle-size.mjs`.** The old line `extension.js < 500KB, main.js < 600KB` predated the 2026-06-02 re-baseline; corrected to `extension.js ≤ 510KB, main.js ≤ 680KB (paydown target: 600KB)`. (`AGENTS.md`, `docs/performance-audit.md`, `docs/performance-research-notes.md`, `docs/adrs/ADR-011-tooltip-system.md`)
+
+### Fixed
+- **`formatTokenCount` ≥1M regression bug.** The old `tokenCostDisplay.ts::formatTokenCount` returned `"1234.6k"` for inputs of 1,234,567 instead of the expected `"1.2M"` — it capped at the thousands tier and never graduated. The new canonical implementation in `context-usage-service.ts` correctly handles K/M/B tiers. (`src/chat/webview/context-usage-service.ts`)
+- **Quota monitor `formatTimeUntilReset` displayed wrong hour/minute breakdown.** The old code computed `seconds = ms/1000`, `minutes = seconds/60`, `hours = minutes/60` and then displayed `${hours}h ${minutes % 60}m` using the *un-modular* `minutes` — so for a 90-minute duration it would have shown `1h 90m`. (Only relevant in the new QuotaMonitor API if a future caller formats a reset countdown.) (`src/chat/webview/quotaMonitor.ts`)
+- **Quota monitor `updateQuotaState` rejected invalid `resetAt` dates by storing `NaN`.** The old code passed the raw `new Date(invalidString)` (which is a `Date` whose `getTime()` is `NaN`) into `calculateTimeUntilReset`, which only checked `isNaN(state.resetAt.getTime())` — but the `EnhancedQuotaState` stored it in `timeUntilReset: 0` and persisted the broken `Date`. The new version coerces to `null` and defends in tests. (`src/chat/webview/quotaMonitor.ts`)
+
+### Removed
+- **Dead code files (7 total).** `planDetector.ts` (stale duplicate; live copy inlined in `toolCallRenderer.ts`), `tooltipHelpers.ts` (never wired to any DOM element), `subagentTypes.ts` (completely orphaned type definitions), `questionModel.ts` (unused re-export shim), and their associated test files were deleted. (`src/chat/webview/planDetector.ts`, `src/chat/webview/tooltipHelpers.ts`, `src/chat/webview/subagentTypes.ts`, `src/chat/webview/questionModel.ts`)
+- **Auto-mode warning modal (anti-pattern).** Research showed no competitor (Cursor, Cline, Kilo Code, Windsurf) uses a confirmation modal when switching to auto/autonomous mode — users explicitly choose Auto mode, treat that as consent. The modal HTML, CSS (~90 lines), component module, and its test were deleted. (`src/chat/webview/ui/modeWarning.ts`, `src/chat/webview/css/layout.css`, `src/chat/webview/index.html`)
+- **Dead HTML comments.** Three stale comments referencing old panel locations (`#context-usage-panel`, `#context-monitor-panel`, `#changed-files-list`) were removed from `index.html`. (`src/chat/webview/index.html`)
+- **Dead wrapper `resetContextUsagePanel()` inlined.** The function was a no-op wrapper around `resetContextUsageDropdown()` after its underlying `context-usage-panel.ts` was removed. Calls replaced with inline code. (`src/chat/webview/main.ts`)
+- **Dead imports cleaned up in `main.ts`.** `removePromptToken` and `parsePromptMentions` were imported from `./ui/attachments` but never used in that file. (`src/chat/webview/main.ts`)
+- **Dead `formatTokenCount` from `tokenCostDisplay.ts`.** Zero production callers; only imported into `main.ts` where it was then re-wrapped but never called. (`src/chat/webview/ui/tokenCostDisplay.ts`)
+- **Dead `formatTokenCount` wrapper in `main.ts`.** Function defined at `main.ts:1615` was never invoked. (`src/chat/webview/main.ts`)
+- **Dead `getQuotaMonitor` import in `streamHandlers.ts`.** Imported but never used. (`src/chat/webview/streamHandlers.ts`)
+
+### Tests
+- **8 new tests for `formatTokenCount` compact mode** in `context-usage-service.test.ts`. Cover K/M/B tiers, sign preservation, ≥1M regression test (the bug that motivated the consolidation), and NaN/Infinity/string defenses.
+- **Rewrote `quotaMonitor.test.ts` for the simplified API.** 7 tests covering empty initial state, snapshot persistence, invalid date coercion to `null`, no-op `startMonitoring`/`stopMonitoring` idempotency, `destroy` reset, singleton behavior, and `resetQuotaMonitor` instance replacement.
+
+### Build
+- `dist/extension.js` reduced by **40.9 KB** (907.7 → 866.8 KB) from the `quotaMonitor.ts` simplification.
+- `dist/chat/webview/styles.css` reduced by **~22 KB** (320 → 309 KB) from the dead mode-warning CSS removal.
+
 ## [0.3.0] - 2026-06-02
 
 ### Added

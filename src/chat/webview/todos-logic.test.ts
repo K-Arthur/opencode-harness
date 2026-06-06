@@ -106,26 +106,6 @@ describe("todos-logic", () => {
       assert.deepStrictEqual(mergeTodos(session, server), server)
     })
 
-    it("applies status overrides to server todos", () => {
-      const session: TodoSessionState = {
-        todoOverrides: { "s1": "completed" }
-      }
-      const server = [makeTodo({ id: "s1", status: "pending" })]
-      const result = mergeTodos(session, server)
-      assert.strictEqual(result.length, 1)
-      assert.strictEqual(result[0]!.status, "completed")
-    })
-
-    it("filters out deleted server todos by deletedTodoIds", () => {
-      const session: TodoSessionState = {
-        deletedTodoIds: ["s1"]
-      }
-      const server = [makeTodo({ id: "s1" }), makeTodo({ id: "s2" })]
-      const result = mergeTodos(session, server)
-      assert.strictEqual(result.length, 1)
-      assert.strictEqual(result[0]!.id, "s2")
-    })
-
     it("appends user todos after server todos", () => {
       const session: TodoSessionState = {
         userTodos: [makeTodo({ id: "u1", content: "User task" })]
@@ -137,32 +117,9 @@ describe("todos-logic", () => {
       assert.strictEqual(result[1]!.id, "u1")
     })
 
-    it("combines overrides, deletions, and user todos", () => {
-      const session: TodoSessionState = {
-        todoOverrides: { "s1": "completed" },
-        deletedTodoIds: ["s3"],
-        userTodos: [makeTodo({ id: "u1" })]
-      }
-      const server = [
-        makeTodo({ id: "s1", status: "pending" }),
-        makeTodo({ id: "s2", status: "in-progress" }),
-        makeTodo({ id: "s3", status: "pending" }),
-      ]
-      const result = mergeTodos(session, server)
-      assert.strictEqual(result.length, 3)
-      assert.strictEqual(result[0]!.id, "s1")
-      assert.strictEqual(result[0]!.status, "completed")
-      assert.strictEqual(result[1]!.id, "s2")
-      assert.strictEqual(result[1]!.status, "in-progress")
-      assert.strictEqual(result[2]!.id, "u1")
-    })
-
     it("does not mutate input serverTodos array", () => {
-      const session: TodoSessionState = {
-        todoOverrides: { "s1": "completed" },
-        deletedTodoIds: ["s2"],
-      }
-      const server = [makeTodo({ id: "s1", status: "pending" }), makeTodo({ id: "s2" })]
+      const session: TodoSessionState = { userTodos: [makeTodo({ id: "u1" })] }
+      const server = [makeTodo({ id: "s1", status: "pending" })]
       const original = JSON.parse(JSON.stringify(server))
       mergeTodos(session, server)
       assert.deepStrictEqual(server, original, "serverTodos should not be mutated")
@@ -178,15 +135,25 @@ describe("todos-logic", () => {
       assert.strictEqual(result[1]!.id, "u2")
     })
 
-    it("override takes precedence over deleted when both are set", () => {
-      // If a todo is both deleted AND overridden, deleted wins (filtered first)
+    it("concatenates server and user todos unchanged", () => {
       const session: TodoSessionState = {
-        todoOverrides: { "s1": "completed" },
-        deletedTodoIds: ["s1"],
+        userTodos: [makeTodo({ id: "u1", status: "pending" })]
       }
-      const server = [makeTodo({ id: "s1" })]
+      const server = [
+        makeTodo({ id: "s1", status: "pending" }),
+        makeTodo({ id: "s2", status: "in-progress" }),
+        makeTodo({ id: "s3", status: "completed" }),
+      ]
       const result = mergeTodos(session, server)
-      assert.strictEqual(result.length, 0)
+      assert.strictEqual(result.length, 4)
+      assert.strictEqual(result[0]!.id, "s1")
+      assert.strictEqual(result[0]!.status, "pending")
+      assert.strictEqual(result[1]!.id, "s2")
+      assert.strictEqual(result[1]!.status, "in-progress")
+      assert.strictEqual(result[2]!.id, "s3")
+      assert.strictEqual(result[2]!.status, "completed")
+      assert.strictEqual(result[3]!.id, "u1")
+      assert.strictEqual(result[3]!.status, "pending")
     })
   })
 

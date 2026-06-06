@@ -220,6 +220,7 @@ export interface ChatMessage {
   timestamp?: number
   sessionId?: string
   tokenCount?: number
+  mode?: string
 }
 
 export interface SessionState {
@@ -261,12 +262,14 @@ export interface Todo {
   content: string
   status: 'pending' | 'in-progress' | 'completed'
   createdAt: number
+  priority?: 'low' | 'medium' | 'high' | string
 }
 
 export interface FileChange {
   path: string
   added: number
   removed: number
+  isPlanDocument?: boolean
 }
 
 export interface SkillInfo {

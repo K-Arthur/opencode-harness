@@ -111,4 +111,26 @@ void describe("TabManager.ts", () => {
       "setInstructions must fire an onInstructionsChanged event so consumers can react"
     )
   })
+
+  void it("createTab_default_mode_is_build_not_normal", () => {
+    const idx = source.indexOf("createTab(")
+    assert.ok(idx >= 0, "createTab must exist")
+    const block = source.slice(idx, source.indexOf("closeTab(", idx))
+    assert.ok(
+      block.includes('mode: mode || "build"'),
+      "createTab must default to 'build' not 'normal'",
+    )
+  })
+
+  void it("has_event_emitter_for_onModeChanged", () => {
+    assert.ok(source.includes("_onModeChanged"), "TabManager must have an _onModeChanged event emitter")
+    assert.ok(source.includes("onModeChanged"), "TabManager must expose readonly onModeChanged")
+  })
+
+  void it("setMode_skips_duplicate_and_fires_onModeChanged_on_change", () => {
+    const block = source.slice(source.indexOf("setMode("), source.indexOf("setInstructions("))
+    assert.ok(block.includes("if (tab.mode === mode) return true"), "setMode must short-circuit on duplicate mode")
+    assert.ok(block.includes("this._onModeChanged.fire"), "setMode must fire _onModeChanged on change")
+    assert.ok(block.includes("{ tabId: id, mode }"), "event payload must include tabId and mode")
+  })
 })

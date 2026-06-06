@@ -1,9 +1,7 @@
 import type { Todo } from "./types"
 
 export interface TodoSessionState {
-  todoOverrides?: Record<string, 'pending' | 'in-progress' | 'completed'>
   userTodos?: Todo[]
-  deletedTodoIds?: string[]
 }
 
 export function calculateProgress(todos: Todo[]) {
@@ -28,19 +26,8 @@ export function applyTodoFilter(
 
 export function mergeTodos(session: TodoSessionState | null | undefined, serverTodos: Todo[]): Todo[] {
   if (!session) return serverTodos
-
-  const overrides = session.todoOverrides || {}
   const userTodos = session.userTodos || []
-  const deletedIds = new Set(session.deletedTodoIds || [])
-
-  const mergedServerTodos = serverTodos
-    .filter(todo => !deletedIds.has(todo.id))
-    .map(todo => {
-      const overrideStatus = overrides[todo.id]
-      return overrideStatus ? { ...todo, status: overrideStatus } : todo
-    })
-
-  return [...mergedServerTodos, ...userTodos]
+  return [...serverTodos, ...userTodos]
 }
 
 export function generateTodoId(): string {

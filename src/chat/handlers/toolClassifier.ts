@@ -1,4 +1,44 @@
 /**
+ * Parsed subagent task invocation from the `task` tool's args.
+ * Mirrors the backend bridge in StreamCoordinator.
+ */
+export interface SubagentInvocation {
+  agentName: string
+  purpose?: string
+  prompt?: string
+}
+
+/** True when the tool name matches the subagent-spawning `task` tool. */
+export function isSubagentToolName(name: string): boolean {
+  return name === "task" || name.includes("subagent")
+}
+
+/**
+ * Extract `{ agentName, purpose, prompt }` from the task tool's args.
+ * The `task` tool can be called with either:
+ *   - Standard: `{ subagent_type, description, prompt }` (recommended)
+ *   - Legacy:   `{ name, purpose, prompt }` or `{ agent, instruction, task }`
+ */
+export function parseSubagentInvocation(rawArgs: unknown): SubagentInvocation {
+  const a = (rawArgs || {}) as Record<string, unknown>
+  const agentName =
+    asString(a.subagent_type) ||
+    asString(a.name) ||
+    asString(a.agent) ||
+    "subagent"
+  const purpose =
+    asString(a.description) ||
+    asString(a.purpose) ||
+    asString(a.task)
+  const prompt = asString(a.prompt) || asString(a.instruction)
+  return { agentName, purpose, prompt }
+}
+
+function asString(v: unknown): string | undefined {
+  return typeof v === "string" && v.trim().length > 0 ? v.trim() : undefined
+}
+
+/**
  * Map an opencode tool name to a display class for icon/color treatment.
  *
  * Canonical tool names (per https://opencode.ai/docs/tools/):

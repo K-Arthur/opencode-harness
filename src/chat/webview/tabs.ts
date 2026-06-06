@@ -4,7 +4,7 @@ export interface TabCallbacks {
   onSwitch: (tabId: string) => void
   onClose: (tabId: string) => void
   onNew: () => void
-  onToggleContextMonitor: () => void
+  onToggleContextMonitor?: () => void
   /**
    * Fired when the user clicks the per-tab context-monitor while it is
    * in the "limit unknown" state (server didn't report a window AND the
@@ -212,7 +212,7 @@ export function createTabContent(tabId: string, tabName: string, callbacks: TabC
       callbacks.onSetContextWindowOverride?.()
       return
     }
-    callbacks.onToggleContextMonitor()
+    callbacks.onToggleContextMonitor?.()
   }
   contextMonitor.addEventListener("click", handleContextMonitorActivate)
   contextMonitor.addEventListener("keydown", (e) => {

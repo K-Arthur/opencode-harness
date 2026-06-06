@@ -412,7 +412,7 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
   if (!sessionId) return
   const state = _stateFor(sessionId)
 
-  const safe = files.map((f) => ({ ...f, added: safeNum(f.added), removed: safeNum(f.removed) }))
+  const safe: FileChange[] = files.map((f) => ({ ...f, added: safeNum(f.added), removed: safeNum(f.removed) }))
   const sorted = [...safe].sort((a, b) =>
     state.sortMode === "alpha"
       ? a.path.localeCompare(b.path)
@@ -503,6 +503,14 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       name.textContent = fileName
       name.title = file.path
 
+      let planTag: HTMLElement | undefined
+      if (file.isPlanDocument) {
+        planTag = document.createElement("span")
+        planTag.className = "cf-plan-tag"
+        planTag.textContent = "plan"
+        planTag.title = "Plan document written by the agent"
+      }
+
       const stats = document.createElement("span")
       stats.className = "cf-file-stats"
       if (file.added > 0) {
@@ -561,6 +569,7 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
 
       row.appendChild(badge)
       row.appendChild(name)
+      if (planTag) row.appendChild(planTag)
       row.appendChild(stats)
       row.appendChild(openBtn)
       row.appendChild(expandBtn)

@@ -17,7 +17,6 @@ let _handleStreamEndImpl: HandleStreamEndFn | undefined
 export function registerStreamEndHandler(fn: HandleStreamEndFn): void { _handleStreamEndImpl = fn }
 import { getErrorHandler } from "./errorHandler"
 import { getErrorDisplay } from "./errorComponents"
-import { getQuotaMonitor } from "./quotaMonitor"
 import type { ErrorActionButton } from "./types"
 import { parseQuestionArgs, parseAllowFreeText } from "../../session/questionModel"
 

@@ -327,10 +327,26 @@ function validateVoiceRequest(msg: Record<string, unknown>, msgType: string, dep
   return true
 }
 
+function validatePlanComplete(msg: Record<string, unknown>, _msgType: string, deps: WebviewMessageValidatorDeps): boolean {
+  if (invalidRequiredString(msg, "sessionId", "Invalid sessionId in plan_complete", deps)) return false
+  return true
+}
+
+function validateModeSwitchRequest(msg: Record<string, unknown>, _msgType: string, deps: WebviewMessageValidatorDeps): boolean {
+  if (invalidRequiredString(msg, "sessionId", "Invalid sessionId in mode_switch_request", deps)) return false
+  const targetMode = msg.targetMode
+  if (targetMode !== "plan" && targetMode !== "build" && targetMode !== "auto") {
+    return reject(deps, `Invalid targetMode in mode_switch_request: ${String(targetMode)}`)
+  }
+  return true
+}
+
 const WEBVIEW_MESSAGE_VALIDATORS: Record<string, MessageValidator> = {
   send_prompt: validateSendPrompt,
   mention_search: validateMentionSearch,
   change_mode: validateChangeMode,
+  plan_complete: validatePlanComplete,
+  mode_switch_request: validateModeSwitchRequest,
   update_theme_config: validateThemeConfig,
   set_model: validateModelVariant,
   set_variant: validateModelVariant,

@@ -199,8 +199,10 @@ verified facts:
    gets an explicit cap with a stated tradeoff (see audit §H).
 4. **Keep heavy parsing off the per-frame path.** Sync markdown on the main
    thread only for the bounded streaming tail; full/large parses go to the worker.
-5. **Bundle gate is a feature, not a nuisance.** Treat the 600 KB webview / 500 KB
-   host limits as real; prefer reductions over raising limits, and only adjust a
-   limit with attribution evidence + a recorded paydown plan.
+5. **Bundle gate is a feature, not a nuisance.** Treat the 680 KB webview /
+   510 KB host limits as real (re-baselined 2026-06-02 from 600 / 500 KB
+   in `scripts/check-bundle-size.mjs`); prefer reductions over raising
+   limits, and only adjust a limit with attribution evidence + a recorded
+   paydown plan.
 6. **Security/accessibility win ties.** Never weaken DOMPurify config, CSP, message
    validation, focus/ARIA, or reduced-motion to gain speed.

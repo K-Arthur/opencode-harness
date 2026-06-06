@@ -502,7 +502,14 @@ export class StreamCoordinator {
       const cliSessionId = await this.sessionManager.ensureSession(tab.cliSessionId, localTitle || undefined)
       this.tabManager.setCliSessionId(tabId, cliSessionId)
       this.sessionStore.updateCliSessionId(tabId, cliSessionId)
-      const streamMessageId = this.createStreamMessageId(tabId, cliSessionId)
+      // H2a: When this is a question-answer continuation (toolCallId present),
+      // reuse the existing activeMessageId so the resumed assistant text renders
+      // in the same bubble that already contains the question block. Otherwise
+      // the old bubble is orphaned — it never receives its stream_end.
+      const isQuestionContinuation = !!callbacks.toolCallId
+      const streamMessageId = isQuestionContinuation
+        ? this.ensureStreamMessageId(tabId, cliSessionId)
+        : this.createStreamMessageId(tabId, cliSessionId)
       this.activeMessageIds.set(tabId, streamMessageId)
 
       const eventStreamReady = await this.sessionManager.waitForEventStreamReady(5_000)
@@ -559,7 +566,12 @@ export class StreamCoordinator {
       }, this.TTFB_TIMEOUT_MS)
       this.ttfbTimeouts.set(tabId, ttfbTimeout)
 
-      const modelRef = tab.model ? parseModelRef(tab.model) : undefined
+      // Resolve the model for this session mode. If the user has configured
+      // `opencode.modeModels`, the mode-specific override is used; otherwise
+      // falls back to the session's default model. Pattern: Cline per-mode
+      // model selector, Copilot per-agent model config.
+      const resolvedModel = this.modelManager.getModeModel(tab.mode || "", tab.model)
+      const modelRef = resolvedModel ? parseModelRef(resolvedModel) : undefined
 
       // Pass the corresponding OpenCode primary agent for mode-specific
       // behavior. OpenCode's current config model uses `agent` + permissions;
@@ -795,6 +807,10 @@ export class StreamCoordinator {
   ): void {
     if (blocks.length === 0) return
 
+    // Stamp the active mode on each assistant message so session history
+    // can show per-turn mode badges (like Copilot Session Insights).
+    const tab = this.tabManager.getTab(tabId)
+
     const assistantMsg: ChatMessage = {
       id: streamMessageId,
       role: "assistant",
@@ -802,6 +818,7 @@ export class StreamCoordinator {
       timestamp: Date.now(),
       sessionId: tabId,
       tokenCount: sdkTokenTotal,
+      mode: tab?.mode,
     }
     this.sessionStore.appendMessage(tabId, assistantMsg)
   }
@@ -1279,6 +1296,18 @@ export class StreamCoordinator {
       sessionId: tabId,
       skillName,
       seq: this.nextSeq(tabId),
+    })
+  }
+
+  recordExternalActivity(tabId: string, activity: { kind: string; label: string }, callbacks: StreamCallbacks): void {
+    const tab = this.tabManager.getTab(tabId)
+    if (!tab) return
+    this.tabManager.touchActivity(tabId)
+    callbacks.postMessage({
+      type: "external_activity",
+      sessionId: tabId,
+      kind: activity.kind,
+      label: activity.label,
     })
   }
 
