@@ -212,6 +212,26 @@
       {
         "command": "opencode-harness.setAutoMode",
         "title": "OpenCode: Set Session Mode to Auto"
+      },
+      {
+        "command": "opencode-harness.setupVoiceInput",
+        "title": "OpenCode: Set Up Voice Input"
+      },
+      {
+        "command": "opencode-harness.retryLast",
+        "title": "OpenCode: Retry Last Failed Run"
+      },
+      {
+        "command": "opencode-harness.nextTab",
+        "title": "OpenCode: Next Tab"
+      },
+      {
+        "command": "opencode-harness.prevTab",
+        "title": "OpenCode: Previous Tab"
+      },
+      {
+        "command": "opencode-harness.openSettings",
+        "title": "OpenCode: Open Settings"
       }
     ],
     "keybindings": [
@@ -252,6 +272,31 @@
         "command": "opencode-harness.cycleMode",
         "key": "alt+shift+tab",
         "when": "focusedView == 'opencode-harness.chatView'"
+      },
+      {
+        "command": "opencode-harness.cycleMode",
+        "key": "ctrl+shift+m",
+        "when": "focusedView == 'opencode-harness.chatView'"
+      },
+      {
+        "command": "opencode-harness.nextTab",
+        "key": "ctrl+alt+]",
+        "when": "focusedView == 'opencode-harness.chat'"
+      },
+      {
+        "command": "opencode-harness.prevTab",
+        "key": "ctrl+alt+[",
+        "when": "focusedView == 'opencode-harness.chat'"
+      },
+      {
+        "command": "opencode-harness.retryLast",
+        "key": "ctrl+alt+r",
+        "when": "focusedView == 'opencode-harness.chat'"
+      },
+      {
+        "command": "opencode-harness.openCommandsPalette",
+        "key": "f1",
+        "when": "focusedView == 'opencode-harness.chat'"
       }
     ],
     "viewsContainers": {
@@ -922,6 +967,30 @@
           ],
           "scope": "window",
           "description": "Default session mode for new chat sessions."
+        },
+        "opencode.modeModels": {
+          "type": "object",
+          "scope": "window",
+          "default": {},
+          "description": "Override default model per session mode (Plan, Build, Auto). Each value should be a model ID in provider/model format. When empty the session model is used for all modes. Pattern: Cline's per-mode model selector, Copilot's per-agent model config.",
+          "properties": {
+            "plan": {
+              "type": "string",
+              "default": "",
+              "description": "Model to use in Plan mode (e.g. 'anthropic/claude-sonnet-4-20250514'). When empty, uses the session's default model."
+            },
+            "build": {
+              "type": "string",
+              "default": "",
+              "description": "Model to use in Build mode. When empty, uses the session's default model."
+            },
+            "auto": {
+              "type": "string",
+              "default": "",
+              "description": "Model to use in Auto mode. When empty, uses the session's default model."
+            }
+          },
+          "additionalProperties": false
         },
         "opencode.voice.enabled": {
           "type": "boolean",

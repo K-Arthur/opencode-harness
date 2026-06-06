@@ -457,6 +457,11 @@ function registerCoreCommands(
   registerStopCommand(context, chatProvider)
   registerSlashCommandShortcuts(context, chatProvider)
   registerGenerateAgentsMdCommand(context)
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.setupVoiceInput", () => {
+      void chatProvider.setupVoiceInput().catch((err) => log.error("setupVoiceInput command failed", err))
+    })
+  )
 
   // Mode switching commands
   context.subscriptions.push(
@@ -492,6 +497,48 @@ function registerCoreCommands(
         chatProvider.setModeForActiveSession("auto")
       } catch (err) {
         log.error("setAutoMode command failed", err)
+      }
+    })
+  )
+
+  // Tab navigation commands
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.nextTab", () => {
+      try {
+        chatProvider.nextTab()
+      } catch (err) {
+        log.error("nextTab command failed", err)
+      }
+    })
+  )
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.prevTab", () => {
+      try {
+        chatProvider.prevTab()
+      } catch (err) {
+        log.error("prevTab command failed", err)
+      }
+    })
+  )
+
+  // Retry last failed run
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.retryLast", () => {
+      try {
+        chatProvider.retryLast()
+      } catch (err) {
+        log.error("retryLast command failed", err)
+      }
+    })
+  )
+
+  // Open OpenCode settings
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.openSettings", () => {
+      try {
+        chatProvider.openSettings()
+      } catch (err) {
+        log.error("openSettings command failed", err)
       }
     })
   )

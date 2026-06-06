@@ -1,5 +1,6 @@
 import { normalizeSessionMode } from "../../modePolicy"
 import { getModeOptionTooltip, getModeSelectorTooltip } from "../tooltips"
+import { isTextEntryTarget, isModalOrDialogOpen as modalOpen } from "../keyboardShortcuts"
 
 export interface ModeDropdownElements {
   modeDropdown: HTMLElement
@@ -48,12 +49,9 @@ export function getCurrentMode(): string {
 
 let _lastCycleTime = 0
 
+/** @deprecated Use `isModalOrDialogOpen` from `../keyboardShortcuts` instead */
 export function isModalOrDialogOpen(): boolean {
-  const modals = document.querySelectorAll<HTMLElement>('[aria-modal="true"]')
-  for (const m of modals) {
-    if (!m.classList.contains("hidden")) return true
-  }
-  return false
+  return modalOpen()
 }
 
 /** Reset the cycle debounce timer. Exposed for testing. */
@@ -188,18 +186,28 @@ export function setupModeToggle(deps: ModeDropdownDeps): void {
     postMessage({ type: "change_mode", mode: normalized, sessionId: active.id })
   }
 
-  function isTextEntryTarget(target: EventTarget | null): boolean {
-    const el = target as HTMLElement | null
-    if (!el) return false
-    const tag = el.tagName?.toLowerCase()
-    return Boolean(el.isContentEditable || tag === "input" || tag === "textarea" || tag === "select")
-  }
-
   els.modeDropdownBtn.addEventListener("click", toggleDropdown)
   els.modeDropdownBtn.addEventListener("keydown", (e) => {
     if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
       e.preventDefault()
       if (els.modeDropdownMenu.classList.contains("hidden")) toggleDropdown()
+    }
+  })
+
+  // Shift+Tab on the mode selector button: cycle mode forward.
+  // Safe because the user is already focused on the cycle control,
+  // so we are not breaking reverse-focus navigation.
+  els.modeDropdownBtn.addEventListener("keydown", (e) => {
+    if (e.shiftKey && e.key === "Tab") {
+      e.preventDefault()
+      if (isModalOrDialogOpen()) return
+      const active = getActiveSession()
+      if (active?.isStreaming) return
+      try {
+        cycleModeForward(deps)
+      } catch (err) {
+        console.error("[opencode-harness] Shift+Tab cycle failed:", err)
+      }
     }
   })
 
@@ -251,6 +259,20 @@ export function setupModeToggle(deps: ModeDropdownDeps): void {
       cycleModeForward(deps)
     } catch (err) {
       console.error("[opencode-harness] Alt+Shift+Tab cycle failed:", err)
+    }
+  })
+
+  // Ctrl+Shift+M: cycle mode globally in the webview (M = Mode)
+  document.addEventListener("keydown", (e) => {
+    if (isModalOrDialogOpen()) return
+    if (!e.ctrlKey && !e.metaKey) return
+    if (!e.shiftKey || e.key.toLowerCase() !== "m") return
+    if (isTextEntryTarget(e.target)) return
+    e.preventDefault()
+    try {
+      cycleModeForward(deps)
+    } catch (err) {
+      console.error("[opencode-harness] Ctrl+Shift+M cycle failed:", err)
     }
   })
 }

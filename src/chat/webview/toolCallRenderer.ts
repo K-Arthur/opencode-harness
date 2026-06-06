@@ -7,6 +7,7 @@ import {
   CHEVRON_RIGHT_SVG,
 } from "./icons"
 import { sanitizeHtml, highlightSyntax } from "./syntaxHighlighter"
+import { isTaskTool, renderSubagentTaskCard } from "./subagentCard"
 
 export interface RenderOptions {
   messageId?: string
@@ -87,10 +88,14 @@ export function createToolSummary(
   summary.setAttribute("tabindex", "0")
   summary.setAttribute("role", "button")
   summary.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") {
+    if (event.key === "Enter" || event.key === " " || event.key === "e" || event.key === "E") {
       event.preventDefault()
       details.open = !details.open
       details.setAttribute("aria-expanded", details.open ? "true" : "false")
+    } else if (event.key === "c" || event.key === "C") {
+      event.preventDefault()
+      const text = details.textContent || ""
+      void navigator.clipboard?.writeText(text).catch(() => {})
     } else if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Home" || event.key === "End") {
       event.preventDefault()
       focusAdjacentToolSummary(summary, event.key)
@@ -101,7 +106,7 @@ export function createToolSummary(
 
   const name = document.createElement("span")
   name.className = "tool-name"
-  name.textContent = toolBlock.name
+  name.textContent = formatToolSummary(toolBlock)
   summary.appendChild(name)
 
   appendToolKeyArg(summary, toolBlock.args, toolBlock, opts?.postMessage)
@@ -349,6 +354,13 @@ export function createToolResultPanel(toolBlock: ToolCallBlock): HTMLElement | n
 export function renderToolCallBlock(block: Block, opts: RenderOptions): HTMLElement | null {
   const toolBlock = normalizeToolBlock(block)
 
+  // The `task` tool spawns a subagent — render it as a first-class subagent
+  // card (purpose/status/duration/result, prompt behind a debug expander)
+  // instead of a generic tool whose args leak the full prompt as raw JSON.
+  if (isTaskTool(toolBlock)) {
+    return renderSubagentTaskCard(toolBlock, opts)
+  }
+
   // Check if this is a plan file write
   const planData = detectPlanFile(toolBlock)
   if (planData) {
@@ -366,6 +378,42 @@ export function renderToolCallBlock(block: Block, opts: RenderOptions): HTMLElem
   if (resultPanel) details.appendChild(resultPanel)
 
   return details
+}
+
+/**
+ * Produce a scannable, verb-phrased label for a tool's summary row. The verb
+ * pairs with the key-arg chip rendered next to it (e.g. "Ran" + "npm test",
+ * "Read" + "ChatView.tsx"). Transitive verbs only apply when a target arg
+ * exists; otherwise we keep the raw tool name so argless/unknown tools aren't
+ * mislabeled. The subagent `task` tool never reaches here — it renders as a card.
+ */
+export function formatToolSummary(toolBlock: ToolCallBlock): string {
+  const rawName = (toolBlock.name || "tool").trim()
+  const name = rawName.toLowerCase()
+  const cls = toolBlock.class || 'read'
+  const hasArg = !!extractKeyArg(toolBlock.args)
+
+  // Self-contained labels — read fine without a target arg.
+  if (name.includes("todo")) return "Updated todos"
+  if (name === "skill") return "Loaded skill"
+
+  // Transitive verbs — only when a target arg is shown beside them.
+  if (hasArg) {
+    if (name.includes("grep") || name.includes("glob") || name === "search" || name.includes("ripgrep")) return "Searched"
+    if (name.includes("websearch")) return "Searched web"
+    if (name.includes("webfetch") || name === "fetch") return "Fetched"
+    if (name.includes("list") || name === "ls") return "Listed"
+    if (name.includes("lsp")) return "Inspected"
+    if (cls === "exec") return "Ran"
+    if (cls === "write") {
+      if (name.includes("edit")) return "Edited"
+      if (name.includes("patch") || name.includes("apply")) return "Patched"
+      return "Wrote"
+    }
+    if (cls === "read" && (name.includes("read") || name === "cat" || name === "open" || name === "view")) return "Read"
+  }
+
+  return rawName
 }
 
 export function extractKeyArg(args: unknown): string | null {
@@ -659,6 +707,17 @@ export function groupConsecutiveToolCalls(blocks: Block[], groupBy: 'consecutive
       continue
     }
 
+    // Subagent (`task`) tools never fold into a generic tool group — each one
+    // renders as its own standalone card so parallel subagents stay distinct.
+    if (isTaskTool(block)) {
+      flushCurrentGroup()
+      groups.push([block])
+      currentGroup = []
+      lastToolName = null
+      lastToolClass = null
+      continue
+    }
+
     if (strategy(toolName, toolClass, lastToolName, lastToolClass, currentGroup.length > 0)) {
       currentGroup.push(block)
     } else {
@@ -716,9 +775,13 @@ export function renderToolGroup(blocks: Block[], opts: RenderOptions): HTMLEleme
   summary.setAttribute("tabindex", "0")
   summary.setAttribute("role", "button")
   summary.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") {
+    if (event.key === "Enter" || event.key === " " || event.key === "e" || event.key === "E") {
       event.preventDefault()
       group.open = !group.open
+    } else if (event.key === "c" || event.key === "C") {
+      event.preventDefault()
+      const text = group.textContent || ""
+      void navigator.clipboard?.writeText(text).catch(() => {})
     }
   })
 
