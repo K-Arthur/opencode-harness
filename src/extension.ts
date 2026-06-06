@@ -457,11 +457,6 @@ function registerCoreCommands(
   registerStopCommand(context, chatProvider)
   registerSlashCommandShortcuts(context, chatProvider)
   registerGenerateAgentsMdCommand(context)
-  context.subscriptions.push(
-    vscode.commands.registerCommand("opencode-harness.setVoiceInputApiKey", () => {
-      void chatProvider.setVoiceInputOpenAiApiKey().catch((err) => log.error("setVoiceInputApiKey command failed", err))
-    })
-  )
 
   // Mode switching commands
   context.subscriptions.push(
@@ -592,11 +587,10 @@ function registerUriHandler(context: vscode.ExtensionContext, chatProvider: Chat
         try {
           const params = new URLSearchParams(uri.query)
           const prompt = params.get("prompt")
-          const isVoiceResult = Boolean(params.get("voiceRequestId"))
           vscode.commands.executeCommand("opencode-harness.chat.focus")
           if (prompt) {
             log.info(`URI handler: pre-fill prompt received`)
-            chatProvider.sendPromptToWebview(prompt, !isVoiceResult)
+            chatProvider.sendPromptToWebview(prompt)
           }
         } catch (err) {
           log.error("URI handler failed", err)

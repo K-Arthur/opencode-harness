@@ -1,4 +1,4 @@
-import type { ChatMessage, HostMessage, LegacyHostMessage, MentionItem, SessionSummary, ModelInfo, WebviewState, ContextChip, ToolCallState, TokenUsageSnapshot, UsageDelta, Block, Todo } from "./types"
+import type { ChatMessage, HostMessage, LegacyHostMessage, MentionItem, SessionSummary, ModelInfo, WebviewState, ContextChip, ToolCallState, TokenUsageSnapshot, UsageDelta, Block, Todo, ContextUsage } from "./types"
 import type { AttachmentEls } from "./ui/attachments"
 import { timers } from "./timerRegistry"
 import { createState } from "./state"
@@ -343,6 +343,8 @@ function getVsCodeApi() {
 
   // Scroll anchors per tab — disposed on tab close
   const scrollAnchors = new Map<string, ScrollAnchor>()
+  const scrollSaveTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  const renderedMessageSignatures = new Map<string, string>()
 
   // Tracks how many messages exist before the current viewport window so the
   // webview can request earlier pages via request_more_messages.
@@ -622,6 +624,10 @@ function getVsCodeApi() {
       insertTextAtCursor: (text) => composer.insertTextAtCursor(text),
       autoResizeTextarea: () => composer.autoResizeTextarea(),
       updateSendButton: () => composer.updateSendButton(),
+      submitPrompt: () => {
+        const btn = els.sendBtn as HTMLButtonElement
+        if (btn && !btn.disabled) btn.click()
+      },
     })
     setupButtonsModule({
       els: {
@@ -1004,6 +1010,59 @@ function getVsCodeApi() {
 
   /* ─── TAB MANAGEMENT ─── */
 
+  function contextUsageHasFill(usage: Pick<ContextUsage, "tokens" | "percent"> | undefined): boolean {
+    return !!usage && (
+      (Number.isFinite(usage.tokens) && usage.tokens > 0) ||
+      (Number.isFinite(usage.percent) && usage.percent > 0)
+    )
+  }
+
+  function getMessageRenderSignature(messages: ChatMessage[]): string {
+    return messages.map((m) => {
+      const blockSig = m.blocks.map((b) => {
+        const textLength = "text" in b && typeof b.text === "string" ? b.text.length : 0
+        return `${b.type}:${textLength}`
+      }).join(",")
+      return `${m.id ?? ""}:${m.role}:${m.blocks.length}:${blockSig}`
+    }).join("|")
+  }
+
+  function shouldRenderHydratedMessages(sessionId: string, msgList: HTMLDivElement, messages: ChatMessage[]): boolean {
+    const signature = getMessageRenderSignature(messages)
+    if (renderedMessageSignatures.get(sessionId) === signature && msgList.childElementCount > 0) {
+      webviewLog(`[main] init_state skipped unchanged message render for session=${sessionId}`)
+      return false
+    }
+    renderedMessageSignatures.set(sessionId, signature)
+    return true
+  }
+
+  function attachScrollPersistence(tabId: string, msgList: HTMLDivElement): void {
+    if (msgList.dataset.scrollPersistAttached === "1") return
+    msgList.dataset.scrollPersistAttached = "1"
+    msgList.addEventListener("scroll", () => {
+      const pending = scrollSaveTimers.get(tabId)
+      if (pending) timers.clearTimeout(pending)
+      const timer = timers.setTimeout(() => {
+        scrollSaveTimers.delete(tabId)
+        stateManager.setScrollPosition(tabId, msgList.scrollTop)
+      }, 150)
+      scrollSaveTimers.set(tabId, timer)
+    }, { passive: true })
+  }
+
+  function restoreScrollPosition(tabId: string, msgList: HTMLDivElement, autoScrollWhenUnset = false): void {
+    const saved = stateManager.getScrollPosition(tabId)
+    if (saved > 0) {
+      msgList.scrollTop = Math.min(saved, Math.max(0, msgList.scrollHeight - msgList.clientHeight))
+      webviewLog(`[main] restored scroll session=${tabId} scrollTop=${Math.round(msgList.scrollTop)}`)
+      return
+    }
+    if (autoScrollWhenUnset) {
+      scrollToBottom(msgList)
+    }
+  }
+
   function createNewTab(name?: string) {
     // Adopt the pending mode chosen on the welcome screen (defaults to "build").
     const session = stateManager.createSession(name, undefined, stateManager.getPendingMode())
@@ -1078,6 +1137,10 @@ function getVsCodeApi() {
     // Create stream handler for this tab — always, since we guaranteed session above
     const stream = createStreamHandlersForTab(tabId)
     streamHandlers.set(tabId, stream)
+    const msgList = getMessageList(tabId)
+    if (msgList) {
+      attachScrollPersistence(tabId, msgList)
+    }
     vscode.postMessage({
       type: "create_tab",
       sessionId: tabId,
@@ -1147,14 +1210,18 @@ function getVsCodeApi() {
     triggerTodosRender(tabId)
     refreshActivityAndTasks(tabId)
     
-    // Scroll to bottom of active tab using anchor if available
-    const anchor = scrollAnchors.get(tabId)
-    if (anchor) {
-      anchor.anchor()
-    } else {
-      const msgList = getActiveMessageList(els)
-      if (msgList) scrollToBottom(msgList)
-	  }
+    const msgList = getActiveMessageList(els)
+    if (msgList) {
+      attachScrollPersistence(tabId, msgList)
+      const savedScroll = stateManager.getScrollPosition(tabId)
+      if (savedScroll > 0) {
+        restoreScrollPosition(tabId, msgList)
+      } else if (notifyHost) {
+        const anchor = scrollAnchors.get(tabId)
+        if (anchor) anchor.anchor()
+        else scrollToBottom(msgList)
+      }
+    }
     
 	  applyTimelineVisibility(tabId)
 	  showSecondaryNav()
@@ -1860,45 +1927,50 @@ function getVsCodeApi() {
           createTabUI(session.id, session.name)
           const msgList = getMessageList(session.id)
           if (msgList) {
-            msgList.replaceChildren()
+            attachScrollPersistence(session.id, msgList)
+            if (shouldRenderHydratedMessages(session.id, msgList, session.messages)) {
+              msgList.replaceChildren()
 
-            const beforeIndex = typeof msg.initialBeforeIndex === "number" ? msg.initialBeforeIndex : 0
-            sessionBeforeIndex.set(session.id, beforeIndex)
+              const beforeIndex = typeof msg.initialBeforeIndex === "number" ? msg.initialBeforeIndex : 0
+              sessionBeforeIndex.set(session.id, beforeIndex)
 
-            if (beforeIndex > 0) {
-              const banner = createLoadEarlierBanner(beforeIndex, () => {
-                const idx = sessionBeforeIndex.get(session.id) ?? 0
-                if (idx <= 0) return
-                vscode.postMessage({ type: "request_more_messages", sessionId: session.id, beforeIndex: idx, limit: 50 })
+              if (beforeIndex > 0) {
+                const banner = createLoadEarlierBanner(beforeIndex, () => {
+                  const idx = sessionBeforeIndex.get(session.id) ?? 0
+                  if (idx <= 0) return
+                  vscode.postMessage({ type: "request_more_messages", sessionId: session.id, beforeIndex: idx, limit: 50 })
+                })
+                banner.dataset.sessionId = session.id
+                msgList.appendChild(banner)
+              }
+
+              const renderOpts = { mode: session.mode, sessionId: session.id, postMessage: (m2: Record<string, unknown>) => vscode.postMessage(m2) }
+              const loader = createChunkedLoader({
+                container: msgList,
+                messages: session.messages,
+                renderFn: (m) => {
+                  const index = session.messages.indexOf(m)
+                  const isConsecutive = index > 0 && session.messages[index - 1]?.role === m.role
+                  return renderMessage(m, { ...renderOpts, turnIndex: index }, isConsecutive)
+                },
+                onChunkDone: (rendered, total) => {
+                  if (rendered === Math.min(total, 20)) {
+                    restoreScrollPosition(session.id, msgList, stateManager.getScrollPosition(session.id) === 0)
+                  }
+                },
+                onAllDone: () => {
+                  applyHistoryCondensation(session.id)
+                  setupJumpToBottom(session.id)
+                  restoreScrollPosition(session.id, msgList, stateManager.getScrollPosition(session.id) === 0)
+                  debouncedUpdateScrollMarkers(session.id)
+                  refreshConversationTimeline(session.id)
+                },
               })
-              banner.dataset.sessionId = session.id
-              msgList.appendChild(banner)
+              loader.start()
+            } else {
+              restoreScrollPosition(session.id, msgList)
+              debouncedUpdateScrollMarkers(session.id)
             }
-
-            const renderOpts = { mode: session.mode, sessionId: session.id, postMessage: (m2: Record<string, unknown>) => vscode.postMessage(m2) }
-            const loader = createChunkedLoader({
-              container: msgList,
-              messages: session.messages,
-              renderFn: (m) => {
-                const index = session.messages.indexOf(m)
-                const isConsecutive = index > 0 && session.messages[index - 1]?.role === m.role
-                return renderMessage(m, { ...renderOpts, turnIndex: index }, isConsecutive)
-              },
-              onChunkDone: (rendered, total) => {
-                if (rendered === Math.min(total, 20)) {
-                  const anchor = scrollAnchors.get(session.id)
-                  if (anchor) anchor.anchor()
-                  else scrollToBottom(msgList)
-                }
-              },
-              onAllDone: () => {
-                applyHistoryCondensation(session.id)
-                setupJumpToBottom(session.id)
-                debouncedUpdateScrollMarkers(session.id)
-                refreshConversationTimeline(session.id)
-              },
-            })
-            loader.start()
 
             if (!scrollAnchors.get(session.id)) {
               const typingInd = msgList.parentElement?.querySelector(".typing-indicator") as HTMLElement | undefined
@@ -1985,25 +2057,36 @@ function getVsCodeApi() {
         const activeId = stateManager.getState().activeSessionId
         const targetId = isValidSessionId(msg.sessionId as string) ? msg.sessionId as string : activeId
         if (!targetId) return
-        // Persist per-session so it survives tab switches
+        const incomingUsage: ContextUsage = {
+          percent: pct,
+          tokens,
+          maxTokens,
+          breakdown: msg.breakdown as ContextUsage["breakdown"],
+          cost: typeof msg.cost === "number" && Number.isFinite(msg.cost) ? msg.cost : undefined,
+          projected: msg.projected as ContextUsage["projected"],
+          source: msg.source === "actual" ? "actual" : "estimated",
+          updatedAt: typeof msg.updatedAt === "number" && Number.isFinite(msg.updatedAt) ? msg.updatedAt : Date.now(),
+        }
         const sess = stateManager.getSession(targetId)
+        const existingUsage = sess?.contextUsage
+        const keepExisting = !contextUsageHasFill(incomingUsage) && contextUsageHasFill(existingUsage)
+        const effectiveUsage = keepExisting ? existingUsage! : incomingUsage
+        // Persist per-session so it survives tab switches, but never let an
+        // empty fallback update erase a valid prior context reading.
         if (sess) {
-          sess.contextUsage = {
-            percent: pct,
-            tokens,
-            maxTokens,
-            breakdown: msg.breakdown as any,
-            cost: typeof msg.cost === "number" && Number.isFinite(msg.cost) ? msg.cost : undefined,
-            projected: msg.projected as any,
-          } as any
-          stateManager.save()
+          if (keepExisting) {
+            webviewLog(`[main] ignored empty context_usage for session=${targetId}`)
+          } else {
+            sess.contextUsage = incomingUsage
+            stateManager.save()
+          }
         }
         if (targetId !== activeId) {
           return
         }
         // Update both the floating dropdown detail view and the always-visible status strip bar
-        ctxDropdownApi?.updateUsage({ ...msg, sessionId: targetId } as Record<string, unknown>)
-        updateContextUsageBar(pct, tokens, maxTokens)
+        ctxDropdownApi?.updateUsage({ type: "context_usage", ...effectiveUsage, sessionId: targetId } as Record<string, unknown>)
+        updateContextUsageBar(effectiveUsage.percent, effectiveUsage.tokens, effectiveUsage.maxTokens)
       }],
       ["context_window_unknown", (msg) => {
         const activeId = stateManager.getState().activeSessionId
@@ -2044,7 +2127,7 @@ function getVsCodeApi() {
           const fill = session?.contextUsage  // set by context_usage handler, represents current fill
           if (fill) {
             const pct = Math.min(100, Math.max(0, (fill.tokens / (msg.maxTokens as number)) * 100))
-            const updatedUsage = { type: "context_usage", sessionId: targetId, percent: pct, tokens: fill.tokens, maxTokens: msg.maxTokens as number, breakdown: fill.breakdown }
+            const updatedUsage = { type: "context_usage", sessionId: targetId, percent: pct, tokens: fill.tokens, maxTokens: msg.maxTokens as number, breakdown: fill.breakdown, projected: fill.projected, cost: fill.cost, source: fill.source, updatedAt: fill.updatedAt }
             session.contextUsage = { ...fill, percent: pct, maxTokens: msg.maxTokens as number }
             stateManager.save()
             if (isActiveTarget) {
@@ -2249,22 +2332,27 @@ function getVsCodeApi() {
           })
         }
       }],
-      ["stt_settings", (msg) => {
+      ["voice_settings", (msg) => {
         const settings = (msg as Record<string, unknown>).settings as VoiceInputSettings | undefined
         if (settings) voiceInputApi?.applySettings(settings)
       }],
-      ["stt_helper_opened", (msg) => {
-        voiceInputApi?.handleHelperOpened({
+      ["voice_recording_started", (msg) => {
+        voiceInputApi?.handleRecordingStarted({
           requestId: (msg as Record<string, unknown>).requestId,
         })
       }],
-      ["stt_transcript", (msg) => {
+      ["voice_transcribing", (msg) => {
+        voiceInputApi?.handleTranscribing({
+          requestId: (msg as Record<string, unknown>).requestId,
+        })
+      }],
+      ["voice_transcript", (msg) => {
         voiceInputApi?.handleTranscript({
           requestId: (msg as Record<string, unknown>).requestId,
           text: (msg as Record<string, unknown>).text,
         })
       }],
-      ["stt_error", (msg) => {
+      ["voice_error", (msg) => {
         voiceInputApi?.handleError({
           requestId: (msg as Record<string, unknown>).requestId,
           message: (msg as Record<string, unknown>).message,
@@ -2375,35 +2463,40 @@ function getVsCodeApi() {
             // reflects the freshest state from the extension host.
             const msgList = getMessageList(s.id)
             if (msgList && s.messages.length > 0) {
-              msgList.replaceChildren()
-              const renderOpts = {
-                mode: s.mode,
-                sessionId: s.id,
-                postMessage: (m: Record<string, unknown>) => vscode.postMessage(m),
+              attachScrollPersistence(s.id, msgList)
+              if (shouldRenderHydratedMessages(s.id, msgList, s.messages)) {
+                msgList.replaceChildren()
+                const renderOpts = {
+                  mode: s.mode,
+                  sessionId: s.id,
+                  postMessage: (m: Record<string, unknown>) => vscode.postMessage(m),
+                }
+                const loader = createChunkedLoader({
+                  container: msgList,
+                  messages: s.messages,
+                  renderFn: (m) => {
+                    const index = s.messages.indexOf(m)
+                    const isConsecutive = index > 0 && s.messages[index - 1]?.role === m.role
+                    return renderMessage(m, { ...renderOpts, turnIndex: index }, isConsecutive)
+                  },
+                  onChunkDone: (rendered, total) => {
+                    if (rendered === Math.min(total, 20)) {
+                      restoreScrollPosition(s.id, msgList, isFirstInit && stateManager.getScrollPosition(s.id) === 0)
+                    }
+                  },
+                  onAllDone: () => {
+                    applyHistoryCondensation(s.id)
+                    setupJumpToBottom(s.id)
+                    restoreScrollPosition(s.id, msgList, isFirstInit && stateManager.getScrollPosition(s.id) === 0)
+                    debouncedUpdateScrollMarkers(s.id)
+                    refreshConversationTimeline(s.id)
+                  },
+                })
+                loader.start()
+              } else {
+                restoreScrollPosition(s.id, msgList)
+                debouncedUpdateScrollMarkers(s.id)
               }
-              const loader = createChunkedLoader({
-                container: msgList,
-                messages: s.messages,
-                renderFn: (m) => {
-                  const index = s.messages.indexOf(m)
-                  const isConsecutive = index > 0 && s.messages[index - 1]?.role === m.role
-                  return renderMessage(m, { ...renderOpts, turnIndex: index }, isConsecutive)
-                },
-                onChunkDone: (rendered, total) => {
-                  if (rendered === Math.min(total, 20)) {
-                    const anchor = scrollAnchors.get(s.id)
-                    if (anchor) anchor.anchor()
-                    else scrollToBottom(msgList)
-                  }
-                },
-                onAllDone: () => {
-                  applyHistoryCondensation(s.id)
-                  setupJumpToBottom(s.id)
-                  debouncedUpdateScrollMarkers(s.id)
-                  refreshConversationTimeline(s.id)
-                },
-              })
-              loader.start()
 
               if (!scrollAnchors.get(s.id)) {
                 const typingInd = msgList.parentElement?.querySelector(".typing-indicator") as HTMLElement | undefined

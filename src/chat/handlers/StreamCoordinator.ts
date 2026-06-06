@@ -19,6 +19,7 @@ import { classifyTool } from "./toolClassifier"
 import { parseQuestionArgs, parseAllowFreeText } from "../../session/questionModel"
 import type { AdvisoryOrchestrationResult } from "../../methodology/MethodologyOrchestrator"
 import { updateMethodologyStatus, getMethodologyOrchestrator } from "../../methodology/registry"
+import { createAttachmentStorage, type MaterializedAttachment } from "./attachmentStorage"
 
 import type { StreamCallbacks, ToolEndResult, StreamLifecycleState } from "./StreamCoordinatorTypes"
 export type { StreamCallbacks, ToolEndResult, StreamLifecycleState }
@@ -81,9 +82,25 @@ export class StreamCoordinator {
   }>()
   /** Per-tab token/cost totals at prompt start, used to dedupe final SDK usage fallback */
   private finalUsageBaselines = new Map<string, { total: number; cost: number }>()
+  /** Per-tab async context estimate version; incremented by estimates and final actual usage. */
+  private contextEstimateVersions = new Map<string, number>()
   private tabCloseDisposable: vscode.Disposable | null = null
   /** Methodology classifier/selector — pluggable so tests can stub it */
   private readonly methodologyAdvisor: MethodologyAdvisor
+  /**
+   * Materializes image attachments to temp files and returns `file://` URLs
+   * instead of inline `data:` URLs. This avoids the opencode server (v1.15.x)
+   * auto-reading the OS clipboard on Linux (where wl-clipboard/xclip may be
+   * absent) and the documented `data:` URL failures with some MCP tools.
+   * Pluggable for tests.
+   */
+  private readonly attachmentStorage: ReturnType<typeof createAttachmentStorage>
+  /**
+   * Per-tab file:// URLs we handed to the server for the current prompt.
+   * Cleaned up when the tab closes or on dispose. Holds at most one
+   * batch of attachment URLs per tab — overwritten on each new prompt.
+   */
+  private pendingAttachmentUrls = new Map<string, string[]>()
 
   constructor(
     private readonly sessionManager: SessionManager,
@@ -94,9 +111,11 @@ export class StreamCoordinator {
     private readonly tabManager: TabManager,
     private readonly rateLimitMonitor: RateLimitMonitor,
     diffApplier: DiffApplier,
-    methodologyAdvisor?: MethodologyAdvisor
+    methodologyAdvisor?: MethodologyAdvisor,
+    attachmentStorage?: ReturnType<typeof createAttachmentStorage>,
   ) {
     this.methodologyAdvisor = methodologyAdvisor ?? new MethodologyAdvisor()
+    this.attachmentStorage = attachmentStorage ?? createAttachmentStorage()
     this.diffHandler = new DiffHandler(diffApplier)
     this.finalizerService = new StreamFinalizerService({
       streamStates: this.streamStates,
@@ -571,12 +590,41 @@ export class StreamCoordinator {
         parts.push({ type: "text", text })
       }
 
+      // Materialize each attachment to a temp file. The opencode server
+      // (v1.15.x) auto-reads the OS clipboard for FilePartInput URLs, which
+      // fails on Linux without wl-clipboard/xclip; pointing the server at
+      // a real file on disk skips that path entirely. `data:` URLs are also
+      // documented to fail with some MCP/non-vision models (opencode
+      // issues #14673, #18437, #10154, #29880).
+      const materialized: MaterializedAttachment[] = []
       for (const attachment of attachments) {
+        const result = await this.attachmentStorage.materialize({
+          data: attachment.data,
+          mimeType: attachment.mimeType,
+          filename: (attachment as { filename?: string }).filename,
+        })
+        materialized.push(result)
         parts.push({
           type: "file",
-          mime: attachment.mimeType,
-          url: `data:${attachment.mimeType};base64,${attachment.data}`,
+          mime: result.mimeType,
+          url: result.url,
         })
+      }
+      // Track file:// URLs for cleanup. data: URLs (fallback path) and
+      // http(s) URLs are not ours to delete; `storage.cleanup` already
+      // ignores them, but we filter here too for clarity.
+      const fileUrls = materialized
+        .filter((m) => m.url.startsWith("file://"))
+        .map((m) => m.url)
+      if (fileUrls.length > 0) {
+        // If a previous prompt left files behind on this tab, clean them up
+        // before overwriting — otherwise the previous batch leaks until
+        // tab close.
+        const prev = this.pendingAttachmentUrls.get(tabId)
+        if (prev && prev.length > 0) {
+          void this.attachmentStorage.cleanup(prev)
+        }
+        this.pendingAttachmentUrls.set(tabId, fileUrls)
       }
 
       const abortSignal = this.ttfbAbortControllers.get(tabId)?.signal
@@ -668,7 +716,8 @@ export class StreamCoordinator {
           // history + workspace + user message — everything the LLM consumed.
           // This replaces the heuristic estimate from refreshContextTokenEstimate.
           if (input > 0) {
-            this.contextMonitor.updateTokens(input, tabId)
+            this.contextEstimateVersions.set(tabId, (this.contextEstimateVersions.get(tabId) ?? 0) + 1)
+            this.contextMonitor.updateTokens(input, tabId, undefined, { source: "actual", updatedAt: Date.now() })
           }
         }
       }
@@ -1305,22 +1354,43 @@ private cleanupTab(tabId: string): void {
     this.postedChunkSeqs.delete(tabId)
     this.clearDeferredChunk(tabId)
     this.finalUsageBaselines.delete(tabId)
+    this.contextEstimateVersions.delete(tabId)
+    // Clean up any materialized attachment files for this tab.
+    const urls = this.pendingAttachmentUrls.get(tabId)
+    if (urls && urls.length > 0) {
+      void this.attachmentStorage.cleanup(urls)
+      this.pendingAttachmentUrls.delete(tabId)
+    }
   }
 
+  /**
+   * Dispose of all resources held by this coordinator. Called by the host
+   * (ChatProvider) when the extension deactivates. vscode's Disposable
+   * contract is sync, so attachment cleanup (which involves unlink +
+   * rmdir) is fire-and-forget. The temp dir is rooted under os.tmpdir()
+   * so the OS sweeps it on reboot regardless.
+   */
   private refreshContextTokenEstimate(tabId: string): void {
     const session = this.sessionStore.get(tabId)
     const historyTokens = session ? session.messages.reduce((acc, msg) => acc + this.estimateMessageTokens(msg), 0) : 0
     const systemTokens = 500 // Arbitrary or estimated base for system prompt
+    const version = (this.contextEstimateVersions.get(tabId) ?? 0) + 1
+    const requestedAt = Date.now()
+    this.contextEstimateVersions.set(tabId, version)
 
     void this.contextEngine.gatherContext()
       .then(ctxPkg => {
+        if (this.contextEstimateVersions.get(tabId) !== version) {
+          log.debug(`Skipping stale context token estimate for ${tabId}`)
+          return
+        }
         const workspaceTokens = estimateContextTokens(ctxPkg)
         const total = historyTokens + systemTokens + workspaceTokens
         this.contextMonitor.updateTokens(total, tabId, {
           system: systemTokens,
           history: historyTokens,
           workspace: workspaceTokens
-        })
+        }, { source: "estimated", updatedAt: requestedAt })
       })
       .catch(err => log.warn("Failed to refresh context token estimate", err))
   }
@@ -1442,5 +1512,17 @@ private cleanupTab(tabId: string): void {
     }
     this.deferredChunks.clear()
     this.diffHandler.dispose()
+    // Clean up any remaining attachment files across all tabs. Fire-and-
+    // forget: vscode's Disposable contract is sync and the temp dir will
+    // be swept by the OS on reboot regardless.
+    const allUrls = Array.from(this.pendingAttachmentUrls.values()).flat()
+    if (allUrls.length > 0) {
+      void this.attachmentStorage.cleanup(allUrls).then(() =>
+        this.attachmentStorage.dispose(),
+      )
+    } else {
+      void this.attachmentStorage.dispose()
+    }
+    this.pendingAttachmentUrls.clear()
   }
 }

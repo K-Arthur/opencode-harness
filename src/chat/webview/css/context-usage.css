@@ -135,6 +135,8 @@
 
 /* Changed Files Always-Visible Strip */
 .cf-strip {
+  position: relative;
+  z-index: calc(var(--z-sticky) + 20);
   display: flex;
   align-items: center;
   gap: 3px;

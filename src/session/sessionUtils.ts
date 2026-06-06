@@ -6,6 +6,22 @@ export interface SessionData {
   messages: unknown[]
   cost: number
   tokenUsage: { prompt: number; completion: number; total: number }
+  contextUsage?: {
+    percent: number
+    tokens: number
+    maxTokens: number
+    source?: "estimated" | "actual"
+    updatedAt?: number
+    breakdown?: {
+      system: number
+      history: number
+      workspace: number
+      queued?: number
+      steer?: number
+    }
+    projected?: { withQueue: number; overflow: boolean }
+    cost?: number
+  }
   model?: string
   mode?: string
   cliSessionId?: string

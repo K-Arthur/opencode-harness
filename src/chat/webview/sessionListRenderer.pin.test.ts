@@ -114,7 +114,7 @@ describe("sessionListRenderer — pinning", () => {
 
   it("renders existing tag chips and edits tags inline", () => {
     const posted: Record<string, unknown>[] = []
-    setSessionListPostMessage((m) => posted.push(m as Record<string, unknown>))
+    setSessionListPostMessage((m) => posted.push(m as Record<string,unknown>))
     setUnifiedLocalSessions([{ id: "a", title: "Tagged", time: 1000, tags: ["wip"] }])
     renderUnifiedSessionList()
     assert.deepEqual(Array.from(document.querySelectorAll(".modal-session-tag")).map((e) => e.textContent), ["wip"])
@@ -127,5 +127,73 @@ describe("sessionListRenderer — pinning", () => {
 
     assert.deepEqual(posted, [{ type: "set_session_tags", targetSessionId: "a", tags: ["wip", "urgent"] }])
     assert.deepEqual(Array.from(document.querySelectorAll(".modal-session-tag")).map((e) => e.textContent), ["wip", "urgent"])
+  })
+})
+
+describe("sessionListRenderer — action icons", () => {
+  beforeEach(() => {
+    setupDom()
+    setUnifiedServerSessions([])
+    setUnifiedSessionQuery("")
+  })
+  afterEach(() => {
+    console.warn = warn
+  })
+
+  it("every action button renders an SVG icon instead of a text label", () => {
+    setUnifiedLocalSessions([{ id: "a", title: "Has actions", time: 1000 }])
+    renderUnifiedSessionList()
+
+    const actionClasses = [
+      ".modal-session-pin",
+      ".modal-session-rename",
+      ".modal-session-tag-btn",
+      ".modal-session-archive",
+      ".modal-session-delete",
+    ]
+    for (const sel of actionClasses) {
+      const btn = document.querySelector<HTMLButtonElement>(sel)
+      assert.ok(btn, `${sel} must be present`)
+      const svg = btn.querySelector("svg")
+      assert.ok(svg, `${sel} must render an <svg> icon, not text`)
+      assert.equal(btn.textContent?.trim() ?? "", "", `${sel} must not contain visible text labels`)
+      assert.ok(btn.classList.contains("icon-btn"), `${sel} must use the icon-btn class for sizing`)
+    }
+  })
+
+  it("delete and archive icons render at the standard 14px action size (not the 10px REMOVE_SVG)", () => {
+    setUnifiedLocalSessions([{ id: "a", title: "Sized", time: 1000 }])
+    renderUnifiedSessionList()
+    for (const sel of [".modal-session-archive", ".modal-session-delete"]) {
+      const svg = document.querySelector(`${sel} svg`)
+      assert.ok(svg, `${sel} must contain an svg`)
+      assert.equal(svg!.getAttribute("width"), "14", `${sel} svg width must be 14`)
+      assert.equal(svg!.getAttribute("height"), "14", `${sel} svg height must be 14`)
+    }
+  })
+
+  it("pin icon swaps between outline (unpinned) and filled (pinned) variants", () => {
+    setUnifiedLocalSessions([
+      { id: "a", title: "Plain", time: 1000, pinned: false },
+      { id: "b", title: "Stuck", time: 900, pinned: true },
+    ])
+    renderUnifiedSessionList()
+    const pins = document.querySelectorAll<HTMLButtonElement>(".modal-session-pin")
+    const unpinnedSvg = pins[0]!.querySelector("svg")
+    const pinnedSvg = pins[1]!.querySelector("svg")
+    assert.ok(unpinnedSvg && pinnedSvg, "both rows must render pin icons")
+    assert.notEqual(
+      unpinnedSvg!.innerHTML,
+      pinnedSvg!.innerHTML,
+      "pinned and unpinned pin icons must differ so the toggle state is visible",
+    )
+  })
+
+  it("delete button keeps accessible labels even without visible text", () => {
+    setUnifiedLocalSessions([{ id: "a", title: "Doomed", time: 1000 }])
+    renderUnifiedSessionList()
+    const del = document.querySelector<HTMLButtonElement>(".modal-session-delete")!
+    assert.equal(del.getAttribute("aria-label"), "Delete")
+    assert.equal(del.title, "Delete")
   })
 })

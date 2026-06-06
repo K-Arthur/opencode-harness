@@ -232,7 +232,7 @@ export interface SessionState {
   isStreaming: boolean
   cost?: number
   tokenUsage?: TokenUsage
-  contextUsage?: { percent: number; tokens: number; maxTokens: number; breakdown?: ContextBreakdown }
+  contextUsage?: ContextUsage
   changedFiles?: string[]
   lastActiveAt?: number
   instructions?: string
@@ -357,6 +357,8 @@ export interface WebviewState {
   skills?: Record<string, SkillInfo>
   toolCollapseConfig?: ToolCollapseConfig
   tokenUsageHistory?: TokenUsageSnapshot[]
+  /** Per-session scrollTop for the message list; webview-only UI state. */
+  scrollPositions?: Record<string, number>
   /** Per-session prompt queue snapshot — restored on webview reload. */
   queues?: Record<string, import("./queue").QueueItem[]>
 }
@@ -428,6 +430,8 @@ export interface ContextUsage {
   breakdown?: ContextBreakdown
   projected?: { withQueue: number; overflow: boolean }
   cost?: number
+  source?: "estimated" | "actual"
+  updatedAt?: number
 }
 
 export interface UsageDelta {
@@ -493,7 +497,7 @@ export type HostMessage =
   | { type: "session_renamed"; sessionId: string; name: string }
   | { type: "streaming_state"; sessionId: string; isStreaming: boolean }
   | { type: "instructions_changed"; sessionId: string; instructions: string }
-  | { type: "context_usage"; sessionId: string; percent: number; tokens: number; maxTokens: number; usage?: ContextUsage | UsageDelta }
+  | { type: "context_usage"; sessionId: string; percent: number; tokens: number; maxTokens: number; usage?: ContextUsage | UsageDelta; source?: "estimated" | "actual"; updatedAt?: number }
   | { type: "server_status"; sessionId?: string; status: string; errorContext?: unknown }
   | { type: "permission_request"; sessionId: string; permissionId?: string; title: string; permissionType?: string; pattern?: string | string[]; metadata?: Record<string, unknown> }
   | { type: "todos_update"; sessionId: string; todos: unknown[] }
@@ -527,10 +531,11 @@ export type HostMessage =
   | { type: "request_error"; message: string; errorContext?: unknown; sessionId?: string }
   | { type: "webview_request_error"; error: string; requestType?: string; sessionId?: string }
   | { type: "prompt_rejected"; reason: string; sessionId?: string }
-  | { type: "stt_settings"; settings: VoiceInputSettings }
-  | { type: "stt_helper_opened"; requestId: string; helperUri: string; provider: VoiceInputSettings["provider"] }
-  | { type: "stt_transcript"; requestId: string; text: string }
-  | { type: "stt_error"; requestId?: string; reason: string; message: string }
+  | { type: "voice_settings"; settings: VoiceInputSettings }
+  | { type: "voice_recording_started"; requestId: string }
+  | { type: "voice_transcribing"; requestId: string }
+  | { type: "voice_transcript"; requestId: string; text: string }
+  | { type: "voice_error"; requestId?: string; reason: string; message: string }
   | { type: "rate_limit_state"; state?: unknown }
   | { type: "rate_limit_exhausted"; info?: RateLimitInfo }
   | { type: "theme_vars"; vars: Record<string, string> }
@@ -545,7 +550,7 @@ export type HostMessage =
   | { type: "session_list"; sessions: SessionSummary[]; query?: string }
   | { type: "server_session_list"; sessions: unknown[] }
   | { type: "server_session_deleted"; sessionId: string }
-  | { type: "resume_session_data"; sessionId: string; messages: ChatMessage[]; model: string; isStreaming: boolean; cost?: number; tokenUsage?: TokenUsage; instructions?: string }
+  | { type: "resume_session_data"; sessionId: string; messages: ChatMessage[]; model: string; isStreaming: boolean; cost?: number; tokenUsage?: TokenUsage; contextUsage?: ContextUsage; instructions?: string }
   | { type: "more_messages"; messages: ChatMessage[]; sessionId: string; hasMore: boolean; newBeforeIndex: number; totalCount: number; initialBeforeIndex?: number }
   | { type: "clear_messages"; sessionId: string }
   | { type: "active_session_changed"; sessionId: string }
@@ -706,8 +711,10 @@ export type WebviewMessage =
   | { type: "resume_stream"; sessionId: string }
   | { type: "decline_resume"; sessionId: string }
   | { type: "request_state_sync" }
-  | { type: "get_stt_settings" }
-  | { type: "stt_open_helper"; requestId: string; provider: VoiceInputSettings["provider"] }
+  | { type: "get_voice_settings" }
+  | { type: "voice_start"; requestId: string }
+  | { type: "voice_stop"; requestId: string }
+  | { type: "voice_cancel"; requestId: string }
   | { type: "set_instructions"; sessionId: string; instructions: string }
   | { type: "fork_session"; sessionId: string }
   | { type: "toggle_diff_wrap"; sessionId?: string }

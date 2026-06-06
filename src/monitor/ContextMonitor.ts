@@ -15,6 +15,13 @@ export interface ContextUsage {
     overflow: boolean
   }
   cost?: number
+  source?: "estimated" | "actual"
+  updatedAt?: number
+}
+
+export interface ContextUsageUpdateOptions {
+  source?: "estimated" | "actual"
+  updatedAt?: number
 }
 
 export interface ContextUsageHistory {
@@ -180,6 +187,8 @@ private currentTokens = 0
       tokens: this.currentTokens,
       maxTokens: this.tokenLimit,
       cost: this.calculateCost(this.currentTokens),
+      source: "estimated",
+      updatedAt: Date.now(),
     }
   }
 
@@ -224,7 +233,12 @@ private currentTokens = 0
     return Math.max(10, Math.min(95, Math.round(raw)))
   }
 
-  updateTokens(tokensUsed: number, sessionId?: string, breakdown?: { system: number; history: number; workspace: number; queued?: number; steer?: number }): void {
+  updateTokens(
+    tokensUsed: number,
+    sessionId?: string,
+    breakdown?: { system: number; history: number; workspace: number; queued?: number; steer?: number },
+    options: ContextUsageUpdateOptions = {},
+  ): void {
     // Clamp negative token values to zero
     this.currentTokens = Math.max(0, tokensUsed)
     const cost = this.calculateCost(this.currentTokens, breakdown)
@@ -245,6 +259,8 @@ private currentTokens = 0
         steer: breakdown.steer ?? 0,
       } : undefined,
       cost,
+      source: options.source ?? "estimated",
+      updatedAt: Number.isFinite(options.updatedAt ?? NaN) ? options.updatedAt : Date.now(),
     }
     if (sessionId) this.latestUsageBySession.set(sessionId, usage)
     this.onContextChangedEmitter.fire(usage)
@@ -264,6 +280,7 @@ private currentTokens = 0
       percent: this.calculatePercent(tokens),
       tokens,
       maxTokens: this.tokenLimit,
+      updatedAt: Date.now(),
     }
     this.latestUsageBySession.set(sessionId, usage)
     this.onContextChangedEmitter.fire(usage)
@@ -293,6 +310,8 @@ private currentTokens = 0
         queued: safeQueueTokens,
         steer: safeSteerTokens,
       },
+      source: "estimated",
+      updatedAt: Date.now(),
     }
     if (sessionId) this.latestUsageBySession.set(sessionId, usage)
     this.onContextChangedEmitter.fire(usage)

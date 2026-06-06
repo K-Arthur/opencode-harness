@@ -1,5 +1,12 @@
 import { getElementRefs } from "./dom"
-import { REMOVE_SVG } from "./icons"
+import {
+  ARCHIVE_SVG,
+  EDIT_SVG,
+  PIN_FILLED_SVG,
+  PIN_SVG,
+  TAG_SVG,
+  TRASH_SVG,
+} from "./icons"
 
 export type ServerSessionEntry = {
   id: string; title?: string; directory?: string; parentId?: string;
@@ -165,13 +172,13 @@ function renderTagChips(container: HTMLElement, tags: readonly string[] | undefi
   }
 }
 
-function addTextAction(label: string, className: string, title: string, onClick: (event: MouseEvent) => void): HTMLButtonElement {
+function addIconAction(icon: string, className: string, title: string, onClick: (event: MouseEvent) => void): HTMLButtonElement {
   const button = document.createElement("button")
   button.type = "button"
   button.className = `${className} icon-btn`
   button.title = title
   button.setAttribute("aria-label", title)
-  button.textContent = label
+  button.innerHTML = icon
   button.addEventListener("click", onClick)
   return button
 }
@@ -203,14 +210,15 @@ function createSessionRowActions(
 
   const localId = item.localId
   if (localId) {
-    const pinBtn = addTextAction(item.pinned ? "Unpin" : "Pin", "modal-session-pin", item.pinned ? "Unpin" : "Pin", (e) => {
+    const pinIcon = item.pinned ? PIN_FILLED_SVG : PIN_SVG
+    const pinBtn = addIconAction(pinIcon, "modal-session-pin", item.pinned ? "Unpin" : "Pin", (e) => {
       e.stopPropagation()
       _postMessage({ type: "pin_session", targetSessionId: localId, pinned: !item.pinned })
     })
     pinBtn.setAttribute("aria-pressed", String(item.pinned === true))
     actions.appendChild(pinBtn)
 
-    const renameBtn = addTextAction("Rename", "modal-session-rename", "Rename", (e) => {
+    const renameBtn = addIconAction(EDIT_SVG, "modal-session-rename", "Rename", (e) => {
       e.stopPropagation()
       const input = document.createElement("input")
       input.className = "modal-session-rename-input"
@@ -241,7 +249,7 @@ function createSessionRowActions(
     })
     actions.appendChild(renameBtn)
 
-    const tagBtn = addTextAction("Tags", "modal-session-tag-btn", "Edit tags", (e) => {
+    const tagBtn = addIconAction(TAG_SVG, "modal-session-tag-btn", "Edit tags", (e) => {
       e.stopPropagation()
       const input = document.createElement("input")
       input.className = "modal-session-tags-input"
@@ -269,12 +277,7 @@ function createSessionRowActions(
     })
     actions.appendChild(tagBtn)
 
-    const archiveBtn = document.createElement("button")
-    archiveBtn.className = "modal-session-archive icon-btn"
-    archiveBtn.title = "Archive"
-    archiveBtn.setAttribute("aria-label", "Archive session")
-    archiveBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>'
-    archiveBtn.addEventListener("click", (e) => {
+    const archiveBtn = addIconAction(ARCHIVE_SVG, "modal-session-archive", "Archive", (e) => {
       e.stopPropagation()
       _postMessage({ type: "archive_session", targetSessionId: item.localId })
       row.remove()
@@ -282,12 +285,7 @@ function createSessionRowActions(
     actions.appendChild(archiveBtn)
   }
 
-  const deleteBtn = document.createElement("button")
-  deleteBtn.className = "modal-session-delete icon-btn"
-  deleteBtn.setAttribute("aria-label", item.type === "local" ? "Delete session" : "Delete server session")
-  deleteBtn.title = item.type === "local" ? "Delete" : "Delete from server"
-  deleteBtn.innerHTML = REMOVE_SVG
-  deleteBtn.addEventListener("click", (e) => {
+  const deleteBtn = addIconAction(TRASH_SVG, "modal-session-delete", item.type === "local" ? "Delete" : "Delete from server", (e) => {
     e.stopPropagation()
     if (item.serverId) {
       _postMessage({ type: "delete_server_session", serverSessionId: item.serverId })

@@ -49,6 +49,12 @@ assistant tokens as a per-turn fallback and calls `SessionStore.accumulateTokenU
 when the normal step-finish path has not already advanced the session totals. This prevents a
 late final-fetch event from replacing cumulative totals restored from older history.
 
+Context-window fill is stored separately from spend totals. `SessionStore.contextUsage` records
+the latest valid fill for each session (`tokens`, `maxTokens`, `percent`, source, timestamp, and
+optional breakdown/cost) so restored sessions can rehydrate the status strip without waiting for
+a fresh context estimate. Missing context fields or zero fallback updates from the host/webview
+must preserve a prior non-zero reading.
+
 ## Session Titles
 
 OpenCode server titles are the source of truth for synced sessions. Local rename commands call `SessionStore.setTitle()`, which persists the local cache and propagates to the server via `SessionManager.updateSessionTitle()` / SDK `client.session.update({ path: { id }, body: { title } })`. Incoming `session.updated` SSE events apply `info.title` back into the local cache through `SessionStore.applyServerTitle()`.
