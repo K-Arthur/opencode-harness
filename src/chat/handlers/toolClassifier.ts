@@ -10,7 +10,7 @@ export interface SubagentInvocation {
 
 /** True when the tool name matches the subagent-spawning `task` tool. */
 export function isSubagentToolName(name: string): boolean {
-  return name === "task" || name.includes("subagent")
+  return name === "task" || name === "delegate" || name.includes("subagent")
 }
 
 /**
@@ -20,17 +20,36 @@ export function isSubagentToolName(name: string): boolean {
  *   - Legacy:   `{ name, purpose, prompt }` or `{ agent, instruction, task }`
  */
 export function parseSubagentInvocation(rawArgs: unknown): SubagentInvocation {
-  const a = (rawArgs || {}) as Record<string, unknown>
+  let parsed: Record<string, unknown>
+  if (typeof rawArgs === "string") {
+    try {
+      const trimmed = rawArgs.trim()
+      if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+        parsed = JSON.parse(trimmed) as Record<string, unknown>
+      } else {
+        return { agentName: "subagent", prompt: trimmed }
+      }
+    } catch {
+      parsed = { prompt: rawArgs }
+    }
+  } else {
+    parsed = (rawArgs || {}) as Record<string, unknown>
+  }
+
   const agentName =
-    asString(a.subagent_type) ||
-    asString(a.name) ||
-    asString(a.agent) ||
+    asString(parsed.subagent_type) ||
+    asString(parsed.name) ||
+    asString(parsed.agent) ||
     "subagent"
   const purpose =
-    asString(a.description) ||
-    asString(a.purpose) ||
-    asString(a.task)
-  const prompt = asString(a.prompt) || asString(a.instruction)
+    asString(parsed.description) ||
+    asString(parsed.purpose) ||
+    asString(parsed.task) ||
+    ""
+  const prompt =
+    asString(parsed.prompt) ||
+    asString(parsed.instruction) ||
+    ""
   return { agentName, purpose, prompt }
 }
 

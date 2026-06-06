@@ -21,6 +21,12 @@ export class VirtualMessageList {
   private entries = new Map<string, VirtualListEntry>()
   private recentlyAdded: string[] = []
   private pruneScheduled = false
+  /**
+   * Ids the IntersectionObserver currently reports as on-screen (within the
+   * 500px rootMargin). Maintained from observer callbacks so pruneOffScreen can
+   * locate the visible window without forcing a per-element layout measure.
+   */
+  private visibleIds = new Set<string>()
   private sessionId: string
   private container: HTMLElement
   private getMessageData: (id: string) => ChatMessage | undefined
@@ -50,6 +56,11 @@ export class VirtualMessageList {
           const el = entry.target as HTMLElement
           const msgId = el.dataset.messageId
           if (!msgId) continue
+
+          // Track on-screen ids straight from the observer so pruneOffScreen
+          // never has to re-measure every element to find the visible window.
+          if (entry.isIntersecting) this.visibleIds.add(msgId)
+          else this.visibleIds.delete(msgId)
 
           const vEntry = this.entries.get(msgId)
           if (vEntry && vEntry.detached && entry.isIntersecting) {
@@ -102,27 +113,30 @@ export class VirtualMessageList {
     const pruneThreshold = this.getPruneThreshold(totalCount, session)
     if (totalCount <= pruneThreshold) return
 
-    const containerRect = this.container.parentElement?.getBoundingClientRect()
-    if (!containerRect) return
-
-    const viewportTop = containerRect.top
-    const viewportBottom = containerRect.bottom
-
+    // The IntersectionObserver already tells us what is on screen, so the visible
+    // window is derived from membership in `visibleIds` using cheap property reads
+    // only — no per-element getBoundingClientRect. This keeps the prune cost flat
+    // regardless of transcript length; previously it forced an O(N) synchronous
+    // layout flush on every scroll/append, which is what made streaming lag worse
+    // the longer a session ran.
     let visibleStart = -1
     let visibleEnd = -1
-
     for (let i = 0; i < allMessages.length; i++) {
-      const el = allMessages[i] as HTMLElement
-      const rect = el.getBoundingClientRect()
-      if (rect.bottom >= viewportTop && rect.top <= viewportBottom) {
+      const id = allMessages[i]?.dataset.messageId
+      if (id && this.visibleIds.has(id)) {
         if (visibleStart === -1) visibleStart = i
         visibleEnd = i
       }
     }
 
+    // No intersection data yet (first observer tick not delivered) — defer rather
+    // than guess. The next observer callback will arrive with a populated set.
     if (visibleStart === -1) return
 
-    const { above, below } = this.getKeepAliveCounts(containerRect.height, totalCount, session)
+    // clientHeight is a single layout read for the viewport height (vs. one rect
+    // per message); 0 in headless/zero-height cases falls back to a row estimate.
+    const viewportHeight = this.container.parentElement?.clientHeight ?? 0
+    const { above, below } = this.getKeepAliveCounts(viewportHeight, totalCount, session)
     const pruneStart = this.findPruneStart(allMessages, visibleStart, above)
     const pruneEnd = this.findPruneEnd(allMessages, visibleEnd, below)
 
@@ -233,6 +247,9 @@ export class VirtualMessageList {
     })
 
     try {
+      // The placeholder is not observed, so this id is no longer on screen as
+      // far as the visible-window computation is concerned.
+      this.visibleIds.delete(msgId)
       this.observer?.unobserve(el)
       el.replaceWith(placeholder)
     } catch {
@@ -285,6 +302,7 @@ export class VirtualMessageList {
     this.restoreAll()
     this.observer?.disconnect()
     this.observer = null
+    this.visibleIds.clear()
   }
 }
 

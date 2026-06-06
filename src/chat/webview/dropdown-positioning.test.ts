@@ -75,7 +75,6 @@ describe("floating webview dropdown positioning", () => {
       btn: null,
       panel,
       content: document.getElementById("ctx-content")!,
-      badge: document.getElementById("ctx-badge")!,
       postMessage: () => {},
     })
     openContextUsageDropdown()

@@ -61,6 +61,7 @@ import { shouldHonorActiveSessionChange, resolveInitStateTarget } from "./sessio
 import { closeSettingsMenu as closeSettingsMenuModule, closeCurrentModal as closeCurrentModalModule, setupSettingsMenuKeyboardNav as setupSettingsMenuKeyboardNavModule, type SettingsMenuDeps } from "./ui/settingsMenu"
 import { trackFileChange as trackFileChangeModule, undoMessage as undoMessageModule, handleChangedFiles as handleChangedFilesModule, renderCheckpointPanel as renderCheckpointPanelModule, handleClearMessages as handleClearMessagesModule, type FileTrackingDeps } from "./ui/fileTracking"
 import { setupButtons as setupButtonsModule, type ButtonSetupDeps } from "./ui/buttonSetup"
+import { deriveState } from "./ui/contextUsageThresholds"
 import { updateScrollMarkers as updateScrollMarkersModule, setupJumpToBottom as setupJumpToBottomModule, scrollMessageToTop as scrollMessageToTopModule, scrollToTurn as scrollToTurnModule, type ScrollMarkerDeps } from "./ui/scrollMarkers"
 import { createStreamOrchestrator, type StreamOrchestratorAPI } from "./streamOrchestrator"
 import { createTimeline, type TimelineAPI } from "./timeline"
@@ -324,17 +325,12 @@ function getVsCodeApi() {
 
   let cfDropdownApi: { updateChangedFiles: typeof updateChangedFiles; handleDiffResponse: typeof handleCfDiffResponse; setCurrentSession: typeof setCfCurrentSession } | null = null
   let ctxDropdownApi: { updateUsage: typeof updateCtxDropdown } | null = null
+  let _contextUsageRafId: number | undefined
 
   const tabBar = createTabBar(els, {
     onSwitch: (tabId) => switchTab(tabId),
     onClose: (tabId) => closeTab(tabId),
     onNew: () => createNewTab(),
-    onToggleContextMonitor: () => {
-      if (els.contextUsageBtn && !els.contextUsageBtn.classList.contains("hidden")) {
-        els.contextUsageBtn.click()
-      }
-    },
-    onSetContextWindowOverride: () => vscode.postMessage({ type: "open_context_window_override_dialog" }),
   })
 
   // Streaming state per session
@@ -838,20 +834,15 @@ function getVsCodeApi() {
   }
 
   function setupContextUsageFeature(): void {
-    if (!els.contextUsageDropdown || !els.ctxDropdownContent || !els.ctxPctBadge) return
+    if (!els.contextUsageDropdown || !els.ctxDropdownContent) return
 
     setupCtxDropdown({
       btn: null,
       panel: els.contextUsageDropdown,
       content: els.ctxDropdownContent,
-      badge: els.ctxPctBadge,
       postMessage: (msg) => vscode.postMessage(msg),
     })
     ctxDropdownApi = { updateUsage: updateCtxDropdown }
-    els.contextUsage.setAttribute("tabindex", "0")
-    els.contextUsage.setAttribute("role", "button")
-    els.contextUsage.setAttribute("aria-haspopup", "true")
-    els.contextUsage.setAttribute("aria-controls", "context-usage-dropdown")
     els.contextUsage.addEventListener("click", (e) => {
       e.stopPropagation()
       openPrimedContextUsageDropdown()
@@ -1126,12 +1117,6 @@ function getVsCodeApi() {
       onSwitch: (tabId) => switchTab(tabId),
       onClose: (tabId) => closeTab(tabId),
       onNew: () => createNewTab(),
-      onToggleContextMonitor: () => {
-      if (els.contextUsageBtn && !els.contextUsageBtn.classList.contains("hidden")) {
-        els.contextUsageBtn.click()
-      }
-    },
-      onSetContextWindowOverride: () => vscode.postMessage({ type: "open_context_window_override_dialog" }),
     })
     if (!view) return
 
@@ -2116,9 +2101,14 @@ function getVsCodeApi() {
         if (targetId !== activeId) {
           return
         }
-        // Update both the floating dropdown detail view and the always-visible status strip bar
-        ctxDropdownApi?.updateUsage({ type: "context_usage", ...effectiveUsage, sessionId: targetId } as Record<string, unknown>)
-        updateContextUsageBar(effectiveUsage.percent, effectiveUsage.tokens, effectiveUsage.maxTokens)
+        // Throttle bar and dropdown updates to animation frame rate
+        // to avoid excessive re-renders during streaming.
+        if (_contextUsageRafId) cancelAnimationFrame(_contextUsageRafId)
+        _contextUsageRafId = requestAnimationFrame(() => {
+          _contextUsageRafId = 0
+          ctxDropdownApi?.updateUsage({ type: "context_usage", ...effectiveUsage, sessionId: targetId } as Record<string, unknown>)
+          updateContextUsageBar(effectiveUsage.percent, effectiveUsage.tokens, effectiveUsage.maxTokens)
+        })
       }],
       ["context_window_unknown", (msg) => {
         const activeId = stateManager.getState().activeSessionId
@@ -3222,6 +3212,8 @@ function getVsCodeApi() {
         fill.style.setProperty("--usage-pct", String(Math.min(1, Math.max(0, safePct / 100))))
       }
       bar.setAttribute("aria-valuenow", String(Math.round(safePct)))
+      bar.setAttribute("aria-valuetext", `${Math.round(safePct)}% used`)
+      bar.setAttribute("aria-label", `Context usage — ${Math.round(safePct)}% used`)
       if (label) {
         label.textContent = buildSummaryText(safeTokens, safeMaxTokens, safePct)
         label.title = getContextUsageTooltip({
@@ -3237,9 +3229,14 @@ function getVsCodeApi() {
         // Parent status-strip has the HTML hidden attribute by default — reveal it.
         els.statusStrip.removeAttribute("hidden")
       }
-      // Apply colour class based on utilisation
-      bar.classList.toggle("context-usage-bar--warning", safePct >= 70 && safePct < 90)
-      bar.classList.toggle("context-usage-bar--critical", safePct >= 90)
+      // Apply visual state based on utilisation thresholds
+      const state = deriveState(safePct, safeTokens, safeMaxTokens)
+      bar.classList.toggle("context-usage-bar--good", state === "good")
+      bar.classList.toggle("context-usage-bar--caution", state === "caution")
+      bar.classList.toggle("context-usage-bar--warning", state === "warning")
+      bar.classList.toggle("context-usage-bar--critical", state === "critical" || state === "over")
+      bar.setAttribute("data-state", state)
+      if (state === "over") bar.setAttribute("aria-valuetext", `${Math.round(safePct)}% used — over limit`)
     } catch (e) {
       console.warn("[opencode-harness] Context usage bar update failed:", e instanceof Error ? e.message : String(e))
     }

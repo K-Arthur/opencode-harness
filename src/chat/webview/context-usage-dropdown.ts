@@ -32,13 +32,14 @@ interface ContextUsage {
   breakdown?: ContextBreakdown
   projected?: { withQueue: number; overflow: boolean }
   cost?: number
+  source?: "estimated" | "actual"
+  updatedAt?: number
 }
 
 let _postMessage: ((msg: Record<string, unknown>) => void) | null = null
 let _btn: HTMLButtonElement | null = null
 let _panel: HTMLElement | null = null
 let _content: HTMLElement | null = null
-let _badge: HTMLElement | null = null
 let _isOpen = false
 let _currentUsage: ContextUsage | null = null
 let _outsideClickHandler: ((e: MouseEvent) => void) | null = null
@@ -62,7 +63,6 @@ export interface ContextUsageDropdownOptions {
   btn: HTMLButtonElement | null   // null when status-strip bar is used as the trigger instead
   panel: HTMLElement
   content: HTMLElement
-  badge: HTMLElement
   postMessage: (msg: Record<string, unknown>) => void
 }
 
@@ -70,7 +70,6 @@ export function setupContextUsageDropdown(opts: ContextUsageDropdownOptions): vo
   _btn = opts.btn
   _panel = opts.panel
   _content = opts.content
-  _badge = opts.badge
   _postMessage = opts.postMessage
 
   _panel.classList.add("hidden")
@@ -81,7 +80,6 @@ export function setupContextUsageDropdown(opts: ContextUsageDropdownOptions): vo
       _toggle()
     })
   }
-  _updateBadge(0)
 
   // Close button inside the dropdown
   const closeBtn = document.getElementById("ctx-dropdown-close")
@@ -94,7 +92,6 @@ export function updateUsage(data: Record<string, unknown>): void {
   if (data.type === "context_usage" || data.type === "context_window_unknown") {
     _currentUsage = normalizeUsage(data)
     const pct = _currentUsage?.percent ?? 0
-    _updateBadge(pct)
     if (_btn) {
       _btn.classList.toggle("hidden", false)
       _btn.classList.toggle("ctx-btn--active", pct > 0)
@@ -118,7 +115,9 @@ function normalizeUsage(data: Record<string, unknown>): ContextUsage {
   const projected = data.projected && typeof data.projected === "object"
     ? data.projected as { withQueue: number; overflow: boolean }
     : undefined
-  return { percent, tokens, maxTokens, sessionId, breakdown, projected, cost }
+  const source = data.source === "actual" ? "actual" : data.source === "estimated" ? "estimated" as const : undefined
+  const updatedAt = typeof data.updatedAt === "number" ? data.updatedAt : undefined
+  return { percent, tokens, maxTokens, sessionId, breakdown, projected, cost, source, updatedAt }
 }
 
 function _toggle(): void {
@@ -202,12 +201,6 @@ function _close(): void {
   _resizeHandler = null
 }
 
-function _updateBadge(pct: number): void {
-  if (!_badge) return
-  _badge.textContent = pct > 0 ? formatUsagePercent(pct) : ""
-  _badge.classList.toggle("hidden", pct === 0)
-}
-
 function _render(container: HTMLElement, usage: ContextUsage | null): void {
   if (!usage) {
     container.innerHTML = '<div class="ctx-empty">No context usage data available.</div>'
@@ -276,6 +269,21 @@ function _render(container: HTMLElement, usage: ContextUsage | null): void {
   const circumference = 2 * Math.PI * radius
   const dashOffset = circumference - (pct / 100) * circumference
 
+  // Source pill
+  const sourcePill = usage.source
+    ? `<span class="cup-source-pill cup-source-pill--${usage.source}">${usage.source === "actual" ? "✓" : "~"} ${usage.source}</span>`
+    : ""
+
+  // Actions row — only show actions the host supports
+  const sessionId = usage.sessionId ? escapeHtml(usage.sessionId) : ""
+  const actionsHtml = `<div class="cup-actions">
+    <span class="cup-actions-label">Actions:</span>
+    <button class="cup-action-btn" data-action="compact" data-sid="${sessionId}">Compact context</button>
+    <button class="cup-action-btn" data-action="new-session">New session</button>
+    <button class="cup-action-btn" data-action="switch-model">Switch model</button>
+    <button class="cup-action-btn" data-action="set-override">Set limit</button>
+  </div>`
+
   container.innerHTML = `
     ${criticalHtml}
     <div class="cup-header-row">
@@ -288,11 +296,35 @@ function _render(container: HTMLElement, usage: ContextUsage | null): void {
         <text class="cup-ring-label" x="28" y="33" text-anchor="middle" font-size="10">${escapeHtml(formatUsagePercent(usage.percent))}</text>
       </svg>
       <div class="cup-header-text">
-        <div class="cup-summary-text">${escapeHtml(summaryText)}</div>
+        <div class="cup-summary-text">${escapeHtml(summaryText)} ${sourcePill}</div>
         ${costHtml}
       </div>
     </div>
     ${breakdownHtml}
     ${projectedHtml}
+    ${actionsHtml}
   `
+
+  // Wire action buttons
+  container.querySelectorAll<HTMLButtonElement>(".cup-action-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation()
+      const action = btn.dataset.action
+      const sid = btn.dataset.sid
+      switch (action) {
+        case "compact":
+          _postMessage?.({ type: "compact_context", sessionId: sid })
+          break
+        case "new-session":
+          _postMessage?.({ type: "new_session" })
+          break
+        case "switch-model":
+          _postMessage?.({ type: "open_model_selector" })
+          break
+        case "set-override":
+          _postMessage?.({ type: "open_context_window_override_dialog" })
+          break
+      }
+    })
+  })
 }

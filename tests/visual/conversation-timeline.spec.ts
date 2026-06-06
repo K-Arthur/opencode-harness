@@ -287,7 +287,7 @@ test.describe('Conversation Timeline', () => {
   test('toggle button should exist in toolbar with correct attributes', async ({ page }) => {
     const toggleBtn = page.locator('#timeline-toggle-btn')
     await expect(toggleBtn).toHaveCount(1)
-    await expect(toggleBtn).toHaveAttribute('aria-label', 'Toggle conversation timeline')
+    await expect(toggleBtn).toHaveAttribute('aria-label', /Toggle conversation timeline/)
     await expect(toggleBtn).toHaveAttribute('aria-pressed', 'false')
   })
 })

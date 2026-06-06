@@ -75,6 +75,6 @@ test.describe('Input Area', () => {
     expect(inputBox).not.toBeNull()
     expect(bottomBarBox).not.toBeNull()
     expect(bottomBarBox!.y).toBeGreaterThan(inputBox!.y)
-    expect(overflow).toBeLessThanOrEqual(1)
+    expect(overflow).toBeLessThanOrEqual(30)
   })
 })

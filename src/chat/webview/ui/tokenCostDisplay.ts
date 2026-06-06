@@ -61,6 +61,13 @@ function usageSignature(usage: UsageDelta): string {
 
 export function rememberStepUsage(sessionId: string, usage: UsageDelta): void {
   recentStepUsage.set(sessionId, { signature: usageSignature(usage), timestamp: Date.now() })
+  // Limit map growth: evict entries older than 60s when over 100 entries
+  if (recentStepUsage.size > 100) {
+    const cutoff = Date.now() - 60_000
+    for (const [sid, entry] of recentStepUsage) {
+      if (entry.timestamp < cutoff) recentStepUsage.delete(sid)
+    }
+  }
 }
 
 export function isDuplicateRecentStepUsage(sessionId: string, usage: UsageDelta): boolean {
@@ -266,9 +273,15 @@ export function updateContextBarFromSession(deps: TokenCostDeps, sessionId: stri
 
   // context_usage events drive the bar via updateContextUsageBar — don't overwrite
   // with cumulative tokenUsage.total, which is unbounded and produces impossible values.
-  // Yield to the authoritative source when it has data.
+  // Yield to the authoritative source when it has any data.
   if (session.contextUsage && session.contextUsage.tokens > 0) {
     deps.showStatusStrip()
+    return
+  }
+
+  // Also yield when contextUsage exists but tokens === 0 (post-compact or fresh session)
+  // The authoritative context_usage will update when the host fires it.
+  if (session.contextUsage) {
     return
   }
 

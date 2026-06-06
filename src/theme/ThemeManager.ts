@@ -27,6 +27,10 @@ export interface OpencodeTheme {
   inputBg?: string
   inputBorder?: string
   mentionBg?: string
+  usageGood?: string
+  usageCaution?: string
+  usageWarning?: string
+  usageCritical?: string
 
   syntaxComment?: string
   syntaxKeyword?: string
@@ -117,6 +121,10 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
     inputBg: "var(--vscode-input-background)",
     inputBorder: "var(--vscode-input-border)",
     mentionBg: "var(--vscode-editor-selectionBackground)",
+    usageGood: "var(--vscode-charts-green)",
+    usageCaution: "var(--vscode-list-warningForeground)",
+    usageWarning: "var(--vscode-charts-yellow, #d29922)",
+    usageCritical: "var(--vscode-errorForeground)",
     syntaxComment: "var(--vscode-descriptionForeground)",
     syntaxKeyword: "var(--vscode-symbolIcon-keywordForeground)",
     syntaxString: "var(--vscode-symbolIcon-stringForeground)",
@@ -163,6 +171,10 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
     inputBg: "#ffffff",
     inputBorder: "#8b949e",
     mentionBg: "#ddf4ff",
+    usageGood: "#2da44e",
+    usageCaution: "#9a6700",
+    usageWarning: "#e06c00",
+    usageCritical: "#cf222e",
     markdownText: "#24292f",
     markdownHeading: "#0969da",
     markdownLink: "#0550ae",
@@ -223,6 +235,10 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
     inputBg: "#161b22",
     inputBorder: "#70767d",
     mentionBg: "#1f6feb",
+    usageGood: "#3fb950",
+    usageCaution: "#d29922",
+    usageWarning: "#e06c00",
+    usageCritical: "#f85149",
     markdownText: "#c9d1d9",
     markdownHeading: "#00e5ff",
     markdownLink: "#58a6ff",
@@ -283,6 +299,10 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
     inputBg: "#0a0a0a",
     inputBorder: "#ffff00",
     mentionBg: "rgba(0, 191, 255, 0.2)",
+    usageGood: "#00e676",
+    usageCaution: "#ffff00",
+    usageWarning: "#ff9100",
+    usageCritical: "#ff5252",
     markdownText: "#ffffff",
     markdownHeading: "#ffff00",
     markdownLink: "#00bfff",
@@ -343,6 +363,10 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
     inputBg: "#ffffff",
     inputBorder: "#cc0000",
     mentionBg: "rgba(0, 0, 255, 0.1)",
+    usageGood: "#006400",
+    usageCaution: "#994d00",
+    usageWarning: "#cc5500",
+    usageCritical: "#cc0000",
     markdownText: "#000000",
     markdownHeading: "#0000cc",
     markdownLink: "#0000cc",
@@ -393,6 +417,10 @@ const BUILT_IN_PRESETS: Record<ThemePreset, OpencodeTheme> = {
     inputBg: "var(--vscode-input-background, #000000)",
     inputBorder: "var(--vscode-input-border, var(--vscode-contrastBorder, #ffffff))",
     mentionBg: "var(--vscode-editor-selectionBackground, transparent)",
+    usageGood: "var(--vscode-testing-iconPassed, #ffffff)",
+    usageCaution: "var(--vscode-list-warningForeground, var(--vscode-editorWarning-foreground, #ffffff))",
+    usageWarning: "var(--vscode-editorWarning-foreground, #ffffff)",
+    usageCritical: "var(--vscode-errorForeground, #ffffff)",
     syntaxComment: "var(--vscode-descriptionForeground, #ffffff)",
     syntaxKeyword: "var(--vscode-symbolIcon-keywordForeground, #ffffff)",
     syntaxString: "var(--vscode-symbolIcon-stringForeground, #ffffff)",
@@ -699,6 +727,10 @@ export class ThemeManager {
     ["warningColor", "warning"],
     ["successColor", "success"],
     ["infoColor", "info"],
+    ["usageGood", "usageGood"],
+    ["usageCaution", "usageCaution"],
+    ["usageWarning", "usageWarning"],
+    ["usageCritical", "usageCritical"],
     ["diffAdded", "diffAdded"],
     ["diffRemoved", "diffRemoved"],
     ["diffContext", "diffContext"],
@@ -895,6 +927,10 @@ export class ThemeManager {
     ["--oc-error", "errorColor"],
     ["--oc-success", "successColor"],
     ["--oc-info", "infoColor"],
+    ["--oc-usage-good", "usageGood"],
+    ["--oc-usage-caution", "usageCaution"],
+    ["--oc-usage-warning", "usageWarning"],
+    ["--oc-usage-critical", "usageCritical"],
     ["--oc-primary", "primaryColor"],
     ["--oc-secondary", "secondaryColor"],
     ["--oc-accent", "accentColor"],

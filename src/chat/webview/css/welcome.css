@@ -257,6 +257,36 @@
   outline-offset: 2px;
 }
 
+/* ─── Welcome Bottom Links (keyboard hint area) ─── */
+
+.welcome-bottom-links {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-1);
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.welcome-shortcuts-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-0-5) var(--space-2);
+  background: transparent;
+  border: 1px solid var(--oc-glass-border);
+  border-radius: var(--radius-full);
+  color: var(--oc-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color var(--duration-fast), border-color var(--duration-fast);
+  white-space: nowrap;
+}
+
+.welcome-shortcuts-btn:hover {
+  color: var(--oc-fg);
+  border-color: var(--color-accent);
+}
+
 /* ─── Keyboard Hint ─── */
 
 .keyboard-hint {
@@ -550,7 +580,8 @@
 /* Toggled on .welcome-container by JS when the viewport is too short to
  * comfortably show the tagline + keyboard hint without crowding. */
 .welcome-container.welcome-short .welcome-tagline,
-.welcome-container.welcome-short #keyboard-hint {
+.welcome-container.welcome-short #keyboard-hint,
+.welcome-container.welcome-short .welcome-bottom-links {
   display: none;
 }
 

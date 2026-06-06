@@ -156,6 +156,12 @@
   --oc-error-action: #c7362e;
   --oc-info: var(--vscode-notificationsInfoIcon-foreground, var(--vscode-button-background, #0078d4));
 
+  /* ─── Usage/Context Bar Colours (ThemeManager injects --oc-usage-*) ─── */
+  --usage-good: var(--oc-usage-good, var(--oc-success, #3fb950));
+  --usage-caution: var(--oc-usage-caution, var(--oc-warning, #d29922));
+  --usage-warning: var(--oc-usage-warning, #e06c00);
+  --usage-critical: var(--oc-usage-critical, var(--oc-error, #f85149));
+
   /* ─── Unified colour aliases ─── */
   --color-accent: var(--oc-accent);
   --color-success: var(--oc-success);

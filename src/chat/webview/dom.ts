@@ -77,10 +77,8 @@ export interface ElementRefs {
   contextProgressBar: HTMLElement
   contextProgressFill: HTMLElement
   contextLabel: HTMLSpanElement
-  contextUsageBtn: HTMLButtonElement | null
   contextUsageDropdown: HTMLElement | null
   ctxDropdownContent: HTMLElement | null
-  ctxPctBadge: HTMLElement | null
   // context-monitor refs removed — panelled monitor was replaced by dropdown
   
   promptStashPanel: HTMLDivElement | null
@@ -266,10 +264,8 @@ export function getElementRefs(): ElementRefs {
     contextProgressBar: requireElement("context-progress-track"),
     contextProgressFill: requireElement("context-progress-fill"),
     contextLabel: requireElement<HTMLSpanElement>("context-label"),
-    contextUsageBtn: document.getElementById("context-usage-btn") as HTMLButtonElement | null,
     contextUsageDropdown: document.getElementById("context-usage-dropdown"),
     ctxDropdownContent: document.getElementById("ctx-dropdown-content"),
-    ctxPctBadge: document.getElementById("ctx-pct-badge"),
     
     promptStashPanel: optionalElement<HTMLDivElement>("prompt-stash-panel"),
     promptStashClose: optionalElement<HTMLButtonElement>("prompt-stash-close"),
