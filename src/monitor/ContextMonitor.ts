@@ -162,6 +162,11 @@ private currentTokens = 0
     }
   }
 
+  setModelAndProvider(modelId: string, provider: string): void {
+    this.currentModelId = modelId
+    this.currentProvider = provider
+  }
+
   getCurrentModel(): string | undefined {
     return this.currentModelId
   }
@@ -263,6 +268,14 @@ private currentTokens = 0
       updatedAt: Number.isFinite(options.updatedAt ?? NaN) ? options.updatedAt : Date.now(),
     }
     if (sessionId) this.latestUsageBySession.set(sessionId, usage)
+    // Populate projected field from pending queued/steer tokens
+    if (breakdown) {
+      const pendingTokens = (breakdown.queued ?? 0) + (breakdown.steer ?? 0)
+      if (pendingTokens > 0) {
+        const prediction = this.predictUsage(pendingTokens)
+        usage.projected = { withQueue: prediction.predictedTokens, overflow: prediction.willOverflow }
+      }
+    }
     this.onContextChangedEmitter.fire(usage)
     if (sessionId !== undefined && breakdown) {
       this.trackUsage(sessionId, this.currentTokens, breakdown, cost)
@@ -314,6 +327,12 @@ private currentTokens = 0
       updatedAt: Date.now(),
     }
     if (sessionId) this.latestUsageBySession.set(sessionId, usage)
+    // Populate projected from queue
+    const pendingTokens = safeQueueTokens + safeSteerTokens
+    if (pendingTokens > 0) {
+      const prediction = this.predictUsage(pendingTokens)
+      usage.projected = { withQueue: prediction.predictedTokens, overflow: prediction.willOverflow }
+    }
     this.onContextChangedEmitter.fire(usage)
   }
 

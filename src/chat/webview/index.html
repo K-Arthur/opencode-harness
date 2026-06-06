@@ -163,13 +163,15 @@
       <div id="tab-bar" role="tablist" aria-label="Sessions">
       </div>
       <!-- Status strip: shows active model + cost + tokens once a session has data -->
-      <div id="status-strip" class="status-strip" hidden aria-live="polite" aria-label="Session status">
+      <div id="status-strip" class="status-strip" hidden aria-label="Session status">
         <span id="status-model" class="status-strip-model"></span>
         <span id="status-cost" class="status-strip-cost hidden"></span>
         <span id="status-tokens" class="status-strip-tokens hidden"></span>
-        <div id="context-usage" class="context-usage-bar hidden" role="button" tabindex="0"
-          aria-label="Context usage — click for details" aria-haspopup="true" aria-controls="context-usage-dropdown">
+        <div id="context-usage" class="context-usage-bar hidden" role="progressbar" tabindex="0"
+          aria-label="Context usage" aria-haspopup="true" aria-controls="context-usage-dropdown"
+          aria-valuemin="0" aria-valuemax="100">
           <span class="context-usage-label">Context</span>
+          <span class="context-usage-dot" aria-hidden="true"></span>
           <div id="context-progress-track" class="context-usage-track" aria-hidden="true">
             <div id="context-progress-fill" class="context-usage-fill"></div>
           </div>
@@ -569,7 +571,10 @@
         <!-- Keyboard hint shown on roomy welcome views; hidden by .welcome-short
              when the panel is too short to comfortably show extras. -->
         <p id="keyboard-hint" class="keyboard-hint" aria-hidden="true">
-          <kbd>⌘</kbd>+<kbd>Enter</kbd> to send · <kbd>Esc</kbd> to cancel
+          <kbd>⌘</kbd>+<kbd>Enter</kbd> to send · <kbd>Esc</kbd> to stop
+        </p>
+        <p class="welcome-bottom-links" aria-hidden="true">
+          <button class="welcome-shortcuts-btn" id="welcome-shortcuts-btn" aria-label="View keyboard shortcuts (?)">⌨ Shortcuts</button>
         </p>
       </div>
     </div>

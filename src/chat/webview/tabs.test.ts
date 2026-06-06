@@ -26,15 +26,6 @@ describe("tabs.ts", () => {
     assert.ok(source.includes("export interface TabCallbacks"))
   })
 
-  it("TabCallbacks includes onToggleContextMonitor", () => {
-    assert.ok(source.includes("onToggleContextMonitor"))
-  })
-
-  it("context-monitor is clickable to open panel", () => {
-    assert.ok(source.includes('contextMonitor.addEventListener("click"'))
-    assert.ok(source.includes("onToggleContextMonitor"))
-  })
-
   it("has renderTabs function", () => {
     assert.ok(source.includes("function renderTabs"))
   })

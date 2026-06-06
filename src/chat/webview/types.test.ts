@@ -38,8 +38,8 @@ describe("types.ts", () => {
     assert.ok(source.includes("export interface ContextChip"))
   })
 
-  it("exports ContextUsage interface", () => {
-    assert.ok(source.includes("export interface ContextUsage"))
+  it("exports ContextUsage interface (re-exported from shared)", () => {
+    assert.ok(source.includes("ContextUsage"), "ContextUsage must be exported (from shared/contextUsage)")
   })
 
   it("exports HostMessage discriminated union type", () => {

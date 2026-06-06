@@ -43,6 +43,7 @@ const SHORTCUT_TABLE: ShortcutRow[] = [
   { keys: "Ctrl+Shift+Alt+H", action: "Open session history", context: "Chat view" },
   { keys: "Ctrl+Shift+Alt+N", action: "New session", context: "Chat view" },
   { keys: "Ctrl+Alt+R", action: "Retry last failed run", context: "Chat view" },
+  { keys: "Ctrl/Cmd+F", action: "Search messages in session", context: "Chat view" },
   { keys: "? (Shift+/)", action: "Open this help", context: "Chat view" },
   { keys: "E / Space", action: "Expand / collapse current tool call", context: "Tool call focused" },
   { keys: "C", action: "Copy current tool output", context: "Tool call focused" },

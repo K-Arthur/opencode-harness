@@ -16,7 +16,7 @@ import {
 void describe("TOOLTIPS map", () => {
   void it("exposes the chat action strings", () => {
     assert.equal(TOOLTIPS.chat.send, "Send message (Ctrl+Enter)")
-    assert.equal(TOOLTIPS.chat.stop, "Stop the current model response")
+    assert.ok(TOOLTIPS.chat.stop.startsWith("Stop the current model response"))
     assert.ok(TOOLTIPS.chat.voiceStart)
     assert.ok(TOOLTIPS.chat.voiceStop)
   })

@@ -4,16 +4,6 @@ export interface TabCallbacks {
   onSwitch: (tabId: string) => void
   onClose: (tabId: string) => void
   onNew: () => void
-  onToggleContextMonitor?: () => void
-  /**
-   * Fired when the user clicks the per-tab context-monitor while it is
-   * in the "limit unknown" state (server didn't report a window AND the
-   * OpenRouter fallback came up empty). Triggers the
-   * `setContextWindowOverride` command so the user can fix the missing
-   * window in one click. Optional so existing tab-creation tests don't
-   * need to thread the callback.
-   */
-  onSetContextWindowOverride?: () => void
 }
 
 export function createTabBar(els: ElementRefs, callbacks: TabCallbacks) {
@@ -182,48 +172,6 @@ export function createTabContent(tabId: string, tabName: string, callbacks: TabC
   messageList.setAttribute("aria-live", "polite")
 
   view.appendChild(messageList)
-  const contextMonitor = document.createElement("div")
-  contextMonitor.className = "context-monitor hidden"
-  contextMonitor.setAttribute("aria-label", "Context usage")
-  contextMonitor.setAttribute("role", "button")
-  contextMonitor.setAttribute("tabindex", "0")
-  contextMonitor.title = "Click to view context usage history and cost summary"
-
-  const progressBar = document.createElement("div")
-  progressBar.className = "context-progress-bar"
-  const progressFill = document.createElement("div")
-  progressFill.className = "context-progress-fill"
-  progressBar.appendChild(progressFill)
-
-  const contextText = document.createElement("span")
-  contextText.className = "context-text"
-
-  contextMonitor.appendChild(progressBar)
-  contextMonitor.appendChild(contextText)
-
-  // Make context-monitor clickable. Behavior depends on whether the
-  // window limit is known:
-  //   - known: opens the breakdown panel (original behavior)
-  //   - unknown (`data-needs-override="true"`): fires the
-  //     `setContextWindowOverride` command so the user can fix it in
-  //     one click instead of digging through the command palette.
-  const handleContextMonitorActivate = () => {
-    if (contextMonitor.dataset.needsOverride === "true") {
-      callbacks.onSetContextWindowOverride?.()
-      return
-    }
-    callbacks.onToggleContextMonitor?.()
-  }
-  contextMonitor.addEventListener("click", handleContextMonitorActivate)
-  contextMonitor.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault()
-      handleContextMonitorActivate()
-    }
-  })
-
-  view.appendChild(contextMonitor)
-
   const typingIndicator = document.createElement("div")
   typingIndicator.className = "typing-indicator hidden"
   typingIndicator.setAttribute("role", "status")

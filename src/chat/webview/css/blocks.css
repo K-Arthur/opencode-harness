@@ -2051,3 +2051,206 @@
 
   .diff-line--removed .diff-line-content { background: Mark !important; }
 }
+
+/* ─── Subagent Task Cards ─── */
+
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.subagent-card {
+  margin: var(--space-2) 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--oc-glass-bg);
+  overflow: hidden;
+}
+
+.subagent-card[open] {
+  background: var(--oc-editor-bg);
+}
+
+.subagent-card--completed {
+  border-color: var(--oc-success-border, rgba(46, 160, 67, 0.3));
+}
+
+.subagent-card--failed {
+  border-color: var(--oc-error-border, rgba(248, 81, 73, 0.3));
+  background: var(--oc-error-subtle, rgba(248, 81, 73, 0.04));
+}
+
+.subagent-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  user-select: none;
+}
+
+.subagent-card-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--oc-fg);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subagent-card-purpose {
+  font-size: var(--text-xs);
+  color: var(--oc-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subagent-card-status--running {
+  background: var(--oc-accent-subtle);
+  color: var(--color-accent);
+  animation: badge-pulse 1.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subagent-card-status--running {
+    animation: none;
+  }
+}
+
+.subagent-card-duration {
+  font-size: var(--text-2xs);
+  color: var(--oc-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.subagent-card-body {
+  padding: 0 var(--space-3) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.subagent-card-section--error {
+  padding: var(--space-2);
+  background: var(--oc-error-subtle, rgba(248, 81, 73, 0.06));
+  border: 1px solid var(--oc-error-border, rgba(248, 81, 73, 0.2));
+  border-radius: var(--radius-md);
+}
+
+.subagent-card-debug {
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+}
+
+/* ─── Diff More Menu ─── */
+
+.diff-more-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.diff-btn-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--oc-glass-border, var(--color-border));
+  border-radius: var(--radius-md, 6px);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+
+.diff-btn-more:hover {
+  background: var(--oc-list-hover);
+  color: var(--oc-fg);
+}
+
+.diff-more-menu {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  z-index: var(--z-dropdown, 200);
+  min-width: 160px;
+  background: var(--oc-bg, var(--vscode-dropdown-background, #1e1e1e));
+  border: 1px solid var(--oc-glass-border, var(--vscode-dropdown-border, #555));
+  border-radius: var(--radius-md, 6px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  padding: var(--space-1, 4px);
+  margin-bottom: 4px;
+}
+
+.diff-more-menu.hidden {
+  display: none;
+}
+
+.diff-more-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--space-1-5, 6px) var(--space-2, 8px);
+  background: none;
+  border: none;
+  color: var(--oc-fg, var(--vscode-dropdown-foreground, #ccc));
+  font-size: var(--text-xs, 12px);
+  cursor: pointer;
+  border-radius: var(--radius-sm, 4px);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.diff-more-menu-item:hover {
+  background: var(--oc-list-hover, var(--vscode-list-hoverBackground, #2a2d2e));
+  color: var(--oc-fg, var(--vscode-list-hoverForeground, #fff));
+}
+
+/* ─── Session modal more-menu ─── */
+
+.modal-session-more-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: var(--z-dropdown, 100);
+  min-width: 160px;
+  background: var(--oc-bg, var(--vscode-dropdown-background, #1e1e1e));
+  border: 1px solid var(--oc-glass-border, var(--vscode-dropdown-border, #555));
+  border-radius: var(--radius-md, 6px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  padding: var(--space-1, 4px);
+}
+
+.modal-session-more-menu.hidden {
+  display: none;
+}
+
+.more-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  width: 100%;
+  padding: var(--space-1-5, 6px) var(--space-2, 8px);
+  background: none;
+  border: none;
+  color: var(--oc-fg, var(--vscode-dropdown-foreground, #ccc));
+  font-size: var(--text-xs, 12px);
+  cursor: pointer;
+  border-radius: var(--radius-sm, 4px);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.more-menu-item:hover {
+  background: var(--oc-list-hover, var(--vscode-list-hoverBackground, #2a2d2e));
+  color: var(--oc-fg, var(--vscode-list-hoverForeground, #fff));
+}
+
+.more-menu-item svg {
+  flex-shrink: 0;
+}

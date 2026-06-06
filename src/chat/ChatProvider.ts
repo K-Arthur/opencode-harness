@@ -8,6 +8,7 @@ import { ThemeManager } from "../theme/ThemeManager"
 import { RateLimitMonitor } from "../monitor/RateLimitMonitor"
 import { ModelManager } from "../model/ModelManager"
 import { CheckpointManager } from "../checkpoint/CheckpointManager"
+import { parseModelRef } from "../utils/tokenCounter"
 import { DiffApplier } from "../diff/DiffApplier"
 import { sdkMessagesToChatMessages, reasoningEventToBlock } from "../session/sdkMessageConverter"
 import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
@@ -1204,6 +1205,15 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     const override = vscode.workspace.getConfiguration("opencode").get<number>("contextWindowOverride", 0)
     const effectiveWindow = override > 0 ? override : resolvedWindow
     const activeSessionId = this.sessionStore.activeId || this.tabManager.getActiveId() || ""
+
+    // Keep ContextMonitor in sync with the active model/provider so cost
+    // calculations and usage history get accurate stamps.
+    const activeModel = model ?? this.modelManager.model
+    if (activeModel) {
+      const { providerID, modelID } = parseModelRef(activeModel)
+      this.contextMonitor.setModelAndProvider(modelID || activeModel, providerID || "anthropic")
+    }
+
     if (effectiveWindow && effectiveWindow > 0) {
       this.contextMonitor.setTokenLimit(effectiveWindow, activeSessionId)
       this.updateStoredContextWindow(activeSessionId, effectiveWindow)

@@ -66,6 +66,24 @@ export function mergeStreamText(existing: string, chunk: string): string {
   return stripContextFromText(existing + chunk)
 }
 
+/**
+ * Look up a message by id scanning from the END of the transcript.
+ *
+ * On the streaming hot path the target is almost always the most-recent
+ * message, so a reverse scan is O(1) in the common case — versus `Array.find`,
+ * which scans from the front and therefore did O(N) work (growing with the
+ * conversation) on every render flush / tool / diff event. Message ids are
+ * unique by construction (crypto ids for live streams, server ids for history),
+ * so "first match from the end" is the same element `Array.find` would return.
+ */
+export function findMessageById(messages: ChatMessage[], id: string): ChatMessage | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]
+    if (m && m.id === id) return m
+  }
+  return undefined
+}
+
 function finalizeCurrentTextBlock(
   state: StreamState,
   els: StreamElements,
@@ -82,7 +100,7 @@ function finalizeCurrentTextBlock(
 
   const id = state.streamingMessageId
   if (id) {
-    const msgObj = messages.find((m) => m.id === id)
+    const msgObj = findMessageById(messages, id)
     if (msgObj && state.currentBlockIndex >= 0) {
       const block = msgObj.blocks[state.currentBlockIndex]
       if (block && block.type === "text") {
@@ -125,7 +143,7 @@ function insertStreamingTextAfterLastBlock(
 
   const id = state.streamingMessageId
   if (id) {
-    const msgObj = messages.find((m) => m.id === id)
+    const msgObj = findMessageById(messages, id)
     if (msgObj) {
       msgObj.blocks.push(createTextBlock(""))
       state.currentBlockIndex = msgObj.blocks.length - 1
@@ -161,7 +179,7 @@ export function reRenderMessage(
   els: StreamElements,
   messages: ChatMessage[]
 ): void {
-  const msgObj = messages.find((m) => m.id === messageId)
+  const msgObj = findMessageById(messages, messageId)
   if (!msgObj) return
 
   const oldEl = els.messageList.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement | null
@@ -266,7 +284,7 @@ function createLiveRenderQueue(
     const displayText = stripContextFromText(state.currentBlockBuffer)
     liveRenderer.renderInto(textEl, displayText)
 
-    const msgObj = messages.find((m) => m.id === streamId)
+    const msgObj = findMessageById(messages, streamId)
     if (msgObj && state.currentBlockIndex >= 0) {
       const block = msgObj.blocks[state.currentBlockIndex]
       if (block && block.type === "text") {
@@ -316,7 +334,7 @@ export function handleStreamStart(
     webviewLog(`handleStreamStart: restarting stream ${state.streamingMessageId} → ${messageId ?? "<new>"}`, "warn")
     const prior = state.streamingMessageId
     if (prior) {
-      const priorMsg = messages.find((m) => m.id === prior)
+      const priorMsg = findMessageById(messages, prior)
       if (priorMsg) finishUnresolvedToolCalls(priorMsg.blocks)
     }
     resetStreamState(state)
@@ -397,7 +415,7 @@ export function handleStreamToken(
   let id = state.streamingMessageId
   if (!id) {
     if (messageId) {
-      const targetMsg = messages.find(m => m.id === messageId)
+      const targetMsg = findMessageById(messages, messageId)
       if (targetMsg) {
         state.streamingMessageId = messageId
         state.isStreaming = true
@@ -461,7 +479,7 @@ export function handleToolStart(
   const id = state.streamingMessageId
   if (!id) return
 
-  const msgObj = messages.find((m) => m.id === id)
+  const msgObj = findMessageById(messages, id)
   if (updateExistingToolStart(state, els, msgObj, toolCall, postMessage, id, callbacks)) return
 
   prepareForToolBlock(state, els, messages, toolCall.id)
@@ -935,7 +953,7 @@ export function handleDiff(
     linesRemoved: diff.linesRemoved,
   }
 
-  const msgObj = messages.find((m) => m.id === id)
+  const msgObj = findMessageById(messages, id)
   if (msgObj) msgObj.blocks.push(diffBlock as Block)
 
   const msgEl = els.messageList.querySelector(`[data-message-id="${id}"]`) as HTMLElement | null
@@ -971,7 +989,7 @@ export function handleSkillIndicator(
   const id = state.streamingMessageId
   if (!id) return
 
-  const msgObj = messages.find((m) => m.id === id)
+  const msgObj = findMessageById(messages, id)
   if (!msgObj) return
 
   const skillBlock: Block = { type: "skill_badge", skillName }
@@ -1022,7 +1040,7 @@ export function handleStreamError(
         const idx = messages.findIndex((m) => m.id === id)
         if (idx !== -1) messages.splice(idx, 1)
       } else {
-        const msgObj = messages.find((m) => m.id === id)
+        const msgObj = findMessageById(messages, id)
         if (msgObj) finishUnresolvedToolCalls(msgObj.blocks)
       }
     }

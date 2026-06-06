@@ -319,6 +319,28 @@
       ]
     },
     "menus": {
+      "commandPalette": [
+        {
+          "command": "opencode-harness.showRateLimits",
+          "when": "false"
+        },
+        {
+          "command": "opencode-harness.checkCli",
+          "when": "false"
+        },
+        {
+          "command": "opencode-harness.installCli",
+          "when": "false"
+        },
+        {
+          "command": "opencode-harness.previewTheme",
+          "when": "false"
+        },
+        {
+          "command": "opencode-harness.clearTestSessions",
+          "when": "false"
+        }
+      ],
       "editor/context": [
         {
           "command": "opencode-harness.explainCode",
