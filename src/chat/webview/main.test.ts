@@ -44,6 +44,16 @@ describe("main.ts", () => {
     assert.ok(!source.includes('id: "user-" + crypto.randomUUID()'), "send path must not crash if crypto.randomUUID is unavailable")
   })
 
+  it("generates opencode-compatible user message ids in the prompt send paths", () => {
+    // opencode rejects user-message ids not starting with "msg" (BadRequest:
+    // "Expected a string starting with \"msg\""). The id is reused as the local
+    // optimistic bubble id, so the webview must mint a msg_ id, not createWebviewId("user").
+    assert.ok(sendLogicSource.includes("generateUserMessageId("), "sendLogic.ts must mint an opencode-compatible user message id")
+    assert.ok(!sendLogicSource.includes('createWebviewId("user")'), "sendLogic.ts must not send a server-rejected user- id")
+    assert.ok(orchestratorSource.includes("generateUserMessageId("), "streamOrchestrator.ts must mint an opencode-compatible user message id")
+    assert.ok(!orchestratorSource.includes('createWebviewId("user")'), "streamOrchestrator.ts must not send a server-rejected user- id")
+  })
+
   it("uses IIFE pattern", () => {
     assert.ok(source.includes("(function ()"))
   })

@@ -1,6 +1,7 @@
 import type { WebviewState, ChatMessage } from "./types"
 import type { ElementRefs } from "./dom"
 import { TOOLTIPS } from "./tooltips"
+import { generateUserMessageId } from "../../session/messageId"
 
 export interface StreamCapacityState {
   isFull: boolean
@@ -300,7 +301,9 @@ export function createSendLogic(deps: SendLogicDeps) {
 
     const msgObj: ChatMessage = {
       role: "user",
-      id: createWebviewId("user"),
+      // opencode rejects user-message ids not starting with "msg"; this id is reused as
+      // both the local optimistic bubble id and the server messageID, so they stay equal.
+      id: generateUserMessageId(),
       blocks: [
         ...(text ? [{ type: "text" as const, text }] : []),
         ...attachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),

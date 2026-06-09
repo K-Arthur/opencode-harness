@@ -1,5 +1,3 @@
-import { randomBytes } from "crypto"
-
 /**
  * Generates an opencode-compatible user message id.
  *
@@ -16,6 +14,12 @@ import { randomBytes } from "crypto"
  *   big-endian) + 14 base62 random chars  →  total 26 chars after the prefix.
  *
  * Source: sst/opencode `packages/opencode/src/id/id.ts`.
+ *
+ * Isomorphic: the id originates in the chat webview (where it is reused as the local
+ * optimistic bubble id) AND must equal the id sent to the server, so this module is
+ * imported by both the webview and the extension-host bundles. It therefore relies on
+ * the Web Crypto API (`globalThis.crypto.getRandomValues`, present in VS Code webviews
+ * and Node 19+) rather than node's `crypto.randomBytes`.
  */
 
 const PREFIX = "msg"
@@ -28,6 +32,19 @@ const TIME_MASK_48 = (1n << 48n) - 1n
 
 let lastTimestamp = 0
 let counter = 0
+
+function randomBytes(length: number): Uint8Array {
+  const out = new Uint8Array(length)
+  const webCrypto = (globalThis as { crypto?: { getRandomValues?: (a: Uint8Array) => Uint8Array } }).crypto
+  if (webCrypto?.getRandomValues) {
+    webCrypto.getRandomValues(out)
+    return out
+  }
+  // Fallback for environments without Web Crypto. The time-ordered prefix already
+  // guarantees ordering; this only needs to avoid same-millisecond collisions.
+  for (let i = 0; i < length; i++) out[i] = (Math.random() * 256) | 0
+  return out
+}
 
 function randomBase62(length: number): string {
   const bytes = randomBytes(length)
