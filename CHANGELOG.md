@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Subagent events for long-running child sessions no longer dropped by PendingEventBuffer.** Default TTL increased from 5s to 5min; `SubagentHeartbeat` now calls `replayChildSessionEvents` on first discovery of each child session, draining buffered server events and dispatching through the parent tab. (`src/chat/PendingEventBuffer.ts`, `src/chat/handlers/SubagentHeartbeat.ts`, `src/chat/ChatProvider.ts`)
+- **Subagent "completed" shown as "running".** `RunActivityTracker.recordSubagent` now guards against overwriting terminal status (`completed`/`failed`/`cancelled`) with non-terminal (`running`/`queued`). (`src/chat/handlers/RunActivityTracker.ts`)
+- **HostMessageBatcher logging cascade.** Dedup drop messages now log the first drop then every 100th (not every single), preventing thousands of log lines per second during subagent-heavy streams. (`src/chat/HostMessageBatcher.ts`)
+- **Chat session state not cleaned up on server error/disconnect.** Both `server_error` and `server_disconnected` handlers now call `streamCoordinator.cleanupTab(tabId)` alongside TabManager resets, preventing stale coordinator state from corrupting the next prompt. (`src/chat/ChatProvider.ts`)
+- **`message_complete` silently dropped when no tab match.** Falls back to the active tab if the event's session ID does not match any known tab. (`src/chat/ChatProvider.ts`)
+- **`maybeFinalizeStream` deferral log spamming.** Deferral reasons now logged at most once per 5s per tab, not on every poll iteration during long subagent waits. (`src/chat/handlers/StreamCoordinator.ts`)
+- **Side region tabs blank when not opened from subagent.** `onTabChange` callback now refreshes panel content on tab switch. (`src/chat/webview/main.ts`)
+- **Subagent detail view overlapping with other tab panes.** Detail view closes on any tab switch; subagent tab is activated before showing detail. (`src/chat/webview/main.ts`)
+- **Missing `slideIn` keyframe animation.** Added `@keyframes slideIn` definition for subagent detail view entrance. (`src/chat/webview/css/components.css`)
+
+### Changed
+
+- **Pin button icon replaced.** Star icon changed to map-pin icon for standard UI affordance. (`src/chat/webview/index.html`)
 - **Stream prematurely stopping on permission/question/rate-limit.** Three fixes in `StreamCoordinator.ts`: `reconcilePendingToolCallsFromServer` now skips removal of `question` type tool calls from `activeToolCallIds` unless `answered === true`; `getFinalizeDeferReason` scans for unanswered `question` blocks and defers finalization; new `markQuestionAnswered(tabId, toolCallId)` method marks the question as answered and removes it from `activeToolCallIds`, called from both `WebviewEventRouter.ts` question_answer paths and `postToolEnd`. (`src/chat/handlers/StreamCoordinator.ts`, `src/chat/WebviewEventRouter.ts`)
 - **Rate-limit card appearing mid-stream.** `rate_limit_exhausted` handler in `main.ts` now checks `isStreaming` — during active streams, only the non-intrusive bar notice is shown, no inline error card. (`src/chat/webview/main.ts`)
 - **Session-history "More actions" (⋯) menu did nothing.** The body-portaled menu used `z-index: var(--z-dropdown)` (50), below the modal backdrop (200)/content (300), so it rendered invisibly behind the modal. Added a dedicated `--z-modal-menu` (350) token. (`tokens.css`, `blocks.css`, `sessionListRenderer.ts`)
@@ -27,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Tests
 
-- `question-block.test.ts` (rewritten for pointer rendering, 12 tests), `question-refresh.test.ts` (3 tests), `main.test.ts` (welcome strip guard), `theme.test.ts` (rate-limit bar reference), `renderer.test.ts` (permission source check moved to `main.ts`). Total: 3115 pass, 0 fail.
+- `question-block.test.ts` (rewritten for pointer rendering, 12 tests), `question-refresh.test.ts` (3 tests), `main.test.ts` (welcome strip guard), `theme.test.ts` (rate-limit bar reference), `renderer.test.ts` (permission source check moved to `main.ts`), `PendingEventBuffer.test.ts` (default TTL struct test). Total: 3123 pass, 0 fail.
 - `activityCoalesce.test.ts` (11), `streamEndErrorPolicy.test.ts` (7), `errorComponents.dom.test.ts` (8), welcome-guard cases in `tokenCostDisplay.context.test.ts`, and a z-index regression in `sessionListRenderer.moreMenu.test.ts`.
 
 ### Docs
