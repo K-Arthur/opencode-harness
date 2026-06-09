@@ -41,6 +41,7 @@ import { setupActivityPanel } from "./activity-panel"
 import { setupTasksPanel } from "./tasks-panel"
 import { mergeTodos, generateTodoId } from "./todos-logic"
 import { setupSkillsModal } from "./skills-modal"
+import * as questionBar from "./questionBar"
 import { setupSubagentPanel, type SubagentPanelApi } from "./subagent-panel"
 import { setupSubagentDetailView, type SubagentDetailViewApi } from "./subagentDetailView"
 import { reconcileSubagentStatuses, computeNewSubagentIds, capCompletedSubagents } from "./subagentReconciler"
@@ -1262,6 +1263,7 @@ function getVsCodeApi() {
     wireTimeline()
     setupMessageListener()
     setupPermissionListener()
+    questionBar.initQuestionBar((m) => vscode.postMessage(m))
     setupDiffActionListener()
     composer.restoreQueues()
     // Request fresh queue state from host — keeps our render cache in sync after reload
@@ -1647,6 +1649,9 @@ function getVsCodeApi() {
     }
     // Refresh queue UI for the switched-to tab
     composer.renderQueue(tabId)
+    // Refresh question bar for the switched-to tab — only show pending questions
+    // belonging to the active session.
+    questionBar.setActiveSession(tabId)
   }
 
   function closeTab(tabId: string) {
@@ -1796,6 +1801,7 @@ function getVsCodeApi() {
       // while a stream is still running, instead of waiting for stream_end.
       postMessage: (m) => vscode.postMessage(m),
       onRenderFlush: postRenderAck,
+      onQuestionBlock: (block, messageId) => questionBar.addQuestion(block, messageId),
     })
 
     // WARNING: Class methods live on the prototype, not as own properties.
@@ -2411,10 +2417,39 @@ function getVsCodeApi() {
       ["more_messages", (msg) => {
         const sid = msg.sessionId as string | undefined
         const moreMsgs = msg.messages as import("./types").ChatMessage[] | undefined
-        if (!sid || !moreMsgs || moreMsgs.length === 0) return
+        const msgList = sid ? getMessageList(sid) : null
+        if (!sid || !msgList) return
 
-        const msgList = getMessageList(sid)
-        if (!msgList) return
+        // Always clean up any banner still in "Loading…" state — otherwise a
+        // host reply with messages: [] (e.g. local exhausted, server has
+        // nothing new) would leave the button stuck disabled forever.
+        const oldBanner = msgList.querySelector<HTMLElement>(".load-earlier-banner")
+        if (oldBanner) oldBanner.remove()
+
+        // Always update pagination state so subsequent "Load earlier"
+        // clicks use the freshest server-reported beforeIndex (e.g. 0 to
+        // signal "no more hidden messages").
+        const newBeforeIndex = typeof msg.newBeforeIndex === "number" ? msg.newBeforeIndex : 0
+        sessionBeforeIndex.set(sid, newBeforeIndex)
+        const newHiddenTurns = typeof msg.displayHiddenTurns === "number" ? msg.displayHiddenTurns : newBeforeIndex
+        sessionHiddenTurns.set(sid, newHiddenTurns)
+
+        // Empty-messages reply means nothing to prepend. Skip the render path
+        // but still create a banner with the remaining count if any (the
+        // server may have backfilled older messages since the local cache).
+        if (!moreMsgs || moreMsgs.length === 0) {
+          if (newBeforeIndex > 0) {
+            const noMoreBanner = createLoadEarlierBanner(newHiddenTurns, newBeforeIndex, () => {
+              const idx = sessionBeforeIndex.get(sid) ?? 0
+              if (idx <= 0) return
+              vscode.postMessage({ type: "request_more_messages", sessionId: sid, beforeIndex: idx, limit: 50 })
+            })
+            noMoreBanner.dataset.sessionId = sid
+            msgList.insertBefore(noMoreBanner, msgList.firstElementChild)
+          }
+          debouncedUpdateScrollMarkers(sid)
+          return
+        }
 
         const session = stateManager.getSession(sid)
         const renderOpts = { mode: session?.mode ?? "build", sessionId: sid, postMessage: (m2: Record<string, unknown>) => vscode.postMessage(m2) }
@@ -2424,15 +2459,7 @@ function getVsCodeApi() {
           return renderMessage(m, { ...renderOpts, turnIndex: session?.messages.indexOf(m) }, isConsecutive)
         })
 
-        const oldBanner = msgList.querySelector<HTMLElement>(".load-earlier-banner")
-        if (oldBanner) oldBanner.remove()
-
         prependMessagesPreservingScroll(msgList, elements)
-
-        const newBeforeIndex = typeof msg.newBeforeIndex === "number" ? msg.newBeforeIndex : 0
-        sessionBeforeIndex.set(sid, newBeforeIndex)
-        const newHiddenTurns = typeof msg.displayHiddenTurns === "number" ? msg.displayHiddenTurns : newBeforeIndex
-        sessionHiddenTurns.set(sid, newHiddenTurns)
 
         if (newBeforeIndex > 0) {
           const banner = createLoadEarlierBanner(newHiddenTurns, newBeforeIndex, () => {
@@ -3092,6 +3119,11 @@ function getVsCodeApi() {
                 scrollAnchors.set(s.id, anchor)
               }
 
+              // Re-populate question bar from persisted question blocks in messages
+              if (s.id === stateManager.getState().activeSessionId) {
+                questionBar.repopulateFromMessages(s.id, s.messages as any)
+              }
+
               if (!getVirtualList(s.id)) {
                 const vl = createVirtualList(
                   s.id,
@@ -3629,6 +3661,21 @@ function getVsCodeApi() {
       }],
       ["push_visible_state", () => {
         requestStateSyncDebounced()
+      }],
+      ["question_asked", (msg, sid) => {
+        const block = msg.block as any
+        const messageId = msg.messageId as string || ""
+        if (block && block.type === "question") {
+          questionBar.addQuestion(block, messageId)
+        }
+      }],
+      ["question_acknowledged", (_msg, _sid) => {
+        const toolCallId = _msg.toolCallId as string || _msg.requestID as string || ""
+        // The host confirms the answer was received — remove the answered
+        // item from the bar immediately so the user gets fast feedback. The
+        // webview already posted the answer and showed a local "Answered"
+        // state via markQuestionAnswered, so this just cleans it up.
+        if (toolCallId) questionBar.removeQuestion(toolCallId)
       }],
     ])
 
