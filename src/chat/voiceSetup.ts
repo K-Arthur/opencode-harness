@@ -66,11 +66,15 @@ export function recorderInstallCommand(
   if (platform === "linux") {
     if (exists("apt-get")) return { manager: "apt", command: "sudo apt-get install -y sox" }
     if (exists("dnf")) return { manager: "dnf", command: "sudo dnf install -y sox" }
+    if (exists("dnf5")) return { manager: "dnf5", command: "sudo dnf5 install -y sox" }
     if (exists("pacman")) return { manager: "pacman", command: "sudo pacman -S --noconfirm sox" }
     if (exists("zypper")) return { manager: "zypper", command: "sudo zypper install -y sox" }
+    if (exists("apk")) return { manager: "apk", command: "sudo apk add sox" }
+    if (exists("nix-env")) return { manager: "Nix", command: "nix-env -iA nixpkgs.sox" }
     return null
   }
   if (platform === "win32") {
+    if (exists("winget")) return { manager: "winget", command: "winget install sox --accept-source-agreements" }
     if (exists("choco")) return { manager: "Chocolatey", command: "choco install sox -y" }
     if (exists("scoop")) return { manager: "Scoop", command: "scoop install sox" }
     return null
