@@ -106,4 +106,29 @@ void describe("voiceSetup plan", () => {
     assert.equal(recorder?.command, undefined)
     assert.match(recorder?.manual || "", /sox/i)
   })
+
+  void it("gives platform-specific linux hint for unknown package manager", () => {
+    const plan = buildVoiceSetupPlan(
+      probe({ hasEngine: true }),
+      "linux",
+    )
+    const recorder = plan.steps.find((s) => s.kind === "recorder")
+    assert.match(recorder?.manual || "", /pacman|dnf|apt/)
+  })
+  void it("gives winget hint on windows without package manager", () => {
+    const plan = buildVoiceSetupPlan(
+      probe({ hasEngine: true }),
+      "win32",
+    )
+    const recorder = plan.steps.find((s) => s.kind === "recorder")
+    assert.match(recorder?.manual || "", /winget/)
+  })
+  void it("gives generic hint for unknown platforms", () => {
+    const plan = buildVoiceSetupPlan(
+      probe({ hasEngine: true }),
+      "freebsd",
+    )
+    const recorder = plan.steps.find((s) => s.kind === "recorder")
+    assert.match(recorder?.manual || "", /package manager/)
+  })
 })
