@@ -5,6 +5,28 @@ All notable changes to the **OpenCode Harness** extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Duplicate info/error cards.** A single fault no longer renders as multiple cards.
+  - Activity notices ("Model switched", "Agent switched", compaction, provider retry) used to stack duplicates because `ChatProvider.appendActivityBlock` minted a random id per delivery and always appended — a re-delivered event (SSE reconnect / `PendingEventBuffer` replay) produced a second card. New pure `activitySignature` + `decideActivityCoalesce` (`src/session/activityCoalesce.ts`) collapse an immediately-repeated identical activity into the previous card and bump a `repeatCount` (rendered as a `×N` badge); `SessionStore.appendOrCoalesceActivity` applies it and the webview upserts in place.
+  - One generation failure used to surface three times: the structured error card, a generic "An error occurred while generating the response" end-of-stream card, and the raw error echoed in the bottom typing indicator. The structured card is now canonical — `hasRecentErrorCard` (`streamEndErrorPolicy.ts`) suppresses the generic end-of-stream card when an error card already exists, and `handleRunActivityUpdate` no longer echoes raw errors into the status indicator. (`streamOrchestrator.ts`, `streamHandlers.ts`)
+- **Session-history "More actions" (⋯) menu did nothing.** The body-portaled menu used `z-index: var(--z-dropdown)` (50), below the modal backdrop (200)/content (300), so it rendered invisibly behind the modal. Added a dedicated `--z-modal-menu` (350) token. (`tokens.css`, `blocks.css`, `sessionListRenderer.ts`)
+- **Context-usage bar leaking onto the welcome screen.** `updateContextBarFromSession` removed the `hidden` class unconditionally; it now respects an `isWelcomeVisible` guard threaded through `TokenCostDeps`, matching the sibling reveal paths. The usage bar must never appear on the welcome/empty screen. (`tokenCostDisplay.ts`, `main.ts`)
+
+### Changed
+
+- **Compact, theme-driven card system.** New shared `.oc-card` model (`src/chat/webview/css/cards.css`, imported by `styles.css`) with severity modifiers (info/success/warning/error/critical/permission): thin severity left border + theme-token icon colour, ~8–10px padding, 12px text, no gradients/shadows/shake. `ErrorDisplay` (`errorComponents.ts`) rewritten to emit `.oc-card` with zero inline styles, theme SVG severity icons (no more emoji), technical details collapsed by default with a **Copy** action and an in-place **Details** toggle. `.msg-error` compacted to match. See `docs/design/cards.md`.
+
+### Tests
+
+- `activityCoalesce.test.ts` (11), `streamEndErrorPolicy.test.ts` (7), `errorComponents.dom.test.ts` (8), welcome-guard cases in `tokenCostDisplay.context.test.ts`, and a z-index regression in `sessionListRenderer.moreMenu.test.ts`.
+
+### Docs
+
+- `docs/design/cards.md` — severity model, card anatomy, lifecycle/disclosure, and the deduplication strategy.
+
 ## [0.3.12] - 2026-06-07
 
 ### Fixed

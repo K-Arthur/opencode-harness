@@ -341,6 +341,26 @@ extension has already restored local state. Six fixes address this:
 - Host → Webview: `{ type: "session_messages_refreshed", sessionId, messages, totalCount }` —
   contains the refreshed message array. The webview re-renders the message list.
 
+## Activity & Error Card Deduplication
+
+Activity notices (model/agent switched, compaction, provider retry) and error
+cards are deduplicated at the host before posting, so a re-delivered event
+(SSE reconnect, `PendingEventBuffer` replay) or a multi-surface failure does not
+stack duplicate cards in the transcript:
+
+- **Activity**: `ChatProvider.appendActivityBlock` builds a content signature
+  (`activitySignature`) and calls `SessionStore.appendOrCoalesceActivity`, which
+  collapses an immediately-repeated identical activity into the previous card and
+  bumps a `repeatCount` (rendered as a `×N` badge). The host posts the stored
+  message (new or updated) and the webview upserts it by id (`upsertMessageById`),
+  replacing the existing node in place rather than appending.
+- **Error**: the structured error card is canonical; the generic end-of-stream
+  "An error occurred…" card is suppressed by `hasRecentErrorCard`
+  (`streamEndErrorPolicy.ts`) when an error card already exists, and the raw
+  error is no longer echoed into the bottom status indicator.
+
+See `docs/design/cards.md` for the full card system and severity model.
+
 ## Question Tool Block
 
 The `question` tool lets the model ask the user one or more multiple-choice or free-text questions. The question block in the assistant transcript renders as a **non-interactive record** (pending chip or answered echo). Interactive option selection and answer submission is handled by the input-area `#question-bar` (`questionBar.ts`).
