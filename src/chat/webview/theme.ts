@@ -147,18 +147,18 @@ export function updateModelIndicator(model?: string) {
 export function handleRateLimitExhausted(els: ElementRefs, resetAt?: string) {
   ;(els.sendBtn as HTMLButtonElement).disabled = true
   const resetMsg = resetAt ? "Reset at " + resetAt : "Please wait for the rate limit to reset."
-  const notification = document.createElement("div")
-  notification.className = "rate-limit-notice"
-  notification.textContent = "\u26A0 Rate limit exceeded. " + resetMsg
-  els.inputArea.appendChild(notification)
+  const rateLimitBar = document.getElementById("rate-limit-bar")
+  if (rateLimitBar) {
+    rateLimitBar.textContent = "Rate limit exceeded. " + resetMsg
+    rateLimitBar.classList.remove("hidden")
+  }
 
   if (resetAt) {
     const now = Date.now()
     const resetTime = new Date(resetAt).getTime()
     const delay = Math.max(resetTime - now, 30000)
     timers.setTimeout(() => {
-      const existing = els.inputArea.querySelector(".rate-limit-notice")
-      if (existing) existing.remove()
+      if (rateLimitBar) rateLimitBar.classList.add("hidden")
       ;(els.sendBtn as HTMLButtonElement).disabled = false
     }, delay)
   }

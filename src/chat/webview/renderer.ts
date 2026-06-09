@@ -1657,73 +1657,49 @@ function renderDiffBlock(block: Block, opts: RenderOptions): HTMLElement | null 
 // Permission block
 // ---------------------------------------------------------------------------
 
-function renderPermissionBlock(block: Block, opts: RenderOptions): HTMLElement | null {
+function renderPermissionBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
   const wrapper = document.createElement("div")
   wrapper.className = "permission-block"
   wrapper.role = "region"
   wrapper.ariaLabel = "Permission request"
+
+  const answerState = (block as Record<string, unknown>).answerState as string | undefined
+  if (answerState) {
+    const text = document.createElement("div")
+    text.className = "permission-text"
+    text.textContent = block.text || "Requesting permission..."
+    wrapper.appendChild(text)
+    const chip = document.createElement("span")
+    chip.className = "permission-answered-chip"
+    const label = answerState === "allowed" ? "Allowed" : answerState === "always" ? "Always allowed" : "Denied"
+    chip.textContent = label
+    wrapper.appendChild(chip)
+    return wrapper
+  }
+
+  const header = document.createElement("div")
+  header.className = "permission-block-header"
+  const icon = document.createElement("span")
+  icon.className = "permission-block-icon"
+  icon.setAttribute("aria-hidden", "true")
+  icon.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`
+  header.appendChild(icon)
+  const label = document.createElement("span")
+  label.className = "permission-block-label"
+  label.textContent = "Permission required"
+  header.appendChild(label)
+  wrapper.appendChild(header)
 
   const text = document.createElement("div")
   text.className = "permission-text"
   text.textContent = block.text || "Requesting permission..."
   wrapper.appendChild(text)
 
-  const actions = document.createElement("div")
-  actions.className = "permission-actions"
-  actions.role = "group"
-  actions.ariaLabel = "Permission response options"
+  const hint = document.createElement("div")
+  hint.className = "permission-pointer-hint"
+  hint.textContent = "Respond in the input bar above"
+  wrapper.appendChild(hint)
 
-  // If the permission was already answered (persisted from a previous render),
-  // show the answer state instead of the action buttons.
-  const answerState = (block as Record<string, unknown>).answerState as string | undefined
-  if (answerState) {
-    const chip = document.createElement("span")
-    chip.className = "permission-answered-chip"
-    const label = answerState === "allowed" ? "Allowed" : answerState === "always" ? "Always allowed" : "Denied"
-    chip.textContent = label
-    actions.appendChild(chip)
-    wrapper.appendChild(actions)
-    return wrapper
-  }
-
-  if (block.permissionId) {
-    const allowBtn = document.createElement("button")
-    allowBtn.className = "permission-btn permission-btn--allow"
-    allowBtn.textContent = "Allow"
-    allowBtn.ariaLabel = "Allow this action once"
-    allowBtn.addEventListener("click", () => {
-      window.dispatchEvent(new CustomEvent("oc-permission", { detail: { sessionId: block.sessionId, permissionId: block.permissionId, response: "once", permissionType: block.permissionType, pattern: block.pattern } }))
-      wrapper.ariaLive = "polite"
-      actions.replaceChildren(document.createTextNode("Allowed"))
-    })
-    actions.appendChild(allowBtn)
-
-    if (block.pattern) {
-      const alwaysBtn = document.createElement("button")
-      alwaysBtn.className = "permission-btn permission-btn--allow"
-      alwaysBtn.textContent = "Always"
-      alwaysBtn.ariaLabel = "Always allow this pattern"
-      alwaysBtn.addEventListener("click", () => {
-        window.dispatchEvent(new CustomEvent("oc-permission", { detail: { sessionId: block.sessionId, permissionId: block.permissionId, response: "always", permissionType: block.permissionType, pattern: block.pattern } }))
-        wrapper.ariaLive = "polite"
-        actions.replaceChildren(document.createTextNode("Always allowed"))
-      })
-      actions.appendChild(alwaysBtn)
-    }
-
-    const denyBtn = document.createElement("button")
-    denyBtn.className = "permission-btn permission-btn--deny"
-    denyBtn.textContent = "Deny"
-    denyBtn.ariaLabel = "Deny this action"
-    denyBtn.addEventListener("click", () => {
-      window.dispatchEvent(new CustomEvent("oc-permission", { detail: { sessionId: block.sessionId, permissionId: block.permissionId, response: "reject", permissionType: block.permissionType, pattern: block.pattern } }))
-      wrapper.ariaLive = "polite"
-      actions.replaceChildren(document.createTextNode("Denied"))
-    })
-    actions.appendChild(denyBtn)
-  }
-
-  wrapper.appendChild(actions)
   return wrapper
 }
 
@@ -1842,7 +1818,8 @@ function renderQuestionBlock(block: Block, opts: RenderOptions): HTMLElement | n
     return wrapper
   }
 
-  // ── Pending question — keep the transcript block interactive too ──
+  // ── Pending question — show a compact pointer in the transcript; the
+  // interactive question-bar above the input area is the primary UI. ──
   wrapper.classList.add("question-block--pending")
   const header = document.createElement("div")
   header.className = "question-block-header"
@@ -1856,150 +1833,18 @@ function renderQuestionBlock(block: Block, opts: RenderOptions): HTMLElement | n
   header.appendChild(label)
   wrapper.appendChild(header)
 
-  const selections = new Map<number, Set<string>>()
-  const controls: Array<HTMLButtonElement | HTMLTextAreaElement> = []
-  let freeText: HTMLTextAreaElement | null = null
-  let submitted = false
-
-  const markAnswered = (value: string, source: "option" | "freetext") => {
-    const trimmed = value.trim()
-    if (submitted || !trimmed) return
-    submitted = true
-    block.answered = true
-    block.answer = trimmed
-    block.answerSource = source
-    wrapper.classList.remove("question-block--pending")
-    wrapper.classList.add("question-block--answered")
-    for (const control of controls) control.disabled = true
-    const summary = document.createElement("div")
-    summary.className = "question-answer"
-    summary.textContent = `Answered: ${trimmed}`
-    wrapper.appendChild(summary)
-    opts.postMessage?.({
-      type: "question_answer",
-      sessionId,
-      toolCallId,
-      requestID,
-      messageId: opts.messageId ?? "",
-      value: trimmed,
-      source,
-    })
-    opts.onAnswered?.(block)
+  const questionText = groups[0]?.question ?? (block.text as string) ?? ""
+  if (questionText) {
+    const textEl = document.createElement("div")
+    textEl.className = "question-text"
+    textEl.textContent = questionText
+    wrapper.appendChild(textEl)
   }
 
-  const buildGroupedAnswer = (): { value: string; source: "option" | "freetext" } => {
-    const parts: string[] = []
-    let hasSelection = false
-    groups.forEach((group, groupIndex) => {
-      const chosen = Array.from(selections.get(groupIndex) ?? [])
-      if (chosen.length === 0) return
-      hasSelection = true
-      const heading = group.header || group.question || `Answer ${groupIndex + 1}`
-      parts.push(`${heading}: ${chosen.join(", ")}`)
-    })
-    const custom = freeText?.value.trim() ?? ""
-    if (custom) parts.push(custom)
-    return { value: parts.join("\n"), source: hasSelection ? "option" : "freetext" }
-  }
-
-  groups.forEach((group, groupIndex) => {
-    selections.set(groupIndex, new Set())
-    const groupEl = document.createElement("div")
-    groupEl.className = "question-group"
-
-    if (group.header) {
-      const groupHeader = document.createElement("div")
-      groupHeader.className = "question-group-header"
-      groupHeader.textContent = group.header
-      groupEl.appendChild(groupHeader)
-    }
-
-    if (group.question) {
-      const text = document.createElement("div")
-      text.className = "question-text"
-      text.textContent = group.question
-      groupEl.appendChild(text)
-    }
-
-    if (group.options.length > 0) {
-      const optionsRow = document.createElement("div")
-      optionsRow.className = "question-options"
-      optionsRow.setAttribute("role", "group")
-      optionsRow.setAttribute("aria-label", "Answer options")
-
-      for (const option of group.options) {
-        const button = document.createElement("button")
-        button.type = "button"
-        button.className = "question-option"
-        button.textContent = option
-        button.setAttribute("aria-pressed", "false")
-        controls.push(button)
-        button.addEventListener("click", () => {
-          if (submitted) return
-          const selected = selections.get(groupIndex) ?? new Set<string>()
-          if (group.multiSelect) {
-            if (selected.has(option)) {
-              selected.delete(option)
-              button.classList.remove("selected")
-              button.setAttribute("aria-pressed", "false")
-            } else {
-              selected.add(option)
-              button.classList.add("selected")
-              button.setAttribute("aria-pressed", "true")
-            }
-          } else {
-            selected.clear()
-            selected.add(option)
-            for (const peer of optionsRow.querySelectorAll<HTMLButtonElement>(".question-option")) {
-              peer.classList.remove("selected")
-              peer.setAttribute("aria-pressed", "false")
-            }
-            button.classList.add("selected")
-            button.setAttribute("aria-pressed", "true")
-          }
-          selections.set(groupIndex, selected)
-          if (groups.length === 1 && !group.multiSelect) markAnswered(option, "option")
-        })
-        optionsRow.appendChild(button)
-      }
-
-      groupEl.appendChild(optionsRow)
-    }
-
-    wrapper.appendChild(groupEl)
-  })
-
-  const allowFreeText = block.allowFreeText !== false
-  if (allowFreeText) {
-    freeText = document.createElement("textarea")
-    freeText.className = "question-freetext"
-    freeText.rows = 2
-    freeText.maxLength = 10000
-    freeText.setAttribute("aria-label", "Type a custom answer")
-    freeText.addEventListener("keydown", (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-        event.preventDefault()
-        const answerPayload = buildGroupedAnswer()
-        markAnswered(answerPayload.value, answerPayload.source)
-      }
-    })
-    controls.push(freeText)
-    wrapper.appendChild(freeText)
-  }
-
-  const needsSubmit = allowFreeText || groups.length > 1 || groups.some((group) => group.multiSelect)
-  if (needsSubmit) {
-    const submit = document.createElement("button")
-    submit.type = "button"
-    submit.className = "question-submit"
-    submit.textContent = "Submit"
-    controls.push(submit)
-    submit.addEventListener("click", () => {
-      const answerPayload = buildGroupedAnswer()
-      markAnswered(answerPayload.value, answerPayload.source)
-    })
-    wrapper.appendChild(submit)
-  }
+  const hint = document.createElement("div")
+  hint.className = "question-pointer-hint"
+  hint.textContent = "Answer in the input bar above"
+  wrapper.appendChild(hint)
 
   return wrapper
 }

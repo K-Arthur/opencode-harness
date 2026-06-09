@@ -28,6 +28,8 @@ how duplicates are prevented.
 | Critical | `.oc-card--critical` | System failure; cannot continue. Slightly heavier (3px) border. (`ErrorSeverity.CRITICAL`) |
 | Permission | `.oc-card--permission` | Action/approval required from the user. |
 
+> **Note:** Interactive permission/approval UI now lives in the dedicated `#permission-bar` above the input area, not in the transcript. The transcript shows a compact read-only pointer with header + text + "Respond in the input bar above" hint. Permission requests are ephemeral (not persisted in session history). See `docs/design/permission-bar.md`.
+
 `ErrorSeverity` (`errorTypes.ts`) maps to the modifier via `severityModifier()`
 in `errorComponents.ts`.
 

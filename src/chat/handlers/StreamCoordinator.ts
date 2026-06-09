@@ -419,6 +419,31 @@ export class StreamCoordinator {
     )
   }
 
+  /**
+   * Mark a question block as answered in the blocksBuffer and remove it
+   * from activeToolCallIds so the stream can finalize. Called by
+   * WebviewEventRouter when the user submits an answer.
+   */
+  markQuestionAnswered(tabId: string, toolCallId: string): void {
+    const tab = this.tabManager.getTab(tabId)
+    if (!tab) return
+    const qBlock = tab.blocksBuffer.find(
+      b => b.type === "question" && (b.id === toolCallId || (b as Record<string, unknown>).toolCallId === toolCallId)
+    )
+    if (qBlock) {
+      ;(qBlock as Record<string, unknown>).answered = true
+      log.info(`markQuestionAnswered: marked question ${toolCallId} as answered in blocksBuffer for ${tabId}`)
+    }
+    const pending = this.activeToolCallIds.get(tabId)
+    if (pending && pending.has(toolCallId)) {
+      pending.delete(toolCallId)
+      if (pending.size === 0) {
+        this.activeToolCallIds.delete(tabId)
+      }
+      log.info(`markQuestionAnswered: removed ${toolCallId} from activeToolCallIds for ${tabId}`)
+    }
+  }
+
   recordExternalActivity(tabId: string, activity: { kind: string; label: string }, callbacks?: StreamCallbacks): void {
     this.recordRunActivity(tabId, {
       kind: activity.kind === "permission" ? "permission" : "agent",
@@ -510,7 +535,7 @@ export class StreamCoordinator {
     }
     this.toolActivityAt.get(tabId)?.delete(toolId)
 
-    const block = tab.blocksBuffer.find(b => b.type === "tool-call" && b.id === toolId)
+    const block = tab.blocksBuffer.find(b => (b.type === "tool-call" || b.type === "question") && b.id === toolId)
     this.recordToolRunActivity(tabId, {
       id: toolId,
       name: typeof block?.name === "string" ? block.name : "tool",
@@ -573,6 +598,18 @@ export class StreamCoordinator {
         const fallbackId = currentPending.size === 1 ? currentPending.values().next().value : undefined
         const toolId = resolvedId && currentPending.has(resolvedId) ? resolvedId : fallbackId
         if (!toolId) continue
+
+        const toolName = typeof part.tool === "string" ? part.tool : ""
+        const isQuestionTool = toolName.toLowerCase() === "question"
+        if (isQuestionTool) {
+          const qBlock = tab.blocksBuffer.find(
+            b => b.type === "question" && (b.id === toolId || (b as Record<string, unknown>).toolCallId === toolId)
+          )
+          if (qBlock && !(qBlock as Record<string, unknown>).answered) {
+            log.info(`reconcilePendingToolCallsFromServer: keeping question tool ${toolId} pending (not yet answered)`)
+            continue
+          }
+        }
 
         const result = typeof state.output === "string"
           ? state.output
@@ -1221,12 +1258,15 @@ export class StreamCoordinator {
     const pending = this.activeToolCallIds.get(tabId)
     if (pending && pending.size > 0) return `${pending.size} tool call(s) still running`
 
+    const hasUnansweredQuestion = blocks.some(b => b.type === "question" && !(b as Record<string, unknown>).answered)
+    if (hasUnansweredQuestion) return "unanswered question block pending"
+
     const activityReason = this.activityTracker.getFinalizeDeferReason(tabId)
     if (activityReason) return activityReason
 
     if (trigger !== "message_complete") return null
 
-    const lastToolIndex = [...blocks].reverse().findIndex((block) => block.type === "tool-call" || block.type === "tool_call" || block.type === "tool")
+    const lastToolIndex = [...blocks].reverse().findIndex((block) => block.type === "tool-call" || block.type === "tool_call" || block.type === "tool" || block.type === "question")
     if (lastToolIndex < 0) return null
 
     const absoluteToolIndex = blocks.length - 1 - lastToolIndex

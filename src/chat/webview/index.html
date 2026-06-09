@@ -356,6 +356,17 @@
         </div>
       </div>
 
+      <!-- Permission prompt panel: appears above the input area when a tool needs approval.
+           Auto-hides after the user responds. -->
+      <div id="permission-bar" class="hidden" role="region" aria-label="Permission request">
+        <div class="permission-bar-header">
+          <span class="permission-bar-title">Permission required</span>
+        </div>
+        <div id="permission-bar-text" class="permission-bar-text"></div>
+        <div id="permission-bar-actions" class="permission-bar-actions" role="group" aria-label="Permission response options">
+        </div>
+      </div>
+
       <div id="queue-status-region" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
 
       <div id="input-area">
@@ -517,6 +528,9 @@
       </div>
     </div>
     </div>
+
+    <!-- Rate-limit notice: below the input area, auto-hides after reset. -->
+    <div id="rate-limit-bar" class="hidden" role="alert" aria-live="polite"></div>
 
     <!-- Display toggles (Phase 4.2) -->
     <div class="display-toggles hidden" id="display-toggles" role="group" aria-label="Display options">

@@ -1,13 +1,17 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-06-08
-**Version:** v0.2.23 (+ Unreleased: opencode CLI auto-install, native local voice input, frontend overhaul)
+**Last Updated:** 2026-06-09
+**Version:** v0.2.23 (+ Unreleased: opencode CLI auto-install, native local voice input, frontend overhaul, stream/dedicated-bar redesign)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
 
 ## Unreleased Highlights
 
-- **Compact card system + duplicate-card fixes** (2026-06-08):
+- **Stream interruption fixed + permission/question/rate-limit UI relocated** (2026-06-09):
+  - **Stream no longer stops on permission/question/rate-limit.** `StreamCoordinator` now tracks `question` tool calls separately from regular tool calls — only removed from `activeToolCallIds` when `answered === true`. New `markQuestionAnswered()` method called from both `WebviewEventRouter` paths. `rate_limit_exhausted` during active stream shows bar only, no inline error card.
+  - **Dedicated UI bars.** Interactive controls for questions, permissions, and rate-limits moved from the message stream to `#question-bar` (above input), `#permission-bar` (above input), and `#rate-limit-bar` (below input). Stream shows compact read-only pointers with hints.
+  - **Permission requests ephemeral** — no longer persisted in the session transcript.
+  - **System messages redesigned** — orange gradient/emoji/shadow removed; replaced with subtle transparent container and thin left border accent.
   - Shared `.oc-card` model (`css/cards.css`) with severity modifiers (info/success/warning/error/critical/permission); `ErrorDisplay` rewritten class-based with theme SVG icons, collapsed-by-default technical details + Copy, and an in-place Details toggle. `.msg-error` compacted. See `docs/design/cards.md`.
   - Root-cause dedup: activity notices coalesce via `activitySignature`/`decideActivityCoalesce` + `SessionStore.appendOrCoalesceActivity` (`×N` repeat badge); a single generation failure now renders one card (`hasRecentErrorCard` suppresses the generic end-of-stream card; the raw error is no longer echoed in the bottom status).
   - Session-history "More actions" (⋯) menu fixed (new `--z-modal-menu` token so the body-portaled menu stacks above the modal). Context-usage bar can no longer appear on the welcome screen (`isWelcomeVisible` guard in `updateContextBarFromSession`).
