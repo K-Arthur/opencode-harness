@@ -17,6 +17,7 @@ import type { CheckpointManager } from "../checkpoint/CheckpointManager"
 import type { McpServerManager } from "../mcp/McpServerManager"
 import { sdkMessagesToChatMessages } from "../session/sdkMessageConverter"
 import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
+import { generateUserMessageId } from "../session/messageId"
 import type { ThemeManager } from "../theme/ThemeManager"
 import type { ThemeController } from "./ThemeController"
 import type { PromptManager } from "../prompts/PromptManager"
@@ -258,7 +259,7 @@ export class WebviewEventRouter {
           log.info(`send_prompt processing: sessionId=${sessionId}, textLength=${text.length}, attachments=${attachmentCount}, model=${model}`)
           this.opts.ensureLocalTab(sessionId, msg.name as string | undefined, model, msg.mode as string | undefined)
           const variant = typeof msg.variant === "string" ? msg.variant : undefined
-          const userMessageId = (msg.messageId as string) || `user-${crypto.randomUUID()}`
+          const userMessageId = (msg.messageId as string) || generateUserMessageId()
           const clientRequestId = typeof msg.clientRequestId === "string" ? msg.clientRequestId : undefined
           const validatedAttachments = this.validateAttachments(msg.attachments)
           if (validatedAttachments === null) {
@@ -322,7 +323,7 @@ export class WebviewEventRouter {
 
       if (requestID) {
         try {
-          const userMessageId = (msg.messageId as string) || `user-${crypto.randomUUID()}`
+          const userMessageId = (msg.messageId as string) || generateUserMessageId()
           const textForPrompt = source === "response" ? `The user responded: ${value}` : value
           const answerSource: "option" | "freetext" | "skip" | "response" =
             source === "freetext" || source === "skip" || source === "response" ? source : "option"
@@ -363,7 +364,7 @@ export class WebviewEventRouter {
         const model = this.opts.modelManager.model
         if (!model) throw new Error("No model selected. Please select a model and try again.")
         this.opts.ensureLocalTab(sessionId)
-        const userMessageId = (msg.messageId as string) || `user-${crypto.randomUUID()}`
+        const userMessageId = (msg.messageId as string) || generateUserMessageId()
         const textForPrompt = source === "response"
           ? `The user responded: ${value}`
           : value
@@ -1618,7 +1619,7 @@ export class WebviewEventRouter {
     isSteerPrompt?: boolean
   }): Promise<void> {
     try {
-      const userMessageId = `user-${crypto.randomUUID()}`
+      const userMessageId = generateUserMessageId()
       const clientRequestId = `queued-${item.id}`
       const textBlocks: Block[] = item.text.trim() ? [{ type: "text", text: item.text }] : []
       const imageBlocks: Block[] = (item.attachments || []).map((a: { data: string; mimeType: string }) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType }))
