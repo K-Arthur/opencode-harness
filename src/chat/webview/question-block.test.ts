@@ -201,6 +201,6 @@ describe("renderQuestionBlock", () => {
     const el = renderBlock(block, { postMessage: () => {} })
     const hint = el!.querySelector(".question-pointer-hint")
     assert.ok(hint)
-    assert.ok(hint!.textContent!.includes("input bar"), "hint mentions input bar")
+    assert.ok(hint!.textContent!.includes("question bar"), "hint mentions question bar")
   })
 })

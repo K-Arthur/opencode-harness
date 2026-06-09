@@ -1105,6 +1105,9 @@ function renderCompactionBlock(block: Block, _opts: RenderOptions): HTMLElement 
 }
 
 function renderActivityBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
+  const isSwitchEvent = block.eventType === "model.switched" || block.eventType === "agent.switched"
+  if (isSwitchEvent) return renderSwitchBadge(block)
+
   const wrapper = document.createElement("div")
   wrapper.className = "activity-block"
   wrapper.setAttribute("role", "status")
@@ -1143,6 +1146,35 @@ function renderActivityBlock(block: Block, _opts: RenderOptions): HTMLElement | 
   }
 
   return wrapper
+}
+
+function renderSwitchBadge(block: Block): HTMLElement {
+  const badge = document.createElement("div")
+  badge.className = "switch-badge"
+  badge.setAttribute("role", "status")
+
+  const dot = document.createElement("span")
+  dot.className = "switch-badge-dot"
+  dot.setAttribute("aria-hidden", "true")
+  badge.appendChild(dot)
+
+  const label = document.createElement("span")
+  label.className = "switch-badge-label"
+  const title = typeof block.title === "string" ? block.title : ""
+  const detail = typeof block.detail === "string" ? block.detail : ""
+  label.textContent = detail ? `${title}: ${detail}` : title
+
+  const repeatCount = typeof block.repeatCount === "number" ? block.repeatCount : 1
+  if (repeatCount > 1) {
+    const count = document.createElement("span")
+    count.className = "switch-badge-count"
+    count.textContent = `×${repeatCount}`
+    label.appendChild(document.createTextNode(" "))
+    label.appendChild(count)
+  }
+
+  badge.appendChild(label)
+  return badge
 }
 
 function renderSubtaskBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
@@ -1843,7 +1875,7 @@ function renderQuestionBlock(block: Block, opts: RenderOptions): HTMLElement | n
 
   const hint = document.createElement("div")
   hint.className = "question-pointer-hint"
-  hint.textContent = "Answer in the input bar above"
+  hint.textContent = "Answer in the question bar below"
   wrapper.appendChild(hint)
 
   return wrapper
