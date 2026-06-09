@@ -29,23 +29,20 @@ describe("StreamCoordinator transport awareness", () => {
     assert.ok(!source.includes("startHardWatchdog"), "hard watchdog must remain folded into startWatchdog")
   })
 
-  it("forwards image attachments as file parts to the opencode SDK prompt body", () => {
+  it("forwards attachments as file parts — images use data: URL, non-images materialise to disk", () => {
     const startIdx = source.indexOf("async startPrompt(")
     assert.ok(startIdx >= 0, "startPrompt must exist")
     const sendIdx = source.indexOf("sendPromptAsync", startIdx)
     const block = source.slice(startIdx, sendIdx > startIdx ? sendIdx : startIdx + 5000)
 
     assert.ok(block.includes("attachments:"), "startPrompt must accept attachments")
-    assert.ok(block.includes('type: "file"'), "image attachments must be emitted as file parts")
-    assert.ok(block.includes("mime:"), "file parts must carry the image MIME type")
-    // File parts must point at a materialised file:// URL (via
-    // attachmentStorage) rather than an inline data: URL. data: URLs trigger
-    // the opencode server's clipboard probe (which fails on Linux without
-    // wl-clipboard/xclip) and have documented failures with some
-    // MCP/non-vision models.
-    assert.ok(block.includes("this.attachmentStorage.materialize"), "file parts must materialise via attachmentStorage")
-    assert.ok(block.includes("result.url"), "file parts must use the materialised URL")
-    assert.ok(!block.includes("data:${attachment.mimeType};base64,${attachment.data}"), "inline data: URLs must not be used anymore")
+    assert.ok(block.includes('type: "file"'), "attachments must be emitted as file parts")
+    assert.ok(block.includes("mime:"), "file parts must carry the MIME type")
+    // Images use data: URL so the webview can inline-render (VS Code blocks
+    // file:// in img.src). Non-images materialise to disk via attachmentStorage.
+    assert.ok(block.includes("startsWith('image/')") || block.includes("isImage"), "images must be detected by MIME")
+    assert.ok(block.includes('"data:') || block.includes("`data:"), "images must use data: URL for webview renderability")
+    assert.ok(block.includes("this.attachmentStorage.materialize"), "non-image files must materialise via attachmentStorage")
   })
 
   it("uses the local first-message title when creating the SDK session", () => {

@@ -34,6 +34,7 @@ export class SubagentHeartbeat {
     const timer = setInterval(() => {
       void this.poll(tabId, cliSessionId)
     }, POLL_INTERVAL_MS)
+    timer.unref()
 
     this.timers.set(tabId, timer)
     log.info(`SubagentHeartbeat started for tab ${tabId} (session ${cliSessionId})`)
@@ -77,76 +78,80 @@ export class SubagentHeartbeat {
       return
     }
 
-    const previous = this.knownChildren.get(tabId)
-    if (!previous) return
+    try {
+      const previous = this.knownChildren.get(tabId)
+      if (!previous) return
 
-    const currentIds = new Set(children.map(c => c.id))
-    const previousIds = new Set(previous.keys())
+      const currentIds = new Set(children.map(c => c.id))
+      const previousIds = new Set(previous.keys())
 
-    const added = children.filter(c => !previousIds.has(c.id))
-    const removed: Session[] = []
-    for (const [id, session] of previous) {
-      if (!currentIds.has(id)) {
-        removed.push(session)
+      const added = children.filter(c => !previousIds.has(c.id))
+      const removed: Session[] = []
+      for (const [id, session] of previous) {
+        if (!currentIds.has(id)) {
+          removed.push(session)
+        }
       }
-    }
 
-    const subagents = this.callbacks.getSubagentSnapshot(tabId)
-    const childlessSubagents = subagents.filter(s => !s.childSessionId && s.status === "running")
+      const subagents = this.callbacks.getSubagentSnapshot(tabId)
+      const childlessSubagents = subagents.filter(s => !s.childSessionId && s.status === "running")
 
-    let changed = false
+      let changed = false
 
-    for (const child of added) {
-      const existing = subagents.find(s => s.childSessionId === child.id)
-      if (existing) continue
+      for (const child of added) {
+        const existing = subagents.find(s => s.childSessionId === child.id)
+        if (existing) continue
 
-      const match = childlessSubagents.shift()
-      if (match) {
-        this.callbacks.recordSubagentActivity(tabId, {
-          id: match.id,
-          agentName: match.agentName,
-          status: "running",
-          childSessionId: child.id,
-          currentActivity: child.title || match.currentActivity,
-        })
-        changed = true
-        log.info(`SubagentHeartbeat: linked child session ${child.id} to subagent ${match.id} for tab ${tabId}`)
+        const match = childlessSubagents.shift()
+        if (match) {
+          this.callbacks.recordSubagentActivity(tabId, {
+            id: match.id,
+            agentName: match.agentName,
+            status: "running",
+            childSessionId: child.id,
+            currentActivity: child.title || match.currentActivity,
+          })
+          changed = true
+          log.info(`SubagentHeartbeat: linked child session ${child.id} to subagent ${match.id} for tab ${tabId}`)
+        } else {
+          const id = `subagent-child-${child.id.slice(0, 8)}`
+          this.callbacks.recordSubagentActivity(tabId, {
+            id,
+            agentName: child.title || "subagent",
+            status: "running",
+            childSessionId: child.id,
+          })
+          changed = true
+          log.info(`SubagentHeartbeat: discovered child session ${child.id} for tab ${tabId}`)
+        }
+        this.callbacks.registerChildSessionMapping(tabId, child.id)
+      }
+
+      for (const child of removed) {
+        const match = subagents.find(s => s.childSessionId === child.id)
+        if (match && (match.status === "running" || match.status === "queued" || match.status === "waiting")) {
+          this.callbacks.recordSubagentActivity(tabId, {
+            id: match.id,
+            agentName: match.agentName,
+            status: "completed",
+            childSessionId: child.id,
+          })
+          changed = true
+          log.info(`SubagentHeartbeat: child session ${child.id} removed — marking subagent ${match.id} as completed for tab ${tabId}`)
+        }
+      }
+
+      if (changed) {
+        const current = new Map<string, Session>()
+        for (const child of children) {
+          current.set(child.id, child)
+        }
+        this.knownChildren.set(tabId, current)
       } else {
-        const id = `subagent-child-${child.id.slice(0, 8)}`
-        this.callbacks.recordSubagentActivity(tabId, {
-          id,
-          agentName: child.title || "subagent",
-          status: "running",
-          childSessionId: child.id,
-        })
-        changed = true
-        log.info(`SubagentHeartbeat: discovered child session ${child.id} for tab ${tabId}`)
+        this.knownChildren.set(tabId, new Map(children.map(c => [c.id, c] as const)))
       }
-      this.callbacks.registerChildSessionMapping(tabId, child.id)
-    }
-
-    for (const child of removed) {
-      const match = subagents.find(s => s.childSessionId === child.id)
-      if (match && (match.status === "running" || match.status === "queued" || match.status === "waiting")) {
-        this.callbacks.recordSubagentActivity(tabId, {
-          id: match.id,
-          agentName: match.agentName,
-          status: "completed",
-          childSessionId: child.id,
-        })
-        changed = true
-        log.info(`SubagentHeartbeat: child session ${child.id} removed — marking subagent ${match.id} as completed for tab ${tabId}`)
-      }
-    }
-
-    if (changed) {
-      const current = new Map<string, Session>()
-      for (const child of children) {
-        current.set(child.id, child)
-      }
-      this.knownChildren.set(tabId, current)
-    } else {
-      this.knownChildren.set(tabId, new Map(children.map(c => [c.id, c] as const)))
+    } catch (err) {
+      log.error(`SubagentHeartbeat poll processing failed for tab ${tabId}:`, err)
     }
   }
 }
