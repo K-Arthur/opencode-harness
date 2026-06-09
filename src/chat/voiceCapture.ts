@@ -127,6 +127,11 @@ export function describeTranscriberPlan(plan: TranscriberPlan): string {
 
 const existsCache = new Map<string, boolean>()
 
+/** Clear the binary-exists cache so next probe re-checks PATH. */
+export function invalidateExistsCache(): void {
+  existsCache.clear()
+}
+
 /** Best-effort check that a binary is resolvable on PATH. Cached. */
 export function commandExists(bin: string): boolean {
   const cached = existsCache.get(bin)
