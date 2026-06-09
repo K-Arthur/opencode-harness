@@ -58,7 +58,7 @@ export function prepareLocalRecentSessions(
       id: s.id,
       title: s.name,
       time: s.messages[s.messages.length - 1]?.timestamp,
-      messageCount: s.messages.filter((m) => m.role === "user").length,
+      messageCount: s.messages.filter((m) => m.role === "user").length satisfies number,
       cost: s.cost || 0,
     }))
 

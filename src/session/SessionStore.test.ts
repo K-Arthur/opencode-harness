@@ -46,6 +46,16 @@ describe("SessionStore.ts", () => {
     assert.ok(source.includes("appendMessage("))
   })
 
+  it("appendMessage upserts by id instead of always pushing (C2: stream_end must not duplicate)", () => {
+    const idx = source.indexOf("appendMessage(sessionId: string, msg: ChatMessage): void {")
+    assert.ok(idx >= 0, "appendMessage must exist")
+    const body = source.slice(idx, idx + 1200)
+    assert.ok(body.includes("msg.id"), "appendMessage must check msg.id")
+    assert.ok(body.includes("findIndex((m) => m.id === msg.id)"), "appendMessage must find existing message by id")
+    assert.ok(body.includes("session.messages[idx] = msg"), "appendMessage must replace in place when id matches")
+    assert.ok(body.includes("session.messages.push(msg)"), "appendMessage must fall back to push when id is new")
+  })
+
   it("has delete method", () => {
     assert.ok(source.includes("delete("))
   })

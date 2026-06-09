@@ -24,6 +24,7 @@ import { ProviderConfigManager } from "../model/ProviderConfigManager"
 import { mapToolType as mapToolTypePure, isSessionInCurrentWorkspace as isSessionInCurrentWorkspacePure, looksLikeSdkError } from "./chatUtils"
 import { shouldIncludeStoreActiveFallback } from "./restorablePolicy"
 import { mapOpencodeError, type OpencodeError } from "./webview/opencodeErrorMapper"
+import { computeMessageCounts } from "./webview/messageCounter"
 import { RetryQueueService, CRITICAL_MESSAGE_TYPES } from "./RetryQueueService"
 import { ChatMessage, Block } from "./types"
 import { log } from "../utils/outputChannel"
@@ -1277,7 +1278,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         cliSessionId: s.cliSessionId,
         title: SessionStore.displayName(s),
         time: s.lastActiveAt,
-        messageCount: s.messages.filter((m) => m.role === "user").length,
+        messageCount: computeMessageCounts(s.messages).userTurns,
         cost: s.cost || 0,
         workspacePath: s.workspacePath,
         pinned: s.pinned === true,

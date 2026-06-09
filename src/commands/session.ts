@@ -5,6 +5,7 @@ import { SessionManager } from "../session/SessionManager"
 import { SessionDbReader } from "../session/SessionDbReader"
 import { sdkMessagesToChatMessages } from "../session/sdkMessageConverter"
 import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
+import { computeMessageCounts } from "../chat/webview/messageCounter"
 import { log } from "../utils/outputChannel"
 import { checkFileSecurity, sanitizeForPrompt } from "../utils/security"
 
@@ -438,11 +439,12 @@ export function registerChooseHistorySessionCommand(
         }
 
         const items = all.map((s) => {
-          const messageCount = s.messages.length
           const tag = s.needsBackfill ? " [server]" : local.has(s.id) ? "" : " [new]"
+          const counts = computeMessageCounts(s.messages)
+          const turns = counts.userTurns + counts.assistantTurns
           return {
             label: `${SessionStore.displayName(s)}${tag}`,
-            description: `${messageCount} message${messageCount === 1 ? "" : "s"}`,
+            description: `${turns} turn${turns === 1 ? "" : "s"}${counts.systemMessages > 0 ? ` (${counts.systemMessages} event${counts.systemMessages === 1 ? "" : "s"})` : ""}`,
             detail: `${new Date(s.lastActiveAt).toLocaleString()} — ${s.model || "no model"}`,
             id: s.id,
             needsBackfill: s.needsBackfill === true,
