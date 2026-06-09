@@ -250,9 +250,17 @@ JSON or `[object Object]` output.
   break the prompt send path.
 - The conversation timeline is a right-side `conversation-timeline` aside toggled from the
   header button. It reserves message-list padding only while visible.
-- The Activity panel (`#activity-panel`) and Tasks panel (`#tasks-panel`) are separate
-  transcript read-models wired from real `ElementRefs`. Their filters are stored per session
-  (`activityFilter`, `commandFilter`) and refresh only for the active session.
+- The side region (`#side-region`) replaces four standalone panels (Todos, Activity,
+  Tasks, Subagents) with a single tabbed panel using `.side-region-tabbar` (`.side-tab`
+  buttons) and `.tab-pane` content areas. The active tab is persisted in `sessionStorage`.
+  A pin button (`aria-pressed`) prevents auto-close; a single close button hides the
+  region. Individual panel modules (todos-panel, activity-panel, tasks-panel,
+  subagent-panel) are wired as tab panes via the `SideRegionApi` (`open`, `close`,
+  `toggle`, `switchTab`). Filters (`activityFilter`, `commandFilter`) remain per-session
+  and refresh only for the active session.
+- `run_activity_update` snapshots carry subagent state. The `subagent_add` message
+  includes `childSessionId` (linked OpenCode child session ID) and `error` (failure
+  detail when status is `failed`) in the subtask data payload.
 - Tasks panel terminal actions post `open_terminal`: `{ type, command, cwd?, autorun? }`.
   The host validates the command, opens a VS Code terminal at `cwd` when provided, and sends
   the command with `autorun` controlling whether Enter is submitted.

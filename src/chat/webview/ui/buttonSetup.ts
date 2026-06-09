@@ -27,6 +27,8 @@ export interface ButtonSetupDeps {
   /** Fired when the user toggles the todos panel via the toolbar button.
    *  `willBeVisible` indicates the post-toggle state. */
   onTodosToggle?: (willBeVisible: boolean) => void
+  /** Toggle the side region for the todos tab. Returns true if now visible. */
+  onTodosToggleRequest?: () => boolean
 }
 
 export function setupButtons(deps: ButtonSetupDeps): void {
@@ -97,21 +99,14 @@ export function setupButtons(deps: ButtonSetupDeps): void {
   })
 
   deps.els.todosToggleBtn.addEventListener("click", () => {
-    const panel = deps.els.todosPanel
-    const showing = !panel.classList.contains("hidden")
-    panel.classList.toggle("hidden", showing)
-    deps.els.todosToggleBtn.setAttribute("aria-pressed", String(!showing))
-    deps.onTodosToggle?.(!showing)
-    if (!showing) {
+    const showing = deps.onTodosToggleRequest?.() ?? false
+    deps.els.todosToggleBtn.setAttribute("aria-pressed", String(showing))
+    if (showing) {
       const sessionId = deps.getActiveSessionId()
       if (sessionId) {
         deps.postMessage({ type: "get_todos", sessionId })
         deps.postMessage({ type: "get_changed_files", sessionId })
       }
-      const closeBtn = panel.querySelector<HTMLElement>("#close-todos-btn")
-      closeBtn?.focus()
-    } else {
-      deps.els.todosToggleBtn.focus()
     }
   })
 

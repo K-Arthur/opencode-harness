@@ -68,6 +68,26 @@ Supported recovery remains honest:
 - Cancel calls the existing OpenCode abort API and marks the run as
   `user_cancelled`.
 
+## Subagent Heartbeat Polling
+
+`SubagentHeartbeat` (`src/chat/handlers/SubagentHeartbeat.ts`) polls the OpenCode
+`/session/children` endpoint every 5 seconds per tab. It cross-references returned child
+session IDs against the tracked `SubagentRunState` list:
+
+- **Newly discovered children** are linked to unmatched running subagents via
+  `childSessionId`. If no matching subagent exists, a new subagent entry is created
+  for the child session.
+- **Disappeared children** trigger marking the linked subagent as `completed`.
+- **Retry policy**: up to 2 consecutive poll failures are tolerated and logged at
+  `warn` level; further failures log at `error` level and the polling loop continues.
+
+The heartbeat is wired into `StreamCoordinator`: initialized in the constructor, started
+after prompt acceptance, stopped in `cleanupTab`, and `stopAll` on dispose. Subtask data
+payloads on `subagent_add` now carry `childSessionId` (the linked OpenCode child session
+ID) and `error` (failure detail when status is `failed`). `ActivityPartHandler` includes
+both fields in the subtask event; `ChatProvider.recordSubagentActivity` passes
+`childSessionId` through to the subagent tracking layer.
+
 ## Validation Commands
 
 Use the repo's documented order before commit:

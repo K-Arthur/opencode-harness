@@ -9,8 +9,7 @@ export interface SubagentPanelOptions {
 export type SubagentPanelEls = Pick<ElementRefs,
   | "subagentPanel"
   | "subagentList"
-  | "closeSubagentBtn"
->
+> & { closeSubagentBtn?: HTMLElement | null }
 
 export interface SubagentPanelApi {
   renderActivities: (activities: SubagentActivity[]) => void
@@ -64,20 +63,20 @@ export function setupSubagentPanel(els: SubagentPanelEls, options: SubagentPanel
   const subagentList = els.subagentList
   const closeBtn = els.closeSubagentBtn
 
-  if (!subagentPanel || !subagentList || !closeBtn) {
+  if (!subagentPanel || !subagentList) {
     console.warn("Subagent panel elements not found")
     return undefined
   }
 
   const onCloseClick = () => { subagentPanel.classList.add("hidden") }
-  closeBtn.addEventListener("click", onCloseClick)
+  if (closeBtn) closeBtn.addEventListener("click", onCloseClick)
 
   const onEscape = (e: KeyboardEvent) => {
     if (e.key === "Escape" && !subagentPanel.classList.contains("hidden")) {
       subagentPanel.classList.add("hidden")
     }
   }
-  document.addEventListener("keydown", onEscape)
+  if (closeBtn) document.addEventListener("keydown", onEscape)
 
   return {
     renderActivities: (activities: SubagentActivity[]) => {
@@ -88,8 +87,10 @@ export function setupSubagentPanel(els: SubagentPanelEls, options: SubagentPanel
     toggle: () => { subagentPanel.classList.toggle("hidden") },
     isOpen: () => !subagentPanel.classList.contains("hidden"),
     dispose: () => {
-      document.removeEventListener("keydown", onEscape)
-      closeBtn.removeEventListener("click", onCloseClick)
+      if (closeBtn) {
+        document.removeEventListener("keydown", onEscape)
+        closeBtn.removeEventListener("click", onCloseClick)
+      }
     },
   }
 }

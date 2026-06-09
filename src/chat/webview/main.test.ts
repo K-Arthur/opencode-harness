@@ -258,17 +258,18 @@ describe("main.ts", () => {
       "activity-panel",
       "activity-filters",
       "activity-list",
-      "activity-close-btn",
       "tasks-toggle-btn",
       "tasks-panel",
       "tasks-filters",
       "tasks-list",
-      "tasks-close-btn",
+      "side-region",
+      "close-side-region-btn",
     ]) {
       assert.ok(indexHtml.includes(`id="${id}"`), `index.html must expose #${id}`)
     }
     assert.ok(source.includes("setupActivityPanel"), "main.ts must initialize the activity panel")
     assert.ok(source.includes("setupTasksPanel"), "main.ts must initialize the tasks panel")
+    assert.ok(source.includes("setupSideRegion"), "main.ts must initialize the side region")
   })
 
   it("rate_limit_exhausted reads resetAt from the structured info payload", () => {

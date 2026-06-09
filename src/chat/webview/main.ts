@@ -24,6 +24,7 @@ import { updateContextChips, applyThemeVars, handleRateLimitExhausted } from "./
 import { getQuotaMonitor } from "./quotaMonitor"
 import { STREAM_LIMIT_TOOLTIP, getContextUsageTooltip, initStaticButtonTooltips } from "./tooltips"
 // context-usage-panel.ts removed — canonical UI is now context-usage-dropdown.ts
+import { setupSideRegion, type SideTabId } from "./sideRegion"
 import { setupChangedFilesDropdown, updateChangedFiles, handleDiffResponse as handleCfDiffResponse, setCurrentSession as setCfCurrentSession } from "./changed-files-dropdown"
 import type { DiffLine } from "./types"
 import { setupContextUsageDropdown as setupCtxDropdown, updateUsage as updateCtxDropdown, resetContextUsageDropdown, openContextUsageDropdown } from "./context-usage-dropdown"
@@ -166,6 +167,7 @@ function getVsCodeApi() {
   let tasksPanelApi: ReturnType<typeof setupTasksPanel> | undefined
   let voiceInputApi: ReturnType<typeof setupVoiceInput> | undefined
   let hasQuotaState = false
+  let sideRegionApi: ReturnType<typeof setupSideRegion> | undefined
   // Per-session server-side todos. Single source of truth keyed by sessionId
   // so a background tab's todos.updated event cannot poison the active tab.
   const serverTodosBySession = new Map<string, Todo[]>()
@@ -199,7 +201,7 @@ function getVsCodeApi() {
     // and only if the user hasn't already dismissed the panel for this session.
     if (options?.autoOpen && merged.length > 0) {
       const activeSid = stateManager.getState().activeSessionId
-      const panelIsOpen = todosPanelApi.isOpen()
+      const panelIsOpen = sideRegionApi?.isOpen() && sideRegionApi?.getActiveTab() === "todos"
       const dismissed = todosDismissedBySession.has(sessionId)
       const alreadyOpened = todosAutoOpenedForSession.has(sessionId)
       if (
@@ -208,7 +210,7 @@ function getVsCodeApi() {
         !dismissed &&
         !alreadyOpened
       ) {
-        todosPanelApi.open()
+        sideRegionApi?.open("todos")
         todosAutoOpenedForSession.add(sessionId)
         const btn = (globalThis as any).document?.getElementById?.("todos-toggle-btn") as HTMLElement | undefined
         if (btn) btn.setAttribute("aria-pressed", "true")
@@ -295,14 +297,14 @@ function getVsCodeApi() {
 
   function setSubagentPanelOpen(open: boolean): void {
     if (open) {
-      subagentPanelApi?.open()
+      sideRegionApi?.open("subagent")
       // Opening (whether by user click or by oc:open-subagent-panel) clears
       // the dismissed flag so future run_activity_updates can re-auto-open
       // if the user closes it again.
       const sid = stateManager.getState().activeSessionId
       if (sid) subagentDismissedBySession.delete(sid)
     } else {
-      subagentPanelApi?.close()
+      sideRegionApi?.close()
       // Track explicit dismissal so the auto-open in run_activity_update
       // doesn't keep re-opening the panel during this run.
       const sid = stateManager.getState().activeSessionId
@@ -951,8 +953,6 @@ function getVsCodeApi() {
       },
       onJump: (anchorMessageId) => scrollToTurnModule(scrollMarkerDeps, anchorMessageId),
     })
-    els.activityToggleBtn.addEventListener("click", () => activityPanelApi?.toggle())
-
     tasksPanelApi = setupTasksPanel(els, {
       getMessages: (sessionId) => stateManager.getSession(sessionId)?.messages,
       isStreaming: (sessionId) => stateManager.getSession(sessionId)?.isStreaming ?? false,
@@ -974,14 +974,12 @@ function getVsCodeApi() {
       onOpenTerminal: (command, cwd, autorun) => vscode.postMessage({ type: "open_terminal", command, cwd, autorun }),
       onCancel: () => abortStream(),
     })
-    els.tasksToggleBtn.addEventListener("click", () => tasksPanelApi?.toggle())
-
     skillsModalApi = setupSkillsModal(els, {
       onToggleSkill: (skillId: string, enabled: boolean) => vscode.postMessage({ type: "toggle_skill", skillId, enabled }),
       onSearchSkills: (query: string) => vscode.postMessage({ type: "search_skills", query }),
     })
     subagentDetailViewApi = setupSubagentDetailView(els, {
-      onBack: () => { subagentPanelApi?.open?.() },
+      onBack: () => { sideRegionApi?.open("subagent") },
       onClose: () => {},
       onCancelSubagent: (subagentId: string) => vscode.postMessage({ type: "cancel_subagent", subagentId }),
     })
@@ -993,18 +991,38 @@ function getVsCodeApi() {
         subagentDetailViewApi?.renderLoading?.()
       },
     })
+
+    // Initialize side region
+    const sideRegionEl = document.getElementById("side-region")
+    const tabBarEl = document.querySelector<HTMLElement>(".side-region-tabbar")
+    const tabButtons = document.querySelectorAll<HTMLElement>(".side-tab")
+    const pinBtn = document.getElementById("close-side-region-btn")?.previousElementSibling as HTMLElement | null
+    const closeBtn = document.getElementById("close-side-region-btn")
+    if (sideRegionEl && tabBarEl && tabButtons.length > 0 && pinBtn && closeBtn) {
+      const paneMap: Record<SideTabId, HTMLElement> = {
+        todos: els.todosPanel,
+        activity: els.activityPanel,
+        tasks: els.tasksPanel,
+        subagent: els.subagentPanel,
+      }
+      sideRegionApi = setupSideRegion(sideRegionEl, tabBarEl, tabButtons, paneMap, pinBtn, closeBtn)
+    }
+
+    // Wire toggle buttons to side region
+    els.activityToggleBtn.addEventListener("click", () => { sideRegionApi?.toggle("activity") })
+    els.tasksToggleBtn.addEventListener("click", () => { sideRegionApi?.toggle("tasks") })
     els.subagentsToggleBtn.addEventListener("click", () => {
-      subagentPanelApi?.toggle()
-      const open = subagentPanelApi?.isOpen() ?? false
-      els.subagentsToggleBtn.setAttribute("aria-pressed", String(open))
-      if (open) {
+      const wasOpen = sideRegionApi?.isOpen() && sideRegionApi?.getActiveTab() === "subagent"
+      if (wasOpen) {
+        setSubagentPanelOpen(false)
+      } else {
+        setSubagentPanelOpen(true)
         requestSubagentActivities()
       }
     })
     window.addEventListener("oc:open-subagent-panel", () => {
       setSubagentPanelOpen(true)
       requestSubagentActivities()
-      // Pulse-highlight the first subagent item after a short delay for render
       requestAnimationFrame(() => {
         const firstItem = els.subagentList?.querySelector<HTMLElement>(".subagent-item")
         if (firstItem) {
@@ -1015,26 +1033,58 @@ function getVsCodeApi() {
       })
     })
 
-    // Pin-button toggle handler
-    document.querySelectorAll<HTMLElement>(".panel-pin-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const pinned = btn.getAttribute("aria-pressed") === "true"
-        btn.setAttribute("aria-pressed", String(!pinned))
-        btn.title = pinned ? "Pin panel" : "Unpin panel"
-      })
-    })
-    // Block close clicks when the panel's pin button is active
-    document.querySelector(".main-layout")?.addEventListener("click", (e) => {
-      const closeBtn = (e.target as HTMLElement).closest("[id$='-close-btn']")
-      if (!closeBtn) return
-      const panel = closeBtn.closest(".side-panel")
-      if (!panel) return
-      const pinBtn = panel.querySelector<HTMLElement>(".panel-pin-btn")
-      if (pinBtn && pinBtn.getAttribute("aria-pressed") === "true") {
-        e.preventDefault()
-        e.stopPropagation()
+    // Wrap panel APIs to delegate visibility to side region
+    if (sideRegionApi) {
+      if (todosPanelApi) {
+        const orig = todosPanelApi
+        todosPanelApi = {
+          ...orig,
+          open: () => sideRegionApi!.open("todos"),
+          close: () => sideRegionApi!.close(),
+          isOpen: () => sideRegionApi!.isOpen() && sideRegionApi!.getActiveTab() === "todos",
+        }
+      }
+      if (activityPanelApi) {
+        const orig = activityPanelApi
+        activityPanelApi = {
+          ...orig,
+          open: () => sideRegionApi!.open("activity"),
+          close: () => sideRegionApi!.close(),
+          toggle: () => sideRegionApi!.toggle("activity"),
+          isOpen: () => sideRegionApi!.isOpen() && sideRegionApi!.getActiveTab() === "activity",
+        }
+      }
+      if (tasksPanelApi) {
+        const orig = tasksPanelApi
+        tasksPanelApi = {
+          ...orig,
+          open: () => sideRegionApi!.open("tasks"),
+          close: () => sideRegionApi!.close(),
+          toggle: () => sideRegionApi!.toggle("tasks"),
+          isOpen: () => sideRegionApi!.isOpen() && sideRegionApi!.getActiveTab() === "tasks",
+        }
+      }
+      if (subagentPanelApi) {
+        const orig = subagentPanelApi
+        subagentPanelApi = {
+          ...orig,
+          open: () => sideRegionApi!.open("subagent"),
+          close: () => sideRegionApi!.close(),
+          toggle: () => sideRegionApi!.toggle("subagent"),
+          isOpen: () => sideRegionApi!.isOpen() && sideRegionApi!.getActiveTab() === "subagent",
+        }
+      }
+    }
+
+    // Pop-out to editor button
+    const popoutBtn = document.getElementById("subagent-detail-popout-btn")
+    popoutBtn?.addEventListener("click", () => {
+      const sid = stateManager.getState().activeSessionId
+      if (sid && subagentDetailViewApi) {
+        vscode.postMessage({ type: "open_subagent_detail", sessionId: sid })
       }
     })
+
     const shortcutsHelpBtn = document.getElementById("shortcuts-help-btn")
     shortcutsHelpBtn?.addEventListener("click", () => openKeyboardShortcutsModal())
   }
@@ -2530,8 +2580,8 @@ function getVsCodeApi() {
           activity.activeSubagentCount > 0 &&
           !subagentDismissedBySession.has(sid)
         ) {
-          subagentPanelApi?.open()
-          els.subagentsToggleBtn.setAttribute("aria-pressed", String(subagentPanelApi?.isOpen() ?? false))
+          sideRegionApi?.open("subagent")
+          els.subagentsToggleBtn.setAttribute("aria-pressed", "true")
         }
       }],
       ["instructions_changed", (msg, sid) => {
@@ -3494,8 +3544,8 @@ function getVsCodeApi() {
             isLiveSubagent(subagent) &&
             !subagentDismissedBySession.has(sessionId)
           ) {
-            subagentPanelApi?.open()
-            els.subagentsToggleBtn.setAttribute("aria-pressed", String(subagentPanelApi?.isOpen() ?? false))
+            sideRegionApi?.open("subagent")
+            els.subagentsToggleBtn.setAttribute("aria-pressed", "true")
           }
           if (merged.length > 0 && sessionId === stateManager.getState().activeSessionId) {
             refreshSubagentPanel(sessionId)

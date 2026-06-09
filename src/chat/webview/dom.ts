@@ -182,20 +182,22 @@ export interface ElementRefs {
   // Checkpoint/undo panel (Phase 5)
   checkpointPanel: HTMLElement | null
   checkpointToggleBtn: HTMLElement
+  // Tabbed side region
+  sideRegion: HTMLElement
+  sideRegionTabBar: HTMLElement
+  sideRegionCloseBtn: HTMLElement
+  sideRegionPinBtn: HTMLElement
   todosPanel: HTMLElement
-  closeTodosBtn: HTMLElement
   todosList: HTMLElement
   todoAddForm: HTMLFormElement
   todoAddInput: HTMLInputElement
   todosToggleBtn: HTMLElement
   activityToggleBtn: HTMLElement
   activityPanel: HTMLElement
-  activityClose: HTMLElement
   activityFilters: HTMLElement
   activityList: HTMLElement
   tasksToggleBtn: HTMLElement
   tasksPanel: HTMLElement
-  tasksClose: HTMLElement
   tasksFilters: HTMLElement
   tasksList: HTMLElement
   skillsBtn: HTMLElement
@@ -214,10 +216,10 @@ export interface ElementRefs {
   subagentPanel: HTMLElement
   subagentsToggleBtn: HTMLElement
   subagentsBadge: HTMLElement | null
-  closeSubagentBtn: HTMLElement
   subagentList: HTMLElement
   subagentDetailView: HTMLElement
   subagentDetailBackBtn: HTMLElement
+  subagentDetailPopoutBtn: HTMLElement
   subagentDetailCloseBtn: HTMLElement
   subagentDetailContent: HTMLElement
 }
@@ -379,20 +381,22 @@ export function getElementRefs(): ElementRefs {
     // Checkpoint/undo panel (Phase 5)
     checkpointPanel: document.getElementById("checkpoint-panel"),
     checkpointToggleBtn: requireElement("checkpoint-toggle-btn"),
+    // Tabbed side region
+    sideRegion: requireElement("side-region"),
+    sideRegionTabBar: requireElement("side-region-tabbar"),
+    sideRegionCloseBtn: requireElement("close-side-region-btn"),
+    sideRegionPinBtn: document.querySelector<HTMLElement>("#side-region .panel-pin-btn")!,
     todosPanel: requireElement("todos-panel"),
-    closeTodosBtn: requireElement("close-todos-btn"),
     todosList: requireElement("todos-list"),
     todoAddForm: requireElement<HTMLFormElement>("todo-add-form"),
     todoAddInput: requireElement<HTMLInputElement>("todo-add-input"),
     todosToggleBtn: requireElement("todos-toggle-btn"),
     activityToggleBtn: requireElement("activity-toggle-btn"),
     activityPanel: requireElement("activity-panel"),
-    activityClose: requireElement("activity-close-btn"),
     activityFilters: requireElement("activity-filters"),
     activityList: requireElement("activity-list"),
     tasksToggleBtn: requireElement("tasks-toggle-btn"),
     tasksPanel: requireElement("tasks-panel"),
-    tasksClose: requireElement("tasks-close-btn"),
     tasksFilters: requireElement("tasks-filters"),
     tasksList: requireElement("tasks-list"),
     skillsBtn: requireElement("skills-btn"),
@@ -404,10 +408,10 @@ export function getElementRefs(): ElementRefs {
     subagentPanel: requireElement("subagent-panel"),
     subagentsToggleBtn: requireElement("subagents-toggle-btn"),
     subagentsBadge: document.getElementById("subagents-badge"),
-    closeSubagentBtn: requireElement("close-subagent-btn"),
     subagentList: requireElement("subagent-list"),
     subagentDetailView: requireElement("subagent-detail-view"),
     subagentDetailBackBtn: requireElement("subagent-detail-back-btn"),
+    subagentDetailPopoutBtn: document.getElementById("subagent-detail-popout-btn")!,
     subagentDetailCloseBtn: requireElement("subagent-detail-close-btn"),
     subagentDetailContent: requireElement("subagent-detail-content"),
     // Commands modal: optional lookup so older HTML bundles still load.

@@ -196,15 +196,23 @@ approval · checkpoint · error · thinking · completion` — derived purely fr
 
 ## 7. Recommended UI structure
 
-Three new header-toolbar toggles next to the existing timeline/todos/checkpoint buttons,
-each opening a per-tab `*-panel` (mirroring `todos-panel`, `subagent-panel`):
+A unified **side region** (`#side-region`) replaces four standalone panels with a tabbed
+interface using `.side-region-tabbar` (`.side-tab` buttons) and `.tab-pane` content
+areas. Four tab panes sit inside a single `.side-region-body`:
 
-- **Activity** (`#activity-toggle-btn` → `#activity-panel`): filter chips
+- **Activity** (`.tab-pane#activity-pane`): filter chips
   *All · Messages · Plans · Commands · Files · Errors · Approvals*; row click scrolls to the
   originating block.
 - **Plan**: inline card upgraded to interactive; optional docked panel.
-- **Tasks**: running commands with metadata + actions.
+- **Tasks** (`.tab-pane#tasks-pane`): running commands with metadata + actions.
 - **Session controls**: tab context menu + enhanced session modal (rename/pin/tag/archive/search).
+
+The region exposes a `SideRegionApi` (`open`, `close`, `toggle`, `switchTab`) with pin
+(`aria-pressed` star icon) and close buttons. Active tab is persisted in `sessionStorage`.
+Toggle buttons in the toolbar call `sideRegion.toggle(tabId)` rather than manipulating
+individual panel DOM elements. A single close button dismisses the entire region; the pin
+button prevents auto-close. The subagent detail view includes a pop-out-to-editor button
+that posts `open_subagent_detail`.
 
 Naming: keep the existing **Conversation Timeline** minimap; the new structured feed is
 **Activity**.
