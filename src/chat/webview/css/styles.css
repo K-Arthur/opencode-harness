@@ -25,5 +25,6 @@
 @import url("./tasks.css")               layer(components);
 @import url("./voice-input.css")         layer(components);
 @import url("./blocks.css")              layer(blocks);
+@import url("./cards.css")               layer(blocks);
 @import url("./animations.css")          layer(animations);
 @import url("./accessibility.css")       layer(accessibility);
