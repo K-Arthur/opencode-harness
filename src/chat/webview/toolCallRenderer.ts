@@ -12,6 +12,7 @@ import { stripAnsi } from "./ansiUtils"
 import { buildGroupSummaryLabel } from "./groupSummary"
 import { renderJsonViewer } from "./jsonViewer"
 import { isWebSearchTool, renderWebSearchResult } from "./webSearchRenderer"
+import { isTerminalState } from "./toolState"
 
 export interface RenderOptions {
   messageId?: string
@@ -289,7 +290,7 @@ export function appendToolStatusBadge(parent: HTMLElement, toolBlock: ToolCallBl
 
 export function appendToolTiming(parent: HTMLElement, toolBlock: ToolCallBlock): void {
   const toolState = toolBlock.state || 'running'
-  const isTerminal = toolState === 'result' || toolState === 'completed' || toolState === 'error' || toolState === 'stale' || toolState === 'cancelled' || toolState === 'timed_out' || toolState === 'retried'
+  const isTerminal = isTerminalState(toolState)
 
   if (toolBlock.durationMs && isTerminal) {
     const dur = document.createElement("span")
@@ -317,8 +318,7 @@ export function appendToolTiming(parent: HTMLElement, toolBlock: ToolCallBlock):
 export function appendToolOutputSize(parent: HTMLElement, toolBlock: ToolCallBlock): void {
   const toolState = toolBlock.state || 'running'
   if (!toolBlock.result) return
-  const terminalStates: ToolCallState[] = ['result', 'completed', 'error', 'stale', 'cancelled', 'timed_out', 'retried']
-  if (!terminalStates.includes(toolState)) return
+  if (!isTerminalState(toolState)) return
 
   const resultStr = typeof toolBlock.result === 'string' ? toolBlock.result : JSON.stringify(toolBlock.result)
   const size = document.createElement("span")
@@ -415,7 +415,7 @@ function renderDiffBody(text: string): { fragment: DocumentFragment; added: numb
 
 export function createToolResultPanel(toolBlock: ToolCallBlock, opts?: RenderOptions): HTMLElement | null {
   const toolState = toolBlock.state || 'running'
-  const isTerminal = toolState === 'result' || toolState === 'completed' || toolState === 'stale' || toolState === 'error' || toolState === 'cancelled' || toolState === 'timed_out' || toolState === 'retried'
+  const isTerminal = isTerminalState(toolState)
   const hasOutput = toolBlock.result !== undefined || (toolBlock.error !== undefined && toolBlock.error !== "")
   if (!hasOutput || !isTerminal) return null
 
@@ -846,6 +846,47 @@ export function renderPlanCard(plan: PlanData, opts: RenderOptions): HTMLElement
 }
 
 /**
+ * Render or refresh the group-level status badge for a set of tool blocks.
+ * Extracted so both initial render (renderToolGroup) and streaming updates
+ * (updateToolGroupHeader) share the same state → label mapping.
+ */
+export function renderToolGroupBadge(blocks: Block[]): HTMLSpanElement | null {
+  if (blocks.length === 0) return null
+  const hasError = blocks.some(b => {
+    const s = b.state
+    return s === 'error' || s === 'timed_out' || b.error
+  })
+  const completed = blocks.filter(b => {
+    const s = b.state
+    return s === 'result' || s === 'completed' || s === 'success'
+  }).length
+  const cancelled = blocks.filter(b => b.state === 'cancelled').length
+  const timedOut = blocks.filter(b => b.state === 'timed_out').length
+  const badge = document.createElement("span")
+  badge.className = "tool-status"
+  if (hasError) {
+    badge.textContent = '\u2717 Error'
+    badge.className += ' tool-status--error'
+  } else if (timedOut > 0) {
+    badge.textContent = '\u23f3 Timed out'
+    badge.className += ' tool-status--timed_out'
+  } else if (cancelled > 0) {
+    badge.textContent = '\u2715 Cancelled'
+    badge.className += ' tool-status--cancelled'
+  } else if (completed === blocks.length) {
+    badge.textContent = '\u2713 Done'
+    badge.className += ' tool-status--completed'
+  } else if (completed > 0) {
+    badge.textContent = `\u25c9 ${completed}/${blocks.length}`
+    badge.className += ' tool-status--running'
+  } else {
+    badge.textContent = '\u25c9 Running'
+    badge.className += ' tool-status--running'
+  }
+  return badge
+}
+
+/**
  * SDK lifecycle blocks (`step-start`, and `step-finish` with a normal
  * completion reason) render to `null` — the user never sees them. The
  * grouper must therefore treat them as *transparent*: they don't break a
@@ -1049,31 +1090,11 @@ export function renderToolGroup(blocks: Block[], opts: RenderOptions): HTMLEleme
     return s === 'running' || s === 'pending'
   }).length
   const baseCount = `${blocks.length} call${blocks.length > 1 ? 's' : ''}`
-  count.textContent = runningCount > 0 ? `${baseCount} (${runningCount} running)` : baseCount
+    count.textContent = runningCount > 0 ? `${baseCount} (${runningCount} running)` : baseCount
   summary.appendChild(count)
 
-   const completed = blocks.filter(b => {
-     const s = b.state
-     return s === 'result' || s === 'completed'
-   }).length
-   const cancelled = blocks.filter(b => b.state === 'cancelled').length
-   const timedOut = blocks.filter(b => b.state === 'timed_out').length
-  const badge = document.createElement("span")
-  badge.className = "tool-status"
-  if (hasError) {
-    badge.textContent = '\u2717 Error'
-  } else if (timedOut > 0) {
-    badge.textContent = '\u23f3 Timed out'
-  } else if (cancelled > 0) {
-    badge.textContent = '\u2715 Cancelled'
-  } else if (completed === blocks.length) {
-    badge.textContent = '\u2713 Done'
-  } else if (completed > 0) {
-    badge.textContent = `\u25c9 ${completed}/${blocks.length}`
-  } else {
-    badge.textContent = '\u25c9 Running'
-  }
-  summary.appendChild(badge)
+  const badge = renderToolGroupBadge(blocks)
+  if (badge) summary.appendChild(badge)
 
   group.appendChild(summary)
 

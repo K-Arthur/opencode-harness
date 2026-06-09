@@ -6,7 +6,7 @@ import { renderMessage } from "./messageRenderer"
 import { renderBlock, renderMarkdown } from "./renderer"
 import { sanitizeHtml, highlightSyntax } from "./syntaxHighlighter"
 import type { RenderOptions } from "./renderer"
-import { renderToolGroup } from "./toolCallRenderer"
+import { renderToolGroup, renderToolGroupBadge } from "./toolCallRenderer"
 import { applySubagentCardUpdate } from "./subagentCard"
 import type { ScrollAnchor } from "./scrollAnchor"
 import { CHECK_SVG, SUCCESS_SVG, SPINNER_SVG } from "./icons"
@@ -781,6 +781,24 @@ function updateToolGroupHeader(groupEl: HTMLElement): void {
     const breakdown = Object.entries(counts).map(([type, n]) => `${n} ${type}`).join(", ")
     breakdownEl.textContent = `(${breakdown})`
   }
+
+  // Refresh the group-level status badge so it reflects the latest child states.
+  // Read state from the child DOM elements' CSS classes (single source of truth
+  // for streaming updates) so we avoid chasing the message model.
+  const blockStates: Array<{ state: string }> = []
+  children.forEach((child) => {
+    const match = child.className.match(/tool-call--(pending|running|result|completed|error|cancelled|timed_out|stale|retried)/)
+    blockStates.push({ state: match?.[1] ?? 'running' })
+  })
+  if (blockStates.length > 0) {
+    const existingBadge = groupEl.querySelector(".tool-header > .tool-status")
+    const newBadge = renderToolGroupBadge(blockStates as any)
+    if (newBadge && existingBadge) {
+      existingBadge.replaceWith(newBadge)
+    } else if (newBadge) {
+      groupEl.querySelector(".tool-header")?.appendChild(newBadge)
+    }
+  }
 }
 
 // m1: single source of truth for tool-call state \u2192 CSS class / badge text. The
@@ -1261,7 +1279,7 @@ export function handleRunActivityUpdate(
     return
   }
 
-  if (!state.isStreaming && activity.phase !== "waiting_for_activity") {
+  if (!state.isStreaming && activity.phase !== "waiting_for_activity" && state.streamingMessageId) {
     state.isStreaming = true
   }
 
@@ -1295,6 +1313,7 @@ export function resetStreamState(state: StreamState): void {
     state.renderQueue.destroy()
     state.renderQueue = null
   }
+  state.isStreaming = false
   state.streamingMessageId = null
   state.streamingBuffer = ""
   state.streamingBlockId = null
