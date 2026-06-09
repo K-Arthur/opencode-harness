@@ -11,6 +11,25 @@ void describe("voiceSetup pip detection", () => {
     assert.equal(pickPipCommand(has("pip")), "pip")
     assert.equal(pickPipCommand(none), null)
   })
+  void it("falls back to python3 -m pip when pip/pip3 are absent", () => {
+    assert.equal(pickPipCommand(none, true), "python3 -m pip")
+    assert.equal(pickPipCommand(none, false), null)
+  })
+  void it("prefers pip3 over python3 -m pip", () => {
+    assert.equal(pickPipCommand(has("pip3"), true), "pip3")
+  })
+  void it("prefers pip over python3 -m pip", () => {
+    assert.equal(pickPipCommand(has("pip"), true), "pip")
+  })
+  void it("supports uv as a fallback after python3 -m pip", () => {
+    assert.equal(pickPipCommand(none, false, true), "uv pip install --system")
+  })
+  void it("prefers pip3 over uv", () => {
+    assert.equal(pickPipCommand(has("pip3"), true, true), "pip3")
+  })
+  void it("prefers python3 -m pip over uv", () => {
+    assert.equal(pickPipCommand(none, true, true), "python3 -m pip")
+  })
 })
 
 void describe("voiceSetup recorder installer", () => {

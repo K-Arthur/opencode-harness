@@ -33,10 +33,20 @@ export interface VoiceSetupPlan {
   steps: VoiceSetupStep[]
 }
 
-/** Prefer `pip3`, then `pip`. Returns null when neither is on PATH. */
-export function pickPipCommand(exists: (bin: string) => boolean): string | null {
+/**
+ * Resolve the best available pip command for installing Python packages.
+ * Priority: pip3 > pip > python3 -m pip > uv.
+ * Returns null when none is available.
+ */
+export function pickPipCommand(
+  exists: (bin: string) => boolean,
+  pipViaPython?: boolean,
+  hasUv?: boolean,
+): string | null {
   if (exists("pip3")) return "pip3"
   if (exists("pip")) return "pip"
+  if (pipViaPython) return "python3 -m pip"
+  if (hasUv) return "uv pip install --system"
   return null
 }
 
