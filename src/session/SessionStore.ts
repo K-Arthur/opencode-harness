@@ -661,6 +661,27 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
   appendMessage(sessionId: string, msg: ChatMessage): void {
     const session = this.sessions.get(sessionId)
     if (!session) return
+
+    // Upsert by id: when the message carries a non-empty id and that id
+    // already exists in the session, replace in place instead of pushing.
+    // This prevents duplicates from:
+    //   • stream_end replacing the stream_start placeholder
+    //   • backfill re-delivery of an already-known message
+    //   • reconnect / event replay that re-emits a finalized message
+    // The webview also deduplicates (upsertMessageById), but the host-side
+    // array must be accurate for persistence and for any count derived from
+    // s.messages.length.
+    if (msg.id) {
+      const idx = session.messages.findIndex((m) => m.id === msg.id)
+      if (idx >= 0) {
+        session.messages[idx] = msg
+        session.lastActiveAt = Date.now()
+        this.save()
+        this._onSessionsChanged.fire()
+        return
+      }
+    }
+
     session.messages.push(msg)
     session.lastActiveAt = Date.now()
 
