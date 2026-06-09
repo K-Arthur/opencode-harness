@@ -13,6 +13,7 @@ import { DiffApplier } from "../diff/DiffApplier"
 import { sdkMessagesToChatMessages, reasoningEventToBlock } from "../session/sdkMessageConverter"
 import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
 import { isLocalPlaceholderSessionId } from "../session/sessionUtils"
+import { activitySignature } from "../session/activityCoalesce"
 import { WebviewContent } from "./WebviewContent"
 import { TabManager, type TabState } from "./TabManager"
 import { StreamCoordinator } from "./handlers/StreamCoordinator"
@@ -1362,6 +1363,11 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     const title = this.stringValue(rec.title) || fallbackTitle
     const detail = this.stringValue(rec.detail) || this.stringValue(rec.text) || this.stringValue(rec.error)
     const eventType = this.stringValue(rec.eventType)
+    // Content signature drives deduplication: the same activity re-delivered
+    // (reconnect, pending-event replay) collapses into the previous card with a
+    // repeat count instead of stacking a duplicate. The id stays unique per
+    // *new* card so genuinely separate, non-adjacent repeats still surface.
+    const signature = activitySignature(eventType, title, detail)
     const id = this.stringValue(rec.id) || `activity-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const block: Block = {
       type: "activity",
@@ -1369,6 +1375,8 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       title,
       detail,
       eventType,
+      signature,
+      repeatCount: 1,
     }
     const message: ChatMessage = {
       role: "system",
@@ -1377,8 +1385,8 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       timestamp: Date.now(),
       sessionId,
     }
-    this.sessionStore.appendMessage(sessionId, message)
-    this.postMessage({ type: "message", sessionId, message })
+    const stored = this.sessionStore.appendOrCoalesceActivity(sessionId, message, signature)
+    if (stored) this.postMessage({ type: "message", sessionId, message: stored })
   }
 
   private questionAnswersToText(value: unknown): string {
