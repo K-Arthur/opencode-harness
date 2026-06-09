@@ -98,10 +98,13 @@ export function buildVoiceSetupPlan(probe: VoiceToolProbe, platform: NodeJS.Plat
 
   if (!probe.hasEngine) {
     if (probe.pip) {
+      const isUv = probe.pip.startsWith("uv")
       steps.push({
         kind: "engine",
         label: "Install the local speech-to-text engine (openai-whisper)",
-        command: `${probe.pip} install -U openai-whisper`,
+        command: isUv
+          ? `${probe.pip} openai-whisper`
+          : `${probe.pip} install -U openai-whisper`,
       })
     } else {
       steps.push({

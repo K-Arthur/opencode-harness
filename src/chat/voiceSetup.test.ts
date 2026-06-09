@@ -131,4 +131,22 @@ void describe("voiceSetup plan", () => {
     const recorder = plan.steps.find((s) => s.kind === "recorder")
     assert.match(recorder?.manual || "", /package manager/)
   })
+
+  void it("offers a runnable engine install when only python3 -m pip is available", () => {
+    const plan = buildVoiceSetupPlan(
+      probe({ hasRecorder: true, pip: "python3 -m pip" }),
+      "linux",
+    )
+    const engine = plan.steps.find((s) => s.kind === "engine")
+    assert.equal(engine?.command, "python3 -m pip install -U openai-whisper")
+  })
+
+  void it("offers a runnable engine install when only uv is available", () => {
+    const plan = buildVoiceSetupPlan(
+      probe({ hasRecorder: true, pip: "uv pip install --system" }),
+      "linux",
+    )
+    const engine = plan.steps.find((s) => s.kind === "engine")
+    assert.equal(engine?.command, "uv pip install --system openai-whisper")
+  })
 })
