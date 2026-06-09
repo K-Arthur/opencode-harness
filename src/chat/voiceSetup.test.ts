@@ -40,7 +40,20 @@ void describe("voiceSetup recorder installer", () => {
   void it("uses the available Linux package manager", () => {
     assert.equal(recorderInstallCommand("linux", has("apt-get"))?.command, "sudo apt-get install -y sox")
     assert.equal(recorderInstallCommand("linux", has("dnf"))?.command, "sudo dnf install -y sox")
+    assert.equal(recorderInstallCommand("linux", has("dnf5"))?.command, "sudo dnf5 install -y sox")
+    assert.equal(recorderInstallCommand("linux", has("pacman"))?.command, "sudo pacman -S --noconfirm sox")
+    assert.equal(recorderInstallCommand("linux", has("zypper"))?.command, "sudo zypper install -y sox")
+    assert.equal(recorderInstallCommand("linux", has("apk"))?.command, "sudo apk add sox")
+    assert.equal(recorderInstallCommand("linux", has("nix-env"))?.command, "nix-env -iA nixpkgs.sox")
     assert.equal(recorderInstallCommand("linux", none), null)
+  })
+  void it("prefers dnf over dnf5 when both exist", () => {
+    const hasBoth = has("dnf", "dnf5")
+    assert.equal(recorderInstallCommand("linux", hasBoth)?.manager, "dnf")
+  })
+  void it("uses winget on Windows", () => {
+    assert.equal(recorderInstallCommand("win32", has("winget"))?.manager, "winget")
+    assert.equal(recorderInstallCommand("win32", has("winget"))?.command, "winget install sox --accept-source-agreements")
   })
   void it("uses choco/scoop on Windows", () => {
     assert.equal(recorderInstallCommand("win32", has("choco"))?.manager, "Chocolatey")
