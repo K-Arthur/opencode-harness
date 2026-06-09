@@ -41,6 +41,7 @@ describe("floating webview dropdown positioning", () => {
       <div id="changed-files-strip" class="hidden"></div>
       <div id="changed-files-dropdown" class="hidden"><button id="cf-dropdown-close"></button><div id="cf-tree"></div></div>
       <span id="cf-badge"></span>
+      <div id="input-area" style="position:fixed;bottom:10px;left:10px;right:10px;height:60px"></div>
     </body>`)
     previousDocument = globalThis.document
     previousWindow = globalThis.window
@@ -111,5 +112,36 @@ describe("floating webview dropdown positioning", () => {
     assert.ok(!panel.classList.contains("hidden"), "clicking the strip must open the dropdown")
     assert.ok(left >= 8, "left edge must stay within viewport margin")
     assert.ok(left + width <= 352, "right edge must stay within viewport margin")
+  })
+
+  it("fallback to input-area when anchor has zero dimensions", () => {
+    // Edge case: strip is present but has zero height (hidden/invisible).
+    // The dropdown should still open and position itself near the input area.
+    const strip = document.getElementById("changed-files-strip")!
+    const panel = document.getElementById("changed-files-dropdown")!
+    const inputArea = document.getElementById("input-area")!
+    setRect(strip, { left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 })
+    setRect(inputArea, { left: 12, right: 348, top: 200, bottom: 260, width: 336, height: 60 })
+    setRect(panel, { left: 0, right: 0, top: 0, bottom: 440, width: 420, height: 440 })
+
+    setupChangedFilesDropdown({
+      btn: null,
+      panel,
+      treeContainer: document.getElementById("cf-tree")!,
+      badge: document.getElementById("cf-badge")!,
+      postMessage: () => {},
+      onOpenFile: () => {},
+    })
+    setCurrentSession("session-a")
+    updateChangedFiles("session-a", [{ path: "/tmp/example.ts", added: 1, removed: 0 }])
+    strip.click()
+
+    // Panel must open and have valid (non-NaN, non-zero) coordinates
+    assert.ok(!panel.classList.contains("hidden"), "clicking the strip must open the dropdown even with zero-size anchor")
+    const top = Number.parseFloat(panel.style.top)
+    const left = Number.parseFloat(panel.style.left)
+    assert.ok(Number.isFinite(top), `panel top must be a finite number, got ${top}`)
+    assert.ok(top >= 0, `panel top must be >= 0, got ${top}`)
+    assert.ok(Number.isFinite(left), `panel left must be a finite number, got ${left}`)
   })
 })

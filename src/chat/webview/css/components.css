@@ -2599,6 +2599,91 @@ textarea {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Summary bar — aggregate file count + added/removed totals */
+.cf-summary-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--oc-border);
+  font-size: 0.72rem;
+  flex-shrink: 0;
+}
+.cf-summary-count {
+  font-weight: 600;
+  color: var(--oc-fg);
+}
+.cf-summary-stats {
+  display: flex;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+
+/* Controls row — collapse-all button */
+.cf-controls .cf-collapse-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  color: var(--oc-muted);
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  margin-left: auto;
+}
+.cf-controls .cf-collapse-all-btn:hover { color: var(--oc-fg); }
+
+/* Open file icon button */
+.cf-open-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: none;
+  color: var(--oc-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.cf-file-row:hover .cf-open-btn,
+.cf-open-btn:focus-visible { opacity: 1; }
+
+/* Plan document tag */
+.cf-plan-tag {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.55rem;
+  font-weight: 700;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--oc-accent-subtle, rgba(0, 120, 212, 0.12));
+  color: var(--oc-accent, #0078d4);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  line-height: 1.4;
+}
+
+/* Directory grouping */
+.cf-dir-group {
+  border-bottom: 1px solid var(--oc-border-subtle, rgba(128, 128, 128, 0.08));
+}
+.cf-dir-group:last-child { border-bottom: none; }
+.cf-dir-header {
+  padding: 4px 10px 2px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--oc-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 /* ─── Context Window Unknown chip ───────────────────────────────────────────── */
 .ctx-window-unknown-chip {
   display: inline-flex;

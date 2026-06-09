@@ -5,6 +5,9 @@
  * even under rapid updates and tab switches. Catches the regression where
  * a module-level state caused another tab's edits to surface in the visible
  * session (especially dangerous in plan mode, where no edits should appear).
+ *
+ * Also covers the welcome-view guard ensuring no file strip/dropdown appears
+ * on the welcome screen.
  */
 import { describe, it, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
@@ -24,6 +27,7 @@ let tree: HTMLElement
 let badge: HTMLElement
 let btn: HTMLButtonElement
 let postedMessages: Array<Record<string, unknown>>
+let welcomeVisible = false
 
 function bootDom() {
   dom = new JSDOM(`<!doctype html>
@@ -51,6 +55,7 @@ function bootDom() {
     badge,
     postMessage: (msg) => postedMessages.push(msg),
     onOpenFile: () => {},
+    isWelcomeVisible: () => welcomeVisible,
   })
 }
 
@@ -145,6 +150,57 @@ describe("changed-files-dropdown — per-session isolation", () => {
     // If A's cache had been polluted, resetting B would not change it; this is
     // a sanity assert that the API surface accepts these calls without throwing.
     assert.ok(true)
+  })
+
+  // ── Welcome-view guard ────────────────────────────────────────────────────
+  // The changed-files strip and dropdown must NEVER appear on the welcome
+  // screen. Files are still accumulated per-session, but the UI surfaces them
+  // only after the user enters a session (welcome view hidden).
+
+  it("strip stays hidden when welcome view is visible even with files", () => {
+    welcomeVisible = true
+    setCurrentSession("sess-A")
+    updateChangedFiles("sess-A", [{ path: "src/welcome-test.ts", added: 3, removed: 1 }])
+
+    const strip = document.getElementById("changed-files-strip")!
+    assert.ok(strip.classList.contains("hidden"), "strip must stay hidden on welcome screen")
+    assert.equal(strip.innerHTML, "", "strip must be empty on welcome screen")
+  })
+
+  it("per-session data is still accumulated when strip is suppressed by welcome", () => {
+    welcomeVisible = true
+    setCurrentSession("sess-A")
+    updateChangedFiles("sess-A", [{ path: "src/welcome-buffer.ts", added: 5, removed: 2 }])
+
+    // Switch away from welcome (simulating entering a session)
+    welcomeVisible = false
+    // The dropdown API needs a new setCurrentSession to re-render
+    setCurrentSession("sess-A")
+
+    const strip = document.getElementById("changed-files-strip")!
+    assert.ok(!strip.classList.contains("hidden"), "strip must show after leaving welcome")
+    assert.ok(strip.textContent!.includes("welcome-buffer.ts"), "session's files must appear after welcome exit")
+  })
+
+  it("re-setting current session to null on welcome keeps strip hidden", () => {
+    welcomeVisible = true
+    setCurrentSession("sess-A")
+    updateChangedFiles("sess-A", [{ path: "src/null-welcome.ts", added: 1, removed: 0 }])
+    setCurrentSession(null)
+
+    const strip = document.getElementById("changed-files-strip")!
+    assert.ok(strip.classList.contains("hidden"), "strip must be hidden after setCurrentSession(null) on welcome")
+  })
+
+  it("dropdown does not open when clicked on welcome screen", () => {
+    welcomeVisible = true
+    setCurrentSession("sess-A")
+    updateChangedFiles("sess-A", [{ path: "src/welcome-no-open.ts", added: 2, removed: 0 }])
+
+    // Simulate clicking the button to toggle the dropdown
+    btn.click()
+    // Panel should remain hidden because isWelcomeVisible suppresses open
+    assert.ok(panel.classList.contains("hidden"), "dropdown panel must stay closed on welcome screen")
   })
 
   it("drops stale module state on resetChangedFilesDropdown", () => {

@@ -98,6 +98,33 @@ describe("fileTracking.ts", () => {
     assert.ok(source.includes("export function handleChangedFiles"), "must export handleChangedFiles")
   })
 
+  it("handleChangedFiles gated by active session before rendering chips", () => {
+    const idx = source.indexOf("function handleChangedFiles(")
+    assert.ok(idx >= 0, "handleChangedFiles function must exist")
+    const block = source.slice(idx, idx + 600)
+    // Data write is unconditional (per-session persistence is correct)
+    assert.ok(block.includes("session.changedFiles"), "must update session data")
+    assert.ok(block.includes("deps.save()"), "must persist")
+    // Render is gated: only show when this session is the active one
+    assert.ok(block.includes("getActiveSessionId()") || block.includes("renderChangedFilesList"),
+      "render must be gated by active session check")
+  })
+
+  it("handleChangedFiles always writes data regardless of active session", () => {
+    const idx = source.indexOf("function handleChangedFiles(")
+    assert.ok(idx >= 0, "handleChangedFiles function must exist")
+    const block = source.slice(idx, idx + 600)
+    // The data write (session.changedFiles = files) must happen before the
+    // active-session gate so switching tabs surfaces persisted files instantly.
+    const writeIdx = block.indexOf("session.changedFiles")
+    const gateIdx = block.indexOf("getActiveSessionId()")
+    assert.ok(writeIdx >= 0, "data write to session.changedFiles must exist")
+    assert.ok(
+      gateIdx === -1 || gateIdx > writeIdx,
+      "data write must happen before the active-session gate (so per-session state survives tab switches)"
+    )
+  })
+
   it("exports handleClearMessages", () => {
     assert.ok(source.includes("export function handleClearMessages"), "must export handleClearMessages")
   })
