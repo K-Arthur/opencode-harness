@@ -2665,7 +2665,10 @@
  * so the menu stays glued to the ⋮ button even if the list scrolls. */
 .modal-session-more-menu {
   position: fixed;
-  z-index: var(--z-dropdown, 100);
+  /* Portaled to <body> and opened from the session-history modal, so it must
+   * sit above the modal content (--z-modal: 300), not at dropdown level (50)
+   * where it rendered behind the backdrop and appeared "dead" on click. */
+  z-index: var(--z-modal-menu, 350);
   min-width: 160px;
   background: var(--oc-bg, var(--vscode-dropdown-background, #1e1e1e));
   border: 1px solid var(--oc-glass-border, var(--vscode-dropdown-border, #555));
