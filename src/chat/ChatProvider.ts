@@ -882,12 +882,12 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
 
       this.streamCoordinator.recordSubagentActivity(targetId, {
         id: data.id,
-        agentName: data.agentName,
+        agentName: typeof data.agentName === "string" ? data.agentName : undefined,
         status: this.normalizeSubagentUpdateStatus(data.status),
-        currentActivity: data.currentActivity,
-        inputPrompt: data.inputPrompt,
-        childSessionId: data.childSessionId,
-        error: data.error,
+        currentActivity: typeof data.currentActivity === "string" ? data.currentActivity : undefined,
+        inputPrompt: typeof data.inputPrompt === "string" ? data.inputPrompt : undefined,
+        childSessionId: typeof data.childSessionId === "string" ? data.childSessionId : undefined,
+        error: typeof data.error === "string" ? data.error : undefined,
       }, { postMessage: (m) => this.postMessage(m), postRequestError: (m) => this.postRequestError(m) })
     }],
     ["text_chunk", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean }) => {
