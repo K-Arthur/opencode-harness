@@ -2721,6 +2721,11 @@ textarea {
 
 /* ── Subagent Detail View ─────────────────────────────────── */
 
+@keyframes slideIn {
+  from { transform: translateX(8px); opacity: 0; }
+  to   { transform: translateX(0);   opacity: 1; }
+}
+
 .subagent-detail-view {
   position: absolute;
   inset: 0;
