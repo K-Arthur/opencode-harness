@@ -398,6 +398,8 @@ const WEBVIEW_MESSAGE_VALIDATORS: Record<string, MessageValidator> = {
   get_subagent_detail: requiredStringValidator("subagentId", () => "Invalid subagentId in get_subagent_detail"),
   cancel_subagent: requiredStringValidator("subagentId", () => "Invalid subagentId in cancel_subagent"),
   mark_subagent_read: requiredStringValidator("subagentId", () => "Invalid subagentId in mark_subagent_read"),
+  popout_get_subagent_detail: requiredStringValidator("subagentId", () => "Invalid subagentId in popout_get_subagent_detail"),
+  popout_cancel_subagent: requiredStringValidator("subagentId", () => "Invalid subagentId in popout_cancel_subagent"),
   voice_start: validateVoiceRequest,
   voice_stop: validateVoiceRequest,
   voice_cancel: validateVoiceRequest,

@@ -295,7 +295,7 @@ export interface SkillInfo {
 export interface SubagentActivity {
   id: string
   name: string
-  status: 'running' | 'completed' | 'failed' | 'cancelled' | 'pending'
+  status: 'running' | 'completed' | 'failed' | 'cancelled' | 'pending' | 'queued' | 'waiting' | 'unknown'
   output?: string
   progress?: number
   // SADD/TDD fields (Phase 1+)
@@ -800,6 +800,8 @@ export type WebviewMessage =
   | { type: "get_subagent_detail"; sessionId: string; subagentId: string }
   | { type: "cancel_subagent"; subagentId: string }
   | { type: "mark_subagent_read"; sessionId: string; subagentId: string }
+  | { type: "popout_get_subagent_detail"; subagentId: string; sessionId: string }
+  | { type: "popout_cancel_subagent"; subagentId: string }
   | { type: "update_setting"; key: string; value: unknown }
   | { type: "show_error"; message: string }
   | { type: "get_context_usage"; sessionId: string }

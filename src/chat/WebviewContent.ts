@@ -10,6 +10,29 @@ export class WebviewContent {
   constructor(private readonly extensionUri: vscode.Uri) {}
 
   build(webview: vscode.Webview, themeManager: ThemeManager): string {
+    return this.buildInternal(webview, themeManager, null)
+  }
+
+  /**
+   * Build the HTML for a popout panel dedicated to a single subagent detail.
+   * Injects `?popout=1&subagentId=...&sessionId=...` into the page so the
+   * webview knows to enter popout mode on init (hide the input, tabs, and
+   * main message list; show only the subagent detail view).
+   */
+  buildForPopout(
+    webview: vscode.Webview,
+    themeManager: ThemeManager,
+    parentSessionId: string,
+    subagentId: string,
+  ): string {
+    return this.buildInternal(webview, themeManager, { parentSessionId, subagentId })
+  }
+
+  private buildInternal(
+    webview: vscode.Webview,
+    themeManager: ThemeManager,
+    popout: { parentSessionId: string; subagentId: string } | null,
+  ): string {
     const extRoot = this.extensionUri.fsPath
 
     const distHtmlPath = path.join(extRoot, "dist", "chat", "webview", "index.html")
@@ -91,9 +114,17 @@ export class WebviewContent {
       `${themeStyle}<style nonce="${nonce}">${css}</style>`
     )
 
+    // Inject popout-mode bootstrap (read by main.ts at init). We use a
+    // module-script with the same nonce so it runs before the bundled
+    // main.js (which is also nonced). We sanitize values to ASCII to keep
+    // them out of HTML/script contexts.
+    const popoutBootstrap = popout
+      ? `<script nonce="${nonce}">window.__OC_POPOUT__=${JSON.stringify({ parentSessionId: popout.parentSessionId, subagentId: popout.subagentId })};</script>`
+      : ""
+
     html = html.replace(
       '<script src="main.js"></script>',
-      `<script nonce="${nonce}">window.__OC_MARKDOWN_WORKER_URI__ = "${markdownWorkerUri}";</script><script nonce="${nonce}" src="${scriptUri}"></script>`
+      `${popoutBootstrap}<script nonce="${nonce}">window.__OC_MARKDOWN_WORKER_URI__ = "${markdownWorkerUri}";</script><script nonce="${nonce}" src="${scriptUri}"></script>`
     )
     html = html.replace(
       'src="media/opencode-wordmark-dark.svg"',

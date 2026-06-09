@@ -141,3 +141,45 @@ so the detail's `absolute; inset: 0` is scoped to the subagent tab pane only.
 - `onClearCompleted` removes terminal subagents from the panel and state.
 - Cancel button is conditionally rendered (not structurally different) for
   running vs non-running items, preventing stale buttons on status transitions.
+
+### Bug 4 — normalizeSubagentStatus mapping unknown → pending/running (root cause of Bug 2 recurrence)
+
+Bug 2's reconciler was correct, but two upstream normalizers silently re-introduced
+the "stuck running" problem:
+
+1. **Webview** (`main.ts:normalizeSubagentStatus`) mapped `"unknown"` → `"pending"`.
+   `isLiveSubagent` treats `"pending"` as live, so unknown-status subagents kept
+   showing "Running" even after the reconciler fixed them.
+2. **Host** (`RunActivityTracker.ts:normalizeSubagentStatus`) used `status ?? "running"`
+   as the default, and `ChatProvider.ts:normalizeSubagentUpdateStatus` defaulted to
+   `"running"`. Both caused unparseable server statuses to appear as live.
+3. **Host** (`RunActivityTracker.ts:activeSubagentCount`) counted `"unknown"` as
+   active, preventing run finalization.
+
+**Fix:** All three normalizers now map unknown / non-canonical values to `"unknown"`
+(NOT `"pending"` or `"running"`). The webview's `isLiveSubagent` only treats
+`"running"` and `"pending"` as live. The reconciler correctly transitions `"unknown"`
+to `"completed"` when the server drops the subagent.
+
+Modules: `src/chat/webview/main.ts`, `src/chat/handlers/RunActivityTracker.ts`,
+`src/chat/ChatProvider.ts`.
+
+### Bug 5 — "Open in editor" button was a no-op placeholder
+
+The popout button (`#subagent-detail-popout-btn`) only sent the parent `sessionId`
+without the subagent id, and the host's `open_subagent_detail` handler only logged.
+
+**Fix:**
+
+1. The webview tracks the active subagent id (`activeSubagentId`) — set on panel
+   click (`onOpenDetail`) and `subagent_update` events, cleared on detail close.
+2. The popout button sends both `sessionId` and `subagentId`.
+3. The host's `openSubagentDetailPanel` creates a new `vscode.WebviewPanel` with
+   `WebviewContent.buildForPopout()`, which injects `window.__OC_POPOUT__`.
+4. The popout webview detects popout mode at init, hides all chat UI, and posts
+   `popout_get_subagent_detail` to fetch and render the detail.
+5. The host forwards `subagent_detail` to matching popout panels via
+   `postSubagentDetailToPopouts`.
+
+Modules: `src/chat/webview/main.ts`, `src/chat/ChatProvider.ts`,
+`src/chat/WebviewEventRouter.ts`, `src/chat/WebviewContent.ts`.

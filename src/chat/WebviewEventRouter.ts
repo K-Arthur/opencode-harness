@@ -123,6 +123,22 @@ export interface WebviewEventRouterOptions {
   skillPreferences: SkillPreferencesStoreLike
   pushAllStateToWebview: () => void
   pushVisibleStateToWebview: () => void
+  /**
+   * Opens a new VS Code editor webview panel dedicated to a single subagent
+   * detail. The host passes a popout session id and the subagent id; the
+   * new panel will auto-request the subagent detail via the same path as
+   * the inline `get_subagent_detail` message. Returns the popout session id
+   * (a string the host may use to track the panel), or undefined if the
+   * host declined (e.g. panel creation was rejected by VS Code).
+   */
+  openSubagentDetailPanel: (parentSessionId: string, subagentId: string) => string | undefined
+  /**
+   * Called after the host fetches subagent detail data (from
+   * get_subagent_detail). Gives the ChatProvider a chance to forward the
+   * detail to any open popout panels before (or in addition to) posting to
+   * the main webview. Returns true if any popout consumed the message.
+   */
+  postSubagentDetailToPopouts: (detail: Record<string, unknown>, subagentId: string) => boolean
 }
 
 export class WebviewEventRouter {
@@ -161,6 +177,7 @@ export class WebviewEventRouter {
     "get_skills", "toggle_skill", "search_skills",
     "get_changed_files", "get_file_diff", "open_file", "open_folder", "open_url", "reveal_in_explorer",
     "get_subagent_activities", "get_subagent_detail", "cancel_subagent", "mark_subagent_read",
+    "popout_get_subagent_detail", "popout_cancel_subagent",
     "update_setting", "show_error", "get_context_usage", "record_stash_usage", "open_context_window_override_dialog",
     "model_favorite", "model_toggle", "get_permission_config", "update_permission_config",
     "question_answer",
@@ -1462,7 +1479,14 @@ export class WebviewEventRouter {
           error: live?.error,
           unreadActivityCount: live?.unreadActivityCount ?? 0,
         }
-        this.opts.postMessage({ type: "subagent_detail", sessionId, subagentId, detail })
+        // Forward to any open popout panels first, then the main webview.
+        const popoutConsumed = this.opts.postSubagentDetailToPopouts(detail, subagentId)
+        if (!popoutConsumed) {
+          this.opts.postMessage({ type: "subagent_detail", sessionId, subagentId, detail })
+        } else {
+          // Still post to main webview so inline detail view updates too
+          this.opts.postMessage({ type: "subagent_detail", sessionId, subagentId, detail })
+        }
       } catch (err) {
         log.error(`Failed to get subagent detail for ${subagentId}`, err)
         this.opts.postMessage({
@@ -1508,11 +1532,25 @@ export class WebviewEventRouter {
       // Host-side, this could be used to reset unread counts for SSE tracking.
     }],
     ["open_subagent_detail", (msg: Record<string, unknown>, sessionId?: string) => {
-      // Popout button: open the active subagent's detail in VS Code's editor area.
-      // Currently a placeholder — the subagentId is not available from the button
-      // context. A future enhancement can resolve the active detail subagent from
-      // the session state and open a dedicated webview panel.
-      log.info(`open_subagent_detail requested for session ${sessionId ?? "unknown"}`)
+      // Popout button: open the active subagent's detail in a dedicated VS Code
+      // editor webview panel. The webview now sends the parent sessionId AND
+      // the active subagentId (tracked from the last panel click or live
+      // subagent_update), so we can hand both to the host's panel creator.
+      const subagentId = typeof msg.subagentId === "string" ? msg.subagentId : ""
+      if (!sessionId || !subagentId) {
+        log.warn(`open_subagent_detail: missing sessionId=${sessionId} or subagentId=${subagentId}`)
+        return
+      }
+      try {
+        const popoutId = this.opts.openSubagentDetailPanel(sessionId, subagentId)
+        if (!popoutId) {
+          log.warn(`open_subagent_detail: host refused to open panel for ${subagentId}`)
+          return
+        }
+        log.info(`open_subagent_detail: opened popout panel ${popoutId} for subagent ${subagentId}`)
+      } catch (err) {
+        log.error(`open_subagent_detail: failed to open panel for ${subagentId}`, err)
+      }
     }],
     ["webview_error", (msg: Record<string, unknown>) => {
       const message = typeof msg.message === "string" ? msg.message : "Unknown webview error"

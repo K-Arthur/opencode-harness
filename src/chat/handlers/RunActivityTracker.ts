@@ -26,9 +26,27 @@ function normalizeToolStatus(status: ToolActivityInput["status"]): ToolExecution
   return status
 }
 
+// Host-side status normalizer. Unknown / non-canonical values default to
+// "unknown" (NOT "running") so the tracker does not treat unparseable events
+// as active liveness. The webview's reconciler will then transition dropped
+// subagents to "completed" when the server stops reporting. See
+// subagentReconciler.ts. The legacy behavior of returning "running" on any
+// unknown input caused subagents to be stuck "Running" forever when the server
+// sent a status string the host did not recognize.
 function normalizeSubagentStatus(status: SubagentActivityInput["status"]): SubagentRunState["status"] {
   if (status === "pending") return "queued"
-  return status ?? "running"
+  if (
+    status === "queued" ||
+    status === "running" ||
+    status === "waiting" ||
+    status === "completed" ||
+    status === "failed" ||
+    status === "cancelled" ||
+    status === "unknown"
+  ) {
+    return status
+  }
+  return "unknown"
 }
 
 function activeToolCount(tools: Map<string, ToolExecutionState>): number {
@@ -39,10 +57,22 @@ function activeToolCount(tools: Map<string, ToolExecutionState>): number {
   return count
 }
 
+// Counts subagents whose status is plausibly still in progress.
+// NOTE: "unknown" is intentionally NOT counted as active. The previous
+// implementation did, which kept the spinner alive indefinitely when the
+// tracker received an unparseable status from the server. With "unknown"
+// excluded, an unparseable status shows "Unknown" in the UI and the
+// reconciler (or final snapshot completion) can finalize the run.
 function activeSubagentCount(subagents: Map<string, SubagentRunState>): number {
   let count = 0
   for (const subagent of subagents.values()) {
-    if (subagent.status === "queued" || subagent.status === "running" || subagent.status === "waiting" || subagent.status === "unknown") count++
+    if (
+      subagent.status === "queued" ||
+      subagent.status === "running" ||
+      subagent.status === "waiting"
+    ) {
+      count++
+    }
   }
   return count
 }
