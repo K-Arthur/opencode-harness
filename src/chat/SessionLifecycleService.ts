@@ -11,6 +11,7 @@ import { checkFileSecurity } from "../utils/security"
 import { sdkMessagesToChatMessages } from "../session/sdkMessageConverter"
 import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
 import { log } from "../utils/outputChannel"
+import { computeMessageCounts } from "./webview/messageCounter"
 import type { ChatMessage, Block } from "./types"
 
 export interface SessionLifecycleOptions {
@@ -105,6 +106,9 @@ export class SessionLifecycleService {
     const INITIAL_RESUME_COUNT = 50
     const totalMessages = fresh.messages.length
     const initialMessages = fresh.messages.slice(-INITIAL_RESUME_COUNT)
+    const totalCounts = computeMessageCounts(fresh.messages)
+    const initialCounts = computeMessageCounts(initialMessages)
+    const hiddenTurns = (totalCounts.userTurns + totalCounts.assistantTurns) - (initialCounts.userTurns + initialCounts.assistantTurns)
 
     this.opts.statePush.postMessage({
       type: "resume_session_data",
@@ -122,6 +126,7 @@ export class SessionLifecycleService {
       },
       totalMessages,
       initialBeforeIndex: totalMessages - initialMessages.length,
+      initialHiddenTurns: hiddenTurns,
     })
   }
 

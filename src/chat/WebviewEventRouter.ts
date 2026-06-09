@@ -30,6 +30,7 @@ import type { UsageAnalytics } from "../monitor/UsageAnalytics"
 import type { SkillPreferencesStoreLike } from "../skills/SkillPreferencesStore"
 import type { VoiceInputService } from "./VoiceInputService"
 import { log } from "../utils/outputChannel"
+import { computeMessageCounts } from "./webview/messageCounter"
 import { handleWebviewError } from "./utils/errorHandler"
 import { validateWebviewMessage } from "./WebviewMessageValidator"
 import { normalizeSessionMode, resolvePlanPermission } from "./modePolicy"
@@ -879,6 +880,8 @@ export class WebviewEventRouter {
       const slice = session.messages.slice(start, beforeIndex)
 
       if (slice.length > 0 || start > 0) {
+        const totalTurns = computeMessageCounts(session.messages).userTurns + computeMessageCounts(session.messages).assistantTurns
+        const sliceTurns = computeMessageCounts(slice).userTurns + computeMessageCounts(slice).assistantTurns
         this.opts.postMessage({
           type: "more_messages",
           sessionId,
@@ -886,6 +889,7 @@ export class WebviewEventRouter {
           hasMore: start > 0,
           newBeforeIndex: start,
           totalCount: session.messages.length,
+          displayHiddenTurns: totalTurns - sliceTurns,
         })
         return
       }
@@ -900,6 +904,8 @@ export class WebviewEventRouter {
             const refreshed = this.opts.sessionStore.get(sessionId)
             if (refreshed) {
               const newStart = Math.max(0, refreshed.messages.length - limit)
+              const totalTurns = computeMessageCounts(refreshed.messages).userTurns + computeMessageCounts(refreshed.messages).assistantTurns
+              const sliceTurns = computeMessageCounts(refreshed.messages.slice(newStart)).userTurns + computeMessageCounts(refreshed.messages.slice(newStart)).assistantTurns
               this.opts.postMessage({
                 type: "more_messages",
                 sessionId,
@@ -907,6 +913,7 @@ export class WebviewEventRouter {
                 hasMore: newStart > 0,
                 newBeforeIndex: newStart,
                 totalCount: refreshed.messages.length,
+                displayHiddenTurns: totalTurns - sliceTurns,
               })
             }
             return
@@ -923,6 +930,7 @@ export class WebviewEventRouter {
         hasMore: false,
         newBeforeIndex: 0,
         totalCount: session.messages.length,
+        displayHiddenTurns: 0,
       })
     }],
     ["refresh_session_messages", async (_msg: Record<string, unknown>, sessionId?: string) => {
