@@ -986,6 +986,8 @@ function getVsCodeApi() {
     subagentPanelApi = setupSubagentPanel(els, {
       onCancelSubagent: (subagentId: string) => vscode.postMessage({ type: "cancel_subagent", subagentId }),
       onOpenDetail: (activity: SubagentActivity) => {
+        // Ensure subagent tab is active before showing detail overlay
+        sideRegionApi?.open("subagent")
         vscode.postMessage({ type: "get_subagent_detail", sessionId: stateManager.getState().activeSessionId ?? "", subagentId: activity.id })
         subagentDetailViewApi?.open(activity)
         subagentDetailViewApi?.renderLoading?.()
@@ -1005,7 +1007,19 @@ function getVsCodeApi() {
         tasks: els.tasksPanel,
         subagent: els.subagentPanel,
       }
-      sideRegionApi = setupSideRegion(sideRegionEl, tabBarEl, tabButtons, paneMap, pinBtn, closeBtn)
+      sideRegionApi = setupSideRegion(sideRegionEl, tabBarEl, tabButtons, paneMap, pinBtn, closeBtn, {
+        onTabChange: (tab: SideTabId) => {
+          // Close detail view on any tab switch — it overlays the side-region body
+          subagentDetailViewApi?.close()
+          if (tab === "activity") activityPanelApi?.refresh()
+          else if (tab === "tasks") tasksPanelApi?.refresh()
+          else if (tab === "subagent") requestSubagentActivities()
+          else if (tab === "todos") {
+            const sid = stateManager.getState().activeSessionId
+            if (sid) triggerTodosRender(sid)
+          }
+        },
+      })
     }
 
     // Wire toggle buttons to side region
