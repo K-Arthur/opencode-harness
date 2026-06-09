@@ -6,6 +6,7 @@ import { timers } from "./timerRegistry"
 import type { ToolElapsedTracker } from "./ui/toolElapsed"
 import type { PromptQueue } from "./queue"
 import { placeholderHasRenderedContent } from "./placeholderContent"
+import { generateUserMessageId } from "../../session/messageId"
 
 export interface StreamOrchestratorDeps {
   vscode: { postMessage(msg: Record<string, unknown>): void }
@@ -70,7 +71,6 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     ensureSession,
     setStreaming,
     save,
-    createWebviewId,
     addMessage,
     showSystemMessage,
     createTabUI,
@@ -380,7 +380,9 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
 
     const msgObj: ChatMessage = {
       role: "user",
-      id: createWebviewId("user"),
+      // opencode rejects user-message ids not starting with "msg"; this id is reused as
+      // both the local optimistic bubble id and the server messageID, so they stay equal.
+      id: generateUserMessageId(),
       blocks: [
         ...(text ? [{ type: "text" as const, text }] : []),
         ...(attachments || []).map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
