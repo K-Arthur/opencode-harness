@@ -25,6 +25,6 @@ describe("T1.3 — Activation log noise reduction", () => {
   it("emits one summary INFO line with count of unresolved models", () => {
     assert.ok(managerSource.includes("unresolvedContextWindowCount > 0"), "must check for unresolved count before summary")
     assert.ok(managerSource.includes("without limit.context"), "summary must mention missing limit.context")
-    assert.ok(managerSource.includes("no OpenRouter match"), "summary must mention OpenRouter fallback")
+    assert.ok(managerSource.includes("no models.dev / OpenRouter match"), "summary must mention both fallbacks")
   })
 })

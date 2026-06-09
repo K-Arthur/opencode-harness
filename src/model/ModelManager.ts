@@ -1,8 +1,9 @@
 import * as vscode from "vscode"
 import { log } from "../utils/outputChannel"
 import { ProviderConfigManager } from "./ProviderConfigManager"
-import { resolveContextWindow } from "./contextWindowResolver"
-import { fetchOpenRouterModels, isCacheFresh } from "./openRouterMetadata"
+import { resolveContextWindow, resolveModelOutputLimit } from "./contextWindowResolver"
+import { fetchOpenRouterModels, isCacheFresh as isOpenRouterCacheFresh } from "./openRouterMetadata"
+import { fetchModelsDevModels, isCacheFresh as isModelsDevCacheFresh, type ModelsDevEntry } from "./modelsDevMetadata"
 
 export interface ModelInfo {
   id: string
@@ -20,6 +21,8 @@ export interface ModelInfo {
 const MODEL_CACHE_KEY = "opencode-harness.modelCache"
 const OPENROUTER_CACHE_KEY = "opencode-harness.openRouterContextCache"
 const OPENROUTER_CACHE_TS_KEY = "opencode-harness.openRouterContextCacheTimestamp"
+const MODELS_DEV_CACHE_KEY = "opencode-harness.modelsDevContextCache"
+const MODELS_DEV_CACHE_TS_KEY = "opencode-harness.modelsDevContextCacheTimestamp"
 
 export class ModelManager {
   private _models: ModelInfo[] = []
@@ -35,6 +38,16 @@ export class ModelManager {
    * dynamically during `refreshModels` using OpenRouter's metadata API.
    */
   private _openRouterCache: Map<string, number> = new Map()
+
+  /**
+   * models.dev context-window + output-limit catalogue. models.dev is
+   * the authoritative source that opencode itself queries to build its
+   * model list. Carries opencode-only free SKUs that OpenRouter never
+   * sees (e.g. deepseek-v4-flash-free, kimi-k2.5-free).
+   * Populated during `refreshModels` with a 24h parallel fetch.
+   */
+  private _modelsDevCache: Map<string, ModelsDevEntry> = new Map()
+  private _modelsDevCacheTimestamp: number | null = null
 
   get onModelChanged(): vscode.Event<string> {
     return this._onModelChanged.event
@@ -95,6 +108,7 @@ export class ModelManager {
       log.warn("Failed to load cached models", err)
     }
     this.loadOpenRouterCache()
+    this.loadModelsDevCache()
   }
 
   /**
@@ -108,12 +122,58 @@ export class ModelManager {
     try {
       const persisted = this._globalState.get<Record<string, number>>(OPENROUTER_CACHE_KEY, {})
       const timestamp = this._globalState.get<number>(OPENROUTER_CACHE_TS_KEY, 0)
-      if (isCacheFresh(timestamp) && persisted && Object.keys(persisted).length > 0) {
+      if (isOpenRouterCacheFresh(timestamp) && persisted && Object.keys(persisted).length > 0) {
         this._openRouterCache = new Map(Object.entries(persisted))
         log.info(`Loaded ${this._openRouterCache.size} OpenRouter context-window entries from cache`)
       }
     } catch (err) {
       log.warn("Failed to load OpenRouter context-window cache", err)
+    }
+  }
+
+  /**
+   * Hydrate the models.dev context-window cache from globalState.
+   * Skipped silently when the persisted timestamp is older than 24h —
+   * `refreshModelsDevCacheIfStale` will then refetch on the next
+   * `refreshModels` call.
+   */
+  private loadModelsDevCache(): void {
+    if (!this._globalState) return
+    try {
+      const persisted = this._globalState.get<Record<string, { contextWindow: number; outputLimit?: number }>>(
+        MODELS_DEV_CACHE_KEY, {},
+      )
+      const timestamp = this._globalState.get<number>(MODELS_DEV_CACHE_TS_KEY, 0)
+      if (isModelsDevCacheFresh(timestamp) && persisted && Object.keys(persisted).length > 0) {
+        this._modelsDevCache = new Map(Object.entries(persisted) as [string, ModelsDevEntry][])
+        this._modelsDevCacheTimestamp = timestamp
+        log.info(`Loaded ${this._modelsDevCache.size} models.dev context-window entries from cache`)
+      }
+    } catch (err) {
+      log.warn("Failed to load models.dev context-window cache", err)
+    }
+  }
+
+  /**
+   * Refresh the models.dev context-window cache when it's missing or
+   * stale (24h+ old). Non-blocking: a failed fetch leaves the previous
+   * cache intact so the user keeps whatever fallback they had.
+   */
+  private async refreshModelsDevCacheIfStale(): Promise<void> {
+    if (!this._globalState) return
+    const timestamp = this._globalState.get<number>(MODELS_DEV_CACHE_TS_KEY, 0)
+    if (isModelsDevCacheFresh(timestamp) && this._modelsDevCache.size > 0) return
+    const fetched = await fetchModelsDevModels({ log: (m) => log.info(m) })
+    if (fetched.size === 0) return
+    this._modelsDevCache = fetched
+    this._modelsDevCacheTimestamp = Date.now()
+    try {
+      const serialized: Record<string, { contextWindow: number; outputLimit?: number }> = {}
+      for (const [k, v] of fetched.entries()) serialized[k] = v
+      await this._globalState.update(MODELS_DEV_CACHE_KEY, serialized)
+      await this._globalState.update(MODELS_DEV_CACHE_TS_KEY, this._modelsDevCacheTimestamp)
+    } catch (err) {
+      log.warn("Failed to persist models.dev context-window cache", err)
     }
   }
 
@@ -125,7 +185,7 @@ export class ModelManager {
   private async refreshOpenRouterCacheIfStale(): Promise<void> {
     if (!this._globalState) return
     const timestamp = this._globalState.get<number>(OPENROUTER_CACHE_TS_KEY, 0)
-    if (isCacheFresh(timestamp) && this._openRouterCache.size > 0) return
+    if (isOpenRouterCacheFresh(timestamp) && this._openRouterCache.size > 0) return
     const fetched = await fetchOpenRouterModels({ log: (m) => log.info(m) })
     if (fetched.size === 0) return
     this._openRouterCache = fetched
@@ -198,7 +258,17 @@ export class ModelManager {
     const info = this._models.find(m => `${m.provider}/${m.id}` === target)
     return resolveContextWindow(target, info?.contextWindow, {
       log: (m) => log.info(m),
+      modelsDevCache: this._modelsDevCache,
       openRouterCache: this._openRouterCache,
+    })
+  }
+
+  getOutputLimit(modelId?: string): number | undefined {
+    const target = modelId || this._current
+    if (!target) return undefined
+    const info = this._models.find(m => `${m.provider}/${m.id}` === target)
+    return resolveModelOutputLimit(target, info?.outputLimit, {
+      modelsDevCache: this._modelsDevCache,
     })
   }
 
@@ -226,10 +296,13 @@ export class ModelManager {
    */
   async refreshModels(port?: number, authHeader?: string): Promise<ModelInfo[]> {
     try {
-      // Kick off the OpenRouter context-window refresh in parallel — it
-      // populates the cross-provider fallback used when our own server
-      // doesn't report `limit.context` for a model. Non-blocking failure:
-      // a network error just leaves the previous cache in place.
+      // Kick off both context-window refreshes in parallel — models.dev
+      // is the authoritative catalogue (covers opencode free SKUs that
+      // OpenRouter never carries). Non-blocking failure: a network error
+      // just leaves the previous cache in place.
+      const modelsDevPromise = this.refreshModelsDevCacheIfStale().catch((err) => {
+        log.warn("models.dev cache refresh failed", err)
+      })
       const openRouterPromise = this.refreshOpenRouterCacheIfStale().catch((err) => {
         log.warn("OpenRouter cache refresh failed", err)
       })
@@ -241,12 +314,11 @@ export class ModelManager {
         models = await this.fetchModelsFromCli()
       }
 
-      // Wait for the OpenRouter refresh so the post-refresh
-      // `getContextWindow` calls (fired by `onModelsRefreshed` listeners)
-      // already see the fresh cache. This is the most common ordering
-      // that matters in practice — without it, the very first model the
-      // user sees after install would miss the OpenRouter fallback.
-      await openRouterPromise
+      // Wait for both refreshes so the post-refresh `getContextWindow`
+      // calls (fired by `onModelsRefreshed` listeners) already see the
+      // fresh caches. Without this, the very first model the user sees
+      // after install would miss the fallback.
+      await Promise.all([modelsDevPromise, openRouterPromise])
 
       // Auto-select first model if none is currently selected
       if (!this._current && models.length > 0 && models[0]) {
@@ -306,6 +378,7 @@ export class ModelManager {
           
           const ctx = resolveContextWindow(modelKey, m.limit?.context, {
             log: (msg) => log.debug(msg),
+            modelsDevCache: this._modelsDevCache,
             openRouterCache: this._openRouterCache,
           })
           if (ctx === undefined) unresolvedContextWindowCount++
@@ -333,7 +406,7 @@ export class ModelManager {
         log.info(`Refreshed models from server: ${models.length} models available`)
       }
       if (unresolvedContextWindowCount > 0) {
-        log.info(`Refreshed models: ${models.length} (${unresolvedContextWindowCount} without limit.context — server didn't report and no OpenRouter match)`)
+        log.info(`Refreshed models: ${models.length} (${unresolvedContextWindowCount} without limit.context — server didn't report and no models.dev / OpenRouter match)`)
       }
       return models
     } finally {
@@ -475,7 +548,10 @@ export class ModelManager {
         const fullId = `${m.provider}/${m.id}`
         const isCurrent = fullId === this._current
         const unavailableSuffix = m.available === false ? " (unavailable)" : ""
-        const effectiveContext = resolveContextWindow(fullId, m.contextWindow)
+        const effectiveContext = resolveContextWindow(fullId, m.contextWindow, {
+          modelsDevCache: this._modelsDevCache,
+          openRouterCache: this._openRouterCache,
+        })
         items.push({
           label: m.displayName + unavailableSuffix,
           description: isCurrent ? "● Current" : "",
