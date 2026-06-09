@@ -1506,6 +1506,8 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       this.contextMonitor.setModelAndProvider(modelID || activeModel, providerID || "anthropic")
     }
 
+    const outputLimit = this.modelManager.getOutputLimit(model)
+
     if (effectiveWindow && effectiveWindow > 0) {
       this.contextMonitor.setTokenLimit(effectiveWindow, activeSessionId)
       this.updateStoredContextWindow(activeSessionId, effectiveWindow)
@@ -1513,14 +1515,17 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         type: "context_window_known",
         sessionId: activeSessionId,
         maxTokens: effectiveWindow,
+        outputLimit,
         source: override > 0 ? "override" : (resolvedWindow ? "server-or-openrouter" : "unknown"),
       })
     } else {
-      // Window unknown: tell the webview so it can show the affordance.
+      // Window unknown: tell the webview so it can hide the chip and show
+      // a "Set limit" affordance in the dropdown instead.
       this.statePush.postMessage({
         type: "context_window_unknown",
         sessionId: activeSessionId,
         modelId: model || this.modelManager.model,
+        suppressStatusChip: true,
       })
     }
   }
@@ -1554,10 +1559,12 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     if (!sessionId) return
     const usage = this.contextMonitor.getCurrentUsage(sessionId) ?? this.sessionStore.getContextUsage(sessionId)
     if (!usage) return
+    const outputLimit = this.modelManager.getOutputLimit()
     log.debug(`Pushing context usage for ${sessionId}: ${usage.tokens}/${usage.maxTokens} (${usage.percent}%, ${usage.source ?? "estimated"})`)
     this.postMessage({
       type: "context_usage",
       ...usage,
+      outputLimit,
       sessionId,
     })
   }
