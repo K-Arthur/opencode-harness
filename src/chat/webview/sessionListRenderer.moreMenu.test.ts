@@ -17,6 +17,8 @@
  */
 import { describe, it, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
+import path from "node:path"
 import { JSDOM } from "jsdom"
 import {
   setSessionListPostMessage,
@@ -135,6 +137,32 @@ describe("sessionListRenderer — more-menu regression", () => {
     // Click somewhere else
     document.body.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
     assert.ok(menu.classList.contains("hidden"), "menu must close on outside click")
+  })
+
+  it("more-menu stacks ABOVE the modal (z-index regression that made the ⋮ button look dead)", () => {
+    // The menu is portaled to <body>, so it shares a stacking context with the
+    // session modal. If its z-index is below the modal's, it renders behind the
+    // backdrop and clicks appear to do nothing. Pin the CSS relationship at the
+    // source level (jsdom does not evaluate stylesheet z-index ordering).
+    const cssDir = path.join(__dirname, "css")
+    const blocks = readFileSync(path.join(cssDir, "blocks.css"), "utf8")
+    const tokens = readFileSync(path.join(cssDir, "tokens.css"), "utf8")
+
+    // The menu rule must use the dedicated modal-menu token, NOT --z-dropdown.
+    const menuRule = blocks.slice(blocks.indexOf(".modal-session-more-menu {"))
+    const zLine = menuRule.slice(0, menuRule.indexOf("}")).split("\n").find((l) => l.includes("z-index")) ?? ""
+    assert.ok(zLine.includes("--z-modal-menu"), `.modal-session-more-menu must use var(--z-modal-menu), got: ${zLine.trim()}`)
+    assert.ok(!zLine.includes("--z-dropdown"), "menu must not use --z-dropdown (50), which renders behind the modal")
+
+    const tokenValue = (name: string): number => {
+      const m = tokens.match(new RegExp(`--${name}:\\s*(\\d+)`))
+      assert.ok(m, `token --${name} must be defined`)
+      return Number(m![1])
+    }
+    assert.ok(
+      tokenValue("z-modal-menu") > tokenValue("z-modal"),
+      "--z-modal-menu must be greater than --z-modal so the menu renders above modal content",
+    )
   })
 
   it("disposePortaledMoreMenus() removes every portaled menu", () => {

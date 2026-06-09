@@ -39,6 +39,13 @@ export interface TokenCostDeps {
   timers: {
     setTimeout: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>
   }
+  /**
+   * Whether the welcome/empty screen is currently showing. The context-usage
+   * bar must NEVER appear over the welcome screen — a session with persisted
+   * usage would otherwise leak the bar onto the empty state. Optional so that
+   * focused unit tests can omit it (treated as "not welcome").
+   */
+  isWelcomeVisible?: () => boolean
 }
 
 const recentStepUsage = new Map<string, { signature: string; timestamp: number }>()
@@ -271,6 +278,16 @@ export function updateContextBarFromSession(deps: TokenCostDeps, sessionId: stri
 
   const usage = session?.contextUsage
   if (!usage || usage.tokens <= 0 || usage.maxTokens <= 0) {
+    ctxBar.classList.add("hidden")
+    ctxBar.querySelector<HTMLElement>("#context-cost")?.classList.add("hidden")
+    return
+  }
+
+  // Never reveal the usage bar over the welcome/empty screen, even when the
+  // session carries valid persisted usage. Sibling reveal paths
+  // (updateContextUsageBar / showStatusStrip) already guard on this; this is
+  // the path that previously leaked the bar onto the welcome screen.
+  if (deps.isWelcomeVisible?.()) {
     ctxBar.classList.add("hidden")
     ctxBar.querySelector<HTMLElement>("#context-cost")?.classList.add("hidden")
     return

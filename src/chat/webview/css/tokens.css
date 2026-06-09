@@ -291,8 +291,12 @@
   --z-sticky: 100;
   --z-modal-backdrop: 200;
   --z-modal: 300;
-  --z-lightbox: 500;
+  /* Popovers/menus opened FROM a modal (e.g. the session-history "More
+   * actions" menu) are portaled to <body>, so they must stack ABOVE the
+   * modal content (300) or they render invisibly behind the backdrop. */
+  --z-modal-menu: 350;
   --z-tooltip: 400;
+  --z-lightbox: 500;
 }
 
   /* ─── Toggle Component Tokens ─── */

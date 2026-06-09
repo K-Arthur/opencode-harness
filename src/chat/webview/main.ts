@@ -3582,6 +3582,7 @@ function getVsCodeApi() {
     showStatusStrip,
     getActiveMessageList: () => getActiveMessageList(els),
     timers,
+    isWelcomeVisible,
   }
 
   function handleTokenUsage(sessionId: string, usage: UsageDelta) {
