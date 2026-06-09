@@ -186,20 +186,21 @@ export function prependMessagesPreservingScroll(
  * request older messages.  The banner transitions to a loading state while the
  * extension host fetches the next page.
  *
- * @param hiddenCount  Number of messages not yet shown (displayed in the label).
+ * @param displayCount  Turn-based count shown in the button text.
+ * @param beforeIndex   Raw message index for pagination requests.
  * @param onLoad       Callback fired when the user triggers a load.  The banner
  *                     enters a loading/aria-busy state immediately so it cannot
  *                     be double-clicked.
  */
-export function createLoadEarlierBanner(hiddenCount: number, onLoad: () => void): HTMLElement {
+export function createLoadEarlierBanner(displayCount: number, beforeIndex: number, onLoad: () => void): HTMLElement {
   const banner = document.createElement("div")
   banner.className = "load-earlier-banner"
   banner.setAttribute("role", "status")
 
   const btn = document.createElement("button")
   btn.className = "load-earlier-btn"
-  btn.textContent = `↑ Load ${hiddenCount} earlier message${hiddenCount === 1 ? "" : "s"}`
-  btn.setAttribute("aria-label", `Load ${hiddenCount} earlier messages`)
+  btn.textContent = `↑ Load ${displayCount} earlier item${displayCount === 1 ? "" : "s"}`
+  btn.setAttribute("aria-label", `Load ${displayCount} earlier items`)
 
   btn.addEventListener("click", () => {
     if (banner.dataset.loading === "true") return

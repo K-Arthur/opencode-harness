@@ -526,6 +526,8 @@ function getVsCodeApi() {
   // Tracks how many messages exist before the current viewport window so the
   // webview can request earlier pages via request_more_messages.
   const sessionBeforeIndex = new Map<string, number>()
+  // Tracks the turn-based count for the "Load earlier" banner display text.
+  const sessionHiddenTurns = new Map<string, number>()
 
   // Throttled updateScrollMarkers — prevents O(n) DOM work on every chunk tick
   const debouncedUpdateScrollMarkers = throttleScrollMarkers((id) => updateScrollMarkers(id))
@@ -2344,9 +2346,11 @@ function getVsCodeApi() {
 
               const beforeIndex = typeof msg.initialBeforeIndex === "number" ? msg.initialBeforeIndex : 0
               sessionBeforeIndex.set(session.id, beforeIndex)
+              const turnCount = typeof msg.initialHiddenTurns === "number" ? msg.initialHiddenTurns : beforeIndex
+              sessionHiddenTurns.set(session.id, turnCount)
 
               if (beforeIndex > 0) {
-                const banner = createLoadEarlierBanner(beforeIndex, () => {
+                const banner = createLoadEarlierBanner(turnCount, beforeIndex, () => {
                   const idx = sessionBeforeIndex.get(session.id) ?? 0
                   if (idx <= 0) return
                   vscode.postMessage({ type: "request_more_messages", sessionId: session.id, beforeIndex: idx, limit: 50 })
@@ -2427,9 +2431,11 @@ function getVsCodeApi() {
 
         const newBeforeIndex = typeof msg.newBeforeIndex === "number" ? msg.newBeforeIndex : 0
         sessionBeforeIndex.set(sid, newBeforeIndex)
+        const newHiddenTurns = typeof msg.displayHiddenTurns === "number" ? msg.displayHiddenTurns : newBeforeIndex
+        sessionHiddenTurns.set(sid, newHiddenTurns)
 
         if (newBeforeIndex > 0) {
-          const banner = createLoadEarlierBanner(newBeforeIndex, () => {
+          const banner = createLoadEarlierBanner(newHiddenTurns, newBeforeIndex, () => {
             const idx = sessionBeforeIndex.get(sid) ?? 0
             if (idx <= 0) return
             vscode.postMessage({ type: "request_more_messages", sessionId: sid, beforeIndex: idx, limit: 50 })
