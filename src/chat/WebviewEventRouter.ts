@@ -166,6 +166,8 @@ export class WebviewEventRouter {
     "resume_stream", "decline_resume",
     "get_voice_settings", "setup_voice_input", "voice_start", "voice_stop", "voice_cancel",
     "mode_switch_request",
+    "open_subagent_detail",
+    "webview_error",
   ])
 
   private readonly webviewHandlers: Map<string, (msg: Record<string, unknown>, sessionId?: string) => void | Promise<void>> = new Map([
@@ -1494,6 +1496,17 @@ export class WebviewEventRouter {
     ["mark_subagent_read", (msg: Record<string, unknown>, sessionId?: string) => {
       // No-op in the host: read state is managed in the webview.
       // Host-side, this could be used to reset unread counts for SSE tracking.
+    }],
+    ["open_subagent_detail", (msg: Record<string, unknown>, sessionId?: string) => {
+      // Popout button: open the active subagent's detail in VS Code's editor area.
+      // Currently a placeholder — the subagentId is not available from the button
+      // context. A future enhancement can resolve the active detail subagent from
+      // the session state and open a dedicated webview panel.
+      log.info(`open_subagent_detail requested for session ${sessionId ?? "unknown"}`)
+    }],
+    ["webview_error", (msg: Record<string, unknown>) => {
+      const message = typeof msg.message === "string" ? msg.message : "Unknown webview error"
+      log.error(`Webview fatal error: ${message}`)
     }],
     ["remove_from_queue", (msg: Record<string, unknown>, sessionId?: string) => {
       if (!sessionId || typeof msg.itemId !== "string") return
