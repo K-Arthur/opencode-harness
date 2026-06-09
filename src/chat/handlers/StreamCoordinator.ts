@@ -66,8 +66,11 @@ function subagentStatusFromToolStatus(status: ToolActivityInput["status"]): Suba
 export class StreamCoordinator {
   private diffHandler: DiffHandler
   private finalizerService: StreamFinalizerService
-  /** Watchdog interval for streams with no server activity across all channels. */
-  private readonly STREAM_STUCK_MS = 600000
+  /** Watchdog interval for streams with no server activity across all channels.
+   *  Set to 45 min to accommodate long-running models (Minimax, DeepSeek, etc.)
+   *  that may take extended time between streaming events (subagents, long
+   *  thinking pauses, tool call gaps). Previously 10 min, then 30 min. */
+  private readonly STREAM_STUCK_MS = 2_700_000
   /** Time-to-first-byte timeout: no chunk received within 45s */
   readonly TTFB_TIMEOUT_MS = 45000
   /** Short grace window for terminal status to be followed by late tool_end events */

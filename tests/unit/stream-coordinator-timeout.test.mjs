@@ -32,12 +32,13 @@ describe("StreamCoordinator timeout hardening", () => {
   })
 
   it("uses STREAM_STUCK_MS as the single inactivity hard cap", () => {
+    const stuckVal = coordinatorSource.match(/STREAM_STUCK_MS = (\d[\d_]*)/)
+    const stuckMs = stuckVal ? Number(stuckVal[1].replace(/_/g, "")) : 0
     const ttfbMatch = coordinatorSource.match(/TTFB_TIMEOUT_MS = (\d+)/)
-    const stuckMatch = coordinatorSource.match(/STREAM_STUCK_MS = (\d+)/)
-    assert.ok(ttfbMatch && stuckMatch, "TTFB and stuck watchdog timeouts must be defined")
+    assert.ok(ttfbMatch && stuckVal, "TTFB and stuck watchdog timeouts must be defined")
     assert.ok(
-      Number(stuckMatch[1]) >= 600000,
-      `STREAM_STUCK_MS (${stuckMatch[1]}ms) must allow long-running tool calls`
+      stuckMs >= 2_400_000,
+      `STREAM_STUCK_MS (${stuckMs}ms) must allow 45-min model runs`
     )
   })
 

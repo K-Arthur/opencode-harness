@@ -23,7 +23,7 @@ describe("StreamCoordinator transport awareness", () => {
   })
 
   it("uses a single stream watchdog and no chunk-inactivity completion timer", () => {
-    assert.ok(source.includes("STREAM_STUCK_MS = 600000"), "watchdog must be at least 10 minutes")
+    assert.ok(source.includes("STREAM_STUCK_MS = 2_700_000"), "watchdog must be at least 45 minutes for long-running models")
     assert.ok(!source.includes("CHUNK_INACTIVITY_TIMEOUT_MS"), "chunk inactivity timeout must not return")
     assert.ok(!source.includes("resetCompletionTimeout"), "per-chunk completion timeout must not return")
     assert.ok(!source.includes("startHardWatchdog"), "hard watchdog must remain folded into startWatchdog")
