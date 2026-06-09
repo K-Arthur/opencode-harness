@@ -106,9 +106,12 @@ export interface ChangedFilesDropdownOptions {
   postMessage: (msg: Record<string, unknown>) => void
   /** Open a file in the editor */
   onOpenFile: (path: string) => void
+  /** Optional guard: when true, strip and dropdown are suppressed (e.g. welcome view) */
+  isWelcomeVisible?: () => boolean
 }
 
 let _onOpenFile: (path: string) => void = () => {}
+let _isWelcomeVisible: () => boolean = () => false
 
 export function setupChangedFilesDropdown(opts: ChangedFilesDropdownOptions): void {
   _btn = opts.btn
@@ -117,6 +120,7 @@ export function setupChangedFilesDropdown(opts: ChangedFilesDropdownOptions): vo
   _badge = opts.badge
   _postMessage = opts.postMessage
   _onOpenFile = opts.onOpenFile
+  _isWelcomeVisible = opts.isWelcomeVisible ?? (() => false)
 
   // Initially hidden
   _panel.classList.add("hidden")
@@ -189,11 +193,12 @@ export function updateChangedFiles(sessionId: string, files: FileChange[]): void
 }
 
 function _refreshUI(sessionId: string, files: FileChange[]): void {
-  _updateBadge(files.length)
+  const welcome = _isWelcomeVisible()
+  _updateBadge(welcome ? 0 : files.length)
   if (_btn && _btn.isConnected) {
-    _btn.classList.toggle("hidden", files.length === 0)
-    _btn.classList.toggle("cf-btn--has-files", files.length > 0)
-    _btn.setAttribute("aria-label", `Changed files (${files.length})`)
+    _btn.classList.toggle("hidden", files.length === 0 || welcome)
+    _btn.classList.toggle("cf-btn--has-files", files.length > 0 && !welcome)
+    _btn.setAttribute("aria-label", welcome ? "" : `Changed files (${files.length})`)
   }
   if (_isOpen && _treeContainer) {
     _renderTree(_treeContainer, files)
@@ -221,6 +226,14 @@ export function updateChangedFilesStrip(sessionId: string, files: FileChange[]):
 function _renderStrip(_sessionId: string, files: FileChange[]): void {
   const strip = document.getElementById("changed-files-strip")
   if (!strip) return
+  // Suppress the strip when the welcome view is visible — files are still
+  // accumulated per session but must not leak into the welcome screen.
+  if (_isWelcomeVisible()) {
+    strip.classList.add("hidden")
+    strip.innerHTML = ""
+    strip.removeAttribute("data-cf-sig")
+    return
+  }
   if (files.length === 0) {
     strip.classList.add("hidden")
     strip.innerHTML = ""
@@ -272,6 +285,7 @@ function _toggle(): void {
 
 function _open(): void {
   if (!_panel || !_treeContainer) return
+  if (_isWelcomeVisible()) return // Never open dropdown on welcome screen
   _isOpen = true
   _panel.classList.remove("hidden")
   if (_btn) _btn.setAttribute("aria-expanded", "true")
