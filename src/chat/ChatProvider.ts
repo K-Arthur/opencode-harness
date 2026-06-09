@@ -126,6 +126,9 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private pendingEventBuffer = new PendingEventBuffer({
     maxPerSession: 200,
     log: { warn: (m) => log.warn(m), info: (m) => log.info(m) },
+    // Default TTL of 10s covers the ~5ms first-prompt race and ~5s heartbeat race window.
+    // Child session events that expire here are safe to drop — they're internal to the
+    // child (Akka Actor Model) and heartbeat + subagent_update provide all needed state.
   })
   /** Maps child session IDs → parent tab ID so child session events are routed
    *  directly without buffering. Populated by SubagentHeartbeat on discovery. */
@@ -1354,6 +1357,13 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       return false
     }
 
+    // Buffer events for the race window before the tab mapping is registered.
+    // This covers:
+    //   1. First-prompt race (~5ms between session.create and setCliSessionId)
+    //   2. Child session events arriving before heartbeat discovery (~5s max)
+    //   Both windows are short; the 10s TTL handles both. Child session events
+    //   that expire here are safe to drop (not needed by parent — heartbeat +
+    //   subagent_update on parent stream provide all required subagent state).
     this.pendingEventBuffer.add(event.sessionId, event)
     if (!isHighFrequency) {
       log.debug(`Buffered ${event.type} for cliSessionId "${event.sessionId}" (size=${this.pendingEventBuffer.size(event.sessionId)})`)
