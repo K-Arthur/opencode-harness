@@ -87,3 +87,57 @@ behind a debug expander — never inline.
   - **Per-command** cancel/retry in the tasks panel remains *server-gated*
     (opencode exposes no per-command cancellation); the panel offers turn-level
     cancel only. Subagent cancellation works (`cancel_subagent`).
+
+## Refinement: Panel auto-open, status reconciliation, and detail-view architecture (2026-06-09)
+
+Three bugs were identified and fixed:
+
+### Bug 1 — Panel auto-opens on every activity update
+
+`run_activity_update` auto-opened the side region whenever `activeSubagentCount > 0`,
+even for activity churn on already-known subagents. During long tool chains the
+panel kept popping back open after dismissal, disrupting the coding flow.
+
+**Fix:** Track previously-known subagent IDs per session
+(`knownSubagentIdsBySession`). Only auto-open when a **new** subagent ID appears
+that wasn't in the previous set. Dismissal is per-session and resets on next run.
+
+Module: [`subagentReconciler.ts`](../../src/chat/webview/subagentReconciler.ts) —
+`computeNewSubagentIds()`.
+
+### Bug 2 — Completed subagents shown as "Running"
+
+The server drops a subagent from its snapshot once it transitions to terminal.
+The webview's `mergeSubagentActivities` appended new entries but never reconciled
+the status of dropped subagents — they stayed stuck on "running" forever.
+
+**Fix:** `reconcileSubagentStatuses()` compares previous activities against incoming
+snapshot. Dropped subagents whose status was live (queued/running/waiting/unknown)
+are transitioned to "completed" with a synthetic `completedAt`. Already-terminal
+dropped subagents keep their status (failed/cancelled).
+
+Completed subagents are collapsed by default in the panel (only name + status badge
+visible), expandable via a toggle button, and capped at 10 most-recent — with a
+"Clear completed" button in the stats bar.
+
+Module: [`subagentReconciler.ts`](../../src/chat/webview/subagentReconciler.ts) —
+`reconcileSubagentStatuses()`, `capCompletedSubagents()`.
+
+### Bug 3 — Detail view overlapped all tab panes
+
+`#subagent-detail-view` was `position: absolute; inset: 0` and a **sibling** of
+`#subagent-panel` inside `.side-region-body`. When shown, it covered all four tab
+panes (todos, activity, tasks, subagent), not just the subagent pane.
+
+**Fix:** Moved `#subagent-detail-view` to be a **child** of `#subagent-panel`.
+Added `data-view="list" | "detail"` attribute on the panel. CSS rules swap list
+and detail visibility based on the attribute. The panel has `position: relative`
+so the detail's `absolute; inset: 0` is scoped to the subagent tab pane only.
+
+### Additional fixes
+
+- `mark_subagent_read` is now posted when the user clicks a panel item or opens
+  the detail view, resetting the unread count badge.
+- `onClearCompleted` removes terminal subagents from the panel and state.
+- Cancel button is conditionally rendered (not structurally different) for
+  running vs non-running items, preventing stale buttons on status transitions.

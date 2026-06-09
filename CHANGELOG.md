@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Subagent panel constantly auto-opening on activity churn.** Panel now only auto-opens when a NEW subagent ID appears (not on every `run_activity_update` with `activeSubagentCount > 0`). Tracks known IDs per session; dismissal persists for the session until a new subagent arrives. (`src/chat/webview/subagentReconciler.ts`, `src/chat/webview/main.ts`)
+- **Completed subagents stuck showing "Running" status.** Server drops subagents from snapshots once they finish; the webview now reconciles by transitioning dropped live subagents to "completed" instead of keeping stale "running" entries. (`src/chat/webview/subagentReconciler.ts`)
+- **Subagent detail view overlapping all tab panes (todos/activity/tasks).** `#subagent-detail-view` moved from sibling to child of `#subagent-panel`. Uses `data-view="list"|"detail"` attribute switching instead of absolute overlay. (`src/chat/webview/index.html`, `src/chat/webview/subagentDetailView.ts`, `src/chat/webview/css/components.css`)
+- **`mark_subagent_read` never sent by webview.** Panel item clicks and detail-view opens now post `mark_subagent_read` to reset the unread count badge. (`src/chat/webview/subagent-panel.ts`, `src/chat/webview/main.ts`)
+- **Permission bar sending wrong message type.** Webview sent `permission_response` but host expected `accept_permission`; host rejected with "Unknown webview message type" error and the opencode server timed out the permission mid-stream. (commit `27aa1ea`, `src/chat/webview/main.ts`)
+
+### Changed
+
+- **Completed subagents are collapsed by default in the panel.** Shows only name + status badge + expand toggle. Click to expand for progress/output/timing details. (`src/chat/webview/subagent-panel.ts`)
+- **Completed subagents capped at 10 most-recent in the panel.** Oldest are evicted; a "Clear completed" button appears when completed items exist. (`src/chat/webview/subagent-panel.ts`)
+- **Auto-open policy: new subagent only.** Panel auto-opens only when a subagent ID not previously seen in the current run appears. Activity churn on existing subagents no longer triggers the panel. (`src/chat/webview/main.ts`, `src/chat/webview/subagentReconciler.ts`)
+
 - **Subagent events for 30-45 minute sessions no longer dropped by PendingEventBuffer.** TTL-based event expiry completely removed — events now persist until explicitly drained (Event Sourcing / Claim-Check pattern). Child session events route directly to parent tab via `childSessionToTab` mapping registered by heartbeat on first discovery (using SDK `parentID` field). Child session streaming events (`text_chunk`, `tool_start`) are NOT dispatched to parent tab — they would corrupt parent state, and all needed subagent info arrives via `subagent_update` on the parent stream (State Watch pattern) + heartbeat polling (HeartBeat pattern). (`src/chat/PendingEventBuffer.ts`, `src/chat/handlers/SubagentHeartbeat.ts`, `src/chat/ChatProvider.ts`)
 - **Stream watchdog increased to 45 minutes.** `STREAM_STUCK_MS` raised from 10min to 45min to accommodate long-running models (Minimax, DeepSeek, etc.). `sweep()` orphan threshold increased from 10min to 30min. (`src/chat/handlers/StreamCoordinator.ts`)
 - **Subagent "completed" shown as "running".** `RunActivityTracker.recordSubagent` now guards against overwriting terminal status (`completed`/`failed`/`cancelled`) with non-terminal (`running`/`queued`). (`src/chat/handlers/RunActivityTracker.ts`)
