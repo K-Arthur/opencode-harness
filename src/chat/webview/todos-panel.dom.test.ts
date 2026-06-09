@@ -92,6 +92,21 @@ describe("setupTodosPanel — progress gauge", () => {
     assert.equal(fill.style.getPropertyValue("--p"), "0.500")
   })
 
+  it("uses unrounded ratio for --p (not rounded percent)", () => {
+    const api = setupTodosPanel(makeEls(), noopOptions())!
+    api.renderTodos([
+      makeTodo({ id: "1", status: "completed" }),
+      makeTodo({ id: "2", status: "pending" }),
+      makeTodo({ id: "3", status: "pending" }),
+    ])
+    const fill = document.querySelector(".todo-progress-bar-fill") as HTMLElement
+    assert.ok(fill, "must render the progress bar fill")
+    assert.equal(fill.style.getPropertyValue("--p"), "0.333",
+      "1/3 completed must use the unrounded ratio (0.333), not Math.round(33)/100 (0.330)")
+    const pct = document.querySelector(".todo-progress-percentage")
+    assert.equal(pct?.textContent, "33%", "label still shows rounded percent")
+  })
+
   it("renders 0% gauge for empty list", () => {
     const api = setupTodosPanel(makeEls(), noopOptions())!
     api.renderTodos([])

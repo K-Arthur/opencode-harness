@@ -34,7 +34,7 @@ export interface TodosPanelApi {
   dispose: () => void
 }
 
-function createProgressGauge(progress: { percent: number; completed: number; total: number }): HTMLElement {
+function createProgressGauge(progress: { percent: number; ratio: number; completed: number; total: number }): HTMLElement {
   const gaugeContainer = document.createElement("div")
   gaugeContainer.className = "todo-progress-container"
   gaugeContainer.innerHTML = `
@@ -43,7 +43,7 @@ function createProgressGauge(progress: { percent: number; completed: number; tot
       <span class="todo-progress-percentage">${progress.percent}%</span>
     </div>
     <div class="todo-progress-bar-track" aria-hidden="true">
-      <div class="todo-progress-bar-fill" style="--p: ${(progress.percent / 100).toFixed(3)}"></div>
+      <div class="todo-progress-bar-fill" style="--p: ${progress.ratio.toFixed(3)}"></div>
     </div>
   `
   return gaugeContainer
