@@ -84,8 +84,9 @@ export function recorderInstallCommand(
 
 function manualRecorderHint(platform: NodeJS.Platform | string): string {
   if (platform === "darwin") return "Install sox: `brew install sox` (install Homebrew from https://brew.sh first)."
-  if (platform === "win32") return "Install sox via Chocolatey (`choco install sox`) or download it from https://sourceforge.net/projects/sox/ and add it to PATH."
-  return "Install sox with your package manager (e.g. `sudo apt-get install sox`)."
+  if (platform === "win32") return "Install sox via winget (`winget install sox`), Chocolatey (`choco install sox`), or download from https://sourceforge.net/projects/sox/."
+  if (platform === "linux") return "Install sox with your package manager (e.g. `sudo apt-get install sox`, `sudo pacman -S sox`, or `sudo dnf install sox`)."
+  return "Install sox with your system's package manager, or download it from https://sourceforge.net/projects/sox/."
 }
 
 /**
