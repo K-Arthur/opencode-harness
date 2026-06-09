@@ -2656,23 +2656,53 @@ function getVsCodeApi() {
         }
       }],
       ["permission_request", (_msg, sid) => {
-        if (sid) {
-          addMessage(sid, {
-            role: "system",
-            id: createWebviewId("perm"),
-            blocks: [{
-              type: "permission",
-              sessionId: sid,
-              permissionId: String(_msg.permissionId || ""),
-              permissionType: typeof _msg.permissionType === "string" ? _msg.permissionType : undefined,
-              pattern: typeof _msg.pattern === "string" || Array.isArray(_msg.pattern) ? _msg.pattern as string | string[] : undefined,
-              metadata: _msg.metadata && typeof _msg.metadata === "object" ? _msg.metadata as Record<string, unknown> : undefined,
-              text: typeof _msg.title === "string" ? _msg.title : "Allow OpenCode to perform this action?",
-            }],
-            timestamp: Date.now(),
-            sessionId: sid,
-          })
-        }
+        const permBar = document.getElementById("permission-bar")
+        const permText = document.getElementById("permission-bar-text")
+        const permActions = document.getElementById("permission-bar-actions")
+        if (!permBar || !permText || !permActions || !sid) return
+
+        const permissionId = String(_msg.permissionId || "")
+        const permissionType = typeof _msg.permissionType === "string" ? _msg.permissionType : undefined
+        const pattern = typeof _msg.pattern === "string" || Array.isArray(_msg.pattern) ? _msg.pattern as string | string[] : undefined
+        const title = typeof _msg.title === "string" ? _msg.title : "Allow OpenCode to perform this action?"
+
+        permText.textContent = title
+        permActions.innerHTML = ""
+
+        const allowBtn = document.createElement("button")
+        allowBtn.className = "permission-bar-btn permission-bar-btn--allow"
+        allowBtn.textContent = "Allow"
+        allowBtn.type = "button"
+        allowBtn.addEventListener("click", () => {
+          vscode.postMessage({ type: "permission_response", sessionId: sid, permissionId, response: "once", permissionType, pattern })
+          permBar.classList.add("hidden")
+          permActions.innerHTML = ""
+        })
+
+        const alwaysBtn = document.createElement("button")
+        alwaysBtn.className = "permission-bar-btn permission-bar-btn--always"
+        alwaysBtn.textContent = "Always"
+        alwaysBtn.type = "button"
+        alwaysBtn.addEventListener("click", () => {
+          vscode.postMessage({ type: "permission_response", sessionId: sid, permissionId, response: "always", permissionType, pattern })
+          permBar.classList.add("hidden")
+          permActions.innerHTML = ""
+        })
+
+        const denyBtn = document.createElement("button")
+        denyBtn.className = "permission-bar-btn permission-bar-btn--deny"
+        denyBtn.textContent = "Deny"
+        denyBtn.type = "button"
+        denyBtn.addEventListener("click", () => {
+          vscode.postMessage({ type: "permission_response", sessionId: sid, permissionId, response: "reject", permissionType, pattern })
+          permBar.classList.add("hidden")
+          permActions.innerHTML = ""
+        })
+
+        permActions.appendChild(allowBtn)
+        if (pattern) permActions.appendChild(alwaysBtn)
+        permActions.appendChild(denyBtn)
+        permBar.classList.remove("hidden")
       }],
       ["file_edited", (msg, sid) => {
         // Record the edit for the changed-files dropdown. (The inline transcript
@@ -2950,7 +2980,10 @@ function getVsCodeApi() {
         handleRateLimitExhausted(els, resetAt)
         const sid = stateManager.getState().activeSessionId ?? undefined
         const resetMsg = resetAt ? ` Resets at ${resetAt}.` : ""
-        handleRequestError(sid, `Rate limit exceeded.${resetMsg} Please wait and try again.`)
+        const isStreaming = sid ? stateManager.getSession(sid)?.isStreaming === true : false
+        if (!isStreaming) {
+          handleRequestError(sid, `Rate limit exceeded.${resetMsg} Please wait and try again.`)
+        }
       }],
       ["prompt_rejected", (msg, sid) => {
         if (sid) {
@@ -3680,11 +3713,10 @@ function getVsCodeApi() {
     els.statusStrip.setAttribute("hidden", "")
     els.statusCost.classList.add("hidden")
     els.statusTokens.classList.add("hidden")
-    if (hasQuotaState) {
+    els.quotaBar.classList.add("hidden")
+    if (hasQuotaState && !isWelcomeVisible()) {
       els.statusStrip.removeAttribute("hidden")
       els.quotaBar.classList.remove("hidden")
-    } else {
-      els.quotaBar.classList.add("hidden")
     }
     els.contextUsage.classList.add("hidden")
     document.getElementById("ctx-window-unknown-chip")?.classList.add("hidden")

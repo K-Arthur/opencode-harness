@@ -337,6 +337,7 @@ export class WebviewEventRouter {
           }
           this.opts.sessionStore.appendMessage(sessionId, userMsg)
           this.opts.sessionStore.markQuestionAnswered(sessionId, answerId, textForPrompt, answerSource)
+          this.opts.streamCoordinator.markQuestionAnswered(sessionId, answerId)
           if (source === "skip") {
             await this.opts.sessionManager.rejectQuestion(requestID)
           } else {
@@ -380,6 +381,7 @@ export class WebviewEventRouter {
           const answerSource: "option" | "freetext" | "skip" | "response" =
             source === "freetext" || source === "skip" || source === "response" ? source : "option"
           this.opts.sessionStore.markQuestionAnswered(sessionId, toolCallId, textForPrompt, answerSource)
+          this.opts.streamCoordinator.markQuestionAnswered(sessionId, toolCallId)
         }
         await this.opts.streamCoordinator.startPrompt(sessionId, value, {
           postMessage: (m) => this.opts.postMessage(m),

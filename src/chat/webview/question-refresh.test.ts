@@ -2,8 +2,8 @@
  * The question tool's input frequently finishes streaming AFTER its block was
  * first rendered (an empty `stream_tool_start`). refreshQuestionBlock must
  * re-parse the fuller args, update the persisted block, and re-render the
- * `.question-block` DOM in place so the text + options appear without waiting
- * for stream_end — and the refreshed options must stay interactive.
+ * `.question-block` DOM in place so the text + pointer hint appear without
+ * waiting for stream_end.
  */
 import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
@@ -21,11 +21,10 @@ function setupDom() {
 describe("refreshQuestionBlock", () => {
   beforeEach(() => setupDom())
 
-  it("fills text + options when args arrive after an empty start, and stays interactive", async () => {
+  it("fills text when args arrive after an empty start, re-renders pointer", async () => {
     const { renderBlock } = await import("./renderer")
     const { refreshQuestionBlock } = await import("./streamHandlers")
 
-    // Block as created at an empty stream_tool_start.
     const block: any = {
       type: "question",
       id: "tool-q-1",
@@ -60,14 +59,15 @@ describe("refreshQuestionBlock", () => {
 
     const rerendered = messageList.querySelector(".question-block") as HTMLElement
     assert.ok(rerendered.textContent!.includes("Pick a DB"))
-    const options = rerendered.querySelectorAll<HTMLButtonElement>(".question-option")
-    assert.equal(options.length, 2)
-
-    // Clicking the refreshed option posts an answer (interactive mid-stream).
-    options[0]!.click()
-    const answer = posted.find((m) => m.type === "question_answer")
-    assert.ok(answer, "refreshed option is interactive")
-    assert.equal(answer!.value, "Postgres")
+    assert.equal(
+      rerendered.querySelectorAll(".question-option").length,
+      0,
+      "pointer mode — no interactive options in transcript",
+    )
+    assert.ok(
+      rerendered.querySelector(".question-pointer-hint"),
+      "pointer hint present after refresh",
+    )
   })
 
   it("returns true but keeps existing content when the update is still empty", async () => {

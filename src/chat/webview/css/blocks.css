@@ -1564,17 +1564,61 @@
    ═════════════════════════════════════════════════════════════════╛ */
 
 .permission-block {
-  border: 1px solid var(--color-border);
+  border: 1px solid rgba(210, 153, 34, 0.18);
+  border-left: 2px solid var(--oc-warning, var(--vscode-notificationsWarningIcon-foreground, #cca700));
   border-radius: var(--radius-md);
-  padding: var(--space-3);
-  background: var(--oc-list-hover);
+  padding: var(--space-2-5) var(--space-3);
+  background: rgba(210, 153, 34, 0.04);
   margin: var(--space-2) 0;
+  max-width: min(100%, 680px);
+}
+
+.permission-block-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  font-weight: 600;
+  font-size: var(--text-xs);
+  color: var(--oc-warning, var(--vscode-notificationsWarningIcon-foreground, #cca700));
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-1);
+}
+
+.permission-block-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: inherit;
+}
+
+.permission-block-label {
+  font-weight: 600;
 }
 
 .permission-text {
-  font-size: var(--text-sm);
-  color: var(--color-muted);
-  margin-bottom: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--oc-fg);
+  margin-bottom: var(--space-1);
+  line-height: 1.45;
+}
+
+.permission-pointer-hint {
+  font-size: var(--text-2xs);
+  color: var(--oc-muted);
+  font-style: italic;
+}
+
+.permission-answered-chip {
+  display: inline-block;
+  padding: var(--space-0-5) var(--space-1-5);
+  border-radius: var(--radius-sm);
+  background: rgba(46, 160, 67, 0.08);
+  color: var(--color-success, #2ea043);
+  font-size: var(--text-2xs);
+  font-weight: 600;
 }
 
 .permission-actions {

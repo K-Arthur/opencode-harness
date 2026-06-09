@@ -555,54 +555,27 @@
 
 /* Collapse system rows whose bubble rendered no content — e.g. an "Edited N
    files" banner suppressed by renderTaskBanner, or one persisted in older
-   session state. Without this the empty amber .system-bubble (with its
-   ::before/::after decoration) would linger as a ghost card. */
+   session state. Without this the empty .system-bubble would linger as a
+   ghost card. */
 .message.system:has(.system-bubble:empty) {
   display: none;
 }
 
 .message.system .system-bubble {
-  position: relative;
-  background: linear-gradient(135deg, rgba(230, 160, 50, 0.1), rgba(230, 160, 50, 0.03));
-  border: 1px solid rgba(230, 160, 50, 0.25);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3) var(--space-4);
-  font-size: var(--text-sm);
-  color: var(--oc-fg, var(--color-fg));
-  max-width: 85%;
-  font-family: var(--font-sans);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-  text-align: center;
-  justify-content: center;
-  backdrop-filter: var(--blur-bubble);
-  -webkit-backdrop-filter: var(--blur-bubble);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.05);
-  transition: background-color var(--duration-normal) var(--ease-out), color var(--duration-normal) var(--ease-out), border-color var(--duration-normal) var(--ease-out), transform var(--duration-normal) var(--ease-out), opacity var(--duration-normal) var(--ease-out), box-shadow var(--duration-normal) var(--ease-out);
-  animation: error-shake-in 0.4s var(--ease-out);
-}
-
-.message.system .system-bubble:hover {
-  transform: translateY(-2px);
-  border-color: rgba(230, 160, 50, 0.45);
-  box-shadow: 0 12px 40px rgba(230, 160, 50, 0.12), inset 0 1px 1px rgba(255, 255, 255, 0.1);
-}
-
-.message.system .system-bubble::before {
-  content: "⚠️";
-  font-size: var(--text-2xl);
-  display: block;
-  animation: pulse 2s infinite ease-in-out;
-  flex: none;
-  width: auto;
-  height: auto;
-  background: none;
-}
-
-.message.system .system-bubble::after {
-  display: none;
+  align-items: stretch;
+  gap: var(--space-1);
+  max-width: min(100%, 680px);
+  padding: var(--space-1-5) var(--space-2-5);
+  border: 1px solid var(--oc-glass-border, rgba(128, 128, 128, 0.15));
+  border-left: 2px solid var(--oc-muted, var(--color-muted));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--oc-fg) 3%, transparent);
+  color: var(--oc-fg, var(--color-fg));
+  font-size: var(--text-xs);
+  font-family: var(--font-sans);
+  line-height: 1.45;
 }
 
 .retry-btn {
@@ -847,6 +820,12 @@
 }
 .question-block-pointer {
   cursor: pointer;
+}
+.question-pointer-hint {
+  font-size: var(--text-2xs);
+  color: var(--oc-muted);
+  font-style: italic;
+  margin-top: var(--space-0-5);
 }
 
 .task-banner:hover {

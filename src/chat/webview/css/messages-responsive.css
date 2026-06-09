@@ -249,7 +249,6 @@
 
 @container message-view (max-width: 399px) {
   .message.system .system-bubble {
-    padding: var(--space-1-5) var(--space-3);
     font-size: var(--text-xs);
   }
 }

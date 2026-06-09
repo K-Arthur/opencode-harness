@@ -37,7 +37,7 @@ describe("theme.ts", () => {
   })
 
   it("handles rate limit with reset delay", () => {
-    assert.ok(source.includes("rate-limit-notice"))
+    assert.ok(source.includes("rate-limit-bar"), "uses the #rate-limit-bar element")
     assert.ok(source.includes("Rate limit exceeded"))
   })
 
