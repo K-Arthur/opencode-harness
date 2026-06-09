@@ -880,8 +880,10 @@ export class WebviewEventRouter {
       const slice = session.messages.slice(start, beforeIndex)
 
       if (slice.length > 0 || start > 0) {
-        const totalTurns = computeMessageCounts(session.messages).userTurns + computeMessageCounts(session.messages).assistantTurns
-        const sliceTurns = computeMessageCounts(slice).userTurns + computeMessageCounts(slice).assistantTurns
+        // Hidden turns = turns older than the slice we just sent (still
+        // hidden from the webview). The webview uses this for the banner
+        // label "Load N earlier items".
+        const stillHiddenTurns = computeMessageCounts(session.messages.slice(0, start)).userTurns + computeMessageCounts(session.messages.slice(0, start)).assistantTurns
         this.opts.postMessage({
           type: "more_messages",
           sessionId,
@@ -889,7 +891,7 @@ export class WebviewEventRouter {
           hasMore: start > 0,
           newBeforeIndex: start,
           totalCount: session.messages.length,
-          displayHiddenTurns: totalTurns - sliceTurns,
+          displayHiddenTurns: stillHiddenTurns,
         })
         return
       }
@@ -904,8 +906,8 @@ export class WebviewEventRouter {
             const refreshed = this.opts.sessionStore.get(sessionId)
             if (refreshed) {
               const newStart = Math.max(0, refreshed.messages.length - limit)
-              const totalTurns = computeMessageCounts(refreshed.messages).userTurns + computeMessageCounts(refreshed.messages).assistantTurns
-              const sliceTurns = computeMessageCounts(refreshed.messages.slice(newStart)).userTurns + computeMessageCounts(refreshed.messages.slice(newStart)).assistantTurns
+              // Hidden turns are those older than the slice we just sent.
+              const stillHiddenTurns = computeMessageCounts(refreshed.messages.slice(0, newStart)).userTurns + computeMessageCounts(refreshed.messages.slice(0, newStart)).assistantTurns
               this.opts.postMessage({
                 type: "more_messages",
                 sessionId,
@@ -913,7 +915,7 @@ export class WebviewEventRouter {
                 hasMore: newStart > 0,
                 newBeforeIndex: newStart,
                 totalCount: refreshed.messages.length,
-                displayHiddenTurns: totalTurns - sliceTurns,
+                displayHiddenTurns: stillHiddenTurns,
               })
             }
             return
