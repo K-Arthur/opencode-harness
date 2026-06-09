@@ -19,10 +19,12 @@ export function isUserTodo(todo: Todo): boolean {
 export function calculateProgress(todos: Todo[]) {
   const total = todos.length
   const completed = todos.filter(t => t.status === "completed").length
+  const ratio = total > 0 ? completed / total : 0
   return {
     total,
     completed,
-    percent: total > 0 ? Math.round((completed / total) * 100) : 0
+    percent: Math.round(ratio * 100),
+    ratio,
   }
 }
 

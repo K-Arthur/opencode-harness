@@ -68,19 +68,19 @@ async function setupLiveTodosPanel(page: Page, initialTodos: Todo[] = SAMPLE_TOD
       renderTodos(todos: Todo[]) {
         const list = document.getElementById('todos-list')!
         list.innerHTML = ''
-        const progress = todos.length > 0
-          ? Math.round((todos.filter((t: Todo) => t.status === 'completed').length / todos.length) * 100)
-          : 0
+        const completed = todos.filter((t: Todo) => t.status === 'completed').length
+        const ratio = todos.length > 0 ? completed / todos.length : 0
+        const percent = Math.round(ratio * 100)
 
         const progressDiv = document.createElement('div')
         progressDiv.className = 'todo-progress-container'
         progressDiv.innerHTML = `
           <div class="todo-progress-header">
             <span class="todo-progress-text">Task Progress</span>
-            <span class="todo-progress-percentage">${progress}%</span>
+            <span class="todo-progress-percentage">${percent}%</span>
           </div>
           <div class="todo-progress-bar-track" aria-hidden="true">
-            <div class="todo-progress-bar-fill" style="--p: ${(progress / 100).toFixed(3)}"></div>
+            <div class="todo-progress-bar-fill" style="--p: ${ratio.toFixed(3)}"></div>
           </div>
         `
         list.appendChild(progressDiv)

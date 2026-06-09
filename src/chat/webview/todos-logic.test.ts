@@ -11,7 +11,7 @@ describe("todos-logic", () => {
   describe("calculateProgress", () => {
     it("returns 0% for empty list", () => {
       const result = calculateProgress([])
-      assert.deepStrictEqual(result, { total: 0, completed: 0, percent: 0 })
+      assert.deepStrictEqual(result, { total: 0, completed: 0, percent: 0, ratio: 0 })
     })
 
     it("returns 100% when all completed", () => {
@@ -19,7 +19,7 @@ describe("todos-logic", () => {
         makeTodo({ id: "1", status: "completed" }),
         makeTodo({ id: "2", status: "completed" }),
       ]
-      assert.deepStrictEqual(calculateProgress(todos), { total: 2, completed: 2, percent: 100 })
+      assert.deepStrictEqual(calculateProgress(todos), { total: 2, completed: 2, percent: 100, ratio: 1 })
     })
 
     it("returns 50% for half completed", () => {
@@ -27,7 +27,31 @@ describe("todos-logic", () => {
         makeTodo({ id: "1", status: "completed" }),
         makeTodo({ id: "2", status: "pending" }),
       ]
-      assert.deepStrictEqual(calculateProgress(todos), { total: 2, completed: 1, percent: 50 })
+      assert.deepStrictEqual(calculateProgress(todos), { total: 2, completed: 1, percent: 50, ratio: 0.5 })
+    })
+
+    it("returns unrounded ratio preserving sub-percent precision", () => {
+      const todos: Todo[] = [
+        makeTodo({ id: "1", status: "completed" }),
+        makeTodo({ id: "2", status: "pending" }),
+        makeTodo({ id: "3", status: "pending" }),
+      ]
+      const result = calculateProgress(todos)
+      assert.strictEqual(result.percent, 33)
+      assert.strictEqual(result.ratio, 1 / 3)
+    })
+
+    it("returns ratio 0 for empty list", () => {
+      const result = calculateProgress([])
+      assert.strictEqual(result.ratio, 0)
+    })
+
+    it("returns ratio 1 when all completed", () => {
+      const todos: Todo[] = [
+        makeTodo({ id: "1", status: "completed" }),
+        makeTodo({ id: "2", status: "completed" }),
+      ]
+      assert.strictEqual(calculateProgress(todos).ratio, 1)
     })
 
     it("rounds percentages correctly", () => {
@@ -36,7 +60,9 @@ describe("todos-logic", () => {
         makeTodo({ id: "2", status: "pending" }),
         makeTodo({ id: "3", status: "pending" }),
       ]
-      assert.strictEqual(calculateProgress(todos).percent, 33)
+      const result = calculateProgress(todos)
+      assert.strictEqual(result.percent, 33)
+      assert.ok(result.ratio > 0.33 && result.ratio < 0.34, `ratio ${result.ratio} should be between 0.33 and 0.34`)
     })
 
     it("counts in-progress as non-completed", () => {
@@ -44,7 +70,7 @@ describe("todos-logic", () => {
         makeTodo({ id: "1", status: "in-progress" }),
         makeTodo({ id: "2", status: "completed" }),
       ]
-      assert.deepStrictEqual(calculateProgress(todos), { total: 2, completed: 1, percent: 50 })
+      assert.deepStrictEqual(calculateProgress(todos), { total: 2, completed: 1, percent: 50, ratio: 0.5 })
     })
   })
 
