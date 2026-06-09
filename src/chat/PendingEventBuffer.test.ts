@@ -13,6 +13,7 @@ void describe("PendingEventBuffer", () => {
   beforeEach(() => {
     warnings = []
     buf = new PendingEventBuffer({
+      ttlMs: 200,
       maxPerSession: 3,
       log: { warn: (m: string) => warnings.push(m), info: () => {} },
     })
@@ -56,13 +57,11 @@ void describe("PendingEventBuffer", () => {
     assert.equal(buf.drain("ses_A").length, 0)
   })
 
-  void it("retains events until explicitly drained (no TTL — supports 45min sessions)", async () => {
-    buf.add("ses_long", evt("subagent_update", "ses_long"))
-    // Wait 500ms — ample time for any implicit TTL to fire if one existed
-    await new Promise((r) => setTimeout(r, 500))
-    const replayed = buf.drain("ses_long")
-    assert.equal(replayed.length, 1, "events must persist until drained, no TTL expiry")
-    assert.equal(warnings.length, 0, "no expiry warnings should fire — there is no TTL")
+  void it("expires events after the 200ms TTL and logs a warning", async () => {
+    buf.add("ses_late", evt("tool_start", "ses_late"))
+    await new Promise((r) => setTimeout(r, 250))
+    assert.deepEqual(buf.drain("ses_late"), [], "expired events must not replay")
+    assert.equal(warnings.filter((w) => w.includes("ses_late")).length, 1)
   })
 
   void it("caps buffered events per session and drops the oldest when full", () => {
@@ -109,30 +108,17 @@ void describe("PendingEventBuffer", () => {
     assert.equal(buf.drain("").length, 0)
   })
 
-  void it("dispose() clears all state without warnings", () => {
+  void it("dispose() cancels pending expiry timers and clears state", async () => {
     buf.add("ses_dispose", evt("tool_start", "ses_dispose"))
     buf.dispose()
-    assert.equal(buf.drain("ses_dispose").length, 0, "buffer must be empty after dispose")
-    assert.equal(warnings.length, 0, "no warnings must fire after dispose")
+    await new Promise((r) => setTimeout(r, 250))
+    assert.equal(warnings.length, 0, "expiry warnings must not fire after dispose")
   })
 
-  void it("sweep removes orphaned entries with an explicit ts older than minAge but leaves others intact", () => {
-    const now = 1_000_000_000_000
-    const stale = { ...evt("old", "ses_stale"), ts: now - 2_000_000 } // > 30 min old
-    const fresh = { ...evt("new", "ses_fresh"), ts: now - 100_000 }    // < 30 min
-    buf.add("ses_stale", stale)
-    buf.add("ses_fresh", fresh)
-
-    const pruned = buf.sweep({ minAgeMs: 1_800_000, now })
-    assert.equal(pruned, 1, "only stale orphan entries must be pruned")
-    assert.equal(buf.drain("ses_stale").length, 0, "stale session must be removed")
-    assert.equal(buf.drain("ses_fresh").length, 1, "fresh session must survive")
-  })
-
-  void it("sweep does nothing when no events carry a ts field (production child session events)", () => {
-    buf.add("ses_child", evt("subagent_update", "ses_child"))
-    const pruned = buf.sweep({ minAgeMs: 0, now: Date.now() + 1_000_000 })
-    assert.equal(pruned, 0, "events without ts must never be swept")
-    assert.equal(buf.drain("ses_child").length, 1, "child session events survive sweep")
+  void it("default TTL of 10s covers the heartbeat race window", () => {
+    const defBuf = new PendingEventBuffer()
+    defBuf.add("ses_race", evt("subagent_update", "ses_race"))
+    assert.equal(defBuf.drain("ses_race").length, 1, "10s TTL must hold events for immediate drain")
+    defBuf.dispose()
   })
 })

@@ -1,15 +1,17 @@
 /**
- * Holds server events whose target tab has not yet registered its cliSessionId
- * (first-prompt race) OR whose child-session-to-tab mapping hasn't yet been
- * registered by SubagentHeartbeat (subagent creation race).
+ * Holds server events whose target tab has not yet registered its cliSessionId.
  *
- * Events persist until explicitly drained — there is no TTL. This is by design:
- * child sessions for models like Minimax can run 30–45 minutes, and their events
- * must not expire before the heartbeat discovers the child session mapping.
+ * Per the Akka Actor Model, child session events (text_chunk, tool_start) are
+ * internal to the child and should NOT be routed to the parent — the parent only
+ * needs lifecycle notifications (heartbeat) and summary info (subagent_update on
+ * the parent stream). Child sessions are discovered by SubagentHeartbeat within
+ * ~5 seconds; the short TTL covers this race window and drops orphans quickly.
  *
- * A periodic `sweep()` removes truly orphaned entries (sessions that were created
- * but never mapped, e.g. prompt aborted mid-flight).
+ * Primary use case: the ~5ms race between session.create and setCliSessionId
+ * during the first prompt in a new tab.
  */
+
+export const BUFFER_TTL_MS = 10_000  // 10s — covers heartbeat race window; orphans expire fast
 
 export interface BufferedServerEvent {
   type: string
@@ -23,6 +25,8 @@ export interface PendingBufferLogger {
 }
 
 export interface PendingEventBufferOptions {
+  /** Time-to-live for buffered events, in ms (default 10s). */
+  ttlMs?: number
   /** Max events held per sessionId (default 200). Oldest dropped when exceeded. */
   maxPerSession?: number
   log?: PendingBufferLogger
@@ -30,15 +34,18 @@ export interface PendingEventBufferOptions {
 
 interface Entry {
   events: BufferedServerEvent[]
+  timer: ReturnType<typeof setTimeout> | null
 }
 
 export class PendingEventBuffer {
+  private readonly ttlMs: number
   private readonly maxPerSession: number
   private readonly log: PendingBufferLogger
   private readonly byCli = new Map<string, Entry>()
   private disposed = false
 
   constructor(opts: PendingEventBufferOptions = {}) {
+    this.ttlMs = opts.ttlMs ?? BUFFER_TTL_MS
     this.maxPerSession = opts.maxPerSession ?? 200
     this.log = opts.log ?? { warn: () => {}, info: () => {} }
   }
@@ -49,7 +56,7 @@ export class PendingEventBuffer {
 
     let entry = this.byCli.get(cliSessionId)
     if (!entry) {
-      entry = { events: [] }
+      entry = { events: [], timer: null }
       this.byCli.set(cliSessionId, entry)
     }
 
@@ -59,12 +66,21 @@ export class PendingEventBuffer {
     if (entry.events.length > this.maxPerSession) {
       entry.events.splice(0, entry.events.length - this.maxPerSession)
     }
+
+    // Arm expiry timer on first event for this session
+    if (!entry.timer) {
+      entry.timer = setTimeout(() => this.expire(cliSessionId), this.ttlMs)
+    }
   }
 
   drain(cliSessionId: string): BufferedServerEvent[] {
     if (!cliSessionId) return []
     const entry = this.byCli.get(cliSessionId)
     if (!entry) return []
+    if (entry.timer) {
+      clearTimeout(entry.timer)
+      entry.timer = null
+    }
     const events = entry.events
     this.byCli.delete(cliSessionId)
     return events
@@ -75,31 +91,21 @@ export class PendingEventBuffer {
     return this.byCli.get(cliSessionId)?.events.length ?? 0
   }
 
-  /**
-   * Remove orphaned entries that have been sitting unclaimed indefinitely.
-   * Orphaned sessions are ones where the user aborted the prompt or the server
-   * emitted events for a session that never registered a tab mapping.
-   * Returns the number of sessions pruned.
-   */
-  sweep(hint?: { minAgeMs?: number; now?: number }): number {
-    if (this.disposed) return 0
-    const now = hint?.now ?? Date.now()
-    const minAge = hint?.minAgeMs ?? 1_800_000  // default: 30 min (matches STREAM_STUCK_MS safety margin)
-    let pruned = 0
-    for (const [key, entry] of this.byCli) {
-      // If the first event is older than minAge, this is likely orphaned.
-      const first = entry.events[0]
-      if (first && typeof (first as any).ts === "number" && now - (first as any).ts > minAge) {
-        this.byCli.delete(key)
-        pruned++
-      }
-    }
-    return pruned
-  }
-
   dispose(): void {
     this.disposed = true
+    for (const entry of this.byCli.values()) {
+      if (entry.timer) clearTimeout(entry.timer)
+    }
     this.byCli.clear()
+  }
+
+  private expire(cliSessionId: string): void {
+    const entry = this.byCli.get(cliSessionId)
+    if (!entry) return
+    this.byCli.delete(cliSessionId)
+    this.log.warn(
+      `[PendingEventBuffer] Dropped ${entry.events.length} buffered event(s) for cliSessionId "${cliSessionId}" — TTL (${this.ttlMs}ms) expired before tab mapping was registered.`,
+    )
   }
 
   private coalesceWithLastEvent(entry: Entry, event: BufferedServerEvent): boolean {
