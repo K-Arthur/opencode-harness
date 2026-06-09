@@ -1,0 +1,237 @@
+/* ═══════════════════════════════════════════════════════════════
+   Animations & Keyframes — Single Source of Truth
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── Message Entrance ─── */
+@keyframes message-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ─── Skeleton Shimmer ─── */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+/* ─── Overlay / Modal ─── */
+@keyframes overlay-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dialog-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dialog-slide-down {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+/* ─── Badge Pop ─── */
+@keyframes badge-pop {
+  0% {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ─── Press Feedback ─── */
+@keyframes press-effect {
+  0% { transform: scale(1); }
+  40% { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+
+/* ─── Typing Indicator ─── */
+@keyframes typing-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-8px);
+    opacity: 1;
+  }
+}
+
+/* ─── Cursor Blink ─── */
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ─── Shimmer Background ─── */
+@keyframes shimmer-background {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+
+/* ─── Streaming Indicator Pulse ─── */
+@keyframes streaming-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+}
+
+/* ─── Tab Slide Indicator ─── */
+@keyframes tab-slide {
+  from { transform: translateX(var(--tab-from, 0)); }
+  to { transform: translateX(var(--tab-to, 0)); }
+}
+
+/* ─── Toast / Banner Slide In ─── */
+@keyframes banner-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes banner-slide-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes banner-fade-out {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 250px;
+  }
+  90% {
+    opacity: 0;
+    transform: translateY(-8px);
+    max-height: 250px;
+    padding: var(--space-3) var(--space-4);
+    margin: var(--space-3) 0;
+    border-width: 1px;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-8px);
+    max-height: 0;
+    padding: 0;
+    margin: 0;
+    border-width: 0;
+    pointer-events: none;
+    visibility: hidden;
+  }
+}
+
+/* ─── Spinner / Loader ─── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Generic Pulse (used by tool status, status LEDs) ─── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1); }
+}
+
+/* ─── Thinking Pulse ─── */
+@keyframes thinking-pulse {
+  0%, 100% {
+    border-left-color: var(--oc-thinking-border);
+    opacity: 1;
+  }
+  50% {
+    border-left-color: var(--color-accent);
+    opacity: 0.8;
+  }
+}
+
+/* ─── Pill Fade In (badges, skill chips) ─── */
+@keyframes pillFadeIn {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* ─── Fade In Out (rate-limit notice, ephemeral messages) ─── */
+@keyframes fadeInOut {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ─── Fade In Only (for reduced-motion) ─── */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ─── Stagger children utility ─── */
+.stagger-children > * {
+  animation: message-enter var(--duration-slow) var(--ease-out) both;
+}
+
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 40ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 80ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 120ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 160ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 200ms; }
+
+/* ─── Message Navigation Flash ─── */
+.message-flash {
+  animation: message-flash 1.5s var(--ease-out);
+}
+
+/* ─── Error Shake In ─── */
+@keyframes error-shake-in {
+  0% { transform: translateX(0) scale(0.98); opacity: 0; }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+  100% { transform: translateX(0) scale(1); opacity: 1; }
+}

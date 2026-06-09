@@ -1,0 +1,487 @@
+# Webview Message Rendering
+
+The chat webview renders assistant output incrementally. Text deltas may arrive after a
+`stream_end` event, especially when the server finalizes tool blocks before the final text
+chunk has been flushed. The webview should recover those late chunks into the most recent
+assistant message for the active tab instead of dropping them.
+
+## Streaming Contract
+
+- `stream_start` creates or reuses the visible assistant placeholder.
+- `stream_chunk` appends text to the active streaming message.
+- If `stream_chunk` arrives after stream state was cleared, the chunk is appended to the
+  most recent assistant message in that tab and persisted.
+- `stream_end` finalizes unresolved tool-call blocks so completed responses do not remain
+  visually stuck in a running state.
+
+### Text/Tool Interleave Invariants
+
+When a `stream_tool_start` event arrives mid-stream (i.e. `state.currentBlockBuffer` is non-empty):
+
+1. **Finalize first** — `finalizeCurrentTextBlock()` must be called before clearing any buffer/element state. This converts the live `streaming-text` element to a finalized `msg-text markdown-content` block with non-streaming markdown rendering.
+2. **Guard deferred flushes** — the RenderQueue callback and the RAF `doUpdate` path must both bail early (`return`) when `state.currentBlockBuffer.trim()` is empty after a tool-start clear, to prevent creating spurious empty text blocks.
+3. **Post-tool text positioning** — `insertStreamingTextAfterLastBlock()` must splice the new text element immediately after the last `details.tool-call`, `details.tool-group`, `.diff-block`, or `.skill-badge` using `bubble.insertBefore(textEl, insertAfter.nextSibling)`, not `bubble.appendChild()`. It must also push a new `createTextBlock("")` entry to `msgObj.blocks` and update `state.currentBlockIndex` so subsequent chunks accumulate correctly.
+4. **Diff blocks** — `handleDiff` must call `finalizeCurrentTextBlock()` before appending a diff element, for the same ordering guarantee.
+
+The `stream-interleave.test.ts` (source-structure assertions) and `streaming-interleave.spec.ts` (Playwright DOM assertions) pin these invariants.
+
+### Tool Group Labels
+
+Tool groups summarize the full run of grouped tool calls. If every child has the same tool
+class, the group may use that class and name. If children contain mixed classes, the summary
+uses `tools`, applies `tool-call--mixed`, and keeps the type breakdown visible (for example
+`(1 read, 1 write, 1 exec)`). Child rows retain their individual classes.
+
+## First Prompt Send Flow
+
+The welcome-page prompt path is covered as a first-class contract:
+
+1. User types into `#prompt-input`; context chips update through the full webview element refs.
+2. Send button enables from prompt text or attachments.
+3. Clicking send creates a local placeholder tab only if no active session exists.
+4. The optimistic user message renders into the active tab before the host round-trip.
+5. The webview posts `send_prompt` with the selected model, message id, mode, text, and attachments.
+6. The typing indicator remains visible until stream events or request errors resolve the turn.
+
+The context-chip renderer must never throw from a partial element-ref object. If chip
+containers are unavailable, it logs and skips chip rendering so prompt submission can continue.
+
+## Voice Input Contract
+
+Voice input is a prompt-composer feature. It inserts text into `#prompt-input`
+and never posts `send_prompt` on its own (unless `opencode.voice.autoSend` is set,
+in which case the webview clicks the existing Send button after insertion).
+
+The microphone is recorded and transcribed entirely in the extension host (the
+webview cannot access the mic). The webview is just the UI and drives state via the
+`requestId` it generates for each take.
+
+Webview → host:
+
+- `get_voice_settings`: requests the current voice settings. The host answers with
+  `voice_settings`.
+- `voice_start`: `{ type, requestId }`. The host starts recording the default mic.
+- `voice_stop`: `{ type, requestId }`. The host stops recording and transcribes.
+- `voice_cancel`: `{ type, requestId }`. The host kills the recorder and discards.
+
+Host → webview:
+
+- `voice_settings`: `{ type, settings }`, where `settings` includes `enabled`,
+  `autoSend`, `language`, `insertMode`, `maxRecordingSeconds`, and the runtime
+  `available` / `unavailableReason` flags used to gate the button.
+- `voice_recording_started`: `{ type, requestId }`. The webview moves to the
+  recording state once capture is confirmed.
+- `voice_transcribing`: `{ type, requestId }`. The webview shows the transcribing
+  state while the local engine runs.
+- `voice_transcript`: `{ type, requestId, text }`. The webview inserts the transcript
+  only if `requestId` matches the current request, then clears it.
+- `voice_error`: `{ type, requestId?, reason, message }`. The webview ignores stale
+  request-scoped errors and surfaces current errors in the input-area live region.
+
+All `voice_*` request messages are validated for a non-empty `requestId` (≤120
+chars). The host deletes the temporary audio file after every take.
+
+## Plan Mode Rendering
+
+Plan-mode visual treatment is role-aware:
+
+- User messages always render as normal user prompts, even when their text contains
+  headings like "Proposed plan", numbered steps, or task-review instructions.
+- Assistant text may receive the `PROPOSED PLAN` treatment only when the session mode is
+  `plan` and the prose shape looks like a plan.
+- Diff review affordances remain separate from text styling: Plan-mode diffs show the
+  review label and "Approve & Apply" action, while Build and Auto use the normal diff flow.
+
+## Markdown Styling
+
+Markdown is rendered with `markdown-it`, sanitized through DOMPurify, and constrained for
+the narrow VS Code side-panel viewport. The message styles intentionally keep rhythm compact:
+
+- Streamed text is normalized before render so split chunks like `1.` followed by a blank
+  line and item text become a normal ordered-list item.
+- Markdown uses standard soft line wrapping (`breaks: false`) instead of converting every
+  newline to a hard break.
+- Headings `h1` through `h6` are styled explicitly with zero letter spacing.
+- Paragraphs, lists, nested lists, blockquotes, and task lists use short vertical margins.
+- Fenced code blocks scroll horizontally instead of clipping long lines.
+- Tables remain usable in narrow panes with horizontal overflow.
+- Links have visible hover and keyboard-focus states; external links open outside the webview
+  with `target="_blank"` and `rel="noopener noreferrer"`.
+
+## Slash Commands
+
+Slash commands use the same mention dropdown surface as `@` context mentions:
+
+- Local commands live in `LOCAL_SLASH_COMMANDS` in `src/chat/webview/slash-commands.ts`.
+  `mentions.ts` and the commands palette both adapt this registry so command labels and
+  descriptions stay in sync.
+- The dropdown is triggered when `/` starts the current token, either at the beginning of
+  the input or after whitespace.
+- Rows use `command-item` markup with an SVG icon, monospace command label, and muted
+  description text.
+- The webview handles UI-only commands such as `/model`, `/new`, `/export`, `/compact`,
+  `/queue`, and `/commands` directly.
+- Typed local slash commands and local commands selected from the commands palette route
+  through the same webview dispatcher in `composer.ts`.
+- The host intercepts `/clear`, `/cost`, `/continue`, and `/help` before server dispatch.
+- Custom prompt commands resolve after local commands.
+- Runtime OpenCode server commands are forwarded without the leading slash, because the
+  OpenCode server command API expects names like `init` or `review`, not `/init`.
+
+Server, MCP, skill, and custom prompt commands are proactively loaded on webview boot via
+`list_commands`, so the inline dropdown is populated immediately without requiring the user
+to type `/commands` first. The host sends custom prompt commands with `isCustom: true`;
+the webview keeps them in inline slash suggestions while rendering them under the commands
+palette's Custom filter instead of the Server filter.
+
+### Commands Palette
+
+The commands palette is a full-screen overlay modal (`#commands-modal`) accessible via:
+
+1. **`>_` button** in the input bottom bar (left of the `@` button)
+2. **`Ctrl+Shift+/`** keybinding (when chat view is focused)
+3. Typing `/commands` in the prompt input
+4. VS Code Command Palette → "OpenCode: Open Commands Palette"
+
+Opening the commands palette automatically hides the inline slash dropdown to prevent
+both UIs from being visible simultaneously.
+
+The host-to-webview `command_list` payload is partitioned before it reaches the modal:
+
+- `isCustom: true` entries update `commandsModal.updatePromptCommands(...)`.
+- Other entries update `commandsModal.updateServerCommands(...)`, preserving `source`
+  values such as `mcp` and `skill` for badges and filters.
+- Inline slash suggestions receive the combined command list so custom prompt commands
+  remain discoverable while typing.
+
+### State Sync Messages
+
+- `webview_ready`: Webview announces that it can receive host state. The host responds
+  directly with `init_state` plus model, theme, rate-limit, and command state.
+- `request_state_sync`: Webview requests a fresh visible-state snapshot after a visibility
+  or focus change. The host responds directly through `pushVisibleStateToWebview()`.
+- `push_all_state` / `push_visible_state`: Legacy host message types retained as a
+  defensive webview fallback. Normal restoration must not route through these messages,
+  because host → webview → `request_state_sync` ping-pong can delay or repeat restore.
+- `mode_change_result`: Host acknowledgement for a `change_mode` request. When
+  `accepted` is false, the payload carries the previous mode so the webview can keep the
+  visible selector in sync after invalid payloads or cancelled Auto-mode confirmation.
+- `plan_complete`: Host notification that the agent wrote a plan document in Plan mode.
+  The webview renders a "Planning Complete" banner with "Switch to Build" and "Stay in Plan"
+  buttons. The sessionId identifies the tab. Payload: `{ type, sessionId, planName? }`.
+- `mode_switch_request`: Webview→Host request to switch a session's mode. Sent when the
+  user clicks "Switch to Build" on the plan-complete card. The host normalizes the mode,
+  logs the transition, and applies it through the existing `change_mode` flow.
+  Payload: `{ type, targetMode, sessionId }`.
+
+These replace the previous behavior where these messages were logged as "unknown host
+message type" and silently dropped.
+
+#### Focus ownership (the webview decides which tab is visible)
+
+The host's `sessionStore.activeId` is only a **hint**; the webview owns which tab is
+visible. Two host channels broadcast the active id, and both are now reconciled through
+pure helpers (`src/chat/webview/sessionFocus.ts`) so a background change never steals focus
+from the tab the user is reading:
+
+- `active_session_changed`: fired on *every* host-side `setActive` (server-side session-id
+  promotion, cleanup, command-palette open). The webview follows it only when doing so is
+  safe — when the welcome view is showing, when the current tab no longer exists, or when
+  it targets the tab already in focus. It will **not** switch onto a session that is
+  mid-stream while the user is viewing a different, valid tab. User-intended opens of a
+  session still switch explicitly through `resume_session_data`.
+- `init_state` is re-sent on **every** visibility change, not just first load. First
+  hydration honours the host's restored `activeSessionId`; every later refresh
+  **preserves the user's current tab** (or keeps them on the welcome screen) rather than
+  snapping back to the host's active id. The host also only re-includes its active session
+  in the restorable set on a refresh if that session still has an open tab
+  (`src/chat/restorablePolicy.ts`), so a tab the user closed is never resurrected.
+
+#### Welcome-screen mode selection
+
+The mode selector lives in the input area, which is visible on the welcome screen where no
+session is active. Choosing a mode (click, `Ctrl/Cmd+Alt+1/2/3`, `Alt+Shift+Tab`, `Ctrl+Shift+M`, or `Shift+Tab` when the mode button is focused) with no
+active session updates a persisted **pending mode** (`state.pendingMode`) and the selector
+UI instead of dropping the request. The next session created (`createSession`, new tab,
+or first prompt) adopts that mode, which then travels to the host via `send_prompt.mode` /
+`create_tab.mode`.
+
+### Context And Token Usage
+
+Context-window fill and API token spend are separate concepts:
+
+- `context_usage`: `{ type, sessionId, percent, tokens, maxTokens, breakdown? }`
+  describes the current context-window fill for one session. The webview persists the
+  payload on the addressed session and updates the visible bar/dropdown only when
+  `sessionId` matches the active tab. Background-session updates must never repaint the
+  active tab's context bar.
+- `context_window_known`: `{ type, sessionId, maxTokens, source }` resolves the denominator
+  for one session. If the target session is active, the webview hides the override chip and
+  re-computes the visible percentage from that session's stored context fill.
+- `context_window_unknown`: `{ type, sessionId, modelId }` shows the override affordance only
+  for the active target session. Unknown-window events for background sessions are ignored
+  by the visible UI.
+- `token_usage`: `{ type, sessionId, usage }`, where `usage` is
+  `{ prompt, completion, total, reasoning?, cacheRead?, cacheWrite? }`, records API token
+  spend. The webview accepts legacy `tokens` payloads defensively, but the canonical wire
+  contract is `usage`.
+
+The backend sends session-scoped context events from `ContextMonitor`/`ChatProvider`.
+`ContextMonitor.setTokenLimit()` must not emit sessionless stale usage. Final SDK usage in
+`StreamCoordinator` is an accumulation fallback only; full-history summaries from session
+backfill replace the stored session summary.
+
+### Remote Command Execution
+
+When a slash command targets a server session that doesn't exist yet (e.g., first command
+on a freshly created tab), `CommandExecutionService` calls `sessionManager.ensureSession()`
+to create a server session on-demand before executing the command. The resulting
+`cliSessionId` is persisted on both the `TabManager` tab and the `SessionStore` session.
+
+Unknown server command errors are converted to short user-facing messages instead of raw
+JSON or `[object Object]` output.
+
+## Context Chips & Timeline
+
+- Input context from `@file:`, `@folder:`, URL, problems, terminal, and pasted images
+  renders as colored chips above the prompt input.
+- Attachment-owned prompt helpers must call `updateContextChips` with the full webview
+  `ElementRefs`; passing attachment-only refs will omit `contextBar`/`contextChips` and
+  break the prompt send path.
+- The conversation timeline is a right-side `conversation-timeline` aside toggled from the
+  header button. It reserves message-list padding only while visible.
+- The Activity panel (`#activity-panel`) and Tasks panel (`#tasks-panel`) are separate
+  transcript read-models wired from real `ElementRefs`. Their filters are stored per session
+  (`activityFilter`, `commandFilter`) and refresh only for the active session.
+- Tasks panel terminal actions post `open_terminal`: `{ type, command, cwd?, autorun? }`.
+  The host validates the command, opens a VS Code terminal at `cwd` when provided, and sends
+  the command with `autorun` controlling whether Enter is submitted.
+
+## Changed Files
+
+Changed-file state is synchronized from the extension host:
+
+- `changed_files_update`: `{ type, sessionId, files: Array<{ path: string; added: number; removed: number }> }`
+  is the canonical state message. The webview replaces that session's changed-file list with
+  this payload. It re-renders the chip bar and todos panel only when the update belongs to
+  the active session, preventing stale changed-file chips from leaking across tabs.
+- `file_edited`: `{ type, sessionId, file }` is retained as a live incremental event for
+  compatibility and immediate feedback. It merges through the same dedupe path as
+  `changed_files_update`.
+- OpenCode `file.edited` SSE events can be sessionless. The host must resolve those global
+  file events to a live or active tab before posting `file_edited`/`changed_files_update`; the
+  webview should never receive or persist changed files under an empty session id.
+- The compact `#changed-files-strip` is the primary visible surface. It appears from
+  `changed_files_update` and opens the full `#changed-files-dropdown`, which must stay within
+  the webview viewport and scroll internally.
+- The frontend clears changed files on stream start for the active turn, then expects the
+  backend store to re-sync any subsequent file events for that session.
+- Open buttons post `{ type: "open_file", path }`; the extension host resolves relative paths
+  against the session workspace first, then open VS Code workspace folders, and supports
+  `#L12` line fragments.
+
+## Session Deletion & Empty Sessions
+
+- Local session delete/archive/pin/tag messages use `targetSessionId`, matching
+  `WebviewEventRouter` validation and the unified session modal contract.
+- Session pinning posts `{ type: "pin_session", targetSessionId, pinned }`; tag edits post
+  `{ type: "set_session_tags", targetSessionId, tags }`. Both are extension-local metadata
+  persisted by `SessionStore` and surfaced back through `session_list` /
+  `session_list_update`.
+- Empty local placeholder sessions (`pendingServerLink`) are transient. They are not persisted
+  or restored until a user message exists, and closing an empty placeholder deletes it.
+- Empty server-imported sessions waiting for history (`needsBackfill`) remain exempt while the
+  extension retries backfill.
+- Closing the active tab clears the host active-session pointer when no other tab remains.
+  Historical sessions stay available in the session list, but they are not reopened by a later
+  `request_state_sync` when focus returns to the webview.
+
+## Diff & Checkpoint Messages
+
+- `diff_result`: `{ type, sessionId, blockId, ok, message?, checkpointCreated? }`.
+- `checkpoint_list`: checkpoint objects include `id`, `sessionId`, `messageId`, `createdAt`,
+  `filesChanged`, and optional `action`.
+- `checkpoint_restored`: `{ type, sessionId, checkpointId, ok, error? }`.
+- `revert_diff` restores the accepted extension-managed diff metadata captured during
+  `accept_diff`. Server-side message rollback uses the OpenCode `session.revert(messageID)`
+  flow and reports through `revert_result`.
+
+## Session Message Freshness
+
+Session messages can become stale when the server lazy-loads conversations from disk after the
+extension has already restored local state. Six fixes address this:
+
+1. **Always refresh on resume**: `handleResumeSession` fetches fresh messages from the server on
+   every resume, regardless of local message count. It no longer skips backfill when
+   `messages.length > 0`.
+
+2. **`backfillTabIfNeeded` respects `needsBackfill` flag**: The method no longer uses
+   `messages.length > 0` as a standalone early-return guard. Sessions with existing messages are
+   re-backfilled when `needsBackfill === true`.
+
+3. **Extended retry budget**: `BACKFILL_RETRY_DELAYS_MS` is `[1500, 4000, 8000, 16000]` (4 retries
+   over ~30 seconds) to accommodate slow server lazy-loading.
+
+4. **No destructive close on empty backfill**: When the server returns 0 messages during
+   resume, the session state is preserved (not cleared and not closed) so that retries can
+   succeed once the server finishes loading.
+
+5. **`request_more_messages` server fallback**: When the webview requests earlier messages and
+   local state is exhausted (no more messages to paginate), the handler falls through to a
+   server fetch via `getSessionMessages`, applies any new data, and returns the fresh slice.
+
+6. **`refresh_session_messages` handler**: New webview-to-host message that explicitly requests a
+   full message refresh from the server. The host responds with `session_messages_refreshed`
+   containing the updated message list.
+
+### Messages
+
+- Webview → Host: `{ type: "refresh_session_messages" }` — triggers a full server fetch for the
+  active session's messages.
+- Host → Webview: `{ type: "session_messages_refreshed", sessionId, messages, totalCount }` —
+  contains the refreshed message array. The webview re-renders the message list.
+
+## Question Tool Block
+
+The `question` tool lets the model ask the user one or more multiple-choice or free-text questions. The question block in the assistant transcript renders as a **non-interactive record** (pending chip or answered echo). Interactive option selection and answer submission is handled by the input-area `#question-bar` (`questionBar.ts`).
+
+### Input schema (defensive)
+
+The tool's `args` are normalized by the pure parser `parseQuestionArgs` (`src/session/questionModel.ts`) into a `QuestionGroup[]`. Two shapes are accepted:
+
+- **Flat single question** — `{ question | prompt | message | text, options | choices | select, allowFreeText? }`.
+- **Nested groups** (Claude-style) — `{ questions: [ { question, header?, options: (string | { label, description })[], multiSelect? } ] }`.
+
+`parseQuestionArgs` returns `[]` for empty/partial args, which signals callers to keep whatever was already rendered (the tool input often finishes streaming after the block first appears).
+
+### Rendering
+
+The question block renders in one of two visual states:
+
+1. **Pending** (`.question-block--pending`): Shows the question text and a subtle `"Answer in input bar"` chip. The user answers via the `#question-bar` in the input area, not by interacting with the block itself.
+2. **Answered** (`.question-block--answered`): Shows the question text, a `"Your answer:"` or `"Selected:"` label, and the user's answer text. The block is rendered at reduced opacity (0.7) and decorated with a green left border to distinguish it visually. The `answer`/`answerSource` fields come from the persisted `QuestionBlock` type.
+
+Both states use the same `.question-block` wrapper with `aria-label="Question from model"`. The wrapper carries `data-block-id` (the tool-call id) so it can be refreshed in place. Neither state includes interactive controls (buttons, textareas, submit) — those live exclusively in the question bar (`questionBar.ts`).
+
+#### Live refresh
+
+When the tool input finishes streaming, `stream_tool_update` (or a duplicate `stream_tool_start`) routes through `refreshQuestionBlock`, which re-parses the args, updates the persisted block, and re-renders the `.question-block` DOM in place — filling in the question text that was empty at start.
+
+`stream_end` carries the persisted `question` block (from the host `blocksBuffer`); `mergeServerBlocks` merges it with the live block (preferring non-empty `groups` so a late/empty copy can't wipe the displayed question), then `reRenderMessage` rebuilds the bubble.
+
+### Host-to-Webview Messages
+
+- `stream_tool_start`: `{ type: "stream_tool_start", sessionId, toolCall: { id, name: "question", class: "meta", state: "running", args } }` — renders the question block during streaming. `args` may be flat or nested (see Input schema); it is often empty at start and filled by a later update.
+- `stream_tool_update`: `{ type: "stream_tool_update", sessionId, toolCall: { id, args } }` — refreshes the question block in place as the input streams in.
+- `stream_end`: `{ type: "stream_end", sessionId, messageId, blocks: Array<{ type: "question", id, toolCallId, sessionId, groups, text, options, allowFreeText, answered?, answer?, answerSource? }> }` — finalizes the question. `groups` is authoritative; `text`/`options` are the derived single-group view kept for backward compatibility. The `answered`, `answer`, and `answerSource` fields are set from the persisted server state when the question has already been answered.
+
+### Webview-to-Host Messages
+
+- `question_answer`: `{ type: "question_answer", sessionId: string, value: string, source: "option" | "freetext", toolCallId: string, messageId?: string }` — posted by the question bar when the user submits selections or free-text input. The `source` field distinguishes pre-defined options from free-text input. `messageId` is included for server-side correlation.
+
+### toolCallId Contract
+
+The `toolCallId` (the tool call's `id` from `stream_tool_start`) flows through three layers:
+
+1. **Question block** — stored on the `QuestionBlock` interface (`toolCallId` field) and included in the `stream_end` blocks payload.
+2. **User message metadata** — `WebviewEventRouter` copies `toolCallId` into the user message block's metadata for downstream correlation.
+3. **Question bar** — `questionBar.ts` uses `toolCallId` as the key to track `QuestionBarItem` state and includes it in `question_answer` for server-side correlation.
+
+### Accessibility
+
+The non-interactive question block implements these ARIA attributes:
+- Outer wrapper: `aria-label="Question from model"`
+- Answered record: the answer text is rendered as plain text in `.q-answer-text`
+
+The question bar (interactive) implements separate ARIA attributes documented under the Question Bar section below.
+
+### Edge Cases
+
+- **XSS**: Question text and options are escaped via `textContent` assignment scoped to `.question-block` — HTML injection is blocked.
+- **Empty question text**: When `groups[0].question` is empty, the `question-text` div renders as blank (still present but empty).
+- **Late-arriving question text**: The live refresh path handles empty-at-start question blocks where text streams in after the block first renders.
+- **Answered state persistence**: When the server sends back a `question` block with `answered: true`, the block renders as an answered record with the answer text and source label, even if the question bar entry has already been cleared.
+
+### Question Bar (`questionBar.ts`)
+
+The `#question-bar` sits in the input area and provides the interactive UI for answering pending questions. It is managed by `questionBar.ts`.
+
+#### Initialization
+
+`initQuestionBar(postMessage)` is called once during webview boot. It locates the `#question-bar`, `#question-bar-items`, `#question-bar-count`, and `#question-bar-submit` DOM elements and wires the submit button click handler.
+
+#### Question Lifecycle
+
+1. **Adding**: `stream_tool_start` for a `question` tool triggers `addQuestion(block, messageId)`, which creates a `QuestionBarItem` with parsed groups, an empty selections map (`Map<number, Set<string>>`), and `answered: false`. It calls `renderBarItem()` to append the question UI and updates visibility.
+2. **Updating**: `updateQuestion(toolCallId, block)` replaces the item's groups and `allowFreeText` flag, re-renders the bar item in place, and refreshes submit state.
+3. **Removing**: `removeQuestion(toolCallId)` deletes the item and removes its DOM element (called when the question is no longer relevant, e.g. stream cancelled).
+4. **Marking answered**: `markQuestionAnswered(toolCallId)` adds an `"Answered"` badge to the bar item, adds the `.question-bar-item--answered` class, and disables all interaction.
+5. **Clearing**: `clearAllQuestions()` removes all items and hides the bar.
+
+#### Rendering
+
+Each `QuestionBarItem` renders as a `.question-bar-item` with:
+- **Section header**: The group's `header` text, if present.
+- **Question text**: The group's `question` text.
+- **Option buttons**: One `.question-bar-option` button per option. Single-select groups use exclusive selection (clicking one deselects others). `multiSelect` groups allow toggling multiple options.
+- **Free-text textarea**: A `.question-bar-freetext` textarea with `maxlength="10000"` and placeholder `"Type a custom answer…"`.
+- **Answered badge**: When `item.answered`, a green `"Answered"` badge is appended and all inputs are disabled.
+
+#### Querying State
+
+- `hasActiveQuestions()`: Returns `true` if any item is unanswered.
+- `getActiveQuestionCount()`: Returns the number of unanswered items. When > 1, the bar displays a count label (e.g. `"3 questions"`).
+- `clearAllQuestions()` called from `stream_end` or tab switch resets the bar.
+
+#### Submit Flow
+
+The submit button (`#question-bar-submit`) posts a `question_answer` message to the host for each unanswered item, aggregating group selections (formatted as `"<header|question>: choice[, choice]"`, newline-separated) and free-text into a single `value` string. After submission, each item is marked answered and after 1500ms — if all items are answered — the bar is automatically cleared.
+
+#### Accessibility
+
+The question bar uses these ARIA attributes:
+- Bar container: `role="region"`, `aria-label="Question from model"`
+- Options groups: `role="group"`, `aria-label="Answer options"` (or `"Options: <header>"` per group)
+- Option buttons: `aria-pressed` reflects selection state
+- Free-text textarea: `aria-label="Custom answer"`, `maxlength="10000"`
+- Submit button: disabled when no selections or text have been made
+
+#### Edge Cases
+
+- **Double-click**: Option click handlers check `item.answered` before processing, so a second click after submission is rejected.
+- **Empty submit**: The submit loop skips items with no selections and no free-text; the submit button is disabled when nothing can be submitted.
+- **Multi-question aggregation**: When multiple groups exist, the bar aggregates one selection line per group. If a group has `multiSelect`, chosen options are comma-separated within that line.
+- **Stream-end cleanup**: When `stream_end` arrives, the streaming handler calls `clearAllQuestions()` to reset the bar for the next turn.
+
+## Tests
+
+The relevant coverage lives in:
+
+- `tests/webview/question-block-e2e.spec.ts` for E2E tests covering static render, edge cases, accessibility, streaming phase, and message contract.
+- `src/chat/webview/questionBar.test.ts` for question bar unit tests (show/hide, option rendering, submit aggregation, multi-question state, clear on stream-end).
+- `src/session/questionModel.test.ts` for the pure `parseQuestionArgs` normalizer (flat + nested shapes, option-label extraction, empty/partial input). The `src/chat/webview/questionModel.ts` re-export shim was removed since production code imports directly from `src/session/questionModel`.
+- `src/chat/webview/question-block.test.ts` for unit tests covering messageId correlation, empty fallback, maxlength, aria-labels, multi-group rendering, and multi-select submit aggregation.
+- `src/chat/webview/question-merge.test.ts` for `stream_end` merge survival — ensures the question block is not clobbered into a tool card and late/empty server copies do not wipe displayed groups.
+- `src/chat/webview/question-refresh.test.ts` for the live in-place refresh (empty start → args arrive → text/options appear and stay interactive).
+- `src/chat/WebviewEventRouter.questionAnswer.test.ts` for 11 integration tests covering routing, validation, double-submit guard, toolCallId forwarding, error handling, and observability.
+- `src/chat/webview/stream.test.ts` for late chunk recovery and tool-call finalization.
+- `src/chat/webview/messages-css.test.ts` for markdown density, overflow, focus, and control transitions.
+- `src/chat/webview/renderer.test.ts` for sanitizer and external-link hardening.
+- `src/chat/webview/mentions.test.ts` and `src/chat/ChatProvider.test.ts` for slash command
+  routing and dropdown structure.
+- `src/chat/CommandExecutionService.test.ts` for server session ensure flow and
+  remote command execution edge cases.
+- `src/chat/SessionLifecycleService.test.ts` for session resume message freshness.
+- `src/chat/ChatProvider.test.ts` for backfill retry budget, stale session handling, and
+  `refresh_session_messages` / `request_more_messages` server fallback.
+- `src/chat/handlers/StreamCoordinator.test.ts`, `src/monitor/ContextMonitor.test.ts`, and
+  `tests/webview/message-contract.test.ts` for final SDK usage accumulation,
+  session-scoped context monitor updates, and the canonical `token_usage.usage` contract.
+- `tests/webview/chat-e2e.spec.ts` for cross-tab context usage isolation.
+- `src/chat/webview/main.test.ts` and `src/chat/webview/theme.test.ts` for prompt context-chip
+  wiring, safe webview ids, changed-file scoping, and missing-chip-container hardening.
+- `src/session/SessionStore.test.ts` for empty placeholder cleanup and persistence rules.
+- `tests/visual/webview-contract.spec.ts` for the rendered welcome send flow and message
+  contracts between the webview and host.
+- `tests/visual/input.spec.ts` for rendered input affordances and send-button enablement.
+- `tests/visual/messages.spec.ts` for message layout behavior in the current app shell.

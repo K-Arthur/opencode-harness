@@ -1,0 +1,1504 @@
+# Copilot Instructions
+
+<!-- ForgeCraft | 2026-05-04 | tags: UNIVERSAL, LIBRARY | npx forgecraft-mcp refresh . to update -->
+
+## Project Identity
+- **Repo**: https://github.com/K-Arthur/opencode-harness
+- **Primary Language**: typescript
+- **Domain**: library
+- **Sensitive Data**: NO
+- **Project Tags**: `[UNIVERSAL]` `[LIBRARY]`
+- **Release Phase**: development
+
+## Code Standards
+- Maximum function/method length: 50 lines. If a function reads like it does two things, decompose it.
+- Split a file when you find yourself using "and" to describe what it does — not when it hits a line count.
+- Maximum function parameters: 5. If more, use a parameter object.
+- No circular imports — module dependency graph must be acyclic (hook-enforced).
+- `tsconfig.json` must include `"strict": true` AND `"noUncheckedIndexedAccess": true`.
+  `strict: true` alone does not narrow `process.env.*` from `string | undefined` — the second flag is required
+  to catch unguarded environment variable access at compile time.
+- Every public function/method must have a JSDoc comment with typed params and returns.
+- Delete orphaned code. Do not comment it out. Git has history.
+- Before creating a new utility, search the entire codebase for existing ones.
+- Reuse existing patterns — check shared modules before writing new.
+- No abbreviations in names except universally understood ones (id, url, http, db, api).
+- All names must be intention-revealing. If you need a comment to explain what a variable
+  holds, the name is wrong.
+
+## Dev Environment Hygiene
+
+AI-assisted development can silently fill disk space. These rules are non-negotiable.
+A full disk kills every running tool simultaneously — VS Code, Docker, the terminal, the DB.
+
+### VS Code Extensions
+- Before installing any extension: `code --list-extensions | grep -i <name>`.
+- Only install if no version in the required major range is already present.
+- Never run `code --install-extension` unconditionally in scripts or setup steps.
+- Installing the same extension twice on the same day = a bug in your script.
+
+### Docker Containers & Volumes
+- Check before creating: `docker ps -a --filter name=<service>` — if it exists, start it, don't create it.
+- Prefer `docker compose up` (reuse) over bare `docker run` (always creates new).
+- One Compose file per project. Split files for the same project = tech debt.
+- Log pruning: run `docker system prune -f` periodically. Never let container logs exceed 500 MB total.
+- Time-series or synthetic data volumes: before writing >100 MB, ask whether raw retention,
+  statistical condensation, or deletion after the run is preferred.
+- Synthetic datasets older than 7 days with no code reference: ask to delete.
+
+### Python Virtual Environments
+- One `.venv` per project root, one per standalone package subdirectory — never more.
+- Before creating: check if `.venv/` exists and `python --version` matches the required major.minor.
+  Recreate only on major version mismatch or explicit user request.
+- Never create a venv in a subdirectory unless that directory is a standalone installable package.
+- Sanitize dependencies: if `pip list --not-required` reveals packages not in requirements, flag them.
+
+### General Install Hygiene
+- Before any install/download: check version already installed. Skip if within the required range.
+- If project directory disk usage outside of `node_modules/`, `.venv/`, `dist/`, `.next/`
+  exceeds 2 GB: surface a warning and ask before continuing any file-generating operation.
+- Never silently grow the workspace. When uncertain about retention, ask.
+
+## Dependency Registry — AI-Maintained Security Contract
+
+The project's approved dependency set is a **living GS artifact maintained by the AI
+assistant**. It is not a template rule — template authors cannot predict which library
+will gain a CVE next quarter. The AI can run an audit at the moment a dependency is
+about to be added. This block prescribes that it must.
+
+### The registry artifact
+
+File: **`docs/approved-packages.md`** — emit in P1 alongside schema, tsconfig, package.json.
+Update it every time a dependency is added or upgraded. If it exists only in prose or a
+README reference, it does not exist.
+
+```markdown
+# Approved Packages
+
+| Package | Version range | Purpose | Alternatives rejected | Rationale | Audit status |
+|---|---|---|---|---|---|
+| example-pkg | ^2.4 | HTTP client | axios (larger bundle), node-fetch (no TS types) | Wide adoption, zero known CVEs | 0 HIGH/CRITICAL |
+```
+
+The AI populates every row. The registry is the authoritative record of WHY each
+dependency was chosen and that it was clean at the time of addition.
+
+### Process rules — stack-agnostic
+
+1. **Before adding any package**: run the project's audit command (see table below)
+   with `--dry-run` or equivalent to check the candidate for known CVEs.
+   - If HIGH or CRITICAL found: choose an alternative and document the rejection.
+   - If no CVE-free alternative exists: document the accepted risk and create an ADR
+     naming the approver. Zero-tolerance is the default; exceptions require a record.
+2. **After adding a package**: add a row to `docs/approved-packages.md` with audit status.
+3. **Commit gate**: the pre-commit hook runs the audit command. HIGH or CRITICAL blocks
+   the commit. If audit is not in the pre-commit hook, the gate does not exist.
+4. **Version pins**: approved version ranges are locked in the lockfile (package-lock.json,
+   uv.lock, Cargo.lock). The lockfile is committed. Ranges without a lockfile are not pins.
+
+### Audit commands by ecosystem
+
+| Ecosystem | Audit command | Threshold |
+|---|---|---|
+| npm / Node.js | `npm audit --audit-level=high` | HIGH or CRITICAL |
+| pnpm | `pnpm audit --audit-level=high` | HIGH or CRITICAL |
+| yarn | `yarn npm audit --severity high` | HIGH or CRITICAL |
+| Python / pip | `pip-audit --fail-on-severity high` | HIGH or CRITICAL |
+| Python / uv | `uv audit` | HIGH or CRITICAL |
+| Rust | `cargo audit` | HIGH or CRITICAL |
+| Go | `govulncheck ./...` | Any directly imported |
+| Java / Maven | `mvn dependency-check:check -DfailBuildOnCVSS=7` | CVSS ≥ 7 |
+| Ruby | `bundle audit` | HIGH or CRITICAL |
+
+The correct command for **this project's ecosystem** must appear in the pre-commit hook
+emitted in P1. Discovering CVEs at code review is too late.
+
+## Language Stack Constraints — Seed Defaults
+
+These are **starting defaults for typescript projects** — use them to populate the
+initial rows of `docs/approved-packages.md` in P1. They are not a permanent approved
+list: the AI maintains the registry from here forward, keeps versions current, and
+replaces any entry that develops a known CVE. The Dependency Registry block above
+governs the process.
+
+Before adding any dependency not listed here, apply the audit-before-add process.
+
+
+### TypeScript / Node.js — Approved Toolchain
+
+**Runtime & compiler**
+- Node.js: `^20 LTS` minimum. NOT `^16` or `^18` (EOL or near-EOL).
+- TypeScript: `^5.4` minimum. `tsconfig.json` must include `"strict": true` AND
+  `"noUncheckedIndexedAccess": true`. The second flag is required to narrow
+  `process.env.*` from `string | undefined` at compile time.
+
+**Linting**
+- `eslint@^9` + `@typescript-eslint/eslint-plugin@^8` + `@typescript-eslint/parser@^8`
+- NOT `@typescript-eslint@^5` or `^6` — old `minimatch` transitive dep has known CVEs.
+- NOT `tslint` — deprecated.
+
+**Test runner**
+- `vitest@^2` (preferred — native ESM, fast, Jest-compatible API) or `jest@^29`.
+- NOT `mocha` + `chai` for new projects (weaker TypeScript support).
+- NOT `jasmine` (no active maintenance for Node.js use).
+
+**Formatting**
+- `prettier@^3` — configured via `.prettierrc`, integrated with ESLint via
+  `eslint-config-prettier`. NOT separate manual formatting.
+
+
+
+
+## Production Code Standards — NON-NEGOTIABLE
+
+These apply to ALL code including prototypes. "It's just a prototype" is never a valid
+exception. Prototypes become production code within days at CC development speed.
+
+### SOLID Principles
+- **Single Responsibility**: One module = one reason to change. Use "and" to describe it? Split it.
+- **Open/Closed**: Extend via interfaces and composition. Never modify working code for new behavior.
+- **Liskov Substitution**: Any interface implementation must be fully swappable. No isinstance checks.
+- **Interface Segregation**: Small focused interfaces. No god-interfaces.
+- **Dependency Inversion**: Depend on abstractions. Concrete classes are injected, never instantiated
+  inside business logic. **In practice**: define `IUserRepository`, `IOrderRepository`,
+  `IEmailSender` etc. as interfaces in the domain/service layer first. Services depend on
+  the interface. The Prisma/SQL/HTTP concrete implementation lives in the adapter layer and
+  is injected at the composition root. Emit these interfaces in P1 alongside the schema —
+  a service that imports a concrete class cannot be unit-tested, cannot be swapped, and
+  is not Composable.
+
+### Zero Hardcoded Values
+- ALL configuration through environment variables or config files. No exceptions.
+- ALL external URLs, ports, credentials, thresholds, feature flags must be configurable.
+- ALL magic numbers must be named constants with documentation.
+- Config is validated at startup — fail fast if required values are missing.
+
+### Zero Mocks in Application Code
+- No mock objects, fake data, or stub responses in source code. Ever.
+- Mocks belong ONLY in test files.
+- For local dev: create proper interface implementations selected via config.
+- No `if DEBUG: return fake_data` patterns. Use dependency injection to swap implementations.
+- No TODO/FIXME stubs returning hardcoded values. Use NotImplementedError with a description.
+
+### Interfaces First
+Before writing any implementation:
+1. Define the interface/protocol/abstract class
+2. Define the data contracts (input/output DTOs)
+3. Write the consuming code against the interface
+4. Write tests against the interface
+5. THEN implement the concrete class
+
+### Dependency Injection
+- Every service receives dependencies through its constructor.
+- A composition root (main.py / app.ts / container) wires everything.
+- No service locator pattern. No global singletons. No module-level instances.
+
+### Error Handling
+- Custom exception hierarchy per module. No bare Exception raises.
+- Errors carry context: IDs, timestamps, operation names.
+- Fail fast, fail loud. No silent swallowing of exceptions.
+- Domain code never returns HTTP status codes — that's the API layer's job.
+
+### Modular from Day One
+- Feature-based modules over layer-based. Each feature owns its models, service, repository, routes.
+- Module dependency graph must be acyclic.
+- Every module has a clear public API via index.ts exports.
+
+## Layered Architecture (Ports & Adapters / Hexagonal)
+
+```
+┌─────────────────────────────┐
+│  API / CLI / Event Handlers │  ← Thin. Validation + delegation only. No logic.
+├─────────────────────────────┤     These are DRIVING ADAPTERS (primary).
+│  Services (Business Logic)  │  ← Orchestration. Depends on PORT INTERFACES only.
+├─────────────────────────────┤
+│  Domain Models              │  ← Pure data + behavior. No I/O. No framework imports.
+│  (Entities, Value Objects)  │     The inner hexagon. Zero external dependencies.
+├─────────────────────────────┤
+│  Port Interfaces            │  ← Abstract contracts (Repository, Gateway, Notifier).
+│                             │     Defined by the domain, implemented by adapters.
+├─────────────────────────────┤
+│  Repositories / Adapters    │  ← DRIVEN ADAPTERS (secondary). All external I/O
+│                             │     (DB, APIs, files, queues, email, caches).
+├─────────────────────────────┤
+│  Infrastructure / Config    │  ← DI container, env config, connection factories
+└─────────────────────────────┘
+```
+
+### Ports (Interfaces owned by the domain)
+- **Repository ports**: `UserRepository`, `OrderRepository` — data persistence contracts.
+- **Gateway ports**: `PaymentGateway`, `EmailSender` — external service contracts.
+- Ports are defined in the domain/service layer, never in the adapter layer.
+- Port interfaces specify WHAT, never HOW.
+
+### Adapters (Implementations of ports)
+- **Driving adapters** (primary): HTTP controllers, CLI handlers, message consumers
+  — they CALL the application through port interfaces.
+- **Driven adapters** (secondary): PostgresUserRepository, StripePaymentGateway,
+  SESEmailSender — they ARE CALLED BY the application through port interfaces.
+- Adapters are interchangeable. Swap `PostgresUserRepository` for `InMemoryUserRepository`
+  in tests without changing a single line of business logic.
+
+### Data Transfer Objects (DTOs)
+- Use DTOs at layer boundaries — never pass domain entities to/from the API layer.
+- **Request DTOs**: validated at the API boundary (Zod schema → typed object).
+- **Response DTOs**: shaped for the consumer, not mirroring the domain model.
+- **Domain ↔ Persistence mapping**: repositories map between domain entities and DB rows/documents.
+- DTOs are plain data objects — no methods, no behavior, no framework decorators.
+
+### Layer Rules
+- Never skip layers. API handlers do not call repositories directly.
+- Dependencies point INWARD only. Inner layers never import from outer layers.
+- Domain models have ZERO external dependencies.
+- The domain layer does not know HTTP, SQL, or any framework exists.
+
+## Clean Code Principles
+
+### Command-Query Separation (CQS)
+- **Commands** change state but return nothing (void).
+- **Queries** return data but change nothing (no side effects).
+- A function should do one or the other, never both.
+- Exception: stack.pop() style operations where separation is impractical — document why.
+
+### Guard Clauses & Early Return
+- Eliminate deep nesting. Handle invalid cases first, return early.
+- The happy path runs at the shallowest indentation level.
+- Before:
+  ```
+  if (user) {
+    if (user.isActive) {
+      if (user.hasPermission) {
+        // actual logic buried 3 levels deep
+  ```
+- After:
+  ```
+  if (!user) throw new NotFoundError(...);
+  if (!user.isActive) throw new InactiveError(...);
+  if (!user.hasPermission) throw new ForbiddenError(...);
+  // actual logic at top level
+  ```
+
+### Composition over Inheritance
+- Prefer composing objects via interfaces and delegation over class inheritance.
+- Inheritance creates tight coupling and fragile hierarchies.
+- Use inheritance ONLY for genuine "is-a" relationships (rare).
+- When in doubt, compose: inject a collaborator, don't extend a base class.
+
+### Law of Demeter (Principle of Least Knowledge)
+- A method should only call methods on: its own object, its parameters, objects it creates,
+  its direct dependencies.
+- Do NOT chain through objects: `order.getCustomer().getAddress().getCity()` — BAD.
+- Instead: `order.getShippingCity()` or pass the needed data directly.
+
+### Immutability by Default
+- Use `const` over `let`. Use `readonly` on properties and parameters.
+- Prefer `ReadonlyArray<T>`, `Readonly<T>`, `ReadonlyMap`, `ReadonlySet`.
+- When you need to "modify" data, create a new copy with the change.
+- Mutable state is the #1 source of bugs. Restrict it to the smallest possible scope.
+
+### Pure Functions
+- A pure function: same inputs → same outputs, no side effects.
+- Domain logic, validation, transformation, and calculation should be pure.
+- Side effects (I/O, logging, database) are pushed to the edges (adapters).
+- Pure functions are trivially testable — no mocks needed.
+
+### Factory Pattern
+- Use factories to encapsulate complex object construction.
+- Factory methods on the class itself for simple cases: `User.create(dto)`.
+- Factory classes/functions when construction involves dependencies or conditional logic.
+- Factories are the natural companion to dependency injection — the DI container
+  IS the top-level factory.
+
+> **Design reference patterns** (DDD, CQRS, GoF) available on demand via `get_design_reference` tool.
+
+## CI/CD & Deployment
+
+### Pipeline
+- Every push triggers: lint → type-check → unit tests → build → integration tests.
+- Merges to main additionally run: security scan → deploy to staging → smoke tests → promote.
+- Pipeline must complete in under 10 minutes. Parallelize test suites, cache dependencies.
+- Failed pipelines block merge. No exceptions.
+
+### Environments
+- Minimum three environments: **development** (local), **staging** (mirrors prod), **production**.
+- Environment config is injected — same artifact runs everywhere with different env vars.
+- Staging is a faithful replica of production (same provider, same DB engine, same services).
+
+### Deployment Strategy
+- Default: **rolling deployment** with health checks (zero downtime).
+- For critical services: **blue-green** or **canary** with automated rollback on error rate spike.
+- Every deploy is tagged with git SHA. Rollback = redeploy a previous SHA.
+- Deployment must be one command or one button. No multi-step manual runbooks.
+
+### Preview Environments
+- Pull requests get ephemeral preview deployments where feasible (Vercel, Netlify, Railway).
+- Preview URLs in PR comments for stakeholder review before merge.
+
+## Testing Pyramid
+
+```
+         /  E2E  \          ← 5-10% of tests. Core journeys only.
+        / Integration \      ← 20-30%. Real dependencies at boundaries.
+       /    Unit Tests   \   ← 60-75%. Fast, isolated, every public function.
+```
+
+### Coverage Targets
+- Overall minimum: 80% line coverage (blocks commit)
+- New/changed code: 90% minimum (measured on diff)
+- Critical paths: 95%+ (data pipelines, auth, PHI handling, financial calculations)
+- Mutation score (MSI) — overall: ≥ 65% (blocks PR merge)
+- Mutation score (MSI) — new/changed code: ≥ 70% (measured on diff)
+- Note: Line coverage and mutation score are both required. 80% line coverage can coexist
+  with 58% MSI when tests execute code without asserting its behavior (confirmed in Shattered
+  Stars). Run stryker-mutator immediately after writing each test batch, not only pre-release.
+  Tooling: stryker-mutator (JS/TS), mutmut (Python), Pitest (Java).
+
+### Test Rules
+- Every test name is a specification: `test_rejects_duplicate_member_ids` not `test_validation`
+- No empty catch blocks. No `assert True`. No tests that can't fail.
+- Test files colocated: `[module].test.[ext]` or in `tests/` mirroring src structure.
+- Flaky tests are bugs — fix or quarantine, never ignore.
+- After writing tests for any module, run Stryker on that module before moving on.
+  Surviving mutants = missing assertions. Fix before proceeding.
+
+### Test Doubles Taxonomy
+Use the correct double for the job:
+- **Stub**: Returns canned data. No assertions on calls. Use when you need to control input.
+- **Spy**: Records calls. Assert after the fact. Use to verify side effects.
+- **Fake**: Working implementation with shortcuts (in-memory DB). Use for integration-speed tests.
+- **Mock**: Pre-programmed expectations. Assert call patterns. Use sparingly — they couple to implementation.
+Prefer stubs and fakes over mocks. Tests that mock everything test nothing.
+
+### Test Data Builders
+- Use Builder or Factory pattern for test data: `UserBuilder.anAdmin().withName('Alice').build()`.
+- One builder per domain entity. Builders provide sensible defaults so tests only specify what matters.
+- No raw object literals scattered across tests. Centralize in `tests/fixtures/` or `tests/builders/`.
+
+### Property-Based Testing
+- For pure functions with wide input ranges, add property tests (fast-check, Hypothesis, QuickCheck).
+- Define invariants, not examples: "sorting is idempotent", "encode then decode = identity".
+- Property tests complement, not replace, example-based tests.
+
+## Test-Driven Development (TDD)
+
+### Red-Green-Refactor — The Only Cycle
+1. **RED**: Write a failing test that describes the desired behavior. Run it. It MUST fail.
+   If it passes, the test is wrong — it's not testing what you think.
+2. **GREEN**: Write the minimum code to make the test pass. No more.
+3. **REFACTOR**: Clean up while all tests stay green. No new behavior in this step.
+Repeat. Every feature, every function, every bug fix follows this cycle.
+
+### Tests Are Specifications, Not Confirmations
+- Write tests against **expected behavior**, never against current implementation.
+- A test that passes on broken code is worse than no test — it provides false confidence.
+- Never weaken an assertion to match what the code currently does. If the code disagrees
+  with the spec, the code is wrong.
+- Never write a test suite after the fact that just "locks in" existing behavior without
+  verifying it's correct.
+
+### Bug Fix Protocol
+- **Every bug fix starts with a failing test** that reproduces the bug.
+- The test must fail before the fix and pass after. No exceptions.
+- If you can't write a reproducing test, you don't understand the bug well enough to fix it.
+
+### One Behavior Per Test
+- Each test verifies exactly one behavior or rule.
+- A test with multiple unrelated assertions is testing multiple things — split it.
+- Test name = the specification: `rejects_expired_tokens`, not `test_auth`.
+
+## TDD Enforcement — Forbidden Patterns and Gate Protocol
+
+Instructions describe a process. Gates enforce it. This block defines what is
+structurally prohibited, what output is required at each gate, and how the
+commit sequence makes the TDD cycle auditable.
+
+### Forbidden Patterns (non-negotiable)
+The following are architecture violations, not style preferences:
+- **NEVER write an implementation file before running and showing a failing test.**
+  Stating that "the test would fail" is not equivalent to running it. Run it.
+- **NEVER write tests after implementation** except for bug fix reproduction tests on
+  pre-existing code not yet covered. Even then: write the test, show it fails, fix,
+  show it passes.
+- **NEVER weaken an assertion** to make a test pass. If the assertion disagrees with
+  the output, the implementation is wrong.
+- **NEVER skip the refactor phase** because "the code is clean enough." The refactor
+  phase exists to enforce separation of concerns under green. Skipping it is a
+  commitment not to separate concerns in that increment.
+- **NEVER commit a `feat:` or `fix:` with no corresponding `test:` commit** preceding
+  it in the same branch. The test commit is the audit trail that the red phase occurred.
+
+### The Session Gate Protocol
+TDD across a multi-step session requires explicit checkpoints the AI reports and the
+human can verify. At each gate, the AI must output the actual test runner output,
+not a summary of what it expects.
+
+```
+┌─────────────────────────────────────────────────────┐
+│  PHASE 1: RED                                       │
+│  Action:  Write test for the specified behavior     │
+│  Gate:    Run test — paste full failure output      │
+│  Block:   Cannot proceed until failure is shown     │
+│  Commit:  test(scope): [RED] describe behavior      │
+└───────────────────┬─────────────────────────────────┘
+                    │ failure confirmed
+┌───────────────────▼─────────────────────────────────┐
+│  PHASE 2: GREEN                                     │
+│  Action:  Write minimum implementation              │
+│  Gate:    Run test — paste full passing output      │
+│  Block:   Cannot proceed until passing is shown     │
+│  Commit:  feat(scope): implement to satisfy test    │
+└───────────────────┬─────────────────────────────────┘
+                    │ green confirmed
+┌───────────────────▼─────────────────────────────────┐
+│  PHASE 3: REFACTOR                                  │
+│  Action:  Improve structure, not behavior           │
+│  Gate:    Run full suite — paste summary output     │
+│  Block:   Cannot commit if any test regresses       │
+│  Commit:  refactor(scope): clean without behavior   │
+└─────────────────────────────────────────────────────┘
+```
+
+### Commit Sequence as Audit Trail
+The git log for any feature must be readable as:
+```
+test(cart): [RED] add test for removing last item empties cart
+feat(cart): remove last item empties cart
+refactor(cart): extract empty-check to CartState predicate
+```
+This sequence is auditable. An AI that wrote the `feat:` commit without the preceding
+`test:` commit either skipped the red phase entirely or conflated it with implementation.
+The commit hook `pre-commit-tdd-check.sh` detects the second pattern before it lands.
+
+### Why Instructions Alone Are Not Sufficient
+A language model generating in a single context window experiences no time delay between
+writing a test and writing an implementation that passes it. The RED phase is structurally
+collapsed. The gates above exist precisely to make the phases non-simultaneous:
+- The test commit must happen before the implementation can be written.
+- The failure output must be produced (by running the code) before the game state is known.
+- The model cannot "know" the failure output without actually running the test,
+  because the failure messages are not in the training distribution for this specific code.
+These gates transform TDD from a discipline into a constraint.
+
+## Adversarial Testing Posture
+
+Tests are not documentation of what the code does. Tests are adversarial assertions
+that the code does the right thing even when given inputs designed to break it.
+
+### The adversarial posture
+- Design every test as if the implementation is wrong until proven otherwise.
+- Write tests that FAIL on incorrect code — not tests that pass on any reasonable implementation.
+- If a test is hard to make fail, the specification is underspecified, not the test.
+
+### Name tests as behaviors, not paths
+- `rejects_expired_tokens` not `test_validate_token`
+- `throws_on_missing_required_field` not `test_error_handling`
+- `returns_empty_list_not_null_when_no_results` not `test_query`
+
+### Cover the adversarial surface
+For every public function or API endpoint, write tests for:
+1. **Valid boundary values**: minimum, maximum, exact-zero, single-element
+2. **Invalid boundary values**: below-minimum, above-maximum, empty, null/undefined
+3. **Constraint violations**: values that look valid but break invariants (negative balance, future birth date)
+4. **Ordering and concurrency**: does order matter? what if called twice?
+5. **Authorization boundaries**: can a user access another user's resource?
+
+A test suite that only exercises the happy path is documentation, not specification.
+Every mutation that survives is a missing adversarial test.
+
+## Property-Based Testing
+
+Example-based tests verify that `f(x) = y` for specific known pairs.
+Property-based tests verify that invariants hold for ALL inputs the generator can produce.
+Both are required. Neither replaces the other.
+
+### When to add property tests
+- Pure functions with wide input domains (serialization, parsing, math, sorting)
+- Functions where "same inputs → same outputs" must hold across edge cases
+- Any encoder/decoder pair: `decode(encode(x)) === x` must hold for all x
+- Any sort or ranking: `sort(sort(xs))` must equal `sort(xs)` (idempotence)
+- Any financial calculation: results must be within bounds for all valid inputs
+
+### Ecosystem tools (language-agnostic principle)
+Use whatever property testing library matches the project's language:
+- TypeScript / JavaScript: `fast-check`
+- Python: `hypothesis`
+- Java / Kotlin: `jqwik` or `kotest`
+- Go: `gopter` or `rapid`
+- Rust: `proptest`
+- Scala: `scalacheck`
+
+### Template invariant structure
+```
+property("encode-decode round trip", () => {
+  forAll(arbitrary_valid_input(), (input) => {
+    expect(decode(encode(input))).toEqual(input);
+  });
+});
+```
+
+If a property test fails with an unexpected input, add that input as a regression example test.
+Property failures are bugs, not edge cases to suppress.
+
+## Specification Completeness Meta-Query
+
+Before writing implementation code, ask the model:
+
+> "What dimensions of correctness does this specification not yet address?"
+
+This activates domain depth and returns the surface that is missing. A complete answer
+identifies gaps before they become bugs — not after.
+
+### Six dimensions to probe systematically
+
+1. **Concurrency behavior** — What happens when two users modify the same resource simultaneously?
+   Are there race conditions? What is the consistency model (eventual, strong, linearizable)?
+
+2. **Partial failure handling** — What state is the system in if the operation fails halfway?
+   Is the operation idempotent? Is retry safe? Is rollback possible? Who cleans up?
+
+3. **Authorization edge cases** — What happens with an expired token? A revoked role?
+   Can a user with partial permissions complete a multi-step operation?
+   What does "no access" mean vs "resource does not exist"?
+
+4. **Observable side effects** — Does this operation send emails, fire webhooks, publish events,
+   write audit logs? Are those effects specified? Are they retryable? Can they duplicate?
+
+5. **Performance constraints** — Is there an SLA? A timeout? A maximum payload size?
+   What is the expected order of magnitude of inputs? What degrades gracefully?
+
+6. **Backwards compatibility** — If this changes an existing interface, what breaks?
+   Is there a migration path? Who depends on the current behavior?
+
+Each unanswered dimension is a test to write before implementation begins.
+If the specification has no answer, the answer must be decided now — not discovered during an incident.
+
+## Data Guardrails ⚠️
+- NEVER sample, truncate, or subset data unless explicitly instructed.
+- NEVER make simplifying assumptions about distributions, scales, or schemas.
+- State exact row counts, column sets, and filters for every data operation.
+- If data is too large for in-memory, say so — don't silently downsample.
+
+## Commit Protocol
+
+A commit is a **verified state** of the system — not a save point, not a checkpoint.
+A valid commit requires all three: test suite passes, delta is bounded and coherent,
+no new anti-patterns introduced.
+
+- Conventional commits: `feat|fix|refactor|docs|test|chore(scope): description`
+- Commits must pass: compilation, lint, tests, coverage gate, mutation score gate (Stryker on changed modules), anti-pattern scan.
+- Keep commits atomic — one logical change per commit.
+- Commit BEFORE any risky refactor. Tag stable states.
+- Update Status.md at the end of every session.
+
+### Commit Hooks — Emit, Don't Reference
+Commit hooks, commit-message linting, and the CI pipeline must be **emitted as fenced
+code blocks** in the first session response — not merely referenced in prose or README
+text. A hook that exists only as "you should add a pre-commit hook" in documentation
+provides zero enforcement. If the file is not written to disk, the gate does not exist.
+
+The following files must be emitted for any new project:
+
+**`package.json`** — add to `scripts` and `devDependencies`:
+```json
+"scripts": { "prepare": "husky install" },
+"devDependencies": {
+  "husky": "^9.0.0",
+  "@commitlint/cli": "^19.0.0",
+  "@commitlint/config-conventional": "^19.0.0"
+}
+```
+
+**`.husky/pre-commit`**:
+```bash
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+npx tsc --noEmit && npm run lint && npm test -- --passWithNoTests
+```
+
+**`.husky/commit-msg`**:
+```bash
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+npx commitlint --edit "$1"
+```
+
+**`commitlint.config.js`**:
+```js
+module.exports = { extends: ['@commitlint/config-conventional'] };
+```
+
+### Linter Config — Emit in P0, Don't Reference
+Linter configuration is infrastructure, not application code. It must be committed to the
+repo root in the **first response** (P0) alongside hooks and CI config — not added post-hoc.
+A linter mentioned only in documentation does not enforce anything.
+
+**TypeScript / JavaScript** — emit `.eslintrc.json` (or `eslint.config.js` for flat config):
+```json
+{
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint"],
+  "rules": {
+    "no-unused-vars": "off",
+    "@typescript-eslint/no-unused-vars": "error",
+    "@typescript-eslint/no-explicit-any": "error"
+  }
+}
+```
+
+**Python** — emit `ruff.toml` (or `[tool.ruff]` section in `pyproject.toml`):
+```toml
+[tool.ruff]
+select = ["E", "F", "I"]
+ignore = []
+line-length = 100
+```
+
+**Go** — emit `.golangci.yaml`:
+```yaml
+linters:
+  enable:
+    - unused
+    - govet
+    - errcheck
+```
+
+The correct linter config for **this project's language** must be committed to the repo root
+in the same response that emits hooks and CI. Discovering lint errors at code review is too late.
+
+### CI Pipeline — Emit, Don't Reference
+`.github/workflows/ci.yml` must be emitted as a fenced code block in the first response.
+A CI configuration described only in documentation does not enforce anything.
+Adapt service blocks, branch names, and language-specific commands to the project stack.
+The mutation gate step (`npx stryker run` for JS/TS, `mutmut run` for Python, `pitest` for
+Java) is non-negotiable — it is the only gate that verifies test quality, not just
+test execution. Line coverage at 80% can coexist with 58% mutation score; the mutation
+gate catches the difference.
+
+Minimum CI for a Node.js/TypeScript project:
+```yaml
+name: CI
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm test -- --coverage --passWithNoTests
+      - name: Mutation gate
+        run: npx stryker run
+```
+
+### Commit Message Precision
+The commit message is the sentence describing this state in the project's typed corpus.
+- ❌ `fix bug` — not a sentence; not queryable; useless as episodic memory.
+- ✅ `fix(auth): reject expired tokens at middleware boundary before service layer invocation`
+The AI uses commit history as context in future sessions. Typed, scoped conventional
+messages are a queryable episodic record. `wip` and `changes` are not.
+
+### What Constitutes One Logical Change
+- A new feature and its tests: one commit.
+- A refactor of an existing module that does not change behavior: one commit.
+- A spec update (constitution change + the code change it governs): one commit.
+- A bug fix with the reproducing test included: one commit.
+Never combine a behavior change with a refactor in the same commit.
+
+## Clarification Protocol
+Before writing code for any new feature or significant change:
+- If the request implies architectural trade-offs that are not explicit, **ask one targeted
+  question** before proceeding. Do not silently choose an architecture.
+- If the domain model is ambiguous (cardinality, ownership, event ordering, shared state),
+  state your assumption and ask for confirmation before implementing.
+- If the request has two or more meaningfully different interpretations, present the options
+  briefly and ask — do not guess and hide the choice.
+- Do NOT ask about mechanical details (naming conventions, file placement, test structure) —
+  apply the conventions already in this document without asking.
+- Maximum one clarification round. If told "use your judgment," proceed with the most
+  conservative interpretation and record the assumption in a code comment or new ADR.
+
+## Feature Completion Protocol
+After implementing any feature (new or changed):
+
+### 1. Verify (local, pre-commit)
+Run: `npx forgecraft-mcp verify .`
+(Or `npm test` + manual HTTP check if forgecraft is not installed.)
+A feature is not done until verify passes. Do not proceed to docs if it fails.
+
+### 2. Commit (code only)
+Commit after `verify` passes. This triggers CI and the staging deploy pipeline.
+`feat(scope): <description>` — describes the feature, not the docs update.
+
+### 3. Deploy to Staging + Smoke Gate
+After the CI pipeline deploys to staging, run the smoke suite:
+```
+npx playwright test --config playwright.smoke.config.ts --grep @smoke
+```
+If smoke fails: **revert the deploy**. Do not proceed to production and do not cascade docs
+for a feature that is broken in the deployed environment.
+
+### 4. Doc Sync Cascade
+Update the following in order — skip any that do not exist in this project:
+1. **spec.md** — update the relevant feature section (APIs, behavior, contract changes)
+2. **docs/adrs/** — add an ADR if a new architectural decision was made
+3. **docs/diagrams/c4-*.md** — update `c4-context.md` or `c4-container.md` if a new
+   module, container, or external dependency was added. Diagrams must be written to disk
+   as fenced Mermaid blocks — updating prose that references a diagram is not an update.
+4. **docs/diagrams/sequence-*.md / state-*.md / flow-*.md** — update or create the
+   relevant diagram file for the changed surface. Sequence diagrams must name real
+   participants; state diagrams must name real states and transitions; flow diagrams must
+   have entry/exit nodes and decision diamonds. A file containing only `<!-- UNFILLED -->`
+   markers is a specification gap, not a completed diagram.
+5. **docs/TechSpec.md** — update module list, API reference, or technology choice sections
+6. **docs/use-cases.md** — update or add use cases if new actor interactions were introduced
+7. **Status.md** — always update: what changed, current state, next steps
+
+## MCP-Powered Tooling
+### CodeSeeker — Graph-Powered Code Intelligence
+CodeSeeker builds a knowledge graph of the codebase with hybrid search
+(vector + text + path, fused with RRF). Use it for:
+- **Semantic search**: "find code that handles errors like this" — not just grep.
+- **Graph traversal**: imports, calls, extends — follow dependency chains.
+- **Coding standards**: auto-detected validation, error handling, and state patterns.
+- **Contextual reads**: `get_file_context` returns a file with its related code.
+Indexing is automatic on first search (~30s–5min depending on codebase size).
+Most valuable on mid-to-large projects (10K+ files) with established patterns.
+Install: `npx codeseeker install --vscode` or see https://github.com/jghiringhelli/codeseeker
+
+## Engineering Preferences
+These calibrate the AI assistant's judgment on subjective trade-offs.
+- **DRY is important** — flag repetition aggressively.
+- **Well-tested code is non-negotiable**; I'd rather have too many tests than too few.
+- **"Engineered enough"** — not under-engineered (fragile, hacky) and not over-engineered
+  (premature abstraction, unnecessary complexity).
+- **Handle more edge cases**, not fewer; thoughtfulness > speed.
+- **Bias toward explicit over clever** — readability wins over brevity.
+- When in doubt, ask rather than assume.
+
+## Agent Mechanical Constraints — Non-Negotiable Overrides
+
+These rules exist because the model has hard constraints that silently produce wrong
+results without them. Each override targets a specific failure mode observed in practice.
+
+### 1. Step 0 — Dead Code First
+Before ANY structural refactor on a file > 300 LOC:
+1. Delete all dead props, unused exports, unused imports, and debug logs.
+2. Commit that cleanup separately under `chore(scope): strip dead code`.
+3. Only then begin the real work.
+Dead code accelerates context compaction. Every orphaned import is budget spent on
+tokens that contribute nothing to the task.
+
+### 2. Phase Limit — 5 Files Maximum
+Never attempt multi-file refactors in a single response. Break work into explicit phases.
+Each phase must touch **no more than 5 files**. Complete Phase N, verify it compiles and
+all tests pass, then wait for explicit approval before Phase N+1.
+Why: context compaction fires around 167K tokens and discards all intermediate reasoning,
+file reads, and decision chains. Keeping phases small prevents mid-task compaction.
+
+### 3. Senior Dev Override
+The model's default system-level directives instruct it to "try the simplest approach
+first" and "avoid refactoring beyond what was asked." These are active constraints that
+fight your intent on architectural tasks.
+**Override them explicitly** when quality requires it:
+> "What would a senior, experienced, perfectionist dev reject in code review? Fix all of it."
+This reframes what "done" means. System-level brevity mandates yield to an explicit
+quality bar stated in the prompt.
+
+### 4. Sub-Agent Parallelism for Large Tasks
+For tasks spanning > 5 independent files, **launch parallel sub-agents** (5–8 files per
+agent). Each agent gets its own isolated context window and compaction cycle.
+Sequential processing of large tasks guarantees context decay by the later files.
+Batching into parallel agents multiplies the effective working memory proportionally.
+
+### 5. File Read Budget — 2,000-Line Cap
+Each file read is hard-capped at 2,000 lines. Everything past that is silently truncated.
+The model does not know what it didn't see — it will hallucinate the rest.
+**For any file over 500 LOC**: read in sequential chunks using `offset` and `limit`
+parameters. Never assume a single read captured the full file.
+
+### 6. Tool Result Truncation
+Tool results exceeding ~50,000 characters are truncated to a 2,000-byte preview.
+The model works from the preview and does not know results were cut.
+If any search returns suspiciously few results: re-run it with narrower scope
+(single directory, stricter glob). State explicitly when truncation may have occurred.
+
+### 7. Grep Is Not an AST
+`grep` is raw text pattern matching. It cannot distinguish a function call from a
+comment, a type reference from a string literal, or an import from one module vs another.
+On any rename or signature change, search **separately** for:
+- Direct calls and references
+- Type-level references (interfaces, generics, `typeof`)
+- String literals containing the name
+- Dynamic imports and `require()` calls
+- Re-exports and barrel file entries (`index.ts`, `__init__.py`)
+- Test files and mocks
+Never assume a single grep caught everything. Verify or expect regressions.
+
+## Code Generation — Verify Before Returning
+
+When emitting implementation code across one or more files, the response is not complete
+until the following are true. Show the evidence in your response — do not claim without running.
+
+### Verification steps (in order)
+1. **Compile check**: Run `tsc --noEmit` (TypeScript), `mypy` (Python), or equivalent.
+   Zero errors required. Do not return with type errors outstanding.
+2. **Test suite**: Run the full test suite (`jest --runInBand`, `pytest`, etc.).
+   Zero failures required. Fix every failure before returning.
+3. **Interface consistency**: When fixing a compile error in file A, check ALL callers of
+   the changed interface. Fixing one side without seeing the other causes oscillation:
+   the model fixes `service.ts` (3-param signature) but `routes.ts` still calls it with
+   an object — same error reappears inverted next pass.
+4. **§8 DRY Check**: Run duplication detector on `src/`. Duplicated lines must be < 5%
+   (min-tokens 50). Use the tool appropriate for your stack (see project-gates.yaml:
+   `no-code-duplication`). If above threshold, extract duplicated logic to a shared utility
+   before closing.
+5. **§9 Interface Completeness**: Every method declared in each interface must be implemented
+   by its concrete class. Run static type checking (0 errors required). Use the tool
+   appropriate for your stack (see project-gates.yaml: `interface-contract-completeness`).
+   If errors exist, implement missing methods before closing.
+
+### Required evidence in the final response
+```
+tsc --noEmit: 0 errors
+Jest: 109 passed, 0 failed, 11 suites
+```
+
+### Common test setup pitfalls (TypeScript / Prisma)
+- **`prisma db push`, not `prisma migrate deploy`** in test environments.
+  `migrate deploy` silently no-ops when no `prisma/migrations/` folder exists,
+  leaving all tables absent. `db push --accept-data-loss` syncs `schema.prisma` directly.
+- **`deleteMany` in FK order, not `DROP SCHEMA`**.
+  `$executeRawUnsafe('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')` throws
+  error 42601 — pg rejects multi-statement queries in prepared statements.
+  Use ordered `deleteMany()` calls in `beforeEach` instead.
+- **JWT_SECRET minimum length**: HS256 requires ≥ 32 characters.
+  Test secrets like `"test-secret"` (11 chars) cause startup errors.
+  Use `"test-secret-that-is-at-least-32-chars"` in test env.
+
+## Known Pitfalls
+Recurring type errors and runtime traps specific to this project's stack.
+Resolve exactly as documented — no `any` casts, ignore directives, or unlisted workarounds.
+### [Add project-specific pitfalls here]
+<!-- Entry format:
+### Library — trap description
+What goes wrong and why, then:
+```
+// ❌ wrong
+```
+```
+// ✅ correct
+```
+-->
+
+## Corrections Log
+When I correct your output, record the correction pattern here so you don't repeat it.
+### Learned Corrections
+- [AI assistant appends corrections here with date and description]
+
+## Techniques
+Named techniques, algorithms, and domain frameworks active in this project.
+Each name activates the AI's full training on that technique — no explanation needed.
+A technique named here is available at the full depth of the model's training on it.
+### Active Techniques
+<!-- Add project-specific techniques below.
+     Examples: RAPTOR indexing · BM25+vector hybrid with RRF fusion ·
+     PCA geometric validation · deontic modal logic · CQRS · Saga pattern -->
+- [Add named techniques here]
+
+## Testing Architecture
+
+### Test Types by Scope and Purpose
+Listed from fastest/most-isolated to slowest/most-integrated:
+
+| Type | Description | Tooling |
+|---|---|---|
+| **Unit — Solitary** | Single unit; mock all collaborators. | Jest, Vitest, pytest |
+| **Unit — Sociable** | Single unit; allow fast non-I/O collaborators (no mocking real logic). | Jest, Vitest, pytest |
+| **Integration — Narrow (DB)** | Exercise one layer against a real local DB; no external services. | Testcontainers, SQLite, in-process Postgres |
+| **Integration — Service** | Service + stubs for external deps via WireMock or equivalent. | WireMock, Wiremock-rs, msw |
+| **Contract / Consumer-Driven (CDC)** | Consumer writes pact file; provider verifies. Prevents API breakage without full E2E infra. | Pact, Spring Cloud Contract |
+| **API / Subcutaneous** | HTTP or WebSocket layer below the UI; tests the full request-response cycle without browser. | Supertest, Playwright APIRequestContext, httpx |
+| **Acceptance / BDD** | Given-When-Then; orthogonal to pyramid — level is a performance choice, not semantic. | Cucumber, behave, should-style assertions |
+| **E2E** | Full user flows in a real browser. Keep minimal — expensive and brittle. Reserve for highest-value journeys. | Playwright, Cypress |
+| **Visual Regression** | Pixel-diff baseline + LLM visual analysis for judgment-requiring defects. | Percy, Chromatic, Playwright snapshots |
+| **Smoke** | Deployed environment only. Strictly happy-path. Binary pass/fail deploy gate. | Playwright, custom health check suite |
+| **Regression** | Discipline: full suite green before merge. Not a test type — a required gate. | All layers |
+| **Security — SAST** | Static analysis at commit: code pattern scanning and dep vulnerability scanning. | Semgrep, SonarQube, ESLint security plugins, npm audit, Snyk |
+| **Security — DAST** | Dynamic analysis at staging: automated attack surface probing. | OWASP ZAP, Burp Suite |
+| **Security — Penetration** | Adversarial session at release candidate gate; OWASP Top 10 coverage. | Manual + OWASP ZAP, Burp Suite |
+| **Mutation** | Tests the tests: injects code mutations and verifies the suite catches them. Tracked at PR; required above threshold at RC. | Stryker (JS), PIT (Java), mutmut (Python) |
+| **Property-Based / Fuzz** | Auto-generates input space against stated invariants. Fuzzing is the adversarial variant. | fast-check (JS), Hypothesis (Python) |
+| **Accessibility / a11y** | WCAG 2.1 AA. Automated at PR; full manual audit at RC. | axe-core, Playwright @axe-core, Lighthouse |
+| **Performance: Load / Stress / Soak** | At staging. Required before production on systems with SLAs. | k6, Locust, Gatling |
+| **Chaos / Resilience** | Random fault injection against deployed environment; named resilience contracts. | Toxiproxy, ChaosMesh, custom fault injection |
+| **Exploratory** | Manual, session-based, scheduled. Charter-driven. Findings become regression tests. | Manual + session notes |
+
+### Variant Coverage Dimensions
+For each test scope, the following input/condition variants are required:
+
+- **Happy path** — nominal, valid inputs. Necessary but never sufficient.
+- **Sad / Negative path** — correct rejection of invalid input or sequences.
+- **Edge case / BVA** — boundary values: max, min, empty, null, type coercions.
+- **Corner case** — intersection of two or more simultaneous edge conditions. Requires explicit enumeration.
+- **State transition** — valid and invalid state machine transitions. Requires a state diagram as prerequisite.
+- **Equivalence partitioning** — one representative from each equivalence class. Reduces test count without reducing coverage.
+- **Error path** — infrastructure/dependency failure: timeout, 500, DB refused, queue full — conditions the user did not cause.
+- **Security / Adversarial input** — SQL injection, XSS, path traversal, oversized payloads, malformed tokens. Required at every layer touching user-supplied data.
+- **Random / Monkey** — unstructured random input. Subsumed by property-based layer.
+
+**Variant coverage matrix** (✓ = required, ~ = structural constraint, — = not applicable):
+
+| Variant | Unit | Integration | Contract | API | E2E | Smoke | Chaos |
+|---|---|---|---|---|---|---|---|
+| Happy path | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
+| Sad / Negative | ✓ | ✓ | ✓ | ✓ | ~ | ~ happy-path only | — |
+| Edge / BVA | ✓ | ✓ | — | ✓ | — | — | — |
+| Corner case | ✓ | — | — | ✓ | — | — | — |
+| State transition | ✓ | ✓ | — | ✓ | ✓ | — | — |
+| Equivalence partition | ✓ | — | — | ✓ | — | — | — |
+| Error path | ✓ | ✓ | — | ✓ | — | — | ✓ |
+| Security / Adversarial | — | — | — | ✓ | — | — | ~ always adversarial |
+| Random / Monkey | via property-based | — | — | — | — | — | ✓ |
+
+### Test Pipeline Mapping
+Each trigger gate accumulates the prior gates. A gate may not be skipped.
+
+| Trigger | Gate Contents | Target Duration |
+|---|---|---|
+| **File save** | Unit only | ~seconds |
+| **git commit / push** | Unit + integration + SAST + dependency scan + lint + regression gate | ~2–5 min |
+| **Pull request** | All prior + contract + API/subcutaneous + E2E (core flows) + acceptance + visual regression + a11y (automated) + property-based | ~10–20 min |
+| **Deploy to staging** | Smoke → DAST → performance baseline → chaos/resilience | ~45–60 min |
+| **Release candidate** | All layers blocking + penetration test + full a11y audit + mutation score gate + compatibility matrix | Per schedule |
+| **Production deploy** | Canary deploy + synthetic monitoring + A/B if applicable | Continuous |
+
+> Mutation score gate: minimum 70% at PR, 80% at RC on changed code. Stryker/mutmut reports block promotion below threshold.
+
+## Active Release Phase: development
+
+Your current phase determines which test gates are **required now**, not advisory.
+The full taxonomy and trigger mapping are in the Testing section above.
+Read your phase row below and apply every requirement listed.
+
+| Phase | Required now — blocking | Not required yet |
+|---|---|---|
+| **development** | Unit + integration + lint + tsc --noEmit + npm audit (no HIGH/CRITICAL) | DAST, load/stress, penetration, mutation score gate |
+| **pre-release / staging** | All development requirements + smoke → DAST (OWASP ZAP / Burp Suite) + load test at 2× peak (k6 / Locust) + chaos/resilience (Toxiproxy) + mutation score ≥ 80% on changed code | Manual penetration test, full a11y audit |
+| **release-candidate** | All staging requirements + manual penetration test (OWASP Top 10, JWT vectors, BOLA/IDOR) + full a11y audit (if UI) + compatibility matrix + mutation score ≥ 80% overall + zero unresolved HIGH/CRITICAL CVEs | Production canary |
+| **production** | Canary deploy + automatic rollback on error rate spike + synthetic health probes + incident runbook verified | — |
+
+**Current active phase: `development`**
+
+> If the phase is `pre-release` or `release-candidate`:
+> Hardening tests (load, DAST, penetration) are REQUIRED in this session, not deferred.
+> Do not proceed to merge without completing the required gate for your phase.
+> The Testing section above maps each gate to its tooling and target duration.
+
+## Generative Specification: Testing Techniques
+
+These five techniques are specific to GS practice and extend the standard taxonomy above.
+
+### Adversarial Test Posture
+The test is a hunter, not a witness.
+- Tests are written to FAIL on incorrect code — to find the input or condition that exposes
+  a violation, not to confirm the current behavior.
+- Tests must be written against interfaces, not implementations.
+  A test coupled to internal state fails on correct refactors and passes on behavioral violations
+  that happen to preserve internal structure. That is the worst outcome.
+
+### Expose-Store-to-Window (Interactive / Game / Real-Time UIs)
+For applications with a shared state store (Redux, Zustand, Pinia, state machine), expose the
+store to `window` in the test environment:
+```typescript
+if (process.env.NODE_ENV === 'test') {
+  (window as any).__store = store;
+}
+```
+Playwright tests can then assert both what the screen renders AND what the application believes
+is true — the store's internal state — without coupling assertions to DOM structure. This catches
+the failure class that renders correctly but corrupts internal state (score displays right, stored wrong;
+entity in undefined state not yet manifested as a visual defect).
+
+### Vertical Chain Test
+A single UI action triggers Playwright, which then:
+1. Queries the service layer response
+2. Queries the database state and any affected indexes
+3. Verifies correct propagation through every boundary the action crosses
+4. Returns to the UI to confirm the visible outcome matches the stored state
+
+Not a unit test, not a visual check, not a flow test: a chain verification. One trigger, inspected
+at every boundary it crosses. Specify which critical flows receive this treatment in the test
+architecture document. A defect anywhere in the chain (service logic, persistence, index consistency,
+UI rendering) is surfaced in a single pass.
+
+### Mutation Testing as Adversarial Audit
+An AI-generated test suite carries a structural risk: tests written by a system that knows the
+correct implementation may pass it rather than catch violations of it.
+- Run Stryker (JS/TS) or mutmut (Python) against every AI-generated suite before accepting it.
+- A test that passes a mutant is not testing the contract — it is confirming the absence of one
+  specific mutation, no more.
+- Coverage measures what was executed. Mutation score measures what was caught. The second is
+  the meaningful metric.
+- Gates: 70% mutation score at PR, 80% at release candidate on changed code.
+
+### Multimodal Quality Gates (Generative Assets)
+When content is AI-generated (images, audio, video), the acceptance criteria must be executable.
+Manual review at scale is not a pipeline.
+
+**Visual assets (sprite sheets, generated imagery):**
+```python
+# PCA-based orientation check
+from sklearn.decomposition import PCA
+pca = PCA(n_components=2).fit(ship_pixel_coordinates)
+angle = np.degrees(np.arctan2(*pca.components_[0][::-1]))
+assert abs(angle) <= 15, f"Sprite orientation {angle:.1f}° exceeds 15° tolerance"
+
+# Symmetry check (horizontal flip similarity)
+similarity = ssim(img_half_left, np.fliplr(img_half_right))
+assert similarity >= 0.85, f"Symmetry {similarity:.2f} below 0.85 threshold"
+```
+
+**Audio assets:**
+- Loudness normalization: assert target LUFS within ±1 dB of spec (pyloudnorm).
+- Frequency profile: no asset competes in the 2–4 kHz presence range during dialogue.
+- Silence detection: reject assets with generation artifacts (> X ms silence in unexpected positions).
+
+**MCP-mediated inspection (judgment-requiring defects):**
+An instrumented game/app state exposed through an MCP server lets a language model
+evaluate whether a running scene satisfies its acceptance criteria without pre-scripting
+every assertion. Feed the model the scene spec + MCP access; it reports violations.
+This addresses defects that are easy to name but hard to encode as assertions.
+
+## Artifact Grammar — The Generative Specification
+
+A system achieves generative specification when any AI coding assistant, given access to
+its artifacts alone, can: correctly identify what should and should not change for any
+requirement; produce output conforming to architectural, quality, and behavioral contracts;
+and detect when any existing artifact violates those contracts.
+
+Each artifact type below is a production rule in the system's grammar. Absent artifacts
+are specification gaps. A gap is not a documentation debt — it is an architecturally
+incomplete grammar.
+
+| Artifact | Function in the System | Required |
+|---|---|---|
+| **Architectural constitution** (`CLAUDE.md` / `AGENTS.md` / `.cursor/rules/` / `.github/copilot-instructions.md`) | Defines what is and is not a valid sentence in this system. Governs every AI interaction. Agent-agnostic concept; filename is agent-specific. | Core |
+| **Architecture Decision Records (ADRs)** | Documents why the grammar evolved. Prevents the AI from "correcting" intentional decisions that appear suboptimal without context. | Core |
+| **C4 diagrams / structural diagrams** (PlantUML, Mermaid) | The parsed structural representation: system context, container topology, component composition. Static structure at a glance for any agent entering the codebase. **Emit as files in P1** — `docs/diagrams/c4-context.md` and `docs/diagrams/c4-container.md`. A diagram referenced in prose but not written to disk provides zero structural constraint. | Recommended |
+| **Sequence diagrams** | Fix the inter-component protocol: which call, in which order, with which contracts. A sequence diagram specifying that auth precedes data fetch is an unambiguous ordering constraint. The AI has two valid sentences: the one matching the diagram, and deviations from it. **Emit as `docs/diagrams/sequence-[feature].md` in P1** with real `participant` declarations and message arrows — not an empty file. | Recommended |
+| **State machine diagrams** | Enumerate every valid state and every valid transition. Directly generate state transition test cases and user-facing modal behavior documentation. **Emit as `docs/diagrams/state-[entity].md` in P1** with real `stateDiagram-v2` states and transitions — these become the source of truth for state transition tests. | When system has states |
+| **User flow diagrams** | Define the expected journey from entry to outcome. Simultaneously the script for every E2E test in that flow and the user journey narrative for the manual. **Emit as `docs/diagrams/flow-[usecase].md` in P1** with real `flowchart` Start/End nodes and decision diamonds. | Recommended |
+| **Use cases** | Single, precise descriptions of an interaction. One use case seeds three artifacts: implementation contract, acceptance test, user documentation. See `use-case-triple-derivation`. | Recommended |
+| **Schema definitions** (DB, API, events) | The vocabulary of the system with constraints formally stated. Types, relations, validation rules, value ranges. | Core |
+| **Living documentation** (derived) | OpenAPI from decorators/schemas; TypeDoc/JSDoc auto-published; Storybook from component specs; README sections from centralized specs. Documentation maintained separately from code drifts — documentation derived from the same artifacts cannot be wrong in a way the code is right. | Recommended |
+| **Naming conventions** (explicit in constitution) | Semantic signal at every token. `calculateMonthlyCostPerMember` carries domain, operation, unit, scope. `processData` carries nothing. Names are grammar; the AI propagates every name it reads. | Core |
+| **Package and module hierarchy** | Communicates responsibility and ownership through structure. The location of a file is a claim about what it is. | Core |
+| **Conventional atomic commits** | Typed corpus: `feat(billing): add prorated invoice calculation` has a part of speech, scope, and semantic payload. The git log is a readable history of how the grammar evolved and why. | Core |
+| **Test suite (adversarial)** | Each test is a specification assertion AND adversarial challenge. The suite is a continuously-running audit and standing challenge to the implementation. Written against interfaces, not implementations. | Core |
+| **Commit hooks and quality gates** | Malformed input is structurally rejected before entering the system. Certain classes of mistake are architecturally unreachable. | Core |
+| **Status.md** | Session bridge: current implementation state, what was completed, where the session stopped, what was tried. The Auditable property requires both that the record exists and that the next session begins by reading it. | Core |
+| **MCP tools and environment tooling** | The tools available to the agent define what operations are possible. Bounded tool access is bounded agency. Specification governs not just code but the system that can act. | Optional |
+
+> **Emit, Don't Reference.** Every diagram type above that is marked "Recommended" or
+> higher must be written as a file on disk with real, parseable content. A spec that
+> says "a sequence diagram should be created later" is not a grammar production rule — it
+> is a forward reference. Forward references do not constrain the AI. Only emitted files
+> do. If a diagram file exists but still contains `<!-- UNFILLED -->`, it is a known gap.
+> Known gaps must be on the cascade backlog; they are not acceptable as a final state.
+
+### The Six Properties (self-test)
+A generative specification satisfies all six. Use as an inspection checklist:
+- **Self-describing**: Does the system explain its own architecture, decisions, and conventions from its own artifacts?
+- **Bounded**: Does every unit have explicit scope and seams? Is the context window to modify any unit predictably bounded?
+- **Verifiable**: Can the correctness of any output be checked without human judgment? Is verification automatic, fast, and blocking?
+- **Defended**: Are destructive operations structurally prevented (hooks, gates) rather than merely discouraged?
+- **Auditable**: Is the current state and full history recoverable from artifacts alone? Would the AI treat an intentional decision as a defect to correct?
+- **Composable**: Can units be combined without unexpected coupling? Can the AI work on any unit in isolation because isolation is structural?
+
+> **GS Protocol on demand:** call `get_reference(resource: guidance)` for the full
+> session-loop procedure, context-loading strategy, incremental cascade, bound roadmap
+> format, and diagnostic checklist. These procedures are NOT inlined here to preserve
+> the token budget of this instruction file.
+
+## Names Are Production Rules
+
+In a context-sensitive system, naming is not style. It is grammar.
+
+A function named `getUser` in a domain model that talks to a database is an architecture
+violation the compiler will not catch, the linter may not catch, and a human reviewer
+will tolerate — but the AI will propagate. The name signals layer; the AI reads the signal.
+
+### Layer-Scoped Naming Vocabulary
+Enforce consistent naming by layer. Deviations are architecture violations.
+
+| Layer | Allowed verbs / patterns | Examples |
+|---|---|---|
+| **Repository** | `find`, `save`, `delete`, `exists`, `count` | `findUserByEmail`, `saveOrder`, `deleteById` |
+| **Service** | `get`, `create`, `update`, `process`, `calculate`, `validate` | `getUserProfile`, `createInvoice`, `calculateMonthlyCost` |
+| **Controller / Handler** | `handle`, `on` + event name | `handleCreateUser`, `onPaymentReceived` |
+| **Domain model** | noun + computed property / behavior | `Invoice.totalWithTax`, `User.isExpired` |
+| **Event** | past tense, domain noun | `UserRegistered`, `OrderShipped`, `PaymentFailed` |
+| **DTO** | noun + `Request` / `Response` or `Dto` | `CreateUserRequest`, `UserProfileResponse` |
+| **Interface / Port** | capability noun | `UserRepository`, `EmailSender`, `PaymentGateway` |
+
+### Naming as Technique Transport
+What a practitioner names in a specification, the AI knows how to apply.
+Every technique in the model's training corpus becomes available to any system whose
+specification names it. A specification that says "analyze legal arguments" receives
+legal analysis. A specification that names prosody, argumentation theory, fallacy
+classification, and deontic modal logic receives a specialist instrument calibrated
+to the domain. The naming cost is one word. The activation cost of the AI's knowledge
+of the field is zero once the name appears.
+
+Name patterns, techniques, and domain frameworks explicitly in the architectural
+constitution. The specification is a technique registry whose scope is the full depth
+of the model's training, activated at the cost of knowing the correct words to write.
+
+## ADR Protocol — Persistent Memory
+
+Every non-obvious architectural decision produces an ADR before implementation begins.
+An unrecorded architectural decision is a gap in the grammar.
+
+Without an ADR, the AI will "improve" intentional decisions that appear suboptimal
+without context — turning deliberate architectural tradeoffs into silently-introduced drift.
+
+### Format (minimal)
+```markdown
+# ADR-NNNN: [Decision Title]
+
+**Date**: YYYY-MM-DD
+**Status**: Proposed | Accepted | Deprecated | Superseded by ADR-NNNN
+
+## Context
+What is the situation that requires a decision? What forces are in tension?
+
+## Decision
+What was decided? State it plainly.
+
+## Alternatives Considered
+What other options were evaluated and why were they not chosen?
+
+## Consequences
+What becomes easier or harder as a result of this decision?
+What will the AI need to know to work within this constraint?
+```
+
+### When to Write an ADR
+- Any architectural choice that is not obvious from the code structure
+- Any decision that involves a tradeoff (performance vs. simplicity, security vs. UX)
+- Any decision that was reached after considering alternatives
+- Any decision that future engineers (or AI sessions) might be tempted to "fix"
+- Any change to the architectural constitution itself
+
+### ADR Directory
+- Path: `docs/adrs/` (zero-padded, kebab-case: `ADR-0001-short-title.md`)
+- ADRs are immutable once Accepted. To change a decision: write a new ADR that supersedes the old one.
+- The old ADR is updated only to add `Superseded by ADR-NNNN` to its status.
+
+### ADR Stubs — Emit in P1
+When starting a new project, emit ADR stub files as **fenced code blocks** in the first
+response alongside `prisma/schema.prisma`, `tsconfig.json`, and `package.json`.
+ADRs referenced only in a README but not written as files are not present in the project.
+The model cannot reference a file that does not exist. Emit the file.
+
+**Minimum ADRs to emit in P1** (adapt titles to the actual stack chosen):
+- `docs/adrs/ADR-0001-stack.md` — language, runtime, framework, ORM selection and rationale
+- `docs/adrs/ADR-0002-authentication.md` — auth strategy (JWT/session), hashing algorithm and why
+- `docs/adrs/ADR-0003-architecture.md` — layered/hexagonal architecture decision and boundary rules
+
+Each ADR stub must contain real content in `Status`, `Context`, `Decision`, and `Consequences`
+fields — not placeholder text. A stub that says "TBD" is not an ADR.
+
+**ADR reference check:** If your README mentions `docs/adrs/ADR-0001-stack.md`, that file
+must appear as a fenced code block in the same response. A reference to a non-emitted file
+is an Auditable violation — it creates the appearance of traceability without the substance.
+
+Also emit **`CHANGELOG.md`** in P1 with initial content documenting the P1 decisions:
+```markdown
+# Changelog
+All notable changes to this project will be documented here.
+Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+
+## [Unreleased]
+### Added
+- Initial project scaffold: layered architecture, Prisma schema, repository interfaces
+- Authentication: JWT + Argon2 (see ADR-0002)
+- Dependency registry: docs/approved-packages.md with audit baseline
+- CI pipeline: lint, type-check, test, npm audit, mutation gate
+- Pre-commit hooks: tsc, lint, audit, test gates
+```
+A CHANGELOG that exists only as "we will add one" is not Auditable. Write the file.
+Document the P1 decisions immediately — the first entry is not a release entry, it is the
+architectural record of what was built in this session.
+
+### Session Protocol
+Every session begins by reading the open ADRs. The status of each ADR is the authoritative
+record of what is intentional. A session that modifies an ADR-governed boundary without
+first reading the ADR has produced drift, regardless of whether the code compiles.
+
+## Use Cases — Triple Derivation
+
+A use case is not a requirements artifact produced before implementation and superseded by it.
+In a generative specification it is a multi-purpose production rule: a single, precise
+description of an interaction from which three artifacts derive independently and without
+redundancy.
+
+### The Three Derivations
+1. **Implementation contract** — The use case names the actor, precondition, trigger, and
+   postcondition with enough precision to be unambiguous. This is the specification the
+   service layer is written against. When the AI reads a well-formed use case before
+   generating the corresponding service method, it has what a human architect would
+   communicate in a design review.
+
+2. **Acceptance test** — The use case and the test scenario are the same artifact expressed
+   in different dialects. A Playwright E2E test for a checkout flow is the checkout use case
+   transcribed into executable form. A Cucumber scenario in Given-When-Then is the use case
+   in declarative test notation. When the use case is precise, the test writes itself.
+   **When the test is hard to write, the use case is underspecified.** The test difficulty
+   is the diagnostic for underspecification.
+
+3. **User documentation** — A use case narrated to a non-technical reader (actor, goal,
+   precondition, sequence, expected outcome, error cases) is a user manual section.
+   The content is identical. The framing is different. A specification with complete use
+   cases does not need a separate documentation writing pass — it needs a rendering pass.
+
+### Use Case Format (minimal)
+```markdown
+## UC-NNN: [Action] [Domain Object]
+
+**Actor**: [who initiates]
+**Precondition**: [what must be true before]
+**Trigger**: [what event or action starts the flow]
+**Main Flow**:
+  1. [Step one]
+  2. [Step two]
+**Postcondition**: [what is true after success]
+**Error Cases**:
+  - [Condition]: [System response]
+**Acceptance Criteria** (machine-checkable):
+  - [ ] [Criterion 1]
+  - [ ] [Criterion 2]
+```
+
+### The Diagnostic Rule
+Before writing any service method, write the use case first. If you cannot state the
+precondition and postcondition precisely, you do not yet understand the behavior well enough
+to implement it correctly. The implementation will be wrong. The use case forces the
+understanding the implementation requires.
+
+## Living Documentation — Derived, Not Maintained
+
+Documentation maintained separately from the code it describes is structurally certain
+to drift. An API reference written by hand becomes wrong the moment the signature changes.
+A system overview written at architecture time becomes misleading the moment the first
+refactor lands.
+
+The failure is structural, not motivational. The documentation and the code share no source
+of truth. Drift is the natural consequence, not a failure of discipline.
+
+### The Generative Specification Resolution
+Documentation is a derivation from the same artifacts the AI reads — which means it cannot
+be wrong in a way the code is right, because they share a source.
+
+| Documentation type | Derivation source | Tooling |
+|---|---|---|
+| **API reference** | TypeScript type annotations + Zod schemas → OpenAPI/Swagger | `swagger-jsdoc`, `zod-to-openapi`, `ts-rest` |
+| **Function/class docs** | Inline JSDoc / docstrings, auto-published | TypeDoc, pdoc, mkdocs |
+| **Component catalog** | Component spec files | Storybook |
+| **README sections** | Centralized spec files, not narrative paragraphs | Custom scripts, code-gen templates |
+| **Database schema docs** | Prisma schema / migration files | `prisma-docs-generator` |
+| **Event catalog** | Event type definitions | AsyncAPI |
+| **Architecture diagrams** | Code structure → diagram | Structurizr, Mermaid auto-gen |
+
+### Rules
+- Never write documentation that paraphrases code. If the doc says what the code says,
+  one of them is redundant — and the code wins on recency.
+- Inline documentation (JSDoc/docstrings) belongs at the declaration, not in a separate file.
+- A README section that duplicates a type definition is a liability. Point to the type.
+- Documentation is a derivation step in the CI pipeline, not a separate task.
+
+### Polyglot Systems
+The argument is sharpest when the system spans multiple languages, runtimes, or paradigms.
+Without a specification that holds naming contracts and behavioral contracts at the layer
+where they cross language lines, the system fragments. Cross-language interface contracts
+must be stated explicitly in language-neutral terms — the architectural constitution that
+both runtimes read.
+
+## Agentic Self-Refinement
+
+Wherever desired output can be specified and actual output can be observed, the agent
+can close a feedback loop on its own execution without human intervention between cycles.
+The structure is identical regardless of domain: desired state → generate → evaluate
+against spec-defined acceptance criteria → adjust parameters or session context → regenerate.
+
+### The Loop Structure
+```
+SPECIFY  →  GENERATE  →  EVALUATE (against acceptance criteria)
+               ↑                    |
+               └──── ADJUST ────────┘
+                     (if criteria not met)
+```
+
+The loop terminates when acceptance criteria are satisfied or retry budget is exhausted.
+The retry budget is itself a constraint in the specification.
+
+### Applications by Domain
+| Domain | Generate | Evaluate | Adjust |
+|---|---|---|---|
+| **Code** | Service method | Tests pass / coverage / mutation score | Refactor implementation |
+| **Visual assets** | Sprite/image | Symmetry, orientation, background checks | Regenerate with refined prompt |
+| **Audio assets** | Sound / music | LUFS, frequency profile, artifact detection | Regenerate with adjusted parameters |
+| **Infrastructure** | Cloud resources | Health checks, policy compliance | Reconfigure and redeploy |
+| **Hyperparameter optimization** | Model training run | Win rate, drawdown, Sharpe threshold | Adjust classifier weights, retry |
+| **Session continuity** | Prior session output | Specification conformance on resume | Adjust strategy before proceeding |
+
+### Session Continuity Pattern (Status.md)
+The Status.md file is the simplest form of agentic self-evaluation. A subsequent session
+begins not from a blank context but from a specification-informed account of what the
+prior session achieved, where it stopped, and what it tried. The agent evaluates its
+own prior output against the specification before beginning new work.
+- End of every session: update Status.md with completed work, current state, open questions.
+- Start of every session: read Status.md and open ADRs before any implementation.
+- The Auditable property requires both: that the record exists, and that the next session
+  begins by reading it.
+
+### Wrong History Pattern (Anti-Pattern)
+An audit trail that exists but is not read as state is equivalent to an absent audit trail.
+If the resume logic calculates from scratch rather than reading persisted state, the prior
+session's work is invisible — despite full persistence. The artifact was not absent; it was
+not consulted. Both conditions are violations of the Auditable property.
+
+## Wrong Specification Risk
+
+The most important risk of generative specification is not an underspecified system — it
+is a *wrongly* specified one. A faithful AI executing a flawed architectural constitution
+will produce flawed code at scale, with high confidence and no complaint. The specification
+being a well-formed grammar does not guarantee it is the *right* grammar.
+
+### Mitigation 1: Specification Verification Before Code
+The specification should face the same verification discipline as the implementation.
+Before any code is written:
+- Write concrete behavioral outcomes and make them checkable (acceptance criteria, ADRs
+  with stated consequences).
+- If the stated rationale for a decision does not survive being written down (the "would
+  I defend this in a code review?" test), the decision is not sound.
+- If the use case cannot be stated with a clear precondition and postcondition, the
+  requirement is not understood well enough to specify correctly.
+
+### Mitigation 2: Living Specification
+The architectural constitution is a living document, revised through the same atomic
+commit discipline as the code it governs.
+- An architectural constitution written at project inception and never revisited is a
+  static grammar for a living system.
+- The ADR record documents when and why the grammar must change — making changes
+  visible, intentional, and recoverable.
+- A specification change follows the same protocol as a code change: one ADR, one
+  commit, one clear reason.
+
+### Diagnostic Signs of a Wrong Specification
+- The AI produces code that compiles, passes tests, and violates architectural intent.
+  (Tests are not testing architecture; the architectural constitution is not specific enough.)
+- The same class of mistake recurs across sessions.
+  (The correction belongs in the architectural constitution, not the session prompt.)
+- The AI "improves" a known intentional decision.
+  (The ADR is missing or was not included in the session context.)
+- Two modules with different responsibilities share a boundary that is not explicitly stated.
+  (The Bounded property is violated; the constitution needs explicit module boundaries.)
+
+## Generative Specification: The Five Memory Types
+
+An AI assistant has no persistent memory across sessions. The methodology distributes
+memory across five artifact classes, each serving a distinct cognitive function. Every
+artifact in a well-formed specification belongs to exactly one type. When an artifact
+is ambiguous about which type it serves, it is trying to do too much and will do none well.
+
+| Memory Type | Cognitive Function | Primary Artifacts |
+|---|---|---|
+| **Semantic** | What the system *is* — identity, contracts, constraints | `CLAUDE.md`, tech spec, domain models, glossary |
+| **Procedural** | *How* things are done — execution rules, pipelines, bound prompts | `DEVELOPMENT_PROMPTS.md`, roadmap, CI/CD spec, commit hooks |
+| **Episodic** | What *happened* — decisions, sessions completed, history | ADRs, `Status.md`, session summaries, git commit log |
+| **Relationship** | *How things connect* — topology, flows, protocols | C4 diagrams, sequence diagrams, state machines, use cases |
+| **Working** | What is *active now* — current task, loaded context, scope | Session prompt, loaded artifacts, clarification state |
+
+### Missing Types = Compounding Failure
+- **Semantic absent** → no grammar; output is locally correct and globally incoherent.
+- **Procedural absent** → each session starts from scratch; nothing is reproducible.
+- **Episodic absent** → decisions are repeated or overwritten; intentional choices become drift.
+- **Relationship absent** → inter-component contracts are implicit; integration points drift.
+- **Working absent (not loaded)** → the current session inherits no context; practitioner re-narrates everything.
+
+A project missing all five types is using interactive prompting with no structural discipline.
+Use the five types as a diagnostic before beginning any session on an inherited project.
+
+## Status.md — Required Format
+
+Status.md is the episodic artifact closest to working memory. Updated at the close of
+every session, without exception. The "Next" section is the handoff: specific enough
+that an agent could begin from it alone, without any narration.
+
+```markdown
+# [Project Name] — Status
+
+**Last updated:** YYYY-MM-DD
+**Current version / branch:**
+
+## Completed (this session)
+- [What was done, with commit hashes where relevant]
+
+## In Progress
+- [Partial state — what the immediate next step is]
+
+## Next
+- [The immediate next action — specific enough to begin from this line alone]
+- Example: "Implement `updateConnectionStatus` in `src/connections/service.ts`,
+  write tests for the three state transition paths, verify against `/connections/:id/status`"
+
+## Decisions made (this session)
+- [Any choice not yet in an ADR — these are ADR candidates]
+
+## Blockers / Dependencies
+- [What is waiting on an external input or a parallel workstream]
+```
+
+A vague "Next" entry ("continue working on the feature") forces the next session to
+reconstruct intent. A specific "Next" entry enables a cold start from the artifact alone.
+The "Next" section is the primary quality measure of Status.md.
+
+## Library / Package Standards
+
+### Public API
+- Clear, minimal public API surface. Export only what consumers need.
+- Barrel file (index.ts / __init__.py) defines the public API explicitly.
+- Internal modules prefixed with underscore or in internal/ directory.
+- Every public API has JSDoc/docstring with examples.
+
+### Versioning & Compatibility
+- Semantic versioning: MAJOR.MINOR.PATCH.
+- MAJOR: breaking API changes. MINOR: new features, backward compatible. PATCH: bug fixes.
+- CHANGELOG.md maintained with every release.
+- Deprecation warnings before removal (minimum 1 minor version).
+
+### Distribution
+- Package includes only dist/ and necessary runtime files.
+- Types included (declaration files for TypeScript).
+- Peer dependencies used for framework integrations.
+- Minimize runtime dependencies — every dep is a risk.
+
+### Testing
+- Test against the public API, not internals.
+- Test with multiple versions of peer dependencies.
+- Integration tests simulate real consumer usage patterns.
+
+### Documentation
+- README with: install, quick start, API reference, examples.
+- Usage examples for every major feature.
+- Migration guide for every major version bump.

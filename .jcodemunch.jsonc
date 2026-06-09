@@ -1,0 +1,58 @@
+{
+  // jCodeMunch configuration for opencode-harness
+  // Defines architectural layer rules enforced by get_layer_violations
+  "architecture": {
+    "layers": [
+      {
+        "name": "shared_types",
+        "paths": ["src/types.ts"],
+        "may_not_import": []
+      },
+      {
+        "name": "extension_entry",
+        "paths": ["src/extension.ts", "src/commands/**"],
+        "may_not_import": []
+      },
+      {
+        "name": "chat",
+        "paths": ["src/chat/**"],
+        "may_not_import": ["extension_entry"]
+      },
+      {
+        "name": "session",
+        "paths": ["src/session/**"],
+        "may_not_import": ["chat", "extension_entry"]
+      },
+      {
+        "name": "theme",
+        "paths": ["src/theme/**"],
+        "may_not_import": ["chat", "session", "extension_entry"]
+      },
+      {
+        "name": "context",
+        "paths": ["src/context/**"],
+        "may_not_import": ["chat", "extension_entry"]
+      },
+      {
+        "name": "model",
+        "paths": ["src/model/**"],
+        "may_not_import": ["chat", "session", "extension_entry"]
+      },
+      {
+        "name": "utils",
+        "paths": ["src/utils/**"],
+        "may_not_import": ["chat", "session", "extension_entry", "theme", "context", "model"]
+      },
+      {
+        "name": "repositories",
+        "paths": ["src/repositories/**"],
+        "may_not_import": ["chat", "extension_entry"]
+      },
+      {
+        "name": "services",
+        "paths": ["src/services/**"],
+        "may_not_import": ["chat", "extension_entry"]
+      }
+    ]
+  }
+}

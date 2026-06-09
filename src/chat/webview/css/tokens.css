@@ -1,0 +1,449 @@
+/* ═══════════════════════════════════════════════════════════════
+   OpenCode Design Tokens
+   ═══════════════════════════════════════════════════════════════ */
+
+/**
+ * NOTE: Semantic colors (--oc-accent, --oc-bg, etc.) are managed by 
+ * src/theme/ThemeManager.ts to support user overrides and CLI parity.
+ * This file defines the structural foundation and fallback values.
+ */
+
+:root {
+  /* ─── Layout Shell ─── */
+  --oc-bg: var(--vscode-sideBar-background);
+  --oc-fg: var(--vscode-sideBar-foreground);
+  --oc-border: var(--vscode-sideBar-border, var(--vscode-widget-border, rgba(128, 128, 128, 0.2)));
+  
+  /* Primary Actions */
+  --oc-primary: var(--oc-accent);
+  --oc-accent-hover: var(--vscode-button-hoverBackground);
+  --oc-accent-fg: var(--vscode-button-foreground);
+
+  /* Button Variants (for skip-link, etc.) */
+  --oc-button-bg: var(--vscode-button-background, var(--oc-accent));
+  --oc-button-fg: var(--vscode-button-foreground, #ffffff);
+  --oc-button-hover: var(--vscode-button-hoverBackground, var(--oc-accent-hover));
+
+  /* Skill Badge */
+  --oc-skill-badge-bg: var(--oc-accent-subtle);
+  --oc-skill-badge-fg: var(--color-accent);
+  
+  /* Secondary Actions */
+  --oc-button-secondary: var(--vscode-button-secondaryBackground, rgba(128, 128, 128, 0.1));
+  --oc-button-secondary-hover: var(--vscode-button-secondaryHoverBackground, rgba(128, 128, 128, 0.15));
+  --oc-button-secondary-fg: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+  
+  /* List & Selection */
+  --oc-list-hover: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.1));
+  --oc-list-active: var(--vscode-list-activeSelectionBackground);
+  --oc-list-active-fg: var(--vscode-list-activeSelectionForeground);
+  
+  /* Editor & Inline Elements */
+  --oc-editor-bg: var(--vscode-editor-background);
+  --oc-editor-fg: var(--vscode-editor-foreground);
+  --oc-editor-font: var(--vscode-editor-font-family, "JetBrains Mono", ui-monospace, monospace);
+  --oc-editor-font-size: var(--vscode-editor-font-size, 13px);
+  
+  /* Status & Description */
+  --oc-focus: var(--vscode-focusBorder);
+  --oc-description: var(--vscode-descriptionForeground);
+  --oc-muted: var(--vscode-disabledForeground);
+
+  /* ─── Signature Colors ─── */
+  --oc-accent-alt: #bf7af0; /* Cyber Amethyst (Branding) */
+  
+  /* Glassmorphism (Mission Control Aesthetic) */
+  --oc-glass-bg: var(--vscode-sideBar-background);
+  --oc-glass-border: var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
+  --oc-glass-blur: blur(12px);
+
+  /* ─── Backdrop filter scope tokens ─────────────────────────────
+     Two distinct backdrop blur tokens keep cost predictable:
+       --blur-surface : applied only to floating TOP-LAYER surfaces
+                        (jump-to-bottom, dropdowns, modals, sticky
+                        toolbar). One layer per visible surface.
+       --blur-bubble  : applied per-message. Defaults to `none` so
+                        a long chat does not pay the compositing
+                        cost on every bubble. Authors can enable it
+                        via `body.glass-bubbles` for low-density
+                        sessions or screenshots.
+  */
+  --blur-surface: var(--oc-glass-blur);
+  --blur-bubble: none;
+
+  /* ─── Spacing: 4px baseline grid ─── */
+  --space-0: 0px;
+  --space-px: 1px;
+  --space-0-5: 2px;
+  --space-1: 4px;
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-2-5: 10px;
+  --space-3: 12px;
+  --space-3-5: 14px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ─── Typography ─── */
+  /* Fonts: Prefer VS Code's configured font family, then fall back to system fonts.
+     "Inter" and "JetBrains Mono" are named as preferred fallbacks but will only
+     render if the user has them installed locally — there are no @font-face rules
+     because VS Code's CSP (font-src: cspSource) prohibits CDN font loading.
+     Developers who want custom fonts should configure them in VS Code settings
+     (editor.fontFamily, terminal.integrated.fontFamily). */
+  --font-sans: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif);
+  --font-mono: var(--vscode-editor-font-family, ui-monospace, "SF Mono", "Cascadia Code", "Consolas", monospace);
+
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: var(--vscode-font-size, 13px);
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 20px;
+
+  --leading-none: 1;
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  /* ─── Border Radius ─── */
+  --radius-none: 0;
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-full: 9999px;
+
+  /* ─── Shadows ─── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.2);
+  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.5);
+  --shadow-mission: 0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--oc-glass-border);
+  /* Accent glow — used by primary buttons & focused affordances.
+     Defined late enough to reference --oc-accent-border/glow tokens below. */
+  --shadow-glow: 0 0 0 1px var(--oc-accent-border, transparent),
+                 0 4px 14px var(--oc-accent-glow, transparent);
+
+  /* ─── Animation ─── */
+  --duration-instant: 100ms;
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 300ms;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ─── Primary Signature Colors (injected by ThemeManager.ts) ─── */
+  /* Fallbacks ensure UI remains visible if ThemeManager fails to inject */
+  --oc-accent: var(--vscode-button-background, #0078d4);
+  --oc-accent-hover: var(--vscode-button-hoverBackground, #026ec1);
+  --oc-accent-fg: var(--vscode-button-foreground, #ffffff);
+
+  --oc-success: var(--vscode-terminal-ansiGreen, #3fb950);
+  --oc-warning: var(--vscode-editorWarning-foreground, #d29922);
+  --oc-error: var(--vscode-errorForeground, #f85149);
+  --oc-error-action: #c7362e;
+  --oc-info: var(--vscode-notificationsInfoIcon-foreground, var(--vscode-button-background, #0078d4));
+
+  /* ─── Usage/Context Bar Colours (ThemeManager injects --oc-usage-*) ─── */
+  --usage-good: var(--oc-usage-good, var(--oc-success, #3fb950));
+  --usage-caution: var(--oc-usage-caution, var(--oc-warning, #d29922));
+  --usage-warning: var(--oc-usage-warning, #e06c00);
+  --usage-critical: var(--oc-usage-critical, var(--oc-error, #f85149));
+
+  /* ─── Unified colour aliases ─── */
+  --color-accent: var(--oc-accent);
+  --color-success: var(--oc-success);
+  --color-warning: var(--oc-warning);
+  --color-error: var(--oc-error);
+
+  /* ─── Semantic Component Tints ─── */
+  --oc-accent-subtle: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  --oc-accent-border: color-mix(in srgb, var(--color-accent) 20%, transparent);
+  --oc-accent-border-hover: color-mix(in srgb, var(--color-accent) 40%, transparent);
+  --oc-accent-glow: color-mix(in srgb, var(--color-accent) 15%, transparent);
+
+  --oc-error-subtle: color-mix(in srgb, var(--color-error) 8%, transparent);
+  --oc-error-border: color-mix(in srgb, var(--color-error) 20%, transparent);
+  --oc-success-subtle: color-mix(in srgb, var(--color-success) 8%, transparent);
+  --oc-success-border: color-mix(in srgb, var(--color-success) 20%, transparent);
+  --oc-warning-subtle: color-mix(in srgb, var(--color-warning) 6%, transparent);
+  --oc-warning-border: color-mix(in srgb, var(--color-warning) 20%, transparent);
+
+  /* ─── Semantic Status Tokens (for tool call states, badges, LEDs) ─── */
+  --oc-status-running: hsl(210 80% 60%);
+  --oc-status-success: hsl(145 60% 50%);
+  --oc-status-error: hsl(0 70% 60%);
+  --oc-status-warning: hsl(38 90% 58%);
+  --oc-status-pending: hsl(220 15% 55%);
+  --oc-status-cancelled: hsl(220 12% 50%);
+
+  /* Subtle elevated surface — for tool cards in dark mode */
+  --oc-surface-elevated: color-mix(in srgb, var(--vscode-editor-background, #1e1e1e) 85%, white 15%);
+
+  /* ─── Tool Call Accent Colours ─── */
+  --tool-read-color: var(--toolReadColor, #5b9fd7);
+  --tool-write-color: var(--toolWriteColor, #7cb87c);
+  --tool-exec-color: var(--toolExecColor, #e6a23c);
+  --tool-error-color: var(--toolErrorColor, #e07070);
+  --tool-meta-color: var(--toolMetaColor, #a78bfa);
+
+  /* ─── Diff Colours ─── */
+  /* Backgrounds bumped from 12% → 22% so add/remove is obvious at a glance.
+     A separate (slightly darker) tint highlights the line-number gutter. */
+  --diff-added-bg: color-mix(in srgb, #4caf50 22%, transparent);
+  --diff-added-fg: #4caf50;
+  --diff-removed-bg: color-mix(in srgb, #f44336 22%, transparent);
+  --diff-removed-fg: #f44336;
+  --diff-context-color: var(--oc-diff-context, var(--oc-muted));
+  --diff-hunk-bg: var(--oc-diff-context-bg, color-mix(in srgb, var(--color-accent) 8%, transparent));
+  --diff-hunk-fg: var(--oc-diff-hunk-header, var(--color-muted));
+  --diff-line-number-fg: var(--oc-diff-line-number, var(--color-muted));
+  --diff-added-bg: var(--oc-diff-added-bg, color-mix(in srgb, #4caf50 22%, transparent));
+  --diff-removed-bg: var(--oc-diff-removed-bg, color-mix(in srgb, #f44336 22%, transparent));
+  --diff-added-fg: var(--oc-diff-added, #4caf50);
+  --diff-removed-fg: var(--oc-diff-removed, #f44336);
+  /* Line-number gutter tint — darker than the content background. */
+  --diff-added-line-number-bg: var(--oc-diff-added-line-number-bg, color-mix(in srgb, #4caf50 32%, transparent));
+  --diff-removed-line-number-bg: var(--oc-diff-removed-line-number-bg, color-mix(in srgb, #f44336 32%, transparent));
+  --bg-code: var(--vscode-textCodeBlock-background, rgba(0,0,0,0.2));
+
+  /* ─── Markdown Colours (OpenCode CLI theme parity) ─── */
+  --markdown-text: var(--oc-markdown-text, var(--color-fg));
+  --markdown-heading: var(--oc-markdown-heading, var(--color-fg));
+  --markdown-link: var(--oc-markdown-link, var(--color-accent));
+  --markdown-link-text: var(--oc-markdown-link-text, var(--markdown-link));
+  --markdown-code: var(--oc-markdown-code, var(--color-accent));
+  --markdown-code-block: var(--oc-markdown-code-block, var(--oc-editor-fg));
+  --markdown-blockquote: var(--oc-markdown-blockquote, var(--color-muted));
+  --markdown-emph: var(--oc-markdown-emph, var(--markdown-text));
+  --markdown-strong: var(--oc-markdown-strong, var(--markdown-text));
+  --markdown-hr: var(--oc-markdown-hr, var(--color-border));
+  --markdown-list-item: var(--oc-markdown-list-item, var(--markdown-text));
+  --markdown-list-enumeration: var(--oc-markdown-list-enumeration, var(--color-muted));
+
+  /* ─── Background Layers ─── */
+  --bg-primary: var(--oc-bg);
+  --bg-secondary: color-mix(in srgb, var(--oc-bg) 96%, var(--oc-fg));
+  --bg-tertiary: color-mix(in srgb, var(--oc-bg) 90%, var(--oc-fg));
+
+  /* ─── Borders & Text ─── */
+  --color-border: var(--oc-border);
+  --color-muted: var(--oc-muted);
+  --color-fg: var(--oc-fg);
+
+  /* ─── Jump-to-Bottom Button ─── */
+  --jump-btn-bg: var(--bg-secondary);
+  --jump-btn-border: var(--color-border);
+  --jump-btn-shadow: 0 2px 8px rgba(0,0,0,0.3);
+
+  /* ─── Input Height (for jump button positioning) ─── */
+  --input-height: 56px;
+
+  /* ─── Message Role Colours ─── */
+  --assistant-message-bg: transparent;
+  --assistant-message-fg: var(--oc-fg);
+  --user-message-bg: var(--vscode-input-background, rgba(128,128,128,0.1));
+  --user-message-fg: var(--oc-fg);
+
+  /* ─── Message Role Colors (injected by ThemeManager) ─── */
+  --oc-user-msg-bg: var(--vscode-input-background, rgba(128, 128, 128, 0.1));
+  --oc-assistant-msg-bg: transparent;
+  --oc-tool-bg: var(--vscode-textBlockQuote-background, rgba(128, 128, 128, 0.05));
+
+  /* ─── Syntax Highlighting (injected by ThemeManager) ─── */
+  --oc-syn-keyword: var(--vscode-symbolIcon-keywordForeground, #569cd6);
+  --oc-syn-string: var(--vscode-symbolIcon-stringForeground, #ce9178);
+  --oc-syn-comment: var(--vscode-symbolIcon-commentForeground, #6a9955);
+  --oc-syn-function: var(--vscode-symbolIcon-functionForeground, #dcdcaa);
+  --oc-syn-number: var(--vscode-symbolIcon-numberForeground, #b5cea8);
+  --oc-syn-type: var(--vscode-symbolIcon-typeParameterForeground, #4ec9b0);
+  --oc-syn-variable: var(--vscode-symbolIcon-variableForeground, #9cdcfe);
+  --oc-syn-operator: var(--vscode-symbolIcon-operatorForeground, #d4d4d4);
+  --oc-syn-punctuation: var(--vscode-editor-foreground, #d4d4d4);
+
+  /* ─── Component Size Tokens ─── */
+  --size-icon-xs: 12px;
+  --size-icon-sm: 14px;
+  --size-icon-md: 16px;
+  --size-icon-lg: 20px;
+  --size-icon-xl: 24px;
+  --size-target-min: 24px;
+  --size-target-comfortable: 32px;
+  --size-target-large: 36px;
+  --size-tab-min: 80px;
+  --size-tab-max: 160px;
+
+  /* ─── Z-Index Scale ─── */
+  --z-base: 0;
+  --z-dropdown: 50;
+  --z-sticky: 100;
+  --z-modal-backdrop: 200;
+  --z-modal: 300;
+  --z-lightbox: 500;
+  --z-tooltip: 400;
+}
+
+  /* ─── Toggle Component Tokens ─── */
+:root {
+  --toggle-width: 36px;
+  --toggle-height: 20px;
+  --toggle-thumb: 14px;
+  --toggle-offset: 3px;
+  --toggle-travel: 16px;
+}
+
+/* ─── Status LED Size ─── */
+:root {
+  --size-status-led: 8px;
+}
+
+/* ─── Code Block Tokens ─── */
+:root {
+  --code-line-num-width: 2.5rem;
+  --message-list-bottom-pad: 140px;
+
+  /* ─── Modal Specific Tokens ─── */
+  --modal-width-sm: 320px;
+  --modal-width-md: 480px;
+  --modal-width-lg: 640px;
+  --modal-width-xl: 680px;
+  --modal-max-height: 80vh;
+  --modal-bg: var(--oc-glass-bg);
+  --modal-border: var(--oc-glass-border);
+  --modal-shadow: var(--shadow-xl);
+}
+
+/* ─── Theme Overrides ─── */
+
+.vscode-light {
+  --oc-glass-bg: rgba(255, 255, 255, 0.85);
+
+  /* Shadows: reduce opacity for light backgrounds */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.18);
+  --shadow-mission: 0 10px 30px -10px rgba(0, 0, 0, 0.15), 0 0 0 1px var(--oc-glass-border);
+  --jump-btn-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+  /* Message bubbles: light-appropriate backgrounds instead of dark-themed values
+     that ThemeManager may inject into :root for dark themes. Declaring on body
+     (via .vscode-light) ensures descendants inherit the light value, overriding
+     any stale dark :root declaration from ThemeManager. */
+  --user-message-bg: var(--vscode-input-background, rgba(0, 0, 0, 0.05));
+  --user-message-fg: var(--oc-fg);
+  --oc-user-msg-bg: var(--vscode-input-background, rgba(0, 0, 0, 0.05));
+  --assistant-message-bg: transparent;
+  --oc-assistant-msg-bg: transparent;
+
+  /* Code block and tool call backgrounds */
+  --bg-code: var(--vscode-textCodeBlock-background, rgba(0, 0, 0, 0.06));
+  --oc-tool-bg: var(--vscode-textBlockQuote-background, rgba(0, 0, 0, 0.04));
+
+  /* Diff colours: lighter themes need slightly less saturation than dark
+     but still strong enough to be obvious at a glance. */
+  --diff-added-bg: color-mix(in srgb, #4caf50 18%, transparent);
+  --diff-removed-bg: color-mix(in srgb, #f44336 18%, transparent);
+  --diff-added-line-number-bg: color-mix(in srgb, #4caf50 28%, transparent);
+  --diff-removed-line-number-bg: color-mix(in srgb, #f44336 28%, transparent);
+}
+
+.vscode-dark {
+  --oc-glass-bg: rgba(22, 22, 26, 0.7);
+}
+
+/* Opt-in: enable per-bubble glass when explicitly requested. */
+body.glass-bubbles {
+  --blur-bubble: var(--oc-glass-blur);
+}
+
+/* Reduced motion (and reduced data) implies low-end hardware preference —
+   disable both per-bubble and top-surface blur to recover compositing budget. */
+@media (prefers-reduced-motion: reduce), (prefers-reduced-data: reduce) {
+  :root {
+    --blur-surface: none;
+    --blur-bubble: none;
+  }
+}
+
+/* High Contrast Adjustments — dark (black bg / white text / yellow accents) */
+.vscode-high-contrast {
+  --oc-glass-blur: none;
+  --oc-glass-bg: #000000;
+  --oc-bg: #000000;
+  --oc-fg: #ffffff;
+  --oc-border: #ffff00;
+  --oc-accent: #ffff00;
+  --oc-user-msg-bg: #1a1a1a;
+  --oc-user-msg-fg: #ffffff;
+  --oc-assistant-msg-bg: transparent;
+  --oc-assistant-msg-fg: #ffffff;
+}
+
+/* High Contrast Light — white bg / black text / red+blue accents */
+.vscode-high-contrast-light {
+  --oc-glass-blur: none;
+  --oc-glass-bg: #ffffff;
+  --oc-bg: #ffffff;
+  --oc-fg: #000000;
+  --oc-border: #cc0000;
+  --oc-accent: #0000cc;
+  --oc-user-msg-bg: #f0f0f0;
+  --oc-user-msg-fg: #000000;
+  --oc-assistant-msg-bg: transparent;
+  --oc-assistant-msg-fg: #000000;
+}
+
+/* forced-colors mode — uses system color keywords for accessibility */
+@media (forced-colors: active) {
+  :root {
+    --oc-fg: CanvasText;
+    --oc-bg: Canvas;
+    --oc-accent: ButtonText;
+    --oc-accent-fg: ButtonFace;
+    --oc-accent-hover: ButtonText;
+    --oc-border: ButtonText;
+    --oc-muted: GrayText;
+    --oc-description: GrayText;
+    --oc-user-msg-bg: Canvas;
+    --oc-user-msg-fg: CanvasText;
+    --oc-assistant-msg-bg: Canvas;
+    --oc-assistant-msg-fg: CanvasText;
+    --oc-input-bg: Canvas;
+    --oc-input-border: ButtonText;
+    --oc-link: LinkText;
+    --oc-glass-blur: none;
+    --oc-glass-bg: Canvas;
+    --color-border: ButtonText;
+    --color-muted: GrayText;
+    --color-fg: CanvasText;
+    --color-accent: ButtonText;
+    --bg-primary: Canvas;
+    --bg-secondary: Canvas;
+    --bg-tertiary: Canvas;
+    --bg-code: Canvas;
+    --shadow-sm: none;
+    --shadow-md: none;
+    --shadow-lg: none;
+    --shadow-mission: none;
+    --assistant-message-bg: Canvas;
+    --assistant-message-fg: CanvasText;
+    --user-message-bg: Canvas;
+    --user-message-fg: CanvasText;
+    --jump-btn-bg: Canvas;
+    --jump-btn-border: ButtonText;
+    --jump-btn-shadow: none;
+  }
+}

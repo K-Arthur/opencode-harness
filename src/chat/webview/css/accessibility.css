@@ -1,0 +1,309 @@
+/* ═══════════════════════════════════════════════════════════════
+   Accessibility & Focus Management
+   ═══════════════════════════════════════════════════════════════
+
+   This file is imported into the @layer accessibility cascade layer
+   (see styles.css). Cascade layers guarantee that everything here
+   wins against earlier layers (tokens, base, layout, components,
+   messages, blocks) regardless of selector specificity — so a stray
+   `outline: none` deeper in the codebase can never strip the keyboard
+   focus ring. Add new focus rules HERE rather than in component files.
+*/
+
+/* ─── Focus Visible Rings ─── */
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* Specific focus styles for different element types */
+button:focus-visible,
+[role="button"]:focus-visible {
+  outline-offset: 2px;
+}
+
+/* Details/summary focus (thinking blocks) */
+details[open] > summary:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+  border-radius: var(--radius-md);
+}
+
+input:focus-visible,
+textarea:focus-visible,
+[contenteditable]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
+}
+
+/* The composer's keyboard focus is shown by the #input-area :has() ring
+   (layout.css), which is drawn for both pointer and keyboard focus — so focus
+   stays clearly visible. Suppress this element's own outline so the composer
+   shows a single ring, not two. This MUST live in the accessibility layer
+   (it is last); an ID selector is needed to beat textarea:focus-visible
+   within the same layer. */
+#prompt-input:focus-visible {
+  outline: none;
+}
+
+.tab:focus-visible {
+  outline-offset: -2px;
+  border-radius: var(--radius-md);
+}
+
+.dropdown-item:focus-visible,
+.dropdown-item.selected {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+/* Shape-specific overrides where inherit doesn't work */
+.send-btn:focus-visible { border-radius: var(--radius-md); }
+.tab-btn:focus-visible { border-radius: var(--radius-md) var(--radius-md) 0 0; }
+
+/* ─── Minimum Touch/Pointer Target Sizes ─── */
+/* WCAG 2.5.8: 24x24px minimum for pointer targets */
+
+.header-btn,
+.bottom-btn,
+.send-btn,
+.abort-btn,
+.btn-icon,
+.mode-dropdown-btn,
+.mode-option,
+.model-selector-btn,
+.input-action-btn,
+.suggestion-btn,
+.suggestion-card,
+.code-block-copy,
+.code-block-insert,
+.code-block-new-file,
+.diff-btn,
+.permission-btn,
+.tab-new,
+.tab-close,
+.overlay-close,
+.view-all-btn {
+  min-width: var(--size-target-min);
+  min-height: var(--size-target-min);
+}
+
+/* Override: larger targets for primary action buttons */
+.send-btn,
+.abort-btn,
+.header-btn {
+  min-width: var(--size-target-large);
+  min-height: var(--size-target-large);
+}
+
+/* Context chip remove: small visual with extended pseudo-element hit area */
+.context-chip-remove {
+  min-width: var(--size-icon-xs);
+  min-height: 18px;
+  position: relative;
+}
+
+.context-chip-remove::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+}
+
+/* ─── Reduced Motion ─── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .message,
+  .tab-content,
+  .overlay-dialog {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .typing-dots span {
+    animation: none !important;
+    opacity: 0.6 !important;
+  }
+
+  .streaming-text::after {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+
+  .stream-cursor {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+
+  .skeleton-shimmer {
+    animation: none !important;
+    background: var(--oc-editor-bg) !important;
+  }
+
+  #context-bar-fill {
+    transition: none !important;
+  }
+
+  .overlay {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+
+  .tab-btn.streaming .tab-indicator {
+    animation: none !important;
+    opacity: 0.6 !important;
+  }
+}
+
+/* ─── High Contrast Mode ─── */
+@media (forced-colors: active) {
+  :root {
+    --oc-border: CanvasText;
+    --oc-focus: Highlight;
+    --oc-fg: CanvasText;
+    --oc-bg: Canvas;
+    --oc-accent: ButtonText;
+    --oc-accent-fg: ButtonFace;
+    --oc-accent-hover: ButtonText;
+    --oc-error: GrayText;
+    --oc-warning: GrayText;
+    --oc-success: ButtonText;
+    --oc-info: LinkText;
+    --oc-muted: GrayText;
+    --oc-description: GrayText;
+    --color-accent: ButtonText;
+    --color-border: ButtonText;
+    --color-muted: GrayText;
+    --color-fg: CanvasText;
+  }
+
+  .message-bubble,
+  .code-block,
+  .tool-card,
+  .diff-block,
+  .permission-block,
+  .thinking-block,
+  .dropdown,
+  .overlay-dialog {
+    border: 1px solid CanvasText;
+  }
+
+  .user .message-bubble {
+    border: 2px solid Highlight;
+  }
+
+  .tab.active {
+    border-bottom: 3px solid Highlight;
+  }
+
+  .skill-badge,
+  .context-chip {
+    border: 1px solid CanvasText;
+  }
+
+  button,
+  [role="button"],
+  .send-btn,
+  .abort-btn,
+  .header-btn {
+    border: 1px solid ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
+  }
+
+  a,
+  .link {
+    color: LinkText;
+    text-decoration: underline;
+  }
+
+  input,
+  textarea,
+  [contenteditable] {
+    border: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .diff-added {
+    background: Canvas;
+    color: CanvasText;
+    border: 1px solid ButtonText;
+  }
+
+  .diff-removed {
+    background: Canvas;
+    color: GrayText;
+    border: 1px solid GrayText;
+  }
+
+  .modal-session-item:hover,
+  .model-option.focused,
+  .dropdown-item.selected {
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  *:focus-visible {
+    outline-color: Highlight !important;
+  }
+
+  .tool-result-action-btn,
+  .tool-file-action-btn {
+    border: 1px solid ButtonText;
+  }
+}
+
+/* ─── Elapsed timer: polite announcement so screen readers don't spam ─── */
+.tool-elapsed {
+  /* aria-live and role are set in JS; CSS ensures the element is role=status */
+  speak: none; /* prevent auto-reading of rapid counter updates */
+}
+
+/* ─── Tool action buttons: ensure focus ring is visible on dark bg ─── */
+.tool-result-action-btn:focus-visible,
+.tool-file-action-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ─── Keyboard Navigation Helpers ─── */
+[tabindex="0"]:focus-visible,
+[tabindex="-1"]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Skip link for keyboard users */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: var(--space-4);
+  z-index: var(--z-tooltip);
+  padding: var(--space-2) var(--space-4);
+  background: var(--oc-button-bg);
+  color: var(--oc-button-fg);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-decoration: none;
+  transition: top var(--duration-fast) var(--ease-out);
+}
+
+.skip-link:focus {
+  top: var(--space-2);
+}

@@ -1,0 +1,168 @@
+/* Queue Panel Styles */
+
+/* Queue badge in input area */
+.queue-badge {
+  background: var(--oc-fg);
+  color: var(--oc-panel-bg);
+  font-size: var(--text-xs);
+  padding: var(--space-0-5) var(--space-2);
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  min-width: 20px;
+  text-align: center;
+}
+
+.queue-badge.hidden {
+  display: none;
+}
+
+/* Queue panel */
+.queue-panel {
+  background: var(--oc-panel-bg);
+  border-top: 1px solid var(--oc-border);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.queue-panel.hidden {
+  display: none;
+}
+
+/* Queue panel header */
+.queue-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--oc-border);
+}
+
+.queue-panel-header h3 {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--oc-fg);
+}
+
+.queue-panel-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Queue list */
+.queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+}
+
+/* Empty state */
+.queue-empty {
+  text-align: center;
+  padding: var(--space-6);
+  color: var(--oc-muted);
+}
+
+/* Queue item */
+.queue-item {
+  background: var(--oc-editor-bg);
+  border: 1px solid var(--oc-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  transition: border-color 0.2s;
+}
+
+.queue-item:hover {
+  border-color: var(--oc-fg);
+}
+
+.queue-item.queued {
+  border-left: 3px solid var(--oc-fg);
+}
+
+.queue-item.sending,
+.queue-item.streaming {
+  border-left: 3px solid var(--oc-fg);
+  opacity: 0.7;
+}
+
+.queue-item.completed {
+  border-left: 3px solid var(--color-success);
+  opacity: 0.5;
+}
+
+.queue-item.failed {
+  border-left: 3px solid var(--color-error);
+}
+
+/* Steer prompt indicators */
+.queue-item.steer-prompt {
+  border-left: 3px solid var(--color-warning);
+  background: linear-gradient(135deg, var(--oc-editor-bg) 0%, rgba(255, 152, 0, 0.1) 100%);
+}
+
+.queue-item.steer-prompt:hover {
+  border-left-color: var(--color-warning);
+}
+
+.steer-indicator {
+  font-size: var(--text-md);
+  margin-right: var(--space-1);
+}
+
+/* Queue item header */
+.queue-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.queue-item-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.queue-item-text-preview {
+  font-size: var(--text-sm);
+  color: var(--oc-editor-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.queue-item-state {
+  font-size: var(--text-2xs);
+  padding: var(--space-0-5) var(--space-1-5);
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  background: var(--oc-muted);
+  color: var(--oc-panel-fg);
+}
+
+.queue-item-tokens {
+  font-size: var(--text-2xs);
+  color: var(--oc-muted);
+  font-family: var(--font-mono);
+}
+
+/* Queue item actions */
+.queue-item-actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+/* Badge styles (reuse existing patterns) */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-0-5) var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+}

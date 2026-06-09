@@ -1,0 +1,432 @@
+/*
+ * Pending-question panel (#question-bar).
+ *
+ * A sticky action panel that sits directly above the composer (sibling of
+ * #input-area, below #changed-files-strip) so a required user decision is never
+ * buried in the transcript. The transcript keeps only a passive pointer; all
+ * interactive controls live here. See questionBar.ts + renderer.ts.
+ */
+
+#question-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  margin: 0 var(--space-4) var(--space-2);
+  padding: var(--space-2-5) var(--space-3);
+  background: linear-gradient(135deg, rgba(0, 120, 212, 0.10), rgba(0, 120, 212, 0.03));
+  border: 1px solid rgba(0, 120, 212, 0.28);
+  border-left: 3px solid var(--color-accent, var(--vscode-focusBorder, #0078d4));
+  border-radius: var(--radius-md);
+  color: var(--oc-fg, var(--color-fg));
+  font-size: var(--text-sm);
+  box-sizing: border-box;
+  /* Required-action affordance, but never let the panel push the composer
+     off-screen — long / multi-question stacks scroll internally instead. */
+  max-height: 42vh;
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.12);
+  animation: question-bar-in var(--duration-normal, 180ms) var(--ease-out, ease);
+}
+
+#question-bar.hidden {
+  display: none;
+}
+
+@keyframes question-bar-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.question-bar-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  flex-shrink: 0;
+}
+
+.question-bar-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  font-weight: 600;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-accent, var(--vscode-focusBorder, #0078d4));
+}
+
+.question-bar-count {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--oc-fg-muted, var(--vscode-descriptionForeground));
+}
+
+.question-bar-count.hidden {
+  display: none;
+}
+
+/* Scroll region — header/status/actions stay pinned, items scroll. */
+.question-bar-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2-5);
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.question-bar-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.question-bar-item--answered {
+  opacity: 0.6;
+}
+
+.question-bar-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
+}
+
+.question-bar-section-header {
+  font-weight: 600;
+  font-size: var(--text-xs);
+  color: var(--oc-fg, var(--color-fg));
+}
+
+.question-bar-question {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal, 1.5);
+  color: var(--oc-fg, var(--color-fg));
+  word-break: break-word;
+}
+
+.question-bar-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1-5);
+}
+
+.question-bar-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2-5);
+  font-size: var(--text-xs);
+  font-family: inherit;
+  background: var(--oc-bg-secondary, rgba(0, 0, 0, 0.18));
+  border: 1px solid var(--oc-glass-border, rgba(255, 255, 255, 0.12));
+  border-radius: var(--radius-sm);
+  color: var(--oc-fg, var(--color-fg));
+  cursor: pointer;
+  min-height: var(--size-target-min);
+  transition: background-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out);
+}
+
+.question-bar-option:hover:not(:disabled) {
+  background: var(--oc-accent-subtle, rgba(0, 120, 212, 0.15));
+  border-color: var(--color-accent, #0078d4);
+  color: var(--color-accent, #0078d4);
+}
+
+/* Selection feedback — not color-only: a check glyph appears so the choice is
+   obvious regardless of theme or color vision. */
+.question-bar-option.selected {
+  background: var(--color-accent, var(--vscode-button-background, #0078d4));
+  border-color: var(--color-accent, var(--vscode-button-background, #0078d4));
+  color: var(--vscode-button-foreground, #fff);
+  font-weight: 600;
+}
+
+.question-bar-option.selected::before {
+  content: "✓";
+  font-size: 0.9em;
+  line-height: 1;
+}
+
+.question-bar-option:focus-visible {
+  outline: 2px solid var(--color-accent, var(--vscode-focusBorder, #0078d4));
+  outline-offset: 2px;
+}
+
+.question-bar-option:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.question-bar-freetext {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-1-5) var(--space-2);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  background: var(--oc-bg-input, rgba(0, 0, 0, 0.2));
+  border: 1px solid var(--oc-glass-border, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-sm);
+  color: var(--oc-fg, var(--color-fg));
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.question-bar-freetext:focus-visible {
+  outline: none;
+  border-color: var(--color-accent, var(--vscode-focusBorder, #0078d4));
+}
+
+.question-bar-status {
+  font-size: var(--text-xs);
+  font-style: italic;
+  color: var(--color-success, var(--vscode-charts-green, #2ea043));
+  flex-shrink: 0;
+}
+
+.question-bar-status.hidden {
+  display: none;
+}
+
+.question-bar-answered-badge {
+  align-self: flex-start;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-success, var(--vscode-charts-green, #2ea043));
+}
+
+.question-bar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.question-bar-submit-btn {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  background: var(--color-accent, var(--vscode-button-background, #0078d4));
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--vscode-button-foreground, #fff);
+  cursor: pointer;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.question-bar-submit-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.question-bar-submit-btn:focus-visible {
+  outline: 2px solid var(--color-accent, var(--vscode-focusBorder, #0078d4));
+  outline-offset: 2px;
+}
+
+.question-bar-submit-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.question-bar-skip-btn {
+  padding: var(--space-1) var(--space-2-5);
+  font-size: var(--text-xs);
+  background: transparent;
+  border: 1px solid var(--oc-glass-border, rgba(255, 255, 255, 0.12));
+  border-radius: var(--radius-sm);
+  color: var(--oc-fg-muted, var(--vscode-descriptionForeground));
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
+}
+
+.question-bar-skip-btn:hover:not(:disabled) {
+  color: var(--oc-fg, var(--color-fg));
+  border-color: var(--oc-fg-muted, var(--vscode-descriptionForeground));
+}
+
+.question-bar-skip-btn:focus-visible {
+  outline: 2px solid var(--color-accent, var(--vscode-focusBorder, #0078d4));
+  outline-offset: 2px;
+}
+
+.question-bar-skip-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* H3a: Numbered <fieldset> legend — "Question 1 of 3 — Database" */
+.question-bar-section-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 600;
+  font-size: var(--text-xs);
+  color: var(--oc-fg, var(--color-fg));
+  margin-bottom: var(--space-1);
+}
+
+.question-bar-q-number {
+  color: var(--color-accent, var(--vscode-focusBorder, #0078d4));
+}
+
+/* H3a: <fieldset> resets for the question bar */
+.question-bar-section {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.question-bar-section[aria-required="true"] .question-bar-legend::after {
+  content: " (required)";
+  font-weight: 400;
+  color: var(--color-error, var(--vscode-errorForeground, #e06c75));
+  font-size: 0.9em;
+}
+
+/* H2d: Pulse animation when waiting for the agent to resume */
+#question-bar.question-bar--resuming {
+  animation: question-bar-pulse 0.8s ease-in-out infinite alternate;
+  border-left-color: var(--color-accent, #0078d4);
+}
+
+@keyframes question-bar-pulse {
+  from { opacity: 0.85; }
+  to { opacity: 1; }
+}
+
+/* H3c: Multi-group compact pointer in the transcript */
+.question-block-questions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.question-block-question-item {
+  display: block;
+  width: 100%;
+  padding: var(--space-0-5) var(--space-1);
+  font-size: var(--text-xs);
+  font-family: inherit;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm, 3px);
+  color: var(--color-accent, var(--vscode-focusBorder, #0078d4));
+  cursor: pointer;
+  transition: background-color var(--duration-fast, 120ms) var(--ease-out, ease);
+}
+
+.question-block-question-item:hover {
+  background: var(--oc-accent-subtle, rgba(0, 120, 212, 0.08));
+}
+
+.question-block-question-item:focus-visible {
+  outline: 2px solid var(--color-accent, var(--vscode-focusBorder, #0078d4));
+  outline-offset: 2px;
+}
+
+/* H3c: Answered multi-group summary */
+.q-answer-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  margin-top: var(--space-1);
+}
+
+.q-answer-summary-item {
+  font-size: var(--text-xs);
+  color: var(--oc-fg-muted, var(--vscode-descriptionForeground));
+}
+
+.q-answer-summary-item::before {
+  content: "\2713";
+  color: var(--color-success, #2ea043);
+  margin-right: var(--space-1);
+}
+
+/* Interactive question option/freetext styles */
+.question-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1-5);
+}
+.question-option {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-2-5);
+  font-size: var(--text-xs);
+  font-family: inherit;
+  background: var(--oc-bg-secondary, rgba(0,0,0,0.18));
+  border: 1px solid var(--oc-glass-border, rgba(255,255,255,0.1));
+  border-radius: var(--radius-sm);
+  color: var(--oc-fg);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+}
+.question-option:hover:not(:disabled) {
+  background: var(--oc-accent-subtle, rgba(0, 120, 212, 0.15));
+  border-color: var(--color-accent, #0078d4);
+  color: var(--color-accent, #0078d4);
+}
+.question-option:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.question-freetext {
+  width: 100%;
+  min-height: 48px;
+  padding: var(--space-1-5) var(--space-2);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  background: var(--oc-bg-input, rgba(0,0,0,0.2));
+  border: 1px solid var(--oc-glass-border, rgba(255,255,255,0.08));
+  border-radius: var(--radius-sm);
+  color: var(--oc-fg);
+  resize: vertical;
+  box-sizing: border-box;
+}
+.question-freetext:focus {
+  outline: none;
+  border-color: var(--color-accent, #0078d4);
+}
+.question-freetext:disabled {
+  opacity: 0.5;
+}
+.question-submit {
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  background: var(--color-accent, #0078d4);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: white;
+  cursor: pointer;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+.question-submit:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.question-submit:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.question-answer {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  font-style: italic;
+  color: var(--color-success, #2ea043);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #question-bar {
+    animation: none;
+  }
+  #question-bar.question-bar--resuming {
+    animation: none;
+  }
+}

@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none';">
+  <title>OpenCode</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a href="#prompt-input" class="skip-link">Skip to input</a>
+
+  <div id="app">
+    <header id="chat-header">
+      <div class="header-row">
+        <div class="header-left">
+          <div class="oc-logo-wrapper">
+            <svg class="oc-logo" width="20" height="20" viewBox="0 0 480 600" fill="none" aria-hidden="true">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M0 0h480v600H0V0zm120 120h240v360H120V120z" fill="currentColor"/>
+            </svg>
+            <div id="agent-status-led" class="status-led idle"></div>
+          </div>
+          <div class="header-info">
+            <h1 class="header-title">OpenCode</h1>
+            <span id="agent-status-text" class="status-text" aria-live="polite" aria-atomic="true">SYSTEM READY</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="icon-btn" id="history-btn" title="Session history" aria-label="Session history" aria-haspopup="dialog" aria-controls="session-modal">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </button>
+          <!-- badge sinks for backward-compat — invisible, no toolbar buttons -->
+          <span id="cf-count-badge" class="hidden" aria-hidden="true"></span>
+          <span id="ctx-pct-badge" class="hidden" aria-hidden="true"></span>
+          <button class="icon-btn" id="skills-btn" title="Manage skills" aria-label="Manage skills" aria-haspopup="dialog" aria-controls="skills-modal">
+            <!-- Sparkles — conveys AI/agent capabilities -->
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.582a.5.5 0 0 1 0 .962L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
+              <path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/>
+            </svg>
+          </button>
+          <button class="icon-btn" id="settings-btn" title="More options" aria-label="More options" aria-haspopup="menu" aria-controls="settings-menu" aria-expanded="false">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Skills management modal -->
+    <div id="skills-modal" class="skills-modal hidden" role="dialog" aria-label="Manage skills" aria-modal="true">
+      <div class="skills-modal-content">
+        <div class="skills-modal-header">
+          <h2 class="skills-modal-title">Manage Skills</h2>
+          <button class="skills-modal-close-btn" id="skills-modal-close-btn" aria-label="Close skills modal">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div class="skills-modal-search">
+          <input type="text" class="skills-modal-search-input" id="skills-search-input" placeholder="Search skills..." aria-label="Search skills">
+        </div>
+        <div class="skills-modal-filter" id="skills-filter" role="group" aria-label="Filter skills by category">
+          <button class="skills-modal-filter-btn active" data-category="all" aria-pressed="true">All</button>
+          <!-- Category buttons are populated dynamically from actual skill data -->
+        </div>
+        <div class="skills-modal-list" id="skills-list">
+          <!-- Skills will be rendered dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Commands palette modal: shown by /commands, list_stashes, or Ctrl+/ -->
+    <div id="commands-modal" class="commands-modal hidden" role="dialog" aria-label="Commands" aria-modal="true">
+      <div class="commands-modal-content">
+        <div class="commands-modal-header">
+          <h2 class="commands-modal-title" id="commands-modal-title">Commands</h2>
+          <button class="commands-modal-close-btn" id="commands-modal-close-btn" aria-label="Close commands modal">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div class="commands-modal-search">
+          <input type="text" class="commands-modal-search-input" id="commands-search-input" placeholder="Search commands..." aria-label="Search commands">
+        </div>
+        <div class="commands-modal-filter" id="commands-filter" role="group" aria-label="Filter commands"></div>
+        <div class="commands-modal-list" id="commands-list" role="listbox"></div>
+      </div>
+    </div>
+
+    <!-- Settings overflow menu (anchored to #settings-btn) -->
+    <div id="settings-menu" class="settings-menu hidden" role="menu" aria-label="More options">
+      <button class="settings-menu-item" id="checkpoint-toggle-btn" role="menuitem" aria-label="Toggle checkpoint panel" aria-controls="checkpoint-panel" aria-pressed="false">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+        </svg>
+        Checkpoints
+      </button>
+      <button class="settings-menu-item" id="todos-toggle-btn" role="menuitem" aria-label="Toggle todos panel" aria-controls="todos-panel" aria-pressed="false">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+        </svg>
+        Todos
+      </button>
+      <button class="settings-menu-item" id="activity-toggle-btn" role="menuitem" aria-label="Toggle activity timeline" aria-controls="activity-panel" aria-pressed="false">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 19V5"/><path d="M8 17V7"/><path d="M12 21V3"/><path d="M16 15V9"/><path d="M20 18V6"/>
+        </svg>
+        Activity
+      </button>
+      <button class="settings-menu-item" id="tasks-toggle-btn" role="menuitem" aria-label="Toggle command tasks" aria-controls="tasks-panel" aria-pressed="false">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10"/><path d="M7 13h6"/><path d="m15 16 2 2 4-4"/>
+        </svg>
+        Tasks
+      </button>
+      <button class="settings-menu-item" id="subagents-toggle-btn" role="menuitem" aria-label="Toggle subagent panel" aria-controls="subagent-panel" aria-pressed="false">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="5" y="8" width="14" height="10" rx="2"/>
+          <path d="M12 5v3"/>
+          <circle cx="9" cy="13" r="1"/>
+          <circle cx="15" cy="13" r="1"/>
+          <path d="M9 18v2"/>
+          <path d="M15 18v2"/>
+        </svg>
+        Subagents
+        <span class="header-badge hidden" id="subagents-badge" aria-hidden="true"></span>
+      </button>
+      <button class="settings-menu-item" id="timeline-toggle-btn" role="menuitem" aria-label="Toggle conversation timeline" aria-pressed="false">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+        </svg>
+        Conversation Timeline
+      </button>
+      <button class="settings-menu-item" id="thinking-toggle-menu-item" role="menuitemcheckbox" aria-checked="true" aria-label="Show thinking blocks">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2z"/>
+          <path d="M12 16v-4"/>
+          <path d="M12 8h.01"/>
+        </svg>
+        Show thinking
+        <span class="settings-menu-checkmark" aria-hidden="true">&#10003;</span>
+      </button>
+
+      <div class="settings-menu-separator" role="separator"></div>
+
+      <button class="settings-menu-item" id="mcp-btn" role="menuitem" aria-label="Manage MCP servers">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+          <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+          <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
+          <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+        </svg>
+        Manage MCP servers
+      </button>
+
+      <button class="settings-menu-item" id="perm-config-btn" role="menuitem" aria-label="Configure tool permissions">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="11" width="18" height="11" rx="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        Tool Permissions
+      </button>
+      <button class="settings-menu-item" id="theme-customizer-btn" role="menuitem" aria-label="Customize theme colors">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3a9 9 0 0 0 0 18h1.5a1.5 1.5 0 0 0 .9-2.7 1.5 1.5 0 0 1 .9-2.7H16a5 5 0 0 0 0-10h-4z"/>
+          <circle cx="7.5" cy="10" r=".5"/><circle cx="10" cy="7.5" r=".5"/><circle cx="14" cy="7.5" r=".5"/>
+        </svg>
+        Customize theme
+      </button>
+      <button class="settings-menu-item" id="shortcuts-help-btn" role="menuitem" aria-label="Open keyboard shortcuts">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="5" width="18" height="14" rx="2"/>
+          <path d="M7 9h.01M11 9h.01M15 9h.01M19 9h.01M8 13h8"/>
+        </svg>
+        Keyboard Shortcuts
+      </button>
+    </div>
+
+    <!-- Hidden cost/token display elements (moved from header; referenced by dom.ts) -->
+    <div id="cost-display" class="cost-display" hidden aria-hidden="true"></div>
+    <div id="token-display" class="token-display" hidden aria-hidden="true"></div>
+    <!-- Hidden files-toggle element (removed from header; auto-show is now used) -->
+    <button id="files-toggle-btn" hidden aria-hidden="true" tabindex="-1"></button>
+
+    <div id="tab-container">
+      <div id="tab-bar" role="tablist" aria-label="Sessions">
+      </div>
+      <!-- Status strip: shows active model + cost + tokens once a session has data -->
+      <div id="status-strip" class="status-strip" hidden aria-label="Session status">
+        <span id="status-model" class="status-strip-model"></span>
+        <span id="status-cost" class="status-strip-cost hidden"></span>
+        <span id="status-tokens" class="status-strip-tokens hidden"></span>
+        <div id="context-usage" class="context-usage-bar ctx-mode-minimal hidden" role="progressbar" tabindex="0"
+          aria-label="Context usage" aria-haspopup="true" aria-controls="context-usage-dropdown"
+          aria-valuemin="0" aria-valuemax="100">
+          <span class="context-usage-label">Context</span>
+          <span class="context-usage-dot" aria-hidden="true"></span>
+          <div id="context-progress-track" class="context-usage-track" aria-hidden="true">
+            <div id="context-progress-fill" class="context-usage-fill"></div>
+          </div>
+          <span id="context-label" class="context-usage-detail">0%</span>
+          <span id="context-cost" class="context-usage-detail hidden"></span>
+        </div>
+        <button id="ctx-window-unknown-chip" class="ctx-window-unknown-chip hidden"
+          aria-label="Context window unknown — click to set an override"
+          title="Context window size is unknown for this model. Click to set an override.">
+          <span class="ctx-window-unknown-icon">⚠</span>
+          <span class="ctx-window-unknown-label">Context window unknown</span>
+          <span class="ctx-window-unknown-action">Set override →</span>
+        </button>
+        <div id="quota-bar" class="quota-bar hidden" role="group" aria-label="Provider quota and usage">
+          <span id="quota-label" class="quota-label">Usage</span>
+          <div class="quota-track" aria-hidden="true">
+            <div id="quota-progress-bar" class="quota-fill"></div>
+          </div>
+          <span id="quota-detail" class="quota-detail"></span>
+        </div>
+      </div>
+      <!-- #changed-files-list removed — canonical UI is now #changed-files-dropdown -->
+      <div id="checkpoint-panel" class="checkpoint-panel hidden" role="list" aria-label="Checkpoints" aria-live="polite"></div>
+      <!-- Main layout row: #tab-panels (chat) on the left, side panels (todos,
+           activity, tasks, subagent) on the right. The .main-layout wrapper
+           turns the four sibling panels from stacked (broken) into a true
+           sidebar beside the chat. -->
+      <div class="main-layout">
+        <div id="tab-panels">
+        </div>
+        <div id="todos-panel" class="todos-panel side-panel hidden" role="region" aria-label="Todos and changed files">
+          <div class="todos-panel-header">
+            <h2 class="todos-panel-title">Todos & Files</h2>
+            <button class="icon-btn" id="close-todos-btn" title="Close panel" aria-label="Close todos panel">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+          <div class="todos-panel-content">
+            <div class="todos-section">
+              <div id="todos-list"></div>
+              <form class="todo-add-form" id="todo-add-form">
+                <input type="text" class="todo-add-input" id="todo-add-input" placeholder="Add a task or reminder..." aria-label="New todo">
+                <button type="submit" class="todo-add-btn">Add</button>
+              </form>
+            </div>
+          </div>
+        </div>
+        <div id="activity-panel" class="activity-panel side-panel hidden" role="region" aria-label="Agent activity timeline">
+          <div class="activity-panel-header">
+            <h2 class="activity-panel-title">Activity</h2>
+            <button class="icon-btn" id="activity-close-btn" title="Close activity timeline" aria-label="Close activity timeline">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+          <div id="activity-filters" class="activity-filters"></div>
+          <div id="activity-list" class="activity-panel-content" aria-live="polite"></div>
+        </div>
+        <div id="tasks-panel" class="tasks-panel side-panel hidden" role="region" aria-label="Command tasks">
+          <div class="tasks-panel-header">
+            <h2 class="tasks-panel-title">Commands</h2>
+            <button class="icon-btn" id="tasks-close-btn" title="Close command tasks" aria-label="Close command tasks">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+          <div id="tasks-filters" class="tasks-filters"></div>
+          <div id="tasks-list" class="tasks-panel-content" aria-live="polite"></div>
+        </div>
+        <div id="subagent-panel" class="subagent-panel side-panel hidden" aria-label="Subagent activity">
+          <div class="subagent-panel-header">
+            <h2 class="subagent-panel-title">Subagent Activity</h2>
+            <button class="icon-btn" id="close-subagent-btn" title="Close panel" aria-label="Close subagent panel">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+          <div class="subagent-panel-content" id="subagent-list">
+            <!-- Subagent activities will be rendered dynamically -->
+          </div>
+        </div>
+        <!-- Detail view overlays the subagent list when active (absolute
+             positioning within .main-layout, which is position:relative). -->
+        <div id="subagent-detail-view" class="subagent-detail-view hidden" aria-label="Subagent detail">
+          <div class="subagent-detail-header">
+            <button class="icon-btn" id="subagent-detail-back-btn" title="Back to list" aria-label="Back to subagent list">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+            </button>
+            <h2 class="subagent-detail-title">Subagent Detail</h2>
+            <button class="icon-btn" id="subagent-detail-close-btn" title="Close detail" aria-label="Close subagent detail">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+          <div class="subagent-detail-content" id="subagent-detail-content">
+            <!-- Subagent detail will be rendered dynamically -->
+          </div>
+        </div>
+      </div>
+      <!-- #context-usage-panel removed — canonical UI is now #context-usage-dropdown -->
+      <!-- Changed Files floating dropdown — anchored below the toolbar button -->
+      <div id="changed-files-dropdown" class="cf-dropdown hidden"
+        role="region" aria-label="Changed files"
+        aria-live="polite">
+        <div class="cf-dropdown-header">
+          <span class="cf-dropdown-title">Changed Files</span>
+          <button class="icon-btn" id="cf-dropdown-close" aria-label="Close changed files">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div id="cf-dropdown-tree" class="cf-dropdown-tree"></div>
+      </div>
+      <!-- Context Usage floating dropdown — anchored below the toolbar button -->
+      <div id="context-usage-dropdown" class="ctx-dropdown hidden"
+        role="region" aria-label="Context usage details"
+        aria-live="polite">
+        <div class="ctx-dropdown-header">
+          <span class="ctx-dropdown-title">Context Usage</span>
+          <button class="icon-btn" id="ctx-dropdown-close" aria-label="Close context usage">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div id="ctx-dropdown-content" class="ctx-dropdown-content"></div>
+      </div>
+
+      <!-- Always-visible compact strip: appears above input when files have been changed -->
+      <div id="changed-files-strip" class="cf-strip hidden"
+        role="button" tabindex="0"
+        aria-label="Changed files — click to view"
+        aria-haspopup="true" aria-controls="changed-files-dropdown">
+      </div>
+
+      <!-- Pending-question panel: appears above the input area when the model asks a question.
+           Auto-hides after the user submits. See questionBar.ts + question-bar.css. -->
+      <div id="question-bar" class="hidden" role="region" aria-label="Question from model">
+        <div class="question-bar-header">
+          <span class="question-bar-title">Question from model</span>
+          <span id="question-bar-count" class="question-bar-count hidden"></span>
+        </div>
+        <div id="question-bar-items" class="question-bar-items"></div>
+        <div class="question-bar-actions">
+          <button id="question-bar-submit" class="question-bar-submit-btn" type="button" disabled>Submit Answer</button>
+        </div>
+      </div>
+
+      <div id="queue-status-region" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+
+      <div id="input-area">
+      <div id="model-dropdown-container" class="hidden"></div>
+      <div id="variant-dropdown-container" class="hidden"></div>
+
+      <div id="input-wrapper">
+        <textarea id="prompt-input" rows="1"
+                  placeholder="Ask OpenCode a question about your code…"
+                  aria-label="Message input"
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-expanded="false"
+                  aria-controls="mention-dropdown slash-autocomplete"
+                  autocomplete="off"
+                  spellcheck="true"></textarea>
+        <div id="mention-dropdown" class="dropdown hidden" role="listbox" aria-label="File mentions"></div>
+        <div id="slash-autocomplete" class="slash-autocomplete hidden" role="listbox" aria-label="Slash commands"></div>
+      </div>
+      <div id="voice-input-status" class="voice-input-status" aria-live="polite" aria-atomic="true"></div>
+
+      <div id="input-bottom-bar">
+        <div class="bottom-bar-left">
+          <button class="icon-btn" id="mention-btn" title="Add context (@)" aria-label="Add context mention">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/>
+            </svg>
+          </button>
+          <button class="icon-btn" id="commands-palette-btn" title="Commands palette (Ctrl+Shift+/)" aria-label="Open commands palette">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="4 17 10 11 4 5"/>
+              <line x1="12" y1="19" x2="20" y2="19"/>
+            </svg>
+          </button>
+          <button class="icon-btn" id="attach-btn" title="Attach files" aria-label="Attach files">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 7.5a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4v7a6 6 0 0 1-12 0v-4"/>
+              <path d="M12 15V7.5"/>
+            </svg>
+          </button>
+          <button class="icon-btn voice-input-btn" id="voice-input-btn" title="Start voice input" aria-label="Start voice input" aria-pressed="false" type="button">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <path d="M12 19v3"/>
+              <path d="M8 22h8"/>
+            </svg>
+          </button>
+          <button class="instructions-gear-btn icon-btn" id="instructions-gear-btn" title="Custom instructions for this tab" aria-label="Edit tab instructions" aria-expanded="false">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+          <div class="instructions-editor hidden" id="instructions-editor"
+               role="dialog" aria-modal="true" aria-labelledby="instructions-editor-label">
+            <label class="instructions-editor-label" id="instructions-editor-label" for="instructions-textarea">Custom instructions (injected once at session start)</label>
+            <textarea class="instructions-textarea" id="instructions-textarea" rows="4" placeholder="E.g. Always write tests first. Use TypeScript strict mode."></textarea>
+            <div class="instructions-editor-actions">
+              <button class="instructions-save-btn" id="instructions-save-btn" aria-label="Save custom instructions (Ctrl+Enter)">Save</button>
+              <button class="instructions-cancel-btn" id="instructions-cancel-btn" aria-label="Discard and close">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="bottom-bar-right">
+        <div class="mode-dropdown" id="mode-dropdown" role="radiogroup">
+            <button class="mode-dropdown-btn" id="mode-dropdown-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Select session mode">
+              <span class="mode-dropdown-label" id="mode-dropdown-label">
+                <svg class="mode-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3L6.91 6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                <span id="mode-current-text">Build</span>
+              </span>
+              <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6"/>
+              </svg>
+            </button>
+            <div class="mode-dropdown-menu hidden" id="mode-dropdown-menu" role="listbox" aria-label="Session mode">
+              <button class="mode-option mode-option--plan" id="mode-opt-plan" role="option" aria-selected="false" data-mode="plan">
+                <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3v18"/><path d="M7 3v18"/><path d="M3 7.5h18"/><path d="M3 16.5h18"/><path d="M17 3a2 2 0 0 1 2 2"/><path d="M17 21a2 2 0 0 0 2-2"/><path d="M7 3a2 2 0 0 0-2 2"/><path d="M7 21a2 2 0 0 1-2-2"/></svg>
+                <span class="mode-option-label">
+                  <span class="mode-option-name">Plan</span>
+                  <span class="mode-option-desc">Review changes before applying (safest for exploration)</span>
+                </span>
+                <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <button class="mode-option mode-option--auto" id="mode-opt-auto" role="option" aria-selected="false" data-mode="auto">
+                <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span class="mode-option-label">
+                  <span class="mode-option-name">Auto</span>
+                  <span class="mode-option-desc">Agent applies changes automatically (review recommended)</span>
+                </span>
+                <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <button class="mode-option mode-option--build" id="mode-opt-build" role="option" aria-selected="false" data-mode="build">
+                <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3L6.91 6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                <span class="mode-option-label">
+                  <span class="mode-option-name">Build</span>
+                  <span class="mode-option-desc">Full agent access including execute commands (use with caution)</span>
+                </span>
+                <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+            </div>
+          </div>
+           <button class="model-selector-btn" id="model-selector-btn" title="Select model" aria-label="Select model" aria-haspopup="listbox" aria-expanded="false">
+              <span id="model-label">Default</span>
+              <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6"/>
+              </svg>
+            </button>
+            <button class="variant-selector-btn hidden" id="variant-selector-btn" title="Select thinking level" aria-label="Select thinking level" aria-haspopup="listbox" aria-expanded="false">
+              <span class="variant-label-text" id="variant-label">Default</span>
+              <svg class="chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6"/>
+              </svg>
+            </button>
+            <div class="steer-mode-selector hidden" id="steer-mode-selector" role="radiogroup" aria-label="Steering mode">
+              <button class="steer-mode-btn active" id="steer-mode-interrupt" data-mode="interrupt" title="Interrupt current response (Ctrl+1)" aria-label="Interrupt mode" aria-keyshortcuts="Control+1" aria-checked="true" role="radio">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="16"/>
+                  <line x1="8" y1="12" x2="16" y2="12"/>
+                </svg>
+                <kbd class="steer-mode-key">Ctrl+1</kbd>
+              </button>
+              <button class="steer-mode-btn" id="steer-mode-append" data-mode="append" title="Append after current response (Ctrl+2)" aria-label="Append mode" aria-keyshortcuts="Control+2" aria-checked="false" role="radio">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 5v14"/>
+                  <path d="M5 12h14"/>
+                </svg>
+                <kbd class="steer-mode-key">Ctrl+2</kbd>
+              </button>
+              <button class="steer-mode-btn" id="steer-mode-queue" data-mode="queue" title="Queue for later (Ctrl+3)" aria-label="Queue mode" aria-keyshortcuts="Control+3" aria-checked="false" role="radio">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="8" y1="6" x2="21" y2="6"/>
+                  <line x1="8" y1="12" x2="21" y2="12"/>
+                  <line x1="8" y1="18" x2="21" y2="18"/>
+                  <line x1="3" y1="6" x2="3.01" y2="6"/>
+                  <line x1="3" y1="12" x2="3.01" y2="12"/>
+                  <line x1="3" y1="18" x2="3.01" y2="18"/>
+                </svg>
+                <kbd class="steer-mode-key">Ctrl+3</kbd>
+              </button>
+            </div>
+            <div class="send-btn-group">
+             <button class="send-btn" id="send-btn" title="Send" aria-label="Send message">
+              <span class="send-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="m5 12 7-7 7 7"/>
+                  <path d="M12 5v14"/>
+                </svg>
+              </span>
+              <span class="stop-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="6" y="6" width="12" height="12" rx="2"/>
+                </svg>
+              </span>
+            </button>
+            <div class="send-queue-count hidden" id="send-queue-count" aria-label="Queued prompts"></div>
+            </div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <!-- Display toggles (Phase 4.2) -->
+    <div class="display-toggles hidden" id="display-toggles" role="group" aria-label="Display options">
+      <label class="toggle-label" for="toggle-text">
+        <input type="checkbox" id="toggle-text" checked>
+        <span class="toggle-label-text">Text</span>
+      </label>
+      <label class="toggle-label" for="toggle-tools">
+        <input type="checkbox" id="toggle-tools" checked>
+        <span class="toggle-label-text">Tools</span>
+      </label>
+      <label class="toggle-label" for="toggle-diffs">
+        <input type="checkbox" id="toggle-diffs" checked>
+        <span class="toggle-label-text">Diffs</span>
+      </label>
+      <label class="toggle-label" for="toggle-errors">
+        <input type="checkbox" id="toggle-errors" checked>
+        <span class="toggle-label-text">Errors</span>
+      </label>
+    </div>
+
+    <!-- Standalone welcome view — shown when no sessions exist -->
+    <div id="welcome-view" class="welcome-view" role="region" aria-label="OpenCode welcome">
+      <div class="welcome-container">
+        <div class="welcome-header">
+          <div class="welcome-brand" aria-hidden="true">
+            <img class="welcome-wordmark" src="media/opencode-wordmark-dark.svg" width="120" height="32" alt="OpenCode" aria-hidden="true">
+          </div>
+          <div class="welcome-title">
+          <h1 id="welcome-greeting" class="welcome-greeting">OpenCode</h1>
+          <p class="welcome-tagline">AI-powered coding assistant integrated into your editor</p>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="welcome-search-wrapper">
+          <div id="welcome-search-input" class="welcome-search-input">
+            <span class="search-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                <circle cx="11" cy="11" r="7"/>
+                <path d="m20 20-3.5-3.5"/>
+              </svg>
+            </span>
+            <input type="text" placeholder="Search your conversation history..." aria-label="Search sessions" autocomplete="off" spellcheck="false">
+          </div>
+        </div>
+
+        <!-- Empty-model action banner (hidden by default) -->
+        <div id="welcome-model-empty-banner" class="welcome-model-empty-banner hidden" role="alert">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span>No model selected — <button class="welcome-empty-banner-link" id="welcome-empty-banner-link">pick a model</button> to start chatting</span>
+        </div>
+
+        <!-- Workspace + model context row -->
+        <div class="welcome-context" id="welcome-context" aria-label="Current workspace and model">
+          <span class="welcome-context-item" id="welcome-workspace">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span id="welcome-workspace-name">No workspace</span>
+          </span>
+          <span class="welcome-context-sep" aria-hidden="true">·</span>
+          <span class="welcome-context-item" id="welcome-model-ctx">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+            <span id="welcome-model-name">No model selected</span>
+          </span>
+        </div>
+
+        <!-- Quick actions -->
+        <div class="welcome-actions" role="group" aria-label="Quick actions">
+          <button class="welcome-action-btn welcome-action-primary hidden" id="welcome-continue-btn" aria-label="Continue last session">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            Continue last session
+          </button>
+          <button class="welcome-action-btn welcome-action-secondary" id="welcome-new-btn" aria-label="Start new session">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            New session
+          </button>
+        </div>
+
+        <!-- Recent sessions (shown above starters) -->
+        <div class="recent-sessions" id="welcome-recent-sessions"></div>
+
+        <!-- Prompt starters -->
+        <section class="prompt-starters-section" aria-label="Suggested prompts">
+          <p class="prompt-starters-label">TRY</p>
+          <div class="prompt-starters">
+            <button class="prompt-starter" data-prompt="Explain the current file structure" aria-label="Explain the current file structure">
+              <span class="prompt-starter-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+              <span class="prompt-starter-text">
+                <span class="prompt-starter-label">Explain structure</span>
+                <span class="prompt-starter-desc">Overview of how this project is organised</span>
+              </span>
+            </button>
+            <button class="prompt-starter" data-prompt="Find potential bugs in the codebase" aria-label="Find potential bugs in the codebase">
+              <span class="prompt-starter-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 6"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9 4 11.27"/><path d="M17.47 9 20 11.27"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M6.53 17 4 14.73"/><path d="M17.47 17 20 14.73"/></svg></span>
+              <span class="prompt-starter-text">
+                <span class="prompt-starter-label">Find bugs</span>
+                <span class="prompt-starter-desc">Scan for common issues and anti-patterns</span>
+              </span>
+            </button>
+            <button class="prompt-starter" data-prompt="Refactor this project to use better patterns" aria-label="Refactor this project to use better patterns">
+              <span class="prompt-starter-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.5 2v6h-6"/><path d="M2.5 22v-6h6"/><path d="M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg></span>
+              <span class="prompt-starter-text">
+                <span class="prompt-starter-label">Refactor patterns</span>
+                <span class="prompt-starter-desc">Modernise with cleaner architecture and idioms</span>
+              </span>
+            </button>
+            <button class="prompt-starter" data-prompt="Generate tests for the main module" aria-label="Generate tests for the main module">
+              <span class="prompt-starter-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></svg></span>
+              <span class="prompt-starter-text">
+                <span class="prompt-starter-label">Generate tests</span>
+                <span class="prompt-starter-desc">Create unit tests for the core modules</span>
+              </span>
+            </button>
+          </div>
+        </section>
+
+        <p class="welcome-or-divider">or type a message below</p>
+
+        <!-- Keyboard hint shown on roomy welcome views; hidden by .welcome-short
+             when the panel is too short to comfortably show extras. -->
+        <p id="keyboard-hint" class="keyboard-hint" aria-hidden="true">
+          <kbd>⌘</kbd>+<kbd>Enter</kbd> to send · <kbd>Esc</kbd> to stop
+        </p>
+        <p class="welcome-bottom-links" aria-hidden="true">
+          <button class="welcome-shortcuts-btn" id="welcome-shortcuts-btn" aria-label="View keyboard shortcuts (?)">⌨ Shortcuts</button>
+        </p>
+      </div>
+    </div>
+
+    <div id="chat-search-bar" class="chat-search-bar hidden">
+      <input type="text" id="chat-search-input" placeholder="Search messages in this session..." aria-label="Search messages">
+      <span id="chat-search-count" class="chat-search-count"></span>
+      <button id="chat-search-prev" class="icon-btn" title="Previous match (Shift+Enter)" aria-label="Previous match">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+      </button>
+      <button id="chat-search-next" class="icon-btn" title="Next match (Enter)" aria-label="Next match">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <button id="chat-search-close" class="icon-btn" title="Close search (Escape)" aria-label="Close search">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div id="context-bar" class="hidden">
+      <div id="context-chips"></div>
+    </div>
+
+    <!-- #context-monitor-panel removed — canonical UI is now #context-usage-dropdown -->
+
+    <div id="prompt-stash-panel" class="prompt-stash-panel hidden">
+      <div class="panel-header">
+        <h2>Prompt Stash</h2>
+        <button id="prompt-stash-close" class="panel-close-btn" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="panel-body">
+        <div id="prompt-stash-list" class="prompt-stash-list"></div>
+      </div>
+    </div>
+
+    <div id="error-boundary" class="hidden" role="alert"></div>
+  </div>
+
+  <!-- Model Manager Panel -->
+  <div id="model-manager-panel" class="model-manager-overlay hidden" role="dialog" aria-modal="true" aria-label="Manage models">
+    <div class="model-manager-content">
+      <div class="model-manager-header">
+        <div class="model-manager-header-text">
+          <h2>Manage models</h2>
+          <p>Customize which models appear in the model selector.</p>
+        </div>
+        <div class="model-manager-header-actions">
+          <button class="model-manager-connect-btn" id="model-manager-connect" aria-label="Connect provider">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            <span>Connect provider</span>
+          </button>
+          <button class="model-manager-close" id="model-manager-close" aria-label="Close model manager">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18"/>
+              <path d="M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="model-manager-search-wrapper">
+        <svg class="model-manager-search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="m21 21-4.3-4.3"/>
+        </svg>
+        <input type="text" id="model-manager-search" class="model-manager-search" placeholder="Search models" aria-label="Search models">
+      </div>
+      <div class="model-manager-list" id="model-manager-list"></div>
+    </div>
+  </div>
+
+  <!-- MCP Config Panel -->
+  <div id="mcp-config-panel" class="model-manager-overlay hidden" role="dialog" aria-modal="true" aria-label="Configure MCP servers">
+    <div class="model-manager-content">
+      <div class="model-manager-header">
+        <div class="model-manager-header-text">
+          <h2>Configure MCP Servers</h2>
+          <p>Add or modify MCP server connections.</p>
+        </div>
+        <div class="model-manager-header-actions">
+          <button class="model-manager-connect-btn" id="mcp-config-add" aria-label="Add MCP server">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            <span>Add Server</span>
+          </button>
+          <button class="model-manager-close" id="mcp-config-close" aria-label="Close MCP config">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 6L6 18"/>
+              <path d="M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="model-manager-list" id="mcp-config-list"></div>
+      <div class="model-manager-form hidden" id="mcp-config-form">
+        <h3 id="mcp-config-form-title">Add MCP Server</h3>
+        <div class="form-group">
+          <label for="mcp-config-name">Server Name</label>
+          <input type="text" id="mcp-config-name" placeholder="e.g., my-server" aria-label="Server name">
+        </div>
+        <div class="form-group">
+          <label for="mcp-config-command">Command</label>
+          <input type="text" id="mcp-config-command" placeholder="e.g., npx -y @modelcontextprotocol/server-everything" aria-label="Server command">
+        </div>
+        <div class="form-group">
+          <label for="mcp-config-args">Arguments (one per line)</label>
+          <textarea id="mcp-config-args" rows="3" placeholder="--arg1&#10;--arg2" aria-label="Server arguments"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="mcp-config-env">Environment Variables (JSON)</label>
+          <textarea id="mcp-config-env" rows="3" placeholder='{"API_KEY": "value"}' aria-label="Environment variables"></textarea>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox" id="mcp-config-disabled"> Disabled</label>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-secondary" id="mcp-config-cancel">Cancel</button>
+          <button class="btn btn-primary" id="mcp-config-save">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Theme Customizer Panel -->
+  <div id="theme-customizer-panel" class="model-manager-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="theme-customizer-title" aria-describedby="theme-customizer-desc">
+    <div class="model-manager-content theme-customizer-content">
+      <div class="model-manager-header">
+        <div class="model-manager-header-text">
+          <h2 id="theme-customizer-title">Customize theme</h2>
+          <p id="theme-customizer-desc">Choose a preset or CLI theme, then override individual colors.</p>
+        </div>
+        <div class="model-manager-header-actions">
+          <button class="model-manager-close" id="theme-customizer-close" aria-label="Close theme customizer" type="button">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18"/><path d="M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="theme-customizer-body">
+        <!-- Preset cards -->
+        <fieldset id="theme-preset-cards" class="theme-preset-card-grid">
+          <legend class="visually-hidden">Base theme preset</legend>
+          <button class="theme-preset-card" data-preset="cli-default" aria-pressed="true" type="button">
+            <div class="theme-preset-swatch" aria-hidden="true">
+              <span class="theme-preset-swatch-sq" style="background:var(--vscode-sideBar-background,#1e1e1e)"></span>
+              <span class="theme-preset-swatch-sq" style="background:var(--vscode-sideBar-foreground,#cccccc)"></span>
+              <span class="theme-preset-swatch-sq" style="background:var(--vscode-button-background,#0969da)"></span>
+            </div>
+            <span>CLI Default</span>
+          </button>
+          <button class="theme-preset-card" data-preset="light" aria-pressed="false" type="button">
+            <div class="theme-preset-swatch" aria-hidden="true">
+              <span class="theme-preset-swatch-sq" style="background:#ffffff"></span>
+              <span class="theme-preset-swatch-sq" style="background:#24292f"></span>
+              <span class="theme-preset-swatch-sq" style="background:#0969da"></span>
+            </div>
+            <span>Light</span>
+          </button>
+          <button class="theme-preset-card" data-preset="dark" aria-pressed="false" type="button">
+            <div class="theme-preset-swatch" aria-hidden="true">
+              <span class="theme-preset-swatch-sq" style="background:#1e1e2e"></span>
+              <span class="theme-preset-swatch-sq" style="background:#c9d1d9"></span>
+              <span class="theme-preset-swatch-sq" style="background:#00e5ff"></span>
+            </div>
+            <span>Dark</span>
+          </button>
+          <button class="theme-preset-card" data-preset="high-contrast" aria-pressed="false" type="button">
+            <div class="theme-preset-swatch" aria-hidden="true">
+              <span class="theme-preset-swatch-sq" style="background:#000000"></span>
+              <span class="theme-preset-swatch-sq" style="background:#ffffff"></span>
+              <span class="theme-preset-swatch-sq" style="background:#ffff00"></span>
+            </div>
+            <span>High Contrast</span>
+          </button>
+        </fieldset>
+
+        <!-- CLI theme search -->
+        <div class="theme-cli-section">
+          <input id="theme-cli-search" class="theme-cli-search-input" type="search" placeholder="Search CLI themes (tokyonight, catppuccin, …)" autocomplete="off" aria-label="Search CLI themes" aria-controls="theme-cli-list">
+          <div id="theme-cli-list" class="theme-cli-list hidden" role="listbox" aria-label="Available CLI themes"></div>
+        </div>
+
+        <!-- Color override sections -->
+        <div class="theme-customizer-hint">Color overrides — hex or rgba, leave empty to use preset default</div>
+
+        <details class="theme-section-collapsible" open>
+          <summary>Messages</summary>
+          <div class="theme-customizer-grid">
+            <label class="theme-field"><span>User message background</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="User message background" data-target="tc-userMessageBg"><input type="text" id="tc-userMessageBg" data-theme-field="userMessageBg" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>User message text</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="User message text" data-target="tc-userMessageFg"><input type="text" id="tc-userMessageFg" data-theme-field="userMessageFg" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Assistant message background</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Assistant message background" data-target="tc-assistantMessageBg"><input type="text" id="tc-assistantMessageBg" data-theme-field="assistantMessageBg" placeholder="transparent"></div>
+            </label>
+            <label class="theme-field"><span>Assistant message text</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Assistant message text" data-target="tc-assistantMessageFg"><input type="text" id="tc-assistantMessageFg" data-theme-field="assistantMessageFg" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Mention highlight</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Mention highlight" data-target="tc-mentionBg"><input type="text" id="tc-mentionBg" data-theme-field="mentionBg" placeholder="#..."></div>
+            </label>
+          </div>
+        </details>
+
+        <details class="theme-section-collapsible">
+          <summary>Syntax</summary>
+          <div class="theme-customizer-grid">
+            <label class="theme-field"><span>Comment</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Syntax comment" data-target="tc-syntaxComment"><input type="text" id="tc-syntaxComment" data-theme-field="syntaxComment" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Keyword</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Syntax keyword" data-target="tc-syntaxKeyword"><input type="text" id="tc-syntaxKeyword" data-theme-field="syntaxKeyword" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>String</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Syntax string" data-target="tc-syntaxString"><input type="text" id="tc-syntaxString" data-theme-field="syntaxString" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Number / primitive</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Syntax number" data-target="tc-syntaxNumber"><input type="text" id="tc-syntaxNumber" data-theme-field="syntaxNumber" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Function</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Syntax function" data-target="tc-syntaxFunction"><input type="text" id="tc-syntaxFunction" data-theme-field="syntaxFunction" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Type</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Syntax type" data-target="tc-syntaxType"><input type="text" id="tc-syntaxType" data-theme-field="syntaxType" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Operator</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Syntax operator" data-target="tc-syntaxOperator"><input type="text" id="tc-syntaxOperator" data-theme-field="syntaxOperator" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Variable</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Syntax variable" data-target="tc-syntaxVariable"><input type="text" id="tc-syntaxVariable" data-theme-field="syntaxVariable" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Punctuation</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Syntax punctuation" data-target="tc-syntaxPunctuation"><input type="text" id="tc-syntaxPunctuation" data-theme-field="syntaxPunctuation" placeholder="#..."></div>
+            </label>
+          </div>
+        </details>
+
+        <details class="theme-section-collapsible">
+          <summary>Diff</summary>
+          <div class="theme-customizer-grid">
+            <label class="theme-field"><span>Added color</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Diff added" data-target="tc-diffAdded"><input type="text" id="tc-diffAdded" data-theme-field="diffAdded" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Removed color</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Diff removed" data-target="tc-diffRemoved"><input type="text" id="tc-diffRemoved" data-theme-field="diffRemoved" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Added background</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Diff added background" data-target="tc-diffAddedBg"><input type="text" id="tc-diffAddedBg" data-theme-field="diffAddedBg" placeholder="rgba(...)"></div>
+            </label>
+            <label class="theme-field"><span>Removed background</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Diff removed background" data-target="tc-diffRemovedBg"><input type="text" id="tc-diffRemovedBg" data-theme-field="diffRemovedBg" placeholder="rgba(...)"></div>
+            </label>
+            <label class="theme-field"><span>Context</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Diff context" data-target="tc-diffContext"><input type="text" id="tc-diffContext" data-theme-field="diffContext" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Hunk header</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Diff hunk header" data-target="tc-diffHunkHeader"><input type="text" id="tc-diffHunkHeader" data-theme-field="diffHunkHeader" placeholder="#..."></div>
+            </label>
+          </div>
+        </details>
+
+        <details class="theme-section-collapsible">
+          <summary>Tools</summary>
+          <div class="theme-customizer-grid">
+            <label class="theme-field"><span>Read tool</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Tool read color" data-target="tc-toolReadColor"><input type="text" id="tc-toolReadColor" data-theme-field="toolReadColor" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Write tool</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Tool write color" data-target="tc-toolWriteColor"><input type="text" id="tc-toolWriteColor" data-theme-field="toolWriteColor" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Exec tool</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Tool exec color" data-target="tc-toolExecColor"><input type="text" id="tc-toolExecColor" data-theme-field="toolExecColor" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Tool call / metadata</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Tool call color" data-target="tc-toolCallColor"><input type="text" id="tc-toolCallColor" data-theme-field="toolCallColor" placeholder="#..."></div>
+            </label>
+          </div>
+        </details>
+
+        <details class="theme-section-collapsible">
+          <summary>Markdown</summary>
+          <div class="theme-customizer-grid">
+            <label class="theme-field"><span>Heading</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Markdown heading" data-target="tc-markdownHeading"><input type="text" id="tc-markdownHeading" data-theme-field="markdownHeading" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Link</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Markdown link" data-target="tc-markdownLink"><input type="text" id="tc-markdownLink" data-theme-field="markdownLink" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Inline code</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Markdown inline code" data-target="tc-markdownCode"><input type="text" id="tc-markdownCode" data-theme-field="markdownCode" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Blockquote</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Markdown blockquote" data-target="tc-markdownBlockQuote"><input type="text" id="tc-markdownBlockQuote" data-theme-field="markdownBlockQuote" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Bold</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Markdown bold" data-target="tc-markdownStrong"><input type="text" id="tc-markdownStrong" data-theme-field="markdownStrong" placeholder="#..."></div>
+            </label>
+          </div>
+        </details>
+
+        <details class="theme-section-collapsible">
+          <summary>Advanced</summary>
+          <div class="theme-customizer-grid">
+            <label class="theme-field"><span>Panel background</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Panel background" data-target="tc-panelBg"><input type="text" id="tc-panelBg" data-theme-field="panelBg" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Panel text</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Panel text" data-target="tc-panelFg"><input type="text" id="tc-panelFg" data-theme-field="panelFg" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Editor background</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Editor background" data-target="tc-editorBg"><input type="text" id="tc-editorBg" data-theme-field="editorBg" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Accent color</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Accent color" data-target="tc-accentColor"><input type="text" id="tc-accentColor" data-theme-field="accentColor" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Error color</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Error color" data-target="tc-errorColor"><input type="text" id="tc-errorColor" data-theme-field="errorColor" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Success color</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Success color" data-target="tc-successColor"><input type="text" id="tc-successColor" data-theme-field="successColor" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Warning color</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Warning color" data-target="tc-warningColor"><input type="text" id="tc-warningColor" data-theme-field="warningColor" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Border color</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Border color" data-target="tc-borderColor"><input type="text" id="tc-borderColor" data-theme-field="borderColor" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Muted text</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Muted text" data-target="tc-mutedFg"><input type="text" id="tc-mutedFg" data-theme-field="mutedFg" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Input background</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Input background" data-target="tc-inputBg"><input type="text" id="tc-inputBg" data-theme-field="inputBg" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Input border</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Input border" data-target="tc-inputBorder"><input type="text" id="tc-inputBorder" data-theme-field="inputBorder" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Thinking background</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Thinking background" data-target="tc-thinkingBg"><input type="text" id="tc-thinkingBg" data-theme-field="thinkingBg" placeholder="rgba(...)"></div>
+            </label>
+            <label class="theme-field"><span>Thinking border</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Thinking border" data-target="tc-thinkingBorder"><input type="text" id="tc-thinkingBorder" data-theme-field="thinkingBorder" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Skill badge background</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Skill badge background" data-target="tc-skillBadgeBg"><input type="text" id="tc-skillBadgeBg" data-theme-field="skillBadgeBg" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Skill badge text</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Skill badge text" data-target="tc-skillBadgeFg"><input type="text" id="tc-skillBadgeFg" data-theme-field="skillBadgeFg" placeholder="#..."></div>
+            </label>
+          </div>
+        </details>
+
+        <!-- Live preview swatch -->
+        <div id="theme-preview-swatch" class="theme-preview-panel" aria-label="Theme preview">
+          <div class="theme-preview-row">
+            <div class="theme-preview-bubble-user">How do I reverse a string?</div>
+            <div class="theme-preview-bubble-assistant">Use slicing: <code class="theme-preview-code">s[::-1]</code></div>
+          </div>
+          <div class="theme-preview-row">
+            <div class="theme-preview-chip" style="--chip-bg:var(--tool-read-color,var(--oc-primary))">Read</div>
+            <div class="theme-preview-chip" style="--chip-bg:var(--tool-write-color,var(--oc-error))">Write</div>
+            <div class="theme-preview-chip" style="--chip-bg:var(--tool-exec-color,var(--oc-success))">Exec</div>
+          </div>
+          <div class="theme-preview-row theme-preview-diff">
+            <span class="theme-preview-diff-add">+added line</span>
+            <span class="theme-preview-diff-del">-removed line</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="theme-customizer-actions">
+        <button class="btn btn-secondary" id="theme-customizer-reset" type="button">Reset overrides</button>
+        <button class="btn btn-primary" id="theme-customizer-save" type="button">Save theme</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Permission Config Panel -->
+  <div id="perm-config-panel" class="model-manager-overlay hidden" role="dialog" aria-modal="true" aria-label="Configure tool permissions">
+    <div class="model-manager-content perm-config-content">
+      <div class="model-manager-header">
+        <div class="model-manager-header-text">
+          <h2>Tool Permissions</h2>
+          <p>Configure which tools require your approval, are always allowed, or are always denied.</p>
+        </div>
+        <div class="model-manager-header-actions">
+          <button class="model-manager-close" id="perm-config-close" aria-label="Close permission config">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18"/><path d="M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="perm-config-list" id="perm-config-list"></div>
+      <div class="perm-config-actions">
+        <button class="btn btn-primary" id="perm-config-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Session History Modal -->
+  <div id="session-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="session-modal-title">
+    <div class="modal-content session-modal-content">
+      <div class="modal-header">
+        <h2 id="session-modal-title">Session History</h2>
+        <button class="modal-close-btn" id="session-modal-close" aria-label="Close session history">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body" id="session-modal-body">
+        <!-- JS will populate this with tabs, search, and list -->
+        <div class="modal-loading">
+          <div class="spinner"></div>
+          <span>Syncing sessions...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mode Transition Warning Modal -->
+  <div id="mode-warning-modal" class="modal-overlay hidden" role="alertdialog" aria-modal="true" aria-labelledby="mode-warning-title" aria-describedby="mode-warning-description">
+    <div class="modal-content mode-warning-content">
+      <div class="modal-header">
+        <h2 id="mode-warning-title">Switch mode?</h2>
+        <button class="modal-close-btn" id="mode-warning-close" aria-label="Cancel">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <p id="mode-warning-description" class="mode-warning-description"></p>
+      <div class="mode-warning-actions">
+        <label class="mode-warning-dont-show">
+          <input type="checkbox" id="mode-warning-dont-show">
+          <span>Don't show again</span>
+        </label>
+        <div class="mode-warning-buttons">
+          <button class="settings-btn-secondary" id="mode-warning-cancel">Cancel</button>
+          <button class="settings-btn-primary" id="mode-warning-confirm">Switch Mode</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>

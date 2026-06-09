@@ -1,0 +1,29 @@
+/* ═══════════════════════════════════════════════════════════════
+   OpenCode Webview Styles
+   ═══════════════════════════════════════════════════════════════
+
+   Cascade layers establish a deterministic specificity order.
+   Anything in a later layer wins over anything in an earlier layer,
+   regardless of selector specificity. This protects the accessibility
+   focus ring from future overrides and makes load order deliberate
+   rather than implicit.
+*/
+
+@layer tokens, base, layout, components, messages, blocks, animations, themes, utilities, accessibility;
+
+@import url("./tokens.css")              layer(tokens);
+@import url("./base.css")                layer(base);
+@import url("./layout.css")              layer(layout);
+@import url("./components.css")          layer(components);
+@import url("./messages.css")            layer(messages);
+@import url("./messages-responsive.css") layer(messages);
+@import url("./welcome.css")             layer(components);
+@import url("./queue-panel.css")         layer(components);
+@import url("./context-usage.css")       layer(components);
+@import url("./question-bar.css")        layer(components);
+@import url("./activity.css")            layer(components);
+@import url("./tasks.css")               layer(components);
+@import url("./voice-input.css")         layer(components);
+@import url("./blocks.css")              layer(blocks);
+@import url("./animations.css")          layer(animations);
+@import url("./accessibility.css")       layer(accessibility);

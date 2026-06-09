@@ -1,0 +1,213 @@
+/* ═══════════════════════════════════════════════════════════════
+   Agent Activity Timeline panel
+   Loaded in the `components` cascade layer. Themed via design tokens
+   (with --vscode-* fallbacks) so it tracks light / dark / high-contrast.
+   ═══════════════════════════════════════════════════════════════ */
+
+.activity-panel {
+  background: var(--oc-editor-bg);
+  border-left: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.activity-panel.hidden {
+  display: none;
+}
+
+.activity-panel-header {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.activity-panel-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-fg);
+  margin: 0;
+}
+
+/* ── Filter chips ───────────────────────────────────────────── */
+
+.activity-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.activity-filter-chip {
+  font: inherit;
+  font-size: var(--text-2xs);
+  color: var(--color-muted);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: var(--space-0-5) var(--space-2-5);
+  cursor: pointer;
+  white-space: nowrap;
+  min-height: var(--size-target-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.activity-filter-chip:hover {
+  color: var(--color-fg);
+  background: var(--vscode-toolbar-hoverBackground, rgba(127, 127, 127, 0.12));
+}
+
+.activity-filter-chip.active {
+  color: var(--vscode-button-foreground, #fff);
+  background: var(--vscode-button-background, #0e639c);
+  border-color: var(--vscode-button-background, #0e639c);
+}
+
+/* ── Event list ─────────────────────────────────────────────── */
+
+.activity-panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+.activity-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-2xs);
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: var(--space-1) 0 var(--space-2);
+}
+
+.activity-summary-count {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--vscode-charts-green, #3fb950);
+  font-weight: 600;
+}
+
+.activity-live::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: activity-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes activity-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
+}
+
+/* Respect reduced-motion: hold the live dot steady instead of pulsing. */
+@media (prefers-reduced-motion: reduce) {
+  .activity-live::before { animation: none; }
+}
+
+.activity-empty {
+  padding: var(--space-4) var(--space-2);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.activity-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: var(--color-fg);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md, 6px);
+  padding: 6px 8px;
+  cursor: pointer;
+  /* a colored rail on the left encodes status/kind without relying on color alone */
+  border-left: 2px solid var(--color-border);
+}
+
+.activity-item:hover {
+  background: var(--vscode-list-hoverBackground, rgba(127, 127, 127, 0.1));
+}
+
+.activity-item[aria-disabled="true"] {
+  cursor: default;
+}
+
+.activity-item-icon {
+  flex: 0 0 auto;
+  width: 1.2em;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.activity-item-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.activity-item-label {
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-item-detail {
+  font-size: var(--text-2xs);
+  color: var(--color-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-item-status {
+  flex: 0 0 auto;
+  align-self: center;
+  font-size: var(--text-2xs);
+  text-transform: capitalize;
+  color: var(--color-muted);
+}
+
+/* Status accents — applied to the left rail and the status badge. Each pairs a
+   hue with a glyph/text so the cue is not color-only (WCAG 1.4.1). */
+.activity-item--status-running { border-left-color: var(--vscode-charts-blue, #3794ff); }
+.activity-item--status-running .activity-item-status { color: var(--vscode-charts-blue, #3794ff); }
+.activity-item--status-success { border-left-color: var(--vscode-charts-green, #3fb950); }
+.activity-item--status-success .activity-item-status { color: var(--vscode-charts-green, #3fb950); }
+.activity-item--status-error { border-left-color: var(--vscode-errorForeground, #f85149); }
+.activity-item--status-error .activity-item-status { color: var(--vscode-errorForeground, #f85149); }
+.activity-item--status-pending { border-left-color: var(--vscode-charts-yellow, #cca700); }
+.activity-item--status-pending .activity-item-status { color: var(--vscode-charts-yellow, #cca700); }
+
+/* Error rows get a slightly stronger label weight for scannability. */
+.activity-item--error .activity-item-label { font-weight: 600; }

@@ -1,0 +1,1149 @@
+{
+  "name": "opencode-harness",
+  "displayName": "OpenCode - AI Coding Assistant for VS Code",
+  "publisher": "kevinoarthur",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/K-Arthur/opencode-harness"
+  },
+  "description": "AI-powered coding assistant integrated into VS Code. Chat, refactor, debug, and write code with the OpenCode agent while staying in your editor. Supports multiple AI models (Claude, GPT, Gemini), custom themes, cost tracking, and granular permission controls.",
+  "icon": "media/opencode-icon-256.png",
+  "version": "0.3.13",
+  "engines": {
+    "vscode": "^1.98.0"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true,
+      "description": "Requires workspace access to read and modify files"
+    }
+  },
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:opencode-harness.chatView"
+  ],
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "opencode",
+    "ai",
+    "coding",
+    "assistant",
+    "vscode",
+    "vs-code",
+    "chat",
+    "refactor",
+    "debug",
+    "llm",
+    "anthropic",
+    "claude",
+    "openai",
+    "gpt",
+    "gemini",
+    "model",
+    "cost-tracking",
+    "theme",
+    "privacy"
+  ],
+  "galleryBanner": {
+    "color": "#007acc",
+    "theme": "dark"
+  },
+  "bugs": {
+    "url": "https://github.com/K-Arthur/opencode-harness/issues"
+  },
+  "homepage": "https://github.com/K-Arthur/opencode-harness#readme",
+  "extensionKind": [
+    "workspace"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "opencode-harness.openChat",
+        "title": "OpenCode: Open Chat"
+      },
+      {
+        "command": "opencode-harness.newSession",
+        "title": "OpenCode: New Session"
+      },
+      {
+        "command": "opencode-harness.toggleFocus",
+        "title": "OpenCode: Toggle Chat Focus"
+      },
+      {
+        "command": "opencode-harness.explainCode",
+        "title": "OpenCode: Explain Code"
+      },
+      {
+        "command": "opencode-harness.refactorCode",
+        "title": "OpenCode: Refactor Code"
+      },
+      {
+        "command": "opencode-harness.generateTests",
+        "title": "OpenCode: Generate Tests"
+      },
+      {
+        "command": "opencode-harness.insertMention",
+        "title": "OpenCode: Insert File Reference"
+      },
+      {
+        "command": "opencode-harness.captureTerminal",
+        "title": "OpenCode: Capture Terminal Output"
+      },
+      {
+        "command": "opencode-harness.rollback",
+        "title": "OpenCode: Rollback Changes"
+      },
+      {
+        "command": "opencode-harness.showRateLimits",
+        "title": "OpenCode: View Rate Limits"
+      },
+      {
+        "command": "opencode-harness.selectModel",
+        "title": "OpenCode: Choose Model"
+      },
+      {
+        "command": "opencode-harness.setContextWindowOverride",
+        "title": "OpenCode: Set Context Window Override"
+      },
+      {
+        "command": "opencode-harness.checkCli",
+        "title": "OpenCode: Test CLI Connection"
+      },
+      {
+        "command": "opencode-harness.installCli",
+        "title": "OpenCode: Install CLI"
+      },
+      {
+        "command": "opencode-harness.listSessions",
+        "title": "OpenCode: View Sessions"
+      },
+      {
+        "command": "opencode-harness.openStoredSession",
+        "title": "OpenCode: Open Stored Session"
+      },
+      {
+        "command": "opencode-harness.deleteSession",
+        "title": "OpenCode: Delete Session"
+      },
+      {
+        "command": "opencode-harness.renameSession",
+        "title": "OpenCode: Rename Session"
+      },
+      {
+        "command": "opencode-harness.exportConversation",
+        "title": "OpenCode: Export Conversation"
+      },
+      {
+        "command": "opencode-harness.previewTheme",
+        "title": "OpenCode: Preview Theme"
+      },
+      {
+        "command": "opencode-harness.clearTestSessions",
+        "title": "OpenCode: Clear Test Sessions"
+      },
+      {
+        "command": "opencode-harness.continueLastSession",
+        "title": "OpenCode: Continue Last Session"
+      },
+      {
+        "command": "opencode-harness.chooseHistorySession",
+        "title": "OpenCode: Open Past Session"
+      },
+      {
+        "command": "opencode-harness.attachRemote",
+        "title": "OpenCode: Connect to Remote Server"
+      },
+      {
+        "command": "opencode-harness.addFileToSession",
+        "title": "OpenCode: Add File to Session"
+      },
+      {
+        "command": "opencode-harness.addSelectionToSession",
+        "title": "OpenCode: Add Selection to Session"
+      },
+      {
+        "command": "opencode-harness.stop",
+        "title": "OpenCode: Stop"
+      },
+      {
+        "command": "opencode-harness.quickChat",
+        "title": "OpenCode: Quick Chat"
+      },
+      {
+        "command": "opencode-harness.generateAgentsMd",
+        "title": "OpenCode: Generate AGENTS.md"
+      },
+      {
+        "command": "opencode-harness.openCommandsPalette",
+        "title": "OpenCode: Open Commands Palette"
+      },
+      {
+        "command": "opencode-harness.clearSession",
+        "title": "OpenCode: Clear Active Session"
+      },
+      {
+        "command": "opencode-harness.showCost",
+        "title": "OpenCode: Show Session Cost"
+      },
+      {
+        "command": "opencode-harness.continueSession",
+        "title": "OpenCode: Continue Most Recent Session"
+      },
+      {
+        "command": "opencode-harness.showHelp",
+        "title": "OpenCode: Show Slash Commands"
+      },
+      {
+        "command": "opencode-harness.cycleMode",
+        "title": "OpenCode: Cycle Session Mode (Plan → Build → Auto)"
+      },
+      {
+        "command": "opencode-harness.setBuildMode",
+        "title": "OpenCode: Set Session Mode to Build"
+      },
+      {
+        "command": "opencode-harness.setPlanMode",
+        "title": "OpenCode: Set Session Mode to Plan"
+      },
+      {
+        "command": "opencode-harness.setAutoMode",
+        "title": "OpenCode: Set Session Mode to Auto"
+      },
+      {
+        "command": "opencode-harness.setupVoiceInput",
+        "title": "OpenCode: Set Up Voice Input"
+      },
+      {
+        "command": "opencode-harness.retryLast",
+        "title": "OpenCode: Retry Last Failed Run"
+      },
+      {
+        "command": "opencode-harness.nextTab",
+        "title": "OpenCode: Next Tab"
+      },
+      {
+        "command": "opencode-harness.prevTab",
+        "title": "OpenCode: Previous Tab"
+      },
+      {
+        "command": "opencode-harness.openSettings",
+        "title": "OpenCode: Open Settings"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "opencode-harness.quickChat",
+        "key": "ctrl+i",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "opencode-harness.toggleFocus",
+        "key": "ctrl+alt+o"
+      },
+      {
+        "command": "opencode-harness.newSession",
+        "key": "ctrl+alt+n"
+      },
+      {
+        "command": "opencode-harness.insertMention",
+        "key": "alt+k",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "opencode-harness.stop",
+        "key": "escape",
+        "when": "focusedView == 'opencode-harness.chat'"
+      },
+      {
+        "command": "opencode-harness.stop",
+        "key": "ctrl+shift+escape",
+        "when": "focusedView == 'opencode-harness.chat'"
+      },
+      {
+        "command": "opencode-harness.openCommandsPalette",
+        "key": "ctrl+shift+/",
+        "when": "focusedView == 'opencode-harness.chat'"
+      },
+      {
+        "command": "opencode-harness.cycleMode",
+        "key": "alt+shift+tab",
+        "when": "focusedView == 'opencode-harness.chat'"
+      },
+      {
+        "command": "opencode-harness.cycleMode",
+        "key": "ctrl+shift+m",
+        "when": "focusedView == 'opencode-harness.chat'"
+      },
+      {
+        "command": "opencode-harness.nextTab",
+        "key": "ctrl+alt+]",
+        "when": "focusedView == 'opencode-harness.chat'"
+      },
+      {
+        "command": "opencode-harness.prevTab",
+        "key": "ctrl+alt+[",
+        "when": "focusedView == 'opencode-harness.chat'"
+      },
+      {
+        "command": "opencode-harness.retryLast",
+        "key": "ctrl+alt+r",
+        "when": "focusedView == 'opencode-harness.chat'"
+      },
+      {
+        "command": "opencode-harness.openCommandsPalette",
+        "key": "f1",
+        "when": "focusedView == 'opencode-harness.chat'"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "opencode-harness",
+          "title": "OpenCode",
+          "icon": "media/opencode-activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "opencode-harness": [
+        {
+          "id": "opencode-harness.chat",
+          "name": "Chat",
+          "type": "webview",
+          "icon": "media/opencode-activity.svg"
+        }
+      ]
+    },
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "opencode-harness.showRateLimits",
+          "when": "false"
+        },
+        {
+          "command": "opencode-harness.checkCli",
+          "when": "false"
+        },
+        {
+          "command": "opencode-harness.installCli",
+          "when": "false"
+        },
+        {
+          "command": "opencode-harness.previewTheme",
+          "when": "false"
+        },
+        {
+          "command": "opencode-harness.clearTestSessions",
+          "when": "false"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "opencode-harness.explainCode",
+          "group": "opencode@1",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "opencode-harness.refactorCode",
+          "group": "opencode@2",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "opencode-harness.generateTests",
+          "group": "opencode@3",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "opencode-harness.addSelectionToSession",
+          "group": "opencode@4",
+          "when": "editorHasSelection"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "opencode-harness.addFileToSession",
+          "group": "opencode@1",
+          "when": "resourceScheme == file"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "OpenCode",
+      "properties": {
+        "opencode.binaryPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Path to the opencode binary. If not set, the extension will search for 'opencode' in your PATH and the default install locations (e.g. ~/.opencode/bin)."
+        },
+        "opencode.autoInstall": {
+          "type": "string",
+          "enum": [
+            "prompt",
+            "auto",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Ask before installing the opencode CLI when it is missing (asks once; remembers if you decline).",
+            "Install the opencode CLI automatically and silently when it is missing.",
+            "Never install automatically. Use the 'OpenCode: Install CLI' command instead."
+          ],
+          "default": "prompt",
+          "scope": "machine",
+          "description": "Controls how the extension installs the required opencode CLI when it is not found. The official installer is used (~/.opencode/bin on macOS/Linux; npm on Windows)."
+        },
+        "opencode.serverUrl": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "When set, attach to a remote opencode server at this URL instead of spawning a local one (e.g. http://host:4096). Leave blank for local spawn."
+        },
+        "opencode.serverAuthToken": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Deprecated plaintext fallback for remote server auth. Use the 'OpenCode: Attach Remote Server' command so the token is stored in SecretStorage."
+        },
+        "opencode.mcpServers": {
+          "type": "object",
+          "default": {},
+          "scope": "window",
+          "description": "Legacy fallback MCP server map. OpenCode config files remain the primary source; entries here are used only when no server with the same name exists in opencode.json.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "stdio",
+                  "http",
+                  "sse"
+                ],
+                "description": "MCP transport type."
+              },
+              "command": {
+                "type": "string",
+                "description": "Command for stdio MCP servers."
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Command arguments for stdio MCP servers."
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Environment variables for stdio MCP servers."
+              },
+              "url": {
+                "type": "string",
+                "description": "URL for HTTP or SSE MCP servers."
+              },
+              "headers": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Request headers for remote MCP servers."
+              },
+              "disabled": {
+                "type": "boolean",
+                "description": "Disable this MCP server."
+              },
+              "enabled": {
+                "type": "boolean",
+                "description": "Enable this MCP server."
+              }
+            }
+          }
+        },
+        "opencode.theme": {
+          "type": "object",
+          "scope": "window",
+          "default": {
+            "preset": "cli-default",
+            "overrides": {}
+          },
+          "description": "Theme configuration for the OpenCode chat panel. Set 'preset' to one of: cli-default, light, dark, high-contrast. Add 'overrides' with specific color overrides.",
+          "properties": {
+            "preset": {
+              "type": "string",
+              "enum": [
+                "cli-default",
+                "light",
+                "dark",
+                "high-contrast"
+              ],
+              "default": "cli-default",
+              "description": "Base theme preset"
+            },
+            "overrides": {
+              "type": "object",
+              "default": {},
+              "description": "Individual color overrides for the theme. All CSS color values are accepted.",
+              "properties": {
+                "userMessageBg": {
+                  "type": "string",
+                  "description": "Background color for user messages"
+                },
+                "userMessageFg": {
+                  "type": "string",
+                  "description": "Text color for user messages"
+                },
+                "assistantMessageBg": {
+                  "type": "string",
+                  "description": "Background color for assistant messages"
+                },
+                "assistantMessageFg": {
+                  "type": "string",
+                  "description": "Text color for assistant messages"
+                },
+                "toolCallColor": {
+                  "type": "string",
+                  "description": "Color for tool call indicators"
+                },
+                "toolReadColor": {
+                  "type": "string",
+                  "description": "Color for read tool calls"
+                },
+                "toolWriteColor": {
+                  "type": "string",
+                  "description": "Color for write tool calls"
+                },
+                "toolExecColor": {
+                  "type": "string",
+                  "description": "Color for execute tool calls"
+                },
+                "skillBadgeBg": {
+                  "type": "string",
+                  "description": "Background color for skill badges"
+                },
+                "skillBadgeFg": {
+                  "type": "string",
+                  "description": "Text color for skill badges"
+                },
+                "thinkingBg": {
+                  "type": "string",
+                  "description": "Background color for thinking blocks"
+                },
+                "thinkingBorder": {
+                  "type": "string",
+                  "description": "Border color for thinking blocks"
+                },
+                "warningColor": {
+                  "type": "string",
+                  "description": "Color for warning messages"
+                },
+                "errorColor": {
+                  "type": "string",
+                  "description": "Color for error messages"
+                },
+                "successColor": {
+                  "type": "string",
+                  "description": "Color for success messages"
+                },
+                "accentColor": {
+                  "type": "string",
+                  "description": "Primary accent color"
+                },
+                "diffAdded": {
+                  "type": "string",
+                  "description": "Color for added diff lines"
+                },
+                "diffRemoved": {
+                  "type": "string",
+                  "description": "Color for removed diff lines"
+                },
+                "inputBg": {
+                  "type": "string",
+                  "description": "Background color for input area"
+                },
+                "inputBorder": {
+                  "type": "string",
+                  "description": "Border color for input area"
+                },
+                "mentionBg": {
+                  "type": "string",
+                  "description": "Background color for mention chips"
+                },
+                "syntaxComment": {
+                  "type": "string",
+                  "description": "Syntax highlight color for comments"
+                },
+                "syntaxKeyword": {
+                  "type": "string",
+                  "description": "Syntax highlight color for keywords"
+                },
+                "syntaxString": {
+                  "type": "string",
+                  "description": "Syntax highlight color for strings"
+                },
+                "syntaxNumber": {
+                  "type": "string",
+                  "description": "Syntax highlight color for numbers"
+                },
+                "syntaxFunction": {
+                  "type": "string",
+                  "description": "Syntax highlight color for functions"
+                },
+                "syntaxType": {
+                  "type": "string",
+                  "description": "Syntax highlight color for types"
+                },
+                "syntaxOperator": {
+                  "type": "string",
+                  "description": "Syntax highlight color for operators"
+                },
+                "primaryColor": {
+                  "type": "string",
+                  "description": "OpenCode CLI primary color"
+                },
+                "secondaryColor": {
+                  "type": "string",
+                  "description": "OpenCode CLI secondary color"
+                },
+                "infoColor": {
+                  "type": "string",
+                  "description": "OpenCode CLI info color"
+                },
+                "elementBg": {
+                  "type": "string",
+                  "description": "Background color for lower-emphasis UI elements"
+                },
+                "borderActive": {
+                  "type": "string",
+                  "description": "Active border color"
+                },
+                "borderSubtle": {
+                  "type": "string",
+                  "description": "Subtle border color"
+                },
+                "diffContext": {
+                  "type": "string",
+                  "description": "Diff context text color"
+                },
+                "diffHunkHeader": {
+                  "type": "string",
+                  "description": "Diff hunk header color"
+                },
+                "diffHighlightAdded": {
+                  "type": "string",
+                  "description": "Diff inline added highlight"
+                },
+                "diffHighlightRemoved": {
+                  "type": "string",
+                  "description": "Diff inline removed highlight"
+                },
+                "diffAddedBg": {
+                  "type": "string",
+                  "description": "Diff added line background"
+                },
+                "diffRemovedBg": {
+                  "type": "string",
+                  "description": "Diff removed line background"
+                },
+                "diffContextBg": {
+                  "type": "string",
+                  "description": "Diff context line background"
+                },
+                "diffLineNumber": {
+                  "type": "string",
+                  "description": "Diff line number color"
+                },
+                "diffAddedLineNumberBg": {
+                  "type": "string",
+                  "description": "Diff added line number background"
+                },
+                "diffRemovedLineNumberBg": {
+                  "type": "string",
+                  "description": "Diff removed line number background"
+                },
+                "markdownText": {
+                  "type": "string",
+                  "description": "Markdown body text color"
+                },
+                "markdownHeading": {
+                  "type": "string",
+                  "description": "Markdown heading color"
+                },
+                "markdownLink": {
+                  "type": "string",
+                  "description": "Markdown link color"
+                },
+                "markdownLinkText": {
+                  "type": "string",
+                  "description": "Markdown link text color"
+                },
+                "markdownCode": {
+                  "type": "string",
+                  "description": "Markdown inline code color"
+                },
+                "markdownBlockQuote": {
+                  "type": "string",
+                  "description": "Markdown blockquote color"
+                },
+                "markdownEmph": {
+                  "type": "string",
+                  "description": "Markdown emphasis color"
+                },
+                "markdownStrong": {
+                  "type": "string",
+                  "description": "Markdown strong text color"
+                },
+                "markdownHorizontalRule": {
+                  "type": "string",
+                  "description": "Markdown horizontal rule color"
+                },
+                "markdownListItem": {
+                  "type": "string",
+                  "description": "Markdown list item color"
+                },
+                "markdownListEnumeration": {
+                  "type": "string",
+                  "description": "Markdown list marker color"
+                },
+                "markdownImage": {
+                  "type": "string",
+                  "description": "Markdown image color"
+                },
+                "markdownImageText": {
+                  "type": "string",
+                  "description": "Markdown image text color"
+                },
+                "markdownCodeBlock": {
+                  "type": "string",
+                  "description": "Markdown fenced code color"
+                },
+                "syntaxVariable": {
+                  "type": "string",
+                  "description": "Syntax highlight color for variables"
+                },
+                "syntaxPunctuation": {
+                  "type": "string",
+                  "description": "Syntax highlight color for punctuation"
+                }
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "opencode.model": {
+          "type": "string",
+          "default": "",
+          "scope": "window",
+          "description": "Default model ID in provider/model format (e.g. anthropic/claude-sonnet-4-20250514). Set via 'OpenCode: Select Model' command."
+        },
+        "opencode.contextWindowOverride": {
+          "type": "number",
+          "default": 0,
+          "scope": "window",
+          "description": "Override the context window limit for the active model. Set to 0 to use the server-reported value. Use this when the server doesn't report limit.context for your model."
+        },
+        "opencode.rateLimits": {
+          "type": "object",
+          "scope": "window",
+          "default": {},
+          "description": "Fallback rate limit configuration per provider. Set tokensPerMin and requestsPerMin for providers that don't return headers (e.g. openai, anthropic).",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "tokensPerMin": {
+                "type": "number",
+                "default": 100000,
+                "description": "Maximum tokens per minute for this provider"
+              },
+              "requestsPerMin": {
+                "type": "number",
+                "default": 50,
+                "description": "Maximum requests per minute for this provider"
+              }
+            }
+          }
+        },
+        "opencode.rateLimitWarningThreshold": {
+          "type": "number",
+          "scope": "window",
+          "default": 0.1,
+          "description": "Fraction of remaining rate limit that triggers a warning notification (0.0-1.0)"
+        },
+        "opencode.rateLimitCriticalThreshold": {
+          "type": "number",
+          "scope": "window",
+          "default": 0.05,
+          "description": "Fraction of remaining rate limit that triggers a critical warning (0.0-1.0)"
+        },
+        "opencode.inlineSuggestions.enabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "Enable server-backed inline ghost-text completions when available. Disabled by default until completions are implemented end-to-end."
+        },
+        "opencode.inlineSuggestions.triggerDelay": {
+          "type": "number",
+          "default": 300,
+          "scope": "window",
+          "description": "Delay in milliseconds before triggering inline completion after typing stops."
+        },
+        "opencode.autoCompact": {
+          "type": "string",
+          "scope": "window",
+          "default": "ask",
+          "enum": [
+            "ask",
+            "auto",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Show a prompt before auto-compacting",
+            "Compact automatically without asking",
+            "Never auto-compact"
+          ],
+          "description": "Controls automatic session compaction when context usage reaches the configured threshold (see opencode.autoCompactThreshold)."
+        },
+        "opencode.autoCompactThreshold": {
+          "type": "number",
+          "scope": "window",
+          "default": 80,
+          "minimum": 10,
+          "maximum": 95,
+          "description": "Percent of the model's context window at which to trigger auto-compaction. Lower values compact earlier (saves cost / runs less risk of overflow); higher values keep more raw history before summarising. Values outside [10, 95] are clamped."
+        },
+        "opencode.autoCompactPerModelThreshold": {
+          "type": "object",
+          "scope": "window",
+          "default": {},
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 10,
+            "maximum": 95
+          },
+          "description": "Per-model overrides for the auto-compaction threshold. Keys are 'provider/modelId' (e.g. 'anthropic/claude-sonnet-4-6-20251015'), values are percent (10-95). Models without an entry use opencode.autoCompactThreshold."
+        },
+        "opencode.sessions.emptySessionTtlMinutes": {
+          "type": "number",
+          "scope": "window",
+          "default": 60,
+          "minimum": 1,
+          "description": "Deletes completely empty, inactive sessions after this many minutes."
+        },
+        "opencode.sessions.cleanupIntervalMinutes": {
+          "type": "number",
+          "scope": "window",
+          "default": 15,
+          "minimum": 1,
+          "description": "How often the extension prunes completely empty sessions."
+        },
+        "opencode.sessions.restoreOpenTabs": {
+          "type": "boolean",
+          "scope": "window",
+          "default": true,
+          "description": "Restore chat tabs that were open in this workspace when VS Code last exited."
+        },
+        "opencode.debugLogging": {
+          "type": "boolean",
+          "scope": "window",
+          "default": false,
+          "description": "Enable verbose debug logging to the OpenCode Harness output channel"
+        },
+        "opencode.tdd.enabled": {
+          "type": "boolean",
+          "scope": "window",
+          "default": false,
+          "description": "Enable Test-Driven Development orchestration. When enabled, coding tasks will follow Red-Green-Refactor cycles with automatic test generation and verification."
+        },
+        "opencode.tdd.minCoverage": {
+          "type": "number",
+          "scope": "window",
+          "default": 80,
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Minimum test coverage percentage required to complete the TDD cycle."
+        },
+        "opencode.tdd.maxIterations": {
+          "type": "number",
+          "scope": "window",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Maximum number of iterations allowed per TDD phase before marking it as failed."
+        },
+        "opencode.sadd.enabled": {
+          "type": "boolean",
+          "scope": "window",
+          "default": false,
+          "description": "Enable Sub-Agent Driven Development. When enabled, complex tasks will be decomposed into parallel subtasks executed by multiple sub-agents."
+        },
+        "opencode.sadd.maxSubagents": {
+          "type": "number",
+          "scope": "window",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 8,
+          "description": "Maximum number of sub-agents that can be dispatched for a single task."
+        },
+        "opencode.methodology.enabled": {
+          "type": "boolean",
+          "scope": "window",
+          "default": true,
+          "description": "Enable proactive methodology selection. When enabled, the extension automatically selects the best development approach (spec-first, TDD, cascade routing, etc.) based on task complexity and model capabilities."
+        },
+        "opencode.methodology.defaultStrategy": {
+          "type": "string",
+          "scope": "window",
+          "default": "hierarchical-cot",
+          "enum": [
+            "direct",
+            "hierarchical-cot",
+            "plan-then-execute",
+            "iterative-refinement",
+            "schema-first",
+            "few-shot-strong",
+            "conversational-decompose"
+          ],
+          "enumDescriptions": [
+            "Simple, direct responses with minimal reasoning overhead",
+            "Plan steps, execute sequentially, provide final answer",
+            "Separate planning and execution phases",
+            "Generate, critique, and refine iteratively",
+            "Return structured JSON matching a provided schema",
+            "Follow pre-generated examples from stronger models",
+            "Break complex tasks into sub-tasks with confirmation between each"
+          ],
+          "description": "Default prompt strategy when no specific methodology is selected."
+        },
+        "opencode.methodology.cascadeEnabled": {
+          "type": "boolean",
+          "scope": "window",
+          "default": true,
+          "description": "Enable cascade routing. When enabled, tasks start with the cheapest capable model and escalate to more capable models only when quality is insufficient."
+        },
+        "opencode.methodology.maxEscalations": {
+          "type": "number",
+          "scope": "window",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 5,
+          "description": "Maximum number of model escalations allowed in cascade routing before returning the best result."
+        },
+        "opencode.methodology.qualityThreshold": {
+          "type": "number",
+          "scope": "window",
+          "default": 0.7,
+          "minimum": 0.5,
+          "maximum": 1,
+          "description": "Minimum quality score (0.0-1.0) required to accept a model response without escalation."
+        },
+        "opencode.methodology.maxTokensPerRequest": {
+          "type": "number",
+          "scope": "window",
+          "default": 50000,
+          "minimum": 1000,
+          "description": "Maximum token budget per methodology request."
+        },
+        "opencode.methodology.maxCostPerRequest": {
+          "type": "number",
+          "scope": "window",
+          "default": 5,
+          "minimum": 0,
+          "description": "Maximum cost ($) per methodology request before returning the best result."
+        },
+        "opencode.methodology.validationEnabled": {
+          "type": "boolean",
+          "scope": "window",
+          "default": true,
+          "description": "Enable schema validation for LLM outputs. When enabled, responses are validated against expected schemas with automatic retry on failure."
+        },
+        "opencode.methodology.maxValidationRetries": {
+          "type": "number",
+          "scope": "window",
+          "default": 3,
+          "minimum": 0,
+          "maximum": 5,
+          "description": "Maximum number of validation retry attempts before accepting an invalid response."
+        },
+        "opencode.sessions.maxConcurrentStreams": {
+          "type": "number",
+          "scope": "window",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Maximum number of concurrent AI streams across all tabs."
+        },
+        "opencode.defaultMode": {
+          "type": "string",
+          "default": "build",
+          "enum": [
+            "plan",
+            "build",
+            "auto"
+          ],
+          "scope": "window",
+          "description": "Default session mode for new chat sessions."
+        },
+        "opencode.modeModels": {
+          "type": "object",
+          "scope": "window",
+          "default": {},
+          "description": "Override default model per session mode (Plan, Build, Auto). Each value should be a model ID in provider/model format. When empty the session model is used for all modes. Pattern: Cline's per-mode model selector, Copilot's per-agent model config.",
+          "properties": {
+            "plan": {
+              "type": "string",
+              "default": "",
+              "description": "Model to use in Plan mode (e.g. 'anthropic/claude-sonnet-4-20250514'). When empty, uses the session's default model."
+            },
+            "build": {
+              "type": "string",
+              "default": "",
+              "description": "Model to use in Build mode. When empty, uses the session's default model."
+            },
+            "auto": {
+              "type": "string",
+              "default": "",
+              "description": "Model to use in Auto mode. When empty, uses the session's default model."
+            }
+          },
+          "additionalProperties": false
+        },
+        "opencode.voice.enabled": {
+          "type": "boolean",
+          "scope": "window",
+          "default": true,
+          "description": "Show the microphone button in the chat composer. Voice input records the microphone and transcribes it locally on your machine — no cloud service or API key. The transcript is inserted into the prompt for review and is never auto-sent unless opencode.voice.autoSend is enabled."
+        },
+        "opencode.voice.autoSend": {
+          "type": "boolean",
+          "scope": "window",
+          "default": false,
+          "description": "Automatically send the prompt as soon as a voice transcript is inserted. Off by default so you can edit before sending."
+        },
+        "opencode.voice.language": {
+          "type": "string",
+          "scope": "window",
+          "default": "auto",
+          "description": "Spoken language passed to the local speech-to-text engine (e.g. 'en-US', 'es', 'fr'). Use 'auto' to let the engine detect the language."
+        },
+        "opencode.voice.insertMode": {
+          "type": "string",
+          "scope": "window",
+          "default": "append",
+          "enum": [
+            "append",
+            "replace"
+          ],
+          "enumDescriptions": [
+            "Append the transcript to whatever is already in the prompt.",
+            "Replace the prompt contents with the transcript."
+          ],
+          "description": "How a voice transcript is placed into the prompt box."
+        },
+        "opencode.voice.maxRecordingSeconds": {
+          "type": "number",
+          "scope": "window",
+          "default": 60,
+          "minimum": 1,
+          "maximum": 300,
+          "description": "Maximum length of a single voice recording. Recording stops automatically at this limit."
+        },
+        "opencode.voice.model": {
+          "type": "string",
+          "scope": "machine",
+          "default": "",
+          "markdownDescription": "Local speech-to-text model. For openai-whisper this is a model size (e.g. `base`, `small`); for whisper.cpp this is the path to a `.bin` model file (required to use whisper.cpp). Leave blank to use the openai-whisper `base` model. Machine-scoped so it cannot be set by an untrusted workspace."
+        },
+        "opencode.voice.localCommand": {
+          "type": "string",
+          "scope": "machine",
+          "default": "",
+          "markdownDescription": "Optional override command for local transcription (bring-your-own engine). Placeholders: `{input}` (audio WAV path), `{output}` (a .txt path the command may write the transcript to), `{language}`. If `{output}` is used the file is read; otherwise stdout is used. Example: `whisper-ctranslate2 {input} --language {language} --output_dir /tmp --output_format txt`. Machine-scoped for security: an untrusted workspace cannot set the command the host runs."
+        },
+        "opencode.voice.recordCommand": {
+          "type": "string",
+          "scope": "machine",
+          "default": "",
+          "markdownDescription": "Optional override command to record the microphone to a WAV file. Placeholders: `{output}` (target WAV path), `{duration}` (max seconds). The command should record the default input device and stop on SIGINT. Leave blank to auto-detect `rec` (sox), `arecord`, or `ffmpeg`. Machine-scoped for security."
+        },
+        "opencode.sessions.processStrategy": {
+          "type": "string",
+          "scope": "window",
+          "default": "shared",
+          "enum": [
+            "shared",
+            "per-tab"
+          ],
+          "enumDescriptions": [
+            "All tabs share one opencode serve process (safe, low memory).",
+            "Each tab gets its own opencode serve process (full crash isolation, higher memory)."
+          ],
+          "description": "Process isolation strategy. 'shared' = one server for all tabs (default). 'per-tab' = each tab gets its own server process."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run typecheck && node esbuild.js --production && node scripts/check-bundle-size.mjs",
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "package": "vsce package --no-dependencies",
+    "reinstall": "node scripts/reinstall-extension.mjs",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "bundle:check": "node scripts/check-bundle-size.mjs",
+    "bundle:attribute": "node scripts/bundle-attribution.mjs",
+    "test:unit": "node --test tests/unit/*.test.mjs && npx tsx --test \"src/**/*.test.ts\"",
+    "coverage": "c8 --reporter=text --include='**' --exclude='node_modules/**' --exclude='tests/**' --exclude='.git/**' --exclude='*.json' --exclude='*.md' --exclude='*.yaml' --exclude='*.html' node --test tests/unit/*.test.mjs",
+    "test:integration": "vscode-test",
+    "test:visual": "playwright test",
+    "test:visual:context": "playwright test tests/visual/chat-context-usage.spec.ts --project=chromium",
+    "test:visual:update": "playwright test --update-snapshots",
+    "test:webview": "playwright test --project=chromium-webview",
+    "test:message-contract": "npx tsx --test tests/webview/message-contract.test.ts",
+    "test:roundtrip": "node --test tests/integration/message-roundtrip.test.mjs",
+    "test": "npm run test:unit && npm run test:message-contract && npm run test:roundtrip"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.5.3",
+    "@commitlint/config-conventional": "^20.5.3",
+    "@playwright/test": "^1.49.0",
+    "@stryker-mutator/core": "^9.6.1",
+    "@types/jsdom": "^28.0.3",
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^22.19.17",
+    "@types/vscode": "^1.98.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.2",
+    "@typescript-eslint/parser": "^8.59.2",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.9.1",
+    "c8": "^11.0.0",
+    "esbuild": "^0.28.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "jsdom": "^29.1.1",
+    "mocha": "^11.3.0",
+    "tsx": "^4.22.3",
+    "typescript": "^5.7.0"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.0.0"
+  },
+  "dependencies": {
+    "@opencode-ai/sdk": "^1.15.1",
+    "@vscode-elements/elements": "^2.5.1",
+    "dompurify": "^3.4.2",
+    "fast-diff": "^1.3.0",
+    "highlight.js": "^11.11.1",
+    "markdown-it": "^14.1.0",
+    "markdown-it-task-lists": "^2.1.1"
+  }
+}
