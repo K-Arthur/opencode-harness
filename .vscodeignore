@@ -56,3 +56,11 @@ stryker.config.json
 typecheck_output.txt
 REPAIR_NOTES.md
 changelog.md
+*.pkg.tar.zst
+*.bak
+queue-steer-*.md
+welcome-screen-research-notes.md
+*-research-notes.md
+*-implementation-map.md
+*-audit.md
+CONTRIBUTING.md
