@@ -86,8 +86,14 @@ export function setupSubagentDetailView(
   }
   document.addEventListener("keydown", onKeydown)
 
+  function getPanel(): HTMLElement | null {
+    return container.closest("#subagent-panel")
+  }
+
   function closeView() {
     container.classList.add("hidden")
+    const panel = getPanel()
+    if (panel) panel.dataset.view = "list"
   }
 
   function close() {
@@ -96,12 +102,16 @@ export function setupSubagentDetailView(
 
   function open(activity: SubagentActivity) {
     container.classList.remove("hidden")
+    const panel = getPanel()
+    if (panel) panel.dataset.view = "detail"
     content.innerHTML = ""
     renderSummary(content, activity)
   }
 
   function showDetail(activity: SubagentActivity, detail: Record<string, unknown>) {
     container.classList.remove("hidden")
+    const panel = getPanel()
+    if (panel) panel.dataset.view = "detail"
     content.innerHTML = ""
     const hydrated = mergeActivityDetail(activity, detail)
     renderSummary(content, hydrated)
@@ -334,11 +344,15 @@ export function setupSubagentDetailView(
 
   function renderLoading() {
     container.classList.remove("hidden")
+    const panel = getPanel()
+    if (panel) panel.dataset.view = "detail"
     content.innerHTML = `<div class="subagent-detail-loading"><span class="subagent-detail-spinner"></span> Loading subagent detail...</div>`
   }
 
   function renderError(message: string) {
     container.classList.remove("hidden")
+    const panel = getPanel()
+    if (panel) panel.dataset.view = "detail"
     content.innerHTML = `<div class="subagent-detail-error-state">${sanitizeHtml(message)}</div>`
   }
 

@@ -1,6 +1,7 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { resolveContextWindow, findKnownContextWindow, KNOWN_CONTEXT_WINDOWS } from "./contextWindowResolver"
+import { resolveContextWindow, resolveModelOutputLimit, findKnownContextWindow, KNOWN_CONTEXT_WINDOWS } from "./contextWindowResolver"
+import type { ModelsDevEntry } from "./modelsDevMetadata"
 
 // The resolver is now a thin server-trust shim — no hardcoded context
 // windows. These tests pin that contract: when the server supplies a
@@ -114,7 +115,7 @@ describe("resolveContextWindow — OpenRouter cache fallback (0.2.15)", () => {
     assert.match(lines[0]!, /placeholder limit\.context/)
   })
 
-  it("returns undefined and logs when both server and cache come up empty", () => {
+  it("returns undefined and logs when both server and fallback caches come up empty", () => {
     const lines: string[] = []
     const cache = new Map<string, number>([["totally-different/model", 1]])
     const out = resolveContextWindow("opencode/proprietary-model", undefined, {
@@ -123,7 +124,7 @@ describe("resolveContextWindow — OpenRouter cache fallback (0.2.15)", () => {
     })
     assert.equal(out, undefined)
     assert.equal(lines.length, 1, "should log the miss so operators can notice")
-    assert.match(lines[0]!, /no OpenRouter fallback hit/, "log line must reflect that fallback also failed")
+    assert.match(lines[0]!, /no models\.dev \/ OpenRouter fallback hit/, "log line must reflect that both fallbacks also failed")
   })
 
   it("does not log when the cache hits — silence on the happy path", () => {
@@ -134,6 +135,90 @@ describe("resolveContextWindow — OpenRouter cache fallback (0.2.15)", () => {
       log: (m) => lines.push(m),
     })
     assert.equal(lines.length, 0)
+  })
+})
+
+describe("resolveContextWindow — models.dev cache fallback (0.3.0+)", () => {
+  const mdCache = new Map<string, ModelsDevEntry>([
+    ["opencode/deepseek-v4-flash-free", { contextWindow: 200_000, outputLimit: 128_000 }],
+    ["deepseek-v4-flash-free", { contextWindow: 200_000, outputLimit: 128_000 }],
+  ])
+
+  it("models.dev hit resolves when server has no value (the primary fix for free models)", () => {
+    assert.equal(
+      resolveContextWindow("opencode/deepseek-v4-flash-free", undefined, { modelsDevCache: mdCache }),
+      200_000,
+    )
+  })
+
+  it("models.dev wins over OpenRouter when both are available (models.dev is higher priority)", () => {
+    const orCache = new Map<string, number>([["deepseek-v4-flash-free", 128_000]])
+    assert.equal(
+      resolveContextWindow("opencode/deepseek-v4-flash-free", undefined, {
+        modelsDevCache: mdCache,
+        openRouterCache: orCache,
+      }),
+      // models.dev says 200k, OpenRouter says 128k. Trust models.dev.
+      200_000,
+    )
+  })
+
+  it("models.dev miss + OpenRouter hit still resolves via OpenRouter (demoted path works)", () => {
+    const emptyMd = new Map<string, ModelsDevEntry>()
+    const orCache = new Map<string, number>([["kimi-k2.5", 200_000]])
+    assert.equal(
+      resolveContextWindow("anyhost/kimi-k2.5", undefined, {
+        modelsDevCache: emptyMd,
+        openRouterCache: orCache,
+      }),
+      200_000,
+    )
+  })
+
+  it("server value still wins over models.dev (server is authoritative)", () => {
+    assert.equal(
+      resolveContextWindow("opencode/deepseek-v4-flash-free", 1_000_000, { modelsDevCache: mdCache }),
+      1_000_000,
+    )
+  })
+
+  it("short-id lookup on models.dev works (different provider prefix still resolves)", () => {
+    assert.equal(
+      resolveContextWindow("zenmux/deepseek-v4-flash-free", undefined, { modelsDevCache: mdCache }),
+      200_000,
+    )
+  })
+})
+
+describe("resolveModelOutputLimit — output limit resolution (0.3.0+)", () => {
+  it("returns the server output limit when it is a positive number", () => {
+    assert.equal(resolveModelOutputLimit("opencode/deepseek-v4-flash-free", 128_000), 128_000)
+    assert.equal(resolveModelOutputLimit("provider/m", 1), 1)
+  })
+
+  it("returns undefined when the server supplies no valid output limit", () => {
+    assert.equal(resolveModelOutputLimit("opencode/deepseek-v4-flash-free"), undefined)
+    assert.equal(resolveModelOutputLimit("opencode/deepseek-v4-flash-free", 0), undefined)
+    assert.equal(resolveModelOutputLimit("opencode/deepseek-v4-flash-free", NaN), undefined)
+    assert.equal(resolveModelOutputLimit("opencode/deepseek-v4-flash-free", -1), undefined)
+  })
+
+  it("falls back to models.dev when the server doesn't report output limit", () => {
+    const mdCache = new Map<string, ModelsDevEntry>([
+      ["opencode/deepseek-v4-flash-free", { contextWindow: 200_000, outputLimit: 128_000 }],
+    ])
+    assert.equal(
+      resolveModelOutputLimit("opencode/deepseek-v4-flash-free", undefined, { modelsDevCache: mdCache }),
+      128_000,
+    )
+  })
+
+  it("returns undefined when neither server nor models.dev have the output limit", () => {
+    const emptyMd = new Map<string, ModelsDevEntry>()
+    assert.equal(
+      resolveModelOutputLimit("opencode/unknown-model", undefined, { modelsDevCache: emptyMd }),
+      undefined,
+    )
   })
 })
 

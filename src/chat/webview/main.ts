@@ -43,6 +43,7 @@ import { mergeTodos, generateTodoId } from "./todos-logic"
 import { setupSkillsModal } from "./skills-modal"
 import { setupSubagentPanel, type SubagentPanelApi } from "./subagent-panel"
 import { setupSubagentDetailView, type SubagentDetailViewApi } from "./subagentDetailView"
+import { reconcileSubagentStatuses, computeNewSubagentIds, capCompletedSubagents } from "./subagentReconciler"
 import { setupSidebarResize } from "./sidebarResize"
 import { applySubagentCardUpdate } from "./subagentCard"
 import { selectDisplayedUsage } from "./tokenDisplayPolicy"
@@ -371,6 +372,7 @@ function getVsCodeApi() {
    * the user re-opens it (or until the next run starts and clears it).
    */
   const subagentDismissedBySession = new Set<string>()
+  const knownSubagentIdsBySession = new Map<string, Set<string>>()
 
   const modelDropdown = setupModelDropdown(els, {
     onOpen: () => {
@@ -991,6 +993,24 @@ function getVsCodeApi() {
         vscode.postMessage({ type: "get_subagent_detail", sessionId: stateManager.getState().activeSessionId ?? "", subagentId: activity.id })
         subagentDetailViewApi?.open(activity)
         subagentDetailViewApi?.renderLoading?.()
+      },
+      onClearCompleted: () => {
+        const sid = stateManager.getState().activeSessionId
+        if (sid) {
+          const session = stateManager.getSession(sid)
+          if (session?.subagentActivities) {
+            const live = session.subagentActivities.filter(isLiveSubagent)
+            stateManager.setSubagentActivities(sid, live)
+            subagentPanelApi?.renderActivities(live)
+            updateSubagentBadge(live.length)
+          }
+        }
+      },
+      onMarkRead: (subagentId: string) => {
+        const sid = stateManager.getState().activeSessionId
+        if (sid) {
+          vscode.postMessage({ type: "mark_subagent_read", sessionId: sid, subagentId })
+        }
       },
     })
 
@@ -2550,31 +2570,20 @@ function getVsCodeApi() {
 
         streamHandlers.get(sid)?.handleRunActivityUpdate(activity)
 
-        const liveSubagents = runSubagentsToActivities(activity)
-        if (liveSubagents.length > 0) {
-          mergeSubagentActivities(sid, liveSubagents)
-          // Keep the inline subagent cards in the transcript in sync with the
-          // tracker snapshot. The card's data-block-id is the tool id; the
-          // tracker subagent id is `subagent:<toolId>` (see
-          // StreamCoordinator.bridgeSubagentFromTool). Strip the prefix to
-          // locate the card and apply the live status/currentActivity/error.
+        const incomingSubagents = runSubagentsToActivities(activity)
+
+        // Reconcile: merge incoming with existing, transition dropped subagents
+        const prevActivities = stateManager.getSession(sid)?.subagentActivities ?? []
+        const reconciled = reconcileSubagentStatuses(prevActivities, incomingSubagents)
+        const capped = capCompletedSubagents(reconciled)
+
+        if (capped.length > 0) {
+          stateManager.setSubagentActivities(sid, capped)
           if (sid === stateManager.getState().activeSessionId) {
-            const msgList = getActiveMessageList(els)
-            if (msgList) {
-              for (const sub of activity.subagents ?? []) {
-                const toolId = sub.id.startsWith("subagent:") ? sub.id.slice("subagent:".length) : sub.id
-                const cardEl = msgList.querySelector<HTMLElement>(`[data-block-id="${toolId}"].subagent-card`)
-                if (!cardEl) continue
-                applySubagentCardUpdate(cardEl, {
-                  state: mapSubagentRunStatusToCardState(sub.status),
-                  result: sub.error,
-                  error: sub.error,
-                })
-              }
-            }
+            subagentPanelApi?.renderActivities(capped)
+            updateSubagentBadge(capped.filter(isLiveSubagent).length)
           }
         } else if (sid === stateManager.getState().activeSessionId) {
-          // No live subagents — clear stale entries from the panel and badge.
           const session = stateManager.getSession(sid)
           if (session && session.subagentActivities?.length) {
             stateManager.setSubagentActivities(sid, [])
@@ -2583,15 +2592,37 @@ function getVsCodeApi() {
           updateSubagentBadge(0)
         }
 
-        // When the last subagent completes, turn off the auto-open flag so
-        // a future stream can re-open.
+        // Inline subagent cards in transcript
+        if (incomingSubagents.length > 0 && sid === stateManager.getState().activeSessionId) {
+          const msgList = getActiveMessageList(els)
+          if (msgList) {
+            for (const sub of activity.subagents ?? []) {
+              const toolId = sub.id.startsWith("subagent:") ? sub.id.slice("subagent:".length) : sub.id
+              const cardEl = msgList.querySelector<HTMLElement>(`[data-block-id="${toolId}"].subagent-card`)
+              if (!cardEl) continue
+              applySubagentCardUpdate(cardEl, {
+                state: mapSubagentRunStatusToCardState(sub.status),
+                result: sub.error,
+                error: sub.error,
+              })
+            }
+          }
+        }
+
+        // Auto-open policy: only on NEW subagent ids, not on activity churn
+        const prevKnownIds = knownSubagentIdsBySession.get(sid) ?? new Set()
+        const newIds = computeNewSubagentIds(prevKnownIds, incomingSubagents)
+        const allIds = new Set(incomingSubagents.map(a => a.id))
+        knownSubagentIdsBySession.set(sid, allIds)
+
+        // When the last subagent completes, turn off the dismissal flag
         if (activity.activeSubagentCount === 0) {
           subagentDismissedBySession.delete(sid)
         }
 
         if (
           sid === stateManager.getState().activeSessionId &&
-          activity.activeSubagentCount > 0 &&
+          newIds.size > 0 &&
           !subagentDismissedBySession.has(sid)
         ) {
           sideRegionApi?.open("subagent")
@@ -3553,8 +3584,16 @@ function getVsCodeApi() {
         const subagent = msg.subagent as SubagentActivity | undefined
         if (sessionId && subagent?.id) {
           const merged = mergeSubagentActivities(sessionId, [subagent])
+
+          // Auto-open only if this is a NEW subagent id
+          const prevKnownIds = knownSubagentIdsBySession.get(sessionId) ?? new Set()
+          const newIds = computeNewSubagentIds(prevKnownIds, [subagent])
+          const allIds = new Set([...prevKnownIds, subagent.id])
+          knownSubagentIdsBySession.set(sessionId, allIds)
+
           if (
             sessionId === stateManager.getState().activeSessionId &&
+            newIds.size > 0 &&
             isLiveSubagent(subagent) &&
             !subagentDismissedBySession.has(sessionId)
           ) {
@@ -3693,6 +3732,7 @@ function getVsCodeApi() {
     // Reset the subagent-panel dismissal flag at the start of each new run —
     // user dismissal is per-run; a fresh prompt should respect auto-open again.
     subagentDismissedBySession.delete(sessionId)
+    knownSubagentIdsBySession.delete(sessionId)
     streamOrchestrator.handleStreamStart(sessionId, messageId)
   }
 

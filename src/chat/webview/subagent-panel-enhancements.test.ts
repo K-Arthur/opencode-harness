@@ -119,8 +119,10 @@ void describe("subagent-panel enhancements", () => {
 
     const items = list.querySelectorAll(".subagent-item")
     assert.equal(items.length, 10, "must cap at 10 completed items")
-    assert.ok(items[0].textContent!.includes("Completed Agent 14"), "first must be newest (index 14)")
-    assert.ok(items[9].textContent!.includes("Completed Agent 5"), "last must be 10th newest (index 5)")
+    const first = items[0]!
+    const last = items[9]!
+    assert.ok(first.textContent!.includes("Completed Agent 0"), "first must be newest (index 0, highest completedAt)")
+    assert.ok(last.textContent!.includes("Completed Agent 9"), "last must be 10th newest (index 9)")
 
     api.dispose()
     document.body.removeChild(container)

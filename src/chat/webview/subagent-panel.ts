@@ -4,6 +4,8 @@ import type { ElementRefs } from "./dom"
 export interface SubagentPanelOptions {
   onCancelSubagent: (subagentId: string) => void
   onOpenDetail: (activity: SubagentActivity) => void
+  onClearCompleted?: () => void
+  onMarkRead?: (subagentId: string) => void
 }
 
 export type SubagentPanelEls = Pick<ElementRefs,
@@ -20,6 +22,8 @@ export interface SubagentPanelApi {
   dispose: () => void
 }
 
+const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"])
+
 const SUBAGENT_STATUS_WHITELIST = new Set(["running", "completed", "cancelled", "failed", "pending"])
 function safeStatusClass(status: string): string {
   return SUBAGENT_STATUS_WHITELIST.has(status) ? status : "unknown"
@@ -29,8 +33,6 @@ function statusLabel(status: string): string {
   return status.charAt(0).toUpperCase() + status.slice(1)
 }
 
-// Strip ANSI escape sequences and other C0 control chars (except \n/\t) that
-// frequently appear in raw subagent stdout streams.
 const ANSI_AND_CONTROL_RE = /\x1b\[[0-9;]*[a-zA-Z]|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g
 function sanitizeOutput(s: string): string {
   return s.replace(ANSI_AND_CONTROL_RE, "")
@@ -101,11 +103,11 @@ function formatDuration(ms: number): string {
   return `${Math.floor(ms / 60_000)}m ${Math.floor((ms % 60_000) / 1000)}s`
 }
 
-function renderAggregateStats(container: HTMLElement, activities: SubagentActivity[]): void {
+function renderAggregateStats(container: HTMLElement, activities: SubagentActivity[], options: SubagentPanelOptions): void {
   const existing = container.querySelector(".subagent-stats-bar")
   if (existing) existing.remove()
 
-  const running = activities.filter(a => a.status === "running").length
+  const running = activities.filter(a => a.status === "running" || a.status === "pending").length
   const completed = activities.filter(a => a.status === "completed").length
   const failed = activities.filter(a => a.status === "failed" || a.status === "cancelled").length
   const totalMs = activities.reduce((sum, a) => sum + (a.durationMs ?? 0), 0)
@@ -122,6 +124,19 @@ function renderAggregateStats(container: HTMLElement, activities: SubagentActivi
   if (totalMs > 0) parts.push(formatDuration(totalMs))
 
   bar.textContent = parts.join(" · ")
+
+  if (completed > 0 && options.onClearCompleted) {
+    const clearBtn = document.createElement("button")
+    clearBtn.className = "subagent-clear-completed-btn"
+    clearBtn.textContent = "Clear completed"
+    clearBtn.type = "button"
+    clearBtn.addEventListener("click", (e) => {
+      e.stopPropagation()
+      options.onClearCompleted?.()
+    })
+    bar.appendChild(clearBtn)
+  }
+
   container.insertBefore(bar, container.firstChild)
 }
 
@@ -129,7 +144,6 @@ function applyRovingTabindex(list: HTMLElement): void {
   const items = Array.from(list.querySelectorAll<HTMLElement>(".subagent-item"))
   if (items.length === 0) return
 
-  // Ensure first item is the tab stop; rest are -1
   items.forEach((item, i) => {
     item.setAttribute("tabindex", i === 0 ? "0" : "-1")
   })
@@ -160,12 +174,29 @@ function applyRovingTabindex(list: HTMLElement): void {
   })
 }
 
+const MAX_COMPLETED_VISIBLE = 10
+
+function isTerminal(status: string): boolean {
+  return TERMINAL_STATUSES.has(status)
+}
+
+function capActivities(activities: SubagentActivity[]): SubagentActivity[] {
+  const live = activities.filter(a => !isTerminal(a.status))
+  const terminal = activities
+    .filter(a => isTerminal(a.status))
+    .sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0))
+    .slice(0, MAX_COMPLETED_VISIBLE)
+  return [...live, ...terminal]
+}
+
 function renderSubagentList(container: HTMLElement, activities: SubagentActivity[], options: SubagentPanelOptions) {
   container.innerHTML = ""
 
-  renderAggregateStats(container, activities)
+  const capped = capActivities(activities)
 
-  if (activities.length === 0) {
+  renderAggregateStats(container, activities, options)
+
+  if (capped.length === 0) {
     const empty = document.createElement("div")
     empty.className = "subagent-empty"
     empty.textContent = "No active subagents"
@@ -178,15 +209,18 @@ function renderSubagentList(container: HTMLElement, activities: SubagentActivity
   list.setAttribute("role", "listbox")
   list.setAttribute("aria-label", "Subagents")
 
-  activities.forEach((activity, idx) => {
+  capped.forEach((activity, idx) => {
+    const terminal = isTerminal(activity.status)
     const item = document.createElement("div")
     item.className = `subagent-item subagent-item--${safeStatusClass(activity.status)}`
+    if (terminal) item.classList.add("subagent-item--collapsed")
     item.dataset.subagentId = activity.id
     item.setAttribute("role", "option")
     item.setAttribute("tabindex", idx === 0 ? "0" : "-1")
     item.setAttribute("aria-label", `Open details for ${activity.name}`)
 
     const openDetail = () => {
+      options.onMarkRead?.(activity.id)
       options.onOpenDetail(activity)
     }
 
@@ -203,7 +237,6 @@ function renderSubagentList(container: HTMLElement, activities: SubagentActivity
 
     nameWrap.appendChild(name)
 
-    // Domain badge
     if (activity.domain) {
       const badge = document.createElement("span")
       badge.className = "subagent-domain-badge"
@@ -215,18 +248,36 @@ function renderSubagentList(container: HTMLElement, activities: SubagentActivity
     status.className = `subagent-item-status subagent-item-status--${safeStatusClass(activity.status)}`
     status.textContent = statusLabel(activity.status)
 
-    // Cancel button (only for running)
     if (activity.status === 'running') {
       const cancelBtn = document.createElement("button")
       cancelBtn.className = "subagent-cancel-btn"
       cancelBtn.setAttribute("aria-label", `Cancel ${activity.name}`)
       cancelBtn.textContent = "Cancel"
-      cancelBtn.addEventListener("click", () => {
+      cancelBtn.addEventListener("click", (e) => {
+        e.stopPropagation()
         options.onCancelSubagent(activity.id)
       })
       header.appendChild(nameWrap)
       header.appendChild(status)
       header.appendChild(cancelBtn)
+    } else if (terminal) {
+      // Terminal items: expand toggle + status
+      const expandBtn = document.createElement("button")
+      expandBtn.className = "subagent-expand-btn"
+      expandBtn.setAttribute("aria-label", "Toggle details")
+      expandBtn.setAttribute("aria-expanded", "false")
+      expandBtn.type = "button"
+      expandBtn.textContent = "▶"
+      expandBtn.addEventListener("click", (e) => {
+        e.stopPropagation()
+        item.classList.toggle("subagent-item--collapsed")
+        const collapsed = item.classList.contains("subagent-item--collapsed")
+        expandBtn.setAttribute("aria-expanded", String(!collapsed))
+        expandBtn.textContent = collapsed ? "▶" : "▼"
+      })
+      header.appendChild(nameWrap)
+      header.appendChild(status)
+      header.appendChild(expandBtn)
     } else {
       header.appendChild(nameWrap)
       header.appendChild(status)
@@ -234,10 +285,11 @@ function renderSubagentList(container: HTMLElement, activities: SubagentActivity
 
     item.appendChild(header)
 
-    // Click to open detail view
+    // Click to open detail view (works for all statuses)
     item.style.cursor = "pointer"
     item.addEventListener("click", (e) => {
       if ((e.target as HTMLElement).closest(".subagent-cancel-btn")) return
+      if ((e.target as HTMLElement).closest(".subagent-expand-btn")) return
       openDetail()
     })
     item.addEventListener("keydown", (e) => {
@@ -258,7 +310,6 @@ function renderSubagentList(container: HTMLElement, activities: SubagentActivity
 
       tddBar.appendChild(phaseLabel)
 
-      // Test counts
       if (activity.testsWritten !== undefined || activity.testsPassing !== undefined) {
         const testInfo = document.createElement("span")
         testInfo.className = "subagent-test-info"
