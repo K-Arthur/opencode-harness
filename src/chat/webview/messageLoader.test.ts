@@ -98,8 +98,9 @@ describe("messageLoader.ts", () => {
     )
   })
 
-  it("createLoadEarlierBanner accepts hiddenCount and onLoad callback", () => {
-    assert.ok(source.includes("hiddenCount"), "must accept hiddenCount")
+  it("createLoadEarlierBanner accepts displayCount, beforeIndex, and onLoad callback", () => {
+    assert.ok(source.includes("displayCount"), "must accept displayCount")
+    assert.ok(source.includes("beforeIndex"), "must accept beforeIndex")
     assert.ok(source.includes("onLoad"), "must accept onLoad callback")
   })
 
