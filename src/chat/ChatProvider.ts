@@ -127,6 +127,9 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     maxPerSession: 200,
     log: { warn: (m) => log.warn(m), info: (m) => log.info(m) },
   })
+  /** Maps child session IDs → parent tab ID so child session events are routed
+   *  directly without buffering. Populated by SubagentHeartbeat on discovery. */
+  private childSessionToTab = new Map<string, string>()
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -161,13 +164,16 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       sessionManager, sessionStore, contextEngine, contextMonitor, modelManager, this.tabManager, rateLimitMonitor, this.diffApplier, methodologyAdvisor
     )
     this.streamCoordinator.setChildSessionReplayer((tabId, childSessionId) => {
-      const events = this.pendingEventBuffer.drain(childSessionId)
-      if (events.length === 0) return
-      log.info(`Replaying ${events.length} buffered child session event(s) for ${childSessionId} through tab ${tabId}`)
-      const tab = this.tabManager.getTab(tabId)
-      for (const ev of events) {
-        this.dispatchServerEvent(ev, tabId, tab ?? undefined)
-      }
+      // Register permanent mapping so future child session events route directly
+      // to the correct parent tab via resolveServerEventTab.
+      // Child session events (text_chunk, tool_start, etc.) carry the child's
+      // cliSessionId — without this mapping they'd be buffered/left unresolvable.
+      // Note: we do NOT drain/dispatch buffered child events here. The only
+      // events buffered for child session IDs are events like text_chunk and
+      // tool_start from the child's own event stream — these are NOT needed by
+      // the parent tab (subagent info comes from subagent_update on the parent's
+      // stream + heartbeat polling). Dispatching them would corrupt parent state.
+      this.childSessionToTab.set(childSessionId, tabId)
     })
     this.promptManager = new PromptManager()
     this.promptManager.scanWorkspace()
@@ -1305,9 +1311,19 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
   }
 
   private resolveServerEventTab(event: ServerEvent): { tab?: TabState; drop: boolean } {
-    const tab = event.sessionId
-      ? this.tabManager.getTabByCliSessionId(event.sessionId) ?? this.tabManager.getTab(event.sessionId)
-      : this.resolveSessionlessFileEditTab(event)
+    let tab: TabState | undefined
+    if (event.sessionId) {
+      tab = this.tabManager.getTabByCliSessionId(event.sessionId) ?? this.tabManager.getTab(event.sessionId)
+      if (!tab) {
+        // Check if this is a child session ID mapped to a parent tab
+        const parentTabId = this.childSessionToTab.get(event.sessionId)
+        if (parentTabId) {
+          tab = this.tabManager.getTab(parentTabId)
+        }
+      }
+    } else {
+      tab = this.resolveSessionlessFileEditTab(event)
+    }
     return { tab, drop: event.type === "file_edited" && !event.sessionId && !tab }
   }
 

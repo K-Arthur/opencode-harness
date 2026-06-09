@@ -178,7 +178,7 @@ export class StreamCoordinator {
           const run = this.activeRuns.get(id)
           return !!run && run.state !== "completed" && run.state !== "failed" && run.state !== "aborted"
         },
-        replayChildSessionEvents: (tabId, childSessionId) => {
+        registerChildSessionMapping: (tabId, childSessionId) => {
           this.childSessionReplayer?.(tabId, childSessionId)
         },
       },
