@@ -32,6 +32,7 @@ interface ContextUsage {
   cost?: number
   source?: "estimated" | "actual"
   updatedAt?: number
+  outputLimit?: number
 }
 
 let _postMessage: ((msg: Record<string, unknown>) => void) | null = null
@@ -115,7 +116,10 @@ function normalizeUsage(data: Record<string, unknown>): ContextUsage {
     : undefined
   const source = data.source === "actual" ? "actual" : data.source === "estimated" ? "estimated" as const : undefined
   const updatedAt = typeof data.updatedAt === "number" ? data.updatedAt : undefined
-  return { percent, tokens, maxTokens, sessionId, breakdown, projected, cost, source, updatedAt }
+  const outputLimit = typeof data.outputLimit === "number" && Number.isFinite(data.outputLimit) && data.outputLimit > 0
+    ? data.outputLimit
+    : undefined
+  return { percent, tokens, maxTokens, sessionId, breakdown, projected, cost, source, updatedAt, outputLimit }
 }
 
 function _toggle(): void {
@@ -243,6 +247,13 @@ function _render(container: HTMLElement, usage: ContextUsage | null): void {
     breakdownHtml = '<p class="cup-muted">No breakdown available.</p>'
   }
 
+  const outputLimitHtml = usage.outputLimit
+    ? `<div class="cup-output-limit-row">
+        <span class="cup-output-limit-label">Max output:</span>
+        <span class="cup-output-limit-value">${formatTokenCount(usage.outputLimit)}</span>
+      </div>`
+    : ""
+
   const projectedHtml = usage.projected
     ? `<div class="cup-projected${usage.projected.overflow ? " cup-projected--overflow" : ""}">
         <span class="cup-projected-label">Projected with queue:</span>
@@ -284,6 +295,7 @@ function _render(container: HTMLElement, usage: ContextUsage | null): void {
       </div>
     </div>
     ${breakdownHtml}
+    ${outputLimitHtml}
     ${projectedHtml}
     ${actionsHtml}
   `

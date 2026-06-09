@@ -494,6 +494,17 @@
 .cup-cost-label { color: var(--oc-muted); }
 .cup-cost-value { font-family: var(--font-mono); font-weight: 600; color: var(--oc-fg); }
 
+/* Output limit row */
+.cup-output-limit-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  font-size: var(--text-xs);
+  padding: var(--space-1) 0;
+}
+.cup-output-limit-label { color: var(--oc-muted); }
+.cup-output-limit-value { font-family: var(--font-mono); font-weight: 600; color: var(--oc-fg); }
+
 /* Source pill */
 .cup-source-pill {
   display: inline-block;
