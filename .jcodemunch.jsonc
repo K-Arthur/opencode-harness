@@ -1,5 +1,18 @@
 {
   // jCodeMunch configuration for opencode-harness
+  //
+  // Entry points calibrate dead-code analysis: without them the analyzer treats the
+  // VS Code extension host entry, the webview bundle entry, CSS, the build script, and
+  // git hooks as unreachable, which inflated dead-code results with false positives
+  // (reachable src/chat/* methods, webview CSS classes, hooks). These are the real
+  // roots of the program; everything they transitively reach is live.
+  "entry_point_patterns": [
+    "src/extension.ts",
+    "src/chat/webview/main.ts",
+    "src/chat/webview/**/*.css",
+    "esbuild.js",
+    ".opencode/hooks/*.sh"
+  ],
   // Defines architectural layer rules enforced by get_layer_violations
   "architecture": {
     "layers": [
