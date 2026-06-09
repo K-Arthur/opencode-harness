@@ -31,15 +31,15 @@ void describe("subagent auto-open policy", () => {
       { id: "s2", name: "Agent 2", status: "completed" as const, isLive: false, unreadActivityCount: 0 },
     ]
     const result = mod.reconcileSubagentStatuses(prev, incoming)
-    const s1 = result.find(a => a.id === "s1")
+    const s1 = result.find(a => a.id === "s1")!
     assert.ok(s1, "s1 must be in result")
-    assert.equal(s1!.status, "completed", "dropped subagent must be reconciled to completed")
-    assert.ok(s1!.completedAt, "completedAt must be set")
-    assert.equal(s1!.isLive, false, "isLive must be false")
+    assert.equal(s1.status, "completed", "dropped subagent must be reconciled to completed")
+    assert.ok(s1.completedAt, "completedAt must be set")
+    assert.equal(s1.isLive, false, "isLive must be false")
 
-    const s2 = result.find(a => a.id === "s2")
+    const s2 = result.find(a => a.id === "s2")!
     assert.ok(s2, "s2 must be in result")
-    assert.equal(s2!.status, "completed", "s2 keeps its incoming status")
+    assert.equal(s2.status, "completed", "s2 keeps its incoming status")
   })
 
   void it("reconcileSubagentStatuses keeps completed subagents unchanged when still present", async () => {
@@ -52,7 +52,7 @@ void describe("subagent auto-open policy", () => {
     ]
     const result = mod.reconcileSubagentStatuses(prev, incoming)
     assert.equal(result.length, 1)
-    assert.equal(result[0].status, "completed")
+    assert.equal(result[0]!.status, "completed")
   })
 
   void it("reconcileSubagentStatuses preserves running status when still in snapshot", async () => {
@@ -64,8 +64,8 @@ void describe("subagent auto-open policy", () => {
       { id: "s1", name: "Agent 1", status: "running" as const, isLive: true, unreadActivityCount: 1 },
     ]
     const result = mod.reconcileSubagentStatuses(prev, incoming)
-    assert.equal(result[0].status, "running")
-    assert.equal(result[0].unreadActivityCount, 1)
+    assert.equal(result[0]!.status, "running")
+    assert.equal(result[0]!.unreadActivityCount, 1)
   })
 
   void it("reconcileSubagentStatuses handles empty incoming (all dropped)", async () => {
@@ -74,8 +74,8 @@ void describe("subagent auto-open policy", () => {
       { id: "s1", name: "Agent 1", status: "running" as const, isLive: true, unreadActivityCount: 0 },
     ]
     const result = mod.reconcileSubagentStatuses(prev, [])
-    assert.equal(result[0].status, "completed", "all dropped live subagents must become completed")
-    assert.equal(result[0].isLive, false)
+    assert.equal(result[0]!.status, "completed", "all dropped live subagents must become completed")
+    assert.equal(result[0]!.isLive, false)
   })
 
   void it("reconcileSubagentStatuses does not transition already-completed dropped subagents", async () => {
@@ -84,7 +84,7 @@ void describe("subagent auto-open policy", () => {
       { id: "s1", name: "Agent 1", status: "failed" as const, isLive: false, unreadActivityCount: 0 },
     ]
     const result = mod.reconcileSubagentStatuses(prev, [])
-    assert.equal(result[0].status, "failed", "already-terminal subagent keeps its status")
+    assert.equal(result[0]!.status, "failed", "already-terminal subagent keeps its status")
   })
 
   void it("computeNewSubagentIds returns only ids not in previous set", async () => {
@@ -124,6 +124,6 @@ void describe("subagent auto-open policy", () => {
     const live = result.filter(a => a.isLive)
     assert.equal(completed.length, MAX, "must cap completed at MAX")
     assert.equal(live.length, 1, "must keep all live subagents")
-    assert.ok(completed[0].completedAt! >= completed[9].completedAt!, "must be newest-first")
+    assert.ok(completed[0]!.completedAt! >= completed[9]!.completedAt!, "must be newest-first")
   })
 })

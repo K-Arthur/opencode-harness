@@ -90,8 +90,10 @@
         <div class="commands-modal-search">
           <input type="text" class="commands-modal-search-input" id="commands-search-input" placeholder="Search commands..." aria-label="Search commands">
         </div>
-        <div class="commands-modal-filter" id="commands-filter" role="group" aria-label="Filter commands"></div>
-        <div class="commands-modal-list" id="commands-list" role="listbox"></div>
+        <div class="commands-modal-body">
+          <div class="commands-modal-filter" id="commands-filter" role="group" aria-label="Filter commands"></div>
+          <div class="commands-modal-list" id="commands-list" role="listbox"></div>
+        </div>
       </div>
     </div>
 
@@ -270,33 +272,33 @@
               <div id="tasks-filters" class="tasks-filters"></div>
               <div id="tasks-list" class="tasks-panel-content" aria-live="polite"></div>
             </div>
-            <div id="subagent-panel" class="tab-pane hidden" role="tabpanel" aria-label="Subagent activity">
+            <div id="subagent-panel" class="tab-pane hidden" role="tabpanel" aria-label="Subagent activity" data-view="list">
               <div id="subagent-list" class="subagent-panel-content"></div>
-            </div>
-            <!-- Detail view overlays the subagent tab pane -->
-            <div id="subagent-detail-view" class="subagent-detail-view hidden" aria-label="Subagent detail">
-              <div class="subagent-detail-header">
-                <button class="icon-btn" id="subagent-detail-back-btn" title="Back to list" aria-label="Back to subagent list">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <polyline points="15 18 9 12 15 6"/>
-                  </svg>
-                </button>
-                <h2 class="subagent-detail-title">Subagent Detail</h2>
-                <div class="side-region-actions">
-                  <button class="icon-btn" id="subagent-detail-popout-btn" title="Open in editor" aria-label="Open subagent detail in editor">
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-                    </svg>
-                  </button>
-                  <button class="icon-btn" id="subagent-detail-close-btn" title="Close detail" aria-label="Close subagent detail">
+              <!-- Detail view is nested inside the subagent pane (not a sibling of tab panes) -->
+              <div id="subagent-detail-view" class="subagent-detail-view hidden" aria-label="Subagent detail">
+                <div class="subagent-detail-header">
+                  <button class="icon-btn" id="subagent-detail-back-btn" title="Back to list" aria-label="Back to subagent list">
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                      <polyline points="15 18 9 12 15 6"/>
                     </svg>
                   </button>
+                  <h2 class="subagent-detail-title">Subagent Detail</h2>
+                  <div class="side-region-actions">
+                    <button class="icon-btn" id="subagent-detail-popout-btn" title="Open in editor" aria-label="Open subagent detail in editor">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                      </svg>
+                    </button>
+                    <button class="icon-btn" id="subagent-detail-close-btn" title="Close detail" aria-label="Close subagent detail">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div class="subagent-detail-content" id="subagent-detail-content">
-                <!-- Subagent detail will be rendered dynamically -->
+                <div class="subagent-detail-content" id="subagent-detail-content">
+                  <!-- Subagent detail will be rendered dynamically -->
+                </div>
               </div>
             </div>
           </div>
@@ -390,8 +392,10 @@
           </button>
           <button class="icon-btn" id="commands-palette-btn" title="Commands palette (Ctrl+Shift+/)" aria-label="Open commands palette">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <polyline points="4 17 10 11 4 5"/>
-              <line x1="12" y1="19" x2="20" y2="19"/>
+              <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3"/>
+              <path d="M6 3a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3"/>
+              <path d="M4 7.5h16"/>
+              <path d="M4 16.5h16"/>
             </svg>
           </button>
           <button class="icon-btn" id="attach-btn" title="Attach files" aria-label="Attach files">

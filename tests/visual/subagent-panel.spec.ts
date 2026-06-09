@@ -293,3 +293,152 @@ test.describe('Subagent Activity — TDD & Domain Enhancements', () => {
     expect(display).toBe('flex')
   })
 })
+
+test.describe('Subagent Panel — Collapsed Completed + Detail View', () => {
+  test.beforeEach(async ({ page }) => {
+    await installVsCodeApi(page)
+    await page.goto('/')
+  })
+
+  test.afterEach(async ({ page }) => {
+    await expectNoWebviewErrors(page)
+  })
+
+  async function mountMixedPanel(page: Page) {
+    await page.evaluate(() => {
+      document.querySelector('.welcome-container')?.remove()
+      const panel = document.getElementById('subagent-panel')!
+      panel.classList.remove('hidden')
+      panel.setAttribute('data-view', 'list')
+      panel.innerHTML = `
+        <div class="subagent-panel-content" id="subagent-list">
+          <div class="subagent-stats-bar">3 subagents · 1 running · 2 done</div>
+          <div class="subagent-list">
+            <div class="subagent-item subagent-item--running" data-subagent-id="s1">
+              <div class="subagent-item-header">
+                <div class="subagent-name-wrap"><div class="subagent-name">Active Runner</div></div>
+                <div class="subagent-item-status subagent-item-status--running">Running</div>
+                <button class="subagent-cancel-btn">Cancel</button>
+              </div>
+              <div class="subagent-item-progress"><div class="subagent-item-progress-bar" style="--p:0.6"></div></div>
+            </div>
+            <div class="subagent-item subagent-item--completed subagent-item--collapsed" data-subagent-id="s2">
+              <div class="subagent-item-header">
+                <div class="subagent-name-wrap"><div class="subagent-name">Done Agent</div></div>
+                <div class="subagent-item-status subagent-item-status--completed">Completed</div>
+                <button class="subagent-expand-btn" aria-expanded="false">▶</button>
+              </div>
+            </div>
+            <div class="subagent-item subagent-item--failed subagent-item--collapsed" data-subagent-id="s3">
+              <div class="subagent-item-header">
+                <div class="subagent-name-wrap"><div class="subagent-name">Failed Agent</div></div>
+                <div class="subagent-item-status subagent-item-status--failed">Failed</div>
+                <button class="subagent-expand-btn" aria-expanded="false">▶</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="subagent-detail-view" class="subagent-detail-view hidden" aria-label="Subagent detail">
+          <div class="subagent-detail-header">
+            <button class="icon-btn" id="subagent-detail-back-btn" aria-label="Back to list">
+              <svg viewBox="0 0 24 24" width="16" height="16"></svg>
+            </button>
+            <h2 class="subagent-detail-title">Subagent Detail</h2>
+            <button class="icon-btn" id="subagent-detail-close-btn" aria-label="Close detail">
+              <svg viewBox="0 0 24 24" width="16" height="16"></svg>
+            </button>
+          </div>
+          <div class="subagent-detail-content" id="subagent-detail-content">
+            <div class="subagent-detail-card">
+              <div class="subagent-detail-section">
+                <div class="subagent-detail-status-row">
+                  <span class="subagent-detail-status-badge subagent-detail-status-badge--completed">Completed</span>
+                  <span class="subagent-detail-duration">5s</span>
+                </div>
+              </div>
+              <div class="subagent-detail-section">
+                <h3 class="subagent-detail-section-title">Summary</h3>
+                <p class="subagent-detail-text">Agent completed its work successfully.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      `
+    })
+  }
+
+  test('completed items render collapsed by default', async ({ page }) => {
+    await mountMixedPanel(page)
+    const collapsed = page.locator('.subagent-item--collapsed')
+    await expect(collapsed).toHaveCount(2)
+  })
+
+  test('collapsed items hide progress bar', async ({ page }) => {
+    await mountMixedPanel(page)
+    const collapsedItem = page.locator('.subagent-item--collapsed').first()
+    const progress = collapsedItem.locator('.subagent-item-progress')
+    await expect(progress).toHaveCount(0)
+  })
+
+  test('expand button toggles collapsed state', async ({ page }) => {
+    await mountMixedPanel(page)
+    const expandBtn = page.locator('.subagent-expand-btn').first()
+    await expandBtn.click()
+    const item = page.locator('.subagent-item--collapsed').first()
+    // After click, the item should no longer have --collapsed
+    await expect(item).toHaveCount(0)
+  })
+
+  test('cancel button only appears for running agents', async ({ page }) => {
+    await mountMixedPanel(page)
+    const cancelBtns = page.locator('.subagent-cancel-btn')
+    await expect(cancelBtns).toHaveCount(1)
+  })
+
+  test('detail view does NOT overlap other tab panes', async ({ page }) => {
+    await mountMixedPanel(page)
+
+    // Show the detail view
+    await page.evaluate(() => {
+      const panel = document.getElementById('subagent-panel')!
+      panel.dataset.view = 'detail'
+      const detailView = document.getElementById('subagent-detail-view')!
+      detailView.classList.remove('hidden')
+    })
+
+    // The detail view must be inside the subagent panel, NOT a direct child of .side-region-body
+    const isNested = await page.evaluate(() => {
+      const detailView = document.getElementById('subagent-detail-view')!
+      const panel = document.getElementById('subagent-panel')!
+      return panel.contains(detailView)
+    })
+    expect(isNested).toBe(true)
+
+    // The list must be hidden when detail is shown
+    const listVisible = await page.evaluate(() => {
+      const list = document.getElementById('subagent-list')!
+      return list.offsetParent !== null
+    })
+    expect(listVisible).toBe(false)
+  })
+
+  test('back button returns to list view', async ({ page }) => {
+    await mountMixedPanel(page)
+
+    // Show detail
+    await page.evaluate(() => {
+      const panel = document.getElementById('subagent-panel')!
+      panel.dataset.view = 'detail'
+      const detailView = document.getElementById('subagent-detail-view')!
+      detailView.classList.remove('hidden')
+    })
+
+    // Click back
+    await page.click('#subagent-detail-back-btn')
+
+    const viewState = await page.evaluate(() => {
+      return document.getElementById('subagent-panel')!.dataset.view
+    })
+    expect(viewState).toBe('list')
+  })
+})
