@@ -309,6 +309,30 @@
   background: color-mix(in srgb, var(--tool-read-color, var(--color-accent)) 4%, var(--oc-editor-bg));
 }
 
+/* State-specific colours: running/pending vs completed/result */
+.tool-call--running,
+.tool-call--pending {
+  border-left: 2px solid var(--color-accent);
+  animation: tool-border-pulse 1.5s ease-in-out infinite;
+  background: color-mix(in srgb, var(--color-accent) 3%, var(--oc-editor-bg));
+}
+.tool-call--result,
+.tool-call--completed {
+  border-left: 2px solid var(--color-success);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tool-call--running,
+  .tool-call--pending {
+    animation: none;
+    border-left-color: var(--color-accent);
+  }
+}
+
+@keyframes tool-border-pulse {
+  0%, 100% { border-left-color: var(--color-accent); }
+  50% { border-left-color: color-mix(in srgb, var(--color-accent) 60%, transparent); }
+}
+
 /* Tool class-specific colours */
 .tool-call--read {
   border-left-color: var(--tool-read-color, #5b9fd7);
@@ -355,6 +379,7 @@
   transition: background var(--duration-fast);
   font-size: var(--text-xs);
   min-height: var(--size-target-min);
+  overflow: hidden;
 }
 
 .tool-header:hover {
@@ -390,7 +415,11 @@
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--color-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 .tool-arg {
@@ -665,6 +694,69 @@
   background: color-mix(in srgb, var(--color-error) 8%, var(--bg-secondary, var(--oc-editor-bg))) !important;
 }
 
+/* ─── Terminal command stdout/stderr split layout ─── */
+.tool-command-output {
+  margin-top: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.tool-command-output + .tool-command-output {
+  margin-top: var(--space-2);
+}
+
+.tool-command-output--stderr {
+  border-color: color-mix(in srgb, var(--color-error) 30%, var(--color-border));
+}
+
+.tool-command-output-label {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: var(--space-0-5) var(--space-2);
+  background: var(--oc-list-hover);
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tool-command-output--stderr .tool-command-output-label {
+  color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 8%, var(--oc-list-hover));
+}
+
+.tool-command-output .tool-result-body {
+  padding: var(--space-1) var(--space-2);
+  max-height: 240px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+/* ─── Exit code display in exec tool meta ─── */
+.tool-exit-code {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  padding: 1px var(--space-1-5);
+  border-radius: var(--radius-sm);
+  margin-right: var(--space-2);
+}
+
+.tool-exit-code--ok {
+  color: var(--color-success);
+  background: var(--oc-success-subtle);
+}
+
+.tool-exit-code--error {
+  color: var(--color-error);
+  background: var(--oc-error-subtle);
+}
+
 .tool-show-more {
   display: inline-block;
   background: none;
@@ -887,7 +979,6 @@
 
 .tool-group-child .tool-args-panel,
 .tool-group-child .tool-result-panel {
-  max-height: none;
   padding: var(--space-2) var(--space-3);
   overflow-y: auto;
   max-height: 200px;
@@ -2318,6 +2409,41 @@
   border-radius: var(--radius-sm);
   background: var(--oc-surface-muted, var(--oc-bg-alt));
   color: var(--oc-fg);
+}
+
+.switch-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--oc-glass-border);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--oc-fg) 4%, transparent);
+  color: var(--oc-muted);
+  font-size: var(--text-2xs);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.switch-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--oc-accent);
+  flex-shrink: 0;
+}
+
+.switch-badge-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0-5);
+}
+
+.switch-badge-count {
+  font-weight: 600;
+  color: var(--oc-muted);
+  padding: 0 var(--space-0-5);
+  font-size: var(--text-2xs);
 }
 
 .activity-block-title {

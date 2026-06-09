@@ -647,6 +647,11 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, #10b981 15%, transparent);
 }
 
+/* Streaming indicator on composer — subtle background tint while model is generating */
+#input-area.input-area--streaming {
+  background: color-mix(in srgb, var(--color-accent) 4%, var(--bg-secondary));
+}
+
 /* Composer-active ring: scoped to the textarea via :has() so the mode/model/
    send buttons show only their own focus ring — never this container ring AND a
    button ring at the same time. :has(#prompt-input:focus) also outranks the
@@ -1002,6 +1007,10 @@
   cursor: pointer;
   transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
   min-height: var(--size-target-comfortable);
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .model-selector-btn:hover {
@@ -1032,6 +1041,10 @@
   align-items: center;
   gap: var(--space-0-5);
   padding: var(--space-0-5) var(--space-1-5);
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   border-radius: var(--radius-md);
   font-size: var(--text-xs);
   font-weight: 600;
