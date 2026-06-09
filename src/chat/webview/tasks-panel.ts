@@ -23,7 +23,8 @@ import {
   type CommandStatus,
 } from "./commandModel"
 
-export type TasksPanelEls = Pick<ElementRefs, "tasksPanel" | "tasksList" | "tasksFilters" | "tasksClose"> & {
+export type TasksPanelEls = Pick<ElementRefs, "tasksPanel" | "tasksList" | "tasksFilters"> & {
+  tasksClose?: HTMLElement | null
   tasksToggleBtn?: HTMLElement | null
 }
 
@@ -72,7 +73,7 @@ export function setupTasksPanel(els: TasksPanelEls, deps: TasksPanelDeps): Tasks
   const filters = els.tasksFilters
   const closeBtn = els.tasksClose
   const toggleBtn = els.tasksToggleBtn ?? null
-  if (!panel || !list || !filters || !closeBtn) {
+  if (!panel || !list || !filters) {
     console.warn("Tasks panel elements not found")
     return undefined
   }
@@ -81,7 +82,7 @@ export function setupTasksPanel(els: TasksPanelEls, deps: TasksPanelDeps): Tasks
   buildFilterChips()
 
   const onCloseClick = () => close()
-  closeBtn.addEventListener("click", onCloseClick)
+  if (closeBtn) closeBtn.addEventListener("click", onCloseClick)
 
   const onEscape = (e: KeyboardEvent) => {
     if (e.key === "Escape" && isOpen()) {
@@ -89,7 +90,7 @@ export function setupTasksPanel(els: TasksPanelEls, deps: TasksPanelDeps): Tasks
       toggleBtn?.focus()
     }
   }
-  document.addEventListener("keydown", onEscape)
+  if (closeBtn) document.addEventListener("keydown", onEscape)
 
   const onListKeydown = (e: KeyboardEvent) => {
     const cards = Array.from(list.querySelectorAll<HTMLElement>(".task-card"))
@@ -275,8 +276,10 @@ export function setupTasksPanel(els: TasksPanelEls, deps: TasksPanelDeps): Tasks
   }
   function toggle(): void { if (isOpen()) close(); else open() }
   function dispose(): void {
-    document.removeEventListener("keydown", onEscape)
-    closeBtn.removeEventListener("click", onCloseClick)
+    if (closeBtn) {
+      document.removeEventListener("keydown", onEscape)
+      closeBtn.removeEventListener("click", onCloseClick)
+    }
     list.removeEventListener("keydown", onListKeydown)
   }
 

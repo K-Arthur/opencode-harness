@@ -666,7 +666,7 @@ Move non-urgent persistent info to the VS Code **Status Bar**:
 - [ ] Reduce toolbar to: Mode, Model, Overflow
 
 ### Phase 2: Contextual Panels (Week 2)
-- [ ] Convert Todos, Activity, Subagents to tabbed panel system
+- [x] Convert Todos, Activity, Subagents to tabbed panel system
 - [ ] Show tabs only when content exists
 - [ ] Add "Close Panel" / hide functionality
 

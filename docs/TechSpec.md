@@ -384,6 +384,8 @@ Welcome-page session search and pasted-image attachments share a webview-side co
 - **Detail hydration**: Opening an activity posts `get_subagent_detail`; the host returns `subagent_detail` with the child session summary and text messages, and the webview replaces the loading state with summary/result/message sections.
 - **Action guard**: `get_subagent_detail` and `cancel_subagent` require a `subagentId` and verify that the id appears in `getChildSessions(activeCliSessionId)` before reading details or aborting. Unauthorized child ids return `webview_request_error` instead of crossing session boundaries.
 - **UI states**: `SubagentActivity.status` supports `running`, `completed`, `failed`, `cancelled`, and `pending`; runtime rows use the same status/progress CSS hooks covered by visual fixtures.
+- **childSessionId + error fields**: `ActivityPartHandler` includes `childSessionId` (linked OpenCode child session ID) and `error` (failure detail) in subtask data payloads. `ChatProvider.recordSubagentActivity` passes `childSessionId` through to the subagent tracking layer.
+- **SubagentHeartbeat polling**: `SubagentHeartbeat` (`src/chat/handlers/SubagentHeartbeat.ts`) polls `/session/children` every 5s per tab, cross-references child session IDs against tracked `SubagentRunState`, links newly discovered children to subagents, and marks subagents as completed when a child session disappears. Initialized in `StreamCoordinator`, started after prompt accept, stopped in `cleanupTab`.
 
 ### Changed-Files Chip Bar (Feature 22 — Fixed)
 - **Canonical changed-file sync**: Backend `SessionStore.addChangedFiles()` registers normalized paths from `file_edited` and `session.diff` events. The host posts `changed_files_update` as `{ type, sessionId, files: Array<{ path: string; added: number; removed: number }> }`; the frontend uses it as the canonical state for both the chip bar and todos panel. Rendering is scoped to the active session and tab switches clear stale chips when the new session has no changed files. Legacy/live `file_edited` remains `{ type, sessionId, file }` and merges through the same dedupe path.
@@ -487,6 +489,7 @@ Welcome-page session search and pasted-image attachments share a webview-side co
 | `installPlan` (pure) | `src/install/installPlan.ts` | vscode-free planning: per-platform install strategy + known binary locations (`~/.opencode/bin`, npm-global, Homebrew) |
 | `SessionExporter` | `src/session/SessionExporter.ts` | Markdown export of session conversations |
 | `StreamCoordinator` | `src/chat/handlers/StreamCoordinator.ts` | Per-tab SSE streaming with watchdog, TTFB/completion timeout split, idempotent finalize guard, stream state machine |
+| `SubagentHeartbeat` | `src/chat/handlers/SubagentHeartbeat.ts` | Per-tab `/session/children` polling (5s interval), child session discovery, subagent lifecycle linkage |
 | `MessageRouter` | `src/chat/handlers/MessageRouter.ts` | Webview-to-handler message dispatch |
 | `DiffHandler` | `src/chat/handlers/DiffHandler.ts` | Diff tracking, accept/reject lifecycle |
 | `ContextEngine` | `src/context/ContextEngine.ts` | Workspace context gathering (files, git, diagnostics) |

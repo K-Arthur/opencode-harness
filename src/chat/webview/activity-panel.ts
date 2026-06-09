@@ -27,7 +27,8 @@ import {
   type ActivityKind,
 } from "./activityModel"
 
-export type ActivityPanelEls = Pick<ElementRefs, "activityPanel" | "activityList" | "activityFilters" | "activityClose"> & {
+export type ActivityPanelEls = Pick<ElementRefs, "activityPanel" | "activityList" | "activityFilters"> & {
+  activityClose?: HTMLElement | null
   activityToggleBtn?: HTMLElement | null
 }
 
@@ -96,7 +97,7 @@ export function setupActivityPanel(els: ActivityPanelEls, deps: ActivityPanelDep
   const closeBtn = els.activityClose
   const toggleBtn = els.activityToggleBtn ?? null
 
-  if (!panel || !list || !filters || !closeBtn) {
+  if (!panel || !list || !filters) {
     console.warn("Activity panel elements not found")
     return undefined
   }
@@ -108,7 +109,7 @@ export function setupActivityPanel(els: ActivityPanelEls, deps: ActivityPanelDep
   buildFilterChips()
 
   const onCloseClick = () => close()
-  closeBtn.addEventListener("click", onCloseClick)
+  if (closeBtn) closeBtn.addEventListener("click", onCloseClick)
 
   const onEscape = (e: KeyboardEvent) => {
     if (e.key === "Escape" && isOpen()) {
@@ -116,7 +117,7 @@ export function setupActivityPanel(els: ActivityPanelEls, deps: ActivityPanelDep
       toggleBtn?.focus()
     }
   }
-  document.addEventListener("keydown", onEscape)
+  if (closeBtn) document.addEventListener("keydown", onEscape)
 
   const onListKeydown = (e: KeyboardEvent) => {
     const items = Array.from(list.querySelectorAll<HTMLElement>(".activity-item"))
@@ -302,8 +303,10 @@ export function setupActivityPanel(els: ActivityPanelEls, deps: ActivityPanelDep
   }
 
   function dispose(): void {
-    document.removeEventListener("keydown", onEscape)
-    closeBtn.removeEventListener("click", onCloseClick)
+    if (closeBtn) {
+      document.removeEventListener("keydown", onEscape)
+      closeBtn.removeEventListener("click", onCloseClick)
+    }
     list.removeEventListener("keydown", onListKeydown)
   }
 

@@ -289,14 +289,7 @@ body.hide-thinking .thinking-block { display: none; }
   background: var(--oc-button-secondary-hover);
 }
 
-/* ─── Panel Header Actions (pin + close) ─── */
-
-.panel-header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-0-5);
-  flex-shrink: 0;
-}
+/* ─── Panel pin button (shared by side region and detail view) ─── */
 
 .panel-pin-btn {
   opacity: 0.5;
@@ -314,48 +307,14 @@ body.hide-thinking .thinking-block { display: none; }
   color: var(--oc-accent, var(--color-accent));
 }
 
-/* Todos panel */
-.todos-panel {
-  background: var(--oc-editor-bg);
-  border-left: 1px solid var(--color-border);
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-}
+/* ─── Tab pane shared content rules ─── */
 
-.todos-panel.hidden {
-  display: none;
-}
-
-.todos-panel-header {
+.side-region-body .tab-pane {
   padding: var(--space-3);
-  border-bottom: 1px solid var(--color-border);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.todos-panel-title {
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--color-fg);
-  margin: 0;
-}
-
-.todos-panel-content {
-  flex: 1;
   overflow-y: auto;
-  padding: var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-}
-
-.todos-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-3);
 }
 
 .todos-section-title {
@@ -1144,35 +1103,6 @@ body.hide-thinking .thinking-block { display: none; }
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-}
-
-/* Subagent panel */
-.subagent-panel {
-  background: var(--oc-editor-bg);
-  border-left: 1px solid var(--color-border);
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-}
-
-.subagent-panel.hidden {
-  display: none;
-}
-
-.subagent-panel-header {
-  padding: var(--space-3);
-  border-bottom: 1px solid var(--color-border);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.subagent-panel-title {
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--color-fg);
-  margin: 0;
 }
 
 .subagent-panel-content {
