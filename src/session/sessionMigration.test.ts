@@ -6,6 +6,7 @@ import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import {
   migrateLocalIdsToServerIds,
+  migrateStalePlanModes,
   mergeServerSessions,
   promotePendingServerLink,
   type MigratableSession,
@@ -185,5 +186,64 @@ describe("promotePendingServerLink", () => {
     const map = new Map<string, MigratableSession>()
     map.set("srv-A", makeSession({ id: "srv-A" }))
     assert.equal(promotePendingServerLink(map, "srv-A", "srv-A"), false)
+  })
+})
+
+describe("migrateStalePlanModes", () => {
+  function sess(overrides: Partial<MigratableSession> = {}): MigratableSession {
+    return {
+      id: "s1", name: "Session 1", createdAt: 0, lastActiveAt: 0,
+      model: "", mode: "plan", messages: [], cost: 0,
+      tokenUsage: { prompt: 0, completion: 0, total: 0 },
+      ...overrides,
+    }
+  }
+
+  it("converts a stale 'plan' session without modeMigratedAt to 'build' and stamps the flag", () => {
+    const map = new Map([["s1", sess()]])
+    const result = migrateStalePlanModes(map)
+    assert.equal(result.migrated, 1)
+    const s = map.get("s1")!
+    assert.equal(s.mode, "build")
+    assert.equal(typeof s.modeMigratedAt, "number")
+  })
+
+  it("leaves a freshly-typed 'plan' session (modeMigratedAt already set) alone", () => {
+    const map = new Map([["s1", sess({ modeMigratedAt: 2000 })]])
+    const result = migrateStalePlanModes(map)
+    assert.equal(result.migrated, 0)
+    assert.equal(map.get("s1")!.mode, "plan")
+  })
+
+  it("is idempotent — re-running finds nothing to migrate", () => {
+    const map = new Map([["s1", sess()]])
+    migrateStalePlanModes(map)
+    const r2 = migrateStalePlanModes(map)
+    assert.equal(r2.migrated, 0)
+  })
+
+  it("leaves non-plan modes (build, auto) untouched", () => {
+    const map = new Map<string, MigratableSession>([
+      ["a", sess({ id: "a", mode: "build" })],
+      ["b", sess({ id: "b", mode: "auto" })],
+    ])
+    const r = migrateStalePlanModes(map)
+    assert.equal(r.migrated, 0)
+    assert.equal(map.get("a")!.mode, "build")
+    assert.equal(map.get("b")!.mode, "auto")
+  })
+
+  it("leaves a 'plan' session with migrated flag untouched", () => {
+    const map = new Map([["s1", sess({ mode: "plan", modeMigratedAt: 5000 })]])
+    const result = migrateStalePlanModes(map)
+    assert.equal(result.migrated, 0)
+    assert.equal(map.get("s1")!.mode, "plan")
+    assert.equal(map.get("s1")!.modeMigratedAt, 5000)
+  })
+
+  it("handles an empty map gracefully", () => {
+    const map = new Map<string, MigratableSession>()
+    const result = migrateStalePlanModes(map)
+    assert.equal(result.migrated, 0)
   })
 })

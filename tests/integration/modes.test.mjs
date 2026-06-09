@@ -45,45 +45,58 @@ describe("OpenCode Harness — Build/Plan Mode Buttons", function () {
 
   describe("Mode value validation", () => {
     it("should accept 'plan' as a valid mode", () => {
-      const validModes = new Set(["normal", "plan", "build"])
+      const validModes = new Set(["normal", "plan", "build", "auto"])
       assert.ok(validModes.has("plan"), "plan is a valid mode")
     })
 
     it("should accept 'build' as a valid mode", () => {
-      const validModes = new Set(["normal", "plan", "build"])
+      const validModes = new Set(["normal", "plan", "build", "auto"])
       assert.ok(validModes.has("build"), "build is a valid mode")
     })
 
+    it("should accept 'auto' as a valid mode", () => {
+      const validModes = new Set(["normal", "plan", "build", "auto"])
+      assert.ok(validModes.has("auto"), "auto is a valid mode")
+    })
+
     it("should accept 'normal' as a valid mode (legacy)", () => {
-      const validModes = new Set(["normal", "plan", "build"])
+      const validModes = new Set(["normal", "plan", "build", "auto"])
       assert.ok(validModes.has("normal"), "normal is a valid legacy mode")
     })
 
     it("should reject invalid mode values", () => {
-      const validModes = new Set(["normal", "plan", "build"])
+      const validModes = new Set(["normal", "plan", "build", "auto"])
       assert.ok(!validModes.has(""), "empty string is not a valid mode")
       assert.ok(!validModes.has("invalid"), "invalid mode is rejected")
       assert.ok(!validModes.has(undefined), "undefined is not a valid mode")
     })
 
-    it("should map 'normal' to 'plan' in ensure()", () => {
+    it("should map 'normal' to 'build' in ensure() (v0.2.20+ standard)", () => {
       // This verifies that the SessionStore.ensure() logic converts
-      // 'normal' to 'plan' for backward compatibility
+      // 'normal' to 'build' for backward compatibility. Before v0.2.20
+      // the mapping was 'normal' → 'plan'. After the mode policy
+      // centralization, 'build' is the canonical fallback.
       const mode = "normal"
-      const normalized = mode === "normal" ? "plan" : mode
-      assert.equal(normalized, "plan")
+      const normalized = mode === "normal" ? "build" : mode
+      assert.equal(normalized, "build")
     })
 
     it("should keep 'plan' as-is", () => {
       const mode = "plan"
-      const normalized = mode === "normal" ? "plan" : mode
+      const normalized = mode === "normal" ? "build" : mode
       assert.equal(normalized, "plan")
     })
 
     it("should keep 'build' as-is", () => {
       const mode = "build"
-      const normalized = mode === "normal" ? "plan" : mode
+      const normalized = mode === "normal" ? "build" : mode
       assert.equal(normalized, "build")
+    })
+
+    it("should keep 'auto' as-is", () => {
+      const mode = "auto"
+      const normalized = mode === "normal" ? "build" : mode
+      assert.equal(normalized, "auto")
     })
   })
 

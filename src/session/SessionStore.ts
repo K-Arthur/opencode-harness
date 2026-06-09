@@ -14,6 +14,7 @@ import {
 } from "./sessionUtils"
 import {
   migrateLocalIdsToServerIds as migrateLocalIdsToServerIdsPure,
+  migrateStalePlanModes as migrateStalePlanModesPure,
   mergeServerSessions as mergeServerSessionsPure,
   promotePendingServerLink as promotePendingServerLinkPure,
   type MigratableSession,
@@ -50,6 +51,8 @@ export interface OpenCodeSession {
   parentSessionId?: string
   /** Index of the last turn included in the fork (0-based). */
   forkedAtTurn?: number
+  /** Set by migrateStalePlanModes when a pre-0.2.20 'plan' session is converted to 'build'. */
+  modeMigratedAt?: number
 }
 
 export interface SessionContextBreakdown {
@@ -157,6 +160,13 @@ export class SessionStore {
         continue
       }
       this.sessions.set(id, sess as unknown as OpenCodeSession)
+    }
+    // Migrate stale pre-0.2.20 'plan' sessions to 'build' (idempotent — uses
+    // modeMigratedAt as a one-shot flag). Must run before id-unification so
+    // the mode is correct before any downstream logic reads it.
+    const planMigration = migrateStalePlanModesPure(this.sessions as unknown as Map<string, MigratableSession>)
+    if (planMigration.migrated > 0) {
+      log.info(`Migrated ${planMigration.migrated} stale 'plan' session(s) to 'build' (pre-0.2.20 default)`)
     }
     // Run the one-shot id-unification migration on load. Idempotent.
     this.migrateLocalIdsToServerIds()

@@ -41,6 +41,8 @@ export class ActivityPartHandler implements EventHandler {
           status: "running",
           currentActivity: stringOrUndefined(part.description) || stringOrUndefined(part.prompt),
           inputPrompt: stringOrUndefined(part.prompt),
+          childSessionId: part.sessionID,
+          error: stringOrUndefined(part.error),
         },
       }]
     }

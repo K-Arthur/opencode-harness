@@ -457,6 +457,34 @@
   position: relative;
 }
 
+/* ─── Sidebar Resize Handle ─── */
+
+.sidebar-resize-handle {
+  flex: 0 0 4px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 5;
+  transition: background-color 150ms ease-out;
+  margin: 0 -2px;
+  background-clip: content-box;
+  padding: 0 2px;
+}
+
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle:focus-visible {
+  background-color: var(--oc-accent-border, rgba(0, 120, 212, 0.3));
+}
+
+.sidebar-resize-handle:active {
+  background-color: var(--oc-accent, #0078d4);
+}
+
+.sidebar-resize-handle:focus-visible {
+  outline: 2px solid var(--oc-focus, var(--color-accent));
+  outline-offset: -1px;
+}
+
 /**
  * Shared sidebar sizing for all four side panels. Each panel sets its own
  * background/border/layout via its own component class — this just enforces
