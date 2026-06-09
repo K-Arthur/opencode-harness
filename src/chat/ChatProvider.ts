@@ -1,4 +1,5 @@
 import * as vscode from "vscode"
+import { spawnSync } from "child_process"
 import { SessionManager } from "../session/SessionManager"
 import { SessionStore, type SessionContextUsage } from "../session/SessionStore"
 import { ContextEngine } from "../context/ContextEngine"
@@ -61,6 +62,7 @@ import {
   createDefaultVoiceCapture,
   describeRecorderPlan,
   describeTranscriberPlan,
+  invalidateExistsCache,
   selectRecorderPlan,
   selectTranscriberPlan,
   type VoiceCaptureConfig,
@@ -422,6 +424,18 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     }
   }
 
+  private detectPipViaPython(): boolean {
+    try {
+      const result = spawnSync("python3", ["-m", "pip", "--version"], {
+        stdio: "ignore",
+        timeout: 5000,
+      })
+      return result.status === 0
+    } catch {
+      return false
+    }
+  }
+
   private createHostMessageBatcher(): HostMessageBatcher {
     return new HostMessageBatcher(
       (msg) => this.messagePostService.postRawMessage(msg),
@@ -662,13 +676,16 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
   }
 
   async setupVoiceInput(): Promise<void> {
+    invalidateExistsCache()
     const captureConfig = this.getVoiceCaptureConfig()
     const recorderPlan = selectRecorderPlan(captureConfig, process.platform, commandExists)
     const transcriberPlan = selectTranscriberPlan(captureConfig, commandExists)
+    const pipViaPython = this.detectPipViaPython()
+    const hasUv = commandExists("uv")
     const setupPlan = buildVoiceSetupPlan({
       hasRecorder: recorderPlan !== null,
       hasEngine: transcriberPlan !== null,
-      pip: pickPipCommand(commandExists),
+      pip: pickPipCommand(commandExists, pipViaPython, hasUv),
       recorderInstall: recorderInstallCommand(process.platform, commandExists),
     }, process.platform)
 
@@ -677,7 +694,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     if (setupPlan.ready) {
       const recorder = recorderPlan ? describeRecorderPlan(recorderPlan) : "recorder"
       const transcriber = transcriberPlan ? describeTranscriberPlan(transcriberPlan) : "speech-to-text engine"
-      vscode.window.showInformationMessage(`Voice input is ready: ${recorder} + ${transcriber}.`)
+      void vscode.window.showInformationMessage(`Voice input is ready: ${recorder} + ${transcriber}.`)
       return
     }
 
@@ -701,11 +718,14 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       for (const command of runnable) {
         terminal.sendText(command)
       }
+      void vscode.window.showInformationMessage(
+        "Voice setup commands sent to the terminal. Once installation completes, reload the window (Developer: Reload Window) to activate voice input.",
+      )
       return
     }
     if (action === "Copy Instructions") {
       await vscode.env.clipboard.writeText(instructions)
-      vscode.window.showInformationMessage("Voice setup instructions copied.")
+      void vscode.window.showInformationMessage("Voice setup instructions copied.")
       return
     }
     if (action === "Open Voice Settings") {
