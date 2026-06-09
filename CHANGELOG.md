@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Subagent events for long-running child sessions no longer dropped by PendingEventBuffer.** Default TTL increased from 5s to 5min; `SubagentHeartbeat` now calls `replayChildSessionEvents` on first discovery of each child session, draining buffered server events and dispatching through the parent tab. (`src/chat/PendingEventBuffer.ts`, `src/chat/handlers/SubagentHeartbeat.ts`, `src/chat/ChatProvider.ts`)
+- **Subagent events for 30-45 minute sessions no longer dropped by PendingEventBuffer.** TTL-based event expiry completely removed — events now persist until explicitly drained (Event Sourcing / Claim-Check pattern). Child session events route directly to parent tab via `childSessionToTab` mapping after first heartbeat discovery. (`src/chat/PendingEventBuffer.ts`, `src/chat/handlers/SubagentHeartbeat.ts`, `src/chat/ChatProvider.ts`)
+- **Stream watchdog increased to 45 minutes.** `STREAM_STUCK_MS` raised from 10min to 45min to accommodate long-running models (Minimax, DeepSeek, etc.). `sweep()` orphan threshold increased from 10min to 30min. (`src/chat/handlers/StreamCoordinator.ts`)
 - **Subagent "completed" shown as "running".** `RunActivityTracker.recordSubagent` now guards against overwriting terminal status (`completed`/`failed`/`cancelled`) with non-terminal (`running`/`queued`). (`src/chat/handlers/RunActivityTracker.ts`)
 - **HostMessageBatcher logging cascade.** Dedup drop messages now log the first drop then every 100th (not every single), preventing thousands of log lines per second during subagent-heavy streams. (`src/chat/HostMessageBatcher.ts`)
 - **Chat session state not cleaned up on server error/disconnect.** Both `server_error` and `server_disconnected` handlers now call `streamCoordinator.cleanupTab(tabId)` alongside TabManager resets, preventing stale coordinator state from corrupting the next prompt. (`src/chat/ChatProvider.ts`)
@@ -40,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Tests
 
-- `question-block.test.ts` (rewritten for pointer rendering, 12 tests), `question-refresh.test.ts` (3 tests), `main.test.ts` (welcome strip guard), `theme.test.ts` (rate-limit bar reference), `renderer.test.ts` (permission source check moved to `main.ts`), `PendingEventBuffer.test.ts` (default TTL struct test). Total: 3123 pass, 0 fail.
+- `question-block.test.ts` (rewritten for pointer rendering, 12 tests), `question-refresh.test.ts` (3 tests), `main.test.ts` (welcome strip guard), `theme.test.ts` (rate-limit bar reference), `renderer.test.ts` (permission source check moved to `main.ts`), `PendingEventBuffer.test.ts` (sweep + no-TTL tests). Total: 3124 pass, 0 fail.
 - `activityCoalesce.test.ts` (11), `streamEndErrorPolicy.test.ts` (7), `errorComponents.dom.test.ts` (8), welcome-guard cases in `tokenCostDisplay.context.test.ts`, and a z-index regression in `sessionListRenderer.moreMenu.test.ts`.
 
 ### Docs
