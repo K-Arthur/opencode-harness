@@ -7,6 +7,12 @@
 
 ## Unreleased Highlights
 
+- **Compact card system + duplicate-card fixes** (2026-06-08):
+  - Shared `.oc-card` model (`css/cards.css`) with severity modifiers (info/success/warning/error/critical/permission); `ErrorDisplay` rewritten class-based with theme SVG icons, collapsed-by-default technical details + Copy, and an in-place Details toggle. `.msg-error` compacted. See `docs/design/cards.md`.
+  - Root-cause dedup: activity notices coalesce via `activitySignature`/`decideActivityCoalesce` + `SessionStore.appendOrCoalesceActivity` (`×N` repeat badge); a single generation failure now renders one card (`hasRecentErrorCard` suppresses the generic end-of-stream card; the raw error is no longer echoed in the bottom status).
+  - Session-history "More actions" (⋯) menu fixed (new `--z-modal-menu` token so the body-portaled menu stacks above the modal). Context-usage bar can no longer appear on the welcome screen (`isWelcomeVisible` guard in `updateContextBarFromSession`).
+  - Tests: `activityCoalesce` (11), `streamEndErrorPolicy` (7), `errorComponents.dom` (8), welcome-guard + modal z-index regressions.
+
 - **Frontend overhaul — tool UX, JSON viewer, web search, error display, a11y** (2026-06-08):
   - **Tool group summary labels** — `buildGroupSummaryLabel()` in `groupSummary.ts` replaces raw class counts with human-readable text: "3 file reads, 1 command, 2 edits" in the collapsed tool group header.
   - **JSON viewer** — `jsonViewer.ts` renders object/array tool args as a collapsible DOM tree (up to 3 levels, Copy JSON button). A 10 KB size guard falls back to truncated plain text for large payloads, preventing DOM bloat on large file-write `content` args.
