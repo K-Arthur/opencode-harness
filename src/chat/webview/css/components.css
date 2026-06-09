@@ -2608,10 +2608,10 @@ textarea {
   max-width: min(240px, 34vw);
   height: 18px;
   padding: 0 7px;
-  border: 1px solid rgba(255, 170, 0, 0.45);
+  border: 1px solid var(--oc-muted, rgba(128,128,128,0.3));
   border-radius: var(--radius-full, 999px);
-  background: rgba(255, 170, 0, 0.08);
-  color: #ffaa00;
+  background: var(--oc-canvas, transparent);
+  color: var(--oc-muted, #888);
   font-size: 0.68rem;
   font-weight: 500;
   line-height: 18px;
@@ -2625,8 +2625,8 @@ textarea {
 }
 .ctx-window-unknown-chip.hidden { display: none; }
 .ctx-window-unknown-chip:hover {
-  background: rgba(255, 170, 0, 0.16);
-  border-color: rgba(255, 170, 0, 0.7);
+  background: var(--oc-hover-bg, rgba(128,128,128,0.08));
+  border-color: var(--oc-fg, rgba(128,128,128,0.6));
   transform: translateY(-1px);
 }
 .ctx-window-unknown-chip:active { transform: translateY(0); }

@@ -2513,23 +2513,29 @@ function getVsCodeApi() {
           document.getElementById("ctx-window-unknown-chip")?.classList.add("hidden")
           return
         }
-        // Hide the context bar and show the "Set override" chip so the user
-        // knows the model's context window is unavailable rather than seeing
-        // a misleading fabricated denominator.
+        // Hide the context bar; if suppressStatusChip is true, skip the
+        // orange "Set override" chip since models.dev likely resolved
+        // the window. The "Set limit" action remains available in the
+        // context-usage dropdown.
+        const suppress = msg.suppressStatusChip === true
         els.contextUsage.classList.add("hidden")
         showStatusStrip()
-        const chip = document.getElementById("ctx-window-unknown-chip") as HTMLButtonElement | null
-        if (chip) {
-          const modelId = typeof msg.modelId === "string" ? msg.modelId : ""
-          chip.title = `Context window unknown for ${modelId || "this model"}. Click to set an override.`
-          chip.classList.remove("hidden")
-          // Wire the click once (guard against double-attaching on repeated messages)
-          if (!chip.dataset.wired) {
-            chip.dataset.wired = "1"
-            chip.addEventListener("click", () => {
-              vscode.postMessage({ type: "open_context_window_override_dialog" })
-            })
+        if (!suppress) {
+          const chip = document.getElementById("ctx-window-unknown-chip") as HTMLButtonElement | null
+          if (chip) {
+            const modelId = typeof msg.modelId === "string" ? msg.modelId : ""
+            chip.title = `Context window unknown for ${modelId || "this model"}. Click to set an override.`
+            chip.classList.remove("hidden")
+            // Wire the click once (guard against double-attaching on repeated messages)
+            if (!chip.dataset.wired) {
+              chip.dataset.wired = "1"
+              chip.addEventListener("click", () => {
+                vscode.postMessage({ type: "open_context_window_override_dialog" })
+              })
+            }
           }
+        } else {
+          document.getElementById("ctx-window-unknown-chip")?.classList.add("hidden")
         }
       }],
       ["context_window_known", (msg) => {
