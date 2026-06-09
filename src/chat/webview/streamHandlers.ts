@@ -1253,8 +1253,11 @@ export function handleRunActivityUpdate(
   }
 
   if (activity.phase === "failed" || activity.phase === "interrupted") {
-    const label = activity.lastError?.message || activity.statusLabel
-    if (label) showTypingIndicator(els, label)
+    // The failure is surfaced by the structured error card in the transcript;
+    // do not also echo the raw error (often a raw JSON payload) into the bottom
+    // status/typing indicator — that was the third duplicate surface for one
+    // fault. Just clear the indicator.
+    hideTypingIndicator(els)
     return
   }
 

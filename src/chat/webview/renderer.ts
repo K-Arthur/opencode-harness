@@ -1112,6 +1112,18 @@ function renderActivityBlock(block: Block, _opts: RenderOptions): HTMLElement | 
   const title = document.createElement("div")
   title.className = "activity-block-title"
   title.textContent = typeof block.title === "string" ? block.title : "OpenCode activity"
+  // Identical activities that arrive back-to-back are coalesced into one card
+  // (see decideActivityCoalesce); show the count instead of stacking duplicates.
+  const repeatCount = typeof block.repeatCount === "number" ? block.repeatCount : 1
+  if (repeatCount > 1) {
+    const badge = document.createElement("span")
+    badge.className = "activity-block-repeat"
+    badge.textContent = `×${repeatCount}`
+    badge.setAttribute("aria-label", `Repeated ${repeatCount} times`)
+    badge.title = `Repeated ${repeatCount} times`
+    title.appendChild(document.createTextNode(" "))
+    title.appendChild(badge)
+  }
   wrapper.appendChild(title)
 
   const detailText = typeof block.detail === "string" ? block.detail : undefined

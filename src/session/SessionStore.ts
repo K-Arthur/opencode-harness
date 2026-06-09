@@ -1,6 +1,7 @@
 import * as vscode from "vscode"
 import { type ChatMessage } from "../types"
 import { log } from "../utils/outputChannel"
+import { decideActivityCoalesce } from "./activityCoalesce"
 import {
   buildSession,
   isLocalPlaceholderSessionId,
@@ -666,6 +667,40 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
 
     this.save()
     this._onSessionsChanged.fire()
+  }
+
+  /**
+   * Append a system "activity" notification, collapsing an *immediately
+   * repeated* identical activity into the previous card (bumping its first
+   * block's `repeatCount`) instead of stacking a duplicate. Returns the stored
+   * message — the new one, or the existing one mutated in place — so the caller
+   * can post it to the webview (which upserts by id and replaces in place).
+   *
+   * This is the root fix for duplicate "Model switched"/"Agent switched" cards:
+   * the same event re-delivered (reconnect, pending-event replay) no longer
+   * produces a second card. See {@link decideActivityCoalesce}.
+   */
+  appendOrCoalesceActivity(sessionId: string, msg: ChatMessage, signature: string): ChatMessage | undefined {
+    const session = this.sessions.get(sessionId)
+    if (!session) return undefined
+    const decision = decideActivityCoalesce(session.messages, signature)
+    if (decision.kind === "coalesce") {
+      const existing = session.messages[decision.index]
+      if (existing) {
+        const block = existing.blocks[0] as Record<string, unknown> | undefined
+        if (block) block.repeatCount = decision.repeatCount
+        existing.timestamp = Date.now()
+        session.lastActiveAt = Date.now()
+        this.save()
+        this._onSessionsChanged.fire()
+        return existing
+      }
+    }
+    session.messages.push(msg)
+    session.lastActiveAt = Date.now()
+    this.save()
+    this._onSessionsChanged.fire()
+    return msg
   }
 
   /**

@@ -7,6 +7,7 @@ import type { ToolElapsedTracker } from "./ui/toolElapsed"
 import type { PromptQueue } from "./queue"
 import { placeholderHasRenderedContent } from "./placeholderContent"
 import { generateUserMessageId } from "../../session/messageId"
+import { hasRecentErrorCard } from "./streamEndErrorPolicy"
 
 export interface StreamOrchestratorDeps {
   vscode: { postMessage(msg: Record<string, unknown>): void }
@@ -280,6 +281,13 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     } else if (reason === "hard_timeout") {
       showSystemMessage(sessionId, "Stream interrupted after extended run. Partial output preserved.", true)
     } else if (reason === "error") {
+      // A structured error card (handleServerStatus("error") → handleStreamError)
+      // is the canonical surface for a failure and is added to the session
+      // messages before this end-of-stream hook. Don't stack a second, generic
+      // error card for the same fault — that was the root of "one failure shows
+      // as multiple cards". Only show the generic card when no error card exists.
+      const existing = getSession(sessionId)?.messages
+      if (existing && hasRecentErrorCard(existing)) return
       showSystemMessage(sessionId, "An error occurred while generating the response. Please try again.", true)
     }
   }
