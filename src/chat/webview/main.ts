@@ -2786,7 +2786,7 @@ function getVsCodeApi() {
         allowBtn.textContent = "Allow"
         allowBtn.type = "button"
         allowBtn.addEventListener("click", () => {
-          vscode.postMessage({ type: "permission_response", sessionId: sid, permissionId, response: "once", permissionType, pattern })
+          vscode.postMessage({ type: "accept_permission", sessionId: sid, permissionId, response: "once", permissionType, pattern })
           permBar.classList.add("hidden")
           permActions.innerHTML = ""
         })
@@ -2796,7 +2796,7 @@ function getVsCodeApi() {
         alwaysBtn.textContent = "Always"
         alwaysBtn.type = "button"
         alwaysBtn.addEventListener("click", () => {
-          vscode.postMessage({ type: "permission_response", sessionId: sid, permissionId, response: "always", permissionType, pattern })
+          vscode.postMessage({ type: "accept_permission", sessionId: sid, permissionId, response: "always", permissionType, pattern })
           permBar.classList.add("hidden")
           permActions.innerHTML = ""
         })
@@ -2806,7 +2806,7 @@ function getVsCodeApi() {
         denyBtn.textContent = "Deny"
         denyBtn.type = "button"
         denyBtn.addEventListener("click", () => {
-          vscode.postMessage({ type: "permission_response", sessionId: sid, permissionId, response: "reject", permissionType, pattern })
+          vscode.postMessage({ type: "accept_permission", sessionId: sid, permissionId, response: "reject", permissionType, pattern })
           permBar.classList.add("hidden")
           permActions.innerHTML = ""
         })
