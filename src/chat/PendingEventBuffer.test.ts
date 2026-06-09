@@ -118,4 +118,12 @@ void describe("PendingEventBuffer", () => {
     await new Promise((r) => setTimeout(r, 250))
     assert.equal(warnings.length, 0, "expiry warnings must not fire after dispose")
   })
+
+  void it("default TTL of 5 minutes keeps events alive for child session replay", () => {
+    const longBuf = new PendingEventBuffer()
+    longBuf.add("ses_child", evt("subagent_update", "ses_child"))
+    // With 5-minute default TTL, events must survive synchronous drain
+    assert.equal(longBuf.drain("ses_child").length, 1, "must drain before any expiry")
+    longBuf.dispose()
+  })
 })

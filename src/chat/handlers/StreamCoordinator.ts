@@ -74,6 +74,8 @@ export class StreamCoordinator {
   readonly TOOL_FINALIZE_GRACE_MS = 30000
   private readonly MAX_UNACKED_STREAM_CHUNKS = 8
   private readonly MAX_STREAM_DEFER_MS = 250
+  /** Tracks last deferral log time per tab to suppress duplicate logging during long subagent waits. */
+  private lastDeferralLogTs = new Map<string, number>()
   private streamWatchdog: ReturnType<typeof setInterval> | null = null
   private stuckStreamHandlers: Map<string, StreamCallbacks> = new Map()
   private ttfbTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
@@ -146,6 +148,9 @@ export class StreamCoordinator {
    * batch of attachment URLs per tab — overwritten on each new prompt.
    */
   private pendingAttachmentUrls = new Map<string, string[]>()
+  /** Optional delegate: called by SubagentHeartbeat when a new child session is discovered,
+   *  so the host can drain the pending event buffer and replay events through the parent tab. */
+  private childSessionReplayer: ((tabId: string, childSessionId: string) => void) | null = null
 
   constructor(
     private readonly sessionManager: SessionManager,
@@ -169,6 +174,9 @@ export class StreamCoordinator {
         hasActiveRun: (id) => {
           const run = this.activeRuns.get(id)
           return !!run && run.state !== "completed" && run.state !== "failed" && run.state !== "aborted"
+        },
+        replayChildSessionEvents: (tabId, childSessionId) => {
+          this.childSessionReplayer?.(tabId, childSessionId)
         },
       },
     )
@@ -1257,7 +1265,12 @@ export class StreamCoordinator {
 
     const deferReason = this.getFinalizeDeferReason(tabId, tab.blocksBuffer, trigger)
     if (deferReason) {
-      log.info(`maybeFinalizeStream: deferred for ${tabId} on ${trigger}: ${deferReason}`)
+      const now = Date.now()
+      const lastLog = this.lastDeferralLogTs.get(tabId) ?? 0
+      if (now - lastLog > 5000) {
+        log.info(`maybeFinalizeStream: deferred for ${tabId} on ${trigger}: ${deferReason}`)
+        this.lastDeferralLogTs.set(tabId, now)
+      }
       if (deferReason.includes("tool") || deferReason.includes("subagent")) {
         this.resetPendingToolGraceTimeout(tabId, callbacks)
       }
@@ -1795,7 +1808,12 @@ export class StreamCoordinator {
     return this.diffHandler
   }
 
-private cleanupTab(tabId: string): void {
+  /** Register a delegate that replays child-session events from the pending buffer. */
+  setChildSessionReplayer(replayer: (tabId: string, childSessionId: string) => void): void {
+    this.childSessionReplayer = replayer
+  }
+
+cleanupTab(tabId: string): void {
     this.appendCallbacks.delete(tabId)
     this.clearTtfbTimeout(tabId)
     this.ttfbAbortControllers.delete(tabId)
@@ -1821,6 +1839,7 @@ private cleanupTab(tabId: string): void {
     this.clearDeferredChunk(tabId)
     this.finalUsageBaselines.delete(tabId)
     this.contextEstimateVersions.delete(tabId)
+    this.lastDeferralLogTs.delete(tabId)
     this.activityTracker.clear(tabId)
     // Clean up any materialized attachment files for this tab.
     const urls = this.pendingAttachmentUrls.get(tabId)

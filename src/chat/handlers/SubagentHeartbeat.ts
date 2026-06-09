@@ -10,6 +10,8 @@ export interface SubagentHeartbeatCallbacks {
   getSubagentSnapshot(tabId: string): SubagentRunState[]
   recordSubagentActivity(tabId: string, input: SubagentActivityInput): void
   hasActiveRun(tabId: string): boolean
+  /** Host should drain pending events for `childSessionId` and dispatch through parent tab. */
+  replayChildSessionEvents(tabId: string, childSessionId: string): void
 }
 
 export class SubagentHeartbeat {
@@ -118,6 +120,7 @@ export class SubagentHeartbeat {
         changed = true
         log.info(`SubagentHeartbeat: discovered child session ${child.id} for tab ${tabId}`)
       }
+      this.callbacks.replayChildSessionEvents(tabId, child.id)
     }
 
     for (const child of removed) {

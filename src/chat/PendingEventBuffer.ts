@@ -8,6 +8,8 @@
  * with no visible response.
  */
 
+export const DEFAULT_PENDING_TTL_MS = 300_000    // 5 min — increased from 5s for long-running subagents
+
 export interface BufferedServerEvent {
   type: string
   sessionId?: string
@@ -41,7 +43,7 @@ export class PendingEventBuffer {
   private disposed = false
 
   constructor(opts: PendingEventBufferOptions = {}) {
-    this.ttlMs = opts.ttlMs ?? 5_000
+    this.ttlMs = opts.ttlMs ?? DEFAULT_PENDING_TTL_MS
     this.maxPerSession = opts.maxPerSession ?? 100
     this.log = opts.log ?? { warn: () => {}, info: () => {} }
   }

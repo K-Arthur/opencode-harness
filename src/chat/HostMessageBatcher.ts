@@ -162,9 +162,14 @@ export class HostMessageBatcher {
     if (fp === this.dedupFingerprint) {
       this.dedupCount++
       if (this.dedupCount > this.dedupWindow) {
-        this.log?.(
-          `[HostMessageBatcher] dropped duplicate type=${String(msg.type)} (window=${this.dedupWindow})`,
-        )
+        // F8: dedup drops are normal operation during subagent-heavy streams.
+        // Log the first drop, then every 100th, to avoid flooding the output channel.
+        const logEvery = 100
+        if (this.dedupCount === this.dedupWindow + 1 || this.dedupCount % logEvery === 0) {
+          this.log?.(
+            `[HostMessageBatcher] dropped duplicate type=${String(msg.type)} (window=${this.dedupWindow}, count=${this.dedupCount})`,
+          )
+        }
         return false
       }
     } else {

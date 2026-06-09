@@ -130,7 +130,7 @@ describe("StreamCoordinator.ts", () => {
   })
 
   it("has cleanupTab and no implicit context builder in the prompt path", () => {
-    assert.ok(source.includes("private cleanupTab("), "cleanupTab must exist")
+    assert.ok(source.includes("cleanupTab(tabId: string): void {"), "cleanupTab must exist")
     assert.ok(!source.includes("private buildContextText("), "implicit context builder must not be used for prompt payloads")
     assert.ok(source.includes("private refreshContextTokenEstimate("), "token estimation may refresh separately from prompt sending")
   })
@@ -376,7 +376,7 @@ describe("StreamCoordinator.ts", () => {
 
   // ── Cleanup: tool maps must not leak across tab lifecycle
   it("cleanupTab clears toolCallCounts and activeToolCallIds entries", () => {
-    const cleanupIdx = source.indexOf("private cleanupTab(")
+    const cleanupIdx = source.indexOf("cleanupTab(tabId: string): void {")
     assert.ok(cleanupIdx >= 0, "cleanupTab must exist")
     const nextSep = source.indexOf("\n  }", cleanupIdx)
     const block = source.slice(cleanupIdx, nextSep)
@@ -410,7 +410,7 @@ describe("StreamCoordinator.ts", () => {
   })
 
   it("cleanupTab clears activeMessageIds so transitions don't leak across turns", () => {
-    const cleanupIdx = source.indexOf("private cleanupTab(")
+    const cleanupIdx = source.indexOf("cleanupTab(tabId: string): void {")
     assert.ok(cleanupIdx >= 0, "cleanupTab must exist")
     const blockEnd = source.indexOf("\n  }", cleanupIdx)
     const block = source.slice(cleanupIdx, blockEnd)
@@ -542,7 +542,7 @@ describe("StreamCoordinator.ts", () => {
   })
 
   void it("cleanupTab_removes_session_from_injectedInstructionsSessions", () => {
-    const cleanupIdx = source.indexOf("private cleanupTab(")
+    const cleanupIdx = source.indexOf("cleanupTab(tabId: string): void {")
     assert.ok(cleanupIdx >= 0, "cleanupTab must exist")
     const blockEnd = source.indexOf("\n  }", cleanupIdx)
     const block = source.slice(cleanupIdx, blockEnd)
