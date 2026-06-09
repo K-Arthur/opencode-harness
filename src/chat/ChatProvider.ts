@@ -124,7 +124,6 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
    * window between `await session.create` and `setCliSessionId(...)`.
    */
   private pendingEventBuffer = new PendingEventBuffer({
-    ttlMs: 5_000,
     maxPerSession: 200,
     log: { warn: (m) => log.warn(m), info: (m) => log.info(m) },
   })
@@ -161,6 +160,15 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     this.streamCoordinator = new StreamCoordinator(
       sessionManager, sessionStore, contextEngine, contextMonitor, modelManager, this.tabManager, rateLimitMonitor, this.diffApplier, methodologyAdvisor
     )
+    this.streamCoordinator.setChildSessionReplayer((tabId, childSessionId) => {
+      const events = this.pendingEventBuffer.drain(childSessionId)
+      if (events.length === 0) return
+      log.info(`Replaying ${events.length} buffered child session event(s) for ${childSessionId} through tab ${tabId}`)
+      const tab = this.tabManager.getTab(tabId)
+      for (const ev of events) {
+        this.dispatchServerEvent(ev, tabId, tab ?? undefined)
+      }
+    })
     this.promptManager = new PromptManager()
     this.promptManager.scanWorkspace()
     this.promptManager.watchPrompts()
@@ -885,11 +893,14 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       }
     }],
     ["message_complete", async (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean }) => {
-      if (tab) {
-        await this.streamCoordinator.maybeFinalizeStream(tab.id, {
+      const target = tab ?? this.tabManager.getActiveTab()
+      if (target) {
+        await this.streamCoordinator.maybeFinalizeStream(target.id, {
           postMessage: (m) => this.postMessage(m),
           postRequestError: (m) => this.postRequestError(m),
         }, "message_complete").catch(err => log.error("maybeFinalizeStream failed", err))
+      } else {
+        log.warn(`message_complete for unknown session ${event.sessionId || tabId} — no active tab, dropping`)
       }
     }],
     ["session_status", async (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean; waitingForCompletion?: boolean }) => {
@@ -1156,8 +1167,13 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         if (targetId) this.postRequestError(errorMsg, targetId, errorContext)
         return
       }
+      // CRITICAL: clean up StreamCoordinator state alongside TabManager.
+      // Without this, the coordinator's per-tab maps (activeRuns, ttfbTimeouts,
+      // subagentHeartbeat, deferredChunks) keep stale entries, causing the next
+      // prompt send in the same tab to hit polluted state.
       if (tab) {
         this.postRequestError(errorMsg, tab.id, errorContext)
+        this.streamCoordinator.cleanupTab(tab.id)
         this.tabManager.setStreaming(tab.id, false)
         this.tabManager.setWaitingForCompletion(tab.id, false)
         this.tabManager.clearCompletionTimeout(tab.id)
@@ -1167,6 +1183,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         if (activeTab && activeTab.isStreaming) {
           log.warn(`server_error for unknown session ${event.sessionId || tabId} — routing to active tab ${activeTab.id}`)
           this.postRequestError(errorMsg, activeTab.id, errorContext)
+          this.streamCoordinator.cleanupTab(activeTab.id)
           this.tabManager.setStreaming(activeTab.id, false)
           this.tabManager.setWaitingForCompletion(activeTab.id, false)
           this.tabManager.clearCompletionTimeout(activeTab.id)
@@ -1183,6 +1200,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       this.tabManager.captureStreamingSnapshot()
       for (const t of this.tabManager.getAllTabs()) {
         if (t.isStreaming) {
+          this.streamCoordinator.cleanupTab(t.id)
           this.tabManager.setStreaming(t.id, false)
           this.tabManager.setWaitingForCompletion(t.id, false)
           this.tabManager.clearCompletionTimeout(t.id)

@@ -18,6 +18,7 @@ type MutableRunState = Omit<AgentRunState, "tools" | "subagents"> & {
 }
 
 const TERMINAL_PHASES = new Set<AgentRunPhase>(["completed", "failed", "cancelled", "interrupted"])
+const TERMINAL_SUBAGENT_STATUSES = new Set<SubagentRunState["status"]>(["completed", "failed", "cancelled"])
 
 function normalizeToolStatus(status: ToolActivityInput["status"]): ToolExecutionState["status"] {
   if (status === "error") return "failed"
@@ -153,6 +154,11 @@ export class RunActivityTracker {
     this.markOpenCodeActivity(run, at)
     const status = normalizeSubagentStatus(input.status)
     const existing = run.subagents.get(input.id)
+    // Do NOT overwrite a terminal subagent status with a non-terminal one.
+    // This prevents late-arriving "running" events from reverting a completed/failed/cancelled subagent.
+    if (existing && TERMINAL_SUBAGENT_STATUSES.has(existing.status) && !TERMINAL_SUBAGENT_STATUSES.has(status)) {
+      return this.snapshot(run)
+    }
     const subagent: SubagentRunState = {
       id: input.id,
       agentName: input.agentName || existing?.agentName || "subagent",
