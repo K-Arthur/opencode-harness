@@ -22,6 +22,7 @@ import { updateMethodologyStatus, getMethodologyOrchestrator } from "../../metho
 import { createAttachmentStorage, type MaterializedAttachment } from "./attachmentStorage"
 import { RunActivityTracker } from "./RunActivityTracker"
 import type { AgentRunState, RunProgressEvent, SubagentActivityInput, SubagentRunState, ToolActivityInput } from "./runActivityTypes"
+import { SubagentHeartbeat } from "./SubagentHeartbeat"
 import { mapRunError } from "./runErrorMapper"
 import { logStreamTrace } from "../../session/streamTrace"
 import { modeToAgent } from "../modePolicy"
@@ -130,6 +131,7 @@ export class StreamCoordinator {
   /** Methodology classifier/selector — pluggable so tests can stub it */
   private readonly methodologyAdvisor: MethodologyAdvisor
   private readonly activityTracker = new RunActivityTracker()
+  private readonly subagentHeartbeat: SubagentHeartbeat
   /**
    * Materializes image attachments to temp files and returns `file://` URLs
    * instead of inline `data:` URLs. This avoids the opencode server (v1.15.x)
@@ -159,6 +161,17 @@ export class StreamCoordinator {
   ) {
     this.methodologyAdvisor = methodologyAdvisor ?? new MethodologyAdvisor()
     this.attachmentStorage = attachmentStorage ?? createAttachmentStorage()
+    this.subagentHeartbeat = new SubagentHeartbeat(
+      this.sessionManager.sessionClient,
+      {
+        getSubagentSnapshot: (id) => this.getSubagentSnapshot(id),
+        recordSubagentActivity: (id, input) => this.recordSubagentActivity(id, input),
+        hasActiveRun: (id) => {
+          const run = this.activeRuns.get(id)
+          return !!run && run.state !== "completed" && run.state !== "failed" && run.state !== "aborted"
+        },
+      },
+    )
     this.diffHandler = new DiffHandler(diffApplier)
     this.finalizerService = new StreamFinalizerService({
       streamStates: this.streamStates,
@@ -985,6 +998,7 @@ export class StreamCoordinator {
       this.recordRunActivity(tabId, { kind: "prompt_accepted", label: "Waiting for activity" }, callbacks)
 
       this.startHeartbeat(tabId, callbacks)
+      this.subagentHeartbeat.start(tabId, cliSessionId)
       // startWatchdog is the single hard safety net and is driven by server activity.
     } catch (e) {
       const message = e instanceof Error ? e.message : "Unknown error"
@@ -1799,6 +1813,7 @@ private cleanupTab(tabId: string): void {
     this.activeRuns.delete(tabId)
     this.loggedBubbleMismatches.delete(tabId)
     this.stopHeartbeat(tabId)
+    this.subagentHeartbeat.stop(tabId)
     const cliSessionId = this.tabManager.getTab(tabId)?.cliSessionId
     if (cliSessionId) this.injectedInstructionsSessions.delete(cliSessionId)
     this.msgSeqs.delete(tabId)
@@ -1946,6 +1961,7 @@ private cleanupTab(tabId: string): void {
       clearInterval(timer)
     }
     this.heartbeatTimers.clear()
+    this.subagentHeartbeat.stopAll()
     this.appendCallbacks.clear()
     this.finalizingTabs.clear()
     this.abortedTabs.clear()
