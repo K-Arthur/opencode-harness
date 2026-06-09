@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Completed subagents still showing "Running".** `normalizeSubagentStatus()` in both the webview (`main.ts`) and the host (`RunActivityTracker.ts`, `ChatProvider.ts`) mapped unknown status strings to `"pending"` or `"running"` — both treated as live. Now maps to `"unknown"` (not live). The reconciler correctly transitions `"unknown"` subagents to `"completed"` when the server drops them. (`src/chat/webview/main.ts`, `src/chat/handlers/RunActivityTracker.ts`, `src/chat/ChatProvider.ts`)
+- **`activeSubagentCount` counting `"unknown"` as active.** The tracker's `activeSubagentCount()` excluded unknown statuses, preventing run finalization when subagents had unparseable status strings. (`src/chat/handlers/RunActivityTracker.ts`)
+- **"Open in editor" button for subagent detail was a no-op.** The webview now tracks the active subagent id (`activeSubagentId`) and sends both `sessionId` and `subagentId` in the `open_subagent_detail` message. The host creates a new `vscode.WebviewPanel` in popout mode (`window.__OC_POPOUT__`), fetches the detail, and renders it in a dedicated editor panel. (`src/chat/webview/main.ts`, `src/chat/ChatProvider.ts`, `src/chat/WebviewEventRouter.ts`, `src/chat/WebviewContent.ts`)
+- **Tab streaming label showed `X/undefined`.** `sendLogic.getStreamCapacityState()` omitted `maxStreams` from the return object; `tabs.ts` read `undefined`. Now returns `maxStreams: getMaxConcurrentStreams()`. (`src/chat/webview/sendLogic.ts`)
+- **Tool group header badge frozen at initial render.** `updateToolGroupHeader` only updated the count text, never refreshed the parent group `.tool-status` badge on child state changes. New `renderToolGroupBadge()` extracted into `toolCallRenderer.ts`, called from the streaming update path. (`src/chat/webview/toolCallRenderer.ts`, `src/chat/webview/streamHandlers.ts`)
+- **State vocabulary mismatch between individual badge and group counter.** `appendToolStatusBadge` treated unknown states (e.g. `"success"`) as "Done" but group counter only counted `"result"`/`"completed"`. New shared `isTerminalState()` in `toolState.ts`. (`src/chat/webview/toolState.ts`)
+- **`resetStreamState` left `isStreaming = true`.** Explicitly set `state.isStreaming = false`. (`src/chat/webview/streamHandlers.ts`)
+- **`handleRunActivityUpdate` could set streaming without a `streamingMessageId`.** Added guard. (`src/chat/webview/streamHandlers.ts`)
+- **Duplicate `max-height` on `.tool-group-child` panels.** Removed dead declaration. (`src/chat/webview/css/blocks.css`)
+- **Question block pointer hint pointed to non-existent input bar.** Changed to "Answer in the question bar below". (`src/chat/webview/renderer.ts`)
+
+### Changed
+
+- **Question bar finally wired up.** `questionBar.ts` and `#question-bar` HTML/CSS existed (added by `ebc0f0e`) but no production code called them. Now wired: `initQuestionBar` at boot, `onQuestionBlock` in stream handlers, `question_asked`/`question_acknowledged` message handlers, `setActiveSession` on tab switch, `repopulateFromMessages` on init_state. (`src/chat/webview/main.ts`, `src/chat/webview/questionBar.ts`)
+- **Terminal command display polished.** CSS added for `.tool-command-output` (stdout/stderr split), `.tool-exit-code` badges, scroll-bound terminal output, and overflow protection on headers. (`src/chat/webview/css/blocks.css`)
+- **Streaming-vs-done visual differentiation.** Animated left-border pulse on streaming bubbles and running tool calls; static green border on completed; pulsing dot in assistant header during streaming; composer background tints when active. All gated on `prefers-reduced-motion`. (`src/chat/webview/css/messages.css`, `blocks.css`, `layout.css`)
+- **Model and variant selector overflow protection.** `max-width: 14rem` on `.model-selector-btn`, `max-width: 10rem` on `.variant-selector-btn`. (`src/chat/webview/css/layout.css`)
+- **`.stream-frozen` / `.stream-tail` CSS added.** Previously unstyled inline elements from `liveTextRenderer.ts`. (`src/chat/webview/css/messages.css`)
+
 - **Subagent panel constantly auto-opening on activity churn.** Panel now only auto-opens when a NEW subagent ID appears (not on every `run_activity_update` with `activeSubagentCount > 0`). Tracks known IDs per session; dismissal persists for the session until a new subagent arrives. (`src/chat/webview/subagentReconciler.ts`, `src/chat/webview/main.ts`)
 - **Completed subagents stuck showing "Running" status.** Server drops subagents from snapshots once they finish; the webview now reconciles by transitioning dropped live subagents to "completed" instead of keeping stale "running" entries. (`src/chat/webview/subagentReconciler.ts`)
 - **Subagent detail view overlapping all tab panes (todos/activity/tasks).** `#subagent-detail-view` moved from sibling to child of `#subagent-panel`. Uses `data-view="list"|"detail"` attribute switching instead of absolute overlay. (`src/chat/webview/index.html`, `src/chat/webview/subagentDetailView.ts`, `src/chat/webview/css/components.css`)

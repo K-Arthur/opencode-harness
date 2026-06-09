@@ -227,20 +227,26 @@ function getVsCodeApi() {
     refreshSubagentPanel(sessionId)
   }
 
+  // Maps a server-reported subagent status string to a SubagentActivity status.
+  // Unknown/non-canonical values are coerced to "unknown" (NOT "pending") so they
+  // are NOT treated as live by isLiveSubagent. This prevents subagents from
+  // appearing to be running forever when the server sends a status string the
+  // webview doesn't recognize (e.g. a new status type from a future opencode
+  // version). The reconciler will then mark them as completed when the server
+  // drops them from the snapshot. See subagentReconciler.ts.
   function normalizeSubagentStatus(status: string): SubagentActivity["status"] {
     switch (status) {
       case "queued":
       case "waiting":
-      case "unknown":
-        return "pending"
       case "running":
       case "completed":
       case "failed":
       case "cancelled":
       case "pending":
+      case "unknown":
         return status
       default:
-        return "pending"
+        return "unknown"
     }
   }
 
@@ -374,6 +380,15 @@ function getVsCodeApi() {
    */
   const subagentDismissedBySession = new Set<string>()
   const knownSubagentIdsBySession = new Map<string, Set<string>>()
+
+  // Tracks the most recently *interacted-with* subagent id, so the "Open in
+  // editor" button in the detail view knows which subagent to pop out. We
+  // intentionally track interaction rather than "the only one in the panel"
+  // because the panel can show multiple subagents at once. Updated on
+  // - onOpenDetail (the user clicks a panel item)
+  // - subagent_update (a live update arrives while the detail view is open)
+  // Cleared when the detail view closes.
+  let activeSubagentId: string | null = null
 
   const modelDropdown = setupModelDropdown(els, {
     onOpen: () => {
@@ -706,7 +721,116 @@ function getVsCodeApi() {
     })
   }
 
+  /**
+   * Popout mode: minimal initialization that only renders the subagent detail
+   * view in a dedicated VS Code editor panel. Hides all chat UI (tabs, input,
+   * sidebar, etc.) and shows just the detail content area. Posts
+   * `popout_get_subagent_detail` to trigger a data fetch from the host, then
+   * renders the returned detail in the #subagent-detail-content element.
+   */
+  function initPopout(parentSessionId: string, subagentId: string): void {
+    // Hide everything except the detail content
+    const root = document.getElementById("root") ?? document.body
+    root.innerHTML = ""
+    const wrapper = document.createElement("div")
+    wrapper.id = "popout-root"
+    wrapper.style.cssText = "height:100%;display:flex;flex-direction:column;padding:12px;overflow-y:auto;color:var(--vscode-foreground);background:var(--vscode-sideBar-background);font-family:var(--vscode-font-family)"
+    const header = document.createElement("div")
+    header.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--vscode-panel-border)"
+    const title = document.createElement("h2")
+    title.style.cssText = "margin:0;font-size:14px;font-weight:600"
+    title.textContent = `Subagent Detail`
+    header.appendChild(title)
+    wrapper.appendChild(header)
+    const content = document.createElement("div")
+    content.id = "popout-detail-content"
+    content.innerHTML = `<div style="color:var(--vscode-descriptionForeground)">Loading subagent detail...</div>`
+    wrapper.appendChild(content)
+    root.appendChild(wrapper)
+
+    // Listen for subagent_detail from the host
+    window.addEventListener("message", (event) => {
+      const msg = event.data as Record<string, unknown>
+      if (!msg || msg.type !== "subagent_detail") return
+      if (msg.subagentId !== subagentId) return
+      const detail = msg.detail as Record<string, unknown> | undefined
+      if (!detail) {
+        content.innerHTML = `<div style="color:var(--vscode-errorForeground)">No detail data available for this subagent.</div>`
+        return
+      }
+      renderPopoutDetail(content, detail)
+    })
+
+    // Request detail from host
+    vscode.postMessage({
+      type: "popout_get_subagent_detail",
+      sessionId: parentSessionId,
+      subagentId,
+    })
+  }
+
+  function renderPopoutDetail(el: HTMLElement, detail: Record<string, unknown>): void {
+    const status = typeof detail.status === "string" ? detail.status : "unknown"
+    const agentName = typeof detail.agentName === "string" ? detail.agentName : "subagent"
+    const summary = typeof detail.summary === "string" ? detail.summary : ""
+    const error = typeof detail.error === "string" ? detail.error : ""
+    const result = typeof detail.result === "string" ? detail.result : ""
+    const currentActivity = typeof detail.currentActivity === "string" ? detail.currentActivity : ""
+    const durationMs = typeof detail.durationMs === "number" ? detail.durationMs : 0
+    const messages = Array.isArray(detail.messages) ? detail.messages : []
+
+    const esc = (s: string): string =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+
+    const statusColor = status === "completed" ? "#22c55e" : status === "failed" ? "#ef4444" : status === "running" ? "#3b82f6" : "#888"
+
+    let html = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <span style="padding:2px 8px;border-radius:4px;font-size:12px;background:${statusColor};color:#fff">${esc(status)}</span>
+        <span style="font-size:14px;font-weight:500">${esc(agentName)}</span>
+        ${durationMs ? `<span style="color:var(--vscode-descriptionForeground);font-size:12px">${(durationMs / 1000).toFixed(1)}s</span>` : ""}
+      </div>
+    `
+    if (currentActivity) {
+      html += `<div style="margin-bottom:8px"><strong>Current Activity:</strong> ${esc(currentActivity)}</div>`
+    }
+    if (summary) {
+      html += `<div style="margin-bottom:12px"><strong>Summary:</strong><p style="margin:4px 0;color:var(--vscode-descriptionForeground)">${esc(summary)}</p></div>`
+    }
+    if (result) {
+      html += `<div style="margin-bottom:12px"><strong>Result:</strong><p style="margin:4px 0">${esc(result)}</p></div>`
+    }
+    if (error) {
+      html += `<div style="margin-bottom:12px"><strong style="color:var(--vscode-errorForeground)">Error:</strong><pre style="margin:4px 0;padding:8px;border-radius:4px;background:var(--vscode-textCodeBlock-background);font-size:12px;overflow-x:auto">${esc(error)}</pre></div>`
+    }
+    if (messages.length > 0) {
+      html += `<div style="margin-top:12px"><strong>Messages (${messages.length})</strong><div style="margin-top:8px">`
+      for (const raw of messages) {
+        if (!raw || typeof raw !== "object") continue
+        const msg = raw as Record<string, unknown>
+        const role = typeof msg.role === "string" ? msg.role : "assistant"
+        const text = typeof msg.text === "string" ? msg.text : ""
+        if (!text) continue
+        html += `<div style="margin-bottom:8px;padding:8px;border-radius:4px;border-left:3px solid ${role === "user" ? "#3b82f6" : "#888"}">
+          <div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-bottom:4px">${esc(role)}</div>
+          <pre style="margin:0;white-space:pre-wrap;word-break:break-word;font-size:12px">${esc(text)}</pre>
+        </div>`
+      }
+      html += `</div></div>`
+    }
+    el.innerHTML = html
+  }
+
   function init() {
+    // Popout mode: if the host created this webview for a single subagent
+    // detail, skip the full chat initialization and just render the detail.
+    const popout = (globalThis as Record<string, unknown>).__OC_POPOUT__ as
+      | { parentSessionId: string; subagentId: string }
+      | undefined
+    if (popout) {
+      initPopout(popout.parentSessionId, popout.subagentId)
+      return
+    }
     try {
       setupCoreInteractionControls()
       setupSessionUtilities()
@@ -985,7 +1109,7 @@ function getVsCodeApi() {
     })
     subagentDetailViewApi = setupSubagentDetailView(els, {
       onBack: () => { sideRegionApi?.open("subagent") },
-      onClose: () => {},
+      onClose: () => { activeSubagentId = null },
       onCancelSubagent: (subagentId: string) => vscode.postMessage({ type: "cancel_subagent", subagentId }),
     })
     subagentPanelApi = setupSubagentPanel(els, {
@@ -993,6 +1117,10 @@ function getVsCodeApi() {
       onOpenDetail: (activity: SubagentActivity) => {
         // Ensure subagent tab is active before showing detail overlay
         sideRegionApi?.open("subagent")
+        const normalizedId = activity.id.startsWith("subagent:")
+          ? activity.id.slice("subagent:".length)
+          : activity.id
+        activeSubagentId = normalizedId
         vscode.postMessage({ type: "get_subagent_detail", sessionId: stateManager.getState().activeSessionId ?? "", subagentId: activity.id })
         subagentDetailViewApi?.open(activity)
         subagentDetailViewApi?.renderLoading?.()
@@ -1113,13 +1241,27 @@ function getVsCodeApi() {
       }
     }
 
-    // Pop-out to editor button
+    // Pop-out to editor button — opens the active subagent's detail in a
+    // dedicated VS Code editor webview panel. Sends the parent sessionId AND
+    // the active subagentId (tracked from the last onOpenDetail /
+    // subagent_update interaction) so the host can resolve and render the
+    // correct child session in the new panel.
     const popoutBtn = document.getElementById("subagent-detail-popout-btn")
     popoutBtn?.addEventListener("click", () => {
       const sid = stateManager.getState().activeSessionId
-      if (sid && subagentDetailViewApi) {
-        vscode.postMessage({ type: "open_subagent_detail", sessionId: sid })
+      if (!sid) {
+        webviewLog("[main] open_subagent_detail: no active session")
+        return
       }
+      if (!activeSubagentId) {
+        webviewLog("[main] open_subagent_detail: no active subagent in detail view")
+        return
+      }
+      vscode.postMessage({
+        type: "open_subagent_detail",
+        sessionId: sid,
+        subagentId: activeSubagentId,
+      })
     })
 
     const shortcutsHelpBtn = document.getElementById("shortcuts-help-btn")
@@ -3648,6 +3790,13 @@ function getVsCodeApi() {
           if (merged.length > 0 && sessionId === stateManager.getState().activeSessionId) {
             refreshSubagentPanel(sessionId)
           }
+        }
+        // Update the active subagent tracking used by the "Open in editor" button.
+        if (sessionId && subagent?.id) {
+          const normalized = subagent.id.startsWith("subagent:")
+            ? subagent.id.slice("subagent:".length)
+            : subagent.id
+          activeSubagentId = normalized
         }
         if (subagentDetailViewApi && msg.subagent) {
           const subagent = msg.subagent as Record<string, unknown>

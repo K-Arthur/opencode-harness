@@ -102,6 +102,18 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private autoModeService!: AutoModeService
   private diffAcceptService!: DiffAcceptService
   private codeInsertionService!: CodeInsertionService
+  /**
+   * Popout panels for subagent detail. One entry per open popout. The key is
+   * a stable panel id (uuid) returned to the webview on creation so the
+   * webview can correlate messages; the value holds the panel and the
+   * subagent/parent ids it was created for (used to route subagent_detail
+   * messages to the right panel).
+   */
+  private subagentDetailPanels: Map<string, {
+    panel: vscode.WebviewPanel
+    parentSessionId: string
+    subagentId: string
+  }> = new Map()
   private voiceInputService!: VoiceInputService
 
   private messagePostService = new MessagePostService({
@@ -354,6 +366,8 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       skillPreferences: this.skillPreferences,
       pushAllStateToWebview: () => this.pushAllStateToWebview(),
       pushVisibleStateToWebview: () => this.pushVisibleStateToWebview(),
+      openSubagentDetailPanel: (parentSessionId, subagentId) => this.openSubagentDetailPanel(parentSessionId, subagentId),
+      postSubagentDetailToPopouts: (detail, subagentId) => this.postSubagentDetailToPopouts(detail, subagentId),
     })
     this.eventRouter.initialize()
 
@@ -1823,8 +1837,14 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
   /**
    * Map a free-form status string from a `subagent_update` event payload to
    * the typed {@link SubagentRunStatus} set expected by RunActivityTracker.
-   * Unknown values default to `"running"` (the most useful assumption for a
-   * mid-stream update — a terminated subagent would arrive via tool_end).
+   * Unknown / non-canonical values default to `"unknown"` (NOT `"running"`).
+   * Returning `"running"` for unknown values caused subagents to be stuck
+   * "Running" forever when the server sent a status string the host did not
+   * recognize (e.g. a new status type from a future opencode version). The
+   * legacy comment claimed "a terminated subagent would arrive via tool_end",
+   * but that is not reliable — tool_end can be delayed, dropped, or never
+   * emitted for some subagent types. With "unknown" the reconciler in the
+   * webview can finalize dropped subagents correctly.
    */
   private normalizeSubagentUpdateStatus(raw: string | undefined): SubagentRunStatus {
     switch (raw) {
@@ -1838,7 +1858,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
       case "pending":
         return raw === "pending" ? "queued" : (raw as SubagentRunStatus)
       default:
-        return "running"
+        return "unknown"
     }
   }
 
@@ -1949,6 +1969,100 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     return this.slashCommands.handleHelpCommand(sessionId)
   }
 
+  /**
+   * Open a new VS Code editor webview panel dedicated to a single subagent
+   * detail. Returns a popout id (stable across the panel's lifetime) so the
+   * webview can correlate init_state / subagent_detail messages. Returns
+   * undefined if the host failed to create the panel (e.g. user cancelled
+   * the open of multiple editors).
+   *
+   * The panel uses a minimal message channel: we forward any
+   * `subagent_detail` message to all open popout panels, and the popout
+   * filters by subagentId. This keeps the implementation simple while
+   * supporting N concurrent popouts.
+   */
+  openSubagentDetailPanel(parentSessionId: string, subagentId: string): string | undefined {
+    if (!this._view) {
+      log.warn("openSubagentDetailPanel: main webview is not resolved yet")
+      return undefined
+    }
+    const popoutId = crypto.randomUUID()
+    const panel = vscode.window.createWebviewPanel(
+      "opencode-harness.subagentDetail",
+      `Subagent ${subagentId.slice(0, 8)}`,
+      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+      {
+        enableScripts: true,
+        localResourceRoots: [
+          vscode.Uri.joinPath(this.context.extensionUri, "dist", "chat", "webview"),
+          vscode.Uri.joinPath(this.context.extensionUri, "src", "chat", "webview"),
+        ],
+        retainContextWhenHidden: true,
+      },
+    )
+    panel.webview.html = this.webviewContent.buildForPopout(
+      panel.webview,
+      this.themeManager,
+      parentSessionId,
+      subagentId,
+    )
+
+    const entry = { panel, parentSessionId, subagentId }
+    this.subagentDetailPanels.set(popoutId, entry)
+
+    panel.onDidDispose(() => {
+      this.subagentDetailPanels.delete(popoutId)
+    }, null, this.disposables)
+
+    // Handle messages from the popout webview. The popout can request its
+    // detail and post subagent updates back. Other message types are
+    // ignored — the popout is read-only.
+    panel.webview.onDidReceiveMessage(async (msg: Record<string, unknown>) => {
+      const t = typeof msg?.type === "string" ? msg.type : ""
+      if (t === "popout_get_subagent_detail") {
+        try {
+          const synthetic = { type: "get_subagent_detail", subagentId, sessionId: parentSessionId }
+          await this.eventRouter.route(synthetic)
+        } catch (err) {
+          log.error(`popout_get_subagent_detail failed for ${subagentId}`, err)
+        }
+      } else if (t === "popout_cancel_subagent") {
+        try {
+          await this.eventRouter.route({ type: "cancel_subagent", subagentId })
+        } catch (err) {
+          log.error(`popout_cancel_subagent failed for ${subagentId}`, err)
+        }
+      } else if (t === "webview_log") {
+        log.info(`[popout ${popoutId.slice(0, 8)}] ${String(msg.message ?? "")}`)
+      } else {
+        log.warn(`popout ${popoutId.slice(0, 8)}: unhandled message type ${t}`)
+      }
+    }, null, this.disposables)
+
+    return popoutId
+  }
+
+  /**
+   * Forward a `subagent_detail` message to all open popout panels whose
+   * subagentId matches. Called by the event router after a
+   * get_subagent_detail fetch completes. Returns true if any popout was
+   * targeted (caller can use this to skip posting to the main webview if
+   * only the popout wanted this detail).
+   */
+  postSubagentDetailToPopouts(detail: Record<string, unknown>, subagentId: string): boolean {
+    if (this.subagentDetailPanels.size === 0) return false
+    let anySent = false
+    for (const [popoutId, entry] of this.subagentDetailPanels) {
+      if (entry.subagentId !== subagentId) continue
+      try {
+        entry.panel.webview.postMessage({ type: "subagent_detail", sessionId: entry.parentSessionId, subagentId, detail })
+        anySent = true
+      } catch (err) {
+        log.error(`Failed to post subagent_detail to popout ${popoutId.slice(0, 8)}`, err)
+      }
+    }
+    return anySent
+  }
 
   dispose(): void {
     this.backfillService.dispose()

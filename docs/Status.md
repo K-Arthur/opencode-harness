@@ -1,9 +1,18 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-06-09
+**Version:** v0.3.29
 **Version:** v0.2.23 (+ Unreleased: opencode CLI auto-install, native local voice input, frontend overhaul, stream/dedicated-bar redesign)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
+
+## v0.3.29 Highlights (2026-06-09)
+
+- **Streaming clarity & bug fixes.** `maxStreams` now included in capacity state (fixes "X/undefined" tab label). Tool group badges refresh on child state change so "Running" header doesn't persist after all children are "Done". State vocabulary aligned via new `isTerminalState()` in `toolState.ts`. `resetStreamState` clears `isStreaming`. `handleRunActivityUpdate` requires `streamingMessageId` before setting streaming. Duplicate `max-height` removed from tool group panels.
+- **Question bar wired up.** The `questionBar.ts` module (HTML, CSS, and logic existed since `ebc0f0e`) is now integrated into the production webview. Questions from the model appear as interactive cards above the composer with option buttons, free-text inputs, multi-select support, submit/skip actions, and per-tab state isolation. `setActiveSession(tabId)` loaded on tab switch; `repopulateFromMessages()` restores pending questions after webview reload.
+- **Terminal command display.** CSS for stdout/stderr split layout, exit-code badges (`-ok`/`-error`), scroll-bound terminal output, and overflow protection on tool headers. (`tool-command-output`, `tool-exit-code`, `tool-name`/`tool-header` overflow.)
+- **Streaming-vs-done visual differentiation.** Assistant bubble left-border pulse animation during streaming. Running/pending tool calls get an animated accent left-border; completed tools get a static success border. Pulsing dot in the assistant message header during streaming. Composer background tints subtly. Respects `prefers-reduced-motion: reduce`.
+- **Model/variant selector overflow.** `.model-selector-btn` capped at `14rem` and `.variant-selector-btn` at `10rem` with `text-overflow: ellipsis`.
 
 ## Unreleased Highlights
 
@@ -12,7 +21,7 @@
   - **Dedicated UI bars.** Interactive controls for questions, permissions, and rate-limits moved from the message stream to `#question-bar` (above input), `#permission-bar` (above input), and `#rate-limit-bar` (below input). Stream shows compact read-only pointers with hints.
   - **Permission requests ephemeral** — no longer persisted in the session transcript.
   - **Permission bar message type fix** — webview sent `permission_response` but host expected `accept_permission`, causing "Unknown webview message type" errors and stream timeouts.
-  - **Subagent panel reliability overhaul** — three bugs fixed: (1) panel no longer auto-opens on every activity update, only when a new subagent ID appears; (2) completed subagents no longer stuck showing "Running" — reconciled via `subagentReconciler.ts` when server drops them from snapshot; (3) detail view no longer overlaps other tab panes — moved inside `#subagent-panel` as a nested pane with `data-view` switching. Completed subagents are collapsed by default, capped at 10, with a "Clear completed" button. `mark_subagent_read` is now posted on click.
+  - **Subagent panel reliability overhaul** — five bugs fixed: (1) panel no longer auto-opens on every activity update, only when a new subagent ID appears; (2) completed subagents no longer stuck showing "Running" — root cause was `normalizeSubagentStatus` mapping unknown → pending/running in three places (webview, RunActivityTracker, ChatProvider), now all map to "unknown" (non-live); (3) detail view no longer overlaps other tab panes — moved inside `#subagent-panel` as a nested pane with `data-view` switching; (4) "Open in editor" button was a no-op placeholder — now creates a dedicated VS Code WebviewPanel in popout mode via `window.__OC_POPOUT__` and renders the subagent detail in a separate editor tab; (5) `activeSubagentCount` no longer counts `"unknown"` as active, preventing run finalization stalls.
   - **System messages redesigned** — orange gradient/emoji/shadow removed; replaced with subtle transparent container and thin left border accent.
   - Shared `.oc-card` model (`css/cards.css`) with severity modifiers (info/success/warning/error/critical/permission); `ErrorDisplay` rewritten class-based with theme SVG icons, collapsed-by-default technical details + Copy, and an in-place Details toggle. `.msg-error` compacted. See `docs/design/cards.md`.
   - Root-cause dedup: activity notices coalesce via `activitySignature`/`decideActivityCoalesce` + `SessionStore.appendOrCoalesceActivity` (`×N` repeat badge); a single generation failure now renders one card (`hasRecentErrorCard` suppresses the generic end-of-stream card; the raw error is no longer echoed in the bottom status).
