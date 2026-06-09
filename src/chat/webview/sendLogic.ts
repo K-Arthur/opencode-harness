@@ -7,6 +7,7 @@ export interface StreamCapacityState {
   isFull: boolean
   streamingNames: string
   activeStreams: number
+  maxStreams: number
 }
 
 let _maxConcurrentStreams = 5
@@ -109,12 +110,13 @@ export function createSendLogic(deps: SendLogicDeps) {
       })
       .filter(Boolean)
       .join(", ")
-    return { isFull, streamingNames, activeStreams }
+    return { isFull, streamingNames, activeStreams, maxStreams: _maxConcurrentStreams }
   }
 
   function updateSendButtonIcon(isStreaming?: boolean, streamCapacity = getStreamCapacityState()) {
     const active = stateManager.getActiveSession()
     const streaming = isStreaming ?? active?.isStreaming ?? false
+    els.inputArea?.classList.toggle("input-area--streaming", streaming)
     if (streaming) {
       els.sendBtn?.classList.add("stopping")
       els.sendBtn?.classList.remove("stream-limit-blocked")

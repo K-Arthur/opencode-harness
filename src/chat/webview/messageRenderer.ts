@@ -27,6 +27,10 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
   contentWrapper.className = "message-content"
 
   // Only show header if not consecutive AND not a re-render (opts?.skipHeader indicates re-render)
+  // Detect switch notification to apply compact styling
+  const isSwitchMsg = role === "system" && msg.blocks?.some(b => b.type === "activity" && (b.eventType === "model.switched" || b.eventType === "agent.switched"))
+  if (isSwitchMsg) div.classList.add("message--compact-system")
+
   if (role !== "system" && !isConsecutive && !opts?.skipHeader) {
     const header = document.createElement("div")
     header.className = "message-header"
