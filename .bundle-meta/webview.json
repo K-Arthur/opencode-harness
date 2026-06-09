@@ -17,7 +17,7 @@
       "format": "esm"
     },
     "src/chat/webview/dom.ts": {
-      "bytes": 20587,
+      "bytes": 20810,
       "imports": [],
       "format": "esm"
     },
@@ -1178,19 +1178,49 @@
       "imports": [],
       "format": "esm"
     },
+    "src/chat/webview/ansiUtils.ts": {
+      "bytes": 448,
+      "imports": [],
+      "format": "esm"
+    },
     "src/chat/webview/subagentCard.ts": {
-      "bytes": 13178,
+      "bytes": 12997,
       "imports": [
         {
           "path": "src/chat/handlers/toolClassifier.ts",
           "kind": "import-statement",
           "original": "../handlers/toolClassifier"
+        },
+        {
+          "path": "src/chat/webview/ansiUtils.ts",
+          "kind": "import-statement",
+          "original": "./ansiUtils"
         }
       ],
       "format": "esm"
     },
+    "src/chat/webview/groupSummary.ts": {
+      "bytes": 3383,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/jsonViewer.ts": {
+      "bytes": 4717,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/webSearchRenderer.ts": {
+      "bytes": 4431,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/toolState.ts": {
+      "bytes": 598,
+      "imports": [],
+      "format": "esm"
+    },
     "src/chat/webview/toolCallRenderer.ts": {
-      "bytes": 37635,
+      "bytes": 44179,
       "imports": [
         {
           "path": "src/chat/webview/icons.ts",
@@ -1206,6 +1236,31 @@
           "path": "src/chat/webview/subagentCard.ts",
           "kind": "import-statement",
           "original": "./subagentCard"
+        },
+        {
+          "path": "src/chat/webview/ansiUtils.ts",
+          "kind": "import-statement",
+          "original": "./ansiUtils"
+        },
+        {
+          "path": "src/chat/webview/groupSummary.ts",
+          "kind": "import-statement",
+          "original": "./groupSummary"
+        },
+        {
+          "path": "src/chat/webview/jsonViewer.ts",
+          "kind": "import-statement",
+          "original": "./jsonViewer"
+        },
+        {
+          "path": "src/chat/webview/webSearchRenderer.ts",
+          "kind": "import-statement",
+          "original": "./webSearchRenderer"
+        },
+        {
+          "path": "src/chat/webview/toolState.ts",
+          "kind": "import-statement",
+          "original": "./toolState"
         }
       ],
       "format": "esm"
@@ -1216,7 +1271,7 @@
       "format": "esm"
     },
     "src/chat/webview/renderer.ts": {
-      "bytes": 84728,
+      "bytes": 82037,
       "imports": [
         {
           "path": "node_modules/markdown-it/index.mjs",
@@ -1277,7 +1332,7 @@
       "format": "esm"
     },
     "src/chat/webview/messageRenderer.ts": {
-      "bytes": 8446,
+      "bytes": 8730,
       "imports": [
         {
           "path": "src/chat/webview/renderer.ts",
@@ -1345,6 +1400,17 @@
       "imports": [],
       "format": "esm"
     },
+    "src/chat/webview/opencodeErrorMapper.ts": {
+      "bytes": 11311,
+      "imports": [
+        {
+          "path": "src/chat/webview/errorTypes.ts",
+          "kind": "import-statement",
+          "original": "./errorTypes"
+        }
+      ],
+      "format": "esm"
+    },
     "src/chat/webview/renderQueue.ts": {
       "bytes": 2316,
       "imports": [],
@@ -1372,7 +1438,7 @@
       "format": "esm"
     },
     "src/chat/webview/errorComponents.ts": {
-      "bytes": 19453,
+      "bytes": 19767,
       "imports": [
         {
           "path": "src/chat/webview/errorTypes.ts",
@@ -1393,7 +1459,7 @@
       "format": "esm"
     },
     "src/chat/webview/streamHandlers.ts": {
-      "bytes": 49084,
+      "bytes": 51129,
       "imports": [
         {
           "path": "src/chat/webview/blocks.ts",
@@ -1404,6 +1470,11 @@
           "path": "src/chat/webview/errorTypes.ts",
           "kind": "import-statement",
           "original": "./errorTypes"
+        },
+        {
+          "path": "src/chat/webview/opencodeErrorMapper.ts",
+          "kind": "import-statement",
+          "original": "./opencodeErrorMapper"
         },
         {
           "path": "src/chat/webview/messageRenderer.ts",
@@ -1517,17 +1588,27 @@
       "format": "esm"
     },
     "src/chat/webview/tooltips.ts": {
-      "bytes": 20251,
+      "bytes": 20046,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/session/messageId.ts": {
+      "bytes": 2965,
       "imports": [],
       "format": "esm"
     },
     "src/chat/webview/sendLogic.ts": {
-      "bytes": 11983,
+      "bytes": 12355,
       "imports": [
         {
           "path": "src/chat/webview/tooltips.ts",
           "kind": "import-statement",
           "original": "./tooltips"
+        },
+        {
+          "path": "src/session/messageId.ts",
+          "kind": "import-statement",
+          "original": "../../session/messageId"
         }
       ],
       "format": "esm"
@@ -1559,7 +1640,7 @@
       "format": "esm"
     },
     "src/chat/webview/theme.ts": {
-      "bytes": 6815,
+      "bytes": 6753,
       "imports": [
         {
           "path": "src/chat/webview/timerRegistry.ts",
@@ -1574,13 +1655,18 @@
       "imports": [],
       "format": "esm"
     },
+    "src/chat/webview/sideRegion.ts": {
+      "bytes": 2939,
+      "imports": [],
+      "format": "esm"
+    },
     "src/chat/webview/file-chip-list.ts": {
       "bytes": 5070,
       "imports": [],
       "format": "esm"
     },
     "src/chat/webview/changed-files-dropdown.ts": {
-      "bytes": 24703,
+      "bytes": 25398,
       "imports": [
         {
           "path": "src/chat/webview/file-chip-list.ts",
@@ -1596,7 +1682,7 @@
       "format": "esm"
     },
     "src/chat/webview/context-usage-dropdown.ts": {
-      "bytes": 11173,
+      "bytes": 11656,
       "imports": [
         {
           "path": "src/chat/webview/context-usage-service.ts",
@@ -1617,7 +1703,7 @@
       "format": "esm"
     },
     "src/chat/webview/recent-sessions.ts": {
-      "bytes": 6923,
+      "bytes": 6940,
       "imports": [],
       "format": "esm"
     },
@@ -1643,7 +1729,7 @@
       "format": "esm"
     },
     "src/chat/webview/messageLoader.ts": {
-      "bytes": 8563,
+      "bytes": 8634,
       "imports": [],
       "format": "esm"
     },
@@ -1653,12 +1739,12 @@
       "format": "esm"
     },
     "src/chat/webview/todos-logic.ts": {
-      "bytes": 1705,
+      "bytes": 1737,
       "imports": [],
       "format": "esm"
     },
     "src/chat/webview/todos-panel.ts": {
-      "bytes": 24219,
+      "bytes": 24262,
       "imports": [
         {
           "path": "src/chat/webview/todos-logic.ts",
@@ -1674,7 +1760,7 @@
       "format": "esm"
     },
     "src/chat/webview/activity-panel.ts": {
-      "bytes": 10499,
+      "bytes": 10563,
       "imports": [
         {
           "path": "src/chat/webview/activityModel.ts",
@@ -1690,7 +1776,7 @@
       "format": "esm"
     },
     "src/chat/webview/tasks-panel.ts": {
-      "bytes": 10635,
+      "bytes": 10699,
       "imports": [
         {
           "path": "src/chat/webview/commandModel.ts",
@@ -1716,13 +1802,28 @@
       ],
       "format": "esm"
     },
+    "src/chat/webview/questionBar.ts": {
+      "bytes": 10711,
+      "imports": [],
+      "format": "esm"
+    },
     "src/chat/webview/subagent-panel.ts": {
-      "bytes": 8549,
+      "bytes": 13460,
       "imports": [],
       "format": "esm"
     },
     "src/chat/webview/subagentDetailView.ts": {
-      "bytes": 14747,
+      "bytes": 15212,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/subagentReconciler.ts": {
+      "bytes": 1685,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/sidebarResize.ts": {
+      "bytes": 3097,
       "imports": [],
       "format": "esm"
     },
@@ -1810,7 +1911,7 @@
       "format": "esm"
     },
     "src/chat/webview/ui/tokenCostDisplay.ts": {
-      "bytes": 15239,
+      "bytes": 16043,
       "imports": [
         {
           "path": "src/chat/webview/tokenDisplayPolicy.ts",
@@ -1857,7 +1958,7 @@
       "format": "esm"
     },
     "src/chat/webview/ui/buttonSetup.ts": {
-      "bytes": 4427,
+      "bytes": 4277,
       "imports": [],
       "format": "esm"
     },
@@ -1881,8 +1982,13 @@
       "imports": [],
       "format": "esm"
     },
+    "src/chat/webview/streamEndErrorPolicy.ts": {
+      "bytes": 1130,
+      "imports": [],
+      "format": "esm"
+    },
     "src/chat/webview/streamOrchestrator.ts": {
-      "bytes": 20081,
+      "bytes": 20885,
       "imports": [
         {
           "path": "src/chat/webview/timerRegistry.ts",
@@ -1893,6 +1999,16 @@
           "path": "src/chat/webview/placeholderContent.ts",
           "kind": "import-statement",
           "original": "./placeholderContent"
+        },
+        {
+          "path": "src/session/messageId.ts",
+          "kind": "import-statement",
+          "original": "../../session/messageId"
+        },
+        {
+          "path": "src/chat/webview/streamEndErrorPolicy.ts",
+          "kind": "import-statement",
+          "original": "./streamEndErrorPolicy"
         }
       ],
       "format": "esm"
@@ -1997,8 +2113,13 @@
       ],
       "format": "esm"
     },
+    "src/chat/webview/timestampUpdater.ts": {
+      "bytes": 2813,
+      "imports": [],
+      "format": "esm"
+    },
     "src/chat/webview/main.ts": {
-      "bytes": 155582,
+      "bytes": 165827,
       "imports": [
         {
           "path": "src/chat/webview/timerRegistry.ts",
@@ -2111,6 +2232,11 @@
           "original": "./tooltips"
         },
         {
+          "path": "src/chat/webview/sideRegion.ts",
+          "kind": "import-statement",
+          "original": "./sideRegion"
+        },
+        {
           "path": "src/chat/webview/changed-files-dropdown.ts",
           "kind": "import-statement",
           "original": "./changed-files-dropdown"
@@ -2186,6 +2312,11 @@
           "original": "./skills-modal"
         },
         {
+          "path": "src/chat/webview/questionBar.ts",
+          "kind": "import-statement",
+          "original": "./questionBar"
+        },
+        {
           "path": "src/chat/webview/subagent-panel.ts",
           "kind": "import-statement",
           "original": "./subagent-panel"
@@ -2194,6 +2325,16 @@
           "path": "src/chat/webview/subagentDetailView.ts",
           "kind": "import-statement",
           "original": "./subagentDetailView"
+        },
+        {
+          "path": "src/chat/webview/subagentReconciler.ts",
+          "kind": "import-statement",
+          "original": "./subagentReconciler"
+        },
+        {
+          "path": "src/chat/webview/sidebarResize.ts",
+          "kind": "import-statement",
+          "original": "./sidebarResize"
         },
         {
           "path": "src/chat/webview/subagentCard.ts",
@@ -2324,6 +2465,11 @@
           "path": "src/chat/modePolicy.ts",
           "kind": "import-statement",
           "original": "../modePolicy"
+        },
+        {
+          "path": "src/chat/webview/timestampUpdater.ts",
+          "kind": "import-statement",
+          "original": "./timestampUpdater"
         }
       ],
       "format": "esm"
@@ -2339,16 +2485,16 @@
           "bytesInOutput": 1850
         },
         "node_modules/highlight.js/lib/core.js": {
-          "bytesInOutput": 20924
+          "bytesInOutput": 20940
         },
         "src/chat/webview/timerRegistry.ts": {
           "bytesInOutput": 564
         },
         "src/chat/webview/state.ts": {
-          "bytesInOutput": 9538
+          "bytesInOutput": 9511
         },
         "src/chat/webview/dom.ts": {
-          "bytesInOutput": 7353
+          "bytesInOutput": 7471
         },
         "node_modules/markdown-it/lib/common/utils.mjs": {
           "bytesInOutput": 2571
@@ -2576,7 +2722,7 @@
           "bytesInOutput": 0
         },
         "src/chat/webview/renderer.ts": {
-          "bytesInOutput": 39203
+          "bytesInOutput": 38186
         },
         "src/chat/webview/htmlUtils.ts": {
           "bytesInOutput": 471
@@ -2585,7 +2731,7 @@
           "bytesInOutput": 36
         },
         "node_modules/dompurify/dist/purify.es.mjs": {
-          "bytesInOutput": 24353
+          "bytesInOutput": 24354
         },
         "node_modules/highlight.js/es/languages/javascript.js": {
           "bytesInOutput": 6481
@@ -2641,11 +2787,26 @@
         "src/chat/handlers/toolClassifier.ts": {
           "bytesInOutput": 531
         },
+        "src/chat/webview/ansiUtils.ts": {
+          "bytesInOutput": 104
+        },
         "src/chat/webview/subagentCard.ts": {
-          "bytesInOutput": 5994
+          "bytesInOutput": 5900
+        },
+        "src/chat/webview/groupSummary.ts": {
+          "bytesInOutput": 1369
+        },
+        "src/chat/webview/jsonViewer.ts": {
+          "bytesInOutput": 2458
+        },
+        "src/chat/webview/webSearchRenderer.ts": {
+          "bytesInOutput": 2084
+        },
+        "src/chat/webview/toolState.ts": {
+          "bytesInOutput": 147
         },
         "src/chat/webview/toolCallRenderer.ts": {
-          "bytesInOutput": 18577
+          "bytesInOutput": 21692
         },
         "src/chat/webview/displayPrefs.ts": {
           "bytesInOutput": 54
@@ -2654,7 +2815,7 @@
           "bytesInOutput": 694
         },
         "src/chat/webview/messageRenderer.ts": {
-          "bytesInOutput": 4375
+          "bytesInOutput": 4538
         },
         "src/chat/webview/slash-commands.ts": {
           "bytesInOutput": 1853
@@ -2668,6 +2829,9 @@
         "src/chat/webview/blocks.ts": {
           "bytesInOutput": 140
         },
+        "src/chat/webview/opencodeErrorMapper.ts": {
+          "bytesInOutput": 4395
+        },
         "src/chat/webview/renderQueue.ts": {
           "bytesInOutput": 1354
         },
@@ -2678,13 +2842,13 @@
           "bytesInOutput": 887
         },
         "src/chat/webview/errorComponents.ts": {
-          "bytesInOutput": 6604
+          "bytesInOutput": 6352
         },
         "src/session/questionModel.ts": {
           "bytesInOutput": 1269
         },
         "src/chat/webview/streamHandlers.ts": {
-          "bytesInOutput": 17785
+          "bytesInOutput": 18393
         },
         "src/chat/webview/streamEndHandler.ts": {
           "bytesInOutput": 2472
@@ -2702,10 +2866,13 @@
           "bytesInOutput": 6276
         },
         "src/chat/webview/tooltips.ts": {
-          "bytesInOutput": 11436
+          "bytesInOutput": 11271
+        },
+        "src/session/messageId.ts": {
+          "bytesInOutput": 484
         },
         "src/chat/webview/sendLogic.ts": {
-          "bytesInOutput": 4945
+          "bytesInOutput": 5017
         },
         "src/chat/webview/model-manager.ts": {
           "bytesInOutput": 4291
@@ -2720,22 +2887,25 @@
           "bytesInOutput": 2074
         },
         "src/chat/webview/theme.ts": {
-          "bytesInOutput": 1769
+          "bytesInOutput": 1710
         },
         "src/chat/webview/quotaMonitor.ts": {
           "bytesInOutput": 505
+        },
+        "src/chat/webview/sideRegion.ts": {
+          "bytesInOutput": 1066
         },
         "src/chat/webview/file-chip-list.ts": {
           "bytesInOutput": 1135
         },
         "src/chat/webview/changed-files-dropdown.ts": {
-          "bytesInOutput": 10212
+          "bytesInOutput": 10377
         },
         "src/chat/webview/context-usage-service.ts": {
           "bytesInOutput": 649
         },
         "src/chat/webview/context-usage-dropdown.ts": {
-          "bytesInOutput": 5980
+          "bytesInOutput": 6312
         },
         "src/chat/webview/compact-banner.ts": {
           "bytesInOutput": 1549
@@ -2753,28 +2923,28 @@
           "bytesInOutput": 793
         },
         "src/chat/webview/messageLoader.ts": {
-          "bytesInOutput": 1922
+          "bytesInOutput": 1918
         },
         "src/chat/webview/virtualList.ts": {
           "bytesInOutput": 4388
         },
         "src/chat/webview/todos-logic.ts": {
-          "bytesInOutput": 637
+          "bytesInOutput": 649
         },
         "src/chat/webview/todos-panel.ts": {
-          "bytesInOutput": 12871
+          "bytesInOutput": 12859
         },
         "src/chat/webview/activityModel.ts": {
           "bytesInOutput": 4743
         },
         "src/chat/webview/activity-panel.ts": {
-          "bytesInOutput": 4846
+          "bytesInOutput": 4853
         },
         "src/chat/webview/commandModel.ts": {
           "bytesInOutput": 1853
         },
         "src/chat/webview/tasks-panel.ts": {
-          "bytesInOutput": 5251
+          "bytesInOutput": 5258
         },
         "src/chat/webview/focus-trap.ts": {
           "bytesInOutput": 455
@@ -2782,11 +2952,20 @@
         "src/chat/webview/skills-modal.ts": {
           "bytesInOutput": 3609
         },
+        "src/chat/webview/questionBar.ts": {
+          "bytesInOutput": 5115
+        },
         "src/chat/webview/subagent-panel.ts": {
-          "bytesInOutput": 4341
+          "bytesInOutput": 7203
         },
         "src/chat/webview/subagentDetailView.ts": {
-          "bytesInOutput": 9067
+          "bytesInOutput": 9309
+        },
+        "src/chat/webview/subagentReconciler.ts": {
+          "bytesInOutput": 593
+        },
+        "src/chat/webview/sidebarResize.ts": {
+          "bytesInOutput": 1361
         },
         "src/chat/webview/tokenDisplayPolicy.ts": {
           "bytesInOutput": 173
@@ -2822,7 +3001,7 @@
           "bytesInOutput": 5093
         },
         "src/chat/webview/ui/tokenCostDisplay.ts": {
-          "bytesInOutput": 5865
+          "bytesInOutput": 5983
         },
         "src/chat/webview/ui/attachments.ts": {
           "bytesInOutput": 2438
@@ -2840,7 +3019,7 @@
           "bytesInOutput": 3597
         },
         "src/chat/webview/ui/buttonSetup.ts": {
-          "bytesInOutput": 2423
+          "bytesInOutput": 2271
         },
         "src/chat/webview/permissionConfig.ts": {
           "bytesInOutput": 3312
@@ -2854,8 +3033,11 @@
         "src/chat/webview/placeholderContent.ts": {
           "bytesInOutput": 223
         },
+        "src/chat/webview/streamEndErrorPolicy.ts": {
+          "bytesInOutput": 186
+        },
         "src/chat/webview/streamOrchestrator.ts": {
-          "bytesInOutput": 7831
+          "bytesInOutput": 7875
         },
         "src/chat/webview/thinkingToggle.ts": {
           "bytesInOutput": 1105
@@ -2881,11 +3063,14 @@
         "src/chat/webview/voiceInput.ts": {
           "bytesInOutput": 3337
         },
+        "src/chat/webview/timestampUpdater.ts": {
+          "bytesInOutput": 793
+        },
         "src/chat/webview/main.ts": {
-          "bytesInOutput": 59313
+          "bytesInOutput": 63663
         }
       },
-      "bytes": 676008
+      "bytes": 706613
     }
   }
 }

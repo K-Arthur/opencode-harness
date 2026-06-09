@@ -25,5 +25,6 @@ audit-report.md
 .forgecraft/
 .superpowers/
 .windsurf/
+.opencode/skills/
 *.pkg.tar.zst
 *.bak

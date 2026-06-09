@@ -544,7 +544,7 @@
       "format": "esm"
     },
     "src/session/eventHandlers/ActivityPartHandler.ts": {
-      "bytes": 2433,
+      "bytes": 2523,
       "imports": [
         {
           "path": "./types",
@@ -984,13 +984,18 @@
       ],
       "format": "esm"
     },
+    "src/session/activityCoalesce.ts": {
+      "bytes": 2308,
+      "imports": [],
+      "format": "esm"
+    },
     "src/session/sessionMigration.ts": {
-      "bytes": 8666,
+      "bytes": 9767,
       "imports": [],
       "format": "esm"
     },
     "src/session/SessionStore.ts": {
-      "bytes": 43824,
+      "bytes": 46861,
       "imports": [
         {
           "path": "vscode",
@@ -1006,6 +1011,11 @@
           "path": "src/utils/outputChannel.ts",
           "kind": "import-statement",
           "original": "../utils/outputChannel"
+        },
+        {
+          "path": "src/session/activityCoalesce.ts",
+          "kind": "import-statement",
+          "original": "./activityCoalesce"
         },
         {
           "path": "src/session/sessionUtils.ts",
@@ -1457,8 +1467,19 @@
       "format": "esm"
     },
     "src/chat/handlers/RunActivityTracker.ts": {
-      "bytes": 11858,
+      "bytes": 12301,
       "imports": [],
+      "format": "esm"
+    },
+    "src/chat/handlers/SubagentHeartbeat.ts": {
+      "bytes": 5465,
+      "imports": [
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../../utils/outputChannel"
+        }
+      ],
       "format": "esm"
     },
     "src/chat/handlers/runErrorMapper.ts": {
@@ -1472,7 +1493,7 @@
       "format": "esm"
     },
     "src/chat/handlers/StreamCoordinator.ts": {
-      "bytes": 80419,
+      "bytes": 85502,
       "imports": [
         {
           "path": "vscode",
@@ -1573,6 +1594,11 @@
           "path": "src/chat/handlers/RunActivityTracker.ts",
           "kind": "import-statement",
           "original": "./RunActivityTracker"
+        },
+        {
+          "path": "src/chat/handlers/SubagentHeartbeat.ts",
+          "kind": "import-statement",
+          "original": "./SubagentHeartbeat"
         },
         {
           "path": "src/chat/handlers/runErrorMapper.ts",
@@ -1676,6 +1702,11 @@
       ],
       "format": "esm"
     },
+    "src/chat/webview/messageCounter.ts": {
+      "bytes": 1915,
+      "imports": [],
+      "format": "esm"
+    },
     "src/chat/RetryQueueService.ts": {
       "bytes": 6050,
       "imports": [
@@ -1693,7 +1724,7 @@
       "format": "esm"
     },
     "src/chat/handlers/MessageRouter.ts": {
-      "bytes": 10531,
+      "bytes": 10548,
       "imports": [
         {
           "path": "vscode",
@@ -1812,7 +1843,7 @@
       "format": "esm"
     },
     "src/chat/HostMessageBatcher.ts": {
-      "bytes": 12301,
+      "bytes": 12630,
       "imports": [
         {
           "path": "src/chat/BatchEngine.ts",
@@ -1823,7 +1854,7 @@
       "format": "esm"
     },
     "src/chat/PendingEventBuffer.ts": {
-      "bytes": 3986,
+      "bytes": 4238,
       "imports": [],
       "format": "esm"
     },
@@ -1869,7 +1900,7 @@
       "format": "esm"
     },
     "src/chat/SessionLifecycleService.ts": {
-      "bytes": 9529,
+      "bytes": 9893,
       "imports": [
         {
           "path": "vscode",
@@ -1900,10 +1931,2849 @@
           "path": "src/utils/outputChannel.ts",
           "kind": "import-statement",
           "original": "../utils/outputChannel"
+        },
+        {
+          "path": "src/chat/webview/messageCounter.ts",
+          "kind": "import-statement",
+          "original": "./webview/messageCounter"
         }
       ],
       "format": "esm"
     },
     "src/chat/CommandExecutionService.ts": {
       "bytes": 6694,
-    
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/tokenCounter.ts",
+          "kind": "import-statement",
+          "original": "../utils/tokenCounter"
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/diff/sdkFileContentToDiffLines.ts": {
+      "bytes": 3461,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/session/messageId.ts": {
+      "bytes": 2965,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/utils/errorHandler.ts": {
+      "bytes": 3930,
+      "imports": [
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/WebviewMessageValidator.ts": {
+      "bytes": 19171,
+      "imports": [
+        {
+          "path": "src/chat/modePolicy.ts",
+          "kind": "import-statement",
+          "original": "./modePolicy"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/WebviewEventRouter.ts": {
+      "bytes": 98936,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/chat/diff/sdkFileContentToDiffLines.ts",
+          "kind": "import-statement",
+          "original": "./diff/sdkFileContentToDiffLines"
+        },
+        {
+          "path": "src/session/sdkMessageConverter.ts",
+          "kind": "import-statement",
+          "original": "../session/sdkMessageConverter"
+        },
+        {
+          "path": "src/session/sdkUsageSummary.ts",
+          "kind": "import-statement",
+          "original": "../session/sdkUsageSummary"
+        },
+        {
+          "path": "src/session/messageId.ts",
+          "kind": "import-statement",
+          "original": "../session/messageId"
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        },
+        {
+          "path": "src/chat/webview/messageCounter.ts",
+          "kind": "import-statement",
+          "original": "./webview/messageCounter"
+        },
+        {
+          "path": "src/chat/utils/errorHandler.ts",
+          "kind": "import-statement",
+          "original": "./utils/errorHandler"
+        },
+        {
+          "path": "src/chat/WebviewMessageValidator.ts",
+          "kind": "import-statement",
+          "original": "./WebviewMessageValidator"
+        },
+        {
+          "path": "src/chat/modePolicy.ts",
+          "kind": "import-statement",
+          "original": "./modePolicy"
+        },
+        {
+          "path": "src/session/eventHandlers/TodoUpdatedHandler.ts",
+          "kind": "import-statement",
+          "original": "../session/eventHandlers/TodoUpdatedHandler"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/handlers/SteerPromptHandler.ts": {
+      "bytes": 6829,
+      "imports": [
+        {
+          "path": "./StreamCoordinator",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../../session/SessionStore",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/HostPromptQueue.ts": {
+      "bytes": 7713,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/skills/SkillPreferencesStore.ts": {
+      "bytes": 1035,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/skills/SkillTriggerEngine.ts": {
+      "bytes": 11423,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/backfillPlanner.ts": {
+      "bytes": 1401,
+      "imports": [
+        {
+          "path": "src/session/sessionUtils.ts",
+          "kind": "import-statement",
+          "original": "../session/sessionUtils"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/BackfillService.ts": {
+      "bytes": 8272,
+      "imports": [
+        {
+          "path": "../session/SessionStore",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/session/sdkMessageConverter.ts",
+          "kind": "import-statement",
+          "original": "../session/sdkMessageConverter"
+        },
+        {
+          "path": "src/session/sdkUsageSummary.ts",
+          "kind": "import-statement",
+          "original": "../session/sdkUsageSummary"
+        },
+        {
+          "path": "src/session/sessionUtils.ts",
+          "kind": "import-statement",
+          "original": "../session/sessionUtils"
+        },
+        {
+          "path": "./TabManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        },
+        {
+          "path": "src/chat/backfillPlanner.ts",
+          "kind": "import-statement",
+          "original": "./backfillPlanner"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/MessagePostService.ts": {
+      "bytes": 1393,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/chat/chatUtils.ts",
+          "kind": "import-statement",
+          "original": "./chatUtils"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/StashService.ts": {
+      "bytes": 1849,
+      "imports": [
+        {
+          "path": "../prompts/PromptStashManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "./TabManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/ProviderManagementService.ts": {
+      "bytes": 2285,
+      "imports": [
+        {
+          "path": "../model/ProviderConfigManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/DiffAcceptService.ts": {
+      "bytes": 1356,
+      "imports": [
+        {
+          "path": "src/chat/modePolicy.ts",
+          "kind": "import-statement",
+          "original": "./modePolicy"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/CodeInsertionService.ts": {
+      "bytes": 506,
+      "imports": [
+        {
+          "path": "src/chat/ChatFileOps.ts",
+          "kind": "import-statement",
+          "original": "./ChatFileOps"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/SlashCommandService.ts": {
+      "bytes": 1729,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../session/SessionManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../session/SessionStore",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "./CommandExecutionService",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "./TabManager",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/SessionSyncService.ts": {
+      "bytes": 1754,
+      "imports": [
+        {
+          "path": "../session/SessionStore",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../session/SessionManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../model/ModelManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../mcp/McpServerManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../monitor/RateLimitMonitor",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "./StatePushService",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "./handlers/MessageRouter",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "./SessionLifecycleService",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/AutoModeService.ts": {
+      "bytes": 1082,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/voiceInputCore.ts": {
+      "bytes": 9396,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/VoiceInputService.ts": {
+      "bytes": 7397,
+      "imports": [
+        {
+          "path": "src/chat/voiceInputCore.ts",
+          "kind": "import-statement",
+          "original": "./voiceInputCore"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/voiceCapture.ts": {
+      "bytes": 13420,
+      "imports": [
+        {
+          "path": "child_process",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "os",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/chat/voiceInputCore.ts",
+          "kind": "import-statement",
+          "original": "./voiceInputCore"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/voiceSetup.ts": {
+      "bytes": 4320,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/ChatProvider.ts": {
+      "bytes": 91458,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../session/SessionManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/session/SessionStore.ts",
+          "kind": "import-statement",
+          "original": "../session/SessionStore"
+        },
+        {
+          "path": "../context/ContextEngine",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../monitor/ContextMonitor",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/monitor/UsageAnalytics.ts",
+          "kind": "import-statement",
+          "original": "../monitor/UsageAnalytics"
+        },
+        {
+          "path": "../theme/ThemeManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../monitor/RateLimitMonitor",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../model/ModelManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../checkpoint/CheckpointManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/tokenCounter.ts",
+          "kind": "import-statement",
+          "original": "../utils/tokenCounter"
+        },
+        {
+          "path": "src/diff/DiffApplier.ts",
+          "kind": "import-statement",
+          "original": "../diff/DiffApplier"
+        },
+        {
+          "path": "src/session/sdkMessageConverter.ts",
+          "kind": "import-statement",
+          "original": "../session/sdkMessageConverter"
+        },
+        {
+          "path": "../session/sdkUsageSummary",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../session/sessionUtils",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/session/activityCoalesce.ts",
+          "kind": "import-statement",
+          "original": "../session/activityCoalesce"
+        },
+        {
+          "path": "src/chat/WebviewContent.ts",
+          "kind": "import-statement",
+          "original": "./WebviewContent"
+        },
+        {
+          "path": "src/chat/TabManager.ts",
+          "kind": "import-statement",
+          "original": "./TabManager"
+        },
+        {
+          "path": "src/chat/handlers/StreamCoordinator.ts",
+          "kind": "import-statement",
+          "original": "./handlers/StreamCoordinator"
+        },
+        {
+          "path": "src/prompts/PromptManager.ts",
+          "kind": "import-statement",
+          "original": "../prompts/PromptManager"
+        },
+        {
+          "path": "src/prompts/PromptStashManager.ts",
+          "kind": "import-statement",
+          "original": "../prompts/PromptStashManager"
+        },
+        {
+          "path": "src/model/ProviderConfigManager.ts",
+          "kind": "import-statement",
+          "original": "../model/ProviderConfigManager"
+        },
+        {
+          "path": "src/chat/chatUtils.ts",
+          "kind": "import-statement",
+          "original": "./chatUtils"
+        },
+        {
+          "path": "src/chat/restorablePolicy.ts",
+          "kind": "import-statement",
+          "original": "./restorablePolicy"
+        },
+        {
+          "path": "src/chat/webview/opencodeErrorMapper.ts",
+          "kind": "import-statement",
+          "original": "./webview/opencodeErrorMapper"
+        },
+        {
+          "path": "src/chat/webview/messageCounter.ts",
+          "kind": "import-statement",
+          "original": "./webview/messageCounter"
+        },
+        {
+          "path": "src/chat/RetryQueueService.ts",
+          "kind": "import-statement",
+          "original": "./RetryQueueService"
+        },
+        {
+          "path": "./types",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        },
+        {
+          "path": "src/chat/handlers/MessageRouter.ts",
+          "kind": "import-statement",
+          "original": "./handlers/MessageRouter"
+        },
+        {
+          "path": "src/chat/ChatCommands.ts",
+          "kind": "import-statement",
+          "original": "./ChatCommands"
+        },
+        {
+          "path": "src/chat/AutoCompactor.ts",
+          "kind": "import-statement",
+          "original": "./AutoCompactor"
+        },
+        {
+          "path": "src/chat/ChatFileOps.ts",
+          "kind": "import-statement",
+          "original": "./ChatFileOps"
+        },
+        {
+          "path": "src/chat/HostMessageBatcher.ts",
+          "kind": "import-statement",
+          "original": "./HostMessageBatcher"
+        },
+        {
+          "path": "src/chat/PendingEventBuffer.ts",
+          "kind": "import-statement",
+          "original": "./PendingEventBuffer"
+        },
+        {
+          "path": "../mcp/McpServerManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/chat/ThemeController.ts",
+          "kind": "import-statement",
+          "original": "./ThemeController"
+        },
+        {
+          "path": "src/chat/StatePushService.ts",
+          "kind": "import-statement",
+          "original": "./StatePushService"
+        },
+        {
+          "path": "src/chat/SessionLifecycleService.ts",
+          "kind": "import-statement",
+          "original": "./SessionLifecycleService"
+        },
+        {
+          "path": "src/chat/CommandExecutionService.ts",
+          "kind": "import-statement",
+          "original": "./CommandExecutionService"
+        },
+        {
+          "path": "src/chat/WebviewEventRouter.ts",
+          "kind": "import-statement",
+          "original": "./WebviewEventRouter"
+        },
+        {
+          "path": "src/chat/handlers/SteerPromptHandler.ts",
+          "kind": "import-statement",
+          "original": "./handlers/SteerPromptHandler"
+        },
+        {
+          "path": "src/chat/HostPromptQueue.ts",
+          "kind": "import-statement",
+          "original": "./HostPromptQueue"
+        },
+        {
+          "path": "src/skills/SkillPreferencesStore.ts",
+          "kind": "import-statement",
+          "original": "../skills/SkillPreferencesStore"
+        },
+        {
+          "path": "src/skills/SkillTriggerEngine.ts",
+          "kind": "import-statement",
+          "original": "../skills/SkillTriggerEngine"
+        },
+        {
+          "path": "src/methodology/MethodologyAdvisor.ts",
+          "kind": "import-statement",
+          "original": "../methodology/MethodologyAdvisor"
+        },
+        {
+          "path": "src/chat/BackfillService.ts",
+          "kind": "import-statement",
+          "original": "./BackfillService"
+        },
+        {
+          "path": "src/chat/MessagePostService.ts",
+          "kind": "import-statement",
+          "original": "./MessagePostService"
+        },
+        {
+          "path": "src/chat/StashService.ts",
+          "kind": "import-statement",
+          "original": "./StashService"
+        },
+        {
+          "path": "src/chat/ProviderManagementService.ts",
+          "kind": "import-statement",
+          "original": "./ProviderManagementService"
+        },
+        {
+          "path": "src/chat/DiffAcceptService.ts",
+          "kind": "import-statement",
+          "original": "./DiffAcceptService"
+        },
+        {
+          "path": "src/chat/modePolicy.ts",
+          "kind": "import-statement",
+          "original": "./modePolicy"
+        },
+        {
+          "path": "src/chat/CodeInsertionService.ts",
+          "kind": "import-statement",
+          "original": "./CodeInsertionService"
+        },
+        {
+          "path": "src/chat/SlashCommandService.ts",
+          "kind": "import-statement",
+          "original": "./SlashCommandService"
+        },
+        {
+          "path": "src/chat/SessionSyncService.ts",
+          "kind": "import-statement",
+          "original": "./SessionSyncService"
+        },
+        {
+          "path": "src/chat/AutoModeService.ts",
+          "kind": "import-statement",
+          "original": "./AutoModeService"
+        },
+        {
+          "path": "src/chat/VoiceInputService.ts",
+          "kind": "import-statement",
+          "original": "./VoiceInputService"
+        },
+        {
+          "path": "src/chat/voiceCapture.ts",
+          "kind": "import-statement",
+          "original": "./voiceCapture"
+        },
+        {
+          "path": "src/chat/voiceSetup.ts",
+          "kind": "import-statement",
+          "original": "./voiceSetup"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/theme/ThemeManager.ts": {
+      "bytes": 38383,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../utils/outputChannel",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/monitor/rateLimitCore.ts": {
+      "bytes": 5028,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/monitor/RateLimitMonitor.ts": {
+      "bytes": 14672,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/monitor/rateLimitCore.ts",
+          "kind": "import-statement",
+          "original": "./rateLimitCore"
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        },
+        {
+          "path": "src/monitor/rateLimitCore.ts",
+          "kind": "import-statement",
+          "original": "./rateLimitCore"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/model/openRouterMetadata.ts": {
+      "bytes": 6017,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/model/modelsDevMetadata.ts": {
+      "bytes": 6638,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/model/contextWindowResolver.ts": {
+      "bytes": 6071,
+      "imports": [
+        {
+          "path": "src/model/openRouterMetadata.ts",
+          "kind": "import-statement",
+          "original": "./openRouterMetadata"
+        },
+        {
+          "path": "src/model/modelsDevMetadata.ts",
+          "kind": "import-statement",
+          "original": "./modelsDevMetadata"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/model/ModelManager.ts": {
+      "bytes": 22324,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        },
+        {
+          "path": "./ProviderConfigManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/model/contextWindowResolver.ts",
+          "kind": "import-statement",
+          "original": "./contextWindowResolver"
+        },
+        {
+          "path": "src/model/openRouterMetadata.ts",
+          "kind": "import-statement",
+          "original": "./openRouterMetadata"
+        },
+        {
+          "path": "src/model/modelsDevMetadata.ts",
+          "kind": "import-statement",
+          "original": "./modelsDevMetadata"
+        },
+        {
+          "path": "child_process",
+          "kind": "dynamic-import",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/diagnostics/CliDiagnostics.ts": {
+      "bytes": 6150,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "child_process",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/mcp/McpServerManager.ts": {
+      "bytes": 19221,
+      "imports": [
+        {
+          "path": "fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "os",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/install/OpencodeInstaller.ts": {
+      "bytes": 9377,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:child_process",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:os",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:fs/promises",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:crypto",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        },
+        {
+          "path": "src/install/installPlan.ts",
+          "kind": "import-statement",
+          "original": "./installPlan"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/commands/rollback.ts": {
+      "bytes": 1556,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../checkpoint/CheckpointManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../session/SessionStore",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/commands/theme.ts": {
+      "bytes": 1134,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../theme/ThemeManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../terminal/TerminalBridge",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/methodology/AgentsMdGenerator.ts": {
+      "bytes": 19855,
+      "imports": [
+        {
+          "path": "fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/commands/methodology.ts": {
+      "bytes": 1865,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/methodology/AgentsMdGenerator.ts",
+          "kind": "import-statement",
+          "original": "../methodology/AgentsMdGenerator"
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/session/SessionDbReader.ts": {
+      "bytes": 4640,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        },
+        {
+          "path": "child_process",
+          "kind": "require-call",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/commands/session.ts": {
+      "bytes": 23718,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/session/SessionStore.ts",
+          "kind": "import-statement",
+          "original": "../session/SessionStore"
+        },
+        {
+          "path": "../session/SessionManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/session/SessionDbReader.ts",
+          "kind": "import-statement",
+          "original": "../session/SessionDbReader"
+        },
+        {
+          "path": "src/session/sdkMessageConverter.ts",
+          "kind": "import-statement",
+          "original": "../session/sdkMessageConverter"
+        },
+        {
+          "path": "src/session/sdkUsageSummary.ts",
+          "kind": "import-statement",
+          "original": "../session/sdkUsageSummary"
+        },
+        {
+          "path": "src/chat/webview/messageCounter.ts",
+          "kind": "import-statement",
+          "original": "../chat/webview/messageCounter"
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        },
+        {
+          "path": "src/utils/security.ts",
+          "kind": "import-statement",
+          "original": "../utils/security"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/commands/model.ts": {
+      "bytes": 3928,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../model/ModelManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../session/SessionStore",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../session/SessionManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/commands/misc.ts": {
+      "bytes": 4117,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../monitor/RateLimitMonitor",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../diagnostics/CliDiagnostics",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../session/SessionManager",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/commands/export.ts": {
+      "bytes": 2562,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../session/SessionExporter",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../session/SessionStore",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/commands/index.ts": {
+      "bytes": 1025,
+      "imports": [
+        {
+          "path": "src/commands/rollback.ts",
+          "kind": "import-statement",
+          "original": "./rollback"
+        },
+        {
+          "path": "src/commands/theme.ts",
+          "kind": "import-statement",
+          "original": "./theme"
+        },
+        {
+          "path": "src/commands/methodology.ts",
+          "kind": "import-statement",
+          "original": "./methodology"
+        },
+        {
+          "path": "src/commands/session.ts",
+          "kind": "import-statement",
+          "original": "./session"
+        },
+        {
+          "path": "src/commands/model.ts",
+          "kind": "import-statement",
+          "original": "./model"
+        },
+        {
+          "path": "src/commands/misc.ts",
+          "kind": "import-statement",
+          "original": "./misc"
+        },
+        {
+          "path": "src/commands/export.ts",
+          "kind": "import-statement",
+          "original": "./export"
+        },
+        {
+          "path": "src/commands/misc.ts",
+          "kind": "import-statement",
+          "original": "./misc"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/skills/stopwords.ts": {
+      "bytes": 1024,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/skills/TaskClassifier.ts": {
+      "bytes": 13043,
+      "imports": [
+        {
+          "path": "./types",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/skills/stopwords.ts",
+          "kind": "import-statement",
+          "original": "./stopwords"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/skills/ConfidenceScorer.ts": {
+      "bytes": 10095,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/skills/TaskDecomposer.ts": {
+      "bytes": 16247,
+      "imports": [
+        {
+          "path": "./types",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/skills/TDDOrchestrator.ts": {
+      "bytes": 13272,
+      "imports": [
+        {
+          "path": "./types",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/methodology/QualityEvaluator.ts": {
+      "bytes": 5401,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/methodology/CascadeRouter.ts": {
+      "bytes": 13201,
+      "imports": [
+        {
+          "path": "./types.js",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/methodology/QualityEvaluator.ts",
+          "kind": "import-statement",
+          "original": "./QualityEvaluator.js"
+        },
+        {
+          "path": "src/methodology/QualityEvaluator.ts",
+          "kind": "import-statement",
+          "original": "./QualityEvaluator.js"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/methodology/types.ts": {
+      "bytes": 10311,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/methodology/ModelProfileRegistry.ts": {
+      "bytes": 4997,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/methodology/MethodologyOrchestrator.ts": {
+      "bytes": 6587,
+      "imports": [
+        {
+          "path": "src/methodology/types.ts",
+          "kind": "import-statement",
+          "original": "./types.js"
+        },
+        {
+          "path": "src/methodology/TaskClassifier.ts",
+          "kind": "import-statement",
+          "original": "./TaskClassifier.js"
+        },
+        {
+          "path": "src/methodology/MethodologyCatalog.ts",
+          "kind": "import-statement",
+          "original": "./MethodologyCatalog.js"
+        },
+        {
+          "path": "src/methodology/CascadeRouter.ts",
+          "kind": "import-statement",
+          "original": "./CascadeRouter.js"
+        },
+        {
+          "path": "src/methodology/ModelProfileRegistry.ts",
+          "kind": "import-statement",
+          "original": "./ModelProfileRegistry.js"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/methodology/PromptEngine.ts": {
+      "bytes": 9918,
+      "imports": [
+        {
+          "path": "./types.js",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/methodology/MethodologyCatalog.ts",
+          "kind": "import-statement",
+          "original": "./MethodologyCatalog.js"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/methodology/SchemaValidator.ts": {
+      "bytes": 11919,
+      "imports": [
+        {
+          "path": "./types.js",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/methodology/SkillManager.ts": {
+      "bytes": 9889,
+      "imports": [
+        {
+          "path": "fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "./types.js",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/methodology/SpecService.ts": {
+      "bytes": 7342,
+      "imports": [
+        {
+          "path": "./types.js",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/methodology/OutcomeTracker.ts": {
+      "bytes": 3645,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/methodology/QualityGate.ts": {
+      "bytes": 3321,
+      "imports": [
+        {
+          "path": "./types.js",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/methodology/PlanValidator.ts": {
+      "bytes": 4530,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/methodology/RefactoringEngine.ts": {
+      "bytes": 9922,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/methodology/index.ts": {
+      "bytes": 3860,
+      "imports": [
+        {
+          "path": "src/skills/TaskClassifier.ts",
+          "kind": "import-statement",
+          "original": "../skills/TaskClassifier.js"
+        },
+        {
+          "path": "src/skills/SkillTriggerEngine.ts",
+          "kind": "import-statement",
+          "original": "../skills/SkillTriggerEngine.js"
+        },
+        {
+          "path": "src/skills/ConfidenceScorer.ts",
+          "kind": "import-statement",
+          "original": "../skills/ConfidenceScorer.js"
+        },
+        {
+          "path": "src/skills/TaskDecomposer.ts",
+          "kind": "import-statement",
+          "original": "../skills/TaskDecomposer.js"
+        },
+        {
+          "path": "src/skills/TDDOrchestrator.ts",
+          "kind": "import-statement",
+          "original": "../skills/TDDOrchestrator.js"
+        },
+        {
+          "path": "src/model/ModelManager.ts",
+          "kind": "import-statement",
+          "original": "../model/ModelManager.js"
+        },
+        {
+          "path": "src/prompts/PromptManager.ts",
+          "kind": "import-statement",
+          "original": "../prompts/PromptManager.js"
+        },
+        {
+          "path": "src/context/ContextEngine.ts",
+          "kind": "import-statement",
+          "original": "../context/ContextEngine.js"
+        },
+        {
+          "path": "src/methodology/TaskClassifier.ts",
+          "kind": "import-statement",
+          "original": "./TaskClassifier.js"
+        },
+        {
+          "path": "src/methodology/MethodologyCatalog.ts",
+          "kind": "import-statement",
+          "original": "./MethodologyCatalog.js"
+        },
+        {
+          "path": "src/methodology/CascadeRouter.ts",
+          "kind": "import-statement",
+          "original": "./CascadeRouter.js"
+        },
+        {
+          "path": "src/methodology/QualityEvaluator.ts",
+          "kind": "import-statement",
+          "original": "./QualityEvaluator.js"
+        },
+        {
+          "path": "src/methodology/MethodologyOrchestrator.ts",
+          "kind": "import-statement",
+          "original": "./MethodologyOrchestrator.js"
+        },
+        {
+          "path": "src/methodology/PromptEngine.ts",
+          "kind": "import-statement",
+          "original": "./PromptEngine.js"
+        },
+        {
+          "path": "src/methodology/SchemaValidator.ts",
+          "kind": "import-statement",
+          "original": "./SchemaValidator.js"
+        },
+        {
+          "path": "src/methodology/SkillManager.ts",
+          "kind": "import-statement",
+          "original": "./SkillManager.js"
+        },
+        {
+          "path": "src/methodology/AgentsMdGenerator.ts",
+          "kind": "import-statement",
+          "original": "./AgentsMdGenerator.js"
+        },
+        {
+          "path": "src/methodology/MethodologyAdvisor.ts",
+          "kind": "import-statement",
+          "original": "./MethodologyAdvisor.js"
+        },
+        {
+          "path": "src/methodology/SpecService.ts",
+          "kind": "import-statement",
+          "original": "./SpecService.js"
+        },
+        {
+          "path": "src/methodology/ModelProfileRegistry.ts",
+          "kind": "import-statement",
+          "original": "./ModelProfileRegistry.js"
+        },
+        {
+          "path": "src/methodology/OutcomeTracker.ts",
+          "kind": "import-statement",
+          "original": "./OutcomeTracker.js"
+        },
+        {
+          "path": "src/methodology/QualityGate.ts",
+          "kind": "import-statement",
+          "original": "./QualityGate.js"
+        },
+        {
+          "path": "src/methodology/PlanValidator.ts",
+          "kind": "import-statement",
+          "original": "./PlanValidator.js"
+        },
+        {
+          "path": "src/methodology/RefactoringEngine.ts",
+          "kind": "import-statement",
+          "original": "./RefactoringEngine.js"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/migrations/authTokenMigration.ts": {
+      "bytes": 1518,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/extension.ts": {
+      "bytes": 27453,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/session/SessionManager.ts",
+          "kind": "import-statement",
+          "original": "./session/SessionManager"
+        },
+        {
+          "path": "src/session/SessionStore.ts",
+          "kind": "import-statement",
+          "original": "./session/SessionStore"
+        },
+        {
+          "path": "src/session/SessionExporter.ts",
+          "kind": "import-statement",
+          "original": "./session/SessionExporter"
+        },
+        {
+          "path": "src/context/ContextEngine.ts",
+          "kind": "import-statement",
+          "original": "./context/ContextEngine"
+        },
+        {
+          "path": "src/statusBarTooltips.ts",
+          "kind": "import-statement",
+          "original": "./statusBarTooltips"
+        },
+        {
+          "path": "src/context/VSCodeWorkspaceAdapter.ts",
+          "kind": "import-statement",
+          "original": "./context/VSCodeWorkspaceAdapter"
+        },
+        {
+          "path": "src/context/ContextFileProvider.ts",
+          "kind": "import-statement",
+          "original": "./context/ContextFileProvider"
+        },
+        {
+          "path": "src/monitor/ContextMonitor.ts",
+          "kind": "import-statement",
+          "original": "./monitor/ContextMonitor"
+        },
+        {
+          "path": "src/terminal/TerminalBridge.ts",
+          "kind": "import-statement",
+          "original": "./terminal/TerminalBridge"
+        },
+        {
+          "path": "src/checkpoint/CheckpointManager.ts",
+          "kind": "import-statement",
+          "original": "./checkpoint/CheckpointManager"
+        },
+        {
+          "path": "src/inline/InlineActionProvider.ts",
+          "kind": "import-statement",
+          "original": "./inline/InlineActionProvider"
+        },
+        {
+          "path": "src/inline/InlineCompletionProvider.ts",
+          "kind": "import-statement",
+          "original": "./inline/InlineCompletionProvider"
+        },
+        {
+          "path": "src/inline/QuickChatCommand.ts",
+          "kind": "import-statement",
+          "original": "./inline/QuickChatCommand"
+        },
+        {
+          "path": "src/decorations/AgentGazeService.ts",
+          "kind": "import-statement",
+          "original": "./decorations/AgentGazeService"
+        },
+        {
+          "path": "src/chat/ChatProvider.ts",
+          "kind": "import-statement",
+          "original": "./chat/ChatProvider"
+        },
+        {
+          "path": "src/theme/ThemeManager.ts",
+          "kind": "import-statement",
+          "original": "./theme/ThemeManager"
+        },
+        {
+          "path": "src/monitor/RateLimitMonitor.ts",
+          "kind": "import-statement",
+          "original": "./monitor/RateLimitMonitor"
+        },
+        {
+          "path": "src/model/ModelManager.ts",
+          "kind": "import-statement",
+          "original": "./model/ModelManager"
+        },
+        {
+          "path": "src/diagnostics/CliDiagnostics.ts",
+          "kind": "import-statement",
+          "original": "./diagnostics/CliDiagnostics"
+        },
+        {
+          "path": "src/mcp/McpServerManager.ts",
+          "kind": "import-statement",
+          "original": "./mcp/McpServerManager"
+        },
+        {
+          "path": "src/install/OpencodeInstaller.ts",
+          "kind": "import-statement",
+          "original": "./install/OpencodeInstaller"
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "./utils/outputChannel"
+        },
+        {
+          "path": "src/commands/index.ts",
+          "kind": "import-statement",
+          "original": "./commands"
+        },
+        {
+          "path": "src/methodology/index.ts",
+          "kind": "import-statement",
+          "original": "./methodology"
+        },
+        {
+          "path": "src/methodology/registry.ts",
+          "kind": "import-statement",
+          "original": "./methodology/registry"
+        },
+        {
+          "path": "src/migrations/authTokenMigration.ts",
+          "kind": "import-statement",
+          "original": "./migrations/authTokenMigration"
+        }
+      ],
+      "format": "esm"
+    }
+  },
+  "outputs": {
+    "dist/extension.js": {
+      "imports": [
+        {
+          "path": "fs",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "child_process",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "os",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "fs/promises",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "crypto",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "child_process",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "os",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "net",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "node:path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "crypto",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "crypto",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "node:os",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "node:path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "dynamic-import",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "dynamic-import",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "dynamic-import",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "crypto",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "crypto",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "node:fs",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "node:os",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "node:path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "node:crypto",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "node:fs",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "node:path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "child_process",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "os",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "child_process",
+          "kind": "dynamic-import",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "child_process",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "os",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "node:child_process",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "node:os",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "node:fs",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "node:fs/promises",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "node:path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "node:crypto",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "child_process",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        }
+      ],
+      "exports": [],
+      "entryPoint": "src/extension.ts",
+      "inputs": {
+        "node_modules/@opencode-ai/sdk/dist/gen/types.gen.js": {
+          "bytesInOutput": 17
+        },
+        "node_modules/@opencode-ai/sdk/dist/gen/core/serverSentEvents.gen.js": {
+          "bytesInOutput": 1537
+        },
+        "node_modules/@opencode-ai/sdk/dist/gen/core/auth.gen.js": {
+          "bytesInOutput": 162
+        },
+        "node_modules/@opencode-ai/sdk/dist/gen/core/bodySerializer.gen.js": {
+          "bytesInOutput": 101
+        },
+        "node_modules/@opencode-ai/sdk/dist/gen/core/pathSerializer.gen.js": {
+          "bytesInOutput": 1559
+        },
+        "node_modules/@opencode-ai/sdk/dist/gen/core/utils.gen.js": {
+          "bytesInOutput": 875
+        },
+        "node_modules/@opencode-ai/sdk/dist/gen/client/utils.gen.js": {
+          "bytesInOutput": 2523
+        },
+        "node_modules/@opencode-ai/sdk/dist/gen/client/client.gen.js": {
+          "bytesInOutput": 1889
+        },
+        "node_modules/@opencode-ai/sdk/dist/gen/core/params.gen.js": {
+          "bytesInOutput": 113
+        },
+        "node_modules/@opencode-ai/sdk/dist/gen/client/index.js": {
+          "bytesInOutput": 36
+        },
+        "node_modules/@opencode-ai/sdk/dist/gen/client.gen.js": {
+          "bytesInOutput": 69
+        },
+        "node_modules/@opencode-ai/sdk/dist/gen/sdk.gen.js": {
+          "bytesInOutput": 8920
+        },
+        "node_modules/@opencode-ai/sdk/dist/error-interceptor.js": {
+          "bytesInOutput": 707
+        },
+        "node_modules/@opencode-ai/sdk/dist/client.js": {
+          "bytesInOutput": 680
+        },
+        "node_modules/isexe/windows.js": {
+          "bytesInOutput": 489
+        },
+        "node_modules/isexe/mode.js": {
+          "bytesInOutput": 496
+        },
+        "node_modules/isexe/index.js": {
+          "bytesInOutput": 550
+        },
+        "node_modules/which/which.js": {
+          "bytesInOutput": 1464
+        },
+        "node_modules/path-key/index.js": {
+          "bytesInOutput": 234
+        },
+        "node_modules/cross-spawn/lib/util/resolveCommand.js": {
+          "bytesInOutput": 479
+        },
+        "node_modules/cross-spawn/lib/util/escape.js": {
+          "bytesInOutput": 333
+        },
+        "node_modules/shebang-regex/index.js": {
+          "bytesInOutput": 56
+        },
+        "node_modules/shebang-command/index.js": {
+          "bytesInOutput": 204
+        },
+        "node_modules/cross-spawn/lib/util/readShebang.js": {
+          "bytesInOutput": 216
+        },
+        "node_modules/cross-spawn/lib/parse.js": {
+          "bytesInOutput": 868
+        },
+        "node_modules/cross-spawn/lib/enoent.js": {
+          "bytesInOutput": 624
+        },
+        "node_modules/cross-spawn/index.js": {
+          "bytesInOutput": 423
+        },
+        "node_modules/@opencode-ai/sdk/dist/process.js": {
+          "bytesInOutput": 17
+        },
+        "node_modules/@opencode-ai/sdk/dist/server.js": {
+          "bytesInOutput": 37
+        },
+        "node_modules/@opencode-ai/sdk/dist/index.js": {
+          "bytesInOutput": 36
+        },
+        "src/session/opencodeClientFactory.ts": {
+          "bytesInOutput": 109
+        },
+        "node_modules/fast-diff/diff.js": {
+          "bytesInOutput": 7770
+        },
+        "src/extension.ts": {
+          "bytesInOutput": 10462
+        },
+        "src/session/SessionManager.ts": {
+          "bytesInOutput": 6917
+        },
+        "src/utils/outputChannel.ts": {
+          "bytesInOutput": 2410
+        },
+        "src/session/AuthProvider.ts": {
+          "bytesInOutput": 1876
+        },
+        "src/utils/security.ts": {
+          "bytesInOutput": 2103
+        },
+        "src/session/ServerLifecycle.ts": {
+          "bytesInOutput": 5386
+        },
+        "src/utils/portFinder.ts": {
+          "bytesInOutput": 265
+        },
+        "src/install/installPlan.ts": {
+          "bytesInOutput": 1122
+        },
+        "src/session/eventHandlers/TextPartHandler.ts": {
+          "bytesInOutput": 491
+        },
+        "src/session/eventHandlers/ToolPartHandler.ts": {
+          "bytesInOutput": 1205
+        },
+        "src/session/eventHandlers/ActivityPartHandler.ts": {
+          "bytesInOutput": 1058
+        },
+        "src/session/eventHandlers/DeltaHandler.ts": {
+          "bytesInOutput": 451
+        },
+        "src/session/eventHandlers/MessageUpdateHandler.ts": {
+          "bytesInOutput": 456
+        },
+        "src/session/eventHandlers/sessionStatusMapper.ts": {
+          "bytesInOutput": 3726
+        },
+        "src/session/eventHandlers/SessionHandlers.ts": {
+          "bytesInOutput": 569
+        },
+        "src/session/eventHandlers/FileEditHandler.ts": {
+          "bytesInOutput": 211
+        },
+        "src/session/eventHandlers/PermissionHandler.ts": {
+          "bytesInOutput": 752
+        },
+        "src/session/eventHandlers/SessionDiffHandler.ts": {
+          "bytesInOutput": 451
+        },
+        "src/session/eventHandlers/SessionCompactedHandler.ts": {
+          "bytesInOutput": 176
+        },
+        "src/session/eventHandlers/StepFinishHandler.ts": {
+          "bytesInOutput": 436
+        },
+        "src/session/eventHandlers/FallbackHandler.ts": {
+          "bytesInOutput": 517
+        },
+        "src/session/eventHandlers/ServerConnectedHandler.ts": {
+          "bytesInOutput": 199
+        },
+        "src/session/eventHandlers/TodoUpdatedHandler.ts": {
+          "bytesInOutput": 861
+        },
+        "src/session/eventHandlers/McpToolsChangedHandler.ts": {
+          "bytesInOutput": 141
+        },
+        "src/session/eventHandlers/SessionUpdatedHandler.ts": {
+          "bytesInOutput": 167
+        },
+        "src/session/eventHandlers/QuestionHandler.ts": {
+          "bytesInOutput": 1603
+        },
+        "src/session/eventHandlers/SessionNextHandler.ts": {
+          "bytesInOutput": 3803
+        },
+        "src/session/EventNormalizer.ts": {
+          "bytesInOutput": 1714
+        },
+        "src/session/sseParser.ts": {
+          "bytesInOutput": 1982
+        },
+        "src/session/IdleWatchdog.ts": {
+          "bytesInOutput": 333
+        },
+        "src/session/SseSubscriber.ts": {
+          "bytesInOutput": 8896
+        },
+        "src/session/SessionClient.ts": {
+          "bytesInOutput": 9407
+        },
+        "src/session/sessionUtils.ts": {
+          "bytesInOutput": 1251
+        },
+        "src/session/streamTrace.ts": {
+          "bytesInOutput": 257
+        },
+        "src/session/SessionStore.ts": {
+          "bytesInOutput": 18731
+        },
+        "src/session/activityCoalesce.ts": {
+          "bytesInOutput": 380
+        },
+        "src/session/sessionMigration.ts": {
+          "bytesInOutput": 2184
+        },
+        "src/session/SessionExporter.ts": {
+          "bytesInOutput": 5403
+        },
+        "src/context/ContextEngine.ts": {
+          "bytesInOutput": 2012
+        },
+        "src/utils/tokenCounter.ts": {
+          "bytesInOutput": 807
+        },
+        "src/statusBarTooltips.ts": {
+          "bytesInOutput": 623
+        },
+        "src/context/VSCodeWorkspaceAdapter.ts": {
+          "bytesInOutput": 1645
+        },
+        "src/context/ContextFileProvider.ts": {
+          "bytesInOutput": 1487
+        },
+        "src/monitor/ContextMonitor.ts": {
+          "bytesInOutput": 7508
+        },
+        "src/terminal/TerminalBridge.ts": {
+          "bytesInOutput": 1442
+        },
+        "src/checkpoint/CheckpointManager.ts": {
+          "bytesInOutput": 2821
+        },
+        "src/inline/InlineActionProvider.ts": {
+          "bytesInOutput": 1473
+        },
+        "src/inline/InlineCompletionProvider.ts": {
+          "bytesInOutput": 901
+        },
+        "src/inline/QuickChatCommand.ts": {
+          "bytesInOutput": 940
+        },
+        "src/decorations/AgentGazeService.ts": {
+          "bytesInOutput": 2785
+        },
+        "src/chat/ChatProvider.ts": {
+          "bytesInOutput": 42272
+        },
+        "src/monitor/UsageAnalytics.ts": {
+          "bytesInOutput": 2956
+        },
+        "src/diff/DiffApplier.ts": {
+          "bytesInOutput": 5610
+        },
+        "src/session/questionModel.ts": {
+          "bytesInOutput": 1269
+        },
+        "src/session/sdkMessageConverter.ts": {
+          "bytesInOutput": 2812
+        },
+        "src/chat/WebviewContent.ts": {
+          "bytesInOutput": 3921
+        },
+        "src/utils/cssSanitizer.ts": {
+          "bytesInOutput": 166
+        },
+        "src/chat/TabManager.ts": {
+          "bytesInOutput": 6694
+        },
+        "src/chat/handlers/StreamCoordinator.ts": {
+          "bytesInOutput": 38194
+        },
+        "src/chat/handlers/DiffHandler.ts": {
+          "bytesInOutput": 1808
+        },
+        "src/chat/handlers/StreamFinalizerService.ts": {
+          "bytesInOutput": 1947
+        },
+        "src/methodology/TaskClassifier.ts": {
+          "bytesInOutput": 5528
+        },
+        "src/methodology/MethodologyCatalog.ts": {
+          "bytesInOutput": 7718
+        },
+        "src/methodology/MethodologyAdvisor.ts": {
+          "bytesInOutput": 2952
+        },
+        "src/chat/handlers/toolClassifier.ts": {
+          "bytesInOutput": 839
+        },
+        "src/methodology/registry.ts": {
+          "bytesInOutput": 99
+        },
+        "src/chat/handlers/attachmentStorage.ts": {
+          "bytesInOutput": 2682
+        },
+        "src/chat/handlers/RunActivityTracker.ts": {
+          "bytesInOutput": 6517
+        },
+        "src/chat/handlers/SubagentHeartbeat.ts": {
+          "bytesInOutput": 2442
+        },
+        "src/chat/handlers/runErrorMapper.ts": {
+          "bytesInOutput": 2690
+        },
+        "src/chat/modePolicy.ts": {
+          "bytesInOutput": 1011
+        },
+        "src/prompts/PromptManager.ts": {
+          "bytesInOutput": 2006
+        },
+        "src/prompts/PromptStashManager.ts": {
+          "bytesInOutput": 3189
+        },
+        "src/model/ProviderConfigManager.ts": {
+          "bytesInOutput": 1583
+        },
+        "src/chat/chatUtils.ts": {
+          "bytesInOutput": 1502
+        },
+        "src/chat/restorablePolicy.ts": {
+          "bytesInOutput": 54
+        },
+        "src/chat/webview/opencodeErrorMapper.ts": {
+          "bytesInOutput": 4395
+        },
+        "src/chat/webview/messageCounter.ts": {
+          "bytesInOutput": 306
+        },
+        "src/chat/RetryQueueService.ts": {
+          "bytesInOutput": 3130
+        },
+        "src/chat/handlers/MessageRouter.ts": {
+          "bytesInOutput": 4620
+        },
+        "src/chat/ChatCommands.ts": {
+          "bytesInOutput": 3469
+        },
+        "src/chat/AutoCompactor.ts": {
+          "bytesInOutput": 3673
+        },
+        "src/chat/ChatFileOps.ts": {
+          "bytesInOutput": 987
+        },
+        "src/chat/BatchEngine.ts": {
+          "bytesInOutput": 2030
+        },
+        "src/chat/HostMessageBatcher.ts": {
+          "bytesInOutput": 6350
+        },
+        "src/chat/PendingEventBuffer.ts": {
+          "bytesInOutput": 1388
+        },
+        "src/chat/ThemeController.ts": {
+          "bytesInOutput": 1766
+        },
+        "src/utils/colorValidation.ts": {
+          "bytesInOutput": 397
+        },
+        "src/chat/StatePushService.ts": {
+          "bytesInOutput": 935
+        },
+        "src/chat/SessionLifecycleService.ts": {
+          "bytesInOutput": 4637
+        },
+        "src/session/sdkUsageSummary.ts": {
+          "bytesInOutput": 527
+        },
+        "src/chat/CommandExecutionService.ts": {
+          "bytesInOutput": 3063
+        },
+        "src/chat/WebviewEventRouter.ts": {
+          "bytesInOutput": 49060
+        },
+        "src/chat/diff/sdkFileContentToDiffLines.ts": {
+          "bytesInOutput": 992
+        },
+        "src/session/messageId.ts": {
+          "bytesInOutput": 484
+        },
+        "src/chat/utils/errorHandler.ts": {
+          "bytesInOutput": 253
+        },
+        "src/chat/WebviewMessageValidator.ts": {
+          "bytesInOutput": 8629
+        },
+        "src/chat/handlers/SteerPromptHandler.ts": {
+          "bytesInOutput": 2851
+        },
+        "src/chat/HostPromptQueue.ts": {
+          "bytesInOutput": 2580
+        },
+        "src/skills/SkillPreferencesStore.ts": {
+          "bytesInOutput": 405
+        },
+        "src/skills/SkillTriggerEngine.ts": {
+          "bytesInOutput": 6085
+        },
+        "src/chat/backfillPlanner.ts": {
+          "bytesInOutput": 314
+        },
+        "src/chat/BackfillService.ts": {
+          "bytesInOutput": 4106
+        },
+        "src/chat/MessagePostService.ts": {
+          "bytesInOutput": 497
+        },
+        "src/chat/StashService.ts": {
+          "bytesInOutput": 1037
+        },
+        "src/chat/ProviderManagementService.ts": {
+          "bytesInOutput": 1321
+        },
+        "src/chat/DiffAcceptService.ts": {
+          "bytesInOutput": 498
+        },
+        "src/chat/CodeInsertionService.ts": {
+          "bytesInOutput": 252
+        },
+        "src/chat/SlashCommandService.ts": {
+          "bytesInOutput": 818
+        },
+        "src/chat/SessionSyncService.ts": {
+          "bytesInOutput": 675
+        },
+        "src/chat/AutoModeService.ts": {
+          "bytesInOutput": 610
+        },
+        "src/chat/voiceInputCore.ts": {
+          "bytesInOutput": 1788
+        },
+        "src/chat/VoiceInputService.ts": {
+          "bytesInOutput": 3133
+        },
+        "src/chat/voiceCapture.ts": {
+          "bytesInOutput": 4825
+        },
+        "src/chat/voiceSetup.ts": {
+          "bytesInOutput": 1590
+        },
+        "src/theme/ThemeManager.ts": {
+          "bytesInOutput": 24317
+        },
+        "src/monitor/RateLimitMonitor.ts": {
+          "bytesInOutput": 8664
+        },
+        "src/monitor/rateLimitCore.ts": {
+          "bytesInOutput": 2398
+        },
+        "src/model/ModelManager.ts": {
+          "bytesInOutput": 10108
+        },
+        "src/model/openRouterMetadata.ts": {
+          "bytesInOutput": 1452
+        },
+        "src/model/modelsDevMetadata.ts": {
+          "bytesInOutput": 1633
+        },
+        "src/model/contextWindowResolver.ts": {
+          "bytesInOutput": 866
+        },
+        "src/diagnostics/CliDiagnostics.ts": {
+          "bytesInOutput": 3381
+        },
+        "src/mcp/McpServerManager.ts": {
+          "bytesInOutput": 7594
+        },
+        "src/install/OpencodeInstaller.ts": {
+          "bytesInOutput": 4395
+        },
+        "src/commands/rollback.ts": {
+          "bytesInOutput": 806
+        },
+        "src/commands/index.ts": {
+          "bytesInOutput": 0
+        },
+        "src/commands/theme.ts": {
+          "bytesInOutput": 546
+        },
+        "src/commands/methodology.ts": {
+          "bytesInOutput": 921
+        },
+        "src/methodology/AgentsMdGenerator.ts": {
+          "bytesInOutput": 9661
+        },
+        "src/commands/session.ts": {
+          "bytesInOutput": 11221
+        },
+        "src/session/SessionDbReader.ts": {
+          "bytesInOutput": 3017
+        },
+        "src/commands/model.ts": {
+          "bytesInOutput": 1791
+        },
+        "src/commands/misc.ts": {
+          "bytesInOutput": 1861
+        },
+        "src/commands/export.ts": {
+          "bytesInOutput": 1457
+        },
+        "src/methodology/index.ts": {
+          "bytesInOutput": 0
+        },
+        "src/methodology/QualityEvaluator.ts": {
+          "bytesInOutput": 2428
+        },
+        "src/methodology/CascadeRouter.ts": {
+          "bytesInOutput": 4587
+        },
+        "src/methodology/types.ts": {
+          "bytesInOutput": 866
+        },
+        "src/methodology/ModelProfileRegistry.ts": {
+          "bytesInOutput": 2424
+        },
+        "src/methodology/MethodologyOrchestrator.ts": {
+          "bytesInOutput": 2219
+        },
+        "src/methodology/OutcomeTracker.ts": {
+          "bytesInOutput": 1037
+        },
+        "src/migrations/authTokenMigration.ts": {
+          "bytesInOutput": 845
+        }
+      },
+      "bytes": 550617
+    }
+  }
+}
