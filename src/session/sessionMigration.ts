@@ -36,6 +36,8 @@ export interface MigratableSession {
     cost?: number
   }
   workspacePath?: string
+  /** Set by migrateStalePlanModes when a pre-0.2.20 'plan' session is converted to 'build'. */
+  modeMigratedAt?: number
 }
 
 export interface ServerSessionSnapshot {
@@ -223,6 +225,36 @@ export function mergeServerSessions(
  *
  * Returns false if the source is missing or the target id is already in use.
  */
+/**
+ * Migrate stale pre-0.2.20 sessions from `mode: "plan"` to `"build"`.
+ *
+ * Before v0.2.20 the harness defaulted new sessions to the opencode SDK's
+ * default agent ("plan"). After v0.2.20 the explicit default is "build" (and
+ * "plan" is a deliberate user choice). This migration converts every persisted
+ * session whose mode is "plan" **and** has no `modeMigratedAt` timestamp.
+ *
+ * The `modeMigratedAt` guard makes the migration idempotent — a user who
+ * deliberately picks plan mode after the fix keeps it.
+ *
+ * Mutates `bySessionId` in place. Returns the count of converted sessions.
+ */
+export function migrateStalePlanModes(
+  bySessionId: Map<string, MigratableSession>
+): { migrated: number } {
+  const now = Date.now()
+  let migrated = 0
+
+  for (const sess of bySessionId.values()) {
+    if (sess.mode === "plan" && sess.modeMigratedAt == null) {
+      sess.mode = "build"
+      sess.modeMigratedAt = now
+      migrated++
+    }
+  }
+
+  return { migrated }
+}
+
 export function promotePendingServerLink(
   bySessionId: Map<string, MigratableSession>,
   fromId: string,

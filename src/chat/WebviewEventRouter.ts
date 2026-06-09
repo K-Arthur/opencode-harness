@@ -1340,10 +1340,11 @@ export class WebviewEventRouter {
           }
 
           // Determine real status: tracker first (live source of truth),
-          // then SDK `time.archived` (completed/failed), default "completed".
+          // then SDK `time.archived` (completed/failed), default "running"
+          // (child session is in-flight on the server).
           const live = liveByChildId.get(childSid)
           const status = live?.status
-            ?? (time?.archived ? "completed" : "completed")
+            ?? (time?.archived ? "completed" : "running")
           const isLive = status === "running" || status === "queued" || status === "waiting" || status === "unknown" || status === "pending"
 
           const activity: Record<string, unknown> = {
@@ -1407,7 +1408,10 @@ export class WebviewEventRouter {
           return
         }
         const sessionData = await this.opts.sessionManager.sessionClient.getSessionDetails(subagentId)
-        const messages = await this.opts.sessionManager.sessionClient.getSessionMessages(subagentId).catch(() => [])
+        const messages = await this.opts.sessionManager.sessionClient.getSessionMessages(subagentId).catch((err) => {
+          log.warn(`Failed to fetch messages for subagent ${subagentId}`, err)
+          return []
+        })
         const time = sessionData.time as { created?: number; updated?: number; archived?: number } | undefined
         const title = typeof sessionData.title === "string" ? sessionData.title : ""
         const summary = sessionData.summary as { additions?: number; deletions?: number; files?: number } | undefined
@@ -1420,7 +1424,7 @@ export class WebviewEventRouter {
         const live = this.opts.streamCoordinator
           .getSubagentSnapshot(sessionId)
           .find((s) => s.childSessionId === subagentId || s.id === subagentId)
-        const status = live?.status ?? (time?.archived ? "completed" : "completed")
+        const status = live?.status ?? (time?.archived ? "completed" : "running")
         const isLive = status === "running" || status === "queued" || status === "waiting" || status === "unknown"
         const detail: Record<string, unknown> = {
           id: subagentId,

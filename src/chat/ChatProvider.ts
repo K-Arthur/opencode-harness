@@ -857,6 +857,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         status?: string
         currentActivity?: string
         inputPrompt?: string
+        childSessionId?: string
         error?: string
       } | undefined
       const targetId = tab?.id || tabId
@@ -868,6 +869,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         status: this.normalizeSubagentUpdateStatus(data.status),
         currentActivity: data.currentActivity,
         inputPrompt: data.inputPrompt,
+        childSessionId: data.childSessionId,
         error: data.error,
       }, { postMessage: (m) => this.postMessage(m), postRequestError: (m) => this.postRequestError(m) })
     }],

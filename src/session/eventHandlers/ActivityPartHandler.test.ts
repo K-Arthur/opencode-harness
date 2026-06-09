@@ -30,6 +30,8 @@ describe("ActivityPartHandler", () => {
       status: "running",
       currentActivity: "Review the React surface",
       inputPrompt: "Audit the UI",
+      childSessionId: "ses-1",
+      error: undefined,
     })
   })
 

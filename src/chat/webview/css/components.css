@@ -289,6 +289,31 @@ body.hide-thinking .thinking-block { display: none; }
   background: var(--oc-button-secondary-hover);
 }
 
+/* ─── Panel Header Actions (pin + close) ─── */
+
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-0-5);
+  flex-shrink: 0;
+}
+
+.panel-pin-btn {
+  opacity: 0.5;
+  transition: opacity var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+
+.panel-pin-btn:hover {
+  opacity: 0.8;
+  color: var(--oc-fg);
+}
+
+.panel-pin-btn[aria-pressed="true"] {
+  opacity: 1;
+  color: var(--oc-accent, var(--color-accent));
+}
+
 /* Todos panel */
 .todos-panel {
   background: var(--oc-editor-bg);
@@ -2767,6 +2792,9 @@ textarea {
 /* ── Subagent Detail View ─────────────────────────────────── */
 
 .subagent-detail-view {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-sticky);
   display: flex;
   flex-direction: column;
   background: var(--oc-panel-bg);

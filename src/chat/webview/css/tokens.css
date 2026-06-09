@@ -273,6 +273,9 @@
   --oc-syn-operator: var(--vscode-symbolIcon-operatorForeground, #d4d4d4);
   --oc-syn-punctuation: var(--vscode-editor-foreground, #d4d4d4);
 
+  /* ─── Sidebar Width ─── */
+  --sidebar-width: 320px;
+
   /* ─── Component Size Tokens ─── */
   --size-icon-xs: 12px;
   --size-icon-sm: 14px;

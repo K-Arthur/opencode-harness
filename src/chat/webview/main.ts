@@ -42,6 +42,7 @@ import { mergeTodos, generateTodoId } from "./todos-logic"
 import { setupSkillsModal } from "./skills-modal"
 import { setupSubagentPanel, type SubagentPanelApi } from "./subagent-panel"
 import { setupSubagentDetailView, type SubagentDetailViewApi } from "./subagentDetailView"
+import { setupSidebarResize } from "./sidebarResize"
 import { applySubagentCardUpdate } from "./subagentCard"
 import { selectDisplayedUsage } from "./tokenDisplayPolicy"
 import { setThinkingVisible, getThinkingVisible } from "./displayPrefs"
@@ -705,6 +706,11 @@ function getVsCodeApi() {
       setupTodoSkillAndSubagentPanels()
       setupChangedFilesFeature()
       setupContextUsageFeature()
+      const sidebarHandle = document.querySelector<HTMLElement>(".sidebar-resize-handle")
+      const mainLayout = document.querySelector<HTMLElement>(".main-layout")
+      if (sidebarHandle && mainLayout) {
+        setupSidebarResize(sidebarHandle, mainLayout)
+      }
       finishWebviewInitialization()
     } catch (err) {
       showInitializationFailure(err)
@@ -998,6 +1004,36 @@ function getVsCodeApi() {
     window.addEventListener("oc:open-subagent-panel", () => {
       setSubagentPanelOpen(true)
       requestSubagentActivities()
+      // Pulse-highlight the first subagent item after a short delay for render
+      requestAnimationFrame(() => {
+        const firstItem = els.subagentList?.querySelector<HTMLElement>(".subagent-item")
+        if (firstItem) {
+          firstItem.scrollIntoView({ block: "nearest", behavior: "smooth" })
+          firstItem.classList.add("subagent-highlight-pulse")
+          setTimeout(() => firstItem.classList.remove("subagent-highlight-pulse"), 3000)
+        }
+      })
+    })
+
+    // Pin-button toggle handler
+    document.querySelectorAll<HTMLElement>(".panel-pin-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const pinned = btn.getAttribute("aria-pressed") === "true"
+        btn.setAttribute("aria-pressed", String(!pinned))
+        btn.title = pinned ? "Pin panel" : "Unpin panel"
+      })
+    })
+    // Block close clicks when the panel's pin button is active
+    document.querySelector(".main-layout")?.addEventListener("click", (e) => {
+      const closeBtn = (e.target as HTMLElement).closest("[id$='-close-btn']")
+      if (!closeBtn) return
+      const panel = closeBtn.closest(".side-panel")
+      if (!panel) return
+      const pinBtn = panel.querySelector<HTMLElement>(".panel-pin-btn")
+      if (pinBtn && pinBtn.getAttribute("aria-pressed") === "true") {
+        e.preventDefault()
+        e.stopPropagation()
+      }
     })
     const shortcutsHelpBtn = document.getElementById("shortcuts-help-btn")
     shortcutsHelpBtn?.addEventListener("click", () => openKeyboardShortcutsModal())
@@ -2474,7 +2510,19 @@ function getVsCodeApi() {
             }
           }
         } else if (sid === stateManager.getState().activeSessionId) {
-          updateSubagentBadge(activity.activeSubagentCount ?? 0)
+          // No live subagents — clear stale entries from the panel and badge.
+          const session = stateManager.getSession(sid)
+          if (session && session.subagentActivities?.length) {
+            stateManager.setSubagentActivities(sid, [])
+            subagentPanelApi?.renderActivities([])
+          }
+          updateSubagentBadge(0)
+        }
+
+        // When the last subagent completes, turn off the auto-open flag so
+        // a future stream can re-open.
+        if (activity.activeSubagentCount === 0) {
+          subagentDismissedBySession.delete(sid)
         }
 
         if (

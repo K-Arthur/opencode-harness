@@ -2371,6 +2371,24 @@
   50% { opacity: 0.6; }
 }
 
+/* ─── Subagent highlight pulse (triggered by oc:open-subagent-panel) ─── */
+@keyframes subagent-highlight-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--oc-accent, var(--color-accent)); }
+  50% { box-shadow: 0 0 0 3px var(--oc-accent-border, rgba(0, 120, 212, 0.4)); }
+}
+
+.subagent-highlight-pulse {
+  animation: subagent-highlight-pulse 1s ease-in-out 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subagent-highlight-pulse {
+    animation: none;
+    outline: 2px solid var(--oc-accent, var(--color-accent));
+    outline-offset: 1px;
+  }
+}
+
 .subagent-card {
   margin: var(--space-2) 0;
   border: 1px solid var(--color-border);

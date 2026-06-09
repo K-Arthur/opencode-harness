@@ -265,6 +265,18 @@ describe("SessionStore.ts", () => {
     assert.ok(block.includes('"build"'), "load must fall back to 'build' not 'normal' when mode is missing")
   })
 
+  it("load_migrates_stale_plan_modes_to_build_via_migrateStalePlanModes", () => {
+    const block = source.slice(source.indexOf("private load()"), source.indexOf("save()"))
+    assert.ok(
+      block.includes("migrateStalePlanModes"),
+      "load must call migrateStalePlanModes to fix pre-0.2.20 stale 'plan' sessions"
+    )
+    assert.ok(
+      block.includes("planMigration.migrated"),
+      "load must log the count of migrated sessions"
+    )
+  })
+
   it("updateMode_normalizes_normal_to_build", () => {
     const block = source.slice(source.indexOf("updateMode("), source.indexOf("updateMode(") + 200)
     assert.ok(block.includes('mode === "normal" ? "build" : mode'), "updateMode must normalize 'normal' to 'build'")
