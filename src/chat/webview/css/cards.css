@@ -1,0 +1,198 @@
+/* ═══════════════════════════════════════════════════════════════
+   Shared compact card system
+   ═══════════════════════════════════════════════════════════════
+
+   One consistent, compact, theme-driven surface for transcript
+   notifications — errors, warnings, info, success, and
+   permission/action-required messages.
+
+   Principles (see docs/design/cards.md):
+   - Compact by default (~8–10px padding, 12px text); no gradients,
+     drop-shadows or shake animations.
+   - Severity is conveyed by a thin left border + icon colour, both
+     driven by VS Code theme tokens via a single --card-accent var.
+   - Progressive disclosure: raw JSON / stack traces live in a
+     collapsed <Details> section with a Copy action.
+   - Long paths / URLs / payloads wrap instead of overflowing.
+
+   `.oc-card` is the canonical class emitted by ErrorDisplay
+   (errorComponents.ts). Legacy `.msg-error` is compacted in
+   messages.css to match. */
+
+.oc-card {
+  --card-accent: var(--oc-error);
+  --card-surface: var(--oc-error-subtle);
+  --card-border: var(--oc-error-border);
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+  max-width: min(100%, 680px);
+  margin: var(--space-2, 8px) 0;
+  padding: var(--space-2, 8px) var(--space-2-5, 10px);
+  border: 1px solid var(--card-border);
+  border-left: 2px solid var(--card-accent);
+  border-radius: var(--radius-md, 8px);
+  background: var(--card-surface);
+  color: var(--oc-fg);
+  font-size: var(--text-xs, 12px);
+  line-height: 1.45;
+}
+
+/* ── Severity modifiers ── */
+.oc-card--info     { --card-accent: var(--oc-info);    --card-surface: var(--oc-accent-subtle);  --card-border: var(--oc-accent-border); }
+.oc-card--success  { --card-accent: var(--oc-success); --card-surface: var(--oc-success-subtle); --card-border: var(--oc-success-border); }
+.oc-card--warning  { --card-accent: var(--oc-warning); --card-surface: var(--oc-warning-subtle); --card-border: var(--oc-warning-border); }
+.oc-card--error    { --card-accent: var(--oc-error);   --card-surface: var(--oc-error-subtle);   --card-border: var(--oc-error-border); }
+.oc-card--critical { --card-accent: var(--oc-error);   --card-surface: var(--oc-error-subtle);   --card-border: var(--oc-error); border-left-width: 3px; }
+.oc-card--permission { --card-accent: var(--oc-accent); --card-surface: var(--oc-accent-subtle); --card-border: var(--oc-accent-border); }
+
+/* ── Header row: icon + title + optional code + dismiss ── */
+.oc-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5, 6px);
+  min-width: 0;
+}
+.oc-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: var(--card-accent);
+}
+.oc-card__icon svg { width: 14px; height: 14px; display: block; }
+.oc-card__title {
+  font-weight: 600;
+  font-size: var(--text-xs, 12px);
+  color: var(--card-accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.oc-card__code {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-2xs, 10px);
+  color: var(--oc-muted);
+  white-space: nowrap;
+}
+.oc-card__spacer { flex: 1 1 auto; min-width: var(--space-2, 8px); }
+.oc-card__dismiss {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm, 4px);
+  background: transparent;
+  color: var(--oc-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+.oc-card__dismiss:hover {
+  background: color-mix(in srgb, var(--oc-fg) 12%, transparent);
+  color: var(--oc-fg);
+}
+
+/* ── Message: the human-readable first line(s) ── */
+.oc-card__message {
+  font-size: var(--text-xs, 12px);
+  line-height: 1.45;
+  color: var(--oc-fg);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ── Progressive disclosure: technical details (raw JSON / stack) ── */
+.oc-card__details {
+  margin-top: var(--space-1, 4px);
+  border-top: 1px solid var(--card-border);
+  padding-top: var(--space-1, 4px);
+}
+.oc-card__details[hidden] { display: none; }
+.oc-card__details-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2, 8px);
+  margin-bottom: var(--space-1, 4px);
+}
+.oc-card__details-label {
+  font-size: var(--text-2xs, 10px);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--oc-muted);
+}
+.oc-card__details-pre {
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-2xs, 10px);
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  color: var(--oc-muted);
+}
+
+/* ── Actions row + toggle ── */
+.oc-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1-5, 6px);
+  margin-top: var(--space-1, 4px);
+}
+.oc-card__btn {
+  appearance: none;
+  font: inherit;
+  font-size: var(--text-2xs, 10px);
+  font-weight: 600;
+  padding: 3px var(--space-2, 8px);
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid var(--oc-glass-border);
+  background: transparent;
+  color: var(--oc-fg);
+  cursor: pointer;
+  line-height: 1.4;
+}
+.oc-card__btn:hover { background: color-mix(in srgb, var(--oc-fg) 8%, transparent); }
+.oc-card__btn--primary {
+  background: var(--oc-accent);
+  border-color: var(--oc-accent);
+  color: var(--oc-accent-fg);
+}
+.oc-card__btn--primary:hover { background: var(--oc-accent-hover, var(--oc-accent)); }
+.oc-card__btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.oc-card__btn--ghost {
+  border: none;
+  color: var(--oc-muted);
+  padding: 3px var(--space-1, 4px);
+}
+.oc-card__btn--ghost:hover {
+  color: var(--oc-fg);
+  background: transparent;
+  text-decoration: underline;
+}
+.oc-card__btn:focus-visible,
+.oc-card__dismiss:focus-visible {
+  outline: 2px solid var(--oc-accent);
+  outline-offset: 1px;
+}
+
+/* ── Activity repeat badge (e.g. "×3" when identical activities coalesce) ── */
+.activity-block-repeat {
+  font-size: var(--text-2xs, 10px);
+  font-weight: 600;
+  color: var(--oc-muted);
+  padding: 0 var(--space-1, 4px);
+  border-radius: var(--radius-sm, 4px);
+  background: color-mix(in srgb, var(--oc-fg) 8%, transparent);
+}

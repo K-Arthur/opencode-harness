@@ -73,6 +73,51 @@ const DEFAULT_THEME: ErrorDisplayTheme = {
 };
 
 /**
+ * Theme-driven severity glyphs (inherit `currentColor`, so the card's
+ * --card-accent tints them). Replaces the old emoji icons (ℹ️⚠️❌🚨), which
+ * ignored the theme and rendered inconsistently across platforms.
+ */
+const ICON_INFO = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM7.25 7h1.5v4.5h-1.5V7zM8 4.25A.9.9 0 118 6a.9.9 0 010-1.75z"/></svg>`;
+const ICON_WARNING = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 1.5l6.5 11.5H1.5L8 1.5zm-.75 4v3.5h1.5V5.5h-1.5zm0 4.5V11h1.5V10h-1.5z"/></svg>`;
+const ICON_ERROR = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zm2.5 8.44L9.44 11 8 9.56 6.56 11 5.5 9.94 6.94 8.5 5.5 7.06 6.56 6 8 7.44 9.44 6l1.06 1.06L9.06 8.5l1.44 1.44z"/></svg>`;
+const ICON_CRITICAL = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M5.2 1.5h5.6L14.5 5.2v5.6L10.8 14.5H5.2L1.5 10.8V5.2L5.2 1.5zm2.05 3.5v4h1.5V5h-1.5zm0 5v1.5h1.5V10h-1.5z"/></svg>`;
+
+function severitySvg(severity: ErrorSeverity): string {
+  switch (severity) {
+    case ErrorSeverity.LOW: return ICON_INFO;
+    case ErrorSeverity.MEDIUM: return ICON_WARNING;
+    case ErrorSeverity.CRITICAL: return ICON_CRITICAL;
+    case ErrorSeverity.HIGH:
+    default: return ICON_ERROR;
+  }
+}
+
+function severityModifier(severity: ErrorSeverity): string {
+  switch (severity) {
+    case ErrorSeverity.LOW: return 'info';
+    case ErrorSeverity.MEDIUM: return 'warning';
+    case ErrorSeverity.CRITICAL: return 'critical';
+    case ErrorSeverity.HIGH:
+    default: return 'error';
+  }
+}
+
+/** Copy `text` to the clipboard, flashing the button label as feedback. */
+function copyToClipboard(text: string, btn: HTMLButtonElement): void {
+  const nav = (globalThis as { navigator?: { clipboard?: { writeText(t: string): Promise<void> } } }).navigator;
+  const flash = () => {
+    const prev = btn.textContent;
+    btn.textContent = 'Copied';
+    setTimeout(() => { btn.textContent = prev || 'Copy'; }, 1200);
+  };
+  try {
+    if (nav?.clipboard?.writeText) {
+      nav.clipboard.writeText(text).then(flash).catch(() => { /* clipboard denied */ });
+    }
+  } catch { /* no clipboard in this context */ }
+}
+
+/**
  * Error display component
  */
 export class ErrorDisplay {
@@ -103,49 +148,26 @@ export class ErrorDisplay {
     const errorId = error.correlationId || error.code;
     const isExpanded = this.expandedErrors.has(errorId);
 
+    // Compact, theme-driven card. Severity (left border + icon colour) and all
+    // spacing come from cards.css (`.oc-card`) — no inline styling, no
+    // gradients/shadows, so it stays small and matches the rest of the UI.
     const container = document.createElement('div');
-    container.className = `error-display error-${error.severity}`;
+    container.className = `oc-card oc-card--${severityModifier(error.severity)} error-display`;
     container.setAttribute('role', 'alert');
     container.setAttribute('aria-live', 'polite');
     container.setAttribute('data-error-id', errorId);
 
-    // Apply severity-based styling
-    const severityColor = this.getSeverityColor(error.severity);
-    container.style.borderLeft = `4px solid ${severityColor}`;
-    container.style.borderRadius = this.theme.borderRadius;
-    container.style.padding = this.theme.padding;
-    container.style.marginBottom = '12px';
-    container.style.backgroundColor = 'var(--vscode-editor-background)';
-    container.style.color = 'var(--vscode-editor-foreground)';
+    container.appendChild(this.renderHeader(error));
+    container.appendChild(this.renderMessage(error));
 
-    // Error header
-    const header = this.renderHeader(error, isExpanded);
-    container.appendChild(header);
-
-    // Error message (always visible)
-    const message = this.renderMessage(error);
-    container.appendChild(message);
-
-    // Technical details (progressive disclosure)
+    // Technical details (raw JSON / stack) collapsed by default.
     if (this.config.enableProgressiveDisclosure && error.technicalDetails) {
-      const details = this.renderTechnicalDetails(error, isExpanded);
-      container.appendChild(details);
+      container.appendChild(this.renderTechnicalDetails(error, isExpanded));
     }
 
-    // Action buttons
-    const actions = this.renderActions(error);
-    container.appendChild(actions);
-
-    // Expand/collapse button for progressive disclosure
-    if (this.config.enableProgressiveDisclosure) {
-      const toggle = this.renderToggleButton(error, isExpanded);
-      container.appendChild(toggle);
-    }
-
-    // Animation support
-    if (this.config.enableAnimations) {
-      container.style.transition = 'all 0.3s ease';
-    }
+    // Action buttons + the Details toggle share one compact row.
+    const actions = this.renderActions(error, isExpanded);
+    if (actions) container.appendChild(actions);
 
     return container;
   }
@@ -155,24 +177,24 @@ export class ErrorDisplay {
    */
   renderBasic(error: ErrorContext): HTMLElement {
     const container = document.createElement('div');
-    container.className = 'error-display-basic';
+    container.className = `oc-card oc-card--${severityModifier(error.severity)} oc-card--basic error-display-basic`;
     container.setAttribute('role', 'alert');
     container.setAttribute('aria-live', 'polite');
 
-    const severityColor = this.getSeverityColor(error.severity);
-    container.style.borderLeft = `3px solid ${severityColor}`;
-    container.style.padding = '8px 12px';
-    container.style.marginBottom = '8px';
-    container.style.borderRadius = '4px';
-    container.style.backgroundColor = 'var(--vscode-editor-background)';
-    container.style.color = 'var(--vscode-editor-foreground)';
+    const header = document.createElement('div');
+    header.className = 'oc-card__header';
 
-    const icon = this.getSeverityIcon(error.severity);
+    const icon = document.createElement('span');
+    icon.className = 'oc-card__icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML = severitySvg(error.severity);
+
     const message = document.createElement('span');
-    message.textContent = `${icon} ${error.userMessage}`;
-    message.style.fontSize = this.theme.fontSize;
+    message.className = 'oc-card__message';
+    message.textContent = error.userMessage;
 
-    container.appendChild(message);
+    header.append(icon, message);
+    container.appendChild(header);
     return container;
   }
 
@@ -193,188 +215,149 @@ export class ErrorDisplay {
   /**
    * Render error header
    */
-  private renderHeader(error: ErrorContext, isExpanded: boolean): HTMLElement {
+  private renderHeader(error: ErrorContext): HTMLElement {
     const header = document.createElement('div');
-    header.className = 'error-header';
-    header.style.display = 'flex';
-    header.style.alignItems = 'center';
-    header.style.marginBottom = '8px';
+    header.className = 'oc-card__header';
 
     const icon = document.createElement('span');
-    icon.textContent = this.getSeverityIcon(error.severity);
-    icon.style.marginRight = '8px';
-    icon.style.fontSize = '18px';
+    icon.className = 'oc-card__icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML = severitySvg(error.severity);
+
+    const title = document.createElement('span');
+    title.className = 'oc-card__title';
+    title.textContent = this.getCategoryLabel(error.category);
 
     const code = document.createElement('code');
+    code.className = 'oc-card__code';
     code.textContent = error.code;
-    code.style.fontSize = '12px';
-    code.style.padding = '2px 6px';
-    code.style.borderRadius = '4px';
-    code.style.backgroundColor = 'var(--vscode-textCodeBlock-background)';
-    code.style.color = 'var(--vscode-textCodeBlock-foreground)';
-    code.style.fontFamily = 'monospace';
 
-    const category = document.createElement('span');
-    category.textContent = this.getCategoryLabel(error.category);
-    category.style.fontSize = '12px';
-    category.style.color = 'var(--vscode-descriptionForeground)';
-    category.style.marginLeft = '8px';
+    const spacer = document.createElement('span');
+    spacer.className = 'oc-card__spacer';
 
-    header.appendChild(icon);
-    header.appendChild(code);
-    header.appendChild(category);
-
+    header.append(icon, title, code, spacer);
     return header;
   }
 
   /**
-   * Render error message
+   * Render error message (the always-visible, human-readable first line)
    */
   private renderMessage(error: ErrorContext): HTMLElement {
     const message = document.createElement('div');
-    message.className = 'error-message';
+    message.className = 'oc-card__message';
     message.textContent = error.userMessage;
-    message.style.fontSize = this.theme.fontSize;
-    message.style.lineHeight = '1.5';
-    message.style.marginBottom = '12px';
-
     return message;
   }
 
   /**
-   * Render technical details (expandable)
+   * Render technical details (raw JSON / stack), collapsed by default with a
+   * Copy action. Visibility is toggled by {@link renderToggleButton} via the
+   * `hidden` attribute.
    */
   private renderTechnicalDetails(error: ErrorContext, isExpanded: boolean): HTMLElement {
     const details = document.createElement('div');
-    details.className = 'error-technical-details';
-    details.style.marginTop = '12px';
-    details.style.paddingTop = '12px';
-    details.style.borderTop = '1px solid var(--vscode-panel-border)';
-    details.style.display = isExpanded ? 'block' : 'none';
+    details.className = 'oc-card__details';
+    if (!isExpanded) details.setAttribute('hidden', '');
 
-    if (this.config.enableAnimations) {
-      details.style.transition = 'display 0.3s ease';
-    }
-
-    const label = document.createElement('strong');
-    label.textContent = 'Technical Details:';
-    label.style.display = 'block';
-    label.style.marginBottom = '4px';
-    label.style.fontSize = '12px';
-    label.style.color = 'var(--vscode-descriptionForeground)';
-
-    const content = document.createElement('pre');
-    content.style.fontSize = '12px';
-    content.style.fontFamily = 'monospace';
-    content.style.whiteSpace = 'pre-wrap';
-    content.style.wordBreak = 'break-word';
-    content.style.color = 'var(--vscode-descriptionForeground)';
-
-    // Truncate technical details if too long
     let detailsText = error.technicalDetails || '';
     if (detailsText.length > this.config.maxTechnicalDetailsLength) {
-      detailsText = detailsText.substring(0, this.config.maxTechnicalDetailsLength) + '...';
+      detailsText = detailsText.substring(0, this.config.maxTechnicalDetailsLength) + '…';
     }
+
+    const head = document.createElement('div');
+    head.className = 'oc-card__details-head';
+
+    const label = document.createElement('span');
+    label.className = 'oc-card__details-label';
+    label.textContent = 'Technical details';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'oc-card__btn oc-card__btn--ghost';
+    copyBtn.textContent = 'Copy';
+    copyBtn.setAttribute('aria-label', 'Copy technical details');
+    copyBtn.addEventListener('click', () => copyToClipboard(detailsText, copyBtn));
+
+    head.append(label, copyBtn);
+
+    const content = document.createElement('pre');
+    content.className = 'oc-card__details-pre';
     content.textContent = detailsText;
 
-    details.appendChild(label);
-    details.appendChild(content);
-
+    details.append(head, content);
     return details;
   }
 
   /**
    * Render action buttons
    */
-  private renderActions(error: ErrorContext): HTMLElement {
-    const actions = document.createElement('div');
-    actions.className = 'error-actions';
-    actions.style.display = 'flex';
-    actions.style.flexWrap = 'wrap';
-    actions.style.gap = '8px';
-    actions.style.marginTop = '12px';
+  private renderActions(error: ErrorContext, isExpanded: boolean): HTMLElement | null {
+    const hasActions = !!error.suggestedActions && error.suggestedActions.length > 0;
+    const hasDetails = this.config.enableProgressiveDisclosure && !!error.technicalDetails;
+    if (!hasActions && !hasDetails) return null;
 
-    for (const action of error.suggestedActions) {
-      const button = this.renderActionButton(action);
-      actions.appendChild(button);
+    const actions = document.createElement('div');
+    actions.className = 'oc-card__actions';
+
+    if (hasActions) {
+      for (const action of error.suggestedActions) {
+        actions.appendChild(this.renderActionButton(action));
+      }
+    }
+    // The Details toggle lives in the same compact row as the actions.
+    if (hasDetails) {
+      actions.appendChild(this.renderToggleButton(error, isExpanded));
     }
 
     return actions;
   }
 
   /**
-   * Render a single action button
+   * Render a single action button (native <button> — keyboard-activates for
+   * free, so no manual keydown wiring needed)
    */
   private renderActionButton(action: ErrorAction): HTMLButtonElement {
     const button = document.createElement('button');
+    button.type = 'button';
     button.textContent = action.label;
-    button.className = `error-action-button ${action.primary ? 'primary' : 'secondary'}`;
-    
-    // Button styling
-    button.style.padding = '6px 12px';
-    button.style.borderRadius = '4px';
-    button.style.border = '1px solid var(--vscode-button-border)';
-    button.style.backgroundColor = action.primary 
-      ? 'var(--vscode-button-background)' 
-      : 'transparent';
-    button.style.color = 'var(--vscode-button-foreground)';
-    button.style.cursor = action.disabled ? 'not-allowed' : 'pointer';
-    button.style.fontSize = '13px';
-    button.style.fontFamily = 'inherit';
+    button.className = `oc-card__btn${action.primary ? ' oc-card__btn--primary' : ''}`;
+    button.setAttribute('aria-label', action.label);
 
     if (action.disabled) {
-      button.style.opacity = '0.5';
       button.disabled = true;
     } else {
-      button.addEventListener('click', () => {
-        this.handleAction(action);
-      });
+      button.addEventListener('click', () => this.handleAction(action));
     }
-
-    // Keyboard accessibility
-    button.setAttribute('tabindex', '0');
-    button.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        if (!action.disabled) {
-          this.handleAction(action);
-        }
-      }
-    });
-
     return button;
   }
 
   /**
-   * Render expand/collapse toggle button
+   * Render the Details disclosure toggle. Toggles the technical-details panel's
+   * `hidden` attribute in place (keeping focus and avoiding a full re-render).
    */
   private renderToggleButton(error: ErrorContext, isExpanded: boolean): HTMLElement {
+    const errorId = error.correlationId || error.code;
     const toggle = document.createElement('button');
-    toggle.className = 'error-toggle-button';
-    toggle.textContent = isExpanded ? 'Show Less' : 'Show Details';
-    toggle.style.marginTop = '8px';
-    toggle.style.padding = '4px 8px';
-    toggle.style.border = 'none';
-    toggle.style.backgroundColor = 'transparent';
-    toggle.style.color = 'var(--vscode-textLink-foreground)';
-    toggle.style.cursor = 'pointer';
-    toggle.style.fontSize = '12px';
-    toggle.style.fontStyle = 'italic';
+    toggle.type = 'button';
+    toggle.className = 'oc-card__btn oc-card__btn--ghost';
+    toggle.textContent = isExpanded ? 'Hide details' : 'Details';
+    toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+    toggle.setAttribute('aria-label', 'Toggle technical details');
 
     toggle.addEventListener('click', () => {
-      const errorId = error.correlationId || error.code;
-      if (isExpanded) {
-        this.expandedErrors.delete(errorId);
-      } else {
+      const card = toggle.closest('.oc-card');
+      const details = card?.querySelector('.oc-card__details') as HTMLElement | null;
+      if (!details) return;
+      const willShow = details.hasAttribute('hidden');
+      if (willShow) {
+        details.removeAttribute('hidden');
         this.expandedErrors.add(errorId);
+      } else {
+        details.setAttribute('hidden', '');
+        this.expandedErrors.delete(errorId);
       }
-      
-      // Re-render the error
-      const newElement = this.render(error);
-      const oldElement = document.querySelector(`[data-error-id="${errorId}"]`);
-      if (oldElement && oldElement.parentNode) {
-        oldElement.parentNode.replaceChild(newElement, oldElement);
-      }
+      toggle.textContent = willShow ? 'Hide details' : 'Details';
+      toggle.setAttribute('aria-expanded', willShow ? 'true' : 'false');
     });
 
     return toggle;
@@ -391,31 +374,6 @@ export class ErrorDisplay {
     // No handler wired (e.g. unit/browser test context) — stay silent rather
     // than pretending to act.
     console.warn('Error action ignored — no handler registered:', action.action);
-  }
-
-  /**
-   * Get severity color
-   */
-  private getSeverityColor(severity: ErrorSeverity): string {
-    return this.theme.colors[severity];
-  }
-
-  /**
-   * Get severity icon
-   */
-  private getSeverityIcon(severity: ErrorSeverity): string {
-    switch (severity) {
-      case ErrorSeverity.LOW:
-        return 'ℹ️';
-      case ErrorSeverity.MEDIUM:
-        return '⚠️';
-      case ErrorSeverity.HIGH:
-        return '❌';
-      case ErrorSeverity.CRITICAL:
-        return '🚨';
-      default:
-        return '⚠️';
-    }
   }
 
   /**
