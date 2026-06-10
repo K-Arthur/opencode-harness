@@ -158,7 +158,7 @@ export class WebviewEventRouter {
     "accept_permission", "mention_search", "list_sessions", "resume_session",
     "new_session", "get_models", "update_cost", "webview_ready", "init_ack", "rename_session", "webview_log",
     "open_settings", "connect_provider", "open_mcp_settings", "open_mcp_config", "attach_files", "export_chat", "export_chat_json", "export_chat_text", "copy_chat", "stash_prompt", "list_stashes", "delete_stash", "add_provider", "list_providers", "update_provider", "delete_provider",
-    "compact_session", "execute_command", "open_terminal", "list_commands",
+    "compact_session", "execute_command", "open_terminal", "copy_text", "list_commands",
     "insert_at_cursor", "create_file_from_code", "compact_banner_action",
     "edit_message", "attach_image",
     "delete_session", "archive_session", "pin_session", "set_session_tags", "revert_message",
@@ -767,6 +767,14 @@ export class WebviewEventRouter {
       const terminal = vscode.window.createTerminal({ name: "OpenCode Task", cwd })
       terminal.show()
       terminal.sendText(command, msg.autorun === true)
+    }],
+    ["copy_text", async (msg: Record<string, unknown>) => {
+      const text = typeof msg.text === "string" ? msg.text : ""
+      if (!text.trim()) return
+      // Webviews frequently have no navigator.clipboard; copy actions
+      // round-trip through the host clipboard instead.
+      await vscode.env.clipboard.writeText(text)
+      vscode.window.setStatusBarMessage("OpenCode: copied to clipboard", 2000)
     }],
     ["revert_message", async (msg: Record<string, unknown>, sessionId?: string) => {
       if (sessionId && typeof msg.messageId === "string") {

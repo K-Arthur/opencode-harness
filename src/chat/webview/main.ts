@@ -1094,12 +1094,9 @@ function getVsCodeApi() {
         stateManager.save()
       },
       onJump: (anchorMessageId) => scrollToTurnModule(scrollMarkerDeps, anchorMessageId),
-      onCopy: (text) => {
-        void navigator.clipboard?.writeText(text).catch(() => {
-          const sid = stateManager.getState().activeSessionId
-          if (sid) showSystemMessage(sid, "Could not copy command text to the clipboard.")
-        })
-      },
+      // Webviews frequently lack navigator.clipboard (and `?.` on it made
+      // `.catch` throw on undefined) — copy via the host clipboard instead.
+      onCopy: (text) => vscode.postMessage({ type: "copy_text", text }),
       onOpenTerminal: (command, cwd, autorun) => vscode.postMessage({ type: "open_terminal", command, cwd, autorun }),
       onCancel: () => abortStream(),
     })

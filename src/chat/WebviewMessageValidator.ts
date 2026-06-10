@@ -341,8 +341,16 @@ function validateModeSwitchRequest(msg: Record<string, unknown>, _msgType: strin
   return true
 }
 
+function validateCopyText(msg: Record<string, unknown>, _msgType: string, deps: WebviewMessageValidatorDeps): boolean {
+  if (typeof msg.text !== "string" || !msg.text.trim()) {
+    return reject(deps, "Invalid text in copy_text")
+  }
+  return true
+}
+
 const WEBVIEW_MESSAGE_VALIDATORS: Record<string, MessageValidator> = {
   send_prompt: validateSendPrompt,
+  copy_text: validateCopyText,
   mention_search: validateMentionSearch,
   change_mode: validateChangeMode,
   plan_complete: validatePlanComplete,
