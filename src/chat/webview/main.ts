@@ -25,7 +25,7 @@ import { getQuotaMonitor } from "./quotaMonitor"
 import { STREAM_LIMIT_TOOLTIP, getContextUsageTooltip, initStaticButtonTooltips } from "./tooltips"
 // context-usage-panel.ts removed — canonical UI is now context-usage-dropdown.ts
 import { setupSideRegion, type SideTabId } from "./sideRegion"
-import { setupChangedFilesDropdown, updateChangedFiles, handleDiffResponse as handleCfDiffResponse, setCurrentSession as setCfCurrentSession } from "./changed-files-dropdown"
+import { setupChangedFilesDropdown, updateChangedFiles, handleDiffResponse as handleCfDiffResponse, setCurrentSession as setCfCurrentSession, refreshChangedFilesVisibility } from "./changed-files-dropdown"
 import type { DiffLine } from "./types"
 import { setupContextUsageDropdown as setupCtxDropdown, updateUsage as updateCtxDropdown, resetContextUsageDropdown, openContextUsageDropdown } from "./context-usage-dropdown"
 import { formatUsagePercent } from "./context-usage-service"
@@ -1472,10 +1472,14 @@ function getVsCodeApi() {
 
   function showWelcomeView() {
     showWelcomeViewModule(welcomeViewDeps)
+    // Re-apply the welcome guard to the changed-files strip/dropdown — its
+    // render-time check can't see this transition on its own.
+    refreshChangedFilesVisibility()
   }
 
   function hideWelcomeView() {
     hideWelcomeViewModule(els)
+    refreshChangedFilesVisibility()
   }
 
   function renderWelcomeContext() {
