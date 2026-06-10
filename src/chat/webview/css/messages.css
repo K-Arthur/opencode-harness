@@ -265,6 +265,23 @@
   font-weight: 500;
 }
 
+/* Turn whose messages are not loaded into the DOM yet (lazy history) —
+   dimmed; clicking it loads the earlier page and then scrolls. */
+.timeline-item--unloaded {
+  opacity: 0.45;
+}
+
+.timeline-item--unloaded .role-dot.user {
+  background: var(--color-fg);
+  box-shadow: none;
+  opacity: 0.5;
+}
+
+.timeline-item--unloaded:hover,
+.timeline-item--unloaded:focus-visible {
+  opacity: 0.8;
+}
+
 .timeline-item.streaming .timeline-item-role::after {
   content: "";
   width: 6px;

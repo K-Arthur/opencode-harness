@@ -74,11 +74,14 @@ export function scrollMessageToTop(msgList: HTMLElement, target: HTMLElement, ti
   target.focus({ preventScroll: true })
 }
 
-export function scrollToTurn(deps: ScrollMarkerDeps, messageId: string): void {
+/** Scroll the active list to a message. Returns false when the message has no
+ *  DOM node (e.g. an earlier page that is not loaded yet) so callers can
+ *  trigger a load-then-scroll flow instead of failing silently. */
+export function scrollToTurn(deps: ScrollMarkerDeps, messageId: string): boolean {
   const msgList = deps.getActiveMessageList()
-  if (!msgList) return
+  if (!msgList) return false
   const target = msgList.querySelector(`[data-message-id="${CSS.escape(messageId)}"]`) as HTMLElement | null
-  if (target) {
-    scrollMessageToTop(msgList, target, deps.timers)
-  }
+  if (!target) return false
+  scrollMessageToTop(msgList, target, deps.timers)
+  return true
 }

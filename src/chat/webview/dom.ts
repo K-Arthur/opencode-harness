@@ -67,6 +67,8 @@ export interface ElementRefs {
   historyBtn: HTMLElement
   mcpBtn: HTMLElement
   timelineToggleBtn: HTMLElement
+  /** Header toolbar twin of timelineToggleBtn (discoverability). */
+  timelineToggleHeaderBtn: HTMLElement | null
   thinkingToggleMenuItem: HTMLElement
   thinkingCheckmark: HTMLElement | null
   settingsBtn: HTMLElement
@@ -267,6 +269,7 @@ export function getElementRefs(): ElementRefs {
     historyBtn: requireElement("history-btn"),
     mcpBtn: requireElement("mcp-btn"),
     timelineToggleBtn: requireElement("timeline-toggle-btn"),
+    timelineToggleHeaderBtn: document.getElementById("timeline-toggle-header-btn"),
     thinkingToggleMenuItem: requireElement("thinking-toggle-menu-item"),
     thinkingCheckmark: document.querySelector<HTMLElement>("#thinking-toggle-menu-item .settings-menu-checkmark"),
     settingsBtn: requireElement("settings-btn"),
