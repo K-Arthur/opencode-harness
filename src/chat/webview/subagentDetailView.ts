@@ -5,6 +5,9 @@ export interface SubagentDetailViewOptions {
   onBack: () => void
   onClose: () => void
   onCancelSubagent: (subagentId: string) => void
+  /** Jump straight to the subagent's child session (rendered only when the
+   *  activity carries a sessionId). */
+  onOpenSession?: (activity: SubagentActivity) => void
 }
 
 export type SubagentDetailViewEls = Pick<ElementRefs,
@@ -189,16 +192,28 @@ export function setupSubagentDetailView(
     renderFileChanges(el, activity.fileChanges)
     renderMetadata(el, activity)
 
+    const actionsRow = document.createElement("div")
+    actionsRow.className = "subagent-detail-actions"
+
+    if (activity.sessionId && options.onOpenSession) {
+      const openSessionBtn = document.createElement("button")
+      openSessionBtn.className = "subagent-open-session-btn"
+      openSessionBtn.type = "button"
+      openSessionBtn.textContent = "Open session"
+      openSessionBtn.title = "Open this subagent's session in a tab"
+      openSessionBtn.addEventListener("click", () => options.onOpenSession?.(activity))
+      actionsRow.appendChild(openSessionBtn)
+    }
+
     if (activity.status === "running") {
-      const cancelRow = document.createElement("div")
-      cancelRow.className = "subagent-detail-actions"
       const cancelBtn = document.createElement("button")
       cancelBtn.className = "subagent-detail-cancel-btn"
       cancelBtn.textContent = "Cancel Subagent"
       cancelBtn.addEventListener("click", () => options.onCancelSubagent(activity.id))
-      cancelRow.appendChild(cancelBtn)
-      el.appendChild(cancelRow)
+      actionsRow.appendChild(cancelBtn)
     }
+
+    if (actionsRow.childElementCount > 0) el.appendChild(actionsRow)
   }
 
   function renderMessages(el: HTMLElement, rawMessages: unknown) {

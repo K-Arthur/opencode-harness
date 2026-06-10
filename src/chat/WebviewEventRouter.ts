@@ -176,7 +176,7 @@ export class WebviewEventRouter {
     "get_todos", // handler posts todos_error on unavailable server/session fetch failures
     "get_skills", "toggle_skill", "search_skills",
     "get_changed_files", "get_file_diff", "open_file", "open_folder", "open_url", "reveal_in_explorer",
-    "get_subagent_activities", "get_subagent_detail", "cancel_subagent", "mark_subagent_read",
+    "get_subagent_activities", "get_subagent_detail", "cancel_subagent", "mark_subagent_read", "open_subagent_session",
     "popout_get_subagent_detail", "popout_cancel_subagent",
     "update_setting", "show_error", "get_context_usage", "record_stash_usage", "open_context_window_override_dialog",
     "model_favorite", "model_toggle", "get_permission_config", "update_permission_config",
@@ -860,6 +860,20 @@ export class WebviewEventRouter {
         if (choice === "Open Folder") {
           this.opts.showOpenFolderDialog(dir)
         }
+      }
+    }],
+    ["open_subagent_session", async (msg: Record<string, unknown>) => {
+      const childSessionId = typeof msg.childSessionId === "string" ? msg.childSessionId : ""
+      if (!childSessionId) return
+      const title = typeof msg.title === "string" && msg.title.trim() ? msg.title : "Subagent session"
+      try {
+        // Subagent child sessions live on the server; import locally (no-op if
+        // already imported) and resume as a regular tab.
+        const localSession = this.opts.sessionStore.importOneServerSession(childSessionId, title, undefined)
+        await this.opts.sessionLifecycle.handleResumeSession(localSession.id)
+      } catch (err) {
+        log.error("Failed to open subagent session", err)
+        this.opts.showErrorMessage(`Could not open the subagent session: ${(err as Error).message}`)
       }
     }],
     ["list_checkpoints", async (_: Record<string, unknown>, sessionId?: string) => {

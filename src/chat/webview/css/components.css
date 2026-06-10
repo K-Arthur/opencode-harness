@@ -1234,6 +1234,30 @@ body.hide-thinking .thinking-block { display: none; }
   color: var(--oc-error-fg);
 }
 
+/* One-click jump to the subagent's child session (card header + detail view) */
+.subagent-open-session-btn {
+  background: var(--oc-accent-subtle, var(--vscode-button-secondaryBackground));
+  color: var(--oc-accent, var(--vscode-button-secondaryForeground));
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  padding: var(--space-0-5) var(--space-1);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
+}
+
+.subagent-open-session-btn:hover {
+  background: var(--oc-accent, var(--vscode-button-background));
+  color: var(--oc-accent-fg, var(--vscode-button-foreground));
+}
+
+.subagent-open-session-btn:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
 /* Subagent header with name wrap + domain badge */
 .subagent-name-wrap {
   display: flex;
