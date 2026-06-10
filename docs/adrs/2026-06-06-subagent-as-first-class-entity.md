@@ -183,3 +183,26 @@ without the subagent id, and the host's `open_subagent_detail` handler only logg
 
 Modules: `src/chat/webview/main.ts`, `src/chat/ChatProvider.ts`,
 `src/chat/WebviewEventRouter.ts`, `src/chat/WebviewContent.ts`.
+
+## Addendum (2026-06-10) — Completion-on-finalize closes the "stuck Running" gap
+
+Three residual paths still left subagents badged "Running" forever:
+
+1. **Run finalize never terminalized subagents.** `RunActivityTracker.
+   markRunComplete()` / `markRunCancelled()` set the run phase but left
+   `run.subagents` entries non-terminal; the finalize snapshot was posted and
+   the run cleared, so no later snapshot could correct them. Both methods now
+   close out queued/running/waiting/unknown subagents with the run outcome
+   (`terminalizeActiveSubagents`).
+2. **Subtask parts mislabeled the parent as the child.** SDK `subtask` parts
+   carry no child-session field — `part.sessionID` is the PARENT session.
+   `ActivityPartHandler` no longer reports it as `childSessionId` (it poisoned
+   `SubagentHeartbeat` targeting and open-session navigation). The real child
+   id continues to arrive via the task-tool bridge.
+3. **Persisted webview state resurrected stale badges.** `state.restore()` now
+   terminalizes non-terminal persisted `subagentActivities` alongside the
+   existing `isStreaming` reset — no run survives a webview reload.
+
+Also new: subagent cards and the detail view expose a one-click "Open session"
+action (`open_subagent_session` message → `importOneServerSession` +
+`handleResumeSession`) that opens the child session as a regular tab.

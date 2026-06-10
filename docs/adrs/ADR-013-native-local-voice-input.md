@@ -82,3 +82,26 @@ removed.
 - The webview no longer needs (or accepts) any audio-upload or browser-helper
   messages; the protocol is `voice_start/stop/cancel` ⇄ `voice_settings/
   voice_recording_started/voice_transcribing/voice_transcript/voice_error`.
+
+## Addendum (2026-06-10) — PEP 668 / isolated engine installs
+
+Auto-setup failed on externally-managed Python distros (Arch/CachyOS,
+Debian 12+, Fedora 38+): `pip install` aborts with
+`externally-managed-environment`, and the previous last-resort
+`uv pip install --system` targets the same managed interpreter.
+
+Engine install priority is now (`pickEngineInstallCommand` in
+`voiceSetup.ts`):
+
+1. `uv tool install openai-whisper` (isolated, puts `whisper` in `~/.local/bin`)
+2. `pipx install openai-whisper` (same idea)
+3. `<pip> install -U openai-whisper` — only when Python is NOT externally
+   managed (probed via the stdlib `EXTERNALLY-MANAGED` marker,
+   `ChatProvider.detectExternallyManagedPython()`)
+4. Manual guidance naming the exact Arch commands
+   (`sudo pacman -S uv` → `uv tool install openai-whisper`)
+
+`commandExists()` and both spawn sites additionally fall back to
+`~/.local/bin/<bin>` (where uv tool/pipx install binaries), because VS Code's
+process PATH is not a login-shell PATH and frequently misses it
+(`resolveBinPath` in `voiceCapture.ts`).
