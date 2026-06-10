@@ -41,7 +41,10 @@ export class ActivityPartHandler implements EventHandler {
           status: "running",
           currentActivity: stringOrUndefined(part.description) || stringOrUndefined(part.prompt),
           inputPrompt: stringOrUndefined(part.prompt),
-          childSessionId: part.sessionID,
+          // part.sessionID is the parent session — the SDK subtask part has no
+          // child-session field. The real child id arrives via the task-tool
+          // bridge (StreamCoordinator) and SubagentHeartbeat discovery.
+          childSessionId: undefined,
           error: stringOrUndefined(part.error),
         },
       }]
