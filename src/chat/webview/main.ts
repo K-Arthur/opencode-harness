@@ -1108,9 +1108,15 @@ function getVsCodeApi() {
       onBack: () => { sideRegionApi?.open("subagent") },
       onClose: () => { activeSubagentId = null },
       onCancelSubagent: (subagentId: string) => vscode.postMessage({ type: "cancel_subagent", subagentId }),
+      onOpenSession: (activity: SubagentActivity) => {
+        if (activity.sessionId) vscode.postMessage({ type: "open_subagent_session", childSessionId: activity.sessionId, title: activity.name })
+      },
     })
     subagentPanelApi = setupSubagentPanel(els, {
       onCancelSubagent: (subagentId: string) => vscode.postMessage({ type: "cancel_subagent", subagentId }),
+      onOpenSession: (activity: SubagentActivity) => {
+        if (activity.sessionId) vscode.postMessage({ type: "open_subagent_session", childSessionId: activity.sessionId, title: activity.name })
+      },
       onOpenDetail: (activity: SubagentActivity) => {
         // Ensure subagent tab is active before showing detail overlay
         sideRegionApi?.open("subagent")

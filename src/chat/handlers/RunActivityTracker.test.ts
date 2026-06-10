@@ -69,13 +69,13 @@ describe("RunActivityTracker", () => {
     now += 1_000
     const snapshot = tracker.markRunComplete("tab-5")
 
-    assert.ok(snapshot)
+    const subagents = snapshot?.subagents ?? []
     for (const id of ["sub-q", "sub-r", "sub-w", "sub-u"]) {
-      const subagent = snapshot.subagents.find((s) => s.id === id)
-      assert.equal(subagent?.status, "completed", `${id} should be completed`)
-      assert.equal(subagent?.completedAt, now, `${id} should have completedAt`)
+      const found = subagents.find((s) => s.id === id)
+      assert.equal(found?.status, "completed", `${id} should be completed`)
+      assert.equal(found?.completedAt, now, `${id} should have completedAt`)
     }
-    assert.equal(snapshot.activeSubagentCount, 0)
+    assert.equal(snapshot?.activeSubagentCount, 0)
   })
 
   it("markRunComplete leaves already-failed subagents untouched", () => {

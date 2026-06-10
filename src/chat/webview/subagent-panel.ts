@@ -6,6 +6,9 @@ export interface SubagentPanelOptions {
   onOpenDetail: (activity: SubagentActivity) => void
   onClearCompleted?: () => void
   onMarkRead?: (subagentId: string) => void
+  /** Jump straight to the subagent's child session (rendered only when the
+   *  activity carries a sessionId). */
+  onOpenSession?: (activity: SubagentActivity) => void
 }
 
 export type SubagentPanelEls = Pick<ElementRefs,
@@ -283,6 +286,20 @@ function renderSubagentList(container: HTMLElement, activities: SubagentActivity
       header.appendChild(status)
     }
 
+    if (activity.sessionId && options.onOpenSession) {
+      const openSessionBtn = document.createElement("button")
+      openSessionBtn.className = "subagent-open-session-btn"
+      openSessionBtn.type = "button"
+      openSessionBtn.setAttribute("aria-label", `Open ${activity.name}'s session`)
+      openSessionBtn.title = "Open this subagent's session in a tab"
+      openSessionBtn.textContent = "Open session"
+      openSessionBtn.addEventListener("click", (e) => {
+        e.stopPropagation()
+        options.onOpenSession?.(activity)
+      })
+      header.appendChild(openSessionBtn)
+    }
+
     item.appendChild(header)
 
     // Click to open detail view (works for all statuses)
@@ -290,6 +307,7 @@ function renderSubagentList(container: HTMLElement, activities: SubagentActivity
     item.addEventListener("click", (e) => {
       if ((e.target as HTMLElement).closest(".subagent-cancel-btn")) return
       if ((e.target as HTMLElement).closest(".subagent-expand-btn")) return
+      if ((e.target as HTMLElement).closest(".subagent-open-session-btn")) return
       openDetail()
     })
     item.addEventListener("keydown", (e) => {

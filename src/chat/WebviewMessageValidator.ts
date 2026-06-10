@@ -397,6 +397,7 @@ const WEBVIEW_MESSAGE_VALIDATORS: Record<string, MessageValidator> = {
   set_session_tags: validateSessionTags,
   open_terminal: validateOpenTerminal,
   resume_server_session: requiredStringValidator("serverSessionId", () => "Invalid serverSessionId in resume_server_session"),
+  open_subagent_session: requiredStringValidator("childSessionId", () => "Invalid childSessionId in open_subagent_session"),
   delete_server_session: requiredStringValidator("serverSessionId", () => "Invalid serverSessionId in delete_server_session"),
   update_cost: validateUpdateCost,
   toggle_diff_wrap: validateOptionalEnabled,
