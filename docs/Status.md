@@ -1,10 +1,21 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-06-09
-**Version:** v0.3.29
+**Last Updated:** 2026-06-10
+**Version:** v0.3.32
 **Version:** v0.2.23 (+ Unreleased: opencode CLI auto-install, native local voice input, frontend overhaul, stream/dedicated-bar redesign)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
+
+## Unreleased Highlights (2026-06-10) — multi-area bugfix & feature release
+
+- **Subagents no longer stuck "Running".** Run finalize (`markRunComplete`/`markRunCancelled`) now terminalizes all active subagents with the run outcome; SDK `subtask` parts no longer mislabel the parent session as `childSessionId`; webview `restore()` terminalizes stale persisted `subagentActivities` on reload. See addendum in `docs/adrs/2026-06-06-subagent-as-first-class-entity.md`.
+- **Subagent "Open session" navigation.** Cards and the detail view expose a one-click "Open session" button (when a child `sessionId` is known) → new `open_subagent_session` message imports the server child session and resumes it as a regular tab.
+- **Question bar session isolation hardened.** `submitAllAnswers`, bar visibility, the count badge, submit-enable state and auto-dismiss are all scoped to the active session (another tab's selections can no longer be posted or wiped). `removeQuestion` resolves requestID-only acknowledgements; `updateQuestion` preserves `requestID` when a refreshed block omits it.
+- **Token/cost accounting: host is source of truth.** `step_tokens`/final `token_usage` carry cumulative host totals; the webview SETs (`applyTokenUsageTotals`) instead of accumulating a parallel ledger — idempotent under SSE replay, consistent across tab switch/reopen. ADR: `docs/adrs/2026-06-10-token-accounting-host-source-of-truth.md`.
+- **Commands tab copy actions fixed.** `navigator.clipboard` is absent in webviews (the old `?.`-chained call threw a TypeError); Copy/Copy-output now round-trip via the new validated `copy_text` message → `vscode.env.clipboard.writeText` + status-bar confirmation. Terminal/Re-run verified end-to-end.
+- **Voice setup works on PEP 668 distros (Arch/CachyOS, Debian 12+, Fedora 38+).** Engine install priority: `uv tool install openai-whisper` > `pipx install openai-whisper` > pip (only on non-externally-managed Python) > manual hint with exact Arch commands. `uv pip install --system` removed (fails under PEP 668). ChatProvider probes `uv`/`pipx` and the stdlib `EXTERNALLY-MANAGED` marker. `commandExists`/spawn fall back to `~/.local/bin` where uv/pipx place `whisper`.
+- **Conversation timeline + lazy history.** `more_messages` pages are now inserted into `session.messages` (deduped) and the timeline refreshes immediately; clicking a turn outside the loaded window expands condensed history or chases up to 3 `request_more_messages` pages and scrolls on arrival (`pendingTimelineScroll`); unloaded turns are dimmed (`timeline-item--unloaded`); the toggle gains a header-toolbar twin synced with the settings-menu entry and Ctrl+Alt+T.
+- **Changed-files strip/dropdown.** Welcome-screen leak fixed (`refreshChangedFilesVisibility()` re-applies the guard on welcome show/hide). Strip redesigned as a contained widget surface with aggregate `+X −Y` totals (tabular-nums). Dropdown A/M/D badges, per-file stats and hunk lines themed via `--vscode-gitDecoration-*`/diff-editor tokens; stat columns fixed-width right-aligned; summary bar sticky.
 
 ## v0.3.29 Highlights (2026-06-09)
 
