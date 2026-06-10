@@ -1187,11 +1187,18 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         if (typeof data.cost === "number" && Number.isFinite(data.cost) && data.cost > 0) {
           this.sessionStore.accumulateCost(tabId, data.cost)
         }
+        // The host SessionStore is the canonical token/cost ledger. Cumulative
+        // totals let the webview SET its display state instead of accumulating
+        // a parallel ledger — idempotent under SSE replay and consistent
+        // across tab switches and webview reloads.
+        const ledger = this.sessionStore.get(tabId)
         this.postMessage({
           type: "step_tokens",
           sessionId: tabId,
           tokens: { input: usage.prompt, output: usage.completion, reasoning: usage.reasoning, cacheRead: usage.cacheRead, cacheWrite: usage.cacheWrite },
           cost: data.cost ?? 0,
+          cumulative: ledger?.tokenUsage,
+          cumulativeCost: ledger?.cost,
         })
       }
     }],

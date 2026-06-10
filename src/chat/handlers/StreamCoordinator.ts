@@ -1118,7 +1118,8 @@ export class StreamCoordinator {
             cacheWrite,
           }
           if (this.recordFinalUsageFallback(tabId, usage, info.cost)) {
-            const cumulativeCost = this.sessionStore.get(tabId)?.cost
+            const ledger = this.sessionStore.get(tabId)
+            const cumulativeCost = ledger?.cost
             if (typeof cumulativeCost === "number" && Number.isFinite(cumulativeCost) && cumulativeCost > 0) {
               callbacks.postMessage({ type: "cost_update", sessionId: tabId, cost: cumulativeCost, seq: this.nextSeq(tabId) })
             }
@@ -1126,6 +1127,9 @@ export class StreamCoordinator {
               type: "token_usage",
               sessionId: tabId,
               usage,
+              // Canonical host totals — lets the webview SET instead of add.
+              cumulative: ledger?.tokenUsage,
+              cumulativeCost,
             })
           }
           const tab = this.tabManager.getTab(tabId)
