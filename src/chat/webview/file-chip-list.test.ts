@@ -176,3 +176,24 @@ describe("file-chip-list — mergeEditBannerFiles", () => {
     assert.equal(merged, "Edited 2 files: a.ts, b.ts")
   })
 })
+
+describe("file-chip-list — aggregate diff stats", () => {
+  it("renders +added/−removed totals after the count label when stats are provided", () => {
+    const html = renderFileChipListHtml(["src/a.ts", "src/b.ts"], {
+      showCountLabel: true,
+      countLabelSuffix: "changed",
+      stats: { added: 12, removed: 4 },
+    })
+    assert.match(html, /class="cf-strip-stats"/)
+    assert.match(html, /class="cf-strip-added"[^>]*>\+12</)
+    assert.match(html, /class="cf-strip-removed"[^>]*>−4</)
+  })
+
+  it("omits the stats block when stats are absent or zero", () => {
+    assert.doesNotMatch(renderFileChipListHtml(["a.ts"]), /cf-strip-stats/)
+    assert.doesNotMatch(
+      renderFileChipListHtml(["a.ts"], { stats: { added: 0, removed: 0 } }),
+      /cf-strip-stats/,
+    )
+  })
+})
