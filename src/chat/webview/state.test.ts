@@ -246,4 +246,41 @@ describe("state.ts — restore() must not resurrect stale isStreaming flags", ()
     // The fix: activeStreams === 0 → capacity available → send goes through.
     assert.equal(activeStreams, 0, "stream-cap must not be inflated by stale persisted flags")
   })
+
+  it("marks non-terminal persisted subagentActivities as completed on restore", () => {
+    // Same rationale as isStreaming: no subagent run survives a webview
+    // reload, and run_activity_update never fires again for a finished run,
+    // so persisted "running"/"pending" badges would otherwise be stuck forever.
+    const persisted = {
+      sessions: {
+        a: {
+          id: "a", name: "Tab A", messages: [], isStreaming: false, mode: "build", model: "x",
+          subagentActivities: [
+            { id: "sub-run", name: "Runner", status: "running", isLive: true },
+            { id: "sub-pend", name: "Pending", status: "pending", isLive: true },
+            { id: "sub-done", name: "Done", status: "completed", completedAt: 111 },
+            { id: "sub-fail", name: "Failed", status: "failed", completedAt: 222 },
+          ],
+        },
+      },
+      sessionOrder: ["a"],
+      activeSessionId: "a",
+      globalModel: "x",
+      initialized: true,
+    }
+
+    const sm = createState(stubWithSaved(persisted))
+    sm.restore()
+
+    const activities = sm.getSession("a")?.subagentActivities ?? []
+    const byId = new Map(activities.map((a) => [a.id, a]))
+    assert.equal(byId.get("sub-run")?.status, "completed")
+    assert.equal(byId.get("sub-run")?.isLive, false)
+    assert.ok(byId.get("sub-run")?.completedAt, "synthesized completedAt expected")
+    assert.equal(byId.get("sub-pend")?.status, "completed")
+    assert.equal(byId.get("sub-done")?.status, "completed")
+    assert.equal(byId.get("sub-done")?.completedAt, 111)
+    assert.equal(byId.get("sub-fail")?.status, "failed")
+    assert.equal(byId.get("sub-fail")?.completedAt, 222)
+  })
 })
