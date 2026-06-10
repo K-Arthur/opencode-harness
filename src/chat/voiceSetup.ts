@@ -17,6 +17,13 @@ export interface VoiceToolProbe {
   pip: string | null
   /** Resolved recorder installer for this platform, else null. */
   recorderInstall: { manager: string; command: string } | null
+  /** uv on PATH → isolated `uv tool install` is the preferred engine install. */
+  hasUv?: boolean
+  /** pipx on PATH → isolated `pipx install` fallback. */
+  hasPipx?: boolean
+  /** PEP 668 externally-managed Python (Arch/CachyOS, Debian 12+, Fedora 38+):
+   *  bare pip installs fail with externally-managed-environment. */
+  externallyManaged?: boolean
 }
 
 export interface VoiceSetupStep {
@@ -35,19 +42,44 @@ export interface VoiceSetupPlan {
 
 /**
  * Resolve the best available pip command for installing Python packages.
- * Priority: pip3 > pip > python3 -m pip > uv.
- * Returns null when none is available.
+ * Priority: pip3 > pip > python3 -m pip.
+ * Returns null when none is available. uv is intentionally NOT a pip
+ * substitute — `uv pip install --system` targets the externally-managed
+ * interpreter on PEP 668 systems and fails exactly like bare pip; uv gets the
+ * isolated `uv tool install` path in pickEngineInstallCommand instead.
  */
 export function pickPipCommand(
   exists: (bin: string) => boolean,
   pipViaPython?: boolean,
-  hasUv?: boolean,
 ): string | null {
   if (exists("pip3")) return "pip3"
   if (exists("pip")) return "pip"
   if (pipViaPython) return "python3 -m pip"
-  if (hasUv) return "uv pip install --system"
   return null
+}
+
+/**
+ * Choose how to install the openai-whisper engine.
+ * Priority: uv tool install (isolated, puts `whisper` in ~/.local/bin) >
+ * pipx install (same idea) > pip (only when the environment is NOT
+ * externally managed) > manual guidance.
+ */
+export function pickEngineInstallCommand(probe: VoiceToolProbe): { command?: string; manual?: string } {
+  if (probe.hasUv) return { command: "uv tool install openai-whisper" }
+  if (probe.hasPipx) return { command: "pipx install openai-whisper" }
+  if (probe.pip && !probe.externallyManaged) {
+    return { command: `${probe.pip} install -U openai-whisper` }
+  }
+  if (probe.externallyManaged) {
+    return {
+      manual: "Your Python is externally managed (PEP 668), so pip cannot install packages directly. "
+        + "Install uv (`sudo pacman -S uv` on Arch/CachyOS, or see https://docs.astral.sh/uv/) and run `uv tool install openai-whisper`, "
+        + "or use `pipx install openai-whisper`. Both put the `whisper` command in ~/.local/bin.",
+    }
+  }
+  return {
+    manual: "Install Python 3, then run `pip install -U openai-whisper` — or set opencode.voice.localCommand to your own engine.",
+  }
 }
 
 /**
@@ -97,20 +129,18 @@ export function buildVoiceSetupPlan(probe: VoiceToolProbe, platform: NodeJS.Plat
   const steps: VoiceSetupStep[] = []
 
   if (!probe.hasEngine) {
-    if (probe.pip) {
-      const isUv = probe.pip.startsWith("uv")
+    const engineInstall = pickEngineInstallCommand(probe)
+    if (engineInstall.command) {
       steps.push({
         kind: "engine",
         label: "Install the local speech-to-text engine (openai-whisper)",
-        command: isUv
-          ? `${probe.pip} openai-whisper`
-          : `${probe.pip} install -U openai-whisper`,
+        command: engineInstall.command,
       })
     } else {
       steps.push({
         kind: "engine",
         label: "Install a local speech-to-text engine",
-        manual: "Install Python 3, then run `pip install -U openai-whisper` — or set opencode.voice.localCommand to your own engine.",
+        manual: engineInstall.manual,
       })
     }
   }
