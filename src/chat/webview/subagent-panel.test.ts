@@ -174,6 +174,66 @@ void describe("subagent-panel", () => {
     document.body.removeChild(container)
   })
 
+  void it("single card click invokes onOpenDetail exactly once", async () => {
+    const { setupSubagentPanel } = await import("./subagent-panel")
+
+    const container = document.createElement("div")
+    const list = document.createElement("div")
+    const closeBtn = document.createElement("button")
+    container.append(list, closeBtn)
+    document.body.appendChild(container)
+
+    const opened: string[] = []
+    const api = setupSubagentPanel(
+      { subagentPanel: container, subagentList: list, closeSubagentBtn: closeBtn },
+      { onOpenDetail: (activity) => { opened.push(activity.id) }, onCancelSubagent: () => {} },
+    )!
+
+    api.renderActivities([{ id: "agent-once", name: "One Click", status: "running" }])
+    const item = list.querySelector(".subagent-item") as HTMLElement
+    item.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }))
+    assert.deepEqual(opened, ["agent-once"], "one click must open the detail exactly once")
+
+    api.dispose()
+    document.body.removeChild(container)
+  })
+
+  void it("card shows Open session button when activity.sessionId is set and click invokes onOpenSession", async () => {
+    const { setupSubagentPanel } = await import("./subagent-panel")
+
+    const container = document.createElement("div")
+    const list = document.createElement("div")
+    const closeBtn = document.createElement("button")
+    container.append(list, closeBtn)
+    document.body.appendChild(container)
+
+    const openedSessions: string[] = []
+    const opened: string[] = []
+    const api = setupSubagentPanel(
+      { subagentPanel: container, subagentList: list, closeSubagentBtn: closeBtn },
+      {
+        onOpenDetail: (activity) => { opened.push(activity.id) },
+        onCancelSubagent: () => {},
+        onOpenSession: (activity) => { openedSessions.push(activity.sessionId ?? "") },
+      },
+    )!
+
+    api.renderActivities([
+      { id: "child-1", sessionId: "child-1", name: "With Session", status: "completed" },
+      { id: "agent-nosess", name: "No Session", status: "completed" },
+    ])
+
+    const buttons = list.querySelectorAll(".subagent-open-session-btn")
+    assert.equal(buttons.length, 1, "only the card with a child session gets the button")
+
+    ;(buttons[0] as HTMLButtonElement).dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }))
+    assert.deepEqual(openedSessions, ["child-1"], "click routes the child session to onOpenSession")
+    assert.deepEqual(opened, [], "Open session click must not also open the detail view")
+
+    api.dispose()
+    document.body.removeChild(container)
+  })
+
   void it("cancel button invokes onCancelSubagent callback", async () => {
     const { setupSubagentPanel } = await import("./subagent-panel")
 

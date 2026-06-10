@@ -132,6 +132,25 @@ describe("WebviewEventRouter copy_text routing", () => {
   })
 })
 
+describe("WebviewEventRouter subagent session navigation", () => {
+  it("requires childSessionId on open_subagent_session", () => {
+    assert.equal(validate({ childSessionId: "child-1" }, "open_subagent_session"), true)
+    assert.equal(validate({}, "open_subagent_session"), false)
+    assert.equal(validate({ childSessionId: 7 }, "open_subagent_session"), false)
+  })
+
+  it("registers an open_subagent_session handler that resumes the child session as a tab", () => {
+    assert.match(
+      source,
+      /\["open_subagent_session",\s*(async\s*)?\(/,
+      "open_subagent_session must have a webview handler",
+    )
+    const handler = blockBetween('["open_subagent_session"', "}],")
+    assert.ok(handler.includes("importOneServerSession"), "handler must import the server session locally")
+    assert.ok(handler.includes("handleResumeSession"), "handler must resume the imported session as a tab")
+  })
+})
+
 describe("WebviewMessageValidator MCP config", () => {
   it("rejects unsafe MCP server names and command strings", () => {
     assert.equal(validate({ name: "safe-server", config: { command: "node", args: ["server.js"] } }, "add_mcp_server"), true)

@@ -61,4 +61,42 @@ void describe("subagentDetailView", () => {
     api.dispose()
     document.body.removeChild(container)
   })
+
+  void it("renders an Open session action that invokes onOpenSession", async () => {
+    const { setupSubagentDetailView } = await import("./subagentDetailView")
+    const { container, content, backBtn, closeBtn } = createEls()
+
+    const openedSessions: string[] = []
+    const api = setupSubagentDetailView(
+      {
+        subagentDetailView: container,
+        subagentDetailContent: content,
+        subagentDetailBackBtn: backBtn,
+        subagentDetailCloseBtn: closeBtn,
+      },
+      {
+        onBack: () => {},
+        onClose: () => {},
+        onCancelSubagent: () => {},
+        onOpenSession: (activity) => { openedSessions.push(activity.sessionId ?? "") },
+      },
+    )!
+
+    api.showDetail(
+      { id: "child-9", sessionId: "child-9", name: "Navigable", status: "completed" },
+      {},
+    )
+
+    const btn = content.querySelector(".subagent-open-session-btn") as HTMLButtonElement | null
+    assert.ok(btn, "detail view must render an Open session action when sessionId is present")
+    btn!.click()
+    assert.deepEqual(openedSessions, ["child-9"])
+
+    // No button when the activity has no child session
+    api.showDetail({ id: "agent-x", name: "No Session", status: "completed" }, {})
+    assert.equal(content.querySelector(".subagent-open-session-btn"), null)
+
+    api.dispose()
+    document.body.removeChild(container)
+  })
 })
