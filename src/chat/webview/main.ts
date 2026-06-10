@@ -58,7 +58,7 @@ import { setupInstructionsEditor } from "./ui/instructionsEditor"
 import { setupSessionModal as setupSessionModalModule, openSessionModal as openSessionModalModule, trapModalFocus } from "./ui/sessionModal"
 import { setupKeyboardShortcutsModal, openKeyboardShortcutsModal } from "./ui/keyboardShortcutsModal"
 
-import { handleTokenUsage as handleTokenUsageModule, accumulateTokenUsage as accumulateTokenUsageModule, accumulateCost as accumulateCostModule, rememberStepUsage, isDuplicateRecentStepUsage, handleRateLimitState as handleRateLimitStateModule, updateCostDisplay as updateCostDisplayModule, updateTokenDisplay as updateTokenDisplayModule, clearTokenDisplay as clearTokenDisplayModule, updateContextBarFromSession as updateContextBarFromSessionModule, type TokenCostDeps, type RateLimitWebviewState } from "./ui/tokenCostDisplay"
+import { handleTokenUsage as handleTokenUsageModule, accumulateTokenUsage as accumulateTokenUsageModule, accumulateCost as accumulateCostModule, applyTokenUsageTotals as applyTokenUsageTotalsModule, rememberStepUsage, isDuplicateRecentStepUsage, handleRateLimitState as handleRateLimitStateModule, updateCostDisplay as updateCostDisplayModule, updateTokenDisplay as updateTokenDisplayModule, clearTokenDisplay as clearTokenDisplayModule, updateContextBarFromSession as updateContextBarFromSessionModule, type TokenCostDeps, type RateLimitWebviewState } from "./ui/tokenCostDisplay"
 import { createAttachmentManager } from "./ui/attachments"
 import { showWelcomeView as showWelcomeViewModule, hideWelcomeView as hideWelcomeViewModule, renderWelcomeContext as renderWelcomeContextModule, setupWelcomeActions as setupWelcomeActionsModule, setupWelcomeSuggestions as setupWelcomeSuggestionsModule, setupWelcomeResponsive as setupWelcomeResponsiveModule, type WelcomeViewDeps } from "./ui/welcomeView"
 import { shouldHonorActiveSessionChange, resolveInitStateTarget } from "./sessionFocus"
@@ -3402,6 +3402,12 @@ function getVsCodeApi() {
             }
           }
           if (!usage) return
+          const cumulative = readCumulativeTotals(msg)
+          if (cumulative) {
+            // Host ledger snapshot: SET, never add — idempotent on replay.
+            applyTokenUsageTotals(sid, cumulative, typeof msg.cumulativeCost === "number" ? msg.cumulativeCost : undefined)
+            return
+          }
           if (!isDuplicateRecentStepUsage(sid, usage)) {
             handleTokenUsage(sid, usage)
           }
@@ -3417,6 +3423,13 @@ function getVsCodeApi() {
             reasoning: t.reasoning ?? 0,
             cacheRead: t.cacheRead ?? 0,
             cacheWrite: t.cacheWrite ?? 0,
+          }
+          const cumulative = readCumulativeTotals(msg)
+          if (cumulative) {
+            // Host ledger snapshot: SET, never add — idempotent on replay.
+            applyTokenUsageTotals(sid, cumulative, typeof msg.cumulativeCost === "number" ? msg.cumulativeCost : undefined)
+            rememberStepUsage(sid, usage)
+            return
           }
           accumulateTokenUsage(sid, usage)
           rememberStepUsage(sid, usage)
@@ -3996,6 +4009,28 @@ function getVsCodeApi() {
 
   function accumulateCost(sessionId: string, costDelta: number) {
     accumulateCostModule(tokenCostDeps, sessionId, costDelta)
+  }
+
+  function applyTokenUsageTotals(sessionId: string, totals: UsageDelta, cumulativeCost?: number) {
+    applyTokenUsageTotalsModule(tokenCostDeps, sessionId, totals, cumulativeCost)
+  }
+
+  /** Parse the host's cumulative token ledger off a step_tokens/token_usage payload. */
+  function readCumulativeTotals(msg: Record<string, unknown>): UsageDelta | null {
+    const raw = msg.cumulative as Partial<UsageDelta> | undefined
+    if (!raw || typeof raw !== "object") return null
+    if (typeof raw.prompt !== "number" || !Number.isFinite(raw.prompt)) return null
+    if (typeof raw.completion !== "number" || !Number.isFinite(raw.completion)) return null
+    return {
+      prompt: raw.prompt,
+      completion: raw.completion,
+      total: typeof raw.total === "number" && Number.isFinite(raw.total)
+        ? raw.total
+        : raw.prompt + raw.completion + (raw.reasoning ?? 0) + (raw.cacheRead ?? 0) + (raw.cacheWrite ?? 0),
+      reasoning: raw.reasoning ?? 0,
+      cacheRead: raw.cacheRead ?? 0,
+      cacheWrite: raw.cacheWrite ?? 0,
+    }
   }
 
   function handleRateLimitState(state?: RateLimitWebviewState | null) {

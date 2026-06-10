@@ -124,6 +124,42 @@ export function handleTokenUsage(deps: TokenCostDeps, sessionId: string, usage: 
   accumulateTokenUsage(deps, sessionId, usage)
 }
 
+/**
+ * SET the session's token usage (and optionally cost) from a cumulative
+ * host-side snapshot. The host SessionStore is the canonical ledger; replacing
+ * instead of adding makes event replay / re-delivery idempotent and keeps the
+ * webview from drifting away from the host across tab switches and reloads.
+ */
+export function applyTokenUsageTotals(deps: TokenCostDeps, sessionId: string, totals: UsageDelta, cumulativeCost?: number): void {
+  if (!isValidSessionId(sessionId)) return
+  const session = deps.getSession(sessionId)
+  if (!session) return
+
+  const total = Number.isFinite(totals.total)
+    ? totals.total
+    : (totals.prompt ?? 0) + (totals.completion ?? 0) + (totals.reasoning ?? 0) + (totals.cacheRead ?? 0) + (totals.cacheWrite ?? 0)
+
+  session.tokenUsage = {
+    prompt: Number.isFinite(totals.prompt) ? totals.prompt : 0,
+    completion: Number.isFinite(totals.completion) ? totals.completion : 0,
+    total: Number.isFinite(total) ? total : 0,
+    reasoning: totals.reasoning ?? 0,
+    cacheRead: totals.cacheRead ?? 0,
+    cacheWrite: totals.cacheWrite ?? 0,
+  }
+  if (typeof cumulativeCost === "number" && Number.isFinite(cumulativeCost) && cumulativeCost >= 0) {
+    session.cost = cumulativeCost
+  }
+  deps.save()
+
+  const activeId = deps.getActiveSessionId()
+  if (shouldRefreshOnUpdate(sessionId, activeId)) {
+    updateTokenDisplay(deps, session.tokenUsage)
+    updateContextBarFromSession(deps, sessionId)
+  }
+  updateCostDisplay(deps, sessionId)
+}
+
 export function accumulateCost(deps: TokenCostDeps, sessionId: string, costDelta: number): void {
   if (!isValidSessionId(sessionId) || !Number.isFinite(costDelta) || costDelta <= 0) return
   const session = deps.getSession(sessionId)
