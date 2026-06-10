@@ -57,6 +57,63 @@ describe("RunActivityTracker", () => {
     assert.equal(tracker.getSnapshot("tab-3")?.phase, "completed")
   })
 
+  it("markRunComplete transitions queued, running, waiting and unknown subagents to completed with completedAt", () => {
+    let now = 7_000
+    const tracker = new RunActivityTracker(() => now)
+    tracker.startRun({ tabId: "tab-5", cliSessionId: "ses-5", messageId: "msg-5" })
+    tracker.recordSubagent("tab-5", { id: "sub-q", agentName: "Queued", status: "queued" })
+    tracker.recordSubagent("tab-5", { id: "sub-r", agentName: "Runner", status: "running" })
+    tracker.recordSubagent("tab-5", { id: "sub-w", agentName: "Waiter", status: "waiting" })
+    tracker.recordSubagent("tab-5", { id: "sub-u", agentName: "Mystery", status: "unknown" })
+
+    now += 1_000
+    const snapshot = tracker.markRunComplete("tab-5")
+
+    assert.ok(snapshot)
+    for (const id of ["sub-q", "sub-r", "sub-w", "sub-u"]) {
+      const subagent = snapshot.subagents.find((s) => s.id === id)
+      assert.equal(subagent?.status, "completed", `${id} should be completed`)
+      assert.equal(subagent?.completedAt, now, `${id} should have completedAt`)
+    }
+    assert.equal(snapshot.activeSubagentCount, 0)
+  })
+
+  it("markRunComplete leaves already-failed subagents untouched", () => {
+    let now = 8_000
+    const tracker = new RunActivityTracker(() => now)
+    tracker.startRun({ tabId: "tab-6", cliSessionId: "ses-6", messageId: "msg-6" })
+    tracker.recordSubagent("tab-6", { id: "sub-f", agentName: "Failer", status: "failed", error: "boom" })
+    const failedAt = now
+
+    now += 1_000
+    const snapshot = tracker.markRunComplete("tab-6")
+
+    const failed = snapshot?.subagents.find((s) => s.id === "sub-f")
+    assert.equal(failed?.status, "failed")
+    assert.equal(failed?.completedAt, failedAt)
+    assert.equal(failed?.error, "boom")
+  })
+
+  it("markRunCancelled transitions active subagents to cancelled", () => {
+    let now = 9_000
+    const tracker = new RunActivityTracker(() => now)
+    tracker.startRun({ tabId: "tab-7", cliSessionId: "ses-7", messageId: "msg-7" })
+    tracker.recordSubagent("tab-7", { id: "sub-r", agentName: "Runner", status: "running" })
+    tracker.recordSubagent("tab-7", { id: "sub-done", agentName: "Done", status: "completed" })
+    const doneAt = now
+
+    now += 500
+    const snapshot = tracker.markRunCancelled("tab-7")
+
+    const cancelled = snapshot?.subagents.find((s) => s.id === "sub-r")
+    assert.equal(cancelled?.status, "cancelled")
+    assert.equal(cancelled?.completedAt, now)
+    const done = snapshot?.subagents.find((s) => s.id === "sub-done")
+    assert.equal(done?.status, "completed")
+    assert.equal(done?.completedAt, doneAt)
+    assert.equal(snapshot?.activeSubagentCount, 0)
+  })
+
   it("distinguishes user cancellation from unknown interruption", () => {
     const tracker = new RunActivityTracker(() => 6_000)
     tracker.startRun({ tabId: "tab-4", cliSessionId: "ses-4", messageId: "msg-4" })
