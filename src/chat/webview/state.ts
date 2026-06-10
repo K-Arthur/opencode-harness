@@ -279,6 +279,18 @@ export function createState(vscode: VsCodeApi) {
       for (const id of Object.keys(state.sessions)) {
         const s = state.sessions[id]
         if (s && s.isStreaming) s.isStreaming = false
+        // Same reasoning for subagents: no subagent run survives a webview
+        // reload, and run_activity_update never fires again for a finished
+        // run, so a persisted non-terminal status would stay "Running" forever.
+        if (s?.subagentActivities) {
+          const now = Date.now()
+          for (const activity of s.subagentActivities) {
+            if (activity.status === "completed" || activity.status === "failed" || activity.status === "cancelled") continue
+            activity.status = "completed"
+            activity.isLive = false
+            activity.completedAt = activity.completedAt ?? now
+          }
+        }
       }
       return Object.keys(state.sessions).length > 0
     }
