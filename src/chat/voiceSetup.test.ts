@@ -1,6 +1,6 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { buildVoiceSetupPlan, pickPipCommand, recorderInstallCommand, type VoiceToolProbe } from "./voiceSetup"
+import { buildVoiceSetupPlan, pickPipCommand, pickEngineInstallCommand, recorderInstallCommand, type VoiceToolProbe } from "./voiceSetup"
 
 const has = (...bins: string[]) => (bin: string) => bins.includes(bin)
 const none = () => false
@@ -21,14 +21,54 @@ void describe("voiceSetup pip detection", () => {
   void it("prefers pip over python3 -m pip", () => {
     assert.equal(pickPipCommand(has("pip"), true), "pip")
   })
-  void it("supports uv as a fallback after python3 -m pip", () => {
-    assert.equal(pickPipCommand(none, false, true), "uv pip install --system")
+  void it("never returns uv as a pip substitute — uv gets the isolated tool-install path instead", () => {
+    // `uv pip install --system` targets the externally-managed interpreter on
+    // Arch/CachyOS and fails the same way bare pip does.
+    assert.equal(pickPipCommand(none, false), null)
   })
-  void it("prefers pip3 over uv", () => {
-    assert.equal(pickPipCommand(has("pip3"), true, true), "pip3")
+})
+
+void describe("voiceSetup engine install (isolated-first)", () => {
+  const probe = (over: Partial<VoiceToolProbe>): VoiceToolProbe => ({
+    hasRecorder: true,
+    hasEngine: false,
+    pip: null,
+    recorderInstall: null,
+    ...over,
   })
-  void it("prefers python3 -m pip over uv", () => {
-    assert.equal(pickPipCommand(none, true, true), "python3 -m pip")
+
+  void it("prefers 'uv tool install openai-whisper' when uv exists, even alongside pip", () => {
+    assert.equal(
+      pickEngineInstallCommand(probe({ hasUv: true, pip: "pip3" })).command,
+      "uv tool install openai-whisper",
+    )
+  })
+
+  void it("falls back to 'pipx install openai-whisper' when only pipx exists", () => {
+    assert.equal(
+      pickEngineInstallCommand(probe({ hasPipx: true, pip: "pip3", externallyManaged: true })).command,
+      "pipx install openai-whisper",
+    )
+  })
+
+  void it("suppresses bare pip installs on externally-managed Python (PEP 668)", () => {
+    const choice = pickEngineInstallCommand(probe({ pip: "pip3", externallyManaged: true }))
+    assert.equal(choice.command, undefined, "pip install would fail with externally-managed-environment")
+    assert.match(choice.manual ?? "", /uv|pipx/, "manual guidance must point at an isolated installer")
+    assert.match(choice.manual ?? "", /pacman -S uv/, "Arch/CachyOS users get the exact uv install command")
+  })
+
+  void it("still uses pip when the environment is not externally managed", () => {
+    assert.equal(pickEngineInstallCommand(probe({ pip: "pip3" })).command, "pip3 install -U openai-whisper")
+  })
+
+  void it("never offers 'uv pip install --system'", () => {
+    for (const p of [probe({ hasUv: true }), probe({ hasUv: true, externallyManaged: true }), probe({ hasUv: true, pip: "pip3" })]) {
+      const plan = buildVoiceSetupPlan(p, "linux")
+      for (const step of plan.steps) {
+        assert.ok(!(step.command ?? "").includes("uv pip install --system"), "uv pip --system targets the managed env and fails")
+      }
+    }
   })
 })
 
@@ -141,12 +181,12 @@ void describe("voiceSetup plan", () => {
     assert.equal(engine?.command, "python3 -m pip install -U openai-whisper")
   })
 
-  void it("offers a runnable engine install when only uv is available", () => {
+  void it("offers an isolated uv tool install when only uv is available", () => {
     const plan = buildVoiceSetupPlan(
-      probe({ hasRecorder: true, pip: "uv pip install --system" }),
+      probe({ hasRecorder: true, hasUv: true }),
       "linux",
     )
     const engine = plan.steps.find((s) => s.kind === "engine")
-    assert.equal(engine?.command, "uv pip install --system openai-whisper")
+    assert.equal(engine?.command, "uv tool install openai-whisper")
   })
 })
