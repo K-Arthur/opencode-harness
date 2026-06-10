@@ -170,6 +170,28 @@ describe("state.ts — per-session token usage isolation (Batch 2d)", () => {
     assert.equal(sm.getSession(s1.id)?.contextUsage?.source, "actual")
   })
 
+  it("ensureSession lets host-provided tokenUsage and cost replace local values", () => {
+    // Host SessionStore is the canonical token/cost ledger. When the host
+    // hands the webview a session snapshot, its values must win — keeping
+    // stale local accumulations caused totals to jump around on tab
+    // switch / reopen.
+    const sm = createState(makeVsCodeStub())
+    const s1 = sm.createSession("Tab 1")
+    const local = sm.getSession(s1.id)!
+    local.tokenUsage = { prompt: 9_999, completion: 9_999, total: 19_998 }
+    local.cost = 9.99
+
+    sm.ensureSession({
+      ...s1,
+      messages: [],
+      tokenUsage: { prompt: 100, completion: 20, total: 120 },
+      cost: 0.05,
+    })
+
+    assert.equal(sm.getSession(s1.id)?.tokenUsage?.total, 120, "host tokenUsage replaces local")
+    assert.equal(sm.getSession(s1.id)?.cost, 0.05, "host cost replaces local even when smaller")
+  })
+
   it("tracks per-session scroll positions in webview state", () => {
     const sm = createState(makeVsCodeStub())
     const s1 = sm.createSession("Tab 1")

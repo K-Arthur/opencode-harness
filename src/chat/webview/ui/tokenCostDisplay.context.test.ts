@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { JSDOM } from "jsdom"
-import { updateContextBarFromSession, type TokenCostDeps } from "./tokenCostDisplay"
+import { updateContextBarFromSession, applyTokenUsageTotals, accumulateTokenUsage, type TokenCostDeps } from "./tokenCostDisplay"
 
 const source = readFileSync(path.join(__dirname, "tokenCostDisplay.ts"), "utf8")
 
@@ -258,5 +258,83 @@ describe("tokenCostDisplay context status UI", () => {
     updateContextBarFromSession(deps, "session-a")
 
     assert.equal(contextUsage.classList.contains("hidden"), false, "usage bar should show once a session is active")
+  })
+})
+
+describe("tokenCostDisplay cumulative totals (host source of truth)", () => {
+  function makeAccountingDeps() {
+    const dom = new JSDOM(`<!doctype html><body>
+      <div id="status-strip" hidden>
+        <span id="status-tokens"></span>
+        <span id="status-model"></span>
+        <div id="context-usage" class="context-usage-bar hidden">
+          <span id="context-label"></span>
+          <span id="context-cost" class="context-cost hidden"></span>
+        </div>
+        <span id="status-cost" class="hidden"></span>
+      </div>
+      <div id="quota-bar"></div>
+      <div id="quota-progress-bar"></div>
+      <div id="quota-label"></div>
+      <div id="quota-detail"></div>
+    </body>`)
+    const doc = dom.window.document
+    const session: { tokenUsage?: { prompt: number; completion: number; total: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }; cost?: number; model?: string } = {
+      model: "provider/model",
+    }
+    const deps: TokenCostDeps = {
+      els: {
+        tokenDisplay: null,
+        statusTokens: doc.getElementById("status-tokens")!,
+        statusModel: doc.getElementById("status-model")!,
+        costDisplay: null,
+        statusCost: doc.getElementById("status-cost")!,
+        contextUsage: doc.getElementById("context-usage")!,
+        statusStrip: doc.getElementById("status-strip")!,
+        quotaBar: doc.getElementById("quota-bar")!,
+        quotaProgressBar: doc.getElementById("quota-progress-bar")!,
+        quotaLabel: doc.getElementById("quota-label")!,
+        quotaDetail: doc.getElementById("quota-detail")!,
+      },
+      getSession: () => session,
+      getActiveSessionId: () => "session-a",
+      save: () => {},
+      getContextWindow: () => 1_000_000,
+      showStatusStrip: () => {},
+      getActiveMessageList: () => null,
+      timers: { setTimeout },
+      isWelcomeVisible: () => false,
+    }
+    return { deps, session }
+  }
+
+  it("applyTokenUsageTotals replaces totals idempotently (same payload twice = same result)", () => {
+    const { deps, session } = makeAccountingDeps()
+    const totals = { prompt: 1_000, completion: 200, total: 1_200, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
+
+    applyTokenUsageTotals(deps, "session-a", totals, 0.42)
+    assert.equal(session.tokenUsage?.total, 1_200)
+    assert.equal(session.cost, 0.42)
+
+    // SSE replay / event re-delivery must not double-count.
+    applyTokenUsageTotals(deps, "session-a", totals, 0.42)
+    assert.equal(session.tokenUsage?.total, 1_200, "re-applying the same cumulative payload must not add")
+    assert.equal(session.tokenUsage?.prompt, 1_000)
+    assert.equal(session.cost, 0.42)
+  })
+
+  it("applyTokenUsageTotals always replaces, never adds", () => {
+    const { deps, session } = makeAccountingDeps()
+    applyTokenUsageTotals(deps, "session-a", { prompt: 500, completion: 100, total: 600 })
+    applyTokenUsageTotals(deps, "session-a", { prompt: 900, completion: 150, total: 1_050 }, 1.5)
+    assert.equal(session.tokenUsage?.total, 1_050, "newer cumulative snapshot replaces the older one")
+    assert.equal(session.cost, 1.5)
+  })
+
+  it("legacy delta payloads still accumulate via accumulateTokenUsage", () => {
+    const { deps, session } = makeAccountingDeps()
+    accumulateTokenUsage(deps, "session-a", { prompt: 100, completion: 10, total: 110, reasoning: 0, cacheRead: 0, cacheWrite: 0 })
+    accumulateTokenUsage(deps, "session-a", { prompt: 100, completion: 10, total: 110, reasoning: 0, cacheRead: 0, cacheWrite: 0 })
+    assert.equal(session.tokenUsage?.total, 220, "delta semantics remain additive for legacy hosts")
   })
 })
