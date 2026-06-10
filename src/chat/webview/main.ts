@@ -544,6 +544,9 @@ function getVsCodeApi() {
   const sessionBeforeIndex = new Map<string, number>()
   // Tracks the turn-based count for the "Load earlier" banner display text.
   const sessionHiddenTurns = new Map<string, number>()
+  // Timeline jumps to not-yet-loaded turns: remember the target and chase it
+  // across a bounded number of request_more_messages pages.
+  const pendingTimelineScroll = new Map<string, { messageId: string; attemptsLeft: number }>()
 
   // Throttled updateScrollMarkers — prevents O(n) DOM work on every chunk tick
   const debouncedUpdateScrollMarkers = throttleScrollMarkers((id) => updateScrollMarkers(id))
@@ -668,6 +671,12 @@ function getVsCodeApi() {
       setTimelineVisible: (v) => stateManager.setTimelineVisible(v),
       getMessageList,
       scrollToTurn: (messageId) => scrollToTurnModule(scrollMarkerDeps, messageId),
+      onUnloadedTurnClick: (sessionId, messageId) => {
+        const idx = sessionBeforeIndex.get(sessionId) ?? 0
+        if (idx <= 0) return
+        pendingTimelineScroll.set(sessionId, { messageId, attemptsLeft: 3 })
+        vscode.postMessage({ type: "request_more_messages", sessionId, beforeIndex: idx, limit: 50 })
+      },
       setThinkingVisible,
       getThinkingVisible,
       toggleAllThinkingBlocks,
@@ -2603,6 +2612,15 @@ function getVsCodeApi() {
         const session = stateManager.getSession(sid)
         const renderOpts = { mode: session?.mode ?? "build", sessionId: sid, postMessage: (m2: Record<string, unknown>) => vscode.postMessage(m2) }
 
+        // Insert the page into session state BEFORE rendering: the timeline,
+        // turn indexes and scroll markers are all derived from
+        // session.messages, and turnIndex below reads indexOf.
+        if (session) {
+          const known = new Set(session.messages.map((m) => m.id))
+          const fresh = moreMsgs.filter((m) => !m.id || !known.has(m.id))
+          if (fresh.length > 0) session.messages.unshift(...fresh)
+        }
+
         const elements = moreMsgs.map((m, index) => {
           const isConsecutive = index > 0 && moreMsgs[index - 1]?.role === m.role
           return renderMessage(m, { ...renderOpts, turnIndex: session?.messages.indexOf(m) }, isConsecutive)
@@ -2623,6 +2641,23 @@ function getVsCodeApi() {
         }
 
         debouncedUpdateScrollMarkers(sid)
+        // Keep the timeline in lock-step with the newly loaded page (no
+        // 200ms debounce here — the user is waiting on this update).
+        refreshConversationTimeline(sid)
+
+        // Fulfill (or chain) a pending timeline jump to an unloaded turn.
+        const pending = pendingTimelineScroll.get(sid)
+        if (pending) {
+          if (msgList.querySelector(`[data-message-id="${CSS.escape(pending.messageId)}"]`)) {
+            pendingTimelineScroll.delete(sid)
+            scrollToTurnModule(scrollMarkerDeps, pending.messageId)
+          } else if (pending.attemptsLeft > 1 && newBeforeIndex > 0) {
+            pendingTimelineScroll.set(sid, { messageId: pending.messageId, attemptsLeft: pending.attemptsLeft - 1 })
+            vscode.postMessage({ type: "request_more_messages", sessionId: sid, beforeIndex: newBeforeIndex, limit: 50 })
+          } else {
+            pendingTimelineScroll.delete(sid)
+          }
+        }
       }],
       ["clear_messages", (_msg, sid) => { handleClearMessages(sid) }],
       ["session_messages_refreshed", (msg) => {

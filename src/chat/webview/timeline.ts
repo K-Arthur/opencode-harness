@@ -14,7 +14,11 @@ export interface TimelineDeps {
   isTimelineVisible: () => boolean
   setTimelineVisible: (visible: boolean) => void
   getMessageList: (tabId: string) => HTMLDivElement | null
-  scrollToTurn: (messageId: string) => void
+  /** Returns false when the turn's message has no DOM node (unloaded page). */
+  scrollToTurn: (messageId: string) => boolean
+  /** Invoked when the user clicks a turn whose message is not rendered —
+   *  expected to load the missing history and scroll once it arrives. */
+  onUnloadedTurnClick?: (sessionId: string, messageId: string) => void
   setThinkingVisible: (visible: boolean) => void
   getThinkingVisible: () => boolean
   toggleAllThinkingBlocks: (visible: boolean) => void
@@ -58,12 +62,21 @@ export function createTimeline(deps: TimelineDeps): TimelineAPI {
   })
 
   function setupTimelineToggle() {
-    els.timelineToggleBtn.setAttribute("aria-pressed", String(isTimelineVisible()))
-    els.timelineToggleBtn.addEventListener("click", () => {
-      const visible = !isTimelineVisible()
-      setTimelineVisible(visible)
+    const headerBtn = (els as { timelineToggleHeaderBtn?: HTMLElement | null }).timelineToggleHeaderBtn ?? null
+    const syncPressed = () => {
+      const pressed = String(isTimelineVisible())
+      els.timelineToggleBtn.setAttribute("aria-pressed", pressed)
+      headerBtn?.setAttribute("aria-pressed", pressed)
+    }
+    const toggle = () => {
+      setTimelineVisible(!isTimelineVisible())
+      syncPressed()
       applyTimelineVisibility()
-    })
+    }
+    syncPressed()
+    els.timelineToggleBtn.addEventListener("click", toggle)
+    // Discoverability: the same toggle also lives in the header toolbar.
+    headerBtn?.addEventListener("click", toggle)
     applyTimelineVisibility()
   }
 
@@ -79,6 +92,12 @@ export function createTimeline(deps: TimelineDeps): TimelineAPI {
     els.timelineToggleBtn.classList.toggle("active", visible)
     els.timelineToggleBtn.setAttribute("aria-pressed", String(visible))
     els.timelineToggleBtn.classList.toggle("hidden", welcomeVisible)
+    const headerBtn = (els as { timelineToggleHeaderBtn?: HTMLElement | null }).timelineToggleHeaderBtn ?? null
+    if (headerBtn) {
+      headerBtn.classList.toggle("active", visible)
+      headerBtn.setAttribute("aria-pressed", String(visible))
+      headerBtn.classList.toggle("hidden", welcomeVisible)
+    }
 
     document.querySelectorAll(".message-list.timeline-visible").forEach((el) => el.classList.remove("timeline-visible"))
     document.querySelectorAll(".conversation-timeline.visible").forEach((el) => el.classList.remove("visible"))
@@ -128,7 +147,13 @@ export function createTimeline(deps: TimelineDeps): TimelineAPI {
       item.type = "button"
       item.className = "timeline-item"
       item.dataset.messageId = turn.userMessageId
-      item.setAttribute("aria-label", `Jump to turn ${index + 1}: ${turn.snippet}`)
+      // Lazy loading keeps earlier pages out of the DOM; dim those turns so
+      // the user can tell which jumps will trigger a history load.
+      const loaded = Boolean(msgList.querySelector(`[data-message-id="${CSS.escape(turn.userMessageId)}"]`))
+      if (!loaded) item.classList.add("timeline-item--unloaded")
+      item.setAttribute("aria-label", loaded
+        ? `Jump to turn ${index + 1}: ${turn.snippet}`
+        : `Load earlier history and jump to turn ${index + 1}: ${turn.snippet}`)
 
       const role = document.createElement("span")
       role.className = "timeline-item-role"
@@ -146,8 +171,20 @@ export function createTimeline(deps: TimelineDeps): TimelineAPI {
       item.appendChild(preview)
 
       item.addEventListener("click", () => {
-        scrollToTurn(turn.userMessageId)
-        scheduleProgressUpdate(targetId)
+        if (scrollToTurn(turn.userMessageId)) {
+          scheduleProgressUpdate(targetId)
+          return
+        }
+        // Target not in the DOM: it may sit inside a condensed history group —
+        // expand those and retry — otherwise hand off to the load-then-scroll
+        // flow so the click never dies silently.
+        const summaries = Array.from(msgList.querySelectorAll<HTMLElement>(".history-condensed-summary"))
+        for (const summary of summaries) summary.click()
+        if (summaries.length > 0 && scrollToTurn(turn.userMessageId)) {
+          scheduleProgressUpdate(targetId)
+          return
+        }
+        deps.onUnloadedTurnClick?.(targetId, turn.userMessageId)
       })
       timeline.appendChild(item)
     })
