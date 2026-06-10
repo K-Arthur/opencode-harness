@@ -218,6 +218,7 @@ export class RunActivityTracker {
     run.phase = "completed"
     run.lastActivityAt = at
     run.statusLabel = "Completed"
+    this.terminalizeActiveSubagents(run, "completed", at)
     this.recompute(run)
     return this.snapshot(run)
   }
@@ -243,8 +244,22 @@ export class RunActivityTracker {
     run.lastActivityAt = at
     run.lastError = this.errorState("user_cancelled", "user", message, at, "non_retryable")
     run.statusLabel = "Cancelled"
+    this.terminalizeActiveSubagents(run, "cancelled", at)
     this.recompute(run)
     return this.snapshot(run)
+  }
+
+  // When the parent run reaches a terminal state, no further subagent events
+  // can arrive for it (the run is cleared right after the final snapshot is
+  // posted). Any subagent still in a non-terminal status would otherwise be
+  // reported as "running" forever, so close them out with the run's outcome.
+  private terminalizeActiveSubagents(run: MutableRunState, status: "completed" | "cancelled", at: number): void {
+    for (const subagent of run.subagents.values()) {
+      if (TERMINAL_SUBAGENT_STATUSES.has(subagent.status)) continue
+      subagent.status = status
+      subagent.completedAt = at
+      subagent.updatedAt = at
+    }
   }
 
   markRunInterrupted(tabId: string, message: string): AgentRunState | undefined {
