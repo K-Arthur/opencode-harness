@@ -19,6 +19,7 @@ import {
   resetChangedFilesDropdown,
   handleDiffResponse,
   resetSessionState,
+  refreshChangedFilesVisibility,
 } from "./changed-files-dropdown"
 
 let dom: JSDOM
@@ -180,6 +181,40 @@ describe("changed-files-dropdown — per-session isolation", () => {
     const strip = document.getElementById("changed-files-strip")!
     assert.ok(!strip.classList.contains("hidden"), "strip must show after leaving welcome")
     assert.ok(strip.textContent!.includes("welcome-buffer.ts"), "session's files must appear after welcome exit")
+  })
+
+  it("strip already rendered for a session is hidden when the welcome view becomes visible", () => {
+    // Reproduces the user-visible leak: the strip renders while a session is
+    // active, then the user navigates to the welcome screen — the guard only
+    // ran at render time, so the stale strip stayed visible on welcome.
+    welcomeVisible = false
+    setCurrentSession("sess-A")
+    updateChangedFiles("sess-A", [{ path: "src/leak.ts", added: 2, removed: 1 }])
+
+    const strip = document.getElementById("changed-files-strip")!
+    assert.ok(!strip.classList.contains("hidden"), "precondition: strip visible in session")
+
+    welcomeVisible = true
+    refreshChangedFilesVisibility()
+
+    assert.ok(strip.classList.contains("hidden"), "strip must hide when welcome becomes visible")
+    assert.equal(strip.innerHTML, "", "strip must be emptied when welcome becomes visible")
+  })
+
+  it("strip reappears when welcome hides again", () => {
+    welcomeVisible = false
+    setCurrentSession("sess-A")
+    updateChangedFiles("sess-A", [{ path: "src/comeback.ts", added: 1, removed: 0 }])
+
+    welcomeVisible = true
+    refreshChangedFilesVisibility()
+    const strip = document.getElementById("changed-files-strip")!
+    assert.ok(strip.classList.contains("hidden"))
+
+    welcomeVisible = false
+    refreshChangedFilesVisibility()
+    assert.ok(!strip.classList.contains("hidden"), "strip must come back after welcome hides")
+    assert.ok(strip.textContent!.includes("comeback.ts"))
   })
 
   it("re-setting current session to null on welcome keeps strip hidden", () => {
