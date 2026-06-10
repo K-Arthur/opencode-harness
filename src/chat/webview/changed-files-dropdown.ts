@@ -192,6 +192,19 @@ export function updateChangedFiles(sessionId: string, files: FileChange[]): void
   })
 }
 
+/**
+ * Re-apply the welcome-view guard to the already-rendered strip/dropdown.
+ * The guard otherwise only runs at render time, so a strip rendered inside a
+ * session would stay visible after the user navigates to the welcome screen.
+ * Call whenever the welcome view is shown or hidden.
+ */
+export function refreshChangedFilesVisibility(): void {
+  if (!_currentSessionId) return
+  _refreshUI(_currentSessionId, _stateFor(_currentSessionId).lastFiles)
+  // The dropdown panel must also close — it floats above the welcome screen.
+  if (_isOpen && _isWelcomeVisible()) _close()
+}
+
 function _refreshUI(sessionId: string, files: FileChange[]): void {
   const welcome = _isWelcomeVisible()
   _updateBadge(welcome ? 0 : files.length)
