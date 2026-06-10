@@ -870,3 +870,19 @@ void it("backfillRecoveredSessions guards in-progress and skips local placeholde
     "must skip local placeholder ids (now delegated to selectPendingBackfill, which filters them out)"
   )
 })
+
+void describe("ChatProvider token accounting — host source of truth", () => {
+  void it("step_finish posts step_tokens with cumulative totals from SessionStore", () => {
+    const start = source.indexOf('["step_finish"')
+    assert.ok(start >= 0, "step_finish handler must exist")
+    const block = source.slice(start, source.indexOf("}],", start))
+    assert.ok(
+      block.includes("cumulative:"),
+      "step_tokens must carry cumulative session totals so the webview can SET instead of accumulate (idempotent on replay)",
+    )
+    assert.ok(
+      block.includes("cumulativeCost:"),
+      "step_tokens must carry the cumulative session cost",
+    )
+  })
+})
