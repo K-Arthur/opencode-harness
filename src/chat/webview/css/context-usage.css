@@ -169,31 +169,52 @@
   display: none;
 }
 
-/* Changed Files Always-Visible Strip */
+/* Changed Files Always-Visible Strip — contained widget surface above the
+   input, not loose text: subtle background, hairline border, rounded. */
 .cf-strip {
   position: relative;
   z-index: calc(var(--z-sticky) + 20);
   display: flex;
   align-items: center;
-  gap: var(--space-0-5);
-  padding: var(--space-1) var(--space-2-5);
+  gap: var(--space-1);
+  margin: 0 var(--space-2) var(--space-1);
+  padding: var(--space-0-5) var(--space-2);
   font-size: var(--text-2xs);
   color: var(--oc-muted);
+  background: var(--vscode-editorWidget-background, var(--oc-glass-bg));
+  border: 1px solid var(--vscode-widget-border, var(--oc-border));
+  border-radius: var(--radius-sm);
   cursor: pointer;
   overflow: hidden;
   flex-shrink: 0;
   min-height: var(--size-target-min);
   white-space: nowrap;
   outline: none;
+  transition: background-color var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast);
 }
 
-.cf-strip:hover { color: var(--oc-fg); }
-.cf-strip:focus-visible { outline: 1px solid var(--vscode-focusBorder, #007fd4); }
+.cf-strip:hover {
+  color: var(--oc-fg);
+  background: var(--vscode-list-hoverBackground, var(--oc-glass-bg));
+  border-color: var(--vscode-focusBorder, var(--oc-border));
+}
+.cf-strip:focus-visible { outline: 1px solid var(--vscode-focusBorder, #007fd4); outline-offset: -1px; }
 .cf-strip.hidden { display: none; }
 
 .cf-strip-icon { display: flex; align-items: center; color: var(--oc-accent); flex-shrink: 0; }
-.cf-strip-label { flex-shrink: 0; font-weight: 500; }
+.cf-strip-label { flex-shrink: 0; font-weight: 600; color: var(--oc-fg); }
 .cf-strip-divider { color: var(--oc-muted); opacity: 0.4; flex-shrink: 0; }
+
+/* Aggregate +added/−removed totals next to the count label */
+.cf-strip-stats {
+  display: inline-flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.cf-strip-added { color: var(--vscode-gitDecoration-addedResourceForeground, var(--color-success, #2ea043)); }
+.cf-strip-removed { color: var(--vscode-gitDecoration-deletedResourceForeground, var(--color-error, #f85149)); }
 
 .cf-strip-chip {
   display: inline;

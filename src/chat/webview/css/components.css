@@ -2532,7 +2532,8 @@ textarea {
 .cf-file-row:hover { background: var(--oc-glass-bg); }
 .cf-file-row:focus { outline: 1px solid var(--oc-accent); outline-offset: -1px; }
 
-/* Status badge */
+/* Status badge — themed via VS Code git decoration tokens so A/M/D match
+   the Explorer's added/modified/deleted colors in every theme. */
 .cf-status-badge {
   flex-shrink: 0;
   width: 14px;
@@ -2541,9 +2542,9 @@ textarea {
   letter-spacing: 0;
   text-align: center;
 }
-.cf-status-badge--A { color: #4caf50; }
-.cf-status-badge--M { color: #ff9800; }
-.cf-status-badge--D { color: #f44336; }
+.cf-status-badge--A { color: var(--vscode-gitDecoration-addedResourceForeground, #4caf50); }
+.cf-status-badge--M { color: var(--vscode-gitDecoration-modifiedResourceForeground, #ff9800); }
+.cf-status-badge--D { color: var(--vscode-gitDecoration-deletedResourceForeground, #f44336); }
 
 /* File name */
 .cf-file-name {
@@ -2556,10 +2557,28 @@ textarea {
   font-family: var(--font-mono);
 }
 
-/* Stat badges */
-.cf-file-stats { display: flex; gap: 3px; flex-shrink: 0; }
-.cf-stat-added  { font-size: 0.7rem; color: #4caf50; font-family: var(--font-mono); }
-.cf-stat-removed { font-size: 0.7rem; color: #f44336; font-family: var(--font-mono); }
+/* Stat badges — fixed-width, right-aligned numeric columns so +/− totals
+   line up vertically across rows. */
+.cf-file-stats {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.cf-stat-added {
+  font-size: 0.7rem;
+  color: var(--vscode-gitDecoration-addedResourceForeground, #4caf50);
+  font-family: var(--font-mono);
+  min-width: 3ch;
+  text-align: right;
+}
+.cf-stat-removed {
+  font-size: 0.7rem;
+  color: var(--vscode-gitDecoration-deletedResourceForeground, #f44336);
+  font-family: var(--font-mono);
+  min-width: 3ch;
+  text-align: right;
+}
 
 /* Expand chevron */
 .cf-expand-btn {
@@ -2599,8 +2618,8 @@ textarea {
   overflow-y: auto;
 }
 .cf-hunk-line { display: block; }
-.cf-hunk-line--added  { color: #4caf50; background: rgba(76,175,80,0.06); }
-.cf-hunk-line--removed { color: #f44336; background: rgba(244,67,54,0.06); }
+.cf-hunk-line--added  { color: var(--vscode-gitDecoration-addedResourceForeground, #4caf50); background: var(--vscode-diffEditor-insertedTextBackground, rgba(76,175,80,0.06)); }
+.cf-hunk-line--removed { color: var(--vscode-gitDecoration-deletedResourceForeground, #f44336); background: var(--vscode-diffEditor-removedTextBackground, rgba(244,67,54,0.06)); }
 .cf-hunk-line--context { color: var(--oc-muted); }
 .cf-hunk-more  { display: block; color: var(--oc-muted); font-style: italic; padding: 1px 0; font-size: 0.68rem; }
 .cf-hunk-empty  { padding: 6px 10px 6px 30px; color: var(--oc-muted); font-size: 0.72rem; }
@@ -2623,7 +2642,8 @@ textarea {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Summary bar — aggregate file count + added/removed totals */
+/* Summary bar — aggregate file count + added/removed totals. Sticky so the
+   totals stay visible while scrolling a long file tree. */
 .cf-summary-bar {
   display: flex;
   align-items: center;
@@ -2632,6 +2652,10 @@ textarea {
   border-bottom: 1px solid var(--oc-border);
   font-size: 0.72rem;
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--vscode-editorWidget-background, var(--oc-editor-bg));
 }
 .cf-summary-count {
   font-weight: 600;

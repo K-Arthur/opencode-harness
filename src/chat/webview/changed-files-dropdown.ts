@@ -255,14 +255,22 @@ function _renderStrip(_sessionId: string, files: FileChange[]): void {
   }
   strip.classList.remove("hidden")
   const paths = files.map((f) => f.path ?? "").filter((p) => p.length > 0)
+  const totalAdded = files.reduce((sum, f) => sum + (typeof f.added === "number" ? f.added : 0), 0)
+  const totalRemoved = files.reduce((sum, f) => sum + (typeof f.removed === "number" ? f.removed : 0), 0)
   // Skip the innerHTML rebuild when the visible content is unchanged — the strip
-  // shows basenames + a count, so paths + length fully determine its markup.
-  const sig = `${files.length}|${paths.join("|")}`
+  // shows basenames + count + aggregate stats, so these fully determine its markup.
+  const sig = `${files.length}|${totalAdded}|${totalRemoved}|${paths.join("|")}`
   if (strip.getAttribute("data-cf-sig") === sig) return
   strip.setAttribute("data-cf-sig", sig)
   strip.innerHTML = renderFileChipListHtml(
     paths,
-    { maxVisible: CF_STRIP_MAX, showLeadingIcon: true, showCountLabel: true, countLabelSuffix: "changed" },
+    {
+      maxVisible: CF_STRIP_MAX,
+      showLeadingIcon: true,
+      showCountLabel: true,
+      countLabelSuffix: "changed",
+      stats: { added: totalAdded, removed: totalRemoved },
+    },
   )
   // NOTE: the click-to-open handler is bound once in setupChangedFilesDropdown;
   // it survives innerHTML updates because it lives on the stable strip element.
