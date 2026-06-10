@@ -436,6 +436,25 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     }
   }
 
+  /**
+   * PEP 668: distros like Arch/CachyOS, Debian 12+ and Fedora 38+ mark the
+   * system Python as externally managed — `pip install` fails outright. Probe
+   * for the stdlib EXTERNALLY-MANAGED marker; default to false on any failure
+   * so non-Python issues never block the setup flow.
+   */
+  private detectExternallyManagedPython(): boolean {
+    try {
+      const result = spawnSync(
+        "python3",
+        ["-c", "import sysconfig,os,sys;sys.exit(0 if os.path.exists(os.path.join(sysconfig.get_path('stdlib'),'EXTERNALLY-MANAGED')) else 1)"],
+        { stdio: "ignore", timeout: 5000 },
+      )
+      return result.status === 0
+    } catch {
+      return false
+    }
+  }
+
   private createHostMessageBatcher(): HostMessageBatcher {
     return new HostMessageBatcher(
       (msg) => this.messagePostService.postRawMessage(msg),
@@ -681,12 +700,14 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     const recorderPlan = selectRecorderPlan(captureConfig, process.platform, commandExists)
     const transcriberPlan = selectTranscriberPlan(captureConfig, commandExists)
     const pipViaPython = this.detectPipViaPython()
-    const hasUv = commandExists("uv")
     const setupPlan = buildVoiceSetupPlan({
       hasRecorder: recorderPlan !== null,
       hasEngine: transcriberPlan !== null,
-      pip: pickPipCommand(commandExists, pipViaPython, hasUv),
+      pip: pickPipCommand(commandExists, pipViaPython),
       recorderInstall: recorderInstallCommand(process.platform, commandExists),
+      hasUv: commandExists("uv"),
+      hasPipx: commandExists("pipx"),
+      externallyManaged: this.detectExternallyManagedPython(),
     }, process.platform)
 
     this.voiceInputService.postSettings()

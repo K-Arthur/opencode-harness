@@ -132,7 +132,9 @@ export function invalidateExistsCache(): void {
   existsCache.clear()
 }
 
-/** Best-effort check that a binary is resolvable on PATH. Cached. */
+/** Best-effort check that a binary is resolvable on PATH. Cached.
+ *  Falls back to ~/.local/bin on POSIX: uv tool / pipx install user binaries
+ *  there, and VS Code's process PATH (no login shell) often misses it. */
 export function commandExists(bin: string): boolean {
   const cached = existsCache.get(bin)
   if (cached !== undefined) return cached
@@ -144,8 +146,36 @@ export function commandExists(bin: string): boolean {
   } catch {
     ok = false
   }
+  if (!ok && process.platform !== "win32" && !bin.includes("/") && !bin.includes("\0")) {
+    try {
+      fs.accessSync(path.join(os.homedir(), ".local", "bin", bin), fs.constants.X_OK)
+      ok = true
+    } catch {
+      // not there either
+    }
+  }
   existsCache.set(bin, ok)
   return ok
+}
+
+/** Resolve a bare binary name to something spawn() can execute: when the name
+ *  is only discoverable via the ~/.local/bin fallback, return its absolute
+ *  path; otherwise return the name unchanged. */
+export function resolveBinPath(bin: string): string {
+  if (process.platform === "win32" || bin.includes("/")) return bin
+  try {
+    const result = spawnSync("which", [bin], { stdio: "ignore", timeout: 3000 })
+    if (result.status === 0) return bin
+  } catch {
+    // fall through to the local-bin check
+  }
+  const localBin = path.join(os.homedir(), ".local", "bin", bin)
+  try {
+    fs.accessSync(localBin, fs.constants.X_OK)
+    return localBin
+  } catch {
+    return bin
+  }
 }
 
 function buildRecorderArgs(plan: RecorderPlan, outputPath: string, maxDurationSeconds: number): { bin: string; args: string[] } {
@@ -195,7 +225,7 @@ class CommandRecorder implements Recorder {
     if (!plan) throw new Error("No microphone recorder is available")
     const { bin, args } = buildRecorderArgs(plan, opts.outputPath, opts.maxDurationSeconds)
     this.log("info", `voice: recording with ${bin}`)
-    const child = spawn(bin, args, { stdio: ["pipe", "ignore", "pipe"] })
+    const child = spawn(resolveBinPath(bin), args, { stdio: ["pipe", "ignore", "pipe"] })
     return new ProcessRecordingSession(child, plan.kind, this.log)
   }
 }
@@ -340,7 +370,7 @@ class CommandTranscriber implements Transcriber {
 
 function runProcess(bin: string, args: string[], timeoutMs: number): Promise<{ stdout: string; code: number | null }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] })
+    const child = spawn(resolveBinPath(bin), args, { stdio: ["ignore", "pipe", "pipe"] })
     let stdout = ""
     let stderr = ""
     const timer = setTimeout(() => {
