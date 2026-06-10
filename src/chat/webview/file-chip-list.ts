@@ -19,6 +19,8 @@ export interface FileChipListOptions {
   showCountLabel?: boolean
   /** Optional verb after the count, e.g. "changed" → "13 files changed". */
   countLabelSuffix?: string
+  /** Aggregate diff totals — rendered as `+X −Y` after the count label. */
+  stats?: { added: number; removed: number }
 }
 
 const DEFAULT_MAX = 5
@@ -59,6 +61,14 @@ export function renderFileChipListHtml(files: string[], opts: FileChipListOption
     parts.push(
       `<span class="cf-strip-label">${files.length} file${files.length !== 1 ? "s" : ""}${suffix}</span>`
     )
+    if (opts.stats && (opts.stats.added > 0 || opts.stats.removed > 0)) {
+      parts.push(
+        `<span class="cf-strip-stats">` +
+          `<span class="cf-strip-added">+${opts.stats.added}</span>` +
+          `<span class="cf-strip-removed">−${opts.stats.removed}</span>` +
+        `</span>`
+      )
+    }
     parts.push(`<span class="cf-strip-divider" aria-hidden="true">·</span>`)
   }
 
