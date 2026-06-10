@@ -111,6 +111,27 @@ describe("WebviewEventRouter host state sync", () => {
   })
 })
 
+describe("WebviewEventRouter copy_text routing", () => {
+  // Webviews frequently lack navigator.clipboard; copy actions must round-trip
+  // through the host's vscode.env.clipboard instead.
+  it("accepts copy_text with a non-empty string and rejects anything else", () => {
+    assert.equal(validate({ text: "npm test" }, "copy_text"), true)
+    assert.equal(validate({}, "copy_text"), false)
+    assert.equal(validate({ text: "   " }, "copy_text"), false)
+    assert.equal(validate({ text: 42 }, "copy_text"), false)
+  })
+
+  it("registers a copy_text handler that writes to the host clipboard", () => {
+    assert.match(
+      source,
+      /\["copy_text",\s*(async\s*)?\(/,
+      "copy_text must have a webview handler",
+    )
+    const handler = blockBetween('["copy_text"', "}],")
+    assert.ok(handler.includes("clipboard.writeText"), "copy_text handler must write to vscode.env.clipboard")
+  })
+})
+
 describe("WebviewMessageValidator MCP config", () => {
   it("rejects unsafe MCP server names and command strings", () => {
     assert.equal(validate({ name: "safe-server", config: { command: "node", args: ["server.js"] } }, "add_mcp_server"), true)

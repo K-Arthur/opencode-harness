@@ -964,4 +964,17 @@ it("unified modal: server session items send resume_server_session on click", ()
       )
     })
   })
+
+  describe("tasks-panel copy action", () => {
+    it("onCopy routes through the host copy_text message, not navigator.clipboard", () => {
+      // navigator.clipboard is undefined in VS Code webviews; the old
+      // `navigator.clipboard?.writeText(text).catch(...)` threw a synchronous
+      // TypeError (`.catch` on undefined) on every Copy click.
+      const onCopyIdx = source.indexOf("onCopy:")
+      assert.ok(onCopyIdx >= 0, "tasks panel deps must define onCopy")
+      const onCopyBlock = source.slice(onCopyIdx, onCopyIdx + 400)
+      assert.ok(!onCopyBlock.includes("navigator.clipboard"), "onCopy must not rely on navigator.clipboard")
+      assert.ok(onCopyBlock.includes('"copy_text"') || onCopyBlock.includes("'copy_text'"), "onCopy must post copy_text to the host")
+    })
+  })
 })
