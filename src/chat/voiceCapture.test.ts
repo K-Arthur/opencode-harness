@@ -77,3 +77,36 @@ void describe("voiceCapture plan descriptions", () => {
     assert.equal(describeTranscriberPlan({ kind: "openai-whisper", bin: "whisper", model: "base" }), "whisper (base)")
   })
 })
+
+void describe("voiceCapture commandExists ~/.local/bin fallback", () => {
+  // uv tool / pipx install the `whisper` binary into ~/.local/bin, which is
+  // not always on VS Code's process PATH (no login shell). The exists probe
+  // must find such binaries so voice input works right after setup without
+  // PATH surgery.
+  void it("finds an executable in ~/.local/bin even when `which` misses it", async (t) => {
+    if (process.platform === "win32") { t.skip("POSIX-only fallback"); return }
+    const { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync } = await import("node:fs")
+    const { join } = await import("node:path")
+    const os = await import("node:os")
+    const { commandExists, invalidateExistsCache } = await import("./voiceCapture")
+
+    const fakeHome = mkdtempSync(join(os.tmpdir(), "oc-voice-home-"))
+    const binDir = join(fakeHome, ".local", "bin")
+    mkdirSync(binDir, { recursive: true })
+    const binName = `oc-fake-whisper-${process.pid}`
+    writeFileSync(join(binDir, binName), "#!/bin/sh\nexit 0\n")
+    chmodSync(join(binDir, binName), 0o755)
+
+    const prevHome = process.env.HOME
+    process.env.HOME = fakeHome
+    invalidateExistsCache()
+    try {
+      assert.equal(commandExists(binName), true, "binary in ~/.local/bin must be discoverable")
+      assert.equal(commandExists(`${binName}-missing`), false, "absent binaries still report false")
+    } finally {
+      process.env.HOME = prevHome
+      invalidateExistsCache()
+      rmSync(fakeHome, { recursive: true, force: true })
+    }
+  })
+})
