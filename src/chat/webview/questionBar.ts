@@ -39,6 +39,13 @@ let _activeSessionId = ""
 
 let els: QuestionBarElements | null = null
 
+// An item belongs to the active session when the ids match. Items or an
+// active-session marker without a session id (legacy payloads, tests) are
+// treated as active so single-session flows keep working.
+function isActiveItem(item: QuestionBarItem): boolean {
+  return !_activeSessionId || !item.sessionId || item.sessionId === _activeSessionId
+}
+
 export function initQuestionBar(postMessage: (msg: Record<string, unknown>) => void): void {
   const bar = document.getElementById("question-bar")
   const items = document.getElementById("question-bar-items")
@@ -49,6 +56,7 @@ export function initQuestionBar(postMessage: (msg: Record<string, unknown>) => v
   els = { bar, items: items as HTMLDivElement, count: count as HTMLSpanElement, submitBtn: submitBtn as HTMLButtonElement }
   state.postMessage = postMessage
   state.items.clear()
+  _activeSessionId = ""
   els.items.innerHTML = ""
   updateVisibility()
   updateSubmitState()
@@ -96,7 +104,9 @@ export function updateQuestion(toolCallId: string, block: QuestionBlock): void {
 
   const oldGroupCount = item.groups.length
   item.groups = block.groups ?? []
-  item.requestID = block.requestID
+  // A refreshed block copy may omit requestID (e.g. server echo without the
+  // v2 field) — never wipe one we already hold, the reply path needs it.
+  item.requestID = block.requestID ?? item.requestID
   item.allowFreeText = block.allowFreeText !== false
 
   while (item.selections.size < item.groups.length) {
@@ -118,10 +128,21 @@ export function updateQuestion(toolCallId: string, block: QuestionBlock): void {
   updateSubmitState()
 }
 
-export function removeQuestion(toolCallId: string): void {
+export function removeQuestion(toolCallIdOrRequestId: string): void {
   if (!els) return
-  state.items.delete(toolCallId)
-  const el = els.items.querySelector(`[data-question-id="${toolCallId}"]`)
+  let key = toolCallIdOrRequestId
+  // Hosts may acknowledge by requestID only (v2 path); items are keyed by
+  // toolCallId, so fall back to a requestID match before giving up.
+  if (!state.items.has(key)) {
+    for (const item of state.items.values()) {
+      if (item.requestID && item.requestID === toolCallIdOrRequestId) {
+        key = item.toolCallId
+        break
+      }
+    }
+  }
+  state.items.delete(key)
+  const el = els.items.querySelector(`[data-question-id="${key}"]`)
   if (el) el.remove()
   updateVisibility()
   updateSubmitState()
@@ -147,18 +168,21 @@ export function markQuestionAnswered(toolCallId: string, submittedValue?: string
   updateSubmitState()
   // If every pending question is now answered, schedule the auto-dismiss.
   // Shorter than the previous 1500ms so the user gets feedback quickly.
-  maybeScheduleDismiss()
+  maybeScheduleDismiss(item?.sessionId)
 }
 
-function maybeScheduleDismiss(): void {
+function maybeScheduleDismiss(sessionId?: string): void {
   if (!els) return
-  // Don't dismiss while the user still has unanswered items in the bar.
-  const stillPending = Array.from(state.items.values()).some((i) => !i.answered)
+  // Dismissal is per session: another tab's unanswered question must neither
+  // block this session's cleanup nor be wiped by it.
+  const inScope = (i: QuestionBarItem) => !sessionId || !i.sessionId || i.sessionId === sessionId
+  const stillPending = Array.from(state.items.values()).some((i) => inScope(i) && !i.answered)
   if (stillPending) return
   // Tiny delay so the user can read the "Answered" state before it goes.
   setTimeout(() => {
-    const allAnswered = Array.from(state.items.values()).every((i) => i.answered)
-    if (allAnswered) clearAllQuestions()
+    for (const item of Array.from(state.items.values())) {
+      if (inScope(item) && item.answered) removeQuestion(item.toolCallId)
+    }
   }, 600)
 }
 
@@ -213,7 +237,7 @@ export function clearAllQuestions(): void {
 
 export function hasActiveQuestions(): boolean {
   for (const item of state.items.values()) {
-    if (!item.answered) return true
+    if (isActiveItem(item) && !item.answered) return true
   }
   return false
 }
@@ -221,19 +245,18 @@ export function hasActiveQuestions(): boolean {
 export function getActiveQuestionCount(): number {
   let count = 0
   for (const item of state.items.values()) {
-    if (!item.answered) count++
+    if (isActiveItem(item) && !item.answered) count++
   }
   return count
 }
 
 function updateVisibility(): void {
   if (!els) return
-  // Bar is visible only when there is at least one UNANSWERED question. If
-  // every item is answered, the bar shows briefly (the answered card) and
-  // is auto-dismissed; once it empties, the wrapper collapses entirely so
-  // the user is not staring at a half-empty bar after submitting.
+  // Bar is visible only when the ACTIVE session has at least one unanswered
+  // question (or a just-answered card awaiting dismissal). Other sessions'
+  // items stay in state but must not surface the bar for this tab.
   const hasPending = getActiveQuestionCount() > 0
-  const hasAnswered = Array.from(state.items.values()).some((i) => i.answered)
+  const hasAnswered = Array.from(state.items.values()).some((i) => isActiveItem(i) && i.answered)
   els.bar.classList.toggle("hidden", !hasPending && !hasAnswered)
   const activeCount = getActiveQuestionCount()
   if (activeCount > 1) {
@@ -247,7 +270,7 @@ function updateVisibility(): void {
 function updateSubmitState(): void {
   if (!els) return
   const hasAnySelection = Array.from(state.items.values()).some((item) => {
-    if (item.answered) return false
+    if (item.answered || !isActiveItem(item)) return false
     const hasSelection = Array.from(item.selections.values()).some((s) => s.size > 0)
     return hasSelection || item.freeTextValue.trim().length > 0
   })
@@ -404,7 +427,9 @@ function submitAllAnswers(): void {
   if (!state.postMessage) return
 
   for (const item of state.items.values()) {
-    if (item.answered) continue
+    // Submit is a per-tab action: selections staged in another session's
+    // bar must not be posted from this one.
+    if (item.answered || !isActiveItem(item)) continue
 
     const parts: string[] = []
     let hasSelection = false
