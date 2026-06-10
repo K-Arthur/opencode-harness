@@ -30,7 +30,10 @@ describe("ActivityPartHandler", () => {
       status: "running",
       currentActivity: "Review the React surface",
       inputPrompt: "Audit the UI",
-      childSessionId: "ses-1",
+      // The SDK subtask part carries no child-session field; part.sessionID is
+      // the PARENT session. Reporting it as childSessionId poisons heartbeat
+      // targeting and open-session navigation.
+      childSessionId: undefined,
       error: undefined,
     })
   })
