@@ -978,3 +978,50 @@ it("unified modal: server session items send resume_server_session on click", ()
     })
   })
 })
+
+// ── Session-open routing (two-session lag fix, 2026-06-11) ──────────────────
+// Clicking a session in the recent list / history modal always posted
+// resume_session — even when that session was already open as a hydrated tab.
+// On the host, resume_session re-fetches the ENTIRE server transcript
+// (getSessionMessages), re-converts and re-applies it to the store, and
+// re-pushes a 50-message payload the webview then has to reconcile — all to
+// "open" a tab that was already current via SSE. Open tabs must switch
+// locally; only genuinely-closed sessions go through the heavyweight resume.
+describe("openSession routing — already-open tabs switch locally", () => {
+  it("defines an openSession helper that prefers switchTab over resume_session", () => {
+    const idx = source.indexOf("function openSession(")
+    assert.ok(idx >= 0, "main.ts must define openSession(sessionId)")
+    const body = source.slice(idx, idx + 900)
+    assert.ok(body.includes("switchTab("), "openSession must switch locally when the tab is already open")
+    assert.ok(body.includes('"resume_session"'), "openSession must fall back to resume_session for closed sessions")
+    assert.ok(body.includes(".tab-panel"), "openSession must check for an existing hydrated tab panel")
+  })
+
+  it("recent-sessions callbacks route through openSession, not a raw resume_session post", () => {
+    assert.ok(
+      !source.includes('vscode.postMessage({ type: "resume_session", sessionId })'),
+      "recent-session click handlers must not post resume_session directly for possibly-open tabs",
+    )
+    const recentIdx = source.indexOf("function renderRecentSessionsList(")
+    assert.ok(recentIdx >= 0)
+    const recentBlock = source.slice(recentIdx, source.indexOf("/* ─── SESSION HISTORY MODAL", recentIdx))
+    assert.ok(recentBlock.includes("openSession("), "recent sessions list must use openSession")
+  })
+
+  it("session history modal posts are routed through openSession as well", () => {
+    const wiringIdx = source.indexOf("setSessionListPostMessage(")
+    assert.ok(wiringIdx >= 0)
+    const wiringBlock = source.slice(wiringIdx, wiringIdx + 600)
+    assert.ok(
+      wiringBlock.includes("openSession("),
+      "the injected session-list postMessage must reroute resume_session for open tabs via openSession",
+    )
+  })
+
+  it("post-compaction refresh still uses a true resume_session (server transcript changed)", () => {
+    const idx = source.indexOf("compaction look like a no-op")
+    assert.ok(idx >= 0, "compaction resume comment anchor must exist")
+    const block = source.slice(idx, idx + 400)
+    assert.ok(block.includes('"resume_session"'), "compaction path must keep the full refetch")
+  })
+})
