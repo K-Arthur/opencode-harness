@@ -247,11 +247,13 @@ export class VirtualMessageList {
     })
 
     try {
-      // The placeholder is not observed, so this id is no longer on screen as
-      // far as the visible-window computation is concerned.
       this.visibleIds.delete(msgId)
       this.observer?.unobserve(el)
       el.replaceWith(placeholder)
+      // Observe the placeholder: it is the only element left carrying this
+      // message id, so it must be the intersection trigger that brings the
+      // message back when the user scrolls it into the rootMargin window.
+      this.observer?.observe(placeholder)
     } catch {
       this.entries.delete(msgId)
     }
@@ -269,6 +271,7 @@ export class VirtualMessageList {
 
     try {
       const newEl = this.renderMessage(msgData, opts)
+      this.observer?.unobserve(entry.placeholder)
       entry.placeholder.replaceWith(newEl)
       entry.detached = false
       this.entries.delete(msgId)
@@ -298,10 +301,21 @@ export class VirtualMessageList {
     this.entries.clear()
   }
 
-  dispose(): void {
-    this.restoreAll()
+  /**
+   * @param options.restoreDom — pass `false` when the container's DOM is being
+   * discarded anyway (tab close, session delete, transcript rebuild). The
+   * default `restoreAll()` synchronously re-renders EVERY detached message,
+   * which is pure wasted main-thread work when the elements are about to be
+   * removed — on a long session that was a multi-hundred-render stall right
+   * on the close/switch path.
+   */
+  dispose(options?: { restoreDom?: boolean }): void {
+    if (options?.restoreDom !== false) {
+      this.restoreAll()
+    }
     this.observer?.disconnect()
     this.observer = null
+    this.entries.clear()
     this.visibleIds.clear()
   }
 }
@@ -325,10 +339,10 @@ export function createVirtualList(
   return vl
 }
 
-export function disposeVirtualList(sessionId: string): void {
+export function disposeVirtualList(sessionId: string, options?: { restoreDom?: boolean }): void {
   const vl = virtualLists.get(sessionId)
   if (vl) {
-    vl.dispose()
+    vl.dispose(options)
     virtualLists.delete(sessionId)
   }
 }

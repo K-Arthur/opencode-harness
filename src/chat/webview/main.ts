@@ -1865,8 +1865,10 @@ function getVsCodeApi() {
       scrollAnchors.delete(tabId)
     }
 
-    // Dispose virtual list for this tab
-    disposeVirtualList(tabId)
+    // Dispose virtual list for this tab. The panel DOM is removed with the
+    // tab, so skip restoreAll — re-rendering every detached message into a
+    // container that is about to be discarded is pure wasted main-thread work.
+    disposeVirtualList(tabId, { restoreDom: false })
 
     // Remove jump-to-bottom for this tab
     const jtb = els.tabPanels.querySelector(`.jump-to-bottom[data-tab-id="${tabId}"]`)
@@ -2505,7 +2507,8 @@ function getVsCodeApi() {
           const msgList = getMessageList(session.id)
           if (msgList) {
             attachScrollPersistence(session.id, msgList)
-            if (shouldRenderHydratedMessages(session.id, msgList, session.messages)) {
+            const rebuildTranscript = shouldRenderHydratedMessages(session.id, msgList, session.messages)
+            if (rebuildTranscript) {
               msgList.replaceChildren()
 
               const beforeIndex = typeof msg.initialBeforeIndex === "number" ? msg.initialBeforeIndex : 0
@@ -2557,14 +2560,30 @@ function getVsCodeApi() {
               scrollAnchors.set(session.id, anchor)
             }
 
-            const vl = createVirtualList(
-              session.id,
-              msgList,
-              (id: string) => session.messages.find((m: ChatMessage) => m.id === id),
-              () => stateManager.getSession(session.id),
-              (m: ChatMessage, opts: Parameters<typeof renderMessage>[1]) => renderMessage(m, opts),
-            )
-            vl.start()
+            // Virtual list lifecycle on resume:
+            //  - transcript DOM untouched → keep the existing list (its
+            //    observer, entries, and placeholders are all still valid).
+            //    Recreating it here used to trigger restoreAll(), which
+            //    synchronously re-rendered EVERY pruned message on each
+            //    resume of an already-open session — a long main-thread
+            //    stall exactly at session-switch time.
+            //  - transcript rebuilt (replaceChildren above) → the old list's
+            //    elements are gone; dispose WITHOUT the restore render and
+            //    start a fresh list over the new DOM.
+            if (rebuildTranscript || !getVirtualList(session.id)) {
+              disposeVirtualList(session.id, { restoreDom: false })
+              const vl = createVirtualList(
+                session.id,
+                msgList,
+                // Read through stateManager: ensureSession() mutates the
+                // canonical messages array in place, so this stays correct
+                // across later resumes that reuse this list instance.
+                (id: string) => stateManager.getSession(session.id)?.messages.find((m: ChatMessage) => m.id === id),
+                () => stateManager.getSession(session.id),
+                (m: ChatMessage, opts: Parameters<typeof renderMessage>[1]) => renderMessage(m, opts),
+              )
+              vl.start()
+            }
           }
           switchTab(session.id)
           hideWelcomeView()
@@ -3556,7 +3575,8 @@ function getVsCodeApi() {
           }
           persistQueues()
 
-          disposeVirtualList(msg.sessionId)
+          // The session's panel is removed below — skip the restoreAll render.
+          disposeVirtualList(msg.sessionId, { restoreDom: false })
           const escapedId = CSS.escape(msg.sessionId)
           const wasActive = stateManager.getState().activeSessionId === msg.sessionId
           stateManager.deleteSession(msg.sessionId)
