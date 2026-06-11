@@ -46,10 +46,22 @@ export class TimestampUpdater {
     el.textContent = formatRelativeTime(ts)
   }
 
+  /** Number of elements currently tracked. Exposed for leak regression tests. */
+  get registeredCount(): number {
+    return this.registered.size
+  }
+
   /** Refresh all registered elements and also pick up any new `[data-timestamp]` elements in the DOM. */
   tick(): void {
-    // Update registered elements
+    // Update registered elements; drop ones removed from the DOM. Message
+    // elements are replaced constantly (virtual-list pruning, streaming
+    // re-renders, transcript rebuilds) — without this check the Map retained
+    // every detached subtree for the lifetime of the webview.
     for (const [el, ts] of this.registered) {
+      if (el.isConnected === false) {
+        this.registered.delete(el)
+        continue
+      }
       el.textContent = formatRelativeTime(ts)
     }
 
