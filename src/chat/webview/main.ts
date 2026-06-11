@@ -1758,6 +1758,7 @@ function getVsCodeApi() {
 
     // Refresh cost/token displays for the new tab — pull from the tab's
     // own stored usage so a previously-displayed tab's totals don't bleed in.
+    renderMethodologyChip(tabId)
     updateCostDisplay(tabId)
     const session = stateManager.getSession(tabId)
     const displayed = selectDisplayedUsage(stateManager.getState().sessions, tabId)
@@ -3702,6 +3703,21 @@ function getVsCodeApi() {
         vscode.postMessage({ type: "list_stashes" })
       }],
       ["open_commands_palette", () => commandsModal.open()],
+      ["methodology_selected", (msg) => {
+        // The host classified the outgoing prompt and injected a strategy
+        // addendum. Surface it so the user can see — and override via
+        // /methodology — what guidance was attached.
+        const sid = typeof msg.sessionId === "string" ? msg.sessionId : ""
+        const label = typeof msg.label === "string" ? msg.label : ""
+        if (!sid || !label) return
+        methodologyBySession.set(sid, {
+          label,
+          strategy: typeof msg.strategy === "string" ? msg.strategy : "",
+          taskType: typeof msg.taskType === "string" ? msg.taskType : "",
+          auto: msg.auto === true,
+        })
+        if (stateManager.getState().activeSessionId === sid) renderMethodologyChip(sid)
+      }],
       ["prefill_prompt", (msg) => {
         if (typeof msg.text === "string") {
           els.promptInput.value = msg.text
@@ -4002,6 +4018,28 @@ function getVsCodeApi() {
 	  /* ─── DISPLAY TOGGLES (Phase 4.2) ─── */
 
   setupDisplayToggles({ els, getState: () => stateManager.getState(), save: () => stateManager.save() })
+
+  // Last methodology selection per session, fed by methodology_selected.
+  // Rendered as a compact status-strip chip scoped to the active session so
+  // selections from a background tab never bleed into the visible strip.
+  const methodologyBySession = new Map<string, { label: string; strategy: string; taskType: string; auto: boolean }>()
+
+  function renderMethodologyChip(sessionId: string) {
+    const info = methodologyBySession.get(sessionId)
+    if (!info) {
+      els.statusMethodology.classList.add("hidden")
+      els.statusMethodology.textContent = ""
+      return
+    }
+    els.statusMethodology.textContent = `◆ ${info.label}`
+    els.statusMethodology.title =
+      `Methodology (${info.auto ? "auto-selected" : "manual"}): ${info.label}` +
+      (info.strategy ? ` · ${info.strategy}` : "") +
+      (info.taskType ? `\nTask type: ${info.taskType}` : "") +
+      `\nDisable for this tab with /methodology off`
+    els.statusMethodology.setAttribute("aria-label", `Selected methodology: ${info.label}`)
+    els.statusMethodology.classList.remove("hidden")
+  }
 
   function showSecondaryNav() {
     els.displayToggles.classList.remove("hidden")

@@ -158,6 +158,7 @@ export interface ElementRefs {
   // Status strip (below tab bar)
   statusStrip: HTMLElement
   statusModel: HTMLSpanElement
+  statusMethodology: HTMLSpanElement
   statusCost: HTMLSpanElement
   statusTokens: HTMLSpanElement
   quotaBar: HTMLDivElement
@@ -358,6 +359,7 @@ export function getElementRefs(): ElementRefs {
     // Status strip (below tab bar)
     statusStrip: requireElement("status-strip"),
     statusModel: requireElement<HTMLSpanElement>("status-model"),
+    statusMethodology: requireElement<HTMLSpanElement>("status-methodology"),
     statusCost: requireElement<HTMLSpanElement>("status-cost"),
     statusTokens: requireElement<HTMLSpanElement>("status-tokens"),
     quotaBar: requireElement<HTMLDivElement>("quota-bar"),

@@ -73,13 +73,14 @@ describe("mentions.ts", () => {
   })
 
   // The old slash trigger regex was anchored to start-of-input (`^\/...$`),
-  // so typing "hello /clear" mid-prompt never opened the dropdown. The new
-  // regex accepts a slash either at the start of input or after whitespace.
+  // so typing "hello /clear" mid-prompt never opened the dropdown. The
+  // regex accepts a slash either at the start of input or after whitespace,
+  // and its token charset includes "-" and ":" so /export-json and
+  // /diagnose:generation keep the dropdown open while being typed.
   it("slash trigger matches mid-line, not only at the start of input", () => {
-    assert.match(
-      source,
-      /\(\?:\^\|\\s\)\\\/\\?\(\\w\*\)\$|\(\?:\^\|\s\\\)\\?\/\(\?:\\w\*\)\$/,
-      "trigger regex must accept slash after whitespace, not just at position 0",
+    assert.ok(
+      source.includes("(?:^|\\s)\\/([\\w:-]*)$"),
+      "trigger regex must accept slash after whitespace with -/: in the token charset",
     )
     // Defensive: the obsolete start-anchored form must not survive.
     assert.ok(

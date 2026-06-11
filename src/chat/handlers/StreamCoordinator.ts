@@ -18,7 +18,7 @@ import { MethodologyAdvisor, type MethodologyAdvice } from "../../methodology/Me
 import { classifyTool, isSubagentToolName, parseSubagentInvocation } from "./toolClassifier"
 import { parseQuestionArgs, parseAllowFreeText } from "../../session/questionModel"
 import type { AdvisoryOrchestrationResult } from "../../methodology/MethodologyOrchestrator"
-import { updateMethodologyStatus, getMethodologyOrchestrator } from "../../methodology/registry"
+import { updateMethodologyStatus } from "../../methodology/registry"
 import { createAttachmentStorage, type MaterializedAttachment } from "./attachmentStorage"
 import { RunActivityTracker } from "./RunActivityTracker"
 import type { AgentRunState, RunProgressEvent, SubagentActivityInput, SubagentRunState, ToolActivityInput } from "./runActivityTypes"
@@ -232,15 +232,14 @@ export class StreamCoordinator {
     tabId: string,
     text: string,
     parts: Array<{ type: "text"; text: string } | { type: "file"; mime: string; url: string }>,
-    _callbacks: StreamCallbacks,
+    callbacks: StreamCallbacks,
     hasImageAttachment = false,
   ): MethodologyAdvice | null {
     if (!this.methodologyAdvisor.isEnabled()) return null
     try {
       const tab = this.tabManager.getTab(tabId)
-      // Per-tab opt-out: if the tab carries `methodologyDisabled`, skip.
-      const tabDisabled = (tab as unknown as { methodologyDisabled?: boolean } | undefined)?.methodologyDisabled === true
-      if (tabDisabled) return null
+      // Per-tab opt-out, toggled by the user via /methodology on|off.
+      if (tab?.methodologyDisabled === true) return null
 
       const advice = this.methodologyAdvisor.advise(text, {
         hasImageAttachment,
@@ -250,13 +249,31 @@ export class StreamCoordinator {
       parts.push({ type: "text", text: advice.promptAddendum })
       log.info(`[methodology] tab=${tabId.slice(0, 8)} ${advice.signature} (conf=${advice.selection.confidence.toFixed(2)})`)
 
-      // Update status bar via orchestrator advisory if available
+      // Surface the selection so the user can see — and override — what
+      // guidance was attached to their prompt.
+      void callbacks.postMessage({
+        type: "methodology_selected",
+        sessionId: tabId,
+        label: advice.label,
+        methodology: advice.selection.methodology,
+        strategy: advice.selection.promptStrategy,
+        confidence: advice.selection.confidence,
+        taskType: advice.classification.type,
+        auto: true,
+      })
+
+      // Status bar renders the SAME advice that was injected. (It used to run
+      // a second, independent classification via the orchestrator, which could
+      // disagree with the addendum the model actually received.)
       try {
-        const orchestrator = getMethodologyOrchestrator()
-        if (orchestrator && orchestrator.getConfig().enabled) {
-          const result = orchestrator.advise(text, { hasImageAttachment })
-          updateMethodologyStatus(result)
-        }
+        updateMethodologyStatus({
+          label: advice.label,
+          methodology: advice.selection.methodology,
+          strategy: advice.selection.promptStrategy,
+          recommendedTier: advice.selection.recommendedTier,
+          confidence: advice.selection.confidence,
+          taskType: advice.classification.type,
+        })
       } catch { /* best-effort status update */ }
 
       return advice

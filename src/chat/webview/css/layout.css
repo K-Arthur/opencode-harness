@@ -3216,6 +3216,18 @@ button.modal-session-item:focus {
   color: var(--color-muted);
 }
 
+.status-strip-methodology {
+  color: var(--color-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+}
+
+.status-strip-methodology.hidden {
+  display: none;
+}
+
 .status-strip-cost.hidden,
 .status-strip-tokens.hidden {
   display: none;

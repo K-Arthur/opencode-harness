@@ -125,6 +125,56 @@ export class ChatCommands {
     vscode.window.showInformationMessage("Generation diagnostics complete - check output channel")
   }
 
+  /**
+   * /methodology: report or toggle automatic methodology guidance for this
+   * tab. No args → report state; "on"/"off" → set the per-tab opt-out that
+   * StreamCoordinator.applyMethodologyAdvice honors before injecting the
+   * strategy addendum.
+   */
+  methodology(sessionId: string, args: string, postMessage: (msg: Record<string, unknown>) => void): void {
+    const tab = this.tabManager.getTab(sessionId)
+    if (!tab) return
+
+    const post = (text: string) => postMessage({
+      type: "message",
+      sessionId,
+      message: {
+        role: "system",
+        id: `methodology-${crypto.randomUUID()}`,
+        blocks: [{ type: "text", text }],
+        timestamp: Date.now(),
+        sessionId,
+      },
+    })
+
+    const globallyEnabled = vscode.workspace
+      .getConfiguration("opencode.methodology")
+      .get<boolean>("enabled", true)
+
+    const arg = args.trim().toLowerCase()
+    if (arg === "") {
+      const tabState = tab.methodologyDisabled ? "disabled for this tab" : "enabled for this tab"
+      const globalState = globallyEnabled ? "enabled globally" : "disabled globally (opencode.methodology.enabled)"
+      post(`Methodology guidance is ${tabState}, ${globalState}. Use \`/methodology on\` or \`/methodology off\` to change it for this tab.`)
+      return
+    }
+    if (arg === "off") {
+      tab.methodologyDisabled = true
+      post("Methodology guidance disabled for this tab. Prompts are sent without a strategy addendum. Re-enable with `/methodology on`.")
+      return
+    }
+    if (arg === "on") {
+      tab.methodologyDisabled = false
+      post(
+        globallyEnabled
+          ? "Methodology guidance enabled for this tab."
+          : "Methodology guidance enabled for this tab, but it is disabled globally — enable `opencode.methodology.enabled` in settings for it to take effect.",
+      )
+      return
+    }
+    post(`Unknown argument \`${args.trim()}\`. Usage: /methodology [on|off]`)
+  }
+
   /** /help: send command list as system-message with markdown table */
   help(sessionId: string, postMessage: (msg: Record<string, unknown>) => void): void {
     // Generated from the canonical registry — a hand-written copy here once
