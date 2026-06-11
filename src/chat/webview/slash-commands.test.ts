@@ -1,6 +1,13 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { LOCAL_SLASH_COMMANDS, toMentionItems, toCommandEntries, dedupServerCommands } from "./slash-commands"
+import {
+  LOCAL_SLASH_COMMANDS,
+  toMentionItems,
+  toCommandEntries,
+  dedupServerCommands,
+  resolveLocalCommand,
+  buildHelpTable,
+} from "./slash-commands"
 
 // This module is the single source of truth for all local (webview-resolved)
 // slash commands. Two old registries (mentions.ts LOCAL_COMMANDS and
@@ -13,14 +20,36 @@ describe("slash-commands canonical registry", () => {
     // otherwise the modal/dropdown surface won't list it.
     const expected = [
       "clear", "model", "cost", "new", "help",
-      "export", "export-md", "export-json", "export-text", "copy",
+      "export", "export-json", "export-text", "copy",
       "stash", "stashes", "compact", "commands", "queue", "continue",
+      "diagnose:generation",
     ]
     for (const name of expected) {
       assert.ok(
         LOCAL_SLASH_COMMANDS.find((c) => c.name === name),
         `LOCAL_SLASH_COMMANDS must contain "${name}"`,
       )
+    }
+  })
+
+  it("export-md survives as an alias of /export, not a duplicate entry", () => {
+    // Two near-identical registry rows ("Export conversation (Markdown)" vs
+    // "as Markdown") confused users browsing the palette. One command, one row.
+    assert.equal(LOCAL_SLASH_COMMANDS.filter((c) => c.name === "export-md").length, 0)
+    const exportCmd = LOCAL_SLASH_COMMANDS.find((c) => c.name === "export")
+    assert.ok(exportCmd?.aliases?.includes("export-md"))
+  })
+
+  it("every entry declares a category for palette grouping", () => {
+    for (const cmd of LOCAL_SLASH_COMMANDS) {
+      assert.ok(cmd.category, `entry "${cmd.name}" missing category`)
+    }
+  })
+
+  it("commands that take arguments declare a usage hint", () => {
+    for (const name of ["model", "stash"]) {
+      const cmd = LOCAL_SLASH_COMMANDS.find((c) => c.name === name)
+      assert.ok(cmd?.usage, `"${name}" expects arguments and must declare usage`)
     }
   })
 
@@ -84,6 +113,22 @@ describe("dedupServerCommands", () => {
     assert.equal(dedupServerCommands(server).length, 0)
   })
 
+  it("also removes server commands that collide with a local alias", () => {
+    const server = [{ name: "export-md", description: "server export-md" }]
+    assert.equal(dedupServerCommands(server).length, 0)
+  })
+
+  it("supports a custom name getter for callers whose items use `display`", () => {
+    // mentions.ts items carry `display`, not `name` — it used to reimplement
+    // this dedup inline, which is exactly how the two copies drifted.
+    const server = [
+      { display: "clear", description: "dupe" },
+      { display: "deploy", description: "keep" },
+    ]
+    const out = dedupServerCommands(server, (c) => c.display)
+    assert.deepEqual(out.map((c) => c.display), ["deploy"])
+  })
+
   it("does not mutate the input array", () => {
     const server = [{ name: "clear", description: "x" }, { name: "deploy", description: "y" }]
     const before = JSON.stringify(server)
@@ -109,5 +154,54 @@ describe("toMentionItems / toCommandEntries", () => {
       assert.equal(entry.source, "local")
       assert.ok(entry.insertText)
     }
+  })
+})
+
+describe("resolveLocalCommand", () => {
+  it("resolves a canonical name to its entry", () => {
+    assert.equal(resolveLocalCommand("export")?.name, "export")
+  })
+
+  it("resolves an alias to the canonical entry", () => {
+    assert.equal(resolveLocalCommand("export-md")?.name, "export")
+  })
+
+  it("is case-insensitive and tolerates a leading slash", () => {
+    assert.equal(resolveLocalCommand("EXPORT-MD")?.name, "export")
+    assert.equal(resolveLocalCommand("/clear")?.name, "clear")
+  })
+
+  it("returns undefined for unknown commands", () => {
+    assert.equal(resolveLocalCommand("deploy"), undefined)
+  })
+})
+
+describe("buildHelpTable", () => {
+  // /help used to hardcode its own markdown table in ChatCommands.ts. It
+  // listed /diagnose:generation (absent from the registry) and omitted
+  // /export-md (present in the registry) — generated output cannot drift.
+  it("contains one row for every registry entry", () => {
+    const table = buildHelpTable()
+    for (const cmd of LOCAL_SLASH_COMMANDS) {
+      assert.ok(table.includes(`\`/${cmd.name}`), `help table missing /${cmd.name}`)
+      assert.ok(table.includes(cmd.description), `help table missing description for /${cmd.name}`)
+    }
+  })
+
+  it("shows usage hints inside the command cell", () => {
+    const table = buildHelpTable()
+    assert.ok(table.includes("`/stash <name> <content>`"))
+    assert.ok(table.includes("`/model <id>`"))
+  })
+
+  it("mentions aliases so /export-md stays discoverable", () => {
+    assert.ok(buildHelpTable().includes("export-md"))
+  })
+
+  it("is a valid markdown table (header + separator + rows)", () => {
+    const lines = buildHelpTable().split("\n")
+    assert.ok(lines[0]!.startsWith("| Command |"))
+    assert.ok(/^\|\s*-+/.test(lines[1]!))
+    assert.equal(lines.length, 2 + LOCAL_SLASH_COMMANDS.length)
   })
 })
