@@ -195,3 +195,58 @@ void describe("classifySession", () => {
     assert.equal(classifySession({ name: "Fix bug", createdAt: 1, messages: [{ role: "user" }], cliSessionId: "cli-1" }), "real")
   })
 })
+
+describe("buildPersistedSessions — bounded flush snapshot (two-session lag fix, 2026-06-11)", () => {
+  // SessionStore.flush() used to hand globalState.update the ENTIRE store —
+  // every session × every message — on each debounced save. During an active
+  // stream that meant a full multi-MB JSON serialization on the extension
+  // host (plus VS Code writing it to the state DB) every 500ms, with cost
+  // scaling with TOTAL store size rather than what changed (~27ms/op at
+  // 10×1000 messages in the node baseline). The persisted snapshot is now
+  // bounded per session; the in-memory store keeps everything and the server
+  // remains the source of truth for full history (resume/backfill re-fetch).
+  const { buildPersistedSessions } = require("./sessionUtils")
+
+  function sess(id: string, msgCount: number, extra: Record<string, unknown> = {}) {
+    return {
+      id,
+      name: id,
+      messages: Array.from({ length: msgCount }, (_, i) => ({ id: `${id}-m${i}` })),
+      ...extra,
+    }
+  }
+
+  it("caps persisted messages per session at the limit, keeping the most recent", () => {
+    const store = new Map([["a", sess("a", 500)]])
+    const out = buildPersistedSessions(store, 200)
+    assert.equal(out.a.messages.length, 200)
+    assert.equal(out.a.messages[0].id, "a-m300")
+    assert.equal(out.a.messages[199].id, "a-m499")
+  })
+
+  it("does not mutate the live session objects", () => {
+    const live = sess("a", 500)
+    const store = new Map([["a", live]])
+    buildPersistedSessions(store, 200)
+    assert.equal(live.messages.length, 500, "in-memory transcript must stay complete")
+  })
+
+  it("passes sessions under the cap through untouched", () => {
+    const live = sess("a", 50)
+    const store = new Map([["a", live]])
+    const out = buildPersistedSessions(store, 200)
+    assert.equal(out.a, live, "no copy needed when under the cap")
+  })
+
+  it("drops empty sessions unless they await backfill (existing flush contract)", () => {
+    const store = new Map([
+      ["empty", sess("empty", 0)],
+      ["backfill", sess("backfill", 0, { needsBackfill: true })],
+      ["real", sess("real", 3)],
+    ])
+    const out = buildPersistedSessions(store, 200)
+    assert.equal(out.empty, undefined)
+    assert.ok(out.backfill)
+    assert.ok(out.real)
+  })
+})
