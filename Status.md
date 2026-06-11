@@ -1,7 +1,19 @@
 # Status.md
 
-## Last Updated: 2026-05-31
-## Project State: ADR-010 complete — horizontal scaling, crash resilience, configurable stream cap
+## Last Updated: 2026-06-11
+## Project State: two-session lag root-caused and fixed — persistence churn + virtual-list lifecycle
+
+### Recent Fix (2026-06-11): Two-session lag — persistence amplification + virtual-list lifecycle (5 root causes, TDD)
+- **Symptom:** UI lag with only two open sessions; slow session switching. The streaming/render pipeline (2026-06-02 audit) was healthy — the cost was in persistence and the virtual-list lifecycle. Full record: `docs/performance-audit.md` §"2026-06-11".
+- **RC1 — webview `setState` full-state churn:** every debounced save handed the entire state (all sessions × all messages, ~2.9 MB at 2×500 msgs) to `vscode.setState` (serialize + IPC), fired by scroll saves, stream block boundaries, token updates. Now persists a bounded snapshot (last 50 msgs/session, deep-trim to 10 over the 2 MB budget); `doPrune`/`schedulePrune` full-state stringify machinery deleted. Payload 2.9 MB → 289 KB. (`src/chat/webview/state.ts`)
+- **RC2 — virtual list:** placeholders were never observed → scroll-back restore was dead code (pruned history = permanent empty boxes), masked by resume's dispose→`restoreAll()`→recreate cycle which synchronously re-rendered every detached message at switch time. Placeholders now observed (restore works), `dispose({restoreDom:false})` on close/delete/rebuild, resume reuses the existing list when the DOM wasn't rebuilt. (`src/chat/webview/virtualList.ts`, `main.ts`)
+- **RC3 — open-tab clicks triggered full server refetch:** recent-list/history-modal clicks always posted `resume_session` (host re-fetches the ENTIRE transcript, rewrites the store, re-pushes 50 messages). New `openSession` router: open tabs switch locally; closed sessions resume; post-compaction keeps the true refetch. (`src/chat/webview/main.ts`)
+- **RC4 — host `SessionStore.flush()` serialized the whole store** (~28 MB at 10×1000 msgs → ~170 ms per 500 ms-debounced flush + state-DB write). Now routes through pure `buildPersistedSessions(sessions, 200)`: 200 msgs/session persisted, in-memory unbounded, server remains source of truth (resume/backfill re-fetch). 170 ms → 16 ms, 28 MB → 5.6 MB. (`src/session/SessionStore.ts`, `sessionUtils.ts`)
+- **RC5 — `TimestampUpdater` memory leak:** element-keyed Map never pruned; tick() now drops `isConnected === false` entries. (`src/chat/webview/timestampUpdater.ts`)
+- **Also:** init_state/resume virtual lists read messages through `stateManager` (canonical in-place array) instead of capturing hydration payload arrays (stale-closure hazard exposed by working scroll-back restore).
+- **Language review verdict:** no Rust/WASM/native justified — bottlenecks were redundant serialization and wasted DOM renders, removed in TypeScript.
+- **Tests:** +21 new (each fix landed RED first): 7 state snapshot, 4 virtualList restore/dispose, 4 openSession routing, 4 buildPersistedSessions, 2 timestamp pruning. Full suite 0 fail; typecheck clean; production bundle gate green (ext 544.0/545 KB, main 699.6/700 KB).
+- **Caveat:** no live-host profiling available in the work environment; serialize/payload wins measured via reproducible node benchmarks of the real code paths. Manual two-session checklist to be run post-reinstall.
 
 ### Recent Feature (2026-05-31): Automatic opencode CLI install on activation
 - **The required opencode CLI is now installed for the user.** VS Code has no install-time hook, so detect-and-install runs on activation. Default is **prompt-once** (Install / Manual Instructions / Not Now); declines are remembered in `globalState` to avoid nagging. macOS/Linux use the official installer (downloaded, validated, run as `bash <file>` with `shell:false` — no `curl | bash`; installs to `~/.opencode/bin`); Windows uses `npm i -g opencode-ai` (or manual). New `opencode.autoInstall` setting (`prompt`|`auto`|`off`) and `OpenCode: Install CLI` command. (`src/install/installPlan.ts`, `src/install/OpencodeInstaller.ts`, `src/extension.ts`, `src/commands/misc.ts`, `package.json`)
