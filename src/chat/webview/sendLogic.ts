@@ -2,6 +2,7 @@ import type { WebviewState, ChatMessage } from "./types"
 import type { ElementRefs } from "./dom"
 import { TOOLTIPS } from "./tooltips"
 import { generateUserMessageId } from "../../session/messageId"
+import { classifyComposerInput } from "./slash-commands"
 
 export interface StreamCapacityState {
   isFull: boolean
@@ -242,7 +243,17 @@ export function createSendLogic(deps: SendLogicDeps) {
     let active = stateManager.getActiveSession()
 
     if (active?.isStreaming) {
-      if (text || attachmentManager.getAttachments().length > 0) {
+      const kind = classifyComposerInput(text, true)
+      if (kind === "slash-blocked") {
+        // Never steer-leak a command to the model as literal text. Keep the
+        // input intact so the user can run it once the stream stops.
+        handleRequestError(
+          active.id,
+          "Slash commands can't run while a response is streaming — press Stop or wait for completion, then try again.",
+        )
+        return
+      }
+      if (kind === "steer" || attachmentManager.getAttachments().length > 0) {
         sendSteerPrompt()
       } else {
         abortStream()

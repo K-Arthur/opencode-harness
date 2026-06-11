@@ -136,6 +136,34 @@ export function toCommandEntries(): Array<{
 }
 
 /**
+ * How the composer should treat the current input, given stream state.
+ *
+ * - "prompt"        idle, plain text → normal send
+ * - "slash"         idle, command-shaped → slash dispatcher
+ * - "steer"         streaming, plain text → steering prompt
+ * - "slash-blocked" streaming, command-shaped → refuse with a clear error;
+ *                   commands must never be steer-leaked to the model as text
+ * - "abort"         streaming, empty input → stop the stream (send button
+ *                   doubles as stop)
+ * - "empty"         idle, empty input → no-op
+ *
+ * Command-shaped means "/" followed by a non-space character. "/ literal…"
+ * stays steerable as an escape hatch for the rare prompt that starts with a
+ * slash.
+ */
+export type ComposerInputKind = "prompt" | "slash" | "steer" | "slash-blocked" | "abort" | "empty"
+
+export function classifyComposerInput(text: string, isStreaming: boolean): ComposerInputKind {
+  const trimmed = text.trim()
+  if (!trimmed) return isStreaming ? "abort" : "empty"
+  const commandShaped = /^\/\S/.test(trimmed)
+  if (isStreaming) return commandShaped ? "slash-blocked" : "steer"
+  // Preserve historical idle behavior: anything starting with "/" (even a
+  // lone slash) routes to the slash dispatcher.
+  return trimmed.startsWith("/") ? "slash" : "prompt"
+}
+
+/**
  * Filter server-reported commands so they don't duplicate local entries
  * (canonical names or aliases). Match is case-insensitive — the opencode
  * server has been seen to normalise some command names to uppercase in
