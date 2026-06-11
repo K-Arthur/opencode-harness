@@ -1,10 +1,20 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-06-10
-**Version:** v0.3.32
+**Last Updated:** 2026-06-11
+**Version:** v0.3.34
 **Version:** v0.2.23 (+ Unreleased: opencode CLI auto-install, native local voice input, frontend overhaul, stream/dedicated-bar redesign)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
+
+## Unreleased Highlights (2026-06-11) — slash/methodology/skills hardening
+
+Plan + verified gap analysis: `.opencode/plans/2026-06-11-methodology-skills-slash-overhaul.md`. User/dev docs: `docs/slash-commands-and-methodology.md`.
+
+- **Slash registry consolidation.** `LOCAL_SLASH_COMMANDS` gains `aliases`/`usage`/`category`; `/export-md` folded into `/export` as an alias; `/diagnose:generation` now discoverable in the dropdown/palette; `/help` table generated from the registry (`buildHelpTable()`) so it can never drift again; `mentions.ts` uses the shared, alias-aware `dedupServerCommands()`; mention trigger charset accepts `-`/`:`.
+- **Slash-during-streaming guard.** `classifyComposerInput()` is the single composer routing decision; command-shaped input typed mid-stream is blocked with a clear error (input preserved) instead of being steer-leaked to the model as literal text.
+- **Methodology guidance is now visible and overridable.** `StreamCoordinator` posts `methodology_selected` (was documented but never sent); the webview shows a session-scoped `◆ <label>` chip in the status strip; the VS Code status-bar lightbulb renders the *same* advice that was injected (removed the second, independent classification pass); new `/methodology [on|off]` toggles the now-typed `TabState.methodologyDisabled` (previously an unreachable unsafe-cast read).
+- **Honesty cleanups.** Skills-modal toggle copy states it controls *suggestion* only (the opencode server loads skills on its own); removed 8 dead `opencode.methodology.*` settings that configured the never-executing cascade pipeline (only `enabled` remains).
+- **Tests.** Registry/alias/help-table/classifier behavioral tests, structural guards for the single-classification-pass and typed opt-out invariants (RED→GREEN committed in sequence).
 
 ## Unreleased Highlights (2026-06-10) — multi-area bugfix & feature release
 
