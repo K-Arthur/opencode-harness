@@ -64,4 +64,12 @@ void describe("CommandExecutionService.ts", () => {
       "custom prompt commands must use sendPromptToWebview which triggers normal send flow (creates session automatically)"
     )
   })
+
+  void it("local slash handler receives arguments so /methodology on|off can route", () => {
+    assert.ok(
+      /handleLocalSlashCommand\(\s*sessionId:\s*string,\s*commandName:\s*string,\s*args/.test(source),
+      "handleLocalSlashCommand must accept an args parameter"
+    )
+    assert.ok(source.includes('case "methodology":'), "must route the methodology command locally")
+  })
 })

@@ -285,6 +285,36 @@ describe("StreamCoordinator.ts", () => {
       "TTFB timeout must pass the computed reason into stream_end"
     )
   })
+
+  // ── Methodology advice visibility ──────────────────────────────────────
+  it("posts methodology_selected to the webview when advice is applied", () => {
+    // The doc comment promised this message for as long as the advisor has
+    // existed, but it was never sent — methodology guidance was invisible.
+    assert.ok(
+      source.includes('"methodology_selected"'),
+      "applyMethodologyAdvice must post methodology_selected to the webview"
+    )
+  })
+
+  it("derives the status bar from the same advice — no second classification pass", () => {
+    // The status bar used to run orchestrator.advise(text) — an independent
+    // re-classification that could disagree with the addendum actually sent.
+    assert.ok(
+      !source.includes("orchestrator.advise("),
+      "status bar must not re-classify; it must render the advice that was injected"
+    )
+  })
+
+  it("reads the per-tab opt-out through a typed field, not an unsafe cast", () => {
+    assert.ok(
+      !source.includes("tab as unknown as { methodologyDisabled"),
+      "methodologyDisabled must be a typed TabState field"
+    )
+    assert.ok(
+      source.includes("methodologyDisabled"),
+      "per-tab opt-out must still be honored"
+    )
+  })
 })
 
   // ── Plan/build agent selection ──────────────────────────────────────────────

@@ -45,6 +45,15 @@ void describe("ChatCommands.ts", () => {
     assert.ok(source.includes('"No previous sessions to continue."'), "must handle no sessions case")
   })
 
+  void it("has methodology method that reports and toggles per-tab guidance", () => {
+    assert.ok(source.includes("methodology("), "must have methodology method")
+    assert.ok(source.includes("methodologyDisabled"), "must read/set tab.methodologyDisabled")
+    assert.ok(source.includes("Usage: /methodology"), "invalid arguments must show usage")
+    const idx = source.indexOf("methodology(")
+    const block = source.slice(idx, idx + 2500)
+    assert.ok(block.includes('role: "system"'), "state changes must be reported as a system message")
+  })
+
   void it("has help method that shows command table", () => {
     assert.ok(source.includes("help("), "must have help method")
     assert.ok(source.includes("Available slash commands"), "must show available commands")
