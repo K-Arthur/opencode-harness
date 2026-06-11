@@ -1428,7 +1428,17 @@ function getVsCodeApi() {
     setupSettingsMenuKeyboardNav()
     composer.updateSendButton()
     setVsCodeApi(vscode)
-    setSessionListPostMessage((msg) => vscode.postMessage(msg as Record<string, unknown>))
+    setSessionListPostMessage((msg) => {
+      // Route history-modal session opens through openSession so clicking an
+      // already-open tab switches locally instead of triggering the host's
+      // full server-transcript refetch (see openSession).
+      const m = msg as Record<string, unknown>
+      if (m?.type === "resume_session" && typeof m.sessionId === "string") {
+        openSession(m.sessionId)
+        return
+      }
+      vscode.postMessage(m)
+    })
     showWelcomeView()
     window.__opencodeInitTimeout = timers.setTimeout(() => {
       if (!stateManager.getState().activeSessionId) {
@@ -1516,9 +1526,7 @@ function getVsCodeApi() {
         prepareHostRecentSessions(hostSessions),
         recentContainer,
         () => vscode.postMessage({ type: "list_sessions", query: filterQuery.trim() }),
-        (sessionId) => {
-          vscode.postMessage({ type: "resume_session", sessionId })
-        },
+        (sessionId) => openSession(sessionId),
         !!query
       )
       return
@@ -1538,9 +1546,7 @@ function getVsCodeApi() {
       prepared.sessions,
       recentContainer,
       () => vscode.postMessage({ type: "list_sessions" }),
-      (sessionId) => {
-        vscode.postMessage({ type: "resume_session", sessionId })
-      },
+      (sessionId) => openSession(sessionId),
       prepared.isFiltered
     )
   }
@@ -1810,6 +1816,23 @@ function getVsCodeApi() {
     // Refresh question bar for the switched-to tab — only show pending questions
     // belonging to the active session.
     questionBar.setActiveSession(tabId)
+  }
+
+  /**
+   * Open a session from the recent list / history modal. A session that is
+   * already open as a tab is fully hydrated and kept current by SSE events —
+   * switch to it locally instead of posting resume_session, which makes the
+   * host re-fetch the ENTIRE server transcript, re-apply it to the store, and
+   * re-push a 50-message payload for a tab that was already correct. Only
+   * genuinely-closed sessions take the heavyweight resume path.
+   */
+  function openSession(targetId: string) {
+    const hasPanel = !!els.tabPanels.querySelector(`.tab-panel[data-tab-id="${CSS.escape(targetId)}"]`)
+    if (hasPanel && stateManager.getSession(targetId)) {
+      switchTab(targetId)
+      return
+    }
+    vscode.postMessage({ type: "resume_session", sessionId: targetId })
   }
 
   function closeTab(tabId: string) {
