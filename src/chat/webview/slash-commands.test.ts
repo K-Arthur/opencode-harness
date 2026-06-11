@@ -7,6 +7,7 @@ import {
   dedupServerCommands,
   resolveLocalCommand,
   buildHelpTable,
+  classifyComposerInput,
 } from "./slash-commands"
 
 // This module is the single source of truth for all local (webview-resolved)
@@ -203,5 +204,38 @@ describe("buildHelpTable", () => {
     assert.ok(lines[0]!.startsWith("| Command |"))
     assert.ok(/^\|\s*-+/.test(lines[1]!))
     assert.equal(lines.length, 2 + LOCAL_SLASH_COMMANDS.length)
+  })
+})
+
+describe("classifyComposerInput", () => {
+  // sendMessage() used to route ALL non-empty input to sendSteerPrompt()
+  // while streaming — before the slash check ran. Typing /clear mid-stream
+  // sent the literal string "/clear" to the model as steering text.
+  it("classifies plain text while idle as a prompt", () => {
+    assert.equal(classifyComposerInput("fix the login bug", false), "prompt")
+  })
+
+  it("classifies command-shaped text while idle as a slash command", () => {
+    assert.equal(classifyComposerInput("/clear", false), "slash")
+    assert.equal(classifyComposerInput("/model gpt-5", false), "slash")
+  })
+
+  it("classifies plain text while streaming as steering", () => {
+    assert.equal(classifyComposerInput("focus on the tests", true), "steer")
+  })
+
+  it("blocks command-shaped text while streaming — never steer-leak a command", () => {
+    assert.equal(classifyComposerInput("/clear", true), "slash-blocked")
+    assert.equal(classifyComposerInput("/deploy prod", true), "slash-blocked")
+  })
+
+  it("classifies empty input by stream state (abort vs empty)", () => {
+    assert.equal(classifyComposerInput("", true), "abort")
+    assert.equal(classifyComposerInput("   ", true), "abort")
+    assert.equal(classifyComposerInput("", false), "empty")
+  })
+
+  it("a lone or space-separated slash is steer text, not a command (escape hatch)", () => {
+    assert.equal(classifyComposerInput("/ literal slash steer", true), "steer")
   })
 })
