@@ -579,19 +579,13 @@ function initMethodology(context: vscode.ExtensionContext): vscode.StatusBarItem
     void context.globalState.update('opencode-methodology-outcomes', events)
   })
 
+  // Only `enabled` remains user-configurable. The cascade/validation settings
+  // that used to be read here were removed from package.json — they fed a
+  // pipeline (CascadeRouter/QualityGate/SchemaValidator) that never runs
+  // against real prompts; exposing knobs that do nothing misleads users.
   methodologyOrchestrator = new MethodologyOrchestrator({
     config: {
       enabled: methConfig.get<boolean>('enabled', true),
-      cascade: {
-        enabled: methConfig.get<boolean>('cascadeEnabled', true),
-        maxEscalations: methConfig.get<number>('maxEscalations', 2),
-        qualityThresholds: {},
-      },
-      prompting: {
-        defaultStrategy: methConfig.get<string>('defaultStrategy', 'hierarchical-cot') as import('./methodology').PromptStrategy,
-        maxRefinementPasses: 3,
-        contextBudget: 8000,
-      },
     },
   })
 
