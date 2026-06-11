@@ -131,3 +131,33 @@ export function classifySession(session: {
   if (!session.cliSessionId) return "orphaned"
   return "real"
 }
+
+/**
+ * Build the object handed to globalState.update() on flush. Two jobs:
+ *
+ * 1. The existing flush contract: persist sessions with messages, plus
+ *    server-imported sessions awaiting backfill; empty local placeholder
+ *    tabs are transient by design.
+ * 2. Bound the persisted transcript per session. flush() runs on a 500ms
+ *    debounce during streaming, and VS Code JSON-serializes the WHOLE value
+ *    (then writes it to the state DB) on every update — so the per-flush
+ *    cost must scale with this bound, never with total store size. The
+ *    in-memory store keeps the full transcript; the server remains the
+ *    source of truth for full history (resume/backfill re-fetch it).
+ *
+ * Pure; never mutates the live sessions (capped entries are shallow copies).
+ */
+export function buildPersistedSessions<T extends { messages: unknown[]; needsBackfill?: boolean }>(
+  sessions: Iterable<[string, T]>,
+  maxMessagesPerSession: number,
+): Record<string, T> {
+  const out: Record<string, T> = {}
+  for (const [id, sess] of sessions) {
+    const exempt = sess.needsBackfill === true
+    if (sess.messages.length === 0 && !exempt) continue
+    out[id] = sess.messages.length > maxMessagesPerSession
+      ? { ...sess, messages: sess.messages.slice(-maxMessagesPerSession) }
+      : sess
+  }
+  return out
+}
