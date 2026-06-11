@@ -3354,7 +3354,10 @@ function getVsCodeApi() {
                 const vl = createVirtualList(
                   s.id,
                   msgList,
-                  (id: string) => s.messages.find((m: ChatMessage) => m.id === id),
+                  // Read through stateManager (not the init payload array):
+                  // the canonical messages array is mutated in place by later
+                  // appends/streams, and scrollback restore must find them.
+                  (id: string) => stateManager.getSession(s.id)?.messages.find((m: ChatMessage) => m.id === id),
                   () => stateManager.getSession(s.id),
                   (m: ChatMessage, opts: Parameters<typeof renderMessage>[1]) => renderMessage(m, opts),
                 )
