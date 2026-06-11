@@ -7,8 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+
+- **Two-session lag fixed (2026-06-11).** Root cause was persistence amplification, not rendering: every small update (scroll save, stream block boundary, token update) re-serialized **all** transcripts in both processes. The webview now persists a bounded snapshot via `vscode.setState` (last 50 messages/session — payload 2.9 MB → 289 KB at 2×500 messages) and the extension host persists at most 200 messages/session to `globalState` (flush serialize 170 ms → 16 ms at 10×1000 messages); in-memory transcripts are untouched and the opencode server remains the source of truth for older history. (`src/chat/webview/state.ts`, `src/session/SessionStore.ts`, `src/session/sessionUtils.ts`)
+- **Session switching no longer re-fetches open tabs.** Clicking an already-open session in the recent list or history modal now switches locally instead of posting `resume_session`, which made the host re-fetch the entire server transcript, rewrite the store, and re-push a 50-message payload. Post-compaction refresh keeps the full re-fetch. (`src/chat/webview/main.ts`)
+- **Virtual list no longer re-renders the detached backlog at switch/close time.** Resuming a session reuses the existing list when the transcript DOM is unchanged; tab close / session delete / transcript rebuild dispose without the `restoreAll()` render. (`src/chat/webview/virtualList.ts`, `src/chat/webview/main.ts`)
+
 ### Fixed
 
+- **Scroll-back over pruned history showed permanent empty boxes.** The virtual list never observed its placeholders, so a pruned message could not restore when scrolled back into view; it only reappeared when a resume happened to rebuild everything. Placeholders are now observed and messages re-render on scroll-back. (`src/chat/webview/virtualList.ts`)
+- **`TimestampUpdater` retained every removed message element forever.** Its element-keyed map is now pruned on tick when elements leave the DOM — bounded memory and tick cost over long sessions. (`src/chat/webview/timestampUpdater.ts`)
 - **Completed subagents still showing "Running".** `normalizeSubagentStatus()` in both the webview (`main.ts`) and the host (`RunActivityTracker.ts`, `ChatProvider.ts`) mapped unknown status strings to `"pending"` or `"running"` — both treated as live. Now maps to `"unknown"` (not live). The reconciler correctly transitions `"unknown"` subagents to `"completed"` when the server drops them. (`src/chat/webview/main.ts`, `src/chat/handlers/RunActivityTracker.ts`, `src/chat/ChatProvider.ts`)
 - **`activeSubagentCount` counting `"unknown"` as active.** The tracker's `activeSubagentCount()` excluded unknown statuses, preventing run finalization when subagents had unparseable status strings. (`src/chat/handlers/RunActivityTracker.ts`)
 - **"Open in editor" button for subagent detail was a no-op.** The webview now tracks the active subagent id (`activeSubagentId`) and sends both `sessionId` and `subagentId` in the `open_subagent_detail` message. The host creates a new `vscode.WebviewPanel` in popout mode (`window.__OC_POPOUT__`), fetches the detail, and renders it in a dedicated editor panel. (`src/chat/webview/main.ts`, `src/chat/ChatProvider.ts`, `src/chat/WebviewEventRouter.ts`, `src/chat/WebviewContent.ts`)

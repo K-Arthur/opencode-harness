@@ -1,5 +1,17 @@
 # Chat Webview Performance Notes
 
+> **2026-06-11:** the "two open sessions lag" report was root-caused to
+> persistence amplification (full-state `vscode.setState` + full-store
+> `globalState` writes on every debounced save) and the virtual-list
+> dispose/`restoreAll` lifecycle — not to the streaming/render pipeline
+> below. See `docs/performance-audit.md` §"2026-06-11" for the five root
+> causes, fixes, and measurements. Key invariants to preserve:
+> `vscode.setState` receives a bounded snapshot (50 msgs/session), never the
+> raw state object; `SessionStore.flush` persists ≤200 msgs/session via
+> `buildPersistedSessions`; virtual-list placeholders are observed (scrollback
+> restore depends on it); already-open tabs switch locally via `openSession`,
+> never through `resume_session`.
+
 ## Verified Hotspots
 
 - The virtual message list now uses dynamic pruning thresholds instead of fixed 40/15/15 counts. It keeps focused, recently added, and active streaming messages attached.

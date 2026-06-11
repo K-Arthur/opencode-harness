@@ -497,3 +497,101 @@ Per the project rules ("don't break correctness for speed", "no speculative rewr
 - **Result:** `npx eslint src/` → **0 errors, 245 warnings, exit 0** (CI lint step passes; backlog visible).
 
 Recommended paydown order (each its own reviewable PR on a clean tree): (1) remove the 55 unused imports (typecheck is the safety net for false positives) → promote `no-unused-vars` toward error; (2) review the 4 `require()` sites (keep intentional lazy/cycle-breaking ones via targeted `// eslint-disable-next-line`); (3) type the 88 `any`s or annotate justified ones, then promote `no-explicit-any`.
+
+---
+
+# 2026-06-11 — Two-session lag: root-cause pass (persistence churn + virtual-list lifecycle)
+
+> Trigger: user report — "the extension lags with only two open sessions;
+> switching between sessions is slow." Method: trace the actual switch/save
+> hot paths end-to-end, measure the dominant costs with node micro-benchmarks
+> against the real data shapes, fix with TDD (RED commit → GREEN commit per
+> fix). No live VS Code profiling available from this CLI session (limitation
+> noted in §F of the previous pass and still true); all numbers below are
+> reproducible node benchmarks of the exact serialize paths, plus payload
+> sizes, which translate directly to webview-IPC and state-DB write cost.
+
+## Root causes found (with evidence)
+
+The streaming/rendering pipeline (audited 2026-06-02) was not the problem.
+The two-session lag came from **persistence amplification**: every small
+update serialized *all* transcripts, twice (once per process), plus a
+virtual-list lifecycle that re-rendered the whole detached backlog at exactly
+the moments the user perceives as "switching".
+
+| # | Root cause | Where | Cost (measured) |
+|---|---|---|---|
+| RC1 | `save()`/`flush()` handed the **entire state** (every session × every message) to `vscode.setState` on a 300 ms debounce — fired by scroll saves (150 ms), stream block boundaries, token/cost updates, subagent updates. The old `doPrune` path re-`JSON.stringify`ed the full state again just to measure it. | `webview/state.ts` | 2 sessions × 500 msgs ≈ 2.9 MB state → ~4.5–7 ms full stringify per save **+ 2.9 MB structured-clone/IPC to the host per save** (+ doPrune probe up to 12 ms). |
+| RC2a | **Scroll-back restore was dead.** `detachMessage` never observed the placeholder, so `restoreOne` was unreachable — pruned messages stayed empty boxes until something disposed the list. | `webview/virtualList.ts` | correctness bug; masked by RC2b. |
+| RC2b | `createVirtualList` (called on **every** `resume_session_data`) and tab close/delete disposed the list via `restoreAll()` — synchronously re-rendering **every** detached message (markdown + highlight) into DOM that was either about to be replaced or removed. | `webview/virtualList.ts`, `main.ts` | O(detached messages) renderMessage calls on the switch/close path — a long main-thread stall precisely at switch time. |
+| RC3 | Clicking a session in the recent list / history modal **always** posted `resume_session`, even for already-open hydrated tabs. The host then re-fetched the **entire server transcript** (`getSessionMessages`), re-converted it, re-applied it to the store (`applyBackfilledMessages` → full store save), and re-pushed a 50-message payload for the webview to reconcile. | `webview/main.ts` → `SessionLifecycleService.handleResumeSession` | full transcript fetch + convert + store rewrite + re-push per click on an open tab. |
+| RC4 | `SessionStore.flush()` handed `globalState.update` the **entire store** (≤50 sessions × full transcripts) on a 500 ms debounce during streaming; VS Code JSON-serializes the whole value and writes it to the state DB each time. | `session/SessionStore.ts` | 10 sessions × 1000 msgs ≈ 28 MB → **~170 ms full serialize per flush** (extension host thread) + 28 MB state-DB write. |
+| RC5 | `TimestampUpdater.registered` (Map keyed by HTMLElement) was never pruned; tick() never checked `isConnected` despite the header comment claiming auto-drop. Message elements are replaced constantly → unbounded retained detached subtrees. | `webview/timestampUpdater.ts` | memory leak + ever-growing 60 s tick. |
+
+## Fixes (one RED test commit + one implementation commit each)
+
+| Fix | Change | After (measured) |
+|---|---|---|
+| RC1 | `vscode.setState` receives a **bounded snapshot**: last 50 messages/session (matching the host `init_state` cap — the host re-hydrates with 50 on reload anyway), deep-trim to 10 if a pathological snapshot still exceeds the 2 MB budget. `doPrune`/`schedulePrune` machinery deleted. In-memory transcripts untouched. | 2.9 MB → **289 KB** persisted payload (10×); serialize ~1.9 ms incl. probe. Cost now scales with the bound, not transcript size. |
+| RC2 | Placeholders are **observed** (scroll-back restore actually works now); `restoreOne` unobserves the placeholder it replaces. `dispose({ restoreDom: false })` skips `restoreAll` on tab close / session delete / transcript rebuild. `resume_session_data` **keeps** the existing list when the transcript DOM wasn't rebuilt (signature unchanged) instead of dispose→restoreAll→recreate. | 0 restoreAll renders on switch/close/delete; pruned messages restore on scroll-back (new behavior, jsdom-tested). |
+| RC3 | New `openSession(targetId)` router in the webview: already-open tabs → local `switchTab` (no host round-trip at all); closed sessions → `resume_session` as before. Post-compaction refresh intentionally keeps the true resume (server transcript really changed). Wired into recent-sessions list and history modal. | open-tab clicks: full server refetch + store rewrite + 50-msg re-push → **zero host messages beyond `switch_tab`**. |
+| RC4 | `flush()` routes through pure `buildPersistedSessions(sessions, 200)`: per-session persisted cap (most recent 200), shallow copies, existing empty/`needsBackfill` filter preserved. In-memory store unbounded; server remains source of truth for older history (resume/backfill re-fetch). | 28.2 MB → **5.6 MB** persisted payload; **170 ms → 16 ms** per flush (10×). |
+| RC5 | `tick()` deletes entries whose element reports `isConnected === false`; `registeredCount` getter exposed for leak tests. | bounded map; leak regression-tested. |
+
+Also fixed while touching the paths: `init_state`'s and resume's virtual lists
+now read messages **through `stateManager`** (the canonical, in-place-mutated
+array) instead of capturing the hydration payload array — required for
+correct scroll-back restore of messages appended after hydration (stale-
+closure hazard that the old dispose/recreate cycle happened to mask).
+
+## Trade-offs accepted (documented behavior changes)
+
+- **Persistence caps.** Webview state persists 50 msgs/session; host
+  globalState persists 200 msgs/session. Older history is restored from the
+  opencode server on resume/backfill (`applyBackfilledMessages` replaces with
+  server truth). The only loss scenario: the server no longer has the session
+  (deleted/foreign workspace) *and* the extension restarted — then "Load
+  earlier" bottoms out at the persisted cap. Judged acceptable vs. multi-MB
+  serializes on every save; revisit with per-session file storage
+  (`storageUri`) if full offline history becomes a requirement.
+- **Open-tab clicks no longer refresh from the server.** SSE keeps open tabs
+  current; reconnect reconciliation (`reconcileAfterReconnect`) covers gaps.
+  Compaction still forces a true resume.
+
+## Language/architecture verdict (per task requirement)
+
+**No Rust/WASM/Go/native helper is justified.** The measured bottlenecks were
+(a) redundant full-payload JSON serialization on both sides of the webview
+boundary and (b) wasted DOM re-renders — both architectural, both fixed in
+TypeScript by bounding payloads and removing the work entirely. The remaining
+CPU-heavy paths (markdown, highlight) already run behind caps, LRU caches and
+a Web Worker (`markdownWorker.js`). A native rewrite would have optimized
+work that should not happen at all.
+
+## Verification
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | ✅ clean |
+| `npm test` (unit mjs 756 + tsx ~3275 + message-contract + roundtrip) | ✅ 0 fail (8 pre-existing skips) |
+| New tests | +7 state snapshot, +4 virtualList restore/dispose, +4 openSession routing, +4 buildPersistedSessions, +2 timestamp pruning (each landed RED first) |
+| `node esbuild.js --production` + `scripts/check-bundle-size.mjs` | ✅ ext 544.0/545 KB, main.js 699.6/700 KB, worker 227.1/500 KB |
+| Benchmarks | `/tmp/perf-baseline-bench.mjs` (shapes) and real-implementation after-bench; figures above |
+
+**Not verified here (requires a live VS Code host):** wall-clock switch
+latency, retained-heap deltas, CPU during streaming. The bounded-payload
+fixes remove the dominant serialize/IPC/DOM costs those metrics measure; the
+manual checklist (two-session switching ×20, streaming smoothness, scrollback
+over pruned history, reload) should be run in the Extension Development Host
+after `npm run reinstall`.
+
+## Future profiling notes
+
+- Webview: open DevTools on the chat webview (`Developer: Open Webview
+  Developer Tools`), Performance tab; `RenderQueue.getStats()`,
+  `getRendererCacheStats()` and the HostMessageBatcher counters are the
+  ready-made instrumentation hooks.
+- Extension host: `Developer: Show Running Extensions` → Profile; or
+  `code --inspect-extensions` + Chrome DevTools.
+- The serialize benchmarks here are reproducible with the scripts noted above
+  against any future data-shape changes.
