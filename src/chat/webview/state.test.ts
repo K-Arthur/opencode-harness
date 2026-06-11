@@ -306,3 +306,123 @@ describe("state.ts — restore() must not resurrect stale isStreaming flags", ()
     assert.equal(byId.get("sub-fail")?.completedAt, 222)
   })
 })
+
+describe("state.ts — bounded persistence snapshot (two-session lag fix, 2026-06-11)", () => {
+  // Background: save()/flush() used to pass the ENTIRE in-memory state to
+  // vscode.setState — every session × every message × every block. With two
+  // long sessions (~3 MB of state) each debounced save cost a full multi-MB
+  // JSON serialization on the webview UI thread plus a multi-MB IPC to the
+  // extension host. setState fires on every scroll save, stream block
+  // boundary, token-usage update, etc., so the per-save cost scaled with
+  // TOTAL transcript size, not with what changed — the root cause of the
+  // "extension lags with only two open sessions" report. The fix: persist a
+  // bounded snapshot (last N messages per session, matching the host's
+  // init_state cap) while keeping the full transcript in memory. The host
+  // store + server remain the source of truth for full history.
+
+  function stubCapture() {
+    let saved: any = null
+    return {
+      api: {
+        getState: () => saved,
+        setState: (s: unknown) => { saved = s },
+        postMessage: () => {},
+      } as any,
+      get saved() { return saved },
+    }
+  }
+
+  function pushMessages(sm: ReturnType<typeof createState>, id: string, count: number, textLen = 40) {
+    for (let i = 0; i < count; i++) {
+      sm.appendMessage(id, {
+        id: `m-${i}`,
+        role: i % 2 === 0 ? "user" : "assistant",
+        timestamp: i,
+        blocks: [{ type: "text", text: "x".repeat(textLen) }],
+      } as any)
+    }
+  }
+
+  it("flush() persists at most 50 messages per session", () => {
+    const cap = stubCapture()
+    const sm = createState(cap.api)
+    const s = sm.createSession("Long")
+    pushMessages(sm, s.id, 120)
+    sm.flush()
+    const persisted = cap.saved.sessions[s.id]
+    assert.equal(persisted.messages.length, 50, "persisted snapshot must cap messages per session")
+    assert.equal(persisted.messages[0].id, "m-70", "persisted window must be the most recent messages")
+    assert.equal(persisted.messages[49].id, "m-119")
+  })
+
+  it("flush() keeps the full transcript in memory (cap applies to the snapshot only)", () => {
+    const cap = stubCapture()
+    const sm = createState(cap.api)
+    const s = sm.createSession("Long")
+    pushMessages(sm, s.id, 120)
+    sm.flush()
+    assert.equal(sm.getSession(s.id)?.messages.length, 120, "in-memory transcript must not be trimmed by persistence")
+  })
+
+  it("flush() preserves session metadata and non-session fields in the snapshot", () => {
+    const cap = stubCapture()
+    const sm = createState(cap.api)
+    const s = sm.createSession("Meta", "anthropic/claude-sonnet-4-6", "build")
+    pushMessages(sm, s.id, 60)
+    sm.setActiveSession(s.id)
+    sm.setScrollPosition(s.id, 333)
+    sm.setGlobalModel("anthropic/claude-sonnet-4-6")
+    sm.flush()
+    assert.equal(cap.saved.sessions[s.id].model, "anthropic/claude-sonnet-4-6")
+    assert.equal(cap.saved.sessions[s.id].mode, "build")
+    assert.equal(cap.saved.scrollPositions[s.id], 333)
+    assert.equal(cap.saved.globalModel, "anthropic/claude-sonnet-4-6")
+    assert.equal(cap.saved.activeSessionId, s.id)
+  })
+
+  it("short sessions are persisted without trimming", () => {
+    const cap = stubCapture()
+    const sm = createState(cap.api)
+    const s = sm.createSession("Short")
+    pushMessages(sm, s.id, 7)
+    sm.flush()
+    assert.equal(cap.saved.sessions[s.id].messages.length, 7)
+  })
+
+  it("falls back to a deeper trim when the bounded snapshot still exceeds the state budget", () => {
+    const cap = stubCapture()
+    const sm = createState(cap.api)
+    const s = sm.createSession("Huge")
+    // 40 messages × ~100KB ≈ 4MB — under the 50-message cap but over the 2MB budget.
+    pushMessages(sm, s.id, 40, 100_000)
+    sm.flush()
+    const persisted = cap.saved.sessions[s.id]
+    assert.ok(
+      persisted.messages.length <= 10,
+      `oversized snapshot must fall back to a deep trim (got ${persisted.messages.length} messages)`,
+    )
+  })
+
+  it("snapshot round-trips through restore()", () => {
+    const cap = stubCapture()
+    const sm = createState(cap.api)
+    const s = sm.createSession("RT")
+    pushMessages(sm, s.id, 80)
+    sm.setActiveSession(s.id)
+    sm.flush()
+
+    const sm2 = createState(cap.api)
+    assert.equal(sm2.restore(), true)
+    assert.equal(sm2.getSession(s.id)?.messages.length, 50)
+    assert.equal(sm2.getState().activeSessionId, s.id)
+  })
+
+  it("no longer schedules full-state JSON.stringify prune passes", () => {
+    // The old doPrune/schedulePrune path re-serialized the ENTIRE state just
+    // to measure its size (and again per pruned session). The bounded
+    // snapshot makes that machinery — and its hidden O(total-state) cost —
+    // unnecessary.
+    assert.ok(!source.includes("schedulePrune"), "schedulePrune must be gone")
+    assert.ok(!source.includes("function doPrune"), "doPrune must be gone")
+  })
+})
