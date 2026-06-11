@@ -22,7 +22,7 @@ describe("mentions.ts", () => {
     // Specific names live in slash-commands.ts now; mentions.ts just adapts them.
     // The slash-commands.test.ts suite asserts the canonical list contains clear,
     // help, model, etc., so we only verify the import wiring here.
-    assert.match(source, /LOCAL_COMMANDS[\s\S]{0,40}toMentionItems\(\)/)
+    assert.match(source, /LOCAL_COMMANDS[\s\S]{0,40}toMentionItems\(SLASH_COMMAND_ICONS\)/)
   })
 
   it("has handleTrigger function", () => {
@@ -54,8 +54,8 @@ describe("mentions.ts", () => {
       "mentions.ts must import from slash-commands.ts (canonical registry)",
     )
     assert.ok(
-      source.includes("toMentionItems()"),
-      "mentions.ts must build LOCAL_COMMANDS from toMentionItems()",
+      source.includes("toMentionItems(SLASH_COMMAND_ICONS)"),
+      "mentions.ts must build LOCAL_COMMANDS from toMentionItems() (icons supplied webview-side)",
     )
     // Defensive: ensure the old hardcoded array literal is gone so future
     // edits don't re-introduce drift.

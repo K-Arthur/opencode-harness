@@ -14,18 +14,10 @@
  * users different command sets depending on which UI they reached for.
  */
 
-import {
-  COMMAND_SVG,
-  BRAIN_SVG,
-  MCP_SVG,
-  PLUS_SVG,
-  SHARE_SVG,
-  REFRESH_SVG,
-  PLAY_SVG,
-  HISTORY_SVG,
-  CODE_SVG,
-  BUG_SVG,
-} from "./icons"
+// NOTE: no icon imports here. This module is also bundled into the extension
+// host (ChatCommands generates /help from the registry); pulling icons.ts in
+// would ship every webview SVG string inside dist/extension.js. Icons are
+// attached by the webview caller via the `icons` parameter of toMentionItems.
 import type { MentionItem } from "./types"
 
 /** Palette grouping; also drives future VS Code contribution generation. */
@@ -38,8 +30,6 @@ export interface LocalSlashCommand {
   description: string
   /** Text inserted into the prompt input. Trailing space means "expects args". */
   insertText: string
-  /** Inline icon (SVG string) shown in the mention dropdown. */
-  icon?: string
   /** Alternate names that resolve to this command (kept for back-compat). */
   aliases?: ReadonlyArray<string>
   /** Argument hint rendered in /help and usage errors, e.g. "<name> <content>". */
@@ -52,23 +42,23 @@ export interface LocalSlashCommand {
  * commands modal (mention dropdown filters/orders by query separately).
  */
 export const LOCAL_SLASH_COMMANDS: ReadonlyArray<LocalSlashCommand> = Object.freeze([
-  { name: "clear",       description: "Clear conversation, start a new server session", insertText: "/clear",       icon: COMMAND_SVG, category: "session" },
-  { name: "model",       description: "Switch the active model",                         insertText: "/model ",      icon: BRAIN_SVG,   category: "session", usage: "<id>" },
-  { name: "cost",        description: "Show session cost (server figures when available)", insertText: "/cost",     icon: MCP_SVG,     category: "session" },
-  { name: "new",         description: "Open a new session tab",                          insertText: "/new",         icon: PLUS_SVG,    category: "session" },
-  { name: "continue",    description: "Resume the most recently closed session",         insertText: "/continue",    icon: PLAY_SVG,    category: "session" },
-  { name: "compact",     description: "Compact session context to free tokens",          insertText: "/compact",     icon: REFRESH_SVG, category: "session" },
-  { name: "stash",       description: "Stash current prompt for reuse",                  insertText: "/stash ",      icon: SHARE_SVG,   category: "prompt", usage: "<name> <content>" },
-  { name: "stashes",     description: "Browse stashed prompts",                          insertText: "/stashes",     icon: SHARE_SVG,   category: "prompt" },
-  { name: "queue",       description: "Show queued prompts",                             insertText: "/queue",       icon: MCP_SVG,     category: "prompt" },
-  { name: "commands",    description: "Open the command palette",                        insertText: "/commands",    icon: HISTORY_SVG, category: "conversation" },
-  { name: "methodology", description: "Show or toggle automatic methodology guidance for this tab", insertText: "/methodology ", icon: BRAIN_SVG, category: "session", usage: "[on|off]" },
-  { name: "export",      description: "Export conversation as Markdown",                 insertText: "/export",      icon: SHARE_SVG,   category: "export", aliases: ["export-md"] },
-  { name: "export-json", description: "Export conversation as JSON",                     insertText: "/export-json", icon: SHARE_SVG,   category: "export" },
-  { name: "export-text", description: "Export conversation as plain text",               insertText: "/export-text", icon: SHARE_SVG,   category: "export" },
-  { name: "copy",        description: "Copy conversation to clipboard",                  insertText: "/copy",        icon: SHARE_SVG,   category: "export" },
-  { name: "diagnose:generation", description: "Dump generation-tracking state to the output channel", insertText: "/diagnose:generation", icon: BUG_SVG, category: "debug" },
-  { name: "help",        description: "Show available slash commands",                   insertText: "/help",        icon: CODE_SVG,    category: "conversation" },
+  { name: "clear",       description: "Clear conversation, start a new server session", insertText: "/clear",       category: "session" },
+  { name: "model",       description: "Switch the active model",                         insertText: "/model ",      category: "session", usage: "<id>" },
+  { name: "cost",        description: "Show session cost (server figures when available)", insertText: "/cost",     category: "session" },
+  { name: "new",         description: "Open a new session tab",                          insertText: "/new",         category: "session" },
+  { name: "continue",    description: "Resume the most recently closed session",         insertText: "/continue",    category: "session" },
+  { name: "compact",     description: "Compact session context to free tokens",          insertText: "/compact",     category: "session" },
+  { name: "stash",       description: "Stash current prompt for reuse",                  insertText: "/stash ",      category: "prompt", usage: "<name> <content>" },
+  { name: "stashes",     description: "Browse stashed prompts",                          insertText: "/stashes",     category: "prompt" },
+  { name: "queue",       description: "Show queued prompts",                             insertText: "/queue",       category: "prompt" },
+  { name: "commands",    description: "Open the command palette",                        insertText: "/commands",    category: "conversation" },
+  { name: "methodology", description: "Show or toggle automatic methodology guidance for this tab", insertText: "/methodology ", category: "session", usage: "[on|off]" },
+  { name: "export",      description: "Export conversation as Markdown",                 insertText: "/export",      category: "export", aliases: ["export-md"] },
+  { name: "export-json", description: "Export conversation as JSON",                     insertText: "/export-json", category: "export" },
+  { name: "export-text", description: "Export conversation as plain text",               insertText: "/export-text", category: "export" },
+  { name: "copy",        description: "Copy conversation to clipboard",                  insertText: "/copy",        category: "export" },
+  { name: "diagnose:generation", description: "Dump generation-tracking state to the output channel", insertText: "/diagnose:generation", category: "debug" },
+  { name: "help",        description: "Show available slash commands",                   insertText: "/help",        category: "conversation" },
 ])
 
 /** Lookup covering canonical names and aliases, lowercase keys. */
@@ -108,13 +98,15 @@ export function buildHelpTable(): string {
 /**
  * Adapter: produce mention-dropdown items for every local command.
  * The mention dropdown displays them as inline suggestions while typing.
+ * `icons` (command name → SVG string) is supplied by the webview caller so
+ * the icon module never ends up in the extension-host bundle.
  */
-export function toMentionItems(): MentionItem[] {
+export function toMentionItems(icons?: Readonly<Record<string, string>>): MentionItem[] {
   return LOCAL_SLASH_COMMANDS.map((cmd) => ({
     prefix: "/",
     display: cmd.name,
     description: cmd.description,
-    icon: cmd.icon,
+    icon: icons?.[cmd.name],
   }))
 }
 
