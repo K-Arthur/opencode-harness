@@ -655,10 +655,12 @@ it("unified modal: server session items send resume_server_session on click", ()
     // The error shown when the user tries to send despite being at the stream
     // cap must name the streaming tabs (the streamingNames from capacity state),
     // not just emit the static STREAM_LIMIT_TOOLTIP.
-    // Anchor on the stream-capacity branch: an earlier handleRequestError call
-    // (the slash-during-streaming guard) is unrelated to the stream cap.
-    const capIdx = sendLogicSource.indexOf("streamCapacity.isFull")
-    assert.ok(capIdx >= 0, "stream-capacity branch must exist in sendLogic.ts")
+    // Anchor on sendMessage's stream-capacity branch: other handleRequestError
+    // calls (e.g. the slash-during-streaming guard) are unrelated to the cap.
+    const sendIdx = sendLogicSource.indexOf("function sendMessage(")
+    assert.ok(sendIdx >= 0, "sendMessage must exist in sendLogic.ts")
+    const capIdx = sendLogicSource.indexOf("streamCapacity.isFull", sendIdx)
+    assert.ok(capIdx >= 0, "stream-capacity branch must exist in sendMessage")
     const idx = sendLogicSource.indexOf("handleRequestError(", capIdx)
     assert.ok(idx >= 0, "stream-limit handleRequestError call must exist in sendLogic.ts")
     const block = sendLogicSource.slice(idx, idx + 400)
