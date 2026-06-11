@@ -1,4 +1,5 @@
 import type { CommandEntry } from "./commands-modal"
+import { resolveLocalCommand } from "./slash-commands"
 
 export interface SlashCommandDeps {
   stateManager: {
@@ -43,7 +44,12 @@ export function createSlashCommandHandler(deps: SlashCommandDeps) {
     active: ActiveSession,
   ): void {
     const parts = text.split(/\s+/)
-    const cmd = (parts[0] || "").toLowerCase()
+    const typed = (parts[0] || "").toLowerCase()
+    // Aliases (e.g. /export-md) normalize to their canonical command so the
+    // switch below only ever sees canonical names. Unknown commands keep the
+    // typed form and fall through to the host/server.
+    const resolved = resolveLocalCommand(typed)
+    const cmd = resolved ? `/${resolved.name}` : typed
     const commandArgs = parts.slice(1).join(" ")
     switch (cmd) {
       case "/clear":
@@ -77,7 +83,6 @@ export function createSlashCommandHandler(deps: SlashCommandDeps) {
         clearPromptInput()
         return
       case "/export":
-      case "/export-md":
         vscode.postMessage({ type: "export_chat" })
         clearPromptInput()
         return

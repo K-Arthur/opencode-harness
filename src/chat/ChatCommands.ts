@@ -4,6 +4,7 @@ import { SessionStore } from "../session/SessionStore"
 import { TabManager } from "./TabManager"
 import { StreamCoordinator } from "./handlers/StreamCoordinator"
 import { log } from "../utils/outputChannel"
+import { buildHelpTable } from "./webview/slash-commands"
 
 export class ChatCommands {
   constructor(
@@ -126,26 +127,10 @@ export class ChatCommands {
 
   /** /help: send command list as system-message with markdown table */
   help(sessionId: string, postMessage: (msg: Record<string, unknown>) => void): void {
-    const table = [
-      "| Command | Description |",
-      "|---------|-------------|",
-      "| `/clear` | Clear conversation and start fresh server session |",
-      "| `/model <id>` | Switch the active model |",
-      "| `/cost` | Show session cost (server figures when available) |",
-      "| `/new` | Open a new session tab |",
-      "| `/continue` | Resume the most recently closed session |",
-      "| `/compact` | Compact session context to free tokens |",
-      "| `/stash <name> <content>` | Save a prompt for reuse |",
-      "| `/stashes` | Browse stashed prompts (opens palette) |",
-      "| `/queue` | Show queued prompts |",
-      "| `/commands` | Open the command palette |",
-      "| `/export` | Export the conversation as Markdown |",
-      "| `/export-json` | Export the conversation as JSON |",
-      "| `/export-text` | Export the conversation as plain text |",
-      "| `/copy` | Copy the conversation to clipboard |",
-      "| `/diagnose:generation` | Dump generation-tracking state to the output channel |",
-      "| `/help` | Show this help table |",
-    ].join("\n")
+    // Generated from the canonical registry — a hand-written copy here once
+    // drifted (listed a command absent from the palette, omitted an alias).
+    const table = buildHelpTable()
+    const footer = "Type `/commands` to browse server, MCP, skill, and custom prompt commands."
 
     postMessage({
       type: "message",
@@ -153,7 +138,7 @@ export class ChatCommands {
       message: {
         role: "system",
         id: `help-${crypto.randomUUID()}`,
-        blocks: [{ type: "text", text: `Available slash commands:\n\n${table}` }],
+        blocks: [{ type: "text", text: `Available slash commands:\n\n${table}\n\n${footer}` }],
         timestamp: Date.now(),
         sessionId,
       },

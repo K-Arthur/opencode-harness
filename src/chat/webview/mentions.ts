@@ -1,7 +1,7 @@
 import type { MentionItem } from "./types"
 import type { ElementRefs } from "./dom"
 import { GEAR_SVG } from "./icons"
-import { toMentionItems } from "./slash-commands"
+import { toMentionItems, dedupServerCommands } from "./slash-commands"
 
 // Local slash commands come from the canonical registry in slash-commands.ts
 // — single source of truth shared with the commands palette modal so the two
@@ -25,8 +25,10 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     // Trigger when the current token starts with "/". The old anchor (`^`)
     // only fired when the slash sat at position 0, so typing "hello /clear"
     // mid-prompt never opened the dropdown. We now accept a slash that is
-    // either at the start of input or preceded by whitespace.
-    const slashMatch = textBefore.match(/(?:^|\s)\/(\w*)$/)
+    // either at the start of input or preceded by whitespace. The token
+    // charset includes "-" and ":" so /export-json and /diagnose:generation
+    // keep the dropdown open while being typed.
+    const slashMatch = textBefore.match(/(?:^|\s)\/([\w:-]*)$/)
     if (slashMatch) {
       state.mode = "command"
       state.query = slashMatch[1]!
@@ -34,10 +36,7 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
       els.mentionDropdown.classList.remove("mention-mode")
       els.mentionDropdown.classList.remove("hidden")
       els.promptInput.setAttribute("aria-expanded", "true")
-      // Drop server commands whose names collide with locals (case-insensitive)
-      // so the user doesn't see two rows for /clear when both exist.
-      const localNames = new Set(LOCAL_COMMANDS.map(c => (c.display || "").toLowerCase()))
-      const uniqueServer = serverCommands.filter(c => !localNames.has((c.display || "").toLowerCase()))
+      const uniqueServer = dedupServerCommands(serverCommands, (c) => c.display)
       const allCommands = [...LOCAL_COMMANDS, ...uniqueServer]
       const filtered = allCommands.filter(c =>
         c.display!.toLowerCase().startsWith(state.query.toLowerCase())
