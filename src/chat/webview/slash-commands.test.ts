@@ -54,6 +54,14 @@ describe("slash-commands canonical registry", () => {
     }
   })
 
+  it("includes /methodology so the per-tab guidance override is discoverable", () => {
+    // The per-tab methodologyDisabled opt-out existed in StreamCoordinator but
+    // nothing ever set it — the override was unreachable from the UI.
+    const cmd = LOCAL_SLASH_COMMANDS.find((c) => c.name === "methodology")
+    assert.ok(cmd, "registry must contain methodology")
+    assert.ok(cmd!.usage?.includes("on"), "usage must document the on|off argument")
+  })
+
   it("each entry has name, description, and either insertText (runnable) or argsHint (templated)", () => {
     for (const cmd of LOCAL_SLASH_COMMANDS) {
       assert.ok(cmd.name, `entry missing name`)

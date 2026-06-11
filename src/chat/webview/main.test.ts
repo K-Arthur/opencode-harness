@@ -1031,3 +1031,46 @@ describe("openSession routing — already-open tabs switch locally", () => {
     assert.ok(block.includes('"resume_session"'), "compaction path must keep the full refetch")
   })
 })
+
+describe("methodology visibility — methodology_selected chip", () => {
+  // The host classifies each outgoing prompt and injects a strategy addendum,
+  // but the webview hid it (renderer drops "[methodology]" parts) and no
+  // message ever surfaced the selection. Users could neither see nor audit
+  // what guidance was added to their prompt.
+  it("handles the methodology_selected host message", () => {
+    assert.ok(
+      source.includes('"methodology_selected"'),
+      "main.ts must register a methodology_selected handler",
+    )
+  })
+
+  it("renders the selection into the status strip chip", () => {
+    assert.ok(
+      indexHtml.includes('id="status-methodology"'),
+      "index.html must have a status-methodology element in the status strip",
+    )
+    assert.ok(
+      source.includes("statusMethodology"),
+      "handler must render into els.statusMethodology",
+    )
+  })
+
+  it("scopes the chip to the active session so selections don't bleed across tabs", () => {
+    const idx = source.indexOf('"methodology_selected"')
+    assert.ok(idx >= 0)
+    const block = source.slice(idx, idx + 1200)
+    assert.ok(
+      block.includes("activeSessionId") || block.includes("getActiveSession"),
+      "methodology_selected must check the message's session against the active one",
+    )
+  })
+
+  it("tells the user how to disable guidance from the chip tooltip", () => {
+    const idx = source.indexOf('"methodology_selected"')
+    const block = source.slice(idx, idx + 1500)
+    assert.ok(
+      block.includes("/methodology"),
+      "chip tooltip must mention the /methodology override command",
+    )
+  })
+})
