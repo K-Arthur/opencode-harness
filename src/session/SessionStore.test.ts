@@ -119,7 +119,11 @@ describe("SessionStore.ts", () => {
       !block.includes("id === this.activeSessionId"),
       "flush must not persist active empty sessions just because they are active"
     )
-    assert.ok(block.includes("sess.messages.length > 0") && block.includes("exempt"))
+    // The empty-session filter + per-session message cap live in the pure
+    // buildPersistedSessions helper (behaviorally tested in
+    // sessionUtils.test.ts); flush must route through it.
+    assert.ok(block.includes("buildPersistedSessions"), "flush must build its snapshot via buildPersistedSessions")
+    assert.ok(block.includes("PERSIST_MAX_MESSAGES"), "flush must apply the persisted message cap")
     assert.ok(!block.includes("pendingServerLink"), "empty pending local placeholders must not be persisted")
   })
 
