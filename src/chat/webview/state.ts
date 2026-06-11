@@ -197,61 +197,44 @@ export function createState(vscode: VsCodeApi) {
   let saveTimer: ReturnType<typeof setTimeout> | null = null
   const SAVE_DEBOUNCE_MS = 300
   const MAX_STATE_BYTES = 2 * 1024 * 1024
-  const MAX_MESSAGES_PER_SESSION = 200
+  // Persistence cap, aligned with the host's init_state MAX_MESSAGES_PER_TAB:
+  // on webview reload the extension host re-hydrates each tab with its last
+  // 50 messages anyway (and "Load earlier" / resume backfill cover the rest),
+  // so persisting more than that here buys nothing — but it used to cost a
+  // full multi-MB serialize + IPC on EVERY debounced save once two long
+  // sessions were open. setState cost must scale with the snapshot bound,
+  // never with total transcript size.
+  const PERSIST_MAX_MESSAGES = 50
+  const PERSIST_FALLBACK_MESSAGES = 10
 
-  let lastKnownSize = 0
-  let pruneScheduled = false
-
-  function schedulePrune(): void {
-    if (pruneScheduled) return
-    pruneScheduled = true
-    timers.setTimeout(() => {
-      pruneScheduled = false
-      doPrune()
-    }, 5000)
+  function snapshotWithCap(cap: number): WebviewState {
+    const sessions: Record<string, SessionState> = {}
+    for (const [id, s] of Object.entries(state.sessions)) {
+      sessions[id] = s.messages.length > cap ? { ...s, messages: s.messages.slice(-cap) } : s
+    }
+    return { ...state, sessions }
   }
 
-  function doPrune(): void {
+  function buildPersistSnapshot(): WebviewState {
+    const snapshot = snapshotWithCap(PERSIST_MAX_MESSAGES)
     try {
-      const size = JSON.stringify(state).length
-      lastKnownSize = size
-      if (size <= MAX_STATE_BYTES) return
-
-      const sessionsByAge = state.sessionOrder
-        .map(id => state.sessions[id])
-        .filter((s): s is SessionState => !!s && !s.isStreaming)
-        .sort((a, b) => (a.lastActiveAt || 0) - (b.lastActiveAt || 0))
-
-      for (const session of sessionsByAge) {
-        if (session.messages.length > MAX_MESSAGES_PER_SESSION) {
-          session.messages = session.messages.slice(-MAX_MESSAGES_PER_SESSION)
-        }
-        if (JSON.stringify(state).length <= MAX_STATE_BYTES) return
-      }
-
-      for (const session of sessionsByAge) {
-        if (session.messages.length > 50) {
-          session.messages = session.messages.slice(-50)
-        }
-        if (JSON.stringify(state).length <= MAX_STATE_BYTES) return
+      // Single bounded-size probe (≤ cap messages/session, sub-ms). If giant
+      // individual messages still blow the state budget, trim deeper rather
+      // than handing VS Code an oversized state object.
+      if (JSON.stringify(snapshot).length > MAX_STATE_BYTES) {
+        return snapshotWithCap(PERSIST_FALLBACK_MESSAGES)
       }
     } catch {
-      // If pruning fails, save anyway — better a large save than data loss
+      // Unserializable content is vscode.setState's problem either way;
+      // persist the bounded snapshot rather than losing the save.
     }
-  }
-
-  function pruneOversizedState(): void {
-    if (lastKnownSize > 0 && lastKnownSize <= MAX_STATE_BYTES * 0.8) {
-      return
-    }
-    schedulePrune()
+    return snapshot
   }
 
   function save() {
     if (saveTimer) timers.clearTimeout(saveTimer)
     saveTimer = timers.setTimeout(() => {
-      pruneOversizedState()
-      vscode.setState(state)
+      vscode.setState(buildPersistSnapshot())
       saveTimer = null
     }, SAVE_DEBOUNCE_MS)
   }
@@ -262,8 +245,7 @@ export function createState(vscode: VsCodeApi) {
       timers.clearTimeout(saveTimer)
       saveTimer = null
     }
-    doPrune()
-    vscode.setState(state)
+    vscode.setState(buildPersistSnapshot())
   }
 
   function restore(): boolean {
