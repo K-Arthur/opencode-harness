@@ -15,6 +15,8 @@ export interface TabState {
   lastActivityTime: number  // Timestamp of last activity for watchdog
   blocksBuffer: Block[]
   instructions?: string
+  /** Per-tab opt-out for methodology guidance, toggled via /methodology on|off. */
+  methodologyDisabled?: boolean
 }
 
 const OPEN_TABS_STORAGE_KEY = "opencode-harness.openTabs"

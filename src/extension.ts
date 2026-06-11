@@ -49,8 +49,8 @@ import {
   registerSlashCommandShortcuts,
   registerGenerateAgentsMdCommand,
 } from "./commands"
-import { MethodologyOrchestrator, OutcomeTracker, type AdvisoryOrchestrationResult } from "./methodology"
-import { setMethodologyOrchestrator, setMethodologyStatusUpdater } from "./methodology/registry"
+import { MethodologyOrchestrator, OutcomeTracker } from "./methodology"
+import { setMethodologyOrchestrator, setMethodologyStatusUpdater, type MethodologyStatusInfo } from "./methodology/registry"
 import { resolveAuthToken } from "./migrations/authTokenMigration"
 
 let sessionManager: SessionManager
@@ -616,23 +616,20 @@ function initMethodology(context: vscode.ExtensionContext): vscode.StatusBarItem
   return statusItem
 }
 
-function updateMethodologyStatusImpl(result: AdvisoryOrchestrationResult): void {
+function updateMethodologyStatusImpl(info: MethodologyStatusInfo): void {
   if (!methodologyStatusItem) return
-  const conf = result.methodology.confidence
-  const label = `${result.methodology.methodology}`
-  const tier = result.advisory.recommendedTier
-  methodologyStatusItem.text = `$(lightbulb) ${label} · ${tier}`
-  const confPct = (conf * 100).toFixed(0)
+  methodologyStatusItem.text = `$(lightbulb) ${info.label} · ${info.recommendedTier}`
+  const confPct = (info.confidence * 100).toFixed(0)
   methodologyStatusItem.tooltip = STATUS_BAR_TOOLTIPS.methodology.active(
-    label,
-    tier,
+    info.label,
+    info.recommendedTier,
     confPct,
-    result.advisory.reasoning,
+    `Task type: ${info.taskType} · Strategy: ${info.strategy}`,
   )
 }
 
-export function updateMethodologyStatus(result: AdvisoryOrchestrationResult): void {
-  updateMethodologyStatusImpl(result)
+export function updateMethodologyStatus(info: MethodologyStatusInfo): void {
+  updateMethodologyStatusImpl(info)
 }
 
 export function getMethodologyOrchestrator(): MethodologyOrchestrator | undefined {

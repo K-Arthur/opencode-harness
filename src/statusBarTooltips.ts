@@ -26,7 +26,7 @@ export const STATUS_BAR_TOOLTIPS = {
   },
   methodology: {
     idle: "OpenCode Methodology — click to configure.\nSet the methodology OpenCode uses to plan, execute, and review work.",
-    active: (label: string, tier: string, confidencePct: string, reasoning: string) =>
-      `Methodology: ${label}\nTier: ${tier}\nConfidence: ${confidencePct}%\n\n${reasoning}\n\nClick to configure`,
+    active: (label: string, tier: string, confidencePct: string, detail: string) =>
+      `Methodology: ${label}\nTier: ${tier}\nConfidence: ${confidencePct}%\n\n${detail}\n\nDisable per tab with /methodology off · Click to configure`,
   },
 } as const

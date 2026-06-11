@@ -33,7 +33,7 @@ export class CommandExecutionService {
     const rawCommand = command.trim()
     const commandName = rawCommand.replace(/^\//, "").toLowerCase()
 
-    if (await this.handleLocalSlashCommand(sessionId, commandName)) {
+    if (await this.handleLocalSlashCommand(sessionId, commandName, args)) {
       return
     }
 
@@ -72,7 +72,7 @@ export class CommandExecutionService {
     await this.executeRemoteCommand(tab, sessionId, commandName, args)
   }
 
-  async handleLocalSlashCommand(sessionId: string, commandName: string): Promise<boolean> {
+  async handleLocalSlashCommand(sessionId: string, commandName: string, args?: string): Promise<boolean> {
     switch (commandName) {
       case "clear":
         await this.handleClear(sessionId)
@@ -85,6 +85,9 @@ export class CommandExecutionService {
         return true
       case "help":
         this.handleHelp(sessionId)
+        return true
+      case "methodology":
+        this.opts.chatCommands.methodology(sessionId, args ?? "", (m) => this.opts.postMessage(m))
         return true
       case "diagnose:generation":
         this.opts.chatCommands.diagnoseGeneration()

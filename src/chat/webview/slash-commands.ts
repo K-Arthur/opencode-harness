@@ -62,6 +62,7 @@ export const LOCAL_SLASH_COMMANDS: ReadonlyArray<LocalSlashCommand> = Object.fre
   { name: "stashes",     description: "Browse stashed prompts",                          insertText: "/stashes",     icon: SHARE_SVG,   category: "prompt" },
   { name: "queue",       description: "Show queued prompts",                             insertText: "/queue",       icon: MCP_SVG,     category: "prompt" },
   { name: "commands",    description: "Open the command palette",                        insertText: "/commands",    icon: HISTORY_SVG, category: "conversation" },
+  { name: "methodology", description: "Show or toggle automatic methodology guidance for this tab", insertText: "/methodology ", icon: BRAIN_SVG, category: "session", usage: "[on|off]" },
   { name: "export",      description: "Export conversation as Markdown",                 insertText: "/export",      icon: SHARE_SVG,   category: "export", aliases: ["export-md"] },
   { name: "export-json", description: "Export conversation as JSON",                     insertText: "/export-json", icon: SHARE_SVG,   category: "export" },
   { name: "export-text", description: "Export conversation as plain text",               insertText: "/export-text", icon: SHARE_SVG,   category: "export" },
