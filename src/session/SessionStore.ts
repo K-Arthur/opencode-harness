@@ -4,6 +4,7 @@ import { log } from "../utils/outputChannel"
 import { decideActivityCoalesce } from "./activityCoalesce"
 import {
   buildSession,
+  buildPersistedSessions,
   isLocalPlaceholderSessionId,
   isValidSession as isValidSessionPure,
   isAutoSessionName,
@@ -112,6 +113,13 @@ export class SessionStore {
   private emptySessionCleanupTimer: ReturnType<typeof setInterval> | null = null
   private static readonly SAVE_DEBOUNCE_MS = 500
   private static readonly MAX_SESSIONS = 50
+  /**
+   * Per-session message cap for the persisted globalState snapshot (NOT the
+   * in-memory store). VS Code re-serializes the whole value on every
+   * globalState.update, so the persisted size must stay bounded. Older
+   * history is restored from the server on resume/backfill.
+   */
+  private static readonly PERSIST_MAX_MESSAGES = 200
   private static readonly ONE_HOUR = 60 * 60 * 1000
   private _onSessionsChanged = new vscode.EventEmitter<void>()
   readonly onSessionsChanged = this._onSessionsChanged.event
@@ -186,17 +194,12 @@ export class SessionStore {
       this.saveTimer = null
     }
     try {
-      const obj: Record<string, OpenCodeSession> = {}
-      for (const [id, sess] of this.sessions) {
-        // Persist sessions with messages and server-imported sessions awaiting
-        // backfill. Empty local placeholder tabs are intentionally transient so
-        // an unused "New session" click does not survive reload and clutter
-        // history.
-        const exempt = sess.needsBackfill === true
-        if (sess.messages.length > 0 || exempt) {
-          obj[id] = sess
-        }
-      }
+      // Bounded snapshot: per-session message cap so the (full-value)
+      // globalState serialization VS Code performs on every update scales
+      // with the cap, not with total transcript size. In-memory sessions
+      // keep everything; resume/backfill restore older history from the
+      // server when needed. See buildPersistedSessions for the contract.
+      const obj = buildPersistedSessions(this.sessions, SessionStore.PERSIST_MAX_MESSAGES)
       await this.globalState.update(STORAGE_KEY, obj)
     } catch (err) {
       log.error("Failed to save sessions to globalState", err)
