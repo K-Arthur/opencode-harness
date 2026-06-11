@@ -940,6 +940,12 @@ body.hide-thinking .thinking-block { display: none; }
   color: var(--color-fg);
 }
 
+.skills-modal-hint {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
 .skills-modal-search {
   margin-bottom: var(--space-4);
 }

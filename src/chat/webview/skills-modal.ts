@@ -137,12 +137,16 @@ function renderSkillsList(container: HTMLElement, skills: SkillInfo[], options: 
     item.className = "skill-item"
     item.dataset.skillId = skill.id
 
-    // Toggle checkbox (visual only — server manages agent availability)
+    // Toggle controls whether this skill is SUGGESTED to the model in the
+    // methodology hint. The opencode server manages skill loading itself and
+    // does not accept enable/disable — be honest about that in the label so
+    // users don't believe the toggle prevents the server from using a skill.
     const toggle = document.createElement("div")
     toggle.className = `skill-item-toggle${skill.enabled ? " checked" : ""}`
     toggle.setAttribute("role", "checkbox")
     toggle.setAttribute("aria-checked", String(skill.enabled))
-    toggle.setAttribute("aria-label", skill.name)
+    toggle.setAttribute("aria-label", `Suggest ${skill.name} to the model`)
+    toggle.title = "Controls whether this skill is suggested to the model. The opencode server may still load it on its own."
     toggle.setAttribute("tabindex", "0")
     toggle.addEventListener("click", () => {
       options.onToggleSkill(skill.id, !skill.enabled)
