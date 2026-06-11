@@ -21,6 +21,12 @@
 // PAYDOWN TARGET is retained as a goal: reachable by moving syntax highlighting
 // fully off the synchronous main-thread path so highlight.js (78.8KB) can leave
 // main.js (see docs/performance-audit.md follow-ups). Adjust deliberately here.
+//
+// 2026-06-11 re-baseline (+5KB each): slash-command registry metadata
+// (aliases/usage/categories + generated /help) now ships in the host bundle,
+// plus /methodology command, methodology_selected chip, and the
+// slash-during-streaming guard in the webview. Icons were split out of the
+// registry so SVG strings stay webview-only (saved ~7KB host).
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -30,8 +36,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 545 * 1024, label: "extension host" },
-  { path: "dist/chat/webview/main.js", limitBytes: 700 * 1024, label: "chat webview" },
+  { path: "dist/extension.js", limitBytes: 550 * 1024, label: "extension host" },
+  { path: "dist/chat/webview/main.js", limitBytes: 705 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
 

@@ -47,8 +47,10 @@ describe("Slash command unification", () => {
       mentionsSource.includes('from "./slash-commands"'),
       "mentions.ts must import from ./slash-commands",
     )
+    // The icons map argument is webview-only — the registry itself must stay
+    // icon-free so /help generation doesn't pull SVGs into dist/extension.js.
     assert.ok(
-      mentionsSource.includes("toMentionItems()"),
+      mentionsSource.includes("toMentionItems("),
       "mentions.ts must use toMentionItems() rather than carrying its own list",
     )
 

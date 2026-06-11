@@ -1,12 +1,47 @@
 import type { MentionItem } from "./types"
 import type { ElementRefs } from "./dom"
-import { GEAR_SVG } from "./icons"
+import {
+  GEAR_SVG,
+  COMMAND_SVG,
+  BRAIN_SVG,
+  MCP_SVG,
+  PLUS_SVG,
+  SHARE_SVG,
+  REFRESH_SVG,
+  PLAY_SVG,
+  HISTORY_SVG,
+  CODE_SVG,
+  BUG_SVG,
+} from "./icons"
 import { toMentionItems, dedupServerCommands } from "./slash-commands"
+
+// Icons live here (webview-only) rather than in the registry: the registry is
+// also bundled into the extension host for /help generation, and the SVG
+// strings must not ship in dist/extension.js.
+const SLASH_COMMAND_ICONS: Readonly<Record<string, string>> = {
+  clear: COMMAND_SVG,
+  model: BRAIN_SVG,
+  cost: MCP_SVG,
+  new: PLUS_SVG,
+  continue: PLAY_SVG,
+  compact: REFRESH_SVG,
+  stash: SHARE_SVG,
+  stashes: SHARE_SVG,
+  queue: MCP_SVG,
+  commands: HISTORY_SVG,
+  methodology: BRAIN_SVG,
+  export: SHARE_SVG,
+  "export-json": SHARE_SVG,
+  "export-text": SHARE_SVG,
+  copy: SHARE_SVG,
+  "diagnose:generation": BUG_SVG,
+  help: CODE_SVG,
+}
 
 // Local slash commands come from the canonical registry in slash-commands.ts
 // — single source of truth shared with the commands palette modal so the two
 // surfaces can never drift out of sync again.
-const LOCAL_COMMANDS: MentionItem[] = toMentionItems()
+const LOCAL_COMMANDS: MentionItem[] = toMentionItems(SLASH_COMMAND_ICONS)
 
 export interface MentionState {
   query: string
