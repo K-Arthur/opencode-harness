@@ -61,15 +61,10 @@ export function renderWelcomeContext(deps: WelcomeViewDeps): void {
   if (deps.els.welcomeContinueBtn) {
     deps.els.welcomeContinueBtn.classList.toggle("hidden", !hasSessions)
   }
-  // Hide the "search your conversation history" box for brand-new users with no
-  // sessions yet — searching empty history is noise. It returns once there is
-  // history to search.
-  if (deps.els.welcomeSearchInput) {
-    const searchWrapper =
-      (deps.els.welcomeSearchInput.closest(".welcome-search-wrapper") as HTMLElement | null) ??
-      deps.els.welcomeSearchInput
-    searchWrapper.classList.toggle("hidden", !hasSessions)
-  }
+  // NOTE: the history search box is intentionally always visible — it queries
+  // the host/server (`list_sessions`), which can have far more history than the
+  // webview's local `getAllSessions()`. Hiding it on local-empty would wrongly
+  // suppress search for users whose sessions simply aren't loaded locally yet.
   // Toggle the empty-model action banner
   if (deps.els.welcomeModelEmptyBanner) {
     deps.els.welcomeModelEmptyBanner.classList.toggle("hidden", !!model)
