@@ -61,6 +61,15 @@ export function renderWelcomeContext(deps: WelcomeViewDeps): void {
   if (deps.els.welcomeContinueBtn) {
     deps.els.welcomeContinueBtn.classList.toggle("hidden", !hasSessions)
   }
+  // Hide the "search your conversation history" box for brand-new users with no
+  // sessions yet — searching empty history is noise. It returns once there is
+  // history to search.
+  if (deps.els.welcomeSearchInput) {
+    const searchWrapper =
+      (deps.els.welcomeSearchInput.closest(".welcome-search-wrapper") as HTMLElement | null) ??
+      deps.els.welcomeSearchInput
+    searchWrapper.classList.toggle("hidden", !hasSessions)
+  }
   // Toggle the empty-model action banner
   if (deps.els.welcomeModelEmptyBanner) {
     deps.els.welcomeModelEmptyBanner.classList.toggle("hidden", !!model)
@@ -71,10 +80,21 @@ export function setupWelcomeActions(deps: WelcomeViewDeps): void {
   deps.els.welcomeNewBtn.addEventListener("click", () => {
     deps.postMessage({ type: "new_session" })
   })
-  deps.els.welcomeModelCtx?.addEventListener("click", () => {
-    deps.openModelManager()
-    deps.postMessage({ type: "get_models" })
-  })
+  if (deps.els.welcomeModelCtx) {
+    const openModelPicker = () => {
+      deps.openModelManager()
+      deps.postMessage({ type: "get_models" })
+    }
+    deps.els.welcomeModelCtx.addEventListener("click", openModelPicker)
+    // The chip is a role=button span — make it keyboard-operable (WCAG 2.1.1).
+    deps.els.welcomeModelCtx.addEventListener("keydown", (e) => {
+      const ke = e as KeyboardEvent
+      if (ke.key === "Enter" || ke.key === " ") {
+        ke.preventDefault()
+        openModelPicker()
+      }
+    })
+  }
   deps.els.welcomeContinueBtn?.addEventListener("click", () => {
     const mostRecent = deps.getAllSessions()
       .filter((s) => s.messages.length > 0)
