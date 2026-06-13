@@ -115,3 +115,67 @@ describe("mention dropdown — server command dedup", () => {
     assert.ok(labels.includes("/deploy"), "non-colliding server commands still appear")
   })
 })
+
+describe("mention dropdown — source badges", () => {
+  function badgeFor(commandName: string): string | null {
+    const rows = Array.from(mentionDropdown.querySelectorAll<HTMLElement>(".command-item"))
+    const row = rows.find((r) => r.dataset.command === commandName)
+    return row?.querySelector(".command-badge")?.textContent ?? null
+  }
+
+  it("built-in commands carry a 'Built-in' badge", () => {
+    typeAt("/clear")
+    assert.equal(badgeFor("clear"), "Built-in")
+  })
+
+  it("server / MCP / skill / custom commands each carry their own badge", () => {
+    setup.updateServerCommands([
+      { name: "deploy", description: "Ship it", source: "command" },
+      { name: "review-pr", description: "Review", source: "mcp", agent: "github-mcp" },
+      { name: "tdd-helper", description: "TDD", source: "skill" },
+      { name: "my-prompt", description: "Custom prompt", isCustom: true },
+    ])
+    typeAt("/")
+    assert.equal(badgeFor("deploy"), "Server")
+    assert.equal(badgeFor("review-pr"), "MCP")
+    assert.equal(badgeFor("tdd-helper"), "Skill")
+    assert.equal(badgeFor("my-prompt"), "Custom")
+  })
+})
+
+describe("mention dropdown — result cap", () => {
+  it("caps the rendered rows and shows a '+N more' hint when matches overflow", () => {
+    const many = Array.from({ length: 80 }, (_, i) => ({
+      name: `srv-cmd-${String(i).padStart(2, "0")}`,
+      description: "server command",
+      source: "command",
+    }))
+    setup.updateServerCommands(many)
+    typeAt("/")
+    const rows = mentionDropdown.querySelectorAll(".dropdown-item")
+    assert.ok(rows.length <= 50, `expected at most 50 rows, got ${rows.length}`)
+    const more = mentionDropdown.querySelector(".dropdown-more")
+    assert.ok(more, "a '+N more' hint must render when results are capped")
+    assert.match(more!.textContent || "", /more/i)
+  })
+
+  it("does NOT render the hint when results fit under the cap", () => {
+    setup.updateServerCommands([{ name: "deploy", description: "Ship it", source: "command" }])
+    typeAt("/deploy")
+    assert.equal(mentionDropdown.querySelector(".dropdown-more"), null)
+  })
+
+  it("the '+N more' hint is not keyboard-selectable", () => {
+    const many = Array.from({ length: 80 }, (_, i) => ({
+      name: `srv-cmd-${String(i).padStart(2, "0")}`,
+      description: "server command",
+      source: "command",
+    }))
+    setup.updateServerCommands(many)
+    typeAt("/")
+    // handleKeydown navigates `.dropdown-item:not(.dropdown-empty)`; the hint
+    // must not be a .dropdown-item or it would steal a selection slot.
+    const more = mentionDropdown.querySelector(".dropdown-more")
+    assert.ok(more && !more.classList.contains("dropdown-item"))
+  })
+})
