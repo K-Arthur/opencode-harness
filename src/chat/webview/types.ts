@@ -809,7 +809,6 @@ export type WebviewMessage =
   | { type: "mark_subagent_read"; sessionId: string; subagentId: string }
   | { type: "popout_get_subagent_detail"; subagentId: string; sessionId: string }
   | { type: "popout_cancel_subagent"; subagentId: string }
-  | { type: "update_setting"; key: string; value: unknown }
   | { type: "show_error"; message: string }
   | { type: "get_context_usage"; sessionId: string }
   | { type: "question_answer"; sessionId: string; toolCallId?: string; requestID?: string; messageId?: string; value: string; source?: string }

@@ -103,9 +103,6 @@ export interface WebviewEventRouterOptions {
   ensureLocalTab: (sessionId: string, name?: string, model?: string, mode?: string) => void
   handleConnectProvider: () => Promise<void>
   openOpenCodeConfigOrSettings: () => Promise<void>
-  hasAutoModeConfirmed: () => boolean
-  setAutoModeConfirmed?: (value: boolean) => Promise<void> | void
-  showAutoModeConfirmation: (sessionId: string) => Promise<boolean>
   replayLiveStreamsToWebview: () => void
   exportChat: () => void
   exportChatJson: () => void
@@ -179,7 +176,7 @@ export class WebviewEventRouter {
     "get_changed_files", "get_file_diff", "open_file", "open_folder", "open_url", "reveal_in_explorer",
     "get_subagent_activities", "get_subagent_detail", "cancel_subagent", "mark_subagent_read", "open_subagent_session",
     "popout_get_subagent_detail", "popout_cancel_subagent",
-    "update_setting", "show_error", "get_context_usage", "record_stash_usage", "open_context_window_override_dialog",
+    "show_error", "get_context_usage", "record_stash_usage", "open_context_window_override_dialog",
     "model_favorite", "model_toggle", "get_permission_config", "update_permission_config",
     "question_answer",
     "resume_stream", "decline_resume",
@@ -432,13 +429,9 @@ export class WebviewEventRouter {
           this.opts.postMessage({ type: "mode_change_result", accepted: false, sessionId, mode: previousMode, reason: "invalid_mode" })
           return
         }
-        if (mode === "auto" && !this.opts.hasAutoModeConfirmed()) {
-          const confirmed = await this.opts.showAutoModeConfirmation(sessionId)
-          if (!confirmed) {
-            this.opts.postMessage({ type: "mode_change_result", accepted: false, sessionId, mode: previousMode, reason: "cancelled" })
-            return
-          }
-        }
+        // Switching to Auto is treated as the user's consent (no confirmation
+        // modal). See CHANGELOG: the native warning modal was removed as an
+        // anti-pattern — it blocked the workbench on Linux and gated the switch.
         this.opts.ensureLocalTab(sessionId)
         if (!this.opts.tabManager.setMode(sessionId, mode)) {
           this.opts.postMessage({ type: "mode_change_result", accepted: false, sessionId, mode: previousMode, reason: "tab_not_found" })
@@ -1060,14 +1053,6 @@ export class WebviewEventRouter {
         pref: "thinkingVisible",
         value: visible,
       })
-    }],
-    ["update_setting", async (msg: Record<string, unknown>) => {
-      const key = msg.key as string
-      const value = msg.value
-      if ((key === "skipModeWarning" || key === "autoModeConfirmed") && value === true) {
-        await this.opts.setAutoModeConfirmed?.(true)
-        this.opts.postMessage({ type: "display_pref_update", pref: key, value: true })
-      }
     }],
     ["model_favorite", (msg: Record<string, unknown>) => {
       const modelId = msg.modelId as string

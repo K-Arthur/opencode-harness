@@ -3,7 +3,6 @@ export interface SettingsMenuEls {
   settingsMenu: HTMLElement
   modelManagerPanel: HTMLElement
   themeCustomizerPanel: HTMLElement
-  modeWarningModal: HTMLElement
   mcpConfigPanel: HTMLElement
   sessionModal: HTMLElement
 }
@@ -12,7 +11,6 @@ export interface SettingsMenuDeps {
   els: SettingsMenuEls
   closeModelManager: () => void
   closeThemeCustomizer: () => void
-  closeModeWarning: () => void
   closeMcpConfig: () => void
   closeSessionModal: () => void
 }
@@ -27,8 +25,6 @@ export function closeCurrentModal(deps: SettingsMenuDeps): void {
     deps.closeModelManager()
   } else if (!deps.els.themeCustomizerPanel.classList.contains("hidden")) {
     deps.closeThemeCustomizer()
-  } else if (!deps.els.modeWarningModal.classList.contains("hidden")) {
-    deps.closeModeWarning()
   } else if (!deps.els.mcpConfigPanel.classList.contains("hidden")) {
     deps.closeMcpConfig()
   } else if (!deps.els.sessionModal.classList.contains("hidden")) {

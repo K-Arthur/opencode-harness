@@ -17,14 +17,13 @@ const modeDropdownSource = readFileSync(path.join(__dirname, "ui", "modeDropdown
 const sessionModalSource = readFileSync(path.join(__dirname, "ui", "sessionModal.ts"), "utf8")
 const tokenCostDisplaySource = readFileSync(path.join(__dirname, "ui", "tokenCostDisplay.ts"), "utf8")
 const attachmentsSource = readFileSync(path.join(__dirname, "ui", "attachments.ts"), "utf8")
-const modeWarningSource = readFileSync(path.join(__dirname, "ui", "modeWarning.ts"), "utf8")
 const welcomeViewSource = readFileSync(path.join(__dirname, "ui", "welcomeView.ts"), "utf8")
 const settingsMenuSource = readFileSync(path.join(__dirname, "ui", "settingsMenu.ts"), "utf8")
 const fileTrackingSource = readFileSync(path.join(__dirname, "ui", "fileTracking.ts"), "utf8")
 const buttonSetupSource = readFileSync(path.join(__dirname, "ui", "buttonSetup.ts"), "utf8")
 const scrollMarkersSource = readFileSync(path.join(__dirname, "ui", "scrollMarkers.ts"), "utf8")
 const indexHtml = readFileSync(path.join(__dirname, "index.html"), "utf8")
-const allSource = source + "\n" + themeCustomizerSource + "\n" + modeDropdownSource + "\n" + sessionModalSource + "\n" + tokenCostDisplaySource + "\n" + attachmentsSource + "\n" + modeWarningSource + "\n" + welcomeViewSource + "\n" + settingsMenuSource + "\n" + fileTrackingSource + "\n" + buttonSetupSource + "\n" + scrollMarkersSource
+const allSource = source + "\n" + themeCustomizerSource + "\n" + modeDropdownSource + "\n" + sessionModalSource + "\n" + tokenCostDisplaySource + "\n" + attachmentsSource + "\n" + welcomeViewSource + "\n" + settingsMenuSource + "\n" + fileTrackingSource + "\n" + buttonSetupSource + "\n" + scrollMarkersSource
 const sessionListRendererSource = readFileSync(path.join(__dirname, "sessionListRenderer.ts"), "utf8")
 const messagesCss = readFileSync(path.join(__dirname, "css", "messages.css"), "utf8")
 
