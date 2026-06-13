@@ -1,6 +1,6 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { buildVoiceSetupPlan, pickPipCommand, pickEngineInstallCommand, recorderInstallCommand, type VoiceToolProbe } from "./voiceSetup"
+import { buildVoiceSetupPlan, pickPipCommand, pickEngineInstallCommand, recorderInstallCommand, uvBootstrapCommand, type VoiceToolProbe } from "./voiceSetup"
 
 const has = (...bins: string[]) => (bin: string) => bins.includes(bin)
 const none = () => false
@@ -102,6 +102,78 @@ void describe("voiceSetup recorder installer", () => {
   })
 })
 
+void describe("voiceSetup uv bootstrap (PEP 668 escape hatch)", () => {
+  void it("uses pacman on Arch/CachyOS to install uv then whisper", () => {
+    const cmd = uvBootstrapCommand("linux", has("pacman"))
+    assert.equal(cmd?.manager, "pacman")
+    assert.match(cmd?.command ?? "", /sudo pacman -S --needed --noconfirm uv/)
+    assert.match(cmd?.command ?? "", /uv tool install openai-whisper/)
+  })
+  void it("uses Homebrew on macOS", () => {
+    const cmd = uvBootstrapCommand("darwin", has("brew"))
+    assert.equal(cmd?.manager, "Homebrew")
+    assert.match(cmd?.command ?? "", /brew install uv/)
+  })
+  void it("falls back to the official curl installer on Debian/Fedora (no uv in repos)", () => {
+    const cmd = uvBootstrapCommand("linux", has("apt-get", "curl"))
+    assert.equal(cmd?.manager, "uv installer")
+    assert.match(cmd?.command ?? "", /curl -LsSf https:\/\/astral\.sh\/uv\/install\.sh/)
+    // Must re-export PATH so the same shell can find uv right after install.
+    assert.match(cmd?.command ?? "", /export PATH/)
+  })
+  void it("uses wget when curl is absent", () => {
+    const cmd = uvBootstrapCommand("linux", has("apt-get", "wget"))
+    assert.match(cmd?.command ?? "", /wget -qO- https:\/\/astral\.sh\/uv\/install\.sh/)
+  })
+  void it("prefers pacman over the curl installer when both are available", () => {
+    const cmd = uvBootstrapCommand("linux", has("pacman", "curl"))
+    assert.equal(cmd?.manager, "pacman")
+  })
+  void it("uses winget on Windows", () => {
+    const cmd = uvBootstrapCommand("win32", has("winget"))
+    assert.match(cmd?.command ?? "", /winget install astral-sh\.uv/)
+  })
+  void it("returns null on linux with no package manager and no curl/wget", () => {
+    assert.equal(uvBootstrapCommand("linux", none), null)
+  })
+})
+
+void describe("voiceSetup engine install on PEP 668 distros", () => {
+  const probe = (over: Partial<VoiceToolProbe>): VoiceToolProbe => ({
+    hasRecorder: true,
+    hasEngine: false,
+    pip: null,
+    recorderInstall: null,
+    externallyManaged: true,
+    uvBootstrap: null,
+    ...over,
+  })
+
+  void it("offers a runnable uv-bootstrap command on Arch/CachyOS (the user's dead-end bug)", () => {
+    const choice = pickEngineInstallCommand(probe({
+      externallyManaged: true,
+      uvBootstrap: uvBootstrapCommand("linux", has("pacman")),
+    }))
+    assert.equal(choice.manual, undefined, "must not be a dead-end manual hint")
+    assert.match(choice.command ?? "", /pacman -S --needed --noconfirm uv/)
+    assert.match(choice.command ?? "", /uv tool install openai-whisper/)
+  })
+
+  void it("still prefers an existing uv over bootstrapping it", () => {
+    const choice = pickEngineInstallCommand(probe({
+      hasUv: true,
+      uvBootstrap: uvBootstrapCommand("linux", has("pacman")),
+    }))
+    assert.equal(choice.command, "uv tool install openai-whisper")
+  })
+
+  void it("falls back to the manual hint only when no bootstrap is possible", () => {
+    const choice = pickEngineInstallCommand(probe({ externallyManaged: true, uvBootstrap: null }))
+    assert.equal(choice.command, undefined)
+    assert.match(choice.manual ?? "", /pacman -S uv/)
+  })
+})
+
 void describe("voiceSetup plan", () => {
   const probe = (over: Partial<VoiceToolProbe>): VoiceToolProbe => ({
     hasRecorder: false,
@@ -188,5 +260,23 @@ void describe("voiceSetup plan", () => {
     )
     const engine = plan.steps.find((s) => s.kind === "engine")
     assert.equal(engine?.command, "uv tool install openai-whisper")
+  })
+
+  void it("offers a runnable engine install on Arch/CachyOS even without uv/pipx (no dead-end Copy Instructions)", () => {
+    // The exact user-reported bug: recorder present (arecord/ffmpeg), engine
+    // missing, externally-managed Python, no uv/pipx, but pacman available.
+    const plan = buildVoiceSetupPlan(
+      probe({
+        hasRecorder: true,
+        externallyManaged: true,
+        uvBootstrap: uvBootstrapCommand("linux", has("pacman")),
+      }),
+      "linux",
+    )
+    assert.equal(plan.ready, false)
+    const engine = plan.steps.find((s) => s.kind === "engine")
+    assert.equal(engine?.manual, undefined, "engine step must be runnable, not a manual hint")
+    assert.match(engine?.command ?? "", /pacman -S --needed --noconfirm uv/)
+    assert.match(engine?.command ?? "", /uv tool install openai-whisper/)
   })
 })

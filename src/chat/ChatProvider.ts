@@ -67,7 +67,7 @@ import {
   selectTranscriberPlan,
   type VoiceCaptureConfig,
 } from "./voiceCapture"
-import { buildVoiceSetupPlan, pickPipCommand, recorderInstallCommand } from "./voiceSetup"
+import { buildVoiceSetupPlan, pickPipCommand, recorderInstallCommand, uvBootstrapCommand } from "./voiceSetup"
 
 type ServerEvent = { type: string; sessionId?: string; data?: unknown }
 
@@ -708,6 +708,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       hasUv: commandExists("uv"),
       hasPipx: commandExists("pipx"),
       externallyManaged: this.detectExternallyManagedPython(),
+      uvBootstrap: uvBootstrapCommand(process.platform, commandExists),
     }, process.platform)
 
     this.voiceInputService.postSettings()

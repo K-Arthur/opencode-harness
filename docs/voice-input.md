@@ -104,9 +104,12 @@ inserts directly into the focused prompt box.
 
 ## Troubleshooting
 
-- **Button is disabled / "not available"**: install a recorder (`sox`) and an
-  engine (`openai-whisper`), or set the override commands. Reload the window so the
-  host re-detects them.
+- **Button is disabled / "not available"**: click it to open the guided
+  setup. On Arch/CachyOS and other PEP 668 distros, "Run Setup" bootstraps
+  `uv` via your package manager (or the official installer) and installs
+  `openai-whisper` into an isolated environment. After it finishes, reload the
+  window so the host re-detects the binaries. You can also install `sox` and
+  `openai-whisper` manually, or set the override commands.
 - **macOS asks for microphone permission**: grant Visual Studio Code microphone
   access in System Settings → Privacy & Security → Microphone.
 - **"No speech was detected"**: speak closer to the mic, or raise
