@@ -62,3 +62,37 @@ describe("settings menu — keyboard navigation", () => {
     assert.equal(closeCount, 1, "Escape triggers close function")
   })
 })
+
+describe("settings menu — grouped sections (role=group) keep flat keyboard traversal", () => {
+  it("ArrowDown traverses across group boundaries in DOM order", async () => {
+    const dom = new JSDOM(`<!doctype html>
+      <button id="settings-btn">Settings</button>
+      <div id="settings-menu" role="menu" aria-label="More options" class="hidden">
+        <div class="settings-menu-group" role="group" aria-label="Panels">
+          <div class="settings-menu-group-label" aria-hidden="true">Panels</div>
+          <button class="settings-menu-item" role="menuitem" id="g1a">Todos</button>
+          <button class="settings-menu-item" role="menuitem" id="g1b">Activity</button>
+        </div>
+        <div class="settings-menu-group" role="group" aria-label="Configure">
+          <div class="settings-menu-group-label" aria-hidden="true">Configure</div>
+          <button class="settings-menu-item" role="menuitem" id="g2a">MCP</button>
+        </div>
+      </div>
+    `)
+    ;(globalThis as any).window = dom.window
+    ;(globalThis as any).document = dom.window.document
+    ;(globalThis as any).HTMLElement = dom.window.HTMLElement
+    ;(globalThis as any).KeyboardEvent = dom.window.KeyboardEvent
+    const menu = document.getElementById("settings-menu")!
+    const btn = document.getElementById("settings-btn")!
+    const { setupSettingsMenuKeyboardNav: setup } = await import("./ui/settingsMenu")
+    setup({ settingsMenu: menu, settingsBtn: btn }, () => {})
+
+    const buttons = menu.querySelectorAll("button")
+    assert.equal(buttons.length, 3, "non-button group labels are not traversable items")
+    ;(buttons[1] as HTMLElement).focus() // last button of group 1
+    const ev = new (dom.window as any).KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })
+    menu.dispatchEvent(ev)
+    assert.equal(document.activeElement, buttons[2], "ArrowDown crosses from group 1 into group 2")
+  })
+})
