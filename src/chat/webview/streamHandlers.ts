@@ -83,14 +83,43 @@ export function findMessageById(messages: ChatMessage[], id: string): ChatMessag
   return undefined
 }
 
+/**
+ * Demote a live `.streaming-text` element to a plain, cursorless text node. The
+ * blinking caret is `.streaming-text::after`, so dropping the class alone stops
+ * it; an element that rendered nothing is removed outright so it doesn't leave a
+ * blank line with a stray cursor.
+ */
+export function demoteStreamingText(el: HTMLElement): void {
+  el.classList.remove("streaming-text")
+  if (!el.textContent?.trim() && el.children.length === 0) el.remove()
+}
+
+/**
+ * Defensive end-of-turn sweep: demote every `.streaming-text` element still in
+ * the message list. A finished turn must never show a live cursor, regardless
+ * of which streaming code path left the element behind (an empty inter-tool
+ * block, a stream_end that re-rendered a different node, an orphan from a
+ * restart, …). Idempotent and cheap. Runs after every stream end.
+ */
+export function finalizeStreamingText(messageList: HTMLElement): void {
+  const lingering = messageList.querySelectorAll<HTMLElement>(".streaming-text")
+  for (const el of Array.from(lingering)) demoteStreamingText(el)
+}
+
 function finalizeCurrentTextBlock(
   state: StreamState,
   els: StreamElements,
   messages: ChatMessage[],
 ): void {
-  if (!state.currentBlockEl || !state.currentBlockBuffer.trim()) return
+  if (!state.currentBlockEl) return
   const displayText = stripContextFromText(state.currentBlockBuffer)
-  if (!displayText.trim()) return
+  if (!state.currentBlockBuffer.trim() || !displayText.trim()) {
+    // Empty block (e.g. inter-tool text that never arrived, or a trailing block
+    // created just before the stream ended): demote it so it stops drawing a
+    // streaming cursor, and drop the node entirely if it rendered nothing.
+    demoteStreamingText(state.currentBlockEl)
+    return
+  }
 
   const textEl = state.currentBlockEl
   textEl.classList.remove("streaming-text")
