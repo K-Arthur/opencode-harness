@@ -95,15 +95,32 @@ export function demoteStreamingText(el: HTMLElement): void {
 }
 
 /**
- * Defensive end-of-turn sweep: demote every `.streaming-text` element still in
- * the message list. A finished turn must never show a live cursor, regardless
- * of which streaming code path left the element behind (an empty inter-tool
- * block, a stream_end that re-rendered a different node, an orphan from a
- * restart, …). Idempotent and cheap. Runs after every stream end.
+ * Defensive end-of-turn sweep: clear EVERY leftover "live" affordance from the
+ * message list so a finished turn never *looks* like it is still streaming —
+ * regardless of which code path left it behind (empty inter-tool block, a
+ * stream_end that re-rendered a different node, a restart orphan, …):
+ *
+ *   1. `.streaming-text` text nodes — the blinking caret (`.streaming-text::after`);
+ *      demoted, and removed outright when empty.
+ *   2. the message-level `.streaming` class — the blue bubble backdrop
+ *      (`.message.assistant.streaming .message-bubble`: accent fill + pulsing
+ *      left border) AND the pulsing header dot (`.message-role::after`). This
+ *      class is added on stream start and is otherwise ONLY cleared by a full
+ *      element re-render, so an orphan message keeps a permanent blue glow.
+ *
+ * The DOM `.streaming` class is purely visual — `state.streamingMessageId` is
+ * the source of truth for which message is live — so stripping it here cannot
+ * affect streaming logic. Idempotent and cheap; runs after every stream end and
+ * the idle/error backstops, after the inner finalize, so it only mops up true
+ * orphans.
  */
 export function finalizeStreamingText(messageList: HTMLElement): void {
-  const lingering = messageList.querySelectorAll<HTMLElement>(".streaming-text")
-  for (const el of Array.from(lingering)) demoteStreamingText(el)
+  for (const el of Array.from(messageList.querySelectorAll<HTMLElement>(".streaming-text"))) {
+    demoteStreamingText(el)
+  }
+  for (const el of Array.from(messageList.querySelectorAll<HTMLElement>(".message.streaming"))) {
+    el.classList.remove("streaming")
+  }
 }
 
 function finalizeCurrentTextBlock(

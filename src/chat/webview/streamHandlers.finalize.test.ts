@@ -86,4 +86,29 @@ describe("finalizeStreamingText (end-of-turn sweep)", () => {
     assert.equal(list().querySelectorAll(".streaming-text").length, 0)
     assert.equal(plain.isConnected, true)
   })
+
+  it("clears the message-level streaming class (blue bubble backdrop + pulsing dot)", () => {
+    const msg = document.createElement("div")
+    msg.className = "message assistant streaming"
+    msg.dataset.messageId = "m1"
+    msg.innerHTML = `<div class="message-content"><div class="message-bubble"><div class="msg-text streaming-text">done</div></div></div>`
+    list().appendChild(msg)
+
+    finalizeStreamingText(list())
+
+    assert.equal(msg.classList.contains("streaming"), false, "blue backdrop / pulsing dot cleared")
+    assert.equal(msg.classList.contains("assistant"), true, "the message itself is preserved")
+    assert.equal(msg.isConnected, true, "the message stays in the transcript")
+    assert.equal(list().querySelector(".streaming-text"), null, "and its caret is gone too")
+    assert.equal(msg.querySelector(".msg-text")?.textContent, "done", "content preserved")
+  })
+
+  it("sweeps backdrop + caret across multiple orphaned messages in one pass", () => {
+    list().innerHTML =
+      `<div class="message assistant streaming"><div class="msg-text streaming-text">a</div></div>` +
+      `<div class="message assistant streaming"><div class="msg-text streaming-text"></div></div>`
+    finalizeStreamingText(list())
+    assert.equal(list().querySelectorAll(".message.streaming").length, 0, "no message keeps the blue glow")
+    assert.equal(list().querySelectorAll(".streaming-text").length, 0, "no caret survives")
+  })
 })
