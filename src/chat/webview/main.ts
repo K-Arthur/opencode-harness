@@ -9,6 +9,7 @@ import { setupCommandsModal, type CommandEntry } from "./commands-modal"
 import { toCommandEntries } from "./slash-commands"
 import { createStreamHandlers, type StreamHandlers } from "./stream"
 import { upsertMessageById } from "./messageUpsert"
+import { isSwitchEventType, switchInsertIndex } from "../../session/activityCoalesce"
 import { createTabBar, createTabContent, switchToTab, removeTabContent } from "./tabs"
 import { setupModelDropdown } from "./model-dropdown"
 import { setVsCodeApi, setupToolKeyboardNav, webviewLog } from "./streamHandlers"
@@ -2392,7 +2393,26 @@ function getVsCodeApi() {
 
     // C1: upsert by id so a stream_end re-adding the same id that streaming
     // already created does not leave a duplicate in session.messages.
-    upsertMessageById(session.messages, msg)
+    //
+    // Switch markers (agent/model.switched) are placed BEFORE the trailing
+    // assistant generation they configure rather than appended at the bottom —
+    // matching the host's ordering (SessionStore.appendOrCoalesceActivity) so
+    // live view, re-render and reload all agree. `switchAnchorId` is the message
+    // the marker was inserted before, used to mirror the position in the DOM.
+    const switchBlock0 = msg.blocks?.[0] as Record<string, unknown> | undefined
+    const isNewSwitch =
+      msg.role === "system" &&
+      !!msg.id &&
+      isSwitchEventType(switchBlock0?.eventType) &&
+      !session.messages.some((m) => m.id === msg.id)
+    let switchAnchorId: string | null = null
+    if (isNewSwitch) {
+      const insertIdx = switchInsertIndex(session.messages)
+      session.messages.splice(insertIdx, 0, msg)
+      switchAnchorId = session.messages[insertIdx + 1]?.id ?? null
+    } else {
+      upsertMessageById(session.messages, msg)
+    }
 
     // Auto-generate title from first user message
     if (msg.role === "user" && isAutoSessionName(session.name)) {
@@ -2432,7 +2452,14 @@ function getVsCodeApi() {
           console.debug(`[perf] renderMessage took ${elapsed}ms for ${msg.role} msg ${msg.id?.slice(0, 16)}`)
         }
       }
-      msgList.appendChild(el)
+      const switchAnchorEl = switchAnchorId
+        ? msgList.querySelector(`[data-message-id="${CSS.escape(switchAnchorId)}"]`)
+        : null
+      if (switchAnchorEl) {
+        msgList.insertBefore(el, switchAnchorEl)
+      } else {
+        msgList.appendChild(el)
+      }
       const vl = getVirtualList(sessionId)
       if (vl) vl.onMessageAdded(el)
       applyHistoryCondensation(sessionId)

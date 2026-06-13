@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 import { type ChatMessage } from "../types"
 import { log } from "../utils/outputChannel"
-import { decideActivityCoalesce } from "./activityCoalesce"
+import { decideActivityCoalesce, decideSwitchPlacement, isSwitchEventType } from "./activityCoalesce"
 import {
   buildSession,
   buildPersistedSessions,
@@ -717,6 +717,34 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
   appendOrCoalesceActivity(sessionId: string, msg: ChatMessage, signature: string): ChatMessage | undefined {
     const session = this.sessions.get(sessionId)
     if (!session) return undefined
+
+    // Agent/model switch markers describe the generation they precede, so they
+    // are placed before the trailing assistant turn rather than appended at the
+    // bottom of the transcript. Coalescing still collapses an identical switch
+    // sitting just before that insert point. Other activities keep the simple
+    // end-append + last-message coalesce behaviour.
+    const block0 = msg.blocks[0] as Record<string, unknown> | undefined
+    if (isSwitchEventType(block0?.eventType)) {
+      const placement = decideSwitchPlacement(session.messages, signature)
+      if (placement.kind === "coalesce") {
+        const existing = session.messages[placement.index]
+        if (existing) {
+          const block = existing.blocks[0] as Record<string, unknown> | undefined
+          if (block) block.repeatCount = placement.repeatCount
+          existing.timestamp = Date.now()
+          session.lastActiveAt = Date.now()
+          this.save()
+          this._onSessionsChanged.fire()
+          return existing
+        }
+      }
+      session.messages.splice(placement.index, 0, msg)
+      session.lastActiveAt = Date.now()
+      this.save()
+      this._onSessionsChanged.fire()
+      return msg
+    }
+
     const decision = decideActivityCoalesce(session.messages, signature)
     if (decision.kind === "coalesce") {
       const existing = session.messages[decision.index]
