@@ -1,7 +1,7 @@
 import type { Block, ChatMessage } from "./types"
 import { createTextBlock } from "./blocks"
 import type { StreamState, StreamElements } from "./streamHandlers"
-import { hideTypingIndicator, finishUnresolvedToolCalls, reRenderMessage, resetStreamState, webviewLog, registerStreamEndHandler } from "./streamHandlers"
+import { hideTypingIndicator, finishUnresolvedToolCalls, reRenderMessage, resetStreamState, webviewLog, registerStreamEndHandler, finalizeStreamingText } from "./streamHandlers"
 
 function ensureRenderedTextFallback(messageId: string, msgObj: ChatMessage, els: StreamElements): void {
   const text = (msgObj.blocks || [])
@@ -196,4 +196,11 @@ export function handleStreamEnd(
   saveState()
 }
 
-registerStreamEndHandler(handleStreamEnd)
+// Wrap the finalizer so a guaranteed cursor sweep runs after every stream end,
+// no matter which internal exit path handleStreamEnd took (no-resolved-id,
+// empty-blocks, server-blocks). This is the backstop that ensures a completed
+// turn never leaves a blinking streaming caret behind.
+registerStreamEndHandler((state, els, messages, saveState, messageId, blocks) => {
+  handleStreamEnd(state, els, messages, saveState, messageId, blocks)
+  finalizeStreamingText(els.messageList)
+})
