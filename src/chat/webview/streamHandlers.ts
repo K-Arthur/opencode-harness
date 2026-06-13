@@ -313,6 +313,20 @@ export function hideTypingIndicator(
   els.typingLabel.innerHTML = ''
 }
 
+/**
+ * A streaming assistant message that never received meaningful content: it has
+ * no blocks, or only blank text blocks (the empty placeholder created in
+ * handleStreamStart). Used to drop orphaned placeholders left behind by a
+ * stream restart so they don't linger with a stuck "live" indicator.
+ */
+export function isEmptyStreamingMessage(msg: ChatMessage): boolean {
+  const blocks = msg.blocks || []
+  if (blocks.length === 0) return true
+  return blocks.every((b) =>
+    b.type === "text" ? !(typeof b.text === "string" && b.text.trim().length > 0) : false,
+  )
+}
+
 export function handleStreamStart(
   state: StreamState,
   els: StreamElements,
@@ -334,7 +348,24 @@ export function handleStreamStart(
     const prior = state.streamingMessageId
     if (prior) {
       const priorMsg = findMessageById(messages, prior)
-      if (priorMsg) finishUnresolvedToolCalls(priorMsg.blocks)
+      if (priorMsg) {
+        finishUnresolvedToolCalls(priorMsg.blocks)
+        if (isEmptyStreamingMessage(priorMsg)) {
+          // The prior bubble never received content before the restart. Drop it
+          // from both the array and the DOM so it doesn't linger as an empty
+          // assistant message with a stuck pulsing "live" dot (the
+          // `.message.assistant.streaming` class is never otherwise cleared on
+          // this path). Root fix for the "streaming never recognised complete"
+          // remnant.
+          const idx = messages.indexOf(priorMsg)
+          if (idx >= 0) messages.splice(idx, 1)
+          els.messageList.querySelector(`[data-message-id="${prior}"]`)?.remove()
+        } else {
+          // It has real content — re-render as a finalized (non-streaming)
+          // message so the live dot stops pulsing instead of being abandoned.
+          reRenderMessage(prior, els, messages)
+        }
+      }
     }
     resetStreamState(state)
   }

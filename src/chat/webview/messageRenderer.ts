@@ -7,6 +7,7 @@ import {
   formatRelativeTime,
   RenderOptions,
 } from "./renderer"
+import { isSwitchEventType } from "./switchEvent"
 import {
   createToolCollapseControls,
 } from "./toolCallRenderer"
@@ -28,7 +29,7 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
 
   // Only show header if not consecutive AND not a re-render (opts?.skipHeader indicates re-render)
   // Detect switch notification to apply compact styling
-  const isSwitchMsg = role === "system" && msg.blocks?.some(b => b.type === "activity" && (b.eventType === "model.switched" || b.eventType === "agent.switched"))
+  const isSwitchMsg = role === "system" && msg.blocks?.some(b => b.type === "activity" && isSwitchEventType(b.eventType))
   if (isSwitchMsg) div.classList.add("message--compact-system")
 
   if (role !== "system" && !isConsecutive && !opts?.skipHeader) {

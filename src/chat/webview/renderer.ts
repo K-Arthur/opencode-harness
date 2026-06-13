@@ -1,6 +1,7 @@
 import MarkdownIt from "markdown-it"
 import taskLists from "markdown-it-task-lists"
 import { escapeHtml } from "./htmlUtils"
+import { isSwitchEventType } from "./switchEvent"
 import { sanitizeHtml, highlightSyntax, clearHighlightCache, getHighlightCacheSize } from "./syntaxHighlighter"
 import {
   BRAIN_SVG,
@@ -1105,8 +1106,7 @@ function renderCompactionBlock(block: Block, _opts: RenderOptions): HTMLElement 
 }
 
 function renderActivityBlock(block: Block, _opts: RenderOptions): HTMLElement | null {
-  const isSwitchEvent = block.eventType === "model.switched" || block.eventType === "agent.switched"
-  if (isSwitchEvent) return renderSwitchBadge(block)
+  if (isSwitchEventType(block.eventType)) return renderSwitchBadge(block)
 
   const wrapper = document.createElement("div")
   wrapper.className = "activity-block"
