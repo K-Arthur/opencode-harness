@@ -8,6 +8,7 @@ import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
 import { computeMessageCounts } from "../chat/webview/messageCounter"
 import { log } from "../utils/outputChannel"
 import { checkFileSecurity, sanitizeForPrompt } from "../utils/security"
+import { buildSessionPickItems, type SessionPickCandidate } from "./sessionQuickPick"
 
 export function registerOpenChatCommand(
   context: vscode.ExtensionContext
@@ -95,9 +96,17 @@ export function registerInsertMentionCommand(
   )
 }
 
+export interface SessionSwitcherNav {
+  /** Open (or focus) the picked session as a chat tab in the webview. */
+  openSessionInWebview: (sessionId: string) => Promise<void>
+  /** Session ids of tabs that are currently streaming, for ordering/markers. */
+  getStreamingSessionIds?: () => string[]
+}
+
 export function registerListSessionsCommand(
   context: vscode.ExtensionContext,
-  sessionStore: SessionStore
+  sessionStore: SessionStore,
+  nav?: SessionSwitcherNav
 ): void {
   context.subscriptions.push(
     vscode.commands.registerCommand("opencode-harness.listSessions", async () => {
@@ -107,16 +116,36 @@ export function registerListSessionsCommand(
           vscode.window.showInformationMessage("No saved sessions.")
           return
         }
-        const items = sessions.map((s) => ({
-          label: SessionStore.displayName(s),
-          description: `${s.messages.length} messages`,
-          detail: `${new Date(s.lastActiveAt).toLocaleDateString()} — ${s.model || "no model"}`,
+        const streaming = new Set(nav?.getStreamingSessionIds?.() ?? [])
+        const candidates: SessionPickCandidate[] = sessions.map((s) => ({
           id: s.id,
+          title: SessionStore.displayName(s),
+          lastActiveAt: s.lastActiveAt,
+          messageCount: s.messages.length,
+          ...(s.model ? { model: s.model } : {}),
+          isActive: s.id === sessionStore.activeId,
+          isStreaming: streaming.has(s.id),
         }))
-        const picked = await vscode.window.showQuickPick(items, { placeHolder: "Choose a session to switch to" })
+        const picked = await vscode.window.showQuickPick(
+          buildSessionPickItems(candidates, Date.now()),
+          {
+            placeHolder: "Switch to a session",
+            title: "OpenCode: Sessions",
+            matchOnDescription: true,
+            matchOnDetail: true,
+          }
+        )
         if (picked) {
           sessionStore.setActive(picked.id)
-          vscode.window.showInformationMessage(`Switched to: ${picked.label}`)
+          if (nav) {
+            // Actually take the user there: reveal the chat view and open the
+            // session as a tab (previously this only flipped store state and
+            // showed a toast — a navigation dead end).
+            await vscode.commands.executeCommand("opencode-harness.chat.focus")
+            await nav.openSessionInWebview(picked.id)
+          } else {
+            vscode.window.showInformationMessage(`Switched to: ${picked.label}`)
+          }
         }
       } catch (err) {
         log.error("List sessions command failed", err)

@@ -17,6 +17,7 @@ export {
   registerAddFileToSessionCommand,
   registerAddSelectionToSessionCommand,
 } from "./session"
+export { registerJumpToRunningTaskCommand } from "./runningTask"
 export { registerSelectModelCommand, registerSetContextWindowOverrideCommand } from "./model"
 export { registerShowRateLimitsCommand, registerCheckCliCommand, registerInstallCliCommand } from "./misc"
 export { registerExportCommand } from "./export"

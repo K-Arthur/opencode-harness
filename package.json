@@ -232,6 +232,10 @@
       {
         "command": "opencode-harness.openSettings",
         "title": "OpenCode: Open Settings"
+      },
+      {
+        "command": "opencode-harness.jumpToRunningTask",
+        "title": "OpenCode: Jump to Running Session"
       }
     ],
     "keybindings": [
@@ -328,6 +332,10 @@
         },
         {
           "command": "opencode-harness.clearTestSessions",
+          "when": "false"
+        },
+        {
+          "command": "opencode-harness.openStoredSession",
           "when": "false"
         }
       ],

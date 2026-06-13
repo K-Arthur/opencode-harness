@@ -23,6 +23,10 @@ export const STATUS_BAR_TOOLTIPS = {
       "OpenCode server is not running.\nClick to retry the connection.",
     error:
       "OpenCode server encountered an error.\nClick to open the chat; check the OpenCode output channel for details.",
+    running: (count: number) =>
+      count === 1
+        ? "1 session is running.\nClick to jump to it."
+        : `${count} sessions are running.\nClick to pick one to jump to.`,
   },
   methodology: {
     idle: "OpenCode Methodology — click to configure.\nSet the methodology OpenCode uses to plan, execute, and review work.",
