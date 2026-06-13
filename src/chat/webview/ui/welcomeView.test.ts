@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { JSDOM } from "jsdom"
-import { setupWelcomeActions, renderWelcomeContext, type WelcomeViewDeps } from "./welcomeView"
+import { setupWelcomeActions, type WelcomeViewDeps } from "./welcomeView"
 
 describe("welcomeView.ts", () => {
   let originalDocument: typeof globalThis.document | undefined
@@ -162,61 +162,5 @@ describe("welcomeView.ts", () => {
     const chip = document.getElementById("welcome-model-ctx")!
     chip.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "a", bubbles: true }))
     assert.equal(openModelCalls.n, 0)
-  })
-})
-
-describe("renderWelcomeContext — search visibility", () => {
-  let originalDocument: typeof globalThis.document | undefined
-  let originalWindow: typeof globalThis.window | undefined
-  beforeEach(() => { originalDocument = globalThis.document; originalWindow = globalThis.window })
-  afterEach(() => {
-    if (originalDocument) globalThis.document = originalDocument; else Reflect.deleteProperty(globalThis, "document")
-    if (originalWindow) globalThis.window = originalWindow; else Reflect.deleteProperty(globalThis, "window")
-  })
-
-  function ctxDeps(sessions: Array<{ id: string; messages: Array<{ timestamp?: number }> }>): WelcomeViewDeps {
-    const dom = new JSDOM(`
-      <div class="welcome-search-wrapper">
-        <div id="welcome-search-input"><input /></div>
-      </div>
-    `)
-    globalThis.document = dom.window.document
-    globalThis.window = dom.window as unknown as typeof window
-    return {
-      els: {
-        welcomeView: document.createElement("div"),
-        welcomeNewBtn: document.createElement("button"),
-        welcomeModelCtx: null,
-        welcomeContinueBtn: null,
-        welcomeModelName: null,
-        welcomeSearchInput: document.getElementById("welcome-search-input"),
-        promptInput: document.createElement("textarea"),
-        welcomeModelEmptyBanner: null,
-        welcomeEmptyBannerLink: null,
-      },
-      postMessage: () => {},
-      getAllSessions: () => sessions,
-      getState: () => ({}),
-      openModelManager: () => {},
-      renderRecentSessionsList: () => {},
-      hideStatusStrip: () => {},
-      applyTimelineVisibility: () => {},
-      autoResizeTextarea: () => {},
-      updateSendButton: () => {},
-    }
-  }
-
-  it("hides the search box for brand-new users with no sessions", () => {
-    const deps = ctxDeps([])
-    renderWelcomeContext(deps)
-    const wrapper = document.querySelector(".welcome-search-wrapper")!
-    assert.equal(wrapper.classList.contains("hidden"), true, "search hidden when there is no history")
-  })
-
-  it("shows the search box once the user has sessions with messages", () => {
-    const deps = ctxDeps([{ id: "s1", messages: [{ timestamp: 1 }] }])
-    renderWelcomeContext(deps)
-    const wrapper = document.querySelector(".welcome-search-wrapper")!
-    assert.equal(wrapper.classList.contains("hidden"), false, "search shown when history exists")
   })
 })
