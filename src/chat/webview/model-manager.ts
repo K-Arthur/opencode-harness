@@ -1,6 +1,7 @@
 import type { ModelInfo } from "./types"
 import type { ElementRefs } from "./dom"
 import type { ProviderConfig } from "../../model/ProviderConfigManager"
+import { mountModalFocus, type ModalFocusHandle } from "./focus-trap"
 
 export interface ModelManagerCallbacks {
   onToggleModel: (modelId: string, enabled: boolean) => void
@@ -32,6 +33,7 @@ export function setupModelManager(els: ElementRefs, callbacks: ModelManagerCallb
   let providers: ProviderConfig[] = []
   let searchQuery = ""
   let isOpen = false
+  let focusHandle: ModalFocusHandle | null = null
 
   const panel = els.modelManagerPanel
   const searchInput = els.modelManagerSearch
@@ -45,12 +47,15 @@ export function setupModelManager(els: ElementRefs, callbacks: ModelManagerCallb
     searchInput.value = ""
     searchQuery = ""
     render()
-    searchInput.focus()
+    // Capture the invoker, trap Tab inside the dialog, and focus the search box.
+    focusHandle = mountModalFocus(panel, { initialFocus: searchInput })
   }
 
   function close() {
     isOpen = false
     panel.classList.add("hidden")
+    focusHandle?.release()
+    focusHandle = null
   }
 
   function toggle() {

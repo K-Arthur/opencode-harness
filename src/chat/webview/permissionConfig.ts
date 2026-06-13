@@ -1,4 +1,5 @@
 import type { ElementRefs } from "./dom"
+import { mountModalFocus, type ModalFocusHandle } from "./focus-trap"
 
 export type PermissionAction = "ask" | "allow" | "deny"
 
@@ -42,6 +43,7 @@ export function getDefaultRules(): PermissionRule[] {
 
 export function setupPermissionConfig(deps: PermissionConfigDeps): void {
   const { els, postMessage, onClose } = deps
+  let focusHandle: ModalFocusHandle | null = null
 
   els.permissionConfigClose.addEventListener("click", close)
   els.permissionConfigSave.addEventListener("click", save)
@@ -59,10 +61,17 @@ export function setupPermissionConfig(deps: PermissionConfigDeps): void {
     _currentRules = loadCurrentRules()
     render()
     els.permissionConfigPanel.classList.remove("hidden")
+    // Move focus into the dialog (previously it stayed on the settings menu
+    // behind the modal), trap Tab, and restore on close.
+    focusHandle = mountModalFocus(els.permissionConfigPanel, {
+      initialFocus: els.permissionConfigClose,
+    })
   }
 
   function close(): void {
     els.permissionConfigPanel.classList.add("hidden")
+    focusHandle?.release()
+    focusHandle = null
     onClose()
   }
 
