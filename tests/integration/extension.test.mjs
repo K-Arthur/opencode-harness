@@ -64,6 +64,7 @@ describe("OpenCode Harness — Integration Tests", function () {
       "opencode-harness.checkCli",
       "opencode-harness.installCli",
       "opencode-harness.listSessions",
+      "opencode-harness.jumpToRunningTask",
       "opencode-harness.openStoredSession",
       "opencode-harness.deleteSession",
       "opencode-harness.renameSession",

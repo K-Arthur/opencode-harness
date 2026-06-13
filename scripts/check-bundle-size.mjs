@@ -27,6 +27,13 @@
 // plus /methodology command, methodology_selected chip, and the
 // slash-during-streaming guard in the webview. Icons were split out of the
 // registry so SVG strings stay webview-only (saved ~7KB host).
+//
+// 2026-06-12 re-baseline (webview 705KB -> 712KB): the central Escape
+// coordinator (escapeCoordinator.ts + its registry wiring in main.ts) and the
+// shortcuts-modal focus trap add ~0.5KB minified to the webview bundle. This is
+// a navigation-safety feature (one Escape press never aborts a running task),
+// not avoidable bloat; +7KB keeps ~1% headroom so the gate still trips on a
+// real regression. Host limit unchanged (still under 550KB).
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -37,7 +44,7 @@ const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
   { path: "dist/extension.js", limitBytes: 550 * 1024, label: "extension host" },
-  { path: "dist/chat/webview/main.js", limitBytes: 705 * 1024, label: "chat webview" },
+  { path: "dist/chat/webview/main.js", limitBytes: 712 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
 
