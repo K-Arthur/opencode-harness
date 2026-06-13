@@ -6,6 +6,7 @@ import { timers } from "./timerRegistry"
 import type { ToolElapsedTracker } from "./ui/toolElapsed"
 import type { PromptQueue } from "./queue"
 import { placeholderHasRenderedContent } from "./placeholderContent"
+import { finalizeStreamingText } from "./streamHandlers"
 import { generateUserMessageId } from "../../session/messageId"
 import { hasRecentErrorCard } from "./streamEndErrorPolicy"
 
@@ -334,6 +335,13 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
         }
       }
 
+      // Catch-all backstop: clear any lingering live-cursor (.streaming-text)
+      // for this session so a finished run is never left "streaming" on the
+      // frontend, regardless of how the inner finalize resolved (or if it threw
+      // above). Runs after the inner handler so it only mops up true orphans.
+      const endMsgList = getMessageList(sessionId)
+      if (endMsgList) finalizeStreamingText(endMsgList)
+
       processStreamEndBlocks(sessionId, messageId, blocks)
 
       setStreaming(sessionId, false)
@@ -429,6 +437,10 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
       updateAgentStatus("executing")
     } else if (status === "idle") {
       updateAgentStatus("idle")
+      // Server reports the run is idle — clear any leftover live cursor even if
+      // no stream_end arrived for this session.
+      const idleMsgList = getMessageList(sessionId)
+      if (idleMsgList) finalizeStreamingText(idleMsgList)
     }
   }
 
@@ -448,6 +460,9 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     if (stream) {
       stream.handleRequestError(message, errorContext)
     }
+    // A failed run also ends streaming — clear any leftover live cursor.
+    const errMsgList = getMessageList(sessionId)
+    if (errMsgList) finalizeStreamingText(errMsgList)
 
     if (sessionId === getState().activeSessionId) {
       updateSendButtonIcon(false)
