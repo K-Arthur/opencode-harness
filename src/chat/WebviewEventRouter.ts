@@ -31,6 +31,7 @@ import type { SkillPreferencesStoreLike } from "../skills/SkillPreferencesStore"
 import type { VoiceInputService } from "./VoiceInputService"
 import { log } from "../utils/outputChannel"
 import { computeMessageCounts } from "./webview/messageCounter"
+import { rankByFuzzy } from "./webview/fuzzyMatch"
 import { handleWebviewError } from "./utils/errorHandler"
 import { validateWebviewMessage } from "./WebviewMessageValidator"
 import { normalizeSessionMode, resolvePlanPermission } from "./modePolicy"
@@ -1346,12 +1347,14 @@ export class WebviewEventRouter {
         .catch(() => { /* best effort */ })
     }],
     ["search_skills", async (msg: Record<string, unknown>) => {
-      const query = (msg.query as string | undefined)?.toLowerCase() || ""
+      const query = (msg.query as string | undefined) || ""
       try {
         const all = await this.resolveAllSkills()
-        const results = query
-          ? all.filter((s) => s.name.toLowerCase().includes(query) || s.description.toLowerCase().includes(query))
-          : all
+        // Fuzzy match (name fuzzily, description by substring), ranked
+        // best-first — same matcher as the slash dropdown + commands palette,
+        // so "review" finds "code-reviewer" and the search isn't startswith-
+        // or substring-only. Empty query returns the full list unchanged.
+        const results = rankByFuzzy(all, query, (s) => s.name, (s) => s.description)
         this.opts.postMessage({ type: "skills_search_results", results, query })
       } catch (err) {
         log.error("Failed to search skills", err)
