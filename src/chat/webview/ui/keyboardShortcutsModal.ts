@@ -58,6 +58,32 @@ const SHORTCUT_TABLE: ShortcutRow[] = [
 
 let modalEl: HTMLElement | null = null
 let closeBtnEl: HTMLElement | null = null
+let lastFocus: HTMLElement | null = null
+let trapHandler: ((e: KeyboardEvent) => void) | null = null
+
+const FOCUSABLE_SELECTOR =
+  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+
+/** Keep Tab focus cycling within the dialog (WCAG 2.4.3 / 2.1.2). */
+function trapModalFocus(container: HTMLElement): (e: KeyboardEvent) => void {
+  return (e: KeyboardEvent) => {
+    if (e.key !== "Tab") return
+    const focusable = Array.from(
+      container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+    ).filter((el) => !el.hasAttribute("disabled"))
+    if (focusable.length === 0) return
+    const first = focusable[0]!
+    const last = focusable[focusable.length - 1]!
+    const active = container.ownerDocument.activeElement
+    if (e.shiftKey && active === first) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault()
+      first.focus()
+    }
+  }
+}
 
 function renderTable(rows: ShortcutRow[]): string {
   return rows
@@ -77,13 +103,27 @@ function renderTable(rows: ShortcutRow[]): string {
 
 export function openKeyboardShortcutsModal(): void {
   if (!modalEl) return
+  lastFocus = (modalEl.ownerDocument.activeElement as HTMLElement | null) ?? null
   modalEl.classList.remove("hidden")
+  if (!trapHandler) {
+    trapHandler = trapModalFocus(modalEl)
+    modalEl.addEventListener("keydown", trapHandler)
+  }
   closeBtnEl?.focus()
 }
 
 export function closeKeyboardShortcutsModal(): void {
   if (!modalEl) return
   modalEl.classList.add("hidden")
+  if (trapHandler) {
+    modalEl.removeEventListener("keydown", trapHandler)
+    trapHandler = null
+  }
+  // Return focus to whatever opened the dialog (WCAG 2.4.3).
+  if (lastFocus && typeof lastFocus.focus === "function") {
+    lastFocus.focus({ preventScroll: true })
+  }
+  lastFocus = null
 }
 
 export function setupKeyboardShortcutsModal(container: HTMLElement): void {

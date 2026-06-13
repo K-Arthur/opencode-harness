@@ -390,6 +390,17 @@ function getVsCodeApi() {
   // - subagent_update (a live update arrives while the detail view is open)
   // Cleared when the detail view closes.
   let activeSubagentId: string | null = null
+  // The subagent card (or other control) that opened the detail view, so focus
+  // can return to it on Back/Close instead of being dropped on <body> (WCAG 2.4.3).
+  let subagentDetailInvoker: HTMLElement | null = null
+
+  function restoreSubagentDetailFocus(): void {
+    const invoker = subagentDetailInvoker
+    subagentDetailInvoker = null
+    if (invoker && invoker.isConnected && typeof invoker.focus === "function") {
+      invoker.focus({ preventScroll: true })
+    }
+  }
 
   const modelDropdown = setupModelDropdown(els, {
     onOpen: () => {
@@ -1260,8 +1271,8 @@ function getVsCodeApi() {
       onSearchSkills: (query: string) => vscode.postMessage({ type: "search_skills", query }),
     })
     subagentDetailViewApi = setupSubagentDetailView(els, {
-      onBack: () => { sideRegionApi?.open("subagent") },
-      onClose: () => { activeSubagentId = null },
+      onBack: () => { sideRegionApi?.open("subagent"); restoreSubagentDetailFocus() },
+      onClose: () => { activeSubagentId = null; restoreSubagentDetailFocus() },
       onCancelSubagent: (subagentId: string) => vscode.postMessage({ type: "cancel_subagent", subagentId }),
       onOpenSession: (activity: SubagentActivity) => {
         if (activity.sessionId) vscode.postMessage({ type: "open_subagent_session", childSessionId: activity.sessionId, title: activity.name })
@@ -1273,6 +1284,9 @@ function getVsCodeApi() {
         if (activity.sessionId) vscode.postMessage({ type: "open_subagent_session", childSessionId: activity.sessionId, title: activity.name })
       },
       onOpenDetail: (activity: SubagentActivity) => {
+        // Remember the card that opened the detail so Back/Close can return
+        // focus to it.
+        subagentDetailInvoker = document.activeElement as HTMLElement | null
         // Ensure subagent tab is active before showing detail overlay
         sideRegionApi?.open("subagent")
         const normalizedId = activity.id.startsWith("subagent:")
