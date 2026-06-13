@@ -14,6 +14,7 @@ import {
   BUG_SVG,
 } from "./icons"
 import { toMentionItems, dedupServerCommands } from "./slash-commands"
+import { rankByFuzzy } from "./fuzzyMatch"
 
 // Icons live here (webview-only) rather than in the registry: the registry is
 // also bundled into the extension host for /help generation, and the SVG
@@ -73,8 +74,15 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
       els.promptInput.setAttribute("aria-expanded", "true")
       const uniqueServer = dedupServerCommands(serverCommands, (c) => c.display)
       const allCommands = [...LOCAL_COMMANDS, ...uniqueServer]
-      const filtered = allCommands.filter(c =>
-        c.display!.toLowerCase().startsWith(state.query.toLowerCase())
+      // Fuzzy subsequence match (not startsWith): typing "/review" must
+      // surface a custom "/code-review" command, and "/cr" should too. The
+      // old startsWith filter hid every command whose name didn't begin with
+      // the typed characters, which made custom/MCP commands look missing.
+      const filtered = rankByFuzzy(
+        allCommands,
+        state.query,
+        (c) => c.display ?? "",
+        (c) => c.description ?? "",
       )
       renderCommandResults(filtered)
       return

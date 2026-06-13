@@ -112,8 +112,29 @@ describe("mentions.ts", () => {
     const block = source.slice(idx, source.indexOf("function renderCommandResults", idx))
     assert.match(
       block,
-      /localNames|filter\([\s\S]{0,200}toLowerCase\(\)/,
-      "handleTrigger must filter serverCommands against local names",
+      /dedupServerCommands\(\s*serverCommands/,
+      "handleTrigger must dedupe serverCommands against local names",
+    )
+  })
+
+  // The dropdown filter must be fuzzy (subsequence), not startsWith. The old
+  // startsWith filter hid every command the user couldn't spell from its
+  // first character — so a custom "/code-review" never appeared when typing
+  // "/review", making custom/MCP commands look missing.
+  it("filters the slash dropdown with fuzzy matching, not startsWith", () => {
+    const idx = source.indexOf("function handleTrigger()")
+    const block = source.slice(idx, source.indexOf("function renderCommandResults", idx))
+    assert.ok(
+      /rankByFuzzy\(/.test(block),
+      "handleTrigger must rank command suggestions with rankByFuzzy",
+    )
+    assert.ok(
+      !/\.startsWith\(/.test(block),
+      "the old startsWith prefix filter must be gone (it hid non-prefix commands)",
+    )
+    assert.ok(
+      source.includes('from "./fuzzyMatch"'),
+      "mentions.ts must import the shared fuzzy matcher",
     )
   })
 })
