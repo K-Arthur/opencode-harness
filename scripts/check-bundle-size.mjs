@@ -34,6 +34,13 @@
 // a navigation-safety feature (one Escape press never aborts a running task),
 // not avoidable bloat; +7KB keeps ~1% headroom so the gate still trips on a
 // real regression. Host limit unchanged (still under 550KB).
+//
+// 2026-06-13 re-baseline (host 550KB -> 552KB): the switch-marker placement
+// logic (isSwitchEventType / switchInsertIndex / decideSwitchPlacement in
+// activityCoalesce.ts + the branch in SessionStore.appendOrCoalesceActivity)
+// adds ~0.9KB minified to the host bundle so agent/model switch markers render
+// before the generation they configure. Justified UX fix, not bloat; +2KB
+// keeps ~0.2% headroom so the gate still trips on a real regression.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -43,7 +50,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 550 * 1024, label: "extension host" },
+  { path: "dist/extension.js", limitBytes: 552 * 1024, label: "extension host" },
   { path: "dist/chat/webview/main.js", limitBytes: 712 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
