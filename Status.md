@@ -1,7 +1,14 @@
 # Status.md
 
 ## Last Updated: 2026-06-13
-## Project State: streaming-completion + switch-marker UX fixes and modal-focus a11y (TDD)
+## Project State: fuzzy command/skill search (custom commands now discoverable) + prior streaming/switch-marker/a11y fixes (TDD)
+
+### Recent Fix (2026-06-13): Fuzzy command + skill search — custom commands no longer "missing"
+- **Symptom:** custom commands (e.g. `.opencode/commands/code-review.md`) and MCP/skill commands appeared to be missing from the slash UI; you also couldn't search by characters that don't begin the command name.
+- **Root cause:** the inline `/` dropdown filtered with `startsWith` and the commands palette + skills search with `includes`. A command whose *name* didn't begin with the typed characters never showed — so `/review` never surfaced `/code-review`, and `/cr` found nothing. Custom commands *do* flow through the server's `command.list()` (opencode reads `.opencode/commands/*.md`), but the prefix filter hid them.
+- **Fix:** new pure, DOM-free `fuzzyMatch.ts` (`fuzzyScore` / `scoreCommandMatch` / `rankByFuzzy`). Names match by subsequence, descriptions by substring; results rank best-first (exact › contiguous prefix › word-boundary › scattered; a name match always tiers above a description-only match). Wired into all three surfaces so they can't drift: inline `/` dropdown (`mentions.ts`), commands palette incl. stash search (`commands-modal.ts`), and host-side skill search (`WebviewEventRouter.search_skills`). (`src/chat/webview/fuzzyMatch.ts`, `mentions.ts`, `commands-modal.ts`, `src/chat/WebviewEventRouter.ts`)
+- **Not a bug (verified):** `.opencode/prompts/*.md` (client-side variable-templating prompts, `PromptManager` → "Custom" badge) and `.opencode/commands/*.md` (server-executed, "Server"/"MCP"/"Skill" badge) are deliberately separate features with different execution paths (`resolveCustomPromptVariables` vs `sendCommand`). No directory change made.
+- **Tests:** +28 RED-first (`fuzzyMatch.test.ts` ×23 incl. hand-rolled property checks; commands-modal fuzzy behaviour ×5) plus updated `mentions.test.ts` assertions. Full unit suite (3408 tests) + message-contract + roundtrip green; typecheck clean.
 
 ### Recent Fix (2026-06-13): Streaming remnant, switch-marker UX, and modal focus a11y
 - **Streaming never recognised as complete (empty bubble + stuck "live" dot).** A stream restart for a new message id (agent/model switch mid-turn) finalized the prior bubble's tool calls but never removed the orphaned empty assistant placeholder — leaving an empty bubble whose pulsing `.message.assistant.streaming` dot never cleared. `handleStreamStart` now removes an empty prior placeholder (array + DOM), or re-renders a non-empty prior as finalized so the dot stops. New exported `isEmptyStreamingMessage()`. (`src/chat/webview/streamHandlers.ts`)
