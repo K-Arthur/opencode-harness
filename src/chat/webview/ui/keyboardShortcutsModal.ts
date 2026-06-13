@@ -9,7 +9,7 @@ const SHORTCUT_TABLE: ShortcutRow[] = [
   { keys: "Ctrl+Alt+N", action: "New session", context: "Global" },
   { keys: "Ctrl+I", action: "Quick chat", context: "Editor focused" },
   { keys: "Alt+K", action: "Insert file reference (@)", context: "Editor focused" },
-  { keys: "Escape", action: "Stop / close modal / close dropdown", context: "Chat view / modals" },
+  { keys: "Escape", action: "Close topmost overlay; stops the run only when nothing is open", context: "Chat view / modals" },
   { keys: "Ctrl+Shift+Esc", action: "Stop active session", context: "Chat view" },
   { keys: "Ctrl+Shift+/", action: "Commands palette", context: "Chat view" },
   { keys: "Shift+Tab", action: "Cycle mode (Plan → Build → Auto)", context: "Mode button focused" },

@@ -55,8 +55,9 @@ import { setupDisplayToggles } from "./ui/displayToggles"
 import { setupThemeCustomizer, openThemeCustomizer, populateCliList, applyThemeCustomizerConfig } from "./ui/themeCustomizer"
 import { setupModeToggle, updateModeDropdown, updateModeSelectorState, syncModeUI as syncModeUIModule, cycleModeForward, isModalOrDialogOpen } from "./ui/modeDropdown"
 import { setupInstructionsEditor } from "./ui/instructionsEditor"
-import { setupSessionModal as setupSessionModalModule, openSessionModal as openSessionModalModule, trapModalFocus } from "./ui/sessionModal"
-import { setupKeyboardShortcutsModal, openKeyboardShortcutsModal } from "./ui/keyboardShortcutsModal"
+import { setupSessionModal as setupSessionModalModule, openSessionModal as openSessionModalModule, closeSessionModal as closeSessionModalModule, trapModalFocus } from "./ui/sessionModal"
+import { setupKeyboardShortcutsModal, openKeyboardShortcutsModal, closeKeyboardShortcutsModal } from "./ui/keyboardShortcutsModal"
+import { createEscapeRegistry, visibleByClass } from "./escapeCoordinator"
 
 import { handleTokenUsage as handleTokenUsageModule, accumulateTokenUsage as accumulateTokenUsageModule, accumulateCost as accumulateCostModule, applyTokenUsageTotals as applyTokenUsageTotalsModule, rememberStepUsage, isDuplicateRecentStepUsage, handleRateLimitState as handleRateLimitStateModule, updateCostDisplay as updateCostDisplayModule, updateTokenDisplay as updateTokenDisplayModule, clearTokenDisplay as clearTokenDisplayModule, updateContextBarFromSession as updateContextBarFromSessionModule, type TokenCostDeps, type RateLimitWebviewState } from "./ui/tokenCostDisplay"
 import { createAttachmentManager } from "./ui/attachments"
@@ -846,6 +847,7 @@ function getVsCodeApi() {
       setupTodoSkillAndSubagentPanels()
       setupChangedFilesFeature()
       setupContextUsageFeature()
+      setupEscapeCoordinator()
       const sidebarHandle = document.querySelector<HTMLElement>(".sidebar-resize-handle")
       const mainLayout = document.querySelector<HTMLElement>(".main-layout")
       if (sidebarHandle && mainLayout) {
@@ -968,6 +970,150 @@ function getVsCodeApi() {
         }
       }
     })
+  }
+
+  /* ─── ESCAPE COORDINATOR ───
+   * One Escape press affects exactly one surface (topmost first); Escape only
+   * stops the active stream when nothing is open. Replaces the host-level
+   * `escape → opencode-harness.stop` keybinding that could abort a running
+   * task while the user was merely dismissing an overlay. */
+
+  // Modals the coordinator owns. Other [aria-modal] dialogs (instructions
+  // editor, model manager, MCP config, theme customizer, permission config,
+  // mode warning) keep their component-level Escape handling — the
+  // coordinator steps aside while any of them is open.
+  const ESCAPE_MANAGED_MODAL_IDS = new Set([
+    "session-modal",
+    "skills-modal",
+    "commands-modal",
+    "keyboard-shortcuts-modal",
+  ])
+
+  // Popups whose Escape semantics live on the composer/anchor element
+  // (combobox pattern) — the coordinator must never race them.
+  const ESCAPE_DEFERRED_POPUP_IDS = [
+    "mention-dropdown",
+    "slash-autocomplete",
+    "mode-dropdown-menu",
+    "model-dropdown-container",
+    "variant-dropdown-container",
+  ]
+
+  function isElementVisibleById(id: string): boolean {
+    const el = document.getElementById(id)
+    return Boolean(el && !el.classList.contains("hidden"))
+  }
+
+  function hasUnmanagedModalOpen(): boolean {
+    const modals = document.querySelectorAll<HTMLElement>('[aria-modal="true"]')
+    for (const m of modals) {
+      if (!m.classList.contains("hidden") && !ESCAPE_MANAGED_MODAL_IDS.has(m.id)) return true
+    }
+    return false
+  }
+
+  function shouldDeferEscape(): boolean {
+    if (ESCAPE_DEFERRED_POPUP_IDS.some(isElementVisibleById)) return true
+    // Text fields other than the prompt input keep their own Escape semantics
+    // (queue inline edit, todo input, modal search fields…); the prompt input
+    // itself falls through so Escape-with-nothing-open can stop the stream.
+    const active = document.activeElement as HTMLElement | null
+    if (active && active !== els.promptInput) {
+      const tag = active.tagName?.toLowerCase()
+      if (active.isContentEditable || tag === "input" || tag === "textarea" || tag === "select") return true
+    }
+    return false
+  }
+
+  function setupEscapeCoordinator(): void {
+    const registry = createEscapeRegistry({
+      isStreaming: () => Boolean(stateManager.getActiveSession()?.isStreaming),
+      onStop: () => abortStream(),
+      hasDeferredOverlay: shouldDeferEscape,
+      hasUnmanagedModal: hasUnmanagedModalOpen,
+    })
+
+    const clickById = (id: string) => () => document.getElementById(id)?.click()
+
+    registry.register({
+      id: "session-modal",
+      priority: 100,
+      isOpen: visibleByClass(() => els.sessionModal),
+      close: () => closeSessionModalModule(els, disposePortaledMoreMenus),
+    })
+    registry.register({
+      id: "skills-modal",
+      priority: 100,
+      isOpen: () => isElementVisibleById("skills-modal"),
+      close: () => skillsModalApi?.close?.(),
+    })
+    registry.register({
+      id: "commands-modal",
+      priority: 100,
+      isOpen: () => isElementVisibleById("commands-modal"),
+      close: () => commandsModal.close(),
+    })
+    registry.register({
+      id: "keyboard-shortcuts-modal",
+      priority: 100,
+      isOpen: () => isElementVisibleById("keyboard-shortcuts-modal"),
+      close: () => closeKeyboardShortcutsModal(),
+    })
+    registry.register({
+      id: "settings-menu",
+      priority: 80,
+      isOpen: visibleByClass(() => els.settingsMenu),
+      close: () => {
+        closeSettingsMenu()
+        els.settingsBtn.focus()
+      },
+    })
+    registry.register({
+      id: "context-usage-dropdown",
+      priority: 80,
+      isOpen: () => isElementVisibleById("context-usage-dropdown"),
+      close: clickById("ctx-dropdown-close"),
+    })
+    registry.register({
+      id: "changed-files-dropdown",
+      priority: 80,
+      isOpen: () => isElementVisibleById("changed-files-dropdown"),
+      close: clickById("cf-dropdown-close"),
+    })
+    // Back to the subagent list first; a second Escape then closes the region.
+    registry.register({
+      id: "subagent-detail",
+      priority: 60,
+      isOpen: () =>
+        !els.subagentDetailView.classList.contains("hidden") && sideRegionApi?.isOpen() === true,
+      close: () => els.subagentDetailBackBtn.click(),
+    })
+    registry.register({
+      id: "chat-search-bar",
+      priority: 40,
+      isOpen: () => isElementVisibleById("chat-search-bar"),
+      close: clickById("chat-search-close"),
+    })
+    registry.register({
+      id: "prompt-stash",
+      priority: 40,
+      isOpen: () => isElementVisibleById("prompt-stash-panel"),
+      close: clickById("prompt-stash-close"),
+    })
+    registry.register({
+      id: "side-region",
+      priority: 20,
+      isOpen: () => {
+        if (!sideRegionApi?.isOpen()) return false
+        const pin = document.querySelector<HTMLElement>('.panel-pin-btn[data-panel="side-region"]')
+        return pin?.getAttribute("aria-pressed") !== "true"
+      },
+      close: () => sideRegionApi?.close(),
+    })
+
+    // Capture phase: runs before every component-level Escape listener so a
+    // consumed event can never double-fire legacy document handlers.
+    document.addEventListener("keydown", registry.handleKeydown, true)
   }
 
   function isWelcomeVisible(): boolean {

@@ -255,11 +255,6 @@
       },
       {
         "command": "opencode-harness.stop",
-        "key": "escape",
-        "when": "focusedView == 'opencode-harness.chat'"
-      },
-      {
-        "command": "opencode-harness.stop",
         "key": "ctrl+shift+escape",
         "when": "focusedView == 'opencode-harness.chat'"
       },
@@ -291,11 +286,6 @@
       {
         "command": "opencode-harness.retryLast",
         "key": "ctrl+alt+r",
-        "when": "focusedView == 'opencode-harness.chat'"
-      },
-      {
-        "command": "opencode-harness.openCommandsPalette",
-        "key": "f1",
         "when": "focusedView == 'opencode-harness.chat'"
       }
     ],
