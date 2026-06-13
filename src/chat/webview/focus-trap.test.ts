@@ -176,3 +176,106 @@ describe("focus-trap", () => {
     assert.equal(matches.length, 8, "should match all 8 focusable elements (excluding tabindex=-1)")
   })
 })
+
+describe("mountModalFocus", () => {
+  it("moves focus to the explicit initialFocus element on mount", async () => {
+    const { mountModalFocus } = await import("./focus-trap")
+    const container = document.getElementById("container")!
+    const input1 = document.getElementById("input1")! as HTMLElement
+    const handle = mountModalFocus(container, { initialFocus: input1 })
+    assert.equal(document.activeElement, input1, "should focus the requested element")
+    handle.release()
+  })
+
+  it("defaults initialFocus to the first focusable element", async () => {
+    const { mountModalFocus } = await import("./focus-trap")
+    const container = document.getElementById("container")!
+    const btn1 = document.getElementById("btn1")!
+    const handle = mountModalFocus(container)
+    assert.equal(document.activeElement, btn1, "should focus the first focusable element")
+    handle.release()
+  })
+
+  it("restores focus to the invoker on release", async () => {
+    const { mountModalFocus } = await import("./focus-trap")
+    const container = document.getElementById("container")!
+    const outside = document.getElementById("outside")! as HTMLElement
+    setActive(outside)
+    const handle = mountModalFocus(container)
+    assert.notEqual(document.activeElement, outside, "focus should move into the dialog")
+    handle.release()
+    assert.equal(document.activeElement, outside, "focus should return to the invoker")
+  })
+
+  it("honors an explicit restoreTo target over the live invoker", async () => {
+    const { mountModalFocus } = await import("./focus-trap")
+    const container = document.getElementById("container")!
+    const outside = document.getElementById("outside")! as HTMLElement
+    const btn2 = document.getElementById("btn2")! as HTMLElement
+    setActive(btn2)
+    const handle = mountModalFocus(container, { restoreTo: outside })
+    handle.release()
+    assert.equal(document.activeElement, outside, "should restore to the explicit target")
+  })
+
+  it("traps Tab inside the container", async () => {
+    const { mountModalFocus } = await import("./focus-trap")
+    const container = document.getElementById("container")!
+    const btn1 = document.getElementById("btn1")!
+    const span1 = document.getElementById("span1")!
+    const handle = mountModalFocus(container)
+    setActive(span1) // last focusable
+    const event = mkEvent("Tab")
+    document.dispatchEvent(event)
+    assert.equal(document.activeElement, btn1, "Tab from last should wrap to first")
+    handle.release()
+  })
+
+  it("release removes the Tab trap so focus no longer wraps", async () => {
+    const { mountModalFocus } = await import("./focus-trap")
+    const container = document.getElementById("container")!
+    const span1 = document.getElementById("span1")!
+    const handle = mountModalFocus(container)
+    handle.release()
+    setActive(span1)
+    document.dispatchEvent(mkEvent("Tab"))
+    assert.equal(document.activeElement, span1, "trap is gone — focus should not wrap")
+  })
+
+  it("release is idempotent", async () => {
+    const { mountModalFocus } = await import("./focus-trap")
+    const container = document.getElementById("container")!
+    const outside = document.getElementById("outside")! as HTMLElement
+    setActive(outside)
+    const handle = mountModalFocus(container)
+    handle.release()
+    // Move focus elsewhere; a second release must NOT yank it back.
+    const btn3 = document.getElementById("btn3")! as HTMLElement
+    setActive(btn3)
+    handle.release()
+    assert.equal(document.activeElement, btn3, "second release should be a no-op")
+  })
+
+  it("does not throw when the invoker was detached before release", async () => {
+    const { mountModalFocus } = await import("./focus-trap")
+    const container = document.getElementById("container")!
+    const temp = document.createElement("button")
+    document.body.appendChild(temp)
+    setActive(temp)
+    const handle = mountModalFocus(container)
+    temp.remove()
+    assert.doesNotThrow(() => handle.release(), "detached invoker must not break release")
+  })
+
+  it("does not restore focus to <body> when there was no real invoker", async () => {
+    const { mountModalFocus } = await import("./focus-trap")
+    const container = document.getElementById("container")!
+    const btn1 = document.getElementById("btn1")! as HTMLElement
+    // No prior focus -> activeElement is <body>; restore must be skipped.
+    ;(document.activeElement as HTMLElement | null)?.blur?.()
+    const handle = mountModalFocus(container)
+    setActive(btn1)
+    handle.release()
+    assert.equal(document.activeElement, btn1, "should not blur back to <body>")
+  })
+})
