@@ -41,8 +41,18 @@ const SLASH_COMMAND_ICONS: Readonly<Record<string, string>> = {
 
 // Local slash commands come from the canonical registry in slash-commands.ts
 // — single source of truth shared with the commands palette modal so the two
-// surfaces can never drift out of sync again.
-const LOCAL_COMMANDS: MentionItem[] = toMentionItems(SLASH_COMMAND_ICONS)
+// surfaces can never drift out of sync again. They are all built-ins, so they
+// carry the "Built-in" badge.
+const LOCAL_COMMANDS: MentionItem[] = toMentionItems(SLASH_COMMAND_ICONS).map((c) => ({
+  ...c,
+  badge: "Built-in",
+}))
+
+// Cap the rendered suggestions so a short query against a large server/MCP
+// command set can't produce a runaway dropdown. Results are fuzzy-ranked
+// best-first, so the cap keeps the most relevant rows; the rest are summarised
+// by a non-interactive "+N more" hint.
+const MAX_COMMAND_RESULTS = 50
 
 export interface MentionState {
   query: string
@@ -78,13 +88,13 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
       // surface a custom "/code-review" command, and "/cr" should too. The
       // old startsWith filter hid every command whose name didn't begin with
       // the typed characters, which made custom/MCP commands look missing.
-      const filtered = rankByFuzzy(
+      const ranked = rankByFuzzy(
         allCommands,
         state.query,
         (c) => c.display ?? "",
         (c) => c.description ?? "",
       )
-      renderCommandResults(filtered)
+      renderCommandResults(ranked.slice(0, MAX_COMMAND_RESULTS), ranked.length)
       return
     }
 
@@ -105,7 +115,7 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     }
   }
 
-  function renderCommandResults(commands: MentionItem[]) {
+  function renderCommandResults(commands: MentionItem[], totalMatches?: number) {
     els.mentionDropdown.innerHTML = ""
     if (commands.length === 0) {
       const empty = document.createElement("div")
@@ -146,9 +156,27 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
         content.appendChild(desc)
       }
       div.appendChild(content)
+      if (item.badge) {
+        // Origin chip (Built-in / Server / MCP / Skill / Custom) so users can
+        // tell a built-in command apart from a server/MCP/skill/custom one
+        // without opening the palette. data-source drives the accent colour.
+        const badge = document.createElement("span")
+        badge.className = "command-badge"
+        badge.dataset.source = item.badge.toLowerCase()
+        badge.textContent = item.badge
+        div.appendChild(badge)
+      }
       div.addEventListener("click", () => insertCommand(item))
       els.mentionDropdown.appendChild(div)
     })
+    // Non-interactive overflow hint. Kept off the `.dropdown-item` class so
+    // handleKeydown's selection query never lands on it.
+    if (typeof totalMatches === "number" && totalMatches > commands.length) {
+      const more = document.createElement("div")
+      more.className = "dropdown-more"
+      more.textContent = `+${totalMatches - commands.length} more \u2014 keep typing to narrow`
+      els.mentionDropdown.appendChild(more)
+    }
   }
 
   function insertCommand(item: MentionItem) {
@@ -163,13 +191,31 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     window.dispatchEvent(new CustomEvent("oc-input-changed"))
   }
 
-  function updateServerCommands(commands: Array<{ name: string; description?: string }>) {
-    serverCommands = commands.map(c => ({
-      prefix: "/",
-      display: c.name,
-      description: c.description || "Server command",
-      icon: GEAR_SVG,
-    }))
+  function updateServerCommands(
+    commands: Array<{ name: string; description?: string; source?: string; isCustom?: boolean }>,
+  ) {
+    serverCommands = commands.map(c => {
+      // Mirror the commands-palette badge taxonomy: custom prompts → "Custom",
+      // and the server's `source` disambiguates MCP / skill / plain server.
+      const source = (c.source || "").toLowerCase()
+      const badge =
+        c.isCustom        ? "Custom" :
+        source === "mcp"   ? "MCP"   :
+        source === "skill" ? "Skill" :
+        "Server"
+      const icon =
+        badge === "MCP"    ? MCP_SVG :
+        badge === "Skill"  ? BRAIN_SVG :
+        badge === "Custom" ? COMMAND_SVG :
+        GEAR_SVG
+      return {
+        prefix: "/",
+        display: c.name,
+        description: c.description || `${badge} command`,
+        icon,
+        badge,
+      }
+    })
   }
 
   function handleKeydown(e: KeyboardEvent) {

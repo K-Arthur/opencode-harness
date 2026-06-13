@@ -1616,6 +1616,56 @@ textarea {
   font-size: var(--text-xs);
 }
 
+/* Slash-command rows carry an origin chip pushed to the right edge. */
+.command-item {
+  align-items: center;
+}
+
+.command-item .dropdown-content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.command-badge {
+  flex-shrink: 0;
+  align-self: center;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--oc-accent-border);
+  color: var(--oc-muted);
+  background: var(--oc-accent-subtle);
+  white-space: nowrap;
+}
+
+/* Per-source accent so the chip is glanceable. Falls back to the muted base
+   above for any source we don't special-case. */
+.command-badge[data-source="mcp"] {
+  color: var(--color-accent);
+  border-color: var(--oc-accent-border);
+}
+
+.command-badge[data-source="skill"] {
+  color: var(--oc-fg);
+}
+
+.command-badge[data-source="custom"] {
+  color: var(--color-accent);
+}
+
+/* Non-interactive overflow hint shown when the dropdown caps its rows. Not a
+   .dropdown-item, so keyboard navigation never selects it. */
+.dropdown-more {
+  padding: var(--space-2);
+  color: var(--oc-muted);
+  font-size: var(--text-xs);
+  text-align: center;
+  font-style: italic;
+}
+
 /* ─── SKILL INDICATORS ─── */
 
 .skill-indicators {

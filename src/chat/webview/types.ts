@@ -388,6 +388,13 @@ export interface MentionItem {
    * insert "@file:file").
    */
   insertText?: string
+  /**
+   * Short origin label rendered as a chip in the slash dropdown
+   * ("Built-in" | "Server" | "MCP" | "Skill" | "Custom"). Lets users tell a
+   * built-in command apart from a server/MCP/skill/custom one inline, the
+   * same way the commands palette modal does.
+   */
+  badge?: string
 }
 
 export interface SessionSummary {
