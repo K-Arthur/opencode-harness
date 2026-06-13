@@ -98,8 +98,16 @@ Engine install priority is now (`pickEngineInstallCommand` in
 3. `<pip> install -U openai-whisper` — only when Python is NOT externally
    managed (probed via the stdlib `EXTERNALLY-MANAGED` marker,
    `ChatProvider.detectExternallyManagedPython()`)
-4. Manual guidance naming the exact Arch commands
-   (`sudo pacman -S uv` → `uv tool install openai-whisper`)
+4. **uv bootstrap** — when externally managed AND no uv/pipx yet, a runnable
+   compound command that installs uv via the system package manager
+   (`sudo pacman -S --needed --noconfirm uv` on Arch/CachyOS, `brew install uv`,
+   `winget install astral-sh.uv`) or the official standalone installer
+   (`curl -LsSf https://astral.sh/uv/install.sh | sh` on Debian/Fedora), then
+   `uv tool install openai-whisper` (`uvBootstrapCommand` in `voiceSetup.ts`).
+   This keeps "Run Setup" usable on PEP 668 distros instead of degrading to a
+   dead-end "Copy Instructions".
+5. Manual guidance (only when no bootstrap is possible) naming the exact Arch
+   commands (`sudo pacman -S uv` → `uv tool install openai-whisper`).
 
 `commandExists()` and both spawn sites additionally fall back to
 `~/.local/bin/<bin>` (where uv tool/pipx install binaries), because VS Code's

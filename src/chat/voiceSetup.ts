@@ -24,6 +24,12 @@ export interface VoiceToolProbe {
   /** PEP 668 externally-managed Python (Arch/CachyOS, Debian 12+, Fedora 38+):
    *  bare pip installs fail with externally-managed-environment. */
   externallyManaged?: boolean
+  /** Runnable command that installs uv (system package manager or the official
+   *  standalone installer) AND then `uv tool install openai-whisper`, so the
+   *  setup flow can offer a real "Run Setup" action on PEP 668 distros instead
+   *  of a dead-end "Copy Instructions". Null when no bootstrap is possible
+   *  (the user gets the manual hint instead). Computed by `uvBootstrapCommand`. */
+  uvBootstrap?: { manager: string; command: string } | null
 }
 
 export interface VoiceSetupStep {
@@ -70,6 +76,12 @@ export function pickEngineInstallCommand(probe: VoiceToolProbe): { command?: str
   if (probe.pip && !probe.externallyManaged) {
     return { command: `${probe.pip} install -U openai-whisper` }
   }
+  // PEP 668 + no isolated installer yet: bootstrap uv via the system package
+  // manager (pacman/brew/winget/…) or the official standalone installer so the
+  // setup flow can offer a runnable "Run Setup" instead of a dead-end copy.
+  if (probe.externallyManaged && probe.uvBootstrap) {
+    return { command: probe.uvBootstrap.command }
+  }
   if (probe.externallyManaged) {
     return {
       manual: "Your Python is externally managed (PEP 668), so pip cannot install packages directly. "
@@ -110,6 +122,59 @@ export function recorderInstallCommand(
     if (exists("choco")) return { manager: "Chocolatey", command: "choco install sox -y" }
     if (exists("scoop")) return { manager: "Scoop", command: "scoop install sox" }
     return null
+  }
+  return null
+}
+
+/**
+ * Resolve a runnable command that installs uv AND uses it to install
+ * openai-whisper into an isolated environment. This is the escape hatch for
+ * PEP 668 distros (Arch/CachyOS, Debian 12+, Fedora 38+) where bare `pip
+ * install` is blocked and uv/pipx aren't on PATH yet — without it the setup
+ * flow degrades to a dead-end "Copy Instructions".
+ *
+ * Strategy: prefer a native package manager that ships uv (faster, upgraded
+ * with the system, immediately on PATH). Fall back to uv's official
+ * standalone installer on POSIX (works on Debian/Fedora/etc. whose repos
+ * don't carry uv). Returns null only when no bootstrap is possible.
+ *
+ * The returned command is a compound (`A && B`) so a single "Run Setup"
+ * click finishes the whole engine install. The standalone installer drops
+ * uv into ~/.local/bin, which the current shell hasn't hashed yet — so we
+ * re-export PATH before invoking uv.
+ */
+export function uvBootstrapCommand(
+  platform: NodeJS.Platform | string,
+  exists: (bin: string) => boolean,
+): { manager: string; command: string } | null {
+  const whisperViaUv = "uv tool install openai-whisper"
+  if (platform === "darwin") {
+    if (exists("brew")) return { manager: "Homebrew", command: `brew install uv && ${whisperViaUv}` }
+    if (exists("curl")) {
+      return { manager: "uv installer", command: `curl -LsSf https://astral.sh/uv/install.sh | sh && export PATH="$HOME/.local/bin:$PATH" && ${whisperViaUv}` }
+    }
+    return null
+  }
+  if (platform === "linux") {
+    // Arch/CachyOS ship uv in the `extra` repo; Alpine ships it in community.
+    if (exists("pacman")) return { manager: "pacman", command: `sudo pacman -S --needed --noconfirm uv && ${whisperViaUv}` }
+    if (exists("apk")) return { manager: "apk", command: `sudo apk add uv && ${whisperViaUv}` }
+    // Debian/Ubuntu/Fedora don't ship uv in their base repos — use the
+    // official standalone installer (astral.sh's recommended path).
+    if (exists("curl")) {
+      return { manager: "uv installer", command: `curl -LsSf https://astral.sh/uv/install.sh | sh && export PATH="$HOME/.local/bin:$PATH" && ${whisperViaUv}` }
+    }
+    if (exists("wget")) {
+      return { manager: "uv installer", command: `wget -qO- https://astral.sh/uv/install.sh | sh && export PATH="$HOME/.local/bin:$PATH" && ${whisperViaUv}` }
+    }
+    return null
+  }
+  if (platform === "win32") {
+    if (exists("winget")) return { manager: "winget", command: `winget install astral-sh.uv --accept-source-agreements && ${whisperViaUv}` }
+    if (exists("scoop")) return { manager: "Scoop", command: `scoop install uv && ${whisperViaUv}` }
+    if (exists("choco")) return { manager: "Chocolatey", command: `choco install uv -y && ${whisperViaUv}` }
+    // PowerShell is always present on Windows; the official uv installer.
+    return { manager: "uv installer", command: `powershell -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/install.ps1 | iex; uv tool install openai-whisper"` }
   }
   return null
 }
