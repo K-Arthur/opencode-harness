@@ -187,6 +187,69 @@ describe("commands modal — MCP source", () => {
     assert.deepEqual(visible, ["review-pr"])
   })
 
+})
+
+describe("commands modal — fuzzy search", () => {
+  function type(value: string) {
+    search.value = value
+    search.dispatchEvent(new (globalThis as any).window.Event("input", { bubbles: true }))
+  }
+  function visibleCommands(): string[] {
+    return Array.from(list.querySelectorAll<HTMLElement>(".commands-modal-item")).map(
+      (r) => r.dataset.command || "",
+    )
+  }
+
+  it("surfaces a custom command by a NON-prefix term (the core complaint)", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    handle.updateServerCommands([{ name: "code-review", description: "Review the code" }])
+    type("review")
+    assert.ok(
+      visibleCommands().includes("code-review"),
+      "typing 'review' must surface /code-review even though it doesn't start with 'review'",
+    )
+  })
+
+  it("matches a scattered subsequence ('dpl' -> deploy)", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    handle.updateServerCommands([{ name: "deploy", description: "Ship it" }])
+    type("dpl")
+    assert.ok(visibleCommands().includes("deploy"))
+  })
+
+  it("matches against the description when the name does not", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    handle.updateServerCommands([{ name: "xyzzy", description: "Deploy to production" }])
+    type("production")
+    assert.ok(visibleCommands().includes("xyzzy"))
+  })
+
+  it("ranks the closest match first", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    handle.updateServerCommands([
+      { name: "code-review", description: "Review the code" },
+      { name: "review", description: "Generic review" },
+    ])
+    type("review")
+    // The exact-name command must outrank the one where 'review' is mid-name.
+    assert.equal(visibleCommands()[0], "review")
+  })
+
+  it("shows the empty-state message when nothing matches", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    handle.updateServerCommands([{ name: "deploy", description: "Ship it" }])
+    type("zzzzzz")
+    const empty = list.querySelector(".commands-modal-empty")
+    assert.ok(empty, "an empty-state row must render when no command matches")
+  })
+})
+
+describe("commands modal — legacy source fallback", () => {
   it("falls back to source=server when the server doesn't tag a source", () => {
     // Older opencode servers don't set Command.source. They must still
     // render — just without the MCP-specific affordances.

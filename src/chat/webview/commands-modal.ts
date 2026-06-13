@@ -6,6 +6,7 @@
  */
 
 import { dedupServerCommands } from "./slash-commands"
+import { rankByFuzzy } from "./fuzzyMatch"
 
 export interface CommandEntry {
   /** Without leading slash. */
@@ -213,12 +214,6 @@ export function setupCommandsModal(els: {
     }
   }
 
-  function matchesQuery(name: string, description: string, query: string): boolean {
-    if (!query) return true
-    const q = query.toLowerCase()
-    return name.toLowerCase().includes(q) || description.toLowerCase().includes(q)
-  }
-
   function render(): void {
     const query = commandsSearchInput!.value.trim()
     commandsList!.innerHTML = ""
@@ -234,10 +229,10 @@ export function setupCommandsModal(els: {
 
   function renderCommands(query: string): void {
     const all = [...options.localCommands, ...serverCommands, ...promptCommands]
-    const filtered = all.filter(c => {
-      if (activeFilter !== "all" && c.source !== activeFilter) return false
-      return matchesQuery(c.name, c.description, query)
-    })
+    const inFilter = all.filter(c => activeFilter === "all" || c.source === activeFilter)
+    // Fuzzy match on the command name + substring match on its description,
+    // ranked best-first. An empty query keeps the source-grouped order.
+    const filtered = rankByFuzzy(inFilter, query, c => c.name, c => c.description)
 
     if (filtered.length === 0) {
       const empty = document.createElement("div")
@@ -295,11 +290,14 @@ export function setupCommandsModal(els: {
   }
 
   function renderStashes(query: string): void {
-    const filtered = stashEntries.filter(s => {
+    const inFilter = stashEntries.filter(s => {
       if (activeFilter === "global" && !s.isGlobal) return false
       if (activeFilter === "session" && s.isGlobal) return false
-      return matchesQuery(s.name, s.content, query)
+      return true
     })
+    // Same fuzzy ranking as commands: match the stash name, fall back to its
+    // content (substring), best-first.
+    const filtered = rankByFuzzy(inFilter, query, s => s.name, s => s.content)
 
     if (filtered.length === 0) {
       const empty = document.createElement("div")
