@@ -1,6 +1,6 @@
 # Slash Commands, Skills, and Methodology Guidance
 
-Updated: 2026-06-11. Companion plan: `.opencode/plans/2026-06-11-methodology-skills-slash-overhaul.md`.
+Updated: 2026-06-13. Companion plan: `.opencode/plans/2026-06-11-methodology-skills-slash-overhaul.md`.
 
 ## Slash commands
 
@@ -54,6 +54,29 @@ Run `/help` for the generated table. Highlights:
 - Everything else (server, MCP, skill, custom-prompt commands): browse with
   `/commands` or Ctrl+Shift+/.
 
+### Searching commands and skills (fuzzy)
+
+All three search surfaces share one matcher, `fuzzyMatch.ts`
+(`fuzzyScore` / `scoreCommandMatch` / `rankByFuzzy`):
+
+- the inline `/` mention dropdown (`mentions.ts`),
+- the commands palette modal (`commands-modal.ts`),
+- the skills modal's search (`search_skills` in `WebviewEventRouter.ts`).
+
+It matches the **name** by *subsequence* (the query characters appear in
+order, not necessarily adjacent) and the **description** by *substring*, then
+ranks best-first (exact › contiguous prefix › word-boundary › scattered;
+name matches always tier above description-only). This is why typing
+`/review` surfaces a custom `/code-review` command and `/cr` surfaces it too.
+
+Before this, the dropdown filtered with `startsWith` and the palette/skills
+search with `includes`, so any command whose name didn't *begin* with the
+typed characters looked missing — most visible with custom and MCP/skill
+commands. The matcher is pure and DOM-free so the extension host (skill
+search) and the webview share it without duplication. Descriptions are kept
+to substring matching on purpose: a 2-char query is a subsequence of almost
+any sentence, which would flood the palette.
+
 ## Methodology guidance
 
 When `opencode.methodology.enabled` is on (default), each outgoing prompt is
@@ -87,7 +110,9 @@ Skill discovery and loading is owned by the opencode server (plus a local
 - suggests relevant skills to the model by name in the methodology addendum
   (`SkillTriggerEngine` → "Relevant skills: …"),
 - exposes server-registered skill commands in the commands palette
-  (tagged `skill`).
+  (tagged `skill`),
+- fuzzy-searches the skills modal via `search_skills` (shared `fuzzyMatch.ts`;
+  see "Searching commands and skills" above).
 
 The modal toggle controls **suggestion only** — the opencode server does not
 accept enable/disable, so a disabled skill may still be loaded server-side.
