@@ -104,13 +104,6 @@ export interface ElementRefs {
   modelManagerClose: HTMLButtonElement
   modelManagerConnect: HTMLButtonElement
 
-  modeWarningModal: HTMLDivElement
-  modeWarningTitle: HTMLSpanElement
-  modeWarningDescription: HTMLParagraphElement
-  modeWarningDontShow: HTMLInputElement
-  modeWarningCancel: HTMLButtonElement
-  modeWarningConfirm: HTMLButtonElement
-
   welcomeView: HTMLDivElement
   welcomeModelEmptyBanner: HTMLElement | null
   welcomeEmptyBannerLink: HTMLElement | null
@@ -304,13 +297,6 @@ export function getElementRefs(): ElementRefs {
     modelManagerList: requireElement<HTMLDivElement>("model-manager-list"),
     modelManagerClose: requireElement<HTMLButtonElement>("model-manager-close"),
     modelManagerConnect: requireElement<HTMLButtonElement>("model-manager-connect"),
-
-    modeWarningModal: requireElement<HTMLDivElement>("mode-warning-modal"),
-    modeWarningTitle: requireElement<HTMLSpanElement>("mode-warning-title"),
-    modeWarningDescription: requireElement<HTMLParagraphElement>("mode-warning-description"),
-    modeWarningDontShow: requireElement<HTMLInputElement>("mode-warning-dont-show"),
-    modeWarningCancel: requireElement<HTMLButtonElement>("mode-warning-cancel"),
-    modeWarningConfirm: requireElement<HTMLButtonElement>("mode-warning-confirm"),
 
     welcomeView: requireElement<HTMLDivElement>("welcome-view"),
     welcomeModelEmptyBanner: document.getElementById("welcome-model-empty-banner"),

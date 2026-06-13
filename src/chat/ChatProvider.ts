@@ -55,7 +55,6 @@ import { normalizeSessionMode, resolvePermissionForMode } from "./modePolicy"
 import { CodeInsertionService } from "./CodeInsertionService"
 import { SlashCommandService } from "./SlashCommandService"
 import { SessionSyncService } from "./SessionSyncService"
-import { AutoModeService } from "./AutoModeService"
 import { VoiceInputService } from "./VoiceInputService"
 import {
   commandExists,
@@ -101,7 +100,6 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private providerManagementService: ProviderManagementService
   private slashCommands: SlashCommandService
   private sessionSync: SessionSyncService
-  private autoModeService!: AutoModeService
   private diffAcceptService!: DiffAcceptService
   private codeInsertionService!: CodeInsertionService
   /**
@@ -269,7 +267,6 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       postMessage: (msg) => this.postMessage(msg),
       getActiveSessionId: () => this.tabManager.getActiveTab()?.id,
     })
-    this.autoModeService = new AutoModeService({ context })
     this.sessionSync = new SessionSyncService({
       sessionStore: this.sessionStore,
       modelManager: this.modelManager,
@@ -349,9 +346,6 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       ensureLocalTab: (sId, name, model, mode) => this.ensureLocalTab(sId, name, model, mode),
       handleConnectProvider: () => this.handleConnectProvider(),
       openOpenCodeConfigOrSettings: () => this.openOpenCodeConfigOrSettings(),
-      hasAutoModeConfirmed: () => this.autoModeService.hasAutoModeConfirmed(),
-      setAutoModeConfirmed: (value) => this.autoModeService.setAutoModeConfirmed(value),
-      showAutoModeConfirmation: (sid) => this.autoModeService.showAutoModeConfirmation(sid),
       replayLiveStreamsToWebview: () => this.replayLiveStreamsToWebview(),
       exportChat: () => { void vscode.commands.executeCommand("opencode-harness.exportConversation") },
       exportChatJson: () => { void vscode.commands.executeCommand("opencode-harness.exportConversationJson") },

@@ -12,7 +12,6 @@ const eventRouterSource = readFileSync(resolve(__dirname, "WebviewEventRouter.ts
 const validatorSource = readFileSync(resolve(__dirname, "WebviewMessageValidator.ts"), "utf8")
 const backfillSource = readFileSync(resolve(__dirname, "BackfillService.ts"), "utf8")
 const modePolicySource = readFileSync(resolve(__dirname, "modePolicy.ts"), "utf8")
-const autoModeSource = readFileSync(resolve(__dirname, "AutoModeService.ts"), "utf8")
 const rateLimitMonitorSource = readFileSync(resolve(__dirname, "../monitor/RateLimitMonitor.ts"), "utf8")
 
 void describe("ChatProvider.ts", () => {
@@ -179,17 +178,15 @@ void describe("ChatProvider.ts", () => {
     assert.ok(source.includes('"Open Chat"'), "must have Open Chat button action")
   })
 
-  void it("auto_mode_shows_one_time_confirmation", () => {
-    assert.ok(source.includes("showAutoModeConfirmation") || autoModeSource.includes("showAutoModeConfirmation"), "must have showAutoModeConfirmation method")
-    assert.ok(source.includes("Auto mode will apply all changes without asking") || autoModeSource.includes("Auto mode will apply all changes without asking"), "must show auto mode warning")
-    assert.ok(source.includes('"auto"') || eventRouterSource.includes('"auto"'), "must handle auto mode")
-    assert.ok(source.includes("hasAutoModeConfirmed") || autoModeSource.includes("hasAutoModeConfirmed"), "must have hasAutoModeConfirmed check")
-  })
-
-  void it("auto_mode_confirmation_suppressible", () => {
-    assert.ok(source.includes("Don't show again") || autoModeSource.includes("Don't show again"), "must have Don't show again option")
-    assert.ok(source.includes("AUTO_MODE_CONFIRMED_KEY") || autoModeSource.includes("AUTO_MODE_CONFIRMED_KEY"), "must use globalState key for persistence")
-    assert.ok(source.includes("globalState.update") || autoModeSource.includes("globalState.update"), "must persist confirmation to globalState")
+  // Switching to Auto is treated as consent — the native warning modal was
+  // removed (it blocked the workbench on Linux and gated the switch). No
+  // confirmation prompt, no persisted "confirmed" flag, no AutoModeService.
+  void it("auto_mode_switches_without_confirmation", () => {
+    assert.ok(!source.includes("AutoModeService"), "AutoModeService must be removed")
+    assert.ok(!source.includes("hasAutoModeConfirmed"), "host must not gate auto mode behind a confirmation flag")
+    assert.ok(!source.includes("showAutoModeConfirmation"), "host must not show an auto-mode confirmation modal")
+    assert.ok(!eventRouterSource.includes("showAutoModeConfirmation"), "router must not call an auto-mode confirmation modal")
+    assert.ok(!eventRouterSource.includes("hasAutoModeConfirmed"), "router must not gate the change_mode handler on a confirmation flag")
   })
 
   void it("has session lifecycle methods", () => {
@@ -244,9 +241,8 @@ void describe("ChatProvider.ts", () => {
     assert.ok(source.includes("handleHelpCommand("), "must have handleHelpCommand")
   })
 
-  void it("has banner and auto-mode methods", () => {
+  void it("has banner methods", () => {
     assert.ok(source.includes("handleCompactBannerAction("), "must have handleCompactBannerAction")
-    assert.ok(source.includes("hasAutoModeConfirmed("), "must have hasAutoModeConfirmed")
   })
 
   void it("has custom prompt variable resolution", () => {
@@ -417,11 +413,15 @@ void it("change_mode passes msg.mode to tabManager.setMode and sessionStore.upda
   )
 })
 
-void it("change_mode triggers auto-mode confirmation when mode is auto", () => {
+void it("change_mode switches to auto without a confirmation gate", () => {
   const block = findChangeModeBlock(source.indexOf('["change_mode"') >= 0 ? source : eventRouterSource)
   assert.ok(
-    /mode\s*===\s*"auto"/.test(block) && block.includes("hasAutoModeConfirmed"),
-    "auto mode must reach the confirmation check (block.mode === 'auto' branch must be reachable)"
+    !block.includes("hasAutoModeConfirmed") && !block.includes("showAutoModeConfirmation"),
+    "switching to auto must not be gated behind a confirmation modal (consent model)"
+  )
+  assert.ok(
+    /tabManager\.setMode\(sessionId,\s*mode\)/.test(block),
+    "auto switch must still apply the mode via tabManager.setMode"
   )
 })
 
