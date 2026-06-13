@@ -1,10 +1,39 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-06-11
-**Version:** v0.3.34
+**Last Updated:** 2026-06-12
+**Version:** v0.3.36
 **Version:** v0.2.23 (+ Unreleased: opencode CLI auto-install, native local voice input, frontend overhaul, stream/dedicated-bar redesign)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
+
+## Unreleased Highlights (2026-06-12) — navigation, wayfinding & Escape safety
+
+Full audit + prioritized plan: `docs/specs/2026-06-12-navigation-audit-and-plan.md`. Architecture: `docs/adrs/ADR-015-navigation-escape-coordinator.md`.
+
+- **Escape never aborts a running task by accident.** A central Escape
+  coordinator (`escapeCoordinator.ts`) closes exactly the topmost open overlay
+  per press (capture-phase, event consumed) and stops the active stream *only*
+  when nothing is open. Replaces 12+ uncoordinated overlay handlers racing the
+  destructive host-level `escape → stop` keybinding (now removed;
+  `Ctrl+Shift+Escape` remains the always-on stop). Defers to combobox popups,
+  unmanaged `aria-modal` dialogs, and text fields. Removed the `F1` hijack
+  inside the chat view.
+- **"Jump to Running Session" (`opencode-harness.jumpToRunningTask`).** One
+  action to reach whatever the agent is doing: 0 running → pointer back to chat,
+  1 → jump, several → streaming-first Quick Pick. The connection status-bar item
+  shows `$(sync~spin) OpenCode: N running` while any tab streams and clicking it
+  jumps there.
+- **`OpenCode: View Sessions` is a real switcher again.** Picking a session now
+  reveals the chat view and opens it as a tab (was a `setActive` + toast dead
+  end). Items gain active/streaming codicons, streaming-first + MRU ordering,
+  message count and relative recency. `openStoredSession` (argument-only) hidden
+  from the palette.
+- **Focus restoration (WCAG 2.4.3).** Keyboard-shortcuts modal now traps Tab and
+  returns focus to its invoker; subagent detail Back/Close return focus to the
+  originating card.
+- **Tests.** `escapeCoordinator.test.ts` (14), `sessionQuickPick.test.ts` (10),
+  `keyboardShortcutsModal.dom.test.ts` (4), status-bar tooltip + integration
+  command coverage — RED→GREEN committed in sequence.
 
 ## Unreleased Highlights (2026-06-11) — slash/methodology/skills hardening
 
