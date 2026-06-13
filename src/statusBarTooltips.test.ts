@@ -26,6 +26,14 @@ void describe("STATUS_BAR_TOOLTIPS", () => {
     assert.match(result, /output channel/i)
   })
 
+  void it("connection.running counts sessions and explains the click action", () => {
+    const one = STATUS_BAR_TOOLTIPS.connection.running(1)
+    assert.match(one, /1 session is running/i)
+    assert.match(one, /click/i)
+    const many = STATUS_BAR_TOOLTIPS.connection.running(3)
+    assert.match(many, /3 sessions are running/i)
+  })
+
   void it("methodology.idle tells the user what to click", () => {
     const result = STATUS_BAR_TOOLTIPS.methodology.idle
     assert.match(result, /click to configure/i)

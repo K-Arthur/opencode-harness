@@ -32,7 +32,7 @@ void describe("formatRelativeTime", () => {
   void it("renders days under a week, dates beyond", () => {
     assert.equal(formatRelativeTime(NOW - 2 * 86_400_000, NOW), "2d ago")
     const old = formatRelativeTime(NOW - 30 * 86_400_000, NOW)
-    assert.notMatch(old, /ago/)
+    assert.doesNotMatch(old, /ago/)
     assert.ok(old.length > 0)
   })
 })

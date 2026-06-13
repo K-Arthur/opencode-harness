@@ -48,6 +48,7 @@ import {
   registerStopCommand,
   registerSlashCommandShortcuts,
   registerGenerateAgentsMdCommand,
+  registerJumpToRunningTaskCommand,
 } from "./commands"
 import { MethodologyOrchestrator, OutcomeTracker } from "./methodology"
 import { setMethodologyOrchestrator, setMethodologyStatusUpdater, type MethodologyStatusInfo } from "./methodology/registry"
@@ -209,6 +210,7 @@ export async function activate(context: vscode.ExtensionContext) {
     registerCoreCommands(context, sessionStore, sessionManager, modelManager, rateLimitMonitor, checkpointManager, cliDiagnostics, themeManager, terminalBridge, chatProviderInstance)
     registerChatProvider(context, chatProviderInstance)
     registerUriHandler(context, chatProviderInstance)
+    wireRunningIndicator(context, connectionStatus, chatProviderInstance, sessionManager)
 
     const agentGaze = new AgentGazeService(sessionManager)
     context.subscriptions.push(agentGaze)
@@ -367,6 +369,43 @@ function initConnectionStatusBar(
   return connectionStatus
 }
 
+/**
+ * Surface "what is running" on the connection status bar item: while any tab
+ * streams, the item shows a spinner + count and clicking it jumps to the
+ * running session (Quick Pick when several). When streaming stops, the item
+ * reverts to the plain connection state. The connection-event subscription in
+ * initConnectionStatusBar keeps owning connect/disconnect/error transitions.
+ */
+function wireRunningIndicator(
+  context: vscode.ExtensionContext,
+  connectionStatus: vscode.StatusBarItem,
+  chatProvider: ChatProvider,
+  sessionManager: SessionManager
+): void {
+  let wasRunning = false
+  const update = () => {
+    const count = chatProvider.getStreamingSessionIds().length
+    if (count > 0) {
+      wasRunning = true
+      connectionStatus.text = `$(sync~spin) OpenCode: ${count} running`
+      connectionStatus.tooltip = STATUS_BAR_TOOLTIPS.connection.running(count)
+      connectionStatus.command = "opencode-harness.jumpToRunningTask"
+      return
+    }
+    if (!wasRunning) return
+    wasRunning = false
+    if (sessionManager.isRunning) {
+      connectionStatus.text = "$(check-all) OpenCode: Connected"
+      connectionStatus.tooltip = STATUS_BAR_TOOLTIPS.connection.connected(sessionManager.currentPort)
+    } else {
+      connectionStatus.text = "$(circle-slash) OpenCode: Not connected"
+      connectionStatus.tooltip = STATUS_BAR_TOOLTIPS.connection.disconnected
+    }
+    connectionStatus.command = "opencode-harness.openChat"
+  }
+  context.subscriptions.push(chatProvider.onStreamingStateChanged(() => update()))
+}
+
 function registerInlineProviders(context: vscode.ExtensionContext, chatProvider: ChatProvider): void {
   const inlineProvider = new InlineActionProvider()
   const completionProvider = new InlineCompletionProvider()
@@ -469,7 +508,14 @@ function registerCoreCommands(
   registerSelectModelCommand(context, modelManager, sessionManager, sessionStore)
   registerSetContextWindowOverrideCommand(context)
   registerCheckCliCommand(context, sessionManager, cliDiagnostics)
-  registerListSessionsCommand(context, sessionStore)
+  registerListSessionsCommand(context, sessionStore, {
+    openSessionInWebview: (sessionId) => chatProvider.openSessionInWebview(sessionId),
+    getStreamingSessionIds: () => chatProvider.getStreamingSessionIds(),
+  })
+  registerJumpToRunningTaskCommand(context, sessionStore, {
+    getStreamingSessionIds: () => chatProvider.getStreamingSessionIds(),
+    openSessionInWebview: (sessionId) => chatProvider.openSessionInWebview(sessionId),
+  })
   registerDeleteSessionCommand(context, sessionStore)
   registerRenameSessionCommand(context, sessionStore)
   registerClearTestSessionsCommand(context, sessionStore, sessionManager)

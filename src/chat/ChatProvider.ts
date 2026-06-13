@@ -773,6 +773,19 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     }
   }
 
+  /** Session ids of tabs that are currently streaming (navigation/status). */
+  getStreamingSessionIds(): string[] {
+    return this.tabManager
+      .getAllTabs()
+      .filter((tab) => tab.isStreaming)
+      .map((tab) => tab.id)
+  }
+
+  /** Fires whenever a tab starts or stops streaming. */
+  get onStreamingStateChanged(): vscode.Event<{ tabId: string; isStreaming: boolean }> {
+    return this.tabManager.onStreamingStateChanged
+  }
+
   openSettings(): void {
     if (this._view) {
       vscode.commands.executeCommand("workbench.action.openSettings", "opencode")
