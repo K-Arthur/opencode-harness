@@ -1,7 +1,14 @@
 # Status.md
 
-## Last Updated: 2026-06-11
-## Project State: two-session lag root-caused and fixed — persistence churn + virtual-list lifecycle
+## Last Updated: 2026-06-13
+## Project State: streaming-completion + switch-marker UX fixes and modal-focus a11y (TDD)
+
+### Recent Fix (2026-06-13): Streaming remnant, switch-marker UX, and modal focus a11y
+- **Streaming never recognised as complete (empty bubble + stuck "live" dot).** A stream restart for a new message id (agent/model switch mid-turn) finalized the prior bubble's tool calls but never removed the orphaned empty assistant placeholder — leaving an empty bubble whose pulsing `.message.assistant.streaming` dot never cleared. `handleStreamStart` now removes an empty prior placeholder (array + DOM), or re-renders a non-empty prior as finalized so the dot stops. New exported `isEmptyStreamingMessage()`. (`src/chat/webview/streamHandlers.ts`)
+- **Agent/Model "switched" cards were verbose and mis-placed.** (1) The normalizer stores the FULL event type (`session.next.agent.switched`) but renderers compared the bare form, so the heavy activity-card path ran instead of the compact pill — fixed with a shared `isSwitchEventType()`. (2) `session.next.*` switches arrive at turn-end and were appended at the transcript bottom; new `switchInsertIndex()`/`decideSwitchPlacement()` place them before the trailing assistant generation (×N coalescing preserved) on both host and webview. (`src/session/activityCoalesce.ts`, `SessionStore.ts`, `src/chat/webview/switchEvent.ts`, `renderer.ts`, `messageRenderer.ts`, `main.ts`)
+- **Modal focus management (WCAG 2.4.3 / 2.1.2).** New `mountModalFocus()` (capture invoker → focus in → trap Tab → restore on release) wired into Model Manager (was leaking Tab behind the dialog, no restore) and Tool Permissions (never moved focus into the dialog). (`src/chat/webview/focus-trap.ts`, `model-manager.ts`, `permissionConfig.ts`)
+- **Icon collision + welcome a11y.** Input-bar "Edit tab instructions" no longer shares the header "More options" cog (distinct notes icon); the welcome "Shortcuts" button is no longer a focusable control inside an `aria-hidden` container (WCAG 4.1.2). (`src/chat/webview/index.html`)
+- **Tests:** +25 (each fix RED-first where applicable): focus-trap `mountModalFocus` ×9, restart remnant ×3, `isSwitchEventType` ×4, `switchInsertIndex`/`decideSwitchPlacement` ×9. Full unit suite + message-contract + roundtrip green; typecheck clean.
 
 ### Recent Fix (2026-06-11): Two-session lag — persistence amplification + virtual-list lifecycle (5 root causes, TDD)
 - **Symptom:** UI lag with only two open sessions; slow session switching. The streaming/render pipeline (2026-06-02 audit) was healthy — the cost was in persistence and the virtual-list lifecycle. Full record: `docs/performance-audit.md` §"2026-06-11".
