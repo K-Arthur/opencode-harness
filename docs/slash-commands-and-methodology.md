@@ -77,6 +77,14 @@ search) and the webview share it without duplication. Descriptions are kept
 to substring matching on purpose: a 2-char query is a subsequence of almost
 any sentence, which would flood the palette.
 
+The inline `/` dropdown also shows a per-command **origin badge**
+(`Built-in` / `Server` / `MCP` / `Skill` / `Custom`, with a per-source icon)
+so you can tell command sources apart without opening the palette
+(`MentionItem.badge`, derived in `updateServerCommands`). It caps at
+`MAX_COMMAND_RESULTS` (50) fuzzy-ranked rows and appends a non-interactive
+`.dropdown-more` "+N more" hint — kept off `.dropdown-item` so keyboard
+navigation never lands on it.
+
 ## Methodology guidance
 
 When `opencode.methodology.enabled` is on (default), each outgoing prompt is
