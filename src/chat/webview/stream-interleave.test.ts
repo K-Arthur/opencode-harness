@@ -94,10 +94,18 @@ describe("streaming text-tool interleave", () => {
     )
   })
 
-  it("finalize skips when no buffer content", () => {
+  it("finalize demotes an empty block (no render, no lingering cursor) instead of leaving it streaming", () => {
+    // Short-circuits without rendering markdown / writing block text when there
+    // is no accumulated content...
     assert.ok(
-      handlersSource.includes("if (!state.currentBlockEl || !state.currentBlockBuffer.trim()) return"),
-      "finalize must bail early when no content accumulated"
+      handlersSource.includes("if (!state.currentBlockBuffer.trim() || !displayText.trim()) {"),
+      "finalize must short-circuit when no content accumulated"
+    )
+    // ...but it must demote the empty streaming element so its blinking caret
+    // does not survive the end of the turn.
+    assert.ok(
+      handlersSource.includes("demoteStreamingText(state.currentBlockEl)"),
+      "an empty block must be demoted (cursor removed), not left as live streaming-text"
     )
   })
 })
