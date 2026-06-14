@@ -757,29 +757,7 @@ export class StreamCoordinator {
       const cliSessionId = await this.sessionManager.ensureSession(tab.cliSessionId, localTitle || undefined)
       this.tabManager.setCliSessionId(tabId, cliSessionId)
       this.sessionStore.updateCliSessionId(tabId, cliSessionId)
-      // H2a: When this is a question-answer continuation (toolCallId present),
-      // reuse the existing activeMessageId so the resumed assistant text renders
-      // in the same bubble that already contains the question block. Otherwise
-      // the old bubble is orphaned — it never receives its stream_end.
-      const isQuestionContinuation = !!callbacks.toolCallId
-      const streamMessageId = isQuestionContinuation
-        ? this.ensureStreamMessageId(tabId, cliSessionId)
-        : this.createStreamMessageId(tabId, cliSessionId)
-      this.activeMessageIds.set(tabId, streamMessageId)
-      const activeRun = this.activeRuns.get(tabId)
-      if (activeRun) {
-        activeRun.cliSessionId = cliSessionId
-        activeRun.assistantMessageId = streamMessageId
-        activeRun.mode = tab.mode
-        activeRun.model = tab.model
-      }
-      const initialActivity = this.activityTracker.startRun({
-        tabId,
-        cliSessionId,
-        messageId: streamMessageId,
-        model: tab.model,
-      })
-      this.postRunActivitySnapshot(tabId, initialActivity, callbacks)
+      const streamMessageId = this.resolveStreamMessageAndStartActivity(tabId, tab, cliSessionId, callbacks)
 
       const eventStreamReady = await this.sessionManager.waitForEventStreamReady(5_000)
       if (!eventStreamReady) {
@@ -1013,6 +991,38 @@ export class StreamCoordinator {
       activeRunForMode.mode = tab.mode
     }
     return { modelRef, agent }
+  }
+
+  private resolveStreamMessageAndStartActivity(
+    tabId: string,
+    tab: TabState,
+    cliSessionId: string,
+    callbacks: StreamCallbacks,
+  ): string {
+    // H2a: When this is a question-answer continuation (toolCallId present),
+    // reuse the existing activeMessageId so the resumed assistant text renders
+    // in the same bubble that already contains the question block. Otherwise
+    // the old bubble is orphaned — it never receives its stream_end.
+    const isQuestionContinuation = !!callbacks.toolCallId
+    const streamMessageId = isQuestionContinuation
+      ? this.ensureStreamMessageId(tabId, cliSessionId)
+      : this.createStreamMessageId(tabId, cliSessionId)
+    this.activeMessageIds.set(tabId, streamMessageId)
+    const activeRun = this.activeRuns.get(tabId)
+    if (activeRun) {
+      activeRun.cliSessionId = cliSessionId
+      activeRun.assistantMessageId = streamMessageId
+      activeRun.mode = tab.mode
+      activeRun.model = tab.model
+    }
+    const initialActivity = this.activityTracker.startRun({
+      tabId,
+      cliSessionId,
+      messageId: streamMessageId,
+      model: tab.model,
+    })
+    this.postRunActivitySnapshot(tabId, initialActivity, callbacks)
+    return streamMessageId
   }
 
   private initializeRunMetadata(
