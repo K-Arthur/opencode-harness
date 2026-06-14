@@ -1,13 +1,20 @@
 /**
- * Playwright E2E tests for the model question block feature.
+ * Playwright E2E tests for the model question bar feature.
  *
  * Covers the full lifecycle:
- *   1. Static render from init_state (post-stream re-render path)
+ *   1. Bar renders from init_state (replay / backfill path)
  *   2. Live streaming render via stream_tool_start (mid-stream path)
  *   3. User interaction: option click, free-text submit, Ctrl+Enter
  *   4. Edge cases: empty submit, double-submit, XSS, options-only, free-text-only
  *   5. Accessibility: aria-label, maxlength
  *   6. Message contract: correct messageId, toolCallId, sessionId, source
+ *
+ * NOTE: As of Sprint 0 the question block is no longer rendered inline in
+ * the transcript. The interactive surface lives in the question bar
+ * (`#question-bar`), and the transcript gets a non-interactive pointer
+ * card. Selectors have been updated to match the bar's class names
+ * (`.question-bar`, `.question-bar-item`, `.question-bar-option`,
+ * `.question-bar-freetext`, `#question-bar-submit`).
  */
 import { test, expect } from "@playwright/test"
 import {
@@ -38,7 +45,7 @@ function initState(sessionOverrides: Record<string, unknown> = {}) {
   }
 }
 
-test.describe("Model Question Block — Static Render", () => {
+test.describe("Model Question Bar — Static Render (init_state)", () => {
   test.beforeEach(async ({ page }) => {
     await installVsCodeApi(page)
   })
@@ -64,14 +71,16 @@ test.describe("Model Question Block — Static Render", () => {
         sessionId: "sess-A",
       }],
     }))
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(500)
 
-    const block = page.locator(".question-block").first()
-    await expect(block).toBeVisible()
-    await expect(block).toContainText("Which database driver?")
-    await expect(block.locator(".question-option")).toHaveCount(3)
-    await expect(block.locator(".question-freetext")).toBeVisible()
-    await expect(block.locator(".question-submit")).toBeVisible()
+    // The bar must become visible and the question's options + freetext rendered.
+    const bar = page.locator("#question-bar")
+    await expect(bar).toBeVisible()
+    const item = bar.locator(".question-bar-item").first()
+    await expect(item).toContainText("Which database driver?")
+    await expect(bar.locator(".question-bar-option")).toHaveCount(3)
+    await expect(bar.locator(".question-bar-freetext")).toBeVisible()
+    await expect(page.locator("#question-bar-submit")).toBeVisible()
 
     expectNoBrowserErrors(captured)
   })
@@ -97,17 +106,20 @@ test.describe("Model Question Block — Static Render", () => {
         sessionId: "sess-A",
       }],
     }))
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(500)
 
-    await page.locator(".question-option").filter({ hasText: "B" }).click()
+    await page.locator(".question-bar-option").filter({ hasText: "B" }).click()
 
     const sent = await postedMessages(page)
     const answer = sent.find((m) => m.type === "question_answer")
     expect(answer).toBeTruthy()
-    expect(answer!.value).toBe("B")
+    expect(answer!.value).toBe("Pick one: B")
     expect(answer!.source).toBe("option")
     expect(answer!.sessionId).toBe("sess-A")
     expect(answer!.toolCallId).toBe("tool-q-2")
+    // B-edge-1: structuredAnswers carries one inner-array per group with
+    // the selected labels — the v2 reply API requires this shape.
+    expect(answer!.structuredAnswers).toEqual([["B"]])
 
     expectNoBrowserErrors(captured)
   })
@@ -132,17 +144,19 @@ test.describe("Model Question Block — Static Render", () => {
         sessionId: "sess-A",
       }],
     }))
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(500)
 
-    const ta = page.locator(".question-freetext").first()
+    const ta = page.locator(".question-bar-freetext").first()
     await ta.fill("Vercel + Neon Postgres")
-    await page.locator(".question-submit").first().click()
+    await page.locator("#question-bar-submit").first().click()
 
     const sent = await postedMessages(page)
     const answer = sent.find((m) => m.type === "question_answer")
     expect(answer).toBeTruthy()
     expect(answer!.value).toBe("Vercel + Neon Postgres")
     expect(answer!.source).toBe("freetext")
+    // freetext alone → structuredAnswers is one inner-array of the free text
+    expect(answer!.structuredAnswers).toEqual([["Vercel + Neon Postgres"]])
   })
 
   test("Ctrl+Enter in textarea submits free-text", async ({ page }) => {
@@ -165,9 +179,9 @@ test.describe("Model Question Block — Static Render", () => {
         sessionId: "sess-A",
       }],
     }))
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(500)
 
-    const ta = page.locator(".question-freetext").first()
+    const ta = page.locator(".question-bar-freetext").first()
     await ta.fill("Ctrl+Enter response")
     await ta.press("Control+Enter")
 
@@ -179,7 +193,7 @@ test.describe("Model Question Block — Static Render", () => {
   })
 })
 
-test.describe("Model Question Block — Edge Cases", () => {
+test.describe("Model Question Bar — Edge Cases", () => {
   test.beforeEach(async ({ page }) => {
     await installVsCodeApi(page)
   })
@@ -204,9 +218,9 @@ test.describe("Model Question Block — Edge Cases", () => {
         sessionId: "sess-A",
       }],
     }))
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(500)
 
-    const opt = page.locator(".question-option").first()
+    const opt = page.locator(".question-bar-option").first()
     await opt.click()
     await opt.dispatchEvent("click")
 
@@ -214,8 +228,9 @@ test.describe("Model Question Block — Edge Cases", () => {
     const answers = sent.filter((m) => m.type === "question_answer")
     expect(answers.length).toBe(1)
 
-    const block = page.locator(".question-block").first()
-    await expect(block).toHaveClass(/question-block--answered/)
+    // After answering, the bar item shows the answered state.
+    const item = page.locator("#question-bar .question-bar-item").first()
+    await expect(item).toHaveClass(/question-bar-item--answered/)
   })
 
   test("empty free-text submit is a no-op", async ({ page }) => {
@@ -238,16 +253,16 @@ test.describe("Model Question Block — Edge Cases", () => {
         sessionId: "sess-A",
       }],
     }))
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(500)
 
-    await page.locator(".question-submit").first().click()
+    await page.locator("#question-bar-submit").first().click()
 
     const sent = await postedMessages(page)
     const answer = sent.find((m) => m.type === "question_answer")
     expect(answer).toBeUndefined()
 
-    const block = page.locator(".question-block").first()
-    await expect(block).not.toHaveClass(/question-block--answered/)
+    const item = page.locator("#question-bar .question-bar-item").first()
+    await expect(item).not.toHaveClass(/question-bar-item--answered/)
   })
 
   test("options-only mode (allowFreeText=false) hides textarea", async ({ page }) => {
@@ -270,13 +285,12 @@ test.describe("Model Question Block — Edge Cases", () => {
         sessionId: "sess-A",
       }],
     }))
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(500)
 
-    const block = page.locator(".question-block").first()
-    await expect(block).toBeVisible()
-    await expect(block.locator(".question-option")).toHaveCount(2)
-    await expect(block.locator(".question-freetext")).toHaveCount(0)
-    await expect(block.locator(".question-submit")).toHaveCount(0)
+    const item = page.locator("#question-bar .question-bar-item").first()
+    await expect(item).toBeVisible()
+    await expect(page.locator(".question-bar-option")).toHaveCount(2)
+    await expect(page.locator(".question-bar-freetext")).toHaveCount(0)
   })
 
   test("free-text-only mode (no options) renders just textarea", async ({ page }) => {
@@ -299,13 +313,12 @@ test.describe("Model Question Block — Edge Cases", () => {
         sessionId: "sess-A",
       }],
     }))
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(500)
 
-    const block = page.locator(".question-block").first()
-    await expect(block).toBeVisible()
-    await expect(block.locator(".question-option")).toHaveCount(0)
-    await expect(block.locator(".question-freetext")).toBeVisible()
-    await expect(block.locator(".question-submit")).toBeVisible()
+    const item = page.locator("#question-bar .question-bar-item").first()
+    await expect(item).toBeVisible()
+    await expect(page.locator(".question-bar-option")).toHaveCount(0)
+    await expect(page.locator(".question-bar-freetext")).toBeVisible()
   })
 
   test("HTML in question text and options is escaped (no injection)", async ({ page }) => {
@@ -329,18 +342,18 @@ test.describe("Model Question Block — Edge Cases", () => {
         sessionId: "sess-A",
       }],
     }))
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(500)
 
-    const block = page.locator(".question-block").first()
-    await expect(block).toBeVisible()
-    await expect(block.locator("img")).toHaveCount(0)
-    await expect(block.locator("script")).toHaveCount(0)
-    await expect(block).toContainText("<img")
+    const item = page.locator("#question-bar .question-bar-item").first()
+    await expect(item).toBeVisible()
+    await expect(item.locator("img")).toHaveCount(0)
+    await expect(item.locator("script")).toHaveCount(0)
+    await expect(item).toContainText("<img")
 
     expectNoBrowserErrors(captured)
   })
 
-  test("after answering, all inputs are disabled", async ({ page }) => {
+  test("after answering, options are no longer interactive (answered state)", async ({ page }) => {
     await page.goto("/")
 
     await dispatchHostMessage(page, initState({
@@ -360,27 +373,21 @@ test.describe("Model Question Block — Edge Cases", () => {
         sessionId: "sess-A",
       }],
     }))
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(500)
 
-    await page.locator(".question-option").first().click()
-
-    const block = page.locator(".question-block").first()
-    await expect(block).toHaveClass(/question-block--answered/)
-    await expect(block.locator(".question-option").first()).toBeDisabled()
-    await expect(block.locator(".question-freetext")).toBeDisabled()
-    await expect(block.locator(".question-submit")).toBeDisabled()
-
-    const echo = block.locator(".question-answer")
-    await expect(echo).toContainText("Answered:")
+    await page.locator(".question-bar-option").first().click()
+    // After answering, the bar item switches to the answered variant.
+    const item = page.locator("#question-bar .question-bar-item").first()
+    await expect(item).toHaveClass(/question-bar-item--answered/)
   })
 })
 
-test.describe("Model Question Block — Accessibility & Attributes", () => {
+test.describe("Model Question Bar — Accessibility & Attributes", () => {
   test.beforeEach(async ({ page }) => {
     await installVsCodeApi(page)
   })
 
-  test("question block has role=form and aria-label", async ({ page }) => {
+  test("question bar has role=region and aria-label", async ({ page }) => {
     await page.goto("/")
 
     await dispatchHostMessage(page, initState({
@@ -400,11 +407,11 @@ test.describe("Model Question Block — Accessibility & Attributes", () => {
         sessionId: "sess-A",
       }],
     }))
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(500)
 
-    const block = page.locator(".question-block").first()
-    await expect(block).toHaveAttribute("role", "form")
-    await expect(block).toHaveAttribute("aria-label", "Question from model")
+    const bar = page.locator("#question-bar")
+    await expect(bar).toHaveAttribute("role", "region")
+    await expect(bar).toHaveAttribute("aria-label", "Question from model")
   })
 
   test("options container has role=group and aria-label", async ({ page }) => {
@@ -427,9 +434,9 @@ test.describe("Model Question Block — Accessibility & Attributes", () => {
         sessionId: "sess-A",
       }],
     }))
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(500)
 
-    const optionsList = page.locator(".question-options").first()
+    const optionsList = page.locator(".question-bar-options").first()
     await expect(optionsList).toHaveAttribute("role", "group")
     await expect(optionsList).toHaveAttribute("aria-label", "Answer options")
   })
@@ -454,20 +461,20 @@ test.describe("Model Question Block — Accessibility & Attributes", () => {
         sessionId: "sess-A",
       }],
     }))
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(500)
 
-    const ta = page.locator(".question-freetext").first()
+    const ta = page.locator(".question-bar-freetext").first()
     await expect(ta).toHaveAttribute("aria-label", "Type a custom answer")
     await expect(ta).toHaveAttribute("maxlength", "10000")
   })
 })
 
-test.describe("Model Question Block — Streaming Phase", () => {
+test.describe("Model Question Bar — Streaming Phase", () => {
   test.beforeEach(async ({ page }) => {
     await installVsCodeApi(page)
   })
 
-  test("question tool renders during streaming via stream_tool_start", async ({ page }) => {
+  test("question tool renders during streaming via stream_tool_start (B1)", async ({ page }) => {
     const captured = captureErrors(page)
     await page.goto("/")
 
@@ -504,17 +511,23 @@ test.describe("Model Question Block — Streaming Phase", () => {
         },
       },
     })
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(500)
 
-    const block = page.locator(".question-block").first()
-    await expect(block).toBeVisible({ timeout: 5000 })
-    await expect(block).toContainText("Which framework?")
-    await expect(block.locator(".question-option")).toHaveCount(3)
+    // The bar must become visible with the question, even though no
+    // question_asked host message ever fired (B1 regression guard: the
+    // path-2 stream_tool_start handler also wires the bar).
+    const bar = page.locator("#question-bar")
+    await expect(bar).toBeVisible({ timeout: 5000 })
+    await expect(bar.locator(".question-bar-option")).toHaveCount(3)
+    await expect(bar.locator(".question-bar-item").first()).toContainText("Which framework")
 
     expectNoBrowserErrors(captured)
   })
 
-  test("question block becomes interactive after stream_end re-render", async ({ page }) => {
+  test("question tool renders via question_asked (B1 path-1, non-tool context)", async ({ page }) => {
+    // The opencode server can emit a question WITHOUT a matching tool part
+    // (e.g. question.v2.asked with tool: undefined). The host posts
+    // question_asked so the bar's addQuestion fires.
     const captured = captureErrors(page)
     await page.goto("/")
 
@@ -524,146 +537,132 @@ test.describe("Model Question Block — Streaming Phase", () => {
     await dispatchHostMessage(page, {
       type: "stream_start",
       sessionId: "sess-A",
-      messageId: "msg-stream-rerender",
-    })
-
-    await dispatchHostMessage(page, {
-      type: "stream_chunk",
-      sessionId: "sess-A",
-      messageId: "msg-stream-rerender",
-      text: "Before question. ",
-    })
-
-    await dispatchHostMessage(page, {
-      type: "stream_tool_start",
-      sessionId: "sess-A",
-      toolCall: {
-        id: "tool-q-rerender",
-        name: "question",
-        class: "meta",
-        state: "running",
-        args: {
-          question: "Pick a runtime",
-          options: ["Node.js", "Bun", "Deno"],
-          allowFreeText: true,
-        },
-      },
+      messageId: "msg-q-1",
     })
     await page.waitForTimeout(200)
 
     await dispatchHostMessage(page, {
-      type: "stream_tool_end",
+      type: "question_asked",
       sessionId: "sess-A",
-      result: { id: "tool-q-rerender", ok: true, result: "pending" },
-    })
-
-    await dispatchHostMessage(page, {
-      type: "stream_chunk",
-      sessionId: "sess-A",
-      messageId: "msg-stream-rerender",
-      text: "Waiting for your answer. ",
-    })
-
-    await dispatchHostMessage(page, {
-      type: "stream_end",
-      sessionId: "sess-A",
-      messageId: "msg-stream-rerender",
-      blocks: [{
+      block: {
         type: "question",
-        id: "tool-q-rerender",
-        toolCallId: "tool-q-rerender",
+        id: "tool-q-ask",
+        toolCallId: "tool-q-ask",
         sessionId: "sess-A",
         text: "Pick a runtime",
         options: ["Node.js", "Bun", "Deno"],
         allowFreeText: true,
-      }],
+        groups: [{ question: "Pick a runtime", options: ["Node.js", "Bun", "Deno"], multiSelect: false }],
+      },
+      messageId: "msg-q-1",
     })
     await page.waitForTimeout(500)
 
-    const block = page.locator(".question-block").first()
-    await expect(block).toBeVisible({ timeout: 5000 })
-    await expect(block).toContainText("Pick a runtime")
+    const bar = page.locator("#question-bar")
+    await expect(bar).toBeVisible({ timeout: 5000 })
+    await expect(bar.locator(".question-bar-option")).toHaveCount(3)
+    await expect(bar.locator(".question-bar-item").first()).toContainText("Pick a runtime")
 
-    await block.locator(".question-option").filter({ hasText: "Bun" }).click()
-
+    // And clicking an option must still post question_answer.
+    await bar.locator(".question-bar-option").filter({ hasText: "Bun" }).click()
     const sent = await postedMessages(page)
     const answer = sent.find((m) => m.type === "question_answer")
     expect(answer).toBeTruthy()
-    expect(answer!.value).toBe("Bun")
-    expect(answer!.source).toBe("option")
-    expect(answer!.toolCallId).toBe("tool-q-rerender")
+    expect(answer!.toolCallId).toBe("tool-q-ask")
+    expect(answer!.value).toBe("Pick a runtime: Bun")
 
     expectNoBrowserErrors(captured)
   })
 
-  test("streaming question followed by stream_end with textarea submit", async ({ page }) => {
-    const captured = captureErrors(page)
+  test("question_unacknowledged (B9) reverts the bar to interactive after a failed submit", async ({ page }) => {
+    // The webview optimistically shows the answered state when the user
+    // clicks submit. If the host's SDK reply throws, it posts
+    // question_unacknowledged so the webview unmarks the answer and the
+    // user can retry.
     await page.goto("/")
 
-    await dispatchHostMessage(page, initState())
-    await page.waitForTimeout(500)
-
-    await dispatchHostMessage(page, {
-      type: "stream_start",
-      sessionId: "sess-A",
-      messageId: "msg-stream-ta",
-    })
-
-    await dispatchHostMessage(page, {
-      type: "stream_tool_start",
-      sessionId: "sess-A",
-      toolCall: {
-        id: "tool-q-ta",
-        name: "question",
-        class: "meta",
-        state: "running",
-        args: {
-          question: "Custom deploy target?",
-          options: [],
+    await dispatchHostMessage(page, initState({
+      messages: [{
+        role: "assistant",
+        id: "msg-b9",
+        blocks: [{
+          type: "question",
+          id: "tool-q-b9",
+          toolCallId: "tool-q-b9",
+          sessionId: "sess-A",
+          text: "Pick",
+          options: ["A", "B"],
           allowFreeText: true,
-        },
-      },
-    })
-    await page.waitForTimeout(200)
-
-    await dispatchHostMessage(page, {
-      type: "stream_end",
-      sessionId: "sess-A",
-      messageId: "msg-stream-ta",
-      blocks: [{
-        type: "question",
-        id: "tool-q-ta",
-        toolCallId: "tool-q-ta",
+        }],
+        timestamp: Date.now(),
         sessionId: "sess-A",
-        text: "Custom deploy target?",
-        options: [],
-        allowFreeText: true,
       }],
-    })
+    }))
     await page.waitForTimeout(500)
 
-    const ta = page.locator(".question-freetext").first()
-    await expect(ta).toBeVisible({ timeout: 5000 })
-    await ta.fill("AWS Lambda")
-    await page.locator(".question-submit").first().click()
+    await page.locator(".question-bar-option").filter({ hasText: "A" }).click()
+    let item = page.locator("#question-bar .question-bar-item").first()
+    await expect(item).toHaveClass(/question-bar-item--answered/)
 
-    const sent = await postedMessages(page)
-    const answer = sent.find((m) => m.type === "question_answer")
-    expect(answer).toBeTruthy()
-    expect(answer!.value).toBe("AWS Lambda")
-    expect(answer!.source).toBe("freetext")
-    expect(answer!.toolCallId).toBe("tool-q-ta")
+    // Host reports the SDK reply failed.
+    await dispatchHostMessage(page, {
+      type: "question_unacknowledged",
+      sessionId: "sess-A",
+      toolCallId: "tool-q-b9",
+      requestID: "req-b9",
+      error: "Network blip",
+    })
+    await page.waitForTimeout(300)
 
-    expectNoBrowserErrors(captured)
+    // The bar must revert to the interactive variant so the user can retry.
+    item = page.locator("#question-bar .question-bar-item").first()
+    await expect(item).not.toHaveClass(/question-bar-item--answered/)
+    await expect(page.locator(".question-bar-option")).toHaveCount(2)
+  })
+
+  test("question_acknowledged removes the bar item (happy path)", async ({ page }) => {
+    await page.goto("/")
+
+    await dispatchHostMessage(page, initState({
+      messages: [{
+        role: "assistant",
+        id: "msg-ack",
+        blocks: [{
+          type: "question",
+          id: "tool-q-ack",
+          toolCallId: "tool-q-ack",
+          sessionId: "sess-A",
+          text: "Pick",
+          options: ["A", "B"],
+          allowFreeText: true,
+        }],
+        timestamp: Date.now(),
+        sessionId: "sess-A",
+      }],
+    }))
+    await page.waitForTimeout(500)
+
+    await page.locator(".question-bar-option").filter({ hasText: "B" }).click()
+    // Host confirms the answer was received.
+    await dispatchHostMessage(page, {
+      type: "question_acknowledged",
+      sessionId: "sess-A",
+      toolCallId: "tool-q-ack",
+      requestID: "req-ack",
+    })
+    await page.waitForTimeout(800) // past the 600ms auto-dismiss
+
+    const bar = page.locator("#question-bar")
+    await expect(bar.locator(".question-bar-item")).toHaveCount(0, "bar item removed after host ack")
   })
 })
 
-test.describe("Model Question Block — Message Contract", () => {
+test.describe("Model Question Bar — Message Contract", () => {
   test.beforeEach(async ({ page }) => {
     await installVsCodeApi(page)
   })
 
-  test("question_answer carries correct sessionId, toolCallId, and source", async ({ page }) => {
+  test("question_answer carries correct sessionId, toolCallId, source, and structuredAnswers", async ({ page }) => {
     await page.goto("/")
 
     await dispatchHostMessage(page, initState({
@@ -683,17 +682,18 @@ test.describe("Model Question Block — Message Contract", () => {
         sessionId: "sess-A",
       }],
     }))
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(500)
 
-    await page.locator(".question-option").filter({ hasText: "Rust" }).click()
+    await page.locator(".question-bar-option").filter({ hasText: "Rust" }).click()
 
     const sent = await postedMessages(page)
     const answer = sent.find((m) => m.type === "question_answer") as Record<string, unknown> | undefined
     expect(answer).toBeTruthy()
     expect(answer!.sessionId).toBe("sess-A")
     expect(answer!.toolCallId).toBe("tool-q-contract")
-    expect(answer!.value).toBe("Rust")
+    expect(answer!.value).toBe("Pick one: Rust")
     expect(answer!.source).toBe("option")
+    expect(answer!.structuredAnswers).toEqual([["Rust"]])
     expect(typeof answer!.messageId).toBe("string")
   })
 })
