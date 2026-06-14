@@ -340,22 +340,25 @@ export class WebviewEventRouter {
       log.info(`question_answer: sessionId=${sessionId}, toolCallId=${toolCallId ?? "N/A"}, requestID=${requestID ?? "N/A"}, source=${source}, len=${value.length}`)
 
       if (requestID) {
+        const userMessageId = (msg.messageId as string) || generateUserMessageId()
+        const textForPrompt = source === "response" ? `The user responded: ${value}` : value
+        const answerSource: "option" | "freetext" | "skip" | "response" =
+          source === "freetext" || source === "skip" || source === "response" ? source : "option"
+        const answerId = toolCallId ?? requestID
+        const userMsg: ChatMessage = {
+          role: "user",
+          id: userMessageId,
+          blocks: [{ type: "text", text: textForPrompt, toolCallId: answerId, requestID }],
+          timestamp: Date.now(),
+          sessionId,
+        }
+        // Optimistic state: record the user message and mark the question
+        // answered BEFORE awaiting the SDK call. If the call throws, the
+        // catch block rolls all of this back (B9).
+        this.opts.sessionStore.appendMessage(sessionId, userMsg)
+        this.opts.sessionStore.markQuestionAnswered(sessionId, answerId, textForPrompt, answerSource)
+        this.opts.streamCoordinator.markQuestionAnswered(sessionId, answerId)
         try {
-          const userMessageId = (msg.messageId as string) || generateUserMessageId()
-          const textForPrompt = source === "response" ? `The user responded: ${value}` : value
-          const answerSource: "option" | "freetext" | "skip" | "response" =
-            source === "freetext" || source === "skip" || source === "response" ? source : "option"
-          const answerId = toolCallId ?? requestID
-          const userMsg: ChatMessage = {
-            role: "user",
-            id: userMessageId,
-            blocks: [{ type: "text", text: textForPrompt, toolCallId: answerId, requestID }],
-            timestamp: Date.now(),
-            sessionId,
-          }
-          this.opts.sessionStore.appendMessage(sessionId, userMsg)
-          this.opts.sessionStore.markQuestionAnswered(sessionId, answerId, textForPrompt, answerSource)
-          this.opts.streamCoordinator.markQuestionAnswered(sessionId, answerId)
           if (source === "skip") {
             await this.opts.sessionManager.rejectQuestion(requestID)
           } else {
@@ -380,7 +383,21 @@ export class WebviewEventRouter {
             requestID,
           })
         } catch (err) {
-          log.error("question_answer v2 failed", err)
+          // B9: the SDK call failed (network blip, unknown requestID, server
+          // 4xx, missing v2 API). Without this rollback the user sees the
+          // optimistic "Answered" state forever and the server is unaware.
+          // Undo the optimistic state across all three layers and tell the
+          // webview to revert the bar so the user can retry.
+          log.error("question_answer v2 failed — rolling back optimistic answered state", err)
+          this.opts.sessionStore.unmarkQuestionAnswered(sessionId, answerId)
+          this.opts.streamCoordinator.unmarkQuestionAnswered(sessionId, answerId)
+          this.opts.postMessage({
+            type: "question_unacknowledged",
+            sessionId,
+            toolCallId: answerId,
+            requestID,
+            error: err instanceof Error ? err.message : "Failed to send answer",
+          })
           this.opts.postRequestError(err instanceof Error ? err.message : "Failed to send answer", sessionId)
         }
         return
