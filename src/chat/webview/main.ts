@@ -1544,6 +1544,7 @@ function getVsCodeApi() {
       badge: null,
       postMessage: (msg) => vscode.postMessage(msg),
       onOpenFile: (path) => vscode.postMessage({ type: "open_file", path }),
+      onOpenChangedFileDiff: (path, sessionId) => vscode.postMessage({ type: "open_changed_file_diff", path, sessionId }),
       isWelcomeVisible,
     })
     cfDropdownApi = { updateChangedFiles, handleDiffResponse: handleCfDiffResponse, setCurrentSession: setCfCurrentSession }

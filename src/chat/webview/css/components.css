@@ -2748,6 +2748,23 @@ textarea {
 .cf-file-row:hover .cf-open-btn,
 .cf-open-btn:focus-visible { opacity: 1; }
 
+.cf-open-diff-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: none;
+  color: var(--oc-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.cf-file-row:hover .cf-open-diff-btn,
+.cf-open-diff-btn:focus-visible { opacity: 1; }
+
 /* Plan document tag */
 .cf-plan-tag {
   flex-shrink: 0;

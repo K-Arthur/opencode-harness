@@ -55,7 +55,8 @@ function bootDom() {
     treeContainer: tree,
     badge,
     postMessage: (msg) => postedMessages.push(msg),
-    onOpenFile: () => {},
+    onOpenChangedFileDiff: () => {},
+      onOpenFile: () => {},
     isWelcomeVisible: () => welcomeVisible,
   })
 }

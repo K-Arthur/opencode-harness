@@ -32,7 +32,7 @@ export class DiffApplier {
     this.diffDocumentProvider?.dispose()
   }
 
-  async showSideBySideDiff(filePath: string, proposedContent: string, title?: string): Promise<void> {
+  async showSideBySideDiff(filePath: string, proposedContent: string, title?: string, beforeContentOverride?: string, afterLabel?: string): Promise<void> {
     const baseName = path.basename(filePath)
     const timestamp = Date.now()
     const originalUri = vscode.Uri.parse(`opencode-diff:/${encodeURIComponent(baseName)}.original.${timestamp}`)
@@ -40,16 +40,23 @@ export class DiffApplier {
 
     this.ensureDiffDocumentProvider()
 
-    const workspaceUri = this.resolveWorkspaceFile(filePath)
-    let originalContent = ""
-    if (workspaceUri) {
-      try {
-        const doc = await vscode.workspace.openTextDocument(workspaceUri)
-        originalContent = doc.getText()
-      } catch {
-        // Workspace file not available — diff will show empty left side
+    let originalContent = beforeContentOverride ?? ""
+
+    // When no before-content override is provided, read the current file
+    // as the "before" side (the existing behavior — shows the file before
+    // any proposed changes).
+    if (beforeContentOverride === undefined) {
+      const workspaceUri = this.resolveWorkspaceFile(filePath)
+      if (workspaceUri) {
+        try {
+          const doc = await vscode.workspace.openTextDocument(workspaceUri)
+          originalContent = doc.getText()
+        } catch {
+          // Workspace file unavailable — diff shows empty left side
+        }
       }
     }
+
     this.diffDocuments.set(originalUri.toString(), originalContent)
     this.diffDocuments.set(proposedUri.toString(), proposedContent)
 
