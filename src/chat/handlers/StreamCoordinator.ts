@@ -901,10 +901,7 @@ export class StreamCoordinator {
     this.cleanupTab(tabId)
   }
 
-  private async resolveModelAndAgentForPrompt(
-    tabId: string,
-    tab: TabState,
-  ): Promise<{ modelRef: { providerID: string; modelID: string } | undefined; agent: "plan" | "build" }> {
+  private async refreshModelsIfMissing(tab: TabState): Promise<void> {
     // Lazy model resolution: if neither the tab nor the global model is set,
     // give refreshModels one more chance (with a 3s timeout) before sending.
     // This catches the init-race where the model list hasn't arrived yet by
@@ -922,6 +919,13 @@ export class StreamCoordinator {
         log.warn("Lazy model refresh timed out — proceeding without a model; server may reject")
       }
     }
+  }
+
+  private async resolveModelAndAgentForPrompt(
+    tabId: string,
+    tab: TabState,
+  ): Promise<{ modelRef: { providerID: string; modelID: string } | undefined; agent: "plan" | "build" }> {
+    await this.refreshModelsIfMissing(tab)
 
     // Resolve the model for this session mode. If the user has configured
     // `opencode.modeModels`, the mode-specific override is used; otherwise
