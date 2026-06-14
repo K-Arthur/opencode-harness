@@ -762,6 +762,33 @@ it("unified modal: server session items send resume_server_session on click", ()
         "switchTab must refresh cost display for the new tab"
       )
     })
+
+    it("B3: switchTab repopulates the question bar from the activated tab's persisted messages", () => {
+      // Regression: switching to a tab with a pending question used to only
+      // call setActiveSession, which renders items already in `state.items`.
+      // For a tab the user had never visited during this page session (or
+      // after a partial reload), state.items was empty for that session, so
+      // the bar stayed hidden and the question became unanswerable until the
+      // user reloaded the webview. switchTab must call
+      // questionBar.repopulateFromMessages(tabId, …messages) so the bar is
+      // rebuilt from the persisted question blocks of the tab being activated.
+      const fnIdx = source.indexOf("function switchTab(")
+      assert.ok(fnIdx >= 0, "switchTab must exist")
+      const body = source.slice(fnIdx, fnIdx + 6000)
+      const activeIdx = body.indexOf("questionBar.setActiveSession")
+      assert.ok(activeIdx >= 0, "switchTab must call questionBar.setActiveSession")
+      const repopulateIdx = body.indexOf("questionBar.repopulateFromMessages")
+      assert.ok(
+        repopulateIdx >= 0,
+        "B3: switchTab must call questionBar.repopulateFromMessages so a tab with a pending question surfaces its bar without a full reload",
+      )
+      // The repopulate call must come BEFORE setActiveSession so the items are
+      // loaded before setActiveSession filters them by sessionId.
+      assert.ok(
+        repopulateIdx < activeIdx,
+        "B3: repopulateFromMessages must run before setActiveSession so the latter has items to filter",
+      )
+    })
   })
 
   // --- Bug fix regression tests: command availability, session lifecycle ---

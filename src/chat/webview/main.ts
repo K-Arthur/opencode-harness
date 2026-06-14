@@ -2003,8 +2003,14 @@ function getVsCodeApi() {
     }
     // Refresh queue UI for the switched-to tab
     composer.renderQueue(tabId)
-    // Refresh question bar for the switched-to tab — only show pending questions
-    // belonging to the active session.
+    // B3: Refresh question bar for the switched-to tab. First repopulate from
+    // the tab's persisted messages so a tab the user is visiting for the first
+    // time in this page session (or after a partial reload) surfaces its
+    // pending questions — setActiveSession alone only renders items already
+    // in `state.items`, which is empty for never-visited tabs. Then
+    // setActiveSession filters the rendered set to the active session.
+    const switchedMessages = stateManager.getSession(tabId)?.messages ?? []
+    questionBar.repopulateFromMessages(tabId, switchedMessages as Array<{ id: string; blocks: Array<{ type: string; toolCallId?: string; id?: string; answered?: boolean; groups?: unknown[] }> }>)
     questionBar.setActiveSession(tabId)
   }
 
