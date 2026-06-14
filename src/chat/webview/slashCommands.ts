@@ -1,5 +1,5 @@
 import type { CommandEntry } from "./commands-modal"
-import { resolveLocalCommand } from "./slash-commands"
+import { resolveLocalCommand, resolveMcpNamespace, type RemoteCommandInfo } from "./slash-commands"
 
 export interface SlashCommandDeps {
   stateManager: {
@@ -22,6 +22,13 @@ export interface SlashCommandDeps {
   showSystemMessage(sessionId: string, message: string): void
   syncModelViews(): void
   renderQueue(tabId: string): void
+  /**
+   * Returns the cached remote (server/MCP/skill) command list. Used by the
+   * default-case handler to detect MCP namespace-prefixed invocations like
+   * `/jcodemunch triage` and rewrite them to the canonical `/triage` form
+   * before forwarding to the host.
+   */
+  getServerCommands?: () => ReadonlyArray<RemoteCommandInfo>
 }
 
 type ActiveSession = NonNullable<ReturnType<SlashCommandDeps["stateManager"]["getActiveSession"]>>
@@ -132,10 +139,39 @@ export function createSlashCommandHandler(deps: SlashCommandDeps) {
         vscode.postMessage({ type: "execute_command", command: "/continue", sessionId: active.id })
         clearPromptInput()
         return
-      default:
-        vscode.postMessage({ type: "execute_command", command: cmd, arguments: commandArgs, sessionId: active.id })
+      default: {
+        // Before forwarding an unknown command to the host, check whether it
+        // matches an MCP namespace pattern (e.g. `/jcodemunch triage`). Users
+        // naturally type `/server tool` but the server registers each MCP tool
+        // as a top-level command (e.g. `/triage`). If we detect this pattern,
+        // rewrite to the canonical form so the command succeeds.
+        const remoteCommands = deps.getServerCommands?.() ?? []
+        const resolved = resolveMcpNamespace(cmd, commandArgs, remoteCommands)
+        if (resolved) {
+          vscode.postMessage({
+            type: "execute_command",
+            command: resolved.command,
+            arguments: resolved.arguments,
+            sessionId: active.id,
+          })
+        } else {
+          // Non-blocking guidance: if the command is not in the cached server
+          // list either, surface a brief tip so the user knows where to look.
+          // We still forward the command — the server may recognise it even if
+          // our cache is stale, so we never reject.
+          const cmdName = cmd.replace(/^\//, "").toLowerCase()
+          const isKnownRemote = remoteCommands.some((c) => c.name.toLowerCase() === cmdName)
+          if (!isKnownRemote) {
+            showSystemMessage(
+              active.id,
+              `\`${cmd}\` is not a recognised command. Forwarding anyway — if it fails, use \`/commands\` to browse available commands.`,
+            )
+          }
+          vscode.postMessage({ type: "execute_command", command: cmd, arguments: commandArgs, sessionId: active.id })
+        }
         clearPromptInput()
         return
+      }
     }
   }
 
@@ -146,8 +182,8 @@ export function createSlashCommandHandler(deps: SlashCommandDeps) {
       runSlashCommandText(entry.insertText || `/${entry.name}`, active)
       return
     }
-    if ((entry as any).run) {
-      ;(entry as any).run()
+    if (entry.run) {
+      entry.run()
       return
     }
     vscode.postMessage({ type: "execute_command", command: `/${entry.name}`, sessionId: active.id })

@@ -25,6 +25,8 @@ export interface CommandEntry {
   insertText?: string
   /** Optional origin label (e.g. MCP server name or agent name) shown next to the badge. */
   origin?: string
+  /** Optional direct callback for local commands that don't route through the slash dispatcher. */
+  run?: () => void
 }
 
 export interface StashEntry {

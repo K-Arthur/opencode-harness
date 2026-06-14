@@ -627,7 +627,7 @@ export type HostMessage =
   | { type: "prefill_prompt"; text: string; autoSend?: boolean }
   | { type: "edit_message_prefill"; text: string; sessionId?: string }
   | { type: "insert_text"; code: string; language?: string }
-  | { type: "command_list"; commands: unknown[]; showInChat?: boolean }
+  | { type: "command_list"; commands: unknown[]; showInChat?: boolean; partial?: boolean }
   | { type: "mcp_servers"; servers: unknown[] }
   | { type: "diff_result"; sessionId: string; blockId: string; ok: boolean; message?: string; checkpointCreated?: boolean }
   | { type: "revert_result"; ok: boolean; sessionId?: string; error?: string }

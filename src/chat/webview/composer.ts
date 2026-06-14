@@ -6,6 +6,7 @@ import { createQueueRenderer } from "./queueRenderer"
 import { createInputHandlers, type InputHandlerDeps } from "./inputHandlers"
 import { createSlashCommandHandler } from "./slashCommands"
 import { createSendLogic, type StreamCapacityState } from "./sendLogic"
+import type { RemoteCommandInfo } from "./slash-commands"
 
 export interface ComposerDeps {
   els: ElementRefs
@@ -53,6 +54,8 @@ export interface ComposerDeps {
   commandsModal: {
     open: () => void
   }
+  /** Returns the cached remote command list for MCP namespace resolution. */
+  getServerCommands?: () => ReadonlyArray<RemoteCommandInfo>
   streamHandlers: {
     get: (id: string) => { showTypingIndicator: (msg: string) => void } | undefined
   }
@@ -210,6 +213,7 @@ export function createComposer(deps: ComposerDeps): ComposerAPI {
     showSystemMessage,
     syncModelViews,
     renderQueue: (tabId: string) => queueRenderer.renderQueue(tabId),
+    getServerCommands: deps.getServerCommands,
   })
 
   _runSlashCommandText = runSlashCommandText

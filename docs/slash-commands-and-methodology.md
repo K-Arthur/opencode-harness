@@ -54,6 +54,45 @@ Run `/help` for the generated table. Highlights:
 - Everything else (server, MCP, skill, custom-prompt commands): browse with
   `/commands` or Ctrl+Shift+/.
 
+### MCP namespace resolution (`/server:tool` and `/server tool`)
+
+Users naturally type the namespace they see in the UI, but the opencode server
+registers every command (MCP tool, skill, built-in) as a flat top-level name.
+The slash dispatcher detects two namespace patterns and rewrites them before
+forwarding:
+
+**Colon syntax** (`/prefix:command`):
+
+- `/jcodemunch:triage` → executes `/triage`
+- `/jcodemunch:triage my-issue` → executes `/triage` with args `my-issue`
+- `/wrongprefix:triage` → executes `/triage` (broad match on suffix)
+
+**Space syntax** (`/server tool`):
+
+- `/jcodemunch triage` → executes `/triage`
+- `/jcodemunch triage my-issue` → executes `/triage` with args `my-issue`
+
+The colon case uses a two-tier match: first an exact MCP origin+tool match,
+then a broad match where the suffix matches any remote command name (skill,
+server, or MCP) — the prefix is discarded because the server ignores it. The
+space case requires the prefix to be a known MCP `origin` (to avoid ambiguity
+with commands like `/cost` that take arguments).
+
+If neither pattern matches, the command is forwarded as-is so the server can
+still attempt it. If a command is also not in the cached server list, a
+**non-blocking tip** is shown pointing to `/commands`.
+
+Implementation: `resolveMcpNamespace()` in `slash-commands.ts` (pure, tested).
+The cached remote command list is populated from `command_list` messages and
+passed to the handler via `getServerCommands()` in `SlashCommandDeps`.
+
+### Command list fetch failures
+
+When the opencode server is unreachable, `handleListCommands` falls back to
+showing only custom prompts and sets `partial: true` on the `command_list`
+message. The webview surfaces a system message so users understand why
+server/MCP commands are missing from the palette and inline dropdown.
+
 ### Searching commands and skills (fuzzy)
 
 All three search surfaces share one matcher, `fuzzyMatch.ts`
@@ -125,6 +164,11 @@ Skill discovery and loading is owned by the opencode server (plus a local
 The modal toggle controls **suggestion only** — the opencode server does not
 accept enable/disable, so a disabled skill may still be loaded server-side.
 The modal states this; do not present the toggle as a hard disable.
+
+Server agents and local skills are deduplicated by a composite key
+(`server:<name>` vs `local:<id>`), so a local skill with the same display name
+as a server agent is **not** silently dropped — both appear in the modal with
+independent toggle state.
 
 ## Known limitations / next steps
 
