@@ -19,10 +19,14 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(source.includes("export class StreamCoordinator"), "StreamCoordinator class must be exported")
   })
 
-  it("has a DiffHandler instance constructed from the injected diffApplier", () => {
-    assert.ok(source.includes("private diffHandler: DiffHandler"), "must have diffHandler field")
-    assert.ok(source.includes("diffApplier: DiffApplier"), "constructor must accept a DiffApplier")
-    assert.ok(source.includes("this.diffHandler = new DiffHandler(diffApplier)"), "must create DiffHandler from the injected applier")
+  it("constructor accepts DiffApplier (DiffHandler removed C1-a)", () => {
+    // C1-a: DiffHandler was removed (the server applies edits directly).
+    // DiffApplier is kept for the showSideBySideDiff entry point.
+    assert.ok(source.includes("DiffApplier"), "constructor must accept a DiffApplier")
+    assert.ok(
+      !source.includes("private diffHandler: DiffHandler") || source.includes("// diffHandler removed"),
+      "C1-a: DiffHandler field must NOT exist"
+    )
   })
 
   it("has stream watchdog with STREAM_STUCK_MS constant", () => {
@@ -108,6 +112,31 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(source.includes("callbacks.postMessage({"), "abort must post via callbacks")
   })
 
+  it("streams live bash output through partial events with polling fallback", () => {
+    assert.ok(source.includes("TOOL_PARTIAL_POLL_INTERVAL_MS = 500"), "must poll live tool output every 500ms")
+    assert.ok(source.includes("TOOL_PARTIAL_FALLBACK_DELAY_MS = 1000"), "must delay polling so SSE partials can win first")
+    assert.ok(source.includes("private armToolPartialPolling("), "must arm fallback polling after tool start")
+    assert.ok(source.includes("pollToolPartialOutput("), "must poll session messages for live output")
+    assert.ok(source.includes("getToolPartialOutput"), "polling must use SessionManager.getToolPartialOutput")
+    assert.ok(source.includes('type: "stream_tool_partial"'), "must post stream_tool_partial messages")
+    assert.ok(source.includes("source: \"sse\" | \"poll\""), "appendToolPartial must distinguish SSE from polling")
+  })
+
+  it("dedupes partial tokens, stops polling on SSE/finalization, and warns once when unsupported", () => {
+    assert.ok(source.includes("toolPartialOffsets"), "must track per-tool partial tokens/lengths")
+    assert.ok(source.includes("if (previous && partial.token <= previous.token) return"), "must drop duplicate partial tokens")
+    assert.ok(source.includes("this.stopToolPartialPolling(tabId, toolId)"), "must stop polling on terminal paths")
+    assert.ok(source.includes("this.toolPartialWarnedSessions.has(cliSessionId)"), "must warn once per session when no live buffer is exposed")
+    assert.ok(source.includes("this.stopAllToolPartialPolling(tabId)"), "must clean up polling for tab cleanup/abort/dispose")
+  })
+
+  it("supports bash-card cancel through synthetic cancelled output plus whole-stream abort", () => {
+    assert.ok(source.includes("async cancelToolFromCard("), "must expose cancelToolFromCard")
+    assert.ok(source.includes('state: "cancelled"'), "cancel must synthesize a cancelled tool end")
+    assert.ok(source.includes("this.stopToolPartialPolling(tabId, toolId)"), "cancel must stop partial polling for the tool")
+    assert.ok(source.includes("await this.abort(tabId, callbacks)"), "cancel must fall back to whole-stream abort")
+  })
+
   it("opens an intentional-abort window so the late server abort error is suppressed", () => {
     assert.ok(source.includes("intentionalAbortUntil"), "must track an intentional-abort window map")
     assert.ok(
@@ -121,13 +150,15 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(source.includes("this.intentionalAbortUntil.clear()"), "dispose() must clear the window map")
   })
 
-  it("has appendChunk and getDiffHandler methods", () => {
+  it("has appendChunk method (getDiffHandler removed C1-a)", () => {
     assert.ok(
       source.includes("appendChunk(tabId: string, text: string, callbacks?: StreamCallbacks, messageId?: string): void"),
       "appendChunk must exist with optional callbacks and messageId params"
     )
-    assert.ok(source.includes("getDiffHandler(): DiffHandler"), "getDiffHandler must exist")
-    assert.ok(source.includes("this.diffHandler"), "getDiffHandler must return this.diffHandler")
+    assert.ok(
+      !source.includes("getDiffHandler"),
+      "C1-a: getDiffHandler must be removed (dead diff subsystem)"
+    )
   })
 
   it("uses rendered chunk ACKs for streaming backpressure", () => {

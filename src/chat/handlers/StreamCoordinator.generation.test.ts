@@ -50,8 +50,11 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(source.includes("activeMessageIds"), "Must track active message IDs")
   })
 
-  it("uses DiffHandler for diff processing", () => {
-    assert.ok(source.includes("diffHandler"), "StreamCoordinator must use DiffHandler")
+  it("removed DiffHandler (C1-a): server applies edits directly", () => {
+    assert.ok(
+      !source.includes("diffHandler") || source.includes("// diffHandler removed"),
+      "C1-a: DiffHandler must be removed — the server applies edits directly"
+    )
   })
 
   it("calls postMessage with final message_complete in finalizeStream", () => {
