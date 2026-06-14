@@ -437,10 +437,12 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
       updateAgentStatus("executing")
     } else if (status === "idle") {
       updateAgentStatus("idle")
-      // Server reports the run is idle — clear any leftover live cursor even if
-      // no stream_end arrived for this session.
+      // Server reports the run is idle — clear any leftover live affordance even
+      // if no stream_end arrived for this session: the caret + blue backdrop,
+      // and any tool still showing a spinner / live elapsed.
       const idleMsgList = getMessageList(sessionId)
       if (idleMsgList) finalizeStreamingText(idleMsgList)
+      stream.finalizePendingTools()
     }
   }
 
@@ -460,9 +462,11 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     if (stream) {
       stream.handleRequestError(message, errorContext)
     }
-    // A failed run also ends streaming — clear any leftover live cursor.
+    // A failed run also ends streaming — clear any leftover live cursor / blue
+    // backdrop, and finalize any tool still spinning.
     const errMsgList = getMessageList(sessionId)
     if (errMsgList) finalizeStreamingText(errMsgList)
+    stream?.finalizePendingTools()
 
     if (sessionId === getState().activeSessionId) {
       updateSendButtonIcon(false)

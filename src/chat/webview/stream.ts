@@ -29,6 +29,7 @@ import {
   stripContextFromText,
   reRenderMessage,
   handleSkillIndicator,
+  finalizeAllPendingTools,
 } from "./streamHandlers"
 import "./streamEndHandler"
 
@@ -53,6 +54,10 @@ export interface StreamHandlers {
   handleRunActivityUpdate: (activity: RunActivitySnapshot) => void
   showTypingIndicator: (label?: string) => void
   hideTypingIndicator: () => void
+  /** Finalize any still-running/pending tool blocks (drop spinners / live
+   *  elapsed) and re-render. Backstop for run-end paths that don't call
+   *  handleStreamEnd (server idle, request error). */
+  finalizePendingTools: () => void
   clearMessages: () => void
   readonly isStreaming: boolean
   readonly streamingMessageId: string | null
@@ -222,5 +227,10 @@ class StreamSession implements StreamHandlers {
 
   clearMessages(): void {
     clearMessages(this.state, this.els, this.messages, this.saveState)
+  }
+
+  finalizePendingTools(): void {
+    finalizeAllPendingTools(this.els, this.messages)
+    this.saveState()
   }
 }

@@ -1,7 +1,7 @@
 import type { Block, ChatMessage } from "./types"
 import { createTextBlock } from "./blocks"
 import type { StreamState, StreamElements } from "./streamHandlers"
-import { hideTypingIndicator, finishUnresolvedToolCalls, reRenderMessage, resetStreamState, webviewLog, registerStreamEndHandler, finalizeStreamingText } from "./streamHandlers"
+import { hideTypingIndicator, finishUnresolvedToolCalls, reRenderMessage, resetStreamState, webviewLog, registerStreamEndHandler, finalizeStreamingText, finalizeAllPendingTools } from "./streamHandlers"
 
 function ensureRenderedTextFallback(messageId: string, msgObj: ChatMessage, els: StreamElements): void {
   const text = (msgObj.blocks || [])
@@ -202,5 +202,7 @@ export function handleStreamEnd(
 // turn never leaves a blinking streaming caret behind.
 registerStreamEndHandler((state, els, messages, saveState, messageId, blocks) => {
   handleStreamEnd(state, els, messages, saveState, messageId, blocks)
+  // No streaming caret / blue backdrop, and no tool left spinning, after a turn.
   finalizeStreamingText(els.messageList)
+  finalizeAllPendingTools(els, messages)
 })
