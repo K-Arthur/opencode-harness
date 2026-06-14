@@ -299,6 +299,60 @@ function recoverAfterStreamEndError(
   safe(() => deps.showSystemMessage(sessionId, msg), "showSystemMessage recovery failed")
 }
 
+/** Deps passed to `ensureStreamUiReady`. */
+interface EnsureStreamUiDeps {
+  postMessage: (m: Record<string, unknown>) => void
+  getSession: (id: string) => { name: string } | undefined
+  ensureSession: (init: { id: string; name: string; model: string; mode: string; messages: ChatMessage[]; isStreaming: boolean }) => { name: string }
+  getState: () => { globalModel: string }
+  getMessageList: (tabId: string) => HTMLDivElement | null
+  createTabUI: (tabId: string, tabName: string) => void
+  streamHandlers: Map<string, StreamHandlers>
+  createStreamHandlersForTab: (tabId: string) => StreamHandlers
+}
+
+/**
+ * Guarantee the session/tab/stream trio exists for `sessionId` before
+ * `handleStreamStart` runs its main body.
+ *
+ * Extracted from `createStreamOrchestrator.handleStreamStart`. Returns the
+ * ready stream handler, or `null` when the (paranoid) final get still fails
+ * — in that case the caller bails out. Each ensure step logs its decision.
+ */
+function ensureStreamUiReady(sessionId: string, deps: EnsureStreamUiDeps): StreamHandlers | null {
+  let session = deps.getSession(sessionId)
+  if (!session) {
+    deps.postMessage({ type: "webview_log", level: "warn", message: `handleStreamStart: Session ${sessionId} not in state, ensuring it` })
+    session = deps.ensureSession({
+      id: sessionId,
+      name: "New Session",
+      model: deps.getState().globalModel || "",
+      mode: "build",
+      messages: [],
+      isStreaming: false,
+    })
+  }
+
+  if (!deps.getMessageList(sessionId)) {
+    deps.postMessage({ type: "webview_log", level: "warn", message: `handleStreamStart: No message list for ${sessionId}, creating tab UI` })
+    deps.createTabUI(sessionId, session.name || "New Session")
+  }
+
+  let stream = deps.streamHandlers.get(sessionId)
+  if (!stream) {
+    deps.postMessage({ type: "webview_log", level: "warn", message: `handleStreamStart: No stream found for session ${sessionId}, creating...` })
+    stream = deps.createStreamHandlersForTab(sessionId)
+    deps.streamHandlers.set(sessionId, stream)
+  }
+
+  const finalStream = deps.streamHandlers.get(sessionId)
+  if (!finalStream) {
+    deps.postMessage({ type: "webview_log", level: "error", message: `handleStreamStart: Failed to get/create stream for ${sessionId}` })
+    return null
+  }
+  return finalStream
+}
+
 export interface StreamOrchestratorDeps {
   vscode: { postMessage(msg: Record<string, unknown>): void }
   els: ElementRefs
@@ -413,38 +467,17 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
   }
 
   function handleStreamStart(sessionId: string, messageId?: string) {
-    let session = getSession(sessionId)
-    if (!session) {
-      vscode.postMessage({ type: "webview_log", level: "warn", message: `handleStreamStart: Session ${sessionId} not in state, ensuring it` })
-      session = ensureSession({
-        id: sessionId,
-        name: "New Session",
-        model: getState().globalModel || "",
-        mode: "build",
-        messages: [],
-        isStreaming: false,
-      })
-    }
-
-    let msgList = getMessageList(sessionId)
-    if (!msgList) {
-      vscode.postMessage({ type: "webview_log", level: "warn", message: `handleStreamStart: No message list for ${sessionId}, creating tab UI` })
-      createTabUI(sessionId, session.name || "New Session")
-      msgList = getMessageList(sessionId)
-    }
-
-    const stream = streamHandlers.get(sessionId)
-    if (!stream) {
-      vscode.postMessage({ type: "webview_log", level: "warn", message: `handleStreamStart: No stream found for session ${sessionId}, creating...` })
-      const newStream = createStreamHandlersForTab(sessionId)
-      streamHandlers.set(sessionId, newStream)
-    }
-
-    const finalStream = streamHandlers.get(sessionId)
-    if (!finalStream) {
-      vscode.postMessage({ type: "webview_log", level: "error", message: `handleStreamStart: Failed to get/create stream for ${sessionId}` })
-      return
-    }
+    const finalStream = ensureStreamUiReady(sessionId, {
+      postMessage: vscode.postMessage,
+      getSession,
+      ensureSession,
+      getState,
+      getMessageList,
+      createTabUI,
+      streamHandlers,
+      createStreamHandlersForTab,
+    })
+    if (!finalStream) return
 
     if (getState().activeSessionId !== sessionId) {
       vscode.postMessage({ type: "webview_log", level: "info", message: `handleStreamStart: Switching to tab ${sessionId}` })
