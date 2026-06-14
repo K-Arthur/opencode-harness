@@ -64,6 +64,7 @@ function mountDropdown(post: (m: Record<string, unknown>) => void = () => {}): v
     badge: document.getElementById("cf-badge") as HTMLElement,
     postMessage: post,
     onOpenFile: () => {},
+    onOpenChangedFileDiff: () => {},
   })
 }
 

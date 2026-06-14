@@ -166,7 +166,7 @@ export class WebviewEventRouter {
     "preview_theme", "get_theme_config", "update_theme_config", "list_cli_themes",
     "request_more_messages", "refresh_session_messages", "stream_ack", "retry_stream", "request_state_sync",
     "set_instructions", "fork_session", "accept_hunk", "reject_hunk",
-    "toggle_diff_wrap", "toggle_thinking", "revert_diff",
+    "toggle_diff_wrap", "toggle_thinking", "revert_diff", "open_changed_file_diff",
     "context_history_request", "context_cost_estimate", "context_suggestions_request",
     "send_steer_prompt",
     "remove_from_queue", "edit_queue_item", "reorder_queue", "retry_queue_item",
@@ -515,6 +515,51 @@ export class WebviewEventRouter {
       this.opts.ensureLocalTab(forked.id, forked.name, forked.model, forked.mode)
       this.opts.tabManager.switchTab(forked.id)
       this.opts.postMessage({ type: "fork_created", sessionId: forked.id, name: forked.name, parentSessionId: sourceId, forkedAtTurn: turnIndex })
+    }],
+    ["open_changed_file_diff", async (msg: Record<string, unknown>, sessionId?: string) => {
+      // M7: Open a VS Code diff editor comparing the file's git HEAD
+      // (before) against its current workspace content (after). Falls back
+      // to a simple "before unavailable" label for untracked / new files.
+      const filePath = typeof msg.path === "string" ? msg.path : undefined
+      if (!filePath) return
+
+      let beforeContent = ""
+      let beforeLabel = `${path.basename(filePath)} (Before)`
+
+      // Try git HEAD first (works for tracked files even if staged/unstaged
+      // changes exist — HEAD is the committed state).
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath
+      if (workspaceRoot) {
+        try {
+          const result = require("child_process").execSync(
+            `git show HEAD:${filePath.replace(/\\/g, "/")}`,
+            { cwd: workspaceRoot, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024, timeout: 5000 },
+          )
+          if (typeof result === "string") {
+            beforeContent = result
+          }
+        } catch {
+          // File not tracked by git or no git repo — use empty "before"
+          beforeLabel = `${path.basename(filePath)} (Before — untracked)`
+        }
+      }
+
+      // Read current file content as the "after" side
+      let afterContent = ""
+      const workspaceUri = vscode.workspace.workspaceFolders?.[0]
+        ? vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, filePath)
+        : undefined
+      if (workspaceUri) {
+        try {
+          const doc = await vscode.workspace.openTextDocument(workspaceUri)
+          afterContent = doc.getText()
+        } catch {
+          // File doesn't exist yet — will show empty right side
+        }
+      }
+
+      const afterLabel = `${path.basename(filePath)} (After)`
+      await this.opts.diffApplier.showSideBySideDiff(filePath, afterContent, `${path.basename(filePath)} — Changes`, beforeContent, afterLabel)
     }],
     ["abort", async (_: Record<string, unknown>, sessionId?: string) => {
       if (sessionId) await this.opts.streamCoordinator.abort(sessionId, { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) })

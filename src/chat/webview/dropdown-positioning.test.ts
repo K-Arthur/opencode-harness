@@ -101,6 +101,7 @@ describe("floating webview dropdown positioning", () => {
       treeContainer: document.getElementById("cf-tree")!,
       badge: document.getElementById("cf-badge")!,
       postMessage: () => {},
+      onOpenChangedFileDiff: () => {},
       onOpenFile: () => {},
     })
     setCurrentSession("session-a")
@@ -130,6 +131,7 @@ describe("floating webview dropdown positioning", () => {
       treeContainer: document.getElementById("cf-tree")!,
       badge: document.getElementById("cf-badge")!,
       postMessage: () => {},
+      onOpenChangedFileDiff: () => {},
       onOpenFile: () => {},
     })
     setCurrentSession("session-a")

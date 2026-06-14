@@ -812,6 +812,10 @@ export type WebviewMessage =
   | { type: "question_answer"; sessionId: string; toolCallId?: string; requestID?: string; messageId?: string; value: string; source?: string; structuredAnswers?: string[][] }
   /** Request unified diff hunks for a specific file path in the active session. */
   | { type: "get_file_diff"; path: string; sessionId?: string }
+  /** Sprint 3 / M7: open a real VS Code diff editor comparing the git HEAD
+   *  (before) against current workspace content (after) for a changed file.
+   *  The dropdown invokes this when the user clicks "Open diff" on a row. */
+  | { type: "open_changed_file_diff"; path: string; sessionId: string }
   /** Reveal a file in the VS Code Explorer sidebar. */
   | { type: "reveal_in_explorer"; path: string }
 

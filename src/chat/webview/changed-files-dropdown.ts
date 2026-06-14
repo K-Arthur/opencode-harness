@@ -106,11 +106,14 @@ export interface ChangedFilesDropdownOptions {
   postMessage: (msg: Record<string, unknown>) => void
   /** Open a file in the editor */
   onOpenFile: (path: string) => void
+  /** Sprint 3 / M7: open a VS Code diff editor for a changed file */
+  onOpenChangedFileDiff: (path: string, sessionId: string) => void
   /** Optional guard: when true, strip and dropdown are suppressed (e.g. welcome view) */
   isWelcomeVisible?: () => boolean
 }
 
 let _onOpenFile: (path: string) => void = () => {}
+let _onOpenChangedFileDiff: (path: string, sessionId: string) => void = () => {}
 let _isWelcomeVisible: () => boolean = () => false
 
 export function setupChangedFilesDropdown(opts: ChangedFilesDropdownOptions): void {
@@ -120,6 +123,7 @@ export function setupChangedFilesDropdown(opts: ChangedFilesDropdownOptions): vo
   _badge = opts.badge
   _postMessage = opts.postMessage
   _onOpenFile = opts.onOpenFile
+  _onOpenChangedFileDiff = opts.onOpenChangedFileDiff
   _isWelcomeVisible = opts.isWelcomeVisible ?? (() => false)
 
   // Initially hidden
@@ -563,6 +567,19 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       openBtn.addEventListener("click", (e) => {
         e.stopPropagation()
         _onOpenFile(file.path)
+      })
+
+      // M7: Open a real VS Code diff editor comparing git HEAD (before)
+      // against current workspace content (after). Distinct from the inline
+      // expandable hunk preview — this opens a tab in the editor area.
+      const diffBtn = document.createElement("button")
+      diffBtn.className = "cf-open-diff-btn"
+      diffBtn.setAttribute("aria-label", "Open diff")
+      diffBtn.title = "Open diff in editor"
+      diffBtn.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v18M3 12h18M8 8l-5 4 5 4M16 8l5 4-5 4"/></svg>`
+      diffBtn.addEventListener("click", (e) => {
+        e.stopPropagation()
+        _onOpenChangedFileDiff(file.path, _currentSessionId || "")
       })
 
       const expandBtn = document.createElement("button")
