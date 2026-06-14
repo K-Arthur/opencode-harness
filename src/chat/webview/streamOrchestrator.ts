@@ -10,6 +10,41 @@ import { finalizeStreamingText } from "./streamHandlers"
 import { generateUserMessageId } from "../../session/messageId"
 import { hasRecentErrorCard } from "./streamEndErrorPolicy"
 
+/**
+ * Render the user-facing system message (if any) for a stream-end reason.
+ *
+ * Extracted from `createStreamOrchestrator` so the dense reason → message
+ * table + the "don't stack on top of a recent error card" guard are testable
+ * in isolation. The orchestrator closure delegates here with its captured
+ * `showSystemMessage` / `getSession` callbacks.
+ */
+function showStreamEndReasonMessage(
+  sessionId: string,
+  reason: string | undefined,
+  partial: boolean | undefined,
+  showSystemMessage: (sessionId: string, text: string, retryable?: boolean) => void,
+  getSession: (id: string) => { messages: ChatMessage[] } | undefined,
+): void {
+  if (reason === "ttfb_timeout") {
+    showSystemMessage(sessionId, "The model took too long to start responding. Please try again or select a different model.", true)
+  } else if (reason === "timeout") {
+    showSystemMessage(sessionId, partial
+      ? "Response was cut off (timeout). Partial output has been preserved."
+      : "Response timed out. Please try again or select a different model.", true)
+  } else if (reason === "hard_timeout") {
+    showSystemMessage(sessionId, "Stream interrupted after extended run. Partial output preserved.", true)
+  } else if (reason === "error") {
+    // A structured error card (handleServerStatus("error") → handleStreamError)
+    // is the canonical surface for a failure and is added to the session
+    // messages before this end-of-stream hook. Don't stack a second, generic
+    // error card for the same fault — that was the root of "one failure shows
+    // as multiple cards". Only show the generic card when no error card exists.
+    const existing = getSession(sessionId)?.messages
+    if (existing && hasRecentErrorCard(existing)) return
+    showSystemMessage(sessionId, "An error occurred while generating the response. Please try again.", true)
+  }
+}
+
 export interface StreamOrchestratorDeps {
   vscode: { postMessage(msg: Record<string, unknown>): void }
   els: ElementRefs
@@ -269,28 +304,7 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
         message: `handleStreamChunk: chunk #${chunkLogCounter} for ${sessionId} len=${text?.length || 0} streamingMessageId=${s.streamingMessageId ?? "<null>"}`,
       })
     }
-    s.handleStreamChunk(text, messageId)
-  }
-
-  function showStreamEndReasonMessage(sessionId: string, reason?: string, partial?: boolean) {
-    if (reason === "ttfb_timeout") {
-      showSystemMessage(sessionId, "The model took too long to start responding. Please try again or select a different model.", true)
-    } else if (reason === "timeout") {
-      showSystemMessage(sessionId, partial
-        ? "Response was cut off (timeout). Partial output has been preserved."
-        : "Response timed out. Please try again or select a different model.", true)
-    } else if (reason === "hard_timeout") {
-      showSystemMessage(sessionId, "Stream interrupted after extended run. Partial output preserved.", true)
-    } else if (reason === "error") {
-      // A structured error card (handleServerStatus("error") → handleStreamError)
-      // is the canonical surface for a failure and is added to the session
-      // messages before this end-of-stream hook. Don't stack a second, generic
-      // error card for the same fault — that was the root of "one failure shows
-      // as multiple cards". Only show the generic card when no error card exists.
-      const existing = getSession(sessionId)?.messages
-      if (existing && hasRecentErrorCard(existing)) return
-      showSystemMessage(sessionId, "An error occurred while generating the response. Please try again.", true)
-    }
+      s.handleStreamChunk(text, messageId)
   }
 
   /**
@@ -358,7 +372,7 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
       updateAgentStatus("idle")
       debouncedTimelineRefresh(sessionId)
 
-      showStreamEndReasonMessage(sessionId, reason, partial)
+      showStreamEndReasonMessage(sessionId, reason, partial, showSystemMessage, getSession)
 
       if (sessionId === getState().activeSessionId) {
         updateSendButtonIcon(false)
