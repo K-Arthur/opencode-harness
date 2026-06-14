@@ -851,48 +851,7 @@ export class StreamCoordinator {
 
       this.setupTtfbTimeout(tabId, callbacks)
 
-      // Lazy model resolution: if neither the tab nor the global model is set,
-      // give refreshModels one more chance (with a 3s timeout) before sending.
-      // This catches the init-race where the model list hasn't arrived yet by
-      // the time the user sends their first prompt.
-      if (!tab.model && !this.modelManager.model) {
-        try {
-          await Promise.race([
-            this.modelManager.refreshModels(this.sessionManager.currentPort, this.sessionManager.authHeader),
-            new Promise<void>((_, reject) => {
-              const id = setTimeout(() => reject(new Error("timeout")), 3_000)
-              if (typeof id === "object" && typeof id.unref === "function") id.unref()
-            }),
-          ])
-        } catch {
-          log.warn("Lazy model refresh timed out — proceeding without a model; server may reject")
-        }
-      }
-
-      // Resolve the model for this session mode. If the user has configured
-      // `opencode.modeModels`, the mode-specific override is used; otherwise
-      // falls back to the session's default model. Pattern: Cline per-mode
-      // model selector, Copilot per-agent model config.
-      const resolvedModel = this.modelManager.getModeModel(tab.mode || "", tab.model)
-      const modelRef = resolvedModel ? parseModelRef(resolvedModel) : undefined
-
-      // Pass the corresponding OpenCode primary agent for mode-specific
-      // behavior. OpenCode's current config model uses `agent` + permissions;
-      // legacy `tools` booleans are deprecated and can over-block Plan's
-      // `.opencode/plans/*.md` exception.
-      //
-      // Plan maps to the built-in `plan` agent. Build and Auto map to
-      // `build`; Auto remains the extension's UX mode for fewer local prompts.
-      //
-      // Docs: plan restricts write/edit/patch/bash, with an exception for
-      // `.opencode/plans/*.md`; `edit` permission gates write/edit/apply_patch.
-      const agent = modeToAgent(tab.mode)
-      const activeRunForMode = this.activeRuns.get(tabId)
-      if (activeRunForMode) {
-        activeRunForMode.agent = agent
-        activeRunForMode.model = resolvedModel
-        activeRunForMode.mode = tab.mode
-      }
+      const { modelRef, agent } = await this.resolveModelAndAgentForPrompt(tabId, tab)
 
       // Inject per-tab instructions as a prepended text part on the first turn only
       const parts: Array<{ type: "text"; text: string } | { type: "file"; mime: string; url: string }> = []
@@ -1047,6 +1006,55 @@ export class StreamCoordinator {
     const userMessage = errorContext.kind === "unknown" ? message : errorContext.userMessage
     callbacks.postRequestError(userMessage, tabId)
     this.cleanupTab(tabId)
+  }
+
+  private async resolveModelAndAgentForPrompt(
+    tabId: string,
+    tab: TabState,
+  ): Promise<{ modelRef: { providerID: string; modelID: string } | undefined; agent: "plan" | "build" }> {
+    // Lazy model resolution: if neither the tab nor the global model is set,
+    // give refreshModels one more chance (with a 3s timeout) before sending.
+    // This catches the init-race where the model list hasn't arrived yet by
+    // the time the user sends their first prompt.
+    if (!tab.model && !this.modelManager.model) {
+      try {
+        await Promise.race([
+          this.modelManager.refreshModels(this.sessionManager.currentPort, this.sessionManager.authHeader),
+          new Promise<void>((_, reject) => {
+            const id = setTimeout(() => reject(new Error("timeout")), 3_000)
+            if (typeof id === "object" && typeof id.unref === "function") id.unref()
+          }),
+        ])
+      } catch {
+        log.warn("Lazy model refresh timed out — proceeding without a model; server may reject")
+      }
+    }
+
+    // Resolve the model for this session mode. If the user has configured
+    // `opencode.modeModels`, the mode-specific override is used; otherwise
+    // falls back to the session's default model. Pattern: Cline per-mode
+    // model selector, Copilot per-agent model config.
+    const resolvedModel = this.modelManager.getModeModel(tab.mode || "", tab.model)
+    const modelRef = resolvedModel ? parseModelRef(resolvedModel) : undefined
+
+    // Pass the corresponding OpenCode primary agent for mode-specific
+    // behavior. OpenCode's current config model uses `agent` + permissions;
+    // legacy `tools` booleans are deprecated and can over-block Plan's
+    // `.opencode/plans/*.md` exception.
+    //
+    // Plan maps to the built-in `plan` agent. Build and Auto map to
+    // `build`; Auto remains the extension's UX mode for fewer local prompts.
+    //
+    // Docs: plan restricts write/edit/patch/bash, with an exception for
+    // `.opencode/plans/*.md`; `edit` permission gates write/edit/apply_patch.
+    const agent = modeToAgent(tab.mode)
+    const activeRunForMode = this.activeRuns.get(tabId)
+    if (activeRunForMode) {
+      activeRunForMode.agent = agent
+      activeRunForMode.model = resolvedModel
+      activeRunForMode.mode = tab.mode
+    }
+    return { modelRef, agent }
   }
 
   private setupTtfbTimeout(tabId: string, callbacks: StreamCallbacks): void {
