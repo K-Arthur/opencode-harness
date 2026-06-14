@@ -75,7 +75,7 @@ test("dedupes repeated running tool updates but keeps terminal tool results", ()
 
   assert.deepEqual(normalized.map((event) => event.type), ["tool_start", "tool_end"])
   assert.deepEqual(normalized[0].data, { id: "tool_1", tool: "read", input: { file: "a.ts" }, status: "running" })
-  assert.deepEqual(normalized[1].data, { id: "tool_1", tool: "read", result: "done", ok: true })
+  assert.deepEqual(normalized[1].data, { id: "tool_1", tool: "read", result: "done", ok: true, durationMs: undefined, exitCode: undefined, stderr: undefined })
 })
 
 test("normalizes session and permission lifecycle events", () => {

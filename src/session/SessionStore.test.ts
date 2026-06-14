@@ -301,3 +301,32 @@ describe("SessionStore.ts", () => {
     assert.ok(block.includes('mode === "normal" ? "build"'), "ensure must normalize 'normal' to 'build'")
   })
 })
+
+
+// ── Sprint 2 / M4: changed-file stats must REPLACE not accumulate ────────
+// session.diff carries whole-file stats (not deltas). The old addChangedFiles
+// accumulated them on top of stored values, so editing file X twice (each
+// with 10 added) showed added: 20 instead of 10. Fix: when stats are
+// provided for a path, overwrite the stored entry for that path.
+
+void describe("SessionStore addChangedFiles — stats semantics (M4)", () => {
+  void it("replaces stored stats per-path instead of accumulating", () => {
+    const idx = source.indexOf("addChangedFiles(")
+    assert.ok(idx >= 0, "addChangedFiles must exist")
+    const block = source.slice(idx, idx + 1800)
+    assert.ok(
+      block.includes("stored[key] = {") || block.includes("stored[key]={"),
+      "addChangedFiles must assign a fresh stats object per path",
+    )
+    // The accumulation pattern was `prev.added + s.added`. After the fix
+    // the assignment uses just `s.added` (with the finite-guard default of 0).
+    assert.ok(
+      !block.includes("prev.added +"),
+      "M4: addChangedFiles must NOT accumulate (prev.added + s.added); the server sends whole-file stats per event, not deltas",
+    )
+    assert.ok(
+      !block.includes("prev.removed +"),
+      "M4: addChangedFiles must NOT accumulate removed counts either",
+    )
+  })
+})
