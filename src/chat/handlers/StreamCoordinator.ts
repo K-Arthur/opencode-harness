@@ -842,20 +842,7 @@ export class StreamCoordinator {
         clientRequestId: identity.clientRequestId,
         signal: abortSignal,
       })
-      this.setActiveRunState(tabId, "accepted", { acceptReason: "prompt_async_returned" })
-      if (identity.userMessageId) {
-        callbacks.postMessage({
-          type: "prompt_accepted",
-          sessionId: tabId,
-          messageId: identity.userMessageId,
-          clientRequestId: identity.clientRequestId,
-        })
-      }
-      this.recordRunActivity(tabId, { kind: "prompt_accepted", label: "Waiting for activity" }, callbacks)
-
-      this.startHeartbeat(tabId, callbacks)
-      this.subagentHeartbeat.start(tabId, cliSessionId)
-      // startWatchdog is the single hard safety net and is driven by server activity.
+      this.armPostAcceptLifecycle(tabId, callbacks, identity, cliSessionId)
     } catch (e) {
       this.handlePromptSendFailure(tabId, tab, callbacks, identity, text, attachments, e)
     }
@@ -961,6 +948,28 @@ export class StreamCoordinator {
       activeRunForMode.mode = tab.mode
     }
     return { modelRef, agent }
+  }
+
+  private armPostAcceptLifecycle(
+    tabId: string,
+    callbacks: StreamCallbacks,
+    identity: PromptRunIdentity,
+    cliSessionId: string,
+  ): void {
+    this.setActiveRunState(tabId, "accepted", { acceptReason: "prompt_async_returned" })
+    if (identity.userMessageId) {
+      callbacks.postMessage({
+        type: "prompt_accepted",
+        sessionId: tabId,
+        messageId: identity.userMessageId,
+        clientRequestId: identity.clientRequestId,
+      })
+    }
+    this.recordRunActivity(tabId, { kind: "prompt_accepted", label: "Waiting for activity" }, callbacks)
+
+    this.startHeartbeat(tabId, callbacks)
+    this.subagentHeartbeat.start(tabId, cliSessionId)
+    // startWatchdog is the single hard safety net and is driven by server activity.
   }
 
   private buildTextParts(
