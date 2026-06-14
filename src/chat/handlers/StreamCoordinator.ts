@@ -774,22 +774,7 @@ export class StreamCoordinator {
 
       const { modelRef, agent } = await this.resolveModelAndAgentForPrompt(tabId, tab)
 
-      // Inject per-tab instructions as a prepended text part on the first turn only
-      const parts: Array<{ type: "text"; text: string } | { type: "file"; mime: string; url: string }> = []
-      if (tab.instructions && !this.injectedInstructionsSessions.has(cliSessionId)) {
-        parts.push({ type: "text", text: tab.instructions })
-        this.injectedInstructionsSessions.add(cliSessionId)
-      }
-
-      // Methodology advice — classify the user's prompt and prepend a short
-      // strategy hint. Pure/synchronous; returns null for trivial inputs and
-      // slash commands. The selected methodology is also surfaced to the
-      // webview so the user can see (and later override) it.
-      this.applyMethodologyAdvice(tabId, text, parts, callbacks, attachments.length > 0)
-
-      if (text.trim()) {
-        parts.push({ type: "text", text })
-      }
+      const parts = this.buildTextParts(tabId, tab, cliSessionId, text, callbacks, attachments)
 
       // Materialize each attachment to a temp file. The opencode server
       // (v1.15.x) auto-reads the OS clipboard for FilePartInput URLs, which
@@ -976,6 +961,33 @@ export class StreamCoordinator {
       activeRunForMode.mode = tab.mode
     }
     return { modelRef, agent }
+  }
+
+  private buildTextParts(
+    tabId: string,
+    tab: TabState,
+    cliSessionId: string,
+    text: string,
+    callbacks: StreamCallbacks,
+    attachments: Array<{ data: string; mimeType: string }>,
+  ): Array<{ type: "text"; text: string } | { type: "file"; mime: string; url: string }> {
+    // Inject per-tab instructions as a prepended text part on the first turn only
+    const parts: Array<{ type: "text"; text: string } | { type: "file"; mime: string; url: string }> = []
+    if (tab.instructions && !this.injectedInstructionsSessions.has(cliSessionId)) {
+      parts.push({ type: "text", text: tab.instructions })
+      this.injectedInstructionsSessions.add(cliSessionId)
+    }
+
+    // Methodology advice — classify the user's prompt and prepend a short
+    // strategy hint. Pure/synchronous; returns null for trivial inputs and
+    // slash commands. The selected methodology is also surfaced to the
+    // webview so the user can see (and later override) it.
+    this.applyMethodologyAdvice(tabId, text, parts, callbacks, attachments.length > 0)
+
+    if (text.trim()) {
+      parts.push({ type: "text", text })
+    }
+    return parts
   }
 
   private emitStreamStartAndArmWatchdogs(tabId: string, callbacks: StreamCallbacks, streamMessageId: string): void {
