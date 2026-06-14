@@ -232,6 +232,30 @@ function clearToolChainProgressIndicator(
   getMessageList(sessionId)?.querySelectorAll(".tool-chain-progress").forEach((el) => el.remove())
 }
 
+/**
+ * Log a stream-chunk line under the established sampling rule: first 3
+ * chunks, every 100th chunk thereafter, or any chunk over 1000 chars.
+ *
+ * Extracted from `createStreamOrchestrator.handleStreamChunk`. The closure
+ * still owns the per-orchestrator `chunkLogCounter` (monotonic state) — this
+ * helper is a pure function of (counter, text) plus the postMessage channel.
+ */
+function maybeLogStreamChunk(
+  counter: number,
+  sessionId: string,
+  text: string | undefined,
+  streamingMessageId: string | null,
+  postMessage: (m: { type: "webview_log"; level: "info"; message: string }) => void,
+): void {
+  if (counter <= 3 || counter % 100 === 0 || (text !== undefined && text.length > 1000)) {
+    postMessage({
+      type: "webview_log",
+      level: "info",
+      message: `handleStreamChunk: chunk #${counter} for ${sessionId} len=${text?.length || 0} streamingMessageId=${streamingMessageId ?? "<null>"}`,
+    })
+  }
+}
+
 export interface StreamOrchestratorDeps {
   vscode: { postMessage(msg: Record<string, unknown>): void }
   els: ElementRefs
@@ -429,14 +453,8 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     }
     const s = stream!
     chunkLogCounter++
-    if (chunkLogCounter <= 3 || chunkLogCounter % 100 === 0 || (text && text.length > 1000)) {
-      vscode.postMessage({
-        type: "webview_log",
-        level: "info",
-        message: `handleStreamChunk: chunk #${chunkLogCounter} for ${sessionId} len=${text?.length || 0} streamingMessageId=${s.streamingMessageId ?? "<null>"}`,
-      })
-    }
-      s.handleStreamChunk(text, messageId)
+    maybeLogStreamChunk(chunkLogCounter, sessionId, text, s.streamingMessageId, vscode.postMessage)
+    s.handleStreamChunk(text, messageId)
   }
 
   /**
