@@ -366,7 +366,7 @@ Action placement follows progressive disclosure:
 - **Contextual actions**: Diff Accept/Reject primary · Review/Open behind ⋮ menu · Session actions behind ⋮ menu
 - **Keyboard shortcut reference**: `?` or `Shift+/` opens the shortcut modal; also accessible from Settings → Keyboard Shortcuts and Welcome screen
 - **Panels auto-show**: Todos panel opens when todos arrive; Subagent panel opens when subagents start running
-- **Steer modes**: Interrupt (Ctrl+1) · Append (Ctrl+2) · Queue (Ctrl+3) — buttons only visible during streaming
+- **Steer while streaming**: Enter = Queue a follow-up (default) · ⌘/Ctrl+Enter = Interrupt & send now. A Queue ▏Interrupt segmented toggle (visible only during streaming) sets what Enter does per tab. (The old Interrupt/Append/Queue trio + Ctrl+1/2/3 was removed.) Session modes: Alt+1/2/3 (Plan/Build/Auto), work in the composer.
 - **Adding new actions**: Use keyboard shortcuts and overflow menus before adding new visible buttons. Prefer progressive disclosure over permanent controls.
 
 **Debounce**: Mode cycling is debounced at 200ms to prevent accidental rapid cycles.

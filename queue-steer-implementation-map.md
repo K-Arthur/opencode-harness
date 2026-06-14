@@ -1,5 +1,22 @@
 # Queue & Steer Modes — Implementation Map
 
+> **2026-06-13 update — model simplified to two behaviors.** The three co-equal
+> modes below (Interrupt default / Append / Queue) were collapsed to **Queue
+> (default) + Interrupt (explicit)**. "Append" was removed (it duplicated Queue with
+> no feedback) along with its `appendCallbacks` / `registerAppendCallback` /
+> `append_cancelled` plumbing and the dead webview `add_to_queue` handler. While
+> streaming: **Enter** queues (safe default, visible/editable, drained after the turn
+> via `onQueueDrain`); **⌘/Ctrl+Enter** interrupts-and-sends (one-shot, doesn't change
+> the persisted default). The expected `MessageAbortedError` after any intentional
+> abort is suppressed by a short-lived intentional-abort window in `StreamCoordinator`
+> (`wasIntentionallyAborted`) consulted by `ChatProvider`'s `server_error` handler, so
+> interrupting no longer shows "The request was cancelled." Session-mode shortcuts moved
+> to **Alt+1/2/3** (work in the composer); the steering `Ctrl+1/2/3` triplet was removed.
+> SDK is on **1.17.6** but the prompt path stays on the **v1** API — native v2
+> `delivery: "steer" | "queue"` is a tracked future enhancement (a "Steer" third
+> behavior maps cleanly onto it). The sections below describe the prior 3-mode design
+> for historical context.
+
 ## Relevant Files
 
 ### Mode Definitions

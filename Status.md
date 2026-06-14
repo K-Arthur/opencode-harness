@@ -1,7 +1,16 @@
 # Status.md
 
 ## Last Updated: 2026-06-13
-## Project State: fuzzy command/skill search (custom commands now discoverable) + prior streaming/switch-marker/a11y fixes (TDD)
+## Project State: steering/queueing + keyboard redesign (Queue default / Interrupt explicit; Alt+1/2/3 modes) + SDK 1.17.6 + prior fuzzy-search/streaming/a11y fixes (TDD)
+
+### Recent Work (2026-06-13): Steering / queueing redesign + keyboard de-conflict + SDK bump
+- **Symptom:** sending a message mid-stream showed a red "Stream error — The request was cancelled. Aborted"; the three steer modes (Interrupt/Append/Queue) were inconsistent (Append gave no feedback); steer `Ctrl+1/2/3` clashed with the plan/build/auto shortcuts, which never fired from the composer anyway.
+- **Root causes:** (1) "interrupt" was the default and did `abort()` → the server's late `MessageAbortedError` (SSE) was mapped to an error card by `ChatProvider`'s `server_error` handler; the `abortedTabs` flag cleared after one tick, too soon to suppress it. (2) steer digits in `inputHandlers` swallowed `Ctrl+Alt+digit`; mode shortcuts in `modeDropdown` bailed on `isTextEntryTarget`.
+- **Fix — behavior:** collapse to **Queue (default)** + **Interrupt (explicit)**; remove "Append" (folded into Queue) and its `appendCallbacks`/`append_cancelled` plumbing + the dead `add_to_queue` handler. Add a self-expiring intentional-abort window (`StreamCoordinator.wasIntentionallyAborted`) consulted by `server_error` (via new pure `isAbortErrorValue` in `chatUtils`) so intentional aborts never show an error or kill the replacement run.
+- **Fix — keyboard:** composer **Enter** = send(idle)/queue(streaming), **⌘/Ctrl+Enter** = send(idle)/interrupt-and-send(streaming, one-shot), **Shift+Enter** = newline; session modes **Alt+1/2/3** now work in the composer (match `e.code`); steer `Ctrl+1/2/3` removed. Help modal updated.
+- **Fix — frontend:** streaming-only **Queue | Interrupt** segmented toggle (re-shows on tab switch via `syncSteerAffordance`); CSS + a11y (`aria-keyshortcuts` Alt+1/2/3) updated.
+- **SDK:** bumped `@opencode-ai/sdk` → **1.17.6** (latest; v1 prompt path unchanged); classified 3 new v2 events in the coverage contract. v2 `delivery:"steer"|"queue"` noted as a future enhancement.
+- **Tests:** RED→GREEN across `chatUtils` (isAbortErrorValue), `ChatProvider`/`StreamCoordinator` (abort suppression, append removal), `SteerPromptHandler` (queue default + legacy coercion), `modeDropdown` (Alt+1/2/3 incl. in text input), `steerMode`, `input-handlers-behavioral` (Enter/Cmd+Enter), regression-smoke. Full unit + message-contract + roundtrip green; typecheck clean.
 
 ### Recent Fix (2026-06-13): Fuzzy command + skill search — custom commands no longer "missing"
 - **Symptom:** custom commands (e.g. `.opencode/commands/code-review.md`) and MCP/skill commands appeared to be missing from the slash UI; you also couldn't search by characters that don't begin the command name.
