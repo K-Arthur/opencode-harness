@@ -10,7 +10,7 @@ export interface QueuedPrompt {
   text: string
   sessionId: string
   attachments: Attachment[]
-  mode: "interrupt" | "append" | "queue"
+  mode: "interrupt" | "queue"
   isSteerPrompt: boolean
   state: QueuedPromptState
   createdAt: number

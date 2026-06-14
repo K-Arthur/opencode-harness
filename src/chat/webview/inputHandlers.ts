@@ -11,8 +11,10 @@ export interface InputHandlerDeps {
   commandsModal: { open: () => void }
   timers: { setTimeout: (fn: (...args: any[]) => void, ms: number) => any }
   sendMessage: () => void
-  sendSteerPrompt: () => void
-  setSteerMode: (mode: "interrupt" | "append" | "queue") => void
+  /** Send while streaming. `modeOverride` forces a one-shot mode (e.g. Cmd+Enter →
+   *  "interrupt") without changing the tab's persisted send-mode default. */
+  sendSteerPrompt: (modeOverride?: "interrupt" | "queue") => void
+  setSteerMode: (mode: "interrupt" | "queue") => void
   updateSendButton: () => void
   createNewTab: (name?: string) => { id: string; name: string; mode?: string } | undefined
   closeTab: (id: string) => void
@@ -44,25 +46,27 @@ export function createInputHandlers(deps: InputHandlerDeps): InputHandlers {
 
   function onInputChange(): void { autoResizeTextarea(); mention.handleTrigger(); updateSendButton() }
 
-  function dispatchSendOrSteer(): void {
+  // Composer submit. Not streaming → send a fresh prompt. Streaming → steer: plain
+  // Enter uses the tab's send-mode default (Queue), Cmd/Ctrl+Enter forces Interrupt.
+  // Steering modes are no longer bound to Ctrl+1/2/3 — that triplet clashed with the
+  // session-mode shortcuts (now Alt+1/2/3 in modeDropdown).
+  function dispatchSubmit(forceInterrupt: boolean): void {
     const active = stateManager.getActiveSession()
-    if (active?.isStreaming) sendSteerPrompt(); else sendMessage()
+    if (active?.isStreaming) sendSteerPrompt(forceInterrupt ? "interrupt" : undefined)
+    else sendMessage()
   }
 
   function onInputKeydown(e: KeyboardEvent): void {
     if (e.ctrlKey || e.metaKey) {
       const key = e.key.toLowerCase()
-      if (e.key === "Enter") { e.preventDefault(); dispatchSendOrSteer(); els.sendBtn?.classList.add("active-feedback"); timers.setTimeout(() => els.sendBtn?.classList.remove("active-feedback"), 200); return }
+      if (e.key === "Enter") { e.preventDefault(); dispatchSubmit(true); els.sendBtn?.classList.add("active-feedback"); timers.setTimeout(() => els.sendBtn?.classList.remove("active-feedback"), 200); return }
       if (!e.shiftKey && key === "t") { e.preventDefault(); createNewTab(); return }
       if (!e.shiftKey && key === "w") { e.preventDefault(); const active = stateManager.getActiveSession(); if (active) closeTab(active.id); return }
       if (e.key === "Tab") { e.preventDefault(); const sessions = stateManager.getAllSessions(); const activeId = stateManager.getState().activeSessionId; if (sessions.length > 1 && activeId) { const idx = sessions.findIndex((s) => s.id === activeId); const nextIdx = e.shiftKey ? (idx - 1 + sessions.length) % sessions.length : (idx + 1) % sessions.length; const nextSession = sessions[nextIdx]; if (nextSession) switchTab(nextSession.id) }; return }
-      if (e.key === "1") { e.preventDefault(); setSteerMode("interrupt"); return }
-      if (e.key === "2") { e.preventDefault(); setSteerMode("append"); return }
-      if (e.key === "3") { e.preventDefault(); setSteerMode("queue"); return }
       if (!e.shiftKey && key === "k") { e.preventDefault(); commandsModal.open(); vscode.postMessage({ type: "list_commands" }); return }
     }
     if (!els.mentionDropdown.classList.contains("hidden")) { mention.handleKeydown(e); return }
-    if (e.key === "Enter" && !e.shiftKey && !(e as any).isComposing) { e.preventDefault(); dispatchSendOrSteer() }
+    if (e.key === "Enter" && !e.shiftKey && !(e as any).isComposing) { e.preventDefault(); dispatchSubmit(false) }
   }
 
   function onPaste(e: ClipboardEvent): void { attachmentManager.onPaste(e) }
@@ -94,10 +98,8 @@ export function createInputHandlers(deps: InputHandlerDeps): InputHandlers {
     els.mentionBtn.addEventListener("click", () => { els.promptInput.value += "@"; els.promptInput.focus(); mention.handleTrigger() })
     els.commandsPaletteBtn?.addEventListener("click", () => { commandsModal.open(); vscode.postMessage({ type: "list_commands" }) })
     const interruptBtn = document.getElementById("steer-mode-interrupt")
-    const appendBtn = document.getElementById("steer-mode-append")
     const queueBtn = document.getElementById("steer-mode-queue")
     if (interruptBtn) interruptBtn.addEventListener("click", () => setSteerMode("interrupt"))
-    if (appendBtn) appendBtn.addEventListener("click", () => setSteerMode("append"))
     if (queueBtn) queueBtn.addEventListener("click", () => setSteerMode("queue"))
     els.sendBtn?.setAttribute("title", TOOLTIPS.chat.send)
     window.addEventListener("oc-input-changed", () => { autoResizeTextarea(); updateSendButton() })

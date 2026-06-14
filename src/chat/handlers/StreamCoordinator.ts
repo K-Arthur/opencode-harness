@@ -130,8 +130,6 @@ export class StreamCoordinator {
   private injectedInstructionsSessions = new Set<string>()
   /** Per-tab last force_rerender seq sent — prevents spamming the webview when acks fall behind */
   private lastForceRerenderSeqs = new Map<string, number>()
-  /** Per-tab append callbacks for steer prompts — executed after stream_end */
-  private appendCallbacks = new Map<string, (() => Promise<void>)[]>()
   /** Called after stream finalization to drain the host-side prompt queue */
   public onQueueDrain: ((tabId: string, reason?: string) => void) | null = null
   /** Per-tab message sequence counter — monotonically increasing, attached to every streaming message */
@@ -1278,22 +1276,9 @@ export class StreamCoordinator {
     this.activityTracker.clear(tabId)
     this.setActiveRunState(tabId, "completed", { finalizeReason: "normal" })
     this.activeRuns.delete(tabId)
-    
-    // Execute append callbacks after stream finalization
-    const callbacksToExecute = this.appendCallbacks.get(tabId)
-    if (callbacksToExecute && callbacksToExecute.length > 0) {
-      log.info(`Executing ${callbacksToExecute.length} append callback(s) for ${tabId}`)
-      for (const callback of callbacksToExecute) {
-        try {
-          await callback()
-        } catch (err) {
-          log.error(`Append callback failed for ${tabId}`, err)
-        }
-      }
-      this.appendCallbacks.delete(tabId)
-    }
 
     // Drain host-side prompt queue after stream finalization
+    // (the old "append" mode is gone — queued follow-ups are the single path).
     if (this.onQueueDrain) {
       try {
         this.onQueueDrain(tabId, "completed")
@@ -1301,17 +1286,6 @@ export class StreamCoordinator {
         log.error(`Queue drain callback failed for ${tabId}`, err)
       }
     }
-  }
-
-  /**
-   * Register a callback to execute after the current stream completes.
-   * Used by steer prompts in "append" mode.
-   */
-  registerAppendCallback(tabId: string, callback: () => Promise<void>): void {
-    const existing = this.appendCallbacks.get(tabId) || []
-    existing.push(callback)
-    this.appendCallbacks.set(tabId, existing)
-    log.info(`Registered append callback for ${tabId} (total: ${existing.length})`)
   }
 
   async maybeFinalizeStream(tabId: string, callbacks: StreamCallbacks, trigger: "message_complete" | "status"): Promise<boolean> {
@@ -1425,11 +1399,6 @@ export class StreamCoordinator {
         seq: this.nextSeq(tabId),
       })
     } finally {
-      // Notify webview if any append callbacks are about to be discarded
-      const pendingAppends = this.appendCallbacks.get(tabId)
-      if (pendingAppends && pendingAppends.length > 0) {
-        callbacks.postMessage({ type: "append_cancelled", sessionId: tabId, count: pendingAppends.length })
-      }
       this.cleanupTab(tabId)
       // Drain host-side prompt queue after abort — queue.drainAfterAbort controls behavior
       if (this.onQueueDrain) {
@@ -1889,7 +1858,6 @@ export class StreamCoordinator {
   }
 
 cleanupTab(tabId: string): void {
-    this.appendCallbacks.delete(tabId)
     this.clearTtfbTimeout(tabId)
     this.ttfbAbortControllers.delete(tabId)
     this.tabManager.setStreaming(tabId, false)
@@ -2056,7 +2024,6 @@ cleanupTab(tabId: string): void {
     }
     this.heartbeatTimers.clear()
     this.subagentHeartbeat.stopAll()
-    this.appendCallbacks.clear()
     this.finalizingTabs.clear()
     this.abortedTabs.clear()
     this.intentionalAbortUntil.clear()

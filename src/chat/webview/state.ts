@@ -400,7 +400,7 @@ export function createState(vscode: VsCodeApi) {
     return true
   }
 
-  function setSessionSteerMode(id: string, steerMode: "interrupt" | "append" | "queue"): boolean {
+  function setSessionSteerMode(id: string, steerMode: "interrupt" | "queue"): boolean {
     const session = state.sessions[id]
     if (!session) return false
     session.steerMode = steerMode

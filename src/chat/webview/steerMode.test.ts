@@ -18,9 +18,8 @@ function setupDom() {
   dom = new JSDOM(`<!doctype html><html><body>
     <div id="input-area">
       <div class="steer-mode-selector" id="steer-mode-selector" role="radiogroup">
-        <button class="steer-mode-btn active" id="steer-mode-interrupt" data-mode="interrupt" aria-checked="true" role="radio"></button>
-        <button class="steer-mode-btn" id="steer-mode-append" data-mode="append" aria-checked="false" role="radio"></button>
-        <button class="steer-mode-btn" id="steer-mode-queue" data-mode="queue" aria-checked="false" role="radio"></button>
+        <button class="steer-mode-btn active" id="steer-mode-queue" data-mode="queue" aria-checked="true" role="radio"></button>
+        <button class="steer-mode-btn" id="steer-mode-interrupt" data-mode="interrupt" aria-checked="false" role="radio"></button>
       </div>
     </div>
   </body></html>`)
@@ -29,7 +28,7 @@ function setupDom() {
   ;(globalThis as any).HTMLElement = dom.window.HTMLElement
 }
 
-let mockActiveSession: { id: string; isStreaming: boolean; steerMode: "interrupt" | "append" | "queue" } | null = null
+let mockActiveSession: { id: string; isStreaming: boolean; steerMode: "interrupt" | "queue" } | null = null
 
 function makeSendLogic() {
   const inputArea = dom.window.document.getElementById("input-area") as unknown as HTMLDivElement
@@ -42,7 +41,7 @@ function makeSendLogic() {
       getSession: () => mockActiveSession || undefined,
       getAllSessions: () => [],
       setStreaming: noop,
-      setSessionSteerMode: (_id: string, mode: "interrupt" | "append" | "queue") => {
+      setSessionSteerMode: (_id: string, mode: "interrupt" | "queue") => {
         if (mockActiveSession) mockActiveSession.steerMode = mode
       },
     },
@@ -94,16 +93,16 @@ describe("setSteerMode", () => {
     assert.deepEqual(activeModes(), ["queue"], "only queue is active")
     assert.deepEqual(pressedModes(), ["queue"], "only queue is aria-checked")
 
-    sl.setSteerMode("append")
-    assert.deepEqual(activeModes(), ["append"], "switching deselects the previous mode")
-    assert.deepEqual(pressedModes(), ["append"])
+    sl.setSteerMode("interrupt")
+    assert.deepEqual(activeModes(), ["interrupt"], "switching deselects the previous mode")
+    assert.deepEqual(pressedModes(), ["interrupt"])
   })
 
   it("never leaves two buttons active after consecutive switches", () => {
     const sl = makeSendLogic()
     sl.setSteerMode("interrupt")
     sl.setSteerMode("queue")
-    sl.setSteerMode("append")
+    sl.setSteerMode("interrupt")
     sl.setSteerMode("interrupt")
     assert.equal(activeModes().length, 1, "exactly one active button")
     assert.equal(pressedModes().length, 1, "exactly one aria-checked button")

@@ -196,11 +196,12 @@ describe("SteerPromptHandler.sendSteerPrompt", () => {
       assert.match(callbacks.errors[0]!.message, /Session not found/)
     })
 
-    it("posts an error for unknown steer mode", async () => {
+    it("queues an unknown steer mode instead of erroring (never drop user input)", async () => {
       const prompt = { id: "p1", text: "redirect", mode: "unknown" as unknown as "interrupt", attachments: [], timestamp: 1, sessionId: "session-1" }
       await handler.sendSteerPrompt("session-1", prompt as SteerPrompt, callbacks)
-      assert.equal(callbacks.errors.length, 1)
-      assert.match(callbacks.errors[0]!.message, /Unknown steer mode/)
+      assert.equal(callbacks.errors.length, 0, "unknown mode must not raise an error")
+      assert.equal(callbacks.posted[0]!.type, "prompt_queued")
+      assert.equal(queuedItems.length, 1)
     })
   })
 
@@ -230,23 +231,19 @@ describe("SteerPromptHandler.sendSteerPrompt", () => {
     })
   })
 
-  describe("append mode", () => {
-    it("registers a callback to fire after the current stream ends", async () => {
-      const prompt: SteerPrompt = { id: "p1", text: "and another thing", mode: "append", attachments: [], timestamp: 1, sessionId: "session-1" }
+  describe("legacy / unknown mode", () => {
+    // The "append" mode was removed (folded into queue). A stale webview or persisted
+    // item carrying it must be queued, never dropped and never silently aborted.
+    it("coerces a removed 'append' mode to queue (no abort, no append callback)", async () => {
+      const prompt = { id: "p1", text: "and another thing", mode: "append", attachments: [], timestamp: 1, sessionId: "session-1" } as unknown as SteerPrompt
       await handler.sendSteerPrompt("session-1", prompt, callbacks)
-      assert.equal(coord.calls.length, 1)
-      assert.equal(coord.calls[0]!.name, "registerAppendCallback")
-      assert.equal(coord.calls[0]!.args[0], "session-1")
-    })
-
-    it("the registered callback sends the prompt when invoked", async () => {
-      const prompt: SteerPrompt = { id: "p1", text: "and another thing", mode: "append", attachments: [], timestamp: 1, sessionId: "session-1" }
-      await handler.sendSteerPrompt("session-1", prompt, callbacks)
-      const cb = coord.calls[0]!.args[1] as () => Promise<void>
-      await cb()
-      const last = coord.calls[coord.calls.length - 1]!
-      assert.equal(last.name, "startPrompt")
-      assert.equal(last.args[1], "and another thing")
+      // Queued (prompt_queued + queue_state), not routed through the stream coordinator.
+      assert.equal(callbacks.errors.length, 0)
+      assert.equal(coord.calls.length, 0)
+      assert.equal(callbacks.posted[0]!.type, "prompt_queued")
+      assert.equal(callbacks.posted[1]!.type, "queue_state")
+      assert.equal(queuedItems.length, 1)
+      assert.equal(queuedItems[0]!.text, "and another thing")
     })
   })
 

@@ -1828,7 +1828,7 @@ function getVsCodeApi() {
     // streaming state visually from a previously-active streaming session.
     updateSendButton()
     els.promptInput.placeholder = "Ask OpenCode a question about your code…"
-    els.inputArea.classList.remove("steer-interrupt", "steer-append", "steer-queue")
+    els.inputArea.classList.remove("steer-interrupt", "steer-queue")
     return session
   }
 
@@ -1977,7 +1977,7 @@ function getVsCodeApi() {
       els.promptInput.placeholder = "Ask OpenCode a question about your code…"
     }
     if (!isActiveStreaming) {
-      els.inputArea.classList.remove("steer-interrupt", "steer-append", "steer-queue")
+      els.inputArea.classList.remove("steer-interrupt", "steer-queue")
     }
     // Refresh queue UI for the switched-to tab
     composer.renderQueue(tabId)
@@ -3135,7 +3135,7 @@ function getVsCodeApi() {
             }
 
             if (!msg.isStreaming) {
-              els.inputArea.classList.remove("steer-interrupt", "steer-append", "steer-queue")
+              els.inputArea.classList.remove("steer-interrupt", "steer-queue")
             }
           }
           
@@ -3204,25 +3204,6 @@ function getVsCodeApi() {
           }
         }
       }],
-      ["add_to_queue", (msg, sid) => {
-        if (!sid) return
-        const text = msg.text as string || ""
-        const attachments = msg.attachments as Array<{ data: string; mimeType: string }> || []
-        const isSteerPrompt = msg.isSteerPrompt as boolean || false
-
-        let q = promptQueues.get(sid)
-        if (!q) {
-          q = createPromptQueue()
-          promptQueues.set(sid, q)
-        }
-
-        const queueItem = q.enqueue(text, attachments)
-        if (queueItem && isSteerPrompt) {
-          q.markAsSteer(queueItem.id)
-        }
-        persistQueues()
-        renderQueue(sid)
-      }],
       ["prompt_queued", (_msg, _sid) => {
         // Host queued a prompt — chips render via queue_state, no system message needed.
         vscode.postMessage({
@@ -3245,17 +3226,6 @@ function getVsCodeApi() {
         } else {
           const container = document.querySelector<HTMLElement>(".prompt-queue")
           if (container) container.remove()
-        }
-      }],
-      ["append_cancelled", (msg, sid) => {
-        if (sid && typeof msg.count === "number" && msg.count > 0) {
-          addMessage(sid, {
-            role: "system",
-            id: createWebviewId("sys-cancelled"),
-            blocks: [{ type: "text", text: `${msg.count} append prompt(s) cancelled — stream was aborted.` }],
-            timestamp: Date.now(),
-            sessionId: sid,
-          })
         }
       }],
       ["permission_request", (_msg, sid) => {

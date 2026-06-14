@@ -100,7 +100,7 @@ void describe("mode dropdown", () => {
     assert.deepEqual(posted[0], { type: "change_mode", mode: "auto", sessionId: "s1" })
   })
 
-  void it("requests mode changes through keyboard shortcuts without mutating local state first", () => {
+  void it("requests mode changes through Alt+1/2/3 without mutating local state first", () => {
     const els = installDom()
     const posted: Record<string, unknown>[] = []
     const localModes: string[] = []
@@ -113,10 +113,47 @@ void describe("mode dropdown", () => {
       postMessage: (msg) => posted.push(msg),
     })
 
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "1", ctrlKey: true, altKey: true, bubbles: true }))
+    // The mock always reports the current mode as the "build" default, so Alt+2
+    // (build) is correctly a no-op; Alt+1 (plan) and Alt+3 (auto) differ and post.
+    document.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit1", altKey: true, bubbles: true }))
+    document.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit3", altKey: true, bubbles: true }))
 
-    assert.deepEqual(posted, [{ type: "change_mode", mode: "plan", sessionId: "s1" }])
+    assert.deepEqual(posted, [
+      { type: "change_mode", mode: "plan", sessionId: "s1" },
+      { type: "change_mode", mode: "auto", sessionId: "s1" },
+    ])
     assert.deepEqual(localModes, [], "local state should wait for host acknowledgement")
+  })
+
+  void it("Alt+1/2/3 fire while focused in a text input (composer), unlike the old guard", () => {
+    const els = installDom()
+    const posted: Record<string, unknown>[] = []
+    updateModeDropdown("build", els)
+    setupModeToggle({
+      els,
+      getActiveSession: () => ({ id: "s1", isStreaming: false }),
+      setSessionMode: () => {},
+      postMessage: (msg) => posted.push(msg),
+    })
+    const textarea = document.createElement("textarea")
+    document.body.appendChild(textarea)
+    // dispatch from the textarea as the event target
+    textarea.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit1", altKey: true, bubbles: true }))
+    assert.deepEqual(posted, [{ type: "change_mode", mode: "plan", sessionId: "s1" }])
+  })
+
+  void it("does NOT treat the old Ctrl+Alt+1 as a mode shortcut (digit triplet freed)", () => {
+    const els = installDom()
+    const posted: Record<string, unknown>[] = []
+    updateModeDropdown("build", els)
+    setupModeToggle({
+      els,
+      getActiveSession: () => ({ id: "s1", isStreaming: false }),
+      setSessionMode: () => {},
+      postMessage: (msg) => posted.push(msg),
+    })
+    document.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit1", ctrlKey: true, altKey: true, bubbles: true }))
+    assert.deepEqual(posted, [], "Ctrl/Cmd+Alt+digit must no longer change mode")
   })
 
   void it("adds discoverable mode tooltips and labels", () => {

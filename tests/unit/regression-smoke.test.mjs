@@ -299,12 +299,13 @@ describe("Regression: Prompt Queue", () => {
     assert.ok(queueSrc.includes('"failed"'), "must have failed state")
   })
 
-  it("steer-queue mode adds to host queue via send_steer_prompt or add_to_queue", () => {
-    // After queue unification (Phase 2), steer-queue prompts go directly to
-    // HostPromptQueue via SteerPromptHandler.handleQueue(). The add_to_queue
-    // handler still exists for backward compatibility, calling q.enqueue(...).
-    assert.ok(files.mainTs.includes("q.enqueue(text, attachments)"), "must enqueue prompts via add_to_queue handler")
-    assert.ok(files.mainTs.includes('"add_to_queue"'), "must handle add_to_queue message")
+  it("steer-queue prompts go directly to HostPromptQueue via send_steer_prompt", () => {
+    // Queue is now the default streaming behavior. Steer prompts are enqueued by
+    // SteerPromptHandler.handleQueue() (host-authoritative); the webview renders
+    // chips from the host queue_state. The legacy webview-side add_to_queue handler
+    // was removed (it was dead — the webview is a read-only render cache).
+    assert.ok(files.webviewEventRouter.includes("steerPromptHandler.sendSteerPrompt("), "send_steer_prompt must route to the host SteerPromptHandler")
+    assert.ok(!files.mainTs.includes('"add_to_queue"'), "the dead webview add_to_queue handler must be gone")
   })
 
   it("stream end triggers host-side queue drain (onQueueDrain) instead of webview", () => {
