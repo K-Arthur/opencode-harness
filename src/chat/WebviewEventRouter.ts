@@ -2100,7 +2100,7 @@ export class WebviewEventRouter {
   private async handleListCommands(): Promise<void> {
     const customCommands = this.opts.promptManager.getPromptCommands()
     if (!this.opts.sessionManager.isRunning) {
-      this.opts.statePush.pushCommandListToWebview(customCommands)
+      this.opts.statePush.pushCommandListToWebview(customCommands, true)
       return
     }
     try {
@@ -2108,11 +2108,14 @@ export class WebviewEventRouter {
       this.opts.statePush.pushCommandListToWebview([...customCommands, ...commands])
     } catch (err) {
       log.warn("Failed to list commands", err)
-      this.opts.statePush.pushCommandListToWebview(customCommands)
+      this.opts.statePush.pushCommandListToWebview(customCommands, true)
     }
   }
 
   private async resolveAllSkills(): Promise<Array<{ id: string; name: string; description: string; category: string; enabled: boolean }>> {
+    // Dedup by a composite key (source-prefix + id) so a local skill with the
+    // same name as a server agent is NOT silently dropped — they are distinct
+    // skills with independent toggle state.
     const seen = new Set<string>()
     const skills: Array<{ id: string; name: string; description: string; category: string; enabled: boolean }> = []
     const prefs = this.opts.skillPreferences
@@ -2123,8 +2126,9 @@ export class WebviewEventRouter {
         const directory = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
         const agents = await this.opts.sessionManager.listAgents(directory)
         for (const a of agents) {
-          if (seen.has(a.name)) continue
-          seen.add(a.name)
+          const key = `server:${a.name}`
+          if (seen.has(key)) continue
+          seen.add(key)
           skills.push({ id: a.name, name: a.name, description: a.description || "", category: a.builtIn ? "built-in" : "custom", enabled: prefs.isEnabled(a.name) })
         }
       } catch (err) {
@@ -2136,8 +2140,9 @@ export class WebviewEventRouter {
     try {
       const local = await this.opts.sessionManager.scanLocalSkills()
       for (const s of local) {
-        if (seen.has(s.name)) continue
-        seen.add(s.name)
+        const key = `local:${s.id}`
+        if (seen.has(key)) continue
+        seen.add(key)
         skills.push({ id: s.id, name: s.name, description: s.description, category: s.category, enabled: prefs.isEnabled(s.id) })
       }
     } catch (err) {

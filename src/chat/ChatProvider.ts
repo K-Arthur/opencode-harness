@@ -859,13 +859,15 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     try {
       const customCommands = this.promptManager.getPromptCommands()
       if (!this.sessionManager.isRunning) {
-        this.postMessage({ type: "command_list", commands: customCommands })
+        this.postMessage({ type: "command_list", commands: customCommands, partial: true })
         return
       }
       const commands = await this.sessionManager.listCommands()
       this.postMessage({ type: "command_list", commands: [...customCommands, ...commands] })
     } catch (err) {
       log.warn("Failed to refresh command list after MCP change", err)
+      const customCommands = this.promptManager.getPromptCommands()
+      this.postMessage({ type: "command_list", commands: customCommands, partial: true })
     }
   }
 

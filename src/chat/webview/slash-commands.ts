@@ -171,3 +171,103 @@ export function dedupServerCommands<T>(server: ReadonlyArray<T>, getName?: (item
   const nameOf = getName ?? ((item: T) => (item as { name?: string }).name)
   return server.filter((c) => !COMMANDS_BY_NAME.has((nameOf(c) ?? "").toLowerCase()))
 }
+
+/**
+ * Minimal shape needed for MCP namespace resolution.
+ * `origin` is the MCP server name (the `agent` field from the server's
+ * command list); `source` distinguishes MCP commands from plain server ones.
+ */
+export interface RemoteCommandInfo {
+  name: string
+  source?: string
+  origin?: string
+}
+
+/**
+ * Result of a successful namespace rewrite.
+ * `command` is the canonical slash command to execute (e.g. "/triage");
+ * `arguments` carries any remaining args after the tool name was extracted.
+ */
+export interface ResolvedNamespace {
+  command: string
+  arguments: string
+}
+
+/**
+ * Resolve a namespace-prefixed command invocation to its canonical form.
+ *
+ * The opencode server registers every command (MCP tool, skill, built-in) as a
+ * flat top-level name (e.g. `/triage`), never under a server/namespace prefix.
+ * But users naturally type the namespace they see in the UI:
+ *
+ *   Colon syntax:  `/jcodemunch:triage`     (most common — matches MCP tool naming)
+ *   Space syntax:  `/jcodemunch triage`     (also natural)
+ *
+ * Both forms are rejected by the server ("Command not found"). This function
+ * detects either pattern and rewrites to the flat command the server expects:
+ *
+ *   `/jcodemunch:triage my-issue`  →  command="/triage" args="my-issue"
+ *   `/jcodemunch triage my-issue`  →  command="/triage" args="my-issue"
+ *
+ * Resolution order for the colon case:
+ *   1. Exact MCP match — prefix matches a known MCP `origin`, suffix matches
+ *      a tool from that server.
+ *   2. Broad match — suffix matches ANY remote command name (skill, server,
+ *      or MCP). The prefix was an incorrect namespace the server ignores.
+ *
+ * The space case is MCP-only (prefix must be a known origin) because a bare
+ * word like `/cost` with trailing args is ambiguous.
+ *
+ * Returns `null` when no match is found; the caller should forward as-is.
+ *
+ * @param typedCommand  The first token incl. leading slash (e.g. "/jcodemunch:triage").
+ * @param args          Everything after the first token (e.g. "my-issue").
+ * @param remoteCommands  The cached server/MCP/skill command list.
+ */
+export function resolveMcpNamespace(
+  typedCommand: string,
+  args: string,
+  remoteCommands: ReadonlyArray<RemoteCommandInfo>,
+): ResolvedNamespace | null {
+  const cleaned = typedCommand.replace(/^\//, "")
+
+  // ── Colon-separated: /prefix:command [args] ──
+  // Local commands with colons (e.g. /diagnose:generation) are resolved before
+  // this function is called, so we only reach here for non-local commands.
+  const colonIdx = cleaned.indexOf(":")
+  if (colonIdx > 0) {
+    const prefix = cleaned.slice(0, colonIdx).toLowerCase()
+    const suffix = cleaned.slice(colonIdx + 1).toLowerCase()
+    if (!suffix) return null
+
+    // 1. Exact MCP match: prefix is the origin, suffix is the tool name
+    const exactMcp = remoteCommands.find(
+      (c) => c.source === "mcp" && c.origin?.toLowerCase() === prefix && c.name.toLowerCase() === suffix,
+    )
+    if (exactMcp) return { command: `/${exactMcp.name}`, arguments: args }
+
+    // 2. Broad match: suffix matches any remote command (skill/server/MCP).
+    //    The prefix was a namespace the server doesn't use.
+    const anyMatch = remoteCommands.find((c) => c.name.toLowerCase() === suffix)
+    if (anyMatch) return { command: `/${anyMatch.name}`, arguments: args }
+
+    return null
+  }
+
+  // ── Space-separated: /server tool [extra-args] ──
+  const serverName = cleaned.toLowerCase()
+  if (!serverName) return null
+
+  const argParts = args.trim().split(/\s+/).filter(Boolean)
+  if (argParts.length === 0) return null
+
+  const toolName = argParts[0]!.toLowerCase()
+  const remainingArgs = argParts.slice(1).join(" ")
+
+  const match = remoteCommands.find(
+    (c) => c.source === "mcp" && c.origin?.toLowerCase() === serverName && c.name.toLowerCase() === toolName,
+  )
+
+  if (!match) return null
+  return { command: `/${match.name}`, arguments: remainingArgs }
+}

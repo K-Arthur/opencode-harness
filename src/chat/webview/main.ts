@@ -6,7 +6,7 @@ import { getElementRefs, scrollToBottom, getActiveMessageList, toggleAllThinking
 import { renderMessage } from "./messageRenderer"
 import { setupMentions } from "./mentions"
 import { setupCommandsModal, type CommandEntry } from "./commands-modal"
-import { toCommandEntries } from "./slash-commands"
+import { toCommandEntries, type RemoteCommandInfo } from "./slash-commands"
 import { createStreamHandlers, type StreamHandlers } from "./stream"
 import { upsertMessageById } from "./messageUpsert"
 import { isSwitchEventType, switchInsertIndex } from "../../session/activityCoalesce"
@@ -582,6 +582,11 @@ function getVsCodeApi() {
   // so the modal and the inline mention dropdown can't drift out of sync.
   const LOCAL_COMMAND_ENTRIES: CommandEntry[] = toCommandEntries()
 
+  // Cached remote (server/MCP/skill) commands — updated whenever the host
+  // pushes a `command_list`. Consumed by the slash dispatcher to resolve
+  // MCP namespace-prefixed invocations (e.g. `/jcodemunch triage` → `/triage`).
+  let cachedRemoteCommands: RemoteCommandInfo[] = []
+
   function runCommandEntry(entry: CommandEntry): void {
     composer.runCommandEntry(entry)
   }
@@ -718,6 +723,7 @@ function getVsCodeApi() {
       modelDropdown: modelDropdown as any,
       modelManager: modelManager as any,
       commandsModal: commandsModal as any,
+      getServerCommands: () => cachedRemoteCommands,
       streamHandlers: streamHandlers as any,
       tabBar: tabBar as any,
       timers: timers as any,
@@ -3858,13 +3864,28 @@ function getVsCodeApi() {
         }
       }],
       ["command_list", (msg) => {
-        const commands = (msg.commands || []) as Array<{ name: string; description?: string; template?: string; isCustom?: boolean; source?: string }>
+        const commands = (msg.commands || []) as Array<{ name: string; description?: string; template?: string; isCustom?: boolean; source?: string; agent?: string }>
         const promptCommands = commands.filter((c) => c.isCustom)
         const remoteCommands = commands.filter((c) => !c.isCustom)
+        // Cache remote commands (with origin/agent) so the slash dispatcher
+        // can resolve MCP namespace prefixes like `/jcodemunch triage`.
+        cachedRemoteCommands = remoteCommands.map((c) => ({
+          name: c.name,
+          source: c.source,
+          origin: c.agent,
+        }))
         const commandSuggestions = [...remoteCommands, ...promptCommands]
         mention.updateServerCommands(commandSuggestions)
         commandsModal.updateServerCommands(remoteCommands)
         commandsModal.updatePromptCommands(promptCommands)
+        // When the server list fetch failed (partial), the modal shows a note
+        // so users understand why server/MCP commands may be missing.
+        if (msg.partial === true && msg.showInChat === true) {
+          const active = stateManager.getActiveSession()
+          if (active) {
+            showSystemMessage(active.id, "Could not fetch the full command list from the server. Only custom commands are shown. Server/MCP commands will appear once the server is reachable.")
+          }
+        }
         if (msg.showInChat !== true) return
         // /commands now opens a real modal instead of dumping into chat history.
         commandsModal.open()

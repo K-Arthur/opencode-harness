@@ -31,6 +31,14 @@ describe("McpServerManager.ts", () => {
     assert.ok(source.includes("MCP remote server URL must use HTTPS"), "must reject insecure remote MCP URLs")
   })
 
+  it("requires a url for http/sse/remote server types", () => {
+    assert.ok(
+      source.includes("MCP") && source.includes("server must include a url"),
+      "must reject http/sse/remote servers without a url",
+    )
+    assert.ok(source.includes("isRemoteType"), "must distinguish remote types from stdio")
+  })
+
   it("sanitizes tool names reported by MCP servers", () => {
     assert.ok(source.includes("sanitizeToolNames"), "must sanitize tool names")
     assert.ok(source.includes("MCP_TOOL_NAME_PATTERN"), "must define a safe tool-name pattern")

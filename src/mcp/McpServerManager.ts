@@ -212,6 +212,14 @@ function sanitizeMcpServerConfig(name: string, value: unknown, partial = false):
 
   const command = typeof config.command === "string" ? config.command.trim() : undefined
   const url = assertRemoteUrl(config.url)
+
+  // Non-stdio types (http/sse/remote) require a URL; without one the server
+  // has no endpoint to connect to and will fail at runtime.
+  const isRemoteType = type === "http" || type === "sse" || type === "remote"
+  if (isRemoteType && !url) {
+    throw new Error(`MCP ${type} server must include a url`)
+  }
+
   const requiresCommand = !partial && (!type || type === "stdio") && !url
   if (requiresCommand && !command) {
     throw new Error("MCP stdio server command must be a non-empty string")

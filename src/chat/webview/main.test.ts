@@ -187,6 +187,16 @@ describe("main.ts", () => {
     assert.ok(!withComposer.includes("Unknown command: ${cmd}"), "must not reject server-discovered commands in the webview")
   })
 
+  it("slash handler resolves MCP namespace prefixes before forwarding", () => {
+    assert.ok(slashCommandsSource.includes("resolveMcpNamespace"), "must call resolveMcpNamespace in the default case")
+    assert.ok(slashCommandsSource.includes("getServerCommands"), "must accept a getServerCommands dependency")
+  })
+
+  it("slash handler shows non-blocking guidance for unrecognised commands", () => {
+    assert.ok(slashCommandsSource.includes("isKnownRemote"), "must check whether the command is in the cached server list")
+    assert.ok(slashCommandsSource.includes("/commands"), "guidance message must point users to /commands")
+  })
+
   it("command palette local entries route through the slash dispatcher", () => {
     const idx = slashCommandsSource.indexOf("function runCommandEntry(")
     assert.ok(idx >= 0, "runCommandEntry must exist")
