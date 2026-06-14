@@ -849,75 +849,7 @@ export class StreamCoordinator {
       this.tabManager.clearBuffer(tabId)
       this.startWatchdog()
 
-      // TTFB (time-to-first-byte) timeout — fires if no stream chunk arrives within 30s
-      const abortController = new AbortController()
-      this.ttfbAbortControllers.set(tabId, abortController)
-      const ttfbTimeout = setTimeout(() => {
-        const t = this.tabManager.getTab(tabId)
-        if (t?.isStreaming && t.waitingForCompletion) {
-          if (!this.activityTracker.shouldTriggerStartupTimeout(tabId, this.TTFB_TIMEOUT_MS)) {
-            log.info(`Startup timeout skipped for tab ${tabId} because OpenCode activity was observed`)
-            this.clearTtfbTimeout(tabId)
-            return
-          }
-          const eventStreamStatus = this.sessionManager.eventStreamStatus
-          const eventStreamDisconnected = eventStreamStatus.state !== "connected"
-          const reason = eventStreamDisconnected ? "event_stream_disconnected" : "ttfb_timeout"
-          log.warn(`TTFB timeout for tab ${tabId} — no chunk received within ${this.TTFB_TIMEOUT_MS}ms (eventStream=${eventStreamStatus.state}, lastRaw=${eventStreamStatus.lastRawEventType || "none"})`)
-          const snapshot = eventStreamDisconnected
-            ? this.activityTracker.markRunInterrupted(tabId, "OpenCode event stream disconnected before any response events arrived.")
-            : this.activityTracker.markRunFailed(tabId, {
-                kind: "model_startup_timeout",
-                source: "model_provider",
-                recoverability: "retryable",
-                message: "No OpenCode activity arrived before the startup timeout.",
-              })
-          const acceptedRun = this.activeRuns.get(tabId)
-          const backendMayStillBeRunning = eventStreamDisconnected ||
-            acceptedRun?.state === "accepted" ||
-            acceptedRun?.state === "streaming" ||
-            acceptedRun?.state === "interrupted"
-          const errorContext = mapRunError({
-            kind: eventStreamDisconnected ? "transport_disconnected" : "model_startup_timeout",
-            source: eventStreamDisconnected ? "event_stream" : "model_provider",
-            recoverability: eventStreamDisconnected ? "refresh_from_server" : "retryable",
-            sessionId: tabId,
-            messageId: this.ensureStreamMessageId(tabId, t.cliSessionId),
-            runId: snapshot?.runId,
-            mayStillBeRunning: backendMayStillBeRunning,
-            partialOutputPreserved: false,
-            technicalDetails: `stream=${eventStreamStatus.state};last=${eventStreamStatus.lastRawEventType || ""};timeout=${this.TTFB_TIMEOUT_MS};session=${t.cliSessionId}`,
-          })
-          this.postRunActivitySnapshot(tabId, snapshot, callbacks)
-          this.setStreamState(tabId, "timeout", { sessionId: t.cliSessionId, eventStream: eventStreamStatus.state })
-          if (acceptedRun?.state === "accepted" || acceptedRun?.state === "streaming" || acceptedRun?.state === "interrupted") {
-            this.setActiveRunState(tabId, "interrupted", {
-              finalizeReason: reason,
-              eventStreamState: eventStreamStatus.state,
-              lastRawEventType: eventStreamStatus.lastRawEventType,
-            })
-            this.clearTtfbTimeout(tabId)
-            callbacks.postRequestError(errorContext.userMessage, tabId)
-            return
-          }
-          abortController.abort("ttfb_timeout")
-          callbacks.postMessage({
-            type: "stream_end",
-            sessionId: tabId,
-            messageId: this.ensureStreamMessageId(tabId, t.cliSessionId),
-            blocks: [],
-            reason,
-            partial: false,
-            retryable: true,
-            seq: this.nextSeq(tabId),
-          })
-          if (eventStreamDisconnected) {
-            callbacks.postRequestError(errorContext.userMessage, tabId)
-          }
-          this.cleanupTab(tabId)
-        }
-      }, this.TTFB_TIMEOUT_MS)
-      this.ttfbTimeouts.set(tabId, ttfbTimeout)
+      this.setupTtfbTimeout(tabId, callbacks)
 
       // Lazy model resolution: if neither the tab nor the global model is set,
       // give refreshModels one more chance (with a 3s timeout) before sending.
@@ -1103,6 +1035,78 @@ export class StreamCoordinator {
       callbacks.postRequestError(userMessage, tabId)
       this.cleanupTab(tabId)
     }
+  }
+
+  private setupTtfbTimeout(tabId: string, callbacks: StreamCallbacks): void {
+    // TTFB (time-to-first-byte) timeout — fires if no stream chunk arrives within 30s
+    const abortController = new AbortController()
+    this.ttfbAbortControllers.set(tabId, abortController)
+    const ttfbTimeout = setTimeout(() => {
+      const t = this.tabManager.getTab(tabId)
+      if (t?.isStreaming && t.waitingForCompletion) {
+        if (!this.activityTracker.shouldTriggerStartupTimeout(tabId, this.TTFB_TIMEOUT_MS)) {
+          log.info(`Startup timeout skipped for tab ${tabId} because OpenCode activity was observed`)
+          this.clearTtfbTimeout(tabId)
+          return
+        }
+        const eventStreamStatus = this.sessionManager.eventStreamStatus
+        const eventStreamDisconnected = eventStreamStatus.state !== "connected"
+        const reason = eventStreamDisconnected ? "event_stream_disconnected" : "ttfb_timeout"
+        log.warn(`TTFB timeout for tab ${tabId} — no chunk received within ${this.TTFB_TIMEOUT_MS}ms (eventStream=${eventStreamStatus.state}, lastRaw=${eventStreamStatus.lastRawEventType || "none"})`)
+        const snapshot = eventStreamDisconnected
+          ? this.activityTracker.markRunInterrupted(tabId, "OpenCode event stream disconnected before any response events arrived.")
+          : this.activityTracker.markRunFailed(tabId, {
+            kind: "model_startup_timeout",
+            source: "model_provider",
+            recoverability: "retryable",
+            message: "No OpenCode activity arrived before the startup timeout.",
+          })
+        const acceptedRun = this.activeRuns.get(tabId)
+        const backendMayStillBeRunning = eventStreamDisconnected ||
+          acceptedRun?.state === "accepted" ||
+          acceptedRun?.state === "streaming" ||
+          acceptedRun?.state === "interrupted"
+        const errorContext = mapRunError({
+          kind: eventStreamDisconnected ? "transport_disconnected" : "model_startup_timeout",
+          source: eventStreamDisconnected ? "event_stream" : "model_provider",
+          recoverability: eventStreamDisconnected ? "refresh_from_server" : "retryable",
+          sessionId: tabId,
+          messageId: this.ensureStreamMessageId(tabId, t.cliSessionId),
+          runId: snapshot?.runId,
+          mayStillBeRunning: backendMayStillBeRunning,
+          partialOutputPreserved: false,
+          technicalDetails: `stream=${eventStreamStatus.state};last=${eventStreamStatus.lastRawEventType || ""};timeout=${this.TTFB_TIMEOUT_MS};session=${t.cliSessionId}`,
+        })
+        this.postRunActivitySnapshot(tabId, snapshot, callbacks)
+        this.setStreamState(tabId, "timeout", { sessionId: t.cliSessionId, eventStream: eventStreamStatus.state })
+        if (acceptedRun?.state === "accepted" || acceptedRun?.state === "streaming" || acceptedRun?.state === "interrupted") {
+          this.setActiveRunState(tabId, "interrupted", {
+            finalizeReason: reason,
+            eventStreamState: eventStreamStatus.state,
+            lastRawEventType: eventStreamStatus.lastRawEventType,
+          })
+          this.clearTtfbTimeout(tabId)
+          callbacks.postRequestError(errorContext.userMessage, tabId)
+          return
+        }
+        abortController.abort("ttfb_timeout")
+        callbacks.postMessage({
+          type: "stream_end",
+          sessionId: tabId,
+          messageId: this.ensureStreamMessageId(tabId, t.cliSessionId),
+          blocks: [],
+          reason,
+          partial: false,
+          retryable: true,
+          seq: this.nextSeq(tabId),
+        })
+        if (eventStreamDisconnected) {
+          callbacks.postRequestError(errorContext.userMessage, tabId)
+        }
+        this.cleanupTab(tabId)
+      }
+    }, this.TTFB_TIMEOUT_MS)
+    this.ttfbTimeouts.set(tabId, ttfbTimeout)
   }
 
   private async fetchFinalBlocks(
