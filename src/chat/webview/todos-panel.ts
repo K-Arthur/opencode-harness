@@ -202,6 +202,11 @@ function createTodoItem(todo: Todo, options: TodosPanelOptions): HTMLElement {
     const led = document.createElement("span")
     led.className = "todo-status-led"
     led.title = "In progress"
+    // M5: status conveyed by color alone fails WCAG 1.4.1 (Use of Color)
+    // and is invisible to screen readers. Expose the in-progress state as
+    // an accessible image with an explicit label.
+    led.setAttribute("role", "img")
+    led.setAttribute("aria-label", "In progress")
     statusContainer.appendChild(led)
   }
 

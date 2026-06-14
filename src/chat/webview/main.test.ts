@@ -809,7 +809,9 @@ it("unified modal: server session items send resume_server_session on click", ()
     it("proactively loads command list on boot so slash commands are available immediately", () => {
       const bootIdx = source.indexOf("function boot()")
       assert.ok(bootIdx >= 0, "boot function must exist")
-      const bootBlock = source.slice(bootIdx, bootIdx + 400)
+      // Window is generous because boot() also wires the density ResizeObserver
+      // (Sprint 1 typography) between init() and the postMessage calls.
+      const bootBlock = source.slice(bootIdx, bootIdx + 2000)
       assert.ok(bootBlock.includes('"list_commands"'), "boot must send list_commands after webview_ready to pre-populate inline dropdown")
     })
 

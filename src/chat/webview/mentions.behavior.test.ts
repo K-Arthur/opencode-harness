@@ -23,6 +23,7 @@ beforeEach(async () => {
   ;(globalThis as any).HTMLTextAreaElement = dom.window.HTMLTextAreaElement
   ;(globalThis as any).HTMLDivElement = dom.window.HTMLDivElement
   ;(globalThis as any).CustomEvent = dom.window.CustomEvent
+  ;(globalThis as any).KeyboardEvent = dom.window.KeyboardEvent
 
   promptInput = document.getElementById("prompt-input") as HTMLTextAreaElement
   mentionDropdown = document.getElementById("mention-dropdown") as HTMLDivElement
@@ -177,5 +178,58 @@ describe("mention dropdown — result cap", () => {
     // must not be a .dropdown-item or it would steal a selection slot.
     const more = mentionDropdown.querySelector(".dropdown-more")
     assert.ok(more && !more.classList.contains("dropdown-item"))
+  })
+})
+
+// ── C3: combobox aria-activedescendant ───────────────────────────────────
+// The prompt <textarea> is declared role="combobox" aria-autocomplete="list"
+// aria-expanded aria-controls. ArrowUp/ArrowDown visually highlight an
+// option (.selected class) but focus stays in the textarea. Without
+// aria-activedescendant pointing at the highlighted option's id, screen
+// readers cannot announce it. Previously the only mention of
+// aria-activedescendant in the source was a removal on close — never a set
+// on navigation.
+describe("mention dropdown — combobox aria-activedescendant (C3)", () => {
+  it("each rendered option has a stable id", () => {
+    setup.updateServerCommands([
+      { name: "c3-deploy", description: "a", source: "command" },
+      { name: "c3-review", description: "b", source: "command" },
+    ])
+    typeAt("/c3-")
+    const items = mentionDropdown.querySelectorAll(".dropdown-item")
+    assert.equal(items.length, 2, "only the 2 matching server commands render")
+    for (const item of items) {
+      assert.ok(item.id, "every option must have an id for aria-activedescendant")
+    }
+  })
+
+  it("ArrowDown sets aria-activedescendant to the highlighted option's id", () => {
+    setup.updateServerCommands([
+      { name: "c3-deploy", description: "a", source: "command" },
+      { name: "c3-review", description: "b", source: "command" },
+    ])
+    typeAt("/c3-")
+    // selectedIndex starts at 0; ArrowDown moves to 1.
+    setup.handleKeydown(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }))
+    const ad = promptInput.getAttribute("aria-activedescendant")
+    assert.ok(ad, "aria-activedescendant must be set after ArrowDown")
+    const selected = mentionDropdown.querySelector(".selected") as HTMLElement | null
+    assert.ok(selected, "an option is highlighted")
+    assert.equal(ad, selected!.id, "aria-activedescendant must point at the highlighted option's id")
+  })
+
+  it("ArrowUp wraps and still updates aria-activedescendant", () => {
+    setup.updateServerCommands([
+      { name: "c3-deploy", description: "a", source: "command" },
+      { name: "c3-review", description: "b", source: "command" },
+    ])
+    typeAt("/c3-")
+    // selectedIndex starts at 0; ArrowUp wraps to last (index 1).
+    setup.handleKeydown(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }))
+    const ad = promptInput.getAttribute("aria-activedescendant")
+    assert.ok(ad, "aria-activedescendant must be set after ArrowUp")
+    const selected = mentionDropdown.querySelector(".selected") as HTMLElement | null
+    assert.ok(selected)
+    assert.equal(ad, selected!.id)
   })
 })
