@@ -95,6 +95,37 @@ function renderAgentStatusLed(
   agentStatusText.textContent = status === "idle" ? "SYSTEM READY" : status.toUpperCase()
 }
 
+/**
+ * Show a transient skill-name pill near the composer; auto-removes after 3s.
+ *
+ * Extracted from `createStreamOrchestrator`. Creates the `.skill-indicators`
+ * container on first use, then appends each new pill to it. The orchestrator
+ * closure delegates here with its captured `els.inputArea` / `els.inputWrapper`.
+ *
+ * Note: `sessionId` is part of the public API for telemetry symmetry but the
+ * current behavior renders pills globally in the composer (one shared strip).
+ */
+function appendSkillPill(
+  _sessionId: string,
+  skillName: string,
+  inputArea: HTMLElement,
+  inputWrapper: HTMLElement,
+): void {
+  const indicator = inputArea.querySelector(".skill-indicators")
+  const pill = document.createElement("span")
+  pill.className = "skill-pill"
+  pill.textContent = skillName
+  if (!indicator) {
+    const container = document.createElement("div")
+    container.className = "skill-indicators"
+    container.appendChild(pill)
+    inputArea.insertBefore(container, inputWrapper)
+  } else {
+    indicator.appendChild(pill)
+  }
+  timers.setTimeout(() => pill.remove(), 3000)
+}
+
 export interface StreamOrchestratorDeps {
   vscode: { postMessage(msg: Record<string, unknown>): void }
   els: ElementRefs
@@ -243,23 +274,7 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
   }
 
   function showSkillIndicator(sessionId: string, skillName: string) {
-    const indicator = els.inputArea.querySelector(".skill-indicators")
-    if (!indicator) {
-      const container = document.createElement("div")
-      container.className = "skill-indicators"
-      els.inputArea.insertBefore(container, els.inputWrapper)
-      const pill = document.createElement("span")
-      pill.className = "skill-pill"
-      pill.textContent = skillName
-      container.appendChild(pill)
-      timers.setTimeout(() => pill.remove(), 3000)
-    } else {
-      const pill = document.createElement("span")
-      pill.className = "skill-pill"
-      pill.textContent = skillName
-      indicator.appendChild(pill)
-      timers.setTimeout(() => pill.remove(), 3000)
-    }
+    appendSkillPill(sessionId, skillName, els.inputArea, els.inputWrapper)
   }
 
   function handleStreamStart(sessionId: string, messageId?: string) {
