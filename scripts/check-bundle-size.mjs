@@ -48,6 +48,22 @@
 // /jcodemunch:triage and get /triage; the echo shows the typed command in the
 // transcript before server output (matching CLI behavior). UX fixes; +2KB
 // keeps headroom so the gate still trips on a real regression.
+//
+// 2026-06-14 re-baseline (host 554KB -> 556KB): Sprint 0 question-tool
+// fixes (B1/B3/B4/B5/B6/B7/B9 + multi-group wire format B-edge-1) add
+// ~1.1KB minified to the host bundle. New code:
+//   - ChatProvider.ensureQuestionBlock posts {type:"question_asked"}
+//   - StreamCoordinator.appendToolStart promotes tool-call → question
+//   - StreamCoordinator.markUnresolvedPendingToolCalls excludes question
+//     blocks
+//   - sdkMessageConverter.partToBlock preserves requestID through history
+//   - SessionStore.unmarkQuestionAnswered + StreamCoordinator equivalent
+//   - WebviewEventRouter.question_answer v2 path prefers structuredAnswers
+//   - WebviewEventRouter.question_answer catch block calls unmark + posts
+//     question_unacknowledged
+// All are correctness fixes for the question-tool surfacing bug (the
+// single most common user-reported regression in this sprint). +2KB
+// keeps ~0.4% headroom so the gate still trips on a real regression.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -57,7 +73,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 554 * 1024, label: "extension host" },
+  { path: "dist/extension.js", limitBytes: 556 * 1024, label: "extension host" },
   { path: "dist/chat/webview/main.js", limitBytes: 712 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
