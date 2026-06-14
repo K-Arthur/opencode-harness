@@ -1822,6 +1822,38 @@ export class StreamCoordinator {
           if (toolCall.args !== undefined) existingBlock.args = toolCall.args
           if (toolCall.class) existingBlock.class = toolCall.class
           if (toolCall.name) existingBlock.name = toolCall.name
+          // B7: promote a stale tool-call block to a question block when the
+          // tool name resolves to "question" on a re-entrant start. Without
+          // this, the duplicate-start branch would only update args/class/name
+          // and never surface the question — the bar would never populate and
+          // the user could not answer. Mutate the persisted block in place
+          // AND post question_asked so the webview's bar handler fires.
+          if (isQuestion) {
+            const promoted: Block = {
+              type: "question",
+              id: stableId,
+              toolCallId: stableId,
+              groups: [],
+              text: "",
+              options: [],
+              allowFreeText: true,
+            }
+            this.applyQuestionArgs(promoted, toolCall.args)
+            // Replace tool-call-only fields with question fields (the
+            // index-sighed Block bag carries both shapes safely).
+            const existingRec = existingBlock as Record<string, unknown>
+            Object.keys(existingRec).forEach((k) => {
+              if (!(k in (promoted as Record<string, unknown>))) delete existingRec[k]
+            })
+            Object.assign(existingRec, promoted)
+            log.info(`appendToolStart: promoted stale tool-call block ${stableId} to question`)
+            callbacks.postMessage({
+              type: "question_asked",
+              sessionId: tabId,
+              block: existingBlock,
+              messageId: undefined,
+            })
+          }
         }
       }
       return
