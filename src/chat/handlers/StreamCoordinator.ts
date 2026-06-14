@@ -637,6 +637,20 @@ export class StreamCoordinator {
       block.state = result.stale ? "stale" : result.ok ? "result" : "error"
       block.result = result.result
       block.durationMs = result.durationMs
+      // M1: persist the defensively-extracted exit code / stderr on the
+      // block so history replay + backfill re-render the bash card with
+      // the colored exit-code chip and the stdout/stderr split panels.
+      // These are no-ops when undefined (the common case for non-bash
+      // tools and for servers that don't ship structured metadata).
+      if (typeof result.exitCode === "number") {
+        ;(block as Record<string, unknown>).exitCode = result.exitCode
+      }
+      if (typeof result.stderr === "string") {
+        ;(block as Record<string, unknown>).stderr = result.stderr
+      }
+      if (result.resultTruncated) {
+        ;(block as Record<string, unknown>).resultTruncated = true
+      }
     }
     return true
   }
