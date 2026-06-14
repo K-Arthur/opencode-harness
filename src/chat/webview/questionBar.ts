@@ -171,6 +171,34 @@ export function markQuestionAnswered(toolCallId: string, submittedValue?: string
   maybeScheduleDismiss(item?.sessionId)
 }
 
+/**
+ * B9: revert a markQuestionAnswered when the host reports the SDK reply
+ * failed (network blip, unknown requestID, server 4xx, missing v2 API).
+ * Restores the interactive controls so the user can retry. The host
+ * already undid its own optimistic state — this side just unwinds the
+ * bar's optimistic UI so the two layers stay in sync.
+ */
+export function unmarkQuestionAnswered(toolCallId: string): void {
+  if (!els) return
+  const item = state.items.get(toolCallId)
+  if (!item) return
+  item.answered = false
+  delete item.answeredAt
+  delete item.submittedValue
+  // The DOM was swapped to the answered variant on markQuestionAnswered;
+  // re-render the interactive variant so the user can pick again. We build
+  // the new element via buildBarItemElement (the same builder renderBarItem
+  // uses) so the markup stays in sync.
+  const old = els.items.querySelector(`[data-question-id="${toolCallId}"]`)
+  if (old) {
+    old.replaceWith(buildBarItemElement(item))
+  } else {
+    renderBarItem(item)
+  }
+  updateSubmitState()
+  updateVisibility()
+}
+
 function maybeScheduleDismiss(sessionId?: string): void {
   if (!els) return
   // Dismissal is per session: another tab's unanswered question must neither
@@ -277,8 +305,7 @@ function updateSubmitState(): void {
   els.submitBtn.disabled = !hasAnySelection
 }
 
-function renderBarItem(item: QuestionBarItem): void {
-  if (!els) return
+function buildBarItemElement(item: QuestionBarItem): HTMLElement {
   const wrapper = document.createElement("div")
   wrapper.className = "question-bar-item"
   wrapper.setAttribute("data-question-id", item.toolCallId)
@@ -376,7 +403,12 @@ function renderBarItem(item: QuestionBarItem): void {
     wrapper.appendChild(badge)
   }
 
-  els.items.appendChild(wrapper)
+  return wrapper
+}
+
+function renderBarItem(item: QuestionBarItem): void {
+  if (!els) return
+  els.items.appendChild(buildBarItemElement(item))
 }
 
 /**

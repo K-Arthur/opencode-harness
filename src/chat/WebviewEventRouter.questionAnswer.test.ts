@@ -115,4 +115,23 @@ describe("WebviewEventRouter — question_answer routing", () => {
       "v2 reply must pass structured answers when present, else fall back to [[value]]",
     )
   })
+
+  // ── B9: optimistic "Answered" rollback on reply failure ──────────────────
+  // The v2 reply branch optimistically calls markQuestionAnswered on the
+  // sessionStore + streamCoordinator BEFORE awaiting replyToQuestion. If
+  // the SDK throws (network blip, unknown requestID, server 4xx), the user
+  // sees an "Answered" state but the server never received the answer. The
+  // catch block must undo the optimistic state — unmark on both stores,
+  // post question_unacknowledged so the webview can revert the bar — so
+  // the user can see the failure and retry.
+  it("B9: v2 reply catch block rolls back optimistic answered state and notifies the webview", () => {
+    assert.ok(
+      handler.includes("unmarkQuestionAnswered"),
+      "B9: catch block must call unmarkQuestionAnswered on sessionStore + streamCoordinator to undo the optimistic state",
+    )
+    assert.ok(
+      handler.includes('"question_unacknowledged"'),
+      "B9: catch block must post question_unacknowledged so the webview reverts the bar's 'Answered' state",
+    )
+  })
 })

@@ -2,7 +2,7 @@ import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
 import { JSDOM } from "jsdom"
 import type { QuestionBlock } from "./types"
-import { initQuestionBar, addQuestion, clearAllQuestions, setActiveSession, removeQuestion, updateQuestion, markQuestionAnswered } from "./questionBar"
+import { initQuestionBar, addQuestion, clearAllQuestions, setActiveSession, removeQuestion, updateQuestion, markQuestionAnswered, unmarkQuestionAnswered } from "./questionBar"
 
 function setupDom() {
   const dom = new JSDOM(`<!doctype html><html><body>
@@ -244,5 +244,33 @@ describe("questionBar", () => {
     setActiveSession("sess-B")
     assert.equal(bar.querySelectorAll(".question-bar-item").length, 1, "other session's pending question survives")
     assert.ok(!bar.classList.contains("hidden"))
+  })
+
+  // ── B9: rollback optimistic "Answered" state ───────────────────────────
+  // The webview's markQuestionAnswered swaps the DOM to the answered variant
+  // and sets item.answered = true. When the host reports the SDK reply
+  // failed (question_unacknowledged), unmarkQuestionAnswered must restore
+  // the interactive controls so the user can retry — without this, the
+  // user sees a "submitted" card forever while the server has no record
+  // of the answer.
+  it("B9: unmarkQuestionAnswered restores interactive controls and lets the user retry", () => {
+    initQuestionBar(() => {})
+    addQuestion(makeBlock(), "msg-1")
+    const optBtns = document.querySelectorAll(".question-bar-option")
+    assert.equal(optBtns.length, 2, "interactive controls rendered before submit")
+    ;(optBtns[0] as HTMLButtonElement).click()
+    markQuestionAnswered("q-1", "Pick one: A")
+
+    // After markQuestionAnswered, the item is in the answered state — the
+    // interactive option buttons are gone, the answered card is rendered.
+    const bar = document.getElementById("question-bar")!
+    assert.equal(bar.querySelectorAll(".question-bar-option").length, 0, "interactive controls removed after mark")
+    assert.ok(bar.querySelector(".question-bar-item--answered"), "answered card is shown")
+
+    // The host reports the SDK reply failed. Webview reverts.
+    unmarkQuestionAnswered("q-1")
+
+    assert.equal(bar.querySelectorAll(".question-bar-option").length, 2, "B9: interactive option buttons restored so the user can retry")
+    assert.equal(bar.querySelectorAll(".question-bar-item--answered").length, 0, "B9: answered state chip removed")
   })
 })

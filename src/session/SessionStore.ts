@@ -795,6 +795,32 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
     return false
   }
 
+  /**
+   * B9: undo an optimistic markQuestionAnswered when the SDK reply call
+   * fails after the optimistic state was set. Reverses answered/answer/
+   * answerSource on the matching question block so the question is once
+   * again presented to the user as pending and they can retry.
+   */
+  unmarkQuestionAnswered(sessionId: string, toolCallId: string): boolean {
+    const session = this.sessions.get(sessionId)
+    if (!session) return false
+    for (const msg of session.messages) {
+      for (const block of msg.blocks) {
+        const b = block as Record<string, unknown>
+        if (b.type !== "question" || b.answered !== true) continue
+        if (b.toolCallId !== toolCallId && b.id !== toolCallId) continue
+        delete b.answered
+        delete b.answer
+        delete b.answerSource
+        session.lastActiveAt = Date.now()
+        this.save()
+        this._onSessionsChanged.fire()
+        return true
+      }
+    }
+    return false
+  }
+
 
   /**
    * Public-facing display name for a session. Empty/auto-generated names

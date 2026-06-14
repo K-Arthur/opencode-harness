@@ -499,6 +499,33 @@ export class StreamCoordinator {
     }
   }
 
+  /**
+   * B9: undo an optimistic markQuestionAnswered when the SDK reply fails
+   * (network blip, unknown requestID, server 4xx). Re-arms the question
+   * block as pending and re-adds the id to activeToolCallIds so the user
+   * can retry the submission.
+   */
+  unmarkQuestionAnswered(tabId: string, toolCallId: string): void {
+    const tab = this.tabManager.getTab(tabId)
+    if (!tab) return
+    const qBlock = tab.blocksBuffer.find(
+      b => b.type === "question" && (b.id === toolCallId || (b as Record<string, unknown>).toolCallId === toolCallId)
+    )
+    if (qBlock) {
+      const rec = qBlock as Record<string, unknown>
+      delete rec.answered
+      delete rec.answer
+      delete rec.answerSource
+      log.info(`unmarkQuestionAnswered: reverted question ${toolCallId} to pending in blocksBuffer for ${tabId}`)
+    }
+    const pending = this.getOrCreatePendingToolIds(tabId)
+    if (!pending.has(toolCallId)) {
+      pending.add(toolCallId)
+      this.trackToolActivity(tabId, toolCallId)
+      log.info(`unmarkQuestionAnswered: re-added ${toolCallId} to activeToolCallIds for ${tabId}`)
+    }
+  }
+
   recordExternalActivity(tabId: string, activity: { kind: string; label: string }, callbacks?: StreamCallbacks): void {
     this.recordRunActivity(tabId, {
       kind: activity.kind === "permission" ? "permission" : "agent",

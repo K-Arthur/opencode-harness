@@ -4150,6 +4150,16 @@ function getVsCodeApi() {
         // state via markQuestionAnswered, so this just cleans it up.
         if (toolCallId) questionBar.removeQuestion(toolCallId)
       }],
+      ["question_unacknowledged", (_msg, _sid) => {
+        // B9: the host's optimistic answer submission failed (network blip,
+        // unknown requestID, server 4xx, missing v2 API). The host already
+        // rolled back its own optimistic state (sessionStore + streamCoordinator);
+        // the webview must unwind the bar's optimistic "Answered" variant
+        // so the user can see the failure and re-submit. Pair with the
+        // postRequestError banner the host already sent for context.
+        const toolCallId = _msg.toolCallId as string || _msg.requestID as string || ""
+        if (toolCallId) questionBar.unmarkQuestionAnswered(toolCallId)
+      }],
     ])
 
     // I3: surface unknown host message types and capture handler exceptions so silent
