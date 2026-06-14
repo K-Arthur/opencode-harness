@@ -359,7 +359,19 @@ export class WebviewEventRouter {
           if (source === "skip") {
             await this.opts.sessionManager.rejectQuestion(requestID)
           } else {
-            await this.opts.sessionManager.replyToQuestion(requestID, [[value]])
+            // B-edge-1: prefer the per-group structured answers the webview
+            // builds (string[][] — one inner array per question group, with
+            // the selected labels in group order). Fall back to [[value]] for
+            // older webview bundles that haven't been updated to send
+            // structuredAnswers. The server can no longer map a flattened
+            // "Header1: A\nHeader2: B" string back to individual groups.
+            const structured = Array.isArray(msg.structuredAnswers)
+              ? (msg.structuredAnswers as unknown as unknown[])
+                  .filter((g): g is unknown[] => Array.isArray(g))
+                  .map((g) => g.map((v) => (typeof v === "string" ? v : String(v ?? ""))).filter((v) => v.length > 0))
+              : null
+            const wireAnswers = structured && structured.length > 0 ? structured : [[value]]
+            await this.opts.sessionManager.replyToQuestion(requestID, wireAnswers)
           }
           this.opts.postMessage({
             type: "question_acknowledged",

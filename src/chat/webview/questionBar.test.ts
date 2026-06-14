@@ -14,6 +14,7 @@ function setupDom() {
       <div id="question-bar-items" class="question-bar-items"></div>
       <div class="question-bar-actions">
         <button id="question-bar-submit" class="question-bar-submit-btn" type="button" disabled>Submit Answer</button>
+        <textarea class="question-bar-freetext" style="display:none"></textarea>
       </div>
     </div>
   </body></html>`)
@@ -39,7 +40,8 @@ function makeBlock(overrides: Record<string, unknown> = {}): QuestionBlock {
 }
 
 describe("questionBar", () => {
-  beforeEach(() => setupDom())
+  let dom: JSDOM
+  beforeEach(() => { dom = setupDom() })
 
   it("addQuestion shows the bar with option buttons", () => {
     initQuestionBar(() => {})
@@ -66,6 +68,98 @@ describe("questionBar", () => {
     assert.ok(answer, "question_answer was posted")
     assert.equal(answer!.value, "Pick one: A", "correct value")
     assert.equal(answer!.requestID, "req-q-1")
+  })
+
+  // ── Multi-group question wire format ────────────────────────────────────
+  // The SDK v2 question.reply endpoint expects `answers: string[][]` — one
+  // inner array per question group, with the labels the user selected. Our
+  // webview previously sent a single flattened "Header1: A\nHeader2: B"
+  // string wrapped as [[value]], which the server could not map back to
+  // individual groups (B-edge-1). submitAllAnswers must also post a
+  // structuredAnswers field carrying the per-group label arrays.
+  it("multi-group question: submitAllAnswers posts structuredAnswers as string[][] (B-edge-1)", () => {
+    const posted: Array<Record<string, unknown>> = []
+    initQuestionBar((m) => posted.push(m))
+
+    // Two groups, each single-select: "DB?" with PG/MySQL, "Auth?" with Yes/No.
+    const block = makeBlock({
+      id: "q-multi",
+      toolCallId: "q-multi",
+      requestID: "req-multi",
+      groups: [
+        { question: "DB?", header: "Database", options: ["PG", "MySQL"], multiSelect: false },
+        { question: "Auth?", header: "Auth", options: ["Yes", "No"], multiSelect: false },
+      ],
+      text: "DB?",
+      options: ["PG", "MySQL"],
+    })
+    addQuestion(block, "msg-multi")
+
+    // Click "PG" for the first group, "Yes" for the second.
+    const allOptions = document.querySelectorAll(".question-bar-option")
+    assert.equal(allOptions.length, 4, "renders 4 option buttons (2 groups × 2 options)")
+    ;(allOptions[0] as HTMLButtonElement).click() // PG
+    ;(allOptions[2] as HTMLButtonElement).click() // Yes
+
+    const submitBtn = document.getElementById("question-bar-submit") as HTMLButtonElement
+    assert.ok(!submitBtn.disabled)
+    submitBtn.click()
+
+    const answer = posted.find((m) => m.type === "question_answer")
+    assert.ok(answer, "question_answer was posted")
+    // The flat value stays for history / display.
+    assert.equal(answer!.value, "Database: PG\nAuth: Yes", "flat value preserved for history")
+    // The structured answer is what the SDK needs to map values back to groups.
+    assert.deepEqual(
+      answer!.structuredAnswers,
+      [["PG"], ["Yes"]],
+      "structuredAnswers must be one inner-array per group, in group order",
+    )
+  })
+
+  it("multi-group question with multiSelect: structuredAnswers is an array of all selected labels per group", () => {
+    const posted: Array<Record<string, unknown>> = []
+    initQuestionBar((m) => posted.push(m))
+    addQuestion(makeBlock({
+      id: "q-ms",
+      toolCallId: "q-ms",
+      requestID: "req-ms",
+      groups: [
+        { question: "Feat?", header: "Features", options: ["Auth", "API", "UI"], multiSelect: true },
+      ],
+      text: "Feat?",
+      options: ["Auth", "API", "UI"],
+    }), "msg-ms")
+    const allOptions = document.querySelectorAll(".question-bar-option")
+    ;(allOptions[0] as HTMLButtonElement).click() // Auth
+    ;(allOptions[2] as HTMLButtonElement).click() // UI
+    ;(document.getElementById("question-bar-submit") as HTMLButtonElement).click()
+    const answer = posted.find((m) => m.type === "question_answer")!
+    assert.deepEqual(answer.structuredAnswers, [["Auth", "UI"]], "all selected labels included per group")
+  })
+
+  it("multi-group question: freeText is appended as a separate group entry in structuredAnswers", () => {
+    // Free text (typed in the input) is conceptually a single implicit group
+    // appended after the structured groups. The SDK doesn't distinguish, but
+    // pushing it as its own inner-array keeps the wire shape consistent.
+    const posted: Array<Record<string, unknown>> = []
+    initQuestionBar((m) => posted.push(m))
+    addQuestion(makeBlock({
+      id: "q-ft",
+      toolCallId: "q-ft",
+      requestID: "req-ft",
+      groups: [{ question: "Pick", options: ["A", "B"], multiSelect: false }],
+      text: "Pick",
+      options: ["A", "B"],
+    }), "msg-ft")
+    const allOptions = document.querySelectorAll(".question-bar-option")
+    ;(allOptions[0] as HTMLButtonElement).click() // A
+    const freeTextEl = document.querySelector(".question-bar-freetext") as HTMLTextAreaElement
+    freeTextEl.value = "extra notes"
+    freeTextEl.dispatchEvent(new dom.window.Event("input", { bubbles: true }))
+    ;(document.getElementById("question-bar-submit") as HTMLButtonElement).click()
+    const answer = posted.find((m) => m.type === "question_answer")!
+    assert.deepEqual(answer.structuredAnswers, [["A"], ["extra notes"]], "free text appended as separate group")
   })
 
   it("clearAllQuestions hides the bar", () => {

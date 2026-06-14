@@ -98,4 +98,21 @@ describe("WebviewEventRouter — question_answer routing", () => {
     assert.ok(handler.includes("this.opts.postRequestError("),
       "must surface failures so the UI doesn't spin")
   })
+
+  // ── Multi-group question wire format (B-edge-1) ─────────────────────────
+  // The SDK v2 question.reply endpoint expects `answers: string[][]` — one
+  // inner array per question group, with the labels the user selected. The
+  // webview now posts a structuredAnswers field on the question_answer
+  // message. The v2 reply branch must prefer structuredAnswers when present
+  // and only fall back to [[value]] for older webview bundles.
+  it("B-edge-1: v2 reply branch prefers structuredAnswers and falls back to [[value]] for older bundles", () => {
+    assert.ok(
+      handler.includes("msg.structuredAnswers"),
+      "v2 reply branch must read msg.structuredAnswers",
+    )
+    assert.ok(
+      handler.includes("structured.length > 0 ? structured : [[value]]"),
+      "v2 reply must pass structured answers when present, else fall back to [[value]]",
+    )
+  })
 })

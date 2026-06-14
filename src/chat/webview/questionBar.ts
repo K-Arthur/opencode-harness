@@ -432,6 +432,7 @@ function submitAllAnswers(): void {
     if (item.answered || !isActiveItem(item)) continue
 
     const parts: string[] = []
+    const structuredAnswers: string[][] = []
     let hasSelection = false
 
     item.groups.forEach((group, gi) => {
@@ -440,11 +441,24 @@ function submitAllAnswers(): void {
         hasSelection = true
         const heading = group.header || group.question || `Answer ${gi + 1}`
         parts.push(`${heading}: ${chosen.join(", ")}`)
+        // Per-group selected labels — what the SDK v2 question.reply API
+        // actually wants. Outer array index = group index; inner array =
+        // selected labels for that group (one for single-select, N for
+        // multi-select). B-edge-1: previously the wire payload was a single
+        // flattened "Header1: A\nHeader2: B" string wrapped as [[value]],
+        // which the server could not map back to individual groups.
+        structuredAnswers.push(chosen)
       }
     })
 
     const free = item.freeTextValue.trim()
-    if (free) parts.push(free)
+    if (free) {
+      parts.push(free)
+      // Free text is appended as its own implicit group so the wire shape
+      // stays string[][] for every reply, regardless of which inputs were
+      // used. The server treats it as a single-value group at the end.
+      structuredAnswers.push([free])
+    }
 
     const value = parts.join("\n")
     if (!value) continue
@@ -456,6 +470,12 @@ function submitAllAnswers(): void {
       requestID: item.requestID,
       messageId: item.messageId,
       value,
+      // Carry the structured per-group answers alongside the flat value.
+      // The host prefers structuredAnswers when present (B-edge-1) but
+      // tolerates an older webview that only sends `value` by falling back
+      // to [[value]]. Both shapes stay in sync — flat for history/display,
+      // structured for the SDK wire.
+      structuredAnswers,
       source: hasSelection ? "option" : "freetext",
     })
 
