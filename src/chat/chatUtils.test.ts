@@ -1,6 +1,6 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { toUserErrorMessage, errorValueToMessage, mapToolType, isSessionInCurrentWorkspace, looksLikeSdkError } from "./chatUtils"
+import { toUserErrorMessage, errorValueToMessage, mapToolType, isSessionInCurrentWorkspace, looksLikeSdkError, isAbortErrorValue } from "./chatUtils"
 
 void describe("toUserErrorMessage", () => {
   void it("returns message as-is for non-matching messages", () => {
@@ -89,6 +89,32 @@ void describe("looksLikeSdkError", () => {
     assert.equal(looksLikeSdkError(null), false)
     assert.equal(looksLikeSdkError(undefined), false)
     assert.equal(looksLikeSdkError({ message: "generic" }), false)
+  })
+})
+
+void describe("isAbortErrorValue", () => {
+  void it("recognises the MessageAbortedError SDK error by name", () => {
+    assert.equal(isAbortErrorValue({ name: "MessageAbortedError", data: { message: "Aborted" } }), true)
+  })
+
+  void it("recognises aborted/cancelled wording in a message field", () => {
+    assert.equal(isAbortErrorValue({ message: "The operation was aborted" }), true)
+    assert.equal(isAbortErrorValue({ data: { message: "Request cancelled by user" } }), true)
+    assert.equal(isAbortErrorValue("Aborted"), true)
+    assert.equal(isAbortErrorValue("The request was canceled"), true)
+  })
+
+  void it("does not flag unrelated SDK errors as aborts", () => {
+    assert.equal(isAbortErrorValue({ name: "APIError", data: { statusCode: 429, message: "rate limited" } }), false)
+    assert.equal(isAbortErrorValue({ name: "ProviderAuthError", data: { message: "bad key" } }), false)
+    assert.equal(isAbortErrorValue("OpenCode event stream connection timed out after 30s"), false)
+  })
+
+  void it("rejects null/undefined/empty", () => {
+    assert.equal(isAbortErrorValue(null), false)
+    assert.equal(isAbortErrorValue(undefined), false)
+    assert.equal(isAbortErrorValue({}), false)
+    assert.equal(isAbortErrorValue(""), false)
   })
 })
 
