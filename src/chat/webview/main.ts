@@ -1890,6 +1890,21 @@ function getVsCodeApi() {
     })
   }
 
+  // Show/hide the streaming-only send-mode (Queue|Interrupt) affordance + placeholder
+  // for the ACTIVE tab. Driven by the active session's streaming state so it stays
+  // correct when switching to an already-streaming tab (streaming_state only fires on
+  // real transitions, not tab switches).
+  function syncSteerAffordance(): void {
+    const active = stateManager.getActiveSession()
+    const streaming = Boolean(active?.isStreaming)
+    const selector = document.getElementById("steer-mode-selector") as HTMLElement | null
+    if (selector) selector.classList.toggle("hidden", !streaming)
+    els.promptInput.placeholder = streaming
+      ? "Guide the AI: correct errors, change direction, or add context…"
+      : "Ask OpenCode a question about your code…"
+    if (!streaming) els.inputArea.classList.remove("steer-interrupt", "steer-queue")
+  }
+
   function switchTab(tabId: string, notifyHost = true) {
     if (!stateManager.setActiveSession(tabId)) return
     switchToTab(els, tabId)
@@ -1899,6 +1914,7 @@ function getVsCodeApi() {
     }
     syncModeUI()
     composer.syncSteerModeUI()
+    syncSteerAffordance()
     updateTabBar()
     // Sync model dropdown to active session's model
     const activeSession = stateManager.getActiveSession()
@@ -3119,26 +3135,11 @@ function getVsCodeApi() {
           const isActiveSession = sid === stateManager.getState().activeSessionId
 
           if (isActiveSession) {
-            const steerModeSelector = document.getElementById("steer-mode-selector") as HTMLElement
-            if (steerModeSelector) {
-              if (msg.isStreaming) {
-                steerModeSelector.classList.remove("hidden")
-              } else {
-                steerModeSelector.classList.add("hidden")
-              }
-            }
-
-            if (msg.isStreaming) {
-              els.promptInput.placeholder = "Guide the AI: correct errors, change direction, or add context…"
-            } else {
-              els.promptInput.placeholder = "Ask OpenCode a question about your code…"
-            }
-
-            if (!msg.isStreaming) {
-              els.inputArea.classList.remove("steer-interrupt", "steer-queue")
-            }
+            // Single source of truth for the streaming-only affordance (selector
+            // visibility, placeholder, input accent) — also used on tab switch.
+            syncSteerAffordance()
           }
-          
+
           if (!msg.isStreaming) {
             const sess = stateManager.getSession(sid)
             if (sess) {

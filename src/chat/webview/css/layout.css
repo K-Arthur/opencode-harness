@@ -631,15 +631,11 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 20%, transparent);
 }
 
-/* Steering mode indicators */
+/* Steering mode indicators — input border accent matches the active send-mode
+   segment (Queue = green, Interrupt = red). "append" was removed. */
 #input-area.steer-interrupt {
   border-color: #f85149;
   box-shadow: 0 0 0 2px color-mix(in srgb, #f85149 15%, transparent);
-}
-
-#input-area.steer-append {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px color-mix(in srgb, #3b82f6 15%, transparent);
 }
 
 #input-area.steer-queue {
