@@ -207,11 +207,15 @@ describe("main.ts", () => {
     assert.ok(block.includes("runSlashCommandText("), "palette local commands must use the same path as typed slash commands")
   })
 
-  it("mode_selector_disabled_during_stream", () => {
-    assert.ok(allSource.includes("isStreaming"), "must reference isStreaming state")
+  it("mode_selector_interactive_during_stream", () => {
+    // Mode is a per-session label consumed by the NEXT prompt, so switching it
+    // mid-stream is safe and the selector must stay fully interactive (this
+    // previously hard-disabled the button + options during a run, leaving users
+    // "stuck on build"). `updateModeSelectorState` must NOT disable on streaming.
     assert.ok(allSource.includes("updateModeSelectorState"), "must have updateModeSelectorState function")
-    assert.ok(modeDropdownSource.includes("classList.toggle(\"disabled\""), "must toggle disabled class")
-    assert.ok(modeDropdownSource.includes("btn.disabled = isStreaming"), "must disable buttons during streaming")
+    assert.ok(!modeDropdownSource.includes("btn.disabled = isStreaming"), "must not disable option buttons during streaming")
+    assert.ok(!modeDropdownSource.includes('classList.toggle("disabled"'), "must not toggle a disabled class during streaming")
+    assert.ok(modeDropdownSource.includes('aria-disabled", "false"'), "must force-enable the selector regardless of streaming state")
   })
 
   it("disables send with a clear tooltip when the global stream cap is full", () => {

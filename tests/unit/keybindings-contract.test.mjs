@@ -42,10 +42,16 @@ describe("keybinding contributions", () => {
     it(`suppresses the VS Code default for "${key}" while the chat is focused`, () => {
       const suppressor = bindingsFor(key).find((k) => k.command === "opencode-harness.suppressKey")
       assert.ok(suppressor, `"${key}" must have a suppressKey binding`)
+      // OR `focusedView` (set by VS Code the moment the view is focused, even
+      // when the iframe's window.focus never fired — e.g. the view was revealed
+      // via the activity bar or toggleFocus and not yet clicked into) with the
+      // iframe-reported `opencodeHarness.chatFocused`. Both are needed: there is
+      // no host-side focus API for WebviewView, so `focusedView` is the only
+      // reliable "view is focused" signal for the not-yet-clicked case.
       assert.equal(
         suppressor.when,
-        "opencodeHarness.chatFocused",
-        `"${key}" suppressor must be gated on the reliable chat-focus context key`,
+        "focusedView == 'opencode-harness.chat' || opencodeHarness.chatFocused",
+        `"${key}" suppressor must gate on focusedView OR chatFocused so it fires even before the iframe is clicked into`,
       )
     })
   }

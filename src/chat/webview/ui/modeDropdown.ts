@@ -43,10 +43,6 @@ const MODE_ICONS: Record<string, string> = {
 
 const MODE_LABELS: Record<string, string> = { plan: "Plan", auto: "Auto", build: "Build" }
 
-export function getCurrentMode(): string {
-  return "build"
-}
-
 let _lastCycleTime = 0
 
 /** @deprecated Use `isModalOrDialogOpen` from `../keyboardShortcuts` instead */
@@ -65,7 +61,8 @@ export function cycleModeForward(deps: ModeDropdownDeps): void {
   _lastCycleTime = now
   const { els, getActiveSession, postMessage } = deps
   const active = getActiveSession()
-  if (active?.isStreaming) return
+  // Mode is a per-session label consumed by the NEXT prompt; the running turn
+  // already captured its mode, so cycling mid-stream is safe and expected.
 
   // Welcome screen / no active session: cycle the pending default mode the
   // next session will adopt, and reflect it in the selector immediately.
@@ -132,28 +129,25 @@ export function closeModeDropdown(els: ModeDropdownElements): void {
   els.modeDropdownMenu.classList.add("hidden")
 }
 
-export function updateModeSelectorState(els: ModeDropdownElements, getActiveSession: ModeDropdownDeps["getActiveSession"]): void {
-  const active = getActiveSession()
-  const isStreaming = Boolean(active?.isStreaming)
-  els.modeDropdown.classList.toggle("disabled", isStreaming)
-  els.modeDropdownBtn.disabled = isStreaming
-  els.modeDropdownBtn.setAttribute("aria-disabled", String(isStreaming))
-
-  const buttons = [els.modeOptPlan, els.modeOptAuto, els.modeOptBuild]
-  for (const btn of buttons) {
-    btn.disabled = isStreaming
-    btn.setAttribute("aria-disabled", String(isStreaming))
+export function updateModeSelectorState(els: ModeDropdownElements, _getActiveSession: ModeDropdownDeps["getActiveSession"]): void {
+  // Mode switching is allowed at any time — including mid-stream — because the
+  // mode is a per-session label consumed by the NEXT prompt; the running turn
+  // already captured its mode. This used to hard-disable the button + options
+  // while streaming, which left users "stuck on build" for the whole run. Keep
+  // the selector fully interactive.
+  els.modeDropdown.classList.remove("disabled")
+  els.modeDropdownBtn.disabled = false
+  els.modeDropdownBtn.setAttribute("aria-disabled", "false")
+  for (const btn of [els.modeOptPlan, els.modeOptAuto, els.modeOptBuild]) {
+    btn.disabled = false
+    btn.setAttribute("aria-disabled", "false")
   }
-
-  if (isStreaming) closeModeDropdown(els)
 }
 
 export function setupModeToggle(deps: ModeDropdownDeps): void {
   const { els, getActiveSession, postMessage } = deps
 
   function toggleDropdown() {
-    const active = getActiveSession()
-    if (active?.isStreaming) return
     const isOpen = els.modeDropdownMenu.classList.contains("hidden")
     if (isOpen) {
       els.modeDropdownMenu.classList.remove("hidden")
@@ -169,7 +163,6 @@ export function setupModeToggle(deps: ModeDropdownDeps): void {
     const normalized = normalizeSessionMode(mode)
     if (!normalized) return
     const active = getActiveSession()
-    if (active?.isStreaming) return
 
     // Welcome screen / no active session: record the pending default mode and
     // reflect it in the selector instead of dropping the request on the floor.
