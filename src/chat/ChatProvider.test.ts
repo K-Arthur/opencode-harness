@@ -44,6 +44,26 @@ void describe("ChatProvider.ts", () => {
     assert.ok(source.includes("private postRequestError("), "must have postRequestError")
   })
 
+  void it("suppresses the expected abort error for an intentionally-aborted tab", () => {
+    // The server emits MessageAbortedError on the SSE stream a beat after Stop /
+    // interrupt-and-send. The server_error handler must swallow it (no error card,
+    // no state teardown) for the tab that was just aborted, before any postRequestError.
+    assert.ok(source.includes("isAbortErrorValue(raw)"), "server_error must classify abort-category errors")
+    assert.ok(
+      source.includes("this.streamCoordinator.wasIntentionallyAborted("),
+      "server_error must consult the intentional-abort window",
+    )
+    const handlerIdx = source.indexOf('["server_error"')
+    const suppressIdx = source.indexOf("wasIntentionallyAborted(", handlerIdx)
+    const postErrorIdx = source.indexOf("this.postRequestError(", handlerIdx)
+    assert.ok(handlerIdx >= 0 && suppressIdx > handlerIdx, "suppression check must live in the server_error handler")
+    assert.ok(suppressIdx < postErrorIdx, "abort suppression must run BEFORE postRequestError")
+    assert.ok(
+      utilsSource.includes("export function isAbortErrorValue("),
+      "isAbortErrorValue must be a shared chatUtils helper",
+    )
+  })
+
   void it("treats tool_update as a high-frequency server event", () => {
     assert.ok(
       source.includes('event.type === "tool_update"'),

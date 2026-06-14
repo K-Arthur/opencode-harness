@@ -71,6 +71,12 @@ export class StreamCoordinator {
    *  that may take extended time between streaming events (subagents, long
    *  thinking pauses, tool call gaps). Previously 10 min, then 30 min. */
   private readonly STREAM_STUCK_MS = 2_700_000
+  /**
+   * How long after an intentional `abort()` the late server `MessageAbortedError`
+   * is treated as expected and suppressed. The SSE error normally lands within a
+   * second or two; the window only gates abort-category errors, so it is safe to
+   * keep generous. */
+  private readonly ABORT_ERROR_SUPPRESS_MS = 8000
   /** Time-to-first-byte timeout: no chunk received within 45s */
   readonly TTFB_TIMEOUT_MS = 45000
   /** Short grace window for terminal status to be followed by late tool_end events */
@@ -88,6 +94,16 @@ export class StreamCoordinator {
   private finalizingTabs = new Set<string>()
   /** Tabs whose stream was explicitly aborted — finalizeStream must not emit its own stream_end */
   private abortedTabs = new Set<string>()
+  /**
+   * Per-tab expiry (epoch ms) of the "intentional abort" window. Set by `abort()`.
+   * The server emits a `MessageAbortedError` on the SSE stream a beat after we call
+   * `abortSession`, which is expected — not a failure. `wasIntentionallyAborted()`
+   * lets the `server_error` handler swallow that error instead of surfacing a
+   * spurious "The request was cancelled." card (and tearing down a replacement run
+   * started by interrupt-and-send). Distinct from the one-tick `abortedTabs` set,
+   * which only coordinates finalize/abort stream_end de-duplication.
+   */
+  private intentionalAbortUntil = new Map<string, number>()
   /** Per-tab stream lifecycle state for observability */
   private streamStates = new Map<string, StreamLifecycleState>()
   /** Per-tab accepted backend run identity. Distinct from the coarse streaming boolean. */
@@ -1355,6 +1371,21 @@ export class StreamCoordinator {
    * `message_complete` event arrives mid-abort (or finalize is already in
    * flight), only one stream_end is delivered to the webview — the abort one.
    */
+  /**
+   * True while the late server `MessageAbortedError` for a recently, intentionally
+   * aborted tab should be suppressed (see `intentionalAbortUntil`). Self-expiring:
+   * a stale entry is dropped on read.
+   */
+  wasIntentionallyAborted(tabId: string): boolean {
+    const until = this.intentionalAbortUntil.get(tabId)
+    if (until === undefined) return false
+    if (Date.now() >= until) {
+      this.intentionalAbortUntil.delete(tabId)
+      return false
+    }
+    return true
+  }
+
   async abort(tabId: string, callbacks: StreamCallbacks): Promise<void> {
     const tab = this.tabManager.getTab(tabId)
     if (!tab || !tab.cliSessionId || !this.sessionManager.isRunning) return
@@ -1362,6 +1393,9 @@ export class StreamCoordinator {
     // Mark first so any in-flight finalizeStream that resumes after our await
     // sees the flag and skips emitting its own stream_end.
     this.abortedTabs.add(tabId)
+    // Open the intentional-abort window so the late server MessageAbortedError is
+    // swallowed rather than shown as a "The request was cancelled." error card.
+    this.intentionalAbortUntil.set(tabId, Date.now() + this.ABORT_ERROR_SUPPRESS_MS)
     this.setActiveRunState(tabId, "aborted", { finalizeReason: "user_abort" })
 
     try {
@@ -2025,6 +2059,7 @@ cleanupTab(tabId: string): void {
     this.appendCallbacks.clear()
     this.finalizingTabs.clear()
     this.abortedTabs.clear()
+    this.intentionalAbortUntil.clear()
     this.streamStates.clear()
     this.activeMessageIds.clear()
     this.activeRuns.clear()

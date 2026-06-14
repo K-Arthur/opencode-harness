@@ -22,7 +22,7 @@ import type { SubagentRunStatus } from "./handlers/runActivityTypes"
 import { PromptManager } from "../prompts/PromptManager"
 import { PromptStashManager } from "../prompts/PromptStashManager"
 import { ProviderConfigManager } from "../model/ProviderConfigManager"
-import { mapToolType as mapToolTypePure, isSessionInCurrentWorkspace as isSessionInCurrentWorkspacePure, looksLikeSdkError } from "./chatUtils"
+import { mapToolType as mapToolTypePure, isSessionInCurrentWorkspace as isSessionInCurrentWorkspacePure, looksLikeSdkError, isAbortErrorValue } from "./chatUtils"
 import { shouldIncludeStoreActiveFallback } from "./restorablePolicy"
 import { mapOpencodeError, type OpencodeError } from "./webview/opencodeErrorMapper"
 import { computeMessageCounts } from "./webview/messageCounter"
@@ -1236,6 +1236,16 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     ["server_error", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean }) => {
       const data = event.data as { error?: unknown } | undefined
       const raw = data?.error ?? event.data ?? "Server error"
+      // Intentional-abort suppression: Stop / interrupt-and-send call abort(), which
+      // makes the server emit MessageAbortedError on the SSE stream a beat later. That
+      // is expected, not a failure — surfacing it would show a spurious "The request
+      // was cancelled." card and (worse) tear down a replacement run started by an
+      // interrupt. Swallow it for the specific tab that was just aborted.
+      const abortTabId = tab?.id ?? tabId
+      if (abortTabId && isAbortErrorValue(raw) && this.streamCoordinator.wasIntentionallyAborted(abortTabId)) {
+        log.info(`Suppressing expected abort error for intentionally-aborted tab ${abortTabId}`)
+        return
+      }
       // Preserve structured fidelity for genuine SDK errors (ProviderAuthError,
       // ApiError, …): map once on the host and carry the full ErrorContext to the
       // webview. Non-SDK values (SSE connection strings, command failures) keep the

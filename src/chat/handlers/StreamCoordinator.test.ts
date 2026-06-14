@@ -111,6 +111,19 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(source.includes("callbacks.postMessage({"), "abort must post via callbacks")
   })
 
+  it("opens an intentional-abort window so the late server abort error is suppressed", () => {
+    assert.ok(source.includes("intentionalAbortUntil"), "must track an intentional-abort window map")
+    assert.ok(
+      source.includes("wasIntentionallyAborted(tabId: string): boolean"),
+      "must expose wasIntentionallyAborted(tabId) for the server_error handler",
+    )
+    assert.ok(
+      /abort\(tabId: string[\s\S]*?this\.intentionalAbortUntil\.set\(tabId,/.test(source),
+      "abort() must open the intentional-abort window",
+    )
+    assert.ok(source.includes("this.intentionalAbortUntil.clear()"), "dispose() must clear the window map")
+  })
+
   it("has appendChunk and getDiffHandler methods", () => {
     assert.ok(
       source.includes("appendChunk(tabId: string, text: string, callbacks?: StreamCallbacks, messageId?: string): void"),

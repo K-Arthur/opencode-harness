@@ -57,6 +57,29 @@ export function looksLikeSdkError(value: unknown): boolean {
   return typeof e.data?.statusCode === "number"
 }
 
+/** Matches the abort/cancel wording used by `mapOpencodeError`'s MESSAGE_ABORTED branch. */
+const ABORT_MESSAGE_RE = /abort(ed)?|cancell?ed/i
+
+/**
+ * True when `value` represents a cancelled/aborted run — either the structured
+ * `MessageAbortedError` SDK error or any error string/object whose message reads
+ * as an abort/cancel. Used to suppress the expected `MessageAbortedError` the
+ * server emits a beat after an intentional `abort()` (Stop / interrupt-and-send),
+ * which would otherwise surface as a spurious "The request was cancelled." card.
+ */
+export function isAbortErrorValue(value: unknown): boolean {
+  if (typeof value === "string") return ABORT_MESSAGE_RE.test(value)
+  if (!value || typeof value !== "object") return false
+  const e = value as { name?: unknown; message?: unknown; data?: { message?: unknown } }
+  if (e.name === "MessageAbortedError") return true
+  const message = typeof e.message === "string"
+    ? e.message
+    : typeof e.data?.message === "string"
+      ? e.data.message
+      : ""
+  return ABORT_MESSAGE_RE.test(message)
+}
+
 export function mapToolType(tool: string): string {
   if (!tool) return "read"
   const t = tool.toLowerCase()
