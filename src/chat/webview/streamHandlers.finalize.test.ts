@@ -1,7 +1,7 @@
 import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
 import { JSDOM } from "jsdom"
-import { demoteStreamingText, finalizeStreamingText } from "./streamHandlers"
+import { demoteStreamingText, finalizeStreamingText, finalizeAllPendingTools } from "./streamHandlers"
 
 let document: Document
 
@@ -10,6 +10,8 @@ beforeEach(() => {
   ;(globalThis as any).window = dom.window
   ;(globalThis as any).document = dom.window.document
   ;(globalThis as any).HTMLElement = dom.window.HTMLElement
+  ;(globalThis as any).Node = dom.window.Node
+  ;(globalThis as any).MouseEvent = dom.window.MouseEvent
   document = dom.window.document
 })
 
@@ -110,5 +112,43 @@ describe("finalizeStreamingText (end-of-turn sweep)", () => {
     finalizeStreamingText(list())
     assert.equal(list().querySelectorAll(".message.streaming").length, 0, "no message keeps the blue glow")
     assert.equal(list().querySelectorAll(".streaming-text").length, 0, "no caret survives")
+  })
+})
+
+describe("finalizeAllPendingTools", () => {
+  function msg(id: string, state: string) {
+    return {
+      id,
+      role: "assistant",
+      blocks: [{ type: "tool-call", id: `${id}-t`, name: "read", args: {}, state }],
+      timestamp: 1,
+    } as any
+  }
+
+  it("flips running/pending tool blocks to a non-live state and clears the spinner", () => {
+    const messages = [msg("m1", "running"), msg("m2", "pending")]
+    const els = { messageList: list() } as any
+
+    finalizeAllPendingTools(els, messages)
+
+    for (const m of messages) {
+      const s = m.blocks[0].state
+      assert.notEqual(s, "running", "no tool left running")
+      assert.notEqual(s, "pending", "no tool left pending")
+    }
+    assert.equal(list().querySelector(".tool-call--running, .tool-call--pending"), null, "no live tool class in DOM")
+    assert.equal(list().querySelector(".premium-spinner"), null, "no spinner left turning")
+  })
+
+  it("leaves already-terminal tools untouched (idempotent, no needless re-render)", () => {
+    const messages = [msg("done", "completed")]
+    const before = messages[0].blocks[0].state
+    finalizeAllPendingTools({ messageList: list() } as any, messages)
+    assert.equal(messages[0].blocks[0].state, before, "terminal tool state is preserved")
+  })
+
+  it("ignores messages with no tool blocks", () => {
+    const messages = [{ id: "t", role: "assistant", blocks: [{ type: "text", text: "hi" }], timestamp: 1 } as any]
+    assert.doesNotThrow(() => finalizeAllPendingTools({ messageList: list() } as any, messages))
   })
 })

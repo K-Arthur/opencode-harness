@@ -123,6 +123,31 @@ export function finalizeStreamingText(messageList: HTMLElement): void {
   }
 }
 
+/**
+ * Finalize EVERY still-running/pending tool block across the whole transcript
+ * and re-render the messages that change, so no tool is left showing a spinner
+ * or a live elapsed counter after the turn ends. `finishUnresolvedToolCalls`
+ * only finalizes the single message resolved at stream end; this covers orphan
+ * messages too (e.g. a tool that started in a bubble the stream then restarted
+ * away from, or a prior turn whose tool never received its end event). The
+ * tool's whole live look is derived from its block `state`, so flipping the
+ * state to terminal and re-rendering reuses the normal renderer — no fragile
+ * DOM surgery. Idempotent: messages with no live tool are skipped.
+ */
+export function finalizeAllPendingTools(els: StreamElements, messages: ChatMessage[]): void {
+  for (const msg of messages) {
+    if (!msg.id) continue
+    const hasLiveTool = msg.blocks.some((b) => {
+      if (!b || b.type !== "tool-call") return false
+      const s = (b as ToolCallBlock).state
+      return s === "running" || s === "pending"
+    })
+    if (!hasLiveTool) continue
+    finishUnresolvedToolCalls(msg.blocks)
+    reRenderMessage(msg.id, els, messages)
+  }
+}
+
 function finalizeCurrentTextBlock(
   state: StreamState,
   els: StreamElements,
