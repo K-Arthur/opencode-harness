@@ -45,6 +45,40 @@ function showStreamEndReasonMessage(
   }
 }
 
+/**
+ * Drop the (now-empty) streaming placeholder for `messageId` and append the
+ * server-authoritative assistant message to session history.
+ *
+ * Extracted from `createStreamOrchestrator`. M7 invariant: a placeholder
+ * that already shows tool/diff/skill blocks (a text-less turn) must NOT be
+ * removed — `placeholderHasRenderedContent` enforces that. The orchestrator
+ * closure delegates here with its captured `getMessageList` / `addMessage`.
+ */
+function processStreamEndBlocks(
+  sessionId: string,
+  messageId: string | undefined,
+  blocks: unknown,
+  getMessageList: (tabId: string) => HTMLDivElement | null,
+  addMessage: (sessionId: string, msg: ChatMessage) => void,
+): void {
+  const blockList = Array.isArray(blocks) ? blocks as ChatMessage["blocks"] : []
+  if (blockList.length === 0) return
+
+  const msgList = getMessageList(sessionId)
+  if (messageId && msgList) {
+    const placeholder = msgList.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement | null
+    if (placeholder && !placeholderHasRenderedContent(placeholder)) {
+      placeholder.remove()
+    }
+  }
+  addMessage(sessionId, {
+    role: "assistant",
+    id: messageId || `resp-${Date.now()}`,
+    blocks: blockList,
+    timestamp: Date.now(),
+  })
+}
+
 export interface StreamOrchestratorDeps {
   vscode: { postMessage(msg: Record<string, unknown>): void }
   els: ElementRefs
@@ -315,27 +349,6 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     return
   }
 
-  function processStreamEndBlocks(sessionId: string, messageId?: string, blocks?: unknown) {
-    const blockList = Array.isArray(blocks) ? blocks as ChatMessage["blocks"] : []
-    if (blockList.length === 0) return
-
-    const msgList = getMessageList(sessionId)
-    if (messageId && msgList) {
-      const placeholder = msgList.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement | null
-      // M7: only remove a placeholder that has neither text nor tool/diff/skill
-      // blocks — a text-less turn that still showed tool calls must survive.
-      if (placeholder && !placeholderHasRenderedContent(placeholder)) {
-        placeholder.remove()
-      }
-    }
-    addMessage(sessionId, {
-      role: "assistant",
-      id: messageId || `resp-${Date.now()}`,
-      blocks: blockList,
-      timestamp: Date.now(),
-    })
-  }
-
   function handleStreamEnd(sessionId: string, messageId?: string, blocks?: unknown, reason?: string, partial?: boolean) {
     try {
       const stream = streamHandlers.get(sessionId)
@@ -356,7 +369,7 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
       const endMsgList = getMessageList(sessionId)
       if (endMsgList) finalizeStreamingText(endMsgList)
 
-      processStreamEndBlocks(sessionId, messageId, blocks)
+      processStreamEndBlocks(sessionId, messageId, blocks, getMessageList, addMessage)
 
       setStreaming(sessionId, false)
       toolElapsedTracker.clearAll()
