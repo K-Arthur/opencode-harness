@@ -74,7 +74,7 @@ describe("extension.ts", () => {
       "opencode-harness.prevTab",
       "opencode-harness.retryLast",
     ]
-    const bindings = (packageJson.contributes?.keybindings ?? []).filter((b) => chatCommandKeys.includes(b.command))
+    const bindings = (packageJson.contributes?.keybindings ?? []).filter((b) => chatCommandKeys.includes(b.command ?? ""))
     assert.ok(bindings.length >= chatCommandKeys.length, "chat command keybindings must be contributed")
     for (const b of bindings) {
       assert.ok(!/chatView/.test(b.when ?? ""), `${b.command} must not reference the stale chatView id`)
