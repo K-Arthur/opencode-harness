@@ -10,11 +10,13 @@ let inputArea: HTMLDivElement
 let mentionDropdown: HTMLDivElement
 let sentMessages: number
 let sentSteers: number
+let lastSteerMode: "interrupt" | "queue" | undefined
 let savedCount: number
 
 function makeDeps() {
   sentMessages = 0
   sentSteers = 0
+  lastSteerMode = undefined
   savedCount = 0
   return {
     els: { promptInput, sendBtn, inputArea, mentionDropdown } as any,
@@ -30,7 +32,7 @@ function makeDeps() {
     commandsModal: { open: () => {} },
     timers: { setTimeout: (fn: () => void, _ms: number) => fn() },
     sendMessage: () => { sentMessages++ },
-    sendSteerPrompt: () => { sentSteers++ },
+    sendSteerPrompt: (mode?: "interrupt" | "queue") => { sentSteers++; lastSteerMode = mode },
     setSteerMode: () => {},
     updateSendButton: () => {},
     createNewTab: () => undefined,
@@ -109,7 +111,7 @@ describe("inputHandlers - onInputKeydown", () => {
     assert.equal(sentSteers, 0, "sendSteerPrompt should NOT be called")
   })
 
-  it("calls sendSteerPrompt on Enter when streaming", async () => {
+  it("calls sendSteerPrompt on Enter when streaming (no mode override = tab default / Queue)", async () => {
     const { createInputHandlers } = await import("../../src/chat/webview/inputHandlers")
     const deps = makeDeps()
     deps.stateManager.getActiveSession = () => ({ id: "s1", isStreaming: true })
@@ -118,6 +120,41 @@ describe("inputHandlers - onInputKeydown", () => {
     handlers.onInputKeydown(event)
     assert.equal(sentSteers, 1, "sendSteerPrompt should be called")
     assert.equal(sentMessages, 0, "sendMessage should NOT be called")
+    assert.equal(lastSteerMode, undefined, "plain Enter must not force a mode (uses the tab's default)")
+  })
+
+  it("Cmd/Ctrl+Enter while streaming forces a one-shot Interrupt", async () => {
+    const { createInputHandlers } = await import("../../src/chat/webview/inputHandlers")
+    const deps = makeDeps()
+    deps.stateManager.getActiveSession = () => ({ id: "s1", isStreaming: true })
+    const handlers = createInputHandlers(deps)
+    const event = new dom.window.KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true, cancelable: true })
+    handlers.onInputKeydown(event)
+    assert.equal(sentSteers, 1, "sendSteerPrompt should be called")
+    assert.equal(lastSteerMode, "interrupt", "Cmd/Ctrl+Enter must force interrupt")
+  })
+
+  it("Cmd/Ctrl+Enter when idle just sends (no steer)", async () => {
+    const { createInputHandlers } = await import("../../src/chat/webview/inputHandlers")
+    const handlers = createInputHandlers(makeDeps())
+    const event = new dom.window.KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true, cancelable: true })
+    handlers.onInputKeydown(event)
+    assert.equal(sentMessages, 1, "idle Cmd/Ctrl+Enter sends")
+    assert.equal(sentSteers, 0, "no steer when idle")
+  })
+
+  it("no longer treats Ctrl+1/2/3 as steer-mode shortcuts (freed for nothing; modes use Alt+1/2/3)", async () => {
+    const { createInputHandlers } = await import("../../src/chat/webview/inputHandlers")
+    let steerModeSets = 0
+    const deps = makeDeps()
+    deps.setSteerMode = () => { steerModeSets++ }
+    deps.stateManager.getActiveSession = () => ({ id: "s1", isStreaming: true })
+    const handlers = createInputHandlers(deps)
+    for (const key of ["1", "2", "3"]) {
+      handlers.onInputKeydown(new dom.window.KeyboardEvent("keydown", { key, ctrlKey: true, bubbles: true, cancelable: true }))
+    }
+    assert.equal(steerModeSets, 0, "Ctrl+1/2/3 must not change steer mode anymore")
+    assert.equal(sentSteers, 0)
   })
 
   it("does NOT send on Enter during IME composition (isComposing)", async () => {

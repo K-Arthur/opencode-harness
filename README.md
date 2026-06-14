@@ -72,7 +72,7 @@ OpenCode includes advanced features like cost tracking, theme customization, gra
 - **@-Mentions** — Reference files, folders, problems, URLs, and terminal output in your prompts, including path-aware file search such as `@src/util`
 - **Secure Context Attachments** — Add files or editor selections from VS Code context menus with sensitive-file and prompt-injection warnings
 - **Permission Modes** — Build (standard approval flow), Plan (review-only), Auto (apply without asking after confirmation)
-- **Steer Modes** — Interrupt (stop and replace), Append (queue for after current response), or Queue (FIFO multi-item queue) for follow-up prompts while the AI is generating
+- **Steer while generating** — type while the AI is responding: **Enter** queues a follow-up (visible, editable, runs after the current turn — the safe default), **⌘/Ctrl+Enter** interrupts and runs it now. A Queue ▏Interrupt toggle sets what Enter does per tab.
 - **Prompt Queue** — Type-ahead queuing with per-item edit, remove, reorder, and retry; keyboard-navigable with Arrow keys, Delete, F2, and Alt+Arrow reorder
 - **Host Queue Persistence** — Queued prompts survive webview and VS Code reloads via workspaceState-backed FIFO queue (50-item cap per session)
 
@@ -140,18 +140,18 @@ OpenCode now supports multiple concurrent AI workers through a tabbed interface:
 | `Shift+Tab` | Cycle mode (Plan → Build → Auto) | Mode button focused |
 | `Alt+Shift+Tab` | Cycle mode (Plan → Build → Auto) | Chat view |
 | `Ctrl+Shift+M` | Cycle mode (Plan → Build → Auto) | Chat view |
-| `Ctrl/Cmd+Alt+1` | Set Plan mode | Chat view |
-| `Ctrl/Cmd+Alt+2` | Set Build mode | Chat view |
-| `Ctrl/Cmd+Alt+3` | Set Auto mode | Chat view |
+| `Alt+1` | Set Plan mode | Chat view (incl. composer) |
+| `Alt+2` | Set Build mode | Chat view (incl. composer) |
+| `Alt+3` | Set Auto mode | Chat view (incl. composer) |
 | `Ctrl/Cmd+L` | Focus prompt input | Chat view |
-| `Ctrl/Cmd+Enter` | Send or steer | Prompt focused |
-| `Enter` | Send | Prompt focused |
+| `Enter` | Send (idle) · Queue a follow-up (while streaming) | Prompt focused |
+| `Ctrl/Cmd+Enter` | Send (idle) · Interrupt & send now (while streaming) | Prompt focused |
+| `Shift+Enter` | New line | Prompt focused |
 | `Ctrl/Cmd+T` | New tab | Prompt focused |
 | `Ctrl/Cmd+W` | Close tab | Prompt focused |
 | `Ctrl/Cmd+Tab` / `Ctrl+Shift+Tab` | Next / previous tab | Prompt focused |
 | `Ctrl+Alt+]` | Next tab | Chat view |
 | `Ctrl+Alt+[` | Previous tab | Chat view |
-| `Ctrl/Cmd+1/2/3` | Steer mode: Interrupt / Append / Queue | Prompt focused |
 | `Ctrl/Cmd+K` | Open commands palette | Prompt focused |
 | `Ctrl/Cmd+Shift+T` | Toggle thinking blocks | Chat view |
 | `Ctrl+Shift+E` | Toggle errors | Chat view |
