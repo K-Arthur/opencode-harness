@@ -4504,6 +4504,29 @@ function getVsCodeApi() {
 function boot() {
     try {
       init()
+      // Sprint 1 typography: toggle data-density on the document element
+      // based on the webview's rendered width so the sidebar gets compact
+      // spacing/typography and the panel/editor column gets comfortable.
+      // Thresholds from the research: ≤340px compact, ≥500px comfortable,
+      // in-between defaults to compact (matches VS Code's narrow-sidebar
+      // behavior). The ResizeObserver is cheap (browser-coalesced) and
+      // fires only on actual width changes.
+      try {
+        const updateDensity = () => {
+          const w = document.documentElement.clientWidth || window.innerWidth || 0
+          const density = w >= 500 ? "comfortable" : "compact"
+          if (document.documentElement.getAttribute("data-density") !== density) {
+            document.documentElement.setAttribute("data-density", density)
+          }
+        }
+        updateDensity()
+        const ro = new ResizeObserver(updateDensity)
+        ro.observe(document.documentElement)
+      } catch (densityErr) {
+        // ResizeObserver missing (very old webview) — fall back to comfortable
+        // (the default in tokens.css's :root:not([data-density]) branch).
+        log.warn("ResizeObserver unavailable; density adaptation disabled", densityErr)
+      }
       vscode.postMessage({ type: "webview_ready" })
       vscode.postMessage({ type: "list_commands" })
     } catch (err) {
