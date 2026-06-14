@@ -757,20 +757,7 @@ export class StreamCoordinator {
       }
     }
 
-    // Reserve the streaming slot ATOMICALLY before any `await`
-    const canStream = this.tabManager.canStartStreaming()
-    if (!canStream.ok) {
-      log.warn(`Concurrent stream limit reached: ${canStream.reason}`)
-      vscode.window.showWarningMessage(canStream.reason!)
-      this.stuckStreamHandlers.delete(tabId)
-      // Notify webview so it can reset optimistic streaming state
-      callbacks.postMessage({
-        type: "prompt_rejected",
-        sessionId: tabId,
-        reason: canStream.reason || "Concurrent stream limit reached",
-      })
-      return
-    }
+    if (!this.reserveStreamSlotOrReject(tabId, callbacks)) return
 
     // Now set streaming state AFTER atomic reservation
     this.tabManager.setStreaming(tabId, true)
@@ -1055,6 +1042,24 @@ export class StreamCoordinator {
       activeRunForMode.mode = tab.mode
     }
     return { modelRef, agent }
+  }
+
+  private reserveStreamSlotOrReject(tabId: string, callbacks: StreamCallbacks): boolean {
+    // Reserve the streaming slot ATOMICALLY before any `await`
+    const canStream = this.tabManager.canStartStreaming()
+    if (!canStream.ok) {
+      log.warn(`Concurrent stream limit reached: ${canStream.reason}`)
+      vscode.window.showWarningMessage(canStream.reason!)
+      this.stuckStreamHandlers.delete(tabId)
+      // Notify webview so it can reset optimistic streaming state
+      callbacks.postMessage({
+        type: "prompt_rejected",
+        sessionId: tabId,
+        reason: canStream.reason || "Concurrent stream limit reached",
+      })
+      return false
+    }
+    return true
   }
 
   private setupTtfbTimeout(tabId: string, callbacks: StreamCallbacks): void {
