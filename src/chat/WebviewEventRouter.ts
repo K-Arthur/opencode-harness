@@ -213,25 +213,17 @@ export class WebviewEventRouter {
       this.opts.voiceInputService.cancel(msg.requestId)
     }],
     ["show_diff", async (msg: Record<string, unknown>, sessionId?: string) => {
-      const diffId = msg.diffId as string | undefined
-      let filePath = msg.filePath as string | undefined
-      let proposed = msg.proposedContent as string | undefined
-      let title = msg.title as string | undefined
-
-      if (diffId) {
-        const diffHandler = this.opts.streamCoordinator.getDiffHandler()
-        const edit = diffHandler.getPendingEdit(diffId) ?? diffHandler.getAcceptedEdit(diffId)
-        if (edit) {
-          filePath = edit.filePath
-          proposed = edit.proposedContent
-          title = title || `Review Changes: ${path.basename(filePath)}`
-        }
-      }
-
+      // C1-a: This handler was previously gated on DiffHandler which has been
+      // removed (the server applies edits directly). The direct filePath +
+      // proposedContent path is kept for any future caller that passes them
+      // directly (M7 new open_diff action will use a different message type).
+      const filePath = msg.filePath as string | undefined
+      const proposed = msg.proposedContent as string | undefined
+      const title = (msg.title as string) || (filePath ? `Diff: ${path.basename(filePath)}` : "Diff")
       if (filePath && proposed) {
         await this.opts.diffApplier.showSideBySideDiff(filePath, proposed, title)
       } else {
-        log.warn("show_diff: could not resolve filePath and proposedContent", { diffId, filePath })
+        log.warn("show_diff: no filePath/proposedContent (dead diff handler path)", { filePath })
       }
     }],
     ["send_prompt", async (msg: Record<string, unknown>, sessionId?: string) => {
@@ -504,12 +496,9 @@ export class WebviewEventRouter {
       }
     }],
     ["accept_hunk", async (msg: Record<string, unknown>, sessionId?: string) => {
-      const path = typeof msg.path === "string" ? msg.path : undefined
-      const hunkId = typeof msg.hunkId === "string" ? msg.hunkId : undefined
-      const hunk = msg.hunk as { id: string; hunkId: string; oldStart: number; oldCount: number; lines: Array<{ type: 'added' | 'removed' | 'context'; content: string }> } | undefined
-      if (!path || !hunkId || !hunk) return
-      const ok = await this.opts.diffApplier.applyHunks(path, [hunk], new Set([hunkId]))
-      this.opts.postMessage({ type: "hunk_result", hunkId, ok, diffId: msg.diffId, sessionId })
+      // C1-a: dead subsystem removed. Log and no-op so old webview bundles
+      // don't error.
+      log.info("accept_hunk: no-op (dead diff subsystem removed for C1-a)")
     }],
     ["reject_hunk", (msg: Record<string, unknown>) => {
       const hunkId = typeof msg.hunkId === "string" ? msg.hunkId : undefined
@@ -573,8 +562,14 @@ export class WebviewEventRouter {
     ["switch_tab", (msg: Record<string, unknown>, sessionId?: string) => {
       if (sessionId) { this.opts.ensureLocalTab(sessionId); this.opts.tabManager.switchTab(sessionId); this.opts.sessionStore.setActive(sessionId) }
     }],
-    ["accept_diff", async (msg: Record<string, unknown>, sessionId?: string) => { const diffId = msg.diffId as string || msg.blockId as string; if (diffId) await this.opts.sessionLifecycle.handleAcceptDiff(diffId, sessionId) }],
-    ["reject_diff", (msg: Record<string, unknown>) => { const diffId = msg.diffId as string || msg.blockId as string; if (diffId) this.opts.streamCoordinator.getDiffHandler().reject(diffId) }],
+    ["accept_diff", async (msg: Record<string, unknown>, sessionId?: string) => {
+      // C1-a: dead subsystem removed (server applies edits directly). No-op.
+      log.info("accept_diff: no-op (dead diff subsystem removed for C1-a)")
+    }],
+    ["reject_diff", (msg: Record<string, unknown>) => {
+      // C1-a: dead subsystem removed. No-op.
+      log.info("reject_diff: no-op (dead diff subsystem removed for C1-a)")
+    }],
     ["accept_permission", async (msg: Record<string, unknown>) => {
       const sessionId = msg.sessionId as string
       if (this.isPlanModeSession(sessionId) && this.shouldRejectPlanPermissionResponse(msg)) {
@@ -1100,50 +1095,9 @@ export class WebviewEventRouter {
         this.opts.postRequestError(message)
       }
     }],
-    ["revert_diff", async (msg: Record<string, unknown>, sessionId?: string) => {
-      const diffId = msg.diffId as string
-      const path = msg.path as string
-      if (!diffId || !path || !sessionId) {
-        log.warn("Invalid revert_diff message: missing required fields")
-        return
-      }
-
-      try {
-        // Find the accepted diff metadata and revert it.
-        const edit = this.opts.streamCoordinator.getDiffHandler().getAcceptedEdit(diffId)
-        if (!edit) {
-          throw new Error("No accepted diff metadata is available for this edit")
-        }
-        const success = await this.opts.diffApplier.rollbackEdit(edit)
-
-        if (success) {
-          this.opts.postMessage({
-            type: "revert_success",
-            diffId,
-            path,
-            sessionId,
-          })
-        } else {
-          log.warn("Revert operation returned false", { diffId, path, sessionId })
-          this.opts.postMessage({
-            type: "revert_failed",
-            diffId,
-            path,
-            sessionId,
-            error: "Failed to revert changes",
-          })
-        }
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err)
-        log.error("Revert failed", err)
-        this.opts.postMessage({
-          type: "revert_failed",
-          diffId,
-          path,
-          sessionId,
-          error: errorMsg,
-        })
-      }
+    ["revert_diff", async (_msg: Record<string, unknown>, _sessionId?: string) => {
+      // C1-a: dead subsystem removed (server applies edits directly). No-op.
+      log.info("revert_diff: no-op (dead diff subsystem removed for C1-a)")
     }],
     ["get_context_usage", (msg: Record<string, unknown>, sessionId?: string) => {
       const requestedId = typeof msg.sessionId === "string" && msg.sessionId.length > 0 ? msg.sessionId : undefined

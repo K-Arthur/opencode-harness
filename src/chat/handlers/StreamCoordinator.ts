@@ -1,6 +1,5 @@
 import * as vscode from "vscode"
 import { DiffApplier } from "../../diff/DiffApplier"
-import { DiffHandler } from "./DiffHandler"
 import { TabManager, type TabState } from "../TabManager"
 import { SessionManager } from "../../session/SessionManager"
 import { SessionStore } from "../../session/SessionStore"
@@ -64,7 +63,6 @@ function subagentStatusFromToolStatus(status: ToolActivityInput["status"]): Suba
 }
 
 export class StreamCoordinator {
-  private diffHandler: DiffHandler
   private finalizerService: StreamFinalizerService
   /** Watchdog interval for streams with no server activity across all channels.
    *  Set to 45 min to accommodate long-running models (Minimax, DeepSeek, etc.)
@@ -197,7 +195,6 @@ export class StreamCoordinator {
         },
       },
     )
-    this.diffHandler = new DiffHandler(diffApplier)
     this.finalizerService = new StreamFinalizerService({
       streamStates: this.streamStates,
       finalizingTabs: this.finalizingTabs,
@@ -2028,10 +2025,6 @@ export class StreamCoordinator {
     this.postToolEnd(tabId, result, callbacks)
   }
 
-  getDiffHandler(): DiffHandler {
-    return this.diffHandler
-  }
-
   /** Register a delegate that replays child-session events from the pending buffer. */
   setChildSessionReplayer(replayer: (tabId: string, childSessionId: string) => void): void {
     this.childSessionReplayer = replayer
@@ -2223,7 +2216,6 @@ cleanupTab(tabId: string): void {
       clearTimeout(deferred.timer)
     }
     this.deferredChunks.clear()
-    this.diffHandler.dispose()
     // Clean up any remaining attachment files across all tabs. Fire-and-
     // forget: vscode's Disposable contract is sync and the temp dir will
     // be swept by the OS on reboot regardless.
