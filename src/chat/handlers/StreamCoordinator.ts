@@ -770,22 +770,7 @@ export class StreamCoordinator {
         log.warn(`Event stream not ready (${status.state}) after 5s — proceeding; TTFB timeout active (${this.TTFB_TIMEOUT_MS}ms)`)
       }
 
-      // NOTE: User message is already rendered and stored by the webview.
-      // Persisting here caused duplicate rendering (garbled/flash effect).
-      callbacks.postMessage({
-        type: "stream_start",
-        sessionId: tabId,
-        messageId: streamMessageId,
-        seq: this.nextSeq(tabId),
-      })
-      this.traceRun(tabId, "stream_start")
-      callbacks.clearPromptsInFlight?.()
-
-      this.tabManager.setWaitingForCompletion(tabId, true)
-      this.tabManager.clearBuffer(tabId)
-      this.startWatchdog()
-
-      this.setupTtfbTimeout(tabId, callbacks)
+      this.emitStreamStartAndArmWatchdogs(tabId, callbacks, streamMessageId)
 
       const { modelRef, agent } = await this.resolveModelAndAgentForPrompt(tabId, tab)
 
@@ -991,6 +976,25 @@ export class StreamCoordinator {
       activeRunForMode.mode = tab.mode
     }
     return { modelRef, agent }
+  }
+
+  private emitStreamStartAndArmWatchdogs(tabId: string, callbacks: StreamCallbacks, streamMessageId: string): void {
+    // NOTE: User message is already rendered and stored by the webview.
+    // Persisting here caused duplicate rendering (garbled/flash effect).
+    callbacks.postMessage({
+      type: "stream_start",
+      sessionId: tabId,
+      messageId: streamMessageId,
+      seq: this.nextSeq(tabId),
+    })
+    this.traceRun(tabId, "stream_start")
+    callbacks.clearPromptsInFlight?.()
+
+    this.tabManager.setWaitingForCompletion(tabId, true)
+    this.tabManager.clearBuffer(tabId)
+    this.startWatchdog()
+
+    this.setupTtfbTimeout(tabId, callbacks)
   }
 
   private resolveStreamMessageAndStartActivity(
