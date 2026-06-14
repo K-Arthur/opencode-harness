@@ -4181,9 +4181,21 @@ function getVsCodeApi() {
       }
     })
 
+    // Mirror webview focus to a host context key so keybindings can override VS
+    // Code defaults (e.g. Alt+1/2/3 = openEditorAtIndex, Ctrl+W = close editor)
+    // ONLY while the chat is focused. `focusedView` is unreliable for webview
+    // views (vscode#234683), so we report focus explicitly from the iframe.
+    const reportChatFocus = (focused: boolean) => {
+      try { vscode.postMessage({ type: "chat_focus", focused }) } catch { /* host gone */ }
+    }
     window.addEventListener("focus", () => {
+      reportChatFocus(true)
       requestStateSyncDebounced()
     })
+    window.addEventListener("blur", () => reportChatFocus(false))
+    // The iframe usually loads already focused; seed the context key so the very
+    // first keystroke is covered without waiting for a focus event.
+    if (document.hasFocus()) reportChatFocus(true)
   }
 
   /* ─── TURN NAVIGATION ─── */
