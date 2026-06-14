@@ -223,8 +223,8 @@ export const TOOLTIPS = {
 
 /**
  * Legacy constant kept for backward compatibility with existing call sites
- * (e.g. {@link import("./main").STREAM_LIMIT_TOOLTIP}) and tests that match
- * the substring. New code should reach for {@link TOOLTIPS.limits}.
+ * (e.g. the `STREAM_LIMIT_TOOLTIP` re-export consumed by main.ts) and tests
+ * that match the substring. New code should reach for {@link TOOLTIPS.limits}.
  */
 export const STREAM_LIMIT_TOOLTIP = TOOLTIPS.limits.streamCapReached
 

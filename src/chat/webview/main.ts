@@ -407,21 +407,21 @@ function getVsCodeApi() {
     onOpen: () => {
       vscode.postMessage({ type: "get_models" })
     },
-	    onSelect: (modelId) => {
-	      // Always update global preference + UI, regardless of whether a session is active.
-	      // This allows model selection to work on the welcome screen before any session exists.
-	      stateManager.setGlobalModel(modelId)
-	      modelDropdown.setCurrentModel(modelId)
-	      syncModelViews()
-	      const model = modelManager.getEnabledModels().find((m) => `${m.provider}/${m.id}` === modelId)
-	      variantSelector.setModel(model || null)
-	      const active = stateManager.getActiveSession()
-	      if (active) {
-	        stateManager.setSessionModel(active.id, modelId)
-	        vscode.postMessage({ type: "set_model", model: modelId, sessionId: active.id })
-	      } else {
-	        vscode.postMessage({ type: "set_model", model: modelId })
-	      }
+ 	    onSelect: (modelId) => {
+ 	      // Always update global preference + UI, regardless of whether a session is active.
+ 	      // This allows model selection to work on the welcome screen before any session exists.
+ 	      stateManager.setGlobalModel(modelId)
+ 	      modelDropdown.setCurrentModel(modelId)
+ 	      syncModelViews()
+ 	      const model = modelManager.getEnabledModels().find((m) => `${m.provider}/${m.id}` === modelId)
+ 	      variantSelector.setModel(model || null)
+ 	      const active = stateManager.getActiveSession()
+ 	      if (active) {
+ 	        stateManager.setSessionModel(active.id, modelId)
+ 	        vscode.postMessage({ type: "set_model", model: modelId, sessionId: active.id })
+ 	      } else {
+ 	        vscode.postMessage({ type: "set_model", model: modelId })
+ 	      }
     },
     onManageModels: () => {
       modelManager.open()
@@ -519,12 +519,18 @@ function getVsCodeApi() {
     },
 	  })
 
-	  function syncModelViews(models = modelManager.getAllModels()) {
-	    const modelsWithState = stateManager.applyModelState(models)
-	    const currentModel = stateManager.getState().globalModel
-	    modelManager.setModels(modelsWithState)
-	    modelDropdown.render(modelsWithState, currentModel)
-	  }
+  function syncModelViews(models = modelManager.getAllModels()) {
+    const modelsWithState = stateManager.applyModelState(models)
+    // The render's checkmark follows the ACTIVE session's model when one is
+    // present; only fall back to the global default on the welcome screen.
+    // Using globalModel unconditionally made compaction / cross-window
+    // model pushes flip the picker off the model the user had chosen for
+    // the current session.
+    const active = stateManager.getActiveSession()
+    const currentModel = active?.model || stateManager.getState().globalModel
+    modelManager.setModels(modelsWithState)
+    modelDropdown.render(modelsWithState, currentModel)
+  }
 
   const mcpConfig = setupMcpConfig(els, {
     onAddServer: (name, config) => vscode.postMessage({ type: "add_mcp_server", name, config }),
@@ -3352,14 +3358,19 @@ function getVsCodeApi() {
         // Updating the active session's model here would silently switch the
         // session off the user's chosen model whenever compaction or any
         // other state-push fires — the bug we are fixing.
-        modelDropdown.setCurrentModel(msg.model as string)
-        if (msg.model) {
-          stateManager.setGlobalModel(msg.model as string)
-          syncModelViews()
-          const modelParts = (msg.model as string).split("/")
-          els.statusModel.textContent = modelParts[modelParts.length - 1] ?? (msg.model as string)
-          renderWelcomeContext()
-        }
+        if (!msg.model) return
+        stateManager.setGlobalModel(msg.model as string)
+        // Re-render the list (enabled/favorite state may have changed) and
+        // explicitly sync the dropdown selection. The selection prefers the
+        // active session's model so a global push doesn't clobber a
+        // per-session pick; the status strip below intentionally shows the
+        // GLOBAL model (it describes the workspace default).
+        syncModelViews()
+        const activeSession = stateManager.getActiveSession()
+        modelDropdown.setCurrentModel(activeSession?.model || (msg.model as string))
+        const modelParts = (msg.model as string).split("/")
+        els.statusModel.textContent = modelParts[modelParts.length - 1] ?? (msg.model as string)
+        renderWelcomeContext()
       }],
       ["variant_update", (msg) => {
         // Same contract as model_update: only the GLOBAL default is pushed.
@@ -3443,7 +3454,11 @@ function getVsCodeApi() {
         stateManager.loadSessions(sessions, msg.activeSessionId as string | null, msg.globalModel as string)
 
         if (msg.globalModel) {
-          modelDropdown.setCurrentModel(msg.globalModel as string)
+          // Prefer the restored active session's own model over the global
+          // default — same rationale as model_update: a session restored with
+          // a specific model should not flip back to the global one on init.
+          const restoredActive = stateManager.getActiveSession()
+          modelDropdown.setCurrentModel(restoredActive?.model || (msg.globalModel as string))
         }
 
         // Update configurable stream cap from extension
@@ -3881,7 +3896,14 @@ function getVsCodeApi() {
         // Refresh the stash list if open
         vscode.postMessage({ type: "list_stashes" })
       }],
-      ["open_commands_palette", () => commandsModal.open()],
+      ["open_commands_palette", () => {
+        commandsModal.open()
+        // Fetch fresh so host-triggered opens (e.g. a "browse commands" CTA)
+        // don't show a stale list — MCP / server commands may have changed
+        // since the last fetch. The webview-triggered open paths
+        // (/commands, palette button, Ctrl+K) already send this themselves.
+        vscode.postMessage({ type: "list_commands" })
+      }],
       ["methodology_selected", (msg) => {
         // The host classified the outgoing prompt and injected a strategy
         // addendum. Surface it so the user can see — and override via
