@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 import { DiffApplier } from "../../diff/DiffApplier"
 import { DiffHandler } from "./DiffHandler"
-import { TabManager } from "../TabManager"
+import { TabManager, type TabState } from "../TabManager"
 import { SessionManager } from "../../session/SessionManager"
 import { SessionStore } from "../../session/SessionStore"
 import { ContextEngine } from "../../context/ContextEngine"
@@ -992,49 +992,61 @@ export class StreamCoordinator {
       this.subagentHeartbeat.start(tabId, cliSessionId)
       // startWatchdog is the single hard safety net and is driven by server activity.
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Unknown error"
-      log.error("Prompt failed", e)
-      this.setActiveRunState(tabId, "failed", { finalizeReason: "send_failed", error: message })
-      vscode.window.showErrorMessage(`OpenCode request failed: ${message}`)
-      const snapshot = this.activityTracker.markRunFailed(tabId, {
-        kind: message.includes("event stream") || message.includes("communication") ? "transport_disconnected" : "unknown",
-        source: message.includes("event stream") || message.includes("communication") ? "event_stream" : "extension_host",
-        recoverability: "retryable",
-        message,
-        technicalDetails: e instanceof Error ? e.stack : undefined,
-      })
-      const errorContext = mapRunError({
-        kind: snapshot?.lastError?.kind ?? "unknown",
-        source: snapshot?.lastError?.source ?? "extension_host",
-        recoverability: snapshot?.lastError?.recoverability ?? "retryable",
-        sessionId: tabId,
-        messageId: this.ensureStreamMessageId(tabId, tab.cliSessionId || tabId),
-        runId: snapshot?.runId,
-        technicalDetails: e instanceof Error ? e.stack : String(e),
-      })
-      this.postRunActivitySnapshot(tabId, snapshot, callbacks)
-      callbacks.postMessage({
-        type: "prompt_send_failed",
-        sessionId: tabId,
-        messageId: identity.userMessageId,
-        clientRequestId: identity.clientRequestId,
-        text,
-        reason: message,
-        attachments,
-      })
-      // Emit stream_end so the webview cleans up the assistant placeholder BEFORE showing the error
-      callbacks.postMessage({
-        type: "stream_end",
-        sessionId: tabId,
-        messageId: this.ensureStreamMessageId(tabId, tab.cliSessionId || tabId),
-        blocks: [],
-        reason: "error",
-        seq: this.nextSeq(tabId),
-      })
-      const userMessage = errorContext.kind === "unknown" ? message : errorContext.userMessage
-      callbacks.postRequestError(userMessage, tabId)
-      this.cleanupTab(tabId)
+      this.handlePromptSendFailure(tabId, tab, callbacks, identity, text, attachments, e)
     }
+  }
+
+  private handlePromptSendFailure(
+    tabId: string,
+    tab: TabState,
+    callbacks: StreamCallbacks,
+    identity: PromptRunIdentity,
+    text: string,
+    attachments: Array<{ data: string; mimeType: string }>,
+    e: unknown,
+  ): void {
+    const message = e instanceof Error ? e.message : "Unknown error"
+    log.error("Prompt failed", e)
+    this.setActiveRunState(tabId, "failed", { finalizeReason: "send_failed", error: message })
+    vscode.window.showErrorMessage(`OpenCode request failed: ${message}`)
+    const snapshot = this.activityTracker.markRunFailed(tabId, {
+      kind: message.includes("event stream") || message.includes("communication") ? "transport_disconnected" : "unknown",
+      source: message.includes("event stream") || message.includes("communication") ? "event_stream" : "extension_host",
+      recoverability: "retryable",
+      message,
+      technicalDetails: e instanceof Error ? e.stack : undefined,
+    })
+    const errorContext = mapRunError({
+      kind: snapshot?.lastError?.kind ?? "unknown",
+      source: snapshot?.lastError?.source ?? "extension_host",
+      recoverability: snapshot?.lastError?.recoverability ?? "retryable",
+      sessionId: tabId,
+      messageId: this.ensureStreamMessageId(tabId, tab.cliSessionId || tabId),
+      runId: snapshot?.runId,
+      technicalDetails: e instanceof Error ? e.stack : String(e),
+    })
+    this.postRunActivitySnapshot(tabId, snapshot, callbacks)
+    callbacks.postMessage({
+      type: "prompt_send_failed",
+      sessionId: tabId,
+      messageId: identity.userMessageId,
+      clientRequestId: identity.clientRequestId,
+      text,
+      reason: message,
+      attachments,
+    })
+    // Emit stream_end so the webview cleans up the assistant placeholder BEFORE showing the error
+    callbacks.postMessage({
+      type: "stream_end",
+      sessionId: tabId,
+      messageId: this.ensureStreamMessageId(tabId, tab.cliSessionId || tabId),
+      blocks: [],
+      reason: "error",
+      seq: this.nextSeq(tabId),
+    })
+    const userMessage = errorContext.kind === "unknown" ? message : errorContext.userMessage
+    callbacks.postRequestError(userMessage, tabId)
+    this.cleanupTab(tabId)
   }
 
   private setupTtfbTimeout(tabId: string, callbacks: StreamCallbacks): void {
