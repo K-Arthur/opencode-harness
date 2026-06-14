@@ -65,21 +65,18 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(source.includes("this.stripContextWrapper("), "must strip context wrapper")
   })
 
-  it("has appendCallbacks map for steer prompt append mode", () => {
-    assert.ok(source.includes("appendCallbacks"), "must have appendCallbacks field")
-    assert.ok(source.includes("Map<string, (() => Promise<void>)[]>"), "appendCallbacks must be a Map of callback arrays")
+  it("no longer carries the removed append-callback machinery", () => {
+    // The "append" steer mode was folded into the visible queue (drained on
+    // stream_end via onQueueDrain). The append callback path and its
+    // append_cancelled notification are gone.
+    assert.ok(!source.includes("appendCallbacks"), "appendCallbacks field must be removed")
+    assert.ok(!source.includes("registerAppendCallback"), "registerAppendCallback must be removed")
+    assert.ok(!source.includes("append_cancelled"), "append_cancelled message must be removed")
   })
 
-  it("has registerAppendCallback method", () => {
-    assert.ok(source.includes("registerAppendCallback("), "must have registerAppendCallback method")
-    assert.ok(source.includes("tabId: string"), "registerAppendCallback must accept tabId")
-    assert.ok(source.includes("callback: () => Promise<void>"), "registerAppendCallback must accept callback")
-  })
-
-  it("executes append callbacks in finalizeStream", () => {
+  it("drains the host queue after finalizeStream (single follow-up path)", () => {
     assert.ok(source.includes("finalizeStream("), "must have finalizeStream method")
-    assert.ok(source.includes("appendCallbacks.get(tabId)"), "finalizeStream must get callbacks for tab")
-    assert.ok(source.includes("appendCallbacks.delete(tabId)"), "finalizeStream must delete callbacks after execution")
+    assert.ok(source.includes('this.onQueueDrain(tabId, "completed")'), "finalize must drain the host queue on completion")
   })
 
   it("has guarded finalization for multi-message tool turns", () => {

@@ -231,7 +231,7 @@ export interface ChatMessage {
   mode?: string
 }
 
-export type SteerMode = "interrupt" | "append" | "queue"
+export type SteerMode = "interrupt" | "queue"
 
 export interface SessionState {
   id: string
@@ -620,10 +620,8 @@ export type HostMessage =
   | { type: "clear_messages"; sessionId: string }
   | { type: "active_session_changed"; sessionId: string }
   | { type: "fork_created"; targetSessionId: string }
-  | { type: "add_to_queue"; item: unknown }
   | { type: "queue_state"; sessionId: string; items: import("./queue").QueueItem[] }
   | { type: "prompt_queued"; sessionId: string; itemId: string }
-  | { type: "append_cancelled"; sessionId: string; count: number }
   | { type: "prefill_prompt"; text: string; autoSend?: boolean }
   | { type: "edit_message_prefill"; text: string; sessionId?: string }
   | { type: "insert_text"; code: string; language?: string }
@@ -692,7 +690,7 @@ export interface SteerPrompt {
   id: string
   text: string
   attachments: Attachment[]
-  mode: 'interrupt' | 'append' | 'queue'
+  mode: 'interrupt' | 'queue'
   timestamp: number
   sessionId: string
 }
@@ -706,7 +704,7 @@ export type WebviewMessage =
   | { type: "init_ack" }
   | { type: "create_tab" }
   | { type: "send_prompt"; sessionId: string; text: string; messageId: string; clientRequestId?: string; model: string; mode?: string; variant?: string; attachments?: Attachment[]; isSteerPrompt?: boolean }
-  | { type: "send_steer_prompt"; id: string; text: string; attachments: Attachment[]; mode: "interrupt" | "append" | "queue"; sessionId: string }
+  | { type: "send_steer_prompt"; id: string; text: string; attachments: Attachment[]; mode: "interrupt" | "queue"; sessionId: string }
   | { type: "change_mode"; mode: string; sessionId: string }
   | { type: "set_model"; model: string; sessionId?: string }
   | { type: "set_variant"; variant: string; sessionId: string }

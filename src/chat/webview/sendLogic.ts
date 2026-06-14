@@ -23,11 +23,11 @@ export interface SendLogicDeps {
   els: ElementRefs
   stateManager: {
     getState: () => WebviewState
-    getActiveSession: () => { id: string; isStreaming: boolean; model?: string; mode?: string; name?: string; steerMode?: "interrupt" | "append" | "queue" } | null
-    getSession: (id: string) => { id: string; isStreaming: boolean; model?: string; mode?: string; name?: string; steerMode?: "interrupt" | "append" | "queue"; messages: any[] } | undefined
+    getActiveSession: () => { id: string; isStreaming: boolean; model?: string; mode?: string; name?: string; steerMode?: "interrupt" | "queue" } | null
+    getSession: (id: string) => { id: string; isStreaming: boolean; model?: string; mode?: string; name?: string; steerMode?: "interrupt" | "queue"; messages: any[] } | undefined
     getAllSessions: () => Array<{ id: string; isStreaming: boolean }>
     setStreaming: (id: string, streaming: boolean) => void
-    setSessionSteerMode?: (id: string, mode: "interrupt" | "append" | "queue") => void
+    setSessionSteerMode?: (id: string, mode: "interrupt" | "queue") => void
   }
   vscode: {
     postMessage: (msg: Record<string, unknown>) => void
@@ -95,9 +95,11 @@ export function createSendLogic(deps: SendLogicDeps) {
     STREAM_LIMIT_TOOLTIP,
   } = deps
 
-  function getCurrentSteerMode(): "interrupt" | "append" | "queue" {
+  function getCurrentSteerMode(): "interrupt" | "queue" {
     const active = stateManager.getActiveSession()
-    return active?.steerMode || "interrupt"
+    // Queue is the safe default while streaming (never aborts, fully visible/editable).
+    // Interrupt is opt-in (the toggle, or a one-shot Cmd/Ctrl+Enter).
+    return active?.steerMode === "interrupt" ? "interrupt" : "queue"
   }
 
   function getStreamCapacityState(): StreamCapacityState {
@@ -164,7 +166,7 @@ export function createSendLogic(deps: SendLogicDeps) {
     updateModeSelectorState()
   }
 
-  function setSteerMode(mode: "interrupt" | "append" | "queue") {
+  function setSteerMode(mode: "interrupt" | "queue") {
     const active = stateManager.getActiveSession()
     if (active && stateManager.setSessionSteerMode) {
       stateManager.setSessionSteerMode(active.id, mode)
@@ -179,7 +181,7 @@ export function createSendLogic(deps: SendLogicDeps) {
       btn.classList.add("active")
       btn.setAttribute("aria-checked", "true")
     }
-    els.inputArea.classList.remove("steer-interrupt", "steer-append", "steer-queue")
+    els.inputArea.classList.remove("steer-interrupt", "steer-queue")
     els.inputArea.classList.add(`steer-${mode}`)
   }
 
@@ -187,11 +189,11 @@ export function createSendLogic(deps: SendLogicDeps) {
     setSteerMode(getCurrentSteerMode())
   }
 
-  function getSteerMode(): "interrupt" | "append" | "queue" {
+  function getSteerMode(): "interrupt" | "queue" {
     return getCurrentSteerMode()
   }
 
-  function sendSteerPrompt() {
+  function sendSteerPrompt(modeOverride?: "interrupt" | "queue") {
     const active = stateManager.getActiveSession()
     if (!active) return
     const text = els.promptInput.value.trim()
@@ -199,11 +201,13 @@ export function createSendLogic(deps: SendLogicDeps) {
     if (!text && attachments.length === 0) return
     attachmentManager.clearAttachments()
     renderAttachmentChips()
+    // modeOverride is a one-shot (Cmd/Ctrl+Enter → interrupt) and must NOT mutate the
+    // tab's persisted send-mode default; only the toggle (setSteerMode) does that.
     vscode.postMessage({
       type: "send_steer_prompt",
       text,
       sessionId: active.id,
-      mode: getCurrentSteerMode(),
+      mode: modeOverride ?? getCurrentSteerMode(),
       ...(attachments.length > 0 ? { attachments } : {}),
     })
     els.promptInput.value = ""

@@ -10,13 +10,15 @@ export interface StreamCallbacks {
 }
 
 /**
- * Handles mid-generation steer prompts to correct, redirect, or add context
- * during active AI streaming.
- * 
- * Three modes:
- * - interrupt: Abort current stream and send immediately
- * - append: Send after current stream completes (via append callback)
- * - queue: Add to HostPromptQueue, processed on stream end
+ * Handles messages submitted while the AI is still streaming.
+ *
+ * Two behaviors (the old "append" mode was folded into "queue" — same intent,
+ * "run after the current turn", but with visible, editable queue feedback):
+ * - queue (default): add to the visible HostPromptQueue, drained FIFO after the
+ *   current turn ends. Never aborts.
+ * - interrupt (explicit): abort the current turn and send the new prompt now. The
+ *   expected MessageAbortedError is suppressed via StreamCoordinator's
+ *   intentional-abort window (see ChatProvider's server_error handler).
  */
 export class SteerPromptHandler {
   constructor(
@@ -27,9 +29,8 @@ export class SteerPromptHandler {
 
   /**
    * Send a steer prompt based on its mode.
-   * - interrupt: Abort current stream and send immediately
-   * - append: Send after current stream completes
-   * - queue: Add to prompt queue
+   * - queue (default): add to prompt queue, drained after the current turn
+   * - interrupt: abort current stream and send immediately
    */
   async sendSteerPrompt(
     sessionId: string,
@@ -66,15 +67,14 @@ export class SteerPromptHandler {
         case "interrupt":
           await this.handleInterrupt(sessionId, steerPrompt, callbacks)
           break
-        case "append":
-          await this.handleAppend(sessionId, steerPrompt, callbacks)
-          break
         case "queue":
           await this.handleQueue(sessionId, steerPrompt, callbacks)
           break
         default:
-          log.warn(`[SteerPromptHandler] Unknown steer mode: ${steerPrompt.mode}`)
-          callbacks.postRequestError(`Unknown steer mode: ${steerPrompt.mode}`, sessionId)
+          // Unknown / legacy modes (e.g. the removed "append") default to the safe,
+          // visible queue rather than rejecting the user's input.
+          log.warn(`[SteerPromptHandler] Unknown steer mode "${steerPrompt.mode}" — queueing`)
+          await this.handleQueue(sessionId, steerPrompt, callbacks)
       }
     } catch (error) {
       log.error(`[SteerPromptHandler] Error sending steer prompt: ${error}`)
@@ -113,39 +113,6 @@ export class SteerPromptHandler {
   }
 
   /**
-   * Append mode: Register callback to send after stream completes.
-   */
-  private async handleAppend(
-    sessionId: string,
-    steerPrompt: SteerPrompt,
-    callbacks: StreamCallbacks
-  ): Promise<void> {
-    log.info(`[SteerPromptHandler] Append mode: registering callback for ${sessionId}`)
-    
-    try {
-      // Register callback to send after stream_end
-      this.streamCoordinator.registerAppendCallback(sessionId, async () => {
-        log.info(`[SteerPromptHandler] Append callback triggered for ${sessionId}`)
-        try {
-          await this.streamCoordinator.startPrompt(
-            sessionId,
-            steerPrompt.text,
-            callbacks,
-            undefined,
-            steerPrompt.attachments,
-          )
-            } catch (error) {
-          log.error(`[SteerPromptHandler] Error in append callback: ${error}`)
-          callbacks.postRequestError(`Failed to send appended prompt: ${error instanceof Error ? error.message : String(error)}`, sessionId)
-        }
-      })
-    } catch (error) {
-      log.error(`[SteerPromptHandler] Error registering append callback: ${error}`)
-      throw error
-    }
-  }
-
-  /**
    * Queue mode: Add to HostPromptQueue.
    * The queue is drained by StreamCoordinator.onQueueDrain after stream end.
    * A queue_state message is pushed to the webview so it can update the UI.
@@ -173,14 +140,14 @@ export class SteerPromptHandler {
           itemId: id,
         })
         // Push full queue state to webview for UI update
-        const items = this.hostQueue.getAll(sessionId).map(item => ({
+        const items = this.hostQueue.getAll(sessionId).map((item, index) => ({
           id: item.id,
           text: item.text,
-          state: item.state === "queued" ? "queued" as const : item.state === "failed" ? "failed" as const : "queued" as const,
+          state: item.state === "failed" ? "failed" as const : "queued" as const,
           attachments: item.attachments,
           isSteerPrompt: item.isSteerPrompt,
           createdAt: item.createdAt,
-          position: 0,
+          position: index,
         }))
         callbacks.postMessage({
           type: "queue_state",

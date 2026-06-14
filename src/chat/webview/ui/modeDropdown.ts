@@ -240,10 +240,17 @@ export function setupModeToggle(deps: ModeDropdownDeps): void {
     if (!els.modeDropdown.contains(target)) closeModeDropdown(els)
   })
 
+  // Alt+1/2/3 set the session mode and — unlike the old Ctrl+Alt+digit binding —
+  // work *while typing in the composer* (no isTextEntryTarget guard). They no longer
+  // collide with steering, which dropped its Ctrl+1/2/3 triplet. Match on e.code
+  // (Digit1/2/3) so layouts where Option/Alt+digit yields a special character
+  // (e.g. macOS Option+1 = "¡") still resolve correctly; preventDefault stops that
+  // character from being inserted into the textarea.
   document.addEventListener("keydown", (e) => {
-    if (!e.altKey || e.shiftKey || (!e.ctrlKey && !e.metaKey) || isTextEntryTarget(e.target)) return
-    const modeByKey: Record<string, string> = { "1": "plan", "2": "build", "3": "auto" }
-    const mode = modeByKey[e.key]
+    if (isModalOrDialogOpen()) return
+    if (!e.altKey || e.shiftKey || e.ctrlKey || e.metaKey) return
+    const modeByCode: Record<string, string> = { Digit1: "plan", Digit2: "build", Digit3: "auto" }
+    const mode = modeByCode[e.code]
     if (!mode) return
     e.preventDefault()
     requestMode(mode)

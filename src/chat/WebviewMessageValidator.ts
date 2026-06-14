@@ -13,7 +13,9 @@ type MessageValidator = (
 ) => boolean
 
 const MODE_VALUES = new Set(["normal", "plan", "build", "auto"])
-const STEER_MODE_VALUES = new Set(["interrupt", "append", "queue"])
+// "append" is a removed mode kept here only so a stale webview's message isn't
+// rejected (the router coerces anything that isn't "interrupt" to "queue").
+const STEER_MODE_VALUES = new Set(["interrupt", "queue", "append"])
 const MCP_SERVER_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/
 const MCP_COMMAND_PATTERN = /^[A-Za-z0-9@._/\\:-]+$/
 const MCP_HEADER_NAME_PATTERN = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/

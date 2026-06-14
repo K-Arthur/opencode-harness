@@ -23,7 +23,7 @@ export interface ComposerDeps {
     getActiveSessionId: () => string | undefined
     setStreaming: (id: string, streaming: boolean) => void
     setSessionModel: (id: string, model: string) => void
-    setSessionSteerMode: (id: string, mode: "interrupt" | "append" | "queue") => void
+    setSessionSteerMode: (id: string, mode: "interrupt" | "queue") => void
     setGlobalModel: (model: string) => void
     save: () => void
     ensureSession: (init: any) => any
@@ -102,9 +102,9 @@ export interface ComposerAPI {
   insertTextAtCursor: (text: string) => void
   runCommandEntry: (entry: CommandEntry) => void
   insertIntoPrompt: (text: string) => void
-  setSteerMode: (mode: "interrupt" | "append" | "queue") => void
+  setSteerMode: (mode: "interrupt" | "queue") => void
   syncSteerModeUI: () => void
-  getSteerMode: () => "interrupt" | "append" | "queue"
+  getSteerMode: () => "interrupt" | "queue"
   onInputChange: () => void
   onInputKeydown: (e: KeyboardEvent) => void
   onPaste: (e: ClipboardEvent) => void

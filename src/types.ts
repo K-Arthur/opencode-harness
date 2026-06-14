@@ -149,7 +149,7 @@ export interface SteerPrompt {
   id: string
   text: string
   attachments: Attachment[]
-  mode: 'interrupt' | 'append' | 'queue'
+  mode: 'interrupt' | 'queue'
   timestamp: number
   sessionId: string
 }

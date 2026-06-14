@@ -169,16 +169,13 @@ export const TOOLTIPS = {
   prompts: {
     placeholder: "Ask OpenCode a question about your code…",
     queueSteerHint:
-      "Add to queue (Ctrl+3) — runs after the current response ends",
+      "Queue (Enter) — runs after the current response ends",
     interruptHint:
-      "Interrupt (Ctrl+1) — stops the current response and starts the new one",
-    appendHint:
-      "Append (Ctrl+2) — adds your message after the current response finishes",
+      "Interrupt (⌘/Ctrl+Enter) — stops the current response and starts the new one",
   },
   steer: {
-    interrupt: "Interrupt current response (Ctrl+1)",
-    append: "Append after current response (Ctrl+2)",
-    queue: "Queue for later (Ctrl+3)",
+    interrupt: "Interrupt now (⌘/Ctrl+Enter) — stop and run this immediately",
+    queue: "Queue (Enter) — run after the current response ends",
   },
   /**
    * Static tooltips for header/icon buttons declared in `index.html`.

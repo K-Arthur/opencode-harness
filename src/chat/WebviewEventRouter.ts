@@ -1613,11 +1613,15 @@ export class WebviewEventRouter {
           return
         }
         const text = this.getPromptText(msg)
+        // Queue is the safe default while streaming. Only an explicit "interrupt"
+        // aborts the current turn; legacy/unknown modes (e.g. the removed "append")
+        // coerce to queue so user input is never dropped or unexpectedly destructive.
+        const steerMode: "interrupt" | "queue" = msg.mode === "interrupt" ? "interrupt" : "queue"
         const steerPrompt = {
           id: `steer-${crypto.randomUUID()}`,
           text,
           attachments: validated,
-          mode: msg.mode as 'interrupt' | 'append' | 'queue' || 'interrupt',
+          mode: steerMode,
           timestamp: Date.now(),
           sessionId,
         }
