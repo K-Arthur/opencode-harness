@@ -23,7 +23,7 @@ import { createAttachmentStorage, type MaterializedAttachment } from "./attachme
 import { RunActivityTracker } from "./RunActivityTracker"
 import type { AgentRunState, RunProgressEvent, SubagentActivityInput, SubagentRunState, ToolActivityInput } from "./runActivityTypes"
 import { SubagentHeartbeat } from "./SubagentHeartbeat"
-import { mapRunError } from "./runErrorMapper"
+import { mapRunError, type RunErrorContext } from "./runErrorMapper"
 import { logStreamTrace } from "../../session/streamTrace"
 import { modeToAgent } from "../modePolicy"
 
@@ -848,19 +848,12 @@ export class StreamCoordinator {
     }
   }
 
-  private handlePromptSendFailure(
+  private buildPromptFailureContext(
     tabId: string,
     tab: TabState,
-    callbacks: StreamCallbacks,
-    identity: PromptRunIdentity,
-    text: string,
-    attachments: Array<{ data: string; mimeType: string }>,
+    message: string,
     e: unknown,
-  ): void {
-    const message = e instanceof Error ? e.message : "Unknown error"
-    log.error("Prompt failed", e)
-    this.setActiveRunState(tabId, "failed", { finalizeReason: "send_failed", error: message })
-    vscode.window.showErrorMessage(`OpenCode request failed: ${message}`)
+  ): { snapshot: AgentRunState | undefined; errorContext: RunErrorContext } {
     const snapshot = this.activityTracker.markRunFailed(tabId, {
       kind: message.includes("event stream") || message.includes("communication") ? "transport_disconnected" : "unknown",
       source: message.includes("event stream") || message.includes("communication") ? "event_stream" : "extension_host",
@@ -877,6 +870,23 @@ export class StreamCoordinator {
       runId: snapshot?.runId,
       technicalDetails: e instanceof Error ? e.stack : String(e),
     })
+    return { snapshot, errorContext }
+  }
+
+  private handlePromptSendFailure(
+    tabId: string,
+    tab: TabState,
+    callbacks: StreamCallbacks,
+    identity: PromptRunIdentity,
+    text: string,
+    attachments: Array<{ data: string; mimeType: string }>,
+    e: unknown,
+  ): void {
+    const message = e instanceof Error ? e.message : "Unknown error"
+    log.error("Prompt failed", e)
+    this.setActiveRunState(tabId, "failed", { finalizeReason: "send_failed", error: message })
+    vscode.window.showErrorMessage(`OpenCode request failed: ${message}`)
+    const { snapshot, errorContext } = this.buildPromptFailureContext(tabId, tab, message, e)
     this.postRunActivitySnapshot(tabId, snapshot, callbacks)
     callbacks.postMessage({
       type: "prompt_send_failed",
