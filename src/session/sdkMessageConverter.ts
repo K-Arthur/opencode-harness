@@ -3,6 +3,15 @@ import type { ChatMessage, Block } from "../types"
 import { parseQuestionArgs, parseAllowFreeText } from "./questionModel"
 
 /**
+ * Coerce an unknown value to a non-empty string, or undefined. Used for
+ * defensively reading free-form metadata keys whose convention isn't pinned
+ * by the SDK types.
+ */
+function str(v: unknown): string | undefined {
+  return typeof v === "string" && v.length > 0 ? v : undefined
+}
+
+/**
  * SDK → CanonicalBlock converter. Single source of truth for projecting the
  * `@opencode-ai/sdk` `Part` union onto the extension's internal `Block`
  * model. Spec: docs/specs/2026-05-16-message-pipeline-alignment.md.
@@ -104,6 +113,25 @@ export function partToBlock(part: Part, opts: { streaming?: boolean } = {}): Blo
           text: first?.question ?? "",
           options: first?.options ?? [],
           allowFreeText: parseAllowFreeText(input),
+        }
+        // B4: preserve requestID from part.metadata so reload-time answers go
+        // through the v2 replyToQuestion API instead of falling back to the
+        // legacy startPrompt path (which leaves the server-side question
+        // orphaned). The SDK types don't pin the metadata key, so accept the
+        // common variants defensively.
+        const meta = (part.metadata ?? ("metadata" in state ? state.metadata : undefined)) as
+          | Record<string, unknown>
+          | undefined
+        if (meta && typeof meta === "object") {
+          const requestID =
+            str(meta.requestID) ??
+            str(meta.request_id) ??
+            str(meta.requestId) ??
+            str(meta.questionId) ??
+            str(meta.question_id)
+          if (requestID) {
+            ;(qBlock as Record<string, unknown>).requestID = requestID
+          }
         }
         return qBlock
       }
