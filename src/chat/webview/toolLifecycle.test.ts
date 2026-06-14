@@ -338,3 +338,36 @@ describe("toolBadgeText — unresolved state badge", () => {
     )
   })
 })
+
+// ---------------------------------------------------------------------------
+// B6: markUnresolvedPendingToolCalls must NOT flag unanswered question tools
+// as unresolved. Question tools are kept pending on purpose (the agent is
+// suspended waiting for an answer); flagging them as "unresolved" after the
+// 30s grace timeout both (a) posts a stream_tool_unresolved message that the
+// webview has no handler for (silent), and (b) records a misleading
+// "unresolved" run-activity entry for the question.
+// ---------------------------------------------------------------------------
+
+describe("markUnresolvedPendingToolCalls — question tool exclusion (B6)", () => {
+  it("skips tools whose persisted block is a question block", () => {
+    const source = readFileSync(path.join(__dirname, "../handlers/StreamCoordinator.ts"), "utf8")
+    const fnStart = source.indexOf("private async markUnresolvedPendingToolCalls(")
+    assert.ok(fnStart >= 0, "markUnresolvedPendingToolCalls must exist")
+    const fnEnd = source.indexOf("private ", fnStart + 1)
+    const fnBody = source.slice(fnStart, fnEnd > fnStart ? fnEnd : fnStart + 3000)
+
+    // The loop must look up the block for the tool id and skip when the block
+    // is a question block (either type === "question" OR toolCallId resolves
+    // to a question block). This single guard is enough because
+    // reconcilePendingToolCallsFromServer already `continue`s past question
+    // parts (leaving their ids in `pending`), so they'll surface here.
+    assert.ok(
+      fnBody.includes('"question"'),
+      "markUnresolvedPendingToolCalls must check for question blocks",
+    )
+    assert.ok(
+      /isQuestionBlock|skipQuestion|continue\b/.test(fnBody),
+      "markUnresolvedPendingToolCalls must skip question-block tool ids (continue / guard) so they are not flagged unresolved",
+    )
+  })
+})

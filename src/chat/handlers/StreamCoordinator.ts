@@ -698,6 +698,21 @@ export class StreamCoordinator {
     log.warn(`Marking ${ids.length} pending tool call(s) unresolved for ${tabId} after terminal server status`)
     for (const toolId of ids) {
       const tab = this.tabManager.getTab(tabId)
+      // B6: question tools are intentionally kept pending while the agent is
+      // suspended waiting for an answer (reconcilePendingToolCallsFromServer
+      // `continue`s past them). Flagging them as "unresolved" here would (a)
+      // post a stream_tool_unresolved message the webview has no handler for,
+      // and (b) record a misleading "unresolved" run-activity entry. The
+      // question block in blocksBuffer IS the user-visible state — leave it.
+      const isQuestionBlock = tab?.blocksBuffer.some(b => {
+        if (b.type !== "question") return false
+        const rec = b as Record<string, unknown>
+        return b.id === toolId || rec.toolCallId === toolId
+      })
+      if (isQuestionBlock) {
+        log.info(`markUnresolvedPendingToolCalls: skipping question tool ${toolId} (still awaiting answer)`)
+        continue
+      }
       const block = tab?.blocksBuffer.find(b => b.type === "tool-call" && b.id === toolId)
       this.recordToolRunActivity(tabId, {
         id: toolId,
