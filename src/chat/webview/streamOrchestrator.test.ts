@@ -1059,6 +1059,71 @@ describe("createStreamOrchestrator", () => {
       assert.equal(h.sessions.get("s1")!.isStreaming, true, "streaming untouched")
       assert.equal((h.deps.els as any).agentStatusLed.className, "", "agent untouched")
     })
+
+    it("B5: an assistant message carrying a pending question block does NOT terminate streaming or flip the tab to idle", () => {
+      // Regression: ChatProvider.ensureQuestionBlock posts an assistant message
+      // to render the inline pointer card. Without this guard, handleHostMessage
+      // treated *any* assistant message as a final turn → setStreaming(false),
+      // updateSendButton, updateAgentStatus("idle") — so the user saw an idle
+      // composer while the agent was actually waiting for an answer. Typing
+      // into the composer sent a fresh prompt instead of answering the question.
+      const h = makeHarness()
+      h.addSession(session("s1", { isStreaming: true }))
+      const stream = h.addStream("s1")
+      const msg: ChatMessage = {
+        role: "assistant",
+        id: "msg-q",
+        sessionId: "s1",
+        blocks: [{
+          type: "question",
+          id: "q-1",
+          toolCallId: "q-1",
+          requestID: "req-q-1",
+          groups: [{ question: "Pick one", options: ["A", "B"], multiSelect: false }],
+          text: "Pick one",
+          options: ["A", "B"],
+          allowFreeText: true,
+        } as any],
+        timestamp: 1,
+      }
+      h.api.handleHostMessage(msg)
+      // The pointer message IS still added to the transcript…
+      assert.ok((h.calls.addMessage || []).some((c) => c[0] === "s1" && c[1] === msg), "pointer message rendered")
+      // …but streaming MUST NOT terminate…
+      assert.equal(h.sessions.get("s1")!.isStreaming, true, "streaming must stay true while waiting for an answer")
+      // …and the agent status MUST NOT flip to idle.
+      const ledClass = (h.deps.els as any).agentStatusLed.className
+      assert.ok(!ledClass.includes("idle"), "agent status must not flip to idle for a question message")
+      assert.equal(stream.calls.filter((c) => c.method === "hideTypingIndicator").length, 0, "typing indicator preserved")
+    })
+
+    it("B5: an answered question in an assistant message still terminates streaming normally (only PENDING questions hold the stream open)", () => {
+      const h = makeHarness()
+      h.addSession(session("s1", { isStreaming: true }))
+      const stream = h.addStream("s1")
+      const msg: ChatMessage = {
+        role: "assistant",
+        id: "msg-q-answered",
+        sessionId: "s1",
+        blocks: [{
+          type: "question",
+          id: "q-2",
+          toolCallId: "q-2",
+          requestID: "req-q-2",
+          groups: [{ question: "Done?", options: ["Yes"], multiSelect: false }],
+          text: "Done?",
+          options: ["Yes"],
+          allowFreeText: false,
+          answered: true,
+          answer: "Yes",
+        } as any],
+        timestamp: 1,
+      }
+      h.api.handleHostMessage(msg)
+      assert.equal(h.sessions.get("s1")!.isStreaming, false, "answered question terminates stream normally")
+      assert.equal((h.deps.els as any).agentStatusLed.className, "status-led idle")
+      assert.ok(stream.calls.some((c) => c.method === "hideTypingIndicator"))
+    })
   })
 
   // -------------------------------------------------------------------------

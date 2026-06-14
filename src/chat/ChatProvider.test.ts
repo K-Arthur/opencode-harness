@@ -906,3 +906,52 @@ void describe("ChatProvider token accounting — host source of truth", () => {
     )
   })
 })
+
+// ── question.asked surfacing (Sprint 0 / B1) ────────────────────────────────
+// The opencode server can emit question.asked / question.v2.asked WITHOUT a
+// matching tool part (question invoked outside a tool-call context). In that
+// case, the only host event that fires is the normalized `question_asked`
+// (no `tool_start` with name "question" ever arrives). The webview's question
+// bar is populated exclusively via the `question_asked` host message — so if
+// the host only posts `{type:"message"}` from `ensureQuestionBlock`, the bar
+// stays empty and the user cannot answer. ensureQuestionBlock MUST also post
+// `{type:"question_asked", block, messageId}` so the existing webview handler
+// at main.ts (~line 4132) fires and calls questionBar.addQuestion.
+
+void describe("ChatProvider question.asked surfacing (B1)", () => {
+  void it("ensureQuestionBlock posts question_asked in addition to the transcript message", () => {
+    const idx = source.indexOf("private ensureQuestionBlock(")
+    assert.ok(idx >= 0, "ensureQuestionBlock must exist")
+    // Slice a generous window — the method body is small but contains the postMessage calls.
+    const block = source.slice(idx, idx + 1600)
+    assert.ok(
+      block.includes('type: "question_asked"'),
+      "ensureQuestionBlock must post {type:\"question_asked\"} so non-tool-context questions reach the question bar (B1)",
+    )
+    assert.ok(
+      block.includes('type: "message"'),
+      "ensureQuestionBlock must STILL post {type:\"message\"} so the transcript pointer card renders",
+    )
+    // Order check: the transcript message must post first (so the block is in
+    // history before the bar attempts to bind to it by messageId), then the
+    // question_asked dispatch.
+    const msgIdx = block.indexOf('type: "message"')
+    const askedIdx = block.indexOf('type: "question_asked"')
+    assert.ok(msgIdx >= 0 && askedIdx >= 0 && msgIdx < askedIdx, "post {type:\"message\"} before {type:\"question_asked\"}")
+  })
+
+  void it("question_asked dispatch carries the question block and messageId", () => {
+    const idx = source.indexOf("private ensureQuestionBlock(")
+    const block = source.slice(idx, idx + 1600)
+    const askedIdx = block.indexOf('type: "question_asked"')
+    assert.ok(askedIdx >= 0, "question_asked post must exist")
+    // Look at the postMessage argument shape right after the question_asked type marker.
+    const slice = block.slice(askedIdx, askedIdx + 400)
+    assert.ok(slice.includes("block"), "question_asked payload must include the question block")
+    assert.ok(
+      slice.includes("messageId") || slice.includes("messageId:"),
+      "question_asked payload must include messageId so the bar can bind to the right transcript bubble",
+    )
+    assert.ok(slice.includes("sessionId"), "question_asked payload must include sessionId")
+  })
+})

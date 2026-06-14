@@ -717,7 +717,8 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
   function handleHostMessage(msg: ChatMessage) {
     if (!msg.sessionId) return
     const stream = streamHandlers.get(msg.sessionId)
-    const isFinalAssistantMessage = msg.role === "assistant"
+    const isFinalAssistantMessage = msg.role === "assistant" &&
+      !hasPendingQuestionBlock(msg)
     if (stream && isFinalAssistantMessage) {
       stream.hideTypingIndicator()
     }
@@ -730,6 +731,28 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
       updateAgentStatus("idle")
     }
     syncModeUI()
+  }
+
+  /**
+   * Detect whether an assistant message is carrying an *unanswered* question
+   * block. Such messages are rendered as a transcript pointer card whose
+   * interactive surface lives in the question bar; the agent is still
+   * suspended waiting for the answer, so the stream MUST NOT terminate and
+   * the composer MUST NOT flip to idle. (B5 fix.)
+   *
+   * Once the question has been answered (`answered: true` or a non-empty
+   * `answer`), the message is a normal finalized record and the stream may
+   * end normally.
+   */
+  function hasPendingQuestionBlock(msg: ChatMessage): boolean {
+    if (!msg.blocks || msg.blocks.length === 0) return false
+    return msg.blocks.some((b) => {
+      const rec = b as Record<string, unknown>
+      if (rec.type !== "question") return false
+      const answered = rec.answered
+      const answer = rec.answer
+      return answered !== true && (answer === undefined || answer === null || answer === "")
+    })
   }
 
   function handleCostUpdate(sessionId: string, cost: number) {
