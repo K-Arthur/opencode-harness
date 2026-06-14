@@ -1498,7 +1498,15 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     if (!alreadyStored) {
       this.sessionStore.appendMessage(sessionId, message)
     }
+    // 1) Render the inline transcript pointer card so users see context above.
     this.postMessage({ type: "message", sessionId, message })
+    // 2) Populate the question bar (B1 fix). Without this second post, a
+    //    question.asked event arriving WITHOUT a matching tool part (the
+    //    common case for question.v2.asked with tool: undefined) renders the
+    //    pointer but never reaches questionBar.addQuestion — the user sees
+    //    the question but has no way to answer. The webview's question_asked
+    //    handler is dead code without this post.
+    this.postMessage({ type: "question_asked", sessionId, block, messageId: msgId })
   }
 
   private appendActivityBlock(sessionId: string, data: unknown, fallbackTitle = "OpenCode activity"): void {
