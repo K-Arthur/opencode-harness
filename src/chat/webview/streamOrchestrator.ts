@@ -126,6 +126,66 @@ function appendSkillPill(
   timers.setTimeout(() => pill.remove(), 3000)
 }
 
+/** One queued (debounced) tool-update. Keyed `${sessionId}:${toolId}`. */
+interface PendingToolUpdate {
+  sessionId: string
+  toolId: string
+  update: { state?: ToolCallState; args?: unknown }
+  timer: ReturnType<typeof setTimeout>
+}
+
+/**
+ * Debounce a tool-update for 50ms, merging subsequent updates for the same
+ * `(sessionId, toolId)` into a single delivery.
+ *
+ * Extracted from `createStreamOrchestrator`. The orchestrator owns the
+ * `pendingToolUpdates` Map (per-instance state) and passes it in; the helper
+ * itself is stateless and independently testable.
+ */
+function scheduleDebouncedToolUpdate(
+  pendingToolUpdates: Map<string, PendingToolUpdate>,
+  streamHandlers: Map<string, StreamHandlers>,
+  sessionId: string,
+  toolId: string,
+  update: { state?: ToolCallState; args?: unknown },
+): void {
+  const key = `${sessionId}:${toolId}`
+  const pending = pendingToolUpdates.get(key)
+  if (pending) {
+    pending.update = { ...pending.update, ...update }
+    return
+  }
+  const timer = timers.setTimeout(() => {
+    const latest = pendingToolUpdates.get(key)
+    pendingToolUpdates.delete(key)
+    const stream = streamHandlers.get(sessionId)
+    if (latest && stream) stream.handleToolUpdate(toolId, latest.update)
+  }, 50)
+  pendingToolUpdates.set(key, { sessionId, toolId, update, timer })
+}
+
+/**
+ * Immediately deliver any pending tool-update for `(sessionId, toolId)`,
+ * cancelling its debounce timer. No-op when nothing is pending.
+ *
+ * Extracted from `createStreamOrchestrator` alongside
+ * `scheduleDebouncedToolUpdate`; both share the `pendingToolUpdates` Map.
+ */
+function flushPendingToolUpdate(
+  pendingToolUpdates: Map<string, PendingToolUpdate>,
+  streamHandlers: Map<string, StreamHandlers>,
+  sessionId: string,
+  toolId: string,
+): void {
+  const key = `${sessionId}:${toolId}`
+  const pending = pendingToolUpdates.get(key)
+  if (!pending) return
+  timers.clearTimeout(pending.timer)
+  pendingToolUpdates.delete(key)
+  const stream = streamHandlers.get(sessionId)
+  if (stream) stream.handleToolUpdate(toolId, pending.update)
+}
+
 export interface StreamOrchestratorDeps {
   vscode: { postMessage(msg: Record<string, unknown>): void }
   els: ElementRefs
@@ -212,38 +272,15 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     persistQueues,
   } = deps
 
-  const pendingToolUpdates = new Map<string, {
-    sessionId: string
-    toolId: string
-    update: { state?: ToolCallState; args?: unknown }
-    timer: ReturnType<typeof setTimeout>
-  }>()
+  const pendingToolUpdates = new Map<string, PendingToolUpdate>()
   const toolChainProgressTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
   function scheduleToolUpdate(sessionId: string, toolId: string, update: { state?: ToolCallState; args?: unknown }): void {
-    const key = `${sessionId}:${toolId}`
-    const pending = pendingToolUpdates.get(key)
-    if (pending) {
-      pending.update = { ...pending.update, ...update }
-      return
-    }
-    const timer = timers.setTimeout(() => {
-      const latest = pendingToolUpdates.get(key)
-      pendingToolUpdates.delete(key)
-      const stream = streamHandlers.get(sessionId)
-      if (latest && stream) stream.handleToolUpdate(toolId, latest.update)
-    }, 50)
-    pendingToolUpdates.set(key, { sessionId, toolId, update, timer })
+    scheduleDebouncedToolUpdate(pendingToolUpdates, streamHandlers, sessionId, toolId, update)
   }
 
   function flushToolUpdate(sessionId: string, toolId: string): void {
-    const key = `${sessionId}:${toolId}`
-    const pending = pendingToolUpdates.get(key)
-    if (!pending) return
-    timers.clearTimeout(pending.timer)
-    pendingToolUpdates.delete(key)
-    const stream = streamHandlers.get(sessionId)
-    if (stream) stream.handleToolUpdate(toolId, pending.update)
+    flushPendingToolUpdate(pendingToolUpdates, streamHandlers, sessionId, toolId)
   }
 
   function markToolChainProgress(sessionId: string): void {
