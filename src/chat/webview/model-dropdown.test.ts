@@ -49,9 +49,12 @@ describe("model-dropdown.ts", () => {
   })
 
   it("setCurrentModel_syncs_selected_class_on_dropdown_items", () => {
-    assert.ok(source.includes("Re-sync .selected class"), "must re-sync selected state")
-    assert.ok(source.includes("opt.classList.add(\"selected\")"), "must add selected class to matching option")
-    assert.ok(source.includes("opt.classList.remove(\"selected\")"), "must remove selected class from non-matching options")
+    assert.ok(source.includes("Re-sync"), "must re-sync selected state")
+    // The re-sync matches options by their canonical model id (data-model-id)
+    // rather than positional index, so the checkmark lands on the right row
+    // even when the displayed set changes between renders.
+    assert.ok(source.includes("dataset.modelId"), "must read the model id from data-model-id")
+    assert.ok(source.includes('classList.toggle("selected"'), "must toggle the selected class")
     assert.ok(source.includes("aria-selected"), "must update aria-selected attribute")
   })
 

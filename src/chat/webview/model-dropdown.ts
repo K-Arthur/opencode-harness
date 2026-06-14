@@ -54,6 +54,12 @@ function createModelOption(
   const option = document.createElement("div")
   option.className = "model-option" + (isSelected ? " selected" : "") + (isUnavailable ? " unavailable" : "")
   option.id = `model-option-${index}`
+  // Stash the canonical model id on the DOM node so the selection re-sync in
+  // setCurrentModel can match directly instead of by positional index. Index
+  // mapping breaks when the displayed set changes between renders (search
+  // filter, enabled-state toggles, model-list refresh) — which was the root
+  // cause of the checkmark landing on the wrong row.
+  option.dataset.modelId = fullId
   option.setAttribute("role", "option")
   option.setAttribute("aria-selected", isSelected ? "true" : "false")
   option.setAttribute("tabindex", "-1")
@@ -327,26 +333,18 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     els.modelLabel.textContent = short || "Default"
     els.modelSelectorBtn.title = `Model: ${modelId || "Default"}`
 
-    const limitedModels = getDisplayModels()
-    if (limitedModels.length === 0) return
-
+    // Re-sync the .selected / aria-selected state on existing options. Match
+    // by the canonical model id stored in data-model-id rather than by
+    // positional index — the displayed set can change between renders (search
+    // filter, enabled toggles, model-list refresh), so index N at sync time
+    // may point to a different model than index N at render time.
     const options = getOptions()
-    for (const opt of options) {  // Re-sync .selected class
-      const optionIndexStr = opt.id?.replace("model-option-", "")
-      if (optionIndexStr) {
-        const optionIdx = Number(optionIndexStr)
-        const model = limitedModels[optionIdx]
-        if (model) {
-          const optionFullId = `${model.provider}/${model.id}`
-          if (optionFullId === modelId) {
-            opt.classList.add("selected")
-            opt.setAttribute("aria-selected", "true")
-          } else {
-            opt.classList.remove("selected")
-            opt.setAttribute("aria-selected", "false")
-          }
-        }
-      }
+    for (const opt of options) {
+      const optionModelId = opt.dataset.modelId
+      if (!optionModelId) continue
+      const isSelected = optionModelId === modelId
+      opt.classList.toggle("selected", isSelected)
+      opt.setAttribute("aria-selected", isSelected ? "true" : "false")
     }
   }
 
