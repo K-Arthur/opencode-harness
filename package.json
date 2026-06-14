@@ -289,57 +289,57 @@
       {
         "command": "opencode-harness.suppressKey",
         "key": "alt+1",
-        "when": "opencodeHarness.chatFocused"
+        "when": "focusedView == 'opencode-harness.chat' || opencodeHarness.chatFocused"
       },
       {
         "command": "opencode-harness.suppressKey",
         "key": "alt+2",
-        "when": "opencodeHarness.chatFocused"
+        "when": "focusedView == 'opencode-harness.chat' || opencodeHarness.chatFocused"
       },
       {
         "command": "opencode-harness.suppressKey",
         "key": "alt+3",
-        "when": "opencodeHarness.chatFocused"
+        "when": "focusedView == 'opencode-harness.chat' || opencodeHarness.chatFocused"
       },
       {
         "command": "opencode-harness.suppressKey",
         "key": "alt+shift+tab",
-        "when": "opencodeHarness.chatFocused"
+        "when": "focusedView == 'opencode-harness.chat' || opencodeHarness.chatFocused"
       },
       {
         "command": "opencode-harness.suppressKey",
         "key": "ctrl+shift+m",
-        "when": "opencodeHarness.chatFocused"
+        "when": "focusedView == 'opencode-harness.chat' || opencodeHarness.chatFocused"
       },
       {
         "command": "opencode-harness.suppressKey",
         "key": "ctrl+shift+t",
-        "when": "opencodeHarness.chatFocused"
+        "when": "focusedView == 'opencode-harness.chat' || opencodeHarness.chatFocused"
       },
       {
         "command": "opencode-harness.suppressKey",
         "key": "ctrl+t",
-        "when": "opencodeHarness.chatFocused"
+        "when": "focusedView == 'opencode-harness.chat' || opencodeHarness.chatFocused"
       },
       {
         "command": "opencode-harness.suppressKey",
         "key": "ctrl+w",
-        "when": "opencodeHarness.chatFocused"
+        "when": "focusedView == 'opencode-harness.chat' || opencodeHarness.chatFocused"
       },
       {
         "command": "opencode-harness.suppressKey",
         "key": "ctrl+tab",
-        "when": "opencodeHarness.chatFocused"
+        "when": "focusedView == 'opencode-harness.chat' || opencodeHarness.chatFocused"
       },
       {
         "command": "opencode-harness.suppressKey",
         "key": "ctrl+shift+tab",
-        "when": "opencodeHarness.chatFocused"
+        "when": "focusedView == 'opencode-harness.chat' || opencodeHarness.chatFocused"
       },
       {
         "command": "opencode-harness.suppressKey",
         "key": "ctrl+k",
-        "when": "opencodeHarness.chatFocused"
+        "when": "focusedView == 'opencode-harness.chat' || opencodeHarness.chatFocused"
       }
     ],
     "viewsContainers": {

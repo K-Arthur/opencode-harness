@@ -221,7 +221,7 @@ void describe("mode dropdown", () => {
       assert.deepEqual(posted[0], { type: "change_mode", mode: "auto", sessionId: "s1" })
     })
 
-    void it("does not cycle when session is streaming", () => {
+    void it("cycles even when session is streaming (mode applies to next prompt)", () => {
       const els = installDom()
       resetCycleTimer()
       const posted: Record<string, unknown>[] = []
@@ -230,7 +230,8 @@ void describe("mode dropdown", () => {
         postMessage: (msg) => posted.push(msg),
       })
       cycleModeForward(deps)
-      assert.equal(posted.length, 0, "should not post change_mode when streaming")
+      assert.equal(posted.length, 1, "mode is a per-session label safe to change mid-stream")
+      assert.deepEqual(posted[0], { type: "change_mode", mode: "build", sessionId: "s1" })
     })
 
     void it("does not fire twice within debounce window", () => {
@@ -483,7 +484,7 @@ void describe("mode dropdown", () => {
       document.body.removeChild(textarea)
     })
 
-    void it("does not fire when session is streaming", () => {
+    void it("fires even when session is streaming (mode applies to next prompt)", () => {
       const els = installDom()
       resetCycleTimer()
       const posted: Record<string, unknown>[] = []
@@ -495,7 +496,7 @@ void describe("mode dropdown", () => {
         postMessage: (msg) => posted.push(msg),
       })
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "m", ctrlKey: true, shiftKey: true, bubbles: true }))
-      assert.equal(posted.length, 0, "should not cycle while streaming")
+      assert.equal(posted.length, 1, "mode is safe to cycle mid-stream")
     })
   })
 })
