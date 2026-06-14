@@ -186,6 +186,52 @@ function flushPendingToolUpdate(
   if (stream) stream.handleToolUpdate(toolId, pending.update)
 }
 
+/**
+ * Show a "Tool chain running..." affordance after 900ms of continuous tool
+ * activity, unless one is already visible.
+ *
+ * Extracted from `createStreamOrchestrator`. The orchestrator owns the
+ * per-instance `toolChainProgressTimers` Map (one in-flight timer per
+ * session) and passes it in.
+ */
+function armToolChainProgressIndicator(
+  toolChainProgressTimers: Map<string, ReturnType<typeof setTimeout>>,
+  getMessageList: (tabId: string) => HTMLDivElement | null,
+  sessionId: string,
+): void {
+  if (toolChainProgressTimers.has(sessionId)) return
+  const timer = timers.setTimeout(() => {
+    toolChainProgressTimers.delete(sessionId)
+    const msgList = getMessageList(sessionId)
+    if (!msgList || msgList.querySelector(".tool-chain-progress")) return
+    const progress = document.createElement("div")
+    progress.className = "tool-chain-progress"
+    progress.textContent = "Tool chain running..."
+    progress.setAttribute("role", "status")
+    progress.setAttribute("aria-live", "polite")
+    msgList.appendChild(progress)
+  }, 900)
+  toolChainProgressTimers.set(sessionId, timer)
+}
+
+/**
+ * Cancel any pending "Tool chain running..." timer for `sessionId` and
+ * remove the rendered affordance if present.
+ *
+ * Extracted from `createStreamOrchestrator` alongside
+ * `armToolChainProgressIndicator`; both share the `toolChainProgressTimers` Map.
+ */
+function clearToolChainProgressIndicator(
+  toolChainProgressTimers: Map<string, ReturnType<typeof setTimeout>>,
+  getMessageList: (tabId: string) => HTMLDivElement | null,
+  sessionId: string,
+): void {
+  const timer = toolChainProgressTimers.get(sessionId)
+  if (timer) timers.clearTimeout(timer)
+  toolChainProgressTimers.delete(sessionId)
+  getMessageList(sessionId)?.querySelectorAll(".tool-chain-progress").forEach((el) => el.remove())
+}
+
 export interface StreamOrchestratorDeps {
   vscode: { postMessage(msg: Record<string, unknown>): void }
   els: ElementRefs
@@ -284,26 +330,11 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
   }
 
   function markToolChainProgress(sessionId: string): void {
-    if (toolChainProgressTimers.has(sessionId)) return
-    const timer = timers.setTimeout(() => {
-      toolChainProgressTimers.delete(sessionId)
-      const msgList = getMessageList(sessionId)
-      if (!msgList || msgList.querySelector(".tool-chain-progress")) return
-      const progress = document.createElement("div")
-      progress.className = "tool-chain-progress"
-      progress.textContent = "Tool chain running..."
-      progress.setAttribute("role", "status")
-      progress.setAttribute("aria-live", "polite")
-      msgList.appendChild(progress)
-    }, 900)
-    toolChainProgressTimers.set(sessionId, timer)
+    armToolChainProgressIndicator(toolChainProgressTimers, getMessageList, sessionId)
   }
 
   function clearToolChainProgress(sessionId: string): void {
-    const timer = toolChainProgressTimers.get(sessionId)
-    if (timer) timers.clearTimeout(timer)
-    toolChainProgressTimers.delete(sessionId)
-    getMessageList(sessionId)?.querySelectorAll(".tool-chain-progress").forEach((el) => el.remove())
+    clearToolChainProgressIndicator(toolChainProgressTimers, getMessageList, sessionId)
   }
 
   function updateAgentStatus(status: "idle" | "thinking" | "executing") {
