@@ -1171,16 +1171,22 @@ validateSessionName(name: string): string | null {
       next.push(normalized)
     }
 
-    // Persist cumulative diff stats, accumulating additions/deletions per file
+    // Persist cumulative diff stats. The opencode server's session.diff
+    // event carries whole-file stats (added/removed totals for the file's
+    // current state vs HEAD), NOT deltas — so we REPLACE the stored entry
+    // per path on every event. The previous accumulate semantics (M4 fix)
+    // double-counted: editing file X twice (each with 10 added) showed
+    // added: 20 instead of 10. When stats is absent (the file.edited path,
+    // which doesn't carry stats), existing entries are left untouched so
+    // a partial event never zeros out a known-good total.
     if (stats && stats.length > 0) {
       const stored = session.changedFileStats ?? {}
       for (const s of stats) {
         const key = this.normalizeChangedFilePath(s.path)
         if (!key) continue
-        const prev = stored[key] ?? { added: 0, removed: 0 }
         stored[key] = {
-          added: prev.added + (Number.isFinite(s.added) ? s.added : 0),
-          removed: prev.removed + (Number.isFinite(s.removed) ? s.removed : 0),
+          added: Number.isFinite(s.added) ? s.added : 0,
+          removed: Number.isFinite(s.removed) ? s.removed : 0,
         }
       }
       session.changedFileStats = stored
