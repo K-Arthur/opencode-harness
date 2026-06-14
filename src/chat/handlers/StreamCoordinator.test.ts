@@ -591,3 +591,33 @@ describe("StreamCoordinator.ts", () => {
       "cleanupTab must remove session from injectedInstructionsSessions to prevent stale injection state"
     )
   })
+
+  // ── B7: appendToolStart must promote a stale tool-call block to a question
+  // block when the tool name resolves to "question" on a re-entrant start.
+  // Race: the SDK sometimes emits the first message.part.updated with an
+  // empty/placeholder tool name, so the host creates a generic tool-call
+  // block. A subsequent part.updated with name:"question" hits the
+  // duplicate-start branch, which used to only update args/class/name and
+  // never promoted the block — so the question bar was never populated and
+  // the user could not answer. The fix: when promotion is detected, also
+  // post {type:"question_asked"} so the webview's bar handler fires.
+  void it("B7: appendToolStart promotes tool-call → question on re-entrant start by posting question_asked", () => {
+    const fnIdx = source.indexOf("appendToolStart(tabId:")
+    assert.ok(fnIdx >= 0, "appendToolStart must exist")
+    const fnEnd = source.indexOf("\n  appendToolUpdate(", fnIdx)
+    const fnBody = source.slice(fnIdx, fnEnd > fnIdx ? fnEnd : fnIdx + 12000)
+
+    // Locate the duplicate-start branch (the one that handles existingBlock).
+    const dupIdx = fnBody.indexOf("pending.has(stableId) || existingBlock")
+    assert.ok(dupIdx >= 0, "must find the duplicate-start branch")
+    const dupBlock = fnBody.slice(dupIdx, dupIdx + 4000)
+
+    // The branch must detect the promotion case (existingBlock.type ===
+    // "tool-call" AND the new name is question) and post question_asked so
+    // the webview's bar handler fires. (We don't pin the exact arg shape —
+    // only that the type marker is present in the branch.)
+    assert.ok(
+      dupBlock.includes('type: "question_asked"'),
+      "B7: appendToolStart must post {type:\"question_asked\"} when a stale tool-call block is promoted to a question, so the question bar gets populated",
+    )
+  })
