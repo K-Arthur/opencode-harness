@@ -64,6 +64,16 @@
 // All are correctness fixes for the question-tool surfacing bug (the
 // single most common user-reported regression in this sprint). +2KB
 // keeps ~0.4% headroom so the gate still trips on a real regression.
+//
+// 2026-06-14 re-baseline (webview 712KB -> 720KB): the live-tool-output
+// pipeline (StreamCoordinator.armToolPartialPolling / pollToolPartialOutput
+// / appendToolPartial, toolPartialStore, liveToolOutput debounce, plus
+// streamOrchestrator + streamHandlers wiring) adds ~6.5KB minified to the
+// webview bundle. Provides real-time stdout/stderr updates from running
+// bash commands via SSE `tool.partial` events with a 500ms polling
+// fallback for the `tool.partial` not yet exposed by the CLI. Required
+// for the upcoming live-tool-card UI (Sprint 4). +8KB keeps ~1% headroom
+// so the gate still trips on a real regression. Host limit unchanged.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -74,7 +84,7 @@ const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
   { path: "dist/extension.js", limitBytes: 556 * 1024, label: "extension host" },
-  { path: "dist/chat/webview/main.js", limitBytes: 712 * 1024, label: "chat webview" },
+  { path: "dist/chat/webview/main.js", limitBytes: 720 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
 
