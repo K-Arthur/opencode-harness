@@ -254,6 +254,19 @@ export function reRenderMessage(
 
   const oldEl = els.messageList.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement | null
 
+  // C2: capture focus BEFORE the swap. If a keyboard/SR user was focused
+  // inside a tool card (e.g. on the "Copy output" button) and we just call
+  // `oldEl.replaceWith(newEl)`, focus silently falls back to
+  // `document.body` and the user loses their place in the transcript.
+  // Tagged descendants (`data-restore-focus-id`) get their equivalent
+  // restored; otherwise we fall back to the new element's <summary> (for
+  // tool cards) or the new element itself.
+  const activeBefore = oldEl ? (document.activeElement as HTMLElement | null) : null
+  const focusInsideOld = !!(activeBefore && oldEl && oldEl.contains(activeBefore))
+  const focusKey = focusInsideOld
+    ? activeBefore!.getAttribute("data-restore-focus-id") || undefined
+    : undefined
+
   // When re-rendering an existing message, skip the header to avoid re-adding it
   // isStreaming is false here because the message is complete
   const newEl = renderMessage(msgObj, { skipHeader: !!oldEl, isStreaming: false }, false)
@@ -261,6 +274,26 @@ export function reRenderMessage(
     oldEl.replaceWith(newEl)
   } else {
     els.messageList.appendChild(newEl)
+  }
+
+  // C2: restore focus into the equivalent element in the new DOM.
+  if (focusInsideOld) {
+    let target: HTMLElement | null = null
+    if (focusKey) {
+      target = newEl.querySelector<HTMLElement>(`[data-restore-focus-id="${CSS.escape(focusKey)}"]`)
+    }
+    if (!target) {
+      // Fall back to the new element's <summary> (tool card / question card
+      // / thinking block disclosure). For non-disclosure messages the new
+      // element itself is focused — neutral but never body-fallback.
+      target = newEl.querySelector<HTMLElement>("summary") ?? newEl
+    }
+    try {
+      target.focus({ preventScroll: true })
+    } catch {
+      // Some elements (e.g. divs without tabindex) cannot receive focus;
+      // silently fall through rather than crash the re-render path.
+    }
   }
 }
 

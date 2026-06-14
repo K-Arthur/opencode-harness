@@ -856,13 +856,17 @@ body.hide-thinking .thinking-block { display: none; }
 }
 
 .changed-file-stat--added {
-  background: rgba(63, 185, 80, 0.15);
-  color: #3FB950;
+  /* M6: derive from theme tokens so High Contrast + custom presets adapt.
+     Previously hard-coded #3FB950 / rgba(63,185,80,0.15) which would not
+     follow --vscode-errorForeground / -terminal-ansiGreen. Matches
+     .diff-stat--added in blocks.css. */
+  background: var(--oc-success-subtle);
+  color: var(--color-success);
 }
 
 .changed-file-stat--removed {
-  background: rgba(248, 81, 73, 0.15);
-  color: #F85149;
+  background: var(--oc-error-subtle);
+  color: var(--color-error);
 }
 
 .changed-file-open-btn {

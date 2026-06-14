@@ -220,6 +220,10 @@ function appendWriteToolActions(
   openBtn.className = "tool-file-action-btn"
   openBtn.title = "Open file in editor"
   openBtn.textContent = "Open"
+  // C2: tag the button so reRenderMessage can restore focus into the
+  // equivalent button in the new DOM after a stream-end swap. The key
+  // is unique within the tool card so the lookup is unambiguous.
+  openBtn.setAttribute("data-restore-focus-id", "tool-open-file")
   openBtn.addEventListener("click", (e) => {
     e.stopPropagation()
     e.preventDefault()
@@ -231,6 +235,7 @@ function appendWriteToolActions(
   copyBtn.className = "tool-file-action-btn"
   copyBtn.title = "Copy file path"
   copyBtn.textContent = "Copy path"
+  copyBtn.setAttribute("data-restore-focus-id", "tool-copy-path")
   copyBtn.addEventListener("click", (e) => {
     e.stopPropagation()
     e.preventDefault()
@@ -245,6 +250,7 @@ function appendWriteToolActions(
     revealBtn.className = "tool-file-action-btn"
     revealBtn.title = "Reveal in Explorer"
     revealBtn.textContent = "Reveal"
+    revealBtn.setAttribute("data-restore-focus-id", "tool-reveal-in-explorer")
     revealBtn.addEventListener("click", (e) => {
       e.stopPropagation()
       e.preventDefault()
@@ -529,6 +535,7 @@ export function createToolResultPanel(toolBlock: ToolCallBlock, opts?: RenderOpt
       copyCmd.className = "tool-result-action-btn"
       copyCmd.textContent = "Copy command"
       copyCmd.title = "Copy command to clipboard"
+      copyCmd.setAttribute("data-restore-focus-id", "tool-copy-command")
       copyCmd.addEventListener("click", (e) => {
         e.stopPropagation()
         void navigator.clipboard?.writeText(command).catch(() => {})
@@ -543,6 +550,7 @@ export function createToolResultPanel(toolBlock: ToolCallBlock, opts?: RenderOpt
       copyOut.className = "tool-result-action-btn"
       copyOut.textContent = "Copy output"
       copyOut.title = "Copy full output to clipboard"
+      copyOut.setAttribute("data-restore-focus-id", "tool-copy-output")
       copyOut.addEventListener("click", (e) => {
         e.stopPropagation()
         void navigator.clipboard?.writeText(resultText).catch(() => {})
@@ -560,6 +568,7 @@ export function createToolResultPanel(toolBlock: ToolCallBlock, opts?: RenderOpt
       openTerm.className = "tool-result-action-btn"
       openTerm.textContent = "Open in terminal"
       openTerm.title = "Open a VS Code terminal with this command"
+      openTerm.setAttribute("data-restore-focus-id", "tool-open-terminal")
       openTerm.addEventListener("click", (e) => {
         e.stopPropagation()
         pm({ type: "open_terminal", command, cwd: toolBlock.workingDir, autorun: false })

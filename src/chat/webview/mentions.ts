@@ -129,6 +129,7 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     commands.forEach((item, i) => {
       const div = document.createElement("div")
       div.className = "dropdown-item command-item" + (i === 0 ? " selected" : "")
+      div.id = `mention-cmd-opt-${i}` // C3: stable id for aria-activedescendant
       div.setAttribute("role", "option")
       div.setAttribute("aria-selected", String(i === 0))
       div.tabIndex = -1
@@ -237,6 +238,10 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
       if (selected) {
         selected.classList.add("selected")
         selected.setAttribute("aria-selected", "true")
+        // C3: announce the highlighted option to screen readers. The
+        // textarea retains DOM focus; aria-activedescendant tells the SR
+        // which option is currently highlighted.
+        els.promptInput.setAttribute("aria-activedescendant", selected.id)
       }
       if (selected) ensureVisible(selected, els.mentionDropdown)
     } else if (e.key === "ArrowUp") {
@@ -250,6 +255,7 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
       if (selectedUp) {
         selectedUp.classList.add("selected")
         selectedUp.setAttribute("aria-selected", "true")
+        els.promptInput.setAttribute("aria-activedescendant", selectedUp.id)
       }
       if (selectedUp) ensureVisible(selectedUp, els.mentionDropdown)
     } else if (e.key === "Enter" && state.selectedIndex >= 0) {
@@ -284,6 +290,7 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     items.forEach((item, i) => {
       const div = document.createElement("div")
       div.className = "dropdown-item" + (i === 0 ? " selected" : "")
+      div.id = `mention-opt-${i}` // C3: stable id for aria-activedescendant
       div.setAttribute("role", "option")
       div.setAttribute("aria-selected", String(i === 0))
       div.tabIndex = -1
