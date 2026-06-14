@@ -744,18 +744,7 @@ export class StreamCoordinator {
     this.toolActivityAt.delete(tabId)
     this.clearPendingToolGraceTimeout(tabId)
 
-    if (!this.sessionManager.isRunning) {
-      try {
-        await this.sessionManager.start()
-      } catch (e) {
-        const msg = (e as Error).message
-        log.error("Failed to start OpenCode server", e)
-        vscode.window.showErrorMessage(`Could not start OpenCode. ${msg}`)
-        callbacks.postRequestError(msg)
-        this.cleanupTab(tabId)
-        return
-      }
-    }
+    if (!await this.ensureServerRunningForPrompt(tabId, callbacks)) return
 
     if (!this.reserveStreamSlotOrReject(tabId, callbacks)) return
 
@@ -1042,6 +1031,22 @@ export class StreamCoordinator {
       activeRunForMode.mode = tab.mode
     }
     return { modelRef, agent }
+  }
+
+  private async ensureServerRunningForPrompt(tabId: string, callbacks: StreamCallbacks): Promise<boolean> {
+    if (!this.sessionManager.isRunning) {
+      try {
+        await this.sessionManager.start()
+      } catch (e) {
+        const msg = (e as Error).message
+        log.error("Failed to start OpenCode server", e)
+        vscode.window.showErrorMessage(`Could not start OpenCode. ${msg}`)
+        callbacks.postRequestError(msg)
+        this.cleanupTab(tabId)
+        return false
+      }
+    }
+    return true
   }
 
   private reserveStreamSlotOrReject(tabId: string, callbacks: StreamCallbacks): boolean {
