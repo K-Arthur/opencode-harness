@@ -578,6 +578,12 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
 
     this.disposables.push(
       webviewView.onDidChangeVisibility(() => {
+        // Safety net for the chat-focus context key: a hidden view cannot be
+        // focused, so force the key off (a missed iframe `blur` must never leave
+        // suppressors active over the editor, e.g. blocking Ctrl+W).
+        if (!webviewView.visible) {
+          void vscode.commands.executeCommand("setContext", "opencodeHarness.chatFocused", false)
+        }
         if (!webviewView.visible || !this.eventRouter.webviewReady) return
         log.debug("Webview became visible — running lightweight visible-state sync")
         this.pushVisibleStateToWebview()
@@ -634,6 +640,15 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
 
   private async handleWebviewMessage(msg: Record<string, unknown>): Promise<void> {
     const msgType = typeof msg?.type === "string" ? msg.type : "unknown"
+    // Reliable webview-focus context key. `focusedView` is unreliable for webview
+    // views (vscode#234683/#181667), so we track focus from inside the iframe and
+    // mirror it to a context key. Keybindings gate on `opencodeHarness.chatFocused`
+    // to override VS Code defaults (e.g. Alt+1/2/3 = openEditorAtIndex) ONLY while
+    // the chat is focused — see package.json `keybindings`.
+    if (msgType === "chat_focus") {
+      void vscode.commands.executeCommand("setContext", "opencodeHarness.chatFocused", msg.focused === true)
+      return
+    }
     if (msgType === "send_prompt" || msgType === "create_tab" || msgType === "new_session") {
       log.info(`handleWebviewMessage: type=${msgType}, sessionId=${typeof msg?.sessionId === "string" ? msg.sessionId : "N/A"}`)
     }

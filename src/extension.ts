@@ -571,6 +571,16 @@ function registerCoreCommands(
       }
     })
   )
+  // No-op "suppressor": claims a key so VS Code's default for it does NOT fire
+  // while the chat webview is focused (gated by `opencodeHarness.chatFocused` in
+  // package.json keybindings). The webview's own keydown handler performs the
+  // real action; this only stops the workbench from ALSO acting on the forwarded
+  // key (vscode#241801) — e.g. Alt+1 switching mode instead of opening editor 1.
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.suppressKey", () => {
+      /* intentionally empty — see comment above */
+    })
+  )
 
   // Tab navigation commands
   context.subscriptions.push(

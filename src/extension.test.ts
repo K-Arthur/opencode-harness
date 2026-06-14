@@ -66,11 +66,29 @@ describe("extension.ts", () => {
     )
   })
 
-  it("targets contributed chat keybindings at the real chat view id", () => {
-    const modeBindings = packageJson.contributes?.keybindings?.filter((binding) => binding.command === "opencode-harness.cycleMode") ?? []
-    assert.ok(modeBindings.length >= 2, "cycleMode keybindings must be contributed")
-    assert.ok(modeBindings.every((binding) => binding.when !== "focusedView == 'opencode-harness.chatView'"), "cycleMode must not reference the stale chatView id")
-    assert.ok(modeBindings.every((binding) => binding.when === "focusedView == 'opencode-harness.chat'"), "cycleMode must target the contributed chat view")
+  it("targets contributed chat keybindings at the real chat view id (not the stale chatView)", () => {
+    const chatCommandKeys = [
+      "opencode-harness.stop",
+      "opencode-harness.openCommandsPalette",
+      "opencode-harness.nextTab",
+      "opencode-harness.prevTab",
+      "opencode-harness.retryLast",
+    ]
+    const bindings = (packageJson.contributes?.keybindings ?? []).filter((b) => chatCommandKeys.includes(b.command))
+    assert.ok(bindings.length >= chatCommandKeys.length, "chat command keybindings must be contributed")
+    for (const b of bindings) {
+      assert.ok(!/chatView/.test(b.when ?? ""), `${b.command} must not reference the stale chatView id`)
+      assert.match(
+        b.when ?? "",
+        /opencode-harness\.chat\b|opencodeHarness\.chatFocused/,
+        `${b.command} must target the real chat view / chat-focus context key`,
+      )
+    }
+    // cycleMode is intentionally NOT a contributed keybinding anymore — the webview
+    // owns the Ctrl+Shift+M / Alt+Shift+Tab cycle keystroke; a contributed binding
+    // double-fired with the webview handler (cycled by two). See keybindings-contract.
+    const cycle = (packageJson.contributes?.keybindings ?? []).filter((b) => b.command === "opencode-harness.cycleMode")
+    assert.equal(cycle.length, 0, "cycleMode must not be double-bound as a contributed keybinding")
   })
 
   it("registers opencode-harness.selectModel command", () => {
