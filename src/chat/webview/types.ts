@@ -809,7 +809,7 @@ export type WebviewMessage =
   | { type: "popout_cancel_subagent"; subagentId: string }
   | { type: "show_error"; message: string }
   | { type: "get_context_usage"; sessionId: string }
-  | { type: "question_answer"; sessionId: string; toolCallId?: string; requestID?: string; messageId?: string; value: string; source?: string }
+  | { type: "question_answer"; sessionId: string; toolCallId?: string; requestID?: string; messageId?: string; value: string; source?: string; structuredAnswers?: string[][] }
   /** Request unified diff hunks for a specific file path in the active session. */
   | { type: "get_file_diff"; path: string; sessionId?: string }
   /** Reveal a file in the VS Code Explorer sidebar. */
