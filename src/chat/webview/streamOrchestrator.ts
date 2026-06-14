@@ -256,6 +256,49 @@ function maybeLogStreamChunk(
   }
 }
 
+/** Deps passed to `recoverAfterStreamEndError`. */
+interface StreamEndRecoveryDeps {
+  postMessage: (m: Record<string, unknown>) => void
+  setStreaming: (sessionId: string, streaming: boolean) => void
+  updateTabBar: () => void
+  updateModeSelectorStateLocal: () => void
+  updateAgentStatus: (status: "idle" | "thinking" | "executing") => void
+  showSystemMessage: (sessionId: string, text: string, retryable?: boolean) => void
+}
+
+/**
+ * Last-resort recovery when something inside `handleStreamEnd`'s try block
+ * throws AFTER the inner stream-handler call.
+ *
+ * Each cleanup step is independently wrapped so a broken step logs and gets
+ * out of the way of the next. Extracted from `createStreamOrchestrator` so
+ * the dense per-step try/catch + reason→message table is independently
+ * testable.
+ */
+function recoverAfterStreamEndError(
+  sessionId: string,
+  reason: string | undefined,
+  err: unknown,
+  deps: StreamEndRecoveryDeps,
+): void {
+  const { postMessage } = deps
+  postMessage({ type: "webview_log", level: "error", message: `handleStreamEnd error: ${err instanceof Error ? err.message : String(err)}` })
+  const safe = (fn: () => void, failureLabel: string) => {
+    try { fn() } catch (e) {
+      postMessage({ type: "webview_log", level: "warn", message: `${failureLabel}: ${e instanceof Error ? e.message : e}` })
+    }
+  }
+  safe(() => deps.setStreaming(sessionId, false), "setStreaming recovery failed")
+  safe(() => deps.updateTabBar(), "updateTabBar recovery failed")
+  safe(() => deps.updateModeSelectorStateLocal(), "updateModeSelector recovery failed")
+  safe(() => deps.updateAgentStatus("idle"), "updateAgentStatus recovery failed")
+  const msg = reason === "ttfb_timeout" ? "Model took too long. Try a different model."
+    : reason === "timeout" ? "Response timed out."
+    : reason === "error" ? "An error occurred."
+    : "Unexpected error."
+  safe(() => deps.showSystemMessage(sessionId, msg), "showSystemMessage recovery failed")
+}
+
 export interface StreamOrchestratorDeps {
   vscode: { postMessage(msg: Record<string, unknown>): void }
   els: ElementRefs
@@ -510,26 +553,14 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
 
       processQueueIfReady(sessionId, reason)
     } catch (err) {
-      vscode.postMessage({ type: "webview_log", level: "error", message: `handleStreamEnd error: ${err instanceof Error ? err.message : String(err)}` })
-      try { setStreaming(sessionId, false) } catch (e) {
-        vscode.postMessage({ type: "webview_log", level: "warn", message: `setStreaming recovery failed: ${e instanceof Error ? e.message : e}` })
-      }
-      try { updateTabBar() } catch (e) {
-        vscode.postMessage({ type: "webview_log", level: "warn", message: `updateTabBar recovery failed: ${e instanceof Error ? e.message : e}` })
-      }
-      try { updateModeSelectorStateLocal() } catch (e) {
-        vscode.postMessage({ type: "webview_log", level: "warn", message: `updateModeSelector recovery failed: ${e instanceof Error ? e.message : e}` })
-      }
-      try { updateAgentStatus("idle") } catch (e) {
-        vscode.postMessage({ type: "webview_log", level: "warn", message: `updateAgentStatus recovery failed: ${e instanceof Error ? e.message : e}` })
-      }
-      const msg = reason === "ttfb_timeout" ? "Model took too long. Try a different model."
-        : reason === "timeout" ? "Response timed out."
-        : reason === "error" ? "An error occurred."
-        : "Unexpected error."
-      try { showSystemMessage(sessionId, msg) } catch (e) {
-        vscode.postMessage({ type: "webview_log", level: "warn", message: `showSystemMessage recovery failed: ${e instanceof Error ? e.message : e}` })
-      }
+      recoverAfterStreamEndError(sessionId, reason, err, {
+        postMessage: vscode.postMessage,
+        setStreaming,
+        updateTabBar,
+        updateModeSelectorStateLocal,
+        updateAgentStatus,
+        showSystemMessage,
+      })
     }
   }
 
