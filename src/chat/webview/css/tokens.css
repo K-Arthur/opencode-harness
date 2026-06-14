@@ -108,6 +108,38 @@
   --text-xl: 18px;
   --text-2xl: 20px;
 
+  /* ── Sprint 1 typography system (research-grounded) ────────────────────
+   * Canonical --oc-font-* scale. Body uses --vscode-font-family (UI font)
+   * NOT --vscode-editor-font-family (which is for code only — the official
+   * docs are incomplete; the webview body actually inherits the UI family
+   * via --vscode-font-family / --vscode-font-size). Body 13px / line-height
+   * 1.5 satisfies WCAG 1.4.12 (Text Spacing) ceiling so user-style
+   * overrides to 1.5 don't break layouts. All sizes in px at the token
+   * level (matches VS Code's own convention); derived spacing in em so
+   * 200% zoom (WCAG 1.4.4) doesn't clip cards. Avoid vw/vh for text —
+   * WCAG F94 failure. */
+  --oc-font-ui: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif);
+  --oc-font-mono: var(--monaco-monospace-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+  --oc-font-code: var(--vscode-editor-font-family, var(--oc-font-mono));
+
+  --oc-font-size-2xs: 11px;
+  --oc-font-size-xs: 12px;
+  --oc-font-size-sm: 13px;
+  --oc-font-size-md: 14px;
+  --oc-font-size-lg: 15px;
+  --oc-font-size-xl: 17px;
+  --oc-font-size-2xl: 19px;
+
+  --oc-font-weight-regular: 400;
+  --oc-font-weight-medium: 500;
+  --oc-font-weight-semibold: 600;
+  --oc-font-weight-bold: 700;
+
+  --oc-line-height-tight: 1.25;
+  --oc-line-height-normal: 1.4;
+  --oc-line-height-relaxed: 1.5;
+  --oc-line-height-code: 1.35;
+
   --leading-none: 1;
   --leading-tight: 1.25;
   --leading-normal: 1.5;
@@ -453,4 +485,33 @@ body.glass-bubbles {
     --jump-btn-border: ButtonText;
     --jump-btn-shadow: none;
   }
+}
+
+/* ── Sprint 1 density adaptation ──────────────────────────────────────────
+ * Sidebar (≤340px) → compact; editor column / wide panel (≥500px) →
+ * comfortable. The webview root carries data-density="compact|comfortable"
+ * (default comfortable); a ResizeObserver in main.ts updates the attribute
+ * as the panel resizes. Per-component CSS keys off this attribute for
+ * spacing/typography variants. Between 340–500px defaults to compact.
+ *
+ * Headings compress in compact mode so 2em h1s don't fragment a 280px
+ * sidebar; line-height stays 1.5 in both (WCAG 1.4.12 ceiling satisfied
+ * regardless of density). */
+:root[data-density="compact"] {
+  --oc-density-card-pad-y: 8px;
+  --oc-density-card-pad-x: 10px;
+  --oc-density-card-gap: 6px;
+  --oc-density-heading-h1: var(--oc-font-size-xl);    /* 17px */
+  --oc-density-heading-h2: var(--oc-font-size-lg);    /* 15px */
+  --oc-density-heading-h3: var(--oc-font-size-sm);    /* 13px bold */
+}
+
+:root[data-density="comfortable"],
+:root:not([data-density]) {
+  --oc-density-card-pad-y: 10px;
+  --oc-density-card-pad-x: 14px;
+  --oc-density-card-gap: 10px;
+  --oc-density-heading-h1: var(--oc-font-size-2xl);  /* 19px */
+  --oc-density-heading-h2: var(--oc-font-size-xl);   /* 17px */
+  --oc-density-heading-h3: var(--oc-font-size-md);   /* 14px bold */
 }
