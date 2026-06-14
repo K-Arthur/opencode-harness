@@ -155,6 +155,29 @@ export function partToBlock(part: Part, opts: { streaming?: boolean } = {}): Blo
           block.durationMs = state.time.end - state.time.start
         }
       }
+      // M1: defensively extract exit code + stderr from the free-form
+      // metadata bag so history replay / backfill re-renders the bash card
+      // with the same exit-code chip + stdout/stderr split the live path
+      // surfaces. Mirrors ToolPartHandler.extractExitCode / extractStderr.
+      const toolMeta = (part.metadata ?? ("metadata" in state ? state.metadata : undefined)) as
+        | Record<string, unknown>
+        | undefined
+      if (toolMeta && typeof toolMeta === "object") {
+        const exitRaw = toolMeta.exit_code ?? toolMeta.exitCode ?? toolMeta.exit ?? toolMeta.status
+        let exitCode: number | undefined
+        if (typeof exitRaw === "number" && Number.isFinite(exitRaw)) exitCode = exitRaw
+        else if (typeof exitRaw === "string") {
+          const n = Number(exitRaw)
+          if (Number.isFinite(n)) exitCode = n
+        }
+        if (exitCode !== undefined) {
+          ;(block as Record<string, unknown>).exitCode = exitCode
+        }
+        const stderrRaw = toolMeta.stderr ?? toolMeta.error_output ?? toolMeta.err
+        if (typeof stderrRaw === "string" && stderrRaw.length > 0) {
+          ;(block as Record<string, unknown>).stderr = stderrRaw
+        }
+      }
       return block
     }
 

@@ -13,6 +13,37 @@ export class ToolPartHandler implements EventHandler {
     return value === undefined ? "" : JSON.stringify(value)
   }
 
+  /**
+   * Sprint 2 / M1: defensively extract exit code from the SDK's free-form
+   * `state.metadata` bag. The opencode server's bash tool convention isn't
+   * pinned in the SDK types, so try the common key variants. Returns
+   * undefined for missing/non-numeric values (the webview falls back to
+   * regex parsing the output text via commandModel.readExitCode).
+   */
+  private extractExitCode(meta: Record<string, unknown> | undefined): number | undefined {
+    if (!meta) return undefined
+    const v = meta.exit_code ?? meta.exitCode ?? meta.exit ?? meta.status
+    if (typeof v === "number" && Number.isFinite(v)) return v
+    if (typeof v === "string") {
+      const n = Number(v)
+      if (Number.isFinite(n)) return n
+    }
+    return undefined
+  }
+
+  /**
+   * Sprint 2 / M1: defensively extract stderr stream from `state.metadata`.
+   * Some servers ship both stdout and stderr in the single `output` string
+   * (which the webview continues to render as a single combined block);
+   * when the server DOES split them, this surfaces the split so the
+   * bash-card renderer's stdout/stderr panels light up.
+   */
+  private extractStderr(meta: Record<string, unknown> | undefined): string | undefined {
+    if (!meta) return undefined
+    const v = meta.stderr ?? meta.error_output ?? meta.err
+    return typeof v === "string" && v.length > 0 ? v : undefined
+  }
+
   handle(event: SdkEventLike, context: NormalizerContext): NormalizedOpencodeEvent[] {
     const out: NormalizedOpencodeEvent[] = []
     const props = event.properties as { part?: PartLike } | undefined
@@ -65,6 +96,18 @@ export class ToolPartHandler implements EventHandler {
       }
     } else if (status === "completed" || status === "error") {
       if (!statusChanged && !outputChanged) return out
+      // M1: defensively extract duration / exit code / stderr from the
+      // free-form state bag so the bash card can light up its exit-code
+      // chip, its stdout/stderr split panels, and the live duration. All
+      // of these were defined on the wire type but never populated before.
+      const stateRec = (toolPart.state ?? {}) as Record<string, unknown>
+      const meta = typeof stateRec.metadata === "object" && stateRec.metadata !== null
+        ? stateRec.metadata as Record<string, unknown>
+        : undefined
+      const time = stateRec.time as { start?: number; end?: number } | undefined
+      const durationMs = time && typeof time.start === "number" && typeof time.end === "number"
+        ? time.end - time.start
+        : undefined
       out.push({
         type: "tool_end",
         sessionId: toolPart.sessionID,
@@ -73,6 +116,9 @@ export class ToolPartHandler implements EventHandler {
           tool: toolPart.tool,
           ok: status === "completed",
           result: toolPart.state?.output ?? toolPart.state?.error ?? "",
+          durationMs,
+          exitCode: this.extractExitCode(meta),
+          stderr: this.extractStderr(meta),
         },
       })
     }

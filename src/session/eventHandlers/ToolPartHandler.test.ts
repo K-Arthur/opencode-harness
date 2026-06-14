@@ -290,4 +290,130 @@ describe("ToolPartHandler", () => {
     assert.equal(results.data.id, "msg_xyz:read")
     assert.equal(results.data.tool, "read")
   })
+
+  // ── Sprint 2 / M1: defensive exit code / stderr / duration plumbing ────
+  // The SDK gives a single `output` string + a free-form `metadata` bag +
+  // `time.start`/`time.end`. The opencode server's bash tool convention for
+  // exit code / stderr isn't pinned in the SDK types, so the handler tries
+  // common key variants defensively and falls back gracefully. The host
+  // passes these through to the webview so bash cards can render the
+  // colored exit-code chip, the separated stdout/stderr panels, the live
+  // duration, and the truncation marker — all of which exist in the
+  // renderer but were effectively dead code on the live path before this.
+  describe("M1: defensive exit code / stderr / duration plumbing", () => {
+    it("computes durationMs from state.time.start / state.time.end on completed", () => {
+      const toolPart = makeToolPart({
+        tool: "bash",
+        state: {
+          status: "completed",
+          input: { command: "true" },
+          output: "ok",
+          title: "bash",
+          metadata: {},
+          time: { start: 1000, end: 2500 },
+        } as any,
+      })
+      const results = handler.handle(makeEvent(toolPart), ctx)
+      const end = results.find((r) => r.type === "tool_end")
+      assert.ok(end)
+      assert.equal((end!.data as Record<string, unknown>).durationMs, 1500, "durationMs = end - start")
+    })
+
+    it("computes durationMs on error too", () => {
+      const toolPart = makeToolPart({
+        tool: "bash",
+        state: {
+          status: "error",
+          input: { command: "false" },
+          error: "boom",
+          metadata: {},
+          time: { start: 100, end: 350 },
+        } as any,
+      })
+      const results = handler.handle(makeEvent(toolPart), ctx)
+      const end = results.find((r) => r.type === "tool_end")
+      assert.ok(end)
+      assert.equal((end!.data as Record<string, unknown>).durationMs, 250)
+    })
+
+    it("extracts exitCode defensively from state.metadata common key variants", () => {
+      const variants: Array<{ id: string; metadata: Record<string, number> }> = [
+        { id: "p-exit-1", metadata: { exit_code: 0 } },
+        { id: "p-exit-2", metadata: { exitCode: 1 } },
+        { id: "p-exit-3", metadata: { exit: 127 } },
+        { id: "p-exit-4", metadata: { status: 42 } },
+      ]
+      for (let i = 0; i < variants.length; i++) {
+        const v = variants[i]!
+        const toolPart = makeToolPart({
+          id: v.id,
+          callID: `${v.id}-call`,
+          tool: "bash",
+          state: {
+            status: "completed",
+            input: { command: "x" },
+            output: `ok-${i}`,
+            title: "bash",
+            metadata: v.metadata,
+            time: { start: 1, end: 2 },
+          } as any,
+        })
+        const freshCtx = makeContext()
+        const results = handler.handle(makeEvent(toolPart), freshCtx)
+        const end = results.find((r) => r.type === "tool_end")
+        assert.ok(end, `variant ${i} must emit tool_end`)
+        const data = end!.data as Record<string, unknown>
+        const expected = Object.values(v.metadata)[0]
+        assert.equal(data.exitCode, expected, `variant ${i}: exitCode must be extracted from metadata`)
+      }
+    })
+
+    it("extracts stderr defensively from state.metadata common key variants", () => {
+      const variants: Array<{ id: string; metadata: Record<string, string> }> = [
+        { id: "p-err-1", metadata: { stderr: "err-out" } },
+        { id: "p-err-2", metadata: { error_output: "err-out-2" } },
+      ]
+      for (let i = 0; i < variants.length; i++) {
+        const v = variants[i]!
+        const toolPart = makeToolPart({
+          id: v.id,
+          callID: `${v.id}-call`,
+          tool: "bash",
+          state: {
+            status: "completed",
+            input: { command: "x" },
+            output: `stdout-line-${i}`,
+            title: "bash",
+            metadata: v.metadata,
+            time: { start: 1, end: 2 },
+          } as any,
+        })
+        const freshCtx = makeContext()
+        const results = handler.handle(makeEvent(toolPart), freshCtx)
+        const end = results.find((r) => r.type === "tool_end")
+        assert.ok(end)
+        const data = end!.data as Record<string, unknown>
+        const expected = Object.values(v.metadata)[0]
+        assert.equal(data.stderr, expected, `variant ${i}: stderr must be extracted from metadata`)
+      }
+    })
+
+    it("does not crash when metadata is missing entirely (graceful no-op)", () => {
+      const toolPart = makeToolPart({
+        tool: "bash",
+        state: {
+          status: "completed",
+          input: { command: "x" },
+          output: "ok",
+          // no metadata, no time
+        } as any,
+      })
+      const results = handler.handle(makeEvent(toolPart), ctx)
+      const end = results.find((r) => r.type === "tool_end")
+      assert.ok(end)
+      assert.equal((end!.data as Record<string, unknown>).exitCode, undefined, "exitCode is undefined when metadata missing")
+      assert.equal((end!.data as Record<string, unknown>).stderr, undefined, "stderr is undefined when metadata missing")
+      assert.equal((end!.data as Record<string, unknown>).durationMs, undefined, "durationMs is undefined when time missing")
+    })
+  })
 })

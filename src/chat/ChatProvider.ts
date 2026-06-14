@@ -918,7 +918,16 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       }, { postMessage: (m) => this.postMessage(m), postRequestError: (m) => this.postRequestError(m) })
     }],
     ["tool_end", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean }) => {
-      const data = event.data as { id?: string; tool?: string; ok?: boolean; result?: unknown; durationMs?: number } | undefined
+      const data = event.data as {
+        id?: string
+        tool?: string
+        ok?: boolean
+        result?: unknown
+        durationMs?: number
+        exitCode?: number
+        stderr?: string
+        resultTruncated?: boolean
+      } | undefined
       const targetId = tab?.id || tabId
       if (!targetId) return
 
@@ -929,7 +938,13 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         id: toolCallId,
         ok: typeof data?.ok === "boolean" ? data.ok : true,
         result: resultStr,
-        durationMs: data?.durationMs
+        durationMs: data?.durationMs,
+        // M1: forward the defensively-extracted structured fields so the
+        // bash card renderer's exit-code chip + stdout/stderr split panels
+        // light up. No-op for tools that don't emit them.
+        exitCode: typeof data?.exitCode === "number" ? data.exitCode : undefined,
+        stderr: typeof data?.stderr === "string" ? data.stderr : undefined,
+        resultTruncated: data?.resultTruncated === true ? true : undefined,
       }, { postMessage: (m) => this.postMessage(m), postRequestError: (m) => this.postRequestError(m) })
     }],
     ["skill_load", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {

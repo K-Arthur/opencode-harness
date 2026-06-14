@@ -10,6 +10,27 @@ export interface StreamCallbacks {
   clearPromptsInFlight?: () => void
 }
 
-export type ToolEndResult = { id: string; ok: boolean; result?: string; durationMs?: number; stale?: boolean }
+export type ToolEndResult = {
+  id: string
+  ok: boolean
+  result?: string
+  durationMs?: number
+  stale?: boolean
+  /** Sprint 2 / M1: bash exit code (defensively extracted from
+   *  state.metadata on the host). Optional because not every tool emits
+   *  one; the webview's commandModel.readExitCode regex parses it from
+   *  the result text as a fallback. */
+  exitCode?: number
+  /** Sprint 2 / M1: separated stderr stream when the server ships one.
+   *  Optional; the bash-card renderer's stdout/stderr split panels light
+   *  up only when this is present. */
+  stderr?: string
+  /** Sprint 2 / M1: true when the host truncated `result` before posting
+   *  to keep the webview message under the IPC size cap. The renderer
+   *  shows a truncation marker and the user can use "Copy output" to get
+   *  the full content via the host. (Reserved — currently set on the
+   *  block but not the wire; future work.) */
+  resultTruncated?: boolean
+}
 
 export type StreamLifecycleState = "idle" | "sending" | "streaming" | "completing" | "error" | "timeout" | "interrupted"
