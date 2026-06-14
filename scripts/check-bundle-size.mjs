@@ -42,6 +42,13 @@
 // before the generation they configure. Justified UX fix, not bloat; +2KB
 // keeps ~0.2% headroom so the gate still trips on a real regression.
 
+// 2026-06-13 re-baseline (host 552KB -> 554KB): the slash-command namespace
+// resolver (resolveMcpNamespace) and the command-echo in executeRemoteCommand
+// add ~0.3KB minified to the host bundle. The resolver lets users type
+// /jcodemunch:triage and get /triage; the echo shows the typed command in the
+// transcript before server output (matching CLI behavior). UX fixes; +2KB
+// keeps headroom so the gate still trips on a real regression.
+
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -50,7 +57,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 552 * 1024, label: "extension host" },
+  { path: "dist/extension.js", limitBytes: 554 * 1024, label: "extension host" },
   { path: "dist/chat/webview/main.js", limitBytes: 712 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]

@@ -72,4 +72,18 @@ void describe("CommandExecutionService.ts", () => {
     )
     assert.ok(source.includes('case "methodology":'), "must route the methodology command locally")
   })
+
+  void it("echoes the typed command as a user message before showing output", () => {
+    const execIdx = source.indexOf("private async executeRemoteCommand(")
+    assert.ok(execIdx >= 0, "executeRemoteCommand must exist")
+    const block = source.slice(execIdx, source.indexOf("private parseCommandResult", execIdx))
+    assert.ok(
+      block.includes('role: "user"') && block.includes("echoText"),
+      "executeRemoteCommand must echo the command as a user message before the server call",
+    )
+    assert.ok(
+      block.includes("appendMessage") && block.includes('"message"'),
+      "echo must be persisted to the session store and posted to the webview",
+    )
+  })
 })

@@ -133,6 +133,21 @@ export class CommandExecutionService {
     commandName: string,
     args?: string
   ): Promise<void> {
+    // Echo the command as a user message so the transcript shows what was run,
+    // matching CLI behavior. Without this the assistant output appears with no
+    // prior context — the user's typed command was already cleared from the
+    // input bar by the webview dispatcher.
+    const echoText = args ? `/${commandName} ${args}` : `/${commandName}`
+    const userEcho: ChatMessage = {
+      role: "user",
+      id: `cmd-echo-${crypto.randomUUID()}`,
+      blocks: [{ type: "text", text: echoText }],
+      timestamp: Date.now(),
+      sessionId,
+    }
+    this.opts.sessionStore.appendMessage(sessionId, userEcho)
+    this.opts.postMessage({ type: "message", sessionId, message: userEcho })
+
     try {
       const modelRef = tab.model ? parseModelRef(tab.model) : undefined
       const result = await this.opts.sessionManager.sendCommand(tab.cliSessionId!, commandName, args)
