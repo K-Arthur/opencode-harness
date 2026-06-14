@@ -748,25 +748,7 @@ export class StreamCoordinator {
 
     if (!this.reserveStreamSlotOrReject(tabId, callbacks)) return
 
-    // Now set streaming state AFTER atomic reservation
-    this.tabManager.setStreaming(tabId, true)
-    this.setStreamState(tabId, "sending", { model: tab.model, sessionId: tab.cliSessionId })
-    this.activeRuns.set(tabId, {
-      tabId,
-      cliSessionId: tab.cliSessionId,
-      clientRequestId: identity.clientRequestId,
-      userMessageId: identity.userMessageId,
-      mode: tab.mode,
-      model: tab.model,
-      startedAt: Date.now(),
-      state: "sending",
-    })
-    this.traceRun(tabId, "run.created", { promptText: text })
-    const baselineSession = this.sessionStore.get(tabId)
-    this.finalUsageBaselines.set(tabId, {
-      total: baselineSession?.tokenUsage?.total ?? 0,
-      cost: baselineSession?.cost ?? 0,
-    })
+    this.initializeRunMetadata(tabId, tab, text, identity)
 
     try {
       this.refreshContextTokenEstimate(tabId)
@@ -1031,6 +1013,33 @@ export class StreamCoordinator {
       activeRunForMode.mode = tab.mode
     }
     return { modelRef, agent }
+  }
+
+  private initializeRunMetadata(
+    tabId: string,
+    tab: TabState,
+    text: string,
+    identity: PromptRunIdentity,
+  ): void {
+    // Now set streaming state AFTER atomic reservation
+    this.tabManager.setStreaming(tabId, true)
+    this.setStreamState(tabId, "sending", { model: tab.model, sessionId: tab.cliSessionId })
+    this.activeRuns.set(tabId, {
+      tabId,
+      cliSessionId: tab.cliSessionId,
+      clientRequestId: identity.clientRequestId,
+      userMessageId: identity.userMessageId,
+      mode: tab.mode,
+      model: tab.model,
+      startedAt: Date.now(),
+      state: "sending",
+    })
+    this.traceRun(tabId, "run.created", { promptText: text })
+    const baselineSession = this.sessionStore.get(tabId)
+    this.finalUsageBaselines.set(tabId, {
+      total: baselineSession?.tokenUsage?.total ?? 0,
+      cost: baselineSession?.cost ?? 0,
+    })
   }
 
   private async ensureServerRunningForPrompt(tabId: string, callbacks: StreamCallbacks): Promise<boolean> {
