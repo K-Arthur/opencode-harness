@@ -353,6 +353,26 @@ function ensureStreamUiReady(sessionId: string, deps: EnsureStreamUiDeps): Strea
   return finalStream
 }
 
+/**
+ * Cancel and drop every pending tool-update belonging to `sessionId`.
+ *
+ * Used by `handleStreamEnd` so a finished run never leaves a stale 50ms
+ * debounce timer that would fire `handleToolUpdate` after the stream is
+ * finalized. Iterates a snapshot (`Array.from`) because the inner callback
+ * mutates the Map. Extracted from `createStreamOrchestrator`.
+ */
+function clearPendingToolUpdatesForSession(
+  pendingToolUpdates: Map<string, PendingToolUpdate>,
+  sessionId: string,
+): void {
+  for (const [key, pending] of Array.from(pendingToolUpdates)) {
+    if (pending.sessionId === sessionId) {
+      timers.clearTimeout(pending.timer)
+      pendingToolUpdates.delete(key)
+    }
+  }
+}
+
 export interface StreamOrchestratorDeps {
   vscode: { postMessage(msg: Record<string, unknown>): void }
   els: ElementRefs
@@ -566,12 +586,7 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
       setStreaming(sessionId, false)
       toolElapsedTracker.clearAll()
       clearToolChainProgress(sessionId)
-      for (const [key, pending] of Array.from(pendingToolUpdates)) {
-        if (pending.sessionId === sessionId) {
-          timers.clearTimeout(pending.timer)
-          pendingToolUpdates.delete(key)
-        }
-      }
+      clearPendingToolUpdatesForSession(pendingToolUpdates, sessionId)
       updateTabBar()
       updateModeSelectorStateLocal()
       updateAgentStatus("idle")
