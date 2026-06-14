@@ -212,37 +212,8 @@ export class SessionLifecycleService {
   }
 
   async handleAcceptDiff(blockId: string, sessionId?: string): Promise<void> {
-    try {
-      const diffHandler = this.opts.streamCoordinator.getDiffHandler()
-      let checkpointCreated = false
-      if (sessionId) {
-        const pendingEdit = diffHandler.getPendingEdit(blockId)
-        const cp = pendingEdit
-          ? await this.opts.checkpointManager.snapshotBeforeAction(sessionId, "apply-diff", pendingEdit.filePath)
-          : null
-        checkpointCreated = cp !== null
-      }
-      const result = await diffHandler.accept(blockId)
-      this.opts.statePush.postMessage({
-        type: "diff_result",
-        blockId,
-        ok: result.ok,
-        message: result.message,
-        checkpointCreated,
-      })
-      if (!result.ok) {
-        this.opts.showErrorMessage(result.message || "Could not apply diff.")
-      }
-    } catch (err) {
-      log.error("Failed to accept diff", err)
-      this.opts.statePush.postMessage({
-        type: "diff_result",
-        blockId,
-        ok: false,
-        message: "An unexpected error occurred while applying the diff.",
-      })
-      this.opts.showErrorMessage("Failed to apply diff. Check the OpenCode output channel for details.")
-    }
+    // C1-a: dead subsystem removed (server applies edits directly). No-op.
+    log.warn("handleAcceptDiff: no-op (dead diff subsystem removed for C1-a)")
   }
 
   syncActiveSession(): void {

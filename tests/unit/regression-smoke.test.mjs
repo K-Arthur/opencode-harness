@@ -30,7 +30,6 @@ const files = {
   mentions: readFileSync(path.join(root, "src", "chat", "webview", "mentions.ts"), "utf8"),
   outputChannel: readFileSync(path.join(root, "src", "utils", "outputChannel.ts"), "utf8"),
   diffApplier: readFileSync(path.join(root, "src", "diff", "DiffApplier.ts"), "utf8"),
-  diffHandler: readFileSync(path.join(root, "src", "chat", "handlers", "DiffHandler.ts"), "utf8"),
   sessionLifecycle: readFileSync(path.join(root, "src", "chat", "SessionLifecycleService.ts"), "utf8"),
   checkpoint: readFileSync(path.join(root, "src", "checkpoint", "CheckpointManager.ts"), "utf8"),
   indexHtml: readFileSync(path.join(root, "src", "chat", "webview", "index.html"), "utf8"),
@@ -215,27 +214,6 @@ describe("Regression: Edit Message", () => {
   it("revert button on assistant messages", () => {
     assert.ok(files.renderer.includes("message-revert-btn") || files.messageRenderer.includes("message-revert-btn"), "must have revert button")
     assert.ok(files.renderer.includes('type: "revert_message"') || files.messageRenderer.includes('type: "revert_message"'), "must post revert_message")
-  })
-})
-
-describe("Regression: Diff Accept & Checkpoint", () => {
-  it("accept_diff creates checkpoint before applying", () => {
-    assert.ok(files.chatProvider.includes("snapshotBeforeAction") || files.sessionLifecycle.includes("snapshotBeforeAction"),
-      "must create checkpoint before diff apply")
-  })
-
-  it("DiffHandler prevents double-accept via acceptingDiffs set", () => {
-    assert.ok(files.diffHandler.includes("acceptingDiffs.has(diffId)"),
-      "must check for concurrent accept")
-    assert.ok(files.diffHandler.includes("acceptingDiffs.add(diffId)"),
-      "must mark as accepting")
-  })
-
-  it("diff_result carries checkpointCreated flag to webview", () => {
-    assert.ok(files.chatProvider.includes("checkpointCreated") || files.sessionLifecycle.includes("checkpointCreated"),
-      "must send checkpointCreated flag with diff_result")
-    assert.ok(files.mainTs.includes("checkpointCreated"),
-      "webview must handle checkpointCreated flag")
   })
 })
 
