@@ -282,6 +282,52 @@ describe("sdkMessageConverter — Layer 1 RED (canonical CanonicalBlock projecti
     assert.equal(groups[1]!.multiSelect, true)
   })
 
+  it("B4: question tool preserves requestID from part.metadata so reload-time answers use the v2 reply API", () => {
+    // Regression: history replay used to construct the question block with
+    // only `id`, `toolCallId`, `groups`, `text`, `options`, `allowFreeText`.
+    // The reconstructed block had NO requestID, so on reload the bar item's
+    // requestID was undefined and submitting an answer fell back to
+    // `startPrompt` (legacy) instead of `replyToQuestion` (v2) — leaving the
+    // server-side question orphaned. partToBlock must propagate requestID
+    // from part.metadata when the server records it there.
+    const part = {
+      ...baseIds,
+      type: "tool",
+      callID: "call-q3",
+      tool: "question",
+      state: {
+        status: "running",
+        input: { question: "Pick one", options: ["A", "B"] },
+        metadata: { requestID: "req-server-123" },
+        time: { start: 1 },
+      },
+    } as Part
+    const b = expectType(partToBlock(part), "question")
+    assert.equal(f(b).requestID, "req-server-123", "requestID must be propagated from part.metadata")
+  })
+
+  it("B4: requestID is also recognized under snake_case and alternate metadata keys", () => {
+    // The opencode server's exact metadata key convention isn't documented in
+    // the SDK types — be defensive and accept the common variants.
+    const variants = ["requestID", "request_id", "requestId", "questionId", "question_id"]
+    for (const key of variants) {
+      const part = {
+        ...baseIds,
+        type: "tool",
+        callID: `call-${key}`,
+        tool: "question",
+        state: {
+          status: "running",
+          input: { question: "X", options: ["A"] },
+          metadata: { [key]: `req-${key}` },
+          time: { start: 1 },
+        },
+      } as Part
+      const b = expectType(partToBlock(part), "question")
+      assert.equal(f(b).requestID, `req-${key}`, `requestID must be propagated from part.metadata.${key}`)
+    }
+  })
+
   it("L1-T12: partToBlock returns step-start block", () => {
     const b = expectType(partToBlock(stepStartPart("snap")), "step-start")
     assert.equal(f(b).snapshot, "snap")
