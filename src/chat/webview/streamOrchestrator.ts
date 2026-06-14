@@ -79,6 +79,22 @@ function processStreamEndBlocks(
   })
 }
 
+/**
+ * Reflect agent run-state on the always-visible status LED + label.
+ *
+ * Extracted from `createStreamOrchestrator`. Idle → "SYSTEM READY" label;
+ * any other state → uppercased status name. The orchestrator closure
+ * delegates here with its captured `els.agentStatusLed` / `els.agentStatusText`.
+ */
+function renderAgentStatusLed(
+  status: "idle" | "thinking" | "executing",
+  agentStatusLed: HTMLElement,
+  agentStatusText: HTMLElement,
+): void {
+  agentStatusLed.className = `status-led ${status}`
+  agentStatusText.textContent = status === "idle" ? "SYSTEM READY" : status.toUpperCase()
+}
+
 export interface StreamOrchestratorDeps {
   vscode: { postMessage(msg: Record<string, unknown>): void }
   els: ElementRefs
@@ -223,8 +239,7 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
   }
 
   function updateAgentStatus(status: "idle" | "thinking" | "executing") {
-    els.agentStatusLed.className = `status-led ${status}`
-    els.agentStatusText.textContent = status === "idle" ? "SYSTEM READY" : status.toUpperCase()
+    renderAgentStatusLed(status, els.agentStatusLed, els.agentStatusText)
   }
 
   function showSkillIndicator(sessionId: string, skillName: string) {
