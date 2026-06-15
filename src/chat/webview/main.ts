@@ -753,6 +753,7 @@ function getVsCodeApi() {
       debouncedUpdateScrollMarkers,
       STREAM_LIMIT_TOOLTIP,
       getAllSessions: () => stateManager.getAllSessions() as any,
+      hasPendingQuestion: () => questionBar.hasActiveQuestions(),
       /* eslint-enable @typescript-eslint/no-explicit-any */
     })
   }
@@ -1847,6 +1848,9 @@ function getVsCodeApi() {
     // streaming state visually from a previously-active streaming session.
     updateSendButton()
     els.promptInput.placeholder = "Ask OpenCode a question about your code…"
+    // Auto-focus the prompt on new tab (matches VS Code Copilot Chat /
+    // Cursor / Claude Code behavior)
+    els.promptInput.focus()
     els.inputArea.classList.remove("steer-interrupt", "steer-queue")
     return session
   }
@@ -1918,9 +1922,18 @@ function getVsCodeApi() {
     const streaming = Boolean(active?.isStreaming)
     const selector = document.getElementById("steer-mode-selector") as HTMLElement | null
     if (selector) selector.classList.toggle("hidden", !streaming)
+    // Context-aware placeholder: show model and stream capacity when idle,
+    // show steer hint when streaming.
+    const modelLabel = active?.model
+      ? active.model.replace(/^.*\//, "").replace(/-20\d{6}/, "").slice(0, 20)
+      : ""
+    const cap = composer.getStreamCapacityState()
+    const capLabel = !cap.isFull && cap.activeStreams < cap.maxStreams ? ` (${cap.activeStreams}/${cap.maxStreams})` : ""
     els.promptInput.placeholder = streaming
       ? "Guide the AI: correct errors, change direction, or add context…"
-      : "Ask OpenCode a question about your code…"
+      : modelLabel
+        ? `Ask OpenCode (${modelLabel}${capLabel})…`
+        : "Ask OpenCode a question about your code…"
     if (!streaming) els.inputArea.classList.remove("steer-interrupt", "steer-queue")
   }
 
