@@ -71,10 +71,12 @@ function setupDom(): void {
   // jsdom's nwsapi rejects :focus-within in some versions; the prune path probes
   // it via matches(). Make it a benign "false" so the test exercises the loop.
   const realMatches = win.Element.prototype.matches
+  // TS 6's lib.dom types `matches` as an overloaded type predicate; this test
+  // stub is a plain boolean probe, so assert it back to the member's own type.
   win.Element.prototype.matches = function (this: Element, sel: string): boolean {
     if (sel === ":focus-within") return false
     return realMatches.call(this, sel)
-  }
+  } as typeof win.Element.prototype.matches
 }
 
 function flushRaf(): void {
