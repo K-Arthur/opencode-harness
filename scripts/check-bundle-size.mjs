@@ -80,6 +80,14 @@
 // toolCallRenderer live stdout/stderr panels, ansiUtils color escape parser,
 // tasks-panel live row, plus tests). Adds ~3.4KB minified beyond the 720KB
 // re-baseline. +6KB keeps ~0.8% headroom. Host limit unchanged.
+//
+// 2026-06-14 re-baseline (webview 726KB -> 732KB): Sprint 4 per-tool-name
+// icon taxonomy (16 new SVG strings + 11 activity-kind + 5 subagent-domain +
+// 6 state overlays + the toolIconFor / toolStateOverlayFor resolvers),
+// activity-panel and subagent-panel emoji → SVG migration, and the
+// appendToolStatusBadge rebuild to use a .tool-status-icon + .tool-status-label
+// pair. Adds ~3.3KB minified beyond the 726KB re-baseline. +6KB keeps ~0.8%
+// headroom. Host limit unchanged.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -90,7 +98,7 @@ const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
   { path: "dist/extension.js", limitBytes: 556 * 1024, label: "extension host" },
-  { path: "dist/chat/webview/main.js", limitBytes: 726 * 1024, label: "chat webview" },
+  { path: "dist/chat/webview/main.js", limitBytes: 732 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
 

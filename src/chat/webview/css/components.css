@@ -1295,6 +1295,27 @@ body.hide-thinking .thinking-block { display: none; }
   color: var(--color-muted);
   white-space: nowrap;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0-5);
+}
+
+.subagent-domain-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted);
+  flex-shrink: 0;
+}
+
+.subagent-domain-icon svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 1.5;
+}
+
+.subagent-domain-label {
+  line-height: 1;
 }
 
 /* TDD phase bar */
