@@ -401,28 +401,12 @@ export class SessionClient {
   }
 
   async respondToPermission(sessionId: string, permissionId: string, response: string): Promise<void> {
-    const client = this.guard()
+    const client = this.guardV2()
     if (!sessionId) throw new Error("Permission response missing session ID")
     if (!permissionId) throw new Error("Permission response missing permission ID")
     const normalized = this.normalizePermissionResponse(response)
-    const modernPermission = (client as unknown as {
-      permission?: {
-        reply?: (parameters: { requestID: string; reply?: "once" | "always" | "reject"; message?: string }) => Promise<{ error?: unknown }>
-      }
-    }).permission
-    if (modernPermission?.reply) {
-      const modernResp = await modernPermission.reply({ requestID: permissionId, reply: normalized })
-      if (!modernResp.error) {
-        log.info(`Permission ${permissionId} responded with v2 API: ${normalized}`)
-        return
-      }
-      log.warn(`Permission v2 reply failed for ${permissionId}; falling back to session permission API`, modernResp.error)
-    }
-    const resp = await client.postSessionIdPermissionsPermissionId({
-      path: { id: sessionId, permissionID: permissionId },
-      body: { response: normalized },
-    })
-    if (resp.error) throw new Error(`Permission response failed: ${JSON.stringify(resp.error)}`)
+    const resp = await client.permission.reply({ requestID: permissionId, reply: normalized })
+    this.throwOnV2Error(resp, "Permission response failed")
     log.info(`Permission ${permissionId} responded with: ${normalized}`)
   }
 
