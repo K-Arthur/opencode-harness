@@ -509,6 +509,9 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
         if (e.affectsConfiguration("opencode.contextWindowOverride")) {
           this.applyContextWindowFor()
         }
+        if (e.affectsConfiguration("opencode.toolOutput.renderAnsi")) {
+          this.pushToolOutputConfigToWebview()
+        }
       }),
       this.themeManager.onThemeChanged(() => this.themeController.pushThemeToWebview()),
       this.rateLimitMonitor.onStateChanged(() => this.pushRateLimitStateToWebview()),
@@ -915,6 +918,43 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
         class: this.mapToolType(data?.tool || ""),
         args: data?.input,
         state: data?.status,
+      }, { postMessage: (m) => this.postMessage(m), postRequestError: (m) => this.postRequestError(m) })
+    }],
+    ["tool_partial", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean }) => {
+      const data = event.data as {
+        id?: string
+        tool?: string
+        token?: number
+        stdoutDelta?: string
+        stderrDelta?: string
+        stdout?: string
+        stderr?: string
+        stdoutLength?: number
+        stderrLength?: number
+        stdoutLineCount?: number
+        stderrLineCount?: number
+        replace?: boolean
+        durationMs?: number
+        exitCode?: number
+      } | undefined
+      const targetId = tab?.id || tabId
+      if (!targetId || !data?.id || typeof data.token !== "number") return
+
+      this.streamCoordinator.appendToolPartial(targetId, {
+        id: data.id,
+        tool: data.tool,
+        token: data.token,
+        stdoutDelta: data.stdoutDelta,
+        stderrDelta: data.stderrDelta,
+        stdout: data.stdout,
+        stderr: data.stderr,
+        stdoutLength: data.stdoutLength ?? 0,
+        stderrLength: data.stderrLength ?? 0,
+        stdoutLineCount: data.stdoutLineCount,
+        stderrLineCount: data.stderrLineCount,
+        replace: data.replace,
+        durationMs: data.durationMs,
+        exitCode: data.exitCode,
       }, { postMessage: (m) => this.postMessage(m), postRequestError: (m) => this.postRequestError(m) })
     }],
     ["tool_end", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean }) => {
@@ -1419,7 +1459,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
   }
 
   private isHighFrequencyServerEvent(event: ServerEvent): boolean {
-    return event.type === "text_chunk" || event.type === "tool_update" || event.type === "tool_end" || event.type === "tool_start"
+    return event.type === "text_chunk" || event.type === "tool_update" || event.type === "tool_partial" || event.type === "tool_end" || event.type === "tool_start"
   }
 
   private logIncomingServerEvent(event: ServerEvent, isHighFrequency: boolean): void {
@@ -1809,7 +1849,13 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       workspaceName,
       maxConcurrentStreams,
     })
+    this.pushToolOutputConfigToWebview()
     this.backfillService.setHydrated(true)
+  }
+
+  private pushToolOutputConfigToWebview(): void {
+    const renderAnsi = vscode.workspace.getConfiguration("opencode").get<boolean>("toolOutput.renderAnsi", false)
+    this.postMessage({ type: "tool_output_config", renderAnsi })
   }
 
 private isSessionInCurrentWorkspace(session: import("../session/SessionStore").OpenCodeSession): boolean {
@@ -1890,7 +1936,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     // H3: Buffer messages if webview isn't ready yet.
     // Allow init_state, theme_vars, model_update, and model_list through
     // so the webview is fully initialized on first load.
-    const passthrough = ["init_state", "theme_vars", "theme_config", "rate_limit_state", "model_update", "model_list", "webview_ready", "session_list_update"]
+    const passthrough = ["init_state", "theme_vars", "theme_config", "tool_output_config", "rate_limit_state", "model_update", "model_list", "webview_ready", "session_list_update"]
     if (!this.eventRouter.webviewReady && !passthrough.includes(msg.type as string)) {
       // Use centralized queue enforcement in WebviewEventRouter
       this.eventRouter.enqueueMessage(msg)

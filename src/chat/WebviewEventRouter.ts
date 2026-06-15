@@ -151,7 +151,7 @@ export class WebviewEventRouter {
   public webviewFullyInitialized = false
 
   private static readonly VALID_WEBVIEW_TYPES = new Set([
-    "create_tab", "send_prompt", "change_mode", "set_model", "set_variant", "abort",
+    "create_tab", "send_prompt", "change_mode", "set_model", "set_variant", "abort", "cancel_tool",
     "close_tab", "switch_tab", "accept_diff", "reject_diff",
     "accept_permission", "mention_search", "list_sessions", "resume_session",
     "new_session", "get_models", "update_cost", "webview_ready", "init_ack", "rename_session", "webview_log",
@@ -563,6 +563,15 @@ export class WebviewEventRouter {
     }],
     ["abort", async (_: Record<string, unknown>, sessionId?: string) => {
       if (sessionId) await this.opts.streamCoordinator.abort(sessionId, { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) })
+    }],
+    ["cancel_tool", async (msg: Record<string, unknown>, sessionId?: string) => {
+      if (!sessionId) return
+      await this.opts.streamCoordinator.cancelToolFromCard(sessionId, {
+        toolId: typeof msg.toolId === "string" ? msg.toolId : undefined,
+        stdout: typeof msg.stdout === "string" ? msg.stdout : undefined,
+        stderr: typeof msg.stderr === "string" ? msg.stderr : undefined,
+        durationMs: typeof msg.durationMs === "number" ? msg.durationMs : undefined,
+      }, { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) })
     }],
     ["webview_log", (msg: Record<string, unknown>) => {
       const lvl = msg.level === "warn" ? "warn" : msg.level === "error" ? "error" : "info"
@@ -1795,7 +1804,7 @@ export class WebviewEventRouter {
 
   /** O1: Message types that must never be silently dropped from the early queue. */
   private static readonly UNDROPPABLE_TYPES = new Set([
-    "init_state", "stream_start", "stream_end", "stream_tool_start", "stream_tool_end",
+    "init_state", "stream_start", "stream_end", "stream_tool_start", "stream_tool_partial", "stream_tool_end",
     "error", "request_error", "session_deleted", "session_renamed", "session_list_update",
     "webview_request_error", "prompt_rejected",
   ])

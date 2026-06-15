@@ -74,6 +74,8 @@ import { createStreamOrchestrator, type StreamOrchestratorAPI } from "./streamOr
 import { createTimeline, type TimelineAPI } from "./timeline"
 import { createComposer, type ComposerAPI } from "./composer"
 import { setupVoiceInput } from "./voiceInput"
+import { setToolOutputRenderAnsi } from "./ansiUtils"
+import { toolPartialStore } from "./toolPartialStore"
 import { normalizeSessionMode } from "../modePolicy"
 import type { VoiceInputSettings } from "../voiceInputCore"
 import { TimestampUpdater } from "./timestampUpdater"
@@ -1272,12 +1274,16 @@ function getVsCodeApi() {
         session.commandFilter = filter
         stateManager.save()
       },
+      getLiveToolOutput: (sessionId, toolId) => toolPartialStore.get(sessionId, toolId),
       onJump: (anchorMessageId) => scrollToTurnModule(scrollMarkerDeps, anchorMessageId),
       // Webviews frequently lack navigator.clipboard (and `?.` on it made
       // `.catch` throw on undefined) — copy via the host clipboard instead.
       onCopy: (text) => vscode.postMessage({ type: "copy_text", text }),
       onOpenTerminal: (command, cwd, autorun) => vscode.postMessage({ type: "open_terminal", command, cwd, autorun }),
-      onCancel: () => abortStream(),
+      onCancel: (payload) => {
+        vscode.postMessage({ type: "cancel_tool", ...payload })
+        abortStream()
+      },
     })
     skillsModalApi = setupSkillsModal(els, {
       onToggleSkill: (skillId: string, enabled: boolean) => vscode.postMessage({ type: "toggle_skill", skillId, enabled }),
@@ -3206,15 +3212,40 @@ function getVsCodeApi() {
           }
         }
       }],
+      ["stream_tool_partial", (msg, sid) => {
+        if (!sid) return
+        const toolCall = msg.toolCall as {
+          id?: string
+          token?: number
+          partialStdout?: string
+          partialStderr?: string
+          stdout?: string
+          stderr?: string
+          stdoutLength?: number
+          stderrLength?: number
+          stdoutLineCount?: number
+          stderrLineCount?: number
+          replace?: boolean
+          durationMs?: number
+          exitCode?: number
+        } | undefined
+        if (!toolCall?.id) return
+        const live = toolPartialStore.apply(sid, toolCall.id, toolCall)
+        if (!live) return
+        streamOrchestrator.scheduleToolPartial(sid, toolCall.id, live)
+        tasksPanelApi?.refresh(sid)
+      }],
       ["stream_tool_end", (msg, sid) => {
         if (sid) {
           const stream = streamHandlers.get(sid)
           if (stream) {
-            const result = msg.result as { id: string; ok: boolean; result?: string; durationMs?: number; stale?: boolean }
+            const result = msg.result as { id: string; ok: boolean; result?: string; durationMs?: number; stale?: boolean; state?: ToolCallState; stderr?: string; exitCode?: number }
+            toolPartialStore.markTerminal(sid, result.id)
             streamOrchestrator.flushToolUpdate(sid, result.id)
             toolElapsedTracker.unregisterEnd(result.id, result.durationMs)
             stream.handleToolEnd(result.id, result)
             streamOrchestrator.clearToolChainProgress(sid)
+            tasksPanelApi?.refresh(sid)
           }
         }
       }],
@@ -3333,6 +3364,9 @@ function getVsCodeApi() {
       ["voice_settings", (msg) => {
         const settings = (msg as Record<string, unknown>).settings as VoiceInputSettings | undefined
         if (settings) voiceInputApi?.applySettings(settings)
+      }],
+      ["tool_output_config", (msg) => {
+        setToolOutputRenderAnsi((msg as Record<string, unknown>).renderAnsi === true)
       }],
       ["voice_recording_started", (msg) => {
         voiceInputApi?.handleRecordingStarted({
