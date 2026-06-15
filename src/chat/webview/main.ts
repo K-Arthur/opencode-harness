@@ -64,6 +64,7 @@ import { handleTokenUsage as handleTokenUsageModule, accumulateTokenUsage as acc
 import { createAttachmentManager } from "./ui/attachments"
 import { showWelcomeView as showWelcomeViewModule, hideWelcomeView as hideWelcomeViewModule, renderWelcomeContext as renderWelcomeContextModule, setupWelcomeActions as setupWelcomeActionsModule, setupWelcomeSuggestions as setupWelcomeSuggestionsModule, setupWelcomeResponsive as setupWelcomeResponsiveModule, type WelcomeViewDeps } from "./ui/welcomeView"
 import { shouldHonorActiveSessionChange, resolveInitStateTarget } from "./sessionFocus"
+import { resolveEventSessionTarget } from "./sessionTarget"
 import { closeSettingsMenu as closeSettingsMenuModule, setupSettingsMenuKeyboardNav as setupSettingsMenuKeyboardNavModule } from "./ui/settingsMenu"
 import { handleChangedFiles as handleChangedFilesModule, renderCheckpointPanel as renderCheckpointPanelModule, handleClearMessages as handleClearMessagesModule, type FileTrackingDeps } from "./ui/fileTracking"
 import { setupButtons as setupButtonsModule } from "./ui/buttonSetup"
@@ -2983,12 +2984,14 @@ function getVsCodeApi() {
         sessionBeforeIndex.set(sid, refreshedMsgs.length)
         debouncedUpdateScrollMarkers(sid)
       }],
-      ["context_usage", (msg) => {
+      ["context_usage", (msg, sid) => {
         const pct = typeof msg.percent === "number" && Number.isFinite(msg.percent) ? msg.percent : 0
         const tokens = typeof msg.tokens === "number" && Number.isFinite(msg.tokens) ? Math.max(0, msg.tokens) : 0
         const maxTokens = typeof msg.maxTokens === "number" && Number.isFinite(msg.maxTokens) ? Math.max(0, msg.maxTokens) : 0
         const activeId = stateManager.getState().activeSessionId
-        const targetId = isValidSessionId(msg.sessionId as string) ? msg.sessionId as string : activeId
+        // Prefer explicit sessionId, then the envelope sid, then active — so a
+        // background session's usage never overwrites the viewed session's bar.
+        const targetId = resolveEventSessionTarget(msg.sessionId, sid, activeId, (s) => isValidSessionId(s as string))
         if (!targetId) return
         const incomingUsage: ContextUsage = {
           percent: pct,
@@ -4213,7 +4216,9 @@ function getVsCodeApi() {
         const block = msg.block as any
         const messageId = msg.messageId as string || ""
         if (block && block.type === "question") {
-          questionBar.addQuestion(block, messageId)
+          // Pass the envelope sid so a background session's question is never
+          // attributed to the tab the user is currently viewing (multi-tab fix).
+          questionBar.addQuestion(block, messageId, sid)
         }
       }],
       ["question_acknowledged", (_msg, _sid) => {
