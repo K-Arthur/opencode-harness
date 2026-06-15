@@ -21,6 +21,7 @@ import { AuthProvider } from "./AuthProvider"
 import { ServerLifecycle } from "./ServerLifecycle"
 import { SseSubscriber } from "./SseSubscriber"
 import { SessionClient } from "./SessionClient"
+import type { LiveToolOutputSnapshot } from "./liveToolOutput"
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -240,6 +241,10 @@ export class SessionManager {
 
   async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part[] }>> {
     return this.sessionClient.getSessionMessages(id)
+  }
+
+  async getToolPartialOutput(sessionId: string, callId: string, sinceToken = 0): Promise<LiveToolOutputSnapshot> {
+    return this.sessionClient.getToolPartialOutput(sessionId, callId, sinceToken)
   }
 
   async listSessions(): Promise<Session[]> {
