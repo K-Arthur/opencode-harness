@@ -12,6 +12,12 @@ import { randomUUID } from "crypto"
 import { log } from "../utils/outputChannel"
 import type { McpServerManager } from "../mcp/McpServerManager"
 import type { V2OpencodeClient } from "./opencodeClientFactory"
+import {
+  mapV2Session,
+  mapV2SessionArray,
+  mapV2MessageWithParts,
+  mapV2MessageWithPartsArray,
+} from "./v2ResponseMappers"
 import type { ModelRef, PromptOptions as BasePromptOptions } from "./sessionTypes"
 import { isLocalPlaceholderSessionId } from "./sessionUtils"
 import { logStreamTrace } from "./streamTrace"
@@ -86,6 +92,10 @@ export class SessionClient {
     return client
   }
 
+  private throwOnV2Error(resp: { error?: unknown }, label: string): void {
+    if (resp.error) throw new Error(`${label}: ${JSON.stringify(resp.error)}`)
+  }
+
   private assertResponseSize(data: unknown, label: string): void {
     try {
       const size = JSON.stringify(data).length
@@ -106,11 +116,12 @@ export class SessionClient {
   }
 
   async createSession(title?: string): Promise<Session> {
-    const client = this.guard()
-    const resp = await client.session.create({ body: { title } })
-    if (resp.error) throw new Error(`Failed to create session: ${JSON.stringify(resp.error)}`)
-    log.info(`Created session: ${(resp.data as Session)?.id}`)
-    return resp.data as Session
+    const client = this.guardV2()
+    const resp = await client.session.create({ title })
+    this.throwOnV2Error(resp, "Failed to create session")
+    const session = mapV2Session(resp.data as Record<string, unknown>)
+    log.info(`Created session: ${session.id}`)
+    return session
   }
 
   async deleteSession(id: string): Promise<boolean> {
@@ -122,17 +133,17 @@ export class SessionClient {
   }
 
   async getSession(id: string): Promise<Session> {
-    const client = this.guard()
-    const resp = await client.session.get({ path: { id } })
-    if (resp.error) throw new Error(`Failed to get session: ${JSON.stringify(resp.error)}`)
-    return resp.data as Session
+    const client = this.guardV2()
+    const resp = await client.session.get({ sessionID: id })
+    this.throwOnV2Error(resp, "Failed to get session")
+    return mapV2Session(resp.data as Record<string, unknown>)
   }
 
   async updateSessionTitle(id: string, title: string): Promise<Session> {
-    const client = this.guard()
-    const resp = await client.session.update({ path: { id }, body: { title } })
-    if (resp.error) throw new Error(`Failed to update session title: ${JSON.stringify(resp.error)}`)
-    return resp.data as Session
+    const client = this.guardV2()
+    const resp = await client.session.update({ sessionID: id, title })
+    this.throwOnV2Error(resp, "Failed to update session title")
+    return mapV2Session(resp.data as Record<string, unknown>)
   }
 
   async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part[] }>> {
