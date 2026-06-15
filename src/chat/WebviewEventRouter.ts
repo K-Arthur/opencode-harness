@@ -223,7 +223,7 @@ export class WebviewEventRouter {
       if (filePath && proposed) {
         await this.opts.diffApplier.showSideBySideDiff(filePath, proposed, title)
       } else {
-        log.warn("show_diff: no filePath/proposedContent (dead diff handler path)", { filePath })
+        log.warn("show_diff: no filePath/proposedContent (expected for legacy callers that use show_diff as a generic message type without the old inline-diff fields)", { filePath })
       }
     }],
     ["send_prompt", async (msg: Record<string, unknown>, sessionId?: string) => {
