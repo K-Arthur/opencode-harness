@@ -46,18 +46,26 @@ module.exports = {
   return createRequire(import.meta.url)(bundlePath)
 }
 
-test("SessionClient.sendPromptAsync sends prompt identity and routing fields", async () => {
+test("SessionClient.sendPromptAsync sends prompt identity and routing fields (v2)", async () => {
   const { SessionClient } = loadSessionClient()
-  const calls = []
-  const client = {
+  const callArgs = []
+  const callOptions = []
+  const v2Client = {
     session: {
-      promptAsync: async (payload) => {
-        calls.push(payload)
+      promptAsync: async (params, options) => {
+        callArgs.push(params)
+        callOptions.push(options)
         return {}
       },
     },
   }
-  const sessionClient = new SessionClient(() => client)
+  // Provide a throwaway v1 client (required by constructor) and the mock v2 client
+  const sessionClient = new SessionClient(
+    () => ({ session: {} }),
+    undefined,
+    () => false,
+    () => v2Client,
+  )
 
   await sessionClient.sendPromptAsync(
     "ses_123",
@@ -71,14 +79,14 @@ test("SessionClient.sendPromptAsync sends prompt identity and routing fields", a
     },
   )
 
-  assert.equal(calls.length, 1)
-  assert.equal(calls[0].path.id, "ses_123")
-  assert.match(calls[0].headers["Idempotency-Key"], /^ses_123-/)
-  assert.deepEqual(calls[0].body, {
-    parts: [{ type: "text", text: "hello" }],
-    messageID: "user-msg-1",
-    model: { providerID: "anthropic", modelID: "claude-sonnet" },
-    agent: "build",
-    variant: "fast",
-  })
+  assert.equal(callArgs.length, 1)
+  // v2: flat sessionID instead of nested path.id
+  assert.equal(callArgs[0].sessionID, "ses_123")
+  // v2: headers in the options (2nd arg) instead of the params
+  assert.match(callOptions[0].headers["Idempotency-Key"], /^ses_123-/)
+  assert.deepEqual(callArgs[0].parts, [{ type: "text", text: "hello" }])
+  assert.deepEqual(callArgs[0].model, { providerID: "anthropic", modelID: "claude-sonnet" })
+  assert.equal(callArgs[0].agent, "build")
+  assert.equal(callArgs[0].variant, "fast")
+  assert.equal(callArgs[0].messageID, "user-msg-1")
 })

@@ -203,7 +203,7 @@ export class SessionClient {
     parts: (TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput)[],
     options?: PromptOptions,
   ): Promise<{ info: Message; parts: Part[] }> {
-    const client = this.guard()
+    const client = this.guardV2()
     const modelRef = options?.model ?? this._currentModel ?? undefined
     const agent = options?.agent
     const variant = options?.variant
@@ -212,23 +212,23 @@ export class SessionClient {
     const idempotencyKey = `${sessionId}-${randomUUID()}`
     log.info(`Sending prompt to session ${sessionId} (idempotency: ${idempotencyKey.slice(0, 16)}..., model=${modelRef ? `${modelRef.providerID}/${modelRef.modelID}` : "default"}, agent=${agent ?? "default"}, variant=${variant ?? "none"}, tools=${JSON.stringify(options?.tools ?? {})}, filteredTools=${JSON.stringify(filteredTools ?? {})})`)
 
-    const resp = await client.session.prompt({
-      path: { id: sessionId },
-      headers: { "Idempotency-Key": idempotencyKey },
-      body: {
+    const resp = await client.session.prompt(
+      {
+        sessionID: sessionId,
         parts,
         ...(messageID ? { messageID } : {}),
-        ...(modelRef ? { model: modelRef } : {}),
+        ...(modelRef ? { model: { providerID: modelRef.providerID, modelID: modelRef.modelID } } : {}),
         ...(agent ? { agent } : {}),
         ...(variant ? { variant } : {}),
         ...(filteredTools ? { tools: filteredTools } : {}),
       },
-    })
+      { headers: { "Idempotency-Key": idempotencyKey } as Record<string, string> },
+    )
 
-    if (resp.error) throw new Error(`Prompt failed: ${JSON.stringify(resp.error)}`)
-    const data = resp.data as { info: Message; parts: Part[] } | undefined
+    this.throwOnV2Error(resp, "Prompt failed")
+    const data = resp.data
     if (!data) throw new Error("Prompt returned no data")
-    return { info: data.info, parts: data.parts }
+    return mapV2MessageWithParts(data as Record<string, unknown>)
   }
 
   async sendPromptAsync(
@@ -238,7 +238,7 @@ export class SessionClient {
     eventStreamState?: string,
     lastRawEventType?: string,
   ): Promise<void> {
-    const client = this.guard()
+    const client = this.guardV2()
     const modelRef = options?.model ?? this._currentModel ?? undefined
     const agent = options?.agent
     const variant = options?.variant
@@ -268,38 +268,27 @@ export class SessionClient {
       if (signal?.aborted) return
 
       try {
+        const v2Params = {
+          sessionID: sessionId,
+          parts,
+          ...(messageID ? { messageID } : {}),
+          ...(modelRef ? { model: { providerID: modelRef.providerID, modelID: modelRef.modelID } } : {}),
+          ...(agent ? { agent } : {}),
+          ...(variant ? { variant } : {}),
+          ...(filteredTools ? { tools: filteredTools } : {}),
+        }
+        const v2Options = { headers: { "Idempotency-Key": idempotencyKey } as Record<string, string> }
+
         const resp = await (signal
           ? Promise.race([
-              client.session.promptAsync({
-                path: { id: sessionId },
-                body: {
-                  parts,
-                  ...(messageID ? { messageID } : {}),
-                  ...(modelRef ? { model: modelRef } : {}),
-                  ...(agent ? { agent } : {}),
-                  ...(variant ? { variant } : {}),
-                  ...(filteredTools ? { tools: filteredTools } : {}),
-                },
-                headers: { "Idempotency-Key": idempotencyKey },
-              }) as { error?: unknown; data?: unknown },
+              client.session.promptAsync(v2Params, v2Options) as { error?: unknown; data?: unknown },
               new Promise<never>((_, reject) => {
                 if (signal.aborted) return reject(new DOMException("Aborted", "AbortError"))
                 const onAbort = () => reject(new DOMException("Aborted", "AbortError"))
                 signal.addEventListener("abort", onAbort, { once: true })
               }),
             ])
-          : client.session.promptAsync({
-              path: { id: sessionId },
-              body: {
-                parts,
-                ...(messageID ? { messageID } : {}),
-                ...(modelRef ? { model: modelRef } : {}),
-                ...(agent ? { agent } : {}),
-                ...(variant ? { variant } : {}),
-                ...(filteredTools ? { tools: filteredTools } : {}),
-              },
-              headers: { "Idempotency-Key": idempotencyKey },
-            }))
+          : client.session.promptAsync(v2Params, v2Options))
 
         const responseData = resp as { error?: unknown; data?: unknown }
         if (responseData.error) {
