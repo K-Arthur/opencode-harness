@@ -119,18 +119,20 @@ void describe("AuthProvider", () => {
     })
   })
 
+  // NOTE: AuthProvider's import chain pulls in `vscode`, so it cannot be instantiated
+  // under `tsx --test`; these stay source-string. The v2 client construction is covered
+  // behaviorally (with a vscode stub bundle) in tests/unit/session-client-question-v2.test.mjs.
   void describe("makeClient", () => {
     void it("builds localhost URL with port", () => {
       assert.ok(source.includes("http://127.0.0.1:${port}"), "must build localhost URL")
     })
 
-    void it("passes auth header via this.createClient when password set", () => {
-      assert.ok(source.includes("return this.createClient({"), "must use DI createClient")
+    void it("sets a Basic auth header when a server password is set", () => {
       assert.ok(source.includes("Authorization: `Basic ${basic}`"), "must set Authorization header")
     })
 
-    void it("calls this.createClient without headers when no password", () => {
-      assert.ok(source.includes("return this.createClient({ baseUrl })"), "fallback without auth")
+    void it("delegates to the shared localClientConfig helper", () => {
+      assert.ok(source.includes("this.createClient(this.localClientConfig(port))"), "makeClient must use the shared config helper")
     })
   })
 
@@ -139,9 +141,25 @@ void describe("AuthProvider", () => {
       assert.ok(source.includes("Authorization: this.buildRemoteAuthHeader(this._remoteServerPassword)"), "must delegate auth")
     })
 
-    void it("calls this.createClient without headers when no remote password", () => {
-      const count = source.split("return this.createClient({ baseUrl })").length - 1
-      assert.ok(count >= 2, "both makeClient and makeRemoteClient must have fallback without auth")
+    void it("delegates to the shared remoteClientConfig helper", () => {
+      assert.ok(source.includes("this.createClient(this.remoteClientConfig(baseUrl))"), "makeRemoteClient must use the shared config helper")
+    })
+  })
+
+  void describe("makeV2Client / makeRemoteV2Client (v2 strangler)", () => {
+    void it("exposes v2 client makers", () => {
+      assert.ok(source.includes("makeV2Client(port: number)"), "must expose makeV2Client")
+      assert.ok(source.includes("makeRemoteV2Client(baseUrl: string)"), "must expose makeRemoteV2Client")
+    })
+
+    void it("builds the v2 client from the SAME config helpers as v1 (cannot drift on auth)", () => {
+      assert.ok(source.includes("this.createV2ClientFn(this.localClientConfig(port))"), "local v2 must reuse localClientConfig")
+      assert.ok(source.includes("this.createV2ClientFn(this.remoteClientConfig(baseUrl))"), "remote v2 must reuse remoteClientConfig")
+    })
+
+    void it("accepts an injected createV2Client for DI", () => {
+      assert.ok(source.includes("createV2ClientFn:"), "constructor must accept createV2ClientFn")
+      assert.ok(source.includes("CreateV2Client"), "must type as CreateV2Client")
     })
   })
 
