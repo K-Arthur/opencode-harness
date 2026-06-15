@@ -8,13 +8,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const source = readFileSync(resolve(__dirname, "SessionClient.ts"), "utf8")
 
 void describe("SessionClient", () => {
-  void describe("guard", () => {
+  void describe("guardV2", () => {
     void it("throws when disposed()", () => {
-      assert.ok(source.includes("if (this.disposed()) throw new Error"), "guard checks disposed()")
+      assert.ok(source.includes("if (this.disposed()) throw new Error"), "guardV2 checks disposed()")
     })
 
-    void it("throws when client is null", () => {
-      assert.ok(source.includes("if (!client) throw new Error"), "guard checks client null")
+    void it("throws when v2 client is null", () => {
+      assert.ok(source.includes("if (!client) throw new Error"), "guardV2 checks client null")
     })
   })
 
@@ -130,14 +130,11 @@ void describe("SessionClient", () => {
   })
 
   void describe("sessionExists", () => {
-    void it("returns false when client is null without using guard", () => {
+    void it("delegates to getSession and returns false on error", () => {
+      assert.ok(source.includes("async sessionExists("), "sessionExists exists")
       assert.ok(
-        source.match(/async sessionExists[\s\S]*?this\.getClient\(\)/) !== null,
-        "sessionExists uses getClient() directly, not guard()",
-      )
-      assert.ok(
-        source.match(/async sessionExists[\s\S]*?if \(!client\) return false/) !== null,
-        "returns false when client null",
+        source.includes("await this.getSession(id)"),
+        "sessionExists delegates to getSession",
       )
     })
   })

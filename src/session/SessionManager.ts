@@ -1,6 +1,5 @@
 import * as vscode from "vscode"
 import {
-  type OpencodeClient,
   type Session,
   type Message,
   type Part,
@@ -65,9 +64,6 @@ function parseSkillFrontmatter(content: string): { name?: string; description?: 
 /* ------------------------------------------------------------------ */
 
 export class SessionManager {
-  private client: OpencodeClient | null = null
-  /** v2 SDK client, created alongside `client` for namespaced APIs absent on v1
-   *  (e.g. question reply/reject). Strangler migration — see opencodeClientFactory. */
   private v2Client: V2OpencodeClient | null = null
   private disposed = false
   private _onEvent = new vscode.EventEmitter<OpencodeEvent>()
@@ -82,13 +78,12 @@ export class SessionManager {
     this.authProvider = new AuthProvider()
     this.serverLifecycle = new ServerLifecycle(this.authProvider)
     this.sessionClient = new SessionClient(
-      () => this.client,
       mcpServerManager ?? undefined,
       () => this.disposed,
       () => this.v2Client,
     )
     this.sseSubscriber = new SseSubscriber(
-      () => this.client,
+      () => this.v2Client !== null,
       () => this.serverBaseUrl(),
       () => this.authHeader,
       (event) => this._onEvent.fire(event),
@@ -96,7 +91,6 @@ export class SessionManager {
     this.lifecycleDisposables.push(
       this.serverLifecycle.onDisconnected((data) => {
         this.sseSubscriber.disconnect()
-        this.client = null
         this.v2Client = null
         this._onEvent.fire({ type: "server_disconnected", data })
       }),
@@ -119,7 +113,7 @@ export class SessionManager {
   }
 
   get isRunning(): boolean {
-    return this.client !== null
+    return this.v2Client !== null
   }
 
   get currentPort(): number {
@@ -160,7 +154,7 @@ export class SessionManager {
 
   async start(): Promise<void> {
     if (this.disposed) throw new Error("SessionManager has been disposed")
-    if (this.client) return
+    if (this.v2Client) return
 
     if (this.authProvider.isRemote) {
       await this._startRemote()
@@ -168,7 +162,6 @@ export class SessionManager {
     }
 
     await this.serverLifecycle.start(async (port) => {
-      this.client = this.authProvider.makeClient(port)
       this.v2Client = this.authProvider.makeV2Client(port)
       this.sseSubscriber.subscribe()
       await this.recoverSessions()
@@ -196,7 +189,6 @@ export class SessionManager {
       clearTimeout(timer)
     }
 
-    this.client = this.authProvider.makeRemoteClient(baseUrl)
     this.v2Client = this.authProvider.makeRemoteV2Client(baseUrl)
     this._onEvent.fire({ type: "server_connected", data: { port: 0, remote: true, url: baseUrl } })
     this.sseSubscriber.subscribe()
@@ -206,7 +198,6 @@ export class SessionManager {
   async stop(): Promise<void> {
     this.sseSubscriber.disconnect()
     await this.serverLifecycle.stop()
-    this.client = null
     this.v2Client = null
   }
 
@@ -370,7 +361,7 @@ export class SessionManager {
   }
 
   private async recoverSessions(): Promise<void> {
-    if (!this.client) return
+    if (!this.v2Client) return
     try {
       const allServerSessions = await this.listSessions()
       const serverSessions = allServerSessions.filter((s) => !(s as { parentID?: string }).parentID)

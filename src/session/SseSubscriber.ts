@@ -1,5 +1,4 @@
 import * as vscode from "vscode"
-import type { OpencodeClient } from "@opencode-ai/sdk"
 import { log } from "../utils/outputChannel"
 import { createSdkEventNormalizer } from "./EventNormalizer"
 import type { SdkEventLike } from "./eventHandlers/types"
@@ -28,7 +27,7 @@ export class SseSubscriber {
   private disposed = false
 
   constructor(
-    private readonly getClient: () => OpencodeClient | null,
+    private readonly hasClient: () => boolean,
     private readonly getBaseUrl: () => string | null,
     private readonly getAuthHeader: () => string | undefined,
     private readonly onEvent: (event: OpencodeEvent) => void,
@@ -49,7 +48,7 @@ export class SseSubscriber {
 
   async waitForReady(timeoutMs = 5_000): Promise<boolean> {
     if (this.isReady) return true
-    if (!this.getClient()) return false
+    if (!this.hasClient()) return false
 
     return new Promise<boolean>((resolve) => {
       const timer = setTimeout(() => {
@@ -69,7 +68,7 @@ export class SseSubscriber {
 
   subscribe(): void {
     const baseUrl = this.getBaseUrl()
-    if (!this.getClient() || !baseUrl || this.disposed) return
+    if (!this.hasClient() || !baseUrl || this.disposed) return
 
     if (this.eventReconnectTimer) {
       clearTimeout(this.eventReconnectTimer)
@@ -346,7 +345,7 @@ export class SseSubscriber {
   }
 
   private scheduleEventStreamReconnect(reason = "stream_error"): void {
-    if (this.disposed || !this.getClient() || this.eventReconnectTimer) return
+    if (this.disposed || !this.hasClient() || this.eventReconnectTimer) return
 
     if (this.eventReconnectAttempts >= this.MAX_EVENT_STREAM_RECONNECT_ATTEMPTS) {
       log.error(`Event stream max reconnect attempts (${this.MAX_EVENT_STREAM_RECONNECT_ATTEMPTS}) reached — giving up`)
@@ -374,7 +373,7 @@ export class SseSubscriber {
     log.warn(`Reconnecting OpenCode event stream in ${delay}ms (attempt ${attempt + 1}; reason=${reason}; last raw=${this.lastRawEventType || "none"} ${rawAge}; last normalized=${this.lastNormalizedEventType || "none"} ${normalizedAge})`)
     this.eventReconnectTimer = setTimeout(() => {
       this.eventReconnectTimer = null
-      if (this.disposed || !this.getClient()) return
+      if (this.disposed || !this.hasClient()) return
       this.subscribe()
     }, delay)
   }
