@@ -40,6 +40,7 @@ type KnownSseEventType =
   | "stream_error"
   | "tool_start"
   | "tool_update"
+  | "tool_partial"
   | "tool_end"
   | "diff"
   | "thinking"
@@ -91,6 +92,9 @@ export class MessageRouter {
         context.postMessage(event)
         break
       case "tool_update":
+        context.postMessage(event)
+        break
+      case "tool_partial":
         context.postMessage(event)
         break
       case "tool_end":
