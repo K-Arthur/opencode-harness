@@ -27,6 +27,7 @@ describe("icons.ts (Sprint 4 taxonomy)", () => {
       "TOOL_PLAN_SVG", "TOOL_QUESTION_SVG", "TOOL_SKILL_SVG",
       "TOOL_LSP_SVG", "TOOL_GIT_SVG", "TOOL_MEMORY_SVG",
       "TOOL_CHECKPOINT_SVG", "TOOL_EDIT_SVG", "TOOL_FALLBACK_SVG",
+      "TOOL_BASH_SVG",
     ]
     for (const name of expected) {
       assert.ok(

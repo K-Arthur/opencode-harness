@@ -36,7 +36,7 @@ async function mountToolBlock(page: Page) {
         <span class="tool-icon">R</span>
         <span class="tool-name">read</span>
         <span class="tool-arg">README.md</span>
-        <span class="tool-status tool-status--result">✓ Done</span>
+        <span class="tool-status tool-status--result"><span class="tool-status-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" stroke="none" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></span><span class="tool-status-label">Done</span></span>
         <span class="tool-duration">6ms</span>
         <span class="tool-output-size">781 chars</span>
       </summary>
@@ -113,7 +113,7 @@ test.describe('Compact tool blocks (codex-style)', () => {
           <span class="tool-name">read</span>
           <span class="tool-group-breakdown">(3 read)</span>
           <span class="tool-group-count">3 calls</span>
-          <span class="tool-status tool-status--result">✓ Done</span>
+          <span class="tool-status tool-status--result"><span class="tool-status-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" stroke="none" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></span><span class="tool-status-label">Done</span></span>
         </summary>
         <div class="tool-group-children">
           <details class="tool-call tool-call--read tool-call--result tool-group-child">
@@ -159,7 +159,7 @@ test.describe('Compact tool blocks (codex-style)', () => {
           <span class="tool-name">tools</span>
           <span class="tool-group-breakdown">(1 read, 1 write, 1 exec)</span>
           <span class="tool-group-count">3 calls</span>
-          <span class="tool-status tool-status--result">✓ Done</span>
+          <span class="tool-status tool-status--result"><span class="tool-status-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" stroke="none" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></span><span class="tool-status-label">Done</span></span>
         </summary>
         <div class="tool-group-children">
           <details class="tool-call tool-call--read tool-call--result tool-group-child"><summary class="tool-header"><span class="tool-name">read</span></summary></details>
@@ -188,7 +188,7 @@ test.describe('Compact tool blocks (codex-style)', () => {
           <summary class="tool-header" tabindex="0" role="button">
             <span class="tool-name">read</span>
             <span class="tool-arg">file-${i}.ts</span>
-            <span class="tool-status tool-status--result">✓ Done</span>
+        <span class="tool-status tool-status--result"><span class="tool-status-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" stroke="none" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></span><span class="tool-status-label">Done</span></span>
           </summary>
         `
         list.appendChild(tool)
