@@ -165,6 +165,7 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
       role,
       postMessage: opts?.postMessage,
       collapseConfig: config,
+      hasQuestionInBar: opts?.hasQuestionInBar,
     }
 
     for (const group of groupConsecutiveToolCalls(msg.blocks, config.groupBy)) {

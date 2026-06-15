@@ -83,6 +83,8 @@ export interface ComposerDeps {
   debouncedUpdateScrollMarkers: (sessionId: string) => void
   STREAM_LIMIT_TOOLTIP: string
   getAllSessions: () => Array<{ id: string; isStreaming: boolean }>
+  /** Returns true if the active session has a pending question in the bar. */
+  hasPendingQuestion?: () => boolean
 }
 
 export interface ComposerAPI {
@@ -124,7 +126,7 @@ export function createComposer(deps: ComposerDeps): ComposerAPI {
     createTabUI, createNewTab, closeTab,
     updateAgentStatus, syncModelViews, updateModeSelectorState,
     renderRecentSessionsList, debouncedUpdateScrollMarkers,
-    STREAM_LIMIT_TOOLTIP,
+    STREAM_LIMIT_TOOLTIP, hasPendingQuestion,
   } = deps
 
   let _autoResizeTextarea: () => void = () => {}
@@ -165,6 +167,7 @@ export function createComposer(deps: ComposerDeps): ComposerAPI {
     runSlashCommandText: (text, active) => _runSlashCommandText(text, active),
     openModelManager: () => modelManager.open(),
     STREAM_LIMIT_TOOLTIP,
+    hasPendingQuestion,
   })
 
   const queueRenderer = createQueueRenderer({
