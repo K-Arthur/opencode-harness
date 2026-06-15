@@ -11,6 +11,7 @@ import {
 import { randomUUID } from "crypto"
 import { log } from "../utils/outputChannel"
 import type { McpServerManager } from "../mcp/McpServerManager"
+import type { V2OpencodeClient } from "./opencodeClientFactory"
 import type { ModelRef, PromptOptions as BasePromptOptions } from "./sessionTypes"
 import { isLocalPlaceholderSessionId } from "./sessionUtils"
 import { logStreamTrace } from "./streamTrace"
@@ -53,6 +54,8 @@ export class SessionClient {
     private readonly getClient: () => OpencodeClient | null,
     private readonly mcpServerManager?: McpServerManager,
     private readonly disposed: () => boolean = () => false,
+    // v2 SDK client — the question reply/reject API exists only on v2.
+    private readonly getV2Client: () => V2OpencodeClient | null = () => null,
   ) {}
 
   get model(): ModelRef | null {
@@ -72,6 +75,13 @@ export class SessionClient {
   private guard(): OpencodeClient {
     if (this.disposed()) throw new Error("SessionManager has been disposed")
     const client = this.getClient()
+    if (!client) throw new Error("Server not running")
+    return client
+  }
+
+  private guardV2(): V2OpencodeClient {
+    if (this.disposed()) throw new Error("SessionManager has been disposed")
+    const client = this.getV2Client()
     if (!client) throw new Error("Server not running")
     return client
   }
@@ -411,27 +421,18 @@ export class SessionClient {
   }
 
   async replyToQuestion(requestID: string, answers: string[][]): Promise<void> {
-    const client = this.guard()
-    const question = (client as unknown as {
-      question?: {
-        reply?: (parameters: { requestID: string; answers?: string[][] }) => Promise<{ error?: unknown }>
-      }
-    }).question
-    if (!question?.reply) throw new Error("OpenCode question reply API is unavailable")
-    const resp = await question.reply({ requestID, answers })
+    // The question reply/reject API exists only on the v2 SDK client; the v1
+    // client has no `question` namespace (which is why this previously always
+    // threw "API is unavailable" and the question panel never dismissed).
+    const client = this.guardV2()
+    const resp = await client.question.reply({ requestID, answers })
     if (resp.error) throw new Error(`Question reply failed: ${JSON.stringify(resp.error)}`)
     log.info(`Question ${requestID} replied with ${answers.length} answer group(s)`)
   }
 
   async rejectQuestion(requestID: string): Promise<void> {
-    const client = this.guard()
-    const question = (client as unknown as {
-      question?: {
-        reject?: (parameters: { requestID: string }) => Promise<{ error?: unknown }>
-      }
-    }).question
-    if (!question?.reject) throw new Error("OpenCode question reject API is unavailable")
-    const resp = await question.reject({ requestID })
+    const client = this.guardV2()
+    const resp = await client.question.reject({ requestID })
     if (resp.error) throw new Error(`Question reject failed: ${JSON.stringify(resp.error)}`)
     log.info(`Question ${requestID} rejected`)
   }

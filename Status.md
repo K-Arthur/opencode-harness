@@ -1,7 +1,16 @@
 # Status.md
 
 ## Last Updated: 2026-06-15
-## Project State: lazy server spawn (R3) + timing-independent abort suppression (R2) from productivity/reliability audit + steering/queueing + keyboard redesign + SDK 1.17.6 + prior fuzzy-search/streaming/a11y fixes (TDD)
+## Project State: v2 SDK client beachhead (question reply/reject fixed) + lazy server spawn (R3) + timing-independent abort suppression (R2) from productivity/reliability audit + steering/queueing + keyboard redesign + prior fixes (TDD)
+
+### Recent Fix (2026-06-15): Question reply/reject "API is unavailable" + panel stuck — v2 SDK client beachhead
+- **Symptom:** answering OR skipping a model clarification question showed a red "Stream error — OpenCode question reply/reject API is unavailable" card, and the QUESTION FROM MODEL panel persisted even after answering.
+- **Root cause:** the question reply/reject API exists **only on the @opencode-ai/sdk v2 client**; the extension's `SessionClient` uses the **v1** client, which has no `question` namespace. The code cast the v1 client and probed `client.question.reply`/`reject` → always `undefined` → always threw "API is unavailable". The webview's optimistic-answer flow then hit its B9 rollback (`question_unacknowledged`), re-showing the bar — hence the "panel persists" symptom. **One root cause, both symptoms.**
+- **Fix (v2 strangler beachhead):** stood up the **v2 SDK client as a first-class citizen** — `opencodeClientFactory.createV2Client`, `AuthProvider.makeV2Client`/`makeRemoteV2Client` (built from the **same** baseUrl + auth as v1 via shared `localClientConfig`/`remoteClientConfig` helpers so they can't drift), `SessionManager.v2Client` created/cleared alongside `client`, passed to `SessionClient` as `getV2Client`. `replyToQuestion`/`rejectQuestion` now call the real v2 `question.reply({ requestID, answers })` / `question.reject({ requestID })`. On success the host posts `question_acknowledged` → webview `questionBar.removeQuestion` dismisses the panel.
+- **Decision (user):** full v1→v2 migration is the destination; this is the agreed **Phase 1 beachhead** (phased strangler plan to follow). Event pipeline (SseSubscriber) migrates last under its own phase.
+- **Bundle:** hey-api's class-based v2 SDK is not tree-shakeable per-method, so importing it pulls the whole generated client (~44KB). Host bundle 561.6KB → 618.1KB; re-baselined the host limit 562KB → **624KB** (~1% headroom) with a documented rationale in `scripts/check-bundle-size.mjs`. (v1 SDK ~30KB becomes removable once the migration completes.)
+- **Tests:** behavioral `tests/unit/session-client-question-v2.test.mjs` (×5, vscode-stub esbuild bundle): reply→v2 `question.reply`, reject→v2 `question.reject`, null v2 → "Server not running" (not "API unavailable"), error surfacing. `AuthProvider.test.ts` updated to the new shape incl. the v2-shares-v1-auth guarantee.
+- **Verification:** typecheck clean; unit **3627 + 768 mjs pass / 0 fail**; message-contract 17/17; roundtrip 7/7; prod build + bundle gate green (ext 618.1/624KB, webview 734.5/736KB).
 
 ### Recent Change (2026-06-15): Lazy opencode server spawn on first engagement (audit R3)
 - **Before:** the opencode server process was spawned in **every** window on activation (fire-and-forget `ensureOpencodeAndStart`), even if the user never opened the OpenCode view — N idle server processes + SSE subscriptions + `recoverSessions()` across multi-window setups.
