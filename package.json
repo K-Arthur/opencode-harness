@@ -9,7 +9,7 @@
   },
   "description": "Open-source AI coding agent for VS Code. Chat, refactor, debug, and write code using Claude, GPT, Gemini, and 75+ models. Includes cost tracking, custom themes, permission controls, and checkpoint rollback.",
   "icon": "media/opencode-icon-256.png",
-  "version": "0.3.61",
+  "version": "0.3.63",
   "engines": {
     "vscode": "^1.98.0"
   },
@@ -427,12 +427,12 @@
     "configuration": {
       "title": "OpenCode",
       "properties": {
-    "opencode.binaryPath": {
-      "type": "string",
-      "default": "",
-      "scope": "machine",
-      "description": "Explicit path to the opencode CLI binary. Leave empty to auto-detect from PATH or default install locations (~/.opencode/bin on macOS/Linux, npm global on Windows)."
-    },
+        "opencode.binaryPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Explicit path to the opencode CLI binary. Leave empty to auto-detect from PATH or default install locations (~/.opencode/bin on macOS/Linux, npm global on Windows)."
+        },
         "opencode.autoInstall": {
           "type": "string",
           "enum": [
