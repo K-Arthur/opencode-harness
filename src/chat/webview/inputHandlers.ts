@@ -40,7 +40,7 @@ export function createInputHandlers(deps: InputHandlerDeps): InputHandlers {
     const prev = el.style.overflow
     el.style.overflow = "hidden"
     el.style.height = "auto"
-    el.style.height = Math.min(el.scrollHeight, 200) + "px"
+    el.style.height = Math.min(el.scrollHeight, 300) + "px"
     el.style.overflow = prev
   }
 
