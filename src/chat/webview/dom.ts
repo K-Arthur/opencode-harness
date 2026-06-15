@@ -86,6 +86,7 @@ export interface ElementRefs {
   promptStashPanel: HTMLDivElement | null
   promptStashClose: HTMLButtonElement | null
   promptStashList: HTMLDivElement | null
+  promptStashToggleBtn: HTMLElement
   
   welcomeRecentSessions: HTMLDivElement | null
   welcomeModelCtx: HTMLSpanElement | null
@@ -280,6 +281,7 @@ export function getElementRefs(): ElementRefs {
     promptStashPanel: optionalElement<HTMLDivElement>("prompt-stash-panel"),
     promptStashClose: optionalElement<HTMLButtonElement>("prompt-stash-close"),
     promptStashList: optionalElement<HTMLDivElement>("prompt-stash-list"),
+    promptStashToggleBtn: requireElement("prompt-stash-toggle-btn"),
     
     welcomeRecentSessions: optionalElement<HTMLDivElement>("welcome-recent-sessions"),
     welcomeModelCtx: optionalElement<HTMLSpanElement>("welcome-model-ctx"),

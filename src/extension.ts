@@ -571,6 +571,15 @@ function registerCoreCommands(
       }
     })
   )
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.setDefaultMode", () => {
+      try {
+        void vscode.commands.executeCommand("workbench.action.openSettings", "opencode.defaultMode")
+      } catch (err) {
+        log.error("setDefaultMode command failed", err)
+      }
+    })
+  )
   // No-op "suppressor": claims a key so VS Code's default for it does NOT fire
   // while the chat webview is focused (gated by `opencodeHarness.chatFocused` in
   // package.json keybindings). The webview's own keydown handler performs the
