@@ -1,6 +1,7 @@
 export type NormalizedOpencodeEventType =
   | "tool_start"
   | "tool_update"
+  | "tool_partial"
   | "tool_end"
   | "skill_load"
   | "step_start"
@@ -59,6 +60,8 @@ export interface ToolPartLike extends PartLike {
     input?: unknown;
     output?: unknown;
     error?: string;
+    metadata?: Record<string, unknown>;
+    time?: { start?: number; end?: number };
   };
 }
 
@@ -103,6 +106,9 @@ export interface NormalizerContext {
   toolInputs: Map<string, string>
   toolOutputs: Map<string, string>
   toolStartedIds: Set<string>
+  toolPartialTokens: Map<string, number>
+  toolPartialStdoutLengths: Map<string, number>
+  toolPartialStderrLengths: Map<string, number>
   seenUnknownTypes: Set<string>
 
   isAssistantMessage(messageId: string | undefined): boolean
