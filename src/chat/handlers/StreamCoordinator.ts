@@ -21,6 +21,7 @@ import type { AdvisoryOrchestrationResult } from "../../methodology/MethodologyO
 import { updateMethodologyStatus } from "../../methodology/registry"
 import { createAttachmentStorage, type MaterializedAttachment } from "./attachmentStorage"
 import { RunActivityTracker } from "./RunActivityTracker"
+import { IntentionalAbortRegistry } from "./intentionalAbortRegistry"
 import type { AgentRunState, RunProgressEvent, SubagentActivityInput, SubagentRunState, ToolActivityInput } from "./runActivityTypes"
 import { SubagentHeartbeat } from "./SubagentHeartbeat"
 import { mapRunError, type RunErrorContext } from "./runErrorMapper"
@@ -42,7 +43,11 @@ interface ActiveStreamRun {
   cliSessionId?: string
   clientRequestId?: string
   userMessageId?: string
+  /** Synthetic `resp-…` id used to anchor the webview bubble for the whole turn. */
   assistantMessageId?: string
+  /** Server `msg_…` id observed during streaming. Used to correlate the late
+   *  MessageAbortedError to an intentional abort (distinct from assistantMessageId). */
+  serverMessageId?: string
   mode?: string
   agent?: string
   model?: string
@@ -94,15 +99,15 @@ export class StreamCoordinator {
   /** Tabs whose stream was explicitly aborted — finalizeStream must not emit its own stream_end */
   private abortedTabs = new Set<string>()
   /**
-   * Per-tab expiry (epoch ms) of the "intentional abort" window. Set by `abort()`.
-   * The server emits a `MessageAbortedError` on the SSE stream a beat after we call
-   * `abortSession`, which is expected — not a failure. `wasIntentionallyAborted()`
-   * lets the `server_error` handler swallow that error instead of surfacing a
-   * spurious "The request was cancelled." card (and tearing down a replacement run
-   * started by interrupt-and-send). Distinct from the one-tick `abortedTabs` set,
-   * which only coordinates finalize/abort stream_end de-duplication.
+   * Decides whether an expected `MessageAbortedError` (emitted by the server a beat
+   * after we call `abortSession`) should be swallowed by the `server_error` handler
+   * instead of surfacing a spurious "The request was cancelled." card (and tearing
+   * down a replacement run started by interrupt-and-send). Correlates by server
+   * message id (timing-independent) with a per-tab window fallback. Distinct from
+   * the one-tick `abortedTabs` set, which only coordinates finalize/abort stream_end
+   * de-duplication.
    */
-  private intentionalAbortUntil = new Map<string, number>()
+  private readonly abortRegistry = new IntentionalAbortRegistry({ windowMs: this.ABORT_ERROR_SUPPRESS_MS })
   /** Per-tab stream lifecycle state for observability */
   private streamStates = new Map<string, StreamLifecycleState>()
   /** Per-tab accepted backend run identity. Distinct from the coarse streaming boolean. */
@@ -1608,18 +1613,13 @@ export class StreamCoordinator {
    * flight), only one stream_end is delivered to the webview — the abort one.
    */
   /**
-   * True while the late server `MessageAbortedError` for a recently, intentionally
-   * aborted tab should be suppressed (see `intentionalAbortUntil`). Self-expiring:
-   * a stale entry is dropped on read.
+   * True when the late server `MessageAbortedError` for an intentionally aborted run
+   * should be suppressed. Prefers correlation by the server `serverMessageId` (carried
+   * on the `server_error` event) so suppression is timing-independent; falls back to a
+   * self-expiring per-tab window when the error carries no correlatable id.
    */
-  wasIntentionallyAborted(tabId: string): boolean {
-    const until = this.intentionalAbortUntil.get(tabId)
-    if (until === undefined) return false
-    if (Date.now() >= until) {
-      this.intentionalAbortUntil.delete(tabId)
-      return false
-    }
-    return true
+  wasIntentionallyAborted(tabId: string, serverMessageId?: string): boolean {
+    return this.abortRegistry.wasIntentional(tabId, serverMessageId, Date.now())
   }
 
   async abort(tabId: string, callbacks: StreamCallbacks): Promise<void> {
@@ -1630,9 +1630,11 @@ export class StreamCoordinator {
     // Mark first so any in-flight finalizeStream that resumes after our await
     // sees the flag and skips emitting its own stream_end.
     this.abortedTabs.add(tabId)
-    // Open the intentional-abort window so the late server MessageAbortedError is
+    // Register the intentional abort so the late server MessageAbortedError is
     // swallowed rather than shown as a "The request was cancelled." error card.
-    this.intentionalAbortUntil.set(tabId, Date.now() + this.ABORT_ERROR_SUPPRESS_MS)
+    // Correlate by the run's server message id when known (timing-independent);
+    // the registry also opens a per-tab window fallback for id-less late errors.
+    this.abortRegistry.recordAbort(tabId, this.activeRuns.get(tabId)?.serverMessageId, Date.now())
     this.setActiveRunState(tabId, "aborted", { finalizeReason: "user_abort" })
 
     try {
@@ -1907,6 +1909,10 @@ export class StreamCoordinator {
     // queries hit the wrong bubble.
     const cbs = callbacks || this.stuckStreamHandlers.get(tabId)
     if (messageId) {
+      // Remember the server `msg_…` id so an intentional abort can be correlated
+      // to its late MessageAbortedError regardless of timing (see abort()).
+      const runForMsgId = this.activeRuns.get(tabId)
+      if (runForMsgId) runForMsgId.serverMessageId = messageId
       const uiMessageId = this.activeMessageIds.get(tabId)
       if (!uiMessageId) {
         this.activeMessageIds.set(tabId, messageId)
@@ -2427,7 +2433,7 @@ cleanupTab(tabId: string): void {
     this.subagentHeartbeat.stopAll()
     this.finalizingTabs.clear()
     this.abortedTabs.clear()
-    this.intentionalAbortUntil.clear()
+    this.abortRegistry.clear()
     this.streamStates.clear()
     this.activeMessageIds.clear()
     this.activeRuns.clear()
