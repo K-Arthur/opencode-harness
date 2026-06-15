@@ -207,6 +207,108 @@ test("getChildSessions throws on v2 error", async () => {
   )
 })
 
+// --- Cluster 3: getSessionMessages, getMessages, getToolPartialOutput -----------------
+
+function makeFakeMessage(id, infoOverrides) {
+  return { id, sessionID: "ses_1", role: "assistant", time: { created: 1000 }, ...infoOverrides }
+}
+
+function makeFakePart(partId, type, overrides) {
+  return { id: partId, sessionID: "ses_1", messageID: "msg_1", type, ...overrides }
+}
+
+function makeMessagesResponse(messages) {
+  return { data: messages, error: undefined }
+}
+
+test("getSessionMessages calls v2 session.messages with flat sessionID and maps response", async () => {
+  const calls = []
+  const v2 = {
+    session: {
+      messages: async (p) => {
+        calls.push(p)
+        return makeMessagesResponse([
+          { info: makeFakeMessage("msg_1"), parts: [makeFakePart("p1", "text", { text: "hello" })] },
+        ])
+      },
+    },
+  }
+  const results = await new SessionClient(() => ({}), undefined, () => false, () => v2).getSessionMessages("ses_1")
+  assert.equal(results.length, 1)
+  assert.equal(results[0].info.id, "msg_1")
+  assert.equal(results[0].parts[0].id, "p1")
+  assert.deepEqual(calls[0], { sessionID: "ses_1" })
+})
+
+test("getSessionMessages throws on v2 error", async () => {
+  const v2 = {
+    session: {
+      messages: async () => ({ data: undefined, error: { message: "not found" } }),
+    },
+  }
+  await assert.rejects(
+    new SessionClient(() => ({}), undefined, () => false, () => v2).getSessionMessages("ses_x"),
+    /Failed to get session messages/,
+  )
+})
+
+test("getMessages calls v2 session.messages with flat sessionID + limit and maps response", async () => {
+  const calls = []
+  const v2 = {
+    session: {
+      messages: async (p) => {
+        calls.push(p)
+        return makeMessagesResponse([
+          { info: makeFakeMessage("msg_1"), parts: [makeFakePart("p1", "text", { text: "hi" })] },
+        ])
+      },
+    },
+  }
+  const results = await new SessionClient(() => ({}), undefined, () => false, () => v2).getMessages("ses_1", 10)
+  assert.equal(results.length, 1)
+  assert.equal(results[0].info.id, "msg_1")
+  assert.equal(results[0].parts[0].id, "p1")
+  assert.deepEqual(calls[0], { sessionID: "ses_1", limit: 10 })
+})
+
+test("getMessages without limit omits limit from params", async () => {
+  const calls = []
+  const v2 = {
+    session: {
+      messages: async (p) => {
+        calls.push(p)
+        return makeMessagesResponse([])
+      },
+    },
+  }
+  await new SessionClient(() => ({}), undefined, () => false, () => v2).getMessages("ses_1")
+  assert.deepEqual(calls[0], { sessionID: "ses_1" })
+})
+
+test("getToolPartialOutput calls v2 session.messages and finds tool part", async () => {
+  const calls = []
+  const v2 = {
+    session: {
+      messages: async (p) => {
+        calls.push(p)
+        return makeMessagesResponse([
+          {
+            info: makeFakeMessage("msg_1"),
+            parts: [
+              makeFakePart("p1", "text", { text: "hi" }),
+              makeFakePart("p2", "tool", { callID: "call_42", tool: "bash", state: { status: "running", input: {}, stdout: "hello world", time: { start: 1000 } } }),
+            ],
+          },
+        ])
+      },
+    },
+  }
+  const result = await new SessionClient(() => ({}), undefined, () => false, () => v2).getToolPartialOutput("ses_1", "call_42")
+  assert.equal(result.callId, "call_42")
+  assert.equal(result.available, true)
+  assert.deepEqual(calls[0], { sessionID: "ses_1" })
+})
+
 test("migrated domain methods require the v2 client (Server not running otherwise)", async () => {
   const sc = new SessionClient(() => ({}), undefined, () => false, () => null)
   await assert.rejects(sc.getSession("ses_x"), /Server not running/)
@@ -214,4 +316,7 @@ test("migrated domain methods require the v2 client (Server not running otherwis
   await assert.rejects(sc.updateSessionTitle("ses_x", "x"), /Server not running/)
   await assert.rejects(sc.listSessions(), /Server not running/)
   await assert.rejects(sc.getChildSessions("p_x"), /Server not running/)
+  await assert.rejects(sc.getSessionMessages("ses_x"), /Server not running/)
+  await assert.rejects(sc.getMessages("ses_x"), /Server not running/)
+  await assert.rejects(sc.getToolPartialOutput("ses_x", "c"), /Server not running/)
 })

@@ -147,10 +147,10 @@ export class SessionClient {
   }
 
   async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part[] }>> {
-    const client = this.guard()
-    const resp = await client.session.messages({ path: { id } })
-    if (resp.error) throw new Error(`Failed to get session messages: ${JSON.stringify(resp.error)}`)
-    const data = (resp.data as Array<{ info: Message; parts: Part[] }> | undefined) ?? []
+    const client = this.guardV2()
+    const resp = await client.session.messages({ sessionID: id })
+    this.throwOnV2Error(resp, "Failed to get session messages")
+    const data = mapV2MessageWithPartsArray((resp.data as Array<Record<string, unknown>>) ?? [])
     this.assertResponseSize(data, "getSessionMessages")
     return data
   }
@@ -161,10 +161,10 @@ export class SessionClient {
 
   async getToolPartialOutput(sessionId: string, callId: string, sinceToken = 0): Promise<LiveToolOutputSnapshot> {
     if (!callId) return unavailableToolSnapshot(callId, sinceToken)
-    const client = this.guard()
-    const resp = await client.session.messages({ path: { id: sessionId } })
-    if (resp.error) throw new Error(`Failed to get tool partial output: ${JSON.stringify(resp.error)}`)
-    const data = (resp.data as Array<{ info: Message; parts: Part[] }> | undefined) ?? []
+    const client = this.guardV2()
+    const resp = await client.session.messages({ sessionID: sessionId })
+    this.throwOnV2Error(resp, "Failed to get tool partial output")
+    const data = mapV2MessageWithPartsArray((resp.data as Array<Record<string, unknown>>) ?? [])
     this.assertResponseSize(data, "getToolPartialOutput")
 
     for (let i = data.length - 1; i >= 0; i--) {
@@ -366,13 +366,13 @@ export class SessionClient {
   }
 
   async getMessages(sessionId: string, limit?: number): Promise<{ info: unknown; parts: Part[] }[]> {
-    const client = this.guard()
+    const client = this.guardV2()
     const resp = await client.session.messages({
-      path: { id: sessionId },
-      query: { limit },
+      sessionID: sessionId,
+      ...(limit !== undefined ? { limit } : {}),
     })
-    if (resp.error) throw new Error(`Failed to get messages: ${JSON.stringify(resp.error)}`)
-    const data = (resp.data as { info: unknown; parts: Part[] }[]) ?? []
+    this.throwOnV2Error(resp, "Failed to get messages")
+    const data = mapV2MessageWithPartsArray((resp.data as Array<Record<string, unknown>>) ?? [])
     this.assertResponseSize(data, "getMessages")
     return data
   }
