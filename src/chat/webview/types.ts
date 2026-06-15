@@ -249,6 +249,7 @@ export interface SessionState {
   mode: string
   steerMode?: SteerMode
   messages: ChatMessage[]
+  draftText?: string
   isStreaming: boolean
   cost?: number
   tokenUsage?: TokenUsage

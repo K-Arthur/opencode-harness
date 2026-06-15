@@ -712,5 +712,15 @@ export function createState(vscode: VsCodeApi) {
       session.subagentDetail = detail
       save()
     },
+    setDraftText(id: string, text: string) {
+      const session = state.sessions[id]
+      if (!session) return
+      if (text) session.draftText = text
+      else delete session.draftText
+      save()
+    },
+    getDraftText(id: string): string {
+      return state.sessions[id]?.draftText ?? ""
+    },
   }
 }
