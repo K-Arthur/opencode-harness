@@ -189,10 +189,10 @@ export class SessionClient {
   }
 
   async listSessions(): Promise<Session[]> {
-    const client = this.guard()
+    const client = this.guardV2()
     const resp = await client.session.list()
-    if (resp.error) throw new Error(`Failed to list sessions: ${JSON.stringify(resp.error)}`)
-    const data = (resp.data as Session[]) ?? []
+    this.throwOnV2Error(resp, "Failed to list sessions")
+    const data = mapV2SessionArray((resp.data as Array<Record<string, unknown>>) ?? [])
     this.assertResponseSize(data, "listSessions")
     return data
   }
@@ -460,10 +460,10 @@ export class SessionClient {
   }
 
   async getChildSessions(parentId: string): Promise<Session[]> {
-    const client = this.guard()
-    const resp = await client.session.children({ path: { id: parentId } })
-    if (resp.error) throw new Error(`Failed to get child sessions: ${JSON.stringify(resp.error)}`)
-    const data = (resp.data as Session[]) ?? []
+    const client = this.guardV2()
+    const resp = await client.session.children({ sessionID: parentId })
+    this.throwOnV2Error(resp, "Failed to get child sessions")
+    const data = mapV2SessionArray((resp.data as Array<Record<string, unknown>>) ?? [])
     this.assertResponseSize(data, "getChildSessions")
     return data
   }

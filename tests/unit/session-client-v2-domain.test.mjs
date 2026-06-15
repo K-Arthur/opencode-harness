@@ -153,9 +153,65 @@ test("updateSessionTitle throws on v2 error", async () => {
   )
 })
 
+// --- Cluster 2: listSessions, getChildSessions ----------------------------------------
+
+test("listSessions calls v2 session.list with no params and maps response", async () => {
+  const calls = []
+  const v2 = {
+    session: {
+      list: async (p) => { calls.push(p); return { data: [makeFakeSession("s1", "Session A"), makeFakeSession("s2", "Session B")], error: undefined } },
+    },
+  }
+  const results = await new SessionClient(() => ({}), undefined, () => false, () => v2).listSessions()
+  assert.equal(results.length, 2)
+  assert.equal(results[0].id, "s1")
+  assert.equal(results[1].title, "Session B")
+  assert.equal(calls[0], undefined) // v2 session.list() called with no params
+})
+
+test("listSessions throws on v2 error", async () => {
+  const v2 = {
+    session: {
+      list: async () => ({ data: undefined, error: { message: "no server" } }),
+    },
+  }
+  await assert.rejects(
+    new SessionClient(() => ({}), undefined, () => false, () => v2).listSessions(),
+    /Failed to list sessions/,
+  )
+})
+
+test("getChildSessions calls v2 session.children with flat sessionID and maps response", async () => {
+  const calls = []
+  const v2 = {
+    session: {
+      children: async (p) => { calls.push(p); return { data: [makeFakeSession("child_1", "Child Session")], error: undefined } },
+    },
+  }
+  const results = await new SessionClient(() => ({}), undefined, () => false, () => v2).getChildSessions("parent_1")
+  assert.equal(results.length, 1)
+  assert.equal(results[0].id, "child_1")
+  assert.equal(results[0].title, "Child Session")
+  assert.deepEqual(calls[0], { sessionID: "parent_1" })
+})
+
+test("getChildSessions throws on v2 error", async () => {
+  const v2 = {
+    session: {
+      children: async () => ({ data: undefined, error: { message: "gone" } }),
+    },
+  }
+  await assert.rejects(
+    new SessionClient(() => ({}), undefined, () => false, () => v2).getChildSessions("parent_x"),
+    /Failed to get child sessions/,
+  )
+})
+
 test("migrated domain methods require the v2 client (Server not running otherwise)", async () => {
   const sc = new SessionClient(() => ({}), undefined, () => false, () => null)
   await assert.rejects(sc.getSession("ses_x"), /Server not running/)
   await assert.rejects(sc.createSession(), /Server not running/)
   await assert.rejects(sc.updateSessionTitle("ses_x", "x"), /Server not running/)
+  await assert.rejects(sc.listSessions(), /Server not running/)
+  await assert.rejects(sc.getChildSessions("p_x"), /Server not running/)
 })
