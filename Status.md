@@ -1,7 +1,13 @@
 # Status.md
 
 ## Last Updated: 2026-06-15
-## Project State: v2 SDK client beachhead (question reply/reject fixed) + lazy server spawn (R3) + timing-independent abort suppression (R2) from productivity/reliability audit + steering/queueing + keyboard redesign + prior fixes (TDD)
+## Project State: v1→v2 SDK migration in progress (questions + safe void session calls on v2; Phase 2b+ mapping layer pending) + lazy server spawn (R3) + timing-independent abort suppression (R2) + steering/queueing + keyboard redesign + prior fixes (TDD)
+
+### Migration progress (2026-06-15): v1→v2 SDK strangler — Phases 1 + 2 (partial)
+- **Phase 1 (done, `816a874`):** v2 client first-class; question reply/reject on v2 (bug fixed).
+- **Phase 2 partial (done, `27cf50d`):** safe void/ack session calls on v2 — `deleteSession`/`abortSession`/`revertMessage` (v2 flat `{ sessionID }` replaces v1 nested `{ path: { id } }`).
+- **Blocker found for the rest of Phase 2:** v2 domain types differ from v1 (`Session` adds slug/workspaceID/path; `summary.diffs` is `SnapshotFileDiff`), so calls returning `Session`/`Message`/`Part` (create/get/list/messages/prompt/command/children) need a v2→domain mapping layer (Phase 2b) — not a clean swap. The streaming prompt path is intentionally untouched; the SSE event pipeline migrates LAST (Phase 4, with R1).
+- **Handoff:** full self-contained continuation prompt at `docs/implementation/2026-06-15-v2-migration-handoff-prompt.md`; plan at `docs/adrs/2026-06-15-v1-to-v2-sdk-migration.md`.
 
 ### Recent Fix (2026-06-15): Question reply/reject "API is unavailable" + panel stuck — v2 SDK client beachhead
 - **Symptom:** answering OR skipping a model clarification question showed a red "Stream error — OpenCode question reply/reject API is unavailable" card, and the QUESTION FROM MODEL panel persisted even after answering.
