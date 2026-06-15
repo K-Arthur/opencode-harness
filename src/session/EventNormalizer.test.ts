@@ -349,6 +349,24 @@ describe("EventNormalizer — behavioral", () => {
     assert.equal(events.length, 0)
   })
 
+  it("silently ignores integration.updated instead of surfacing an Unsupported card", () => {
+    const events = normalizer.normalize({ type: "integration.updated", properties: {} })
+    assert.equal(events.length, 0)
+  })
+
+  it("silently ignores reference.updated instead of surfacing an Unsupported card", () => {
+    const events = normalizer.normalize({ type: "reference.updated", properties: {} })
+    assert.equal(events.length, 0)
+  })
+
+  it("silently ignores un-enumerated sub-events under known-noisy namespaces", () => {
+    // Prefix safety net: future sub-events under these server-internal
+    // namespaces must not regress into "Unsupported OpenCode event" cards.
+    for (const type of ["integration.connected", "reference.created", "lsp.symbol.indexed", "pty.resized"]) {
+      assert.equal(normalizer.normalize({ type, properties: {} }).length, 0, `${type} should be safe-ignored`)
+    }
+  })
+
   it("emits text_chunk even when message.part.delta arrives before message.updated (role race)", () => {
     // This is the critical race condition: the server may send part deltas
     // before the message.updated event that sets the role. If we require

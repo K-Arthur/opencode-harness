@@ -60,6 +60,27 @@ export const SAFE_IGNORED_EVENT_TYPES: readonly string[] = [
   ...prefixed("worktree.", "failed|ready"),
 ] as const
 
+// Namespaces whose every sub-event is noise for the chat UI. This prefix net is
+// the safety valve that keeps un-enumerated future sub-events (a new `lsp.*`,
+// `integration.*`, … variant) from regressing into "Unsupported OpenCode event"
+// cards. The exact members enumerated above stay as the observed-event manifest;
+// this list is matched in addition to them, never instead.
+export const SAFE_IGNORED_EVENT_PREFIXES: readonly string[] = [
+  "account",
+  "catalog",
+  "file.watcher",
+  "installation",
+  "integration",
+  "lsp",
+  "mcp.browser",
+  "project",
+  "pty",
+  "reference",
+  "tui",
+  "workspace",
+  "worktree",
+] as const
+
 export const HANDLED_PART_TYPES: readonly string[] = split("agent|compaction|reasoning|retry|step-finish|step-start|subtask|text|tool")
 
 export const SAFE_IGNORED_PART_TYPES: readonly string[] = split("file|patch|snapshot")
@@ -68,13 +89,14 @@ const handledEvents = new Set<string>(HANDLED_EVENT_TYPES)
 const safeIgnoredEvents = new Set<string>(SAFE_IGNORED_EVENT_TYPES)
 const handledParts = new Set<string>(HANDLED_PART_TYPES)
 const safeIgnoredParts = new Set<string>(SAFE_IGNORED_PART_TYPES)
+const safeIgnoredPrefixes = new RegExp(`^(${SAFE_IGNORED_EVENT_PREFIXES.map((p) => p.replace(/\./g, "\\.")).join("|")})\\.`)
 
 export function isHandledEventType(type: string): boolean {
   return handledEvents.has(type)
 }
 
 export function isSafeIgnoredEventType(type: string): boolean {
-  return safeIgnoredEvents.has(type)
+  return safeIgnoredEvents.has(type) || safeIgnoredPrefixes.test(type)
 }
 
 export function isHandledPartType(type: string): boolean {

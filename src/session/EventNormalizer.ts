@@ -21,6 +21,7 @@ import { McpToolsChangedHandler } from "./eventHandlers/McpToolsChangedHandler"
 import { SessionUpdatedHandler } from "./eventHandlers/SessionUpdatedHandler"
 import { QuestionHandler } from "./eventHandlers/QuestionHandler"
 import { SessionNextHandler } from "./eventHandlers/SessionNextHandler"
+import { isSafeIgnoredEventType } from "./eventCoverage"
 
 const HANDLERS: EventHandler[] = [
   new TextPartHandler(),
@@ -44,13 +45,6 @@ const HANDLERS: EventHandler[] = [
   new McpToolsChangedHandler(),
   new FallbackHandler(),
 ]
-
-const SAFE_IGNORED_EXACT = new Set("command.executed|global.disposed|message.part.removed|message.removed|models-dev.refreshed|plugin.added|server.heartbeat|server.instance.disposed|session.created|session.deleted|sync|vcs.branch.updated".split("|"))
-const SAFE_IGNORED_PREFIX = /^(account|catalog|file\.watcher|installation|lsp|mcp\.browser|project|pty|tui|workspace|worktree)\./
-
-function isSafeIgnoredEventType(type: string): boolean {
-  return SAFE_IGNORED_EXACT.has(type) || SAFE_IGNORED_PREFIX.test(type)
-}
 
 export function createSdkEventNormalizer(): SdkEventNormalizer {
 
