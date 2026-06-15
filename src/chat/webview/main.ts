@@ -1233,7 +1233,8 @@ function getVsCodeApi() {
   function setupSessionUtilities(): void {
     setupSessionModal()
     setupKeyboardShortcutsModal(document.getElementById("app") || document.body)
-    setupPromptStash(els, (msg) => vscode.postMessage(msg as Record<string, unknown>))
+    const stashHandlers = setupPromptStash(els, (msg) => vscode.postMessage(msg as Record<string, unknown>))
+    els.promptStashToggleBtn.addEventListener("click", () => stashHandlers.toggle())
   }
 
   function setupTodoSkillAndSubagentPanels(): void {

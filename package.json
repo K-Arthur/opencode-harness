@@ -192,10 +192,6 @@
         "title": "OpenCode: Show Session Cost"
       },
       {
-        "command": "opencode-harness.continueSession",
-        "title": "OpenCode: Continue Most Recent Session"
-      },
-      {
         "command": "opencode-harness.showHelp",
         "title": "OpenCode: Show Slash Commands"
       },
@@ -214,6 +210,10 @@
       {
         "command": "opencode-harness.setAutoMode",
         "title": "OpenCode: Set Session Mode to Auto"
+      },
+      {
+        "command": "opencode-harness.setDefaultMode",
+        "title": "OpenCode: Set Default Session Mode"
       },
       {
         "command": "opencode-harness.setupVoiceInput",
@@ -367,19 +367,19 @@
       "commandPalette": [
         {
           "command": "opencode-harness.showRateLimits",
-          "when": "false"
+          "when": "opencodeHarness.chatFocused"
         },
         {
           "command": "opencode-harness.checkCli",
-          "when": "false"
+          "when": "opencodeHarness.chatFocused"
         },
         {
           "command": "opencode-harness.installCli",
-          "when": "false"
+          "when": "opencodeHarness.chatFocused"
         },
         {
           "command": "opencode-harness.previewTheme",
-          "when": "false"
+          "when": "opencodeHarness.chatFocused"
         },
         {
           "command": "opencode-harness.clearTestSessions",
