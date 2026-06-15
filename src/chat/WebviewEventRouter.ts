@@ -858,7 +858,7 @@ export class WebviewEventRouter {
             messageId: msg.messageId,
             ok: true,
           })
-          this.opts.showInformationMessage("Reverted changes from the selected message.")
+          this.opts.showInformationMessage("OpenCode: Changes reverted for the selected message.")
         } catch (err) {
           log.error("Revert message failed", err)
           this.opts.postMessage({
@@ -868,7 +868,7 @@ export class WebviewEventRouter {
             ok: false,
             error: (err as Error).message,
           })
-          this.opts.showErrorMessage(`Failed to revert: ${(err as Error).message}`)
+          this.opts.showErrorMessage(`OpenCode: Could not revert changes — ${(err as Error).message}`)
         }
       }
     }],
@@ -945,7 +945,7 @@ export class WebviewEventRouter {
         await this.opts.sessionLifecycle.handleResumeSession(localSession.id)
       } catch (err) {
         log.error("Failed to open subagent session", err)
-        this.opts.showErrorMessage(`Could not open the subagent session: ${(err as Error).message}`)
+        this.opts.showErrorMessage(`OpenCode: Could not open the subagent session — ${(err as Error).message}`)
       }
     }],
     ["list_checkpoints", async (_: Record<string, unknown>, sessionId?: string) => {
@@ -978,7 +978,7 @@ export class WebviewEventRouter {
       } catch (err) {
         log.error("Failed to restore checkpoint", err)
         this.opts.postMessage({ type: "checkpoint_restored", sessionId, checkpointId: msg.checkpointId, ok: false, error: (err as Error).message })
-        this.opts.showErrorMessage(`Failed to restore checkpoint: ${(err as Error).message}`)
+        this.opts.showErrorMessage(`OpenCode: Could not restore checkpoint — ${(err as Error).message}. Check the output channel for details.`)
       }
     }],
     ["request_more_messages", async (msg: Record<string, unknown>, sessionId?: string) => {
@@ -1095,7 +1095,7 @@ export class WebviewEventRouter {
         this.opts.postMessage({ type: "server_session_deleted", serverSessionId: serverId })
       } catch (err) {
         log.error(`Failed to delete server session ${serverId}`, err)
-        this.opts.showErrorMessage(`Failed to delete server session: ${(err as Error).message}`)
+        this.opts.showErrorMessage(`OpenCode: Could not delete the server session — ${(err as Error).message}`)
       }
     }],
     ["preview_theme", async (_msg: Record<string, unknown>, _sessionId?: string) => {
@@ -1103,7 +1103,7 @@ export class WebviewEventRouter {
         await this.opts.themeManager.previewTheme()
       } catch (err) {
         log.error("Theme preview failed", err)
-        this.opts.showErrorMessage(`Theme preview failed: ${(err as Error).message}`)
+        this.opts.showErrorMessage(`OpenCode: Could not preview the theme — ${(err as Error).message}.`)
       }
     }],
     ["get_theme_config", () => {
@@ -1301,7 +1301,7 @@ export class WebviewEventRouter {
         await vscode.window.showTextDocument(doc, options)
       } catch (err) {
         log.error(`Failed to open file: ${rawPath}`, err)
-        this.opts.showErrorMessage(`Failed to open file: ${(err as Error).message}`)
+        this.opts.showErrorMessage(`OpenCode: Could not open the file — ${(err as Error).message}`)
       }
     }],
     ["open_folder", async (msg: Record<string, unknown>, sessionId?: string) => {

@@ -41,7 +41,7 @@ export function registerNewSessionCommand(
         vscode.window.showInformationMessage(`New session: ${session.name}`)
       } catch (err) {
         log.error("Failed to create new session", err)
-        vscode.window.showErrorMessage("Failed to create a new session.")
+        vscode.window.showErrorMessage("Could not create a new session. Check the OpenCode output channel for details.")
       }
     })
   )
@@ -58,11 +58,11 @@ export function registerOpenStoredSessionCommand(
         if (session) {
           await vscode.commands.executeCommand("workbench.view.extension.opencode-harness")
         } else {
-          vscode.window.showWarningMessage("That saved session could not be found.")
+          vscode.window.showWarningMessage("That session could not be found. It may have been deleted on the server.")
         }
       } catch (err) {
         log.error("Failed to open stored session", err)
-        vscode.window.showErrorMessage("Failed to open stored session.")
+        vscode.window.showErrorMessage("Could not open that session. Check the output channel for details.")
       }
     })
   )
@@ -113,7 +113,7 @@ export function registerListSessionsCommand(
       try {
         const sessions = sessionStore.list()
         if (sessions.length === 0) {
-          vscode.window.showInformationMessage("No saved sessions.")
+          vscode.window.showInformationMessage("No saved sessions to show. Start a new conversation to create one.")
           return
         }
         const streaming = new Set(nav?.getStreamingSessionIds?.() ?? [])
@@ -149,7 +149,7 @@ export function registerListSessionsCommand(
         }
       } catch (err) {
         log.error("List sessions command failed", err)
-        vscode.window.showErrorMessage("Failed to list sessions.")
+        vscode.window.showErrorMessage("Could not load the session list. Try again or check the output channel.")
       }
     })
   )
@@ -165,7 +165,7 @@ export function registerDeleteSessionCommand(
         if (!sessionId) {
           const sessions = sessionStore.list()
           if (sessions.length === 0) {
-            vscode.window.showInformationMessage("No sessions to delete.")
+            vscode.window.showInformationMessage("No sessions available to delete.")
             return
           }
           const items = sessions.map(s => ({ label: SessionStore.displayName(s), description: `${s.messages.length} messages`, id: s.id }))
@@ -198,11 +198,11 @@ export function registerDeleteSessionCommand(
         if (confirm === "Delete") {
           sessionStore.delete(sessionId!)
           log.info(`Session deleted: ${sessionId}`)
-          vscode.window.showInformationMessage("Session deleted.")
+          vscode.window.showInformationMessage("Session deleted successfully.")
         }
       } catch (err) {
         log.error("Delete session command failed", err)
-        vscode.window.showErrorMessage("Failed to delete session.")
+        vscode.window.showErrorMessage("Could not delete that session. Check the output channel for details.")
       }
     })
   )
@@ -220,7 +220,7 @@ export function registerClearTestSessionsCommand(
         const preview = sessionStore.clearAll(true)
 
         if (preview.totalRemovable === 0) {
-          vscode.window.showInformationMessage("No test, empty, or archiveable sessions found to clear.")
+          vscode.window.showInformationMessage("No sessions found that can be cleaned up.")
           return
         }
 
@@ -265,7 +265,7 @@ export function registerClearTestSessionsCommand(
         vscode.window.showInformationMessage(`Cleared ${result.totalRemovable} session(s). ${result.retainedReal} real session(s) retained.`)
       } catch (err) {
         log.error("Clear test sessions command failed", err)
-        vscode.window.showErrorMessage("Failed to clear test sessions.")
+        vscode.window.showErrorMessage("Could not clear sessions. Try again or check the output channel.")
       }
     })
   )
@@ -289,7 +289,7 @@ export function registerContinueLastSessionCommand(
         log.info(`Continued last session: ${target.name} (${target.id})`)
       } catch (err) {
         log.error("Continue last session failed", err)
-        vscode.window.showErrorMessage("Failed to continue the last session.")
+        vscode.window.showErrorMessage("Could not resume the last session. Check the output channel for details.")
       }
     })
   )
@@ -352,7 +352,7 @@ export function registerAddFileToSessionCommand(
           vscode.window.showInformationMessage(`Added "${relativePath}" to session`)
         } catch (err) {
           log.error("Add file to session failed", err)
-          vscode.window.showErrorMessage("Failed to add file to session.")
+          vscode.window.showErrorMessage("Could not add that file to the session. Check the output channel for details.")
         }
       }
     )
@@ -392,7 +392,7 @@ export function registerAddSelectionToSessionCommand(
           vscode.window.showInformationMessage(`Added selection from "${relativePath}" to session`)
         } catch (err) {
           log.error("Add selection to session failed", err)
-          vscode.window.showErrorMessage("Failed to add selection to session.")
+          vscode.window.showErrorMessage("Could not add the selection to the session. Check the output channel for details.")
         }
       }
     )
@@ -463,7 +463,7 @@ export function registerChooseHistorySessionCommand(
           return s.workspacePath === currentDir
         })
         if (all.length === 0) {
-          vscode.window.showInformationMessage("No sessions for this workspace.")
+          vscode.window.showInformationMessage("No saved sessions for this workspace. Start a new conversation.")
           return
         }
 
@@ -507,7 +507,7 @@ export function registerChooseHistorySessionCommand(
         await vscode.commands.executeCommand("workbench.view.extension.opencode-harness")
       } catch (err) {
         log.error("Choose history session failed", err)
-        vscode.window.showErrorMessage("Failed to load session history.")
+        vscode.window.showErrorMessage("Could not load session history. Check the output channel for details.")
       }
     })
   )
@@ -587,7 +587,7 @@ export function registerAttachRemoteCommand(
         }
       } catch (err) {
         log.error("Attach remote command failed", err)
-        vscode.window.showErrorMessage("Failed to attach to remote server.")
+        vscode.window.showErrorMessage("Could not connect to the remote server. Verify the URL and auth token, then try again.")
       }
     })
   )
@@ -623,7 +623,7 @@ export function registerRenameSessionCommand(
         }
       } catch (err) {
         log.error("Rename session command failed", err)
-        vscode.window.showErrorMessage("Failed to rename session.")
+        vscode.window.showErrorMessage("Could not rename the session. Check the output channel for details.")
       }
     })
   )

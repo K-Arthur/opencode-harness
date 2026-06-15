@@ -13,13 +13,13 @@ export function registerExportCommand(
       try {
         const session = sessionStore.getActive()
         if (!session) {
-          vscode.window.showInformationMessage("No active session to export.")
+          vscode.window.showInformationMessage("No active session to export. Open a session first.")
           return
         }
         await sessionExporter.exportMarkdown(session)
       } catch (err) {
         log.error("Export conversation failed", err)
-        vscode.window.showErrorMessage("Failed to export conversation.")
+        vscode.window.showErrorMessage("Could not export this conversation. Check the output channel for details.")
       }
     })
   )
@@ -29,13 +29,13 @@ export function registerExportCommand(
       try {
         const session = sessionStore.getActive()
         if (!session) {
-          vscode.window.showInformationMessage("No active session to export.")
+          vscode.window.showInformationMessage("No active session to export. Open a session first.")
           return
         }
         await sessionExporter.exportJson(session)
       } catch (err) {
         log.error("Export conversation as JSON failed", err)
-        vscode.window.showErrorMessage("Failed to export conversation as JSON.")
+        vscode.window.showErrorMessage("Could not export this conversation. Check the output channel for details.")
       }
     })
   )
@@ -45,13 +45,13 @@ export function registerExportCommand(
       try {
         const session = sessionStore.getActive()
         if (!session) {
-          vscode.window.showInformationMessage("No active session to export.")
+          vscode.window.showInformationMessage("No active session to export. Open a session first.")
           return
         }
         await sessionExporter.exportPlainText(session)
       } catch (err) {
         log.error("Export conversation as text failed", err)
-        vscode.window.showErrorMessage("Failed to export conversation as text.")
+        vscode.window.showErrorMessage("Could not export this conversation. Check the output channel for details.")
       }
     })
   )
@@ -61,14 +61,14 @@ export function registerExportCommand(
       try {
         const session = sessionStore.getActive()
         if (!session) {
-          vscode.window.showInformationMessage("No active session to copy.")
+          vscode.window.showInformationMessage("No active session to copy. Open a session first.")
           return
         }
         const content = sessionExporter.markdown(session)
         await sessionExporter.copyToClipboard(content)
       } catch (err) {
         log.error("Copy conversation failed", err)
-        vscode.window.showErrorMessage("Failed to copy conversation.")
+        vscode.window.showErrorMessage("Could not copy the conversation. Check the output channel for details.")
       }
     })
   )

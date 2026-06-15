@@ -103,7 +103,7 @@ void describe("getVoiceTooltip", () => {
 void describe("getModeSelectorTooltip", () => {
   void it("preserves test-expected substrings for build mode", () => {
     const result = getModeSelectorTooltip("build")
-    assert.match(result.title, /Build mode/)
+    assert.match(result.title, /Build/)
     assert.match(result.ariaLabel, /Ctrl/)
     assert.match(result.ariaLabel, /Alt\+Shift\+Tab/)
   })
@@ -118,8 +118,8 @@ void describe("getModeSelectorTooltip", () => {
 
 void describe("getModeOptionTooltip", () => {
   void it("includes the mode label in the aria-label for plan/auto", () => {
-    assert.match(getModeOptionTooltip("plan").title, /Plan mode/)
-    assert.match(getModeOptionTooltip("auto").ariaLabel, /Auto mode/)
+    assert.match(getModeOptionTooltip("plan").title, /Plan/)
+    assert.match(getModeOptionTooltip("auto").ariaLabel, /Auto/)
   })
 })
 

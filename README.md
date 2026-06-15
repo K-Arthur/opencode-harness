@@ -45,7 +45,7 @@ OpenCode includes advanced features like cost tracking, theme customization, gra
 ## Features
 
 ### Core Features
-- **Multi-Tab Workers** — Run multiple AI sessions concurrently. Each tab is an independent worker with its own model, mode, and conversation history. Up to 3 concurrent streams.
+- **Multi-Tab Workers** — Run multiple AI sessions concurrently. Each tab is an independent worker with its own model, mode, and conversation history. Up to 5 concurrent streams (configurable).
 - **Per-Tab Model Selection** — Each conversation can use a different AI model. Switch models without restarting the server.
 - **Token, Cost, and Context Tracking** — Real-time status-strip usage shows spend totals plus per-session context-window fill, restored across reloads and tab switches.
 - **Task Completion Banners** — Visual success/error/warning banners for completed operations.
@@ -117,8 +117,8 @@ OpenCode now supports multiple concurrent AI workers through a tabbed interface:
 - Closing a tab **stops the AI worker** but **preserves the chat history** for resume flows
 
 ### Concurrent Stream Limit
-- Maximum **3 concurrent AI streams** at once
-- Attempting to start a 4th shows a warning with the names of currently streaming tabs
+- Maximum **5 concurrent AI streams** at once (configurable via `opencode.sessions.maxConcurrentStreams`)
+- Attempting to exceed the limit shows a warning with the names of currently streaming tabs
 - This prevents rate limit exhaustion and keeps the UI responsive
 
 ### Per-Tab Model Selection
@@ -967,55 +967,8 @@ MIT
 
 ---
 
-## About the Developer
+## Community & Support
 
-OpenCode VS Code Extension is developed by [Kevin Arthur](https://kevinarthur.design), a product designer and developer specializing in developer tools and AI-powered applications. With expertise in UX design, technical architecture, and open-source development, Kevin brings a user-centric approach to AI coding tools.
-
-**Portfolio:** [kevinarthur.design](https://kevinarthur.design)  
-**Contact:** [hello@kevinarthur.design](mailto:hello@kevinarthur.design)  
-**GitHub:** [@K-Arthur](https://github.com/K-Arthur)
-
----
-
-**Product Copy & UX Optimization by Kevin Arthur**
-
-This comprehensive product copy and UX optimization was designed and implemented by [Kevin Arthur](https://kevinarthur.design), a product designer and developer specializing in developer tools and AI-powered applications.
-
-[Portfolio](https://kevinarthur.design) | [Contact](mailto:hello@kevinarthur.design) | [GitHub](https://github.com/K-Arthur)
-
----
-
-## Community
-
-### What Developers Say
-
-*"OpenCode has transformed how I approach debugging. The integrated interface keeps me in the flow while the AI handles the tedious work."* — [Your Name], Full-Stack Developer
-
-*"The theme customization and cost tracking features are game-changers. I can finally use AI coding tools without breaking the bank."* — [Your Name], Senior Developer
-
-*"The permission modes give me the control I need. I use Plan mode for exploration and Auto mode for trusted codebases."* — [Your Name], Tech Lead
-
-**[Share your experience](https://github.com/K-Arthur/opencode-harness/issues/new)**
-
----
-
-### Used By
-
-OpenCode is used by developers at:
-
-- [Your Company/Organization] — [Use case]
-- [Your Company/Organization] — [Use case]
-- [Your Company/Organization] — [Use case]
-
-**[Add your organization](https://github.com/K-Arthur/opencode-harness/pulls)**
-
----
-
-### Community Metrics
-
-- 🌟 **GitHub Stars** stars on GitHub
-- 📦 **VS Code Installs** installations (coming soon to marketplace)
-- 💬 **Active Users** monthly active users
-- 🤝 **Contributors** contributors
-
-[Join the community](https://github.com/K-Arthur/opencode-harness)
+- **GitHub Issues:** [Report bugs or request features](https://github.com/K-Arthur/opencode-harness/issues)
+- **GitHub Discussions:** [Ask questions and share tips](https://github.com/K-Arthur/opencode-harness/discussions)
+- **VS Code Marketplace:** [Rate and review](https://marketplace.visualstudio.com/items?itemName=kevinoarthur.opencode-harness)

@@ -458,14 +458,14 @@ export class NetworkErrorDisplay extends ErrorDisplay {
       networkInfo.style.fontSize = '12px';
 
       const statusText = error.networkStatus === 'offline' 
-        ? '🔴 Offline' 
+        ? 'Offline' 
         : error.networkStatus === 'slow' 
-          ? '🟡 Slow Connection' 
+          ? 'Slow connection' 
           : error.networkStatus === 'timeout' 
-            ? '🟠 Connection Timeout' 
-            : '🟢 Connected';
+            ? 'Connection timed out' 
+            : 'Connected';
 
-      networkInfo.textContent = `Network Status: ${statusText}`;
+      networkInfo.textContent = `Network: ${statusText}`;
       container.appendChild(networkInfo);
     }
 

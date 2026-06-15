@@ -64,14 +64,14 @@ export const TOOLTIPS = {
       "Provider key is missing or invalid — open settings to configure",
   },
   mode: {
-    selector: "Pick the session mode — controls how the agent is allowed to act",
+    selector: "Choose how the AI agent may act — Plan (review-only), Build (with approval), or Auto (applies changes)",
     selectorActive: (label: string) =>
       `Mode: ${label}. Click to change. Shift+Tab · Alt+Shift+Tab · Ctrl+Shift+M to cycle.`,
     disabledDuringStream: "Mode is locked while the agent is responding",
     build:
-      "Build mode: full access including running shell commands and editing files",
-    plan: "Plan mode: agent proposes changes; nothing is applied without your approval",
-    auto: "Auto mode: agent applies changes without per-action prompts — review output carefully",
+      "Build: AI can read, write, and run commands — but asks for approval before applying changes to your files.",
+    plan: "Plan: AI proposes changes as a written plan — no files are edited without your explicit approval.",
+    auto: "Auto: AI reads, writes, and runs commands — changes are applied without per-action prompts. Review output carefully.",
     cycleHint: "Shift+Tab · Alt+Shift+Tab · Ctrl+Shift+M to cycle plan → build → auto",
   },
   server: {
@@ -324,10 +324,10 @@ const MODE_LABELS: Record<SessionMode, string> = {
 }
 
 const MODE_DESCRIPTIONS: Record<SessionMode, string> = {
-  plan: "Plan mode: agent proposes changes; nothing is applied without your approval",
+  plan: "Plan: agent proposes a written plan — no files are changed without your approval",
   build:
-    "Build mode: full access including running shell commands and editing files",
-  auto: "Auto mode: agent applies changes without per-action prompts — review output carefully",
+    "Build: agent reads, writes, and runs commands — changes require approval before applying",
+  auto: "Auto: agent applies changes without per-action prompts — review all output carefully",
 }
 
 const MODE_SHORTCUTS: Record<SessionMode, string> = {

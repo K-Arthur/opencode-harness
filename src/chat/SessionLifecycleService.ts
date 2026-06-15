@@ -56,7 +56,7 @@ export class SessionLifecycleService {
   async handleResumeSession(sessionId: string): Promise<void> {
     const session = this.opts.sessionStore.setActive(sessionId)
     if (!session) {
-      this.opts.showWarningMessage("That saved session could not be found.")
+      this.opts.showWarningMessage("That session could not be found. It may have been deleted or expired.")
       return
     }
     if (!this.opts.tabManager.getTab(session.id)) {

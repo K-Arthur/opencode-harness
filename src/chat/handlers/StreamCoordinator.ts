@@ -1055,7 +1055,7 @@ export class StreamCoordinator {
     const message = e instanceof Error ? e.message : "Unknown error"
     log.error("Prompt failed", e)
     this.setActiveRunState(tabId, "failed", { finalizeReason: "send_failed", error: message })
-    vscode.window.showErrorMessage(`OpenCode request failed: ${message}`)
+    vscode.window.showErrorMessage(`OpenCode: Request failed — ${message}. Check the output channel for details.`)
     const { snapshot, errorContext } = this.buildPromptFailureContext(tabId, tab, message, e)
     this.postRunActivitySnapshot(tabId, snapshot, callbacks)
     callbacks.postMessage({
@@ -1268,7 +1268,7 @@ export class StreamCoordinator {
       } catch (e) {
         const msg = (e as Error).message
         log.error("Failed to start OpenCode server", e)
-        vscode.window.showErrorMessage(`Could not start OpenCode. ${msg}`)
+        vscode.window.showErrorMessage(`OpenCode: Could not start the server — ${msg}. Try restarting VS Code.`)
         callbacks.postRequestError(msg)
         this.cleanupTab(tabId)
         return false

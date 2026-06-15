@@ -29,13 +29,13 @@ export function registerCheckCliCommand(
       try {
         const ok = await cliDiagnostics.check(sessionManager.isRunning ? sessionManager.currentPort : undefined)
         if (ok) {
-          vscode.window.showInformationMessage("OpenCode CLI is working correctly.")
+          vscode.window.showInformationMessage("OpenCode CLI is working correctly. You can start using the extension.")
         } else {
-          vscode.window.showErrorMessage("OpenCode CLI check failed. See 'OpenCode Harness' output channel for details.")
+          vscode.window.showErrorMessage("OpenCode CLI check failed. Try reinstalling with 'OpenCode: Install CLI' or check the output channel for details.")
         }
       } catch (err) {
         log.error("CLI diagnostics command failed", err)
-        vscode.window.showErrorMessage("Failed to run CLI diagnostics. Check the OpenCode output channel for details.")
+        vscode.window.showErrorMessage("Could not run CLI diagnostics. Check the OpenCode output channel, then try again.")
       }
     })
   )
@@ -56,12 +56,12 @@ export function registerInstallCliCommand(
       try {
         const ok = await installer.install()
         if (ok) {
-          vscode.window.showInformationMessage("OpenCode CLI installed. Starting the server…")
+          vscode.window.showInformationMessage("OpenCode CLI installed successfully. Starting the server…")
           onInstalled()
         }
       } catch (err) {
         log.error("Install CLI command failed", err)
-        vscode.window.showErrorMessage("Failed to install the OpenCode CLI. Check the OpenCode Harness output channel for details.")
+        vscode.window.showErrorMessage("OpenCode CLI installation failed. Check the output channel for details, or try installing manually from https://opencode.ai/install")
       }
     })
   )

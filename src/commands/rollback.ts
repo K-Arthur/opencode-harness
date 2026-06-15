@@ -15,7 +15,7 @@ export function registerRollbackCommand(
           sessionStore.getActive()?.cliSessionId || sessionStore.activeId
         )
         if (allCheckpoints.length === 0) {
-          vscode.window.showInformationMessage("No checkpoints are available for the active session.")
+          vscode.window.showInformationMessage("No checkpoints available for this session. Checkpoints are created when changes are accepted.")
           return
         }
         const items = allCheckpoints.map((c) => ({
@@ -31,7 +31,7 @@ export function registerRollbackCommand(
         }
       } catch (err) {
         log.error("Rollback command failed", err)
-        vscode.window.showErrorMessage("Failed to restore checkpoint. Check the OpenCode output channel for details.")
+        vscode.window.showErrorMessage("Could not restore that checkpoint. Check the output channel for details, then try again.")
       }
     })
   )
