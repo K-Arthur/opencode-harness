@@ -2,8 +2,10 @@ import type { ChatMessage } from "../../types"
 import type { ScrollAnchor } from "./scrollAnchor"
 import { renderMessage } from "./messageRenderer"
 import type { SdkMessageEvent } from "../../types"
-import type { DiffHunk, RunActivitySnapshot, ToolCallState } from "./types"
+import type { DiffHunk, RunActivitySnapshot, ToolCallBlock, ToolCallState } from "./types"
 import type { ErrorContext } from "./errorTypes"
+import type { LiveToolOutput } from "./toolPartialStore"
+import { createToolResultPanel } from "./toolCallRenderer"
 
 import {
   StreamState,
@@ -17,6 +19,7 @@ import {
   handleRequestError,
   handleToolStart,
   handleToolUpdate,
+  handleToolPartial,
   handleToolEnd,
   refreshQuestionBlock,
   handleDiff,
@@ -46,7 +49,8 @@ export interface StreamHandlers {
   handleRequestError: (message?: string, errorContext?: unknown) => void
   handleToolStart: (toolCall: { id: string; name: string; class?: string; args?: unknown; state?: ToolCallState }) => void
   handleToolUpdate: (toolId: string, update: { state?: ToolCallState; result?: string; error?: string; args?: unknown }) => void
-  handleToolEnd: (toolId: string, result: { ok: boolean; result?: string; durationMs?: number; stale?: boolean }) => void
+  handleToolPartial: (sessionId: string, toolId: string, live: LiveToolOutput) => void
+  handleToolEnd: (toolId: string, result: { ok: boolean; result?: string; durationMs?: number; stale?: boolean; state?: ToolCallState; stderr?: string; exitCode?: number }) => void
   handleSkillIndicator: (skillName: string) => void
   handleDiff: (diff: { diffId: string; path: string; hunks: DiffHunk[]; linesAdded: number; linesRemoved: number }) => void
   handleDiffResult: (blockId?: string, ok?: boolean, message?: string) => void
@@ -192,8 +196,34 @@ class StreamSession implements StreamHandlers {
     handleToolUpdate(this.els, toolId, update)
   }
 
-  handleToolEnd(toolId: string, result: { ok: boolean; result?: string; durationMs?: number; stale?: boolean }): void {
+  handleToolPartial(sessionId: string, toolId: string, live: LiveToolOutput): void {
+    handleToolPartial(this.els, this.messages, sessionId, toolId, live, this.callbacks?.postMessage)
+  }
+
+  handleToolEnd(toolId: string, result: { ok: boolean; result?: string; durationMs?: number; stale?: boolean; state?: ToolCallState; stderr?: string; exitCode?: number }): void {
+    const found = this.messages
+      .flatMap((message) => message.blocks)
+      .find((block) => block.type === "tool-call" && (block as { id?: string }).id === toolId) as (ToolCallBlock | undefined)
+    if (found) {
+      found.state = result.state ?? (result.stale ? "stale" : result.ok ? "completed" : "error")
+      found.result = result.result
+      found.durationMs = result.durationMs
+      if (typeof result.stderr === "string") found.stderr = result.stderr
+      if (typeof result.exitCode === "number") found.exitCode = result.exitCode
+    }
     handleToolEnd(this.els, toolId, result)
+    if (found) {
+      const toolEl = this.els.messageList.querySelector(`[data-block-id="${toolId}"]`) as HTMLElement | null
+      const fresh = createToolResultPanel(found, {
+        messageId: this.state.streamingMessageId ?? undefined,
+        postMessage: this.callbacks?.postMessage,
+      })
+      if (toolEl && fresh) {
+        const existing = toolEl.querySelector(".tool-result-panel") as HTMLElement | null
+        if (existing) existing.replaceWith(fresh)
+        else toolEl.appendChild(fresh)
+      }
+    }
     if (this.state.streamingToolCallId === toolId) this.state.streamingToolCallId = null
   }
 

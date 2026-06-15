@@ -81,6 +81,7 @@ function makeFakeStream(): StreamHandlers & { calls: Array<{ method: string; arg
     handleRequestError: rec("handleRequestError"),
     handleToolStart: rec("handleToolStart"),
     handleToolUpdate: rec("handleToolUpdate"),
+    handleToolPartial: rec("handleToolPartial"),
     handleToolEnd: rec("handleToolEnd"),
     handleSkillIndicator: rec("handleSkillIndicator"),
     handleDiff: rec("handleDiff"),
