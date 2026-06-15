@@ -60,6 +60,10 @@ export interface SendLogicDeps {
   ) => void
   openModelManager: () => void
   STREAM_LIMIT_TOOLTIP: string
+  /** Returns true if the active session has at least one pending (unanswered)
+   *  question in the question bar. Used to warn/block send when user input
+   *  is expected first (Gap 5, Deadlock 2 prevention). */
+  hasPendingQuestion?: () => boolean
 }
 
 function createWebviewId(prefix: string): string {
@@ -153,7 +157,11 @@ export function createSendLogic(deps: SendLogicDeps) {
     const streamCapacity = getStreamCapacityState()
     const blockedByStreamLimit = !isStreaming && streamCapacity.isFull
     const hasModel = isStreaming || !!resolveSendModel(active)
-    const canSubmit = hasModel && (isStreaming || ((hasText || hasAttachments) && !blockedByStreamLimit))
+    // Block sending while a question is pending — the user must answer the
+    // model's question first to avoid orphaning the activeToolCallIds tracking
+    // and to prevent confusing dual-stream UX (Gap 5, Deadlock 2 prevention).
+    const blockedByPendingQuestion: boolean = !isStreaming && !!active?.id && deps.hasPendingQuestion?.() === true
+    const canSubmit = hasModel && (isStreaming || ((hasText || hasAttachments) && !blockedByStreamLimit && !blockedByPendingQuestion))
     ;(els.sendBtn as HTMLButtonElement).disabled = !canSubmit
     els.sendBtn?.classList.toggle("stream-limit-blocked", blockedByStreamLimit)
     const blockedByModel = !hasModel && !isStreaming
@@ -161,6 +169,9 @@ export function createSendLogic(deps: SendLogicDeps) {
     if (blockedByModel) {
       els.sendBtn?.setAttribute("aria-label", "Select a model first")
       els.sendBtn?.setAttribute("title", "Select a model first")
+    } else if (blockedByPendingQuestion) {
+      els.sendBtn?.setAttribute("aria-label", "Answer the model's question first")
+      els.sendBtn?.setAttribute("title", "Answer the model's question first")
     }
     updateSendButtonIcon(isStreaming, streamCapacity)
     updateModeSelectorState()

@@ -196,6 +196,16 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       // the parent tab (subagent info comes from subagent_update on the parent's
       // stream + heartbeat polling). Dispatching them would corrupt parent state.
       this.childSessionToTab.set(childSessionId, tabId)
+
+      // However, question.asked events CAN be buffered for child sessions and
+      // MUST be dispatched to the parent tab. Drain the buffer for this child
+      // session and dispatch only question_asked events (Gap 4 fix).
+      const buffered = this.pendingEventBuffer.drain(childSessionId)
+      for (const ev of buffered) {
+        if (ev.type === "question_asked" || ev.type === "question_replied" || ev.type === "question_rejected") {
+          this.handleServerEvent(ev)
+        }
+      }
     })
     this.promptManager = new PromptManager()
     this.promptManager.scanWorkspace()
@@ -1151,6 +1161,13 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       const data = event.data as { requestID?: string; toolCallId?: string; messageId?: string; block?: Block } | undefined
       const block = data?.block
       if (!block || block.type !== "question") return
+      // Normalize the block's sessionId to the parent tab's ID so the
+      // question bar renders it against the correct session. Subagent
+      // (child session) questions carry the child sessionId but must
+      // appear in the parent tab's question bar (Gap 4 fix).
+      if (block.sessionId !== targetId) {
+        block.sessionId = targetId
+      }
       const questionId = this.stringValue(block.requestID) ?? this.stringValue(block.toolCallId) ?? this.stringValue(block.id) ?? data?.requestID
       if (!questionId) return
 

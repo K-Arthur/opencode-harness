@@ -450,6 +450,10 @@ export interface RenderOptions {
   collapseConfig?: ToolCollapseConfig
   isStreaming?: boolean
   onAnswered?: (block: Block) => void
+  /** Check whether a specific question is currently rendered in the question
+   *  bar DOM. Used for the inline fallback: if the bar does NOT have the item,
+   *  render interactive controls inline so the user can still answer (RC-2). */
+  hasQuestionInBar?: (toolCallId: string) => boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -1850,8 +1854,7 @@ function renderQuestionBlock(block: Block, opts: RenderOptions): HTMLElement | n
     return wrapper
   }
 
-  // ── Pending question — show a compact pointer in the transcript; the
-  // interactive question-bar above the input area is the primary UI. ──
+  // ── Pending question ──
   wrapper.classList.add("question-block--pending")
   const header = document.createElement("div")
   header.className = "question-block-header"
@@ -1873,10 +1876,102 @@ function renderQuestionBlock(block: Block, opts: RenderOptions): HTMLElement | n
     wrapper.appendChild(textEl)
   }
 
-  const hint = document.createElement("div")
-  hint.className = "question-pointer-hint"
-  hint.textContent = "Answer in the question bar below"
-  wrapper.appendChild(hint)
+  // Check whether the question bar has this question registered. If yes
+  // (or if we can't determine — the streaming path doesn't pass the
+  // callback), show a compact pointer; the bar is the primary UI.
+  // If the bar definitely does NOT have it (RC-2 fallback), render inline.
+  const isInBar = opts.hasQuestionInBar === undefined || toolCallId && opts.hasQuestionInBar(toolCallId) === true
+  if (isInBar) {
+    const hint = document.createElement("div")
+    hint.className = "question-pointer-hint"
+    hint.textContent = "Answer in the question bar below"
+    wrapper.appendChild(hint)
+  } else {
+    // ── Inline fallback: self-contained interactive controls ──
+    const inlineGroups = groups.length > 0 ? groups : questionGroupsFromBlock(block)
+    const inlineSelections = new Map<number, Set<string>>()
+    let inlineFreeText = ""
+    for (let gi = 0; gi < inlineGroups.length; gi++) {
+      inlineSelections.set(gi, new Set())
+      const group = inlineGroups[gi]!
+
+      if (group.options.length > 0) {
+        const optContainer = document.createElement("div")
+        optContainer.className = "question-block-questions"
+
+        for (const opt of group.options) {
+          const btn = document.createElement("button")
+          btn.type = "button"
+          btn.className = "question-block-question-item"
+          btn.textContent = opt
+          btn.addEventListener("click", () => {
+            if (group.multiSelect) {
+              const current = inlineSelections.get(gi)!
+              if (current.has(opt)) {
+                current.delete(opt)
+                btn.classList.remove("selected")
+              } else {
+                current.add(opt)
+                btn.classList.add("selected")
+              }
+            } else {
+              const current = new Set([opt])
+              inlineSelections.set(gi, current)
+              optContainer.querySelectorAll(".question-block-question-item").forEach((b) => b.classList.remove("selected"))
+              btn.classList.add("selected")
+            }
+          })
+          optContainer.appendChild(btn)
+        }
+        wrapper.appendChild(optContainer)
+      }
+    }
+
+    const allowInlineFree = (block as Record<string, unknown>).allowFreeText !== false
+    if (allowInlineFree) {
+      const ta = document.createElement("textarea")
+      ta.className = "question-freetext"
+      ta.rows = 2
+      ta.maxLength = 10000
+      ta.placeholder = "Type a custom answer\u2026"
+      ta.addEventListener("input", () => { inlineFreeText = ta.value })
+      wrapper.appendChild(ta)
+    }
+
+    const answerBtn = document.createElement("button")
+    answerBtn.type = "button"
+    answerBtn.className = "question-submit"
+    answerBtn.textContent = "Answer"
+    answerBtn.addEventListener("click", () => {
+      const parts: string[] = []
+      let hasSelection = false
+      inlineGroups.forEach((g, gi) => {
+        const chosen = Array.from(inlineSelections.get(gi) ?? [])
+        if (chosen.length > 0) {
+          hasSelection = true
+          const heading = g.header || g.question || `Answer ${gi + 1}`
+          parts.push(`${heading}: ${chosen.join(", ")}`)
+        }
+      })
+      const free = inlineFreeText.trim()
+      if (free) parts.push(free)
+      const value = parts.join("\n")
+      if (!value && !hasSelection && !free) return
+      const finalValue = value || "(answered)"
+      opts.postMessage?.({
+        type: "question_answer",
+        sessionId,
+        toolCallId,
+        requestID,
+        messageId: opts.messageId,
+        value: finalValue,
+        source: hasSelection ? "option" : "freetext",
+      })
+      answerBtn.disabled = true
+      answerBtn.textContent = "Sent!"
+    })
+    wrapper.appendChild(answerBtn)
+  }
 
   return wrapper
 }

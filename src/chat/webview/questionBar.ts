@@ -1,5 +1,8 @@
 import type { QuestionBlock, QuestionGroup } from "./types"
 
+const log = typeof console !== "undefined" ? console : null
+const diag = (msg: string) => log?.info(`[questionBar] ${msg}`)
+
 export interface QuestionBarItem {
   toolCallId: string
   requestID?: string
@@ -51,7 +54,10 @@ export function initQuestionBar(postMessage: (msg: Record<string, unknown>) => v
   const items = document.getElementById("question-bar-items")
   const count = document.getElementById("question-bar-count")
   const submitBtn = document.getElementById("question-bar-submit")
-  if (!bar || !items || !count || !submitBtn) return
+  if (!bar || !items || !count || !submitBtn) {
+    diag("initQuestionBar: DOM elements not found — question system will be unavailable")
+    return
+  }
 
   els = { bar, items: items as HTMLDivElement, count: count as HTMLSpanElement, submitBtn: submitBtn as HTMLButtonElement }
   state.postMessage = postMessage
@@ -62,11 +68,19 @@ export function initQuestionBar(postMessage: (msg: Record<string, unknown>) => v
   updateSubmitState()
 
   submitBtn.addEventListener("click", () => submitAllAnswers())
+  diag("initQuestionBar: initialized")
 }
 
 export function addQuestion(block: QuestionBlock, messageId: string): void {
-  if (!els) return
-  const toolCallId = block.toolCallId || block.id
+  if (!els) {
+    diag("addQuestion dropped: els is null (initQuestionBar failed or not called)")
+    return
+  }
+  let toolCallId = block.toolCallId || block.id
+  if (!toolCallId) {
+    toolCallId = `q-${crypto.randomUUID()}`
+    diag(`addQuestion: synthesized toolCallId=${toolCallId}`)
+  }
   if (state.items.has(toolCallId)) {
     updateQuestion(toolCallId, block)
     return
@@ -75,7 +89,7 @@ export function addQuestion(block: QuestionBlock, messageId: string): void {
   const item: QuestionBarItem = {
     toolCallId,
     requestID: block.requestID,
-    sessionId: block.sessionId ?? "",
+    sessionId: block.sessionId ?? _activeSessionId,
     messageId,
     groups: block.groups ?? [],
     allowFreeText: block.allowFreeText !== false,
@@ -92,6 +106,7 @@ export function addQuestion(block: QuestionBlock, messageId: string): void {
   renderBarItem(item)
   updateVisibility()
   updateSubmitState()
+  diag(`addQuestion: ${toolCallId} sessionId=${item.sessionId} groups=${item.groups.length}`)
 }
 
 export function updateQuestion(toolCallId: string, block: QuestionBlock): void {
@@ -108,6 +123,9 @@ export function updateQuestion(toolCallId: string, block: QuestionBlock): void {
   // v2 field) — never wipe one we already hold, the reply path needs it.
   item.requestID = block.requestID ?? item.requestID
   item.allowFreeText = block.allowFreeText !== false
+  // If the second-arrival block (e.g. from streaming path) carries a
+  // sessionId, repair the first write's empty value. Fixes RC-3/RC-4.
+  if (block.sessionId) item.sessionId = block.sessionId
 
   while (item.selections.size < item.groups.length) {
     item.selections.set(item.selections.size, new Set())
@@ -169,6 +187,7 @@ export function markQuestionAnswered(toolCallId: string, submittedValue?: string
   // If every pending question is now answered, schedule the auto-dismiss.
   // Shorter than the previous 1500ms so the user gets feedback quickly.
   maybeScheduleDismiss(item?.sessionId)
+  diag(`markQuestionAnswered: ${toolCallId} value=${submittedValue?.slice(0, 50)}`)
 }
 
 /**
@@ -219,11 +238,11 @@ export function setActiveSession(sessionId: string): void {
   if (!els) return
   // Clear the current DOM
   els.items.innerHTML = ""
-  // Re-render only items belonging to the active session. Answered items
-  // are rendered as read-only cards (with the submitted value) so the user
-  // can still see what they answered for the active tab.
+  // Re-render only items belonging to the active session. Items with an
+  // empty sessionId (legacy payloads without sessionID) are treated as
+  // belonging to whichever session is currently active (fixes RC-1).
   for (const item of state.items.values()) {
-    if (item.sessionId === sessionId) {
+    if (item.sessionId === sessionId || !item.sessionId) {
       if (item.answered) {
         els.items.appendChild(renderAnsweredItem(item))
       } else {
@@ -233,6 +252,7 @@ export function setActiveSession(sessionId: string): void {
   }
   updateVisibility()
   updateSubmitState()
+  diag(`setActiveSession: ${sessionId} items=${state.items.size} activeCount=${getActiveQuestionCount()}`)
 }
 
 /**
@@ -261,6 +281,82 @@ export function clearAllQuestions(): void {
   els.items.innerHTML = ""
   updateVisibility()
   updateSubmitState()
+  diag("clearAllQuestions")
+}
+
+export function clearForSession(sessionId: string): void {
+  if (!els) return
+  const toRemove: string[] = []
+  for (const [key, item] of state.items) {
+    if (item.sessionId === sessionId || (item.sessionId === "" && _activeSessionId === sessionId)) {
+      toRemove.push(key)
+    }
+  }
+  for (const key of toRemove) {
+    state.items.delete(key)
+    const el = els.items.querySelector(`[data-question-id="${key}"]`)
+    if (el) el.remove()
+  }
+  if (toRemove.length > 0) {
+    updateVisibility()
+    updateSubmitState()
+    diag(`clearForSession: ${sessionId} removed=${toRemove.length}`)
+  }
+}
+
+export function hasQuestionRenderedInBar(toolCallId: string): boolean {
+  if (!els) return false
+  return !!els.items.querySelector(`[data-question-id="${toolCallId}"]`)
+}
+
+export function getBarItem(toolCallId: string): QuestionBarItem | undefined {
+  return state.items.get(toolCallId)
+}
+
+/** Check if a specific question has been registered in the bar's internal state
+ *  (whether or not it's currently rendered in the DOM). Used by the inline
+ *  renderer to decide whether the inline fallback should activate. */
+export function hasQuestionInState(toolCallId: string): boolean {
+  return state.items.has(toolCallId)
+}
+
+/**
+ * Reconcile the question bar: remove stale items (answered for too long
+ * without being cleaned up), items whose session no longer has open tabs,
+ * and re-render any items that are in state but missing from the DOM.
+ * Call this periodically or on session/tab lifecycle events.
+ */
+export function reconcileBar(sessionId: string): void {
+  if (!els) return
+  const staleTimeout = 30_000
+  const now = Date.now()
+  const toRemove: string[] = []
+  for (const [key, item] of state.items) {
+    // Remove answered items that are too old and never got acknowledged
+    if (item.answered && item.answeredAt && (now - item.answeredAt) > staleTimeout) {
+      toRemove.push(key)
+      diag(`reconcileBar: removing stale answered item ${key}`)
+      continue
+    }
+    // Re-render items that belong to this session but are missing from the DOM
+    if ((item.sessionId === sessionId || !item.sessionId) && !els.items.querySelector(`[data-question-id="${key}"]`)) {
+      if (item.answered) {
+        els.items.appendChild(renderAnsweredItem(item))
+      } else {
+        renderBarItem(item)
+      }
+      diag(`reconcileBar: restored missing item ${key} to DOM`)
+    }
+  }
+  for (const key of toRemove) {
+    state.items.delete(key)
+    const el = els.items.querySelector(`[data-question-id="${key}"]`)
+    if (el) el.remove()
+  }
+  if (toRemove.length > 0) {
+    updateVisibility()
+    updateSubmitState()
+  }
 }
 
 export function hasActiveQuestions(): boolean {
@@ -403,6 +499,33 @@ function buildBarItemElement(item: QuestionBarItem): HTMLElement {
     wrapper.appendChild(badge)
   }
 
+  // Skip button — appears above the answered badge when the question is
+  // still pending. Lets the user skip/reject a question without answering.
+  // Wire protocol: posts question_answer with source="skip".
+  if (!item.answered) {
+    const skipBtn = document.createElement("button")
+    skipBtn.type = "button"
+    skipBtn.className = "question-bar-skip-btn"
+    skipBtn.textContent = "Skip"
+    skipBtn.setAttribute("aria-label", "Skip this question")
+    skipBtn.addEventListener("click", (e) => {
+      e.stopPropagation()
+      if (item.answered || !state.postMessage) return
+      item.answered = true
+      state.postMessage({
+        type: "question_answer",
+        sessionId: item.sessionId,
+        toolCallId: item.toolCallId,
+        requestID: item.requestID,
+        messageId: item.messageId,
+        value: "Skipped",
+        source: "skip",
+      })
+      markQuestionAnswered(item.toolCallId, "Skipped")
+    })
+    wrapper.appendChild(skipBtn)
+  }
+
   return wrapper
 }
 
@@ -510,6 +633,8 @@ function submitAllAnswers(): void {
       structuredAnswers,
       source: hasSelection ? "option" : "freetext",
     })
+
+    diag(`submitAllAnswers: posting question_answer for ${item.toolCallId} source=${hasSelection ? "option" : "freetext"} valueLen=${value.length}`)
 
     // markQuestionAnswered sets item.answered, swaps the DOM for the
     // answered state, and schedules the post-answer bar dismissal.

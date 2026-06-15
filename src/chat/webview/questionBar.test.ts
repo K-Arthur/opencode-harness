@@ -2,7 +2,11 @@ import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
 import { JSDOM } from "jsdom"
 import type { QuestionBlock } from "./types"
-import { initQuestionBar, addQuestion, clearAllQuestions, setActiveSession, removeQuestion, updateQuestion, markQuestionAnswered, unmarkQuestionAnswered } from "./questionBar"
+import {
+  initQuestionBar, addQuestion, clearAllQuestions, setActiveSession, removeQuestion,
+  updateQuestion, markQuestionAnswered, unmarkQuestionAnswered, clearForSession,
+  hasQuestionInState, hasQuestionRenderedInBar, reconcileBar,
+} from "./questionBar"
 
 function setupDom() {
   const dom = new JSDOM(`<!doctype html><html><body>
@@ -272,5 +276,210 @@ describe("questionBar", () => {
 
     assert.equal(bar.querySelectorAll(".question-bar-option").length, 2, "B9: interactive option buttons restored so the user can retry")
     assert.equal(bar.querySelectorAll(".question-bar-item--answered").length, 0, "B9: answered state chip removed")
+  })
+
+  // ── RC-1: addQuestion inherits _activeSessionId when block.sessionId is empty ──
+  it("RC-1: addQuestion inherits _activeSessionId when block has no sessionId", () => {
+    const posted: Array<Record<string, unknown>> = []
+    initQuestionBar((m) => posted.push(m))
+    setActiveSession("tab-1")
+    addQuestion(makeBlock({ sessionId: undefined }), "msg-1")
+    const bar = document.getElementById("question-bar")!
+    assert.ok(!bar.classList.contains("hidden"), "bar visible for empty-sessionId question")
+    assert.equal(bar.querySelectorAll(".question-bar-option").length, 2, "renders options for empty-sessionId question")
+  })
+
+  // ── RC-1: setActiveSession renders items with empty sessionId ──
+  it("RC-1: setActiveSession includes items with empty sessionId", () => {
+    initQuestionBar(() => {})
+    setActiveSession("tab-1")
+    addQuestion(makeBlock({ id: "q-empty", toolCallId: "q-empty", sessionId: "" }), "msg-1")
+    // Switch to a different session then back — the empty-sessionId item must survive
+    setActiveSession("tab-other")
+    setActiveSession("tab-1")
+    const bar = document.getElementById("question-bar")!
+    assert.equal(bar.querySelectorAll(".question-bar-option").length, 2, "empty-sessionId item re-rendered after tab switch-back")
+    assert.ok(!bar.classList.contains("hidden"))
+  })
+
+  // ── RC-3: updateQuestion repairs item.sessionId from block ──
+  it("RC-3: updateQuestion repairs item.sessionId from a later block", () => {
+    const posted: Array<Record<string, unknown>> = []
+    initQuestionBar((m) => posted.push(m))
+    setActiveSession("sess-A")
+    // First add with empty sessionId (legacy path)
+    addQuestion(makeBlock({
+      id: "q-repair", toolCallId: "q-repair",
+      sessionId: undefined as any,
+      requestID: "req-repair",
+    }), "msg-1")
+    // Then update with the real sessionId (streaming path arrives second)
+    updateQuestion("q-repair", makeBlock({
+      id: "q-repair", toolCallId: "q-repair",
+      sessionId: "sess-B", requestID: undefined,
+    }))
+    // The item.sessionId should now be "sess-B" — switch to sess-B and verify it shows
+    setActiveSession("sess-B")
+    const bar = document.getElementById("question-bar")!
+    assert.equal(bar.querySelectorAll(".question-bar-option").length, 2, "sessionId repaired by updateQuestion, renders for sess-B")
+  })
+
+  // ── RC-4: addQuestion synthesizes toolCallId when both toolCallId and id are empty ──
+  it("RC-4: addQuestion synthesizes toolCallId when empty", () => {
+    initQuestionBar(() => {})
+    const block = makeBlock({ id: undefined, toolCallId: undefined })
+    delete (block as any).id
+    delete (block as any).toolCallId
+    addQuestion(block, "msg-1")
+    const bar = document.getElementById("question-bar")!
+    // Should have rendered items — verify by checking the dom
+    assert.equal(bar.querySelectorAll(".question-bar-item").length, 1, "item rendered even with empty id")
+  })
+
+  // ── RC-5: addQuestion is a no-op when els is null (initQuestionBar not called) ──
+  it("RC-5: addQuestion silently no-ops when initQuestionBar was never called", () => {
+    // Do NOT call initQuestionBar
+    addQuestion(makeBlock(), "msg-1")
+    const bar = document.getElementById("question-bar")!
+    assert.equal(bar.querySelectorAll(".question-bar-item").length, 0, "no items when els is null")
+  })
+
+  // ── RC-8: skip button posts question_answer with source="skip" ──
+  it("RC-8: skip button posts question_answer with source=skip", () => {
+    const posted: Array<Record<string, unknown>> = []
+    initQuestionBar((m) => posted.push(m))
+    addQuestion(makeBlock(), "msg-1")
+    const skipBtn = document.querySelector(".question-bar-skip-btn") as HTMLButtonElement
+    assert.ok(skipBtn, "skip button exists")
+    skipBtn.click()
+    const answer = posted.find((m) => m.type === "question_answer")
+    assert.ok(answer, "question_answer posted by skip")
+    assert.equal(answer!.source, "skip", "source is skip")
+    assert.equal(answer!.value, "Skipped", "value is Skipped")
+    assert.equal(answer!.requestID, "req-q-1")
+  })
+
+  // ── skip button: click marks item answered locally ──
+  it("skip button marks item answered and shows the answered card", () => {
+    initQuestionBar(() => {})
+    addQuestion(makeBlock(), "msg-1")
+    const skipBtn = document.querySelector(".question-bar-skip-btn") as HTMLButtonElement
+    skipBtn.click()
+    const bar = document.getElementById("question-bar")!
+    assert.equal(bar.querySelectorAll(".question-bar-option").length, 0, "interactive controls removed after skip")
+    assert.ok(bar.querySelector(".question-bar-item--answered"), "answered card shown after skip")
+  })
+
+  // ── clearForSession removes only the specified session's items ──
+  it("clearForSession removes only items for the given session", () => {
+    initQuestionBar(() => {})
+    setActiveSession("sess-B")
+    addQuestion(makeBlock({ id: "q-b", toolCallId: "q-b", sessionId: "sess-B" }), "msg-b")
+    setActiveSession("sess-A")
+    addQuestion(makeBlock({ id: "q-a", toolCallId: "q-a", sessionId: "sess-A" }), "msg-a")
+    clearForSession("sess-B")
+    const bar = document.getElementById("question-bar")!
+    // q-a is for the active session (sess-A), so it remains in the DOM
+    assert.equal(bar.querySelectorAll(".question-bar-item").length, 1, "only sess-A item remains in DOM")
+    assert.ok(bar.querySelector('[data-question-id="q-a"]'), "q-a stays in DOM since sess-A is active")
+    // Switch to sess-B — no items for sess-B remain
+    setActiveSession("sess-B")
+    assert.equal(bar.querySelectorAll(".question-bar-item").length, 0, "no items remain for sess-B after clear")
+  })
+
+  // ── hasQuestionInState returns correct results ──
+  it("hasQuestionInState returns true for registered toolCallId", () => {
+    initQuestionBar(() => {})
+    assert.equal(hasQuestionInState("q-1"), false, "not registered yet")
+    addQuestion(makeBlock(), "msg-1")
+    assert.equal(hasQuestionInState("q-1"), true, "registered after addQuestion")
+    removeQuestion("q-1")
+    assert.equal(hasQuestionInState("q-1"), false, "unregistered after remove")
+  })
+
+  // ── hasQuestionRenderedInBar checks the DOM ──
+  it("hasQuestionRenderedInBar checks DOM presence", () => {
+    initQuestionBar(() => {})
+    addQuestion(makeBlock(), "msg-1")
+    assert.equal(hasQuestionRenderedInBar("q-1"), true, "rendered in DOM after addQuestion")
+    removeQuestion("q-1")
+    assert.equal(hasQuestionRenderedInBar("q-1"), false, "not in DOM after remove")
+  })
+
+  // ── reconcileBar re-renders missing DOM items ──
+  it("reconcileBar re-renders items that are in state but missing from the DOM", () => {
+    initQuestionBar(() => {})
+    setActiveSession("sess-A")
+    addQuestion(makeBlock({ id: "q-a", toolCallId: "q-a", sessionId: "sess-A" }), "msg-a")
+    // Simulate silent DOM wipe (e.g., bug or race)
+    const bar = document.getElementById("question-bar")!
+    bar.querySelectorAll(".question-bar-item").forEach((el: Element) => el.remove())
+    assert.equal(bar.querySelectorAll(".question-bar-item").length, 0, "DOM wiped")
+    // reconcileBar should restore it
+    reconcileBar("sess-A")
+    assert.equal(bar.querySelectorAll(".question-bar-option").length, 2, "reconcileBar restored missing DOM item")
+  })
+
+  // ── reconcileBar cleans stale answered items ──
+  it("reconcileBar removes answered items older than the stale timeout", () => {
+    const origDateNow = Date.now
+    const fakeNow = 1_000_000_000_000
+    globalThis.Date.now = () => fakeNow
+
+    try {
+      initQuestionBar(() => {})
+      addQuestion(makeBlock({ id: "q-old", toolCallId: "q-old", sessionId: "sess-A" }), "msg-a")
+      markQuestionAnswered("q-old", "old answer")
+      // Advance time past the 30s stale timeout
+      globalThis.Date.now = () => fakeNow + 31_000
+      reconcileBar("sess-A")
+      const bar = document.getElementById("question-bar")!
+      assert.equal(bar.querySelectorAll(".question-bar-item").length, 0, "stale answered item cleaned")
+    } finally {
+      globalThis.Date.now = origDateNow
+    }
+  })
+
+  // ── updateSubmitState: freetext typing enables submit when options are empty ──
+  it("RC-7: freetext typing enables submit when options are empty", () => {
+    initQuestionBar(() => {})
+    const block = makeBlock({ options: [], text: "Free response" })
+    addQuestion(block, "msg-1")
+    const submitBtn = document.getElementById("question-bar-submit") as HTMLButtonElement
+    assert.ok(submitBtn.disabled, "submit disabled when no freetext entered")
+    const freeTextEl = document.querySelector(".question-bar-freetext") as HTMLTextAreaElement
+    freeTextEl.value = "my answer"
+    freeTextEl.dispatchEvent(new dom.window.Event("input", { bubbles: true }))
+    assert.ok(!submitBtn.disabled, "submit enabled after freetext entry")
+  })
+
+  // ── submitAllAnswers: empty value is not posted (no crash) ──
+  it("submitAllAnswers skips items with empty value (no crash)", () => {
+    const posted: Array<Record<string, unknown>> = []
+    initQuestionBar((m) => posted.push(m))
+    const block = makeBlock({ options: [] })
+    block.options = []
+    addQuestion(block, "msg-1")
+    const submitBtn = document.getElementById("question-bar-submit") as HTMLButtonElement
+    // Without a selection AND with empty freetext, submit stays disabled
+    assert.ok(submitBtn.disabled, "submit disabled for empty answer")
+    // Even if we force-click (shouldn't happen), no crash
+    submitBtn.disabled = false
+    submitBtn.click()
+    const answers = posted.filter((m) => m.type === "question_answer")
+    assert.equal(answers.length, 0, "no answer posted for empty item")
+  })
+
+  // ── hasActiveQuestions works across sessions ──
+  it("hasActiveQuestions reflects unanswered items for the active session", async () => {
+    const { hasActiveQuestions } = await import("./questionBar")
+    initQuestionBar(() => {})
+    setActiveSession("sess-A")
+    addQuestion(makeBlock({ id: "q-a", toolCallId: "q-a", sessionId: "sess-A" }), "msg-a")
+    assert.equal(hasActiveQuestions(), true, "true when active session has unanswered question")
+    setActiveSession("sess-B")
+    assert.equal(hasActiveQuestions(), false, "false when active session has none")
+    addQuestion(makeBlock({ id: "q-b", toolCallId: "q-b", sessionId: "sess-B" }), "msg-b")
+    assert.equal(hasActiveQuestions(), true, "true for sess-B question")
   })
 })
