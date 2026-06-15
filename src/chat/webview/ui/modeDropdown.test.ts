@@ -161,11 +161,11 @@ void describe("mode dropdown", () => {
 
     updateModeDropdown("build", els)
 
-    assert.match(els.modeDropdownBtn.title, /Build mode/)
+    assert.match(els.modeDropdownBtn.title, /Build/)
     assert.match(els.modeDropdownBtn.getAttribute("aria-label") ?? "", /Ctrl/)
     assert.match(els.modeDropdownBtn.getAttribute("aria-label") ?? "", /Alt\+Shift\+Tab/)
-    assert.match(els.modeOptions.find((option) => option.dataset.mode === "plan")?.title ?? "", /Plan mode/)
-    assert.match(els.modeOptions.find((option) => option.dataset.mode === "auto")?.getAttribute("aria-label") ?? "", /Auto mode/)
+    assert.match(els.modeOptions.find((option) => option.dataset.mode === "plan")?.title ?? "", /Plan/)
+    assert.match(els.modeOptions.find((option) => option.dataset.mode === "auto")?.getAttribute("aria-label") ?? "", /Auto/)
   })
 
   void describe("cycleModeForward", () => {

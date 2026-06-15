@@ -219,11 +219,11 @@ export async function activate(context: vscode.ExtensionContext) {
   } catch (err) {
     log.error("Extension activation failed", err)
     vscode.window.showErrorMessage(
-      "OpenCode Harness failed to activate. Please check the output channel for details.",
-      "Reload Window"
+      "OpenCode extension failed to activate. Check the OpenCode Harness output channel for details, then reload the window.",
+      "Show Logs"
     ).then((action) => {
-      if (action === "Reload Window") {
-        vscode.commands.executeCommand("workbench.action.reloadWindow")
+      if (action === "Show Logs") {
+        log.outputChannel.show()
       }
     })
   }
@@ -269,7 +269,7 @@ function installUnhandledRejectionDiagnostics(context: vscode.ExtensionContext):
 
     if (unhandledRejectionCount === 3) {
       void vscode.window.showWarningMessage(
-        "OpenCode Harness observed repeated internal errors. Open the output channel for diagnostics.",
+        "OpenCode is encountering repeated internal errors. Open the output channel to diagnose.",
         "Show Logs"
       ).then((choice) => {
         if (choice === "Show Logs") log.outputChannel.show()
@@ -459,11 +459,11 @@ function createInlineCommand(action: string, promptTemplate: string, chatProvide
       if (selection.isEmpty) {
         const docEnd = editor.document.lineAt(editor.document.lineCount - 1).range.end
         selection = new vscode.Range(new vscode.Position(0, 0), docEnd)
-        vscode.window.showWarningMessage("No code range was selected; sending the current file instead.")
+        vscode.window.showWarningMessage("OpenCode: No code selected — sending the entire file instead.")
       }
       const text = editor.document.getText(selection)
       if (!text.trim()) {
-        vscode.window.showWarningMessage("No code content was available to send to OpenCode.")
+        vscode.window.showWarningMessage("OpenCode: No code found to send — make sure the editor has content.")
         return
       }
       const relativePath = vscode.workspace.asRelativePath(uri)
@@ -475,7 +475,7 @@ function createInlineCommand(action: string, promptTemplate: string, chatProvide
       vscode.window.showInformationMessage(`${verb} requested for ${relativePath}`)
     } catch (err) {
       log.error(`Inline action ${action} failed`, err)
-      vscode.window.showErrorMessage(`Failed to ${verb} code.`)
+      vscode.window.showErrorMessage(`OpenCode: Could not ${verb} the selected code. Check the output channel for details.`)
     }
   }
 }

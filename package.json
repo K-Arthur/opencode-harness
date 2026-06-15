@@ -7,7 +7,7 @@
     "type": "git",
     "url": "https://github.com/K-Arthur/opencode-harness"
   },
-  "description": "AI-powered coding assistant integrated into VS Code. Chat, refactor, debug, and write code with the OpenCode agent while staying in your editor. Supports multiple AI models (Claude, GPT, Gemini), custom themes, cost tracking, and granular permission controls.",
+  "description": "Open-source AI coding agent for VS Code. Chat, refactor, debug, and write code using Claude, GPT, Gemini, and 75+ models. Includes cost tracking, custom themes, permission controls, and checkpoint rollback.",
   "icon": "media/opencode-icon-256.png",
   "version": "0.3.61",
   "engines": {
@@ -24,7 +24,9 @@
     "onView:opencode-harness.chatView"
   ],
   "categories": [
-    "Programming Languages"
+    "Programming Languages",
+    "Chat",
+    "Machine Learning"
   ],
   "keywords": [
     "opencode",
@@ -425,12 +427,12 @@
     "configuration": {
       "title": "OpenCode",
       "properties": {
-        "opencode.binaryPath": {
-          "type": "string",
-          "default": "",
-          "scope": "machine",
-          "description": "Path to the opencode binary. If not set, the extension will search for 'opencode' in your PATH and the default install locations (e.g. ~/.opencode/bin)."
-        },
+    "opencode.binaryPath": {
+      "type": "string",
+      "default": "",
+      "scope": "machine",
+      "description": "Explicit path to the opencode CLI binary. Leave empty to auto-detect from PATH or default install locations (~/.opencode/bin on macOS/Linux, npm global on Windows)."
+    },
         "opencode.autoInstall": {
           "type": "string",
           "enum": [
@@ -523,7 +525,7 @@
             "preset": "cli-default",
             "overrides": {}
           },
-          "description": "Theme configuration for the OpenCode chat panel. Set 'preset' to one of: cli-default, light, dark, high-contrast. Add 'overrides' with specific color overrides.",
+          "description": "Theme for the OpenCode chat panel. Pick a preset (cli-default, light, dark, high-contrast) and optionally override individual colors. Changes only affect the chat panel — your VS Code editor theme is never modified.",
           "properties": {
             "preset": {
               "type": "string",
@@ -825,7 +827,7 @@
           "type": "number",
           "scope": "window",
           "default": 0.1,
-          "description": "Fraction of remaining rate limit that triggers a warning notification (0.0-1.0)"
+          "description": "Warn when this fraction (0.0-1.0) of the rate limit remains. Example: 0.1 means 'warn at 10% remaining'."
         },
         "opencode.rateLimitCriticalThreshold": {
           "type": "number",
@@ -837,13 +839,13 @@
           "type": "boolean",
           "default": false,
           "scope": "window",
-          "description": "Enable server-backed inline ghost-text completions when available. Disabled by default until completions are implemented end-to-end."
+          "description": "[Preview] Enable inline ghost-text completions as you type. This feature is not yet fully implemented and is disabled by default."
         },
         "opencode.inlineSuggestions.triggerDelay": {
           "type": "number",
           "default": 300,
           "scope": "window",
-          "description": "Delay in milliseconds before triggering inline completion after typing stops."
+          "description": "Milliseconds to wait after typing stops before requesting an inline completion."
         },
         "opencode.autoCompact": {
           "type": "string",
@@ -855,11 +857,11 @@
             "off"
           ],
           "enumDescriptions": [
-            "Show a prompt before auto-compacting",
-            "Compact automatically without asking",
-            "Never auto-compact"
+            "Show a confirmation prompt before auto-compacting the conversation history.",
+            "Auto-compact the conversation history without asking when the threshold is reached.",
+            "Never auto-compact. The session continues until the model's context limit is reached."
           ],
-          "description": "Controls automatic session compaction when context usage reaches the configured threshold (see opencode.autoCompactThreshold)."
+          "description": "Controls whether the conversation history is automatically summarized (compacted) when it reaches the configured threshold (opencode.autoCompactThreshold). Compaction saves tokens and prevents context-limit errors but discards some detail from earlier turns."
         },
         "opencode.autoCompactThreshold": {
           "type": "number",
@@ -932,7 +934,7 @@
           "type": "boolean",
           "scope": "window",
           "default": false,
-          "description": "Enable Sub-Agent Driven Development. When enabled, complex tasks will be decomposed into parallel subtasks executed by multiple sub-agents."
+          "description": "Enable Sub-Agent Driven Development (SADD). When enabled, the AI decomposes complex tasks into parallel subtasks, each run by a separate sub-agent. This can speed up multi-file changes but uses more tokens."
         },
         "opencode.sadd.maxSubagents": {
           "type": "number",
@@ -940,7 +942,7 @@
           "default": 4,
           "minimum": 1,
           "maximum": 8,
-          "description": "Maximum number of sub-agents that can be dispatched for a single task."
+          "description": "Maximum number of sub-agents that can run in parallel for a single task when Sub-Agent Driven Development is enabled."
         },
         "opencode.methodology.enabled": {
           "type": "boolean",
@@ -977,7 +979,7 @@
           "type": "object",
           "scope": "window",
           "default": {},
-          "description": "Override default model per session mode (Plan, Build, Auto). Each value should be a model ID in provider/model format. When empty the session model is used for all modes. Pattern: Cline's per-mode model selector, Copilot's per-agent model config.",
+          "description": "Assign a different AI model to each session mode (Plan, Build, Auto). For example, use a cheaper model for Plan and a more capable model for Build. Each value must be a model ID in provider/model format (e.g. 'anthropic/claude-sonnet-4-20250514'). Leave a mode empty to use the session's default model.",
           "properties": {
             "plan": {
               "type": "string",
@@ -1064,10 +1066,10 @@
             "per-tab"
           ],
           "enumDescriptions": [
-            "All tabs share one opencode serve process (safe, low memory).",
-            "Each tab gets its own opencode serve process (full crash isolation, higher memory)."
+            "All tabs share one opencode server process — uses less memory, safe for most workflows.",
+            "Each tab gets its own opencode server process — full crash isolation but uses more memory."
           ],
-          "description": "Process isolation strategy. 'shared' = one server for all tabs (default). 'per-tab' = each tab gets its own server process."
+          "description": "Process isolation strategy. 'shared' (default) = one server for all tabs. 'per-tab' = each tab gets its own server process for full crash isolation."
         }
       }
     }

@@ -45,7 +45,7 @@ export function registerSelectModelCommand(
         }
       } catch (err) {
         log.error("Select model command failed", err)
-        vscode.window.showErrorMessage("Failed to select model. Check the OpenCode output channel for details.")
+        vscode.window.showErrorMessage("Could not select that model. Check the OpenCode output channel for details, then try a different model.")
       }
     })
   )
@@ -80,7 +80,7 @@ export function registerSetContextWindowOverrideCommand(context: vscode.Extensio
         }
       } catch (err) {
         log.error("Set context window override command failed", err)
-        vscode.window.showErrorMessage("Failed to set context window override. Check the OpenCode output channel for details.")
+        vscode.window.showErrorMessage("Could not set the context window. Check the output channel for details.")
       }
     })
   )
