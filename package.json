@@ -1109,7 +1109,7 @@
     "@vscode/vsce": "^3.9.2",
     "c8": "^11.0.0",
     "esbuild": "^0.28.1",
-    "eslint": "^9.0.0",
+    "eslint": "^10.0.0",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "jsdom": "^29.1.1",
