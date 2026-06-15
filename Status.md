@@ -1,7 +1,14 @@
 # Status.md
 
 ## Last Updated: 2026-06-15
-## Project State: timing-independent abort suppression (R2 from productivity/reliability audit) + steering/queueing + keyboard redesign + SDK 1.17.6 + prior fuzzy-search/streaming/a11y fixes (TDD)
+## Project State: lazy server spawn (R3) + timing-independent abort suppression (R2) from productivity/reliability audit + steering/queueing + keyboard redesign + SDK 1.17.6 + prior fuzzy-search/streaming/a11y fixes (TDD)
+
+### Recent Change (2026-06-15): Lazy opencode server spawn on first engagement (audit R3)
+- **Before:** the opencode server process was spawned in **every** window on activation (fire-and-forget `ensureOpencodeAndStart`), even if the user never opened the OpenCode view — N idle server processes + SSE subscriptions + `recoverSessions()` across multi-window setups.
+- **Decision (user):** keep `onStartupFinished` activation (status bar, CLI auto-install prompt, diagnostics, command registration all stay) but defer the **server spawn** until first engagement. Trade-off accepted: a brief "connecting" state on first chat-view open in exchange for zero idle cost in windows that never use OpenCode.
+- **Fix:** new pure `createLazyStarter` (`src/utils/lazyStarter.ts`) memoizes success, de-dupes concurrent callers to a single in-flight start, and re-arms on failure (so a transient CLI-not-installed failure can retry). `extension.ts` builds `ensureServerReady = createLazyStarter(() => ensureOpencodeAndStart(...))`, removes the eager top-level call, and wires it to `ChatProvider.setServerWarmup()`, which `resolveWebviewView` invokes when the view is shown. Command flows that need chat already reveal the view (`chat.focus`/`openChat`) → transitive warm-up; non-view paths already degrade gracefully (`!isRunning` guards, constitution rule #6).
+- **Tests:** RED→GREEN `lazyStarter.test.ts` (×4: single-in-flight, memoize-success, re-arm-on-failure, resolved-after-success); regression assertions in `extension.test.ts` (lazy wiring present, eager start absent) and `ChatProvider.test.ts` (resolveWebviewView fires the warm-up hook).
+- **Verification:** typecheck clean; unit **3624 pass / 0 fail** (+6); message-contract 17/17; roundtrip 7/7; production build + bundle gate green (ext **561.6/562.0KB — 0.4KB headroom, re-baseline likely needed next host change**; main 734.5/736KB).
 
 ### Recent Fix (2026-06-15): Timing-independent abort suppression via server-message-id correlation (audit R2)
 - **Symptom:** a spurious "The request was cancelled." error card could still appear after Stop / interrupt-and-send when the server's late `MessageAbortedError` (SSE) landed after the fixed 8s suppression window expired (queued/slow sessions).

@@ -139,4 +139,20 @@ describe("extension.ts", () => {
     assert.ok(extensionSource.includes("codeDocumentSelectors"), "must use language-specific selectors")
     assert.ok(!extensionSource.includes('{ pattern: "**" }'), "inline provider must not register for every file")
   })
+
+  it("spawns the opencode server lazily (on first view engagement), not eagerly on activation", () => {
+    // R3: windows that never open the OpenCode view must not spawn a server process.
+    assert.ok(
+      extensionSource.includes("createLazyStarter(() => ensureOpencodeAndStart("),
+      "server start must be wrapped in a lazy starter",
+    )
+    assert.ok(
+      extensionSource.includes("setServerWarmup("),
+      "the lazy starter must be wired to the chat view warm-up hook",
+    )
+    assert.ok(
+      !/\bvoid ensureOpencodeAndStart\(sessionManager, installer\)\.catch/.test(extensionSource),
+      "activation must NOT eagerly start the server at top level",
+    )
+  })
 })
