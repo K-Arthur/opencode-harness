@@ -74,3 +74,34 @@ test("rejectQuestion surfaces a server-side error from the v2 response", async (
   const v2 = { question: { reply: async () => ({}), reject: async () => ({ error: { message: "nope" } }) } }
   await assert.rejects(makeClientWithV2(v2).rejectQuestion("req_4"), /Question reject failed/)
 })
+
+// --- Phase 2: safe void/ack session calls migrated to the v2 client ----------------
+// These pin the v1 -> v2 param-shape transform: v1 nested `{ path: { id } }` /
+// `{ body: { messageID } }` becomes v2 FLAT `{ sessionID, messageID }`.
+
+test("abortSession calls v2 session.abort with a flat sessionID", async () => {
+  const calls = []
+  const v2 = { session: { abort: async (p) => { calls.push(p); return {} } } }
+  const result = await new SessionClient(() => ({}), undefined, () => false, () => v2).abortSession("ses_1")
+  assert.equal(result, true)
+  assert.deepEqual(calls[0], { sessionID: "ses_1" })
+})
+
+test("deleteSession calls v2 session.delete with a flat sessionID", async () => {
+  const calls = []
+  const v2 = { session: { delete: async (p) => { calls.push(p); return {} } } }
+  await new SessionClient(() => ({}), undefined, () => false, () => v2).deleteSession("ses_2")
+  assert.deepEqual(calls[0], { sessionID: "ses_2" })
+})
+
+test("revertMessage calls v2 session.revert with flat sessionID + messageID", async () => {
+  const calls = []
+  const v2 = { session: { revert: async (p) => { calls.push(p); return {} } } }
+  await new SessionClient(() => ({}), undefined, () => false, () => v2).revertMessage("ses_3", "msg_9")
+  assert.deepEqual(calls[0], { sessionID: "ses_3", messageID: "msg_9" })
+})
+
+test("migrated session calls require the v2 client (Server not running otherwise)", async () => {
+  const sc = new SessionClient(() => ({}), undefined, () => false, () => null)
+  await assert.rejects(sc.abortSession("ses_x"), /Server not running/)
+})

@@ -114,8 +114,9 @@ export class SessionClient {
   }
 
   async deleteSession(id: string): Promise<boolean> {
-    const client = this.guard()
-    await client.session.delete({ path: { id } })
+    // v2 migration (Phase 2): flat `{ sessionID }` replaces v1 `{ path: { id } }`.
+    const client = this.guardV2()
+    await client.session.delete({ sessionID: id })
     log.info(`Deleted session: ${id}`)
     return true
   }
@@ -346,8 +347,9 @@ export class SessionClient {
   }
 
   async abortSession(sessionId: string): Promise<boolean> {
-    const client = this.guard()
-    await client.session.abort({ path: { id: sessionId } })
+    // v2 migration (Phase 2): flat `{ sessionID }` replaces v1 `{ path: { id } }`.
+    const client = this.guardV2()
+    await client.session.abort({ sessionID: sessionId })
     log.info(`Aborted session: ${sessionId}`)
     return true
   }
@@ -388,8 +390,10 @@ export class SessionClient {
   }
 
   async revertMessage(sessionId: string, messageId: string): Promise<boolean> {
-    const client = this.guard()
-    await client.session.revert({ path: { id: sessionId }, body: { messageID: messageId } })
+    // v2 migration (Phase 2): flat `{ sessionID, messageID }` replaces v1
+    // `{ path: { id }, body: { messageID } }`.
+    const client = this.guardV2()
+    await client.session.revert({ sessionID: sessionId, messageID: messageId })
     log.info(`Reverted message ${messageId} in session ${sessionId}`)
     return true
   }
