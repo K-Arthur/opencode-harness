@@ -64,6 +64,23 @@ void describe("ChatProvider.ts", () => {
     )
   })
 
+  void it("correlates abort suppression by the server message id carried on the event", () => {
+    // Timing-independent correlation: the handler must extract the server message id
+    // from the event payload and pass it to wasIntentionallyAborted so a late abort
+    // error is suppressed regardless of how long after the abort it lands.
+    const handlerIdx = source.indexOf('["server_error"')
+    assert.ok(handlerIdx >= 0, "server_error handler must exist")
+    const handlerBody = source.slice(handlerIdx, handlerIdx + 2000)
+    assert.ok(
+      /messageId\??:\s*unknown/.test(handlerBody) && handlerBody.includes("data?.messageId"),
+      "must read messageId off the server_error event data",
+    )
+    assert.ok(
+      handlerBody.includes("wasIntentionallyAborted(abortTabId, serverMessageId)"),
+      "must pass the extracted serverMessageId into wasIntentionallyAborted",
+    )
+  })
+
   void it("treats tool_update as a high-frequency server event", () => {
     assert.ok(
       source.includes('event.type === "tool_update"'),

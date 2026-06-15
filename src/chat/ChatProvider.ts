@@ -1327,15 +1327,16 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       }
     }],
     ["server_error", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean }) => {
-      const data = event.data as { error?: unknown } | undefined
+      const data = event.data as { error?: unknown; messageId?: unknown } | undefined
       const raw = data?.error ?? event.data ?? "Server error"
+      const serverMessageId = typeof data?.messageId === "string" ? data.messageId : undefined
       // Intentional-abort suppression: Stop / interrupt-and-send call abort(), which
       // makes the server emit MessageAbortedError on the SSE stream a beat later. That
       // is expected, not a failure — surfacing it would show a spurious "The request
       // was cancelled." card and (worse) tear down a replacement run started by an
       // interrupt. Swallow it for the specific tab that was just aborted.
       const abortTabId = tab?.id ?? tabId
-      if (abortTabId && isAbortErrorValue(raw) && this.streamCoordinator.wasIntentionallyAborted(abortTabId)) {
+      if (abortTabId && isAbortErrorValue(raw) && this.streamCoordinator.wasIntentionallyAborted(abortTabId, serverMessageId)) {
         log.info(`Suppressing expected abort error for intentionally-aborted tab ${abortTabId}`)
         return
       }

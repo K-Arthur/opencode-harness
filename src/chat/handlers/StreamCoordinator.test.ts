@@ -137,17 +137,35 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(source.includes("await this.abort(tabId, callbacks)"), "cancel must fall back to whole-stream abort")
   })
 
-  it("opens an intentional-abort window so the late server abort error is suppressed", () => {
-    assert.ok(source.includes("intentionalAbortUntil"), "must track an intentional-abort window map")
+  // Suppression POLICY is covered behaviorally in intentionalAbortRegistry.test.ts.
+  // Here we only assert StreamCoordinator delegates to that registry at the right seams.
+  it("delegates intentional-abort suppression to IntentionalAbortRegistry", () => {
     assert.ok(
-      source.includes("wasIntentionallyAborted(tabId: string): boolean"),
-      "must expose wasIntentionallyAborted(tabId) for the server_error handler",
+      source.includes("new IntentionalAbortRegistry("),
+      "must construct an IntentionalAbortRegistry",
     )
     assert.ok(
-      /abort\(tabId: string[\s\S]*?this\.intentionalAbortUntil\.set\(tabId,/.test(source),
-      "abort() must open the intentional-abort window",
+      source.includes("wasIntentionallyAborted(tabId: string, serverMessageId?: string): boolean"),
+      "must expose wasIntentionallyAborted(tabId, serverMessageId?) for the server_error handler",
     )
-    assert.ok(source.includes("this.intentionalAbortUntil.clear()"), "dispose() must clear the window map")
+    assert.ok(
+      source.includes("this.abortRegistry.wasIntentional(tabId, serverMessageId,"),
+      "wasIntentionallyAborted must consult the registry",
+    )
+    assert.ok(
+      /async abort\(tabId: string[\s\S]*?this\.abortRegistry\.recordAbort\(/.test(source),
+      "abort() must record the intentional abort (with the run's serverMessageId)",
+    )
+    assert.ok(source.includes("this.abortRegistry.clear()"), "dispose() must clear the registry")
+  })
+
+  it("records the server message id on the active run during appendChunk for abort correlation", () => {
+    assert.ok(
+      /if \(messageId\) \{[\s\S]*?runForMsgId\.serverMessageId = messageId/.test(source),
+      "appendChunk must stash the server messageId on the active run",
+    )
+    assert.ok(typesSource.includes("serverMessageId") || source.includes("serverMessageId?: string"),
+      "ActiveStreamRun must carry serverMessageId")
   })
 
   it("has appendChunk method (getDiffHandler removed C1-a)", () => {

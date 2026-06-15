@@ -20,7 +20,10 @@ export class MessageUpdateHandler implements EventHandler {
       out.push({
         type: "server_error",
         sessionId: msg.sessionID ?? msg.sessionId,
-        data: { error: msg.error },
+        // Carry the server assistant message id so the host can correlate an
+        // expected MessageAbortedError to the run it intentionally aborted,
+        // independent of wall-clock timing (see IntentionalAbortRegistry).
+        data: { error: msg.error, messageId: msg.id },
       })
       if (msg.id) context.clearMessageTracking(msg.id)
       return out
