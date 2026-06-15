@@ -1,5 +1,12 @@
 import type { SubagentActivity } from "./types"
 import type { ElementRefs } from "./dom"
+import {
+  DOMAIN_FRONTEND_SVG,
+  DOMAIN_BACKEND_SVG,
+  DOMAIN_DATABASE_SVG,
+  DOMAIN_API_SVG,
+  DOMAIN_SHARED_SVG,
+} from "./icons"
 
 export interface SubagentPanelOptions {
   onCancelSubagent: (subagentId: string) => void
@@ -56,11 +63,11 @@ const TDD_PHASE_COLORS: Record<string, string> = {
 }
 
 const DOMAIN_ICONS: Record<string, string> = {
-  frontend: '🎨',
-  backend: '⚙️',
-  database: '🗄️',
-  api: '🔌',
-  shared: '📦',
+  frontend: DOMAIN_FRONTEND_SVG,
+  backend: DOMAIN_BACKEND_SVG,
+  database: DOMAIN_DATABASE_SVG,
+  api: DOMAIN_API_SVG,
+  shared: DOMAIN_SHARED_SVG,
 }
 
 export function setupSubagentPanel(els: SubagentPanelEls, options: SubagentPanelOptions): SubagentPanelApi | undefined {
@@ -243,7 +250,18 @@ function renderSubagentList(container: HTMLElement, activities: SubagentActivity
     if (activity.domain) {
       const badge = document.createElement("span")
       badge.className = "subagent-domain-badge"
-      badge.textContent = `${DOMAIN_ICONS[activity.domain] ?? '📦'} ${activity.domain}`
+      const iconHtml = DOMAIN_ICONS[activity.domain] ?? DOMAIN_SHARED_SVG
+      const domain = activity.domain
+      badge.innerHTML = ""
+      const iconSpan = document.createElement("span")
+      iconSpan.className = "subagent-domain-icon"
+      iconSpan.setAttribute("aria-hidden", "true")
+      iconSpan.innerHTML = iconHtml
+      const labelSpan = document.createElement("span")
+      labelSpan.className = "subagent-domain-label"
+      labelSpan.textContent = domain
+      badge.appendChild(iconSpan)
+      badge.appendChild(labelSpan)
       nameWrap.appendChild(badge)
     }
 

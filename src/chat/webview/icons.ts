@@ -82,3 +82,111 @@ export const PIN_FILLED_SVG = SVG_FILL(`<path d="M12 2a1 1 0 0 1 1 1v7.17l4.95 2
 export const ARCHIVE_SVG = SVG(`<rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M10 13h4"/>`, 14)
 export const TAG_SVG = SVG(`<path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>`, 14)
 export const GEAR_SVG = SVG(`<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>`, 12)
+
+// ═══════════════════════════════════════════════════════════════════
+// Sprint 4 — per-tool-name icon taxonomy
+// All icons follow the same 1.5px stroke + rounded caps/joins style.
+// ═══════════════════════════════════════════════════════════════════
+
+// ─── Activity Kind Icons (replaces emoji in activity-panel.ts) ───
+export const MESSAGE_SVG = SVG(`<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>`, 14)
+export const THINKING_SVG = SVG(`<path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v0a2.5 2.5 0 0 1-2.5 2.5"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v0a2.5 2.5 0 0 0 2.5 2.5"/><path d="M9.5 21A2.5 2.5 0 0 0 12 18.5v0a2.5 2.5 0 0 0-2.5-2.5"/><path d="M14.5 21A2.5 2.5 0 0 1 12 18.5v0a2.5 2.5 0 0 1 2.5-2.5"/><path d="M7 7a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v0a3 3 0 0 1-3 3H10a3 3 0 0 1-3-3z"/><path d="M7 17a3 3 0 0 0 3 3h4a3 3 0 0 0 3-3v0a3 3 0 0 0-3-3H10a3 3 0 0 0-3 3z"/>`, 14)
+export const PLAN_ICON_SVG = SVG(`<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>`, 14)
+export const COMPLETION_SVG = SVG_FILL(`<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>`, 14)
+export const APPROVAL_SVG = SVG(`<path d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>`, 14)
+export const CHECKPOINT_SVG = SVG(`<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>`, 14)
+export const FILE_READ_ICON_SVG = SVG(`<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>`, 14)
+export const FILE_EDIT_ICON_SVG = SVG(`<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>`, 14)
+
+// ─── Subagent Domain Icons (replaces emoji in subagent-panel.ts) ───
+export const DOMAIN_FRONTEND_SVG = SVG(`<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>`, 14)
+export const DOMAIN_BACKEND_SVG = SVG(`<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>`, 14)
+export const DOMAIN_DATABASE_SVG = SVG(`<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>`, 14)
+export const DOMAIN_API_SVG = SVG(`<path d="M8 9l-4 3 4 3"/><path d="M16 9l4 3-4 3"/><line x1="14" y1="6" x2="10" y2="18"/>`, 14)
+export const DOMAIN_SHARED_SVG = SVG(`<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>`, 14)
+
+// ─── Per-Tool-Name Icons (extends the 4-class system to actual tool names) ───
+export const TOOL_GREP_SVG = SVG(`<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>`, 14)
+export const TOOL_GLOB_SVG = SVG(`<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>`, 14)
+export const TOOL_LS_SVG = SVG(`<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>`, 14)
+export const TOOL_TASK_SVG = SVG(`<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 11h-6"/><path d="M19 8v6"/>`, 14)
+export const TOOL_TODOWRITE_SVG = SVG(`<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>`, 14)
+export const TOOL_WEBSEARCH_SVG = SVG(`<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>`, 14)
+export const TOOL_WEBFETCH_SVG = SVG(`<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>`, 14)
+export const TOOL_PLAN_SVG = SVG(`<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/><circle cx="6" cy="8" r=".5" fill="currentColor"/><circle cx="18" cy="8" r=".5" fill="currentColor"/>`, 14)
+export const TOOL_QUESTION_SVG = SVG(`<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/>`, 14)
+export const TOOL_SKILL_SVG = SVG(`<path d="M12 3l-1.5 4.5L6 9l4.5 1.5L12 15l1.5-4.5L18 9l-4.5-1.5z"/><path d="M5 16l-1 2.5L1.5 20l2.5 1L5 23.5l1-2.5 2.5-1-2.5-1z"/><path d="M19 14l-.5 1.5L17 16l1.5.5L19 18l.5-1.5L21 16l-1.5-.5z"/>`, 14)
+export const TOOL_LSP_SVG = SVG(`<path d="M12 2L4 7v10l8 5 8-5V7l-8-5z"/><path d="M12 22V12"/><path d="M4 7l8 5 8-5"/>`, 14)
+export const TOOL_GIT_SVG = SVG(`<circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><line x1="6" y1="8" x2="6" y2="16"/><path d="M18 8a4 4 0 0 0-4 4"/>`, 14)
+export const TOOL_MEMORY_SVG = SVG(`<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>`, 14)
+export const TOOL_CHECKPOINT_SVG = SVG(`<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>`, 14)
+export const TOOL_FALLBACK_SVG = SVG(`<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>`, 14)
+export const TOOL_EDIT_SVG = SVG(`<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>`, 14)
+
+// ─── Tool State Overlays (Sprint 4: visual indicator for current state) ───
+export const STATE_PENDING_SVG = SVG(`<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>`, 12)
+export const STATE_RUNNING_SVG = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="premium-spinner" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke-dasharray="28" stroke-dashoffset="28"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.9s" repeatCount="indefinite"/></circle></svg>`
+export const STATE_SUCCESS_SVG = SVG_FILL(`<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>`, 12)
+export const STATE_FAILED_SVG = SVG_FILL(`<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>`, 12)
+export const STATE_CANCELLED_SVG = SVG(`<circle cx="12" cy="12" r="9"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/>`, 12)
+export const STATE_TIMEOUT_SVG = SVG(`<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/><line x1="3" y1="3" x2="21" y2="21"/>`, 12)
+
+// ─── Per-tool-name resolver (Sprint 4) ───
+import type { ToolCallClass } from "./types"
+export type ToolName = string
+
+const TOOL_NAME_ICONS: Readonly<Record<string, string>> = Object.freeze({
+  grep: TOOL_GREP_SVG,
+  glob: TOOL_GLOB_SVG,
+  ls: TOOL_LS_SVG,
+  list: TOOL_LS_SVG,
+  task: TOOL_TASK_SVG,
+  todowrite: TOOL_TODOWRITE_SVG,
+  todo_write: TOOL_TODOWRITE_SVG,
+  websearch: TOOL_WEBSEARCH_SVG,
+  web_search: TOOL_WEBSEARCH_SVG,
+  webfetch: TOOL_WEBFETCH_SVG,
+  web_fetch: TOOL_WEBFETCH_SVG,
+  plan: TOOL_PLAN_SVG,
+  question: TOOL_QUESTION_SVG,
+  skill: TOOL_SKILL_SVG,
+  lsp: TOOL_LSP_SVG,
+  git_commit: TOOL_GIT_SVG,
+  git_diff: TOOL_GIT_SVG,
+  git_log: TOOL_GIT_SVG,
+  git_status: TOOL_GIT_SVG,
+  memory: TOOL_MEMORY_SVG,
+  checkpoint: TOOL_CHECKPOINT_SVG,
+  edit: TOOL_EDIT_SVG,
+})
+
+export function toolIconFor(toolName: string, toolClass: ToolCallClass | string | null | undefined): string {
+  if (toolName) {
+    const key = toolName.toLowerCase()
+    if (TOOL_NAME_ICONS[key]) return TOOL_NAME_ICONS[key]!
+    const normalized = key.replace(/[^a-z0-9]/g, "_")
+    if (TOOL_NAME_ICONS[normalized]) return TOOL_NAME_ICONS[normalized]!
+  }
+  switch (toolClass) {
+    case "write": return TOOL_WRITE_SVG
+    case "exec": return TOOL_EXEC_SVG
+    case "meta": return TOOL_META_SVG
+    case "read":
+    default: return TOOL_READ_SVG
+  }
+}
+
+export function toolStateOverlayFor(state: string): string | null {
+  switch (state) {
+    case "pending": return STATE_PENDING_SVG
+    case "running": return STATE_RUNNING_SVG
+    case "completed":
+    case "succeeded": return STATE_SUCCESS_SVG
+    case "failed":
+    case "error": return STATE_FAILED_SVG
+    case "cancelled": return STATE_CANCELLED_SVG
+    case "timed_out":
+    case "timeout": return STATE_TIMEOUT_SVG
+    default: return null
+  }
+}

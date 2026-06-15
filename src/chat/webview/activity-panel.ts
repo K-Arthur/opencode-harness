@@ -26,6 +26,19 @@ import {
   type ActivityFilter,
   type ActivityKind,
 } from "./activityModel"
+import {
+  MESSAGE_SVG,
+  THINKING_SVG,
+  PLAN_ICON_SVG,
+  TOOL_EXEC_SVG,
+  COMMAND_SVG,
+  FILE_READ_ICON_SVG,
+  FILE_EDIT_ICON_SVG,
+  APPROVAL_SVG,
+  CHECKPOINT_SVG,
+  WARNING_SVG,
+  COMPLETION_SVG,
+} from "./icons"
 
 export type ActivityPanelEls = Pick<ElementRefs, "activityPanel" | "activityList" | "activityFilters"> & {
   activityClose?: HTMLElement | null
@@ -63,17 +76,17 @@ const FILTER_LABELS: Record<ActivityFilter, string> = {
 }
 
 const KIND_ICON: Record<ActivityKind, string> = {
-  message: "💬",
-  thinking: "💭",
-  plan: "📋",
-  tool: "🔧",
-  command: "⌘",
-  "file-read": "📖",
-  "file-edit": "✎",
-  approval: "❓",
-  checkpoint: "🏁",
-  error: "⚠",
-  completion: "✓",
+  message: MESSAGE_SVG,
+  thinking: THINKING_SVG,
+  plan: PLAN_ICON_SVG,
+  tool: TOOL_EXEC_SVG,
+  command: COMMAND_SVG,
+  "file-read": FILE_READ_ICON_SVG,
+  "file-edit": FILE_EDIT_ICON_SVG,
+  approval: APPROVAL_SVG,
+  checkpoint: CHECKPOINT_SVG,
+  error: WARNING_SVG,
+  completion: COMPLETION_SVG,
 }
 
 const KIND_LABEL: Record<ActivityKind, string> = {
@@ -223,7 +236,7 @@ export function setupActivityPanel(els: ActivityPanelEls, deps: ActivityPanelDep
       const icon = document.createElement("span")
       icon.className = "activity-item-icon"
       icon.setAttribute("aria-hidden", "true")
-      icon.textContent = KIND_ICON[ev.kind]
+      icon.innerHTML = KIND_ICON[ev.kind]
       item.appendChild(icon)
 
       const body = document.createElement("span")
