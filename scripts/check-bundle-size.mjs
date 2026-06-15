@@ -74,6 +74,12 @@
 // fallback for the `tool.partial` not yet exposed by the CLI. Required
 // for the upcoming live-tool-card UI (Sprint 4). +8KB keeps ~1% headroom
 // so the gate still trips on a real regression. Host limit unchanged.
+//
+// 2026-06-14 re-baseline (webview 720KB -> 726KB): the follow-up commits
+// landed the consumer side (stream.ts dispatch, streamHandlers.handleToolPartial,
+// toolCallRenderer live stdout/stderr panels, ansiUtils color escape parser,
+// tasks-panel live row, plus tests). Adds ~3.4KB minified beyond the 720KB
+// re-baseline. +6KB keeps ~0.8% headroom. Host limit unchanged.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -84,7 +90,7 @@ const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
   { path: "dist/extension.js", limitBytes: 556 * 1024, label: "extension host" },
-  { path: "dist/chat/webview/main.js", limitBytes: 720 * 1024, label: "chat webview" },
+  { path: "dist/chat/webview/main.js", limitBytes: 726 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
 
