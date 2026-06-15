@@ -204,13 +204,24 @@ SADD-based review of `src/methodology/` (22 source files, 11 test files, ~150 te
 
 ## Remaining Work
 
-### Integrate TaskDecomposer with Spec System ⏳
-- **Status**: Not started
-- **Planned Integration**:
-  - Extend TaskDecomposer to accept spec as input
-  - Use spec outcomes/scope to guide task decomposition
-  - Use spec constraints to influence dependency analysis
-  - Map spec verification criteria to test task generation
+### Integrate TaskDecomposer with Spec System ✅
+- **Status**: Done (c7199a3)
+- **Integration shipped**:
+  - `TaskDecomposer.decompose(analysis, repo, spec?)` now accepts an
+    optional `SpecContext` parameter.
+  - When a spec is present:
+    - the domain task title prefers the first in-scope item that
+      mentions the domain (lets a spec override the analysis-driven
+      default)
+    - one task per `verificationCriteria` entry is added (testType
+      derived from criterion.type)
+    - one task per `taskBreakdown` item is added (shared domain,
+      medium complexity, optional TDD scope)
+  - The `SpecContext` type matches the shape produced by
+    `methodology/SpecService` (outcomes, scope, constraints,
+    decisions, taskBreakdown, verificationCriteria) without a hard
+    dependency.
+  - Tests in `TaskDecomposer.spec.ts` cover the new surface.
 
 ### Add Spec Management to Skill System ⏳
 - **Status**: Not started
@@ -234,11 +245,22 @@ SADD-based review of `src/methodology/` (22 source files, 11 test files, ~150 te
 - **Remaining**: Display optimization suggestions in context usage panel, add warning banners
 - **Implementation**: WebviewEventRouter now calls ContextMonitor.generateOptimizationSuggestions() on context_suggestions_request
 
-### Skill Performance Recording Integration ⏳
-- **Status**: Invocation point now exists, recording wire-up pending
-- **Infrastructure**: ConfidenceScorer class with recordSkillUsage() method exists in src/skills/ConfidenceScorer.ts
-- **Invocation point (new)**: `ChatProvider`'s `skillHinter` closure now runs `SkillTriggerEngine.getTriggeredSkills` on every classified prompt — this is the natural point to call `ConfidenceScorer.recordSkillUsage(skillId, …)` once we know which suggested skills the model actually leaned on.
-- **Outstanding**: emit `recordSkillUsage` from the hinter (suggested) and from a post-stream signal that observes whether the assistant referenced a suggested skill (effective). Surface counts back to `SkillInfo.performanceScore`/`usageCount` for the modal.
+### Skill Performance Recording Integration ✅ (suggested half)
+- **Status**: Suggested path wired (c7199a3); effective path remains
+- **Infrastructure**: `ConfidenceScorer.recordSkillUsage(skillId)`
+  increments the `historicalUsage` map (capped at 1.0) — same
+  signal that powers the 5% historical-usage weight in confidence.
+- **Invocation point (new)**: `ChatProvider`'s `skillHinter` closure
+  now instantiates a `ConfidenceScorer` and calls
+  `recordSkillUsage(id)` on every triggered-and-enabled skill. No
+  retroactive wiring needed: every prompt that triggers a skill
+  contributes one observation, so the `SkillInfo.performanceScore` /
+  `usageCount` surfaces populate naturally as the user works.
+- **Outstanding (effective path)**: a post-stream signal that
+  observes whether the assistant actually referenced a suggested
+  skill (e.g. by emitting a `tool_call` named after the skill or by
+  citing a skill id in a tool arg) is still future work. The
+  suggested-path wiring is the prerequisite.
 
 ## Key Design Decisions
 
