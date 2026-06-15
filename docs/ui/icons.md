@@ -26,6 +26,8 @@ back to the four-class system (read/write/exec/meta) for everything else.
 | `memory`                           | read           | persistent memory                          |
 | `checkpoint`                       | meta           | checkpoint save/restore                    |
 | `edit`                             | write          | targeted file edit                         |
+| `patch`, `apply_patch`, `multiedit`| write          | alternative edit names                      |
+| `bash`, `shell`, `command`, `terminal`, `run_command` | exec | shell command execution           |
 | _anything else_                    | read/write/exec/meta | uses the four-class switch         |
 
 Names are case-insensitive and non-alphanumeric characters are normalized
