@@ -33,6 +33,7 @@ export const HANDLED_EVENT_TYPES: readonly string[] = [
 export const SAFE_IGNORED_EVENT_TYPES: readonly string[] = [
   ...prefixed("account.", "added|removed|switched"),
   "catalog.model.updated",
+  "catalog.updated",
   "command.executed",
   "file.watcher.updated",
   "global.disposed",
