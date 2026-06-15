@@ -31,6 +31,27 @@ export type ToolEndResult = {
    *  the full content via the host. (Reserved — currently set on the
    *  block but not the wire; future work.) */
   resultTruncated?: boolean
+  state?: "cancelled" | "error" | "result" | "stale"
+}
+
+export type ToolPartialInput = {
+  id: string
+  tool?: string
+  token: number
+  stdoutDelta?: string
+  stderrDelta?: string
+  stdout?: string
+  stderr?: string
+  stdoutLength: number
+  stderrLength: number
+  stdoutLineCount?: number
+  stderrLineCount?: number
+  replace?: boolean
+  durationMs?: number
+  exitCode?: number
+  terminal?: boolean
+  ok?: boolean
+  result?: string
 }
 
 export type StreamLifecycleState = "idle" | "sending" | "streaming" | "completing" | "error" | "timeout" | "interrupted"

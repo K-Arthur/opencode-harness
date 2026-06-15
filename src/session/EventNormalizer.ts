@@ -64,6 +64,9 @@ export function createSdkEventNormalizer(): SdkEventNormalizer {
   const toolInputs = new Map<string, string>()
   const toolOutputs = new Map<string, string>()
   const toolStartedIds = new Set<string>()
+  const toolPartialTokens = new Map<string, number>()
+  const toolPartialStdoutLengths = new Map<string, number>()
+  const toolPartialStderrLengths = new Map<string, number>()
   const seenUnknownTypes = new Set<string>()
 
   const isAssistantMessage = (messageId: string | undefined): boolean => {
@@ -87,6 +90,9 @@ export function createSdkEventNormalizer(): SdkEventNormalizer {
       toolInputs.delete(statusKey)
       toolOutputs.delete(statusKey)
       toolStartedIds.delete(statusKey)
+      toolPartialTokens.delete(statusKey)
+      toolPartialStdoutLengths.delete(statusKey)
+      toolPartialStderrLengths.delete(statusKey)
     }
   }
 
@@ -108,6 +114,9 @@ export function createSdkEventNormalizer(): SdkEventNormalizer {
     toolInputs,
     toolOutputs,
     toolStartedIds,
+    toolPartialTokens,
+    toolPartialStdoutLengths,
+    toolPartialStderrLengths,
     seenUnknownTypes,
     isAssistantMessage,
     clearMessageTracking,

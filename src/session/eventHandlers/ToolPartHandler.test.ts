@@ -14,6 +14,9 @@ function makeContext(): NormalizerContext {
     toolStatuses: new Map(),
     toolInputs: new Map(),
     toolOutputs: new Map(),
+    toolPartialTokens: new Map(),
+    toolPartialStdoutLengths: new Map(),
+    toolPartialStderrLengths: new Map(),
     toolStartedIds: new Set(),
     seenUnknownTypes: new Set(),
     isAssistantMessage: () => true,
@@ -414,6 +417,139 @@ describe("ToolPartHandler", () => {
       assert.equal((end!.data as Record<string, unknown>).exitCode, undefined, "exitCode is undefined when metadata missing")
       assert.equal((end!.data as Record<string, unknown>).stderr, undefined, "stderr is undefined when metadata missing")
       assert.equal((end!.data as Record<string, unknown>).durationMs, undefined, "durationMs is undefined when time missing")
+    })
+  })
+
+  describe("live tool output partials", () => {
+    it("emits a tool_partial with defensive liveOutput stdout/stderr metadata", () => {
+      const toolPart = makeToolPart({
+        tool: "bash",
+        state: {
+          status: "running",
+          input: { command: "npm test" },
+          metadata: {
+            liveOutput: {
+              stdout: "one\ntwo\n",
+              stderr: "warn\n",
+              token: 7,
+            },
+          },
+        } as any,
+      })
+
+      const results = handler.handle(makeEvent(toolPart), ctx)
+      const partial = results.find((r) => r.type === "tool_partial")
+      assert.ok(partial)
+      assert.equal(partial.sessionId, "ses_abc")
+      assert.deepEqual(partial.data, {
+        id: "part-1",
+        tool: "bash",
+        token: 7,
+        stdoutDelta: "one\ntwo\n",
+        stderrDelta: "warn\n",
+        stdoutLength: 8,
+        stderrLength: 5,
+        stdoutLineCount: 2,
+        stderrLineCount: 1,
+      })
+    })
+
+    it("dedupes partials by monotonic token", () => {
+      const toolPart = makeToolPart({
+        tool: "bash",
+        state: {
+          status: "running",
+          input: { command: "npm test" },
+          metadata: { live_output: { stdout: "one", token: 1 } },
+        } as any,
+      })
+      handler.handle(makeEvent(toolPart), ctx)
+
+      const duplicate = handler.handle(makeEvent(toolPart), ctx)
+      assert.equal(duplicate.some((r) => r.type === "tool_partial"), false)
+    })
+
+    it("emits only stdout/stderr deltas when a later full snapshot advances", () => {
+      const firstPart = makeToolPart({
+        tool: "bash",
+        state: {
+          status: "running",
+          input: { command: "npm test" },
+          metadata: { liveOutput: { stdout: "one", stderr: "err", token: 1 } },
+        } as any,
+      })
+      handler.handle(makeEvent(firstPart), ctx)
+
+      const nextPart = makeToolPart({
+        tool: "bash",
+        state: {
+          status: "running",
+          input: { command: "npm test" },
+          metadata: { liveOutput: { stdout: "one two", stderr: "err!", token: 2 } },
+        } as any,
+      })
+      const results = handler.handle(makeEvent(nextPart), ctx)
+      const partial = results.find((r) => r.type === "tool_partial")
+      assert.ok(partial)
+      const data = partial.data as Record<string, unknown>
+      assert.equal(data.stdoutDelta, " two")
+      assert.equal(data.stderrDelta, "!")
+      assert.equal(data.stdoutLength, 7)
+      assert.equal(data.stderrLength, 4)
+      assert.equal(data.replace, undefined)
+    })
+
+    it("sends a replacement snapshot when a later buffer is shorter", () => {
+      const firstPart = makeToolPart({
+        tool: "bash",
+        state: {
+          status: "running",
+          input: { command: "npm test" },
+          metadata: { liveOutput: { stdout: "old long output", stderr: "warning", token: 1 } },
+        } as any,
+      })
+      handler.handle(makeEvent(firstPart), ctx)
+
+      const shorter = makeToolPart({
+        tool: "bash",
+        state: {
+          status: "running",
+          input: { command: "npm test" },
+          metadata: { liveOutput: { stdout: "fresh", stderr: "", token: 2 } },
+        } as any,
+      })
+      const results = handler.handle(makeEvent(shorter), ctx)
+      const partial = results.find((r) => r.type === "tool_partial")
+      assert.ok(partial)
+      const data = partial.data as Record<string, unknown>
+      assert.equal(data.replace, true)
+      assert.equal(data.stdout, "fresh")
+      assert.equal(data.stderr, "")
+      assert.equal(data.stdoutDelta, "fresh")
+    })
+
+    it("falls back to nested liveOutput stdout/stderr on final tool_end", () => {
+      const toolPart = makeToolPart({
+        tool: "bash",
+        state: {
+          status: "completed",
+          input: { command: "npm test" },
+          metadata: {
+            liveOutput: { stdout: "final out", stderr: "final err", token: 3 },
+            exitCode: 0,
+          },
+          time: { start: 10, end: 25 },
+        } as any,
+      })
+
+      const results = handler.handle(makeEvent(toolPart), ctx)
+      const end = results.find((r) => r.type === "tool_end")
+      assert.ok(end)
+      const data = end.data as Record<string, unknown>
+      assert.equal(data.result, "final out")
+      assert.equal(data.stderr, "final err")
+      assert.equal(data.exitCode, 0)
+      assert.equal(data.durationMs, 15)
     })
   })
 })
