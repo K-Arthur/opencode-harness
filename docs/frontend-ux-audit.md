@@ -244,7 +244,7 @@ trigger.
 | 0 | Commit this audit | `docs/frontend-ux-audit.md` | **done** |
 | 1 ⭐ | Agent Activity Timeline (deep vertical) | `activityModel.ts`, `activity-panel.ts`, `css/activity.css`, wiring | **done** |
 | 2 | Interactive plan cards (progress, badges, Approve/Revise) + `detectPlanFile` fix | `toolCallRenderer.ts`, `planDetector.ts`, `WebviewEventRouter.ts`, `css/blocks.css` | **done** |
-| 3 | Commands/Tasks panel (metadata, copy/terminal/re-run, cancel) | `commandModel.ts`, `tasks-panel.ts`, `css/tasks.css`, `open_terminal` host handler | **done** (live stdout + true per-command cancel are server-gated — §14) |
+| 3 | Commands/Tasks panel (metadata, copy/terminal/re-run, cancel) | `commandModel.ts`, `tasks-panel.ts`, `css/tasks.css`, `open_terminal` host handler | **done** (live stdout uses Hybrid A; true per-command cancel remains server-gated — §14) |
 | 4 | Session mutability: **pin + rename + tags** + open-applied-diff in VS Code | `SessionStore.ts`, `MessageRouter.ts`, `sessionListRenderer.ts`, `renderer.ts` | **done** (hunk staging remains — §14) |
 | 5 | A11y/perf/polish | reduced-motion guard, global `*:focus-visible`, token theming, keyboard nav across all panels | **done** (long-log virtualization deferred; history condensation covers it) |
 | 6 | Question bar wiring | `questionBar.ts` (main.ts wiring), `renderer.ts` (question block), `types.ts` (persistence), `sendLogic.ts` (steer-mode fix) | **done** |
@@ -329,12 +329,16 @@ These require the **opencode server itself** (a separate process reached via
 `@opencode-ai/sdk`), so they are implemented up to the extension-host boundary and the
 remainder is documented here rather than faked:
 
-1. **Live command stdout streaming** — the Tasks panel shows each command's final output;
-   incremental live stdout needs the server to stream tool output deltas. *(Panel is built
-   and refreshes live as parts arrive; it surfaces whatever the host currently receives.)*
-2. **Mid-command cancellation** — the Tasks panel's **Cancel** posts the existing
-   whole-stream `abort`; a true per-command cancel needs a server handle for the running
-   tool. **Re-run / Open in terminal** are fully wired host-side (`open_terminal`).
+1. **Live command stdout streaming** — implemented as Hybrid A. The host consumes
+   `message.part.updated` / `session.next.tool.progress` partials when they expose live
+   output, then arms a 500ms `session.messages` polling fallback for running bash/exec tools
+   that have not produced SSE partials. The webview keeps stdout/stderr buffers transient,
+   updates cards and the Tasks panel live, drops stale/duplicate tokens, and logs a one-time
+   warning per session when the server exposes no recognizable live buffer.
+2. **Mid-command cancellation** — bash-card **Cancel** marks the card cancelled with captured
+   live output, stops polling, and falls back to whole-stream `abort`. A true per-tool abort
+   still needs a server/SDK handle for the running tool. **Re-run / Open in terminal** are
+   fully wired host-side (`open_terminal`).
 3. **Hunk-level apply/revert** — UI can render hunks and `accept_hunk`/`reject_hunk`
    messages exist; granular apply/revert needs server support beyond file-level
    `accept_diff`/`revert_diff`. (Open-applied-diff in VS Code is **done**.)

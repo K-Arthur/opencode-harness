@@ -1,6 +1,6 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import type { HostMessage } from "../../src/chat/webview/types"
+import type { HostMessage, WebviewMessage } from "../../src/chat/webview/types"
 
 void describe("Message Contract Tests", () => {
   void it("validates stream_chunk message structure", () => {
@@ -93,6 +93,59 @@ void describe("Message Contract Tests", () => {
     assert.strictEqual(typeof message.usage.prompt, "number")
     assert.strictEqual(typeof message.usage.completion, "number")
     assert.strictEqual(typeof message.usage.total, "number")
+  })
+
+  void it("validates stream_tool_partial message structure", () => {
+    const message: HostMessage = {
+      type: "stream_tool_partial",
+      sessionId: "test-123",
+      toolCall: {
+        id: "tool-1",
+        name: "bash",
+        class: "exec",
+        state: "running",
+        partialStdout: "installing\n",
+        partialStderr: "warn\n",
+        stdoutLength: 11,
+        stderrLength: 5,
+        stdoutLineCount: 1,
+        stderrLineCount: 1,
+        token: 2,
+        durationMs: 600,
+      },
+      seq: 9,
+    }
+
+    assert.strictEqual(message.type, "stream_tool_partial")
+    assert.strictEqual(message.toolCall.id, "tool-1")
+    assert.strictEqual(message.toolCall.partialStdout, "installing\n")
+    assert.strictEqual(message.toolCall.partialStderr, "warn\n")
+    assert.strictEqual(message.toolCall.token, 2)
+  })
+
+  void it("validates tool_output_config message structure", () => {
+    const message: HostMessage = {
+      type: "tool_output_config",
+      renderAnsi: true,
+    }
+
+    assert.strictEqual(message.type, "tool_output_config")
+    assert.strictEqual(message.renderAnsi, true)
+  })
+
+  void it("validates cancel_tool webview message structure", () => {
+    const message: WebviewMessage = {
+      type: "cancel_tool",
+      sessionId: "test-123",
+      toolId: "tool-1",
+      stdout: "partial out",
+      stderr: "partial err",
+      durationMs: 1200,
+    }
+
+    assert.strictEqual(message.type, "cancel_tool")
+    assert.strictEqual(message.sessionId, "test-123")
+    assert.strictEqual(message.toolId, "tool-1")
   })
 
   void it("validates host_message_batch structure", () => {

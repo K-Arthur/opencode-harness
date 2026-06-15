@@ -29,6 +29,14 @@ describe("package configuration schema", () => {
     assert.equal(schema.default, "prompt", "autoInstall must default to prompt-once")
   })
 
+  it("exposes ANSI rendering for tool output as an opt-in setting", () => {
+    const schema = properties["opencode.toolOutput.renderAnsi"]
+    assert.ok(schema, "opencode.toolOutput.renderAnsi must be contributed")
+    assert.equal(schema.type, "boolean")
+    assert.equal(schema.scope, "window")
+    assert.equal(schema.default, false)
+  })
+
   it("contributes the Install CLI command", () => {
     const commands = pkg.contributes.commands
     assert.ok(

@@ -9,10 +9,51 @@ assistant message for the active tab instead of dropping them.
 
 - `stream_start` creates or reuses the visible assistant placeholder.
 - `stream_chunk` appends text to the active streaming message.
+- `stream_tool_partial` appends live stdout/stderr bytes to an existing bash/exec tool
+  card while the command is running.
 - If `stream_chunk` arrives after stream state was cleared, the chunk is appended to the
   most recent assistant message in that tab and persisted.
 - `stream_end` finalizes unresolved tool-call blocks so completed responses do not remain
   visually stuck in a running state.
+
+### Live Tool Output
+
+Live bash/exec output uses transient webview buffers only. The host sends:
+
+```ts
+{
+  type: "stream_tool_partial",
+  sessionId,
+  toolCall: {
+    id,
+    partialStdout?, partialStderr?,
+    stdout?, stderr?, replace?,
+    token,
+    stdoutLength, stderrLength,
+    stdoutLineCount?, stderrLineCount?,
+    durationMs?, exitCode?,
+  }
+}
+```
+
+Rules:
+
+- `token` is monotonic per session/tool. The webview drops partials with `token <= lastSeen`.
+- `partialStdout` / `partialStderr` are deltas. When `replace: true`, `stdout` and `stderr`
+  are full snapshots used to repair a gap or shorter server buffer.
+- Final `stream_tool_end` is authoritative. Any partial for a terminal tool is ignored.
+- Output is debounced at 100ms before DOM replacement so rapid progress updates coalesce.
+- `tool_output_config` pushes `{ renderAnsi }`; ANSI rendering is opt-in through
+  `opencode.toolOutput.renderAnsi`, and the default path strips ANSI/control sequences.
+
+The bash-card **Cancel** action posts:
+
+```ts
+{ type: "cancel_tool", sessionId, toolId, stdout?, stderr?, durationMs? }
+```
+
+SDK 1.17.6 has no per-tool abort, so v1 stops live polling, renders a synthetic cancelled
+tool result with captured output, and then falls back to the existing whole-stream `abort`.
 
 ### Text/Tool Interleave Invariants
 
