@@ -5,6 +5,8 @@ import {
   TOOL_EXEC_SVG,
   TOOL_META_SVG,
   CHEVRON_RIGHT_SVG,
+  toolIconFor,
+  toolStateOverlayFor,
 } from "./icons"
 import { sanitizeHtml, highlightSyntax } from "./syntaxHighlighter"
 import { isTaskTool, renderSubagentTaskCard } from "./subagentCard"
@@ -129,7 +131,7 @@ export function createToolSummary(
     }
   })
 
-  appendToolIcon(summary, toolBlock.class || 'read')
+  appendToolIcon(summary, toolBlock.class || 'read', toolBlock.name)
 
   const name = document.createElement("span")
   name.className = "tool-name"
@@ -148,15 +150,10 @@ export function createToolSummary(
   return summary
 }
 
-export function appendToolIcon(parent: HTMLElement, toolClass: ToolCallClass): void {
+export function appendToolIcon(parent: HTMLElement, toolClass: ToolCallClass, toolName?: string): void {
   const icon = document.createElement("span")
   icon.className = "tool-icon"
-  switch (toolClass) {
-    case 'write': icon.innerHTML = TOOL_WRITE_SVG; break
-    case 'exec': icon.innerHTML = TOOL_EXEC_SVG; break
-    case 'meta': icon.innerHTML = TOOL_META_SVG; break
-    default: icon.innerHTML = TOOL_READ_SVG; break
-  }
+  icon.innerHTML = toolIconFor(toolName ?? "", toolClass)
   parent.appendChild(icon)
 }
 
@@ -283,31 +280,38 @@ export function appendToolStatusBadge(parent: HTMLElement, toolBlock: ToolCallBl
   const toolState = toolBlock.state || 'running'
   const badge = document.createElement("span")
   badge.className = `tool-status tool-status--${toolState}`
+  const overlay = toolStateOverlayFor(toolState)
+  let label: string
+  let ariaLabel: string
   if (toolState === 'pending') {
-    badge.textContent = '\u25cb Pending'
-    badge.setAttribute("aria-label", "Tool pending")
+    label = 'Pending'; ariaLabel = 'Tool pending'
   } else if (toolState === 'running') {
-    badge.textContent = '\u25c9 Running'
-    badge.setAttribute("aria-label", "Tool running")
+    label = 'Running'; ariaLabel = 'Tool running'
   } else if (toolState === 'stale') {
-    badge.textContent = 'Stale'
-    badge.setAttribute("aria-label", "Tool completion unconfirmed")
+    label = 'Stale'; ariaLabel = 'Tool completion unconfirmed'
   } else if (toolBlock.error || toolState === 'error') {
-    badge.textContent = '\u2717 Error'
-    badge.setAttribute("aria-label", "Tool error")
+    label = 'Error'; ariaLabel = 'Tool error'
   } else if (toolState === 'cancelled') {
-    badge.textContent = '\u2715 Cancelled'
-    badge.setAttribute("aria-label", "Tool cancelled")
+    label = 'Cancelled'; ariaLabel = 'Tool cancelled'
   } else if (toolState === 'timed_out') {
-    badge.textContent = '\u23f3 Timed out'
-    badge.setAttribute("aria-label", "Tool timed out")
+    label = 'Timed out'; ariaLabel = 'Tool timed out'
   } else if (toolState === 'retried') {
-    badge.textContent = '\u21ba Retried'
-    badge.setAttribute("aria-label", "Tool retried")
+    label = 'Retried'; ariaLabel = 'Tool retried'
   } else {
-    badge.textContent = '\u2713 Done'
-    badge.setAttribute("aria-label", "Tool complete")
+    label = 'Done'; ariaLabel = 'Tool complete'
   }
+  if (overlay) {
+    const icon = document.createElement("span")
+    icon.className = "tool-status-icon"
+    icon.setAttribute("aria-hidden", "true")
+    icon.innerHTML = overlay
+    badge.appendChild(icon)
+  }
+  const text = document.createElement("span")
+  text.className = "tool-status-label"
+  text.textContent = label
+  badge.appendChild(text)
+  badge.setAttribute("aria-label", ariaLabel)
   parent.appendChild(badge)
 }
 

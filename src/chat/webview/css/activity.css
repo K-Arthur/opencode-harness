@@ -133,9 +133,19 @@
 
 .activity-item-icon {
   flex: 0 0 auto;
-  width: 1.2em;
-  text-align: center;
-  line-height: 1.4;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+}
+
+.activity-item-icon svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.5;
+  display: block;
 }
 
 .activity-item-body {
