@@ -1,7 +1,17 @@
 # Status.md
 
-## Last Updated: 2026-06-13
-## Project State: steering/queueing + keyboard redesign (Queue default / Interrupt explicit; Alt+1/2/3 modes) + SDK 1.17.6 + prior fuzzy-search/streaming/a11y fixes (TDD)
+## Last Updated: 2026-06-15
+## Project State: timing-independent abort suppression (R2 from productivity/reliability audit) + steering/queueing + keyboard redesign + SDK 1.17.6 + prior fuzzy-search/streaming/a11y fixes (TDD)
+
+### Recent Fix (2026-06-15): Timing-independent abort suppression via server-message-id correlation (audit R2)
+- **Symptom:** a spurious "The request was cancelled." error card could still appear after Stop / interrupt-and-send when the server's late `MessageAbortedError` (SSE) landed after the fixed 8s suppression window expired (queued/slow sessions).
+- **Root cause:** abort suppression relied **solely** on a per-tab time window (`intentionalAbortUntil`, 8s). The only message id tracked per run was the synthetic `resp-…` UI bubble id (anchored deliberately, see `appendChunk`), never the server `msg_…` id the abort error actually carries — so no precise, timing-independent correlation existed.
+- **Fix:** new pure, clock-injected `IntentionalAbortRegistry` (`src/chat/handlers/intentionalAbortRegistry.ts`) suppresses an abort-category error by correlating the **server message id** (consumed on match, independent of elapsed time), keeping the self-expiring per-tab window only as a fallback for late errors with no correlatable id. Zero behavioral regression; strictly more robust.
+  - `ActiveStreamRun` gains `serverMessageId`, recorded in `appendChunk`; `abort()` registers it; `StreamCoordinator.wasIntentionallyAborted(tabId, serverMessageId?)` delegates to the registry; dispose clears it.
+  - `MessageUpdateHandler` now carries `messageId: msg.id` on the abort `server_error` event; `ChatProvider.server_error` extracts it and passes it through.
+- **Test quality (audit R5, in microcosm):** replaced the 4 brittle source-string assertions that pinned the removed private `intentionalAbortUntil` field with real **behavioral** tests — `intentionalAbortRegistry.test.ts` (×10, fake clock) and `MessageUpdateHandler.test.ts` (×4) — plus delegation-seam checks in `StreamCoordinator.test.ts`/`ChatProvider.test.ts`.
+- **Verification:** typecheck clean; unit **3618 pass / 0 fail** (+13); message-contract 17/17; roundtrip 7/7; production build + bundle gate green (ext 561.4/562KB, main 734.5/736KB).
+- **Context:** first implementation item from the 2026-06-15 productivity/reliability audit (P0). De-risks the larger R1 (unify the dual host/webview stream state machine) by introducing the pure, tested run-identity seam it will build on.
 
 ### Recent Work (2026-06-13): Steering / queueing redesign + keyboard de-conflict + SDK bump
 - **Symptom:** sending a message mid-stream showed a red "Stream error — The request was cancelled. Aborted"; the three steer modes (Interrupt/Append/Queue) were inconsistent (Append gave no feedback); steer `Ctrl+1/2/3` clashed with the plan/build/auto shortcuts, which never fired from the composer anyway.
