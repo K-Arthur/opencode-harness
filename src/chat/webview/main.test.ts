@@ -751,7 +751,7 @@ it("unified modal: server session items send resume_server_session on click", ()
       // activated so a previously-displayed tab's totals don't bleed in.
       const fnIdx = source.indexOf("function switchTab(")
       assert.ok(fnIdx >= 0, "switchTab must exist")
-      const body = source.slice(fnIdx, fnIdx + 2000)
+      const body = source.slice(fnIdx, fnIdx + 3000)
       assert.ok(body.includes("updateTokenDisplay("), "switchTab must call updateTokenDisplay")
       assert.ok(
         body.includes(".tokenUsage") || body.includes("selectDisplayedUsage("),

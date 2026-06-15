@@ -533,7 +533,9 @@
                 "cli-default",
                 "light",
                 "dark",
-                "high-contrast"
+                "high-contrast",
+                "high-contrast-dark",
+                "high-contrast-light"
               ],
               "default": "cli-default",
               "description": "Base theme preset"

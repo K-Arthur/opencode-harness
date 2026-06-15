@@ -908,12 +908,12 @@ function getVsCodeApi() {
 
       if ((e.ctrlKey || e.metaKey) && !e.altKey) {
         const key = e.key.toLowerCase()
-        if (!e.shiftKey && key === "t") {
+        if (!e.shiftKey && key === "t" && !isTextInput(e.target)) {
           e.preventDefault()
           createNewTab()
           return
         }
-        if (!e.shiftKey && key === "w") {
+        if (!e.shiftKey && key === "w" && !isTextInput(e.target)) {
           const active = stateManager.getActiveSession()
           if (active) {
             e.preventDefault()
@@ -921,7 +921,7 @@ function getVsCodeApi() {
           }
           return
         }
-        if (key === "tab") {
+        if (key === "tab" && !isTextInput(e.target)) {
           e.preventDefault()
           switchRelativeTab(e.shiftKey ? -1 : 1)
           return
@@ -933,6 +933,12 @@ function getVsCodeApi() {
         if (key === "l" && !isTextInput(e.target)) {
           e.preventDefault()
           els.promptInput.focus()
+          return
+        }
+        if (key === "k" && !isTextInput(e.target)) {
+          e.preventDefault()
+          commandsModal.open()
+          vscode.postMessage({ type: "list_commands" })
           return
         }
         if (key === "f" && !isTextInput(e.target)) {
@@ -1919,6 +1925,10 @@ function getVsCodeApi() {
   }
 
   function switchTab(tabId: string, notifyHost = true) {
+    // Persist draft from the current (old) tab before switching
+    const prevSession = stateManager.getActiveSession()
+    if (prevSession) stateManager.setDraftText(prevSession.id, els.promptInput.value)
+
     if (!stateManager.setActiveSession(tabId)) return
     switchToTab(els, tabId)
     hideWelcomeView()
@@ -1929,6 +1939,10 @@ function getVsCodeApi() {
     composer.syncSteerModeUI()
     syncSteerAffordance()
     updateTabBar()
+    // Restore draft for the new tab
+    els.promptInput.value = stateManager.getDraftText(tabId)
+    composer.autoResizeTextarea()
+
     // Sync model dropdown to active session's model
     const activeSession = stateManager.getActiveSession()
     if (activeSession?.model) {
@@ -2019,6 +2033,9 @@ function getVsCodeApi() {
     const switchedMessages = stateManager.getSession(tabId)?.messages ?? []
     questionBar.repopulateFromMessages(tabId, switchedMessages as Array<{ id: string; blocks: Array<{ type: string; toolCallId?: string; id?: string; answered?: boolean; groups?: unknown[] }> }>)
     questionBar.setActiveSession(tabId)
+    // Reconcile bar: clean stale answered items and restore any missing
+    // from the active session that fell out of the DOM.
+    questionBar.reconcileBar(tabId)
   }
 
   /**
@@ -2101,6 +2118,9 @@ function getVsCodeApi() {
     if (jtb) jtb.remove()
     const markers = els.tabPanels.querySelector(`.scroll-markers[data-tab-id="${tabId}"]`)
     if (markers) markers.remove()
+
+    // Clear question bar items for the closed tab (fixes multi-tab ghost count)
+    questionBar.clearForSession(tabId)
 
     // Notify backend
     vscode.postMessage({ type: "close_tab", sessionId: tabId })
@@ -3526,12 +3546,22 @@ function getVsCodeApi() {
             const msgList = getMessageList(s.id)
             if (msgList && s.messages.length > 0) {
               attachScrollPersistence(s.id, msgList)
+
+              // Re-populate question bar BEFORE rendering messages so the
+              // inline fallback check (hasQuestionInBar) sees the item in
+              // the bar's state and shows the compact pointer, not the
+              // redundant interactive controls (RC-2 ordering fix).
+              if (s.id === stateManager.getState().activeSessionId) {
+                questionBar.repopulateFromMessages(s.id, s.messages as any)
+              }
+
               if (shouldRenderHydratedMessages(s.id, msgList, s.messages)) {
                 msgList.replaceChildren()
                 const renderOpts = {
                   mode: s.mode,
                   sessionId: s.id,
                   postMessage: (m: Record<string, unknown>) => vscode.postMessage(m),
+                  hasQuestionInBar: (toolCallId: string) => questionBar.hasQuestionInState(toolCallId),
                 }
                 const loader = createChunkedLoader({
                   container: msgList,
@@ -3564,11 +3594,6 @@ function getVsCodeApi() {
                 const typingInd = msgList.parentElement?.querySelector(".typing-indicator") as HTMLElement | undefined
                 const anchor = createScrollAnchor(msgList, typingInd)
                 scrollAnchors.set(s.id, anchor)
-              }
-
-              // Re-populate question bar from persisted question blocks in messages
-              if (s.id === stateManager.getState().activeSessionId) {
-                questionBar.repopulateFromMessages(s.id, s.messages as any)
               }
 
               if (!getVirtualList(s.id)) {
@@ -4564,6 +4589,13 @@ function boot() {
       }
       vscode.postMessage({ type: "webview_ready" })
       vscode.postMessage({ type: "list_commands" })
+
+      // Periodic question bar reconciliation: clean stale answered items
+      // and restore any that fell out of the DOM (RC-1 defense).
+      setInterval(() => {
+        const activeId = stateManager.getState().activeSessionId
+        if (activeId) questionBar.reconcileBar(activeId)
+      }, 30_000)
     } catch (err) {
       log.error("Fatal init error:", err)
       vscode.postMessage({ type: "webview_error", message: "Initialization failed" })
