@@ -363,6 +363,43 @@ export function createToolArgsPanel(toolBlock: ToolCallBlock): HTMLElement | nul
   argsDiv.className = "tool-args-panel"
 
   const args = toolBlock.args
+
+  // Command/exec tools: the command IS the input. Surface it as a readable
+  // command line (like a terminal prompt) instead of dumping the raw
+  // `{ command, description, timeout }` object as a JSON tree.
+  const isCommandTool =
+    toolBlock.class === "exec" ||
+    ["bash", "shell", "command", "terminal"].some((k) => (toolBlock.name?.toLowerCase() ?? "").includes(k))
+  if (isCommandTool) {
+    const parsed = typeof args === "string" ? safeJsonParse(args) : args
+    const obj = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null
+    const command =
+      obj && typeof obj.command === "string" ? obj.command : typeof args === "string" ? args : null
+    if (command && command.trim()) {
+      argsDiv.classList.add("tool-args-panel--command")
+      const line = document.createElement("code")
+      line.className = "tool-command-line"
+      const prompt = document.createElement("span")
+      prompt.className = "tool-command-prompt"
+      prompt.setAttribute("aria-hidden", "true")
+      prompt.textContent = "$ "
+      line.appendChild(prompt)
+      const cmdText = document.createElement("span")
+      cmdText.className = "tool-command-text"
+      cmdText.textContent = command
+      line.appendChild(cmdText)
+      argsDiv.appendChild(line)
+      const description = obj && typeof obj.description === "string" ? obj.description.trim() : ""
+      if (description) {
+        const desc = document.createElement("div")
+        desc.className = "tool-command-desc"
+        desc.textContent = description
+        argsDiv.appendChild(desc)
+      }
+      return argsDiv
+    }
+  }
+
   if (args !== null && typeof args === "object") {
     // Use the collapsible JSON tree for structured args.
     // Guard against very large payloads (e.g. full file content in write args):

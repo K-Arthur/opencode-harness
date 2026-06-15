@@ -605,6 +605,27 @@
   overflow-y: auto;
 }
 
+/* Command/exec tools render their input as a readable command line, not JSON. */
+.tool-command-line {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--color-fg);
+}
+
+.tool-command-prompt {
+  color: var(--color-fg-muted);
+  user-select: none;
+}
+
+.tool-command-desc {
+  margin-top: var(--space-1);
+  font-size: var(--text-2xs);
+  color: var(--color-fg-muted);
+}
+
 /* ─── JSON Viewer (inside tool args panel) ─── */
 .json-viewer {
   font-family: var(--font-mono);
