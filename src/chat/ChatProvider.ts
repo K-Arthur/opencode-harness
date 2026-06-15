@@ -73,6 +73,9 @@ type ServerEvent = { type: string; sessionId?: string; data?: unknown }
 
 export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   private _view?: vscode.WebviewView
+  /** Optional hook invoked when the chat view is first resolved, used to lazily
+   *  spawn the opencode server (idempotent; safe to call on every re-resolve). */
+  private serverWarmup?: () => void
   private diffApplier = new DiffApplier()
   private disposables: vscode.Disposable[] = []
   private webviewContent: WebviewContent
@@ -472,11 +475,22 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     )
   }
 
+  /** Register a callback fired when the chat view is resolved (used to lazily
+   *  spawn the opencode server on first engagement instead of on activation). */
+  setServerWarmup(fn: () => void): void {
+    this.serverWarmup = fn
+  }
+
   resolveWebviewView(
     webviewView: vscode.WebviewView,
     _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken
   ): void {
+    // The view is being shown — the user is engaging OpenCode, so warm the server
+    // now (idempotent). Deferring start to here keeps windows that never open the
+    // view from spawning a server process.
+    this.serverWarmup?.()
+
     // H16: Dispose old disposables from previous webview resolve to prevent memory leak
     for (const d of this.disposables) {
       try { d.dispose() } catch { /* individual dispose failure should not block others */ }

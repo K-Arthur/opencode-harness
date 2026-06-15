@@ -64,6 +64,17 @@ void describe("ChatProvider.ts", () => {
     )
   })
 
+  void it("warms the server lazily when the chat view is resolved (R3)", () => {
+    assert.ok(source.includes("setServerWarmup("), "must expose setServerWarmup for the host to wire lazy start")
+    const resolveIdx = source.indexOf("resolveWebviewView(")
+    assert.ok(resolveIdx >= 0, "resolveWebviewView must exist")
+    const resolveBody = source.slice(resolveIdx, resolveIdx + 1200)
+    assert.ok(
+      resolveBody.includes("this.serverWarmup?.()"),
+      "resolveWebviewView must invoke the warm-up hook so opening the view spawns the server",
+    )
+  })
+
   void it("correlates abort suppression by the server message id carried on the event", () => {
     // Timing-independent correlation: the handler must extract the server message id
     // from the event payload and pass it to wasIntentionallyAborted so a late abort

@@ -21,6 +21,7 @@ import { CliDiagnostics } from "./diagnostics/CliDiagnostics"
 import { McpServerManager } from "./mcp/McpServerManager"
 import { OpencodeInstaller, type AutoInstallMode } from "./install/OpencodeInstaller"
 import { log } from "./utils/outputChannel"
+import { createLazyStarter } from "./utils/lazyStarter"
 import {
   registerRollbackCommand,
   registerThemePreviewCommand,
@@ -140,8 +141,12 @@ export async function activate(context: vscode.ExtensionContext) {
     // OpenCode CLI is a hard requirement. VS Code has no install-time hook, so
     // detect-and-install runs on activation (see ensureOpencodeAndStart below).
     const installer = new OpencodeInstaller(context.globalState)
+    // Lazy server warm-up: spawn the opencode server on first engagement (chat
+    // view resolve / explicit install) rather than in every window on activation.
+    // Idempotent + de-duped; SessionManager.start() early-returns when connected.
+    const ensureServerReady = createLazyStarter(() => ensureOpencodeAndStart(sessionManager, installer))
     registerInstallCliCommand(context, installer, () => {
-      void sessionManager.start().catch((err) => log.warn("Start after install failed", err))
+      void ensureServerReady().catch((err) => log.warn("Start after install failed", err))
     })
 
     // Context file provider for viewing session context files
@@ -172,10 +177,10 @@ export async function activate(context: vscode.ExtensionContext) {
     // Methodology system — orchestrator + outcome tracker + status bar
     const methStatus = initMethodology(context)
 
-    // Auto-start server so user doesn't see disconnected state after reload.
-    // Ensures the opencode CLI is present first (prompting/installing per the
-    // opencode.autoInstall setting), since it's a hard requirement.
-    void ensureOpencodeAndStart(sessionManager, installer).catch(err => log.warn("Auto-start server failed", err))
+    // Server start is deferred to first engagement (see ensureServerReady wired to
+    // the chat view below) so windows where OpenCode is never opened don't spawn a
+    // server process. When the user does open the view it warms immediately, so they
+    // still don't sit on a disconnected state while interacting.
 
     // When workspace folders are added after the server already started in ~/,
     // offer one restart that covers the full batch.
@@ -205,6 +210,11 @@ export async function activate(context: vscode.ExtensionContext) {
       themeManager, rateLimitMonitor, modelManager, sessionStore,
       checkpointManager, mcpServerManager
     )
+
+    // Warm the server the first time the chat view is resolved (user opened OpenCode).
+    chatProviderInstance.setServerWarmup(() => {
+      void ensureServerReady().catch((err) => log.warn("Lazy server start failed", err))
+    })
 
     registerInlineProviders(context, chatProviderInstance)
     registerCoreCommands(context, sessionStore, sessionManager, modelManager, rateLimitMonitor, checkpointManager, cliDiagnostics, themeManager, terminalBridge, chatProviderInstance)
