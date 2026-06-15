@@ -435,6 +435,7 @@ export function createState(vscode: VsCodeApi) {
         state.sessions[s.id] = {
           ...s,
           messages: existing.messages,
+          draftText: existing.draftText,
           isStreaming: existing.isStreaming,
           tokenUsage: s.tokenUsage ?? existing?.tokenUsage,
           cost: typeof s.cost === "number" && s.cost > 0 ? s.cost : existing?.cost ?? s.cost,
@@ -444,6 +445,7 @@ export function createState(vscode: VsCodeApi) {
         state.sessions[s.id] = {
           ...s,
           messages: existing.messages !== s.messages ? (() => { existing.messages.length = 0; existing.messages.push(...s.messages); return existing.messages })() : s.messages,
+          draftText: existing.draftText || s.draftText,
           isStreaming: existing.isStreaming,
           tokenUsage: s.tokenUsage ?? existing?.tokenUsage,
           cost: typeof s.cost === "number" && s.cost > 0 ? s.cost : existing?.cost ?? s.cost,
