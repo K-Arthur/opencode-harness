@@ -186,7 +186,7 @@ test.describe('Subagent Activity — TDD & Domain Enhancements', () => {
             <div class="subagent-header">
               <div class="subagent-name-wrap">
                 <div class="subagent-name">Auth API Implementer</div>
-                <span class="subagent-domain-badge">🔌 api</span>
+                <span class="subagent-domain-badge"><span class="subagent-domain-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 9l-4 3 4 3"/><path d="M16 9l4 3-4 3"/><line x1="14" y1="6" x2="10" y2="18"/></svg></span><span class="subagent-domain-label">api</span></span>
               </div>
               <div class="subagent-status">running</div>
               <button class="subagent-cancel-btn" aria-label="Cancel Auth API Implementer">Cancel</button>
@@ -201,7 +201,7 @@ test.describe('Subagent Activity — TDD & Domain Enhancements', () => {
             <div class="subagent-header">
               <div class="subagent-name-wrap">
                 <div class="subagent-name">User Dashboard</div>
-                <span class="subagent-domain-badge">🎨 frontend</span>
+                <span class="subagent-domain-badge"><span class="subagent-domain-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg></span><span class="subagent-domain-label">frontend</span></span>
               </div>
               <div class="subagent-status">running</div>
               <button class="subagent-cancel-btn" aria-label="Cancel User Dashboard">Cancel</button>
@@ -215,7 +215,7 @@ test.describe('Subagent Activity — TDD & Domain Enhancements', () => {
             <div class="subagent-header">
               <div class="subagent-name-wrap">
                 <div class="subagent-name">DB Migration</div>
-                <span class="subagent-domain-badge">🗄️ database</span>
+                <span class="subagent-domain-badge"><span class="subagent-domain-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg></span><span class="subagent-domain-label">database</span></span>
               </div>
               <div class="subagent-status">completed</div>
             </div>
@@ -243,9 +243,9 @@ test.describe('Subagent Activity — TDD & Domain Enhancements', () => {
   test('should render domain badges', async ({ page }) => {
     const badges = page.locator('.subagent-domain-badge')
     await expect(badges).toHaveCount(3)
-    await expect(badges.nth(0)).toHaveText('🔌 api')
-    await expect(badges.nth(1)).toHaveText('🎨 frontend')
-    await expect(badges.nth(2)).toHaveText('🗄️ database')
+    await expect(badges.nth(0)).toHaveText('api')
+    await expect(badges.nth(1)).toHaveText('frontend')
+    await expect(badges.nth(2)).toHaveText('database')
   })
 
   test('should render TDD phase indicators', async ({ page }) => {

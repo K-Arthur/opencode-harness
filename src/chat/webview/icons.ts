@@ -122,6 +122,7 @@ export const TOOL_MEMORY_SVG = SVG(`<ellipse cx="12" cy="5" rx="9" ry="3"/><path
 export const TOOL_CHECKPOINT_SVG = SVG(`<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>`, 14)
 export const TOOL_FALLBACK_SVG = SVG(`<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>`, 14)
 export const TOOL_EDIT_SVG = SVG(`<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>`, 14)
+export const TOOL_BASH_SVG = SVG(`<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/><line x1="2" y1="3" x2="22" y2="3"/>`, 14)
 
 // ─── Tool State Overlays (Sprint 4: visual indicator for current state) ───
 export const STATE_PENDING_SVG = SVG(`<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>`, 12)
@@ -158,6 +159,14 @@ const TOOL_NAME_ICONS: Readonly<Record<string, string>> = Object.freeze({
   memory: TOOL_MEMORY_SVG,
   checkpoint: TOOL_CHECKPOINT_SVG,
   edit: TOOL_EDIT_SVG,
+  patch: TOOL_EDIT_SVG,
+  apply_patch: TOOL_EDIT_SVG,
+  multiedit: TOOL_EDIT_SVG,
+  bash: TOOL_BASH_SVG,
+  shell: TOOL_BASH_SVG,
+  command: TOOL_BASH_SVG,
+  terminal: TOOL_BASH_SVG,
+  run_command: TOOL_BASH_SVG,
 })
 
 export function toolIconFor(toolName: string, toolClass: ToolCallClass | string | null | undefined): string {
