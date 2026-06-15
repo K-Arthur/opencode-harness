@@ -1,6 +1,7 @@
 export type OpencodeEventType =
   | "tool_start"
   | "tool_update"
+  | "tool_partial"
   | "tool_end"
   | "skill_load"
   | "step_start"

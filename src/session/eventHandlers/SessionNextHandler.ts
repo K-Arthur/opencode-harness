@@ -1,5 +1,4 @@
 import { SdkEventLike, NormalizedOpencodeEvent, NormalizerContext, EventHandler } from "./types"
-
 const NEXT_PREFIX = "session.next."
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -8,6 +7,15 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined
+}
+
+function numberValue(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value)
+    if (Number.isFinite(n)) return n
+  }
+  return undefined
 }
 
 function contentToString(content: unknown, structured: unknown): string {
@@ -49,7 +57,7 @@ export class SessionNextHandler implements EventHandler {
     return eventType.startsWith(NEXT_PREFIX)
   }
 
-  handle(event: SdkEventLike, _context: NormalizerContext): NormalizedOpencodeEvent[] {
+  handle(event: SdkEventLike, context: NormalizerContext): NormalizedOpencodeEvent[] {
     const props = asRecord(event.properties)
     const sessionId = stringValue(props.sessionID)
     const messageId = stringValue(props.messageID)
@@ -75,18 +83,44 @@ export class SessionNextHandler implements EventHandler {
           sessionId,
           data: { id: callId, tool: stringValue(props.tool) ?? "tool", input: props.input, status: "running" },
         }]
-      case "tool.progress":
-        return [{
+      case "tool.progress": {
+        const result = contentToString(props.content, props.structured)
+        const id = callId ?? `${sessionId ?? "session"}:tool`
+        const prevToken = context.toolPartialTokens.get(id) ?? 0
+        const token = numberValue(props.token) ?? numberValue(props.seq) ?? numberValue(props.sequence) ?? prevToken + 1
+        const events: NormalizedOpencodeEvent[] = [{
           type: "tool_update",
           sessionId,
           data: {
             id: callId,
-            tool: "tool",
+            tool: stringValue(props.tool) ?? "tool",
             input: props.structured,
             status: "running",
-            result: contentToString(props.content, props.structured),
+            result,
           },
         }]
+        if (result && token > prevToken) {
+          const prevStdoutLength = context.toolPartialStdoutLengths.get(id) ?? 0
+          const stdoutLength = prevStdoutLength + result.length
+          context.toolPartialTokens.set(id, token)
+          context.toolPartialStdoutLengths.set(id, stdoutLength)
+          context.toolPartialStderrLengths.set(id, context.toolPartialStderrLengths.get(id) ?? 0)
+          events.push({
+            type: "tool_partial",
+            sessionId,
+            data: {
+              id: callId,
+              tool: stringValue(props.tool) ?? "tool",
+              token,
+              stdoutDelta: result,
+              stderrDelta: "",
+              stdoutLength,
+              stderrLength: context.toolPartialStderrLengths.get(id) ?? 0,
+            },
+          })
+        }
+        return events
+      }
       case "tool.success":
         return [{
           type: "tool_end",

@@ -14,11 +14,34 @@ import type { McpServerManager } from "../mcp/McpServerManager"
 import type { ModelRef, PromptOptions as BasePromptOptions } from "./sessionTypes"
 import { isLocalPlaceholderSessionId } from "./sessionUtils"
 import { logStreamTrace } from "./streamTrace"
+import { extractLiveToolOutput, type LiveToolOutputSnapshot } from "./liveToolOutput"
 
 const MAX_RESPONSE_SIZE = 50 * 1024 * 1024
 
 interface PromptOptions extends BasePromptOptions {
   signal?: AbortSignal
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" ? value as Record<string, unknown> : undefined
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined
+}
+
+function unavailableToolSnapshot(callId: string, token = 0): LiveToolOutputSnapshot {
+  return {
+    available: false,
+    callId,
+    stdout: "",
+    stderr: "",
+    token,
+    stdoutLength: 0,
+    stderrLength: 0,
+    stdoutLineCount: 0,
+    stderrLineCount: 0,
+  }
 }
 
 export class SessionClient {
@@ -108,6 +131,39 @@ export class SessionClient {
     const data = (resp.data as Array<{ info: Message; parts: Part[] }> | undefined) ?? []
     this.assertResponseSize(data, "getSessionMessages")
     return data
+  }
+
+  private stableToolPartId(part: Record<string, unknown>, messageId?: string): string | undefined {
+    return stringValue(part.id) || stringValue(part.callID) || (messageId && stringValue(part.tool) ? `${messageId}:${stringValue(part.tool)}` : undefined)
+  }
+
+  async getToolPartialOutput(sessionId: string, callId: string, sinceToken = 0): Promise<LiveToolOutputSnapshot> {
+    if (!callId) return unavailableToolSnapshot(callId, sinceToken)
+    const client = this.guard()
+    const resp = await client.session.messages({ path: { id: sessionId } })
+    if (resp.error) throw new Error(`Failed to get tool partial output: ${JSON.stringify(resp.error)}`)
+    const data = (resp.data as Array<{ info: Message; parts: Part[] }> | undefined) ?? []
+    this.assertResponseSize(data, "getToolPartialOutput")
+
+    for (let i = data.length - 1; i >= 0; i--) {
+      const message = data[i]
+      if (!message) continue
+      const messageId = stringValue((message.info as Record<string, unknown> | undefined)?.id)
+      for (const rawPart of message.parts ?? []) {
+        const part = asRecord(rawPart)
+        if (!part || part.type !== "tool") continue
+        if (part.id === callId || part.callID === callId || this.stableToolPartId(part, messageId) === callId) {
+          return extractLiveToolOutput({
+            callId,
+            state: part.state,
+            part,
+            fallbackToken: sinceToken,
+          })
+        }
+      }
+    }
+
+    return unavailableToolSnapshot(callId, sinceToken)
   }
 
   async listSessions(): Promise<Session[]> {

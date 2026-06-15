@@ -209,4 +209,29 @@ void describe("SessionClient", () => {
       )
     })
   })
+
+  void describe("getToolPartialOutput", () => {
+    void it("is backed by client.session.messages and checks response size", () => {
+      assert.ok(source.includes("async getToolPartialOutput("), "getToolPartialOutput exists")
+      assert.ok(
+        /getToolPartialOutput[\s\S]*?client\.session\.messages\(\{ path: \{ id: sessionId \} \}\)/.test(source),
+        "polls session.messages for the live tool snapshot",
+      )
+      assert.ok(
+        /getToolPartialOutput[\s\S]*?this\.assertResponseSize\(data, "getToolPartialOutput"\)/.test(source),
+        "guards response size",
+      )
+    })
+
+    void it("matches tool parts by id, callID, or stable fallback", () => {
+      assert.ok(source.includes("private stableToolPartId("), "stable fallback helper exists")
+      assert.ok(source.includes("part.id === callId || part.callID === callId || this.stableToolPartId(part, messageId) === callId"), "matches all supported call ids")
+      assert.ok(source.includes("`${messageId}:${stringValue(part.tool)}`"), "stable fallback uses messageId:tool")
+    })
+
+    void it("returns a defensive unavailable snapshot when no live output exists", () => {
+      assert.ok(source.includes("unavailableToolSnapshot(callId, sinceToken)"), "falls back to unavailable snapshot")
+      assert.ok(source.includes("fallbackToken: sinceToken"), "passes sinceToken as extraction fallback")
+    })
+  })
 })
