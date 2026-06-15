@@ -356,6 +356,34 @@ export function appendToolOutputSize(parent: HTMLElement, toolBlock: ToolCallBlo
   parent.appendChild(size)
 }
 
+/** First non-empty string value among the given keys, else null. */
+function firstStringField(obj: Record<string, unknown>, keys: string[]): string | null {
+  for (const k of keys) {
+    const v = obj[k]
+    if (typeof v === "string") return v
+  }
+  return null
+}
+
+/** Render a multi-line string as removed/added diff lines (edit-tool input preview). */
+function appendDiffSide(parent: HTMLElement, text: string, kind: "removed" | "added"): void {
+  const marker = kind === "removed" ? "-" : "+"
+  for (const raw of text.split("\n")) {
+    const line = document.createElement("div")
+    line.className = `diff-line diff-line--${kind}`
+    const mark = document.createElement("span")
+    mark.className = "diff-line-marker"
+    mark.setAttribute("aria-hidden", "true")
+    mark.textContent = marker
+    const content = document.createElement("span")
+    content.className = "diff-line-content"
+    content.textContent = raw
+    line.appendChild(mark)
+    line.appendChild(content)
+    parent.appendChild(line)
+  }
+}
+
 export function createToolArgsPanel(toolBlock: ToolCallBlock): HTMLElement | null {
   if (toolBlock.args === undefined) return null
 
@@ -397,6 +425,35 @@ export function createToolArgsPanel(toolBlock: ToolCallBlock): HTMLElement | nul
         argsDiv.appendChild(desc)
       }
       return argsDiv
+    }
+  }
+
+  // Write/edit tools: show the change as a diff (edit) or a code block (write),
+  // not a JSON-escaped string with literal \n noise.
+  const isWriteTool =
+    toolBlock.class === "write" ||
+    ["edit", "write", "patch"].some((k) => (toolBlock.name?.toLowerCase() ?? "").includes(k))
+  if (isWriteTool) {
+    const parsedW = typeof args === "string" ? safeJsonParse(args) : args
+    const obj = parsedW && typeof parsedW === "object" ? (parsedW as Record<string, unknown>) : null
+    if (obj) {
+      const oldStr = firstStringField(obj, ["oldString", "old_string", "old", "search"])
+      const newStr = firstStringField(obj, ["newString", "new_string", "new", "replace"])
+      const content = firstStringField(obj, ["content", "contents", "text", "fileText"])
+      if (oldStr !== null || newStr !== null) {
+        argsDiv.classList.add("tool-args-panel--edit")
+        if (oldStr !== null) appendDiffSide(argsDiv, oldStr, "removed")
+        if (newStr !== null) appendDiffSide(argsDiv, newStr, "added")
+        return argsDiv
+      }
+      if (content !== null) {
+        argsDiv.classList.add("tool-args-panel--write")
+        const body = document.createElement("pre")
+        body.className = "tool-result-body"
+        addTruncatedContent(body, content, 2000, 40)
+        argsDiv.appendChild(body)
+        return argsDiv
+      }
     }
   }
 
