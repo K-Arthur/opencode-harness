@@ -321,7 +321,8 @@ Fixes for four coupled defects where the welcome screen and live tab state disag
   captures only `"  -"` and `detectPlanFile()` returns `null` for well-formed
   plans — meaning the existing **plan card never renders**. The Activity feed
   sidesteps this with its own robust `detectPlanLite()`. Fix `detectPlanFile`
-  in Phase 2 (anchor the capture / parse line-by-line) and add a regression test.
+  in Phase 2 (anchor the capture / parse line-by-line) and add a regression test. **Fixed** — `planDetector.ts` now uses an anchored `^todos:\s*$` regex and parses line-by-line; `planDetector.test.ts` locks the regression.
+- **Sprint 4 iconography** (c233830, 12bce8c, 96447dc): per-tool-name SVG resolver, activity-kind SVG icons, subagent-domain SVG icons, and state overlays all shipped. All emoji + literal-glyph replacements live. See `docs/ui/icons.md`.
 
 ## 14. Backend / API gaps blocking ideal frontend behavior
 

@@ -88,6 +88,13 @@
 // appendToolStatusBadge rebuild to use a .tool-status-icon + .tool-status-label
 // pair. Adds ~3.3KB minified beyond the 726KB re-baseline. +6KB keeps ~0.8%
 // headroom. Host limit unchanged.
+//
+// 2026-06-14 re-baseline (host 556KB -> 558KB): ConfidenceScorer wired into
+// the skill hinter closure in ChatProvider (instantiation + recordSkillUsage
+// call on every triggered-and-enabled skill) and the SpecContext plumbing
+// in TaskDecomposer (decompose signature, generateTasks spec threading,
+// generateTaskTitle spec override, two new spec-task helpers). Adds ~1.1KB
+// minified. +2KB keeps ~0.4% headroom. Webview limit unchanged.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -97,7 +104,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 556 * 1024, label: "extension host" },
+  { path: "dist/extension.js", limitBytes: 558 * 1024, label: "extension host" },
   { path: "dist/chat/webview/main.js", limitBytes: 732 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
