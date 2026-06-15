@@ -956,6 +956,12 @@
           "maximum": 10,
           "description": "Maximum number of concurrent AI streams across all tabs."
         },
+        "opencode.toolOutput.renderAnsi": {
+          "type": "boolean",
+          "scope": "window",
+          "default": false,
+          "description": "Render a small ANSI SGR color palette in bash tool output. Disabled by default; when off, ANSI and control sequences are stripped from tool output."
+        },
         "opencode.defaultMode": {
           "type": "string",
           "default": "build",
@@ -1090,37 +1096,35 @@
   "devDependencies": {
     "@commitlint/cli": "^20.5.3",
     "@commitlint/config-conventional": "^20.5.3",
-    "@playwright/test": "^1.49.0",
+    "@playwright/test": "^1.60.0",
     "@stryker-mutator/core": "^9.6.1",
     "@types/jsdom": "^28.0.3",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.19.17",
     "@types/vscode": "^1.98.0",
-    "@typescript-eslint/eslint-plugin": "^8.59.2",
-    "@typescript-eslint/parser": "^8.59.2",
-    "@vscode/test-cli": "^0.0.11",
+    "@typescript-eslint/eslint-plugin": "^8.61.0",
+    "@typescript-eslint/parser": "^8.61.0",
+    "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "^3.9.1",
+    "@vscode/vsce": "^3.9.2",
     "c8": "^11.0.0",
-    "esbuild": "^0.28.0",
+    "esbuild": "^0.28.1",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "jsdom": "^29.1.1",
     "mocha": "^11.3.0",
-    "tsx": "^4.22.3",
+    "tsx": "^4.22.4",
     "typescript": "^5.7.0"
   },
   "overrides": {
     "serialize-javascript": "^7.0.0"
   },
   "dependencies": {
-    "@opencode-ai/sdk": "^1.17.6",
-    "@vscode-elements/elements": "^2.5.1",
-    "dompurify": "^3.4.2",
-    "fast-diff": "^1.3.0",
+    "@opencode-ai/sdk": "^1.17.7",
+    "dompurify": "^3.4.10",
     "highlight.js": "^11.11.1",
-    "markdown-it": "^14.1.0",
+    "markdown-it": "^14.2.0",
     "markdown-it-task-lists": "^2.1.1"
   }
 }
