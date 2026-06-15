@@ -158,7 +158,7 @@ export class ToolPartHandler implements EventHandler {
         ? time.end - time.start
         : undefined
       const durationMs = computedDurationMs ?? liveSnapshot.durationMs
-      const stderr = this.extractStderr(meta) ?? (liveSnapshot.stderr ? liveSnapshot.stderr : undefined)
+      const stderr = this.extractStderr(meta) ?? (liveSnapshot.stderr || undefined)
       out.push({
         type: "tool_end",
         sessionId: toolPart.sessionID,
