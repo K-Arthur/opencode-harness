@@ -95,6 +95,16 @@
 // in TaskDecomposer (decompose signature, generateTasks spec threading,
 // generateTaskTitle spec override, two new spec-task helpers). Adds ~1.1KB
 // minified. +2KB keeps ~0.4% headroom. Webview limit unchanged.
+//
+// 2026-06-14 re-baseline (host 558KB -> 562KB): composer UX improvements
+// (auto-focus on new tab, dynamic placeholder with model+cache, resize cap
+// 200->300, draft persistence in switchTab/setDraftText/getDraftText,
+// Ctrl+K global shortcut handler, Ctrl+T/W/Tab/K isTextInput guards,
+// shortcuts modal wiring). Adds ~1.8KB minified. +4KB keeps ~0.7% headroom.
+// Webview 732KB -> 736KB: same changes plus draft persistence in state.ts
+// (loadSessions draftText merge), aria-live announcements region in
+// index.html, and state.ts `setDraftText`/`getDraftText` getter-setter.
+// Adds ~2.1KB minified. +4KB keeps ~0.5% headroom.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -104,8 +114,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 558 * 1024, label: "extension host" },
-  { path: "dist/chat/webview/main.js", limitBytes: 732 * 1024, label: "chat webview" },
+  { path: "dist/extension.js", limitBytes: 562 * 1024, label: "extension host" },
+  { path: "dist/chat/webview/main.js", limitBytes: 736 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
 
