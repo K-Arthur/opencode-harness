@@ -71,7 +71,7 @@ export function initQuestionBar(postMessage: (msg: Record<string, unknown>) => v
   diag("initQuestionBar: initialized")
 }
 
-export function addQuestion(block: QuestionBlock, messageId: string): void {
+export function addQuestion(block: QuestionBlock, messageId: string, envelopeSessionId?: string): void {
   if (!els) {
     diag("addQuestion dropped: els is null (initQuestionBar failed or not called)")
     return
@@ -89,7 +89,10 @@ export function addQuestion(block: QuestionBlock, messageId: string): void {
   const item: QuestionBarItem = {
     toolCallId,
     requestID: block.requestID,
-    sessionId: block.sessionId ?? _activeSessionId,
+    // Attribute to the question's real session: explicit block.sessionId, then
+    // the dispatcher's envelope sid, and only as a last resort the viewed
+    // session. The active fallback alone caused the wrong-tab bleed bug.
+    sessionId: block.sessionId || envelopeSessionId || _activeSessionId,
     messageId,
     groups: block.groups ?? [],
     allowFreeText: block.allowFreeText !== false,
