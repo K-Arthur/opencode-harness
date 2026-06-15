@@ -309,7 +309,166 @@ test("getToolPartialOutput calls v2 session.messages and finds tool part", async
   assert.deepEqual(calls[0], { sessionID: "ses_1" })
 })
 
-test("migrated domain methods require the v2 client (Server not running otherwise)", async () => {
+// --- Cluster 4: sendCommand ----------------------------------------------------------
+
+test("sendCommand calls v2 session.command with flat params and maps response", async () => {
+  const calls = []
+  const v2 = {
+    session: {
+      command: async (p) => {
+        calls.push(p)
+        return { data: { info: makeFakeMessage("msg_cmd"), parts: [makeFakePart("p1", "text", { text: "done" })] }, error: undefined }
+      },
+    },
+  }
+  const result = await new SessionClient(() => ({}), undefined, () => false, () => v2).sendCommand("ses_1", "test", "--verbose")
+  assert.equal(result.info.id, "msg_cmd")
+  assert.equal(result.parts[0].id, "p1")
+  assert.deepEqual(calls[0], { sessionID: "ses_1", command: "test", arguments: "--verbose" })
+})
+
+test("sendCommand uses empty string for undefined args", async () => {
+  const calls = []
+  const v2 = {
+    session: {
+      command: async (p) => {
+        calls.push(p)
+        return { data: { info: makeFakeMessage("msg_cmd"), parts: [] }, error: undefined }
+      },
+    },
+  }
+  await new SessionClient(() => ({}), undefined, () => false, () => v2).sendCommand("ses_1", "test")
+  assert.deepEqual(calls[0], { sessionID: "ses_1", command: "test", arguments: "" })
+})
+
+// --- Cluster 5: compactSession -------------------------------------------------------
+
+test("compactSession calls v2 session.summarize with flat sessionID", async () => {
+  const calls = []
+  const v2 = {
+    session: {
+      summarize: async (p) => { calls.push(p); return { data: true, error: undefined } },
+    },
+  }
+  const result = await new SessionClient(() => ({}), undefined, () => false, () => v2).compactSession("ses_1")
+  assert.equal(result, true)
+  assert.deepEqual(calls[0], { sessionID: "ses_1" })
+})
+
+test("compactSession passes model ref when provided", async () => {
+  const calls = []
+  const sc = new SessionClient(() => ({}), undefined, () => false, () => ({
+    session: { summarize: async (p) => { calls.push(p); return { data: true, error: undefined } } },
+  }))
+  sc.setModel("provider_1", "model_1")
+  await sc.compactSession("ses_1")
+  assert.deepEqual(calls[0], { sessionID: "ses_1", providerID: "provider_1", modelID: "model_1" })
+})
+
+// --- Cluster 6: getSessionDiff, getSessionTodos --------------------------------------
+
+test("getSessionDiff calls v2 session.diff with flat sessionID", async () => {
+  const calls = []
+  const v2 = {
+    session: {
+      diff: async (p) => { calls.push(p); return { data: [{ file: "test.ts", additions: 5, deletions: 3 }], error: undefined } },
+    },
+  }
+  const result = await new SessionClient(() => ({}), undefined, () => false, () => v2).getSessionDiff("ses_1")
+  assert.deepEqual(result, [{ file: "test.ts", additions: 5, deletions: 3 }])
+  assert.deepEqual(calls[0], { sessionID: "ses_1" })
+})
+
+test("getSessionDiff passes messageID when provided", async () => {
+  const calls = []
+  const v2 = {
+    session: {
+      diff: async (p) => { calls.push(p); return { data: [], error: undefined } },
+    },
+  }
+  await new SessionClient(() => ({}), undefined, () => false, () => v2).getSessionDiff("ses_1", "msg_9")
+  assert.deepEqual(calls[0], { sessionID: "ses_1", messageID: "msg_9" })
+})
+
+test("getSessionTodos calls v2 session.todo with flat sessionID", async () => {
+  const calls = []
+  const v2 = {
+    session: {
+      todo: async (p) => { calls.push(p); return { data: [{ id: "t1", content: "fix bug", status: "pending", priority: "high" }], error: undefined } },
+    },
+  }
+  const results = await new SessionClient(() => ({}), undefined, () => false, () => v2).getSessionTodos("ses_1")
+  assert.equal(results.length, 1)
+  assert.equal(results[0].content, "fix bug")
+  assert.deepEqual(calls[0], { sessionID: "ses_1" })
+})
+
+// --- Cluster 7: readFile, listCommands, listAgents -----------------------------------
+
+test("readFile calls v2 file.read with flat path and directory", async () => {
+  const calls = []
+  const v2 = {
+    file: {
+      read: async (p) => { calls.push(p); return { data: { type: "text", content: "hello" }, error: undefined } },
+    },
+  }
+  const result = await new SessionClient(() => ({}), undefined, () => false, () => v2).readFile("src/test.ts", "/repo")
+  assert.deepEqual(result, { type: "text", content: "hello" })
+  assert.deepEqual(calls[0], { path: "src/test.ts", directory: "/repo" })
+})
+
+test("readFile omits directory when not provided", async () => {
+  const calls = []
+  const v2 = {
+    file: {
+      read: async (p) => { calls.push(p); return { data: null, error: undefined } },
+    },
+  }
+  await new SessionClient(() => ({}), undefined, () => false, () => v2).readFile("README.md")
+  assert.deepEqual(calls[0], { path: "README.md" })
+})
+
+test("listCommands calls v2 command.list and maps response", async () => {
+  const calls = []
+  const v2 = {
+    command: {
+      list: async (p) => { calls.push(p); return { data: [{ name: "test", template: "npm test" }], error: undefined } },
+    },
+  }
+  const results = await new SessionClient(() => ({}), undefined, () => false, () => v2).listCommands()
+  assert.equal(results.length, 1)
+  assert.equal(results[0].name, "test")
+  assert.equal(calls[0], undefined) // no params
+})
+
+test("listAgents calls v2 app.agents and maps native→builtIn", async () => {
+  const calls = []
+  const v2 = {
+    app: {
+      agents: async (p) => { calls.push(p); return { data: [{ name: "builder", mode: "primary", native: true }], error: undefined } },
+    },
+  }
+  const results = await new SessionClient(() => ({}), undefined, () => false, () => v2).listAgents()
+  assert.equal(results.length, 1)
+  assert.equal(results[0].name, "builder")
+  assert.equal(results[0].builtIn, true) // native→builtIn mapping
+  assert.equal(calls[0], undefined) // no params → undefined
+})
+
+test("listAgents passes directory when provided", async () => {
+  const calls = []
+  const v2 = {
+    app: {
+      agents: async (p) => { calls.push(p); return { data: [], error: undefined } },
+    },
+  }
+  await new SessionClient(() => ({}), undefined, () => false, () => v2).listAgents("/my/repo")
+  assert.deepEqual(calls[0], { directory: "/my/repo" })
+})
+
+// --- Guard: all migrated methods require the v2 client -------------------------------
+
+test("all migrated domain methods require the v2 client (Server not running otherwise)", async () => {
   const sc = new SessionClient(() => ({}), undefined, () => false, () => null)
   await assert.rejects(sc.getSession("ses_x"), /Server not running/)
   await assert.rejects(sc.createSession(), /Server not running/)
@@ -319,4 +478,11 @@ test("migrated domain methods require the v2 client (Server not running otherwis
   await assert.rejects(sc.getSessionMessages("ses_x"), /Server not running/)
   await assert.rejects(sc.getMessages("ses_x"), /Server not running/)
   await assert.rejects(sc.getToolPartialOutput("ses_x", "c"), /Server not running/)
+  await assert.rejects(sc.sendCommand("ses_x", "x"), /Server not running/)
+  await assert.rejects(sc.compactSession("ses_x"), /Server not running/)
+  await assert.rejects(sc.getSessionDiff("ses_x"), /Server not running/)
+  await assert.rejects(sc.getSessionTodos("ses_x"), /Server not running/)
+  await assert.rejects(sc.readFile("x"), /Server not running/)
+  await assert.rejects(sc.listCommands(), /Server not running/)
+  await assert.rejects(sc.listAgents(), /Server not running/)
 })

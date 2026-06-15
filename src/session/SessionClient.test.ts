@@ -211,11 +211,11 @@ void describe("SessionClient", () => {
   })
 
   void describe("getToolPartialOutput", () => {
-    void it("is backed by client.session.messages and checks response size", () => {
+    void it("is backed by client.session.messages (v2) and checks response size", () => {
       assert.ok(source.includes("async getToolPartialOutput("), "getToolPartialOutput exists")
       assert.ok(
-        /getToolPartialOutput[\s\S]*?client\.session\.messages\(\{ path: \{ id: sessionId \} \}\)/.test(source),
-        "polls session.messages for the live tool snapshot",
+        /getToolPartialOutput[\s\S]*?client\.session\.messages\(\{ sessionID: sessionId \}\)/.test(source),
+        "polls session.messages (v2) for the live tool snapshot",
       )
       assert.ok(
         /getToolPartialOutput[\s\S]*?this\.assertResponseSize\(data, "getToolPartialOutput"\)/.test(source),

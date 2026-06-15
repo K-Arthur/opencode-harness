@@ -90,3 +90,12 @@ function mapV2DiffToFileDiff(v2: Record<string, unknown>): FileDiff {
     deletions: v2.deletions as number,
   }
 }
+
+export function mapV2Agent(v2: Record<string, unknown>): { name: string; description?: string; mode: string; builtIn: boolean } {
+  return {
+    name: v2.name as string,
+    description: v2.description as string | undefined,
+    mode: v2.mode as string,
+    builtIn: (v2.native as boolean) ?? false,
+  }
+}

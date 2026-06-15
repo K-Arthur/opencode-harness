@@ -17,6 +17,7 @@ import {
   mapV2SessionArray,
   mapV2MessageWithParts,
   mapV2MessageWithPartsArray,
+  mapV2Agent,
 } from "./v2ResponseMappers"
 import type { ModelRef, PromptOptions as BasePromptOptions } from "./sessionTypes"
 import { isLocalPlaceholderSessionId } from "./sessionUtils"
@@ -329,31 +330,32 @@ export class SessionClient {
   }
 
   async sendCommand(sessionId: string, command: string, args?: string): Promise<{ info: Message; parts: Part[] }> {
-    const client = this.guard()
+    const client = this.guardV2()
     const resp = await client.session.command({
-      path: { id: sessionId },
-      body: { command, arguments: args ?? "" },
+      sessionID: sessionId,
+      command,
+      arguments: args ?? "",
     })
-    if (resp.error) throw new Error(`Command failed: ${JSON.stringify(resp.error)}`)
-    return resp.data as { info: Message; parts: Part[] }
+    this.throwOnV2Error(resp, "Command failed")
+    return mapV2MessageWithParts(resp.data as Record<string, unknown>)
   }
 
   async compactSession(sessionId: string, model?: ModelRef): Promise<boolean> {
-    const client = this.guard()
+    const client = this.guardV2()
     const modelRef = model ?? this._currentModel ?? undefined
     const resp = await client.session.summarize({
-      path: { id: sessionId },
-      body: modelRef ? { providerID: modelRef.providerID, modelID: modelRef.modelID } : undefined,
+      sessionID: sessionId,
+      ...(modelRef ? { providerID: modelRef.providerID, modelID: modelRef.modelID } : {}),
     })
-    if (resp.error) throw new Error(`Compaction failed: ${JSON.stringify(resp.error)}`)
+    this.throwOnV2Error(resp, "Compaction failed")
     log.info(`Session compacted: ${sessionId}`)
     return resp.data as boolean
   }
 
   async listCommands(): Promise<Array<{ name: string; description?: string; template: string; agent?: string; source?: string }>> {
-    const client = this.guard()
+    const client = this.guardV2()
     const resp = await client.command.list()
-    if (resp.error) throw new Error(`Failed to list commands: ${JSON.stringify(resp.error)}`)
+    this.throwOnV2Error(resp, "Failed to list commands")
     return (resp.data as Array<{ name: string; description?: string; template: string; agent?: string; source?: string }>) ?? []
   }
 
@@ -378,12 +380,12 @@ export class SessionClient {
   }
 
   async getSessionDiff(sessionId: string, messageId?: string): Promise<unknown> {
-    const client = this.guard()
+    const client = this.guardV2()
     const resp = await client.session.diff({
-      path: { id: sessionId },
-      query: { messageID: messageId },
+      sessionID: sessionId,
+      ...(messageId ? { messageID: messageId } : {}),
     })
-    if (resp.error) throw new Error(`Failed to get diff: ${JSON.stringify(resp.error)}`)
+    this.throwOnV2Error(resp, "Failed to get diff")
     return resp.data
   }
 
@@ -394,9 +396,9 @@ export class SessionClient {
    * `diff` string) for the changed-files view.
    */
   async readFile(path: string, directory?: string): Promise<unknown> {
-    const client = this.guard()
-    const resp = await client.file.read({ query: { path, directory } })
-    if (resp.error) throw new Error(`Failed to read file '${path}': ${JSON.stringify(resp.error)}`)
+    const client = this.guardV2()
+    const resp = await client.file.read({ path, ...(directory ? { directory } : {}) })
+    this.throwOnV2Error(resp, `Failed to read file '${path}'`)
     return resp.data
   }
 
@@ -453,8 +455,9 @@ export class SessionClient {
   }
 
   async getSessionTodos(id: string): Promise<Array<{ id: string; content: string; status: string; priority: string }>> {
-    const client = this.guard()
-    const resp = await client.session.todo({ path: { id } })
+    const client = this.guardV2()
+    const resp = await client.session.todo({ sessionID: id })
+    this.throwOnV2Error(resp, "Failed to get session todos")
     this.assertResponseSize(resp.data, "getSessionTodos")
     return (resp.data ?? []) as Array<{ id: string; content: string; status: string; priority: string }>
   }
@@ -473,10 +476,11 @@ export class SessionClient {
   }
 
   async listAgents(directory?: string): Promise<Array<{ name: string; description?: string; mode: string; builtIn: boolean }>> {
-    const client = this.guard()
-    const resp = await client.app.agents(directory ? { query: { directory } } : undefined)
+    const client = this.guardV2()
+    const resp = await client.app.agents(directory ? { directory } : undefined)
+    this.throwOnV2Error(resp, "Failed to list agents")
     this.assertResponseSize(resp.data, "listAgents")
-    return (resp.data ?? []) as Array<{ name: string; description?: string; mode: string; builtIn: boolean }>
+    return ((resp.data as Array<Record<string, unknown>>) ?? []).map(mapV2Agent)
   }
 
   async sessionExists(id: string): Promise<boolean> {
