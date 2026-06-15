@@ -8,7 +8,7 @@ import {
 } from "./icons"
 import { sanitizeHtml, highlightSyntax } from "./syntaxHighlighter"
 import { isTaskTool, renderSubagentTaskCard } from "./subagentCard"
-import { stripAnsi } from "./ansiUtils"
+import { isToolOutputRenderAnsiEnabled, renderAnsiToHtml, stripAnsi } from "./ansiUtils"
 import { buildGroupSummaryLabel } from "./groupSummary"
 import { renderJsonViewer } from "./jsonViewer"
 import { isWebSearchTool, renderWebSearchResult } from "./webSearchRenderer"
@@ -16,6 +16,7 @@ import { isTerminalState } from "./toolState"
 
 export interface RenderOptions {
   messageId?: string
+  sessionId?: string
   postMessage?: (msg: Record<string, unknown>) => void
   mode?: string
   role?: string
@@ -42,9 +43,17 @@ export function normalizeToolBlock(block: Block): ToolCallBlock {
       name: (typeof block.tool === "string" ? block.tool : undefined) || block.toolName || block.name || "tool",
       class: (block.class as ToolCallClass) || (block.toolType as ToolCallClass) || 'read',
       state: (block.state as ToolCallState) || 'running',
-      args: block.args ? (typeof block.args === 'string' ? safeJsonParse(block.args) : block.args) : undefined,
-      result: block.result,
-      durationMs: (block.durationMs as number | undefined),
+    args: block.args ? (typeof block.args === 'string' ? safeJsonParse(block.args) : block.args) : undefined,
+    result: block.result,
+    partialStdout: (block as ToolCallBlock).partialStdout,
+    partialStderr: (block as ToolCallBlock).partialStderr,
+    stdoutLength: (block as ToolCallBlock).stdoutLength,
+    stderrLength: (block as ToolCallBlock).stderrLength,
+    stdoutLineCount: (block as ToolCallBlock).stdoutLineCount,
+    stderrLineCount: (block as ToolCallBlock).stderrLineCount,
+    stderr: (block as ToolCallBlock).stderr,
+    exitCode: (block as ToolCallBlock).exitCode,
+    durationMs: (block.durationMs as number | undefined),
     } as ToolCallBlock
   }
   const tb = block as ToolCallBlock
@@ -59,6 +68,14 @@ export function normalizeToolBlock(block: Block): ToolCallBlock {
     state: tb.state || 'running',
     args: tb.args ? (typeof tb.args === 'string' ? safeJsonParse(tb.args) : tb.args) : undefined,
     result: tb.result,
+    partialStdout: tb.partialStdout,
+    partialStderr: tb.partialStderr,
+    stdoutLength: tb.stdoutLength,
+    stderrLength: tb.stderrLength,
+    stdoutLineCount: tb.stdoutLineCount,
+    stderrLineCount: tb.stderrLineCount,
+    stderr: tb.stderr,
+    exitCode: tb.exitCode,
     durationMs: tb.durationMs,
     startedAt: tb.startedAt,
     workingDir: tb.workingDir,
@@ -422,8 +439,13 @@ function renderDiffBody(text: string): { fragment: DocumentFragment; added: numb
 export function createToolResultPanel(toolBlock: ToolCallBlock, opts?: RenderOptions): HTMLElement | null {
   const toolState = toolBlock.state || 'running'
   const isTerminal = isTerminalState(toolState)
-  const hasOutput = toolBlock.result !== undefined || (toolBlock.error !== undefined && toolBlock.error !== "")
-  if (!hasOutput || !isTerminal) return null
+  const liveStdout = typeof toolBlock.partialStdout === "string" ? toolBlock.partialStdout : undefined
+  const liveStderr = typeof toolBlock.partialStderr === "string" ? toolBlock.partialStderr : undefined
+  const hasLiveOutput = liveStdout !== undefined || liveStderr !== undefined
+  const isCommand = toolBlock.class === "exec" || ["bash","shell","command","terminal"].some(k => toolBlock.name?.toLowerCase().includes(k))
+  const isRunningCommand = isCommand && !isTerminal
+  const hasOutput = toolBlock.result !== undefined || (toolBlock.error !== undefined && toolBlock.error !== "") || hasLiveOutput || isRunningCommand
+  if (!hasOutput || (!isTerminal && !hasLiveOutput && !isRunningCommand)) return null
 
   const isErrorPanel = !!toolBlock.error || toolState === 'error' || toolState === 'timed_out'
 
@@ -440,8 +462,6 @@ export function createToolResultPanel(toolBlock: ToolCallBlock, opts?: RenderOpt
 
   const resultDiv = document.createElement("div")
   resultDiv.className = isErrorPanel ? "tool-result-panel tool-result-panel--error" : "tool-result-panel"
-
-  const isCommand = toolBlock.class === "exec" || ["bash","shell","command","terminal"].some(k => toolBlock.name?.toLowerCase().includes(k))
 
   const meta = document.createElement("div")
   meta.className = "tool-result-meta"
@@ -465,17 +485,35 @@ export function createToolResultPanel(toolBlock: ToolCallBlock, opts?: RenderOpt
     pieces.push(`exit ${toolBlock.exitCode}`)
   }
 
-  if (toolBlock.durationMs && isTerminal) {
+  if (toolBlock.durationMs && (isTerminal || hasLiveOutput)) {
     pieces.push(toolBlock.durationMs >= 1000 ? `${(toolBlock.durationMs / 1000).toFixed(1)}s` : `${toolBlock.durationMs}ms`)
   }
 
-  const rawOutput = toolBlock.result !== undefined ? toolBlock.result : toolBlock.error
-  const resultText = stripAnsi(typeof rawOutput === 'string' ? rawOutput : JSON.stringify(rawOutput, null, 2))
+  if (hasLiveOutput && !isTerminal) {
+    const live = document.createElement("span")
+    live.className = "tool-live-indicator"
+    live.title = "Streaming output"
+    live.setAttribute("aria-label", "Streaming output")
+    live.innerHTML = '<span class="codicon codicon-sync"></span>'
+    meta.appendChild(live)
+  }
+
+  const rawOutput = hasLiveOutput
+    ? liveStdout ?? ""
+    : toolBlock.result !== undefined ? toolBlock.result : toolBlock.error
+  const rawText = rawOutput === undefined ? "" : typeof rawOutput === 'string' ? rawOutput : JSON.stringify(rawOutput, null, 2)
+  const resultText = stripAnsi(rawText)
+  const stdoutText = hasLiveOutput ? stripAnsi(liveStdout ?? "") : resultText
+  const stderrText = hasLiveOutput ? stripAnsi(liveStderr ?? "") : (toolBlock.stderr ? stripAnsi(toolBlock.stderr) : "")
+  const stdoutRenderText = hasLiveOutput ? liveStdout ?? "" : resultText
+  const stderrRenderText = hasLiveOutput ? liveStderr ?? "" : toolBlock.stderr ?? ""
+  const copyOutputText = stderrText ? `${stdoutText}${stderrText}` : stdoutText
 
   const isDiff = !isErrorPanel && isDiffContent(resultText)
 
-  const lines = resultText.split("\n")
-  const metaText = `${formatOutputSize(resultText.length)}${lines.length > 1 ? `, ${lines.length} lines` : ""}`
+  const totalLength = (toolBlock.stdoutLength ?? stdoutText.length) + (toolBlock.stderrLength ?? stderrText.length)
+  const totalLines = (toolBlock.stdoutLineCount ?? (stdoutText ? stdoutText.split("\n").length : 0)) + (toolBlock.stderrLineCount ?? (stderrText ? stderrText.split("\n").length : 0))
+  const metaText = `${formatOutputSize(totalLength)}${totalLines > 1 ? `, ${totalLines} lines` : ""}`
   pieces.push(metaText)
 
   const metaTextEl = document.createElement("span")
@@ -490,7 +528,7 @@ export function createToolResultPanel(toolBlock: ToolCallBlock, opts?: RenderOpt
     meta.appendChild(document.createTextNode(` · +${added}/-${removed}`))
     resultDiv.appendChild(meta)
     resultDiv.appendChild(body)
-  } else if (isCommand && toolBlock.stderr) {
+  } else if (isCommand && (stderrText || hasLiveOutput)) {
     resultDiv.appendChild(meta)
     const stdoutEl = document.createElement("div")
     stdoutEl.className = "tool-command-output"
@@ -500,26 +538,30 @@ export function createToolResultPanel(toolBlock: ToolCallBlock, opts?: RenderOpt
     stdoutEl.appendChild(stdoutLabel)
     const stdoutBody = document.createElement("pre")
     stdoutBody.className = "tool-result-body"
-    addTruncatedContent(stdoutBody, resultText, 2000, 40)
+    addTruncatedContent(stdoutBody, stdoutRenderText, 2000, 40)
     stdoutEl.appendChild(stdoutBody)
     resultDiv.appendChild(stdoutEl)
 
-    const stderrEl = document.createElement("div")
-    stderrEl.className = "tool-command-output tool-command-output--stderr"
-    const stderrLabel = document.createElement("div")
-    stderrLabel.className = "tool-command-output-label"
-    stderrLabel.textContent = "stderr"
-    stderrEl.appendChild(stderrLabel)
-    const stderrBody = document.createElement("pre")
-    stderrBody.className = "tool-result-body"
-    addTruncatedContent(stderrBody, toolBlock.stderr, 2000, 40)
-    stderrEl.appendChild(stderrBody)
-    resultDiv.appendChild(stderrEl)
+    if (stderrText || hasLiveOutput) {
+      const stderrEl = document.createElement("div")
+      stderrEl.className = "tool-command-output tool-command-output--stderr"
+      const stderrLabel = document.createElement("div")
+      stderrLabel.className = "tool-command-output-label"
+      stderrLabel.textContent = "stderr"
+      stderrEl.appendChild(stderrLabel)
+      const stderrBody = document.createElement("pre")
+      stderrBody.className = "tool-result-body"
+      addTruncatedContent(stderrBody, stderrRenderText, 2000, 40)
+      stderrEl.appendChild(stderrBody)
+      resultDiv.appendChild(stderrEl)
+    }
+  } else if (isRunningCommand && !hasLiveOutput && !resultText) {
+    resultDiv.appendChild(meta)
   } else {
     resultDiv.appendChild(meta)
     const body = document.createElement("pre")
     body.className = "tool-result-body"
-    addTruncatedContent(body, resultText, 2000, 40)
+    addTruncatedContent(body, isToolOutputRenderAnsiEnabled() ? rawText : resultText, 2000, 40)
     resultDiv.appendChild(body)
   }
 
@@ -545,7 +587,7 @@ export function createToolResultPanel(toolBlock: ToolCallBlock, opts?: RenderOpt
       actions.appendChild(copyCmd)
     }
 
-    if (resultText) {
+    if (copyOutputText) {
       const copyOut = document.createElement("button")
       copyOut.className = "tool-result-action-btn"
       copyOut.textContent = "Copy output"
@@ -553,7 +595,7 @@ export function createToolResultPanel(toolBlock: ToolCallBlock, opts?: RenderOpt
       copyOut.setAttribute("data-restore-focus-id", "tool-copy-output")
       copyOut.addEventListener("click", (e) => {
         e.stopPropagation()
-        void navigator.clipboard?.writeText(resultText).catch(() => {})
+        void navigator.clipboard?.writeText(copyOutputText).catch(() => {})
         copyOut.textContent = "Copied!"
         setTimeout(() => { copyOut.textContent = "Copy output" }, 1500)
       })
@@ -576,6 +618,26 @@ export function createToolResultPanel(toolBlock: ToolCallBlock, opts?: RenderOpt
       actions.appendChild(openTerm)
     }
 
+    if (!isTerminal && pm) {
+      const cancel = document.createElement("button")
+      cancel.className = "tool-result-action-btn tool-result-action-btn--danger"
+      cancel.textContent = "Cancel"
+      cancel.title = "Cancel this running command"
+      cancel.setAttribute("data-restore-focus-id", "tool-cancel")
+      cancel.addEventListener("click", (e) => {
+        e.stopPropagation()
+        pm({
+          type: "cancel_tool",
+          sessionId: opts?.sessionId,
+          toolId: toolBlock.id,
+          stdout: liveStdout ?? "",
+          stderr: liveStderr ?? "",
+          durationMs: toolBlock.durationMs,
+        })
+      })
+      actions.appendChild(cancel)
+    }
+
     if (actions.childElementCount > 0) resultDiv.appendChild(actions)
   }
 
@@ -586,13 +648,15 @@ function addTruncatedContent(container: HTMLElement, text: string, maxChars: num
   const lines = text.split("\n")
   const truncated = text.length > maxChars || lines.length > maxLines
   const displayText = truncated ? lines.slice(0, maxLines).join("\n").slice(0, maxChars) : text
-  container.textContent = displayText
+  if (isToolOutputRenderAnsiEnabled()) container.innerHTML = renderAnsiToHtml(displayText)
+  else container.textContent = displayText
   if (truncated) {
     const more = document.createElement("button")
     more.className = "tool-show-more"
     more.textContent = "Show full"
     more.addEventListener("click", () => {
-      container.textContent = text
+      if (isToolOutputRenderAnsiEnabled()) container.innerHTML = renderAnsiToHtml(text)
+      else container.textContent = text
       more.remove()
     })
     container.parentElement?.appendChild(more)

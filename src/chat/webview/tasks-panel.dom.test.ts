@@ -50,7 +50,7 @@ function makeDeps(over: Partial<TasksPanelDeps> = {}) {
     filter: new Map<string, CommandFilter>(),
     copies: [] as string[],
     terminals: [] as Array<{ command: string; cwd?: string; autorun: boolean }>,
-    cancels: 0,
+    cancels: [] as Array<{ sessionId: string; toolId: string; stdout?: string; stderr?: string }>,
     jumps: [] as string[],
   }
   const deps: TasksPanelDeps = {
@@ -62,7 +62,7 @@ function makeDeps(over: Partial<TasksPanelDeps> = {}) {
     onJump: (id) => state.jumps.push(id),
     onCopy: (t) => state.copies.push(t),
     onOpenTerminal: (command, cwd, autorun) => state.terminals.push({ command, cwd, autorun }),
-    onCancel: () => { state.cancels++ },
+    onCancel: (payload) => { state.cancels.push(payload) },
     ...over,
   }
   return { state, deps }
@@ -135,15 +135,15 @@ describe("setupTasksPanel", () => {
     ])
   })
 
-  it("Cancel only appears for running commands and calls onCancel", () => {
+  it("Cancel only appears for running commands and calls onCancel with tool context", () => {
     const { state, deps } = makeDeps()
-    state.messages.set("s1", [msg([exec({ args: { command: "sleep 9" }, state: "running" })])])
+    state.messages.set("s1", [msg([exec({ id: "tool-sleep", args: { command: "sleep 9" }, state: "running" })])])
     const api = setupTasksPanel(els(), deps)!
     api.open()
     const cancel = Array.from(document.querySelectorAll<HTMLButtonElement>(".task-action-btn")).find((b) => b.textContent === "Cancel")
     assert.ok(cancel, "running command should offer Cancel")
     cancel!.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
-    assert.equal(state.cancels, 1)
+    assert.deepEqual(state.cancels, [{ sessionId: "s1", toolId: "tool-sleep", stdout: undefined, stderr: undefined }])
   })
 
   it("does NOT offer Cancel for a finished command", () => {
@@ -152,6 +152,32 @@ describe("setupTasksPanel", () => {
     const api = setupTasksPanel(els(), deps)!
     api.open()
     assert.equal(Array.from(document.querySelectorAll(".task-action-btn")).some((b) => b.textContent === "Cancel"), false)
+  })
+
+  it("overlays live stdout/stderr in running command cards and Copy output", () => {
+    const { state, deps } = makeDeps({
+      getLiveToolOutput: (_sessionId, toolId) => toolId === "tool-live"
+        ? {
+            stdout: "installing\n",
+            stderr: "warn\n",
+            token: 2,
+            stdoutLength: 11,
+            stderrLength: 5,
+            stdoutLineCount: 1,
+            stderrLineCount: 1,
+            terminal: false,
+          }
+        : undefined,
+    })
+    state.messages.set("s1", [msg([exec({ id: "tool-live", args: { command: "npm i" }, state: "running" })])])
+    const api = setupTasksPanel(els(), deps)!
+    api.open()
+
+    assert.match(document.querySelector(".task-card-output pre")!.textContent || "", /installing\nwarn/)
+    const copyOutput = Array.from(document.querySelectorAll<HTMLButtonElement>(".task-action-btn")).find((b) => b.textContent === "Copy output")
+    assert.ok(copyOutput)
+    copyOutput!.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
+    assert.equal(state.copies.at(-1), "installing\nwarn\n")
   })
 
   it("toggle opens and closes the panel", () => {

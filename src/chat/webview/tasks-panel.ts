@@ -8,12 +8,12 @@
  * `setup*(els, deps)` → API, `*-panel hidden` region, Escape-to-close, filter
  * chips, empty state, keyboard navigation, signature-guarded rebuilds.
  *
- * Live incremental stdout and true per-command cancellation are server-gated
- * (see docs/frontend-ux-audit.md §14); this panel surfaces everything the host
- * currently exposes and stages re-runs in the user's terminal.
+ * Live incremental stdout is overlaid from the transient webview store when
+ * available. Final persisted output still comes from the command read-model.
  */
 import type { ElementRefs } from "./dom"
 import type { ChatMessage } from "./types"
+import type { LiveToolOutput } from "./toolPartialStore"
 import {
   buildCommandTasks,
   filterCommandTasks,
@@ -34,12 +34,13 @@ export interface TasksPanelDeps {
   getActiveSessionId: () => string | undefined
   getFilter: (sessionId: string) => CommandFilter
   setFilter: (sessionId: string, filter: CommandFilter) => void
+  getLiveToolOutput?: (sessionId: string, toolId: string) => LiveToolOutput | undefined
   onJump: (anchorMessageId: string) => void
   onCopy: (text: string) => void
   /** Open the command in the integrated terminal; autorun executes it. */
   onOpenTerminal: (command: string, cwd: string | undefined, autorun: boolean) => void
-  /** Cancel the active session's running turn (whole-stream abort). */
-  onCancel: () => void
+  /** Cancel the running tool card, falling back to whole-stream abort host-side. */
+  onCancel: (payload: { sessionId: string; toolId: string; stdout?: string; stderr?: string }) => void
 }
 
 export interface TasksPanelApi {
@@ -80,6 +81,8 @@ export function setupTasksPanel(els: TasksPanelEls, deps: TasksPanelDeps): Tasks
 
   let lastSignature = ""
   buildFilterChips()
+
+  type RenderTask = CommandTask & { live?: LiveToolOutput }
 
   const onCloseClick = () => close()
   if (closeBtn) closeBtn.addEventListener("click", onCloseClick)
@@ -134,8 +137,8 @@ export function setupTasksPanel(els: TasksPanelEls, deps: TasksPanelDeps): Tasks
     }
   }
 
-  function signatureOf(tasks: CommandTask[], filter: CommandFilter): string {
-    return `${filter}|${tasks.length}|${tasks.map((t) => `${t.id}:${t.status}:${t.exitCode ?? ""}`).join(",")}`
+  function signatureOf(tasks: RenderTask[], filter: CommandFilter): string {
+    return `${filter}|${tasks.length}|${tasks.map((t) => `${t.id}:${t.status}:${t.exitCode ?? ""}:${t.live?.token ?? ""}:${t.output?.length ?? 0}`).join(",")}`
   }
 
   function actionButton(label: string, title: string, onClick: () => void): HTMLButtonElement {
@@ -149,9 +152,10 @@ export function setupTasksPanel(els: TasksPanelEls, deps: TasksPanelDeps): Tasks
     return b
   }
 
-  function renderCard(task: CommandTask): HTMLElement {
+  function renderCard(task: RenderTask, sessionId: string): HTMLElement {
     const card = document.createElement("div")
     card.className = `task-card task-card--${task.status}`
+    card.dataset.toolId = task.id
     card.tabIndex = 0
     card.setAttribute("role", "group")
     card.setAttribute("aria-label", `${task.status} command: ${task.command}`)
@@ -214,14 +218,19 @@ export function setupTasksPanel(els: TasksPanelEls, deps: TasksPanelDeps): Tasks
     actions.appendChild(actionButton("Terminal", "Stage command in the integrated terminal", () => deps.onOpenTerminal(task.command, task.cwd, false)))
     actions.appendChild(actionButton("Re-run", "Run the command in the integrated terminal", () => deps.onOpenTerminal(task.command, task.cwd, true)))
     if (task.status === "running") {
-      actions.appendChild(actionButton("Cancel", "Cancel the running turn", () => deps.onCancel()))
+      actions.appendChild(actionButton("Cancel", "Cancel the running command", () => deps.onCancel({
+        sessionId,
+        toolId: task.id,
+        stdout: task.live?.stdout,
+        stderr: task.live?.stderr,
+      })))
     }
     card.appendChild(actions)
 
     return card
   }
 
-  function renderList(tasks: CommandTask[], opts: { filter: CommandFilter; total: number }): void {
+  function renderList(tasks: RenderTask[], opts: { filter: CommandFilter; total: number; sessionId: string }): void {
     list.replaceChildren()
 
     const summary = document.createElement("div")
@@ -241,8 +250,22 @@ export function setupTasksPanel(els: TasksPanelEls, deps: TasksPanelDeps): Tasks
 
     const rows = document.createElement("div")
     rows.className = "task-rows"
-    for (const task of tasks) rows.appendChild(renderCard(task))
+    for (const task of tasks) rows.appendChild(renderCard(task, opts.sessionId))
     list.appendChild(rows)
+  }
+
+  function overlayLiveOutput(sessionId: string, tasks: CommandTask[]): RenderTask[] {
+    return tasks.map((task) => {
+      const live = deps.getLiveToolOutput?.(sessionId, task.id)
+      if (!live) return task
+      const output = `${live.stdout}${live.stderr}`
+      return {
+        ...task,
+        status: task.status === "pending" ? "running" : task.status,
+        output: output || task.output,
+        live,
+      }
+    })
   }
 
   function refresh(sessionId?: string): void {
@@ -251,15 +274,15 @@ export function setupTasksPanel(els: TasksPanelEls, deps: TasksPanelDeps): Tasks
     if (!sid || sid !== deps.getActiveSessionId()) return
 
     const messages = deps.getMessages(sid) || []
-    const all = buildCommandTasks(messages)
+    const all = overlayLiveOutput(sid, buildCommandTasks(messages))
     const filter = deps.getFilter(sid)
-    const tasks = filterCommandTasks(all, filter)
+    const tasks = filterCommandTasks(all, filter) as RenderTask[]
     syncChips(filter)
 
     const sig = signatureOf(all, filter)
     if (sig === lastSignature) return
     lastSignature = sig
-    renderList(tasks, { filter, total: all.length })
+    renderList(tasks, { filter, total: all.length, sessionId: sid })
   }
 
   function isOpen(): boolean { return !panel.classList.contains("hidden") }

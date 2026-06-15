@@ -229,7 +229,7 @@ describe("stream.ts", () => {
     const handlers = [
       "showTypingIndicator", "hideTypingIndicator",
       "handleStreamStart", "handleStreamToken", "handleStreamChunk",
-      "handleToolStart", "handleToolUpdate", "handleToolEnd",
+      "handleToolStart", "handleToolUpdate", "handleToolPartial", "handleToolEnd",
       "handleDiff", "handleStreamEnd", "handleStreamError",
       "handleRequestError", "handleDiffResult", "handleServerStatus",
       "clearMessages",

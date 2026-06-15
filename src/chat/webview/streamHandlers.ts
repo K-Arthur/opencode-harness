@@ -6,9 +6,10 @@ import { renderMessage } from "./messageRenderer"
 import { renderBlock, renderMarkdown } from "./renderer"
 import { sanitizeHtml, highlightSyntax } from "./syntaxHighlighter"
 import type { RenderOptions } from "./renderer"
-import { renderToolGroup, renderToolGroupBadge } from "./toolCallRenderer"
+import { createToolResultPanel, renderToolGroup, renderToolGroupBadge } from "./toolCallRenderer"
 import { applySubagentCardUpdate } from "./subagentCard"
 import type { ScrollAnchor } from "./scrollAnchor"
+import type { LiveToolOutput } from "./toolPartialStore"
 import { CHECK_SVG, SUCCESS_SVG, SPINNER_SVG } from "./icons"
 import { RenderQueue } from "./renderQueue"
 import { LiveTextRenderer } from "./liveTextRenderer"
@@ -1041,6 +1042,61 @@ export function handleToolUpdate(
     errorEl.textContent = update.error
   }
 
+  const scrollAnchor = (els as unknown as { scrollAnchor: ScrollAnchor }).scrollAnchor
+  scrollAnchor?.scrollIfAnchored()
+}
+
+function findToolBlock(messages: ChatMessage[], toolId: string): { block: ToolCallBlock; messageId?: string } | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i]
+    if (!msg) continue
+    for (const block of msg.blocks) {
+      if (block.type !== "tool-call") continue
+      const tool = block as ToolCallBlock
+      if (tool.id === toolId) return { block: tool, messageId: msg.id }
+    }
+  }
+  return undefined
+}
+
+export function handleToolPartial(
+  els: StreamElements,
+  messages: ChatMessage[],
+  sessionId: string,
+  toolId: string,
+  live: LiveToolOutput,
+  postMessage?: (msg: Record<string, unknown>) => void,
+): void {
+  const toolEl = els.messageList.querySelector(`[data-block-id="${toolId}"]`) as HTMLElement | null
+  if (!toolEl) return
+  const found = findToolBlock(messages, toolId)
+  if (!found) return
+
+  const block: ToolCallBlock = {
+    ...found.block,
+    state: found.block.state === "pending" ? "running" : found.block.state,
+    partialStdout: live.stdout,
+    partialStderr: live.stderr,
+    stdoutLength: live.stdoutLength,
+    stderrLength: live.stderrLength,
+    stdoutLineCount: live.stdoutLineCount,
+    stderrLineCount: live.stderrLineCount,
+    durationMs: live.durationMs ?? found.block.durationMs,
+    exitCode: live.exitCode ?? found.block.exitCode,
+  }
+  const fresh = createToolResultPanel(block, {
+    messageId: found.messageId,
+    postMessage,
+    sessionId,
+  })
+  if (!fresh) return
+
+  const existing = toolEl.querySelector(".tool-result-panel") as HTMLElement | null
+  if (existing) existing.replaceWith(fresh)
+  else toolEl.appendChild(fresh)
+
+  const parentGroup = toolEl.closest(".tool-group") as HTMLElement | null
+  if (parentGroup) updateToolGroupHeader(parentGroup)
   const scrollAnchor = (els as unknown as { scrollAnchor: ScrollAnchor }).scrollAnchor
   scrollAnchor?.scrollIfAnchored()
 }

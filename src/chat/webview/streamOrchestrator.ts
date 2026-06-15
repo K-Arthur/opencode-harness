@@ -5,6 +5,7 @@ import type { StreamHandlers } from "./stream"
 import { timers } from "./timerRegistry"
 import type { ToolElapsedTracker } from "./ui/toolElapsed"
 import type { PromptQueue } from "./queue"
+import type { LiveToolOutput } from "./toolPartialStore"
 import { placeholderHasRenderedContent } from "./placeholderContent"
 import { finalizeStreamingText } from "./streamHandlers"
 import { generateUserMessageId } from "../../session/messageId"
@@ -134,6 +135,13 @@ interface PendingToolUpdate {
   timer: ReturnType<typeof setTimeout>
 }
 
+interface PendingToolPartial {
+  sessionId: string
+  toolId: string
+  live: LiveToolOutput
+  timer: ReturnType<typeof setTimeout>
+}
+
 /**
  * Debounce a tool-update for 50ms, merging subsequent updates for the same
  * `(sessionId, toolId)` into a single delivery.
@@ -184,6 +192,39 @@ function flushPendingToolUpdate(
   pendingToolUpdates.delete(key)
   const stream = streamHandlers.get(sessionId)
   if (stream) stream.handleToolUpdate(toolId, pending.update)
+}
+
+function scheduleDebouncedToolPartial(
+  pendingToolPartials: Map<string, PendingToolPartial>,
+  streamHandlers: Map<string, StreamHandlers>,
+  sessionId: string,
+  toolId: string,
+  live: LiveToolOutput,
+): void {
+  const key = `${sessionId}:${toolId}`
+  const pending = pendingToolPartials.get(key)
+  if (pending) {
+    pending.live = live
+    return
+  }
+  const timer = timers.setTimeout(() => {
+    const latest = pendingToolPartials.get(key)
+    pendingToolPartials.delete(key)
+    const stream = streamHandlers.get(sessionId)
+    if (latest && stream) stream.handleToolPartial(sessionId, toolId, latest.live)
+  }, 100)
+  pendingToolPartials.set(key, { sessionId, toolId, live, timer })
+}
+
+function clearPendingToolPartialsForSession(
+  pendingToolPartials: Map<string, PendingToolPartial>,
+  sessionId: string,
+): void {
+  for (const [key, pending] of Array.from(pendingToolPartials)) {
+    if (pending.sessionId !== sessionId) continue
+    timers.clearTimeout(pending.timer)
+    pendingToolPartials.delete(key)
+  }
 }
 
 /**
@@ -418,6 +459,7 @@ export interface StreamOrchestratorAPI {
   handleCostUpdate: (sessionId: string, cost: number) => void
   sendQueuedPrompt: (sessionId: string, text: string, attachments?: Array<{ data: string; mimeType: string }>) => void
   scheduleToolUpdate: (sessionId: string, toolId: string, update: { state?: ToolCallState; args?: unknown }) => void
+  scheduleToolPartial: (sessionId: string, toolId: string, live: LiveToolOutput) => void
   flushToolUpdate: (sessionId: string, toolId: string) => void
   markToolChainProgress: (sessionId: string) => void
   clearToolChainProgress: (sessionId: string) => void
@@ -460,10 +502,15 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
   } = deps
 
   const pendingToolUpdates = new Map<string, PendingToolUpdate>()
+  const pendingToolPartials = new Map<string, PendingToolPartial>()
   const toolChainProgressTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
   function scheduleToolUpdate(sessionId: string, toolId: string, update: { state?: ToolCallState; args?: unknown }): void {
     scheduleDebouncedToolUpdate(pendingToolUpdates, streamHandlers, sessionId, toolId, update)
+  }
+
+  function scheduleToolPartial(sessionId: string, toolId: string, live: LiveToolOutput): void {
+    scheduleDebouncedToolPartial(pendingToolPartials, streamHandlers, sessionId, toolId, live)
   }
 
   function flushToolUpdate(sessionId: string, toolId: string): void {
@@ -587,6 +634,7 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
       toolElapsedTracker.clearAll()
       clearToolChainProgress(sessionId)
       clearPendingToolUpdatesForSession(pendingToolUpdates, sessionId)
+      clearPendingToolPartialsForSession(pendingToolPartials, sessionId)
       updateTabBar()
       updateModeSelectorStateLocal()
       updateAgentStatus("idle")
@@ -776,6 +824,7 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     handleCostUpdate,
     sendQueuedPrompt,
     scheduleToolUpdate,
+    scheduleToolPartial,
     flushToolUpdate,
     markToolChainProgress,
     clearToolChainProgress,

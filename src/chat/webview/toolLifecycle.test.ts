@@ -12,7 +12,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { JSDOM } from "jsdom"
-import { groupConsecutiveToolCalls } from "./toolCallRenderer"
+import { createToolResultPanel, groupConsecutiveToolCalls } from "./toolCallRenderer"
 import type { Block, ToolCallBlock, ToolCallState } from "./types"
 
 const handlersSource = readFileSync(path.join(__dirname, "streamHandlers.ts"), "utf8")
@@ -134,6 +134,41 @@ describe("handleToolEnd — duplicate duration prevention", () => {
       fnBody.includes('querySelector(".tool-duration")'),
       "handleToolEnd must check for existing .tool-duration before creating a new one"
     )
+  })
+})
+
+describe("running exec tool actions", () => {
+  it("renders Cancel before any live output arrives", () => {
+    const dom = new JSDOM("<!doctype html><html><body></body></html>")
+    ;(globalThis as any).document = dom.window.document
+    ;(globalThis as any).window = dom.window
+
+    const posted: Record<string, unknown>[] = []
+    const panel = createToolResultPanel({
+      type: "tool-call",
+      id: "tool-running",
+      name: "bash",
+      class: "exec",
+      state: "running",
+      args: { command: "sleep 5" },
+    }, {
+      sessionId: "s1",
+      postMessage: (msg) => posted.push(msg),
+    })
+
+    assert.ok(panel, "running exec tool should render an action panel")
+    const cancel = Array.from(panel!.querySelectorAll<HTMLButtonElement>(".tool-result-action-btn"))
+      .find((button) => button.textContent === "Cancel")
+    assert.ok(cancel, "running exec tool should offer Cancel before output")
+    cancel!.click()
+    assert.deepEqual(posted[0], {
+      type: "cancel_tool",
+      sessionId: "s1",
+      toolId: "tool-running",
+      stdout: "",
+      stderr: "",
+      durationMs: undefined,
+    })
   })
 })
 

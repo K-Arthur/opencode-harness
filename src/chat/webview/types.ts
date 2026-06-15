@@ -28,6 +28,14 @@ export interface ToolCallBlock {
   state: ToolCallState
   args?: unknown
   result?: string
+  partialStdout?: string
+  partialStderr?: string
+  stdoutLength?: number
+  stderrLength?: number
+  stdoutLineCount?: number
+  stderrLineCount?: number
+  token?: number
+  replace?: boolean
   resultTruncated?: boolean
   stderr?: string
   exitCode?: number
@@ -486,7 +494,18 @@ export interface ToolCallData {
   state: ToolCallState
   args?: unknown
   result?: string
+  partialStdout?: string
+  partialStderr?: string
+  stdout?: string
+  stderr?: string
+  stdoutLength?: number
+  stderrLength?: number
+  stdoutLineCount?: number
+  stderrLineCount?: number
+  token?: number
+  replace?: boolean
   error?: string
+  exitCode?: number
   durationMs?: number
   /** Unix ms when the tool call started. */
   startedAt?: number
@@ -589,6 +608,7 @@ export type HostMessage =
   | { type: "stream_ack"; sessionId: string; seq?: number }
   | { type: "stream_tool_start"; sessionId: string; toolCall: ToolCallData }
   | { type: "stream_tool_update"; sessionId: string; toolCall: ToolCallData }
+  | { type: "stream_tool_partial"; sessionId: string; toolCall: ToolCallData; seq?: number }
   | { type: "stream_tool_end"; sessionId: string; toolCall: ToolCallData }
   | { type: "stream_tool_unresolved"; sessionId: string; toolCall: ToolCallData }
   | { type: "force_rerender"; sessionId: string }
@@ -605,6 +625,7 @@ export type HostMessage =
   | { type: "rate_limit_exhausted"; info?: RateLimitInfo }
   | { type: "theme_vars"; vars: Record<string, string> }
   | { type: "theme_config"; config: Record<string, unknown> }
+  | { type: "tool_output_config"; renderAnsi: boolean }
   | { type: "theme"; theme: unknown }
   | { type: "cli_themes_list"; themes: unknown[] }
   | { type: "model_update"; model: string }
@@ -709,6 +730,7 @@ export type WebviewMessage =
   | { type: "set_model"; model: string; sessionId?: string }
   | { type: "set_variant"; variant: string; sessionId: string }
   | { type: "abort"; sessionId: string }
+  | { type: "cancel_tool"; sessionId: string; toolId: string; stdout?: string; stderr?: string; durationMs?: number }
   | { type: "close_tab"; sessionId: string }
   | { type: "switch_tab"; sessionId: string }
   | { type: "accept_diff"; diffId: string; path?: string; sessionId?: string }

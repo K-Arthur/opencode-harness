@@ -677,10 +677,28 @@
 }
 
 .tool-result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1-5);
   margin-bottom: var(--space-2);
   color: var(--color-muted);
   font-family: var(--font-sans);
   font-size: var(--text-2xs);
+}
+
+.tool-live-indicator {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-accent);
+}
+
+.tool-live-indicator .codicon {
+  animation: tool-live-spin 1s linear infinite;
+}
+
+@keyframes tool-live-spin {
+  to { transform: rotate(360deg); }
 }
 
 .tool-result-body {
@@ -815,6 +833,61 @@
   background: var(--oc-list-hover);
   color: var(--color-fg);
   border-color: var(--oc-accent-border);
+}
+
+.tool-result-action-btn--danger {
+  color: var(--color-error);
+  border-color: var(--oc-error-border);
+}
+
+.tool-result-action-btn--danger:hover {
+  background: var(--oc-error-subtle);
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+.ansi-bold {
+  font-weight: 700;
+}
+
+.ansi-fg-black,
+.ansi-fg-bright-black {
+  color: var(--color-muted);
+}
+
+.ansi-fg-red,
+.ansi-fg-bright-red {
+  color: var(--color-error);
+}
+
+.ansi-fg-green,
+.ansi-fg-bright-green {
+  color: var(--color-success);
+}
+
+.ansi-fg-yellow,
+.ansi-fg-bright-yellow {
+  color: var(--color-warning);
+}
+
+.ansi-fg-blue,
+.ansi-fg-bright-blue {
+  color: var(--color-info);
+}
+
+.ansi-fg-magenta,
+.ansi-fg-bright-magenta {
+  color: var(--oc-syn-keyword);
+}
+
+.ansi-fg-cyan,
+.ansi-fg-bright-cyan {
+  color: var(--oc-syn-function);
+}
+
+.ansi-fg-white,
+.ansi-fg-bright-white {
+  color: var(--color-fg);
 }
 
 /* ─── Write-class tool header action buttons (Open, Copy path, Reveal) ─── */
