@@ -11,10 +11,10 @@ void describe("AuthProvider", () => {
       assert.ok(source.includes("export class AuthProvider"))
     })
 
-    void it("has DI constructor accepting createClient", () => {
+    void it("has DI constructor accepting createV2Client", () => {
       assert.ok(source.includes("constructor("), "constructor must exist")
-      assert.ok(source.includes("createClient:"), "constructor must accept createClient parameter")
-      assert.ok(source.includes("CreateOpencodeClient"), "must type as CreateOpencodeClient")
+      assert.ok(source.includes("createV2Client:"), "constructor must accept createV2Client parameter")
+      assert.ok(source.includes("CreateV2Client"), "must type as CreateV2Client")
     })
 
     void it("imports validateServerUrl", () => {
@@ -119,46 +119,19 @@ void describe("AuthProvider", () => {
     })
   })
 
-  // NOTE: AuthProvider's import chain pulls in `vscode`, so it cannot be instantiated
-  // under `tsx --test`; these stay source-string. The v2 client construction is covered
-  // behaviorally (with a vscode stub bundle) in tests/unit/session-client-question-v2.test.mjs.
-  void describe("makeClient", () => {
-    void it("builds localhost URL with port", () => {
-      assert.ok(source.includes("http://127.0.0.1:${port}"), "must build localhost URL")
-    })
-
-    void it("sets a Basic auth header when a server password is set", () => {
-      assert.ok(source.includes("Authorization: `Basic ${basic}`"), "must set Authorization header")
-    })
-
-    void it("delegates to the shared localClientConfig helper", () => {
-      assert.ok(source.includes("this.createClient(this.localClientConfig(port))"), "makeClient must use the shared config helper")
-    })
-  })
-
-  void describe("makeRemoteClient", () => {
-    void it("delegates auth to buildRemoteAuthHeader", () => {
-      assert.ok(source.includes("Authorization: this.buildRemoteAuthHeader(this._remoteServerPassword)"), "must delegate auth")
-    })
-
-    void it("delegates to the shared remoteClientConfig helper", () => {
-      assert.ok(source.includes("this.createClient(this.remoteClientConfig(baseUrl))"), "makeRemoteClient must use the shared config helper")
-    })
-  })
-
-  void describe("makeV2Client / makeRemoteV2Client (v2 strangler)", () => {
+  void describe("makeV2Client / makeRemoteV2Client (v2)", () => {
     void it("exposes v2 client makers", () => {
       assert.ok(source.includes("makeV2Client(port: number)"), "must expose makeV2Client")
       assert.ok(source.includes("makeRemoteV2Client(baseUrl: string)"), "must expose makeRemoteV2Client")
     })
 
-    void it("builds the v2 client from the SAME config helpers as v1 (cannot drift on auth)", () => {
-      assert.ok(source.includes("this.createV2ClientFn(this.localClientConfig(port))"), "local v2 must reuse localClientConfig")
-      assert.ok(source.includes("this.createV2ClientFn(this.remoteClientConfig(baseUrl))"), "remote v2 must reuse remoteClientConfig")
+    void it("builds the v2 client from the config helpers", () => {
+      assert.ok(source.includes("this.createV2Client(this.localClientConfig(port))"), "local v2 must reuse localClientConfig")
+      assert.ok(source.includes("this.createV2Client(this.remoteClientConfig(baseUrl))"), "remote v2 must reuse remoteClientConfig")
     })
 
     void it("accepts an injected createV2Client for DI", () => {
-      assert.ok(source.includes("createV2ClientFn:"), "constructor must accept createV2ClientFn")
+      assert.ok(source.includes("createV2Client:"), "constructor must accept createV2Client")
       assert.ok(source.includes("CreateV2Client"), "must type as CreateV2Client")
     })
   })

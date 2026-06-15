@@ -59,9 +59,8 @@ test("SessionClient.sendPromptAsync sends prompt identity and routing fields (v2
       },
     },
   }
-  // Provide a throwaway v1 client (required by constructor) and the mock v2 client
+  // Provide the mock v2 client
   const sessionClient = new SessionClient(
-    () => ({ session: {} }),
     undefined,
     () => false,
     () => v2Client,

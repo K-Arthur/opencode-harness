@@ -36,9 +36,9 @@ module.exports = {
 
 const { SessionClient } = loadSessionClient()
 
-// getV2Client is the 4th constructor arg: (getClient, mcp?, disposed?, getV2Client?)
+// getV2Client is the 3rd constructor arg: (mcp?, disposed?, getV2Client?)
 function makeClientWithV2(v2) {
-  return new SessionClient(() => ({}), undefined, () => false, () => v2)
+  return new SessionClient(undefined, () => false, () => v2)
 }
 
 test("replyToQuestion calls the v2 question.reply with requestID + answers", async () => {
@@ -61,7 +61,7 @@ test("replyToQuestion throws 'Server not running' (not 'API unavailable') when n
   // Regression: previously the v1 client lacked a `question` API and this threw
   // "OpenCode question reply API is unavailable", which rolled back the optimistic
   // answer and left the question panel stuck. Now the absence is just "not running".
-  const sc = new SessionClient(() => ({}), undefined, () => false, () => null)
+  const sc = new SessionClient(undefined, () => false, () => null)
   await assert.rejects(sc.replyToQuestion("req_x", [["A"]]), /Server not running/)
 })
 
@@ -82,7 +82,7 @@ test("rejectQuestion surfaces a server-side error from the v2 response", async (
 test("abortSession calls v2 session.abort with a flat sessionID", async () => {
   const calls = []
   const v2 = { session: { abort: async (p) => { calls.push(p); return {} } } }
-  const result = await new SessionClient(() => ({}), undefined, () => false, () => v2).abortSession("ses_1")
+  const result = await new SessionClient(undefined, () => false, () => v2).abortSession("ses_1")
   assert.equal(result, true)
   assert.deepEqual(calls[0], { sessionID: "ses_1" })
 })
@@ -90,18 +90,18 @@ test("abortSession calls v2 session.abort with a flat sessionID", async () => {
 test("deleteSession calls v2 session.delete with a flat sessionID", async () => {
   const calls = []
   const v2 = { session: { delete: async (p) => { calls.push(p); return {} } } }
-  await new SessionClient(() => ({}), undefined, () => false, () => v2).deleteSession("ses_2")
+  await new SessionClient(undefined, () => false, () => v2).deleteSession("ses_2")
   assert.deepEqual(calls[0], { sessionID: "ses_2" })
 })
 
 test("revertMessage calls v2 session.revert with flat sessionID + messageID", async () => {
   const calls = []
   const v2 = { session: { revert: async (p) => { calls.push(p); return {} } } }
-  await new SessionClient(() => ({}), undefined, () => false, () => v2).revertMessage("ses_3", "msg_9")
+  await new SessionClient(undefined, () => false, () => v2).revertMessage("ses_3", "msg_9")
   assert.deepEqual(calls[0], { sessionID: "ses_3", messageID: "msg_9" })
 })
 
 test("migrated session calls require the v2 client (Server not running otherwise)", async () => {
-  const sc = new SessionClient(() => ({}), undefined, () => false, () => null)
+  const sc = new SessionClient(undefined, () => false, () => null)
   await assert.rejects(sc.abortSession("ses_x"), /Server not running/)
 })

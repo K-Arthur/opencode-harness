@@ -1,5 +1,4 @@
 import {
-  type OpencodeClient,
   type Session,
   type Message,
   type Part,
@@ -58,10 +57,8 @@ export class SessionClient {
   private readonly BASE_BACKOFF_MS = 1000
 
   constructor(
-    private readonly getClient: () => OpencodeClient | null,
     private readonly mcpServerManager?: McpServerManager,
     private readonly disposed: () => boolean = () => false,
-    // v2 SDK client — the question reply/reject API exists only on v2.
     private readonly getV2Client: () => V2OpencodeClient | null = () => null,
   ) {}
 
@@ -77,13 +74,6 @@ export class SessionClient {
   clearModel(): void {
     this._currentModel = null
     log.info("Model cleared – will use server default")
-  }
-
-  private guard(): OpencodeClient {
-    if (this.disposed()) throw new Error("SessionManager has been disposed")
-    const client = this.getClient()
-    if (!client) throw new Error("Server not running")
-    return client
   }
 
   private guardV2(): V2OpencodeClient {
@@ -457,8 +447,6 @@ export class SessionClient {
   }
 
   async sessionExists(id: string): Promise<boolean> {
-    const client = this.getClient()
-    if (!client) return false
     try {
       await this.getSession(id)
       return true
@@ -468,7 +456,7 @@ export class SessionClient {
   }
 
   async ensureSession(cliSessionId: string | undefined, title?: string): Promise<string> {
-    this.guard()
+    this.guardV2()
     if (cliSessionId && !isLocalPlaceholderSessionId(cliSessionId)) {
       const exists = await this.sessionExists(cliSessionId)
       if (exists) {

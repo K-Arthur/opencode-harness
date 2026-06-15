@@ -1,21 +1,14 @@
 import { randomUUID } from "crypto"
-import type { CreateOpencodeClient, CreateV2Client } from "./opencodeClientFactory"
+import type { CreateV2Client } from "./opencodeClientFactory"
 import { log } from "../utils/outputChannel"
 import { validateServerUrl } from "../utils/security"
 
-type OpencodeClient = ReturnType<CreateOpencodeClient>
-type OpencodeClientConfig = Parameters<CreateOpencodeClient>[0]
 type V2OpencodeClient = ReturnType<CreateV2Client>
 
-/** baseUrl + optional auth header — shared so the v1 and v2 clients can never drift. */
+/** baseUrl + optional auth header. */
 type ClientConfig = { baseUrl: string; headers?: Record<string, string> }
 
-function createOpencodeClient(config?: OpencodeClientConfig): OpencodeClient {
-  const factory = require("./opencodeClientFactory") as typeof import("./opencodeClientFactory")
-  return factory.createOpencodeClient(config)
-}
-
-const createV2Client: CreateV2Client = (config) => {
+const createV2ClientFn: CreateV2Client = (config) => {
   const factory = require("./opencodeClientFactory") as typeof import("./opencodeClientFactory")
   return factory.createV2Client(config)
 }
@@ -26,8 +19,7 @@ export class AuthProvider {
   private _remoteServerPassword: string | null = null
 
   constructor(
-    private readonly createClient: CreateOpencodeClient = createOpencodeClient,
-    private readonly createV2ClientFn: CreateV2Client = createV2Client,
+    private readonly createV2Client: CreateV2Client = createV2ClientFn,
   ) {}
 
   get serverPassword(): string {
@@ -98,22 +90,12 @@ export class AuthProvider {
     return { baseUrl }
   }
 
-  makeClient(port: number): OpencodeClient {
-    return this.createClient(this.localClientConfig(port))
-  }
-
-  makeRemoteClient(baseUrl: string): OpencodeClient {
-    return this.createClient(this.remoteClientConfig(baseUrl))
-  }
-
-  /** v2 SDK client for the local server — same baseUrl + auth as {@link makeClient}. */
   makeV2Client(port: number): V2OpencodeClient {
-    return this.createV2ClientFn(this.localClientConfig(port))
+    return this.createV2Client(this.localClientConfig(port))
   }
 
-  /** v2 SDK client for a remote server — same baseUrl + auth as {@link makeRemoteClient}. */
   makeRemoteV2Client(baseUrl: string): V2OpencodeClient {
-    return this.createV2ClientFn(this.remoteClientConfig(baseUrl))
+    return this.createV2Client(this.remoteClientConfig(baseUrl))
   }
 
   buildRemoteAuthHeader(secret: string): string {

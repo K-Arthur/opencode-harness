@@ -106,15 +106,11 @@
 // index.html, and state.ts `setDraftText`/`getDraftText` getter-setter.
 // Adds ~2.1KB minified. +4KB keeps ~0.5% headroom.
 //
-// 2026-06-15 re-baseline (host 562KB -> 624KB): the question reply/reject feature
-// requires the @opencode-ai/sdk **v2** client (the v1 client has no `question`
-// API — calls always threw "API is unavailable" and the question panel never
-// dismissed). hey-api's class-based v2 SDK is not tree-shakeable per-method, so
-// importing it pulls the whole generated client graph (sdk.gen.js ~44KB). This is
-// the first-class v2 client and the agreed beachhead for the phased v1->v2
-// strangler migration (docs/adrs), so the cost is foundational, not throwaway.
-// Host 561.6KB -> 618.1KB (+56.5KB). +6KB keeps ~1% headroom so the gate still
-// trips on a real regression. (v1 SDK ~30KB can be dropped once migration completes.)
+// 2026-06-15 re-baseline (host 624KB -> 598KB): the v1 SDK migration completed
+// (Phase 5: remove v1). The v1 `createOpencodeClient` + `@opencode-ai/sdk` runtime
+// (~30KB) was dropped. The v2 SDK (~44KB) stays as the sole client. Host went from
+// 618.6KB to 593.2KB. +5KB keeps ~0.8% headroom so the gate still trips on a real
+// regression.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -124,7 +120,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 624 * 1024, label: "extension host" },
+  { path: "dist/extension.js", limitBytes: 598 * 1024, label: "extension host" },
   { path: "dist/chat/webview/main.js", limitBytes: 736 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]

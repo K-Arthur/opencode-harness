@@ -36,9 +36,9 @@ module.exports = {
 
 const { SessionClient } = loadSessionClient()
 
-// getV2Client is the 4th constructor arg: (getClient, mcp?, disposed?, getV2Client?)
+// getV2Client is the 3rd constructor arg: (mcp?, disposed?, getV2Client?)
 function makeClientWithV2(v2) {
-  return new SessionClient(() => ({}), undefined, () => false, () => v2)
+  return new SessionClient(undefined, () => false, () => v2)
 }
 
 // --- Phase 2b: domain-returning session calls ----------------------------------------
@@ -70,7 +70,7 @@ test("getSession calls v2 session.get with flat sessionID and maps response", as
       get: async (p) => { calls.push(p); return makeV2SessionResponse("ses_1") },
     },
   }
-  const result = await new SessionClient(() => ({}), undefined, () => false, () => v2).getSession("ses_1")
+  const result = await new SessionClient(undefined, () => false, () => v2).getSession("ses_1")
   assert.equal(result.id, "ses_1")
   assert.equal(result.title, "Test Session")
   assert.equal(result.projectID, "proj_1")
@@ -87,7 +87,7 @@ test("createSession calls v2 session.create with flat title and maps response", 
       create: async (p) => { calls.push(p); return makeV2SessionResponse("ses_2", "New Session") },
     },
   }
-  const result = await new SessionClient(() => ({}), undefined, () => false, () => v2).createSession("New Session")
+  const result = await new SessionClient(undefined, () => false, () => v2).createSession("New Session")
   assert.equal(result.id, "ses_2")
   assert.equal(result.title, "New Session")
   assert.deepEqual(calls[0], { title: "New Session" })
@@ -100,7 +100,7 @@ test("createSession with no title still works", async () => {
       create: async (p) => { calls.push(p); return makeV2SessionResponse("ses_3") },
     },
   }
-  const result = await new SessionClient(() => ({}), undefined, () => false, () => v2).createSession()
+  const result = await new SessionClient(undefined, () => false, () => v2).createSession()
   assert.equal(result.id, "ses_3")
   assert.deepEqual(calls[0], { title: undefined })
 })
@@ -112,7 +112,7 @@ test("updateSessionTitle calls v2 session.update with flat sessionID + title", a
       update: async (p) => { calls.push(p); return makeV2SessionResponse("ses_1", "Updated") },
     },
   }
-  const result = await new SessionClient(() => ({}), undefined, () => false, () => v2).updateSessionTitle("ses_1", "Updated")
+  const result = await new SessionClient(undefined, () => false, () => v2).updateSessionTitle("ses_1", "Updated")
   assert.equal(result.title, "Updated")
   assert.deepEqual(calls[0], { sessionID: "ses_1", title: "Updated" })
 })
@@ -124,7 +124,7 @@ test("getSession throws on v2 error", async () => {
     },
   }
   await assert.rejects(
-    new SessionClient(() => ({}), undefined, () => false, () => v2).getSession("ses_x"),
+    new SessionClient(undefined, () => false, () => v2).getSession("ses_x"),
     /Failed to get session/,
   )
 })
@@ -136,7 +136,7 @@ test("createSession throws on v2 error", async () => {
     },
   }
   await assert.rejects(
-    new SessionClient(() => ({}), undefined, () => false, () => v2).createSession("fail"),
+    new SessionClient(undefined, () => false, () => v2).createSession("fail"),
     /Failed to create session/,
   )
 })
@@ -148,7 +148,7 @@ test("updateSessionTitle throws on v2 error", async () => {
     },
   }
   await assert.rejects(
-    new SessionClient(() => ({}), undefined, () => false, () => v2).updateSessionTitle("ses_x", "fail"),
+    new SessionClient(undefined, () => false, () => v2).updateSessionTitle("ses_x", "fail"),
     /Failed to update session title/,
   )
 })
@@ -162,7 +162,7 @@ test("listSessions calls v2 session.list with no params and maps response", asyn
       list: async (p) => { calls.push(p); return { data: [makeFakeSession("s1", "Session A"), makeFakeSession("s2", "Session B")], error: undefined } },
     },
   }
-  const results = await new SessionClient(() => ({}), undefined, () => false, () => v2).listSessions()
+  const results = await new SessionClient(undefined, () => false, () => v2).listSessions()
   assert.equal(results.length, 2)
   assert.equal(results[0].id, "s1")
   assert.equal(results[1].title, "Session B")
@@ -176,7 +176,7 @@ test("listSessions throws on v2 error", async () => {
     },
   }
   await assert.rejects(
-    new SessionClient(() => ({}), undefined, () => false, () => v2).listSessions(),
+    new SessionClient(undefined, () => false, () => v2).listSessions(),
     /Failed to list sessions/,
   )
 })
@@ -188,7 +188,7 @@ test("getChildSessions calls v2 session.children with flat sessionID and maps re
       children: async (p) => { calls.push(p); return { data: [makeFakeSession("child_1", "Child Session")], error: undefined } },
     },
   }
-  const results = await new SessionClient(() => ({}), undefined, () => false, () => v2).getChildSessions("parent_1")
+  const results = await new SessionClient(undefined, () => false, () => v2).getChildSessions("parent_1")
   assert.equal(results.length, 1)
   assert.equal(results[0].id, "child_1")
   assert.equal(results[0].title, "Child Session")
@@ -202,7 +202,7 @@ test("getChildSessions throws on v2 error", async () => {
     },
   }
   await assert.rejects(
-    new SessionClient(() => ({}), undefined, () => false, () => v2).getChildSessions("parent_x"),
+    new SessionClient(undefined, () => false, () => v2).getChildSessions("parent_x"),
     /Failed to get child sessions/,
   )
 })
@@ -233,7 +233,7 @@ test("getSessionMessages calls v2 session.messages with flat sessionID and maps 
       },
     },
   }
-  const results = await new SessionClient(() => ({}), undefined, () => false, () => v2).getSessionMessages("ses_1")
+  const results = await new SessionClient(undefined, () => false, () => v2).getSessionMessages("ses_1")
   assert.equal(results.length, 1)
   assert.equal(results[0].info.id, "msg_1")
   assert.equal(results[0].parts[0].id, "p1")
@@ -247,7 +247,7 @@ test("getSessionMessages throws on v2 error", async () => {
     },
   }
   await assert.rejects(
-    new SessionClient(() => ({}), undefined, () => false, () => v2).getSessionMessages("ses_x"),
+    new SessionClient(undefined, () => false, () => v2).getSessionMessages("ses_x"),
     /Failed to get session messages/,
   )
 })
@@ -264,7 +264,7 @@ test("getMessages calls v2 session.messages with flat sessionID + limit and maps
       },
     },
   }
-  const results = await new SessionClient(() => ({}), undefined, () => false, () => v2).getMessages("ses_1", 10)
+  const results = await new SessionClient(undefined, () => false, () => v2).getMessages("ses_1", 10)
   assert.equal(results.length, 1)
   assert.equal(results[0].info.id, "msg_1")
   assert.equal(results[0].parts[0].id, "p1")
@@ -281,7 +281,7 @@ test("getMessages without limit omits limit from params", async () => {
       },
     },
   }
-  await new SessionClient(() => ({}), undefined, () => false, () => v2).getMessages("ses_1")
+  await new SessionClient(undefined, () => false, () => v2).getMessages("ses_1")
   assert.deepEqual(calls[0], { sessionID: "ses_1" })
 })
 
@@ -303,7 +303,7 @@ test("getToolPartialOutput calls v2 session.messages and finds tool part", async
       },
     },
   }
-  const result = await new SessionClient(() => ({}), undefined, () => false, () => v2).getToolPartialOutput("ses_1", "call_42")
+  const result = await new SessionClient(undefined, () => false, () => v2).getToolPartialOutput("ses_1", "call_42")
   assert.equal(result.callId, "call_42")
   assert.equal(result.available, true)
   assert.deepEqual(calls[0], { sessionID: "ses_1" })
@@ -321,7 +321,7 @@ test("sendCommand calls v2 session.command with flat params and maps response", 
       },
     },
   }
-  const result = await new SessionClient(() => ({}), undefined, () => false, () => v2).sendCommand("ses_1", "test", "--verbose")
+  const result = await new SessionClient(undefined, () => false, () => v2).sendCommand("ses_1", "test", "--verbose")
   assert.equal(result.info.id, "msg_cmd")
   assert.equal(result.parts[0].id, "p1")
   assert.deepEqual(calls[0], { sessionID: "ses_1", command: "test", arguments: "--verbose" })
@@ -337,7 +337,7 @@ test("sendCommand uses empty string for undefined args", async () => {
       },
     },
   }
-  await new SessionClient(() => ({}), undefined, () => false, () => v2).sendCommand("ses_1", "test")
+  await new SessionClient(undefined, () => false, () => v2).sendCommand("ses_1", "test")
   assert.deepEqual(calls[0], { sessionID: "ses_1", command: "test", arguments: "" })
 })
 
@@ -350,14 +350,14 @@ test("compactSession calls v2 session.summarize with flat sessionID", async () =
       summarize: async (p) => { calls.push(p); return { data: true, error: undefined } },
     },
   }
-  const result = await new SessionClient(() => ({}), undefined, () => false, () => v2).compactSession("ses_1")
+  const result = await new SessionClient(undefined, () => false, () => v2).compactSession("ses_1")
   assert.equal(result, true)
   assert.deepEqual(calls[0], { sessionID: "ses_1" })
 })
 
 test("compactSession passes model ref when provided", async () => {
   const calls = []
-  const sc = new SessionClient(() => ({}), undefined, () => false, () => ({
+  const sc = new SessionClient(undefined, () => false, () => ({
     session: { summarize: async (p) => { calls.push(p); return { data: true, error: undefined } } },
   }))
   sc.setModel("provider_1", "model_1")
@@ -374,7 +374,7 @@ test("getSessionDiff calls v2 session.diff with flat sessionID", async () => {
       diff: async (p) => { calls.push(p); return { data: [{ file: "test.ts", additions: 5, deletions: 3 }], error: undefined } },
     },
   }
-  const result = await new SessionClient(() => ({}), undefined, () => false, () => v2).getSessionDiff("ses_1")
+  const result = await new SessionClient(undefined, () => false, () => v2).getSessionDiff("ses_1")
   assert.deepEqual(result, [{ file: "test.ts", additions: 5, deletions: 3 }])
   assert.deepEqual(calls[0], { sessionID: "ses_1" })
 })
@@ -386,7 +386,7 @@ test("getSessionDiff passes messageID when provided", async () => {
       diff: async (p) => { calls.push(p); return { data: [], error: undefined } },
     },
   }
-  await new SessionClient(() => ({}), undefined, () => false, () => v2).getSessionDiff("ses_1", "msg_9")
+  await new SessionClient(undefined, () => false, () => v2).getSessionDiff("ses_1", "msg_9")
   assert.deepEqual(calls[0], { sessionID: "ses_1", messageID: "msg_9" })
 })
 
@@ -397,7 +397,7 @@ test("getSessionTodos calls v2 session.todo with flat sessionID", async () => {
       todo: async (p) => { calls.push(p); return { data: [{ id: "t1", content: "fix bug", status: "pending", priority: "high" }], error: undefined } },
     },
   }
-  const results = await new SessionClient(() => ({}), undefined, () => false, () => v2).getSessionTodos("ses_1")
+  const results = await new SessionClient(undefined, () => false, () => v2).getSessionTodos("ses_1")
   assert.equal(results.length, 1)
   assert.equal(results[0].content, "fix bug")
   assert.deepEqual(calls[0], { sessionID: "ses_1" })
@@ -412,7 +412,7 @@ test("readFile calls v2 file.read with flat path and directory", async () => {
       read: async (p) => { calls.push(p); return { data: { type: "text", content: "hello" }, error: undefined } },
     },
   }
-  const result = await new SessionClient(() => ({}), undefined, () => false, () => v2).readFile("src/test.ts", "/repo")
+  const result = await new SessionClient(undefined, () => false, () => v2).readFile("src/test.ts", "/repo")
   assert.deepEqual(result, { type: "text", content: "hello" })
   assert.deepEqual(calls[0], { path: "src/test.ts", directory: "/repo" })
 })
@@ -424,7 +424,7 @@ test("readFile omits directory when not provided", async () => {
       read: async (p) => { calls.push(p); return { data: null, error: undefined } },
     },
   }
-  await new SessionClient(() => ({}), undefined, () => false, () => v2).readFile("README.md")
+  await new SessionClient(undefined, () => false, () => v2).readFile("README.md")
   assert.deepEqual(calls[0], { path: "README.md" })
 })
 
@@ -435,7 +435,7 @@ test("listCommands calls v2 command.list and maps response", async () => {
       list: async (p) => { calls.push(p); return { data: [{ name: "test", template: "npm test" }], error: undefined } },
     },
   }
-  const results = await new SessionClient(() => ({}), undefined, () => false, () => v2).listCommands()
+  const results = await new SessionClient(undefined, () => false, () => v2).listCommands()
   assert.equal(results.length, 1)
   assert.equal(results[0].name, "test")
   assert.equal(calls[0], undefined) // no params
@@ -448,7 +448,7 @@ test("listAgents calls v2 app.agents and maps native→builtIn", async () => {
       agents: async (p) => { calls.push(p); return { data: [{ name: "builder", mode: "primary", native: true }], error: undefined } },
     },
   }
-  const results = await new SessionClient(() => ({}), undefined, () => false, () => v2).listAgents()
+  const results = await new SessionClient(undefined, () => false, () => v2).listAgents()
   assert.equal(results.length, 1)
   assert.equal(results[0].name, "builder")
   assert.equal(results[0].builtIn, true) // native→builtIn mapping
@@ -462,14 +462,14 @@ test("listAgents passes directory when provided", async () => {
       agents: async (p) => { calls.push(p); return { data: [], error: undefined } },
     },
   }
-  await new SessionClient(() => ({}), undefined, () => false, () => v2).listAgents("/my/repo")
+  await new SessionClient(undefined, () => false, () => v2).listAgents("/my/repo")
   assert.deepEqual(calls[0], { directory: "/my/repo" })
 })
 
 // --- Guard: all migrated methods require the v2 client -------------------------------
 
 test("all migrated domain methods require the v2 client (Server not running otherwise)", async () => {
-  const sc = new SessionClient(() => ({}), undefined, () => false, () => null)
+  const sc = new SessionClient(undefined, () => false, () => null)
   await assert.rejects(sc.getSession("ses_x"), /Server not running/)
   await assert.rejects(sc.createSession(), /Server not running/)
   await assert.rejects(sc.updateSessionTitle("ses_x", "x"), /Server not running/)
