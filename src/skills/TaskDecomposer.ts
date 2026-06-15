@@ -4,6 +4,11 @@
  *
  * Phase 2: Integrates with jCodemunch get_dependency_graph, get_coupling_metrics,
  * and get_file_tree to produce structured DecompositionPlan objects.
+ *
+ * Phase 3: Optional spec context. When a `Spec` is provided, the decomposer
+ * injects one task per `verificationCriteria` entry (test scaffolding work)
+ * and one task per `taskBreakdown` entry (spec-defined sub-area), letting
+ * a spec act as a first-class decomposition input alongside the analysis.
  */
 
 import {
@@ -16,6 +21,34 @@ import {
   FileDependency,
   TddScope,
 } from './types';
+
+/**
+ * Spec context. Loosely typed to avoid a hard dependency on
+ * methodology/SpecService; matches the shape produced by SpecService
+ * (outcomes, scope, constraints, decisions, taskBreakdown,
+ * verificationCriteria).
+ */
+export interface SpecContext {
+  id: string
+  outcomes: readonly string[]
+  scope: { inScope: readonly string[]; outOfScope: readonly string[] }
+  constraints: readonly string[]
+  decisions: Readonly<Record<string, string>>
+  taskBreakdown: ReadonlyArray<{ id: string; title: string; description?: string }>
+  verificationCriteria: ReadonlyArray<{ id: string; description: string; type: 'unit-test' | 'integration-test' | 'manual' | 'metric' }>
+}
+
+export interface SpecTaskBreakdownItem {
+  id: string
+  title: string
+  description?: string
+}
+
+export interface SpecVerificationCriterion {
+  id: string
+  description: string
+  type: 'unit-test' | 'integration-test' | 'manual' | 'metric'
+}
 
 interface JCodemunchDependencyGraph {
   imports: string[];
@@ -49,8 +82,9 @@ class TaskDecomposer {
   async decompose(
     analysis: TaskAnalysis,
     repo: string,
+    spec?: SpecContext,
   ): Promise<DecompositionPlan> {
-    const tasks = await this.generateTasks(analysis, repo);
+    const tasks = await this.generateTasks(analysis, repo, spec);
     const executionOrder = this.computeExecutionOrder(tasks);
     const conflicts = await this.detectConflicts(tasks, repo);
 
@@ -69,33 +103,45 @@ class TaskDecomposer {
   private async generateTasks(
     analysis: TaskAnalysis,
     repo: string,
+    spec?: SpecContext,
   ): Promise<DecomposedTask[]> {
     const tasks: DecomposedTask[] = [];
 
     // Cross-domain tasks need separate frontend/backend subtasks
     if (analysis.frontendBackendSplit) {
       tasks.push(
-        await this.createDomainTask(analysis, 'frontend', repo),
-        await this.createDomainTask(analysis, 'backend', repo),
+        await this.createDomainTask(analysis, 'frontend', repo, spec),
+        await this.createDomainTask(analysis, 'backend', repo, spec),
       );
     } else {
       tasks.push(
-        await this.createDomainTask(analysis, this.mapDomain(analysis.domain), repo),
+        await this.createDomainTask(analysis, this.mapDomain(analysis.domain), repo, spec),
       );
     }
 
     // Add database tasks if database domain is involved
     if (analysis.domain === 'database' || this.involvesDatabase(analysis)) {
       tasks.push(
-        await this.createDomainTask(analysis, 'database', repo),
+        await this.createDomainTask(analysis, 'database', repo, spec),
       );
     }
 
     // Add API tasks if API domain is involved
     if (analysis.domain === 'api' || this.involvesApi(analysis)) {
       tasks.push(
-        await this.createDomainTask(analysis, 'api', repo),
+        await this.createDomainTask(analysis, 'api', repo, spec),
       );
+    }
+
+    // Add spec-derived tasks: each verification criterion becomes a test
+    // task; each taskBreakdown item becomes a domain-agnostic task.
+    if (spec) {
+      for (const verification of spec.verificationCriteria) {
+        tasks.push(this.createSpecVerificationTask(verification, repo, spec));
+      }
+      for (const item of spec.taskBreakdown) {
+        tasks.push(this.createSpecTaskBreakdownItem(item, repo, spec));
+      }
     }
 
     // Deduplicate by domain
@@ -109,6 +155,7 @@ class TaskDecomposer {
     analysis: TaskAnalysis,
     domain: DecomposedTask['domain'],
     repo: string,
+    spec?: SpecContext,
   ): Promise<DecomposedTask> {
     const files = await this.discoverFilesForDomain(domain, repo, analysis);
     const testFiles = await this.discoverTestFiles(files, repo);
@@ -116,7 +163,7 @@ class TaskDecomposer {
 
     return {
       id: `task-${domain}-${Date.now()}`,
-      title: this.generateTaskTitle(analysis, domain),
+      title: this.generateTaskTitle(analysis, domain, spec),
       description: this.generateTaskDescription(analysis, domain),
       domain,
       dependencies: this.determineDependencies(domain, analysis),
@@ -515,7 +562,14 @@ class TaskDecomposer {
   private generateTaskTitle(
     analysis: TaskAnalysis,
     domain: DecomposedTask['domain'],
+    spec?: SpecContext,
   ): string {
+    // Spec-aware override: prefer an in-scope item that names the
+    // domain over the analysis-driven default title.
+    if (spec) {
+      const match = spec.scope.inScope.find((s) => s.toLowerCase().includes(domain))
+      if (match) return match
+    }
     const typeLabels: Record<string, string> = {
       coding: 'Implement',
       debugging: 'Fix',
@@ -545,6 +599,72 @@ class TaskDecomposer {
   private detectTestFramework(candidates: string[]): string {
     // In production, scan package.json for test framework dependencies
     return candidates[0] ?? 'jest';
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // Spec-aware task generation (Phase 3 of the SADD/TDD integration)
+  // ────────────────────────────────────────────────────────────────────
+
+  /**
+   * One task per spec verification criterion. The task's TDD scope is
+   * derived from the criterion's type:
+   *   - 'unit-test' / 'integration-test'  → testType 'unit' / 'integration'
+   *   - 'metric' / 'manual'                → testType 'component' (placeholder)
+   */
+  private createSpecVerificationTask(
+    criterion: SpecVerificationCriterion,
+    repo: string,
+    spec: SpecContext,
+  ): DecomposedTask {
+    const testType: TddScope['testType'] =
+      criterion.type === 'unit-test' ? 'unit'
+      : criterion.type === 'integration-test' ? 'integration'
+      : 'component'
+    return {
+      id: `spec-verify-${criterion.id}-${Date.now()}`,
+      title: `Verify: ${criterion.description}`,
+      description: `Spec ${spec.id} verification criterion (${criterion.type}).`,
+      domain: 'shared',
+      dependencies: [],
+      files: [],
+      testFiles: [],
+      estimatedComplexity: 'simple',
+      tddScope: {
+        testType,
+        testFramework: 'jest',
+        testPatterns: [`${criterion.id} passes`, `${criterion.id} returns expected value`],
+        edgeCases: criterion.type === 'unit-test' ? ['null input', 'empty input'] : [],
+      },
+    }
+  }
+
+  /**
+   * One task per spec taskBreakdown item. These are spec-defined
+   * sub-areas and may or may not overlap with the analysis-derived
+   * domain tasks — the final `deduplicateTasks` pass folds
+   * overlapping titles.
+   */
+  private createSpecTaskBreakdownItem(
+    item: SpecTaskBreakdownItem,
+    repo: string,
+    spec: SpecContext,
+  ): DecomposedTask {
+    return {
+      id: `spec-item-${item.id}-${Date.now()}`,
+      title: item.title,
+      description: item.description ?? `Spec ${spec.id} task breakdown item.`,
+      domain: 'shared',
+      dependencies: [],
+      files: [],
+      testFiles: [],
+      estimatedComplexity: 'medium',
+      tddScope: {
+        testType: 'component',
+        testFramework: 'jest',
+        testPatterns: [],
+        edgeCases: [],
+      },
+    }
   }
 }
 
