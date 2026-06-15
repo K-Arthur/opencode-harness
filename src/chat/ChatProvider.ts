@@ -45,6 +45,7 @@ import { SteerPromptHandler } from "./handlers/SteerPromptHandler"
 import { HostPromptQueue } from "./HostPromptQueue"
 import { SkillPreferencesStore } from "../skills/SkillPreferencesStore"
 import { SkillTriggerEngine } from "../skills/SkillTriggerEngine"
+import { ConfidenceScorer } from "../skills/ConfidenceScorer"
 import { MethodologyAdvisor } from "../methodology/MethodologyAdvisor"
 import { BackfillService } from "./BackfillService"
 import { MessagePostService } from "./MessagePostService"
@@ -169,10 +170,15 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     // prompt addendum; we filter by the user's enabled set so disabling a
     // skill in the modal also stops it from being suggested to the model.
     const skillTriggerEngine = new SkillTriggerEngine()
+    const confidenceScorer = new ConfidenceScorer()
     const methodologyAdvisor = new MethodologyAdvisor({
       skillHinter: (text: string) => {
         const ids = skillTriggerEngine.getTriggeredSkills(text)
-        return ids.filter((id) => this.skillPreferences.isEnabled(id))
+        const enabled = ids.filter((id) => this.skillPreferences.isEnabled(id))
+        for (const id of enabled) {
+          confidenceScorer.recordSkillUsage(id)
+        }
+        return enabled
       },
     })
 
