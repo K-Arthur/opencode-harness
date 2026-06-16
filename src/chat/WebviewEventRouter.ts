@@ -201,6 +201,26 @@ export class WebviewEventRouter {
     "webview_error",
   ])
 
+  /**
+   * Resolve a webview tab ID to the server-side CLI session ID.
+   *
+   * Several `sessionManager` methods (`replyToQuestion`, `rejectQuestion`,
+   * `revertMessage`, `unrevert`, `respondToPermission`, etc.) require the
+   * **server** session identifier, not the local tab ID.  Calling
+   * `ensureSession` both creates the server session if it doesn't exist yet
+   * and returns the canonical `cliSessionId`.  The tab and store are updated
+   * so subsequent calls short-circuit.
+   */
+  private async resolveCliSessionId(tabId: string): Promise<string> {
+    const tab = this.opts.tabManager.getTab(tabId)
+    const cliSessionId = await this.opts.sessionManager.ensureSession(tab?.cliSessionId)
+    if (tab) {
+      this.opts.tabManager.setCliSessionId(tabId, cliSessionId)
+      this.opts.sessionStore.updateCliSessionId(tabId, cliSessionId)
+    }
+    return cliSessionId
+  }
+
   private readonly webviewHandlers: Map<string, (msg: Record<string, unknown>, sessionId?: string) => void | Promise<void>> = new Map([
     ["create_tab", (msg: Record<string, unknown>, sessionId?: string) => {
       if (sessionId) {
@@ -347,6 +367,10 @@ export class WebviewEventRouter {
       log.info(`question_answer: sessionId=${sessionId}, toolCallId=${toolCallId ?? "N/A"}, requestID=${requestID ?? "N/A"}, source=${source}, len=${value.length}`)
 
       if (requestID) {
+        // Resolve webview tab ID → server session ID (the SDK v2
+        // question.reply/reject endpoints require the server-side session
+        // identifier, not the local tab ID).
+        const cliSessionId = await this.resolveCliSessionId(sessionId)
         const userMessageId = (msg.messageId as string) || generateUserMessageId()
         const textForPrompt = source === "response" ? `The user responded: ${value}` : value
         const answerSource: "option" | "freetext" | "skip" | "response" =
@@ -367,7 +391,7 @@ export class WebviewEventRouter {
         this.opts.streamCoordinator.markQuestionAnswered(sessionId, answerId)
         try {
           if (source === "skip") {
-            await this.opts.sessionManager.rejectQuestion(sessionId, requestID)
+            await this.opts.sessionManager.rejectQuestion(cliSessionId, requestID)
           } else {
             // B-edge-1: prefer the per-group structured answers the webview
             // builds (string[][] — one inner array per question group, with
@@ -381,7 +405,7 @@ export class WebviewEventRouter {
                   .map((g) => g.map((v) => (typeof v === "string" ? v : String(v ?? ""))).filter((v) => v.length > 0))
               : null
             const wireAnswers = structured && structured.length > 0 ? structured : [[value]]
-            await this.opts.sessionManager.replyToQuestion(sessionId, requestID, wireAnswers)
+            await this.opts.sessionManager.replyToQuestion(cliSessionId, requestID, wireAnswers)
           }
           this.opts.postMessage({
             type: "question_acknowledged",
@@ -1048,7 +1072,8 @@ export class WebviewEventRouter {
     ["revert_message", async (msg: Record<string, unknown>, sessionId?: string) => {
       if (sessionId && typeof msg.messageId === "string") {
         try {
-          await this.opts.sessionManager.revertMessage(sessionId, msg.messageId)
+          const cliSessionId = await this.resolveCliSessionId(sessionId)
+          await this.opts.sessionManager.revertMessage(cliSessionId, msg.messageId)
           this.opts.postMessage({
             type: "revert_result",
             sessionId,
@@ -1072,7 +1097,8 @@ export class WebviewEventRouter {
     ["unrevert", async (_: Record<string, unknown>, sessionId?: string) => {
       if (sessionId) {
         try {
-          await this.opts.sessionManager.unrevert(sessionId)
+          const cliSessionId = await this.resolveCliSessionId(sessionId)
+          await this.opts.sessionManager.unrevert(cliSessionId)
           this.opts.postMessage({ type: "unrevert_result", sessionId, ok: true })
           this.opts.showInformationMessage("OpenCode: All reverted messages restored.")
         } catch (err) {

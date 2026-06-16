@@ -1192,9 +1192,7 @@
 }
 
 .instructions-editor {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
+  position: fixed;
   width: 320px;
   background: var(--oc-glass-bg);
   backdrop-filter: var(--blur-surface);
@@ -1203,7 +1201,7 @@
   border-radius: var(--radius-lg);
   padding: var(--space-3);
   box-shadow: var(--shadow-mission);
-  z-index: var(--z-dropdown, 100);
+  z-index: calc(var(--z-modal-backdrop) + 1);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -1419,7 +1417,8 @@
 /* ─── MESSAGES CONTAINER ─── */
 
 .messages-container {
-  scroll-behavior: smooth;
+  /* scroll-behavior: smooth removed — causes scroll jitter during streaming.
+     Smooth scroll is applied explicitly on user-initiated actions only. */
 }
 
 /* ─── MODEL DROPDOWN PANEL ─── */
@@ -1431,9 +1430,7 @@
 }
 
 #model-dropdown-container:not(.hidden) {
-  position: absolute;
-  bottom: calc(100% + var(--space-3));
-  right: 0;
+  position: fixed;
   min-width: 240px;
   max-height: 320px;
   overflow-y: auto;
@@ -1443,7 +1440,7 @@
   border: 1px solid var(--oc-glass-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-mission);
-  z-index: var(--z-dropdown);
+  z-index: calc(var(--z-modal-backdrop) + 1);
 }
 
 .model-dropdown-search-container {
@@ -1493,9 +1490,7 @@
 }
 
 #variant-dropdown-container:not(.hidden) {
-  position: absolute;
-  bottom: calc(100% + var(--space-3));
-  right: 0;
+  position: fixed;
   min-width: 160px;
   max-height: 240px;
   overflow-y: auto;
@@ -1505,7 +1500,7 @@
   border: 1px solid var(--oc-glass-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-mission);
-  z-index: var(--z-dropdown);
+  z-index: calc(var(--z-modal-backdrop) + 1);
 }
 
 .model-group-label {
@@ -1577,14 +1572,11 @@
 /* ─── MENTION DROPDOWN POSITIONING ─── */
 
 #mention-dropdown {
-  position: absolute;
-  bottom: calc(100% + var(--space-2));
-  left: var(--space-2);
-  right: var(--space-2);
+  position: fixed;
   min-width: 240px;
   max-height: min(320px, 42vh);
   overflow-y: auto;
-  z-index: var(--z-dropdown);
+  z-index: calc(var(--z-modal-backdrop) + 1);
 }
 
 #mention-dropdown.command-mode {
@@ -1594,10 +1586,7 @@
 /* ─── SLASH AUTOCOMPLETE ─── */
 
 .slash-autocomplete {
-  position: absolute;
-  bottom: calc(100% + var(--space-2));
-  left: 0;
-  right: 0;
+  position: fixed;
   min-width: 200px;
   max-height: 260px;
   overflow-y: auto;
@@ -1605,7 +1594,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  z-index: var(--z-dropdown);
+  z-index: calc(var(--z-modal-backdrop) + 1);
 }
 
 .autocomplete-item {

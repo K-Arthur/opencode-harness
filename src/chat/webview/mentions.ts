@@ -62,6 +62,49 @@ export interface MentionState {
 
 export function setupMentions(els: ElementRefs, state: MentionState, postMessage: (msg: Record<string, unknown>) => void) {
   let serverCommands: MentionItem[] = []
+  let _resizeHandler: (() => void) | null = null
+
+  function positionDropdown() {
+    const input = els.promptInput
+    const dropdown = els.mentionDropdown
+    if (!input || !dropdown) return
+    const margin = 8
+    const r = input.getBoundingClientRect()
+    const dropdownW = Math.min(520, Math.max(240, window.innerWidth - margin * 2))
+    const estimatedHeight = Math.min(320, dropdown.getBoundingClientRect().height || 320)
+    const spaceAbove = r.top - margin
+    const maxHeight = Math.max(200, Math.floor(spaceAbove - 4))
+    const leftEdge = Math.max(margin, Math.min(r.left, window.innerWidth - dropdownW - margin))
+    const top = Math.max(margin, r.top - Math.min(estimatedHeight, maxHeight) - 6)
+
+    dropdown.style.position = "fixed"
+    dropdown.style.top = `${top}px`
+    dropdown.style.left = `${leftEdge}px`
+    dropdown.style.right = "auto"
+    dropdown.style.width = `${dropdownW}px`
+    dropdown.style.maxHeight = `${maxHeight}px`
+  }
+
+  function showDropdown() {
+    els.mentionDropdown.classList.remove("hidden")
+    els.promptInput.setAttribute("aria-expanded", "true")
+    positionDropdown()
+    if (!_resizeHandler) {
+      _resizeHandler = () => positionDropdown()
+      window.addEventListener("resize", _resizeHandler)
+    }
+  }
+
+  function hideDropdown() {
+    els.mentionDropdown.classList.remove("command-mode", "mention-mode")
+    els.mentionDropdown.classList.add("hidden")
+    els.promptInput.setAttribute("aria-expanded", "false")
+    els.promptInput.removeAttribute("aria-activedescendant")
+    if (_resizeHandler) {
+      window.removeEventListener("resize", _resizeHandler)
+      _resizeHandler = null
+    }
+  }
 
   function handleTrigger() {
     const val = els.promptInput.value
@@ -80,8 +123,7 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
       state.query = slashMatch[1]!
       els.mentionDropdown.classList.add("command-mode")
       els.mentionDropdown.classList.remove("mention-mode")
-      els.mentionDropdown.classList.remove("hidden")
-      els.promptInput.setAttribute("aria-expanded", "true")
+      showDropdown()
       const uniqueServer = dedupServerCommands(serverCommands, (c) => c.display)
       const allCommands = [...LOCAL_COMMANDS, ...uniqueServer]
       // Fuzzy subsequence match (not startsWith): typing "/review" must
@@ -104,14 +146,10 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
       state.query = atMatch[1]!
       els.mentionDropdown.classList.add("mention-mode")
       els.mentionDropdown.classList.remove("command-mode")
-      els.mentionDropdown.classList.remove("hidden")
-      els.promptInput.setAttribute("aria-expanded", "true")
+      showDropdown()
       postMessage({ type: "mention_search", query: state.query })
     } else {
-      els.mentionDropdown.classList.remove("command-mode", "mention-mode")
-      els.mentionDropdown.classList.add("hidden")
-      els.promptInput.setAttribute("aria-expanded", "false")
-      els.promptInput.removeAttribute("aria-activedescendant")
+      hideDropdown()
     }
   }
 
@@ -187,7 +225,7 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     els.promptInput.value = val.slice(0, slashIdx) + cmd + val.slice(els.promptInput.selectionStart)
     const newCursor = slashIdx + cmd.length
     els.promptInput.setSelectionRange(newCursor, newCursor)
-    els.mentionDropdown.classList.add("hidden")
+    hideDropdown()
     els.promptInput.focus()
     window.dispatchEvent(new CustomEvent("oc-input-changed"))
   }
@@ -223,7 +261,7 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     const items = els.mentionDropdown.querySelectorAll<HTMLElement>(".dropdown-item:not(.dropdown-empty)")
     if (items.length === 0) {
       if (e.key === "Escape") {
-        els.mentionDropdown.classList.add("hidden")
+        hideDropdown()
       }
       return
     }
@@ -263,7 +301,7 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
       const selectedEnter = items[state.selectedIndex]
       if (selectedEnter) selectedEnter.click()
     } else if (e.key === "Escape") {
-      els.mentionDropdown.classList.add("hidden")
+      hideDropdown()
     }
   }
 
@@ -345,7 +383,7 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     els.promptInput.value = before + text + trailing + after
     const newCursor = atIdx + text.length + trailing.length
     els.promptInput.setSelectionRange(newCursor, newCursor)
-    els.mentionDropdown.classList.add("hidden")
+    hideDropdown()
     els.promptInput.focus()
     window.dispatchEvent(new CustomEvent("oc-input-changed"))
   }

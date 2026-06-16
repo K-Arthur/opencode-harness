@@ -58,6 +58,34 @@ export function setupVariantSelector(els: ElementRefs, callbacks: VariantSelecto
     }
   }
 
+  function positionDropdown() {
+    if (!btn || !dropdown) return
+    const margin = 8
+    const r = btn.getBoundingClientRect()
+    const dropdownW = Math.min(300, Math.max(160, window.innerWidth - margin * 2))
+    const estimatedHeight = Math.min(240, dropdown.getBoundingClientRect().height || 240)
+    const spaceBelow = window.innerHeight - r.bottom - margin
+    const spaceAbove = r.top - margin
+    const openAbove = spaceBelow < Math.min(160, estimatedHeight) && spaceAbove > spaceBelow
+    const maxHeight = Math.max(160, Math.floor((openAbove ? spaceAbove : spaceBelow) - 4))
+    const leftEdge = Math.min(
+      Math.max(margin, r.right - dropdownW),
+      Math.max(margin, window.innerWidth - dropdownW - margin),
+    )
+    const top = openAbove
+      ? Math.max(margin, r.top - Math.min(estimatedHeight, maxHeight) - 6)
+      : Math.min(window.innerHeight - margin - estimatedHeight, r.bottom + 6)
+
+    dropdown.style.position = "fixed"
+    dropdown.style.top = `${Math.max(margin, top)}px`
+    dropdown.style.left = `${leftEdge}px`
+    dropdown.style.right = "auto"
+    dropdown.style.width = `${dropdownW}px`
+    dropdown.style.maxHeight = `${maxHeight}px`
+  }
+
+  let _resizeHandler: (() => void) | null = null
+
   function open() {
     if (btn.classList.contains("hidden")) return
     isOpen = true
@@ -66,6 +94,9 @@ export function setupVariantSelector(els: ElementRefs, callbacks: VariantSelecto
     btn.setAttribute("aria-expanded", "true")
     btn.removeAttribute("aria-activedescendant")
     render()
+    positionDropdown()
+    _resizeHandler = () => positionDropdown()
+    window.addEventListener("resize", _resizeHandler)
   }
 
   function close() {
@@ -76,6 +107,10 @@ export function setupVariantSelector(els: ElementRefs, callbacks: VariantSelecto
     btn.removeAttribute("aria-activedescendant")
     const options = getOptions()
     for (const opt of options) opt.classList.remove("focused")
+    if (_resizeHandler) {
+      window.removeEventListener("resize", _resizeHandler)
+      _resizeHandler = null
+    }
   }
 
   function toggle() {

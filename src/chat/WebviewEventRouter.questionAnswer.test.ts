@@ -68,8 +68,8 @@ describe("WebviewEventRouter — question_answer routing", () => {
   it("uses question reply/reject API for v2 requestID answers before the legacy prompt fallback", () => {
     assert.ok(handler.includes("const requestID"), "must read requestID from question_answer")
     assert.ok(handler.includes("if (requestID)"), "must branch before the legacy startPrompt fallback")
-    assert.ok(handler.includes("this.opts.sessionManager.replyToQuestion(sessionId,"), "must use the v2 question reply API")
-    assert.ok(handler.includes("this.opts.sessionManager.rejectQuestion(sessionId,"), "must use the v2 question reject API for skipped answers")
+    assert.ok(handler.includes("this.opts.sessionManager.replyToQuestion(cliSessionId,"), "must use the v2 question reply API with resolved server session ID")
+    assert.ok(handler.includes("this.opts.sessionManager.rejectQuestion(cliSessionId,"), "must use the v2 question reject API for skipped answers with resolved server session ID")
     assert.ok(handler.indexOf("if (requestID)") < handler.indexOf("this.promptsInFlight.has(sessionId)"),
       "v2 replies must not consume a prompt stream slot")
   })

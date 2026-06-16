@@ -159,6 +159,36 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     else open()
   }
 
+  function positionDropdown() {
+    const btn = els.modelSelectorBtn
+    const dropdown = els.modelDropdown
+    if (!btn || !dropdown) return
+    const margin = 8
+    const r = btn.getBoundingClientRect()
+    const dropdownW = Math.min(440, Math.max(240, window.innerWidth - margin * 2))
+    const estimatedHeight = Math.min(320, dropdown.getBoundingClientRect().height || 320)
+    const spaceBelow = window.innerHeight - r.bottom - margin
+    const spaceAbove = r.top - margin
+    const openAbove = spaceBelow < Math.min(200, estimatedHeight) && spaceAbove > spaceBelow
+    const maxHeight = Math.max(200, Math.floor((openAbove ? spaceAbove : spaceBelow) - 4))
+    const leftEdge = Math.min(
+      Math.max(margin, r.right - dropdownW),
+      Math.max(margin, window.innerWidth - dropdownW - margin),
+    )
+    const top = openAbove
+      ? Math.max(margin, r.top - Math.min(estimatedHeight, maxHeight) - 6)
+      : Math.min(window.innerHeight - margin - estimatedHeight, r.bottom + 6)
+
+    dropdown.style.position = "fixed"
+    dropdown.style.top = `${Math.max(margin, top)}px`
+    dropdown.style.left = `${leftEdge}px`
+    dropdown.style.right = "auto"
+    dropdown.style.width = `${dropdownW}px`
+    dropdown.style.maxHeight = `${maxHeight}px`
+  }
+
+  let _resizeHandler: (() => void) | null = null
+
   function open() {
     isOpen = true
     focusedIndex = -1
@@ -167,6 +197,11 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     els.modelSelectorBtn.setAttribute("aria-activedescendant", "")
     callbacks.onOpen?.()
     
+    // Position using fixed coordinates to escape overflow:hidden ancestors
+    positionDropdown()
+    _resizeHandler = () => positionDropdown()
+    window.addEventListener("resize", _resizeHandler)
+
     // Auto-focus search input
     const searchInput = els.modelDropdown.querySelector(".model-dropdown-search") as HTMLInputElement | null
     if (searchInput) {
@@ -194,6 +229,10 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     els.modelSelectorBtn.removeAttribute("aria-activedescendant")
     const options = getOptions()
     for (const opt of options) opt.classList.remove("focused")
+    if (_resizeHandler) {
+      window.removeEventListener("resize", _resizeHandler)
+      _resizeHandler = null
+    }
   }
 
   function focusOption(index: number) {
