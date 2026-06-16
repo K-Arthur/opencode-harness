@@ -98,13 +98,21 @@ export class ProviderManagementService {
       for (const c of localConfigs) localByName.set(c.name.toLowerCase(), c)
 
       const items: ProviderDiscoveryItem[] = listData.all.map((p) => {
-        const hasKey = p.source === "api" || !!p.key || !!localByName.get(p.id.toLowerCase())?.apiKey
+        const hasLocalKey = !!p.key || !!localByName.get(p.id.toLowerCase())?.apiKey
+        const isEnvProvider = p.source === "env" && p.env.length > 0
         const methods = authData?.[p.id] ?? authData?.[p.name] ?? []
         const hasOauth = methods.some((m: ProviderAuthMethod) => m.type === "oauth")
-        const needsAuth = !hasKey && !hasOauth
+
         let status: ProviderDiscoveryItem["status"] = "connected"
-        if (needsAuth) status = "needs_key"
-        else if (!hasKey && hasOauth) status = "needs_oauth"
+        if (isEnvProvider && !hasLocalKey) {
+          // Env providers are connected if the env vars are set (server wouldn't
+          // list them otherwise). Mark as connected, not needs_key.
+          status = "connected"
+        } else if (!hasLocalKey && hasOauth) {
+          status = "needs_oauth"
+        } else if (!hasLocalKey && !hasOauth) {
+          status = "needs_key"
+        }
 
         return {
           id: p.id,

@@ -29,6 +29,7 @@ let lastFocus: HTMLElement | null = null
 let activeTab = "discover"
 let pendingOAuthProviderId: string | null = null
 let cachedDeps: ProviderPanelDeps | null = null
+let oauthPollTimer: ReturnType<typeof setInterval> | null = null
 
 export function setupProviderPanel(deps: ProviderPanelDeps): void {
   cachedDeps = deps
@@ -280,14 +281,37 @@ export function renderProviderCredentialList(
   }
 }
 
-export function handleOAuthStarted(providerId: string, authorizationUrl: string): void {
+export function handleOAuthStarted(providerId: string, authorizationUrl: string, postMessage: (msg: Record<string, unknown>) => void): void {
   pendingOAuthProviderId = providerId
   window.open(authorizationUrl, "_blank")
+
+  // Poll for OAuth completion by re-requesting provider list every 2s.
+  // The server stores credentials in auth.json when OAuth completes;
+  // re-discovering providers will reflect the new connected status.
+  stopOAuthPolling()
+  let attempts = 0
+  const MAX_ATTEMPTS = 60 // 2 minutes max
+  oauthPollTimer = setInterval(() => {
+    attempts++
+    if (attempts > MAX_ATTEMPTS || !pendingOAuthProviderId) {
+      stopOAuthPolling()
+      return
+    }
+    postMessage({ type: "discover_providers" })
+  }, 2000)
+}
+
+function stopOAuthPolling(): void {
+  if (oauthPollTimer) {
+    clearInterval(oauthPollTimer)
+    oauthPollTimer = null
+  }
 }
 
 export function handleOAuthCompleted(providerId: string, ok: boolean, error?: string): void {
   if (pendingOAuthProviderId === providerId) {
     pendingOAuthProviderId = null
+    stopOAuthPolling()
   }
   if (!ok && error) {
     console.warn(`[provider-panel] OAuth failed for ${providerId}: ${error}`)

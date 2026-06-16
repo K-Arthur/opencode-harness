@@ -3836,7 +3836,7 @@ function getVsCodeApi() {
       ["provider_oauth_started", (msg) => {
         const providerId = (msg as Record<string, unknown>).providerId as string | undefined
         const url = (msg as Record<string, unknown>).authorizationUrl as string | undefined
-        if (providerId && url) handleOAuthStarted(providerId, url)
+        if (providerId && url) handleOAuthStarted(providerId, url, (m) => vscode.postMessage(m))
       }],
       ["provider_oauth_completed", (msg) => {
         const providerId = (msg as Record<string, unknown>).providerId as string | undefined
