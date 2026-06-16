@@ -297,6 +297,15 @@ export interface FileChange {
   isPlanDocument?: boolean
 }
 
+export interface PromptTemplate {
+  id: string
+  name: string
+  content: string
+  tags: string[]
+  createdAt: number
+  updatedAt: number
+}
+
 export interface SkillInfo {
   id: string
   name: string
@@ -664,11 +673,20 @@ export type HostMessage =
   | { type: "stash_error"; error: string }
   | { type: "stash_list"; stashes: unknown[] }
   | { type: "stash_deleted"; id: string }
+  | { type: "template_saved"; template: unknown }
+  | { type: "template_list"; templates: unknown[] }
+  | { type: "template_deleted"; id: string }
+  | { type: "template_error"; error: string }
   | { type: "provider_added"; id: string; name: string }
   | { type: "provider_error"; error: string }
   | { type: "provider_list"; providers: unknown[] }
   | { type: "provider_updated"; id: string }
   | { type: "provider_deleted"; id: string }
+  | { type: "provider_discovery_list"; providers: ProviderDiscoveryItem[] }
+  | { type: "provider_auth_methods"; providerId: string; methods: ProviderAuthMethodInfo[] }
+  | { type: "provider_oauth_started"; providerId: string; authorizationUrl: string; instructions?: string }
+  | { type: "provider_oauth_completed"; providerId: string; ok: boolean; error?: string }
+  | { type: "provider_credential_list"; credentials: ProviderCredentialInfo[] }
   | { type: "push_all_state" }
   | { type: "push_visible_state" }
   | { type: "open_commands_palette" }
@@ -703,6 +721,28 @@ export interface ModelInfo {
   contextWindow?: number
   available?: boolean
   unavailableReason?: string
+  connectionStatus?: "connected" | "needs_key" | "needs_oauth"
+}
+
+export interface ProviderDiscoveryItem {
+  id: string
+  name: string
+  source: "env" | "config" | "custom" | "api"
+  status: "connected" | "needs_key" | "needs_oauth"
+  modelCount: number
+  envVars: string[]
+}
+
+export interface ProviderAuthMethodInfo {
+  type: "oauth" | "api"
+  label: string
+}
+
+export interface ProviderCredentialInfo {
+  id: string
+  providerId: string
+  label: string
+  type: "oauth" | "api"
 }
 
 export interface TabInfo {
@@ -778,10 +818,21 @@ export type WebviewMessage =
   | { type: "list_stashes" }
   | { type: "delete_stash"; id: string }
   | { type: "record_stash_usage"; id: string }
+  | { type: "save_template"; name: string; content: string; tags?: string[]; existingId?: string }
+  | { type: "list_templates" }
+  | { type: "delete_template"; id: string }
+  | { type: "save_message_as_template"; name: string; content: string; tags?: string[] }
   | { type: "add_provider"; name: string; config: Record<string, unknown> }
   | { type: "list_providers" }
   | { type: "update_provider"; id: string; config: Record<string, unknown> }
   | { type: "delete_provider"; id: string }
+  | { type: "discover_providers" }
+  | { type: "get_provider_auth_methods"; providerId: string }
+  | { type: "connect_provider_key"; providerId: string; key: string; label?: string }
+  | { type: "connect_provider_oauth"; providerId: string; methodIndex?: number }
+  | { type: "complete_provider_oauth"; providerId: string; code?: string; methodIndex?: number }
+  | { type: "list_provider_credentials" }
+  | { type: "remove_provider_credential"; credentialId: string }
   | { type: "compact_session"; sessionId: string }
   | { type: "execute_command"; command: string; arguments?: string; sessionId?: string }
   | { type: "list_commands" }

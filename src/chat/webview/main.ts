@@ -546,11 +546,12 @@ function getVsCodeApi() {
 
 	  const variantSelector = setupVariantSelector(els, {
     onSelect: (variant) => {
-      stateManager.setGlobalVariant(variant)
+      const normalized = variant === "Default" ? "" : variant
+      stateManager.setGlobalVariant(normalized)
       const active = stateManager.getActiveSession()
       if (active) {
-        stateManager.setSessionVariant(active.id, variant)
-        vscode.postMessage({ type: "set_variant", variant, sessionId: active.id })
+        stateManager.setSessionVariant(active.id, normalized)
+        vscode.postMessage({ type: "set_variant", variant: normalized, sessionId: active.id })
       }
     },
 	  })
@@ -654,6 +655,10 @@ function getVsCodeApi() {
       insertIntoPrompt(stash.content)
     },
     onDeleteStash: (id) => vscode.postMessage({ type: "delete_stash", id }),
+    onUseTemplate: (tpl) => {
+      insertIntoPrompt(tpl.content)
+    },
+    onDeleteTemplate: (id) => vscode.postMessage({ type: "delete_template", id }),
   })
 
   const attachmentManager = createAttachmentManager({
@@ -3875,7 +3880,7 @@ function getVsCodeApi() {
       }],
       ["checkpoint_list", (msg) => {
         if (msg.checkpoints) {
-          renderCheckpointPanel(msg.checkpoints as Array<{ id: string; sessionId: string; messageId?: string; filesChanged?: string[] }>)
+          renderCheckpointPanel(msg.checkpoints as Array<{ id: string; sessionId: string; messageId?: string; createdAt?: number; filesChanged?: string[]; action?: string }>)
         }
       }],
       ["checkpoint_restored", (msg, sid) => {
@@ -4037,6 +4042,28 @@ function getVsCodeApi() {
       ["stash_deleted", () => {
         // Refresh the stash list if open
         vscode.postMessage({ type: "list_stashes" })
+      }],
+      ["template_saved", (msg) => {
+        const active = stateManager.getActiveSession()
+        const template = msg.template as { name?: string } | undefined
+        if (active && template?.name) {
+          showSystemMessage(active.id, `Template "${template.name}" saved.`)
+        }
+        // Refresh template list if modal is open
+        vscode.postMessage({ type: "list_templates" })
+      }],
+      ["template_list", (msg) => {
+        const templates = (msg as unknown as { templates?: Array<{ id: string; name: string; content: string; tags: string[] }> }).templates || []
+        commandsModal.openTemplateList(templates)
+        commandsModal.updateTemplateCommands(templates)
+      }],
+      ["template_deleted", () => {
+        vscode.postMessage({ type: "list_templates" })
+      }],
+      ["template_error", (msg) => {
+        const active = stateManager.getActiveSession()
+        const errText = typeof msg.error === "string" ? msg.error : "Template operation failed."
+        if (active) showSystemMessage(active.id, `Template error: ${errText}`)
       }],
       ["open_commands_palette", () => {
         commandsModal.open()
@@ -4651,7 +4678,7 @@ function getVsCodeApi() {
     handleChangedFilesModule(fileTrackingDeps, sessionId, files)
   }
 
-  function renderCheckpointPanel(checkpoints: Array<{ id: string; sessionId: string; messageId?: string; filesChanged?: string[] }>) {
+  function renderCheckpointPanel(checkpoints: Array<{ id: string; sessionId: string; messageId?: string; createdAt?: number; filesChanged?: string[]; action?: string }>) {
     renderCheckpointPanelModule(fileTrackingDeps, checkpoints)
   }
 

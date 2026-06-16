@@ -280,6 +280,7 @@ export class MessageRouter {
       provider: m.provider,
       displayName: m.displayName,
       supportsVariants: m.supportsVariants,
+      variantNames: m.variantNames,
       contextWindow: m.contextWindow,
       available: m.available !== false,
       unavailableReason: m.unavailableReason,

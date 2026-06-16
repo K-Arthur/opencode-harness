@@ -6,7 +6,7 @@ export interface VariantSelectorCallbacks {
   onSelect: (variant: string) => void
 }
 
-const VARIANTS = ["Default", "Low", "Medium", "High"]
+const DEFAULT_VARIANTS = ["Default", "Low", "Medium", "High"]
 
 export function setupVariantSelector(els: ElementRefs, callbacks: VariantSelectorCallbacks) {
   let isOpen = false
@@ -25,6 +25,13 @@ export function setupVariantSelector(els: ElementRefs, callbacks: VariantSelecto
   function setModel(model: ModelInfo | null) {
     currentModel = model
     updateVisibility()
+  }
+
+  function getVariants(): string[] {
+    if (currentModel?.variantNames && currentModel.variantNames.length > 0) {
+      return ["Default", ...currentModel.variantNames]
+    }
+    return DEFAULT_VARIANTS
   }
 
   function updateVisibility() {
@@ -92,7 +99,7 @@ export function setupVariantSelector(els: ElementRefs, callbacks: VariantSelecto
     btn.setAttribute("aria-controls", "variant-listbox")
 
     let optionIndex = 0
-    for (const variant of VARIANTS) {
+    for (const variant of getVariants()) {
       const isSelected = variant === currentVariant
       const option = document.createElement("div")
       option.className = "model-option" + (isSelected ? " selected" : "")

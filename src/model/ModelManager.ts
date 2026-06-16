@@ -14,6 +14,7 @@ export interface ModelInfo {
   available?: boolean
   unavailableReason?: string
   supportsVariants?: boolean
+  variantNames?: string[]
   favorite?: boolean
   enabled?: boolean
 }
@@ -383,6 +384,13 @@ export class ModelManager {
           })
           if (ctx === undefined) unresolvedContextWindowCount++
 
+          const variantNames = m.variants && typeof m.variants === "object"
+            ? Object.keys(m.variants).filter(k => {
+                const v = m.variants[k]
+                return v && typeof v === "object" && v.disabled !== true
+              })
+            : undefined
+
           models.push({
             id: m.id,
             provider: provider.id,
@@ -390,6 +398,7 @@ export class ModelManager {
             contextWindow: ctx,
             outputLimit: m.limit?.output || undefined,
             supportsVariants: !!reasoning,
+            variantNames: variantNames && variantNames.length > 0 ? variantNames : undefined,
             available: m.available !== false,
             unavailableReason: m.unavailableReason || undefined,
             favorite: this._favoriteModels.has(modelKey),
