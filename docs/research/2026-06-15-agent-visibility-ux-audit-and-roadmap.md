@@ -4,7 +4,7 @@
 > **Author:** Architecture/DX research pass
 > **Scope:** "Make users continuously informed about what the agent is doing" — file changes,
 > terminal activity, tool calls, reasoning, progress, subagents, approvals, review/audit.
-> **Status:** Research + design deliverable. **No feature code written yet** (per request).
+> **Status:** Research + design + partial implementation. See §14 (implementation log).
 > **Supersedes / extends:** [`docs/frontend-ux-audit.md`](frontend-ux-audit.md) (2026-06-06/07),
 > [`docs/research/ai-coding-ux-patterns-report.md`](research/ai-coding-ux-patterns-report.md),
 > [`docs/research/timeline-research-notes.md`](research/timeline-research-notes.md).
@@ -388,3 +388,68 @@ the native SDK surfaces.**
 **Dropped entirely:** `FileSnapshotManager` (2B-1), `activityCenter.ts` as new (2C-1),
 `sessionHistoryPanel.ts` as new (2C-3), step-inference fallback (2C-4) — each redundant with
 existing code or native SDK data.
+
+---
+
+## 14. Implementation log (2026-06-15 session)
+
+### 14a. Requested-feature status (verified)
+| Feature | Status | Where |
+|---|---|---|
+| Show changed file lines when edits are made | ✅ Present | edit-tool cards render added/removed/context diff lines ([`toolCallRenderer.ts`](../src/chat/webview/toolCallRenderer.ts)); changed-files dropdown per-file expansion; **new:** edit/write inputs now preview as a diff/code block instead of JSON |
+| Show commands + view running bash in the VS Code terminal | ⚠️ Partial | "Open in terminal" re-runs the command in a real VS Code terminal ([`WebviewEventRouter.ts:835`](../src/chat/WebviewEventRouter.ts)); **true live attach** to the already-running command needs the PTY wiring (§14d) |
+| Recent prompts pinned to the top | ✅ Implemented this session | [`recentPromptsRail.ts`](../src/chat/webview/recentPromptsRail.ts) + [`recentPrompts.ts`](../src/prompts/recentPrompts.ts) core; per-session `pinnedPrompts` persisted |
+
+### 14b. Multi-session bleed — root causes fixed (TDD)
+- **Question bar / context-usage on wrong session:** webview attributed per-session events to the *viewed* session when the explicit `sessionId` was absent. Fix: `resolveEventSessionTarget` (explicit → envelope `sid` → active) + `addQuestion(…, sid)`. ([`sessionTarget.ts`](../src/chat/webview/sessionTarget.ts), `questionBar.ts`, `main.ts`)
+- **Context-usage persistence bleed:** `ContextMonitor` kept a single shared `tokenLimit`; two tabs on different-context models corrupted each other's percentage. Fix: per-session `limitBySession`. ([`ContextMonitor.ts`](../src/monitor/ContextMonitor.ts))
+- **Host session/tab routing audited:** robust — `resolveServerEventTab` resolves by cliSessionId → child-session map, **buffers** during the registration race (ADR-009), **drops ambiguous** sessionless edits, and never falls back to the active tab. The bug was webview-side attribution, now fixed. `set_mode`/`get_context_usage`/all three `question_asked` emitters already stamp the authoritative sessionId.
+
+### 14c. Hunk staging — the *correct* design (answering "what would achieve the feature")
+**The feature's real goal:** let the user keep some of an agent's edit and discard the rest
+(partial acceptance), instead of all-or-nothing accept/revert.
+
+**Why naive "apply a diff" is wrong here:** opencode is **server-authoritative** — it applies
+edits to disk itself and the old client diff-*generation/apply* subsystem was removed (C1-a)
+because the server never emitted a client-appliable "diff part". Resurrecting that would make
+client and server fight over file ownership.
+
+**What the model actually offers:** `session.diff` → `FileDiff{before, after}` (full contents);
+`session/revert{messageID, partID, snapshot}` + `unrevert` (revert to a **snapshot**, i.e. a
+whole-workspace point — *not* sub-file); a **file watcher** (`file.watcher.updated`/`file.edited`)
+that reconciles external edits. There is **no hunk-level server API**.
+
+**Correct way to achieve the feature (ranked):**
+1. **Rejecting a hunk = a normal, user-initiated, undoable edit.** The edit is already on disk;
+   discarding a hunk means reverting *those specific lines* via a VS Code `WorkspaceEdit`
+   (undoable, satisfies constitution rule #3). This is *not* the C1-a subsystem — it's the user
+   editing their own file, which is always allowed, and opencode's file watcher reconciles its
+   diff view afterward (refresh changed-files on completion). The pure `applyHunkSelection`
+   ([`hunkStaging.ts`](../src/chat/diff/hunkStaging.ts)) computes the resulting content; the host
+   applies it as one `WorkspaceEdit`. **This is achievable and the recommended path.**
+2. **Pre-apply permission gating (whole edit):** opencode's `edit: ask` permission already lets
+   the user approve/deny a *whole* edit before apply — coarser, but server-native. Good for
+   "review before it touches my files"; not per-hunk.
+3. **Agent-mediated undo:** ask the agent to revert a specific change — indirect, costs a turn.
+
+**Verdict:** the feature *is* achievable. Implement reject-hunk as a host `WorkspaceEdit` driven
+by `applyHunkSelection` over the cached `FileDiff.before/after`, then refresh changed-files so
+opencode's reconciled view and the panel agree. (Accept-all/revert-file already exist server-side.)
+
+### 14d. PTY live terminal — wiring plan (user will manually verify against a live server)
+Manual verification resolves the only blocker (no server in this dev env). Correct wiring:
+1. **Capability probe** once per server: `client.pty.list()` → `isPtySupported` ([`ptyModel.ts`](../src/terminal/ptyModel.ts)); if unsupported, keep Hybrid-A.
+2. **Host:** on `pty.created/updated/exited/deleted` SSE events, fold through `ptyReducer`; call
+   `client.pty.connect(id)` to stream live output → forward `pty_data{ptyId, chunk}` to the webview
+   (coalesced per frame); **Cancel** → `client.pty.remove(id)` (true per-command cancel).
+3. **Webview:** render the `ptyReducer` state in the bash tool card / Tasks panel (reuse
+   `ansiUtils` for ANSI), ring-buffered (`PTY_OUTPUT_CAP`).
+4. **Degradation:** fall back to Hybrid-A polling when PTY is absent (constitution rule #6).
+
+### 14e. Cores delivered this session (all RED→GREEN, committed)
+| Core | Status | Wiring |
+|---|---|---|
+| `recentPrompts` / rail | ✅ wired + rendered | done |
+| `hunkStaging` (computeHunks/applyHunkSelection) | ✅ core; design in §14c | host reject-hunk WorkspaceEdit = next concrete step |
+| `ptyModel` (reducer + probe) | ✅ core | host connect/forward + render (§14d) — pending live verify |
+| `restorePoints` (collector + revert builder) | ✅ core | needs a restore-rail UI + partID revert call |
