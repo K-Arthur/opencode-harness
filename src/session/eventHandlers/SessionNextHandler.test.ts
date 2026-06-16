@@ -58,6 +58,8 @@ describe("SessionNextHandler tool.progress partials", () => {
       stderrDelta: "",
       stdoutLength: 11,
       stderrLength: 0,
+      stdoutLineCount: 1,
+      stderrLineCount: 0,
     })
   })
 

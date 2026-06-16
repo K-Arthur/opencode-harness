@@ -1,4 +1,5 @@
 import { SdkEventLike, NormalizedOpencodeEvent, NormalizerContext, EventHandler } from "./types"
+import { countOutputLines } from "../liveToolOutput"
 const NEXT_PREFIX = "session.next."
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -116,6 +117,8 @@ export class SessionNextHandler implements EventHandler {
               stderrDelta: "",
               stdoutLength,
               stderrLength: context.toolPartialStderrLengths.get(id) ?? 0,
+              stdoutLineCount: countOutputLines(result),
+              stderrLineCount: 0,
             },
           })
         }

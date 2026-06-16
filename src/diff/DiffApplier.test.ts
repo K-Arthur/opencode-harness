@@ -14,9 +14,9 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
-import path from "node:path"
+import { resolve } from "node:path"
 
-const source = readFileSync(path.join(__dirname, "DiffApplier.ts"), "utf8")
+const source = readFileSync(resolve(__dirname, "DiffApplier.ts"), "utf8")
 
 describe("DiffApplier.ts (trimmed C1-a)", () => {
   it("keeps ProposedEdit interface for backward compatibility", () => {

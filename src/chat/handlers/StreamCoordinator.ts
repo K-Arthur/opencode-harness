@@ -622,14 +622,16 @@ export class StreamCoordinator {
 
   private stopAllToolPartialPolling(tabId: string): void {
     const prefix = `${tabId}\u0000`
-    for (const [key, timer] of Array.from(this.toolPartialFallbackTimers)) {
+    for (const key of Array.from(this.toolPartialFallbackTimers.keys())) {
       if (!key.startsWith(prefix)) continue
-      clearTimeout(timer)
+      const timer = this.toolPartialFallbackTimers.get(key)
+      if (timer) clearTimeout(timer)
       this.toolPartialFallbackTimers.delete(key)
     }
-    for (const [key, timer] of Array.from(this.toolPartialPollTimers)) {
+    for (const key of Array.from(this.toolPartialPollTimers.keys())) {
       if (!key.startsWith(prefix)) continue
-      clearInterval(timer)
+      const timer = this.toolPartialPollTimers.get(key)
+      if (timer) clearInterval(timer)
       this.toolPartialPollTimers.delete(key)
     }
     for (const key of Array.from(this.toolPartialOffsets.keys())) {
@@ -2172,10 +2174,14 @@ export class StreamCoordinator {
     if (partial.stdoutLength < prevStdoutLength || partial.stderrLength < prevStderrLength) replace = true
 
     const stdoutDelta = partial.stdoutDelta ?? (
-      partial.stdout !== undefined ? (replace ? partial.stdout : partial.stdout.slice(prevStdoutLength)) : ""
+      partial.stdout !== undefined
+        ? (replace ? partial.stdout : partial.stdout.slice(prevStdoutLength))
+        : ""
     )
     const stderrDelta = partial.stderrDelta ?? (
-      partial.stderr !== undefined ? (replace ? partial.stderr : partial.stderr.slice(prevStderrLength)) : ""
+      partial.stderr !== undefined
+        ? (replace ? partial.stderr : partial.stderr.slice(prevStderrLength))
+        : ""
     )
 
     this.toolPartialOffsets.set(key, {
@@ -2212,10 +2218,11 @@ export class StreamCoordinator {
     })
 
     if (partial.terminal) {
+      const resultText = partial.result ?? partial.stdout ?? ""
       this.postToolEnd(tabId, {
         id: toolId,
         ok: partial.ok ?? partial.exitCode === 0,
-        result: partial.result ?? partial.stdout ?? "",
+        result: resultText,
         stderr: partial.stderr,
         durationMs: partial.durationMs,
         exitCode: partial.exitCode,

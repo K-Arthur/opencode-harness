@@ -19,13 +19,13 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(source.includes("export class StreamCoordinator"), "StreamCoordinator class must be exported")
   })
 
-  it("constructor accepts DiffApplier (DiffHandler removed C1-a)", () => {
+  it("constructor accepts DiffApplier for showSideBySideDiff (DiffHandler removed C1-a)", () => {
     // C1-a: DiffHandler was removed (the server applies edits directly).
     // DiffApplier is kept for the showSideBySideDiff entry point.
     assert.ok(source.includes("DiffApplier"), "constructor must accept a DiffApplier")
     assert.ok(
-      !source.includes("private diffHandler: DiffHandler") || source.includes("// diffHandler removed"),
-      "C1-a: DiffHandler field must NOT exist"
+      !source.includes("DiffHandler") || source.includes("// DiffHandler removed"),
+      "DiffHandler must NOT be instantiated in the constructor (C1-a dead subsystem removal)"
     )
   })
 
@@ -167,7 +167,6 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(typesSource.includes("serverMessageId") || source.includes("serverMessageId?: string"),
       "ActiveStreamRun must carry serverMessageId")
   })
-
   it("has appendChunk method (getDiffHandler removed C1-a)", () => {
     assert.ok(
       source.includes("appendChunk(tabId: string, text: string, callbacks?: StreamCallbacks, messageId?: string): void"),

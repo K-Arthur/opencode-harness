@@ -36,6 +36,18 @@ describe("stripAnsi", () => {
   it("string with only ANSI escapes returns empty", () => {
     assert.strictEqual(stripAnsi("\x1b[0m\x1b[1m\x1b[32m"), "")
   })
+
+  it("keeps ANSI rendering disabled by default", () => {
+    setToolOutputRenderAnsi(false)
+    assert.equal(isToolOutputRenderAnsiEnabled(), false)
+  })
+
+  it("renders a small SGR palette when explicitly enabled", () => {
+    setToolOutputRenderAnsi(true)
+    assert.equal(isToolOutputRenderAnsiEnabled(), true)
+    assert.equal(renderAnsiToHtml("\x1b[31mred\x1b[0m <tag>"), '<span class="ansi-fg-red">red</span> &lt;tag&gt;')
+    setToolOutputRenderAnsi(false)
+  })
 })
 
 describe("tool output ANSI rendering", () => {

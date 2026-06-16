@@ -2689,6 +2689,22 @@ textarea {
 .cf-hunk-line--removed { color: var(--vscode-gitDecoration-deletedResourceForeground, #f44336); background: var(--vscode-diffEditor-removedTextBackground, rgba(244,67,54,0.06)); }
 .cf-hunk-line--context { color: var(--oc-muted); }
 .cf-hunk-more  { display: block; color: var(--oc-muted); font-style: italic; padding: 1px 0; font-size: 0.68rem; }
+.cf-hunk-more-btn {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--vscode-textLink-foreground, var(--oc-accent));
+  cursor: pointer;
+  font-size: 0.68rem;
+  padding: 2px 0;
+  text-align: left;
+}
+.cf-hunk-more-btn:hover,
+.cf-hunk-more-btn:focus-visible {
+  text-decoration: underline;
+  opacity: 0.9;
+}
 .cf-hunk-empty  { padding: 6px 10px 6px 30px; color: var(--oc-muted); font-size: 0.72rem; }
 .cf-hunk-error  { padding: 6px 10px 6px 30px; color: #f44336; font-size: 0.72rem; }
 .cf-hunk-loading {
