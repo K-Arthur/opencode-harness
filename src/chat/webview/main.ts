@@ -1249,6 +1249,15 @@ function getVsCodeApi() {
       },
       getActiveSessionId: () => stateManager.getState().activeSessionId ?? undefined,
       skillsModalOpen: () => skillsModalApi?.open?.(),
+      onTodosToggleRequest: () => {
+        const wasOpen = sideRegionApi?.isOpen() && sideRegionApi?.getActiveTab() === "todos"
+        if (wasOpen) {
+          sideRegionApi?.close()
+          return false
+        }
+        sideRegionApi?.open("todos")
+        return true
+      },
       onTodosToggle: (willBeVisible: boolean) => {
         const sid = stateManager.getState().activeSessionId
         if (!sid) return
@@ -4076,6 +4085,7 @@ function getVsCodeApi() {
             if (msgIdx !== -1) {
               active.messages.splice(msgIdx + 1)
               stateManager.save()
+              refreshActivityAndTasks(sid)
             }
 
             els.promptInput.value = msg.text as string
