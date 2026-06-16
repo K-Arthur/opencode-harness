@@ -1271,6 +1271,15 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       this.postMessage({ type: "message", sessionId: tabId, message: { role: "system", blocks: [block], timestamp: Date.now(), sessionId: tabId } })
     }],
     ["session_compacted", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => { log.info(`Session compacted for ${tabId}`); this.postMessage({ type: "session_compacted", sessionId: tabId }) }],
+    ["session_updated", (event: { type: string; sessionId?: string; data?: unknown }) => {
+      const data = event.data as { title?: string } | undefined
+      const cliSessionId = event.sessionId
+      if (cliSessionId && data?.title) {
+        this.sessionStore.applyServerTitle(cliSessionId, data.title)
+      }
+    }],
+    ["step_start", (_event: { type: string; sessionId?: string; data?: unknown }) => {
+    }],
     ["mcp_tools_changed", (event: { type: string; sessionId?: string; data?: unknown }) => {
       // MCP server tools changed (connect / disconnect / reauth) means the
       // server's /command list may now include or exclude MCP-sourced

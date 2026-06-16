@@ -205,9 +205,14 @@ export class SessionNextHandler implements EventHandler {
       case "prompt.promoted":
       case "context.updated":
       case "synthetic":
+      case "step.started":
+        return [{
+          type: "step_start",
+          sessionId,
+          data: { messageId },
+        }]
       case "shell.started":
       case "shell.ended":
-      case "step.started":
       case "text.started":
       case "text.ended":
       case "reasoning.started":
