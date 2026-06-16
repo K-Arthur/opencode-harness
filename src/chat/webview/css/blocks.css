@@ -3101,17 +3101,18 @@
   width: 28px;
   height: 28px;
   padding: 0;
-  border: 1px solid var(--oc-glass-border, var(--color-border));
-  border-radius: var(--radius-md, 6px);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-muted);
   cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast);
+  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
 }
 
 .diff-btn-more:hover {
   background: var(--oc-list-hover);
-  color: var(--oc-fg);
+  color: var(--color-fg);
+  border-color: var(--color-border);
 }
 
 .diff-more-menu {
