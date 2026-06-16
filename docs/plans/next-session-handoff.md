@@ -211,9 +211,14 @@ Connecting AI providers currently seems to require CLI interaction (opencode.jso
    - How does the `opencode.json` config file define providers?
    - What's the `opencode.toml` or `opencode.json` schema for provider blocks?
 
-4. **Competitive Analysis:**
-   - Fetch `https://continue.dev/docs` or similar to see how Continue.dev handles provider UI.
-   - Compare: Cursor's settings screen for providers vs our webview.
+4. **Competitive Analysis (use webfetch + prior work):**
+   - The previous session produced a competitive analysis matrix comparing us against GitHub PR, Cursor, Claude Code, Cline, Roo Code, and Continue.dev across 20+ diff and rendering features. Reference `docs/plans/` for prior research artifacts, and search `AGENTS.md` for the existing competitor feature matrix.
+   - **For provider UI specifically:** Use webfetch to examine:
+     - `https://continue.dev/docs` → How does Continue.dev's provider config UI work?
+     - `https://cline.bot` or `https://github.com/nicepkg/cursor` → How do Cursor/Cline handle provider setup?
+     - `https://opencode.ai/docs` → What does the official OpenCode+ client look like for providers?
+   - **Key questions:** Do competitors offer in-app API key entry? OAuth flows? Provider discovery? How do they handle "no API key configured" states?
+   - **What to extract:** Screenshots aren't needed — look for UI flow descriptions, config schema, user-facing messaging around provider setup.
 
 **Implementation Plan (after research):**
 - Design provider onboarding flow for the webview (API key input, OAuth redirect, status badges)
@@ -252,6 +257,14 @@ The "Rollback Changes" command and checkpoint concepts seem incomplete or confli
 3. **OpenCode Server:**
    - Use webfetch to search `https://opencode.ai/docs` for snapshot/checkpoint concepts.
    - How does the CLI handle `session.revert`?
+
+4. **Competitive Analysis (use webfetch + prior work):**
+   - The previous session analyzed checkpoint and revert patterns across Cursor, Claude Code, Cline, and Roo Code (there's an existing diff/comparison matrix in this session's accumulated research). Search for it.
+   - Use webfetch for specifics:
+     - Cursor's "Timeline" feature → How does Cursor handle version history?
+     - Claude Code's "snapshot" command → How does Claude's native checkpointing work?
+     - Roo Code's checkpoint UI → How does Roo display snapshot history?
+   - **Key questions:** Do competitors offer per-message revert, per-file revert, or session-level rollback? What does the checkpoint UI look like? How do they handle "undo" vs "revert"?
 
 4. **Conceptual Cleanup:**
    - Determine the single source of truth: should checkpoints be snapshot-based (server state) or WorkspaceEdit-based (extension-local file changes)?
@@ -292,6 +305,15 @@ The variant selector exists (`variant-selector.ts` with "Default"/"Low"/"Medium"
 3. **OpenCode Server / Docs:**
    - Use webfetch to check `https://opencode.ai/docs` for variants/reasoning/thinking model support.
    - How does the CLI handle `opencode --variant`?
+
+4. **Competitive Analysis (use webfetch + prior work):**
+   - The previous session analyzed how competitors handle model selection, reasoning levels, and variant switching (Cursor's model dropdown with "thinking" toggle, Claude Code's `/plan` mode with different model, Cline's thinking budget slider). Look for that analysis in the session research.
+   - Use webfetch for specifics:
+     - Cursor's model selector → How do they display reasoning vs non-reasoning models?
+     - Claude Code's `/compact` and mode model assignment
+     - Continue.dev's model configuration UI
+     - Roo Code's "thinking budget" slider
+   - **Key questions:** Do competitors offer per-message reasoning override? Per-mode model assignment? A "thinking budget" slider that maps to the correct API parameter? How do they handle models that don't support thinking?
 
 4. **Correctness Determination:**
    - If the SDK has no `reasoning_effort` field on the prompt payload, how does the variant selector work? Is it just setting a different model ID (e.g., "claude-sonnet-4" vs "claude-sonnet-4:thinking")?
