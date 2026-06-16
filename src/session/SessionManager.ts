@@ -21,6 +21,7 @@ import { AuthProvider } from "./AuthProvider"
 import { ServerLifecycle } from "./ServerLifecycle"
 import { SseSubscriber } from "./SseSubscriber"
 import { SessionClient } from "./SessionClient"
+import { PtyService } from "./PtyService"
 import type { LiveToolOutputSnapshot } from "./liveToolOutput"
 
 /* ------------------------------------------------------------------ */
@@ -73,6 +74,7 @@ export class SessionManager {
   readonly serverLifecycle: ServerLifecycle
   readonly sseSubscriber: SseSubscriber
   readonly sessionClient: SessionClient
+  readonly ptyService: PtyService
 
   constructor(mcpServerManager?: McpServerManager) {
     this.authProvider = new AuthProvider()
@@ -81,6 +83,11 @@ export class SessionManager {
       mcpServerManager ?? undefined,
       () => this.disposed,
       () => this.v2Client,
+    )
+    this.ptyService = new PtyService(
+      () => this.v2Client,
+      () => this.authHeader,
+      () => this.serverBaseUrl(),
     )
     this.sseSubscriber = new SseSubscriber(
       () => this.v2Client !== null,
@@ -197,6 +204,7 @@ export class SessionManager {
 
   async stop(): Promise<void> {
     this.sseSubscriber.disconnect()
+    this.ptyService.dispose()
     await this.serverLifecycle.stop()
     this.v2Client = null
   }
@@ -206,6 +214,7 @@ export class SessionManager {
     this.disposed = true
     for (const disposable of this.lifecycleDisposables) disposable.dispose()
     this.lifecycleDisposables.length = 0
+    this.ptyService.dispose()
     this.sseSubscriber.dispose()
     this._onEvent.dispose()
     this.serverLifecycle.dispose()

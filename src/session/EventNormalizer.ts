@@ -21,6 +21,7 @@ import { McpToolsChangedHandler } from "./eventHandlers/McpToolsChangedHandler"
 import { SessionUpdatedHandler } from "./eventHandlers/SessionUpdatedHandler"
 import { QuestionHandler } from "./eventHandlers/QuestionHandler"
 import { SessionNextHandler } from "./eventHandlers/SessionNextHandler"
+import { PtyEventHandler } from "./eventHandlers/PtyEventHandler"
 import { isSafeIgnoredEventType } from "./eventCoverage"
 
 const HANDLERS: EventHandler[] = [
@@ -43,6 +44,7 @@ const HANDLERS: EventHandler[] = [
   new ServerConnectedHandler(),
   new TodoUpdatedHandler(),
   new McpToolsChangedHandler(),
+  new PtyEventHandler(),
   new FallbackHandler(),
 ]
 
