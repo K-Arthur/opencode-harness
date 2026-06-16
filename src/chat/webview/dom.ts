@@ -178,6 +178,7 @@ export interface ElementRefs {
 
   // Checkpoint/undo panel (Phase 5)
   checkpointPanel: HTMLElement | null
+  recentPromptsRail: HTMLElement | null
   checkpointToggleBtn: HTMLElement
   // Tabbed side region
   sideRegion: HTMLElement
@@ -373,6 +374,7 @@ export function getElementRefs(): ElementRefs {
 
     // Checkpoint/undo panel (Phase 5)
     checkpointPanel: document.getElementById("checkpoint-panel"),
+    recentPromptsRail: document.getElementById("recent-prompts-rail"),
     checkpointToggleBtn: requireElement("checkpoint-toggle-btn"),
     // Tabbed side region
     sideRegion: requireElement("side-region"),

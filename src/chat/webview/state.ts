@@ -400,6 +400,21 @@ export function createState(vscode: VsCodeApi) {
     return true
   }
 
+  function toggleSessionPinnedPrompt(id: string, promptId: string): boolean {
+    const session = state.sessions[id]
+    if (!session) return false
+    const current = session.pinnedPrompts ?? []
+    session.pinnedPrompts = current.includes(promptId)
+      ? current.filter((p) => p !== promptId)
+      : [...current, promptId]
+    save()
+    return true
+  }
+
+  function getSessionPinnedPrompts(id: string): string[] {
+    return state.sessions[id]?.pinnedPrompts ?? []
+  }
+
   function setSessionSteerMode(id: string, steerMode: "interrupt" | "queue"): boolean {
     const session = state.sessions[id]
     if (!session) return false
@@ -662,6 +677,8 @@ export function createState(vscode: VsCodeApi) {
     setSessionModel,
     setSessionMode,
     setSessionSteerMode,
+    toggleSessionPinnedPrompt,
+    getSessionPinnedPrompts,
     setStreaming,
     appendMessage,
     getAllSessions,
