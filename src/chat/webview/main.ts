@@ -65,6 +65,7 @@ import { createAttachmentManager } from "./ui/attachments"
 import { showWelcomeView as showWelcomeViewModule, hideWelcomeView as hideWelcomeViewModule, renderWelcomeContext as renderWelcomeContextModule, setupWelcomeActions as setupWelcomeActionsModule, setupWelcomeSuggestions as setupWelcomeSuggestionsModule, setupWelcomeResponsive as setupWelcomeResponsiveModule, type WelcomeViewDeps } from "./ui/welcomeView"
 import { shouldHonorActiveSessionChange, resolveInitStateTarget } from "./sessionFocus"
 import { resolveEventSessionTarget } from "./sessionTarget"
+import { renderRecentPromptsRail } from "./recentPromptsRail"
 import { closeSettingsMenu as closeSettingsMenuModule, setupSettingsMenuKeyboardNav as setupSettingsMenuKeyboardNavModule } from "./ui/settingsMenu"
 import { handleChangedFiles as handleChangedFilesModule, renderCheckpointPanel as renderCheckpointPanelModule, handleClearMessages as handleClearMessagesModule, type FileTrackingDeps } from "./ui/fileTracking"
 import { setupButtons as setupButtonsModule } from "./ui/buttonSetup"
@@ -230,6 +231,33 @@ function getVsCodeApi() {
     activityPanelApi?.refresh(sessionId)
     tasksPanelApi?.refresh(sessionId)
     refreshSubagentPanel(sessionId)
+    refreshRecentPrompts(sessionId)
+  }
+
+  // Recent / pinned prompts rail (brief Phase 5). Renders the active session's
+  // recent user prompts with pinned ones floated to the top; click-to-reuse fills
+  // the composer, pin toggles persist per session.
+  function refreshRecentPrompts(sessionId?: string): void {
+    const rail = els.recentPromptsRail
+    if (!rail) return
+    const id = sessionId ?? stateManager.getState().activeSessionId
+    const session = id ? stateManager.getSession(id) : undefined
+    if (!id || !session) {
+      rail.classList.add("hidden")
+      return
+    }
+    renderRecentPromptsRail(rail, {
+      messages: session.messages,
+      pinnedIds: stateManager.getSessionPinnedPrompts(id),
+      onPin: (promptId) => {
+        stateManager.toggleSessionPinnedPrompt(id, promptId)
+        refreshRecentPrompts(id)
+      },
+      onPick: (text) => {
+        els.promptInput.value = text
+        els.promptInput.focus()
+      },
+    })
   }
 
   // Maps a server-reported subagent status string to a SubagentActivity status.

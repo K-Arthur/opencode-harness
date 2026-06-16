@@ -266,6 +266,8 @@ export interface SessionState {
   commandFilter?: 'all' | 'running' | 'failed' | 'succeeded'
   pinned?: boolean
   tags?: string[]
+  /** Message ids of user prompts pinned to the top of this session's prompt rail. */
+  pinnedPrompts?: string[]
 }
 
 export interface RevertEntry {
