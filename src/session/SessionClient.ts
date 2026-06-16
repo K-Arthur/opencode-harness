@@ -6,7 +6,7 @@ import {
   type FilePartInput,
   type AgentPartInput,
   type SubtaskPartInput,
-} from "@opencode-ai/sdk"
+} from "@opencode-ai/sdk/v2"
 import { randomUUID } from "crypto"
 import { log } from "../utils/outputChannel"
 import type { McpServerManager } from "../mcp/McpServerManager"

@@ -15,7 +15,7 @@ import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
-import type { Message, Part } from "@opencode-ai/sdk"
+import type { Message, Part } from "@opencode-ai/sdk/v2"
 import {
   partToBlock,
   partsToBlocks,
@@ -154,6 +154,7 @@ const assistantMessage = (id = "m1", sessionId = "s1", completed?: number): Mess
     modelID: "claude-x",
     providerID: "anthropic",
     mode: "build",
+    agent: "build",
     path: { cwd: "/", root: "/" },
     cost: 0,
     tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
@@ -429,7 +430,7 @@ describe("sdkMessageConverter — Layer 1 RED (canonical CanonicalBlock projecti
     const offenders: string[] = []
     const expectedFile = "src/session/sdkMessageConverter.ts"
     const switchRe = /switch\s*\(\s*[A-Za-z_$][\w$]*\.type\s*\)/
-    const partImportRe = /from\s+["']@opencode-ai\/sdk["']/
+    const partImportRe = /from\s+["']@opencode-ai\/sdk(?:\/v2)?["']/
 
     function walk(dir: string): void {
       for (const entry of readdirSync(dir)) {

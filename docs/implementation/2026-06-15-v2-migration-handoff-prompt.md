@@ -1,8 +1,7 @@
 # Handoff Prompt — Complete the @opencode-ai/sdk v1 → v2 Migration
 
-> Paste everything below the line into a fresh session to continue/finish the migration.
-> It is self-contained: it carries the findings, the per-call rules, the test protocol,
-> and the guardrails so you don't have to re-derive them.
+> **STATUS: COMPLETE (2026-06-16).** All phases shipped. All type imports migrated to v2.
+> This document is preserved for historical reference.
 
 ---
 

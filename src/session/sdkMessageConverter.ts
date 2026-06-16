@@ -1,4 +1,4 @@
-import type { Message, Part } from "@opencode-ai/sdk"
+import type { Message, Part } from "@opencode-ai/sdk/v2"
 import type { ChatMessage, Block } from "../types"
 import { parseQuestionArgs, parseAllowFreeText } from "./questionModel"
 

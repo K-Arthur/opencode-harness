@@ -8,7 +8,7 @@ import {
   type AgentPartInput,
   type SubtaskPartInput,
   type Event as SdkEvent,
-} from "@opencode-ai/sdk"
+} from "@opencode-ai/sdk/v2"
 import { randomUUID } from "crypto"
 import * as os from "os"
 import * as fsPromises from "fs/promises"

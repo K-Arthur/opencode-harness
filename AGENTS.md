@@ -56,7 +56,7 @@ Full rationale + worktree recipes: [`docs/development/concurrent-agents.md`](doc
 
 ## What This Is
 
-VS Code extension that integrates the opencode AI agent into VS Code. TypeScript/Node.js, built with esbuild. Client-server architecture: extension connects to an opencode HTTP server (localhost:4096) via `@opencode-ai/sdk`. Does not embed or spawn the CLI directly for chat.
+VS Code extension that integrates the opencode AI agent into VS Code. TypeScript/Node.js, built with esbuild. Client-server architecture: extension connects to an opencode HTTP server (localhost:4096) via `@opencode-ai/sdk/v2` (v2 client). Does not embed or spawn the CLI directly for chat.
 
 ## Commands
 
@@ -222,7 +222,7 @@ Use jCodemunch-MCP tools for code exploration. Use `Read` only when editing a fi
 Error handling spans three layers: SDK errors (host-side), extension routing, and webview display.
 
 ### Error Flow
-1. **SDK errors** (`@opencode-ai/sdk`) arrive at `ChatProvider.ts` as `server_error` events with shapes like `ProviderAuthError`, `APIError`, `MessageOutputLengthError`, `MessageAbortedError`
+1. **SDK errors** (`@opencode-ai/sdk/v2`) arrive at `ChatProvider.ts` as `server_error` events with shapes like `ProviderAuthError`, `APIError`, `MessageOutputLengthError`, `MessageAbortedError`
 2. **Host mapping**: `looksLikeSdkError()` checks for known error names/status codes → `mapOpencodeError()` in `opencodeErrorMapper.ts` produces a structured `ErrorContext` with category, severity, actions, and technical detail
 3. **Extension routing**: `ChatProvider.ts` sends `request_error` or `webview_request_error` messages to webview, optionally carrying the `ErrorContext`
 4. **Webview handling**: `main.ts` dispatches to `handleRequestError()` → `handleStreamError()` in `streamHandlers.ts` which:

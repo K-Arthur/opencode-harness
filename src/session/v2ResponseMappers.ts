@@ -2,26 +2,20 @@ import type {
   Session,
   Message,
   Part,
-  FileDiff,
-} from "@opencode-ai/sdk"
+  SnapshotFileDiff,
+} from "@opencode-ai/sdk/v2"
 
 /**
- * Strategy A: v2→domain adapter/mapper.
+ * v2→domain adapter/mapper.
  *
- * v2 SDK domain types are supersets of v1 types (extra fields like `slug`,
- * `workspaceID`, `path`, `cost`, `tokens`). The extension code only reads a
- * subset of fields (id, title, directory, parentID, time, summary.*). These
- * mapper functions extract the v1-shaped subset from v2-shaped data.
- *
- * v2 `summary.diffs` uses `SnapshotFileDiff` (file?/patch?/status?) while v1
- * uses `FileDiff` (file/before/after). The extension never accesses
- * `.summary.diffs`, `.before`, or `.after` on Session objects, so we provide
- * a best-effort mapping: map via the V2FileDiff type's `patch` field.
+ * The v2 SDK client returns raw `Record<string, unknown>` from HTTP calls.
+ * These mappers validate and cast to the typed v2 SDK domain types.
  */
 export function mapV2Session(v2: Record<string, unknown>): Session {
   const summaryRaw = v2.summary as Record<string, unknown> | undefined
   return {
     id: v2.id as string,
+    slug: v2.slug as string,
     projectID: v2.projectID as string,
     directory: v2.directory as string,
     parentID: v2.parentID as string | undefined,
@@ -31,7 +25,7 @@ export function mapV2Session(v2: Record<string, unknown>): Session {
           deletions: summaryRaw.deletions as number,
           files: summaryRaw.files as number,
           diffs: summaryRaw.diffs
-            ? (summaryRaw.diffs as Array<Record<string, unknown>>).map(mapV2DiffToFileDiff)
+            ? (summaryRaw.diffs as Array<Record<string, unknown>>).map(mapV2SnapshotFileDiff)
             : undefined,
         }
       : undefined,
@@ -81,13 +75,13 @@ export function mapV2MessageWithPartsArray(
   return v2Array.map(mapV2MessageWithParts)
 }
 
-function mapV2DiffToFileDiff(v2: Record<string, unknown>): FileDiff {
+function mapV2SnapshotFileDiff(v2: Record<string, unknown>): SnapshotFileDiff {
   return {
-    file: (v2.file as string) ?? "",
-    before: "",
-    after: "",
+    file: v2.file as string | undefined,
+    patch: v2.patch as string | undefined,
     additions: v2.additions as number,
     deletions: v2.deletions as number,
+    status: v2.status as "added" | "deleted" | "modified" | undefined,
   }
 }
 

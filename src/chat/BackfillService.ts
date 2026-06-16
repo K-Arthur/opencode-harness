@@ -5,7 +5,7 @@ import { isLocalPlaceholderSessionId } from "../session/sessionUtils"
 import { TabManager } from "./TabManager"
 import { log } from "../utils/outputChannel"
 import { selectPendingBackfill, SingleFlight } from "./backfillPlanner"
-import type { Message, Part } from "@opencode-ai/sdk"
+import type { Message, Part } from "@opencode-ai/sdk/v2"
 
 interface BackfillDeps {
   sessionStore: SessionStore

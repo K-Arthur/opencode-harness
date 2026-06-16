@@ -10,7 +10,7 @@ import { estimateContextTokens, parseModelRef, estimateTokens } from "../../util
 import { ModelManager } from "../../model/ModelManager"
 import { log } from "../../utils/outputChannel"
 import type { Block, ChatMessage } from "../types"
-import type { Part } from "@opencode-ai/sdk"
+import type { Part } from "@opencode-ai/sdk/v2"
 import { partsToBlocks as sdkConvertPartsToBlocks } from "../../session/sdkMessageConverter"
 import type { LiveToolOutputSnapshot } from "../../session/liveToolOutput"
 import { StreamFinalizerService } from "./StreamFinalizerService"

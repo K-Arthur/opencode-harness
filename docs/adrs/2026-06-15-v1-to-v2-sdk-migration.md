@@ -46,6 +46,27 @@ Adopt a **strangler-fig migration**: stand up the v2 client as a first-class cit
 
 ## Post-migration follow-up (2026-06-15)
 
+### Phase 6 — Type import migration (2026-06-16)
+
+All remaining `import type { ... } from "@opencode-ai/sdk"` (v1) statements migrated to `"@opencode-ai/sdk/v2"` across 8 files:
+
+- `src/session/SessionClient.ts` — `Session, Message, Part, TextPartInput, FilePartInput, AgentPartInput, SubtaskPartInput`
+- `src/session/SessionManager.ts` — same + `Event as SdkEvent`
+- `src/session/v2ResponseMappers.ts` — `Session, Message, Part, SnapshotFileDiff` (replaced `FileDiff`)
+- `src/session/sdkMessageConverter.ts` — `Message, Part`
+- `src/session/sdkMessageConverter.test.ts` — `Message, Part` + added required `agent` field to `AssistantMessage` fixtures
+- `src/chat/BackfillService.ts` — `Message, Part`
+- `src/chat/handlers/StreamCoordinator.ts` — `Part`
+- `src/chat/handlers/SubagentHeartbeat.ts` — `Session`
+
+Key v2 type differences handled:
+- `AssistantMessage` gains required `agent: string`
+- `FileDiff` → `SnapshotFileDiff` (optional `file?/patch?/status?` vs required `file/before/after`)
+- `Session.summary.diffs` is `SnapshotFileDiff[]`
+- `mapV2Session` now maps `slug` and uses `mapV2SnapshotFileDiff`
+
+25 TDD tests added in `tests/unit/v2ResponseMappers.test.mjs` covering all mapper functions.
+
 **Phase 2 gap: `replyToQuestion`/`rejectQuestion` used the wrong v2 sub-client.**
 
 The Phase 1 beachhead wired `SessionClient.replyToQuestion` to `client.question.reply` — the v2 *global* question endpoint (`POST /question/{requestID}/reply`) instead of the session-scoped endpoint (`POST /api/session/{sessionID}/question/{requestID}/reply`). The global endpoint returns `QuestionNotFoundError` because questions are session-scoped on the v2 server. The correct call is `client.session.question.reply({ sessionID, requestID, questionV2Reply: { answers } })`.

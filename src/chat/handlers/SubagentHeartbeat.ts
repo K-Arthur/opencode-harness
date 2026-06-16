@@ -1,4 +1,4 @@
-import type { Session } from "@opencode-ai/sdk"
+import type { Session } from "@opencode-ai/sdk/v2"
 import type { SessionClient } from "../../session/SessionClient"
 import type { SubagentActivityInput, SubagentRunState } from "./runActivityTypes"
 import { log } from "../../utils/outputChannel"
