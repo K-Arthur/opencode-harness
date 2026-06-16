@@ -149,6 +149,22 @@ export function renderCheckpointPanel(deps: FileTrackingDeps, checkpoints: Array
   }
   panel.classList.remove("hidden")
   toggleBtn?.setAttribute("aria-pressed", "true")
+
+  // Unrevert button — restores all reverted messages
+  const unrevertRow = document.createElement("div")
+  unrevertRow.className = "checkpoint-unrevert-row"
+  const unrevertBtn = document.createElement("button")
+  unrevertBtn.className = "checkpoint-unrevert-btn"
+  unrevertBtn.textContent = "Restore all reverted messages"
+  unrevertBtn.setAttribute("aria-label", "Restore all reverted messages in this session")
+  const firstCp = checkpoints[0]
+  if (firstCp) {
+    unrevertBtn.addEventListener("click", () => {
+      deps.postMessage({ type: "unrevert", sessionId: firstCp.sessionId })
+    })
+  }
+  unrevertRow.appendChild(unrevertBtn)
+  panel.appendChild(unrevertRow)
   for (const cp of checkpoints) {
     const item = document.createElement("div")
     item.className = "checkpoint-item"

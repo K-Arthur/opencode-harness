@@ -61,7 +61,7 @@ import { setupModeToggle, updateModeDropdown, updateModeSelectorState, syncModeU
 import { setupInstructionsEditor } from "./ui/instructionsEditor"
 import { setupSessionModal as setupSessionModalModule, openSessionModal as openSessionModalModule, closeSessionModal as closeSessionModalModule, trapModalFocus } from "./ui/sessionModal"
 import { setupKeyboardShortcutsModal, openKeyboardShortcutsModal, closeKeyboardShortcutsModal } from "./ui/keyboardShortcutsModal"
-import { setupProviderPanel, openProviderPanel, closeProviderPanel, configureProviderPanelTrapFocus, renderProviderDiscoveryList, renderProviderCredentialList, handleOAuthStarted, handleOAuthCompleted } from "./ui/providerPanel"
+import { setupProviderPanel, openProviderPanel, closeProviderPanel, renderProviderDiscoveryList, renderProviderCredentialList, handleOAuthStarted, handleOAuthCompleted } from "./ui/providerPanel"
 import type { ProviderDiscoveryItem, ProviderAuthMethodInfo, ProviderCredentialInfo } from "./types"
 import { createEscapeRegistry, visibleByClass } from "./escapeCoordinator"
 
@@ -2429,7 +2429,6 @@ function getVsCodeApi() {
     postMessage: (msg) => vscode.postMessage(msg),
     trapFocus: (container) => trapModalFocus(container),
   })
-  configureProviderPanelTrapFocus((container) => trapModalFocus(container))
 
   /* ─── WELCOME ─── */
 

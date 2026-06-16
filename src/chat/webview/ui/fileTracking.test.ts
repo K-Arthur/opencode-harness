@@ -147,4 +147,89 @@ describe("fileTracking.ts", () => {
       "checkpoint panel must not immediately hide when a list request returns no checkpoints",
     )
   })
+
+  // ── Enhanced checkpoint panel features ────────────────────────────────
+
+  it("exports formatRelativeTime helper", () => {
+    assert.ok(source.includes("function formatRelativeTime"), "must have formatRelativeTime helper")
+  })
+
+  it("exports formatActionLabel helper", () => {
+    assert.ok(source.includes("function formatActionLabel"), "must have formatActionLabel helper")
+  })
+
+  it("formatRelativeTime handles 'just now' for recent timestamps", () => {
+    assert.ok(source.includes("just now"), "must show 'just now' for sub-minute timestamps")
+  })
+
+  it("formatRelativeTime handles minutes ago", () => {
+    assert.ok(source.includes("m ago"), "must show 'Xm ago' for minute-level timestamps")
+  })
+
+  it("formatRelativeTime handles hours ago", () => {
+    assert.ok(source.includes("h ago"), "must show 'Xh ago' for hour-level timestamps")
+  })
+
+  it("formatActionLabel maps known actions to human-readable labels", () => {
+    assert.ok(source.includes("Session start"), "must map 'baseline' to 'Session start'")
+    assert.ok(source.includes("File edit"), "must map 'edit' to 'File edit'")
+    assert.ok(source.includes("File write"), "must map 'write' to 'File write'")
+    assert.ok(source.includes("Tool execution"), "must map 'tool' to 'Tool execution'")
+  })
+
+  it("renderCheckpointPanel renders timeline dots", () => {
+    assert.ok(source.includes("checkpoint-dot"), "must render timeline dot elements")
+  })
+
+  it("renderCheckpointPanel renders content column with header", () => {
+    assert.ok(source.includes("checkpoint-content"), "must render content column")
+    assert.ok(source.includes("checkpoint-header"), "must render header row within content")
+  })
+
+  it("renderCheckpointPanel renders timestamps when createdAt is provided", () => {
+    assert.ok(source.includes("checkpoint-time"), "must render timestamp element")
+    assert.ok(source.includes("createdAt"), "must check for createdAt field")
+  })
+
+  it("renderCheckpointPanel renders file summaries", () => {
+    assert.ok(source.includes("checkpoint-files"), "must render file summary element")
+  })
+
+  it("renderCheckpointPanel uses data-checkpoint-id for test targeting", () => {
+    assert.ok(source.includes("data-checkpoint-id"), "must add data-checkpoint-id attribute")
+  })
+
+  it("renderCheckpointPanel shows restore button on hover via CSS class", () => {
+    assert.ok(source.includes("checkpoint-restore-btn"), "must have restore button class")
+  })
+
+  it("renderCheckpointPanel accepts createdAt and action in checkpoint shape", () => {
+    const sigMatch = source.match(/function renderCheckpointPanel\([^)]+\)/)
+    assert.ok(sigMatch, "must have renderCheckpointPanel function")
+    const sig = sigMatch![0]
+    assert.ok(sig.includes("createdAt"), "signature must include createdAt field")
+    assert.ok(sig.includes("action"), "signature must include action field")
+  })
+
+  it("renderCheckpointPanel truncates file list when more than 3 files", () => {
+    assert.ok(source.includes("+"), "must show '+N more' for file overflow")
+  })
+
+  // ── Unrevert support ──────────────────────────────────────────────────
+
+  it("renderCheckpointPanel renders unrevert button", () => {
+    assert.ok(source.includes("checkpoint-unrevert-btn"), "must have unrevert button class")
+    assert.ok(source.includes("unrevert"), "must reference unrevert action")
+  })
+
+  it("unrevert button posts unrevert message type", () => {
+    assert.ok(source.includes('"unrevert"') || source.includes("'unrevert'"), "must post unrevert message type")
+  })
+
+  it("unrevert button has accessible label", () => {
+    assert.ok(
+      source.includes("Restore all reverted"),
+      "unrevert button must have descriptive aria-label",
+    )
+  })
 })
