@@ -107,6 +107,40 @@
   overflow-wrap: break-word;
 }
 
+.code-block--wrapped .code-block-content,
+.code-block--wrapped .code-block-content .code-line-content {
+  white-space: pre-wrap;
+  overflow-x: hidden;
+}
+
+.code-wrap-toggle {
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-0-5);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
+}
+
+.code-wrap-toggle:hover {
+  background: var(--color-element-bg);
+  color: var(--color-text);
+}
+
+.code-wrap-toggle.active {
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+  border-color: var(--color-accent);
+}
+
+.code-wrap-toggle.active:hover {
+  opacity: 0.85;
+}
+
 /* Code block with line numbers (grid layout for >5 lines) */
 .code-block-lines {
   display: grid;

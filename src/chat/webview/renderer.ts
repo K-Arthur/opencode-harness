@@ -739,6 +739,9 @@ function renderCodeBlock(block: Block, _opts: RenderOptions): HTMLElement | null
   })
   actions.appendChild(newFileBtn)
 
+  const wrapToggle = createCodeWrapToggle(outerWrapper)
+  actions.appendChild(wrapToggle)
+
   header.appendChild(actions)
   outerWrapper.appendChild(header)
 
@@ -1355,6 +1358,49 @@ function persistDiffWrapPreference(isWrapped: boolean): void {
   } catch (error) {
     console.warn("Failed to persist diff wrap preference:", error)
   }
+}
+
+function createCodeWrapToggle(wrapper: HTMLElement): HTMLButtonElement {
+  const wrapToggle = document.createElement("button")
+  wrapToggle.className = "code-wrap-toggle"
+  wrapToggle.setAttribute("aria-label", "Toggle code wrapping")
+  wrapToggle.title = "Wrap lines"
+  wrapToggle.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12h18"/><path d="M6 16l4-4-4-4"/><path d="M18 8l-4 4 4 4"/></svg>`
+  if (readCodeWrapPreference()) {
+    wrapToggle.classList.add("active")
+    wrapper.classList.add("code-block--wrapped")
+  }
+  wrapToggle.addEventListener("click", (e) => {
+    e.stopPropagation()
+    toggleCodeBlockWrap(wrapper, wrapToggle)
+  })
+  return wrapToggle
+}
+
+function toggleCodeBlockWrap(wrapper: HTMLElement, wrapToggle: HTMLElement): void {
+  const isWrapped = wrapper.classList.toggle("code-block--wrapped")
+  wrapToggle.classList.toggle("active", isWrapped)
+  persistCodeWrapPreference(isWrapped)
+}
+
+function readCodeWrapPreference(): boolean {
+  const vscode = (window as any).acquireVsCodeApi?.()
+  if (!vscode) return false
+  try {
+    return vscode.getState()?.displayPrefs?.codeWrapEnabled === true
+  } catch { return false }
+}
+
+function persistCodeWrapPreference(isWrapped: boolean): void {
+  const vscode = (window as any).acquireVsCodeApi?.()
+  if (!vscode) return
+  try {
+    const state = vscode.getState()
+    if (state?.displayPrefs) {
+      state.displayPrefs.codeWrapEnabled = isWrapped
+      vscode.setState(state)
+    }
+  } catch { }
 }
 
 function appendDiffBody(wrapper: HTMLElement, block: Block, diffBlock: DiffBlock, opts: RenderOptions): void {
