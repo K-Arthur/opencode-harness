@@ -837,6 +837,12 @@
   font: inherit;
 }
 
+.tool-result-body--nowrap {
+  white-space: pre;
+  word-break: normal;
+  overflow-x: auto;
+}
+
 .tool-result-panel--error {
   background: color-mix(in srgb, var(--color-error) 8%, var(--bg-secondary, var(--oc-editor-bg))) !important;
 }

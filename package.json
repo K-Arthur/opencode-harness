@@ -968,6 +968,22 @@
           "maximum": 10,
           "description": "Maximum number of concurrent AI streams across all tabs."
         },
+        "opencode.chat.wrapLongLines": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "on",
+            "off",
+            "auto"
+          ],
+          "enumDescriptions": [
+            "Always wrap long lines in code blocks, diffs, and tool output.",
+            "Never wrap — always use horizontal scrolling.",
+            "Use per-context defaults: wrap markdown and diffs, scroll code."
+          ],
+          "scope": "window",
+          "description": "Controls how long lines are displayed in code blocks, diffs, and tool output. 'auto' wraps conversational content but scrolls structured content like code."
+        },
         "opencode.defaultMode": {
           "type": "string",
           "default": "build",
