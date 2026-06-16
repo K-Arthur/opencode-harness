@@ -97,6 +97,11 @@ selection-feedback style.
     sends one); the MCP "SHOULD pre-populate defaults" is a future enhancement.
 - The transcript-interactivity tests moved from `question-block.test.ts` to
   `questionBar.test.ts`; the transcript test now asserts the passive pointer.
+- **2026-06-15 follow-up:** multi-group questions now use a carousel (one card
+  per group, prev/next nav) instead of stacked sections. Each card has its own
+  free-text textarea and a "Ready" button that marks it for submission. The
+  global "Submit All" collects only Ready-marked cards. Single-group items
+  remain inline (no carousel wrapper). Commits: `dfff97e`.
 
 ## References
 - `src/chat/webview/questionBar.ts`, `renderer.ts`, `main.ts`, `index.html`,

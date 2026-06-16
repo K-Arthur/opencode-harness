@@ -446,7 +446,7 @@ When the tool input finishes streaming, `stream_tool_update` (or a duplicate `st
 
 ### Webview-to-Host Messages
 
-- `question_answer`: `{ type: "question_answer", sessionId: string, value: string, source: "option" | "freetext", toolCallId: string, messageId?: string }` — posted by the question bar when the user submits selections or free-text input. The `source` field distinguishes pre-defined options from free-text input. `messageId` is included for server-side correlation.
+- `question_answer`: `{ type: "question_answer", sessionId: string, value: string, source: "option" | "freetext" | "skip" | "response", toolCallId: string, requestID?: string, messageId?: string, structuredAnswers?: string[][] }` — posted by the question bar when the user submits selections or free-text input. The `source` field distinguishes pre-defined options from free-text input. `requestID` is the v2 question request ID for the host to use with `replyToQuestion`. `structuredAnswers` carries one inner array per question group (selected labels in group order) for the v2 session-scoped `question.reply` API (B-edge-1). `messageId` is included for server-side correlation.
 
 ### toolCallId Contract
 
@@ -504,7 +504,7 @@ Each `QuestionBarItem` renders as a `.question-bar-item` with:
 
 #### Submit Flow
 
-The submit button (`#question-bar-submit`) posts a `question_answer` message to the host for each unanswered item, aggregating group selections (formatted as `"<header|question>: choice[, choice]"`, newline-separated) and free-text into a single `value` string. After submission, each item is marked answered and after 1500ms — if all items are answered — the bar is automatically cleared.
+The submit button (`#question-bar-submit`) posts a `question_answer` message to the host for each unanswered item, aggregating group selections (formatted as `"<header|question>: choice[, choice]"`, newline-separated) and free-text into a single `value` string. Multi-group questions use a carousel (prev/next navigation, one card per group); each card has a `Ready` button that marks it for inclusion in the final Submit All. After submission, each item is marked answered and after 600ms — if all items are answered — the bar is automatically cleared.
 
 #### Accessibility
 
