@@ -61,6 +61,8 @@ import { setupModeToggle, updateModeDropdown, updateModeSelectorState, syncModeU
 import { setupInstructionsEditor } from "./ui/instructionsEditor"
 import { setupSessionModal as setupSessionModalModule, openSessionModal as openSessionModalModule, closeSessionModal as closeSessionModalModule, trapModalFocus } from "./ui/sessionModal"
 import { setupKeyboardShortcutsModal, openKeyboardShortcutsModal, closeKeyboardShortcutsModal } from "./ui/keyboardShortcutsModal"
+import { setupProviderPanel, openProviderPanel, closeProviderPanel, configureProviderPanelTrapFocus, renderProviderDiscoveryList, renderProviderCredentialList, handleOAuthStarted, handleOAuthCompleted } from "./ui/providerPanel"
+import type { ProviderDiscoveryItem, ProviderAuthMethodInfo, ProviderCredentialInfo } from "./types"
 import { createEscapeRegistry, visibleByClass } from "./escapeCoordinator"
 
 import { handleTokenUsage as handleTokenUsageModule, accumulateTokenUsage as accumulateTokenUsageModule, accumulateCost as accumulateCostModule, applyTokenUsageTotals as applyTokenUsageTotalsModule, rememberStepUsage, isDuplicateRecentStepUsage, handleRateLimitState as handleRateLimitStateModule, updateCostDisplay as updateCostDisplayModule, updateTokenDisplay as updateTokenDisplayModule, clearTokenDisplay as clearTokenDisplayModule, updateContextBarFromSession as updateContextBarFromSessionModule, type TokenCostDeps, type RateLimitWebviewState } from "./ui/tokenCostDisplay"
@@ -2417,6 +2419,18 @@ function getVsCodeApi() {
   }
   setupThemeCustomizer(themeDeps)
 
+  /* ─── PROVIDER PANEL ─── */
+
+  const providerAuthMethods = new Map<string, ProviderAuthMethodInfo[]>()
+  let providerDiscoveryItems: ProviderDiscoveryItem[] = []
+  let providerCredentials: ProviderCredentialInfo[] = []
+
+  setupProviderPanel({
+    postMessage: (msg) => vscode.postMessage(msg),
+    trapFocus: (container) => trapModalFocus(container),
+  })
+  configureProviderPanelTrapFocus((container) => trapModalFocus(container))
+
   /* ─── WELCOME ─── */
 
   function setupWelcomeSuggestions() {
@@ -3759,6 +3773,43 @@ function getVsCodeApi() {
       }],
       ["provider_deleted", () => {
         vscode.postMessage({ type: "list_providers" })
+      }],
+      ["provider_discovery_list", (msg) => {
+        const providers = (msg as Record<string, unknown>).providers as ProviderDiscoveryItem[] | undefined
+        if (providers) {
+          providerDiscoveryItems = providers
+          renderProviderDiscoveryList(providers, providerAuthMethods, (m) => vscode.postMessage(m))
+        }
+      }],
+      ["provider_auth_methods", (msg) => {
+        const providerId = (msg as Record<string, unknown>).providerId as string | undefined
+        const methods = (msg as Record<string, unknown>).methods as ProviderAuthMethodInfo[] | undefined
+        if (providerId && methods) {
+          providerAuthMethods.set(providerId, methods)
+          renderProviderDiscoveryList(providerDiscoveryItems, providerAuthMethods, (m) => vscode.postMessage(m))
+        }
+      }],
+      ["provider_oauth_started", (msg) => {
+        const providerId = (msg as Record<string, unknown>).providerId as string | undefined
+        const url = (msg as Record<string, unknown>).authorizationUrl as string | undefined
+        if (providerId && url) handleOAuthStarted(providerId, url)
+      }],
+      ["provider_oauth_completed", (msg) => {
+        const providerId = (msg as Record<string, unknown>).providerId as string | undefined
+        const ok = (msg as Record<string, unknown>).ok as boolean
+        const error = (msg as Record<string, unknown>).error as string | undefined
+        if (providerId) handleOAuthCompleted(providerId, ok, error)
+        if (ok) {
+          vscode.postMessage({ type: "discover_providers" })
+          vscode.postMessage({ type: "list_provider_credentials" })
+        }
+      }],
+      ["provider_credential_list", (msg) => {
+        const credentials = (msg as Record<string, unknown>).credentials as ProviderCredentialInfo[] | undefined
+        if (credentials) {
+          providerCredentials = credentials
+          renderProviderCredentialList(credentials, (m) => vscode.postMessage(m))
+        }
       }],
       ["request_error", (msg, sid) => { handleRequestError(sid ?? stateManager.getState().activeSessionId ?? undefined, typeof msg.message === "string" ? msg.message : undefined, msg.errorContext) }],
       ["diff_result", (msg) => {

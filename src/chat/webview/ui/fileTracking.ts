@@ -133,7 +133,7 @@ export function handleClearMessages(deps: FileTrackingDeps, sessionId?: string):
   }
 }
 
-export function renderCheckpointPanel(deps: FileTrackingDeps, checkpoints: Array<{ id: string; sessionId: string; messageId?: string; filesChanged?: string[] }>): void {
+export function renderCheckpointPanel(deps: FileTrackingDeps, checkpoints: Array<{ id: string; sessionId: string; messageId?: string; createdAt?: number; filesChanged?: string[]; action?: string }>): void {
   const panel = deps.checkpointPanel
   if (!panel) return
   panel.innerHTML = ""
@@ -153,22 +153,90 @@ export function renderCheckpointPanel(deps: FileTrackingDeps, checkpoints: Array
     const item = document.createElement("div")
     item.className = "checkpoint-item"
     item.setAttribute("role", "listitem")
+    item.setAttribute("data-checkpoint-id", cp.id)
 
+    // Timeline dot
+    const dot = document.createElement("span")
+    dot.className = "checkpoint-dot"
+    dot.setAttribute("aria-hidden", "true")
+    item.appendChild(dot)
+
+    // Content column
+    const content = document.createElement("div")
+    content.className = "checkpoint-content"
+
+    const header = document.createElement("div")
+    header.className = "checkpoint-header"
+
+    // Action label or truncated ID
     const label = document.createElement("span")
-    label.textContent = `Checkpoint ${cp.id.slice(0, 8)}... (${cp.filesChanged?.length || 0} files)`
-    label.title = `Message: ${cp.messageId || "unknown"}`
     label.className = "checkpoint-label"
+    if (cp.action) {
+      label.textContent = formatActionLabel(cp.action)
+    } else {
+      label.textContent = `Checkpoint ${cp.id.slice(0, 12)}`
+    }
+    label.title = `ID: ${cp.id}`
+    header.appendChild(label)
 
+    // Timestamp
+    if (cp.createdAt) {
+      const time = document.createElement("span")
+      time.className = "checkpoint-time"
+      time.textContent = formatRelativeTime(cp.createdAt)
+      time.title = new Date(cp.createdAt).toLocaleString()
+      header.appendChild(time)
+    }
+
+    content.appendChild(header)
+
+    // File summary
+    const fileCount = cp.filesChanged?.length ?? 0
+    if (fileCount > 0) {
+      const files = document.createElement("div")
+      files.className = "checkpoint-files"
+      const fileNames = cp.filesChanged!.map(f => f.split("/").pop() ?? f)
+      if (fileCount <= 3) {
+        files.textContent = fileNames.join(", ")
+      } else {
+        files.textContent = `${fileNames.slice(0, 2).join(", ")} +${fileCount - 2} more`
+      }
+      files.title = cp.filesChanged!.join("\n")
+      content.appendChild(files)
+    }
+
+    item.appendChild(content)
+
+    // Restore button
     const restoreBtn = document.createElement("button")
     restoreBtn.className = "checkpoint-restore-btn"
     restoreBtn.textContent = "Restore"
-    restoreBtn.setAttribute("aria-label", `Restore to checkpoint ${cp.id.slice(0, 8)}`)
+    restoreBtn.setAttribute("aria-label", `Restore to checkpoint ${cp.action || cp.id.slice(0, 8)}`)
     restoreBtn.addEventListener("click", () => {
       deps.postMessage({ type: "restore_checkpoint", checkpointId: cp.id, sessionId: cp.sessionId })
     })
 
-    item.appendChild(label)
     item.appendChild(restoreBtn)
     panel.appendChild(item)
   }
+}
+
+function formatRelativeTime(timestamp: number): string {
+  const diff = Date.now() - timestamp
+  if (diff < 60_000) return "just now"
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
+  return new Date(timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+}
+
+function formatActionLabel(action: string): string {
+  const labels: Record<string, string> = {
+    baseline: "Session start",
+    edit: "File edit",
+    write: "File write",
+    create: "File create",
+    delete: "File delete",
+    tool: "Tool execution",
+  }
+  return labels[action] ?? action.charAt(0).toUpperCase() + action.slice(1)
 }
