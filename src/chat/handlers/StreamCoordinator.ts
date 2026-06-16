@@ -953,42 +953,31 @@ export class StreamCoordinator {
 
       const parts = this.buildTextParts(tabId, tab, cliSessionId, text, callbacks, attachments)
 
-      // Materialize each attachment to a temp file. The opencode server
-      // (v1.15.x) auto-reads the OS clipboard for FilePartInput URLs, which
-      // fails on Linux without wl-clipboard/xclip; pointing the server at
-      // a real file on disk skips that path entirely. `data:` URLs are also
-      // documented to fail with some MCP/non-vision models (opencode
-      // issues #14673, #18437, #10154, #29880).
+      // Materialize each attachment to a temp file and send a `file://` URL
+      // to the server. The opencode server (v1.15.x) auto-reads the OS
+      // clipboard for FilePartInput URLs, which fails on Linux without
+      // wl-clipboard/xclip; pointing the server at a real file on disk
+      // skips that path entirely. `data:` URLs are also documented to fail
+      // with some MCP/non-vision models (opencode issues #14673, #18437,
+      // #10154, #29880).
       //
-      // For IMAGES: we send a `data:` URL instead — the webview CANNOT
-      // render `file://` URLs (VS Code sandbox restriction). The server
-      // returns `file` blocks with `file://` in its response, which would
-      // render as a non-loadable chip. By sending `data:`, the local
-      // optimistic render (base64 inline) matches what the server returns.
-      // Non-image files still materialize to disk.
+      // Images are ALSO materialized to disk — same rationale as above.
+      // The webview chip preview uses an independent `data:` URL stored in
+      // the attachment manager's local state, so the server payload can use
+      // `file://` regardless of the sandbox restriction.
       const materialized: MaterializedAttachment[] = []
       for (const attachment of attachments) {
-        const isImage = attachment.mimeType?.startsWith("image/")
-        if (isImage) {
-          // Use data: URL for images — webview can render these inline
-          parts.push({
-            type: "file",
-            mime: attachment.mimeType,
-            url: `data:${attachment.mimeType};base64,${attachment.data}`,
-          })
-        } else {
-          const result = await this.attachmentStorage.materialize({
-            data: attachment.data,
-            mimeType: attachment.mimeType,
-            filename: (attachment as { filename?: string }).filename,
-          })
-          materialized.push(result)
-          parts.push({
-            type: "file",
-            mime: result.mimeType,
-            url: result.url,
-          })
-        }
+        const result = await this.attachmentStorage.materialize({
+          data: attachment.data,
+          mimeType: attachment.mimeType,
+          filename: (attachment as { filename?: string }).filename,
+        })
+        materialized.push(result)
+        parts.push({
+          type: "file",
+          mime: result.mimeType,
+          url: result.url,
+        })
       }
       // Track file:// URLs for cleanup. data: URLs (fallback path) and
       // http(s) URLs are not ours to delete; `storage.cleanup` already

@@ -46,7 +46,7 @@ let els: QuestionBarElements | null = null
 // active-session marker without a session id (legacy payloads, tests) are
 // treated as active so single-session flows keep working.
 function isActiveItem(item: QuestionBarItem): boolean {
-  return !_activeSessionId || !item.sessionId || item.sessionId === _activeSessionId
+  return !_activeSessionId || item.sessionId === _activeSessionId
 }
 
 export function initQuestionBar(postMessage: (msg: Record<string, unknown>) => void): void {
@@ -225,7 +225,7 @@ function maybeScheduleDismiss(sessionId?: string): void {
   if (!els) return
   // Dismissal is per session: another tab's unanswered question must neither
   // block this session's cleanup nor be wiped by it.
-  const inScope = (i: QuestionBarItem) => !sessionId || !i.sessionId || i.sessionId === sessionId
+  const inScope = (i: QuestionBarItem) => !sessionId || i.sessionId === sessionId
   const stillPending = Array.from(state.items.values()).some((i) => inScope(i) && !i.answered)
   if (stillPending) return
   // Tiny delay so the user can read the "Answered" state before it goes.
@@ -241,11 +241,10 @@ export function setActiveSession(sessionId: string): void {
   if (!els) return
   // Clear the current DOM
   els.items.innerHTML = ""
-  // Re-render only items belonging to the active session. Items with an
-  // empty sessionId (legacy payloads without sessionID) are treated as
-  // belonging to whichever session is currently active (fixes RC-1).
+  // Re-render only items belonging to the active session. Every item
+  // now carries a non-empty sessionId set at addQuestion time.
   for (const item of state.items.values()) {
-    if (item.sessionId === sessionId || !item.sessionId) {
+    if (item.sessionId === sessionId) {
       if (item.answered) {
         els.items.appendChild(renderAnsweredItem(item))
       } else {
@@ -342,7 +341,7 @@ export function reconcileBar(sessionId: string): void {
       continue
     }
     // Re-render items that belong to this session but are missing from the DOM
-    if ((item.sessionId === sessionId || !item.sessionId) && !els.items.querySelector(`[data-question-id="${key}"]`)) {
+    if (item.sessionId === sessionId && !els.items.querySelector(`[data-question-id="${key}"]`)) {
       if (item.answered) {
         els.items.appendChild(renderAnsweredItem(item))
       } else {
