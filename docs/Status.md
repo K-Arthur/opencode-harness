@@ -6,6 +6,44 @@
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
 
+## Unreleased Highlights (2026-06-16) — marketplace icon redesign
+
+- **`media/opencode-icon-256.png` (the icon shown in the VS Code Marketplace
+  and Extensions view, per `package.json`'s `icon` field) replaced** — the
+  previous asset was a flat black square with a plain white rectangular
+  cutout and no depth, which read as visually "too simple" next to other
+  marketplace listings.
+- New design keeps the **exact existing brand silhouette** (the
+  frame-with-rectangular-cutout mark, officially commented as "OpenCode
+  mark: single geometric O" in `media/opencode.svg`, also used by
+  `media/opencode-activity.svg` and the in-product header logo in
+  `src/chat/webview/index.html`) — elevated, not replaced.
+- **Palette corrected to match the project's actual established brand
+  assets**: `media/opencode-logo.svg` and `media/opencode-wordmark-dark.svg`
+  use a neutral warm-charcoal/off-white palette (`#4B4646`/`#B7B1B1`/
+  `#F1ECEC`), not blue. The new icon uses a deepened version of that same
+  neutral family (a warm charcoal gradient badge with an off-white frame
+  mark) instead of introducing an unrelated brand color.
+- Added depth via a subtle corner sheen (radial highlight), a recessed
+  "well" gradient inside the cutout, and a soft inset shadow/highlight pair
+  at the cutout's top edge — flat, single-tone shapes elevated to a
+  premium-feeling badge without adding new hues or animation.
+- **Background is fully opaque and bakes in its own dark-charcoal backdrop**
+  (not transparent), so the icon renders identically regardless of whether
+  the surrounding VS Code/Marketplace chrome is in light or dark mode.
+  Verified by compositing the rendered PNG over white, dark (`#1e1e1e`), and
+  light-gray backdrops — confirmed legible and theme-agnostic in all three.
+- Verified legible down to 32px (smallest realistic Extensions-list
+  thumbnail size) via nearest-neighbor upscale inspection — the frame
+  silhouette remains clearly readable.
+- Added `media/opencode-icon.svg` as the editable vector source (the repo's
+  existing convention for brand PNGs, e.g. `opencode-logo.svg` alongside its
+  PNG exports) so the icon can be regenerated at any resolution in future.
+- Out of scope (not touched): `media/opencode-icon-96.png` and
+  `media/opencode-apple-touch-icon.png` carry the same dated flat style but
+  are currently unreferenced anywhere in the codebase — the user's request
+  was specifically about the marketplace/extension-store icon.
+
 ## Unreleased Highlights (2026-06-16) — streaming UI visual redesign
 
 - **Streaming indicators upgraded from functional to polished**, reusing

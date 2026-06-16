@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3e3938"/>
+      <stop offset="55%" stop-color="#262221"/>
+      <stop offset="100%" stop-color="#151312"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="26%" cy="18%" r="75%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="mark" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fcfafa"/>
+      <stop offset="100%" stop-color="#cdc6c5"/>
+    </linearGradient>
+    <linearGradient id="well" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0e0c0c"/>
+      <stop offset="35%" stop-color="#221f1e"/>
+      <stop offset="100%" stop-color="#2c2828"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="256" height="256" fill="url(#bg)"/>
+  <rect width="256" height="256" fill="url(#sheen)"/>
+
+  <g transform="translate(56.4 38.5) scale(0.298333)">
+    <rect x="120" y="120" width="240" height="360" fill="url(#well)"/>
+    <rect x="120" y="120" width="240" height="26" fill="#000000" opacity="0.4"/>
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M0 0h480v600H0V0zm120 120h240v360H120V120z" fill="url(#mark)"/>
+    <rect x="120" y="120" width="240" height="4" fill="#ffffff" opacity="0.5"/>
+  </g>
+</svg>

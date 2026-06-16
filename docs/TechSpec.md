@@ -112,6 +112,21 @@ This is a "box-shadow ping ring" idiom with precedent already in this codebase (
 
 Every new `box-shadow`/`transform` declaration is covered by the existing `prefers-reduced-motion: reduce` and `forced-colors: active` rules in `accessibility.css`/`messages.css`/`layout.css`, extended (not replaced) per component. `question-bar.css` and the SVG-based premium spinner were deliberately left untouched — the former is an interactive control surface where heavy motion would compete with clickable affordances, the latter is already a separate, polished system.
 
+### Marketplace Icon Redesign (2026-06-16)
+
+`package.json`'s `icon` field (`media/opencode-icon-256.png`) is the asset rendered by the VS Code Marketplace and the Extensions view — distinct from `media/opencode-activity.svg` (the activity-bar icon, a deliberately simple monochrome `currentColor` SVG per VS Code convention) and from the in-product header logo in `src/chat/webview/index.html`. The previous PNG was a flat 1-bit-feeling black square with a plain white rectangular cutout, no gradient or depth, which read as visually undersized/plain relative to other Marketplace listings.
+
+The redesign keeps the exact brand silhouette (the frame-with-cutout shape, `d="M0 0h480v600H0V0zm120 120h240v360H120V120z"`, officially commented "OpenCode mark: single geometric O" in `media/opencode.svg` and reused verbatim by `media/opencode-activity.svg` and the webview header's `.oc-logo`) rather than introducing a new mark. The color story was corrected to match the project's actual established brand palette: `media/opencode-logo.svg` and `media/opencode-wordmark-dark.svg` render this same mark family in neutral warm-charcoal/off-white (`#4B4646`/`#B7B1B1`/`#F1ECEC`), not blue — an earlier draft of this icon used a `#0078d4`-family blue gradient (matching the webview's dynamic `--oc-accent` default, which is just VS Code's button-background token, not a fixed brand color) and was discarded in favor of the neutral palette for brand consistency.
+
+Implementation (`media/opencode-icon.svg`, rasterized to `media/opencode-icon-256.png` via `rsvg-convert`):
+- Full-bleed 256×256 canvas, warm-charcoal linear gradient background (`#3e3938` → `#151312`) — opaque, not transparent, so the icon supplies its own backdrop and renders identically regardless of surrounding light/dark chrome (verified by compositing over white, `#1e1e1e`, and light-gray backdrops).
+- A low-opacity radial "sheen" gradient in the top-left for a glassy highlight.
+- The brand mark scaled/centered (`transform: translate(56.4 38.5) scale(0.298333)` against the canonical 480×600 path) and filled with an off-white linear gradient (`#fcfafa` → `#cdc6c5`), matching the established wordmark tones.
+- The cutout is not a flat hole: a dark "well" gradient fills it, with an extra-dark semi-transparent strip at the top (simulating shadow cast by the frame's overhanging lip) and a thin bright highlight line at the very top inner edge (simulating light catching that edge) — drawn by layering rects before/after the evenodd frame path within the same transform, so the hole reveals depth instead of a flat color.
+- No new hues, no animation — depth comes entirely from gradients/shadow within the existing neutral palette, kept legible down to 32px (verified via nearest-neighbor upscale of a 32px render).
+
+`media/opencode-icon-96.png` and `media/opencode-apple-touch-icon.png` share the old flat style but are unreferenced anywhere in the codebase (confirmed via grep — only `opencode-icon-256.png` is wired up, through `package.json`); left untouched as out of scope for this change.
+
 ### Context And Token Usage Accounting
 
 The extension tracks two related but distinct quantities:
