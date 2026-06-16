@@ -319,12 +319,12 @@ export class SessionManager {
     return this.sessionClient.respondToPermission(sessionId, permissionId, response)
   }
 
-  async replyToQuestion(requestID: string, answers: string[][]): Promise<void> {
-    return this.sessionClient.replyToQuestion(requestID, answers)
+  async replyToQuestion(sessionId: string, requestID: string, answers: string[][]): Promise<void> {
+    return this.sessionClient.replyToQuestion(sessionId, requestID, answers)
   }
 
-  async rejectQuestion(requestID: string): Promise<void> {
-    return this.sessionClient.rejectQuestion(requestID)
+  async rejectQuestion(sessionId: string, requestID: string): Promise<void> {
+    return this.sessionClient.rejectQuestion(sessionId, requestID)
   }
 
   async getSessionTodos(id: string): Promise<Array<{ id: string; content: string; status: string; priority: string }>> {
