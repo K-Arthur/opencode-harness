@@ -205,8 +205,8 @@ function sanitizeMcpServerConfig(name: string, value: unknown, partial = false):
   const raw = value as Record<string, unknown>
   const config = { ...raw } as McpServerConfig
   const type = typeof config.type === "string" ? config.type.trim().toLowerCase() : undefined
-  if (type !== undefined && !["stdio", "http", "sse", "remote"].includes(type)) {
-    throw new Error("MCP server type must be stdio, http, sse, or remote")
+  if (type !== undefined && !["stdio", "local", "http", "sse", "remote"].includes(type)) {
+    throw new Error("MCP server type must be stdio, local, http, sse, or remote")
   }
   if (type !== undefined) config.type = type
 
@@ -220,9 +220,9 @@ function sanitizeMcpServerConfig(name: string, value: unknown, partial = false):
     throw new Error(`MCP ${type} server must include a url`)
   }
 
-  const requiresCommand = !partial && (!type || type === "stdio") && !url
+  const requiresCommand = !partial && (!type || type === "stdio" || type === "local") && !url
   if (requiresCommand && !command) {
-    throw new Error("MCP stdio server command must be a non-empty string")
+    throw new Error("MCP stdio/local server command must be a non-empty string")
   }
   if (command !== undefined) {
     if (!MCP_COMMAND_PATTERN.test(command) || command.includes("..") || hasControlChars(command)) {

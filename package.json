@@ -1,7 +1,7 @@
 {
   "name": "opencode-harness",
   "displayName": "OpenCode - AI Coding Assistant for VS Code",
-  "publisher": "kevinoarthur",
+  "publisher": "koarthur",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -9,7 +9,7 @@
   },
   "description": "Open-source AI coding agent for VS Code. Chat, refactor, debug, and write code using Claude, GPT, Gemini, and 75+ models. Includes cost tracking, custom themes, permission controls, and checkpoint rollback.",
   "icon": "media/opencode-icon-256.png",
-  "version": "0.3.70",
+  "version": "0.3.71",
   "engines": {
     "vscode": "^1.98.0"
   },
@@ -473,10 +473,12 @@
                 "type": "string",
                 "enum": [
                   "stdio",
+                  "local",
                   "http",
-                  "sse"
+                  "sse",
+                  "remote"
                 ],
-                "description": "MCP transport type."
+                "description": "MCP transport type. Use 'stdio' or 'local' for locally spawned servers, 'http'/'sse'/'remote' for remote endpoints."
               },
               "command": {
                 "type": "string",
