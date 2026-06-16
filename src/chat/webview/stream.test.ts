@@ -349,4 +349,43 @@ describe("stream.ts", () => {
       restore()
     }
   })
+
+  // Regression test for the dropped "stream_tool_unresolved" host message:
+  // the webview had no handler for it (logged as "unknown host message
+  // type"), so a tool call left running when the server went idle kept
+  // showing its mid-stream spinner/"Running" badge forever, even after the
+  // Stop/Send button had already reverted to Send. This exercises the same
+  // streamHandlers.ts primitives the new main.ts handler calls.
+  it("handleToolUpdate with state 'unresolved' clears the running badge and marks the card incomplete", async () => {
+    const restore = installDom()
+    try {
+      const { handleStreamStart, handleToolStart, handleToolUpdate } = await import("./streamHandlers")
+      const harness = createHarness()
+
+      handleStreamStart(harness.state, harness.els as any, harness.messages, "resp-stuck")
+      handleToolStart(harness.state, harness.els as any, harness.messages, {
+        id: "tool-stuck",
+        name: "bash",
+        class: "exec",
+        args: {},
+        state: "running",
+      })
+
+      const toolEl = harness.els.messageList.querySelector('[data-block-id="tool-stuck"]') as HTMLElement
+      assert.ok(toolEl, "tool block must be rendered")
+      assert.ok(toolEl.className.includes("tool-call--running"), "starts in running state")
+
+      handleToolUpdate(harness.els as any, "tool-stuck", {
+        state: "unresolved",
+        error: "Tool did not emit a completion event before the server became idle.",
+      })
+
+      assert.ok(toolEl.className.includes("tool-call--unresolved"), "DOM class reflects unresolved state")
+      assert.ok(!toolEl.className.includes("tool-call--running"), "no longer shows the running state")
+      const badge = toolEl.querySelector(".tool-status")
+      assert.match(badge?.textContent || "", /Incomplete/, "badge must say Incomplete, not still spinning")
+    } finally {
+      restore()
+    }
+  })
 })

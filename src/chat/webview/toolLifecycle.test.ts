@@ -378,9 +378,15 @@ describe("toolBadgeText — unresolved state badge", () => {
 // B6: markUnresolvedPendingToolCalls must NOT flag unanswered question tools
 // as unresolved. Question tools are kept pending on purpose (the agent is
 // suspended waiting for an answer); flagging them as "unresolved" after the
-// 30s grace timeout both (a) posts a stream_tool_unresolved message that the
-// webview has no handler for (silent), and (b) records a misleading
-// "unresolved" run-activity entry for the question.
+// 30s grace timeout would (a) post a stream_tool_unresolved message, and (b)
+// record a misleading "unresolved" run-activity entry for the question.
+//
+// For regular (non-question) tool calls, stream_tool_unresolved IS posted —
+// main.ts previously had no handler for it ("unknown host message type"),
+// leaving the tool card's spinner/"Running" badge stuck even after the
+// Stop/Send button had already reverted to Send. See stream.test.ts's
+// "handleToolUpdate with state 'unresolved'" test for the rendering fix and
+// the handler registration check below.
 // ---------------------------------------------------------------------------
 
 describe("markUnresolvedPendingToolCalls — question tool exclusion (B6)", () => {
@@ -403,6 +409,29 @@ describe("markUnresolvedPendingToolCalls — question tool exclusion (B6)", () =
     assert.ok(
       /isQuestionBlock|skipQuestion|continue\b/.test(fnBody),
       "markUnresolvedPendingToolCalls must skip question-block tool ids (continue / guard) so they are not flagged unresolved",
+    )
+  })
+})
+
+describe("stream_tool_unresolved — webview handler (B6 follow-up)", () => {
+  it("main.ts registers a handler instead of silently dropping the message", () => {
+    const source = readFileSync(path.join(__dirname, "main.ts"), "utf8")
+    assert.ok(
+      source.includes('["stream_tool_unresolved",'),
+      "main.ts must register a stream_tool_unresolved handler",
+    )
+    const handlerStart = source.indexOf('["stream_tool_unresolved",')
+    const handlerEnd = source.indexOf("}],", handlerStart)
+    const handlerBody = source.slice(handlerStart, handlerEnd)
+    assert.ok(handlerBody.includes('state: "unresolved"'), "handler must surface the unresolved state to the DOM")
+    assert.ok(handlerBody.includes("toolCallId"), "handler must read toolCallId from the message")
+  })
+
+  it("types.ts declares the actual runtime shape the host sends", () => {
+    const source = readFileSync(path.join(__dirname, "types.ts"), "utf8")
+    assert.ok(
+      source.includes('{ type: "stream_tool_unresolved"; sessionId: string; toolCallId: string; message: string }'),
+      "WebviewMessage union must match StreamCoordinator's actual payload ({ toolCallId, message }), not a stale { toolCall } shape",
     )
   })
 })
