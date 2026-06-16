@@ -176,6 +176,13 @@ servers are also sanitized before they are shown or routed.
 - **Scope**: `window`
 - **Description**: Restores previously open, non-empty tabs for the current workspace when the webview is recreated.
 
+### `opencode.sessions.maxConcurrentStreams`
+- **Type**: `number`
+- **Default**: `5`
+- **Range**: `1`-`10`
+- **Scope**: `window`
+- **Description**: Maximum number of concurrent AI streams across all tabs. Exceeding it shows a warning naming the currently streaming tabs instead of starting a new one.
+
 ### `opencode.rateLimits`
 - **Type**: `object`
 - **Default**: `{}`

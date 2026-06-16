@@ -2,129 +2,82 @@
 
 [![GitHub stars](https://img.shields.io/github/stars/K-Arthur/opencode-harness?style=social)](https://github.com/K-Arthur/opencode-harness/stargazers)
 
-**Write code faster, debug smarter, and ship with confidence using AI—without leaving your editor.**
+A VS Code extension that puts a chat panel, diff viewer, and multi-session tabs
+in front of the [opencode](https://opencode.ai) CLI agent. It starts
+`opencode serve` for you and talks to it over HTTP — your prompts and files go
+to whichever AI provider you've configured in opencode, same as running the
+CLI directly. opencode itself is open source; this extension is open source
+too and is free to install (you pay your AI provider for usage, not this
+extension).
 
-OpenCode brings the power of the open-source AI coding agent directly into VS Code. Unlike terminal-based tools, this extension provides a rich, integrated interface that keeps you in the flow while giving you full control over how AI assists your development workflow.
+## How it compares
 
-AI coding agent for your editor — write, refactor, test, and debug with natural language commands.
+The official [`sst-dev.opencode`](https://marketplace.visualstudio.com/items?itemName=sst-dev.opencode)
+extension adds keyboard shortcuts to launch the opencode CLI in a split
+terminal, plus `@file` reference insertion — it has no chat panel, diff
+viewer, or session tabs. This extension is a full GUI client instead.
 
-OpenCode brings the [opencode](https://opencode.ai) agentic coding experience directly into VS Code with a rich chat interface, real-time agent visibility, and deep workspace context awareness.
+The closest comparable extension is [`TanShiyong.opencode-gui`](https://marketplace.visualstudio.com/items?itemName=TanShiyong.opencode-gui)
+(sidebar chat, diff view, session switching, git-powered undo). Differences
+worth knowing before you pick one:
 
-## Why OpenCode?
+| | This extension | opencode-gui |
+|---|---|---|
+| Sessions | Tabs, run concurrently (default cap 5, configurable) | Switch between sessions one at a time |
+| Reverting changes | Extension-side checkpoint/rollback for accepted diffs, plus opencode's own message-revert | Git-powered undo/restore |
+| Theming | Mirrors your opencode CLI theme, plus overrides | Not advertised in its listing |
+| Voice input | Local mic recording + local transcription, no cloud | Not advertised in its listing |
+| Rate limit / quota display | Status bar + webview quota bar | Not advertised in its listing |
 
-### Unlike Terminal-Based Tools
-OpenCode provides a rich, integrated interface directly in VS Code. No context switching between your editor and terminal—stay in the flow while AI assists your coding.
-
-### Unlike Proprietary Solutions
-OpenCode is fully open-source with no vendor lock-in. Use any AI model from any provider, customize everything, and maintain full control over your data.
-
-### Unlike Basic Extensions
-OpenCode includes advanced features like cost tracking, theme customization, granular permission modes, and checkpoint/rollback—capabilities usually reserved for enterprise tools.
-
-### Key Differentiators
-- **Multi-Model Support:** Use Claude, GPT, Gemini, or 75+ other providers
-- **Cost Tracking:** Monitor your AI usage and optimize spending
-- **Theme Customization:** Match your editor's look or choose from presets
-- **Permission Modes:** Choose how much autonomy the AI has (Plan, Build, Auto)
-- **Privacy-First:** Your code stays local, no data storage
-- **Open Source:** Fully transparent, customizable, and free
-
-## Compare with Alternatives
-
-| Feature | OpenCode | GitHub Copilot | Claude Code | Continue |
-|---------|----------|----------------|-------------|----------|
-| **Open Source** | ✅ Yes | ❌ No | ❌ No | ✅ Yes |
-| **Multi-Model Support** | ✅ 75+ providers | ❌ GitHub only | ❌ Claude only | ✅ Multiple |
-| **Cost Tracking** | ✅ Built-in | ❌ No | ❌ No | ❌ No |
-| **Theme Customization** | ✅ Full control | ❌ No | ❌ No | ❌ No |
-| **Permission Modes** | ✅ Plan/Build/Auto | ⚠️ Limited | ⚠️ Limited | ❌ No |
-| **Privacy-First** | ✅ No code storage | ⚠️ Data sent to GitHub | ⚠️ Data sent to Anthropic | ⚠️ Varies |
-| **VS Code Integration** | ✅ Native | ✅ Native | ✅ Native | ✅ Native |
-| **Free to Use** | ✅ Yes (pay for API) | ❌ Subscription | ❌ Subscription | ✅ Yes (pay for API) |
+Both extensions are clients over the same opencode server — neither can do
+anything the opencode CLI itself doesn't support.
 
 ## Features
 
-### Core Features
-- **Multi-Tab Workers** — Run multiple AI sessions concurrently. Each tab is an independent worker with its own model, mode, and conversation history. Up to 5 concurrent streams (configurable).
-- **Per-Tab Model Selection** — Each conversation can use a different AI model. Switch models without restarting the server.
-- **Token, Cost, and Context Tracking** — Real-time status-strip usage shows spend totals plus per-session context-window fill, restored across reloads and tab switches.
-- **Task Completion Banners** — Visual success/error/warning banners for completed operations.
-- **Rich Chat Interface** — Premium message bubbles with tail accents, typing indicators, skill badges, and expandable tool call timelines with status pills
-- **Human-Readable Tool Group Labels** — Collapsed tool groups show descriptive summaries like "3 file reads, 1 command, 2 edits" instead of raw class names
-- **Interactive JSON Viewer** — Object and array tool arguments render as a collapsible color-coded tree (strings, numbers, booleans, nulls each have distinct colors) with a one-click Copy JSON button. Automatically falls back to plain text for very large payloads
-- **Web Search Result Cards** — Web search and fetch tool results display as structured cards with domain, title, and snippet rather than raw text. Supports websearch, webfetch, Brave Search, Tavily, Serper, and more
-- **File Action Buttons on Write Tools** — "Open", "Copy Path", and "Reveal in Explorer" buttons appear inline on file-write/edit tool summaries for instant access to changed files
-- **Humanized Error Messages** — Error codes are translated to plain English ("Quota exceeded", "Rate limited", "Server unreachable") and every error shows both Retry and Dismiss actions
-- **Thinking Block Sub-types** — Thinking blocks are automatically classified as "Planning", "Tool selection", or "Reasoning" and labeled with a small colored chip
-- **Model Manager Panel** — Searchable model list with per-model toggle switches, provider grouping, and "Connect provider" integration
-- **Branded Welcome Screen** — OpenCode wordmark with workspace-oriented prompt starter cards featuring icon + label + description layout
-- **Agent Visibility** — See exactly what the agent is doing in real-time (reading files, running commands, loading skills)
-- **Subagent Visibility** — Delegated `task` work renders as first-class subagent cards (agent, purpose, status, duration, result) and in an "Active Subagents" side panel, instead of leaking raw prompts as a generic tool call
-- **Subagent Keyboard Navigation** — Arrow keys (Up/Down/Home/End) navigate the Active Subagents panel; Enter/Space opens detail view. An aggregate stats bar shows total count, running, done, and elapsed time
-- **Context-Aware** — Automatically includes open files, diagnostics, git status, and workspace structure
-- **Inline Code Actions** — CodeLens on functions for Explain, Refactor, and Generate Tests
-- **Smart Diffs** — AI-suggested code changes shown as unified diffs with Accept/Discard controls
-- **Checkpoints** — VS Code-safe file snapshots for extension-managed diff accepts, plus OpenCode-native message revert for server-managed edits
-- **Slash Commands** — `/clear`, `/model`, `/cost`, `/new`, `/export`, `/compact`, `/continue`, `/help`, `/queue`
-- **Voice Input** — Click the microphone in the composer to dictate a prompt. Recording and transcription are 100% local (no cloud, no API key); transcripts are inserted for review and never auto-sent unless you opt in.
-- **Export Conversation** — Save current session as Markdown file
-- **Session History** — Searchable conversation history with resume support in the chat surface
-- **@-Mentions** — Reference files, folders, problems, URLs, and terminal output in your prompts, including path-aware file search such as `@src/util`
-- **Secure Context Attachments** — Add files or editor selections from VS Code context menus with sensitive-file and prompt-injection warnings
-- **Permission Modes** — Build (standard approval flow), Plan (review-only), Auto (apply without asking after confirmation)
-- **Steer while generating** — type while the AI is responding: **Enter** queues a follow-up (visible, editable, runs after the current turn — the safe default), **⌘/Ctrl+Enter** interrupts and runs it now. A Queue ▏Interrupt toggle sets what Enter does per tab.
-- **Prompt Queue** — Type-ahead queuing with per-item edit, remove, reorder, and retry; keyboard-navigable with Arrow keys, Delete, F2, and Alt+Arrow reorder
-- **Host Queue Persistence** — Queued prompts survive webview and VS Code reloads via workspaceState-backed FIFO queue (50-item cap per session)
+### Sessions & chat
+- **Multiple tabs, run concurrently** — each tab is an independent worker with its own model, mode, and history. Default cap is 5 concurrent streams (`opencode.sessions.maxConcurrentStreams`, configurable 1-10); going over it warns you and names the busy tabs. Closing a tab stops that worker but keeps its history for resume.
+- **Per-tab model selection** — a searchable, provider-grouped model list per tab; switching one tab's model doesn't affect the others or require a server restart.
+- **Steer while generating** — type while the AI is responding: Enter queues a follow-up (visible, editable, runs after the current turn), Ctrl/Cmd+Enter interrupts and runs it now. A per-tab toggle sets what Enter does.
+- **Prompt queue** — queued messages can be edited, removed, and reordered (keyboard or drag) before they run, and survive a window reload (50-item cap per session).
+- **Session history & export** — searchable history with resume, export any session to Markdown.
+- **Turn navigation** — user/assistant exchanges collapse into turns with Previous/Next navigation and a snippet preview.
 
-### Phase 1: MCP Server Management
-- **MCP Server Manager** — Add, update, remove, and toggle MCP servers directly from the chat interface
-- **MCP Config Panel** — Modal overlay following model-manager pattern for managing Model Context Protocol servers
-- **Server Status Tracking** — Visual indicators for connected/disconnected/error states
-- **Validated Config** — MCP server configs are stored in OpenCode config files first, with legacy VS Code settings used only as fallback; names, commands, args, env, headers, URLs, and reported tool names are validated before use
+### Agent visibility
+- **Real-time activity** — file reads, commands, and skill loads as they happen; collapsed tool groups summarize in plain language ("3 file reads, 1 command, 2 edits").
+- **Subagent visibility** — delegated `task` work shows as its own card (agent, purpose, status, duration, result) and in an "Active Subagents" panel, instead of a raw tool call. Arrow keys navigate the panel.
+- **Thinking block labeling** — reasoning blocks are tagged "Planning", "Tool selection", or "Reasoning".
+- **Structured tool output** — JSON tool arguments render as a collapsible, color-coded tree with copy-JSON; web search/fetch results render as cards with domain, title, and snippet (websearch, webfetch, Brave, Tavily, Serper, and others).
+- **Humanized errors** — error codes are translated to plain language ("Quota exceeded", "Rate limited", "Server unreachable") with Retry/Dismiss actions, and success/error/warning banners for completed operations.
 
-### Phase 2: Diff & Stop Command
-- **Side-by-Side Diff Viewer** — Compare AI-suggested changes with current file using read-only virtual documents and VS Code's `vscode.diff` command
-- **Undoable Diff Applies** — Accepted diffs are applied through `WorkspaceEdit` and get a pre-accept extension snapshot for local revert
-- **Changed-File Tracking** — Backend `SessionStore` persists canonical changed files; the webview chip bar and todos panel sync from `changed_files_update`
-- **Stop Command** — Abort active AI sessions with keyboard shortcuts (`Escape`, `Ctrl+Shift+Escape`)
-- **Fast Diff Algorithm** — Uses `fast-diff` library for O(n) diff computation (replacing naive O(n*m) algorithm)
+### Diffs & file changes
+- **Side-by-side diff viewer** using VS Code's native `vscode.diff` view, with Accept/Discard controls.
+- **Undoable applies** — accepted diffs go through `WorkspaceEdit` with a pre-accept snapshot for local revert; server-managed edits get opencode's own message-revert instead.
+- **Changed-file tracking** — a synced chip bar and todos panel show every file touched in the session.
+- **File action buttons** — Open / Copy Path / Reveal in Explorer inline on write/edit tool results.
 
-### Phase 3: SQLite Fallback
-- **Session Database Reader** — Read session data directly from SQLite database as fallback when CLI server is not running
-- **Python3 Subprocess** — Uses Python3 for SQLite access (no native node-sqlite3 dependency)
+### Context & attachments
+- **@-mentions** for files, folders, problems, URLs, and terminal output, with path-aware search (`@src/util`).
+- **Context menu attachments** — add a file or editor selection from VS Code's right-click menu; sensitive paths (`.env`, keys) and likely prompt-injection content are flagged before sending.
+- **Auto-included workspace context** — open files, diagnostics, git status, and workspace structure.
+- **Voice input** — local mic recording and local transcription, no cloud or API key involved. See [Voice Input](#voice-input).
 
-### Phase 4: Turn Summaries & Display Toggles
-- **Turn Navigation** — Navigate between conversation turns with Previous/Next buttons and dropdown selector
-- **Turn Summaries** — Automatic grouping of user+assistant exchanges into collapsible turns
-- **Display Toggles** — Show/hide text blocks, tool calls, diffs, and error messages
-- **Snippet Preview** — Quick snippet preview for each turn in the navigation dropdown
+### MCP servers
+- Add, edit, remove, and toggle MCP servers from a config panel in the chat UI, with connection status indicators.
+- Configs (commands, args, env, headers, URLs) are validated before use and stored in opencode's own config files first — VS Code settings are a fallback only.
 
-### Phase 5: Color-Coded Quota Bar
-- **Progress Bar Visualization** — Compact webview bar plus VS Code status bar text for known quota percentages
-- **Color-Coded Status** — Green (>50%), Yellow (10-50%), Red (<10%) with theme color integration
-- **Real-Time Updates** — Webview/status bar updates with remaining tokens/requests when available, or observed tokens/cost when a provider exposes usage but not quota
-- **Proactive Warnings** — Configurable thresholds for warning (10%) and critical (5%) notifications
+### Permissions & safety
+- **Plan / Build / Auto modes** — Plan blocks mutating actions except direct writes to `.opencode/plans/*.md`; Build uses the normal approval flow; Auto applies changes after a one-time confirmation.
+- **Checkpoints** — snapshot files before an extension-managed diff is applied, with rollback.
+- **Slash commands** — `/clear`, `/model`, `/cost`, `/new`, `/export`, `/compact`, `/continue`, `/help`, `/queue`.
 
-## Multi-Tab Interface
+### Cost, quota, and theming
+- **Token/cost/context tracking** in the status strip, persisted across reloads.
+- **Quota bar** — color-coded remaining-quota display with warning/critical notifications; falls back to observed token/cost usage when a provider doesn't expose quota headers. See [Rate Limit Monitoring](#rate-limit-monitoring).
+- **Theme system** — mirrors your opencode CLI theme automatically, or pick a preset/customize colors. See [Theme Customization](#theme-customization).
+- **Inline code actions** — CodeLens for Explain, Refactor, and Generate Tests.
 
-OpenCode now supports multiple concurrent AI workers through a tabbed interface:
-
-### Tab Management
-- Click **+** in the tab bar or press `Ctrl+T` to create a new worker
-- Each tab has its own conversation history, model, and mode
-- Tabs show a **streaming indicator** (pulsing dot) when actively generating
-- Close a tab with the **×** button or `Ctrl+W`
-- Closing a tab **stops the AI worker** but **preserves the chat history** for resume flows
-
-### Concurrent Stream Limit
-- Maximum **5 concurrent AI streams** at once (configurable via `opencode.sessions.maxConcurrentStreams`)
-- Attempting to exceed the limit shows a warning with the names of currently streaming tabs
-- This prevents rate limit exhaustion and keeps the UI responsive
-
-### Per-Tab Model Selection
-- Click the **model dropdown** in the header to select a different model for the active tab
-- Models are grouped by provider (Anthropic, OpenAI, etc.)
-- Changing a model only affects the active tab — other tabs continue with their own models
+### Fallback behavior
+- If the opencode CLI server isn't running, session history is read directly from its SQLite database (via a Python3 subprocess, no native SQLite dependency), so viewing past sessions doesn't hard-depend on the server being up.
 
 ## Keyboard Shortcuts
 
@@ -186,42 +139,20 @@ OpenCode now supports multiple concurrent AI workers through a tabbed interface:
 
 All commands are also available via the Command Palette (`Ctrl+Shift+P`).
 
-### Why not plain `Shift+Tab` for mode cycling everywhere?
-
-Plain `Shift+Tab` is the universal keyboard shortcut for **reverse focus navigation** — it moves focus to the previous interactive element on the page (equivalent to `Tab` but backwards). Rebinding it globally would:
-
-1. **Break reverse-focus navigation** in the webview, making it harder for keyboard-only and screen-reader users to navigate form controls, buttons, and menus.
-2. **Break modal focus traps** — modals rely on `Shift+Tab` at the first focusable element to wrap focus to the last.
-3. **Interfere with text editing** — in textareas and contenteditable elements, pressing `Shift+Tab` can involve the browser's or screen-reader's navigation.
-
-Instead, `Shift+Tab` cycles modes **only when the mode selector button is already focused** — a safe context where the user is confirming they want to interact with the mode control. For global mode cycling, use `Alt+Shift+Tab` (existing) or `Ctrl+Shift+M` (new, with `M` for Mode).
-
 ### Customizing shortcuts
 
-All OpenCode commands can be rebound in VS Code:
+Rebind any OpenCode command in **File → Preferences → Keyboard Shortcuts** (`Ctrl+K Ctrl+S`), searching for `OpenCode:` or the command id (e.g. `opencode-harness.cycleMode`).
 
-1. Open **File → Preferences → Keyboard Shortcuts** (`Ctrl+K Ctrl+S`).
-2. Search for `OpenCode:` or the specific command you want to rebind (e.g., `opencode-harness.cycleMode`).
-3. Click the pencil icon and press your preferred key combination.
-4. Press `Enter` to save.
+A few OpenCode shortcuts intentionally override VS Code defaults while the OpenCode view or editor is focused; outside that context VS Code's default still works:
 
-The "context" column in the table above maps to VS Code `when` clauses you can use for context-specific bindings (`focusedView == 'opencode-harness.chat'`, `focusedView == 'opencode-harness.chatView'`, `editorTextFocus`).
-
-### Known Shortcut Conflicts
-
-Some OpenCode shortcuts reuse key combinations that VS Code uses for other features. These are intentional design choices (the extension takes priority when the OpenCode view is focused) but are documented here for transparency:
-
-| Shortcut | OpenCode Command | VS Code Command Overridden | When Overridden |
+| Shortcut | OpenCode command | Overrides | When |
 |---|---|---|---|
-| `Ctrl+I` | Quick Chat | `inlineChat.start` (Open editor inline chat) | `editorTextFocus` |
+| `Ctrl+I` | Quick Chat | `inlineChat.start` (editor inline chat) | Editor focused |
 | `Ctrl+Alt+O` | Toggle OpenCode focus | `workbench.action.toggleOutline` | Global |
-| `Ctrl+Shift+M` | Cycle mode (Plan → Build → Auto) | `workbench.actions.view.problems` (Show Problems) | `focusedView == opencode-harness.chatView` |
-| `F1` | Open Commands Palette (webview) | `workbench.action.showCommands` (VS Code Command Palette) | `focusedView == opencode-harness.chat` |
+| `Ctrl+Shift+M` | Cycle mode (Plan → Build → Auto) | `workbench.actions.view.problems` (Problems panel) | OpenCode view focused |
+| `F1` | Open commands palette (webview) | VS Code Command Palette | OpenCode view focused |
 
-**Notes on resolution:**
-- All conflicts are scoped by `when` clause — the VS Code default behavior is preserved when the OpenCode view is not focused.
-- `Ctrl+I` is the most impactful conflict. VS Code uses `Ctrl+I` for editor inline chat (`inlineChat.start`). OpenCode's Quick Chat takes priority in `editorTextFocus`. To restore the original VS Code inline chat, reassign `opencode-harness.quickChat` to a different shortcut in the Keyboard Shortcuts editor.
-- `Ctrl+Shift+M` was chosen for mode cycling because `M` = **M**ode. The Problems panel can still be opened by clicking the error count in the Status Bar or by reassigning the shortcut.
+If you rely on one of the overridden defaults, reassign the OpenCode shortcut in the Keyboard Shortcuts editor — it only takes effect in the contexts listed above, so freeing it up there restores VS Code's behavior everywhere else.
 
 ## Context Attachments
 
@@ -262,38 +193,11 @@ your OS's built-in dictation (macOS Dictation / Windows `Win+H`).
 > model isn't redistributable — so it can't feed this custom composer. Details in
 > [docs/voice-input.md](docs/voice-input.md).
 
-## Design System
-
-OpenCode uses a **token-based design system** for consistent spacing, typography, colors, and animations across the entire interface.
-
-### Spacing Scale (4px baseline)
-All padding, margins, and gaps use a consistent scale:
-- `--space-1: 4px`, `--space-2: 8px`, `--space-3: 12px`, `--space-4: 16px`, `--space-5: 20px`, etc.
-
-### Typography Scale
-- `--text-xs: 11px` (labels, timestamps)
-- `--text-sm: 12px` (buttons, metadata)
-- `--text-base: 13px` (body text, matches VS Code)
-- `--text-md: 14px` (headings)
-- `--text-lg: 16px` (section titles)
-
-### Border Radius Scale
-- `--radius-sm: 3px` (small badges, tags)
-- `--radius-md: 6px` (buttons, inputs)
-- `--radius-lg: 8px` (cards, message bubbles)
-- `--radius-xl: 10px` (modals, panels)
-
-### Animation Tokens
-- `--duration-fast: 150ms` (button hovers, toggles)
-- `--duration-normal: 250ms` (dropdowns, panels)
-- `--duration-slow: 350ms` (message entrance)
-- `--ease-out: cubic-bezier(0.16, 1, 0.3, 1)` (primary easing)
-
 ## Theme Customization
 
-OpenCode supports a flexible theme system that mirrors the [opencode CLI theme system](https://opencode.ai/docs/themes/).
+OpenCode mirrors the [opencode CLI theme system](https://opencode.ai/docs/themes/) automatically, or you can pick a preset and override individual colors. Theme changes only affect the OpenCode chat panel — your VS Code editor theme is never touched.
 
-### Built-in Presets
+### Built-in presets
 
 | Preset | Description |
 |--------|-------------|
@@ -302,131 +206,33 @@ OpenCode supports a flexible theme system that mirrors the [opencode CLI theme s
 | `dark` | Dark theme optimized for code |
 | `high-contrast` | Maximum contrast for accessibility (WCAG AAA) |
 
-The `cli-default` and `high-contrast` presets now use VS Code theme tokens for shell/canvas colors so the webview follows the active editor theme instead of forcing a separate workbench theme.
-
 ### Configuration
-
-Set your theme in VS Code `settings.json`:
 
 ```json
 {
   "opencode.theme": {
     "preset": "cli-default",
-    "overrides": {}
-  }
-}
-```
-
-### Available Override Properties
-
-#### UI Colors
-- `primaryColor` — OpenCode CLI primary color
-- `secondaryColor` — OpenCode CLI secondary color
-- `panelBg` — Chat panel background
-- `panelFg` — Chat panel text color
-- `editorBg` — Code block / editor area background
-- `editorFg` — Code block / editor area text color
-- `elementBg` — Secondary panel/element background
-- `borderColor` — Panel and section borders
-- `borderActive` — Active/focused border
-- `borderSubtle` — Subtle separator border
-- `mutedFg` — Secondary/muted text color
-- `userMessageBg` — User message bubble background
-- `userMessageFg` — User message text color
-- `assistantMessageBg` — Assistant message bubble background
-- `assistantMessageFg` — Assistant message text color
-- `toolReadColor` — "Read" tool calls (file reads, search)
-- `toolWriteColor` — "Write" tool calls (file edits, creation)
-- `toolExecColor` — "Execute" tool calls (terminal commands)
-- `skillBadgeBg` — Skill indicator badge background
-- `skillBadgeFg` — Skill indicator badge text
-- `thinkingBg` — Thinking/reasoning block background
-- `thinkingBorder` — Thinking block left border
-- `accentColor` — Primary accent color
-- `errorColor` — Error/destructive actions
-- `infoColor` — Informational accents
-- `successColor` — Success indicators
-- `warningColor` — Warning indicators
-- `diffAdded` — Diff added lines color
-- `diffRemoved` — Diff removed lines color
-- `diffContext`, `diffHunkHeader`, `diffHighlightAdded`, `diffHighlightRemoved`
-- `diffAddedBg`, `diffRemovedBg`, `diffContextBg`, `diffLineNumber`
-- `diffAddedLineNumberBg`, `diffRemovedLineNumberBg`
-- `inputBg` — Input area background
-- `inputBorder` — Input area border
-- `mentionBg` — @mention highlight background
-- `markdownText`, `markdownHeading`, `markdownLink`, `markdownLinkText`
-- `markdownCode`, `markdownCodeBlock`, `markdownBlockQuote`, `markdownEmph`
-- `markdownStrong`, `markdownHorizontalRule`, `markdownListItem`, `markdownListEnumeration`
-- `markdownImage`, `markdownImageText`
-
-#### Syntax Highlighting Colors
-- `syntaxComment` — Code comments
-- `syntaxKeyword` — Keywords (function, return, if, etc.)
-- `syntaxString` — String literals
-- `syntaxNumber` — Numeric literals
-- `syntaxFunction` — Function names
-- `syntaxVariable` — Variables and identifiers
-- `syntaxType` — Type annotations
-- `syntaxOperator` — Operators
-- `syntaxPunctuation` — Punctuation tokens
-
-### Example: Custom Theme
-
-```json
-{
-  "opencode.theme": {
-    "preset": "dark",
     "overrides": {
       "userMessageBg": "#1a1a2e",
       "syntaxKeyword": "#ff79c6",
-      "syntaxString": "#50fa7b",
       "accentColor": "#8be9fd"
     }
   }
 }
 ```
 
-### CLI Theme Parity
+`overrides` accepts UI colors (panel, message, border, and tool-call colors), diff colors, Markdown rendering colors, and syntax-highlighting colors. See [`src/chat/webview/css/tokens.css`](src/chat/webview/css/tokens.css) for the full property list and defaults — values are sanitized before use (no `url()`, `expression()`, or `javascript:`).
 
-OpenCode automatically discovers the active theme installed for the `opencode` CLI. It reads your `tui.json` to find the active theme name and loads the corresponding theme `.json` file from your workspace or global config. 
+### CLI theme parity
 
-The resolution order is:
-1. **Workspace Config**: `<project-root>/.opencode/tui.json` and `<project-root>/.opencode/themes/<theme>.json`
-2. **Global Config**: `~/.config/opencode/tui.json` and `~/.config/opencode/themes/<theme>.json` (or `$XDG_CONFIG_HOME`)
+OpenCode reads your `opencode` CLI's `tui.json` to find its active theme and loads the matching theme file, checking the workspace config (`<project>/.opencode/`) before the global one (`~/.config/opencode/`, or `$XDG_CONFIG_HOME`). Colors are layered in order — VS Code tokens, then the OpenCode preset, then the CLI theme file, then your `opencode.theme.overrides` — with each later step winning.
 
-Colors are merged in this order (later overrides earlier):
-1. Built-in VS Code dynamic tokens
-2. OpenCode preset (if specified)
-3. Active CLI theme file (resolved from `tui.json`)
-4. VS Code Settings `opencode.theme.overrides`
+### Theme preview & customizer
 
-### Theme Preview (Chat Panel Only)
+- **Theme preview button** (chat settings menu, or `OpenCode: Preview Theme` in the Command Palette) — browse built-in presets and CLI-discovered themes live.
+- **Settings → Customize theme** (chat header) — a modal for the most common overrides (preset, accent, panel colors, input border, heading color, diff-added background) that writes straight to `opencode.theme` and refreshes immediately.
 
-Click the **theme preview button** in the OpenCode chat settings menu to open the theme picker:
-
-1. **Built-in Presets** — Apply OpenCode presets (cli-default, light, dark, high-contrast) to the chat panel
-2. **CLI Themes** — Discover and preview themes from your CLI configuration
-
-Theme changes only affect the OpenCode chat panel — your VS Code editor theme is never modified. Settings are saved globally so they work without a workspace folder.
-
-### Personalized Theme Customizer
-
-Use **Settings → Customize theme** in the OpenCode chat header to open a webview modal for the common overrides: preset, accent, panel foreground/background, input border, Markdown heading, and added-diff background. The modal writes `opencode.theme` workspace settings and immediately refreshes webview CSS variables.
-
-#### Architecture
-
-The theme system uses CSS custom properties injected into the webview:
-- `--oc-accent`, `--oc-error`, `--oc-success`, `--oc-warning` — Semantic colors
-- `--oc-syn-keyword`, `--oc-syn-string`, `--oc-syn-comment`, etc. — Syntax highlighting
-- `--tool-read-color`, `--tool-write-color`, `--tool-exec-color` — Tool call accents
-
-All CSS variables are defined in `src/chat/webview/css/tokens.css` with VS Code token fallbacks. ThemeManager overrides are injected via `applyThemeVars()` which sanitizes values (blocks `url()`, `expression()`, `javascript:`).
-
-#### Using VS Code Command Palette
-
-You can also use the Command Palette (`Ctrl+Shift+P`) and search for:
-- `OpenCode: Preview Theme` — Open the theme preview picker
+Settings are saved globally, so themes work without a workspace folder open.
 
 ## Rate Limit Monitoring
 
@@ -491,35 +297,25 @@ The extension warns you before you hit limits:
 
 ## Frequently Asked Questions
 
-### What is OpenCode for VS Code?
-OpenCode for VS Code is an extension that integrates the open-source AI coding agent directly into your editor. It provides a rich chat interface, multi-model support, cost tracking, and advanced features like theme customization and permission modes.
+### Can I use my existing API keys?
+Yes — configure a provider in opencode (`opencode provider --help`, or see [opencode.ai/docs/providers](https://opencode.ai/docs/providers)) and the extension picks up whatever models that provider exposes, including Anthropic, OpenAI, Google, and dozens of others via [Models.dev](https://models.dev). Switch models per tab at any time, without restarting the server.
 
-### How does OpenCode differ from GitHub Copilot?
-OpenCode is open-source, supports multiple AI models (not just GitHub's), includes cost tracking, and offers granular permission controls. GitHub Copilot is a proprietary solution tied to GitHub's infrastructure.
+### Is it free to use?
+The extension is free and open-source. You pay your AI provider for usage (tokens/requests) the same as calling their API directly — there's no separate OpenCode subscription.
 
-### Can I use OpenCode with my existing API keys?
-Yes! OpenCode supports 75+ AI providers including Anthropic (Claude), OpenAI (GPT), Google (Gemini), and many others. Simply configure your API key in the settings.
-
-### Is OpenCode free to use?
-Yes, OpenCode is free and open-source. You pay only for the AI provider API usage. OpenCode itself has no subscription or licensing fees.
-
-### How do I install OpenCode in VS Code?
-1. Open VS Code Extensions view (Ctrl+Shift+X)
-2. Search for "OpenCode"
-3. Click Install
-4. Configure your API key in settings
-5. Open the OpenCode panel and start coding
-
-### What AI models does OpenCode support?
-OpenCode supports Claude (Anthropic), GPT (OpenAI), Gemini (Google), and 75+ other providers through Models.dev. You can switch between models at any time.
+### How do I install it?
+1. Open the VS Code Extensions view (`Ctrl+Shift+X`), search "OpenCode", click Install.
+2. On first activation, the extension offers to install the `opencode` CLI for you if it's missing.
+3. Configure a provider/API key (`opencode provider --help`).
+4. Open the OpenCode panel and pick a model.
 
 ### Is my code private?
-Yes. OpenCode does not store your code or context data. Your code is processed by the AI provider you configure according to their privacy policy. OpenCode itself has zero-knowledge of your code.
+The extension doesn't store or transmit your code anywhere on its own. It sends prompts and context to whichever AI provider you've configured, under that provider's privacy policy — the same exposure as using their API directly. Voice transcription runs on-device, and chat history is saved to local VS Code storage.
 
 ### What are the permission modes?
-- **Plan Mode:** Uses the planning agent and blocks mutating permissions except direct writes to `.opencode/plans/*.md`; assistant planning output is visually marked as a proposed plan.
-- **Build Mode:** Uses the build agent with the standard approval flow for mutating actions.
-- **Auto Mode:** Uses the build agent and auto-approves permissions after a one-time confirmation.
+- **Plan** — uses the planning agent; blocks mutating actions except direct writes to `.opencode/plans/*.md`; output is visually marked as a proposed plan.
+- **Build** — uses the build agent with the standard approval flow for mutating actions.
+- **Auto** — uses the build agent and auto-approves actions after a one-time confirmation.
 
 ## AI Safety & Limitations
 
@@ -546,138 +342,22 @@ OpenCode uses AI models to assist with coding tasks. Please note:
 - **Permission Modes:** Control how much autonomy the AI has
 - **Cost Tracking:** Monitor and limit your AI usage
 
-## Quick Start
+## Installation
 
-```bash
-# 1. Install the opencode CLI (agent runtime)
-curl -fsSL https://opencode.ai/install | bash
-# Verify:
-opencode --version   # should show 1.14.x or later
-
-# 2. Clone and build the extension
-git clone https://github.com/K-Arthur/opencode-harness
-cd opencode-harness
-npm install
-
-# 3. Build
-npm run build
-
-# 4. Open in VS Code and press F5 to launch Extension Dev Host
-code .
-# In the new window, click the OpenCode icon in the Activity Bar
-```
-
-## Detailed Installation
-
-### Prerequisites
-
-1. **opencode CLI** — The agent backend that this extension connects to.
-
-   > **The extension installs this for you by default.** On first activation
-   > without a CLI present, it prompts to install (see the
-   > [`opencode.autoInstall`](docs/configuration.md) setting, or run
-   > **`OpenCode: Install CLI`**). The commands below are for manual setup or if
-   > you prefer a different install method.
-
+1. Open the Extensions view in VS Code (`Ctrl+Shift+X`), search "OpenCode", and click Install.
+2. The extension needs the `opencode` CLI as its agent backend. If it's missing, the extension detects that on first activation and offers to install it for you (see [`opencode.autoInstall`](docs/configuration.md), or run **`OpenCode: Install CLI`** any time). To install it manually instead:
    ```bash
-   # Official install (macOS/Linux) — installs to ~/.opencode/bin, no sudo:
-   curl -fsSL https://opencode.ai/install | bash
-
-   # Or via npm (also used on Windows):
-   npm install -g opencode-ai
-
-   # Or via Homebrew (macOS):
-   brew install opencode-ai/tap/opencode
-
-   # Verify:
-   opencode --version
-   opencode doctor   # checks API keys, config, and connectivity
+   curl -fsSL https://opencode.ai/install | bash   # macOS/Linux, no sudo
+   npm install -g opencode-ai                       # or via npm (also Windows)
+   opencode --version && opencode doctor            # verify + check provider config
    ```
+3. Configure at least one LLM provider (`opencode provider --help`, or [opencode.ai/docs/providers](https://opencode.ai/docs/providers)).
+4. **Linux only:** some setups need `libsecret` for credential storage (`sudo pacman -S libsecret` / `sudo apt install libsecret-1-dev` / `sudo dnf install libsecret-devel`, depending on distro).
+5. Open the OpenCode panel from the Activity Bar (or `Ctrl+Alt+O`), pick a model, and start chatting.
 
-   You must also configure at least one LLM provider (see `opencode provider --help` or [opencode.ai/docs/providers](https://opencode.ai/docs/providers)).
+If the panel doesn't connect, open the **OUTPUT** panel (`Ctrl+Shift+U` → "OpenCode Harness") for activation logs — see [Troubleshooting](#troubleshooting-common-issues) below.
 
-2. **VS Code 1.98+** with Node.js 20+.
-3. **Linux users:** Some setups require `libsecret` for credential storage:
-   ```bash
-   # Arch
-   sudo pacman -S libsecret
-   # Ubuntu/Debian
-   sudo apt install libsecret-1-dev
-   # Fedora
-   sudo dnf install libsecret-devel
-   ```
-
-### Install via VSIX (packaged release)
-
-```bash
-# Build the extension package
-npm install
-npm run build
-
-# Install vsce (VS Code packaging tool)
-npm install -g @vscode/vsce
-
-# Package
-npx @vscode/vsce package --no-dependencies --allow-missing-repository
-
-# Install in VS Code
-code --install-extension opencode-harness-*.vsix --force
-```
-
-### Install via VSIX (pre-built from CI)
-
-If you have a `.vsix` file (e.g. from a CI artifact):
-
-```bash
-code --install-extension path/to/opencode-harness-0.2.0.vsix --force
-```
-
-After installing, **reload the window** (`Ctrl+Shift+P` → `Developer: Reload Window`).
-
-### Run in Development Mode (F5)
-
-This is the fastest way to develop and test changes without repackaging:
-
-```bash
-npm install
-npm run build
-```
-
-Then in VS Code:
-1. Open the `opencode-harness` folder
-2. Press **F5** (or `Ctrl+Shift+D` → "Run Extension" dropdown → "Extension" launch config)
-3. A new **Extension Development Host** window opens
-4. Click the OpenCode icon in the Activity Bar (or `Ctrl+Alt+O`)
-5. Select a model from the dropdown and start chatting
-
-**After code changes**, rebuild and reload:
-
-```bash
-npm run build
-# Then in the Dev Host window: Ctrl+Shift+P → Developer: Reload Window
-```
-
-Or use watch mode for auto-rebuild:
-
-```bash
-npm run watch    # rebuilds on every save; reload the Dev Host manually
-```
-
-### Verify the Extension is Running
-
-Open the **OUTPUT** panel in VS Code (`Ctrl+Shift+U`) and select **"OpenCode Harness"** from the dropdown. You should see:
-
-```
-[INFO] OpenCode Harness extension activating…
-[INFO] Terminal bridge initialized
-[INFO] OpenCode Harness extension activated
-[INFO] Chat webview resolved
-[INFO] Starting opencode server on port XXXXX (/home/.../opencode)
-[INFO] OpenCode server healthy (version 1.14.39)
-[INFO] Subscribed to OpenCode event stream
-```
-
-If you see these logs, the extension is connected and ready.
+Building from source, running a dev host, or packaging your own `.vsix` is covered in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Troubleshooting Common Issues
 
@@ -741,42 +421,9 @@ If every message times out:
 3. Check the output channel for server errors (`[opencode:stderr]`)
 4. If using a custom binary path via `opencode.binaryPath`, verify the path is correct
 
-## Development
+## Settings
 
-```bash
-# Clone and install dependencies
-git clone https://github.com/K-Arthur/opencode-harness
-cd opencode-harness
-npm install
-
-# Build the extension
-npm run build          # bundles extension + webview via esbuild
-npm run typecheck      # TypeScript type checking (run before committing)
-
-# Watch mode for development
-npm run watch          # auto-rebuild on file changes (reload Dev Host after)
-
-# Run tests
-npm run test:unit      # behavioral + structural unit tests
-npm run test:lint      # lint with tsc --noEmit
-```
-
-| Setting | Default | Scope | Description |
-|---------|---------|-------|-------------|
-| `opencode.binaryPath` | `""` | machine | Path to the opencode binary. If not set, the extension will search for 'opencode' in your PATH |
-| `opencode.serverUrl` | `""` | machine | Optional remote opencode server URL. Non-loopback HTTP is rejected; use HTTPS for remote hosts |
-| `opencode.serverAuthToken` | `""` | machine | Deprecated plaintext fallback. Use `OpenCode: Attach Remote Server` so the token is stored in SecretStorage |
-| `opencode.theme` | `{ "preset": "cli-default" }` | window | Theme configuration (see Theme Customization below) |
-| `opencode.mcpServers` | `{}` | window | Legacy fallback MCP server map for stdio/HTTP/SSE entries when OpenCode config does not define the server |
-| `opencode.model` | `""` | window | Default model ID in provider/model format (e.g. anthropic/claude-sonnet-4-20250514) |
-| `opencode.autoCompact` | `"ask"` | window | Auto-compact behavior: `"ask"` (prompt before compacting), `"auto"` (compact without asking), `"off"` (never auto-compact) |
-| `opencode.sessions.emptySessionTtlMinutes` | `60` | window | Prune completely empty inactive sessions after this many minutes |
-| `opencode.sessions.cleanupIntervalMinutes` | `15` | window | Interval for periodic empty-session pruning |
-| `opencode.sessions.restoreOpenTabs` | `true` | window | Restore previously open tabs in the same workspace on reload; closed historical sessions stay in history |
-| `opencode.rateLimits` | `{}` | window | Per-provider rate limit configuration (tokensPerMin, requestsPerMin) |
-| `opencode.rateLimitWarningThreshold` | `0.1` | window | Fraction of remaining rate limit that triggers a warning notification (0.0-1.0) |
-| `opencode.rateLimitCriticalThreshold` | `0.05` | window | Fraction of remaining rate limit that triggers a critical warning (0.0-1.0) |
-| `opencode.inlineSuggestions.enabled` | `false` | window | Reserved for server-backed inline completions; disabled until implemented end-to-end |
+Full settings reference (defaults, scope, and descriptions) is in [docs/configuration.md](docs/configuration.md). The ones most people touch: `opencode.binaryPath`, `opencode.model`, `opencode.theme`, `opencode.autoInstall`, and `opencode.sessions.maxConcurrentStreams`.
 
 ## Commands
 
@@ -802,150 +449,16 @@ npm run test:lint      # lint with tsc --noEmit
 
 ## Architecture
 
-OpenCode follows a modular, event-driven architecture. Key design decisions:
+- **Multi-tab concurrency** — each tab maps to an independent server session; a single `opencode serve` instance hosts all of them.
+- **Modular backend** — `ChatProvider` delegates to focused handlers (`TabManager`, `StreamCoordinator`, `MessageRouter`, `DiffHandler`).
+- **Soft tab close** — closing a tab aborts its stream but preserves chat history for resume.
+- **Token-based CSS** — spacing, typography, color, and animation are CSS custom properties, bundled by esbuild.
 
-- **Multi-tab concurrency**: Each tab maps to an independent server session. A single `opencode serve` instance hosts all sessions.
-- **Design token system**: All UI values (spacing, typography, colors, animation) are CSS custom properties for consistency.
-- **Modular backend**: `ChatProvider` delegates to focused handlers (`TabManager`, `StreamCoordinator`, `MessageRouter`, `DiffHandler`).
-- **Soft tab close**: Closing a tab aborts the active stream but preserves chat history for resume flows.
-- **CSS bundling**: esbuild bundles 8 modular CSS files into a single stylesheet.
-- **Brand assets**: the Activity Bar uses `media/opencode-activity.svg`; the welcome screen uses `media/opencode-wordmark-dark.svg` copied into the webview bundle for standalone tests and packaged VSIX installs.
-
-See [`docs/specs/2026-05-02-opencode-harness-architecture.md`](docs/specs/2026-05-02-opencode-harness-architecture.md) for full system design.
+See [docs/specs/2026-05-02-opencode-harness-architecture.md](docs/specs/2026-05-02-opencode-harness-architecture.md) for full system design.
 
 ## Development
 
-```bash
-# Clone and install dependencies
-git clone https://github.com/YOUR_USER/opencode-harness
-cd opencode-harness
-npm install
-
-# Build the extension
-npm run build          # production build via esbuild
-npm run typecheck      # TypeScript type checking
-
-# Watch mode for development
-npm run watch          # auto-rebuild on file changes
-```
-
-### Project Structure
-
-```
-src/
-├── chat/
-│   ├── ChatProvider.ts          # Main webview provider (orchestrator)
-│   ├── TabManager.ts            # Per-tab state & concurrency limit
-│   ├── ChunkBatcher.ts          # Streaming text chunk batching (50ms flush)
-│   ├── WebviewContent.ts        # HTML/CSS injection for webview
-│   ├── handlers/
-│   │   ├── StreamCoordinator.ts # Per-tab streaming lifecycle
-│   │   ├── MessageRouter.ts     # Webview message routing
-│   │   └── DiffHandler.ts       # Diff apply/reject tracking
-│   └── webview/
-│       ├── index.html           # Webview HTML structure
-│       ├── main.ts              # Webview entry point (multi-tab)
-│       ├── state.ts             # Multi-session state management
-│       ├── dom.ts               # DOM element references
-│       ├── renderer.ts          # Message block rendering
-│       ├── stream.ts            # Streaming message handlers
-│       ├── tabs.ts              # Tab bar UI & logic
-│       ├── model-dropdown.ts    # Model picker dropdown
-│       ├── mentions.ts          # @-mention autocomplete
-│       ├── theme.ts             # Context chips & usage bar
-│       ├── types.ts             # TypeScript interfaces
-│       └── css/
-│           ├── tokens.css       # Design tokens (spacing, type, color)
-│           ├── base.css         # Reset & utilities
-│           ├── layout.css       # Header, tab bar, input
-│           ├── components.css   # Buttons, chips, badges
-│           ├── messages.css     # Message bubbles, banners
-│           ├── blocks.css       # Code, tools, diffs
-│           ├── animations.css   # Keyframes & transitions
-│           ├── accessibility.css # Focus rings, reduced-motion
-│           └── styles.css       # Entry point (imports all)
-├── session/
-│   ├── SessionManager.ts        # opencode server lifecycle
-│   └── SessionStore.ts          # Persistent session storage
-├── context/
-│   └── ContextEngine.ts         # Workspace context gathering
-├── diff/
-│   └── DiffApplier.ts           # Diff parsing & application
-├── monitor/
-│   ├── ContextMonitor.ts        # Context usage status bar
-│   └── RateLimitMonitor.ts      # Rate limit tracking
-├── model/
-│   └── ModelManager.ts          # Model selection & status bar
-├── theme/
-│   └── ThemeManager.ts          # Theme variable resolution
-├── inline/
-│   └── InlineActionProvider.ts  # CodeLens actions (Explain, Refactor, Generate Tests)
-├── terminal/
-│   └── TerminalBridge.ts        # Terminal output capture
-├── checkpoint/
-│   └── CheckpointManager.ts     # VS Code file snapshots
-├── utils/
-│   ├── outputChannel.ts         # Logging utility
-│   ├── tokenCounter.ts          # Token estimation
-│   └── portFinder.ts            # Free port discovery
-└── extension.ts                 # Extension entry point
-```
-
-### Debugging
-
-Press `F5` in VS Code to launch an Extension Development Host with the extension loaded.
-
-### Testing
-
-```bash
-# Run all tests (behavioral + structural)
-npm run test:unit
-
-# Run integration tests (requires VS Code Extension Dev Host with Xvfb on Linux)
-npm run test:integration
-
-# Run visual regression tests (Playwright)
-npm run test:visual
-
-# Run full verification pipeline
-npm run typecheck && npm run build && npm run test:unit
-```
-
-The project has four test layers:
-
-1. **Behavioral unit tests** (`tests/unit/*.test.mjs`, **61 tests**) — real function-calling tests for SessionStore, EventNormalizer, DiffApplier, mode normalization, and map size limiting
-2. **Structural unit tests** (`src/**/*.test.ts`, **356 tests**) — text-grep source code pattern checks (being migrated to behavioral)
-3. **Integration tests** (`tests/integration/`, VS Code Extension Dev Host) — verifies activation, commands, configuration, mode switching, and webview message handling
-4. **Visual tests** (`tests/visual/`, Playwright) — screenshot-based UI regression testing
-
-### Packaging
-
-Build a `.vsix` installable file:
-
-```bash
-# Install the VS Code packaging tool
-npm install -g @vscode/vsce
-
-# Package the extension
-npx @vscode/vsce package --no-dependencies --allow-missing-repository
-
-# Install the packaged extension
-code --install-extension opencode-harness-*.vsix --force
-```
-
-The `.vsix` file will be created in the project root. It contains:
-- `dist/extension.js` — the bundled extension
-- `dist/chat/webview/main.js` — bundled webview JS
-- `dist/chat/webview/styles.css` — bundled webview CSS
-- `package.json` — manifest and configuration
-- `README.md` — documentation
-
-### Platform Requirements
-
-- **VS Code**: 1.98.0 or higher
-- **Node.js**: 20.x or later
-- **opencode CLI**: Install from [opencode.ai](https://opencode.ai)
-- **Linux**: `libsecret` required for vsce credential store (`sudo pacman -S libsecret` on Arch, `sudo dnf install libsecret-devel` on Fedora)
+Building from source, running the dev host, the test suite, and packaging your own `.vsix` are all covered in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Accessibility
 
@@ -953,7 +466,7 @@ OpenCode is built with accessibility as a first-class concern:
 
 - **Keyboard navigation**: Full support for Tab, Enter, Escape, arrow keys, and shortcuts
 - **Subagent panel roving tabindex**: Arrow Up/Down/Home/End navigate the Active Subagents list; focus moves between cards without Tab-cycling the entire panel
-- **Mode selector affordances**: Plan/Build/Auto entries include tooltips, ARIA labels, and `Ctrl/Cmd+Alt+1/2/3` shortcuts
+- **Mode selector affordances**: Plan/Build/Auto entries include tooltips, ARIA labels, and `Alt+1/2/3` shortcuts
 - **Focus management**: Visible `focus-visible` rings on all interactive elements (2px solid, offset 2px), including new file-action and tool-result-action buttons
 - **Touch targets**: All interactive elements meet WCAG 2.5.5 minimum (24×24px)
 - **Reduced motion**: Respects `prefers-reduced-motion` — animations become instant fades
@@ -969,6 +482,7 @@ MIT
 
 ## Community & Support
 
+- **Changelog:** [What's new in each version](CHANGELOG.md)
 - **GitHub Issues:** [Report bugs or request features](https://github.com/K-Arthur/opencode-harness/issues)
 - **GitHub Discussions:** [Ask questions and share tips](https://github.com/K-Arthur/opencode-harness/discussions)
 - **VS Code Marketplace:** [Rate and review](https://marketplace.visualstudio.com/items?itemName=koarthur.opencode-harness)
