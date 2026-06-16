@@ -436,15 +436,27 @@ that reconciles external edits. There is **no hunk-level server API**.
 by `applyHunkSelection` over the cached `FileDiff.before/after`, then refresh changed-files so
 opencode's reconciled view and the panel agree. (Accept-all/revert-file already exist server-side.)
 
-### 14d. PTY live terminal — wiring plan (user will manually verify against a live server)
-Manual verification resolves the only blocker (no server in this dev env). Correct wiring:
-1. **Capability probe** once per server: `client.pty.list()` → `isPtySupported` ([`ptyModel.ts`](../src/terminal/ptyModel.ts)); if unsupported, keep Hybrid-A.
-2. **Host:** on `pty.created/updated/exited/deleted` SSE events, fold through `ptyReducer`; call
-   `client.pty.connect(id)` to stream live output → forward `pty_data{ptyId, chunk}` to the webview
-   (coalesced per frame); **Cancel** → `client.pty.remove(id)` (true per-command cancel).
-3. **Webview:** render the `ptyReducer` state in the bash tool card / Tasks panel (reuse
-   `ansiUtils` for ANSI), ring-buffered (`PTY_OUTPUT_CAP`).
-4. **Degradation:** fall back to Hybrid-A polling when PTY is absent (constitution rule #6).
+### 14d. PTY live terminal — wiring plan + a scope correction
+**Correction (verified against SDK 1.17.7 v2):** PTY live *output* is delivered over a **raw
+WebSocket**, not an HTTP/SSE stream. The SDK exposes `pty.connectToken` — *"a short-lived ticket
+for opening a PTY WebSocket connection"* — so the host must mint a token then open `ws://…` and
+pump bytes. `pty.*` lifecycle events are also **not yet handled** in the event pipeline. So live
+output is a **host WebSocket subsystem**, materially larger than the other wirings and only
+verifiable against a running server. (My earlier "just call `pty.connect()` to stream" was wrong.)
+
+Two implementable slices:
+- **Slice A — HTTP-only (no WebSocket): running-command visibility + true cancel.** Handle
+  `pty.created/updated/exited/deleted` SSE events → `ptyReducer` → webview renders the *list of
+  running commands* (command, cwd, status, exit code, duration); **Cancel** → `client.pty.remove(id)`
+  (HTTP). This already answers "show commands + let me cancel a running bash" — no WS. Output bytes
+  are absent (the events don't carry them), so the existing Hybrid-A poll still covers stdout.
+- **Slice B — WebSocket live output.** `pty.connectToken` → open `ws://`, pump → forward
+  `pty_data{ptyId, chunk}` (coalesced/frame) → render in the card (ANSI via `ansiUtils`,
+  ring-buffered `PTY_OUTPUT_CAP`). This is the new host subsystem; verify live.
+- **Degradation:** probe `pty.list()` (`isPtySupported`); fall back to Hybrid-A when PTY is absent
+  (constitution rule #6).
+
+The pure `ptyModel` reducer + probe already support both slices.
 
 ### 14e. Cores delivered this session (all RED→GREEN, committed)
 | Core | Status | Wiring |
