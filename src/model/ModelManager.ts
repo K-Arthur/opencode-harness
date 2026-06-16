@@ -327,7 +327,7 @@ export class ModelManager {
       }
       return models
     } catch (err) {
-      log.error("Failed to refresh models", err)
+      log.warn("Failed to refresh models (expected during cold start)", err)
       return this._models
     }
   }
