@@ -675,6 +675,8 @@ export type HostMessage =
   | { type: "show_error"; message: string }
   /** Response to get_file_diff — carries unified diff lines for a given path. */
   | { type: "file_diff_response"; path: string; sessionId?: string; lines: DiffLine[]; error?: string }
+  | { type: "file_hunks"; path: string; sessionId?: string; hunks: Array<{ id: string; additions: number; deletions: number; lines: string[] }> }
+  | { type: "hunk_reverted"; path: string; ok: boolean; reason?: string; sessionId?: string }
 
 // Backward-compatible alias — gradual migration; remove once all consumers use the union.
 export type LegacyHostMessage = HostMessage & Record<string, unknown>
@@ -740,6 +742,8 @@ export type WebviewMessage =
   | { type: "reject_diff"; diffId: string; sessionId?: string }
   | { type: "accept_hunk"; sessionId: string; hunkId: string; diffId?: string }
   | { type: "reject_hunk"; sessionId: string; hunkId: string; diffId?: string }
+  | { type: "get_file_hunks"; path: string; sessionId?: string }
+  | { type: "revert_hunk"; path: string; hunkId: string; sessionId?: string }
   | { type: "revert_diff"; diffId: string; path: string; sessionId?: string }
   | { type: "accept_permission"; sessionId?: string; permissionId?: string; response?: string }
   | { type: "mention_search"; query: string }

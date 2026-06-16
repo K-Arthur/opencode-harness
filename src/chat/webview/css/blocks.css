@@ -663,6 +663,22 @@
   max-width: 18ch;
 }
 
+/* Per-hunk revert blocks in the changed-files dropdown (audit §14.3) */
+.cf-hunk-block { border: 1px solid var(--color-border); border-radius: var(--radius-sm, 4px); margin-bottom: var(--space-1); overflow: hidden; }
+.cf-hunk-block-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 2px var(--space-2);
+  background: var(--oc-editor-bg);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-2xs);
+  color: var(--color-fg-muted);
+}
+.cf-hunk-revert {
+  background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm, 4px);
+  color: var(--color-fg); cursor: pointer; font-size: var(--text-2xs); padding: 0 var(--space-1);
+}
+.cf-hunk-revert:hover { border-color: var(--color-error, var(--vscode-errorForeground)); color: var(--color-error, var(--vscode-errorForeground)); }
+
 /* ─── JSON Viewer (inside tool args panel) ─── */
 .json-viewer {
   font-family: var(--font-mono);

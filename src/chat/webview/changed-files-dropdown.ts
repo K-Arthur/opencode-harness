@@ -16,6 +16,7 @@
  */
 
 import type { FileChange, DiffLine } from "./types"
+import { renderHunksWithRevert, type FileHunkView } from "./hunkRevertView"
 import { renderFileChipListHtml } from "./file-chip-list"
 
 // ─── Per-session state ────────────────────────────────────────────────────────
@@ -26,6 +27,7 @@ interface ChangedFilesState {
   sortMode: "changes" | "alpha"
   expandedFiles: Set<string>
   diffCache: Map<string, DiffLine[] | null | string>
+  hunksCache: Map<string, FileHunkView[]>
   lastFiles: FileChange[]
 }
 
@@ -34,6 +36,7 @@ function _createState(): ChangedFilesState {
     sortMode: "changes",
     expandedFiles: new Set<string>(),
     diffCache: new Map<string, DiffLine[] | null | string>(),
+    hunksCache: new Map<string, FileHunkView[]>(),
     lastFiles: [],
   }
 }
@@ -295,6 +298,17 @@ function _setDiffCache(cache: Map<string, DiffLine[] | null | string>, path: str
 export function handleDiffResponse(sessionId: string, path: string, lines: DiffLine[] | null, error?: string): void {
   const state = _stateFor(sessionId)
   _setDiffCache(state.diffCache, path, error ? error : (lines ?? []))
+  if (sessionId !== _currentSessionId) return
+  document.querySelectorAll<HTMLElement>(".cf-hunk-preview--open[data-path]").forEach((el) => {
+    if (el.dataset.path === path) _renderHunk(el, sessionId, path)
+  })
+}
+
+/** Host-authoritative hunks for per-hunk Revert (audit §14.3 wiring). */
+export function handleFileHunks(sessionId: string, path: string, hunks: FileHunkView[]): void {
+  const state = _stateFor(sessionId)
+  if (hunks.length > 0) state.hunksCache.set(path, hunks)
+  else state.hunksCache.delete(path)
   if (sessionId !== _currentSessionId) return
   document.querySelectorAll<HTMLElement>(".cf-hunk-preview--open[data-path]").forEach((el) => {
     if (el.dataset.path === path) _renderHunk(el, sessionId, path)
@@ -612,6 +626,10 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
             _setDiffCache(state.diffCache, file.path, null)
             _postMessage?.({ type: "get_file_diff", path: file.path, sessionId })
           }
+          // Request host-authoritative hunks for per-hunk Revert (audit §14.3).
+          if (!state.hunksCache.has(file.path)) {
+            _postMessage?.({ type: "get_file_hunks", path: file.path, sessionId })
+          }
         } else {
           state.expandedFiles.delete(file.path)
         }
@@ -637,6 +655,16 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
 
 function _renderHunk(el: HTMLElement, sessionId: string, path: string): void {
   const state = _stateFor(sessionId)
+  // Prefer host-authoritative hunks with per-hunk Revert when available.
+  const hunks = state.hunksCache.get(path)
+  if (hunks && hunks.length > 0) {
+    renderHunksWithRevert(el, {
+      path,
+      hunks,
+      onRevert: (p, hunkId) => _postMessage?.({ type: "revert_hunk", path: p, hunkId, sessionId }),
+    })
+    return
+  }
   const data = state.diffCache.get(path)
   if (data === null || data === undefined) {
     el.innerHTML = '<div class="cf-hunk-loading"><span class="cf-hunk-loading-dot"></span>Loading diff…</div>'

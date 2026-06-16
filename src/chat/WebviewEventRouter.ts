@@ -8,6 +8,7 @@ import type { SessionStore } from "../session/SessionStore"
 import type { SessionManager } from "../session/SessionManager"
 import type { DiffLine } from "./webview/types"
 import { sdkFileContentToDiffLines, type SdkFileContentLike } from "./diff/sdkFileContentToDiffLines"
+import { getFileHunks, planHunkRevert } from "./diff/hunkRevertPlan"
 import type { ModelManager } from "../model/ModelManager"
 import type { DiffApplier } from "../diff/DiffApplier"
 import type { StreamCoordinator } from "./handlers/StreamCoordinator"
@@ -166,6 +167,7 @@ export class WebviewEventRouter {
     "preview_theme", "get_theme_config", "update_theme_config", "list_cli_themes",
     "request_more_messages", "refresh_session_messages", "stream_ack", "retry_stream", "request_state_sync",
     "set_instructions", "fork_session", "accept_hunk", "reject_hunk",
+    "get_file_hunks", "revert_hunk",
     "toggle_diff_wrap", "toggle_thinking", "revert_diff", "open_changed_file_diff",
     "context_history_request", "context_cost_estimate", "context_suggestions_request",
     "send_steer_prompt",
@@ -504,6 +506,45 @@ export class WebviewEventRouter {
       const hunkId = typeof msg.hunkId === "string" ? msg.hunkId : undefined
       if (hunkId) {
         this.opts.postMessage({ type: "hunk_result", hunkId, ok: true, rejected: true, diffId: msg.diffId })
+      }
+    }],
+    // Hunk staging (audit §14.3): host-authoritative hunks computed from git
+    // before/after so webview/host ids can't drift. get_file_hunks supplies the
+    // ids; revert_hunk reverts one hunk as a single undoable WorkspaceEdit (the
+    // user editing their own file — opencode's file watcher reconciles).
+    ["get_file_hunks", async (msg: Record<string, unknown>, sessionId?: string) => {
+      const filePath = typeof msg.path === "string" ? msg.path : undefined
+      if (!filePath) return
+      const ba = await this.getFileBeforeAfter(filePath)
+      if (!ba) return
+      this.opts.postMessage({ type: "file_hunks", path: filePath, hunks: getFileHunks(ba.before, ba.after), sessionId })
+    }],
+    ["revert_hunk", async (msg: Record<string, unknown>, sessionId?: string) => {
+      const filePath = typeof msg.path === "string" ? msg.path : undefined
+      const hunkId = typeof msg.hunkId === "string" ? msg.hunkId : undefined
+      if (!filePath || !hunkId) return
+      const ba = await this.getFileBeforeAfter(filePath)
+      if (!ba) return
+      const plan = planHunkRevert(ba.before, ba.after, hunkId)
+      if (!plan) {
+        this.opts.postMessage({ type: "hunk_reverted", path: filePath, ok: false, reason: "stale", sessionId })
+        return
+      }
+      const wsFolder = vscode.workspace.workspaceFolders?.[0]
+      if (!wsFolder) return
+      const uri = vscode.Uri.joinPath(wsFolder.uri, filePath)
+      try {
+        const doc = await vscode.workspace.openTextDocument(uri)
+        const edit = new vscode.WorkspaceEdit()
+        edit.replace(uri, new vscode.Range(0, 0, doc.lineCount, 0), plan.newContent)
+        const applied = await vscode.workspace.applyEdit(edit)
+        if (applied) await doc.save()
+        this.opts.postMessage({ type: "hunk_reverted", path: filePath, ok: applied, sessionId })
+        // Re-emit remaining hunks so the panel updates immediately.
+        this.opts.postMessage({ type: "file_hunks", path: filePath, hunks: getFileHunks(ba.before, plan.newContent), sessionId })
+      } catch (err) {
+        log.warn(`revert_hunk failed for ${filePath}`, err)
+        this.opts.postMessage({ type: "hunk_reverted", path: filePath, ok: false, sessionId })
       }
     }],
     ["fork_session", (msg: Record<string, unknown>, sessionId?: string) => {
@@ -2014,6 +2055,34 @@ export class WebviewEventRouter {
       isValidThemeConfigPayload: (theme) => this.opts.themeController.isValidThemeConfigPayload(theme),
       warn: (message) => log.warn(message),
     })
+  }
+
+  /**
+   * Resolve a changed file's before (git HEAD) / after (current workspace)
+   * content — the source for hunk computation and reverts. Mirrors the
+   * open_changed_file_diff logic; untracked/missing files yield "".
+   */
+  private async getFileBeforeAfter(filePath: string): Promise<{ before: string; after: string } | null> {
+    const wsFolder = vscode.workspace.workspaceFolders?.[0]
+    if (!wsFolder) return null
+    let before = ""
+    try {
+      const result = require("child_process").execSync(
+        `git show HEAD:${filePath.replace(/\\/g, "/")}`,
+        { cwd: wsFolder.uri.fsPath, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024, timeout: 5000 },
+      )
+      if (typeof result === "string") before = result
+    } catch {
+      // Untracked / new file or no git repo — before stays "".
+    }
+    let after = ""
+    try {
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(wsFolder.uri, filePath))
+      after = doc.getText()
+    } catch {
+      // File deleted / unreadable — after stays "".
+    }
+    return { before, after }
   }
 
   private pushModelListToWebview(): void {
