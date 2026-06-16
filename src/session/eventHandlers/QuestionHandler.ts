@@ -68,9 +68,7 @@ export class QuestionHandler implements EventHandler {
       const tool = asRecord(props.tool)
       const toolCallId = typeof tool.callID === "string" ? tool.callID : requestID ?? "question"
       const messageId = typeof tool.messageID === "string" ? tool.messageID : undefined
-      const allowFreeText = Array.isArray(props.questions)
-        ? props.questions.some((entry) => asRecord(entry).custom === true)
-        : false
+      const allowFreeText = !Array.isArray(props.questions) || props.questions.some((entry) => asRecord(entry).custom !== false)
 
       return [{
         type: "question_asked",
