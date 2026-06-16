@@ -38,9 +38,11 @@ export function createAttachmentManager(deps: AttachmentDeps) {
 
   function attachImageBlob(blob: Blob): void {
     if (blob.size > MAX_ATTACHMENT_BYTES) {
+      console.warn(`[opencode-harness] attachImageBlob: image too large (${blob.size} bytes)`)
       deps.postMessage({ type: "show_error", message: "Image attachment exceeds 10 MB limit." })
       return
     }
+    console.log(`[opencode-harness] attachImageBlob: reading ${blob.size} bytes as data URL`)
     const reader = new FileReader()
     reader.onload = () => {
       const result = reader.result as string
@@ -48,9 +50,12 @@ export function createAttachmentManager(deps: AttachmentDeps) {
       const base64Match = result.match(/^data:(image\/[\w.+-]+);base64,(.+)$/)
       if (base64Match && base64Match[1] && base64Match[2]) {
         pendingAttachments.push({ data: base64Match[2], mimeType: base64Match[1] })
+        console.log(`[opencode-harness] attachImageBlob: attached ${base64Match[1]} (${base64Match[2].length} chars base64), total=${pendingAttachments.length}`)
         renderAttachmentChips()
         updatePromptContextChips()
         deps.updateSendButton()
+      } else {
+        console.warn("[opencode-harness] attachImageBlob: failed to parse data URL")
       }
     }
     reader.onerror = () => {
@@ -85,7 +90,10 @@ export function createAttachmentManager(deps: AttachmentDeps) {
 
   function onPaste(e: ClipboardEvent): void {
     const data = e.clipboardData
-    if (!data) return
+    if (!data) {
+      console.warn("[opencode-harness] onPaste: no clipboardData")
+      return
+    }
 
     // First pass: DataTransferItemList. Some platforms duplicate the same
     // MIME type with a string-typed entry whose getAsFile() returns null —
@@ -93,12 +101,15 @@ export function createAttachmentManager(deps: AttachmentDeps) {
     const items = data.items
     let attached = false
     if (items) {
+      console.log(`[opencode-harness] onPaste: ${items.length} items in clipboardData`)
       for (let i = 0; i < items.length; i++) {
         const item = items[i]
         if (!item) continue
+        console.log(`[opencode-harness] onPaste: item ${i} type=${item.type} kind=${item.kind}`)
         if (!ALLOWED_IMAGE_MIMES.includes(item.type as typeof ALLOWED_IMAGE_MIMES[number])) continue
         const blob = item.getAsFile()
         if (blob) {
+          console.log(`[opencode-harness] onPaste: attaching image blob ${blob.size} bytes`)
           attachImageBlob(blob)
           attached = true
           break
@@ -111,16 +122,22 @@ export function createAttachmentManager(deps: AttachmentDeps) {
     if (!attached) {
       const files = data.files
       if (files && files.length > 0) {
+        console.log(`[opencode-harness] onPaste: ${files.length} files in clipboardData.files`)
         for (let i = 0; i < files.length; i++) {
           // Index access works for both FileList and plain arrays (tests use
           // arrays); FileList also exposes `.item(i)` but it's not required.
           const f = (files as unknown as { [k: number]: File | undefined })[i]
-          if (f && ALLOWED_IMAGE_MIMES.includes(f.type as typeof ALLOWED_IMAGE_MIMES[number])) {
-            attachImageBlob(f)
-            attached = true
-            break
+          if (f) {
+            console.log(`[opencode-harness] onPaste: file ${i} name=${f.name} type=${f.type} size=${f.size}`)
+            if (ALLOWED_IMAGE_MIMES.includes(f.type as typeof ALLOWED_IMAGE_MIMES[number])) {
+              attachImageBlob(f)
+              attached = true
+              break
+            }
           }
         }
+      } else {
+        console.log("[opencode-harness] onPaste: no items and no files in clipboardData")
       }
     }
 
