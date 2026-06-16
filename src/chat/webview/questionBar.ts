@@ -19,6 +19,11 @@ export interface QuestionBarItem {
   /** Timestamp at which the answer was posted — used to schedule the
    *  post-answer bar dismissal. */
   answeredAt?: number
+  /** Per-card ready-tracking: group indices whose "Ready" button was clicked.
+   *  A ready card's selections are included when Submit All runs. */
+  cardReady: Set<number>
+  /** Current carousel index for card-by-card navigation. */
+  _carouselIdx: number
 }
 
 interface QuestionBarState {
@@ -89,9 +94,6 @@ export function addQuestion(block: QuestionBlock, messageId: string, envelopeSes
   const item: QuestionBarItem = {
     toolCallId,
     requestID: block.requestID,
-    // Attribute to the question's real session: explicit block.sessionId, then
-    // the dispatcher's envelope sid, and only as a last resort the viewed
-    // session. The active fallback alone caused the wrong-tab bleed bug.
     sessionId: block.sessionId || envelopeSessionId || _activeSessionId,
     messageId,
     groups: block.groups ?? [],
@@ -99,6 +101,8 @@ export function addQuestion(block: QuestionBlock, messageId: string, envelopeSes
     selections: new Map(),
     freeTextValue: "",
     answered: false,
+    cardReady: new Set(),
+    _carouselIdx: 0,
   }
 
   for (let i = 0; i < item.groups.length; i++) {
@@ -397,6 +401,7 @@ function updateSubmitState(): void {
   if (!els) return
   const hasAnySelection = Array.from(state.items.values()).some((item) => {
     if (item.answered || !isActiveItem(item)) return false
+    if (item.cardReady.size > 0) return true
     const hasSelection = Array.from(item.selections.values()).some((s) => s.size > 0)
     return hasSelection || item.freeTextValue.trim().length > 0
   })
@@ -409,89 +414,13 @@ function buildBarItemElement(item: QuestionBarItem): HTMLElement {
   wrapper.setAttribute("data-question-id", item.toolCallId)
   if (item.answered) wrapper.classList.add("question-bar-item--answered")
 
-  item.groups.forEach((group, gi) => {
-    const section = document.createElement("div")
-    section.className = "question-bar-section"
+  const totalCards = item.groups.length
+  const showCarousel = totalCards > 1
 
-    if (group.header) {
-      const hdr = document.createElement("div")
-      hdr.className = "question-bar-section-header"
-      hdr.textContent = group.header
-      section.appendChild(hdr)
-    }
-
-    if (group.question) {
-      const q = document.createElement("div")
-      q.className = "question-bar-question"
-      q.textContent = group.question
-      section.appendChild(q)
-    }
-
-    if (group.options.length > 0) {
-      const optionsRow = document.createElement("div")
-      optionsRow.className = "question-bar-options"
-      optionsRow.setAttribute("role", "group")
-      optionsRow.setAttribute("aria-label", group.header ?? "Answer options")
-
-      const sel = item.selections.get(gi) ?? new Set<string>()
-      for (const opt of group.options) {
-        const btn = document.createElement("button")
-        btn.type = "button"
-        btn.className = "question-bar-option"
-        btn.textContent = opt
-        btn.setAttribute("aria-pressed", sel.has(opt) ? "true" : "false")
-        if (sel.has(opt)) btn.classList.add("selected")
-
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation()
-          if (item.answered) return
-          const currentSel = item.selections.get(gi) ?? new Set<string>()
-          if (group.multiSelect) {
-            if (currentSel.has(opt)) {
-              currentSel.delete(opt)
-              btn.classList.remove("selected")
-              btn.setAttribute("aria-pressed", "false")
-            } else {
-              currentSel.add(opt)
-              btn.classList.add("selected")
-              btn.setAttribute("aria-pressed", "true")
-            }
-          } else {
-            currentSel.clear()
-            currentSel.add(opt)
-            for (const b of optionsRow.querySelectorAll(".question-bar-option")) {
-              b.classList.remove("selected")
-              b.setAttribute("aria-pressed", "false")
-            }
-            btn.classList.add("selected")
-            btn.setAttribute("aria-pressed", "true")
-          }
-          item.selections.set(gi, currentSel)
-          updateSubmitState()
-        })
-
-        optionsRow.appendChild(btn)
-      }
-      section.appendChild(optionsRow)
-    }
-
-    wrapper.appendChild(section)
-  })
-
-  if (item.allowFreeText) {
-    const ta = document.createElement("textarea")
-    ta.className = "question-bar-freetext"
-    ta.rows = 2
-    ta.maxLength = 10000
-    ta.placeholder = "Type a custom answer\u2026"
-    ta.setAttribute("aria-label", "Type a custom answer")
-    ta.value = item.freeTextValue
-    ta.addEventListener("input", () => {
-      item.freeTextValue = ta.value
-      updateSubmitState()
-    })
-    if (item.answered) ta.disabled = true
-    wrapper.appendChild(ta)
+  if (showCarousel) {
+    renderCarousel(wrapper, item)
+  } else {
+    renderSingleCard(wrapper, item, 0)
   }
 
   if (item.answered) {
@@ -501,9 +430,6 @@ function buildBarItemElement(item: QuestionBarItem): HTMLElement {
     wrapper.appendChild(badge)
   }
 
-  // Skip button — appears above the answered badge when the question is
-  // still pending. Lets the user skip/reject a question without answering.
-  // Wire protocol: posts question_answer with source="skip".
   if (!item.answered) {
     const skipBtn = document.createElement("button")
     skipBtn.type = "button"
@@ -529,6 +455,193 @@ function buildBarItemElement(item: QuestionBarItem): HTMLElement {
   }
 
   return wrapper
+}
+
+function renderCarousel(wrapper: HTMLElement, item: QuestionBarItem): void {
+  const total = item.groups.length
+
+  const carousel = document.createElement("div")
+  carousel.className = "qbar-carousel"
+
+  const nav = document.createElement("div")
+  nav.className = "qbar-carousel-nav"
+
+  const prevBtn = document.createElement("button")
+  prevBtn.type = "button"
+  prevBtn.className = "qbar-carousel-arrow qbar-carousel-prev"
+  prevBtn.textContent = "\u2039"
+  prevBtn.setAttribute("aria-label", "Previous question")
+  prevBtn.disabled = item._carouselIdx <= 0
+
+  const nextBtn = document.createElement("button")
+  nextBtn.type = "button"
+  nextBtn.className = "qbar-carousel-arrow qbar-carousel-next"
+  nextBtn.textContent = "\u203A"
+  nextBtn.setAttribute("aria-label", "Next question")
+  nextBtn.disabled = item._carouselIdx >= total - 1
+
+  const progress = document.createElement("span")
+  progress.className = "qbar-carousel-progress"
+
+  const updateProgress = () => {
+    const readyCount = item.cardReady.size
+    progress.textContent = `Card ${item._carouselIdx + 1} of ${total}${readyCount > 0 ? ` (${readyCount} ready)` : ""}`
+    prevBtn.disabled = item._carouselIdx <= 0
+    nextBtn.disabled = item._carouselIdx >= total - 1
+  }
+  updateProgress()
+
+  nav.appendChild(prevBtn)
+  nav.appendChild(progress)
+  nav.appendChild(nextBtn)
+  carousel.appendChild(nav)
+
+  const cardContainer = document.createElement("div")
+  cardContainer.className = "qbar-carousel-cards"
+
+  const changeCard = (newIdx: number) => {
+    item._carouselIdx = newIdx
+    const oldCard = cardContainer.querySelector(".qbar-carousel-card")
+    if (oldCard) oldCard.remove()
+    const card = buildCardElement(item, newIdx)
+    cardContainer.appendChild(card)
+    updateProgress()
+  }
+
+  prevBtn.addEventListener("click", () => {
+    if (item._carouselIdx > 0) changeCard(item._carouselIdx - 1)
+  })
+  nextBtn.addEventListener("click", () => {
+    if (item._carouselIdx < total - 1) changeCard(item._carouselIdx + 1)
+  })
+
+  changeCard(item._carouselIdx)
+  carousel.appendChild(cardContainer)
+
+  wrapper.appendChild(carousel)
+}
+
+function renderSingleCard(wrapper: HTMLElement, item: QuestionBarItem, gi: number): void {
+  const card = buildCardElement(item, gi)
+  wrapper.appendChild(card)
+}
+
+function buildCardElement(item: QuestionBarItem, gi: number): HTMLElement {
+  const group = item.groups[gi]!
+  const isReady = item.cardReady.has(gi)
+
+  const card = document.createElement("div")
+  card.className = "qbar-carousel-card"
+  card.dataset.groupIndex = String(gi)
+  if (isReady) card.classList.add("qbar-card--ready")
+
+  if (group.header) {
+    const hdr = document.createElement("div")
+    hdr.className = "question-bar-section-header"
+    hdr.textContent = group.header
+    card.appendChild(hdr)
+  }
+
+  if (group.question) {
+    const q = document.createElement("div")
+    q.className = "question-bar-question"
+    q.textContent = group.question
+    card.appendChild(q)
+  }
+
+  if (group.options.length > 0) {
+    const optionsRow = document.createElement("div")
+    optionsRow.className = "question-bar-options"
+    optionsRow.setAttribute("role", "group")
+    optionsRow.setAttribute("aria-label", group.header ?? "Answer options")
+
+    const sel = item.selections.get(gi) ?? new Set<string>()
+    for (const opt of group.options) {
+      const btn = document.createElement("button")
+      btn.type = "button"
+      btn.className = "question-bar-option"
+      btn.textContent = opt
+      btn.setAttribute("aria-pressed", sel.has(opt) ? "true" : "false")
+      if (sel.has(opt)) btn.classList.add("selected")
+
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation()
+        if (item.answered) return
+        const currentSel = item.selections.get(gi) ?? new Set<string>()
+        if (group.multiSelect) {
+          if (currentSel.has(opt)) {
+            currentSel.delete(opt)
+            btn.classList.remove("selected")
+            btn.setAttribute("aria-pressed", "false")
+          } else {
+            currentSel.add(opt)
+            btn.classList.add("selected")
+            btn.setAttribute("aria-pressed", "true")
+          }
+        } else {
+          currentSel.clear()
+          currentSel.add(opt)
+          for (const b of optionsRow.querySelectorAll(".question-bar-option")) {
+            b.classList.remove("selected")
+            b.setAttribute("aria-pressed", "false")
+          }
+          btn.classList.add("selected")
+          btn.setAttribute("aria-pressed", "true")
+        }
+        item.selections.set(gi, currentSel)
+        updateSubmitState()
+      })
+
+      optionsRow.appendChild(btn)
+    }
+    card.appendChild(optionsRow)
+  }
+
+  if (item.allowFreeText) {
+    const ta = document.createElement("textarea")
+    ta.className = "question-bar-freetext"
+    ta.rows = 2
+    ta.maxLength = 10000
+    ta.placeholder = "Type a custom answer\u2026"
+    ta.setAttribute("aria-label", "Type a custom answer")
+    ta.value = item.freeTextValue
+    ta.addEventListener("input", () => {
+      item.freeTextValue = ta.value
+      updateSubmitState()
+    })
+    if (item.answered || isReady) ta.disabled = true
+    card.appendChild(ta)
+  }
+
+  if (isReady) {
+    const badge = document.createElement("span")
+    badge.className = "qbar-card-ready-badge"
+    badge.textContent = "\u2713 Ready"
+    card.appendChild(badge)
+  } else if (!item.answered) {
+    const readyBtn = document.createElement("button")
+    readyBtn.type = "button"
+    readyBtn.className = "qbar-card-ready-btn"
+    readyBtn.textContent = "Ready"
+    readyBtn.setAttribute("aria-label", "Mark this question as ready")
+    readyBtn.addEventListener("click", () => {
+      if (item.answered) return
+      item.cardReady.add(gi)
+      // Re-render just this card within the carousel
+      const container = card.closest(".qbar-carousel-cards")
+      if (container) {
+        const oldCard = container.querySelector(".qbar-carousel-card")
+        if (oldCard) {
+          const freshCard = buildCardElement(item, gi)
+          oldCard.replaceWith(freshCard)
+        }
+      }
+      updateSubmitState()
+    })
+    card.appendChild(readyBtn)
+  }
+
+  return card
 }
 
 function renderBarItem(item: QuestionBarItem): void {
@@ -584,37 +697,41 @@ function submitAllAnswers(): void {
   if (!state.postMessage) return
 
   for (const item of state.items.values()) {
-    // Submit is a per-tab action: selections staged in another session's
-    // bar must not be posted from this one.
     if (item.answered || !isActiveItem(item)) continue
 
     const parts: string[] = []
     const structuredAnswers: string[][] = []
     let hasSelection = false
 
+    // When per-card Ready was used, only submit groups the user explicitly
+    // marked as ready. Otherwise submit all groups with selections.
+    const useReady = item.cardReady.size > 0
+
     item.groups.forEach((group, gi) => {
+      if (useReady && !item.cardReady.has(gi)) {
+        structuredAnswers.push([])
+        return
+      }
       const chosen = Array.from(item.selections.get(gi) ?? [])
       if (chosen.length > 0) {
         hasSelection = true
         const heading = group.header || group.question || `Answer ${gi + 1}`
         parts.push(`${heading}: ${chosen.join(", ")}`)
-        // Per-group selected labels — what the SDK v2 question.reply API
-        // actually wants. Outer array index = group index; inner array =
-        // selected labels for that group (one for single-select, N for
-        // multi-select). B-edge-1: previously the wire payload was a single
-        // flattened "Header1: A\nHeader2: B" string wrapped as [[value]],
-        // which the server could not map back to individual groups.
         structuredAnswers.push(chosen)
+      } else {
+        structuredAnswers.push([])
       }
     })
 
-    const free = item.freeTextValue.trim()
-    if (free) {
-      parts.push(free)
-      // Free text is appended as its own implicit group so the wire shape
-      // stays string[][] for every reply, regardless of which inputs were
-      // used. The server treats it as a single-value group at the end.
-      structuredAnswers.push([free])
+    if (useReady && item.cardReady.size > 0) {
+      // When card-ready is used, free-text is per-card and included in
+      // structuredAnswers per group. Don't append an extra free-text group.
+    } else {
+      const free = item.freeTextValue.trim()
+      if (free) {
+        parts.push(free)
+        structuredAnswers.push([free])
+      }
     }
 
     const value = parts.join("\n")
@@ -627,19 +744,11 @@ function submitAllAnswers(): void {
       requestID: item.requestID,
       messageId: item.messageId,
       value,
-      // Carry the structured per-group answers alongside the flat value.
-      // The host prefers structuredAnswers when present (B-edge-1) but
-      // tolerates an older webview that only sends `value` by falling back
-      // to [[value]]. Both shapes stay in sync — flat for history/display,
-      // structured for the SDK wire.
       structuredAnswers,
       source: hasSelection ? "option" : "freetext",
     })
 
     diag(`submitAllAnswers: posting question_answer for ${item.toolCallId} source=${hasSelection ? "option" : "freetext"} valueLen=${value.length}`)
-
-    // markQuestionAnswered sets item.answered, swaps the DOM for the
-    // answered state, and schedules the post-answer bar dismissal.
     markQuestionAnswered(item.toolCallId, value)
   }
 }
