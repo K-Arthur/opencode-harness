@@ -659,6 +659,29 @@ function updateExistingToolStart(
     return true
   }
 
+  // B7: duplicate tool_start with name=question but the live block is a
+  // tool-call (first start had no name). Promote the block to question type
+  // in both the data model and the DOM, then notify the bar.
+  if (isQuestionTool(toolCall)) {
+    const idx = msgObj.blocks.findIndex(
+      (b) => (b.id === toolCall.id) || ((b as ToolCallBlock).toolCallId === toolCall.id)
+    )
+    if (idx < 0) return false
+    state.streamingToolCallId = toolCall.id
+    webviewLog(`handleToolStart: promoting tool-call to question block id=${toolCall.id}`)
+    const qBlock = buildQuestionBlock(toolCall.id, msgObj.sessionId, toolCall.args)
+    msgObj.blocks[idx] = qBlock as Block
+    const oldEl = els.messageList.querySelector(`[data-block-id="${toolCall.id}"]`) as HTMLElement | null
+    if (oldEl) {
+      const freshEl = renderBlock(qBlock as Block, { messageId: messageId ?? "", postMessage })
+      if (freshEl) oldEl.replaceWith(freshEl)
+    }
+    if (callbacks?.onQuestionBlock) {
+      callbacks.onQuestionBlock(qBlock as QuestionBlock, messageId ?? "")
+    }
+    return true
+  }
+
   const existing = msgObj.blocks.findIndex(
     (b) => b.type === "tool-call" && (b as ToolCallBlock).id === toolCall.id
   )
