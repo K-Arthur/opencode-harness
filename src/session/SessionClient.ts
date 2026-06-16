@@ -400,21 +400,20 @@ export class SessionClient {
     log.info(`Permission ${permissionId} responded with: ${normalized}`)
   }
 
-  async replyToQuestion(requestID: string, answers: string[][]): Promise<void> {
-    // The question reply/reject API exists only on the v2 SDK client; the v1
-    // client has no `question` namespace (which is why this previously always
-    // threw "API is unavailable" and the question panel never dismissed).
+  async replyToQuestion(sessionId: string, requestID: string, answers: string[][]): Promise<void> {
     const client = this.guardV2()
-    const resp = await client.question.reply({ requestID, answers })
+    const session = client.session as any
+    const resp = await session.question.reply({ sessionID: sessionId, requestID, questionV2Reply: { answers } })
     if (resp.error) throw new Error(`Question reply failed: ${JSON.stringify(resp.error)}`)
-    log.info(`Question ${requestID} replied with ${answers.length} answer group(s)`)
+    log.info(`Session ${sessionId} question ${requestID} replied with ${answers.length} answer group(s)`)
   }
 
-  async rejectQuestion(requestID: string): Promise<void> {
+  async rejectQuestion(sessionId: string, requestID: string): Promise<void> {
     const client = this.guardV2()
-    const resp = await client.question.reject({ requestID })
+    const session = client.session as any
+    const resp = await session.question.reject({ sessionID: sessionId, requestID })
     if (resp.error) throw new Error(`Question reject failed: ${JSON.stringify(resp.error)}`)
-    log.info(`Question ${requestID} rejected`)
+    log.info(`Session ${sessionId} question ${requestID} rejected`)
   }
 
   async getSessionTodos(id: string): Promise<Array<{ id: string; content: string; status: string; priority: string }>> {

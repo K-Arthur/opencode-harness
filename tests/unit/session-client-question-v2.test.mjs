@@ -41,38 +41,35 @@ function makeClientWithV2(v2) {
   return new SessionClient(undefined, () => false, () => v2)
 }
 
-test("replyToQuestion calls the v2 question.reply with requestID + answers", async () => {
+test("replyToQuestion calls the v2 session.question.reply with sessionID + requestID + questionV2Reply", async () => {
   const calls = []
-  const v2 = { question: { reply: async (p) => { calls.push(p); return {} }, reject: async () => ({}) } }
-  await makeClientWithV2(v2).replyToQuestion("req_1", [["A"], ["B"]])
+  const v2 = { session: { question: { reply: async (p) => { calls.push(p); return {} }, reject: async () => ({}) } } }
+  await makeClientWithV2(v2).replyToQuestion("ses_1", "req_1", [["A"], ["B"]])
   assert.equal(calls.length, 1)
-  assert.deepEqual(calls[0], { requestID: "req_1", answers: [["A"], ["B"]] })
+  assert.deepEqual(calls[0], { sessionID: "ses_1", requestID: "req_1", questionV2Reply: { answers: [["A"], ["B"]] } })
 })
 
-test("rejectQuestion calls the v2 question.reject with requestID", async () => {
+test("rejectQuestion calls the v2 session.question.reject with sessionID + requestID", async () => {
   const calls = []
-  const v2 = { question: { reply: async () => ({}), reject: async (p) => { calls.push(p); return {} } } }
-  await makeClientWithV2(v2).rejectQuestion("req_2")
+  const v2 = { session: { question: { reply: async () => ({}), reject: async (p) => { calls.push(p); return {} } } } }
+  await makeClientWithV2(v2).rejectQuestion("ses_2", "req_2")
   assert.equal(calls.length, 1)
-  assert.deepEqual(calls[0], { requestID: "req_2" })
+  assert.deepEqual(calls[0], { sessionID: "ses_2", requestID: "req_2" })
 })
 
 test("replyToQuestion throws 'Server not running' (not 'API unavailable') when no v2 client", async () => {
-  // Regression: previously the v1 client lacked a `question` API and this threw
-  // "OpenCode question reply API is unavailable", which rolled back the optimistic
-  // answer and left the question panel stuck. Now the absence is just "not running".
   const sc = new SessionClient(undefined, () => false, () => null)
-  await assert.rejects(sc.replyToQuestion("req_x", [["A"]]), /Server not running/)
+  await assert.rejects(sc.replyToQuestion("ses_x", "req_x", [["A"]]), /Server not running/)
 })
 
 test("replyToQuestion surfaces a server-side error from the v2 response", async () => {
-  const v2 = { question: { reply: async () => ({ error: { message: "bad request" } }), reject: async () => ({}) } }
-  await assert.rejects(makeClientWithV2(v2).replyToQuestion("req_3", [["A"]]), /Question reply failed/)
+  const v2 = { session: { question: { reply: async () => ({ error: { message: "bad request" } }), reject: async () => ({}) } } }
+  await assert.rejects(makeClientWithV2(v2).replyToQuestion("ses_3", "req_3", [["A"]]), /Question reply failed/)
 })
 
 test("rejectQuestion surfaces a server-side error from the v2 response", async () => {
-  const v2 = { question: { reply: async () => ({}), reject: async () => ({ error: { message: "nope" } }) } }
-  await assert.rejects(makeClientWithV2(v2).rejectQuestion("req_4"), /Question reject failed/)
+  const v2 = { session: { question: { reply: async () => ({}), reject: async () => ({ error: { message: "nope" } }) } } }
+  await assert.rejects(makeClientWithV2(v2).rejectQuestion("ses_4", "req_4"), /Question reject failed/)
 })
 
 // --- Phase 2: safe void/ack session calls migrated to the v2 client ----------------

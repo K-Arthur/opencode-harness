@@ -354,7 +354,7 @@ export class WebviewEventRouter {
         this.opts.streamCoordinator.markQuestionAnswered(sessionId, answerId)
         try {
           if (source === "skip") {
-            await this.opts.sessionManager.rejectQuestion(requestID)
+            await this.opts.sessionManager.rejectQuestion(sessionId, requestID)
           } else {
             // B-edge-1: prefer the per-group structured answers the webview
             // builds (string[][] — one inner array per question group, with
@@ -368,7 +368,7 @@ export class WebviewEventRouter {
                   .map((g) => g.map((v) => (typeof v === "string" ? v : String(v ?? ""))).filter((v) => v.length > 0))
               : null
             const wireAnswers = structured && structured.length > 0 ? structured : [[value]]
-            await this.opts.sessionManager.replyToQuestion(requestID, wireAnswers)
+            await this.opts.sessionManager.replyToQuestion(sessionId, requestID, wireAnswers)
           }
           this.opts.postMessage({
             type: "question_acknowledged",
