@@ -31,6 +31,22 @@
   `{ silent: true }` option; the `switch_tab` handler in
   `WebviewEventRouter` uses it so the echo never fires. New regression
   coverage in `SessionStore.test.ts` and `WebviewEventRouter.test.ts`.
+- **Permission bar no longer bleeds across tabs.** `permission_request`
+  rendered the shared `#permission-bar` for whatever `sid` the host sent,
+  with no check against the tab the user was actually viewing — a permission
+  raised by a background tab's tool call popped up over the focused tab, and
+  clicking Allow/Always/Deny resolved the *background* tab's permission while
+  appearing to belong to the viewed one. A second request arriving from
+  another tab would also silently overwrite the first tab's still-pending
+  one, so switching back showed no bar at all and that tab's stream stayed
+  stuck. Fix: a new `pendingPermissionBySession` map tracks one pending
+  request per session; `permission_request` records into it unconditionally
+  but only renders when the request's session matches the active one;
+  `switchTab` restores the switched-to tab's pending request (if any) or
+  hides the bar otherwise — mirroring the same per-session pattern already
+  used to fix the question bar above. New regression coverage in
+  `main.test.ts`; existing `renderer.test.ts` coverage updated to match the
+  new shared `respond()` helper.
 
 ## Unreleased Highlights (2026-06-12) — navigation, wayfinding & Escape safety
 

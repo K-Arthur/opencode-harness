@@ -1116,3 +1116,61 @@ describe("methodology visibility — methodology_selected chip", () => {
     )
   })
 })
+
+// ── Permission bar — multi-tab session attribution (2026-06-16) ────────────
+// permission_request rendered the shared #permission-bar unconditionally for
+// whatever sid the host sent, with no check against the tab the user is
+// actually looking at. A permission request raised by a background tab's
+// tool call would pop up over whichever tab was focused, and clicking
+// Allow/Always/Deny would resolve the BACKGROUND tab's permission while
+// looking like it belonged to the viewed tab. Worse: if tab B's request
+// later arrived and overwrote tab A's still-pending one, switching back to
+// tab A showed no bar at all — tab A's stream stayed stuck with no way to
+// respond. Fix: track one pending permission per session and only render the
+// bar for the active session; switchTab restores or hides it from that
+// per-session state, mirroring the questionBar pattern already used to fix
+// the same class of bug.
+describe("permission bar — multi-tab session attribution", () => {
+  it("permission_request records the request per-session before deciding whether to render", () => {
+    const idx = source.indexOf('["permission_request"')
+    assert.ok(idx >= 0, "permission_request handler must exist")
+    const block = source.slice(idx, source.indexOf('["file_edited"', idx))
+    assert.ok(
+      block.includes("pendingPermissionBySession.set("),
+      "permission_request must record the request per-session so it survives tab switches",
+    )
+  })
+
+  it("permission_request only renders the bar when the request belongs to the active session", () => {
+    const idx = source.indexOf('["permission_request"')
+    const block = source.slice(idx, source.indexOf('["file_edited"', idx))
+    assert.ok(
+      /if\s*\(\s*sid\s*!==\s*stateManager\.getState\(\)\.activeSessionId\s*\)\s*return/.test(block),
+      "permission_request must bail out of rendering for a non-active session",
+    )
+  })
+
+  it("permission response buttons clear the per-session pending entry instead of just hiding the DOM", () => {
+    const idx = source.indexOf("function renderPermissionBar(")
+    assert.ok(idx >= 0, "renderPermissionBar helper must exist")
+    const block = source.slice(idx, idx + 2000)
+    assert.ok(
+      block.includes("pendingPermissionBySession.delete("),
+      "Allow/Always/Deny handlers must clear the resolved session's pending entry",
+    )
+  })
+
+  it("switchTab restores a pending permission for the newly active session, or hides the bar if none", () => {
+    const idx = source.indexOf("function switchTab(")
+    assert.ok(idx >= 0, "switchTab must exist")
+    const block = source.slice(idx, idx + 6000)
+    assert.ok(
+      block.includes("pendingPermissionBySession.get(tabId)"),
+      "switchTab must look up the switched-to session's pending permission",
+    )
+    assert.ok(
+      /renderPermissionBar\(/.test(block) && /hidePermissionBar\(\)/.test(block),
+      "switchTab must either restore the bar for a pending permission or hide it when there is none",
+    )
+  })
+})

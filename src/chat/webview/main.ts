@@ -619,6 +619,18 @@ function getVsCodeApi() {
   // Per-tab prompt queues — keyed by sessionId
   const promptQueues = new Map<string, PromptQueue>()
 
+  // Per-session pending permission request — at most one per session. Lets
+  // the permission bar survive tab switches (restored when its session
+  // becomes active again) instead of bleeding into whichever tab is focused
+  // when the request arrives, or vanishing if a later request from another
+  // tab overwrites the shared bar.
+  const pendingPermissionBySession = new Map<string, {
+    permissionId: string
+    permissionType?: string
+    pattern?: string | string[]
+    title: string
+  }>()
+
   const mention = setupMentions(
     els,
     { query: "", selectedIndex: -1, mode: "mention" as const },
@@ -2008,6 +2020,53 @@ function getVsCodeApi() {
     if (!streaming) els.inputArea.classList.remove("steer-interrupt", "steer-queue")
   }
 
+  function hidePermissionBar() {
+    const permBar = document.getElementById("permission-bar")
+    const permActions = document.getElementById("permission-bar-actions")
+    permBar?.classList.add("hidden")
+    if (permActions) permActions.innerHTML = ""
+  }
+
+  function renderPermissionBar(sid: string, req: { permissionId: string; permissionType?: string; pattern?: string | string[]; title: string }) {
+    const permBar = document.getElementById("permission-bar")
+    const permText = document.getElementById("permission-bar-text")
+    const permActions = document.getElementById("permission-bar-actions")
+    if (!permBar || !permText || !permActions) return
+
+    const { permissionId, permissionType, pattern, title } = req
+    permText.textContent = title
+    permActions.innerHTML = ""
+
+    const respond = (response: "once" | "always" | "reject") => {
+      vscode.postMessage({ type: "accept_permission", sessionId: sid, permissionId, response, permissionType, pattern })
+      pendingPermissionBySession.delete(sid)
+      hidePermissionBar()
+    }
+
+    const allowBtn = document.createElement("button")
+    allowBtn.className = "permission-bar-btn permission-bar-btn--allow"
+    allowBtn.textContent = "Allow"
+    allowBtn.type = "button"
+    allowBtn.addEventListener("click", () => respond("once"))
+
+    const alwaysBtn = document.createElement("button")
+    alwaysBtn.className = "permission-bar-btn permission-bar-btn--always"
+    alwaysBtn.textContent = "Always"
+    alwaysBtn.type = "button"
+    alwaysBtn.addEventListener("click", () => respond("always"))
+
+    const denyBtn = document.createElement("button")
+    denyBtn.className = "permission-bar-btn permission-bar-btn--deny"
+    denyBtn.textContent = "Deny"
+    denyBtn.type = "button"
+    denyBtn.addEventListener("click", () => respond("reject"))
+
+    permActions.appendChild(allowBtn)
+    if (pattern) permActions.appendChild(alwaysBtn)
+    permActions.appendChild(denyBtn)
+    permBar.classList.remove("hidden")
+  }
+
   function switchTab(tabId: string, notifyHost = true) {
     // Persist draft from the current (old) tab before switching
     const prevSession = stateManager.getActiveSession()
@@ -2120,6 +2179,16 @@ function getVsCodeApi() {
     // Reconcile bar: clean stale answered items and restore any missing
     // from the active session that fell out of the DOM.
     questionBar.reconcileBar(tabId)
+
+    // Restore this tab's own pending permission request (if any), or hide
+    // the bar — it must never keep showing a request that belongs to the
+    // tab we just switched away from.
+    const pendingPermission = pendingPermissionBySession.get(tabId)
+    if (pendingPermission) {
+      renderPermissionBar(tabId, pendingPermission)
+    } else {
+      hidePermissionBar()
+    }
   }
 
   /**
@@ -3423,53 +3492,18 @@ function getVsCodeApi() {
         }
       }],
       ["permission_request", (_msg, sid) => {
-        const permBar = document.getElementById("permission-bar")
-        const permText = document.getElementById("permission-bar-text")
-        const permActions = document.getElementById("permission-bar-actions")
-        if (!permBar || !permText || !permActions || !sid) return
+        if (!sid) return
 
         const permissionId = String(_msg.permissionId || "")
         const permissionType = typeof _msg.permissionType === "string" ? _msg.permissionType : undefined
         const pattern = typeof _msg.pattern === "string" || Array.isArray(_msg.pattern) ? _msg.pattern as string | string[] : undefined
         const title = typeof _msg.title === "string" ? _msg.title : "Allow OpenCode to perform this action?"
 
-        permText.textContent = title
-        permActions.innerHTML = ""
-
-        const allowBtn = document.createElement("button")
-        allowBtn.className = "permission-bar-btn permission-bar-btn--allow"
-        allowBtn.textContent = "Allow"
-        allowBtn.type = "button"
-        allowBtn.addEventListener("click", () => {
-          vscode.postMessage({ type: "accept_permission", sessionId: sid, permissionId, response: "once", permissionType, pattern })
-          permBar.classList.add("hidden")
-          permActions.innerHTML = ""
-        })
-
-        const alwaysBtn = document.createElement("button")
-        alwaysBtn.className = "permission-bar-btn permission-bar-btn--always"
-        alwaysBtn.textContent = "Always"
-        alwaysBtn.type = "button"
-        alwaysBtn.addEventListener("click", () => {
-          vscode.postMessage({ type: "accept_permission", sessionId: sid, permissionId, response: "always", permissionType, pattern })
-          permBar.classList.add("hidden")
-          permActions.innerHTML = ""
-        })
-
-        const denyBtn = document.createElement("button")
-        denyBtn.className = "permission-bar-btn permission-bar-btn--deny"
-        denyBtn.textContent = "Deny"
-        denyBtn.type = "button"
-        denyBtn.addEventListener("click", () => {
-          vscode.postMessage({ type: "accept_permission", sessionId: sid, permissionId, response: "reject", permissionType, pattern })
-          permBar.classList.add("hidden")
-          permActions.innerHTML = ""
-        })
-
-        permActions.appendChild(allowBtn)
-        if (pattern) permActions.appendChild(alwaysBtn)
-        permActions.appendChild(denyBtn)
-        permBar.classList.remove("hidden")
+        // Record per-session first so the request survives tab switches even
+        // though it belongs to a tab the user isn't currently looking at.
+        pendingPermissionBySession.set(sid, { permissionId, permissionType, pattern, title })
+        if (sid !== stateManager.getState().activeSessionId) return
+        renderPermissionBar(sid, { permissionId, permissionType, pattern, title })
       }],
       ["file_edited", (msg, sid) => {
         // Record the edit for the changed-files dropdown. (The inline transcript
