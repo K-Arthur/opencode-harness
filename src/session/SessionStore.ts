@@ -644,11 +644,17 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
       .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
   }
 
-  setActive(id: string): OpenCodeSession | undefined {
+  // `silent` skips the onActiveSessionChanged broadcast. Use it when the
+  // caller is relaying a switch the webview already made locally (switch_tab)
+  // — without it, every host round-trip echoes back as a fresh
+  // active_session_changed the webview must re-decide whether to honor, and
+  // a stale echo arriving after the user has since switched to a third tab
+  // forces a visible snap back to the now-superseded session.
+  setActive(id: string, opts?: { silent?: boolean }): OpenCodeSession | undefined {
     const session = this.sessions.get(id)
     if (session) {
       this.activeSessionId = id
-      this._onActiveSessionChanged.fire(id)
+      if (!opts?.silent) this._onActiveSessionChanged.fire(id)
       this.fireChangeEvent({ kind: "active_changed", sessionId: id })
     }
     return session

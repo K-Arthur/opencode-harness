@@ -735,7 +735,11 @@ export class WebviewEventRouter {
       }
     }],
     ["switch_tab", (msg: Record<string, unknown>, sessionId?: string) => {
-      if (sessionId) { this.opts.ensureLocalTab(sessionId); this.opts.tabManager.switchTab(sessionId); this.opts.sessionStore.setActive(sessionId) }
+      // silent: the webview already switched itself locally before sending
+      // this message (see main.ts switchTab) — echoing active_session_changed
+      // back here is what forced visible snap-backs to a stale tab once the
+      // user had already moved on to a different one.
+      if (sessionId) { this.opts.ensureLocalTab(sessionId); this.opts.tabManager.switchTab(sessionId); this.opts.sessionStore.setActive(sessionId, { silent: true }) }
     }],
     ["accept_diff", async (_msg: Record<string, unknown>, _sessionId?: string) => {
       // opencode applies edits server-side; accept is a UI bookmark.

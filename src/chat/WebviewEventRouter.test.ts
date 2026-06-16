@@ -111,6 +111,22 @@ describe("WebviewEventRouter host state sync", () => {
   })
 })
 
+describe("WebviewEventRouter switch_tab routing", () => {
+  // Regression: switch_tab used a non-silent setActive, which echoed
+  // active_session_changed back to the same webview that had already
+  // switched itself locally. Under rapid tab switching the echo for an
+  // earlier switch could arrive after the user had moved to a third tab,
+  // forcing a visible snap back to the stale, superseded tab.
+  it("calls setActive with silent: true so the webview's own switch is not echoed back", () => {
+    const handler = blockBetween('["switch_tab"', '["accept_diff"')
+
+    assert.ok(
+      /sessionStore\.setActive\(\s*sessionId\s*,\s*\{\s*silent:\s*true\s*\}\s*\)/.test(handler),
+      "switch_tab must call sessionStore.setActive(sessionId, { silent: true })",
+    )
+  })
+})
+
 describe("WebviewEventRouter copy_text routing", () => {
   // Webviews frequently lack navigator.clipboard; copy actions must round-trip
   // through the host's vscode.env.clipboard instead.

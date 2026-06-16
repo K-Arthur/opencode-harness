@@ -42,6 +42,22 @@ describe("SessionStore.ts", () => {
     assert.ok(source.includes("setActive("))
   })
 
+  // Regression: every setActive call unconditionally fired
+  // onActiveSessionChanged, including the one made on behalf of a switch_tab
+  // message the webview itself had already applied locally. That echoed
+  // active_session_changed back to the webview, which could arrive after the
+  // user had switched again and force a visible snap back to a stale tab.
+  it("setActive skips the onActiveSessionChanged broadcast when called with silent: true", () => {
+    const idx = source.indexOf("setActive(id: string")
+    assert.ok(idx >= 0, "setActive method must exist")
+    const body = source.slice(idx, idx + 600)
+    assert.ok(body.includes("opts?: { silent?: boolean }"), "setActive must accept a silent option")
+    assert.ok(
+      /if\s*\(!opts\?\.silent\)\s*this\._onActiveSessionChanged\.fire\(id\)/.test(body),
+      "setActive must guard the onActiveSessionChanged broadcast behind the silent flag",
+    )
+  })
+
   it("has appendMessage method", () => {
     assert.ok(source.includes("appendMessage("))
   })
