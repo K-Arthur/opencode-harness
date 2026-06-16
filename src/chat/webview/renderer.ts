@@ -1255,7 +1255,11 @@ function createDiffHeader(diffBlock: DiffBlock, opts: RenderOptions, wrapper: HT
   fileInfo.appendChild(createDiffStats(diffBlock))
 
   header.appendChild(fileInfo)
-  header.appendChild(createDiffWrapToggle(wrapper))
+  const controls = document.createElement("div")
+  controls.className = "diff-controls"
+  controls.appendChild(createDiffViewToggle(wrapper, diffBlock, opts))
+  controls.appendChild(createDiffWrapToggle(wrapper))
+  header.appendChild(controls)
   return header
 }
 
@@ -1324,6 +1328,62 @@ function createDiffWrapToggle(wrapper: HTMLElement): HTMLButtonElement {
   wrapToggle.classList.toggle("active", readDiffWrapPreference())
   wrapToggle.addEventListener("click", () => toggleDiffWrap(wrapper, wrapToggle))
   return wrapToggle
+}
+
+function createDiffViewToggle(wrapper: HTMLElement, diffBlock: DiffBlock, opts: RenderOptions): HTMLButtonElement {
+  const viewToggle = document.createElement("button")
+  viewToggle.className = "diff-view-toggle"
+  viewToggle.setAttribute("aria-label", "Toggle side-by-side diff view")
+  viewToggle.title = "Side-by-side view"
+  viewToggle.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg><span>Split</span>`
+  let isSideBySide = readDiffViewModePreference() === "side-by-side"
+  viewToggle.classList.toggle("active", isSideBySide)
+  viewToggle.addEventListener("click", () => {
+    isSideBySide = !isSideBySide
+    const newMode = isSideBySide ? "side-by-side" : "unified"
+    persistDiffViewModePreference(newMode)
+    viewToggle.classList.toggle("active", isSideBySide)
+    const tableWrapper = wrapper.querySelector(".diff-table-wrapper")
+    if (tableWrapper) {
+      tableWrapper.classList.toggle("diff-table-wrapper--side-by-side", isSideBySide)
+      // Re-render the table content for the new mode
+      const table = tableWrapper.querySelector("table.diff-table") as HTMLElement | null
+      if (table) {
+        while (table.firstChild) table.removeChild(table.firstChild)
+        diffBlock.hunks.forEach((hunk) => computeWordDiffs(hunk.lines))
+        if (isSideBySide) {
+          diffBlock.hunks.forEach((hunk, hunkIndex) => {
+            appendSideBySideHunkRows(table, diffBlock, hunk, hunkIndex, opts)
+          })
+        } else {
+          diffBlock.hunks.forEach((hunk, hunkIndex) => {
+            appendHunkRows(table, diffBlock, hunk, hunkIndex, opts, Infinity)
+          })
+        }
+      }
+    }
+  })
+  return viewToggle
+}
+
+function readDiffViewModePreference(): "unified" | "side-by-side" {
+  const vscode = (window as any).acquireVsCodeApi?.()
+  if (!vscode) return "unified"
+  try {
+    return vscode.getState()?.displayPrefs?.diffViewMode === "side-by-side" ? "side-by-side" : "unified"
+  } catch { return "unified" }
+}
+
+function persistDiffViewModePreference(mode: "unified" | "side-by-side"): void {
+  const vscode = (window as any).acquireVsCodeApi?.()
+  if (!vscode) return
+  try {
+    const state = vscode.getState()
+    if (state?.displayPrefs) {
+      state.displayPrefs.diffViewMode = mode
+      vscode.setState(state)
+    }
+  } catch { }
 }
 
 function toggleDiffWrap(wrapper: HTMLElement, wrapToggle: HTMLElement): void {
@@ -1423,15 +1483,25 @@ function createDiffTableWrapper(diffBlock: DiffBlock, opts: RenderOptions): HTML
   if (readDiffWrapPreference()) {
     tableWrapper.classList.add("diff-table-wrapper--wrapped")
   }
+  const isSideBySide = readDiffViewModePreference() === "side-by-side"
+  if (isSideBySide) {
+    tableWrapper.classList.add("diff-table-wrapper--side-by-side")
+  }
 
   const table = document.createElement("table")
   table.className = "diff-table"
 
   let budget = MAX_DIFF_LINES_RENDERED
   diffBlock.hunks.forEach((hunk) => computeWordDiffs(hunk.lines))
-  diffBlock.hunks.forEach((hunk, hunkIndex) => {
-    budget = appendHunkRows(table, diffBlock, hunk, hunkIndex, opts, budget)
-  })
+  if (isSideBySide) {
+    diffBlock.hunks.forEach((hunk, hunkIndex) => {
+      budget = appendSideBySideHunkRows(table, diffBlock, hunk, hunkIndex, opts, budget)
+    })
+  } else {
+    diffBlock.hunks.forEach((hunk, hunkIndex) => {
+      budget = appendHunkRows(table, diffBlock, hunk, hunkIndex, opts, budget)
+    })
+  }
 
   const remaining = diffBlock.hunks.reduce((sum, h) => sum + h.lines.length, 0) - countRenderedLines(table)
   if (remaining > 0) {
@@ -1441,10 +1511,12 @@ function createDiffTableWrapper(diffBlock: DiffBlock, opts: RenderOptions): HTML
     showAll.textContent = `Show all changes (${remaining} more line${remaining === 1 ? "" : "s"})`
     showAll.addEventListener("click", () => {
       showAll.remove()
-      // Re-render every hunk with no budget. Cheap relative to the click — the
-      // user explicitly opted into the full diff.
       while (table.firstChild) table.removeChild(table.firstChild)
-      diffBlock.hunks.forEach((hunk, hunkIndex) => appendHunkRows(table, diffBlock, hunk, hunkIndex, opts, Infinity))
+      if (isSideBySide) {
+        diffBlock.hunks.forEach((hunk, hunkIndex) => appendSideBySideHunkRows(table, diffBlock, hunk, hunkIndex, opts, Infinity))
+      } else {
+        diffBlock.hunks.forEach((hunk, hunkIndex) => appendHunkRows(table, diffBlock, hunk, hunkIndex, opts, Infinity))
+      }
     })
     tableWrapper.appendChild(table)
     tableWrapper.appendChild(showAll)
@@ -1487,6 +1559,118 @@ function appendHunkRows(
     left--
   }
   return left
+}
+
+/**
+ * Append a hunk's header plus side-by-side rows. Returns the budget left.
+ */
+function appendSideBySideHunkRows(
+  table: HTMLElement,
+  diffBlock: DiffBlock,
+  hunk: DiffHunk,
+  hunkIndex: number,
+  opts: RenderOptions,
+  budget: number = Infinity,
+): number {
+  const oldCount = hunk.lines.filter((l) => l.type === "removed" || l.type === "context").length
+  const newCount = hunk.lines.filter((l) => l.type === "added" || l.type === "context").length
+  const hunkId = hunk.id || `${diffBlock.diffId}:${hunkIndex}`
+  const hunkState = hunk.state || "pending"
+
+  if (budget <= 0) return budget
+
+  table.appendChild(createHunkHeaderRow(diffBlock, hunk, hunkId, hunkState, oldCount, newCount, opts))
+
+  // Pair removed/added lines for side-by-side display
+  const paired = pairLinesForSideBySide(hunk.lines)
+  let left = budget
+  for (const pair of paired) {
+    if (left <= 0) break
+    table.appendChild(createSideBySideLineRow(pair, diffBlock.path))
+    left--
+  }
+  return left
+}
+
+interface SideBySidePair {
+  left: DiffLine | null
+  right: DiffLine | null
+  type: "context" | "removed" | "added" | "modified"
+}
+
+function pairLinesForSideBySide(lines: DiffLine[]): SideBySidePair[] {
+  const pairs: SideBySidePair[] = []
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]!
+    if (line.type === "context") {
+      pairs.push({ left: line, right: line, type: "context" })
+      i++
+    } else if (line.type === "removed") {
+      // Look ahead for a matching added line
+      const nextLine = lines[i + 1]
+      if (nextLine && nextLine.type === "added") {
+        pairs.push({ left: line, right: nextLine, type: "modified" })
+        i += 2
+      } else {
+        pairs.push({ left: line, right: null, type: "removed" })
+        i++
+      }
+    } else if (line.type === "added") {
+      pairs.push({ left: null, right: line, type: "added" })
+      i++
+    } else {
+      i++
+    }
+  }
+  return pairs
+}
+
+function createSideBySideLineRow(pair: SideBySidePair, diffFilePath?: string): HTMLElement {
+  const row = document.createElement("tr")
+  row.className = `diff-line diff-line--${pair.type}`
+
+  // Left side (old)
+  const leftNum = document.createElement("td")
+  leftNum.className = "diff-line-num diff-line-num--old"
+  leftNum.textContent = pair.left?.oldLine != null ? String(pair.left.oldLine) : ""
+
+  const leftContent = document.createElement("td")
+  leftContent.className = "diff-line-content diff-side-left"
+  if (pair.left) {
+    if (pair.left.wordDiffHtml) {
+      leftContent.innerHTML = pair.left.wordDiffHtml
+    } else if (pair.left.content && diffFilePath) {
+      const lang = inferLanguageFromPath(diffFilePath)
+      leftContent.innerHTML = lang ? sanitizeHtml(highlightSyntax(pair.left.content, lang)) : escapeHtml(pair.left.content)
+    } else {
+      leftContent.textContent = pair.left.content
+    }
+  }
+
+  // Right side (new)
+  const rightNum = document.createElement("td")
+  rightNum.className = "diff-line-num diff-line-num--new"
+  rightNum.textContent = pair.right?.newLine != null ? String(pair.right.newLine) : ""
+
+  const rightContent = document.createElement("td")
+  rightContent.className = "diff-line-content diff-side-right"
+  if (pair.right) {
+    if (pair.right.wordDiffHtml) {
+      rightContent.innerHTML = pair.right.wordDiffHtml
+    } else if (pair.right.content && diffFilePath) {
+      const lang = inferLanguageFromPath(diffFilePath)
+      rightContent.innerHTML = lang ? sanitizeHtml(highlightSyntax(pair.right.content, lang)) : escapeHtml(pair.right.content)
+    } else {
+      rightContent.textContent = pair.right.content
+    }
+  }
+
+  row.appendChild(leftNum)
+  row.appendChild(leftContent)
+  row.appendChild(rightNum)
+  row.appendChild(rightContent)
+  return row
 }
 
 function createHunkHeaderRow(

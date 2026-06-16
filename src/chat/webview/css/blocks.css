@@ -1528,6 +1528,97 @@
   border-color: var(--oc-accent-border);
 }
 
+/* Diff view toggle (side-by-side) */
+.diff-view-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: var(--text-2xs);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast),
+    border-color var(--duration-fast);
+  min-height: var(--size-target-min);
+  min-width: var(--size-target-min);
+  white-space: nowrap;
+}
+
+.diff-view-toggle:hover {
+  background: var(--oc-accent-subtle);
+  color: var(--color-accent);
+  border-color: var(--oc-accent-border);
+}
+
+.diff-view-toggle.active {
+  color: var(--color-accent);
+  border-color: var(--oc-accent-border);
+}
+
+/* Diff controls container */
+.diff-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Side-by-side diff layout */
+.diff-table-wrapper--side-by-side .diff-table {
+  table-layout: auto;
+}
+
+.diff-table-wrapper--side-by-side .diff-line {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr;
+}
+
+.diff-table-wrapper--side-by-side .diff-line-num {
+  width: var(--code-line-num-width, 2.5rem);
+}
+
+.diff-table-wrapper--side-by-side .diff-side-left,
+.diff-table-wrapper--side-by-side .diff-side-right {
+  border-left: 1px solid var(--color-border);
+  padding-left: var(--space-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.diff-table-wrapper--side-by-side .diff-line--removed .diff-side-left {
+  background: var(--diff-removed-bg);
+  color: var(--diff-removed-fg);
+}
+
+.diff-table-wrapper--side-by-side .diff-line--added .diff-side-right {
+  background: var(--diff-added-bg);
+  color: var(--diff-added-fg);
+}
+
+.diff-table-wrapper--side-by-side .diff-line--modified .diff-side-left {
+  background: var(--diff-removed-bg);
+  color: var(--diff-removed-fg);
+}
+
+.diff-table-wrapper--side-by-side .diff-line--modified .diff-side-right {
+  background: var(--diff-added-bg);
+  color: var(--diff-added-fg);
+}
+
+.diff-table-wrapper--side-by-side .diff-hunk-header {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.diff-table-wrapper--side-by-side .diff-hunk-header td {
+  grid-column: 1 / -1;
+}
+
 .diff-line-num {
   width: var(--code-line-num-width, 2.5rem);
   color: var(--diff-line-number-fg, var(--color-muted));
