@@ -112,6 +112,12 @@
 // 618.6KB to 593.2KB. +5KB keeps ~0.8% headroom so the gate still trips on a real
 // regression.
 //
+// 2026-06-16 re-baseline (host 598KB -> 604KB): PTY WebSocket transport
+// (ADR-016). PtyService.ts (~2KB minified + SDK pty namespace inc. ~0.5KB)
+// adds legitimate host code for managing PTY sessions via the opencode
+// server's WebSocket subsystem. +6KB keeps ~1% headroom so the gate still
+// trips on a real regression. Webview limit unchanged.
+//
 // 2026-06-15 re-baseline (webview 736KB -> 740KB): agent-transparency + multi-
 // session fixes add real webview code — command/edit tool inputs rendered as a
 // command line / diff instead of a raw JSON tree (toolCallRenderer), the pure
@@ -131,7 +137,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 598 * 1024, label: "extension host" },
+  { path: "dist/extension.js", limitBytes: 604 * 1024, label: "extension host" },
   { path: "dist/chat/webview/main.js", limitBytes: 744 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
