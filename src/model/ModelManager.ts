@@ -366,6 +366,7 @@ export class ModelManager {
         const providerModels = Array.isArray(provider.models)
           ? provider.models
           : Object.entries(provider.models || {}).map(([id, model]: [string, any]) => ({
+              ...model,
               id: model.id || id,
               name: model.name,
               reasoning: model.capabilities?.reasoning === true || model.reasoning === true,

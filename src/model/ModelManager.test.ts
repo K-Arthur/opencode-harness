@@ -63,4 +63,20 @@ describe("ModelManager.ts", () => {
   it("groups models by provider in pickModel", () => {
     assert.ok(source.includes("Separator") || source.includes("grouped"))
   })
+
+  it("ModelInfo has variantNames field", () => {
+    assert.ok(source.includes("variantNames?: string[]"))
+  })
+
+  it("extracts variant names from server model variants object", () => {
+    assert.ok(source.includes("Object.keys(m.variants)"), "must read variant keys from server response")
+  })
+
+  it("filters disabled variants", () => {
+    assert.ok(source.includes("v.disabled !== true"), "must exclude variants with disabled=true")
+  })
+
+  it("preserves model fields when spreading from object-map models", () => {
+    assert.ok(source.includes("...model"), "must spread model object to preserve variants and other fields")
+  })
 })
