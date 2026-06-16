@@ -81,6 +81,10 @@ export function sameToolBlock(
 }
 
 function mergeServerBlocks(msgObj: ChatMessage, blockList: Block[]): void {
+  // Diagnostic: log the live vs server block count so the user can verify
+  // ordering at stream_end without persistent console noise.
+  webviewLog(`mergeServerBlocks: live count=${msgObj.blocks.length}, server count=${blockList.length}`)
+
   const merged: Block[] = []
   const usedExisting = new Set<number>()
 
