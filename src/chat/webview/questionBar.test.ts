@@ -86,6 +86,7 @@ describe("questionBar", () => {
     initQuestionBar((m) => posted.push(m))
 
     // Two groups, each single-select: "DB?" with PG/MySQL, "Auth?" with Yes/No.
+    // With the carousel rework, one card is visible at a time.
     const block = makeBlock({
       id: "q-multi",
       toolCallId: "q-multi",
@@ -99,21 +100,39 @@ describe("questionBar", () => {
     })
     addQuestion(block, "msg-multi")
 
-    // Click "PG" for the first group, "Yes" for the second.
-    const allOptions = document.querySelectorAll(".question-bar-option")
-    assert.equal(allOptions.length, 4, "renders 4 option buttons (2 groups × 2 options)")
-    ;(allOptions[0] as HTMLButtonElement).click() // PG
-    ;(allOptions[2] as HTMLButtonElement).click() // Yes
+    // Card 1 (group 0) is visible: select PG, then mark ready
+    const card1Options = document.querySelectorAll(".qbar-carousel-card .question-bar-option")
+    assert.equal(card1Options.length, 2, "card 1 shows 2 options (PG, MySQL)")
+    ;(card1Options[0] as HTMLButtonElement).click() // PG
+    const readyBtns = document.querySelectorAll(".qbar-card-ready-btn")
+    assert.equal(readyBtns.length, 1, "one ready button on card 1")
+    ;(readyBtns[0] as HTMLButtonElement).click()
 
+    // Navigate to card 2 (group 1): click next arrow
+    const nextBtn = document.querySelector(".qbar-carousel-next") as HTMLButtonElement
+    assert.ok(nextBtn, "next arrow exists")
+    assert.ok(!nextBtn.disabled, "next arrow is enabled")
+    nextBtn.click()
+
+    // Card 2 is now visible: select Yes, then mark ready
+    const card2Options = document.querySelectorAll(".qbar-carousel-card .question-bar-option")
+    assert.equal(card2Options.length, 2, "card 2 shows 2 options (Yes, No)")
+    ;(card2Options[1] as HTMLButtonElement).click() // Yes (index 1 = "No" is index 0, wait...)
+    // Actually card2 = group 1 with options ["Yes", "No"], so index 0 = Yes
+    let opts = document.querySelectorAll(".qbar-carousel-card .question-bar-option")
+    ;(opts[0] as HTMLButtonElement).click() // Yes
+    const readyBtns2 = document.querySelectorAll(".qbar-card-ready-btn")
+    assert.equal(readyBtns2.length, 1, "one ready button on card 2")
+    ;(readyBtns2[0] as HTMLButtonElement).click()
+
+    // Submit all
     const submitBtn = document.getElementById("question-bar-submit") as HTMLButtonElement
     assert.ok(!submitBtn.disabled)
     submitBtn.click()
 
     const answer = posted.find((m) => m.type === "question_answer")
     assert.ok(answer, "question_answer was posted")
-    // The flat value stays for history / display.
     assert.equal(answer!.value, "Database: PG\nAuth: Yes", "flat value preserved for history")
-    // The structured answer is what the SDK needs to map values back to groups.
     assert.deepEqual(
       answer!.structuredAnswers,
       [["PG"], ["Yes"]],

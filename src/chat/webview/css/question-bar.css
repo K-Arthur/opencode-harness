@@ -322,6 +322,96 @@
   cursor: default;
 }
 
+/* ── Carousel layout for multi-group question items ──────────── */
+.qbar-carousel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
+}
+
+.qbar-carousel-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.qbar-carousel-arrow {
+  background: transparent;
+  border: 1px solid var(--oc-glass-border, rgba(255,255,255,0.12));
+  border-radius: var(--radius-sm);
+  color: var(--oc-fg, var(--color-fg));
+  cursor: pointer;
+  font-size: var(--text-base);
+  line-height: 1;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
+}
+.qbar-carousel-arrow:hover:not(:disabled) {
+  background: var(--oc-list-hover);
+  border-color: var(--color-accent, #0078d4);
+  color: var(--color-accent, #0078d4);
+}
+.qbar-carousel-arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.qbar-carousel-arrow:focus-visible {
+  outline: 2px solid var(--oc-focus);
+  outline-offset: -1px;
+}
+
+.qbar-carousel-progress {
+  font-size: var(--text-2xs);
+  color: var(--oc-fg-muted, var(--vscode-descriptionForeground));
+  white-space: nowrap;
+}
+
+.qbar-carousel-cards {
+  min-height: 0;
+}
+
+.qbar-carousel-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
+  animation: question-bar-fade-in var(--duration-fast) var(--ease-out);
+}
+.qbar-carousel-card.qbar-card--ready {
+  opacity: 0.8;
+}
+
+.qbar-card-ready-btn {
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-2-5);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid var(--color-accent, var(--vscode-focusBorder, #0078d4));
+  border-radius: var(--radius-sm);
+  color: var(--color-accent, var(--vscode-focusBorder, #0078d4));
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+.qbar-card-ready-btn:hover {
+  background: var(--oc-accent-subtle, rgba(0,120,212,0.15));
+}
+
+.qbar-card-ready-badge {
+  align-self: flex-start;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-success, #2ea043);
+}
+
 /* H3a: Numbered <fieldset> legend — "Question 1 of 3 — Database" */
 .question-bar-section-legend {
   display: flex;
