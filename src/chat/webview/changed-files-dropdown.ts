@@ -492,7 +492,7 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
   summary.appendChild(totals)
   container.appendChild(summary)
 
-  // Controls — sort toggle + collapse-all.
+  // Controls — sort toggle + collapse-all + bulk actions.
   const controls = document.createElement("div")
   controls.className = "cf-controls"
   controls.innerHTML = `
@@ -504,6 +504,10 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 15l7-7 7 7"/></svg>
       Collapse all
     </button>
+    <button class="cf-revert-all-btn" data-action="revert-all" title="Revert all files to git HEAD" aria-label="Revert all files">
+      <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+      Revert All
+    </button>
   `
   controls.querySelector('[data-action="toggle-sort"]')!.addEventListener("click", () => {
     state.sortMode = state.sortMode === "changes" ? "alpha" : "changes"
@@ -512,6 +516,11 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
   controls.querySelector('[data-action="collapse-all"]')!.addEventListener("click", () => {
     state.expandedFiles.clear()
     _renderTree(container, files)
+  })
+  controls.querySelector('[data-action="revert-all"]')!.addEventListener("click", () => {
+    if (!sessionId) return
+    if (!confirm(`Revert all ${files.length} changed files to git HEAD? This cannot be undone.`)) return
+    _postMessage?.({ type: "revert_all_files", sessionId })
   })
   container.appendChild(controls)
 
@@ -605,6 +614,17 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       expandBtn.setAttribute("aria-expanded", String(isExpanded))
       expandBtn.innerHTML = _expandIcon(isExpanded)
 
+      // W1.E: Undo button — revert this file to git HEAD
+      const undoBtn = document.createElement("button")
+      undoBtn.className = "cf-undo-btn"
+      undoBtn.setAttribute("aria-label", "Undo changes to this file")
+      undoBtn.title = "Undo changes"
+      undoBtn.innerHTML = `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>`
+      undoBtn.addEventListener("click", (e) => {
+        e.stopPropagation()
+        _postMessage?.({ type: "undo_file", path: file.path, sessionId })
+      })
+
       const preview = document.createElement("div")
       preview.className = `cf-hunk-preview${isExpanded ? " cf-hunk-preview--open" : ""}`
       preview.setAttribute("data-path", file.path)
@@ -645,6 +665,8 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       if (planTag) row.appendChild(planTag)
       row.appendChild(stats)
       row.appendChild(openBtn)
+      row.appendChild(diffBtn)
+      row.appendChild(undoBtn)
       row.appendChild(expandBtn)
       group.appendChild(row)
       group.appendChild(preview)

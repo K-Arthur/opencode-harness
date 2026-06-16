@@ -2767,6 +2767,44 @@ textarea {
 }
 .cf-controls .cf-collapse-all-btn:hover { color: var(--oc-fg); }
 
+/* Revert All button */
+.cf-controls .cf-revert-all-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-2xs);
+  color: var(--oc-warning);
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--oc-warning) 30%, transparent);
+  background: none;
+  margin-left: 4px;
+}
+.cf-controls .cf-revert-all-btn:hover {
+  color: var(--color-fg);
+  background: color-mix(in srgb, var(--oc-warning) 15%, transparent);
+}
+
+/* Per-file Undo button */
+.cf-undo-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: none;
+  color: var(--oc-warning);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.cf-file-row:hover .cf-undo-btn,
+.cf-undo-btn:focus-visible { opacity: 1; }
+.cf-undo-btn:hover { color: var(--color-fg); }
+
 /* Open file icon button */
 .cf-open-btn {
   flex-shrink: 0;

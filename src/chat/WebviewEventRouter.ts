@@ -568,6 +568,52 @@ export class WebviewEventRouter {
         this.opts.postMessage({ type: "hunk_reverted", path: filePath, ok: false, sessionId })
       }
     }],
+    // W1.E: Undo changes to a single file (revert to git HEAD)
+    ["undo_file", async (msg: Record<string, unknown>, sessionId?: string) => {
+      const filePath = typeof msg.path === "string" ? msg.path : undefined
+      if (!filePath) return
+      const ba = await this.getFileBeforeAfter(filePath)
+      if (!ba) return
+      const wsFolder = vscode.workspace.workspaceFolders?.[0]
+      if (!wsFolder) return
+      const uri = vscode.Uri.joinPath(wsFolder.uri, filePath)
+      try {
+        const doc = await vscode.workspace.openTextDocument(uri)
+        const edit = new vscode.WorkspaceEdit()
+        edit.replace(uri, new vscode.Range(0, 0, doc.lineCount, 0), ba.before)
+        const applied = await vscode.workspace.applyEdit(edit)
+        if (applied) await doc.save()
+        this.opts.postMessage({ type: "hunk_reverted", path: filePath, ok: applied, sessionId })
+      } catch (err) {
+        log.warn(`undo_file failed for ${filePath}`, err)
+        this.opts.postMessage({ type: "hunk_reverted", path: filePath, ok: false, sessionId })
+      }
+    }],
+    // W1.F: Revert all changed files to git HEAD
+    ["revert_all_files", async (msg: Record<string, unknown>, sessionId?: string) => {
+      const sid = sessionId ?? (typeof msg.sessionId === "string" ? msg.sessionId : undefined)
+      if (!sid) return
+      const fileStats = this.opts.sessionStore.getChangedFileStats?.(sid) ?? {}
+      const filePaths = Object.keys(fileStats)
+      let reverted = 0
+      for (const filePath of filePaths) {
+        const ba = await this.getFileBeforeAfter(filePath)
+        if (!ba) continue
+        const wsFolder = vscode.workspace.workspaceFolders?.[0]
+        if (!wsFolder) continue
+        const uri = vscode.Uri.joinPath(wsFolder.uri, filePath)
+        try {
+          const doc = await vscode.workspace.openTextDocument(uri)
+          const edit = new vscode.WorkspaceEdit()
+          edit.replace(uri, new vscode.Range(0, 0, doc.lineCount, 0), ba.before)
+          const applied = await vscode.workspace.applyEdit(edit)
+          if (applied) { await doc.save(); reverted++ }
+        } catch (err) {
+          log.warn(`revert_all_files: failed for ${filePath}`, err)
+        }
+      }
+      this.opts.postMessage({ type: "revert_result", ok: true, sessionId: sid, reverted })
+    }],
     ["fork_session", (msg: Record<string, unknown>, sessionId?: string) => {
       const sourceId = sessionId ?? (typeof msg.sessionId === "string" ? msg.sessionId : undefined)
       const turnIndex = typeof msg.turnIndex === "number" ? msg.turnIndex : undefined

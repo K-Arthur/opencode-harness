@@ -848,6 +848,10 @@ export type WebviewMessage =
   | { type: "open_changed_file_diff"; path: string; sessionId: string }
   /** Reveal a file in the VS Code Explorer sidebar. */
   | { type: "reveal_in_explorer"; path: string }
+  /** W1.E: Undo changes to a single file (revert to git HEAD) */
+  | { type: "undo_file"; path: string; sessionId?: string }
+  /** W1.F: Revert all changed files to git HEAD */
+  | { type: "revert_all_files"; sessionId: string }
 
 // Backward-compatible alias
 export type LegacyWebviewMessage = WebviewMessage & Record<string, unknown>
