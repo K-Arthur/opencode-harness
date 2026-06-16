@@ -169,14 +169,14 @@ Run all unit+contract+roundtrip: `npm test`
 
 | Module | File | Responsibility |
 |--------|------|---------------|
-| Diff rendering | `src/chat/webview/renderer.ts` | `renderNewDiffBlock`, `createDiffTableWrapper`, `createDiffLineRow`, `createHunkHeaderRow`, `createHunkActionCell`, `toggleDiffWrap`, `renderPendingDiffActions`, `createRevertDiffButton`, `createHunkNavButtons`, `inferLanguageFromPath` |
+| Diff rendering | `src/chat/webview/renderer.ts` | `renderNewDiffBlock`, `createDiffTableWrapper`, `createDiffLineRow`, `createHunkHeaderRow`, `createHunkActionCell`, `toggleDiffWrap`, `renderPendingDiffActions`, `createRevertDiffButton`, `createHunkNavButtons`, `inferLanguageFromPath`, `createDiffViewToggle`, `appendSideBySideHunkRows`, `pairLinesForSideBySide`, `createSideBySideLineRow` |
 | Word-level diff | `src/chat/webview/wordDiff.ts` | `computeWordDiffs()` — character-level diff of paired removed/added lines using `diff-match-patch`, emits `<ins>`/`<del>` spans via `line.wordDiffHtml` |
 | Diff types | `src/chat/webview/types.ts` | `DiffBlock`, `DiffHunk`, `DiffLine` (with `wordDiffHtml?`) |
-| Changed-files dropdown | `src/chat/webview/changed-files-dropdown.ts` | Per-file change tree with stats, hunk previews, per-hunk revert |
+| Changed-files dropdown | `src/chat/webview/changed-files-dropdown.ts` | Per-file change tree with stats, hunk previews, per-hunk revert, per-file Undo button, bulk Revert All |
 | Hunk staging | `src/chat/diff/hunkRevertPlan.ts`, `hunkStaging.ts` | LCS-based per-hunk revert planning, host-authoritative hunk computations |
-| Host diff handlers | `src/chat/WebviewEventRouter.ts` (~lines 500-560, 660-670, 1193-1210) | `accept_diff`, `reject_diff`, `revert_diff`, `accept_hunk`, `reject_hunk`, `revert_hunk`, `get_file_hunks`, `get_file_diff` |
-| Diff CSS | `src/chat/webview/css/blocks.css` (~lines 1330-1600) | `.diff-block`, `.diff-table`, `.diff-line--added`, `.diff-line--removed`, `.diff-line-num--old/new`, `.diff-wrap-toggle`, `.diff-hunk-collapse`, `.diff-hunk-nav` |
-| Wrap toggles | `src/chat/webview/renderer.ts` | `readDiffWrapPreference`, `persistDiffWrapPreference`, `readCodeWrapPreference`, `persistCodeWrapPreference` |
+| Host diff handlers | `src/chat/WebviewEventRouter.ts` (~lines 500-560, 660-670, 1193-1210) | `accept_diff`, `reject_diff`, `revert_diff`, `accept_hunk`, `reject_hunk`, `revert_hunk`, `get_file_hunks`, `get_file_diff`, `undo_file`, `revert_all_files` |
+| Diff CSS | `src/chat/webview/css/blocks.css` (~lines 1330-1600) | `.diff-block`, `.diff-table`, `.diff-line--added`, `.diff-line--removed`, `.diff-line-num--old/new`, `.diff-wrap-toggle`, `.diff-hunk-collapse`, `.diff-hunk-nav`, `.diff-view-toggle`, `.diff-table-wrapper--side-by-side` |
+| Wrap toggles | `src/chat/webview/renderer.ts` | `readDiffWrapPreference`, `persistDiffWrapPreference`, `readCodeWrapPreference`, `persistCodeWrapPreference`, `readDiffViewModePreference`, `persistDiffViewModePreference` |
 
 ### Horizontal Scaling (ADR-010 — Proposed)
 
