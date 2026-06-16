@@ -11,7 +11,7 @@ import { test, expect } from "@playwright/test"
 import { catalog, SHOT_VIEWPORT_DEFAULT } from "./catalog"
 import { installVsCodeApi, dispatchHostMessage, expectNoWebviewErrors } from "../webviewTestHarness"
 import { loadFixture } from "./fixture-utils"
-import { DARK_THEME_VARS } from "./capture"
+import { DARK_THEME_VARS, LIGHT_THEME_VARS } from "./capture"
 
 test.describe("Screenshot Verification", () => {
   for (const entry of catalog) {
@@ -21,8 +21,9 @@ test.describe("Screenshot Verification", () => {
       await installVsCodeApi(page)
       await page.goto("/")
 
-      // Push dark theme CSS variables so webview text is readable
-      await dispatchHostMessage(page, { type: "theme_vars", vars: DARK_THEME_VARS })
+      // Use light theme only if explicitly marked; dark is the default
+      const themeVars = entry.theme === "light" ? LIGHT_THEME_VARS : DARK_THEME_VARS
+      await dispatchHostMessage(page, { type: "theme_vars", vars: themeVars })
 
       const fixture = loadFixture(entry.fixture)
       await dispatchHostMessage(page, fixture)

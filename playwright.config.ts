@@ -31,6 +31,7 @@ export default defineConfig({
     {
       name: 'chromium',
       testDir: './tests/visual',
+      testIgnore: '**/screenshots/**',
       use: { 
         ...devices['Desktop Chrome'],
         viewport: { width: 400, height: 700 }

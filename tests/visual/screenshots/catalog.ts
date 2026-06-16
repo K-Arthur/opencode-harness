@@ -22,6 +22,8 @@ export interface ScreenshotEntry {
   extraMessages?: Array<Record<string, unknown>>
   /** Playwright viewport override (defaults to 420×800 — panel-only) */
   viewport?: { width: number; height: number }
+  /** Theme override: "light" for the one showcase shot; dark is default */
+  theme?: "light" | "dark"
   /** Options passed to injectFrame() */
   frameOptions?: FrameOptions
   /** CSS selectors that must be visible before capture */
@@ -93,8 +95,9 @@ export const catalog: ScreenshotEntry[] = [
   },
   {
     name: "model-controls",
-    caption: "Model and provider selection with Claude, GPT, Gemini, and 75+ models",
+    caption: "Model and provider selection with Claude, GPT, Gemini, and 75+ models (light theme)",
     fixture: "model-controls.json",
+    theme: "light",
     extraMessages: [
       {
         type: "model_list",
