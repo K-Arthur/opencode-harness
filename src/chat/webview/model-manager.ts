@@ -12,6 +12,7 @@ export interface ModelManagerCallbacks {
 }
 
 const STAR_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.1 8.4 22 9.3 17 14.2 18.2 21 12 17.8 5.8 21 7 14.2 2 9.3 8.9 8.4 12 2"/></svg>'
+const TRASH_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>'
 
 export interface ModelManagerHandlers {
   open: () => void
@@ -26,7 +27,6 @@ export interface ModelManagerHandlers {
   isOpen: () => boolean
   setProviders: (providers: ProviderConfig[]) => void
   addProvider: (name: string, apiKey: string, baseUrl?: string) => void
-  deleteProvider: (id: string) => void
 }
 
 export function setupModelManager(els: ElementRefs, callbacks: ModelManagerCallbacks): ModelManagerHandlers {
@@ -116,15 +116,15 @@ export function setupModelManager(els: ElementRefs, callbacks: ModelManagerCallb
     const recentModels = filtered.filter((m) => !m.favorite && typeof m.recentRank === "number")
     const remainingModels = filtered.filter((m) => !m.favorite && typeof m.recentRank !== "number")
 
+    if (providers.length > 0) {
+      renderProvidersSection()
+    }
+
     if (favoriteModels.length > 0) {
       renderGroup("Favorites", favoriteModels)
     }
     if (recentModels.length > 0) {
       renderGroup("Recently used", recentModels)
-    }
-
-    if (providers.length > 0) {
-      renderProvidersSection()
     }
 
     const byProvider = new Map<string, ModelInfo[]>()
@@ -164,11 +164,14 @@ export function setupModelManager(els: ElementRefs, callbacks: ModelManagerCallb
 
       const deleteBtn = document.createElement("button")
       deleteBtn.className = "model-manager-provider-delete"
-      deleteBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>'
+      deleteBtn.innerHTML = TRASH_SVG
       deleteBtn.setAttribute("aria-label", `Remove ${provider.name} provider`)
       deleteBtn.title = "Remove provider"
       deleteBtn.addEventListener("click", () => {
-        callbacks.onDeleteProvider(provider.id)
+        const ok = window.confirm(
+          `Remove "${provider.name}" provider? This will delete its API key configuration.`,
+        )
+        if (ok) callbacks.onDeleteProvider(provider.id)
       })
       row.appendChild(deleteBtn)
 
@@ -325,10 +328,6 @@ export function setupModelManager(els: ElementRefs, callbacks: ModelManagerCallb
       }
       providers.push(provider)
       render()
-    },
-    deleteProvider: (id: string) => {
-      providers = providers.filter((p) => p.id !== id)
-      if (isOpen) render()
     },
   }
 }
