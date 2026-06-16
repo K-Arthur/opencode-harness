@@ -64,6 +64,9 @@ export const DARK_THEME_VARS: Record<string, string> = {
   "--oc-error": "#ff5252",
   "--oc-success": "#00e676",
   "--oc-info": "#58a6ff",
+  "--color-warning": "#ffab00",
+  "--color-error": "#ff5252",
+  "--color-success": "#00e676",
   "--oc-usage-good": "#3fb950",
   "--oc-usage-caution": "#d29922",
   "--oc-usage-warning": "#e06c00",
@@ -71,6 +74,9 @@ export const DARK_THEME_VARS: Record<string, string> = {
   // ─── Accent / Primary ───
   "--oc-primary": "#58a6ff",
   "--oc-accent": "#00e5ff",
+  "--color-accent": "#00e5ff",
+  "--oc-accent-fg": "#ffffff",
+  "--oc-accent-hover": "#33ebff",
   // ─── Diff ───
   "--oc-diff-added": "rgba(63, 185, 80, 0.15)",
   "--oc-diff-removed": "rgba(248, 81, 73, 0.1)",
@@ -190,6 +196,9 @@ export const LIGHT_THEME_VARS: Record<string, string> = {
   "--oc-error": "#cf222e",
   "--oc-success": "#116329",
   "--oc-info": "#0550ae",
+  "--color-warning": "#9a6700",
+  "--color-error": "#cf222e",
+  "--color-success": "#116329",
   "--oc-usage-good": "#2da44e",
   "--oc-usage-caution": "#9a6700",
   "--oc-usage-warning": "#e06c00",
@@ -197,6 +206,9 @@ export const LIGHT_THEME_VARS: Record<string, string> = {
   // ─── Accent / Primary ───
   "--oc-primary": "#0969da",
   "--oc-accent": "#0969da",
+  "--color-accent": "#0969da",
+  "--oc-accent-fg": "#ffffff",
+  "--oc-accent-hover": "#1158c7",
   // ─── Diff ───
   "--oc-diff-added": "rgba(45, 164, 78, 0.15)",
   "--oc-diff-removed": "rgba(207, 34, 46, 0.1)",

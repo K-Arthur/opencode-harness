@@ -295,6 +295,9 @@ export interface FileChange {
   added: number
   removed: number
   isPlanDocument?: boolean
+  /** Real git status when available (A=added, M=modified, D=deleted).
+   *  Falls back to line-count heuristic when absent. */
+  status?: "A" | "M" | "D"
 }
 
 export interface PromptTemplate {

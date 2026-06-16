@@ -85,26 +85,26 @@ describe("renderChangedFilesList — summary bar", () => {
 })
 
 describe("renderChangedFilesList — status badge inference", () => {
-  it("assigns badge A (added) when removed === 0 and added > 0", async () => {
+  it("defaults to M when only added > 0 (cannot distinguish A from M without git status)", async () => {
     const container = setupDom()
     renderChangedFilesList(container, [{ path: "new.ts", added: 20, removed: 0 }], { onOpenChangedFileDiff: () => {},
       onOpenFile: () => {} } as any)
     const badge = container.querySelector(".cf-status-badge")
     assert.ok(badge, "must render a status badge")
     assert.ok(
-      badge!.textContent === "A" || badge!.classList.contains("cf-status-badge--A"),
-      `badge should be A, got: ${badge!.textContent} classes: ${badge!.className}`
+      badge!.textContent === "M" || badge!.classList.contains("cf-status-badge--M"),
+      `badge should be M, got: ${badge!.textContent} classes: ${badge!.className}`
     )
   })
 
-  it("assigns badge D (deleted) when added === 0 and removed > 0", async () => {
+  it("defaults to M when only removed > 0 (cannot distinguish D from M without git status)", async () => {
     const container = setupDom()
     renderChangedFilesList(container, [{ path: "gone.ts", added: 0, removed: 15 }], { onOpenChangedFileDiff: () => {},
       onOpenFile: () => {} } as any)
     const badge = container.querySelector(".cf-status-badge")
     assert.ok(
-      badge!.textContent === "D" || badge!.classList.contains("cf-status-badge--D"),
-      `badge should be D, got: ${badge!.textContent}`
+      badge!.textContent === "M" || badge!.classList.contains("cf-status-badge--M"),
+      `badge should be M, got: ${badge!.textContent}`
     )
   })
 
@@ -117,6 +117,21 @@ describe("renderChangedFilesList — status badge inference", () => {
       badge!.textContent === "M" || badge!.classList.contains("cf-status-badge--M"),
       `badge should be M, got: ${badge!.textContent}`
     )
+  })
+
+  it("uses explicit status field when provided", async () => {
+    const container = setupDom()
+    renderChangedFilesList(container, [
+      { path: "new.ts", added: 20, removed: 0, status: "A" },
+      { path: "gone.ts", added: 0, removed: 15, status: "D" },
+    ], { onOpenChangedFileDiff: () => {},
+      onOpenFile: () => {} } as any)
+    const badges = container.querySelectorAll(".cf-status-badge")
+    assert.equal(badges.length, 2, "must render 2 badges")
+    assert.ok(badges[0]!.textContent === "A" || badges[0]!.classList.contains("cf-status-badge--A"),
+      `first badge should be A, got: ${badges[0]!.textContent}`)
+    assert.ok(badges[1]!.textContent === "D" || badges[1]!.classList.contains("cf-status-badge--D"),
+      `second badge should be D, got: ${badges[1]!.textContent}`)
   })
 
   it("handles non-number added/removed safely (coerced to 0)", async () => {

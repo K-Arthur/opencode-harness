@@ -1679,30 +1679,30 @@
 }
 
 .diff-hunk-btn--accept {
-  color: var(--oc-success, #3fb950);
-  border-color: var(--oc-success, #3fb950);
+  color: var(--color-success, #3fb950);
+  border-color: var(--color-success, #3fb950);
 }
 
 .diff-hunk-btn--accept:hover {
-  background: rgba(63,185,80,0.15);
+  background: var(--oc-success-subtle, rgba(63,185,80,0.15));
 }
 
 .diff-hunk-btn--reject {
-  color: var(--oc-error, #f85149);
-  border-color: var(--oc-error, #f85149);
+  color: var(--color-error, #f85149);
+  border-color: var(--color-error, #f85149);
 }
 
 .diff-hunk-btn--reject:hover {
-  background: rgba(248,81,73,0.15);
+  background: var(--oc-error-subtle, rgba(248,81,73,0.15));
 }
 
 .diff-hunk--accepted .diff-hunk-accepted-chip {
-  color: var(--oc-success, #3fb950);
+  color: var(--color-success, #3fb950);
   font-size: var(--text-xs);
 }
 
 .diff-hunk--rejected .diff-hunk-rejected-chip {
-  color: var(--oc-error, #f85149);
+  color: var(--color-error, #f85149);
   font-size: var(--text-xs);
 }
 
@@ -1719,6 +1719,7 @@
 /* Sticky action bar at bottom of diff */
 .diff-action-bar {
   display: flex;
+  align-items: center;
   gap: var(--space-2);
   padding: var(--space-2-5) var(--space-3);
   background: var(--oc-bg, var(--oc-editor-bg));
@@ -1728,6 +1729,7 @@
   z-index: var(--z-sticky, 100);
   backdrop-filter: var(--blur-surface);
   -webkit-backdrop-filter: var(--blur-surface);
+  flex-wrap: wrap;
 }
 
 .diff-state-chip {
@@ -1744,32 +1746,36 @@
 .diff-state--discarded { background: var(--oc-error-subtle); color: var(--color-error); }
 
 .diff-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
+  gap: var(--space-1-5);
   padding: var(--space-1-5) var(--space-3);
-  border: none;
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
   transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast), opacity var(--duration-fast), box-shadow var(--duration-fast);
   min-height: 28px;
-  flex: 1;
+  white-space: nowrap;
 }
 
 .diff-btn--accept {
   background: var(--color-accent);
   color: var(--oc-accent-fg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
-.diff-btn--accept:hover { background: var(--oc-accent-hover); }
+.diff-btn--accept:hover {
+  background: var(--oc-accent-hover);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
 
 .diff-btn--discard {
   background: transparent;
   color: var(--color-error);
-  border: 1px solid color-mix(in srgb, var(--color-error) 40%, transparent);
+  border: 1px solid var(--color-error);
 }
 
 .diff-btn--discard:hover {
@@ -1784,9 +1790,9 @@
 }
 
 .diff-btn--review:hover {
-  background: var(--oc-accent-hover);
+  background: var(--color-accent);
   color: var(--oc-accent-fg);
-  border-color: transparent;
+  border-color: var(--color-accent);
 }
 
 .diff-btn--open {

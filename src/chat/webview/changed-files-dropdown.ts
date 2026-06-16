@@ -289,7 +289,15 @@ function _refreshUI(sessionId: string, files: FileChange[]): void {
  * Public for backwards compatibility; internal callers should prefer
  * `updateChangedFiles` which routes through `_refreshUI`.
  */
-const CF_STRIP_MAX = 5
+// The strip's job is to confirm scope (file count, +added/-removed) at a
+// glance — the "N files changed +X -Y" prefix is the priority and always
+// stays fully legible (.cf-strip-label/.cf-strip-stats are flex-shrink:0).
+// Individual files are secondary here; the full list with diffs lives one
+// click away in the dropdown modal (strip aria-label says "click to view").
+// At typical panel widths, more than one chip squeezes below a legible
+// width even with .file-chip's flex-shrink fallback, so we only tease one
+// representative chip and fold the rest into "+N more".
+const CF_STRIP_MAX = 1
 export function updateChangedFilesStrip(sessionId: string, files: FileChange[]): void {
   const state = _stateFor(sessionId)
   state.lastFiles = files
@@ -502,9 +510,12 @@ function safeNum(n: unknown): number {
   return Number.isFinite(v) ? v : 0
 }
 
-function _inferStatus(added: number, removed: number): "A" | "M" | "D" {
-  if (removed === 0 && added > 0) return "A"
-  if (added === 0 && removed > 0) return "D"
+function _inferStatus(file: FileChange): "A" | "M" | "D" {
+  if (file.status) return file.status
+  // Without real git status, default to M (modified) for all cases.
+  // Pure additions could be new files OR appended code to existing files;
+  // pure removals could be deleted files OR trimmed code from existing files.
+  // Only git knows the difference — don't guess.
   return "M"
 }
 
@@ -628,7 +639,7 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
     groupFiles.forEach((file) => {
       const parts = file.path.split("/")
       const fileName = parts[parts.length - 1] ?? file.path
-      const status = _inferStatus(file.added, file.removed)
+      const status = _inferStatus(file)
       const isExpanded = state.expandedFiles.has(file.path)
 
       const row = document.createElement("div")
