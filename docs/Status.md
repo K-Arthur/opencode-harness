@@ -1,10 +1,36 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-06-12
+**Last Updated:** 2026-06-16
 **Version:** v0.3.36
 **Version:** v0.2.23 (+ Unreleased: opencode CLI auto-install, native local voice input, frontend overhaul, stream/dedicated-bar redesign)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
+
+## Unreleased Highlights (2026-06-16) — multi-tab session-attribution fixes
+
+- **Question bar no longer bleeds across tabs.** Questions arriving via the
+  live-stream tool-start path (`streamHandlers.ts` → `onQuestionBlock`) always
+  carried an empty `block.sessionId`, because `handleStreamStart` creates the
+  streaming `ChatMessage` with no `sessionId` field. `main.ts` called
+  `questionBar.addQuestion(block, messageId)` with no third `sid` argument, so
+  `addQuestion`'s fallback chain landed on `_activeSessionId` — whichever tab
+  the user currently had open — silently misattributing a background tab's
+  question to the viewed tab. The same gap existed in
+  `questionBar.repopulateFromMessages`, called on tab switch *before*
+  `setActiveSession(tabId)` runs for the new tab. Fix: thread the
+  already-in-scope tab/session id through both call sites as `addQuestion`'s
+  third argument. New regression coverage in `questionBar.session.test.ts`
+  and `toolLifecycle.test.ts`.
+- **Tab switching no longer snaps back to a stale tab.** `switch_tab` called
+  `sessionStore.setActive` unconditionally, which always broadcasts
+  `active_session_changed` back to the webview — but the webview already
+  applies the switch locally before sending `switch_tab`, so this was a pure
+  echo. Under rapid tab switching, a stale echo for an earlier switch could
+  arrive after the user had already moved to a third tab, forcing a visible
+  snap back to the superseded tab. `SessionStore.setActive` now takes a
+  `{ silent: true }` option; the `switch_tab` handler in
+  `WebviewEventRouter` uses it so the echo never fires. New regression
+  coverage in `SessionStore.test.ts` and `WebviewEventRouter.test.ts`.
 
 ## Unreleased Highlights (2026-06-12) — navigation, wayfinding & Escape safety
 

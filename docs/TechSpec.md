@@ -86,6 +86,13 @@ See `docs/adrs/ADR-009-pending-event-buffer.md` for the full motivation and alte
 
 `ChatProvider.backfillRecoveredSessions` uses a 4-step exponential backoff (`BACKFILL_RETRY_DELAYS_MS = [1500, 4000, 8000, 16000]`) when the opencode server returns an empty messages array on `session.messages()`. After the last attempt, `SessionStore.clearNeedsBackfill(sessionId)` is called for any session that is still empty, so subsequent `sessions_recovered` events stop re-trying and stop spamming "Empty response …" log lines. The session is treated as genuinely empty on the server.
 
+### Session/Tab Attribution Races (Fixed, 2026-06-16)
+
+Two related multi-tab attribution bugs, both rooted in a message lacking an explicit session id and a fallback path silently defaulting to "whichever tab is active right now":
+
+- **Question-bar cross-tab bleed**: live-stream question blocks are built before `handleStreamStart` stamps a `sessionId` on the streaming `ChatMessage`, so `block.sessionId` is always empty at the point `onQuestionBlock` fires. `main.ts` called `questionBar.addQuestion(block, messageId)` with no third `sid` argument, so `addQuestion`'s fallback chain (`block.sessionId || envelopeSessionId || _activeSessionId`) landed on `_activeSessionId` — silently misattributing a background tab's question to whichever tab the user currently had open. The same gap existed in `questionBar.repopulateFromMessages`, which runs on tab switch *before* `setActiveSession(tabId)` updates `_activeSessionId` for the new tab. Fix: both call sites now pass the already-in-scope tab/session id as `addQuestion`'s third argument. Tests: `questionBar.session.test.ts`, `toolLifecycle.test.ts`.
+- **Tab-switch echo causing visible snap-back**: `WebviewEventRouter`'s `switch_tab` handler called `sessionStore.setActive(sessionId)` unconditionally, which always broadcasts `active_session_changed` back to the webview — but the webview had already applied the switch locally before sending `switch_tab`, making this a pure echo. Under rapid switching, a stale echo for an earlier switch could arrive after the user had moved to a third tab, forcing a visible snap back to the superseded tab. Fix: `SessionStore.setActive(id, opts?: { silent?: boolean })` skips the `_onActiveSessionChanged` broadcast when `silent: true`; the `switch_tab` handler now passes it. Tests: `SessionStore.test.ts`, `WebviewEventRouter.test.ts`.
+
 ### Context And Token Usage Accounting
 
 The extension tracks two related but distinct quantities:
