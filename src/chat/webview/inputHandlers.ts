@@ -6,7 +6,7 @@ export interface InputHandlerDeps {
   els: ElementRefs
   vscode: { postMessage: (msg: Record<string, unknown>) => void; getState: <T>() => T | undefined; setState: (state: WebviewState) => void }
   stateManager: { getState: () => WebviewState; getActiveSession: () => { id: string; isStreaming: boolean; model?: string; mode?: string; name?: string } | null; getAllSessions: () => Array<{ id: string; isStreaming: boolean }>; save: () => void }
-  attachmentManager: { onPaste: (e: ClipboardEvent) => void; getAttachments: () => Array<{ data: string; mimeType: string }>; attachImageBlob: (file: File) => void }
+  attachmentManager: { onPaste: (e: ClipboardEvent) => void; getAttachments: () => Array<{ data: string; mimeType: string }>; attachImageBlob: (file: File) => void; attachFileBlob: (file: File, mimeType: string) => void }
   mention: { handleTrigger: () => void; handleKeydown: (e: KeyboardEvent) => void }
   commandsModal: { open: () => void }
   timers: { setTimeout: (fn: (...args: any[]) => void, ms: number) => any }
@@ -110,8 +110,8 @@ export function createInputHandlers(deps: InputHandlerDeps): InputHandlers {
       const files = e.dataTransfer?.files
       if (files && files.length > 0) {
         const fileMentions: string[] = []
-        const allowedMimes = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const
-        for (const f of Array.from(files)) { if (allowedMimes.includes(f.type as typeof allowedMimes[number])) { attachmentManager.attachImageBlob(f) } else { const relPath = (f as { webkitRelativePath?: string }).webkitRelativePath || f.name; fileMentions.push(`@file:${relPath}`) } }
+        const allowedMimes = ["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"] as const
+        for (const f of Array.from(files)) { if (allowedMimes.includes(f.type as typeof allowedMimes[number])) { if (f.type === "application/pdf") { attachmentManager.attachFileBlob(f, "application/pdf") } else { attachmentManager.attachImageBlob(f) } } else { const relPath = (f as { webkitRelativePath?: string }).webkitRelativePath || f.name; fileMentions.push(`@file:${relPath}`) } }
         if (fileMentions.length > 0) insertTextAtCursor(fileMentions.join(" "))
       }
     })

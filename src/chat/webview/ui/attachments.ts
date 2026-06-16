@@ -59,6 +59,30 @@ export function createAttachmentManager(deps: AttachmentDeps) {
     reader.readAsDataURL(blob)
   }
 
+  // W4.A: Support non-image file attachments (PDF, etc.)
+  function attachFileBlob(blob: Blob, mimeType: string): void {
+    if (blob.size > MAX_ATTACHMENT_BYTES) {
+      deps.postMessage({ type: "show_error", message: `File attachment exceeds 10 MB limit.` })
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      if (!result) return
+      const base64Match = result.match(/^data:[\w./+-]+;base64,(.+)$/)
+      if (base64Match && base64Match[1]) {
+        pendingAttachments.push({ data: base64Match[1], mimeType })
+        renderAttachmentChips()
+        updatePromptContextChips()
+        deps.updateSendButton()
+      }
+    }
+    reader.onerror = () => {
+      console.error("[opencode-harness] Failed to read file attachment")
+    }
+    reader.readAsDataURL(blob)
+  }
+
   function onPaste(e: ClipboardEvent): void {
     const data = e.clipboardData
     if (!data) return
@@ -118,10 +142,17 @@ export function createAttachmentManager(deps: AttachmentDeps) {
     pendingAttachments.forEach((att, idx) => {
       const chip = document.createElement("div")
       chip.className = "attachment-chip"
-      const thumbnail = document.createElement("img")
-      thumbnail.src = `data:${att.mimeType};base64,${att.data}`
-      thumbnail.alt = "Attached image"
-      chip.appendChild(thumbnail)
+      if (att.mimeType.startsWith("image/")) {
+        const thumbnail = document.createElement("img")
+        thumbnail.src = `data:${att.mimeType};base64,${att.data}`
+        thumbnail.alt = "Attached image"
+        chip.appendChild(thumbnail)
+      } else {
+        const icon = document.createElement("span")
+        icon.className = "attachment-chip-icon"
+        icon.textContent = att.mimeType === "application/pdf" ? "PDF" : "FILE"
+        chip.appendChild(icon)
+      }
       const remove = document.createElement("button")
       remove.className = "attachment-chip-remove"
       remove.title = "Remove attachment"
@@ -157,8 +188,18 @@ export function createAttachmentManager(deps: AttachmentDeps) {
     }))
 
     if (pendingAttachments.length > 0) {
+      const hasImages = pendingAttachments.some(a => a.mimeType.startsWith("image/"))
+      const hasFiles = pendingAttachments.some(a => !a.mimeType.startsWith("image/"))
+      let label = ""
+      if (hasImages && hasFiles) {
+        label = `${pendingAttachments.length} files attached`
+      } else if (hasImages) {
+        label = pendingAttachments.length === 1 ? "1 image attached" : `${pendingAttachments.length} images attached`
+      } else {
+        label = pendingAttachments.length === 1 ? "1 file attached" : `${pendingAttachments.length} files attached`
+      }
       chips.push({
-        label: pendingAttachments.length === 1 ? "1 image attached" : `${pendingAttachments.length} images attached`,
+        label,
         kind: "file",
         removable: false,
       })
@@ -175,6 +216,7 @@ export function createAttachmentManager(deps: AttachmentDeps) {
   return {
     getAttachments,
     attachImageBlob,
+    attachFileBlob,
     onPaste,
     renderAttachmentChips,
     updatePromptContextChips,

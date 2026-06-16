@@ -35,6 +35,7 @@ export interface ComposerDeps {
     updatePromptContextChips: () => void
     renderAttachmentChips: () => void
     attachImageBlob: (file: File) => void
+    attachFileBlob: (file: File, mimeType: string) => void
   }
   mention: {
     handleTrigger: () => void

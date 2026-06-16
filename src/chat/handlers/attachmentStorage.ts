@@ -36,6 +36,7 @@ const MIME_TO_EXT: Record<string, string> = {
   "image/webp": "webp",
   "image/svg+xml": "svg",
   "image/bmp": "bmp",
+  "application/pdf": "pdf",
 }
 
 export interface MaterializeInput {
