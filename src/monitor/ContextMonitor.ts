@@ -90,6 +90,11 @@ private currentTokens = 0
   // resolved yet (e.g. opencode-routed models whose server config omits
   // limit.context). setTokenLimit() is called once the model resolves.
   private tokenLimit = 0
+  // Per-session context window. A single shared tokenLimit caused cross-session
+  // bleed: two tabs on different-context models computed maxTokens/percent
+  // against whichever limit was set last. limitBySession keeps them independent;
+  // this.tokenLimit remains the sessionless default/fallback.
+  private limitBySession = new Map<string, number>()
   private onContextChangedEmitter = new SimpleEventEmitter<ContextUsage>()
   private latestUsageBySession = new Map<string, ContextUsage>()
   private usageHistory: ContextUsageHistory[] = []
@@ -175,10 +180,24 @@ private currentTokens = 0
    * Update the token limit dynamically based on the active model.
    */
   setTokenLimit(limit: number, sessionId?: string): void {
-    if (limit >= 0 && limit !== this.tokenLimit) {
-      this.tokenLimit = limit
-      if (sessionId) this.reemitLatestUsageForSession(sessionId)
+    if (limit < 0) return
+    if (sessionId) {
+      // Store per-session so a second tab's model can't change this session's
+      // window. Re-emit only when this session's own limit actually changed.
+      if (this.limitBySession.get(sessionId) !== limit) {
+        this.limitBySession.set(sessionId, limit)
+        this.tokenLimit = limit // keep the sessionless default fresh
+        this.reemitLatestUsageForSession(sessionId)
+      }
+      return
     }
+    if (limit !== this.tokenLimit) this.tokenLimit = limit
+  }
+
+  /** Effective context window for a session: its own limit, else the shared default. */
+  private limitFor(sessionId?: string): number {
+    if (sessionId && this.limitBySession.has(sessionId)) return this.limitBySession.get(sessionId)!
+    return this.tokenLimit
   }
 
   getCurrentUsage(sessionId?: string): ContextUsage | undefined {
@@ -247,14 +266,15 @@ private currentTokens = 0
     // Clamp negative token values to zero
     this.currentTokens = Math.max(0, tokensUsed)
     const cost = this.calculateCost(this.currentTokens, breakdown)
-    
+    const effectiveLimit = this.limitFor(sessionId)
+
     // Emit percent:0 when the limit is unknown (tokenLimit === 0) rather than
     // dividing by a fake safeLimit of 1, which would produce percent:100 for
     // any non-zero token count and trigger a false critical-red ring in the UI.
     const usage: ContextUsage = {
-      percent: this.calculatePercent(this.currentTokens),
+      percent: this.calculatePercent(this.currentTokens, effectiveLimit),
       tokens: this.currentTokens,
-      maxTokens: this.tokenLimit,
+      maxTokens: effectiveLimit,
       sessionId,
       breakdown: breakdown ? {
         system: breakdown.system,
@@ -288,11 +308,12 @@ private currentTokens = 0
 
     const tokens = Math.max(0, latest.tokens)
     this.currentTokens = tokens
+    const effectiveLimit = this.limitFor(sessionId)
     const usage: ContextUsage = {
       ...latest,
-      percent: this.calculatePercent(tokens),
+      percent: this.calculatePercent(tokens, effectiveLimit),
       tokens,
-      maxTokens: this.tokenLimit,
+      maxTokens: effectiveLimit,
       updatedAt: Date.now(),
     }
     this.latestUsageBySession.set(sessionId, usage)
@@ -311,10 +332,11 @@ private currentTokens = 0
     // This will be called by the queue when items are added/removed.
     // Guard against tokenLimit === 0 (unknown context window) to prevent
     // NaN/Infinity in the emitted percent field.
+    const queueLimit = this.limitFor(sessionId)
     const usage: ContextUsage = {
-      percent: this.calculatePercent(this.currentTokens),
+      percent: this.calculatePercent(this.currentTokens, queueLimit),
       tokens: this.currentTokens,
-      maxTokens: this.tokenLimit,
+      maxTokens: queueLimit,
       sessionId,
       breakdown: {
         system: 0, // Will be filled by the main updateTokens
@@ -354,9 +376,9 @@ private currentTokens = 0
     return inputCost + outputCost
   }
 
-  private calculatePercent(tokens: number): number {
-    if (this.tokenLimit <= 0) return 0
-    const raw = (Math.max(0, tokens) / this.tokenLimit) * 100
+  private calculatePercent(tokens: number, limit: number = this.tokenLimit): number {
+    if (limit <= 0) return 0
+    const raw = (Math.max(0, tokens) / limit) * 100
     if (!Number.isFinite(raw)) return 0
     const clamped = Math.min(100, Math.max(0, raw))
     if (clamped > 0 && clamped < 1) {
