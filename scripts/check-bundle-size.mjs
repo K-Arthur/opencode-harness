@@ -128,6 +128,14 @@
 // (recentPromptsRail.ts) and per-hunk revert UI (hunkRevertView.ts + changed-files
 // wiring) ship as real webview features. main.js 736.5 -> 740.7KB. +4KB restores
 // ~0.4% headroom.
+//
+// 2026-06-16 re-baseline (host 610KB -> 622KB): the prompt-template-library
+// feature (TemplateService.ts + templateLibrary.ts, ~183 lines of real host
+// code wired into ChatProvider) adds legitimate host bundle weight. (Note:
+// the limit was already at 610KB here, 6KB past the last dated entry above —
+// that increment predates this one and isn't accounted for by this comment.)
+// Measured 615.5KB. +6.5KB keeps ~1% headroom so the gate still trips on a
+// real regression. Webview limit unchanged.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -137,7 +145,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 610 * 1024, label: "extension host" },
+  { path: "dist/extension.js", limitBytes: 622 * 1024, label: "extension host" },
   { path: "dist/chat/webview/main.js", limitBytes: 780 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
