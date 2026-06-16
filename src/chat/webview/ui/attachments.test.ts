@@ -144,4 +144,18 @@ describe("attachments.ts", () => {
     assert.equal(prevented, false, "must not preventDefault when no image was attached — let the text paste through")
     assert.equal(manager.getAttachments().length, 0)
   })
+
+  it("getAttachments returns a copy that survives clearAttachments", () => {
+    const { manager } = setupManager()
+    const blob = new Blob(["test"], { type: "image/png" })
+    manager.attachImageBlob(blob)
+
+    const snapshot = manager.getAttachments()
+    assert.equal(snapshot.length, 1, "snapshot must capture the attachment")
+
+    manager.clearAttachments()
+    assert.equal(manager.getAttachments().length, 0, "internal state must be cleared")
+    assert.equal(snapshot.length, 1, "snapshot must survive clearAttachments — this is the root cause of images showing as attached but not being sent")
+    assert.equal(snapshot[0]!.mimeType, "image/png")
+  })
 })

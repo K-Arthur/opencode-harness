@@ -33,7 +33,10 @@ export function createAttachmentManager(deps: AttachmentDeps) {
   const pendingAttachments: Attachment[] = []
 
   function getAttachments(): Attachment[] {
-    return pendingAttachments
+    // Return a shallow copy — clearAttachments() mutates the internal array
+    // in place, so callers that capture the reference before clearing would
+    // see an empty array by the time they read it.
+    return [...pendingAttachments]
   }
 
   function attachImageBlob(blob: Blob): void {

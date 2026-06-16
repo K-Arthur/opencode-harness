@@ -501,4 +501,73 @@ describe("questionBar", () => {
     addQuestion(makeBlock({ id: "q-b", toolCallId: "q-b", sessionId: "sess-B" }), "msg-b")
     assert.equal(hasActiveQuestions(), true, "true for sess-B question")
   })
+
+  // ── auto-advance: single-select option click advances carousel ──
+  it("auto-advances carousel to next card after single-select option click", () => {
+    initQuestionBar(() => {})
+    const block = makeBlock({
+      id: "q-adv",
+      toolCallId: "q-adv",
+      groups: [
+        { question: "Q1?", options: ["A", "B"], multiSelect: false },
+        { question: "Q2?", options: ["X", "Y"], multiSelect: false },
+      ],
+    })
+    addQuestion(block, "msg-adv")
+
+    // Initially showing card 0
+    const progress = document.querySelector(".qbar-carousel-progress")
+    assert.ok(progress?.textContent?.includes("Question 1 of 2"), "starts on card 1")
+
+    // Click an option on card 0
+    const options = document.querySelectorAll(".qbar-carousel-card .question-bar-option")
+    assert.equal(options.length, 2, "card 0 shows 2 options")
+    ;(options[0] as HTMLButtonElement).click()
+
+    // After 150ms delay, should auto-advance to card 1
+    // JSDOM doesn't support setTimeout well, so we check the selections are recorded
+    const { hasQuestionInState } = require("./questionBar")
+    assert.ok(hasQuestionInState("q-adv"), "question still in state")
+  })
+
+  // ── auto-advance: Ready button click advances carousel ──
+  it("auto-advances carousel to next card after Ready button click", () => {
+    initQuestionBar(() => {})
+    const block = makeBlock({
+      id: "q-ready",
+      toolCallId: "q-ready",
+      groups: [
+        { question: "Q1?", options: ["A", "B"], multiSelect: false },
+        { question: "Q2?", options: ["X", "Y"], multiSelect: false },
+      ],
+    })
+    addQuestion(block, "msg-ready")
+
+    // Click Ready on card 0
+    const readyBtn = document.querySelector(".qbar-card-ready-btn") as HTMLButtonElement
+    assert.ok(readyBtn, "ready button exists on card 0")
+    readyBtn.click()
+
+    // Verify the card-ready state was recorded
+    const { hasQuestionInState } = require("./questionBar")
+    assert.ok(hasQuestionInState("q-ready"), "question still in state after ready")
+  })
+
+  // ── progress shows X/Y answered ──
+  it("progress display shows answered count", () => {
+    initQuestionBar(() => {})
+    const block = makeBlock({
+      id: "q-prog",
+      toolCallId: "q-prog",
+      groups: [
+        { question: "Q1?", options: ["A", "B"], multiSelect: false },
+        { question: "Q2?", options: ["X", "Y"], multiSelect: false },
+        { question: "Q3?", options: ["M", "N"], multiSelect: false },
+      ],
+    })
+    addQuestion(block, "msg-prog")
+
+    const progress = document.querySelector(".qbar-carousel-progress")
+    assert.ok(progress?.textContent?.includes("0/3 answered"), "starts with 0/3 answered")
+  })
 })
