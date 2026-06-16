@@ -26,7 +26,8 @@ import { getQuotaMonitor } from "./quotaMonitor"
 import { STREAM_LIMIT_TOOLTIP, getContextUsageTooltip, initStaticButtonTooltips } from "./tooltips"
 // context-usage-panel.ts removed — canonical UI is now context-usage-dropdown.ts
 import { setupSideRegion, type SideTabId } from "./sideRegion"
-import { setupChangedFilesDropdown, updateChangedFiles, handleDiffResponse as handleCfDiffResponse, setCurrentSession as setCfCurrentSession, refreshChangedFilesVisibility } from "./changed-files-dropdown"
+import { setupChangedFilesDropdown, updateChangedFiles, handleDiffResponse as handleCfDiffResponse, handleFileHunks as handleCfFileHunks, setCurrentSession as setCfCurrentSession, refreshChangedFilesVisibility } from "./changed-files-dropdown"
+import type { FileHunkView } from "./hunkRevertView"
 import type { DiffLine } from "./types"
 import { setupContextUsageDropdown as setupCtxDropdown, updateUsage as updateCtxDropdown, resetContextUsageDropdown, openContextUsageDropdown } from "./context-usage-dropdown"
 import { formatUsagePercent } from "./context-usage-service"
@@ -4162,6 +4163,17 @@ function getVsCodeApi() {
         const lines = Array.isArray(msg.lines) ? msg.lines as DiffLine[] : null
         const error = typeof msg.error === "string" ? msg.error : undefined
         if (path) cfDropdownApi?.handleDiffResponse(sid, path, lines, error)
+      }],
+      ["file_hunks", (msg, envSid) => {
+        const sid = typeof msg.sessionId === "string" ? msg.sessionId : envSid
+        const path = typeof msg.path === "string" ? msg.path : ""
+        const hunks = Array.isArray(msg.hunks) ? (msg.hunks as FileHunkView[]) : []
+        if (sid && path) handleCfFileHunks(sid, path, hunks)
+      }],
+      ["hunk_reverted", (msg) => {
+        // Host already re-emits file_hunks with the remaining hunks; surface a
+        // failure to the user if the revert didn't apply (e.g. stale diff).
+        if (msg.ok === false) webviewLog(`[main] revert_hunk failed for ${String(msg.path)} (${String(msg.reason ?? "error")})`)
       }],
       ["skills_list", (msg) => {
         if (skillsModalApi && skillsModalApi.renderSkills) {
