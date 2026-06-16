@@ -269,6 +269,127 @@ describe("ToolPartHandler", () => {
     assert.equal(results[0]?.type, "tool_update")
   })
 
+  describe("live output partials", () => {
+    it("emits tool_partial with stdout/stderr deltas and line counts from metadata.liveOutput", () => {
+      const toolPart = makeToolPart({
+        id: "bash-part",
+        callID: "bash-call",
+        tool: "bash",
+        state: {
+          status: "running",
+          input: { command: "npm install" },
+          metadata: {
+            liveOutput: {
+              stdout: "installing\n",
+              stderr: "warn\n",
+              token: 1,
+            },
+          },
+          time: { start: 1000, end: 1750 },
+        } as any,
+      })
+
+      const results = handler.handle(makeEvent(toolPart), ctx)
+      assert.deepEqual(results.map((r) => r.type), ["tool_start", "tool_partial"])
+      const data = results[1]!.data as Record<string, unknown>
+      assert.equal(data.id, "bash-part")
+      assert.equal(data.tool, "bash")
+      assert.equal(data.stdoutDelta, "installing\n")
+      assert.equal(data.stderrDelta, "warn\n")
+      assert.equal(data.stdoutLength, 11)
+      assert.equal(data.stderrLength, 5)
+      assert.equal(data.stdoutLineCount, 1)
+      assert.equal(data.stderrLineCount, 1)
+      assert.equal(data.token, 1)
+      assert.equal(data.durationMs, 750)
+    })
+
+    it("dedupes repeated live output tokens and emits only new deltas for longer snapshots", () => {
+      const base = makeToolPart({
+        id: "bash-dedupe",
+        callID: "bash-dedupe-call",
+        tool: "bash",
+        state: {
+          status: "running",
+          input: { command: "npm test" },
+          metadata: { live_output: { stdout: "line 1\n", stderr: "", token: 7 } },
+        } as any,
+      })
+
+      handler.handle(makeEvent(base), ctx)
+
+      const duplicate = handler.handle(makeEvent(base), ctx)
+      assert.equal(duplicate.some((event) => event.type === "tool_partial"), false)
+
+      const longer = {
+        ...base,
+        state: {
+          ...(base.state as any),
+          metadata: { live_output: { stdout: "line 1\nline 2\n", stderr: "", token: 8 } },
+        } as any,
+      }
+      const results = handler.handle(makeEvent(longer), ctx)
+      const partial = results.find((event) => event.type === "tool_partial")
+      assert.ok(partial)
+      const data = partial!.data as Record<string, unknown>
+      assert.equal(data.stdoutDelta, "line 2\n")
+      assert.equal(data.stdoutLength, 14)
+      assert.equal(data.token, 8)
+      assert.equal(data.replace, undefined)
+    })
+
+    it("marks replacement snapshots when the server buffer shrinks", () => {
+      const firstPart = makeToolPart({
+        id: "bash-replace",
+        callID: "bash-replace-call",
+        tool: "bash",
+        state: {
+          status: "running",
+          input: { command: "node build.js" },
+          metadata: { stdout: "abcdef", stderr: "old", token: 10 },
+        } as any,
+      })
+      handler.handle(makeEvent(firstPart), ctx)
+
+      const replacementPart = {
+        ...firstPart,
+        state: {
+          ...(firstPart.state as any),
+          metadata: { stdout: "xy", stderr: "", token: 11 },
+        } as any,
+      }
+      const results = handler.handle(makeEvent(replacementPart), ctx)
+      const partial = results.find((event) => event.type === "tool_partial")
+      assert.ok(partial)
+      const data = partial!.data as Record<string, unknown>
+      assert.equal(data.replace, true)
+      assert.equal(data.stdout, "xy")
+      assert.equal(data.stderr, "")
+      assert.equal(data.stdoutDelta, "xy")
+      assert.equal(data.stderrDelta, "")
+      assert.equal(data.stdoutLength, 2)
+      assert.equal(data.stderrLength, 0)
+    })
+
+    it("treats metadata.output as a stdout live snapshot when split streams are absent", () => {
+      const toolPart = makeToolPart({
+        id: "bash-output",
+        callID: "bash-output-call",
+        tool: "bash",
+        state: {
+          status: "running",
+          input: { command: "echo done" },
+          metadata: { output: "combined\n", token: 12 },
+        } as any,
+      })
+      const partial = handler.handle(makeEvent(toolPart), ctx).find((event) => event.type === "tool_partial")
+      assert.ok(partial)
+      const data = partial!.data as Record<string, unknown>
+      assert.equal(data.stdoutDelta, "combined\n")
+      assert.equal(data.stderrDelta, "")
+    })
+  })
+
   it("does not emit duplicate tool_end for identical completed event", () => {
     const toolPart = makeToolPart({ state: { status: "pending" } })
     handler.handle(makeEvent(toolPart), ctx)

@@ -18,6 +18,48 @@ void describe("Message Contract Tests", () => {
     assert.ok(message.messageId && message.messageId.length > 0)
   })
 
+  void it("validates stream_tool_partial message structure", () => {
+    const message: HostMessage = {
+      type: "stream_tool_partial",
+      sessionId: "test-123",
+      toolCall: {
+        id: "tool-1",
+        name: "bash",
+        class: "exec",
+        state: "running",
+        partialStdout: "installing\n",
+        partialStderr: "warn\n",
+        stdoutLength: 11,
+        stderrLength: 5,
+        stdoutLineCount: 1,
+        stderrLineCount: 1,
+        token: 9,
+        durationMs: 750,
+      },
+    }
+
+    assert.strictEqual(message.type, "stream_tool_partial")
+    assert.strictEqual(message.toolCall.id, "tool-1")
+    assert.strictEqual(message.toolCall.token, 9)
+    assert.strictEqual(message.toolCall.stdoutLength, 11)
+    assert.strictEqual(message.toolCall.stderrLength, 5)
+  })
+
+  void it("validates cancel_tool webview message structure", () => {
+    const message: WebviewMessage = {
+      type: "cancel_tool",
+      sessionId: "test-123",
+      toolId: "tool-1",
+      stdout: "partial stdout\n",
+      stderr: "partial stderr\n",
+    }
+
+    assert.strictEqual(message.type, "cancel_tool")
+    assert.strictEqual(message.toolId, "tool-1")
+    assert.strictEqual(typeof message.stdout, "string")
+    assert.strictEqual(typeof message.stderr, "string")
+  })
+
   void it("validates model_update message structure", () => {
     const message: HostMessage = {
       type: "model_update",

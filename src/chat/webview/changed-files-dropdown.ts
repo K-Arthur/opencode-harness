@@ -29,6 +29,8 @@ interface ChangedFilesState {
   diffCache: Map<string, DiffLine[] | null | string>
   hunksCache: Map<string, FileHunkView[]>
   lastFiles: FileChange[]
+  /** Sprint 3 / M3: hunks the user has expanded past the 60-line preview cap */
+  expandedHunks: Set<string>
 }
 
 function _createState(): ChangedFilesState {
@@ -38,6 +40,7 @@ function _createState(): ChangedFilesState {
     diffCache: new Map<string, DiffLine[] | null | string>(),
     hunksCache: new Map<string, FileHunkView[]>(),
     lastFiles: [],
+    expandedHunks: new Set<string>(),
   }
 }
 
@@ -678,12 +681,16 @@ function _renderHunk(el: HTMLElement, sessionId: string, path: string): void {
     el.innerHTML = '<div class="cf-hunk-empty">No diff lines available</div>'
     return
   }
-  const lines = data.slice(0, 60)
+
+  // M3: the preview is capped at 60 lines by default. A "Show all N lines"
+  // button expands to a higher cap (500 lines). Beyond that, an "Open full
+  // diff" CTA routes to the VS Code diff editor (M7).
+  const isExpanded = state.expandedHunks.has(path)
+  const cap = isExpanded ? 500 : 60
+  const lines = data.slice(0, cap)
   el.innerHTML = ""
   const pre = document.createElement("pre")
   pre.className = "cf-hunk-code"
-  // Build into a fragment and attach once — appending each span+newline directly
-  // to a live node triggers a layout pass per line.
   const frag = document.createDocumentFragment()
   lines.forEach((line) => {
     const span = document.createElement("span")
@@ -693,10 +700,25 @@ function _renderHunk(el: HTMLElement, sessionId: string, path: string): void {
     frag.appendChild(span)
     frag.appendChild(document.createTextNode("\n"))
   })
-  if (data.length > 60) {
-    const more = document.createElement("span")
-    more.className = "cf-hunk-more"
-    more.textContent = `… ${data.length - 60} more lines`
+  if (data.length > cap) {
+    const remaining = data.length - cap
+    const more = document.createElement("button")
+    more.className = "cf-hunk-more-btn"
+    more.setAttribute("aria-label", isExpanded ? "Show all changes" : `Show ${remaining} more lines`)
+    more.textContent = isExpanded
+      ? `Still truncated — open full diff for all ${data.length} lines`
+      : `Show ${remaining} more lines`
+    more.addEventListener("click", (e) => {
+      e.stopPropagation()
+      e.preventDefault()
+      if (isExpanded) {
+        // Beyond the expanded cap: route to the VS Code diff editor.
+        _onOpenChangedFileDiff(path, sessionId)
+      } else {
+        state.expandedHunks.add(path)
+        _renderHunk(el, sessionId, path)
+      }
+    })
     frag.appendChild(more)
   }
   pre.appendChild(frag)

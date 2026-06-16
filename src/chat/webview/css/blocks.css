@@ -788,6 +788,7 @@
 }
 
 .tool-live-indicator .codicon {
+  font-size: var(--text-2xs);
   animation: tool-live-spin 1s linear infinite;
 }
 
@@ -940,49 +941,23 @@
   border-color: var(--color-error);
 }
 
-.ansi-bold {
-  font-weight: 700;
-}
-
-.ansi-fg-black,
-.ansi-fg-bright-black {
-  color: var(--color-muted);
-}
-
-.ansi-fg-red,
-.ansi-fg-bright-red {
-  color: var(--color-error);
-}
-
-.ansi-fg-green,
-.ansi-fg-bright-green {
-  color: var(--color-success);
-}
-
-.ansi-fg-yellow,
-.ansi-fg-bright-yellow {
-  color: var(--color-warning);
-}
-
-.ansi-fg-blue,
-.ansi-fg-bright-blue {
-  color: var(--color-info);
-}
-
-.ansi-fg-magenta,
-.ansi-fg-bright-magenta {
-  color: var(--oc-syn-keyword);
-}
-
-.ansi-fg-cyan,
-.ansi-fg-bright-cyan {
-  color: var(--oc-syn-function);
-}
-
-.ansi-fg-white,
-.ansi-fg-bright-white {
-  color: var(--color-fg);
-}
+.ansi-bold { font-weight: 700; }
+.ansi-fg-black { color: var(--oc-muted); }
+.ansi-fg-red { color: var(--color-error); }
+.ansi-fg-green { color: var(--color-success); }
+.ansi-fg-yellow { color: var(--color-warning); }
+.ansi-fg-blue { color: var(--color-accent); }
+.ansi-fg-magenta { color: var(--oc-syn-keyword, #c586c0); }
+.ansi-fg-cyan { color: var(--oc-syn-function, #4ec9b0); }
+.ansi-fg-white { color: var(--color-fg); }
+.ansi-fg-bright-black { color: var(--color-muted); }
+.ansi-fg-bright-red { color: color-mix(in srgb, var(--color-error) 80%, white); }
+.ansi-fg-bright-green { color: color-mix(in srgb, var(--color-success) 80%, white); }
+.ansi-fg-bright-yellow { color: color-mix(in srgb, var(--color-warning) 80%, white); }
+.ansi-fg-bright-blue { color: color-mix(in srgb, var(--color-accent) 80%, white); }
+.ansi-fg-bright-magenta { color: color-mix(in srgb, var(--oc-syn-keyword, #c586c0) 80%, white); }
+.ansi-fg-bright-cyan { color: color-mix(in srgb, var(--oc-syn-function, #4ec9b0) 80%, white); }
+.ansi-fg-bright-white { color: var(--color-fg); }
 
 /* ─── Write-class tool header action buttons (Open, Copy path, Reveal) ─── */
 .tool-file-actions {

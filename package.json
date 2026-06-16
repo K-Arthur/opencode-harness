@@ -910,6 +910,12 @@
           "default": false,
           "description": "Enable verbose debug logging to the OpenCode Harness output channel"
         },
+        "opencode.toolOutput.renderAnsi": {
+          "type": "boolean",
+          "scope": "window",
+          "default": false,
+          "description": "Render ANSI color sequences in bash tool output (experimental — may affect performance)"
+        },
         "opencode.tdd.enabled": {
           "type": "boolean",
           "scope": "window",
@@ -959,12 +965,6 @@
           "minimum": 1,
           "maximum": 10,
           "description": "Maximum number of concurrent AI streams across all tabs."
-        },
-        "opencode.toolOutput.renderAnsi": {
-          "type": "boolean",
-          "scope": "window",
-          "default": false,
-          "description": "Render a small ANSI SGR color palette in bash tool output. Disabled by default; when off, ANSI and control sequences are stripped from tool output."
         },
         "opencode.defaultMode": {
           "type": "string",

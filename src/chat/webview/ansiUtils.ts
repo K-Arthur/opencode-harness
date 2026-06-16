@@ -7,7 +7,7 @@
 
 const ANSI_AND_CONTROL_RE = /\x1b\[[0-9;]*[a-zA-Z]|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g
 const ANSI_SGR_RE = /\x1b\[([0-9;]*)m/g
-const ANSI_NON_SGR_RE = /\x1b\[[0-9;]*[A-LN-Z_a-ln-z]|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g
+const ANSI_NON_SGR_RE = /\x1b\[[0-9;]*[A-LN-Z_a-ln-z]|[\x00-\x08\x0b\x0c\x0e-\x1a\x1c-\x1f\x7f]/g
 
 let renderAnsiEnabled = false
 
@@ -52,16 +52,18 @@ function classesForCodes(codes: number[], current: Set<string>): Set<string> {
 }
 
 export function renderAnsiToHtml(input: string): string {
-  const text = input
+  const text = input.replace(ANSI_NON_SGR_RE, "")
   let out = ""
   let lastIndex = 0
   let classes = new Set<string>()
   for (const match of text.matchAll(ANSI_SGR_RE)) {
     const index = match.index ?? 0
-    const segment = text.slice(lastIndex, index).replace(ANSI_NON_SGR_RE, "")
+    const segment = text.slice(lastIndex, index)
     if (segment) {
       const escaped = escapeHtml(segment)
-      out += classes.size > 0 ? `<span class="${Array.from(classes).join(" ")}">${escaped}</span>` : escaped
+      out += classes.size > 0
+        ? `<span class="${Array.from(classes).join(" ")}">${escaped}</span>`
+        : escaped
     }
     const codes = (match[1] ?? "")
       .split(";")
@@ -71,10 +73,12 @@ export function renderAnsiToHtml(input: string): string {
     classes = classesForCodes(codes, classes)
     lastIndex = index + match[0].length
   }
-  const tail = text.slice(lastIndex).replace(ANSI_NON_SGR_RE, "")
+  const tail = text.slice(lastIndex)
   if (tail) {
     const escaped = escapeHtml(tail)
-    out += classes.size > 0 ? `<span class="${Array.from(classes).join(" ")}">${escaped}</span>` : escaped
+    out += classes.size > 0
+      ? `<span class="${Array.from(classes).join(" ")}">${escaped}</span>`
+      : escaped
   }
   return out
 }
