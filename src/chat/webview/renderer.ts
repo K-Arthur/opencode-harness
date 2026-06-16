@@ -1374,6 +1374,9 @@ export const MAX_DIFF_LINES_RENDERED = 500
 function createDiffTableWrapper(diffBlock: DiffBlock, opts: RenderOptions): HTMLElement {
   const tableWrapper = document.createElement("div")
   tableWrapper.className = "diff-table-wrapper"
+  if (readDiffWrapPreference()) {
+    tableWrapper.classList.add("diff-table-wrapper--wrapped")
+  }
 
   const table = document.createElement("table")
   table.className = "diff-table"

@@ -1497,8 +1497,8 @@
   border-right: 1px solid var(--color-border);
 }
 
-.diff-line-num--old { color: var(--diff-line-number-fg, var(--color-error)); }
-.diff-line-num--new { color: var(--diff-line-number-fg, var(--color-success)); }
+.diff-line-num--old { color: var(--diff-removed-fg, var(--vscode-diffEditor-removedTextColor, var(--color-error))); }
+.diff-line-num--new { color: var(--diff-added-fg, var(--vscode-diffEditor-insertedTextColor, var(--color-success))); }
 
 .diff-line-marker {
   width: 1.2rem;
