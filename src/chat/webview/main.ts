@@ -1,4 +1,4 @@
-import type { ChatMessage, LegacyHostMessage, MentionItem, SessionSummary, ModelInfo, ContextChip, ToolCallState, UsageDelta, Todo, ContextUsage, RunActivitySnapshot, SubagentActivity, SessionState } from "./types"
+import type { ChatMessage, LegacyHostMessage, MentionItem, SessionSummary, ModelInfo, ContextChip, ToolCallState, UsageDelta, Todo, ContextUsage, RunActivitySnapshot, SubagentActivity, SessionState, ToolCallBlock } from "./types"
 import type { AttachmentEls } from "./ui/attachments"
 import { timers } from "./timerRegistry"
 import { createState } from "./state"
@@ -491,7 +491,9 @@ function getVsCodeApi() {
 	      modelManager.close()
 	    },
 		onConnectProvider: () => {
-			vscode.postMessage({ type: "connect_provider" })
+			openProviderPanel()
+			vscode.postMessage({ type: "discover_providers" })
+			vscode.postMessage({ type: "list_provider_credentials" })
 		},
 		onDeleteProvider: (id: string) => {
 			vscode.postMessage({ type: "delete_provider", id })
@@ -520,7 +522,9 @@ function getVsCodeApi() {
 	        vscode.postMessage({ type: "get_models" })
 	        break
 	      case "edit":
-	        vscode.postMessage({ type: "connect_provider" })
+	        openProviderPanel()
+	        vscode.postMessage({ type: "discover_providers" })
+	        vscode.postMessage({ type: "list_provider_credentials" })
 	        break
 	      case "dismiss": {
 	        const sid = stateManager.getState().activeSessionId
@@ -1134,6 +1138,18 @@ function getVsCodeApi() {
       close: () => closeKeyboardShortcutsModal(),
     })
     registry.register({
+      id: "provider-panel",
+      priority: 100,
+      isOpen: () => isElementVisibleById("provider-panel"),
+      close: () => closeProviderPanel(),
+    })
+    registry.register({
+      id: "api-key-modal",
+      priority: 100,
+      isOpen: () => isElementVisibleById("api-key-modal"),
+      close: () => document.getElementById("api-key-modal-close")?.click(),
+    })
+    registry.register({
       id: "settings-menu",
       priority: 80,
       isOpen: visibleByClass(() => els.settingsMenu),
@@ -1236,6 +1252,7 @@ function getVsCodeApi() {
         mcpBtn: els.mcpBtn,
         themeCustomizerBtn: els.themeCustomizerBtn,
         permConfigBtn: els.permissionConfigBtn,
+        providerPanelBtn: els.providerPanelBtn,
         settingsBtn: els.settingsBtn,
         settingsMenu: els.settingsMenu,
         checkpointPanel: els.checkpointPanel,
@@ -1253,6 +1270,9 @@ function getVsCodeApi() {
         const active = stateManager.getActiveSession()
         const sid = active?.id ?? stateManager.getState().activeSessionId
         if (sid) vscode.postMessage({ type: "get_permission_config", sessionId: sid })
+      },
+      openProviderPanel: () => {
+        openProviderPanel()
       },
       getActiveSessionId: () => stateManager.getState().activeSessionId ?? undefined,
       skillsModalOpen: () => skillsModalApi?.open?.(),
@@ -3346,6 +3366,31 @@ function getVsCodeApi() {
             tasksPanelApi?.refresh(sid)
           }
         }
+      }],
+      // B6 follow-up: the host posts this when a tool call never emitted a
+      // completion event before the server went idle. Without this handler
+      // the tool-call card stays stuck mid-stream-looking (spinner/"Running")
+      // even after the Stop/Send button has already reverted to Send.
+      ["stream_tool_unresolved", (msg, sid) => {
+        if (!sid) return
+        const toolCallId = msg.toolCallId as string | undefined
+        if (!toolCallId) return
+        const stream = streamHandlers.get(sid)
+        if (!stream) return
+        const errorMessage = msg.message as string | undefined
+        const session = stateManager.getSession(sid)
+        const block = session?.messages.flatMap((m) => m.blocks).find(
+          (b) => b.type === "tool-call" && (b as { id?: string }).id === toolCallId,
+        ) as ToolCallBlock | undefined
+        if (block) {
+          block.state = "unresolved"
+          block.error = errorMessage
+        }
+        toolPartialStore.markTerminal(sid, toolCallId)
+        streamOrchestrator.flushToolUpdate(sid, toolCallId)
+        stream.handleToolUpdate(toolCallId, { state: "unresolved", error: errorMessage })
+        streamOrchestrator.clearToolChainProgress(sid)
+        tasksPanelApi?.refresh(sid)
       }],
       ["prompt_queued", (_msg, _sid) => {
         // Host queued a prompt — chips render via queue_state, no system message needed.

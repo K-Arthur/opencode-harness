@@ -180,6 +180,12 @@
           </svg>
           Manage MCP servers
         </button>
+        <button class="settings-menu-item" id="provider-panel-btn" role="menuitem" aria-label="Connect providers">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          Provider Connections
+        </button>
         <button class="settings-menu-item" id="perm-config-btn" role="menuitem" aria-label="Configure tool permissions">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="3" y="11" width="18" height="11" rx="2"/>
@@ -1088,6 +1094,60 @@
       <div class="perm-config-list" id="perm-config-list"></div>
       <div class="perm-config-actions">
         <button class="btn btn-primary" id="perm-config-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Provider Connection Panel -->
+  <div id="provider-panel" class="model-manager-overlay hidden" role="dialog" aria-modal="true" aria-label="Connect providers">
+    <div class="model-manager-content provider-panel-content">
+      <div class="model-manager-header">
+        <div class="model-manager-header-text">
+          <h2>Provider Connections</h2>
+          <p>Manage API keys and OAuth connections for AI providers.</p>
+        </div>
+        <div class="model-manager-header-actions">
+          <button class="model-manager-close" id="provider-panel-close" aria-label="Close provider panel">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18"/><path d="M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="provider-panel-tabs" role="tablist">
+        <button class="provider-tab active" role="tab" data-tab="discover" aria-selected="true">Providers</button>
+        <button class="provider-tab" role="tab" data-tab="credentials" aria-selected="false">Credentials</button>
+      </div>
+      <div class="provider-panel-body">
+        <div class="provider-tab-content" data-tab="discover">
+          <div class="provider-discovery-list" id="provider-discovery-list"></div>
+        </div>
+        <div class="provider-tab-content hidden" data-tab="credentials">
+          <div class="provider-credential-list" id="provider-credential-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- API Key Modal -->
+  <div id="api-key-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Enter API key">
+    <div class="modal-content api-key-modal-content">
+      <div class="modal-header">
+        <h2 id="api-key-modal-title">Enter API Key</h2>
+        <button class="modal-close-btn" id="api-key-modal-close" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 6 6 18"/><path d="M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <label for="api-key-input" id="api-key-label">API Key</label>
+        <input type="password" id="api-key-input" class="api-key-input" placeholder="sk-..." autocomplete="off" spellcheck="false" />
+        <p class="api-key-hint" id="api-key-hint">Your key is stored locally and never sent to OpenCode servers.</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="api-key-cancel">Cancel</button>
+        <button class="btn btn-primary" id="api-key-submit">Connect</button>
       </div>
     </div>
   </div>

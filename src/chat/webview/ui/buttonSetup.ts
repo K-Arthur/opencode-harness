@@ -5,6 +5,7 @@ export interface ButtonSetupEls {
   mcpBtn: HTMLElement
   themeCustomizerBtn: HTMLElement
   permConfigBtn: HTMLElement
+  providerPanelBtn: HTMLElement | null
   settingsBtn: HTMLElement
   settingsMenu: HTMLElement
   checkpointPanel: HTMLElement | null
@@ -22,6 +23,7 @@ export interface ButtonSetupDeps {
   openMcpConfig: () => void
   openThemeCustomizer: () => void
   openPermissionConfig: () => void
+  openProviderPanel: () => void
   getActiveSessionId: () => string | undefined
   skillsModalOpen: (() => void) | undefined
   /** Fired when the user toggles the todos panel via the toolbar button.
@@ -52,6 +54,13 @@ export function setupButtons(deps: ButtonSetupDeps): void {
   deps.els.permConfigBtn?.addEventListener("click", () => {
     deps.closeSettingsMenu()
     deps.openPermissionConfig()
+  })
+
+  deps.els.providerPanelBtn?.addEventListener("click", () => {
+    deps.closeSettingsMenu()
+    deps.openProviderPanel()
+    deps.postMessage({ type: "discover_providers" })
+    deps.postMessage({ type: "list_provider_credentials" })
   })
 
   deps.els.settingsBtn.addEventListener("click", (e) => {

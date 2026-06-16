@@ -627,7 +627,7 @@ export type HostMessage =
   | { type: "stream_tool_update"; sessionId: string; toolCall: ToolCallData }
   | { type: "stream_tool_partial"; sessionId: string; toolCall: ToolCallData; seq?: number }
   | { type: "stream_tool_end"; sessionId: string; toolCall: ToolCallData }
-  | { type: "stream_tool_unresolved"; sessionId: string; toolCall: ToolCallData }
+  | { type: "stream_tool_unresolved"; sessionId: string; toolCallId: string; message: string }
   | { type: "force_rerender"; sessionId: string }
   | { type: "skill_indicator"; sessionId: string; skillName: string }
   | { type: "request_error"; message: string; errorContext?: unknown; sessionId?: string }
@@ -717,6 +717,7 @@ export interface ModelInfo {
   displayName: string
   enabled?: boolean
   supportsVariants?: boolean
+  variantNames?: string[]
   favorite?: boolean
   recentRank?: number
   contextWindow?: number

@@ -130,6 +130,9 @@ export interface ElementRefs {
   permissionConfigSave: HTMLButtonElement
   permissionConfigBtn: HTMLElement
 
+  // Provider connection panel
+  providerPanelBtn: HTMLElement | null
+
   // Display toggles (Phase 4.2)
   displayToggles: HTMLElement
   toggleText: HTMLInputElement
@@ -325,6 +328,9 @@ export function getElementRefs(): ElementRefs {
     permissionConfigClose: requireElement<HTMLButtonElement>("perm-config-close"),
     permissionConfigSave: requireElement<HTMLButtonElement>("perm-config-save"),
     permissionConfigBtn: requireElement("perm-config-btn"),
+
+    // Provider connection panel
+    providerPanelBtn: document.getElementById("provider-panel-btn"),
 
     // Display toggles (Phase 4.2)
     displayToggles: requireElement("display-toggles"),

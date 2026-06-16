@@ -50,6 +50,8 @@ import { MethodologyAdvisor } from "../methodology/MethodologyAdvisor"
 import { BackfillService } from "./BackfillService"
 import { MessagePostService } from "./MessagePostService"
 import { StashService } from "./StashService"
+import { TemplateService } from "./TemplateService"
+import { TemplateLibraryManager } from "../prompts/templateLibrary"
 import { ProviderManagementService } from "./ProviderManagementService"
 import { DiffAcceptService } from "./DiffAcceptService"
 import { normalizeSessionMode, resolvePermissionForMode } from "./modePolicy"
@@ -99,8 +101,10 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private steerPromptHandler: SteerPromptHandler
   private hostQueue: HostPromptQueue
   private promptStashManager: PromptStashManager
+  private templateLibrary: TemplateLibraryManager
   private providerConfigManager: ProviderConfigManager
   private stashService: StashService
+  private templateService: TemplateService
   private providerManagementService: ProviderManagementService
   private slashCommands: SlashCommandService
   private sessionSync: SessionSyncService
@@ -227,15 +231,21 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     this.usageAnalytics = new UsageAnalytics()
     this.usageAnalytics.setHistory(contextMonitor.getHistory())
     this.promptStashManager = new PromptStashManager({ context })
+    this.templateLibrary = new TemplateLibraryManager({ context })
     this.providerConfigManager = new ProviderConfigManager({ context })
     this.stashService = new StashService({
       promptStashManager: this.promptStashManager,
       tabManager: this.tabManager,
       postMessage: (msg) => this.postMessage(msg),
     })
+    this.templateService = new TemplateService({
+      templateLibrary: this.templateLibrary,
+      postMessage: (msg) => this.postMessage(msg),
+    })
     this.providerManagementService = new ProviderManagementService({
       providerConfigManager: this.providerConfigManager,
       postMessage: (msg) => this.postMessage(msg),
+      getV2Client: () => this.sessionManager.getV2Client(),
     })
     this.modelManager.setProviderConfigManager(this.providerConfigManager)
     this.hostQueue = new HostPromptQueue(this.context.globalState, false)
@@ -373,10 +383,20 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       stashPrompt: (name, content, isGlobal) => this.handleStashPrompt(name, content, isGlobal),
       listStashes: () => { this.handleListStashes() },
       deleteStash: (id) => { this.handleDeleteStash(id) },
+      saveTemplate: (name, content, tags, existingId) => this.handleSaveTemplate(name, content, tags, existingId),
+      listTemplates: () => { this.handleListTemplates() },
+      deleteTemplate: (id) => { this.handleDeleteTemplate(id) },
       addProvider: (name, apiKey, baseUrl) => this.handleAddProvider(name, apiKey, baseUrl),
       listProviders: () => { this.handleListProviders() },
       updateProvider: (id, updates) => this.handleUpdateProvider(id, updates),
       deleteProvider: (id) => { this.handleDeleteProvider(id) },
+      discoverProviders: () => this.handleDiscoverProviders(),
+      getProviderAuthMethods: (providerId) => this.handleGetProviderAuthMethods(providerId),
+      connectProviderKey: (providerId, key) => this.handleConnectProviderKey(providerId, key),
+      connectProviderOAuth: (providerId, methodIndex) => this.handleConnectProviderOAuth(providerId, methodIndex),
+      completeProviderOAuth: (providerId, code, methodIndex) => this.handleCompleteProviderOAuth(providerId, code, methodIndex),
+      listProviderCredentials: () => this.handleListProviderCredentials(),
+      removeProviderCredential: (credentialId) => this.handleRemoveProviderCredential(credentialId),
       showOpenFolderDialog: (dir) => { void vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(dir)) },
       skillPreferences: this.skillPreferences,
       pushAllStateToWebview: () => this.pushAllStateToWebview(),
@@ -2119,6 +2139,18 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     return this.stashService.handleDeleteStash(id)
   }
 
+  private async handleSaveTemplate(name: string, content: string, tags: string[], existingId?: string): Promise<void> {
+    return this.templateService.handleSaveTemplate(name, content, tags, existingId)
+  }
+
+  private handleListTemplates(): void {
+    return this.templateService.handleListTemplates()
+  }
+
+  private async handleDeleteTemplate(id: string): Promise<void> {
+    return this.templateService.handleDeleteTemplate(id)
+  }
+
   private async handleAddProvider(name: string, apiKey: string, baseUrl?: string): Promise<void> {
     return this.providerManagementService.handleAddProvider(name, apiKey, baseUrl)
   }
@@ -2133,6 +2165,34 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
 
   private async handleDeleteProvider(id: string): Promise<void> {
     return this.providerManagementService.handleDeleteProvider(id)
+  }
+
+  private async handleDiscoverProviders(): Promise<void> {
+    return this.providerManagementService.handleDiscoverProviders()
+  }
+
+  private async handleGetProviderAuthMethods(providerId: string): Promise<void> {
+    return this.providerManagementService.handleGetProviderAuthMethods(providerId)
+  }
+
+  private async handleConnectProviderKey(providerId: string, key: string): Promise<void> {
+    return this.providerManagementService.handleConnectProviderKey(providerId, key)
+  }
+
+  private async handleConnectProviderOAuth(providerId: string, methodIndex?: number): Promise<void> {
+    return this.providerManagementService.handleConnectProviderOAuth(providerId, methodIndex)
+  }
+
+  private async handleCompleteProviderOAuth(providerId: string, code?: string, methodIndex?: number): Promise<void> {
+    return this.providerManagementService.handleCompleteProviderOAuth(providerId, code, methodIndex)
+  }
+
+  private async handleListProviderCredentials(): Promise<void> {
+    return this.providerManagementService.handleListProviderCredentials()
+  }
+
+  private async handleRemoveProviderCredential(credentialId: string): Promise<void> {
+    return this.providerManagementService.handleRemoveProviderCredential(credentialId)
   }
 
   private async handleCompactBannerAction(sessionId: string | undefined, action: string): Promise<void> {

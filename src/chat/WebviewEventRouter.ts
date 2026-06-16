@@ -114,10 +114,20 @@ export interface WebviewEventRouterOptions {
   stashPrompt: (name: string, content: string, isGlobal: boolean) => Promise<void> | void
   listStashes: () => void
   deleteStash: (id: string) => void
+  saveTemplate: (name: string, content: string, tags: string[], existingId?: string) => Promise<void> | void
+  listTemplates: () => void
+  deleteTemplate: (id: string) => void
   addProvider: (name: string, apiKey: string, baseUrl?: string) => Promise<void> | void
   listProviders: () => void
   updateProvider: (id: string, updates: Record<string, unknown>) => Promise<void> | void
   deleteProvider: (id: string) => void
+  discoverProviders: () => Promise<void> | void
+  getProviderAuthMethods: (providerId: string) => Promise<void> | void
+  connectProviderKey: (providerId: string, key: string, label?: string) => Promise<void> | void
+  connectProviderOAuth: (providerId: string, methodIndex?: number) => Promise<void> | void
+  completeProviderOAuth: (providerId: string, code?: string, methodIndex?: number) => Promise<void> | void
+  listProviderCredentials: () => Promise<void> | void
+  removeProviderCredential: (credentialId: string) => Promise<void> | void
   showOpenFolderDialog: (dir: string) => void
   skillPreferences: SkillPreferencesStoreLike
   pushAllStateToWebview: () => void
@@ -156,7 +166,10 @@ export class WebviewEventRouter {
     "close_tab", "switch_tab", "accept_diff", "reject_diff",
     "accept_permission", "mention_search", "list_sessions", "resume_session",
     "new_session", "get_models", "update_cost", "webview_ready", "init_ack", "rename_session", "webview_log",
-    "open_settings", "connect_provider", "open_mcp_settings", "open_mcp_config", "attach_files", "export_chat", "export_chat_json", "export_chat_text", "copy_chat", "stash_prompt", "list_stashes", "delete_stash", "add_provider", "list_providers", "update_provider", "delete_provider",
+    "open_settings", "connect_provider", "open_mcp_settings", "open_mcp_config", "attach_files", "export_chat", "export_chat_json", "export_chat_text", "copy_chat", "stash_prompt", "list_stashes", "delete_stash",     "add_provider", "list_providers", "update_provider", "delete_provider",
+    "discover_providers", "get_provider_auth_methods", "connect_provider_key",
+    "connect_provider_oauth", "complete_provider_oauth", "list_provider_credentials",
+    "remove_provider_credential",
     "compact_session", "execute_command", "open_terminal", "copy_text", "list_commands",
     "insert_at_cursor", "create_file_from_code", "compact_banner_action",
     "edit_message", "attach_image",
@@ -890,6 +903,30 @@ export class WebviewEventRouter {
         this.opts.deleteStash(id)
       }
     }],
+    ["save_template", async (msg: Record<string, unknown>) => {
+      const name = msg.name as string
+      const content = msg.content as string
+      const tags = (msg.tags as string[]) ?? []
+      const existingId = msg.existingId as string | undefined
+      if (name && content) {
+        await this.opts.saveTemplate(name, content, tags, existingId)
+      }
+    }],
+    ["list_templates", () => { this.opts.listTemplates() }],
+    ["delete_template", (msg: Record<string, unknown>) => {
+      const id = msg.id as string
+      if (id) {
+        this.opts.deleteTemplate(id)
+      }
+    }],
+    ["save_message_as_template", async (msg: Record<string, unknown>) => {
+      const name = msg.name as string
+      const content = msg.content as string
+      const tags = (msg.tags as string[]) ?? []
+      if (name && content) {
+        await this.opts.saveTemplate(name, content, tags)
+      }
+    }],
     ["add_provider", async (msg: Record<string, unknown>) => {
       const name = msg.name as string
       const apiKey = msg.apiKey as string
@@ -911,6 +948,37 @@ export class WebviewEventRouter {
       if (id) {
         this.opts.deleteProvider(id)
       }
+    }],
+    ["discover_providers", async () => {
+      await this.opts.discoverProviders()
+    }],
+    ["get_provider_auth_methods", async (msg: Record<string, unknown>) => {
+      const providerId = msg.providerId as string
+      if (providerId) await this.opts.getProviderAuthMethods(providerId)
+    }],
+    ["connect_provider_key", async (msg: Record<string, unknown>) => {
+      const providerId = msg.providerId as string
+      const key = msg.key as string
+      const label = msg.label as string | undefined
+      if (providerId && key) await this.opts.connectProviderKey(providerId, key, label)
+    }],
+    ["connect_provider_oauth", async (msg: Record<string, unknown>) => {
+      const providerId = msg.providerId as string
+      const methodIndex = typeof msg.methodIndex === "number" ? msg.methodIndex : undefined
+      if (providerId) await this.opts.connectProviderOAuth(providerId, methodIndex)
+    }],
+    ["complete_provider_oauth", async (msg: Record<string, unknown>) => {
+      const providerId = msg.providerId as string
+      const code = msg.code as string | undefined
+      const methodIndex = typeof msg.methodIndex === "number" ? msg.methodIndex : undefined
+      if (providerId) await this.opts.completeProviderOAuth(providerId, code, methodIndex)
+    }],
+    ["list_provider_credentials", async () => {
+      await this.opts.listProviderCredentials()
+    }],
+    ["remove_provider_credential", async (msg: Record<string, unknown>) => {
+      const credentialId = msg.credentialId as string
+      if (credentialId) await this.opts.removeProviderCredential(credentialId)
     }],
     ["compact_session", async (_: Record<string, unknown>, sessionId?: string) => { await this.opts.sessionLifecycle.handleCompactSession(sessionId) }],
     ["execute_command", async (msg: Record<string, unknown>, sessionId?: string) => { await this.opts.commandExec.handleExecuteCommand(sessionId, msg.command as string, msg.arguments as string) }],

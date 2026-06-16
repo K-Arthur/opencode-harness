@@ -123,6 +123,10 @@ export class SessionManager {
     return this.v2Client !== null
   }
 
+  getV2Client(): V2OpencodeClient | null {
+    return this.v2Client
+  }
+
   get currentPort(): number {
     return this.serverLifecycle.currentPort
   }

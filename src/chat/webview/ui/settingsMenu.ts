@@ -5,6 +5,7 @@ export interface SettingsMenuEls {
   themeCustomizerPanel: HTMLElement
   mcpConfigPanel: HTMLElement
   sessionModal: HTMLElement
+  providerPanel: HTMLElement | null
 }
 
 export interface SettingsMenuDeps {
@@ -13,6 +14,7 @@ export interface SettingsMenuDeps {
   closeThemeCustomizer: () => void
   closeMcpConfig: () => void
   closeSessionModal: () => void
+  closeProviderPanel: () => void
 }
 
 export function closeSettingsMenu(els: { settingsMenu: HTMLElement; settingsBtn: HTMLElement }): void {
@@ -27,6 +29,8 @@ export function closeCurrentModal(deps: SettingsMenuDeps): void {
     deps.closeThemeCustomizer()
   } else if (!deps.els.mcpConfigPanel.classList.contains("hidden")) {
     deps.closeMcpConfig()
+  } else if (deps.els.providerPanel && !deps.els.providerPanel.classList.contains("hidden")) {
+    deps.closeProviderPanel()
   } else if (!deps.els.sessionModal.classList.contains("hidden")) {
     deps.closeSessionModal()
   }

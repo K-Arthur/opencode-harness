@@ -88,6 +88,16 @@ function createModelOption(
     meta.style.background = "rgba(244, 67, 54, 0.1)"
     meta.textContent = "Offline"
     option.appendChild(meta)
+  } else if (model.connectionStatus === "needs_key") {
+    const meta = document.createElement("span")
+    meta.className = "model-option-meta provider-status-needs-key"
+    meta.textContent = "Needs API Key"
+    option.appendChild(meta)
+  } else if (model.connectionStatus === "needs_oauth") {
+    const meta = document.createElement("span")
+    meta.className = "model-option-meta provider-status-needs-oauth"
+    meta.textContent = "Needs OAuth"
+    option.appendChild(meta)
   }
 
   if (!isUnavailable) {
