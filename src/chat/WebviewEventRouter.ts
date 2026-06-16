@@ -1268,17 +1268,8 @@ export class WebviewEventRouter {
       if (!sessionId) return
       const session = this.opts.sessionStore.get(sessionId)
       const cliSessionId = session?.cliSessionId
-      if (!cliSessionId) {
-        this.opts.postMessage({ type: "todos_error", message: "Session is not connected to OpenCode yet.", sessionId })
-        return
-      }
-      if (!this.opts.sessionManager.isRunning) {
-        // Server is down — tell the webview to render an actionable error
-        // rather than a silent empty list, so the user can distinguish
-        // "no todos exist" from "we can't reach the server".
-        this.opts.postMessage({ type: "todos_error", message: "Server is not running.", sessionId })
-        return
-      }
+      if (!cliSessionId) return
+      if (!this.opts.sessionManager.isRunning) return
       try {
         const raw = await this.opts.sessionManager.getSessionTodos(cliSessionId)
         const todos = normalizeTodoList(raw)
