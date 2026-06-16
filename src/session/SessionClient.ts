@@ -400,19 +400,81 @@ export class SessionClient {
     log.info(`Permission ${permissionId} responded with: ${normalized}`)
   }
 
+  /**
+   * Resolve the session-scoped question API on the v2 SDK client.
+   *
+   * The v0.3.73 crash ("Cannot read properties of undefined (reading 'reply')")
+   * happened because the code read `client.session.question` — but the SDK's
+   * `OpencodeClient.session` returns `Session2`, which has NO `question`
+   * getter. The session-scoped question API lives under `client.v2.session`
+   * (Session3 → Question2 → POST /api/session/{sessionID}/question/{requestID}/reply).
+   *
+   * This helper centralises the path resolution and throws a CLEAR, searchable
+   * error if the SDK shape ever drifts, instead of a cryptic TypeError that
+   * leaves the user with a stuck question bar and no recourse.
+   */
+  private resolveSessionQuestionApi(client: V2OpencodeClient): {
+    reply: (params: Record<string, unknown>) => Promise<Record<string, unknown>>
+    reject: (params: Record<string, unknown>) => Promise<Record<string, unknown>>
+  } {
+    const v2 = (client as { v2?: unknown }).v2
+    if (!v2 || typeof v2 !== "object") {
+      throw new Error(
+        "Question API unavailable: SDK client does not expose the v2 session namespace. " +
+          "Update @opencode-ai/sdk and reload the window.",
+      )
+    }
+    const session = (v2 as { session?: unknown }).session
+    if (!session || typeof session !== "object") {
+      throw new Error(
+        "Question API unavailable: SDK client does not expose v2.session. " +
+          "Update @opencode-ai/sdk and reload the window.",
+      )
+    }
+    const question = (session as { question?: unknown }).question
+    if (!question || typeof question !== "object") {
+      throw new Error(
+        "Question API unavailable: SDK client does not expose v2.session.question. " +
+          "Update @opencode-ai/sdk and reload the window.",
+      )
+    }
+    const reply = (question as { reply?: unknown }).reply
+    const reject = (question as { reject?: unknown }).reject
+    if (typeof reply !== "function" || typeof reject !== "function") {
+      throw new Error(
+        "Question API unavailable: SDK v2.session.question.reply/reject are not callable. " +
+          "Update @opencode-ai/sdk and reload the window.",
+      )
+    }
+    return {
+      reply: reply as (params: Record<string, unknown>) => Promise<Record<string, unknown>>,
+      reject: reject as (params: Record<string, unknown>) => Promise<Record<string, unknown>>,
+    }
+  }
+
   async replyToQuestion(sessionId: string, requestID: string, answers: string[][]): Promise<void> {
     const client = this.guardV2()
-    const session = client.session as any
-    const resp = await session.question.reply({ sessionID: sessionId, requestID, questionV2Reply: { answers } })
-    if (resp.error) throw new Error(`Question reply failed: ${JSON.stringify(resp.error)}`)
+    const api = this.resolveSessionQuestionApi(client)
+    const resp = (await api.reply({ sessionID: sessionId, requestID, questionV2Reply: { answers } })) as
+      | { error?: unknown }
+      | null
+      | undefined
+    if (resp && typeof resp.error !== "undefined") {
+      throw new Error(`Question reply failed: ${JSON.stringify(resp.error)}`)
+    }
     log.info(`Session ${sessionId} question ${requestID} replied with ${answers.length} answer group(s)`)
   }
 
   async rejectQuestion(sessionId: string, requestID: string): Promise<void> {
     const client = this.guardV2()
-    const session = client.session as any
-    const resp = await session.question.reject({ sessionID: sessionId, requestID })
-    if (resp.error) throw new Error(`Question reject failed: ${JSON.stringify(resp.error)}`)
+    const api = this.resolveSessionQuestionApi(client)
+    const resp = (await api.reject({ sessionID: sessionId, requestID })) as
+      | { error?: unknown }
+      | null
+      | undefined
+    if (resp && typeof resp.error !== "undefined") {
+      throw new Error(`Question reject failed: ${JSON.stringify(resp.error)}`)
+    }
     log.info(`Session ${sessionId} question ${requestID} rejected`)
   }
 
