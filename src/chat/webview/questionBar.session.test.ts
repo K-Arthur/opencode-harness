@@ -11,7 +11,7 @@ import { describe, it, beforeEach } from "node:test"
 import assert from "node:assert/strict"
 import { JSDOM } from "jsdom"
 import type { QuestionBlock } from "./types"
-import { initQuestionBar, addQuestion, clearAllQuestions, setActiveSession, getActiveQuestionCount } from "./questionBar"
+import { initQuestionBar, addQuestion, clearAllQuestions, setActiveSession, getActiveQuestionCount, repopulateFromMessages } from "./questionBar"
 
 function setupDom() {
   const dom = new JSDOM(`<!doctype html><html><body>
@@ -51,5 +51,21 @@ describe("question bar — session attribution (multi-tab)", () => {
     setActiveSession("A")
     addQuestion(block({ toolCallId: "qA", sessionId: undefined }), "mA")
     assert.equal(getActiveQuestionCount(), 1)
+  })
+
+  // Regression: repopulateFromMessages(sessionId, messages) is called on tab
+  // switch (main.ts switchTab, BEFORE setActiveSession(tabId) runs for the new
+  // tab) and on init_state resume. It forwarded persisted blocks to addQuestion
+  // with no envelope sid, so a block saved with no sessionId of its own (e.g.
+  // one built by the live-stream path, which never stamps sessionId) fell back
+  // to _activeSessionId — at that moment still the PREVIOUS tab — attributing
+  // the repopulated session's own question to the tab being switched away from.
+  it("attributes a repopulated block with no sessionId to the session being repopulated, not the still-active previous tab", () => {
+    setActiveSession("A")
+    const messages = [{ id: "mB", blocks: [{ type: "question", toolCallId: "qNoSid", groups: [{ question: "Pick", options: ["A", "B"], multiSelect: false }] }] }]
+    repopulateFromMessages("B", messages as any)
+    assert.equal(getActiveQuestionCount(), 1, "shows on session B, which repopulateFromMessages just made active")
+    setActiveSession("A")
+    assert.equal(getActiveQuestionCount(), 0, "must NOT have been attributed to session A, the tab active when repopulate ran")
   })
 })

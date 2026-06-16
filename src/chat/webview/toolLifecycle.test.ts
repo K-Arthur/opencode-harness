@@ -435,3 +435,29 @@ describe("stream_tool_unresolved — webview handler (B6 follow-up)", () => {
     )
   })
 })
+
+// Regression test for the wrong-session question-bar bleed: a question tool
+// starting in a BACKGROUND tab's live stream built its block via
+// createQuestionToolBlock(toolCall, msgObj), which sources sessionId from
+// msgObj.sessionId — but handleStreamStart creates the streaming ChatMessage
+// with no sessionId field at all, so the block's sessionId is always empty
+// at the point onQuestionBlock fires. The wiring in main.ts called
+// questionBar.addQuestion(block, messageId) with only two arguments, so
+// addQuestion's fallback chain (block.sessionId || envelopeSessionId ||
+// _activeSessionId) landed on _activeSessionId — whichever tab the user
+// currently has open — silently misattributing the background tab's
+// question to the viewed tab. createStreamHandlersForTab(tabId) already has
+// the correct id in scope; it just wasn't threaded through.
+describe("onQuestionBlock wiring — live-stream session attribution", () => {
+  it("main.ts passes this tab's id as addQuestion's envelope sid, not just (block, messageId)", () => {
+    const source = readFileSync(path.join(__dirname, "main.ts"), "utf8")
+    const idx = source.indexOf("onQuestionBlock:")
+    assert.ok(idx >= 0, "main.ts must wire an onQuestionBlock callback")
+    const line = source.slice(idx, source.indexOf("\n", idx))
+    assert.ok(
+      /addQuestion\(block,\s*messageId,\s*tabId\)/.test(line),
+      `onQuestionBlock callback must call addQuestion(block, messageId, tabId) so a block with no sessionId of its own ` +
+      `still attributes to the tab that is actually streaming it, not _activeSessionId. Got: ${line}`,
+    )
+  })
+})

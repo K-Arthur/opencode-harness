@@ -273,7 +273,11 @@ export function repopulateFromMessages(sessionId: string, messages: Array<{ id: 
       if (block.type === "question" && !block.answered) {
         const toolCallId = block.toolCallId || block.id || ""
         if (!state.items.has(toolCallId)) {
-          addQuestion(block as any, msg.id)
+          // Pass sessionId as the envelope sid: a persisted block with no
+          // sessionId of its own must attribute to the session being
+          // repopulated, not whatever tab _activeSessionId still points at
+          // (the old tab — setActiveSession(sessionId) hasn't run yet here).
+          addQuestion(block as any, msg.id, sessionId)
         }
       }
     }

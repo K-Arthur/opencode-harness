@@ -2291,7 +2291,13 @@ function getVsCodeApi() {
       // while a stream is still running, instead of waiting for stream_end.
       postMessage: (m) => vscode.postMessage(m),
       onRenderFlush: postRenderAck,
-      onQuestionBlock: (block, messageId) => questionBar.addQuestion(block, messageId),
+      // Pass this tab's id as the envelope sid. The live-streaming ChatMessage
+      // this block belongs to never carries a sessionId (handleStreamStart
+      // creates it with none), so block.sessionId is always empty here. Without
+      // this third argument, addQuestion's fallback chain lands on whichever
+      // tab the user currently has open, misattributing a background tab's
+      // question to the viewed tab (multi-tab bleed).
+      onQuestionBlock: (block, messageId) => questionBar.addQuestion(block, messageId, tabId),
     })
 
     // WARNING: Class methods live on the prototype, not as own properties.
