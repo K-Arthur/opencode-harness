@@ -315,6 +315,10 @@ export class SessionManager {
     return this.sessionClient.revertMessage(sessionId, messageId)
   }
 
+  async unrevert(sessionId: string): Promise<boolean> {
+    return this.sessionClient.unrevert(sessionId)
+  }
+
   async respondToPermission(sessionId: string, permissionId: string, response: string): Promise<void> {
     return this.sessionClient.respondToPermission(sessionId, permissionId, response)
   }

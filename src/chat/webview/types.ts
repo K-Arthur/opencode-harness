@@ -667,6 +667,7 @@ export type HostMessage =
   | { type: "mcp_servers"; servers: unknown[] }
   | { type: "diff_result"; sessionId: string; blockId: string; ok: boolean; message?: string; checkpointCreated?: boolean }
   | { type: "revert_result"; ok: boolean; sessionId?: string; error?: string }
+  | { type: "unrevert_result"; ok: boolean; sessionId?: string; error?: string }
   | { type: "checkpoint_list"; sessionId: string; checkpoints: CheckpointInfo[] }
   | { type: "checkpoint_restored"; sessionId: string; ok: boolean; checkpointId: string; error?: string }
   | { type: "stash_success"; name: string }
@@ -852,6 +853,7 @@ export type WebviewMessage =
   | { type: "list_checkpoints"; sessionId: string }
   | { type: "restore_checkpoint"; checkpointId: string; sessionId?: string }
   | { type: "revert_message"; sessionId?: string; messageId?: string }
+  | { type: "unrevert"; sessionId?: string }
   | { type: "preview_theme"; theme: unknown }
   | { type: "get_theme_config" }
   | { type: "update_theme_config"; theme: unknown }

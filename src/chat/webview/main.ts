@@ -3904,6 +3904,15 @@ function getVsCodeApi() {
           }
         }
       }],
+      ["unrevert_result", (msg, sid) => {
+        if (sid) {
+          if (msg.ok) {
+            showSystemMessage(sid, "All reverted messages restored.")
+          } else {
+            showSystemMessage(sid, `Unrevert failed: ${msg.error || "Unknown error"}`)
+          }
+        }
+      }],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- loose webview message payload (msg.diffId/path are unknown)
       ["revert_success", (msg: any, sid) => {
         const diffId = msg.diffId as string | undefined

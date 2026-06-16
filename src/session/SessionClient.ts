@@ -390,6 +390,13 @@ export class SessionClient {
     return true
   }
 
+  async unrevert(sessionId: string): Promise<boolean> {
+    const client = this.guardV2()
+    await client.session.unrevert(sessionId)
+    log.info(`Unreverted all messages in session ${sessionId}`)
+    return true
+  }
+
   async respondToPermission(sessionId: string, permissionId: string, response: string): Promise<void> {
     const client = this.guardV2()
     if (!sessionId) throw new Error("Permission response missing session ID")

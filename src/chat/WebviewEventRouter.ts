@@ -160,7 +160,7 @@ export class WebviewEventRouter {
     "compact_session", "execute_command", "open_terminal", "copy_text", "list_commands",
     "insert_at_cursor", "create_file_from_code", "compact_banner_action",
     "edit_message", "attach_image",
-    "delete_session", "archive_session", "pin_session", "set_session_tags", "revert_message",
+    "delete_session", "archive_session", "pin_session", "set_session_tags", "revert_message", "unrevert",
     "list_server_sessions", "delete_server_session", "resume_server_session",
     "add_mcp_server", "update_mcp_server", "remove_mcp_server", "toggle_mcp_server", "get_mcp_servers",
     "show_diff", "list_checkpoints", "restore_checkpoint",
@@ -994,6 +994,19 @@ export class WebviewEventRouter {
             error: (err as Error).message,
           })
           this.opts.showErrorMessage(`OpenCode: Could not revert changes — ${(err as Error).message}`)
+        }
+      }
+    }],
+    ["unrevert", async (_: Record<string, unknown>, sessionId?: string) => {
+      if (sessionId) {
+        try {
+          await this.opts.sessionManager.unrevert(sessionId)
+          this.opts.postMessage({ type: "unrevert_result", sessionId, ok: true })
+          this.opts.showInformationMessage("OpenCode: All reverted messages restored.")
+        } catch (err) {
+          log.error("Unrevert failed", err)
+          this.opts.postMessage({ type: "unrevert_result", sessionId, ok: false, error: (err as Error).message })
+          this.opts.showErrorMessage(`OpenCode: Could not restore reverted messages — ${(err as Error).message}`)
         }
       }
     }],
