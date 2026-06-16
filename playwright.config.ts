@@ -44,5 +44,23 @@ export default defineConfig({
         viewport: { width: 400, height: 700 }
       },
     },
+    {
+      name: 'screenshots-generate',
+      testDir: './tests/visual/screenshots',
+      testMatch: 'generate.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1600, height: 1000 },
+      },
+    },
+    {
+      name: 'screenshots-verify',
+      testDir: './tests/visual/screenshots',
+      testMatch: 'verify.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1600, height: 1000 },
+      },
+    },
   ],
 })

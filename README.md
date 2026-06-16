@@ -32,6 +32,55 @@ worth knowing before you pick one:
 Both extensions are clients over the same opencode server — neither can do
 anything the opencode CLI itself doesn't support.
 
+## Screenshots
+
+<!-- SCREENSHOTS:START -->
+
+<p align="center">
+  <img src="media/screenshots/dark/overview.png" alt="Chat interface with model selection, session controls, and project context" width="100%">
+</p>
+
+<table>
+<tr>
+  <td align="center" width="50%">
+    <img src="media/screenshots/dark/coding-workflow.png" alt="AI-assisted refactoring with tool calls, code diffs, and structured responses" width="100%">
+    <br><strong>AI-assisted refactoring with tool calls, code diffs, and structured responses</strong>
+  </td>
+  <td align="center" width="50%">
+    <img src="media/screenshots/dark/context-management.png" alt="Context-aware coding with file references, @-mentions, and usage tracking" width="100%">
+    <br><strong>Context-aware coding with file references, @-mentions, and usage tracking</strong>
+  </td>
+</tr>
+<tr>
+  <td align="center" width="50%">
+    <img src="media/screenshots/dark/tool-execution.png" alt="Transparent tool execution with search, read, edit, and run operations" width="100%">
+    <br><strong>Transparent tool execution with search, read, edit, and run operations</strong>
+  </td>
+  <td align="center" width="50%">
+    <img src="media/screenshots/dark/sessions.png" alt="Multi-session management with tab switching and conversation history" width="100%">
+    <br><strong>Multi-session management with tab switching and conversation history</strong>
+  </td>
+</tr>
+<tr>
+  <td align="center" width="50%">
+    <img src="media/screenshots/dark/review-changes.png" alt="Code change review with diff preview, accept/discard controls, and per-file navigation" width="100%">
+    <br><strong>Code change review with diff preview, accept/discard controls, and per-file navigation</strong>
+  </td>
+  <td align="center" width="50%">
+    <img src="media/screenshots/dark/model-controls.png" alt="Model and provider selection with Claude, GPT, Gemini, and 75+ models" width="100%">
+    <br><strong>Model and provider selection with Claude, GPT, Gemini, and 75+ models</strong>
+  </td>
+</tr>
+<tr>
+  <td align="center" width="50%">
+    <img src="media/screenshots/dark/build-mode.png" alt="Auto mode with multi-step tool chains, autonomous coding, and test verification" width="100%">
+    <br><strong>Auto mode with multi-step tool chains, autonomous coding, and test verification</strong>
+  </td>
+</tr>
+</table>
+
+<!-- SCREENSHOTS:END -->
+
 ## Features
 
 ### Sessions & chat

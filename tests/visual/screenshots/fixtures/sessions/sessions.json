@@ -1,0 +1,77 @@
+{
+  "type": "init_state",
+  "sessions": [
+    {
+      "id": "session-1",
+      "name": "Explain component structure",
+      "model": "anthropic/claude-sonnet-4-5",
+      "mode": "build",
+      "messages": [
+        {
+          "role": "user",
+          "id": "u1",
+          "sessionId": "session-1",
+          "blocks": [{ "type": "text", "text": "Explain the current file structure of this project" }]
+        },
+        {
+          "role": "assistant",
+          "id": "a1",
+          "sessionId": "session-1",
+          "blocks": [{ "type": "text", "text": "This is a VS Code extension that integrates the OpenCode AI agent. The codebase follows a thin-orchestrator pattern with focused services:\n\n- **ChatProvider** — main orchestrator\n- **SessionManager** — server lifecycle\n- **StreamCoordinator** — concurrent streams\n- **TabManager** — per-tab state" }]
+        }
+      ],
+      "tokenUsage": { "prompt": 1240, "completion": 890, "total": 2130 }
+    },
+    {
+      "id": "session-2",
+      "name": "Refactor retry logic",
+      "model": "anthropic/claude-sonnet-4-5",
+      "mode": "build",
+      "messages": [
+        {
+          "role": "user",
+          "id": "u2",
+          "sessionId": "session-2",
+          "blocks": [{ "type": "text", "text": "Refactor the retry logic to use exponential backoff" }]
+        },
+        {
+          "role": "assistant",
+          "id": "a2",
+          "sessionId": "session-2",
+          "blocks": [
+            { "type": "text", "text": "I'll refactor the retry logic to use exponential backoff with jitter." },
+            { "type": "tool", "id": "t1", "tool": "rg", "state": "completed", "args": { "pattern": "retryDelay" }, "result": "Found retryDelay in RetryQueueService.ts:42" },
+            { "type": "tool", "id": "t2", "tool": "edit", "state": "completed", "args": { "file": "src/chat/RetryQueueService.ts" }, "result": "Applied exponential backoff" }
+          ]
+        }
+      ],
+      "tokenUsage": { "prompt": 2100, "completion": 1450, "total": 3550 }
+    },
+    {
+      "id": "session-3",
+      "name": "Add unit tests for diff",
+      "model": "openai/gpt-4o",
+      "mode": "build",
+      "messages": [
+        {
+          "role": "user",
+          "id": "u3",
+          "sessionId": "session-3",
+          "blocks": [{ "type": "text", "text": "Write unit tests for the diff rendering logic" }]
+        },
+        {
+          "role": "assistant",
+          "id": "a3",
+          "sessionId": "session-3",
+          "blocks": [{ "type": "text", "text": "I'll write tests covering the diff block renderer, hunk navigation, and word-level diff computation." }]
+        }
+      ],
+      "tokenUsage": { "prompt": 800, "completion": 600, "total": 1400 }
+    }
+  ],
+  "activeSessionId": "session-1",
+  "globalModel": "anthropic/claude-sonnet-4-5",
+  "workspaceName": "opencode-harness",
+  "maxConcurrentStreams": 5,
+  "branch": "master"
+}

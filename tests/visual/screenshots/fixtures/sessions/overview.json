@@ -1,0 +1,41 @@
+{
+  "type": "init_state",
+  "sessions": [
+    {
+      "id": "session-overview",
+      "name": "Explain component structure",
+      "model": "anthropic/claude-sonnet-4-5",
+      "mode": "build",
+      "messages": [
+        {
+          "role": "user",
+          "id": "u1",
+          "sessionId": "session-overview",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "Explain the current file structure of this project"
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "id": "a1",
+          "sessionId": "session-overview",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "This is a VS Code extension that integrates the OpenCode AI agent into VS Code. Here's the high-level architecture:\n\n## Core Structure\n\n- **`src/extension.ts`** — Extension entry point; registers commands and the webview provider\n- **`src/chat/ChatProvider.ts`** — Main orchestrator for the chat panel; delegates to services\n- **`src/session/SessionManager.ts`** — Manages the opencode HTTP server lifecycle\n\n## Chat Services\n\nThe chat panel is decomposed into focused services:\n\n| Service | Responsibility |\n|---------|---------------|\n| `StreamCoordinator` | Manages concurrent AI streams |\n| `MessageRouter` | Routes webview ↔ host messages |\n| `TabManager` | Per-tab state and persistence |\n| `RetryQueueService` | Message retry with backoff |\n\n## Webview Layer\n\nThe webview (`src/chat/webview/`) is a standalone browser bundle:\n\n- **`main.ts`** — Entry point; message dispatch and state management\n- **`renderer.ts`** — Block-level rendering (text, tools, diffs, errors)\n- **`composer.ts`** — Input area, slash commands, queue UI\n\nThe architecture follows a **thin-orchestrator** pattern — `ChatProvider` delegates to services rather than accumulating logic."
+            }
+          ]
+        }
+      ],
+      "tokenUsage": { "prompt": 1240, "completion": 890, "total": 2130 }
+    }
+  ],
+  "activeSessionId": "session-overview",
+  "globalModel": "anthropic/claude-sonnet-4-5",
+  "workspaceName": "opencode-harness",
+  "maxConcurrentStreams": 5,
+  "branch": "master"
+}

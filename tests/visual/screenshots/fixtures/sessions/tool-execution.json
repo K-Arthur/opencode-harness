@@ -1,0 +1,81 @@
+{
+  "type": "init_state",
+  "sessions": [
+    {
+      "id": "session-tools",
+      "name": "Find and fix type error",
+      "model": "anthropic/claude-sonnet-4-5",
+      "mode": "build",
+      "messages": [
+        {
+          "role": "user",
+          "id": "u1",
+          "sessionId": "session-tools",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "There's a TypeScript error in the session converter — something about incompatible types. Find it and fix it."
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "id": "a1",
+          "sessionId": "session-tools",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "Let me search for the type error in the session converter."
+            },
+            {
+              "type": "tool",
+              "id": "t1",
+              "tool": "rg",
+              "state": "completed",
+              "args": { "pattern": "Type.*not assignable|incompatible|Conversion|converter", "path": "src/session/" },
+              "result": "src/session/sdkMessageConverter.ts:87: Type 'string | undefined' is not assignable to type 'string'\nsrc/session/sdkMessageConverter.ts:142: Conversion of type 'unknown' to type 'Block' may be a mistake"
+            },
+            {
+              "type": "tool",
+              "id": "t2",
+              "tool": "read",
+              "state": "completed",
+              "args": { "file": "src/session/sdkMessageConverter.ts", "startLine": 80, "endLine": 150 },
+              "result": "Found two type errors at lines 87 and 142"
+            },
+            {
+              "type": "text",
+              "text": "Found two issues:\n1. Line 87: `sessionName` can be `undefined` but the target type requires `string`\n2. Line 142: Unsafe cast from `unknown` to `Block`\n\nFixing both:"
+            },
+            {
+              "type": "tool",
+              "id": "t3",
+              "tool": "edit",
+              "state": "completed",
+              "args": { "file": "src/session/sdkMessageConverter.ts", "description": "Fix type errors: add fallback for undefined sessionName, add proper type guard for Block cast" },
+              "result": "Applied edit to src/session/sdkMessageConverter.ts"
+            },
+            {
+              "type": "tool",
+              "id": "t4",
+              "tool": "run",
+              "state": "completed",
+              "args": { "command": "npx tsc --noEmit 2>&1 | head -20" },
+              "result": "No errors found. TypeScript compilation succeeded."
+            },
+            {
+              "type": "text",
+              "text": "Both type errors fixed:\n\n- **Line 87**: Added `|| \"Untitled\"` fallback for `undefined` session name\n- **Line 142**: Replaced unsafe cast with a proper `isBlock()` type guard\n\nTypeScript compiles cleanly now."
+            }
+          ]
+        }
+      ],
+      "tokenUsage": { "prompt": 1800, "completion": 1200, "total": 3000 }
+    }
+  ],
+  "activeSessionId": "session-tools",
+  "globalModel": "anthropic/claude-sonnet-4-5",
+  "workspaceName": "opencode-harness",
+  "maxConcurrentStreams": 5,
+  "branch": "master"
+}

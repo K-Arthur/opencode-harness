@@ -1,0 +1,95 @@
+{
+  "type": "init_state",
+  "sessions": [
+    {
+      "id": "session-refactor",
+      "name": "Refactor retry logic",
+      "model": "anthropic/claude-sonnet-4-5",
+      "mode": "build",
+      "messages": [
+        {
+          "role": "user",
+          "id": "u1",
+          "sessionId": "session-refactor",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "Refactor the retry logic in RetryQueueService to use exponential backoff instead of fixed delay"
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "id": "a1",
+          "sessionId": "session-refactor",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "I'll refactor the retry logic to use exponential backoff. Let me first look at the current implementation."
+            },
+            {
+              "type": "tool",
+              "id": "t1",
+              "tool": "rg",
+              "state": "completed",
+              "args": { "pattern": "retryDelay|backoff|setTimeout", "path": "src/chat/RetryQueueService.ts" },
+              "result": "src/chat/RetryQueueService.ts:42:    const delay = this.config.retryDelayMs || 1000\nsrc/chat/RetryQueueService.ts:58:    setTimeout(() => this.processQueue(), delay)"
+            },
+            {
+              "type": "text",
+              "text": "Found the current fixed-delay pattern. Now I'll apply the refactored implementation with exponential backoff:"
+            },
+            {
+              "type": "tool",
+              "id": "t2",
+              "tool": "edit",
+              "state": "completed",
+              "args": { "file": "src/chat/RetryQueueService.ts", "description": "Replace fixed delay with exponential backoff" },
+              "result": "Applied edit to src/chat/RetryQueueService.ts"
+            },
+            {
+              "type": "diff",
+              "diffId": "diff-retry",
+              "path": "src/chat/RetryQueueService.ts",
+              "state": "accepted",
+              "linesAdded": 8,
+              "linesRemoved": 3,
+              "hunks": [
+                {
+                  "id": "h1",
+                  "oldStart": 38,
+                  "newStart": 38,
+                  "state": "accepted",
+                  "lines": [
+                    { "type": "context", "oldLine": 38, "newLine": 38, "content": "  private scheduleRetry(item: QueueItem, attempt: number): void {" },
+                    { "type": "removed", "oldLine": 39, "content": "    const delay = this.config.retryDelayMs || 1000" },
+                    { "type": "removed", "oldLine": 40, "content": "    if (attempt >= this.config.maxRetries) {" },
+                    { "type": "added", "newLine": 39, "content": "    const baseDelay = this.config.retryDelayMs || 1000" },
+                    { "type": "added", "newLine": 40, "content": "    const delay = Math.min(baseDelay * Math.pow(2, attempt), 30_000)" },
+                    { "type": "added", "newLine": 41, "content": "    const jitter = delay * 0.1 * Math.random()" },
+                    { "type": "added", "newLine": 42, "content": "    if (attempt >= this.config.maxRetries) {" },
+                    { "type": "context", "oldLine": 41, "newLine": 43, "content": "      this.markFailed(item)" },
+                    { "type": "context", "oldLine": 42, "newLine": 44, "content": "      return" },
+                    { "type": "context", "oldLine": 43, "newLine": 45, "content": "    }" },
+                    { "type": "removed", "oldLine": 44, "content": "    setTimeout(() => this.processQueue(), delay)" },
+                    { "type": "added", "newLine": 46, "content": "    setTimeout(() => this.processQueue(), delay + jitter)" }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": "Done. The retry logic now uses exponential backoff with jitter:\n\n- **Base delay** starts at `retryDelayMs` (default 1s)\n- **Exponential**: delay doubles each attempt (`2^attempt`)\n- **Cap**: maximum 30 seconds\n- **Jitter**: 10% random jitter to prevent thundering herd\n\nThe `attempt` parameter is already passed by the caller, so no signature changes were needed."
+            }
+          ]
+        }
+      ],
+      "tokenUsage": { "prompt": 2100, "completion": 1450, "total": 3550 }
+    }
+  ],
+  "activeSessionId": "session-refactor",
+  "globalModel": "anthropic/claude-sonnet-4-5",
+  "workspaceName": "opencode-harness",
+  "maxConcurrentStreams": 5,
+  "branch": "master"
+}

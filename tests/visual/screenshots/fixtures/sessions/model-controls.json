@@ -1,0 +1,36 @@
+{
+  "type": "init_state",
+  "sessions": [
+    {
+      "id": "session-models",
+      "name": "Compare providers",
+      "model": "anthropic/claude-sonnet-4-5",
+      "mode": "build",
+      "messages": [
+        {
+          "role": "user",
+          "id": "u1",
+          "sessionId": "session-models",
+          "blocks": [{ "type": "text", "text": "What model should I use for code generation tasks?" }]
+        },
+        {
+          "role": "assistant",
+          "id": "a1",
+          "sessionId": "session-models",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "For code generation, here are the top options:\n\n| Model | Provider | Strengths |\n|-------|----------|-----------|\n| Claude Sonnet | Anthropic | Best balance of speed and quality |\n| GPT-4o | OpenAI | Strong at multi-file refactors |\n| Gemini 2.5 Pro | Google | Excellent for large context windows |\n\nYou're currently using **Claude Sonnet**, which is a great default. You can switch models anytime from the model selector above."
+            }
+          ]
+        }
+      ],
+      "tokenUsage": { "prompt": 900, "completion": 650, "total": 1550 }
+    }
+  ],
+  "activeSessionId": "session-models",
+  "globalModel": "anthropic/claude-sonnet-4-5",
+  "workspaceName": "opencode-harness",
+  "maxConcurrentStreams": 5,
+  "branch": "master"
+}

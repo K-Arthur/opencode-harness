@@ -32,395 +32,6 @@
       ],
       "format": "esm"
     },
-    "node_modules/@opencode-ai/sdk/dist/gen/types.gen.js": {
-      "bytes": 65,
-      "imports": [],
-      "format": "esm"
-    },
-    "node_modules/@opencode-ai/sdk/dist/gen/core/serverSentEvents.gen.js": {
-      "bytes": 5497,
-      "imports": [],
-      "format": "esm"
-    },
-    "node_modules/@opencode-ai/sdk/dist/gen/core/auth.gen.js": {
-      "bytes": 411,
-      "imports": [],
-      "format": "esm"
-    },
-    "node_modules/@opencode-ai/sdk/dist/gen/core/bodySerializer.gen.js": {
-      "bytes": 1824,
-      "imports": [],
-      "format": "esm"
-    },
-    "node_modules/@opencode-ai/sdk/dist/gen/core/pathSerializer.gen.js": {
-      "bytes": 3507,
-      "imports": [],
-      "format": "esm"
-    },
-    "node_modules/@opencode-ai/sdk/dist/gen/core/utils.gen.js": {
-      "bytes": 2444,
-      "imports": [
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/gen/core/pathSerializer.gen.js",
-          "kind": "import-statement",
-          "original": "./pathSerializer.gen.js"
-        }
-      ],
-      "format": "esm"
-    },
-    "node_modules/@opencode-ai/sdk/dist/gen/client/utils.gen.js": {
-      "bytes": 7285,
-      "imports": [
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/gen/core/auth.gen.js",
-          "kind": "import-statement",
-          "original": "../core/auth.gen.js"
-        },
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/gen/core/bodySerializer.gen.js",
-          "kind": "import-statement",
-          "original": "../core/bodySerializer.gen.js"
-        },
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/gen/core/pathSerializer.gen.js",
-          "kind": "import-statement",
-          "original": "../core/pathSerializer.gen.js"
-        },
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/gen/core/utils.gen.js",
-          "kind": "import-statement",
-          "original": "../core/utils.gen.js"
-        }
-      ],
-      "format": "esm"
-    },
-    "node_modules/@opencode-ai/sdk/dist/gen/client/client.gen.js": {
-      "bytes": 5674,
-      "imports": [
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/gen/core/serverSentEvents.gen.js",
-          "kind": "import-statement",
-          "original": "../core/serverSentEvents.gen.js"
-        },
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/gen/client/utils.gen.js",
-          "kind": "import-statement",
-          "original": "./utils.gen.js"
-        }
-      ],
-      "format": "esm"
-    },
-    "node_modules/@opencode-ai/sdk/dist/gen/core/params.gen.js": {
-      "bytes": 2642,
-      "imports": [],
-      "format": "esm"
-    },
-    "node_modules/@opencode-ai/sdk/dist/gen/client/index.js": {
-      "bytes": 346,
-      "imports": [
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/gen/core/bodySerializer.gen.js",
-          "kind": "import-statement",
-          "original": "../core/bodySerializer.gen.js"
-        },
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/gen/core/params.gen.js",
-          "kind": "import-statement",
-          "original": "../core/params.gen.js"
-        },
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/gen/client/client.gen.js",
-          "kind": "import-statement",
-          "original": "./client.gen.js"
-        },
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/gen/client/utils.gen.js",
-          "kind": "import-statement",
-          "original": "./utils.gen.js"
-        }
-      ],
-      "format": "esm"
-    },
-    "node_modules/@opencode-ai/sdk/dist/gen/client.gen.js": {
-      "bytes": 211,
-      "imports": [
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/gen/client/index.js",
-          "kind": "import-statement",
-          "original": "./client/index.js"
-        }
-      ],
-      "format": "esm"
-    },
-    "node_modules/@opencode-ai/sdk/dist/gen/sdk.gen.js": {
-      "bytes": 21590,
-      "imports": [
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/gen/client.gen.js",
-          "kind": "import-statement",
-          "original": "./client.gen.js"
-        }
-      ],
-      "format": "esm"
-    },
-    "node_modules/@opencode-ai/sdk/dist/error-interceptor.js": {
-      "bytes": 2138,
-      "imports": [],
-      "format": "esm"
-    },
-    "node_modules/@opencode-ai/sdk/dist/client.js": {
-      "bytes": 1688,
-      "imports": [
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/gen/types.gen.js",
-          "kind": "import-statement",
-          "original": "./gen/types.gen.js"
-        },
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/gen/client/client.gen.js",
-          "kind": "import-statement",
-          "original": "./gen/client/client.gen.js"
-        },
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/gen/sdk.gen.js",
-          "kind": "import-statement",
-          "original": "./gen/sdk.gen.js"
-        },
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/error-interceptor.js",
-          "kind": "import-statement",
-          "original": "./error-interceptor.js"
-        }
-      ],
-      "format": "esm"
-    },
-    "node_modules/isexe/windows.js": {
-      "bytes": 890,
-      "imports": [
-        {
-          "path": "fs",
-          "kind": "require-call",
-          "external": true
-        }
-      ],
-      "format": "cjs"
-    },
-    "node_modules/isexe/mode.js": {
-      "bytes": 909,
-      "imports": [
-        {
-          "path": "fs",
-          "kind": "require-call",
-          "external": true
-        }
-      ],
-      "format": "cjs"
-    },
-    "node_modules/isexe/index.js": {
-      "bytes": 1192,
-      "imports": [
-        {
-          "path": "fs",
-          "kind": "require-call",
-          "external": true
-        },
-        {
-          "path": "node_modules/isexe/windows.js",
-          "kind": "require-call",
-          "original": "./windows.js"
-        },
-        {
-          "path": "node_modules/isexe/mode.js",
-          "kind": "require-call",
-          "original": "./mode.js"
-        }
-      ],
-      "format": "cjs"
-    },
-    "node_modules/which/which.js": {
-      "bytes": 3163,
-      "imports": [
-        {
-          "path": "path",
-          "kind": "require-call",
-          "external": true
-        },
-        {
-          "path": "node_modules/isexe/index.js",
-          "kind": "require-call",
-          "original": "isexe"
-        }
-      ],
-      "format": "cjs"
-    },
-    "node_modules/path-key/index.js": {
-      "bytes": 415,
-      "imports": [],
-      "format": "cjs"
-    },
-    "node_modules/cross-spawn/lib/util/resolveCommand.js": {
-      "bytes": 1557,
-      "imports": [
-        {
-          "path": "path",
-          "kind": "require-call",
-          "external": true
-        },
-        {
-          "path": "node_modules/which/which.js",
-          "kind": "require-call",
-          "original": "which"
-        },
-        {
-          "path": "node_modules/path-key/index.js",
-          "kind": "require-call",
-          "original": "path-key"
-        }
-      ],
-      "format": "cjs"
-    },
-    "node_modules/cross-spawn/lib/util/escape.js": {
-      "bytes": 1383,
-      "imports": [],
-      "format": "cjs"
-    },
-    "node_modules/shebang-regex/index.js": {
-      "bytes": 42,
-      "imports": [],
-      "format": "cjs"
-    },
-    "node_modules/shebang-command/index.js": {
-      "bytes": 387,
-      "imports": [
-        {
-          "path": "node_modules/shebang-regex/index.js",
-          "kind": "require-call",
-          "original": "shebang-regex"
-        }
-      ],
-      "format": "cjs"
-    },
-    "node_modules/cross-spawn/lib/util/readShebang.js": {
-      "bytes": 549,
-      "imports": [
-        {
-          "path": "fs",
-          "kind": "require-call",
-          "external": true
-        },
-        {
-          "path": "node_modules/shebang-command/index.js",
-          "kind": "require-call",
-          "original": "shebang-command"
-        }
-      ],
-      "format": "cjs"
-    },
-    "node_modules/cross-spawn/lib/parse.js": {
-      "bytes": 3065,
-      "imports": [
-        {
-          "path": "path",
-          "kind": "require-call",
-          "external": true
-        },
-        {
-          "path": "node_modules/cross-spawn/lib/util/resolveCommand.js",
-          "kind": "require-call",
-          "original": "./util/resolveCommand"
-        },
-        {
-          "path": "node_modules/cross-spawn/lib/util/escape.js",
-          "kind": "require-call",
-          "original": "./util/escape"
-        },
-        {
-          "path": "node_modules/cross-spawn/lib/util/readShebang.js",
-          "kind": "require-call",
-          "original": "./util/readShebang"
-        }
-      ],
-      "format": "cjs"
-    },
-    "node_modules/cross-spawn/lib/enoent.js": {
-      "bytes": 1471,
-      "imports": [],
-      "format": "cjs"
-    },
-    "node_modules/cross-spawn/index.js": {
-      "bytes": 1192,
-      "imports": [
-        {
-          "path": "child_process",
-          "kind": "require-call",
-          "external": true
-        },
-        {
-          "path": "node_modules/cross-spawn/lib/parse.js",
-          "kind": "require-call",
-          "original": "./lib/parse"
-        },
-        {
-          "path": "node_modules/cross-spawn/lib/enoent.js",
-          "kind": "require-call",
-          "original": "./lib/enoent"
-        }
-      ],
-      "format": "cjs"
-    },
-    "node_modules/@opencode-ai/sdk/dist/process.js": {
-      "bytes": 1088,
-      "imports": [
-        {
-          "path": "node:child_process",
-          "kind": "import-statement",
-          "external": true
-        }
-      ],
-      "format": "esm"
-    },
-    "node_modules/@opencode-ai/sdk/dist/server.js": {
-      "bytes": 3301,
-      "imports": [
-        {
-          "path": "node_modules/cross-spawn/index.js",
-          "kind": "import-statement",
-          "original": "cross-spawn"
-        },
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/process.js",
-          "kind": "import-statement",
-          "original": "./process.js"
-        }
-      ],
-      "format": "esm"
-    },
-    "node_modules/@opencode-ai/sdk/dist/index.js": {
-      "bytes": 419,
-      "imports": [
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/client.js",
-          "kind": "import-statement",
-          "original": "./client.js"
-        },
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/server.js",
-          "kind": "import-statement",
-          "original": "./server.js"
-        },
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/client.js",
-          "kind": "import-statement",
-          "original": "./client.js"
-        },
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/server.js",
-          "kind": "import-statement",
-          "original": "./server.js"
-        }
-      ],
-      "format": "esm"
-    },
     "node_modules/@opencode-ai/sdk/dist/v2/gen/types.gen.js": {
       "bytes": 65,
       "imports": [],
@@ -572,6 +183,11 @@
       ],
       "format": "esm"
     },
+    "node_modules/@opencode-ai/sdk/dist/error-interceptor.js": {
+      "bytes": 2138,
+      "imports": [],
+      "format": "esm"
+    },
     "node_modules/@opencode-ai/sdk/dist/v2/client.js": {
       "bytes": 2773,
       "imports": [
@@ -599,13 +215,8 @@
       "format": "esm"
     },
     "src/session/opencodeClientFactory.ts": {
-      "bytes": 1227,
+      "bytes": 478,
       "imports": [
-        {
-          "path": "node_modules/@opencode-ai/sdk/dist/index.js",
-          "kind": "import-statement",
-          "original": "@opencode-ai/sdk"
-        },
         {
           "path": "node_modules/@opencode-ai/sdk/dist/v2/client.js",
           "kind": "import-statement",
@@ -615,7 +226,7 @@
       "format": "esm"
     },
     "src/session/AuthProvider.ts": {
-      "bytes": 4654,
+      "bytes": 3736,
       "imports": [
         {
           "path": "crypto",
@@ -631,11 +242,6 @@
           "path": "src/utils/security.ts",
           "kind": "import-statement",
           "original": "../utils/security"
-        },
-        {
-          "path": "src/session/opencodeClientFactory.ts",
-          "kind": "require-call",
-          "original": "./opencodeClientFactory"
         },
         {
           "path": "src/session/opencodeClientFactory.ts",
@@ -905,7 +511,7 @@
       "format": "esm"
     },
     "src/session/eventHandlers/QuestionHandler.ts": {
-      "bytes": 3514,
+      "bytes": 3493,
       "imports": [
         {
           "path": "./types",
@@ -916,14 +522,24 @@
       "format": "esm"
     },
     "src/session/eventHandlers/SessionNextHandler.ts": {
-      "bytes": 8824,
+      "bytes": 9079,
       "imports": [
         {
           "path": "./types",
           "kind": "import-statement",
           "external": true
+        },
+        {
+          "path": "src/session/liveToolOutput.ts",
+          "kind": "import-statement",
+          "original": "../liveToolOutput"
         }
       ],
+      "format": "esm"
+    },
+    "src/session/eventHandlers/PtyEventHandler.ts": {
+      "bytes": 1022,
+      "imports": [],
       "format": "esm"
     },
     "src/session/eventCoverage.ts": {
@@ -932,7 +548,7 @@
       "format": "esm"
     },
     "src/session/EventNormalizer.ts": {
-      "bytes": 5865,
+      "bytes": 5956,
       "imports": [
         {
           "path": "./eventHandlers/types",
@@ -1030,6 +646,11 @@
           "original": "./eventHandlers/SessionNextHandler"
         },
         {
+          "path": "src/session/eventHandlers/PtyEventHandler.ts",
+          "kind": "import-statement",
+          "original": "./eventHandlers/PtyEventHandler"
+        },
+        {
           "path": "src/session/eventCoverage.ts",
           "kind": "import-statement",
           "original": "./eventCoverage"
@@ -1048,7 +669,7 @@
       "format": "esm"
     },
     "src/session/SseSubscriber.ts": {
-      "bytes": 14991,
+      "bytes": 14922,
       "imports": [
         {
           "path": "vscode",
@@ -1078,6 +699,11 @@
       ],
       "format": "esm"
     },
+    "src/session/v2ResponseMappers.ts": {
+      "bytes": 3205,
+      "imports": [],
+      "format": "esm"
+    },
     "src/session/sessionUtils.ts": {
       "bytes": 5230,
       "imports": [],
@@ -1099,11 +725,16 @@
       ],
       "format": "esm"
     },
+    "src/session/resolveSessionQuestionApi.ts": {
+      "bytes": 3058,
+      "imports": [],
+      "format": "esm"
+    },
     "src/session/SessionClient.ts": {
-      "bytes": 21581,
+      "bytes": 20956,
       "imports": [
         {
-          "path": "@opencode-ai/sdk",
+          "path": "@opencode-ai/sdk/v2",
           "kind": "import-statement",
           "external": true
         },
@@ -1116,6 +747,11 @@
           "path": "src/utils/outputChannel.ts",
           "kind": "import-statement",
           "original": "../utils/outputChannel"
+        },
+        {
+          "path": "src/session/v2ResponseMappers.ts",
+          "kind": "import-statement",
+          "original": "./v2ResponseMappers"
         },
         {
           "path": "src/session/sessionUtils.ts",
@@ -1131,12 +767,17 @@
           "path": "src/session/liveToolOutput.ts",
           "kind": "import-statement",
           "original": "./liveToolOutput"
+        },
+        {
+          "path": "src/session/resolveSessionQuestionApi.ts",
+          "kind": "import-statement",
+          "original": "./resolveSessionQuestionApi"
         }
       ],
       "format": "esm"
     },
-    "src/session/SessionManager.ts": {
-      "bytes": 16610,
+    "src/session/PtyService.ts": {
+      "bytes": 6051,
       "imports": [
         {
           "path": "vscode",
@@ -1144,7 +785,23 @@
           "external": true
         },
         {
-          "path": "@opencode-ai/sdk",
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/session/SessionManager.ts": {
+      "bytes": 16711,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "@opencode-ai/sdk/v2",
           "kind": "import-statement",
           "external": true
         },
@@ -1192,6 +849,11 @@
           "path": "src/session/SessionClient.ts",
           "kind": "import-statement",
           "original": "./SessionClient"
+        },
+        {
+          "path": "src/session/PtyService.ts",
+          "kind": "import-statement",
+          "original": "./PtyService"
         }
       ],
       "format": "esm"
@@ -1207,7 +869,7 @@
       "format": "esm"
     },
     "src/session/SessionStore.ts": {
-      "bytes": 49803,
+      "bytes": 50286,
       "imports": [
         {
           "path": "vscode",
@@ -1342,7 +1004,7 @@
       "format": "esm"
     },
     "src/monitor/ContextMonitor.ts": {
-      "bytes": 18559,
+      "bytes": 19750,
       "imports": [
         {
           "path": "vscode",
@@ -1475,7 +1137,7 @@
       "format": "esm"
     },
     "src/session/sdkMessageConverter.ts": {
-      "bytes": 10586,
+      "bytes": 10589,
       "imports": [
         {
           "path": "src/session/questionModel.ts",
@@ -1491,7 +1153,7 @@
       "format": "esm"
     },
     "src/chat/WebviewContent.ts": {
-      "bytes": 8979,
+      "bytes": 9371,
       "imports": [
         {
           "path": "vscode",
@@ -1612,7 +1274,7 @@
       "format": "esm"
     },
     "src/chat/handlers/attachmentStorage.ts": {
-      "bytes": 10202,
+      "bytes": 10230,
       "imports": [
         {
           "path": "node:fs",
@@ -1648,7 +1310,7 @@
       "format": "esm"
     },
     "src/chat/handlers/SubagentHeartbeat.ts": {
-      "bytes": 5465,
+      "bytes": 5468,
       "imports": [
         {
           "path": "src/utils/outputChannel.ts",
@@ -1669,7 +1331,7 @@
       "format": "esm"
     },
     "src/chat/handlers/StreamCoordinator.ts": {
-      "bytes": 103899,
+      "bytes": 103631,
       "imports": [
         {
           "path": "vscode",
@@ -1900,7 +1562,7 @@
       "format": "esm"
     },
     "src/chat/handlers/MessageRouter.ts": {
-      "bytes": 10643,
+      "bytes": 10679,
       "imports": [
         {
           "path": "vscode",
@@ -1931,7 +1593,7 @@
       "format": "esm"
     },
     "src/chat/webview/slash-commands.ts": {
-      "bytes": 13130,
+      "bytes": 13300,
       "imports": [],
       "format": "esm"
     },
@@ -2152,6 +1814,22 @@
       "imports": [],
       "format": "esm"
     },
+    "src/chat/diff/hunkStaging.ts": {
+      "bytes": 7463,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/diff/hunkRevertPlan.ts": {
+      "bytes": 2176,
+      "imports": [
+        {
+          "path": "src/chat/diff/hunkStaging.ts",
+          "kind": "import-statement",
+          "original": "./hunkStaging"
+        }
+      ],
+      "format": "esm"
+    },
     "src/session/messageId.ts": {
       "bytes": 2965,
       "imports": [],
@@ -2185,7 +1863,7 @@
       "format": "esm"
     },
     "src/chat/WebviewEventRouter.ts": {
-      "bytes": 105611,
+      "bytes": 118333,
       "imports": [
         {
           "path": "vscode",
@@ -2201,6 +1879,11 @@
           "path": "src/chat/diff/sdkFileContentToDiffLines.ts",
           "kind": "import-statement",
           "original": "./diff/sdkFileContentToDiffLines"
+        },
+        {
+          "path": "src/chat/diff/hunkRevertPlan.ts",
+          "kind": "import-statement",
+          "original": "./diff/hunkRevertPlan"
         },
         {
           "path": "src/session/sdkMessageConverter.ts",
@@ -2251,6 +1934,11 @@
           "path": "src/session/eventHandlers/TodoUpdatedHandler.ts",
           "kind": "import-statement",
           "original": "../session/eventHandlers/TodoUpdatedHandler"
+        },
+        {
+          "path": "child_process",
+          "kind": "require-call",
+          "external": true
         },
         {
           "path": "child_process",
@@ -2319,7 +2007,7 @@
       "format": "esm"
     },
     "src/chat/BackfillService.ts": {
-      "bytes": 8272,
+      "bytes": 8275,
       "imports": [
         {
           "path": "../session/SessionStore",
@@ -2396,8 +2084,40 @@
       ],
       "format": "esm"
     },
+    "src/chat/TemplateService.ts": {
+      "bytes": 1972,
+      "imports": [
+        {
+          "path": "../prompts/templateLibrary",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/prompts/templateLibrary.ts": {
+      "bytes": 3321,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
     "src/chat/ProviderManagementService.ts": {
-      "bytes": 2285,
+      "bytes": 10593,
       "imports": [
         {
           "path": "../model/ProviderConfigManager",
@@ -2564,7 +2284,7 @@
       "format": "esm"
     },
     "src/chat/ChatProvider.ts": {
-      "bytes": 105214,
+      "bytes": 109095,
       "imports": [
         {
           "path": "vscode",
@@ -2822,6 +2542,16 @@
           "original": "./StashService"
         },
         {
+          "path": "src/chat/TemplateService.ts",
+          "kind": "import-statement",
+          "original": "./TemplateService"
+        },
+        {
+          "path": "src/prompts/templateLibrary.ts",
+          "kind": "import-statement",
+          "original": "../prompts/templateLibrary"
+        },
+        {
           "path": "src/chat/ProviderManagementService.ts",
           "kind": "import-statement",
           "original": "./ProviderManagementService"
@@ -2953,7 +2683,7 @@
       "format": "esm"
     },
     "src/model/ModelManager.ts": {
-      "bytes": 22324,
+      "bytes": 22779,
       "imports": [
         {
           "path": "vscode",
@@ -3015,7 +2745,7 @@
       "format": "esm"
     },
     "src/mcp/McpServerManager.ts": {
-      "bytes": 19534,
+      "bytes": 19576,
       "imports": [
         {
           "path": "fs",
@@ -3945,46 +3675,6 @@
     "dist/extension.js": {
       "imports": [
         {
-          "path": "fs",
-          "kind": "require-call",
-          "external": true
-        },
-        {
-          "path": "fs",
-          "kind": "require-call",
-          "external": true
-        },
-        {
-          "path": "fs",
-          "kind": "require-call",
-          "external": true
-        },
-        {
-          "path": "path",
-          "kind": "require-call",
-          "external": true
-        },
-        {
-          "path": "path",
-          "kind": "require-call",
-          "external": true
-        },
-        {
-          "path": "fs",
-          "kind": "require-call",
-          "external": true
-        },
-        {
-          "path": "path",
-          "kind": "require-call",
-          "external": true
-        },
-        {
-          "path": "child_process",
-          "kind": "require-call",
-          "external": true
-        },
-        {
           "path": "vscode",
           "kind": "require-call",
           "external": true
@@ -4290,6 +3980,11 @@
           "external": true
         },
         {
+          "path": "child_process",
+          "kind": "require-call",
+          "external": true
+        },
+        {
           "path": "vscode",
           "kind": "require-call",
           "external": true
@@ -4488,101 +4183,11 @@
       "exports": [],
       "entryPoint": "src/extension.ts",
       "inputs": {
-        "node_modules/@opencode-ai/sdk/dist/gen/types.gen.js": {
-          "bytesInOutput": 17
-        },
-        "node_modules/@opencode-ai/sdk/dist/gen/core/serverSentEvents.gen.js": {
-          "bytesInOutput": 1541
-        },
-        "node_modules/@opencode-ai/sdk/dist/gen/core/auth.gen.js": {
-          "bytesInOutput": 162
-        },
-        "node_modules/@opencode-ai/sdk/dist/gen/core/bodySerializer.gen.js": {
-          "bytesInOutput": 101
-        },
-        "node_modules/@opencode-ai/sdk/dist/gen/core/pathSerializer.gen.js": {
-          "bytesInOutput": 1559
-        },
-        "node_modules/@opencode-ai/sdk/dist/gen/core/utils.gen.js": {
-          "bytesInOutput": 875
-        },
-        "node_modules/@opencode-ai/sdk/dist/gen/client/utils.gen.js": {
-          "bytesInOutput": 2523
-        },
-        "node_modules/@opencode-ai/sdk/dist/gen/client/client.gen.js": {
-          "bytesInOutput": 1889
-        },
-        "node_modules/@opencode-ai/sdk/dist/gen/core/params.gen.js": {
-          "bytesInOutput": 113
-        },
-        "node_modules/@opencode-ai/sdk/dist/gen/client/index.js": {
-          "bytesInOutput": 36
-        },
-        "node_modules/@opencode-ai/sdk/dist/gen/client.gen.js": {
-          "bytesInOutput": 69
-        },
-        "node_modules/@opencode-ai/sdk/dist/gen/sdk.gen.js": {
-          "bytesInOutput": 8920
-        },
-        "node_modules/@opencode-ai/sdk/dist/error-interceptor.js": {
-          "bytesInOutput": 707
-        },
-        "node_modules/@opencode-ai/sdk/dist/client.js": {
-          "bytesInOutput": 680
-        },
-        "node_modules/isexe/windows.js": {
-          "bytesInOutput": 488
-        },
-        "node_modules/isexe/mode.js": {
-          "bytesInOutput": 495
-        },
-        "node_modules/isexe/index.js": {
-          "bytesInOutput": 549
-        },
-        "node_modules/which/which.js": {
-          "bytesInOutput": 1463
-        },
-        "node_modules/path-key/index.js": {
-          "bytesInOutput": 233
-        },
-        "node_modules/cross-spawn/lib/util/resolveCommand.js": {
-          "bytesInOutput": 478
-        },
-        "node_modules/cross-spawn/lib/util/escape.js": {
-          "bytesInOutput": 332
-        },
-        "node_modules/shebang-regex/index.js": {
-          "bytesInOutput": 55
-        },
-        "node_modules/shebang-command/index.js": {
-          "bytesInOutput": 203
-        },
-        "node_modules/cross-spawn/lib/util/readShebang.js": {
-          "bytesInOutput": 215
-        },
-        "node_modules/cross-spawn/lib/parse.js": {
-          "bytesInOutput": 867
-        },
-        "node_modules/cross-spawn/lib/enoent.js": {
-          "bytesInOutput": 623
-        },
-        "node_modules/cross-spawn/index.js": {
-          "bytesInOutput": 422
-        },
-        "node_modules/@opencode-ai/sdk/dist/process.js": {
-          "bytesInOutput": 17
-        },
-        "node_modules/@opencode-ai/sdk/dist/server.js": {
-          "bytesInOutput": 37
-        },
-        "node_modules/@opencode-ai/sdk/dist/index.js": {
-          "bytesInOutput": 36
-        },
         "node_modules/@opencode-ai/sdk/dist/v2/gen/types.gen.js": {
           "bytesInOutput": 17
         },
         "node_modules/@opencode-ai/sdk/dist/v2/gen/core/serverSentEvents.gen.js": {
-          "bytesInOutput": 1723
+          "bytesInOutput": 1728
         },
         "node_modules/@opencode-ai/sdk/dist/v2/gen/core/pathSerializer.gen.js": {
           "bytesInOutput": 1559
@@ -4617,23 +4222,26 @@
         "node_modules/@opencode-ai/sdk/dist/v2/gen/sdk.gen.js": {
           "bytesInOutput": 45193
         },
+        "node_modules/@opencode-ai/sdk/dist/error-interceptor.js": {
+          "bytesInOutput": 707
+        },
         "node_modules/@opencode-ai/sdk/dist/v2/client.js": {
           "bytesInOutput": 1284
         },
         "src/session/opencodeClientFactory.ts": {
-          "bytesInOutput": 164
+          "bytesInOutput": 103
         },
         "src/extension.ts": {
           "bytesInOutput": 11422
         },
         "src/session/SessionManager.ts": {
-          "bytesInOutput": 7179
+          "bytesInOutput": 7287
         },
         "src/utils/outputChannel.ts": {
           "bytesInOutput": 2410
         },
         "src/session/AuthProvider.ts": {
-          "bytesInOutput": 2181
+          "bytesInOutput": 1937
         },
         "src/utils/security.ts": {
           "bytesInOutput": 2103
@@ -4702,16 +4310,19 @@
           "bytesInOutput": 167
         },
         "src/session/eventHandlers/QuestionHandler.ts": {
-          "bytesInOutput": 1603
+          "bytesInOutput": 1602
         },
         "src/session/eventHandlers/SessionNextHandler.ts": {
-          "bytesInOutput": 4461
+          "bytesInOutput": 4560
+        },
+        "src/session/eventHandlers/PtyEventHandler.ts": {
+          "bytesInOutput": 293
         },
         "src/session/eventCoverage.ts": {
           "bytesInOutput": 2175
         },
         "src/session/EventNormalizer.ts": {
-          "bytesInOutput": 1478
+          "bytesInOutput": 1485
         },
         "src/session/sseParser.ts": {
           "bytesInOutput": 1982
@@ -4723,7 +4334,10 @@
           "bytesInOutput": 8896
         },
         "src/session/SessionClient.ts": {
-          "bytesInOutput": 10351
+          "bytesInOutput": 9741
+        },
+        "src/session/v2ResponseMappers.ts": {
+          "bytesInOutput": 861
         },
         "src/session/sessionUtils.ts": {
           "bytesInOutput": 1424
@@ -4731,8 +4345,14 @@
         "src/session/streamTrace.ts": {
           "bytesInOutput": 257
         },
+        "src/session/resolveSessionQuestionApi.ts": {
+          "bytesInOutput": 812
+        },
+        "src/session/PtyService.ts": {
+          "bytesInOutput": 2891
+        },
         "src/session/SessionStore.ts": {
-          "bytesInOutput": 19368
+          "bytesInOutput": 19381
         },
         "src/session/activityCoalesce.ts": {
           "bytesInOutput": 977
@@ -4759,7 +4379,7 @@
           "bytesInOutput": 1487
         },
         "src/monitor/ContextMonitor.ts": {
-          "bytesInOutput": 7508
+          "bytesInOutput": 7731
         },
         "src/terminal/TerminalBridge.ts": {
           "bytesInOutput": 1442
@@ -4780,7 +4400,7 @@
           "bytesInOutput": 2785
         },
         "src/chat/ChatProvider.ts": {
-          "bytesInOutput": 46884
+          "bytesInOutput": 49093
         },
         "src/monitor/UsageAnalytics.ts": {
           "bytesInOutput": 2956
@@ -4795,7 +4415,7 @@
           "bytesInOutput": 3423
         },
         "src/chat/WebviewContent.ts": {
-          "bytesInOutput": 4214
+          "bytesInOutput": 4474
         },
         "src/utils/cssSanitizer.ts": {
           "bytesInOutput": 166
@@ -4804,7 +4424,7 @@
           "bytesInOutput": 6694
         },
         "src/chat/handlers/StreamCoordinator.ts": {
-          "bytesInOutput": 45920
+          "bytesInOutput": 45934
         },
         "src/chat/handlers/StreamFinalizerService.ts": {
           "bytesInOutput": 1947
@@ -4825,7 +4445,7 @@
           "bytesInOutput": 75
         },
         "src/chat/handlers/attachmentStorage.ts": {
-          "bytesInOutput": 2682
+          "bytesInOutput": 2706
         },
         "src/chat/handlers/RunActivityTracker.ts": {
           "bytesInOutput": 6827
@@ -4867,13 +4487,13 @@
           "bytesInOutput": 3130
         },
         "src/chat/handlers/MessageRouter.ts": {
-          "bytesInOutput": 4662
+          "bytesInOutput": 4690
         },
         "src/chat/ChatCommands.ts": {
           "bytesInOutput": 3710
         },
         "src/chat/webview/slash-commands.ts": {
-          "bytesInOutput": 2335
+          "bytesInOutput": 2470
         },
         "src/chat/AutoCompactor.ts": {
           "bytesInOutput": 3673
@@ -4909,10 +4529,16 @@
           "bytesInOutput": 3416
         },
         "src/chat/WebviewEventRouter.ts": {
-          "bytesInOutput": 50605
+          "bytesInOutput": 56601
         },
         "src/chat/diff/sdkFileContentToDiffLines.ts": {
           "bytesInOutput": 992
+        },
+        "src/chat/diff/hunkStaging.ts": {
+          "bytesInOutput": 2119
+        },
+        "src/chat/diff/hunkRevertPlan.ts": {
+          "bytesInOutput": 275
         },
         "src/session/messageId.ts": {
           "bytesInOutput": 484
@@ -4953,8 +4579,14 @@
         "src/chat/StashService.ts": {
           "bytesInOutput": 1037
         },
+        "src/chat/TemplateService.ts": {
+          "bytesInOutput": 1101
+        },
+        "src/prompts/templateLibrary.ts": {
+          "bytesInOutput": 1652
+        },
         "src/chat/ProviderManagementService.ts": {
-          "bytesInOutput": 1321
+          "bytesInOutput": 5337
         },
         "src/chat/DiffAcceptService.ts": {
           "bytesInOutput": 498
@@ -4990,7 +4622,7 @@
           "bytesInOutput": 2398
         },
         "src/model/ModelManager.ts": {
-          "bytesInOutput": 10108
+          "bytesInOutput": 10324
         },
         "src/model/openRouterMetadata.ts": {
           "bytesInOutput": 1452
@@ -5005,10 +4637,10 @@
           "bytesInOutput": 3381
         },
         "src/mcp/McpServerManager.ts": {
-          "bytesInOutput": 7693
+          "bytesInOutput": 7727
         },
         "src/install/OpencodeInstaller.ts": {
-          "bytesInOutput": 4395
+          "bytesInOutput": 4385
         },
         "src/utils/lazyStarter.ts": {
           "bytesInOutput": 134
@@ -5041,7 +4673,7 @@
           "bytesInOutput": 1131
         },
         "src/commands/model.ts": {
-          "bytesInOutput": 1810
+          "bytesInOutput": 1800
         },
         "src/commands/misc.ts": {
           "bytesInOutput": 1990
@@ -5074,7 +4706,7 @@
           "bytesInOutput": 845
         }
       },
-      "bytes": 632947
+      "bytes": 630313
     }
   }
 }

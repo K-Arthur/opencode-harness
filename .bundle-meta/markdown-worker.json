@@ -1059,7 +1059,7 @@
       "format": "esm"
     },
     "src/chat/webview/markdownWorker.ts": {
-      "bytes": 4446,
+      "bytes": 4926,
       "imports": [
         {
           "path": "node_modules/highlight.js/es/core.js",
@@ -1401,7 +1401,7 @@
           "bytesInOutput": 0
         },
         "src/chat/webview/markdownWorker.ts": {
-          "bytesInOutput": 1744
+          "bytesInOutput": 1856
         },
         "src/chat/webview/htmlUtils.ts": {
           "bytesInOutput": 471
@@ -1452,7 +1452,7 @@
           "bytesInOutput": 1878
         }
       },
-      "bytes": 233472
+      "bytes": 233584
     }
   }
 }

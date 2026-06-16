@@ -1,0 +1,81 @@
+{
+  "type": "init_state",
+  "sessions": [
+    {
+      "id": "session-context",
+      "name": "Add error handling",
+      "model": "anthropic/claude-sonnet-4-5",
+      "mode": "build",
+      "messages": [
+        {
+          "role": "user",
+          "id": "u1",
+          "sessionId": "session-context",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "@file:\"src/chat/StreamCoordinator.ts\" @file:\"src/chat/MessageRouter.ts\" Add proper error handling for when the server connection drops mid-stream. I want retry logic and user-visible error states."
+            },
+            {
+              "type": "context",
+              "id": "ctx1",
+              "files": [
+                { "path": "src/chat/StreamCoordinator.ts", "lineCount": 245 },
+                { "path": "src/chat/MessageRouter.ts", "lineCount": 180 }
+              ]
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "id": "a1",
+          "sessionId": "session-context",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "I'll add connection-drop error handling to both files. Let me analyze the current error paths first."
+            },
+            {
+              "type": "tool",
+              "id": "t1",
+              "tool": "rg",
+              "state": "completed",
+              "args": { "pattern": "catch|error|disconnect|abort", "path": "src/chat/StreamCoordinator.ts" },
+              "result": "src/chat/StreamCoordinator.ts:89:    } catch (err) {\nsrc/chat/StreamCoordinator.ts:90:      log.error(\"Stream error:\", err)\nsrc/chat/StreamCoordinator.ts:156:      case \"aborted\":"
+            },
+            {
+              "type": "text",
+              "text": "I can see the current error handling is minimal — errors are logged but not surfaced to the user. Here's my plan:\n\n1. Add a `ConnectionDropError` class with retry metadata\n2. Wrap stream operations in retry-aware error boundaries\n3. Push `show_error` messages to the webview on terminal failures\n\nLet me implement this:"
+            },
+            {
+              "type": "tool",
+              "id": "t2",
+              "tool": "edit",
+              "state": "completed",
+              "args": { "file": "src/chat/StreamCoordinator.ts", "description": "Add ConnectionDropError and retry wrapper" },
+              "result": "Applied edit to src/chat/StreamCoordinator.ts"
+            },
+            {
+              "type": "tool",
+              "id": "t3",
+              "tool": "edit",
+              "state": "completed",
+              "args": { "file": "src/chat/MessageRouter.ts", "description": "Route connection errors to webview" },
+              "result": "Applied edit to src/chat/MessageRouter.ts"
+            },
+            {
+              "type": "text",
+              "text": "Both files updated. The error handling now:\n\n- **Retries** transient connection drops up to 3 times with backoff\n- **Surfaces** terminal errors as `show_error` messages in the chat\n- **Preserves** partial stream content so users don't lose progress\n- **Logs** all errors for debugging via the existing log infrastructure"
+            }
+          ]
+        }
+      ],
+      "tokenUsage": { "prompt": 3200, "completion": 1800, "total": 5000 }
+    }
+  ],
+  "activeSessionId": "session-context",
+  "globalModel": "anthropic/claude-sonnet-4-5",
+  "workspaceName": "opencode-harness",
+  "maxConcurrentStreams": 5,
+  "branch": "master"
+}

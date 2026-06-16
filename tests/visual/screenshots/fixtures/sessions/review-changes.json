@@ -1,0 +1,81 @@
+{
+  "type": "init_state",
+  "sessions": [
+    {
+      "id": "session-diff",
+      "name": "Update message handler",
+      "model": "anthropic/claude-sonnet-4-5",
+      "mode": "build",
+      "messages": [
+        {
+          "role": "user",
+          "id": "u1",
+          "sessionId": "session-diff",
+          "blocks": [{ "type": "text", "text": "Update the message handler to support the new stream_tool_partial event type" }]
+        },
+        {
+          "role": "assistant",
+          "id": "a1",
+          "sessionId": "session-diff",
+          "blocks": [
+            { "type": "text", "text": "I'll update the message handler to support `stream_tool_partial`. Here are the changes:" },
+            {
+              "type": "diff",
+              "diffId": "diff-handler",
+              "path": "src/chat/webview/main.ts",
+              "state": "pending",
+              "linesAdded": 12,
+              "linesRemoved": 4,
+              "hunks": [
+                {
+                  "id": "h1",
+                  "oldStart": 3420,
+                  "newStart": 3420,
+                  "state": "pending",
+                  "lines": [
+                    { "type": "context", "oldLine": 3420, "newLine": 3420, "content": "      [\"stream_tool_start\", (msg) => {" },
+                    { "type": "context", "oldLine": 3421, "newLine": 3421, "content": "        const sessionId = msg.sessionId as string" },
+                    { "type": "context", "oldLine": 3422, "newLine": 3422, "content": "        if (!sessionId) return" },
+                    { "type": "removed", "oldLine": 3423, "content": "        const tool = stateManager.getTool(sessionId, msg.toolId as string)" },
+                    { "type": "removed", "oldLine": 3424, "content": "        if (tool) tool.state = \"running\"" },
+                    { "type": "added", "newLine": 3423, "content": "        const toolId = msg.toolId as string" },
+                    { "type": "added", "newLine": 3424, "content": "        if (!toolId) return" },
+                    { "type": "added", "newLine": 3425, "content": "        const tool = stateManager.upsertTool(sessionId, toolId, {" },
+                    { "type": "added", "newLine": 3426, "content": "          name: msg.tool as string," },
+                    { "type": "added", "newLine": 3427, "content": "          state: \"running\"," },
+                    { "type": "added", "newLine": 3428, "content": "          class: (msg.class as ToolCallClass) || \"meta\"," },
+                    { "type": "added", "newLine": 3429, "content": "          args: msg.args," },
+                    { "type": "added", "newLine": 3430, "content": "        })" },
+                    { "type": "context", "oldLine": 3425, "newLine": 3431, "content": "        if (!tool) return" },
+                    { "type": "removed", "oldLine": 3426, "content": "        tool.args = msg.args" },
+                    { "type": "removed", "oldLine": 3427, "content": "        tool.class = (msg.class as string) || \"meta\"" },
+                    { "type": "context", "oldLine": 3428, "newLine": 3432, "content": "        renderToolUpdate(sessionId, tool)" },
+                    { "type": "added", "newLine": 3433, "content": "      }]," },
+                    { "type": "added", "newLine": 3434, "content": "      [\"stream_tool_partial\", (msg) => {" },
+                    { "type": "added", "newLine": 3435, "content": "        const sessionId = msg.sessionId as string" },
+                    { "type": "added", "newLine": 3436, "content": "        const toolId = msg.toolId as string" },
+                    { "type": "added", "newLine": 3437, "content": "        if (!sessionId || !toolId) return" },
+                    { "type": "added", "newLine": 3438, "content": "        const tool = stateManager.getTool(sessionId, toolId)" },
+                    { "type": "added", "newLine": 3439, "content": "        if (!tool) return" },
+                    { "type": "added", "newLine": 3440, "content": "        tool.partialStdout = msg.stdout as string" },
+                    { "type": "added", "newLine": 3441, "content": "        renderToolUpdate(sessionId, tool)" }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": "The changes:\n\n1. **Refactored `stream_tool_start`** — uses `upsertTool` instead of `getTool` + manual field assignment, ensuring the tool block exists before updating\n2. **Added `stream_tool_partial`** — new handler that updates `partialStdout` for live output streaming\n3. **Guard clauses** — early returns for missing `sessionId`/`toolId`\n\nAccept or discard these changes?"
+            }
+          ]
+        }
+      ],
+      "tokenUsage": { "prompt": 2800, "completion": 1900, "total": 4700 }
+    }
+  ],
+  "activeSessionId": "session-diff",
+  "globalModel": "anthropic/claude-sonnet-4-5",
+  "workspaceName": "opencode-harness",
+  "maxConcurrentStreams": 5,
+  "branch": "master"
+}

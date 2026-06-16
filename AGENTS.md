@@ -121,6 +121,7 @@ Flags: `--no-bump` (keep version — not recommended), `--code=code-insiders`
 | Roundtrip | Integration roundtrip tests | `node --test tests/integration/message-roundtrip.test.mjs` |
 | Integration | VS Code Extension Dev Host (requires xvfb on Linux) | `npm run test:integration` |
 | Visual | Playwright screenshot regression | `npm run test:visual` |
+| Marketplace screenshots | Automated marketplace asset generation + visual regression | `npm run screenshots:generate` / `npm run screenshots:verify` |
 
 Run all unit+contract+roundtrip: `npm test`
 
