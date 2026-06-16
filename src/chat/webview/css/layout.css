@@ -1700,7 +1700,6 @@
 /* ─── Keyboard Shortcuts Modal ─── */
 .keyboard-shortcuts-content {
   max-width: var(--modal-width-xl, 680px);
-  overflow-y: auto;
 }
 
 .keyboard-shortcuts-table {

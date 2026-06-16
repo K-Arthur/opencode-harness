@@ -149,13 +149,20 @@ export function setupKeyboardShortcutsModal(container: HTMLElement): void {
   header.appendChild(closeBtnEl)
   inner.appendChild(header)
 
+  // Table lives in its own scrolling body, separate from the header, so the
+  // title and close button stay fixed in view instead of scrolling away
+  // underneath the table's sticky thead.
+  const body = document.createElement("div")
+  body.className = "modal-body"
+
   const table = document.createElement("table")
   table.className = "keyboard-shortcuts-table"
   table.innerHTML = `
     <thead><tr><th>Shortcut</th><th>Action</th><th>Context</th></tr></thead>
     <tbody>${renderTable(SHORTCUT_TABLE)}</tbody>
   `
-  inner.appendChild(table)
+  body.appendChild(table)
+  inner.appendChild(body)
   modalEl.appendChild(inner)
   container.appendChild(modalEl)
 

@@ -128,4 +128,28 @@ describe("keyboardShortcutsModal", () => {
     assert.ok(closeBtn, "close button must exist")
     assert.equal(closeBtn!.getAttribute("aria-label"), "Close")
   })
+
+  // The title and close button must stay fixed in view while only the table
+  // scrolls beneath them — `.keyboard-shortcuts-content` used to put
+  // `overflow-y: auto` directly on the container that held BOTH the header
+  // and the table, so the header scrolled away with everything else while
+  // the table's `position: sticky; top: 0` thead stuck to the same
+  // scroll-container top the header had just vacated, visually overlapping
+  // the close button. The fix wraps the table in its own `.modal-body`
+  // scroll container, matching every other modal in this codebase (session
+  // history, API key), so the header is a non-scrolling sibling instead of
+  // sharing a scroll box with the sticky table header.
+  it("keeps the header out of the scrolling body so it can't collide with the sticky table header", () => {
+    setupKeyboardShortcutsModal(document.getElementById("app")!)
+    openKeyboardShortcutsModal()
+    const modal = document.getElementById("keyboard-shortcuts-modal")!
+    const header = modal.querySelector(".modal-header")
+    const body = modal.querySelector(".modal-body")
+    const table = modal.querySelector(".keyboard-shortcuts-table")
+    assert.ok(header, "header must exist")
+    assert.ok(body, "a dedicated scrolling body wrapper must exist")
+    assert.ok(table, "table must exist")
+    assert.ok(!body!.contains(header), "header must not be inside the scrolling body")
+    assert.ok(body!.contains(table), "table must be inside the scrolling body")
+  })
 })

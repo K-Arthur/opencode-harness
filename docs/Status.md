@@ -6,6 +6,30 @@
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
 
+## Unreleased Highlights (2026-06-16) — keyboard-shortcuts modal header fix
+
+- **Keyboard-shortcuts modal header no longer collides with the table's
+  sticky column headers.** `.keyboard-shortcuts-content` put `overflow-y:
+  auto` directly on the container holding *both* the modal header (title +
+  close button) and the shortcuts table, so the header scrolled away with
+  the rest of the content. Meanwhile `.keyboard-shortcuts-table thead th`
+  is `position: sticky; top: 0`, which sticks relative to the nearest
+  scrolling ancestor — the same container — so the column-header row ended
+  up sticking right where the modal header had just scrolled out from
+  under it, visually overlapping the title and close button. Every other
+  modal in this codebase (session history, API key) avoids this by giving
+  the header a non-scrolling `.modal-body` sibling; the keyboard-shortcuts
+  modal was the one outlier missing that wrapper. Fix:
+  `setupKeyboardShortcutsModal` now wraps the table in a `.modal-body` div
+  (reusing the existing `flex: 1; overflow-y: auto` rule already used by
+  every other modal), and `.keyboard-shortcuts-content` no longer sets its
+  own `overflow-y`. New regression coverage in
+  `keyboardShortcutsModal.test.ts` asserts the header is not inside the
+  scrolling body. Audited every other `position: sticky` usage in the
+  webview CSS (sticky search box, sticky bottom composer, sticky diff
+  action bar, sticky changed-files summary bar) — none share this bug,
+  since each is the sole sticky element in its own scroll container.
+
 ## Unreleased Highlights (2026-06-16) — multi-tab session-attribution fixes
 
 - **Question bar no longer bleeds across tabs.** Questions arriving via the
