@@ -19,6 +19,7 @@ import {
   MORE_HORIZONTAL_SVG,
 } from "./icons"
 import { renderToolCallBlock, isToolCallBlock, groupConsecutiveToolCalls } from "./toolCallRenderer"
+import { computeWordDiffs } from "./wordDiff"
 import { getThinkingVisible } from "./displayPrefs"
 import type {
   Block,
@@ -1378,6 +1379,7 @@ function createDiffTableWrapper(diffBlock: DiffBlock, opts: RenderOptions): HTML
   table.className = "diff-table"
 
   let budget = MAX_DIFF_LINES_RENDERED
+  diffBlock.hunks.forEach((hunk) => computeWordDiffs(hunk.lines))
   diffBlock.hunks.forEach((hunk, hunkIndex) => {
     budget = appendHunkRows(table, diffBlock, hunk, hunkIndex, opts, budget)
   })
@@ -1516,7 +1518,7 @@ function createDiffLineRow(line: DiffLine): HTMLElement {
   row.appendChild(createDiffLineNumber("old", line.oldLine))
   row.appendChild(createDiffLineNumber("new", line.newLine))
   row.appendChild(createDiffLineMarker(line))
-  row.appendChild(createDiffLineContent(line.content))
+  row.appendChild(createDiffLineContent(line))
   return row
 }
 
@@ -1534,10 +1536,14 @@ function createDiffLineMarker(line: DiffLine): HTMLElement {
   return marker
 }
 
-function createDiffLineContent(contentText: string): HTMLElement {
+function createDiffLineContent(line: DiffLine): HTMLElement {
   const content = document.createElement("td")
   content.className = "diff-line-content"
-  content.textContent = contentText
+  if (line.wordDiffHtml) {
+    content.innerHTML = line.wordDiffHtml
+  } else {
+    content.textContent = line.content
+  }
   return content
 }
 

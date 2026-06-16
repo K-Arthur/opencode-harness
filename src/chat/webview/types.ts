@@ -60,6 +60,7 @@ export interface DiffLine {
   oldLine?: number
   newLine?: number
   content: string
+  wordDiffHtml?: string
 }
 
 export interface DiffBlock {

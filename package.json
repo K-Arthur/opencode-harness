@@ -1104,6 +1104,7 @@
     "@commitlint/config-conventional": "^20.5.3",
     "@playwright/test": "^1.60.0",
     "@stryker-mutator/core": "^9.6.1",
+    "@types/diff-match-patch": "^1.0.36",
     "@types/jsdom": "^28.0.3",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.19.17",
