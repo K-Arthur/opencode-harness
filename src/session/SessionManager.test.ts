@@ -9,7 +9,8 @@ const authSource = readFileSync(path.join(__dirname, "AuthProvider.ts"), "utf8")
 const clientSource = readFileSync(path.join(__dirname, "SessionClient.ts"), "utf8")
 const lifecycleSource = readFileSync(path.join(__dirname, "ServerLifecycle.ts"), "utf8")
 const sseSource = readFileSync(path.join(__dirname, "SseSubscriber.ts"), "utf8")
-const allSource = source + authSource + clientSource + lifecycleSource + sseSource
+const ptySource = readFileSync(path.join(__dirname, "PtyService.ts"), "utf8")
+const allSource = source + authSource + clientSource + lifecycleSource + sseSource + ptySource
 
 describe("SessionManager.ts", () => {
   it("exports OpencodeEventType union type", () => {
@@ -38,6 +39,18 @@ describe("SessionManager.ts", () => {
 
   it("has dispose method", () => {
     assert.ok(source.includes("dispose()"))
+  })
+
+  it("has ptyService property", () => {
+    assert.ok(source.includes("ptyService: PtyService") || source.includes("readonly ptyService:"))
+  })
+
+  it("creates PtyService in constructor", () => {
+    assert.ok(source.includes("new PtyService("))
+  })
+
+  it("disposes PtyService on stop", () => {
+    assert.ok(source.includes("this.ptyService.dispose()"))
   })
 
   it("has sendPrompt method", () => {
