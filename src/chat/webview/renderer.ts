@@ -2141,12 +2141,14 @@ function createDiffReviewLabel(): HTMLElement {
 function createHunkNavButtons(wrapper: HTMLElement): HTMLElement {
   const nav = document.createElement("span")
   nav.className = "diff-hunk-nav"
+  nav.setAttribute("role", "group")
+  nav.setAttribute("aria-label", "Hunk navigation")
 
   const prevBtn = document.createElement("button")
   prevBtn.className = "diff-btn diff-btn--nav"
   prevBtn.setAttribute("aria-label", "Previous hunk")
   prevBtn.title = "Previous hunk (\u2191)"
-  prevBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>`
+  prevBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>`
   prevBtn.addEventListener("click", (e) => {
     e.stopPropagation()
     const headers = Array.from(wrapper.querySelectorAll("tr.diff-hunk-header"))
@@ -2164,7 +2166,7 @@ function createHunkNavButtons(wrapper: HTMLElement): HTMLElement {
   nextBtn.className = "diff-btn diff-btn--nav"
   nextBtn.setAttribute("aria-label", "Next hunk")
   nextBtn.title = "Next hunk (\u2193)"
-  nextBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>`
+  nextBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>`
   nextBtn.addEventListener("click", (e) => {
     e.stopPropagation()
     const headers = Array.from(wrapper.querySelectorAll("tr.diff-hunk-header"))

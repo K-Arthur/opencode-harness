@@ -1764,12 +1764,12 @@
 .diff-btn--accept {
   background: var(--color-accent);
   color: var(--oc-accent-fg);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-sm);
 }
 
 .diff-btn--accept:hover {
   background: var(--oc-accent-hover);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-md);
 }
 
 .diff-btn--discard {
