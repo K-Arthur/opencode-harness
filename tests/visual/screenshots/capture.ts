@@ -44,17 +44,17 @@ export const DARK_THEME_VARS: Record<string, string> = {
   "--oc-muted": "#969696",
   "--color-muted": "#969696",
   "--oc-description": "#969696",
-  // ─── Messages ───
-  "--oc-user-msg-bg": "#2d2d2d",
+  // ─── Messages (cli-default: uses editor bg/fg) ───
+  "--oc-user-msg-bg": "#1e1e1e",
   "--oc-user-msg-fg": "#d4d4d4",
   "--oc-assistant-msg-bg": "transparent",
-  "--oc-assistant-msg-fg": "#cccccc",
+  "--oc-assistant-msg-fg": "#d4d4d4",
   // ─── Tool Calls ───
-  "--tool-read-color": "#3794ff",
-  "--tool-write-color": "#f44747",
-  "--tool-exec-color": "#4ec9b0",
+  "--tool-read-color": "#9cdcfe",
+  "--tool-write-color": "#f48771",
+  "--tool-exec-color": "#89d185",
   // ─── Skill Badge ───
-  "--oc-skill-badge-bg": "#0e639c",
+  "--oc-skill-badge-bg": "#4d4d4d",
   "--oc-skill-badge-fg": "#ffffff",
   // ─── Thinking ───
   "--oc-thinking-bg": "rgba(210, 153, 34, 0.08)",
@@ -136,7 +136,7 @@ export const DARK_THEME_VARS: Record<string, string> = {
   "--vscode-list-warningForeground": "#d29922",
   "--vscode-errorForeground": "#f48771",
   "--vscode-textLink-foreground": "#3794ff",
-  "--vscode-badge-background": "#0e639c",
+  "--vscode-badge-background": "#4d4d4d",
   "--vscode-badge-foreground": "#ffffff",
   "--vscode-charts-yellow": "#d29922",
   "--vscode-charts-green": "#4ec9b0",
@@ -153,6 +153,7 @@ export const DARK_THEME_VARS: Record<string, string> = {
   "--vscode-symbolIcon-operatorForeground": "#d4d4d4",
   "--vscode-testing-iconPassed": "#4ec9b0",
   "--vscode-editorWarning-foreground": "#d29922",
+  "--vscode-debugIcon-startForeground": "#89d185",
 }
 
 /**

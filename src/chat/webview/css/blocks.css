@@ -1795,6 +1795,28 @@
   border-color: var(--color-accent);
 }
 
+.diff-btn--nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  min-height: unset;
+  flex: unset;
+}
+
+.diff-btn--nav:hover {
+  background: var(--oc-list-hover);
+  color: var(--color-fg);
+  border-color: var(--color-border);
+}
+
 .diff-btn--open {
   background: transparent;
   color: var(--color-muted);
