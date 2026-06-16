@@ -1504,7 +1504,30 @@ function createHunkHeaderRow(
 
   const hunkCell = document.createElement("td")
   hunkCell.colSpan = 3
-  hunkCell.textContent = `@@ -${hunk.oldStart},${oldCount} +${hunk.newStart},${newCount} @@`
+
+  const collapseBtn = document.createElement("button")
+  collapseBtn.className = "diff-hunk-collapse"
+  collapseBtn.setAttribute("aria-label", "Collapse hunk")
+  collapseBtn.title = "Collapse"
+  collapseBtn.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>`
+  collapseBtn.style.cssText = "margin-right:8px;background:none;border:none;cursor:pointer;color:var(--color-muted);padding:0;display:inline-flex;align-items:center;"
+  collapseBtn.addEventListener("click", (e) => {
+    e.stopPropagation()
+    const collapsed = hunkRow.classList.toggle("diff-hunk--collapsed")
+    collapseBtn.innerHTML = collapsed
+      ? `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg>`
+      : `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>`
+    collapseBtn.title = collapsed ? "Expand" : "Collapse"
+    collapseBtn.setAttribute("aria-label", collapsed ? "Expand hunk" : "Collapse hunk")
+    let next = hunkRow.nextElementSibling as HTMLElement | null
+    while (next && !next.classList.contains("diff-hunk-header")) {
+      ;(next as HTMLElement).style.display = collapsed ? "none" : ""
+      next = next.nextElementSibling as HTMLElement | null
+    }
+  })
+  hunkCell.appendChild(collapseBtn)
+
+  hunkCell.appendChild(document.createTextNode(`@@ -${hunk.oldStart},${oldCount} +${hunk.newStart},${newCount} @@`))
   hunkRow.appendChild(hunkCell)
   hunkRow.appendChild(createHunkActionCell(diffBlock, hunk, hunkId, hunkState, oldCount, opts, hunkRow))
 
@@ -1667,6 +1690,7 @@ function renderPendingDiffActions(actionBar: HTMLElement, wrapper: HTMLElement, 
     showDiffStateChip(actionBar, wrapper, "discarded")
     collapseDiffContent(wrapper)
   }))
+  actionBar.appendChild(createHunkNavButtons(wrapper))
   const moreBtn = document.createElement("button")
   moreBtn.className = "diff-btn-more"
   moreBtn.setAttribute("aria-label", "More diff actions")
@@ -1716,6 +1740,51 @@ function createDiffReviewLabel(): HTMLElement {
   reviewLabel.className = "diff-review-label"
   reviewLabel.textContent = "Review"
   return reviewLabel
+}
+
+function createHunkNavButtons(wrapper: HTMLElement): HTMLElement {
+  const nav = document.createElement("span")
+  nav.className = "diff-hunk-nav"
+
+  const prevBtn = document.createElement("button")
+  prevBtn.className = "diff-btn diff-btn--nav"
+  prevBtn.setAttribute("aria-label", "Previous hunk")
+  prevBtn.title = "Previous hunk (\u2191)"
+  prevBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>`
+  prevBtn.addEventListener("click", (e) => {
+    e.stopPropagation()
+    const headers = Array.from(wrapper.querySelectorAll("tr.diff-hunk-header"))
+    const viewTop = wrapper.getBoundingClientRect().top
+    for (let i = headers.length - 1; i >= 0; i--) {
+      const rect = (headers[i] as HTMLElement).getBoundingClientRect()
+      if (rect.top < viewTop - 10) {
+        ;(headers[i] as HTMLElement).scrollIntoView({ behavior: "smooth", block: "start" })
+        return
+      }
+    }
+  })
+
+  const nextBtn = document.createElement("button")
+  nextBtn.className = "diff-btn diff-btn--nav"
+  nextBtn.setAttribute("aria-label", "Next hunk")
+  nextBtn.title = "Next hunk (\u2193)"
+  nextBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>`
+  nextBtn.addEventListener("click", (e) => {
+    e.stopPropagation()
+    const headers = Array.from(wrapper.querySelectorAll("tr.diff-hunk-header"))
+    const viewTop = wrapper.getBoundingClientRect().top
+    for (let i = 0; i < headers.length; i++) {
+      const rect = (headers[i] as HTMLElement).getBoundingClientRect()
+      if (rect.top > viewTop + 10) {
+        ;(headers[i] as HTMLElement).scrollIntoView({ behavior: "smooth", block: "start" })
+        return
+      }
+    }
+  })
+
+  nav.appendChild(prevBtn)
+  nav.appendChild(nextBtn)
+  return nav
 }
 
 const DIFF_BUTTON_CLASS_BY_KIND: Record<string, string> = {
