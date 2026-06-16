@@ -231,4 +231,12 @@ void describe("SessionClient", () => {
       assert.ok(source.includes("fallbackToken: sinceToken"), "passes sinceToken as extraction fallback")
     })
   })
+
+  void describe("replyToQuestion / rejectQuestion", () => {
+    void it("delegates to the shared resolveSessionQuestionApi helper", () => {
+      assert.ok(source.includes("import { resolveSessionQuestionApi }"), "imports the pure helper")
+      assert.ok(source.includes("resolveSessionQuestionApi(client)"), "replyToQuestion/rejectQuestion call the helper")
+      assert.ok(!source.includes("private resolveSessionQuestionApi("), "no longer duplicates the helper as a private method")
+    })
+  })
 })
