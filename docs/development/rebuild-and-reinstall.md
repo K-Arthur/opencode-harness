@@ -25,7 +25,7 @@ path in its stack frames tells you which one is actually running:
 | Log path contains… | You're running… | To see your changes… |
 |---|---|---|
 | `…/PersonalProjects/opencode-harness/dist/extension.js` | the **Extension Development Host** (F5 / "Run Extension") — it loads the **workspace `dist/`** | **`npm run build`**, then **reload _that_ `[Extension Development Host]` window** (`Ctrl/Cmd+R` in it). A VSIX reinstall does **NOT** change this window. |
-| `~/.vscode/extensions/kevinoarthur.opencode-harness-<ver>/dist/extension.js` | the **installed VSIX** | **`npm run reinstall`**, then **Developer: Reload Window**. |
+| `~/.vscode/extensions/koarthur.opencode-harness-<ver>/dist/extension.js` | the **installed VSIX** | **`npm run reinstall`**, then **Developer: Reload Window**. |
 
 So:
 - **Dev Host** (the common case here): your source → `dist/` via **`npm run build`**;
@@ -64,7 +64,7 @@ Source: [`scripts/reinstall-extension.mjs`](../../scripts/reinstall-extension.mj
 
 1. `npm version patch --no-git-tag-version` — bump (skip with `--no-bump`).
 2. Delete every `opencode-harness-*.vsix` in the repo.
-3. `code --uninstall-extension kevinoarthur.opencode-harness`.
+3. `code --uninstall-extension koarthur.opencode-harness`.
 4. `vsce package --no-dependencies` (runs `vscode:prepublish`: **typecheck +
    production build + bundle-size check** — a failing typecheck blocks the package).
 5. `code --install-extension <new>.vsix --force`.
@@ -79,7 +79,7 @@ Flags:
 
 ```bash
 code --list-extensions --show-versions | grep opencode   # expect the new version
-ls ~/.vscode/extensions/kevinoarthur.opencode-harness-*   # expect exactly ONE dir
+ls ~/.vscode/extensions/koarthur.opencode-harness-*   # expect exactly ONE dir
 ```
 
 In the running window, the version also shows in the Extensions view. If it
@@ -109,13 +109,13 @@ An installed VSIX should instead load from a versioned install directory, for
 example:
 
 ```text
-~/.vscode/extensions/kevinoarthur.opencode-harness-<version>/dist/extension.js
+~/.vscode/extensions/koarthur.opencode-harness-<version>/dist/extension.js
 ```
 
 The activation log prints the runtime source explicitly:
 
 ```text
-OpenCode Harness runtime: id=kevinoarthur.opencode-harness version=... mode=Development|Production path=... main=...
+OpenCode Harness runtime: id=koarthur.opencode-harness version=... mode=Development|Production path=... main=...
 ```
 
 Use it as the first diagnostic:
@@ -134,8 +134,8 @@ after `npm run build` / the watch task rebuilds `dist/`.
 If state is badly confused (multiple installs, partial uninstalls):
 
 ```bash
-code --uninstall-extension kevinoarthur.opencode-harness
-rm -rf ~/.vscode/extensions/kevinoarthur.opencode-harness-*   # all versions
+code --uninstall-extension koarthur.opencode-harness
+rm -rf ~/.vscode/extensions/koarthur.opencode-harness-*   # all versions
 rm -f opencode-harness-*.vsix                                 # all artifacts
 npm run reinstall
 # then: Developer: Reload Window

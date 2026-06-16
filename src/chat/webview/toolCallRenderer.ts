@@ -8,7 +8,9 @@ import {
   toolIconFor,
   toolStateOverlayFor,
 } from "./icons"
-import { sanitizeHtml, highlightSyntax } from "./syntaxHighlighter"
+import { sanitizeHtml } from "./syntaxHighlighter"
+import { escapeHtml } from "./htmlUtils"
+import { getMarkdownWorkerClient } from "./renderer"
 import { isTaskTool, renderSubagentTaskCard } from "./subagentCard"
 import { isToolOutputRenderAnsiEnabled, renderAnsiToHtml, stripAnsi } from "./ansiUtils"
 import { buildGroupSummaryLabel } from "./groupSummary"
@@ -469,13 +471,16 @@ export function createToolArgsPanel(toolBlock: ToolCallBlock): HTMLElement | nul
     // Large payload: fall through to truncated plain-text display
     const truncated2 = jsonStr.length > 500
     const display2 = truncated2 ? jsonStr.slice(0, 500) : jsonStr
-    argsDiv.innerHTML = sanitizeHtml(highlightSyntax(display2, 'json'))
+    argsDiv.innerHTML = sanitizeHtml(escapeHtml(display2))
     if (truncated2) {
       const more2 = document.createElement("button")
       more2.className = "tool-show-more"
       more2.textContent = "Show more\u2026"
       more2.addEventListener("click", () => {
-        argsDiv.innerHTML = sanitizeHtml(highlightSyntax(jsonStr, 'json'))
+        argsDiv.innerHTML = sanitizeHtml(escapeHtml(jsonStr))
+        void getMarkdownWorkerClient().highlight(jsonStr, "json").then((result) => {
+          if (result) argsDiv.innerHTML = sanitizeHtml(result)
+        })
         more2.remove()
       })
       argsDiv.appendChild(more2)
@@ -484,13 +489,16 @@ export function createToolArgsPanel(toolBlock: ToolCallBlock): HTMLElement | nul
     const argsStr = typeof args === 'string' ? args : JSON.stringify(args, null, 2)
     const truncated = argsStr.length > 500
     const displayStr = truncated ? argsStr.slice(0, 500) : argsStr
-    argsDiv.innerHTML = sanitizeHtml(highlightSyntax(displayStr, 'json'))
+    argsDiv.innerHTML = sanitizeHtml(escapeHtml(displayStr))
     if (truncated) {
       const more = document.createElement("button")
       more.className = "tool-show-more"
       more.textContent = "Show more\u2026"
       more.addEventListener("click", () => {
-        argsDiv.innerHTML = sanitizeHtml(highlightSyntax(argsStr, 'json'))
+        argsDiv.innerHTML = sanitizeHtml(escapeHtml(argsStr))
+        void getMarkdownWorkerClient().highlight(argsStr, "json").then((result) => {
+          if (result) argsDiv.innerHTML = sanitizeHtml(result)
+        })
         more.remove()
       })
       argsDiv.appendChild(more)

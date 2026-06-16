@@ -48,6 +48,32 @@ const cssConfig = {
   outdir: "dist",
   minify: production,
   logLevel: "info",
+  loader: {
+    ".woff": "file",
+    ".woff2": "file",
+    ".ttf": "file",
+    ".eot": "file",
+  },
+}
+
+const mermaidVendorConfig = {
+  entryPoints: [{ in: "src/chat/webview/vendor/mermaidEntry.ts", out: "chat/webview/mermaid-vendor" }],
+  bundle: true,
+  format: "iife",
+  platform: "browser",
+  outdir: "dist",
+  minify: production,
+  logLevel: "info",
+}
+
+const katexVendorConfig = {
+  entryPoints: [{ in: "src/chat/webview/vendor/katexEntry.ts", out: "chat/webview/katex-vendor" }],
+  bundle: true,
+  format: "iife",
+  platform: "browser",
+  outdir: "dist",
+  minify: production,
+  logLevel: "info",
 }
 
 function copyWebviewAssets() {
@@ -75,6 +101,8 @@ if (watch) {
     esbuild.context(extensionConfig).then(ctx => ctx.watch()),
     esbuild.context(webviewConfig).then(ctx => ctx.watch()),
     esbuild.context(markdownWorkerConfig).then(ctx => ctx.watch()),
+    esbuild.context(mermaidVendorConfig).then(ctx => ctx.watch()),
+    esbuild.context(katexVendorConfig).then(ctx => ctx.watch()),
     esbuild.context(cssConfig).then(ctx => ctx.watch()),
   ])
 } else {
@@ -82,6 +110,8 @@ if (watch) {
     esbuild.build(extensionConfig),
     esbuild.build(webviewConfig),
     esbuild.build(markdownWorkerConfig),
+    esbuild.build(mermaidVendorConfig),
+    esbuild.build(katexVendorConfig),
     esbuild.build(cssConfig),
   ])
     .then(copyWebviewAssets)

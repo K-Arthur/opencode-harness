@@ -2,7 +2,7 @@ import MarkdownIt from "markdown-it"
 import taskLists from "markdown-it-task-lists"
 import { escapeHtml } from "./htmlUtils"
 import { isSwitchEventType } from "./switchEvent"
-import { sanitizeHtml, highlightSyntax, clearHighlightCache, getHighlightCacheSize } from "./syntaxHighlighter"
+import { sanitizeHtml } from "./syntaxHighlighter"
 import {
   BRAIN_SVG,
   WARNING_SVG,
@@ -21,6 +21,7 @@ import {
 import { renderToolCallBlock, isToolCallBlock, groupConsecutiveToolCalls } from "./toolCallRenderer"
 import { computeWordDiffs } from "./wordDiff"
 import { getThinkingVisible } from "./displayPrefs"
+import { loadMermaid, loadKatex } from "./vendorLoader"
 import type {
   Block,
   ChatMessage,
@@ -134,14 +135,16 @@ export const MARKDOWN_WORKER_MIN_CHARS = 8_000
 export const MARKDOWN_WORKER_MIN_CODE_CHARS = 4_000
 export const MARKDOWN_WORKER_TIMEOUT_MS = 8_000
 
-type MarkdownWorkerResponse =
+type WorkerMessage =
   | { id: number; html: string }
   | { id: number; error: string }
 
-type PendingMarkdownRender = {
+type PendingWorkerTask = {
   resolve: (html: string | undefined) => void
   timer: ReturnType<typeof setTimeout>
 }
+
+export const HIGHLIGHT_WORKER_TIMEOUT_MS = 10_000
 
 function normalizeMarkdownForRender(text: string, isStreaming: boolean): string {
   return isStreaming ? normalizeStreamingMarkdown(text) : normalizeMarkdownText(text)
@@ -166,9 +169,10 @@ class MarkdownWorkerClient {
   private worker: Worker | undefined
   private workerPromise: Promise<Worker | null> | undefined
   private objectUrl: string | undefined
-  private pending = new Map<number, PendingMarkdownRender>()
+  private pending = new Map<number, PendingWorkerTask>()
   private nextId = 1
   private disabled = false
+  private highlightTimeout = HIGHLIGHT_WORKER_TIMEOUT_MS
 
   async render(normalized: string): Promise<string | undefined> {
     if (this.disabled) return undefined
@@ -185,6 +189,29 @@ class MarkdownWorkerClient {
       this.pending.set(id, { resolve, timer })
       try {
         worker.postMessage({ id, text: normalized })
+      } catch {
+        clearTimeout(timer)
+        this.pending.delete(id)
+        resolve(undefined)
+      }
+    })
+  }
+
+  async highlight(code: string, language: string): Promise<string | undefined> {
+    if (this.disabled) return undefined
+    const worker = await this.getWorker()
+    if (!worker) return undefined
+
+    const id = this.nextId
+    this.nextId = (this.nextId % 0x7fffffff) + 1
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id)
+        resolve(undefined)
+      }, this.highlightTimeout)
+      this.pending.set(id, { resolve, timer })
+      try {
+        worker.postMessage({ id, code, language, type: "highlight" })
       } catch {
         clearTimeout(timer)
         this.pending.delete(id)
@@ -214,6 +241,7 @@ class MarkdownWorkerClient {
     this.worker = undefined
     this.workerPromise = undefined
     this.objectUrl = undefined
+    this.disabled = true
   }
 
   private async getWorker(): Promise<Worker | null> {
@@ -239,14 +267,14 @@ class MarkdownWorkerClient {
     this.objectUrl = objectUrl
     this.worker = worker
 
-    worker.onmessage = (event: MessageEvent<MarkdownWorkerResponse>) => {
+    worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
       const message = event.data
       const entry = this.pending.get(message?.id)
       if (!entry) return
       clearTimeout(entry.timer)
       this.pending.delete(message.id)
       if ("error" in message) {
-        console.warn("[opencode] Markdown worker render error:", message.error)
+        console.warn("[opencode] Markdown worker error:", message.error)
       }
       entry.resolve("html" in message && typeof message.html === "string" ? message.html : undefined)
     }
@@ -261,7 +289,7 @@ class MarkdownWorkerClient {
 
 let markdownWorkerClient: MarkdownWorkerClient | undefined
 
-function getMarkdownWorkerClient(): MarkdownWorkerClient {
+export function getMarkdownWorkerClient(): MarkdownWorkerClient {
   if (!markdownWorkerClient) markdownWorkerClient = new MarkdownWorkerClient()
   return markdownWorkerClient
 }
@@ -298,7 +326,6 @@ export async function renderMarkdownAsync(text: string, isStreaming: boolean = f
 
 export function clearRendererCaches(): void {
   markdownCache.clear()
-  clearHighlightCache()
   markdownWorkerClient?.dispose()
   markdownWorkerClient = undefined
 }
@@ -306,7 +333,7 @@ export function clearRendererCaches(): void {
 export function getRendererCacheStats(): { markdownEntries: number; highlightEntries: number } {
   return {
     markdownEntries: markdownCache.size,
-    highlightEntries: getHighlightCacheSize(),
+    highlightEntries: 0,
   }
 }
 
@@ -315,7 +342,7 @@ const md = new MarkdownIt({
   linkify: true,
   typographer: false,
   breaks: false,
-  highlight: (str, lang) => highlightSyntax(str, lang || ""),
+  highlight: (str, _lang) => escapeHtml(str),
 }).use(taskLists, { label: false })
 
 const defaultLinkOpen = md.renderer.rules.link_open || ((tokens, idx, options, _env, self) =>
@@ -342,7 +369,7 @@ md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
 // but not installed. Install them for enhanced markdown rendering.
 
 
-export { sanitizeHtml, highlightSyntax } from "./syntaxHighlighter"
+export { sanitizeHtml } from "./syntaxHighlighter"
 
 
 // ---------------------------------------------------------------------------
@@ -661,16 +688,161 @@ function renderMarkdownIntoTargetAsync(target: HTMLElement, text: string): void 
   target.dataset.markdownRenderId = renderId
   target.setAttribute("aria-busy", "true")
   void renderMarkdownAsync(text, false)
-    .then((html) => {
+    .then(async (html) => {
       if (target.dataset.markdownRenderId !== renderId) return
       target.innerHTML = html
       target.removeAttribute("aria-busy")
+      await renderMermaidBlocks(target)
+      await renderMathBlocks(target)
     })
     .catch(() => {
       if (target.dataset.markdownRenderId !== renderId) return
       target.innerHTML = renderMarkdown(text, false)
       target.removeAttribute("aria-busy")
     })
+}
+
+// ---------------------------------------------------------------------------
+// Mermaid diagram rendering — lazy-loads mermaid vendor bundle, replaces
+// ```mermaid fenced code blocks with inline SVGs.
+// ---------------------------------------------------------------------------
+
+export async function renderMermaidBlocks(container: HTMLElement): Promise<void> {
+  const mermaidCodes = container.querySelectorAll("code.language-mermaid")
+  if (mermaidCodes.length === 0) return
+
+  let mermaid: Awaited<ReturnType<typeof loadMermaid>> | undefined
+  try {
+    mermaid = await loadMermaid()
+  } catch (err) {
+    console.warn("[opencode] Failed to load mermaid:", err)
+    return
+  }
+
+  for (const codeEl of mermaidCodes) {
+    const text = (codeEl.textContent || "").trim()
+    if (!text) continue
+
+    try {
+      const { svg } = await mermaid.render(`mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, text)
+      const wrapper = document.createElement("div")
+      wrapper.className = "mermaid-diagram"
+      wrapper.innerHTML = sanitizeHtml(svg)
+      const pre = codeEl.closest("pre")
+      if (pre && pre.parentNode) {
+        pre.parentNode.replaceChild(wrapper, pre)
+      }
+    } catch (err) {
+      console.warn("[opencode] Mermaid render failed:", err)
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// KaTeX math rendering — lazy-loads katex vendor bundle, replaces $$...$$
+// (display) and $...$ (inline) math expressions in text content.
+// ---------------------------------------------------------------------------
+
+const DISPLAY_MATH_RE = /\$\$(.+?)\$\$/gs
+const INLINE_MATH_RE = /(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)/g
+
+export async function renderMathBlocks(container: HTMLElement): Promise<void> {
+  let katex: Awaited<ReturnType<typeof loadKatex>> | undefined
+
+  const walker = document.createTreeWalker(
+    container,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode(node) {
+        const parent = node.parentElement
+        if (parent && (parent.tagName === "CODE" || parent.tagName === "PRE" || parent.tagName === "SCRIPT" || parent.tagName === "STYLE" || parent.classList.contains("mermaid-diagram"))) {
+          return NodeFilter.FILTER_REJECT
+        }
+        const text = node.textContent || ""
+        return text.includes("$") ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
+      }
+    }
+  )
+
+  const nodes: Text[] = []
+  let n: Text | null
+  while ((n = walker.nextNode() as Text | null)) {
+    nodes.push(n)
+  }
+
+  if (nodes.length === 0) return
+
+  try {
+    katex = await loadKatex()
+  } catch (err) {
+    console.warn("[opencode] Failed to load katex:", err)
+    return
+  }
+
+  for (const node of nodes) {
+    renderMathInTextNode(node, katex)
+  }
+}
+
+function renderMathInTextNode(node: Text, katex: Awaited<ReturnType<typeof loadKatex>>): void {
+  const text = node.textContent || ""
+  const parent = node.parentNode
+  if (!parent) return
+
+  const fragment = document.createDocumentFragment()
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  const combined = new RegExp(`${DISPLAY_MATH_RE.source}|${INLINE_MATH_RE.source}`, "gs")
+  DISPLAY_MATH_RE.lastIndex = 0
+  INLINE_MATH_RE.lastIndex = 0
+
+  while ((match = combined.exec(text)) !== null) {
+    const before = text.slice(lastIndex, match.index)
+    if (before) {
+      fragment.appendChild(document.createTextNode(before))
+    }
+
+    let tex: string
+    let isDisplay: boolean
+
+    if (match[1] !== undefined) {
+      tex = match[1].trim()
+      isDisplay = true
+    } else if (match[2] !== undefined) {
+      tex = match[2].trim()
+      isDisplay = false
+    } else {
+      fragment.appendChild(document.createTextNode(match[0]))
+      lastIndex = match.index + match[0].length
+      continue
+    }
+
+    if (!tex) {
+      fragment.appendChild(document.createTextNode(match[0]))
+      lastIndex = match.index + match[0].length
+      continue
+    }
+
+    try {
+      const html = katex.renderToString(tex, { throwOnError: false, displayMode: isDisplay })
+      const span = document.createElement(isDisplay ? "div" : "span")
+      span.className = isDisplay ? "katex-display" : "katex"
+      span.innerHTML = sanitizeHtml(html)
+      fragment.appendChild(span)
+    } catch {
+      fragment.appendChild(document.createTextNode(match[0]))
+    }
+
+    lastIndex = match.index + match[0].length
+  }
+
+  const remaining = text.slice(lastIndex)
+  if (remaining) {
+    fragment.appendChild(document.createTextNode(remaining))
+  }
+
+  parent.replaceChild(fragment, node)
 }
 
 // ---------------------------------------------------------------------------
@@ -748,28 +920,47 @@ function renderCodeBlock(block: Block, _opts: RenderOptions): HTMLElement | null
   // Content: syntax-highlighted code with optional line numbers
   const lines = code.split("\n")
   const showLineNums = lines.length > 5
+  const language = block.language || ""
 
   if (showLineNums) {
     const grid = document.createElement("div")
     grid.className = "code-block-lines"
-    const fullHighlighted = sanitizeHtml(highlightSyntax(code, block.language || ""))
-    const highlightedLines = fullHighlighted.split("\n")
-    lines.forEach((_, i) => {
+    lines.forEach((line, i) => {
       const numEl = document.createElement("span")
       numEl.className = "code-line-num"
       numEl.textContent = String(i + 1)
       grid.appendChild(numEl)
       const codeEl = document.createElement("span")
       codeEl.className = "code-line-content"
-      codeEl.innerHTML = highlightedLines[i] || "&nbsp;"
+      codeEl.textContent = line || " "
       grid.appendChild(codeEl)
     })
     outerWrapper.appendChild(grid)
+
+    // Fire async highlight, update lines when resolved
+    const lineEls = Array.from(grid.querySelectorAll(".code-line-content")) as HTMLElement[]
+    void getMarkdownWorkerClient().highlight(code, language).then((result) => {
+      if (!result) return
+      const sanitized = sanitizeHtml(result)
+      const highlightedLines = sanitized.split("\n")
+      lineEls.forEach((el, i) => {
+        el.innerHTML = highlightedLines[i] || "&nbsp;"
+      })
+    }).catch(() => {
+      // Fallback: already showing escapeHtml via textContent
+    })
   } else {
     const pre = document.createElement("pre")
     pre.className = "code-block-content"
-    pre.innerHTML = sanitizeHtml(highlightSyntax(code, block.language || ""))
+    pre.textContent = code
     outerWrapper.appendChild(pre)
+
+    // Fire async highlight, update when resolved
+    void getMarkdownWorkerClient().highlight(code, language).then((result) => {
+      pre.innerHTML = sanitizeHtml(result ?? escapeHtml(code))
+    }).catch(() => {
+      pre.textContent = code
+    })
   }
 
   return outerWrapper
@@ -1642,7 +1833,14 @@ function createSideBySideLineRow(pair: SideBySidePair, diffFilePath?: string): H
       leftContent.innerHTML = pair.left.wordDiffHtml
     } else if (pair.left.content && diffFilePath) {
       const lang = inferLanguageFromPath(diffFilePath)
-      leftContent.innerHTML = lang ? sanitizeHtml(highlightSyntax(pair.left.content, lang)) : escapeHtml(pair.left.content)
+      if (lang) {
+        leftContent.innerHTML = escapeHtml(pair.left.content)
+        void getMarkdownWorkerClient().highlight(pair.left.content, lang).then(
+          (result) => { if (result) leftContent.innerHTML = sanitizeHtml(result) }
+        )
+      } else {
+        leftContent.textContent = pair.left.content
+      }
     } else {
       leftContent.textContent = pair.left.content
     }
@@ -1660,7 +1858,14 @@ function createSideBySideLineRow(pair: SideBySidePair, diffFilePath?: string): H
       rightContent.innerHTML = pair.right.wordDiffHtml
     } else if (pair.right.content && diffFilePath) {
       const lang = inferLanguageFromPath(diffFilePath)
-      rightContent.innerHTML = lang ? sanitizeHtml(highlightSyntax(pair.right.content, lang)) : escapeHtml(pair.right.content)
+      if (lang) {
+        rightContent.innerHTML = escapeHtml(pair.right.content)
+        void getMarkdownWorkerClient().highlight(pair.right.content, lang).then(
+          (result) => { if (result) rightContent.innerHTML = sanitizeHtml(result) }
+        )
+      } else {
+        rightContent.textContent = pair.right.content
+      }
     } else {
       rightContent.textContent = pair.right.content
     }
@@ -1799,7 +2004,14 @@ function createDiffLineContent(line: DiffLine, diffFilePath?: string): HTMLEleme
     content.innerHTML = line.wordDiffHtml
   } else if (line.content && diffFilePath) {
     const lang = inferLanguageFromPath(diffFilePath)
-    content.innerHTML = lang ? sanitizeHtml(highlightSyntax(line.content, lang)) : escapeHtml(line.content)
+    if (lang) {
+      content.innerHTML = escapeHtml(line.content)
+      void getMarkdownWorkerClient().highlight(line.content, lang).then(
+        (result) => { if (result) content.innerHTML = sanitizeHtml(result) }
+      )
+    } else {
+      content.textContent = line.content
+    }
   } else {
     content.textContent = line.content
   }

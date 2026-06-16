@@ -3,8 +3,9 @@ import { createTextBlock, createErrorBlock } from "./blocks"
 import { ErrorCategory, ErrorSeverity, RetryStrategyType, type ErrorContext } from "./errorTypes"
 import { mapOpencodeError } from "./opencodeErrorMapper"
 import { renderMessage } from "./messageRenderer"
-import { renderBlock, renderMarkdown } from "./renderer"
-import { sanitizeHtml, highlightSyntax } from "./syntaxHighlighter"
+import { renderBlock, renderMarkdown, getMarkdownWorkerClient } from "./renderer"
+import { sanitizeHtml } from "./syntaxHighlighter"
+import { escapeHtml } from "./htmlUtils"
 import type { RenderOptions } from "./renderer"
 import { createToolResultPanel, renderToolGroup, renderToolGroupBadge } from "./toolCallRenderer"
 import { applySubagentCardUpdate } from "./subagentCard"
@@ -1026,14 +1027,17 @@ export function handleToolUpdate(
     if (argsPanel.dataset.lastArgs !== argsStr) {
       const truncated = argsStr.length > 500
       const displayStr = truncated ? argsStr.slice(0, 500) : argsStr
-      argsPanel.innerHTML = sanitizeHtml(highlightSyntax(displayStr, 'json'))
+      argsPanel.innerHTML = sanitizeHtml(escapeHtml(displayStr))
       argsPanel.dataset.lastArgs = argsStr
       if (truncated) {
         const more = document.createElement("button")
         more.className = "tool-show-more"
         more.textContent = "Show more\u2026"
         more.addEventListener("click", () => {
-          argsPanel!.innerHTML = sanitizeHtml(highlightSyntax(argsStr, 'json'))
+          argsPanel!.innerHTML = sanitizeHtml(escapeHtml(argsStr))
+          void getMarkdownWorkerClient().highlight(argsStr, "json").then((result) => {
+            if (result) argsPanel!.innerHTML = sanitizeHtml(result)
+          })
           more.remove()
         })
         argsPanel.appendChild(more)

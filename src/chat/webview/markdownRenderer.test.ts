@@ -130,11 +130,11 @@ void describe("markdown normalization", () => {
 })
 
 void describe("highlight callback — no double normalization (C1 fix)", () => {
-  void it("renderer.md highlight callback passes lang directly to highlightSyntax", () => {
+  void it("renderer.md highlight callback uses escapeHtml (sync, no hljs)", () => {
     assert.match(
       rendererSource,
-      /highlight:\s*\(\s*str\s*,\s*lang\s*\)\s*=>\s*highlightSyntax\(\s*str\s*,\s*lang\s*\|\|\s*""\s*\)/,
-      "renderer highlight callback must not call normalizeMarkdownLanguage"
+      /highlight:\s*\(\s*str\s*,\s*_lang\s*\)\s*=>\s*escapeHtml\(\s*str\s*\)/,
+      "renderer highlight callback must use escapeHtml (sync, no highlight.js on main thread)"
     )
   })
 
@@ -166,7 +166,7 @@ void describe("worker error logging (m2 fix)", () => {
     )
     assert.match(
       rendererSource,
-      /console\.warn\(\s*"\[opencode\]\s+Markdown\s+worker\s+render\s+error:"/,
+      /console\.warn\(\s*"\[opencode\]\s+Markdown\s+worker\s+error:"/,
       "worker onmessage must log error via console.warn"
     )
   })
@@ -225,16 +225,16 @@ void describe("normalizeMarkdownLanguage — extended aliases (m4 fix)", () => {
 })
 
 void describe("renderCodeBlock — multi-line highlighting (M4 fix)", () => {
-  void it("highlights the full code block before splitting by line", () => {
+  void it("dispatches async highlight via worker for line-numbered code blocks", () => {
     assert.match(
       rendererSource,
-      /const fullHighlighted = sanitizeHtml\(highlightSyntax\(code,\s*block\.language/,
-      "renderCodeBlock must highlight the full block before splitting"
+      /getMarkdownWorkerClient\(\)\.highlight\(code,\s*language\)/,
+      "renderCodeBlock must dispatch highlight to the markdown worker"
     )
     assert.match(
       rendererSource,
-      /const highlightedLines = fullHighlighted\.split\("\\n"\)/,
-      "must split highlighted output by newlines"
+      /lineEls\.forEach/,
+      "must update line elements after worker highlight resolves"
     )
   })
 })

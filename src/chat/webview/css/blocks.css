@@ -3241,3 +3241,96 @@
   max-height: 300px;
   overflow-y: auto;
 }
+
+/* ------------------------------------------------------------------ */
+/* Mermaid diagram wrapper                                             */
+/* ------------------------------------------------------------------ */
+.mermaid-diagram {
+  display: flex;
+  justify-content: center;
+  margin: var(--space-md, 12px) 0;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ------------------------------------------------------------------ */
+/* KaTeX math rendering — minimal layout styles                        */
+/* Font-face rules omitted (fonts served via system fallback).         */
+/* ------------------------------------------------------------------ */
+.katex {
+  font-family: var(--font-mono, KaTeX_Main, "Times New Roman", serif);
+  font-size: 1.1em;
+  line-height: 1.2;
+  text-indent: 0;
+  text-rendering: auto;
+}
+
+.katex-display {
+  display: block;
+  margin: 1em 0;
+  text-align: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.katex-display > .katex {
+  display: inline-block;
+  white-space: nowrap;
+  max-width: 100%;
+  font-size: 1.21em;
+}
+
+.katex .katex-html {
+  display: inline-block;
+}
+
+/* spacing helpers used by katex HTML output */
+.katex .mord,
+.katex .mbin,
+.katex .mrel,
+.katex .mopen,
+.katex .mclose,
+.katex .mpunct,
+.katex .minner {
+  display: inline-block;
+}
+
+.katex .mfrac {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.katex .mfrac .frac-line {
+  border-bottom: 1px solid;
+}
+
+.katex .msupsub {
+  display: inline-block;
+}
+
+.katex .vlist {
+  display: inline-table;
+}
+
+.katex .vlist > span {
+  display: table-row;
+}
+
+.katex .vlist > span > span {
+  display: table-cell;
+  text-align: center;
+  vertical-align: bottom;
+}
+
+.katex .overline {
+  border-top: 1px solid;
+}
+
+.katex .underline {
+  border-bottom: 1px solid;
+}

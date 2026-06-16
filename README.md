@@ -971,4 +971,4 @@ MIT
 
 - **GitHub Issues:** [Report bugs or request features](https://github.com/K-Arthur/opencode-harness/issues)
 - **GitHub Discussions:** [Ask questions and share tips](https://github.com/K-Arthur/opencode-harness/discussions)
-- **VS Code Marketplace:** [Rate and review](https://marketplace.visualstudio.com/items?itemName=kevinoarthur.opencode-harness)
+- **VS Code Marketplace:** [Rate and review](https://marketplace.visualstudio.com/items?itemName=koarthur.opencode-harness)

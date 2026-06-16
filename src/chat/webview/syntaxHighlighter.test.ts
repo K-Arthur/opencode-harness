@@ -6,16 +6,30 @@ import { fileURLToPath } from "node:url"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const source = readFileSync(resolve(__dirname, "syntaxHighlighter.ts"), "utf8")
+const workerSource = readFileSync(resolve(__dirname, "markdownWorker.ts"), "utf8")
 
-void describe("syntaxHighlighter.ts (F3-style lazy registration)", () => {
-  // The main webview (main.js) is over the 600KB limit, and 78.8KB of that
-  // is highlight.js — driven by 15 `hljs.registerLanguage()` calls at module
-  // top-level. Each call builds the language grammar (regex compilation +
-  // mode setup) on the main thread, blocking first paint. The fix: defer
-  // the registrations to the first call to `highlightSyntax`.
+void describe("syntaxHighlighter.ts — after highlight-worker separation", () => {
+  void it("exports sanitizeHtml but NOT highlightSyntax", () => {
+    assert.ok(/export function sanitizeHtml/.test(source), "must still export sanitizeHtml")
+    assert.ok(!/\bhighlightSyntax\b/.test(source), "must NOT export highlightSyntax (moved to worker)")
+  })
 
+  void it("does NOT import highlight.js on main thread", () => {
+    assert.ok(!source.includes("highlight.js"), "syntaxHighlighter must not import highlight.js")
+  })
+
+  void it("keeps PURIFY_CONFIG for XSS protection", () => {
+    assert.ok(source.includes("ALLOWED_TAGS"), "must keep PURIFY_CONFIG for XSS protection")
+  })
+
+  void it("keeps DOMPurify import for sanitizeHtml", () => {
+    assert.ok(source.includes('DOMPurify from "dompurify"'), "must keep DOMPurify import")
+  })
+})
+
+void describe("markdownWorker.ts — lazy highlight registration (moved from syntaxHighlighter)", () => {
   void it("defers hljs.registerLanguage calls out of module top-level", () => {
-    const lines = source.split("\n")
+    const lines = workerSource.split("\n")
     const unindentedRegisterLines = lines.filter(
       (l) => l.length > 0 && l[0] !== " " && l[0] !== "\t" && /hljs\.registerLanguage\s*\(/.test(l),
     )
@@ -24,12 +38,11 @@ void describe("syntaxHighlighter.ts (F3-style lazy registration)", () => {
       0,
       `hljs.registerLanguage must not run at column 0 (module top-level) — found ${unindentedRegisterLines.length} such lines`,
     )
-    // The registration code itself must still exist somewhere.
-    assert.ok(/hljs\.registerLanguage\s*\(/.test(source), "registerLanguage calls must still exist (just deferred)")
+    assert.ok(/hljs\.registerLanguage\s*\(/.test(workerSource), "registerLanguage calls must still exist (just deferred)")
   })
 
   void it("defers hljs.registerAliases calls out of module top-level", () => {
-    const lines = source.split("\n")
+    const lines = workerSource.split("\n")
     const unindentedAliasLines = lines.filter(
       (l) => l.length > 0 && l[0] !== " " && l[0] !== "\t" && /hljs\.registerAliases\s*\(/.test(l),
     )
@@ -40,63 +53,47 @@ void describe("syntaxHighlighter.ts (F3-style lazy registration)", () => {
     )
   })
 
-  void it("registers languages lazily via ensureLanguagesRegistered called from highlightSyntax", () => {
+  void it("registers languages lazily via ensureLanguagesRegistered called from onmessage", () => {
     assert.ok(
-      /function\s+ensureLanguagesRegistered/.test(source),
+      /function\s+ensureLanguagesRegistered/.test(workerSource),
       "worker must expose a function called ensureLanguagesRegistered",
     )
-    const helperBody = source.match(/function\s+ensureLanguagesRegistered[\s\S]*?\n\}/m)
+    const helperBody = workerSource.match(/function\s+ensureLanguagesRegistered[\s\S]*?\n\}/m)
     assert.ok(helperBody, "ensureLanguagesRegistered function body must exist")
-    // Helper must reference an idempotent guard flag (e.g. `languagesRegistered`).
     assert.ok(
-      /\b(languagesRegistered|languages_Registered|registered)\b/.test(helperBody[0]),
-      "ensureLanguagesRegistered must be guarded by an idempotent flag (e.g. languagesRegistered)",
-    )
-    // highlightSyntax must call it before any hljs.* call.
-    const highlightBody = source.match(/export function highlightSyntax[\s\S]*?\n\}/m)
-    assert.ok(highlightBody, "highlightSyntax function must exist")
-    assert.ok(
-      /ensureLanguagesRegistered\s*\(/.test(highlightBody[0]),
-      "highlightSyntax must call ensureLanguagesRegistered() before using hljs",
+      /\b(registered)\b/.test(helperBody[0]),
+      "ensureLanguagesRegistered must be guarded by an idempotent flag",
     )
   })
 
   void it("preserves the 15 registerLanguage invocations for renderer.test.ts contract", () => {
-    // renderer.test.ts asserts each `"${lang}", ${lang}` substring exists.
-    // Our refactor must keep those exact strings (just inside a function).
     const languages = ["javascript", "typescript", "python", "rust", "go", "bash", "json", "css", "markdown", "sql", "diff", "java", "cpp", "yaml", "xml"]
     for (const lang of languages) {
       assert.ok(
-        source.includes(`"${lang}", ${lang}`),
-        `Missing ${lang} language registration pattern (must keep "${lang}", ${lang} for renderer.test.ts contract)`,
+        workerSource.includes(`"${lang}", ${lang}`),
+        `Missing ${lang} language registration pattern in worker`,
       )
     }
   })
 })
 
-void describe("syntaxHighlighter.ts — large-block highlight cap", () => {
-  // highlightAuto() tests the input against every registered grammar, so it is
-  // materially slower than a targeted highlight; an unbounded large block can
-  // become a main-thread long task during a finalization re-render. A size cap
-  // returns escaped plaintext past a threshold. These tests guard against the
-  // cap being removed.
-
-  void it("defines a MAX_HIGHLIGHT_CHARS cap constant", () => {
+void describe("markdownWorker.ts — large-block highlight cap", () => {
+  void it("defines a MAX_HIGHLIGHT_CHARS cap constant in the worker", () => {
     assert.match(
-      source,
+      workerSource,
       /const\s+MAX_HIGHLIGHT_CHARS\s*=\s*[\d_]+/,
-      "MAX_HIGHLIGHT_CHARS constant must exist",
+      "MAX_HIGHLIGHT_CHARS constant must exist in the worker",
     )
   })
 
   void it("short-circuits highlightSyntax for oversized input before hljs runs", () => {
-    const body = source.match(/export function highlightSyntax[\s\S]*?\n\}/m)
-    assert.ok(body, "highlightSyntax function must exist")
+    const body = workerSource.match(/function highlightSyntax[\s\S]*?\n\}/m)
+    assert.ok(body, "highlightSyntax function must exist in worker")
     const fn = body[0]
     const guardIdx = fn.search(/code\.length\s*>\s*MAX_HIGHLIGHT_CHARS/)
-    assert.ok(guardIdx >= 0, "highlightSyntax must guard on code.length > MAX_HIGHLIGHT_CHARS")
+    assert.ok(guardIdx >= 0, "worker highlightSyntax must guard on code.length > MAX_HIGHLIGHT_CHARS")
     const autoIdx = fn.search(/highlightAuto/)
-    assert.ok(autoIdx >= 0, "highlightSyntax must still have a highlightAuto fallback")
+    assert.ok(autoIdx >= 0, "worker highlightSyntax must still have a highlightAuto fallback")
     assert.ok(guardIdx < autoIdx, "the size guard must precede the highlightAuto fallback")
   })
 })

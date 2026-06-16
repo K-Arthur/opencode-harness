@@ -45,6 +45,12 @@ export class WebviewContent {
     const markdownWorkerUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, "dist", "chat", "webview", "markdownWorker.js")
     )
+    const mermaidVendorUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, "dist", "chat", "webview", "mermaid-vendor.js")
+    )
+    const katexVendorUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, "dist", "chat", "webview", "katex-vendor.js")
+    )
     const wordmarkDarkUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, "dist", "chat", "webview", "media", "opencode-wordmark-dark.svg")
     )
@@ -124,7 +130,7 @@ export class WebviewContent {
 
     html = html.replace(
       '<script src="main.js"></script>',
-      `${popoutBootstrap}<script nonce="${nonce}">window.__OC_MARKDOWN_WORKER_URI__ = "${markdownWorkerUri}";</script><script nonce="${nonce}" src="${scriptUri}"></script>`
+      `${popoutBootstrap}<script nonce="${nonce}">window.__OC_MARKDOWN_WORKER_URI__ = "${markdownWorkerUri}";window.__OC_MERMAID_URI__ = "${mermaidVendorUri}";window.__OC_KATEX_URI__ = "${katexVendorUri}";</script><script nonce="${nonce}" src="${scriptUri}"></script>`
     )
     html = html.replace(
       'src="media/opencode-wordmark-dark.svg"',

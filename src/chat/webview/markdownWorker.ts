@@ -23,7 +23,16 @@ type RenderRequest = {
   text: string
 }
 
-type RenderResponse =
+type HighlightRequest = {
+  id: number
+  code: string
+  language: string
+  type: "highlight"
+}
+
+type WorkerRequest = RenderRequest | HighlightRequest
+
+type WorkerResponse =
   | { id: number; html: string }
   | { id: number; error: string }
 
@@ -36,18 +45,25 @@ function ensureLanguagesRegistered() {
   registerAllLanguages()
 }
 
-self.onmessage = (event: MessageEvent<RenderRequest>) => {
+self.onmessage = (event: MessageEvent<WorkerRequest>) => {
   const id = Number(event.data?.id)
-  const text = typeof event.data?.text === "string" ? event.data.text : ""
   if (!Number.isFinite(id)) return
 
   try {
     ensureLanguagesRegistered()
-    const response: RenderResponse = { id, html: getMarkdown().render(text) }
+    if (event.data && (event.data as HighlightRequest).type === "highlight") {
+      const { code, language } = event.data as HighlightRequest
+      const html = highlightSyntax(code, language)
+      const response: WorkerResponse = { id, html }
+      self.postMessage(response)
+      return
+    }
+    const text = typeof (event.data as RenderRequest).text === "string" ? (event.data as RenderRequest).text : ""
+    const response: WorkerResponse = { id, html: getMarkdown().render(text) }
     self.postMessage(response)
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Markdown worker render failed"
-    const response: RenderResponse = { id, error: message }
+    const message = err instanceof Error ? err.message : "Worker request failed"
+    const response: WorkerResponse = { id, error: message }
     self.postMessage(response)
   }
 }

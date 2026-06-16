@@ -8,7 +8,7 @@ import assert from "node:assert/strict"
 import { describe, it, before } from "mocha"
 import * as vscode from "vscode"
 
-const EXTENSION_ID = "kevinoarthur.opencode-harness"
+const EXTENSION_ID = "koarthur.opencode-harness"
 
 describe("OpenCode Harness — Build/Plan Mode Buttons", function () {
   this.timeout(30000)

@@ -8,6 +8,7 @@ const mainSource = readFileSync(path.join(__dirname, "main.ts"), "utf8")
 const syntaxHighlighterSource = readFileSync(path.join(__dirname, "syntaxHighlighter.ts"), "utf8")
 const toolCallRendererSource = readFileSync(path.join(__dirname, "toolCallRenderer.ts"), "utf8")
 const messageRendererSource = readFileSync(path.join(__dirname, "messageRenderer.ts"), "utf8")
+const workerSource = readFileSync(path.join(__dirname, "markdownWorker.ts"), "utf8")
 
 describe("renderer.ts", () => {
   it("exports renderMessage", () => {
@@ -57,9 +58,8 @@ it("has type guards for discriminated blocks", () => {
   })
 
   it("caches sanitized markdown and highlighted code with bounded LRU caches", () => {
-    assert.ok(source.includes("class LruStringCache") || syntaxHighlighterSource.includes("class LruStringCache") || syntaxHighlighterSource.includes("class HighlightCache"), "must define a bounded cache")
+    assert.ok(source.includes("class LruStringCache"), "must define a bounded markdown cache")
     assert.ok(source.includes("markdownCache"), "must cache non-streaming markdown")
-    assert.ok(source.includes("highlightCache") || syntaxHighlighterSource.includes("highlightCache"), "must cache syntax highlighting")
     assert.ok(source.includes("if (isStreaming) return sanitizeHtml"), "streaming markdown must skip the markdown cache")
   })
 
@@ -179,8 +179,10 @@ it("has type guards for discriminated blocks", () => {
     assert.ok(source.includes("Thinking"), "must show thinking label")
   })
 
-  it("imports highlight.js", () => {
-    assert.ok(source.includes('import hljs from "highlight.js/lib/core"') || syntaxHighlighterSource.includes('import hljs from "highlight.js/lib/core"'))
+  it("imports highlight.js only in the worker", () => {
+    const highlightInRenderSyntax = source.includes('import hljs from "highlight.js/lib/core"') || syntaxHighlighterSource.includes('import hljs from "highlight.js/lib/core"')
+    assert.ok(!highlightInRenderSyntax, "highlight.js must NOT be in main-thread renderer or syntaxHighlighter bundle")
+    assert.ok(workerSource.includes('import hljs from "highlight.js/lib/core"'), "highlight.js must be in the markdown worker")
   })
 
   it("imports markdown-it", () => {
@@ -200,10 +202,10 @@ it("has type guards for discriminated blocks", () => {
     assert.ok(source.includes("function sanitizeHtml") || syntaxHighlighterSource.includes("function sanitizeHtml"))
   })
 
-  it("registers 15 highlight.js languages", () => {
+  it("registers 15 highlight.js languages in the worker", () => {
     const languages = ["javascript", "typescript", "python", "rust", "go", "bash", "json", "css", "markdown", "sql", "diff", "java", "cpp", "yaml", "xml"]
     languages.forEach(lang => {
-      assert.ok(source.includes(`"${lang}", ${lang}`) || syntaxHighlighterSource.includes(`"${lang}", ${lang}`), `Missing ${lang} language registration`)
+      assert.ok(workerSource.includes(`"${lang}", ${lang}`), `Missing ${lang} language registration in worker`)
     })
   })
 
