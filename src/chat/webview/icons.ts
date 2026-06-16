@@ -41,6 +41,7 @@ export const SEARCH_SVG = SVG(`<circle cx="11" cy="11" r="8"/><path d="m21 21-4.
 export const CLOSE_SVG = SVG(`<path d="M18 6 6 18"/><path d="M6 6l12 12"/>`, 18)
 export const PLUS_SVG = SVG(`<path d="M12 5v14"/><path d="M5 12h14"/>`, 14)
 export const CHECK_SVG = SVG(`<path d="m20 6-9 9-5-5"/>`, 14)
+export const BRANCH_SVG = SVG(`<line x1="6" y1="3" x2="6" y2="15"/><circle cx="6" cy="15" r="2"/><path d="M18 9a8 8 0 0 1-8 8"/><circle cx="18" cy="9" r="2"/>`, 14)
 
 // ─── Tool Call Icons ───
 export const TOOL_READ_SVG = SVG(`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`, 16)
