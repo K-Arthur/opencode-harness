@@ -497,15 +497,36 @@ export class WebviewEventRouter {
         this.opts.tabManager.setInstructions(sessionId, msg.instructions)
       }
     }],
-    ["accept_hunk", async (msg: Record<string, unknown>, sessionId?: string) => {
-      // C1-a: dead subsystem removed. Log and no-op so old webview bundles
-      // don't error.
-      log.info("accept_hunk: no-op (dead diff subsystem removed for C1-a)")
+    ["accept_hunk", async (_msg: Record<string, unknown>, _sessionId?: string) => {
+      // opencode applies edits server-side, so accept is a UI bookmark.
+      // The renderer handles the visual state; this acks to prevent warnings.
     }],
-    ["reject_hunk", (msg: Record<string, unknown>) => {
+    ["reject_hunk", async (msg: Record<string, unknown>, sessionId?: string) => {
+      // Revert a single hunk by restoring the original content for that range.
+      const filePath = typeof msg.path === "string" ? msg.path : undefined
       const hunkId = typeof msg.hunkId === "string" ? msg.hunkId : undefined
-      if (hunkId) {
-        this.opts.postMessage({ type: "hunk_result", hunkId, ok: true, rejected: true, diffId: msg.diffId })
+      if (!filePath || !hunkId) return
+      const ba = await this.getFileBeforeAfter(filePath)
+      if (!ba) return
+      const plan = planHunkRevert(ba.before, ba.after, hunkId)
+      if (!plan) {
+        this.opts.postMessage({ type: "hunk_result", hunkId, ok: false, rejected: true, reason: "stale", sessionId })
+        return
+      }
+      const wsFolder = vscode.workspace.workspaceFolders?.[0]
+      if (!wsFolder) return
+      const uri = vscode.Uri.joinPath(wsFolder.uri, filePath)
+      try {
+        const doc = await vscode.workspace.openTextDocument(uri)
+        const edit = new vscode.WorkspaceEdit()
+        edit.replace(uri, new vscode.Range(0, 0, doc.lineCount, 0), plan.newContent)
+        const applied = await vscode.workspace.applyEdit(edit)
+        if (applied) await doc.save()
+        this.opts.postMessage({ type: "hunk_result", hunkId, ok: applied, rejected: true, diffId: msg.diffId, sessionId })
+        this.opts.postMessage({ type: "file_hunks", path: filePath, hunks: getFileHunks(ba.before, plan.newContent), sessionId })
+      } catch (err) {
+        log.warn(`reject_hunk failed for ${filePath}`, err)
+        this.opts.postMessage({ type: "hunk_result", hunkId, ok: false, rejected: true, diffId: msg.diffId, sessionId })
       }
     }],
     // Hunk staging (audit §14.3): host-authoritative hunks computed from git
@@ -657,13 +678,30 @@ export class WebviewEventRouter {
     ["switch_tab", (msg: Record<string, unknown>, sessionId?: string) => {
       if (sessionId) { this.opts.ensureLocalTab(sessionId); this.opts.tabManager.switchTab(sessionId); this.opts.sessionStore.setActive(sessionId) }
     }],
-    ["accept_diff", async (msg: Record<string, unknown>, sessionId?: string) => {
-      // C1-a: dead subsystem removed (server applies edits directly). No-op.
-      log.info("accept_diff: no-op (dead diff subsystem removed for C1-a)")
+    ["accept_diff", async (_msg: Record<string, unknown>, _sessionId?: string) => {
+      // opencode applies edits server-side; accept is a UI bookmark.
+      // The renderer handles the visual pending→accepted chip transition.
     }],
-    ["reject_diff", (msg: Record<string, unknown>) => {
-      // C1-a: dead subsystem removed. No-op.
-      log.info("reject_diff: no-op (dead diff subsystem removed for C1-a)")
+    ["reject_diff", async (msg: Record<string, unknown>, sessionId?: string) => {
+      // Revert ALL changes in this diff block by restoring git HEAD content.
+      const filePath = typeof msg.path === "string" ? msg.path : undefined
+      if (!filePath) return
+      const ba = await this.getFileBeforeAfter(filePath)
+      if (!ba) return
+      const wsFolder = vscode.workspace.workspaceFolders?.[0]
+      if (!wsFolder) return
+      const uri = vscode.Uri.joinPath(wsFolder.uri, filePath)
+      try {
+        const doc = await vscode.workspace.openTextDocument(uri)
+        const edit = new vscode.WorkspaceEdit()
+        edit.replace(uri, new vscode.Range(0, 0, doc.lineCount, 0), ba.before)
+        const applied = await vscode.workspace.applyEdit(edit)
+        if (applied) await doc.save()
+        this.opts.postMessage({ type: "diff_rejected", path: filePath, ok: applied, sessionId })
+      } catch (err) {
+        log.warn(`reject_diff failed for ${filePath}`, err)
+        this.opts.postMessage({ type: "diff_rejected", path: filePath, ok: false, sessionId })
+      }
     }],
     ["accept_permission", async (msg: Record<string, unknown>) => {
       const sessionId = msg.sessionId as string
@@ -1190,9 +1228,26 @@ export class WebviewEventRouter {
         this.opts.postRequestError(message)
       }
     }],
-    ["revert_diff", async (_msg: Record<string, unknown>, _sessionId?: string) => {
-      // C1-a: dead subsystem removed (server applies edits directly). No-op.
-      log.info("revert_diff: no-op (dead diff subsystem removed for C1-a)")
+    ["revert_diff", async (msg: Record<string, unknown>, sessionId?: string) => {
+      // Revert ALL changes in this diff block (same as reject_diff).
+      const filePath = typeof msg.path === "string" ? msg.path : undefined
+      if (!filePath) return
+      const ba = await this.getFileBeforeAfter(filePath)
+      if (!ba) return
+      const wsFolder = vscode.workspace.workspaceFolders?.[0]
+      if (!wsFolder) return
+      const uri = vscode.Uri.joinPath(wsFolder.uri, filePath)
+      try {
+        const doc = await vscode.workspace.openTextDocument(uri)
+        const edit = new vscode.WorkspaceEdit()
+        edit.replace(uri, new vscode.Range(0, 0, doc.lineCount, 0), ba.before)
+        const applied = await vscode.workspace.applyEdit(edit)
+        if (applied) await doc.save()
+        this.opts.postMessage({ type: "diff_reverted", path: filePath, ok: applied, sessionId })
+      } catch (err) {
+        log.warn(`revert_diff failed for ${filePath}`, err)
+        this.opts.postMessage({ type: "diff_reverted", path: filePath, ok: false, sessionId })
+      }
     }],
     ["get_context_usage", (msg: Record<string, unknown>, sessionId?: string) => {
       const requestedId = typeof msg.sessionId === "string" && msg.sessionId.length > 0 ? msg.sessionId : undefined

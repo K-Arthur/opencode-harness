@@ -1583,7 +1583,7 @@ function renderPendingDiffActions(actionBar: HTMLElement, wrapper: HTMLElement, 
   }))
   actionBar.appendChild(createDiffButton("discard", "Discard", `Discard changes to ${diffBlock.path}`, (e) => {
     e.stopPropagation()
-    opts.postMessage?.({ type: "reject_diff", diffId: diffBlock.diffId })
+    opts.postMessage?.({ type: "reject_diff", diffId: diffBlock.diffId, path: diffBlock.path })
     showDiffStateChip(actionBar, wrapper, "discarded")
     collapseDiffContent(wrapper)
   }))
