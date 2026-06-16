@@ -17,6 +17,7 @@ import { setErrorActionHandler as setCompsErrorActionHandler } from "./errorComp
 import { setErrorActionHandler as setRendererErrorActionHandler } from "./renderer"
 import { setMaxConcurrentStreams } from "./sendLogic"
 import { setupModelManager } from "./model-manager"
+import type { ProviderConfig } from "../../model/ProviderConfigManager"
 import { setupVariantSelector } from "./variant-selector"
 import { setupMcpConfig } from "./mcp-config"
 import type { McpServerInfo } from "../../mcp/McpServerManager"
@@ -489,6 +490,9 @@ function getVsCodeApi() {
 	    },
 		onConnectProvider: () => {
 			vscode.postMessage({ type: "connect_provider" })
+		},
+		onDeleteProvider: (id: string) => {
+			vscode.postMessage({ type: "delete_provider", id })
 		},
 	})
 
@@ -3681,6 +3685,7 @@ function getVsCodeApi() {
         }
 
         vscode.postMessage({ type: "init_ack" })
+        vscode.postMessage({ type: "list_providers" })
         getQuotaMonitor().startMonitoring()
       }],
       ["rate_limit_exhausted", (msg) => {
@@ -3724,6 +3729,16 @@ function getVsCodeApi() {
           ? (msg as Record<string, unknown>).error as string
           : "Provider configuration error."
         handleRequestError(stateManager.getState().activeSessionId ?? undefined, `Provider error: ${errText}`)
+      }],
+      ["provider_list", (msg) => {
+        const providers = (msg as Record<string, unknown>).providers as ProviderConfig[] | undefined
+        if (providers) modelManager.setProviders(providers)
+      }],
+      ["provider_added", () => {
+        vscode.postMessage({ type: "list_providers" })
+      }],
+      ["provider_deleted", () => {
+        vscode.postMessage({ type: "list_providers" })
       }],
       ["request_error", (msg, sid) => { handleRequestError(sid ?? stateManager.getState().activeSessionId ?? undefined, typeof msg.message === "string" ? msg.message : undefined, msg.errorContext) }],
       ["diff_result", (msg) => {

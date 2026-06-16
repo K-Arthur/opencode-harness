@@ -8,6 +8,7 @@ export interface ModelManagerCallbacks {
   onToggleFavorite: (modelId: string) => void
   onSelectModel: (modelId: string) => void
   onConnectProvider: () => void
+  onDeleteProvider: (id: string) => void
 }
 
 const STAR_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.1 8.4 22 9.3 17 14.2 18.2 21 12 17.8 5.8 21 7 14.2 2 9.3 8.9 8.4 12 2"/></svg>'
@@ -122,6 +123,10 @@ export function setupModelManager(els: ElementRefs, callbacks: ModelManagerCallb
       renderGroup("Recently used", recentModels)
     }
 
+    if (providers.length > 0) {
+      renderProvidersSection()
+    }
+
     const byProvider = new Map<string, ModelInfo[]>()
     for (const m of remainingModels) {
       const list = byProvider.get(m.provider) || []
@@ -132,6 +137,45 @@ export function setupModelManager(els: ElementRefs, callbacks: ModelManagerCallb
     for (const [provider, providerModels] of byProvider) {
       renderGroup(provider, providerModels)
     }
+  }
+
+  function renderProvidersSection() {
+    const group = document.createElement("div")
+    group.className = "model-manager-group"
+
+    const header = document.createElement("div")
+    header.className = "model-manager-group-header"
+    header.textContent = "Configured providers"
+    group.appendChild(header)
+
+    for (const provider of providers) {
+      const row = document.createElement("div")
+      row.className = "model-manager-provider-row"
+
+      const name = document.createElement("span")
+      name.className = "model-manager-provider-name"
+      name.textContent = provider.name
+      row.appendChild(name)
+
+      const baseUrl = document.createElement("span")
+      baseUrl.className = "model-manager-provider-url"
+      baseUrl.textContent = provider.baseUrl ?? ""
+      row.appendChild(baseUrl)
+
+      const deleteBtn = document.createElement("button")
+      deleteBtn.className = "model-manager-provider-delete"
+      deleteBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>'
+      deleteBtn.setAttribute("aria-label", `Remove ${provider.name} provider`)
+      deleteBtn.title = "Remove provider"
+      deleteBtn.addEventListener("click", () => {
+        callbacks.onDeleteProvider(provider.id)
+      })
+      row.appendChild(deleteBtn)
+
+      group.appendChild(row)
+    }
+
+    modelList.appendChild(group)
   }
 
   function renderGroup(label: string, providerModels: ModelInfo[]) {
@@ -284,7 +328,7 @@ export function setupModelManager(els: ElementRefs, callbacks: ModelManagerCallb
     },
     deleteProvider: (id: string) => {
       providers = providers.filter((p) => p.id !== id)
-      render()
+      if (isOpen) render()
     },
   }
 }

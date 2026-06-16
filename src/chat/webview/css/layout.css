@@ -2605,6 +2605,66 @@ button.modal-session-item:focus {
   color: var(--color-fg);
 }
 
+.model-manager-provider-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  transition: background 0.15s;
+}
+
+.model-manager-provider-row:hover {
+  background: var(--oc-list-hover);
+}
+
+.model-manager-provider-name {
+  flex: 0 0 auto;
+  font-size: var(--font-size-sm);
+  color: var(--color-fg);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-manager-provider-url {
+  flex: 1 1 auto;
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.7;
+}
+
+.model-manager-provider-delete {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.model-manager-provider-delete:hover {
+  color: var(--vscode-errorForeground, #f14c4c);
+  background: color-mix(in srgb, var(--vscode-errorForeground, #f14c4c) 12%, transparent);
+}
+
+.model-manager-provider-delete:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
 .theme-customizer-content {
   max-width: min(720px, 94vw);
 }
