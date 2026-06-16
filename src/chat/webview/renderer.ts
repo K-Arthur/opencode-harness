@@ -1483,7 +1483,7 @@ function appendHunkRows(
   let left = budget
   for (const line of hunk.lines) {
     if (left <= 0) break
-    table.appendChild(createDiffLineRow(line))
+    table.appendChild(createDiffLineRow(line, diffBlock.path))
     left--
   }
   return left
@@ -1561,13 +1561,13 @@ function createHunkButton(kind: "accept" | "reject", text: string, title: string
   return button
 }
 
-function createDiffLineRow(line: DiffLine): HTMLElement {
+function createDiffLineRow(line: DiffLine, diffFilePath?: string): HTMLElement {
   const row = document.createElement("tr")
   row.className = `diff-line diff-line--${line.type}`
   row.appendChild(createDiffLineNumber("old", line.oldLine))
   row.appendChild(createDiffLineNumber("new", line.newLine))
   row.appendChild(createDiffLineMarker(line))
-  row.appendChild(createDiffLineContent(line))
+  row.appendChild(createDiffLineContent(line, diffFilePath))
   return row
 }
 
@@ -1585,15 +1585,40 @@ function createDiffLineMarker(line: DiffLine): HTMLElement {
   return marker
 }
 
-function createDiffLineContent(line: DiffLine): HTMLElement {
+function createDiffLineContent(line: DiffLine, diffFilePath?: string): HTMLElement {
   const content = document.createElement("td")
   content.className = "diff-line-content"
   if (line.wordDiffHtml) {
     content.innerHTML = line.wordDiffHtml
+  } else if (line.content && diffFilePath) {
+    const lang = inferLanguageFromPath(diffFilePath)
+    content.innerHTML = lang ? sanitizeHtml(highlightSyntax(line.content, lang)) : escapeHtml(line.content)
   } else {
     content.textContent = line.content
   }
   return content
+}
+
+function inferLanguageFromPath(filePath: string): string {
+  const name = filePath.split("/").pop()?.split("\\").pop() || ""
+  const lower = name.toLowerCase()
+  const ext = lower.split(".").pop() || ""
+  const map: Record<string, string> = {
+    ts: "typescript", tsx: "tsx", js: "javascript", jsx: "javascript",
+    py: "python", rs: "rust", go: "go", rb: "ruby",
+    json: "json", yaml: "yaml", yml: "yaml", toml: "toml",
+    html: "xml", css: "css", scss: "scss", less: "less",
+    md: "markdown", sh: "bash", bash: "bash", zsh: "bash",
+    sql: "sql", c: "c", h: "c", cpp: "cpp", hpp: "cpp", cc: "cpp",
+    java: "java", cs: "csharp", php: "php", swift: "swift",
+    kt: "kotlin", scala: "scala", lua: "lua", r: "r",
+    dockerfile: "dockerfile", makefile: "makefile", cmake: "cmake",
+    vue: "xml", svelte: "html", graphql: "graphql", gql: "graphql",
+    ini: "ini", cfg: "ini", conf: "ini",
+  }
+  if (map[ext]) return map[ext]
+  if (map[lower]) return map[lower]
+  return ""
 }
 
 function createRawDiffContent(diffText: string): HTMLElement {
