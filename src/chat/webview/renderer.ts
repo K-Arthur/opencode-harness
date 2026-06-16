@@ -2018,7 +2018,7 @@ function createDiffLineContent(line: DiffLine, diffFilePath?: string): HTMLEleme
   return content
 }
 
-function inferLanguageFromPath(filePath: string): string {
+export function inferLanguageFromPath(filePath: string): string {
   const name = filePath.split("/").pop()?.split("\\").pop() || ""
   const lower = name.toLowerCase()
   const ext = lower.split(".").pop() || ""

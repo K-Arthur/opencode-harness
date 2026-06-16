@@ -1,13 +1,14 @@
 /**
- * Single source of truth for rendering a compact inline file list.
+ * Single source of truth for rendering a compact inline file chip list.
  *
  * Used by:
  *  - the persistent bottom `#changed-files-strip` (aggregate, all session edits)
  *  - the inline `task-banner` (ephemeral, what just got edited)
  *
- * Produces a single-line text string with dot separators — no chip
- * backgrounds, no borders, no card-like styling. Files are just text
- * spans, keeping the UI minimal and fast for high-frequency updates.
+ * Each file is rendered as an interactive `.file-chip` button with an
+ * extension badge, filename, and remove affordance. Click opens the file
+ * in the editor; the remove button clears the chip from the strip without
+ * reverting the file.
  */
 
 export interface FileChipListOptions {
@@ -25,6 +26,64 @@ export interface FileChipListOptions {
 
 const DEFAULT_MAX = 5
 
+/** Extension → short badge label map (2-3 chars, uppercase). */
+const EXT_BADGE_MAP: Record<string, string> = {
+  ts: "TS", tsx: "TSX", js: "JS", jsx: "JSX",
+  py: "PY", rs: "RS", go: "GO", rb: "RB",
+  json: "JSON", yaml: "YML", yml: "YML", toml: "TOML",
+  html: "HTML", css: "CSS", scss: "SCSS", less: "LESS",
+  md: "MD", sh: "SH", bash: "SH", zsh: "SH",
+  sql: "SQL", c: "C", h: "H", cpp: "C++", hpp: "C++", cc: "C++",
+  java: "JAVA", cs: "CS", php: "PHP", swift: "SWIFT",
+  kt: "KT", scala: "SCALA", lua: "LUA", r: "R",
+  vue: "VUE", svelte: "SVELTE", graphql: "GQL", gql: "GQL",
+  ini: "INI", cfg: "CFG", conf: "CONF",
+  dockerfile: "DKR", makefile: "MK", cmake: "CMAKE",
+}
+
+/** Extension → inferLanguageFromPath-compatible language name. */
+const EXT_LANG_MAP: Record<string, string> = {
+  ts: "typescript", tsx: "tsx", js: "javascript", jsx: "javascript",
+  py: "python", rs: "rust", go: "go", rb: "ruby",
+  json: "json", yaml: "yaml", yml: "yaml", toml: "toml",
+  html: "xml", css: "css", scss: "scss", less: "less",
+  md: "markdown", sh: "bash", bash: "bash", zsh: "bash",
+  sql: "sql", c: "c", h: "c", cpp: "cpp", hpp: "cpp", cc: "cpp",
+  java: "java", cs: "csharp", php: "php", swift: "swift",
+  kt: "kotlin", scala: "scala", lua: "lua", r: "r",
+  dockerfile: "dockerfile", makefile: "makefile", cmake: "cmake",
+  vue: "xml", svelte: "html", graphql: "graphql", gql: "graphql",
+  ini: "ini", cfg: "ini", conf: "ini",
+}
+
+/**
+ * Return the short uppercase badge label for a file's extension.
+ * e.g. "foo.ts" → "TS", "main.go" → "GO", "Makefile" → "MK"
+ */
+export function getExtBadgeLabel(filePath: string): string {
+  const name = filePath.split("/").pop()?.split("\\").pop() || ""
+  const lower = name.toLowerCase()
+  const ext = lower.split(".").length > 1 ? lower.split(".").pop() || "" : ""
+  if (ext && EXT_BADGE_MAP[ext]) return EXT_BADGE_MAP[ext]
+  if (!ext && EXT_BADGE_MAP[lower]) return EXT_BADGE_MAP[lower]
+  if (ext) return ext.toUpperCase()
+  // Special case: files like Makefile, Dockerfile with no dot-extension
+  return lower.slice(0, 2).toUpperCase()
+}
+
+/**
+ * Return the language identifier for a file path (matching inferLanguageFromPath).
+ * Used to set `data-lang` on the extension badge for CSS styling.
+ */
+function getExtLang(filePath: string): string {
+  const name = filePath.split("/").pop()?.split("\\").pop() || ""
+  const lower = name.toLowerCase()
+  const ext = lower.split(".").length > 1 ? lower.split(".").pop() || "" : ""
+  if (ext && EXT_LANG_MAP[ext]) return EXT_LANG_MAP[ext]
+  if (!ext && EXT_LANG_MAP[lower]) return EXT_LANG_MAP[lower]
+  return ""
+}
+
 export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -34,8 +93,10 @@ export function escapeHtml(s: string): string {
 }
 
 /**
- * Render an inline text-based file list.
- * Click handlers should use event delegation on `.cf-strip-chip[data-path]`.
+ * Render interactive file chip list HTML.
+ * Each chip is a `<button class="file-chip">` with extension badge,
+ * filename, and remove affordance. Click handlers use event delegation
+ * on `.file-chip[data-path]` (open file) and `.file-chip__remove` (remove chip).
  */
 export function renderFileChipListHtml(files: string[], opts: FileChipListOptions = {}): string {
   const maxVisible = opts.maxVisible ?? DEFAULT_MAX
@@ -74,14 +135,18 @@ export function renderFileChipListHtml(files: string[], opts: FileChipListOption
 
   for (const fpath of visible) {
     const name = fpath.split("/").pop() || fpath
+    const badge = getExtBadgeLabel(fpath)
+    const lang = getExtLang(fpath)
+    const safePath = escapeHtml(fpath)
+    const safeName = escapeHtml(name)
+    const safeLabel = escapeHtml(`Remove ${name}`)
     parts.push(
-      `<span class="cf-strip-chip" title="${escapeHtml(fpath)}" data-path="${escapeHtml(fpath)}">` +
-        escapeHtml(name) +
-      `</span>`
+      `<button class="file-chip" data-path="${safePath}" tabindex="0" title="${safePath}">` +
+        `<span class="file-chip__ext" data-lang="${escapeHtml(lang)}">${escapeHtml(badge)}</span>` +
+        `<span class="file-chip__name">${safeName}</span>` +
+        `<span class="file-chip__remove" role="button" aria-label="${safeLabel}" tabindex="-1">&times;</span>` +
+      `</button>`
     )
-    if (fpath !== visible[visible.length - 1] || overflow > 0) {
-      parts.push(`<span class="cf-strip-divider" aria-hidden="true">·</span>`)
-    }
   }
 
   if (overflow > 0) {

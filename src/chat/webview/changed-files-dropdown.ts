@@ -150,14 +150,66 @@ export function setupChangedFilesDropdown(opts: ChangedFilesDropdownOptions): vo
     closeBtn.addEventListener("click", () => _close())
   }
 
-  // Bind the strip's click-to-open handler ONCE. The strip container element is
+  // Bind the strip's click handler ONCE. The strip container element is
   // stable across re-renders (only its innerHTML changes), so rebinding it on
   // every render — as the old code did — was pure churn.
+  //
+  // With interactive file chips, click targets are:
+  //   .file-chip__remove → remove chip from strip (don't toggle dropdown)
+  //   .file-chip         → open file in editor (don't toggle dropdown)
+  //   elsewhere on strip → toggle dropdown
   const strip = document.getElementById("changed-files-strip")
   if (strip) {
     strip.addEventListener("click", (e) => {
+      const target = e.target as HTMLElement
+
+      // Remove button: remove the chip from the strip
+      const removeBtn = target.closest(".file-chip__remove")
+      if (removeBtn) {
+        e.stopPropagation()
+        const chip = removeBtn.closest(".file-chip")
+        if (chip) {
+          chip.remove()
+          _updateStripSig()
+        }
+        return
+      }
+
+      // Chip click (not on remove): open file in editor
+      const chip = target.closest(".file-chip") as HTMLElement | null
+      if (chip) {
+        e.stopPropagation()
+        const path = chip.dataset.path
+        if (path && _onOpenFile) {
+          _onOpenFile(path)
+        }
+        return
+      }
+
+      // Click on empty strip area: toggle dropdown
       e.stopPropagation()
       _toggle()
+    })
+
+    // Keyboard navigation on chips: Delete/Backspace removes focused chip,
+    // Enter/Space opens the file.
+    strip.addEventListener("keydown", (e) => {
+      const target = e.target as HTMLElement
+      if (!target.classList.contains("file-chip")) return
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault()
+        e.stopPropagation()
+        target.remove()
+        _updateStripSig()
+      } else if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault()
+        e.stopPropagation()
+        const path = target.dataset.path
+        if (path && _onOpenFile) {
+          _onOpenFile(path)
+        }
+      }
     })
   }
 }
@@ -285,6 +337,32 @@ function _renderStrip(_sessionId: string, files: FileChange[]): void {
   // NOTE: the click-to-open handler is bound once in setupChangedFilesDropdown;
   // it survives innerHTML updates because it lives on the stable strip element.
   strip.setAttribute("aria-label", `${files.length} changed file${files.length !== 1 ? "s" : ""} — click to view`)
+}
+
+/**
+ * Rebuild `data-cf-sig` from the current chip DOM after a user-initiated
+ * chip removal. This keeps the signature in sync so the next
+ * `_renderStrip` call can correctly decide whether to rebuild.
+ */
+function _updateStripSig(): void {
+  const strip = document.getElementById("changed-files-strip")
+  if (!strip) return
+  const chips = strip.querySelectorAll<HTMLElement>(".file-chip[data-path]")
+  const paths = Array.from(chips).map((c) => c.dataset.path ?? "").filter(Boolean)
+  if (paths.length === 0) {
+    strip.classList.add("hidden")
+    strip.innerHTML = ""
+    strip.removeAttribute("data-cf-sig")
+    return
+  }
+  const sig = `chip|${paths.join("|")}`
+  strip.setAttribute("data-cf-sig", sig)
+  // Update count label if present
+  const label = strip.querySelector<HTMLElement>(".cf-strip-label")
+  if (label) {
+    const suffix = label.textContent?.match(/\d+ files?(\s+\w+)?/)?.[1] ?? ""
+    label.textContent = `${paths.length} file${paths.length !== 1 ? "s" : ""}${suffix}`
+  }
 }
 
 function _setDiffCache(cache: Map<string, DiffLine[] | null | string>, path: string, value: DiffLine[] | null | string): void {
