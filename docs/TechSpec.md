@@ -98,6 +98,20 @@ Two related multi-tab attribution bugs, both rooted in a message lacking an expl
 
 `.keyboard-shortcuts-content` set `overflow-y: auto` directly on the container holding *both* the modal header (title + close button) and the shortcuts `<table>`. `.keyboard-shortcuts-table thead th` is `position: sticky; top: 0`, which sticks relative to the nearest scrolling ancestor — the same container — so as the user scrolled, the modal header scrolled away while the sticky column-header row caught at the top of that same scroll box, overlapping the title and close button it had just displaced. Every other modal in this codebase (session history, API key) avoids this by structuring `.modal-content` as a non-scrolling `.modal-header` plus a separate `.modal-body` (`flex: 1; overflow-y: auto`) sibling that scrolls independently — the keyboard-shortcuts modal was the one place that skipped the `.modal-body` wrapper and let the header live inside the scroll box. Fix: `setupKeyboardShortcutsModal` now wraps the `<table>` in a `.modal-body` div, reusing the existing rule rather than adding new CSS; `.keyboard-shortcuts-content` keeps only its `max-width` override. Audited all five `position: sticky` usages in the webview CSS (`cf-summary-bar`, `#input-area`, `.model-dropdown-search-container`, `.diff-action-bar`, plus this one) — only the keyboard-shortcuts thead shared a scroll container with another element that itself needed to stay fixed; the rest are each the sole sticky element in their scroll box (sticky-first-item or sticky-bottom-bar patterns) and don't have this failure mode. Test: `keyboardShortcutsModal.test.ts` (`"keeps the header out of the scrolling body so it can't collide with the sticky table header"`).
 
+### Streaming Visual Polish (2026-06-16)
+
+The streaming-state indicators (assistant role dot, timeline-item dot, message bubble, typing dots, stream cursor, tab-bar indicator) were upgraded from flat opacity/color blinks to a cohesive glow-pulse treatment, reusing existing tokens rather than adding new ones:
+
+- `pulse-active` (shared by `.message.assistant.streaming .message-role::after` and `.timeline-item.streaming .timeline-item-role::after` in `messages.css`) now scales (`transform: scale`) and emits an expanding `box-shadow` ring between `--oc-accent-border` and `--oc-accent-glow`, instead of only changing opacity.
+- `.message.assistant.streaming .message-bubble` gained `bubble-stream-pulse`, an ambient box-shadow breathing alongside the pre-existing `border-left-color` shift.
+- `.typing-dots span` (`typing-bounce` keyframe, `animations.css`) now scales and fades in addition to translating, plus a static glow.
+- `.stream-cursor` and `.streaming-text::after` switched their blink timing function from `step-end` to `ease-in-out` (matches VS Code's native caret fade) and gained a small glow.
+- `streaming-pulse` (`animations.css`, drives `.tab-btn.streaming .tab-indicator` in `layout.css`) had a dead no-op `transform: scale(1)` at both keyframe stops; it now scales through 1.3 and emits a glow ring like the others.
+
+This is a "box-shadow ping ring" idiom with precedent already in this codebase (`subagent-highlight-pulse` in `blocks.css`, `message-flash` in `messages.css`) — chosen over adding DOM nodes/pseudo-rings because `box-shadow` keyframes are cheap at the size and concurrency this renders at (CLAUDE.md caps streaming to 3 concurrent tabs). `transform`/`opacity` changes remain compositor-only as before; only `box-shadow` adds paint cost, and only on already-animating elements.
+
+Every new `box-shadow`/`transform` declaration is covered by the existing `prefers-reduced-motion: reduce` and `forced-colors: active` rules in `accessibility.css`/`messages.css`/`layout.css`, extended (not replaced) per component. `question-bar.css` and the SVG-based premium spinner were deliberately left untouched — the former is an interactive control surface where heavy motion would compete with clickable affordances, the latter is already a separate, polished system.
+
 ### Context And Token Usage Accounting
 
 The extension tracks two related but distinct quantities:

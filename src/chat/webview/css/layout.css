@@ -456,6 +456,11 @@
   background: var(--color-accent);
   animation: streaming-pulse 2s ease-in-out infinite;
 }
+@media (forced-colors: active) {
+  .tab-btn.streaming .tab-indicator {
+    box-shadow: none !important;
+  }
+}
 
 .tab-btn .tab-indicator--complete {
   background: var(--color-success);

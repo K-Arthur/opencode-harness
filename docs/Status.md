@@ -6,6 +6,40 @@
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
 
+## Unreleased Highlights (2026-06-16) — streaming UI visual redesign
+
+- **Streaming indicators upgraded from functional to polished**, reusing
+  existing design tokens (`--oc-accent-glow`, `--oc-accent-border`) and the
+  codebase's established box-shadow "ping ring" idiom (precedent:
+  `subagent-highlight-pulse` in `blocks.css`, `message-flash` in
+  `messages.css`) rather than inventing new colors or DOM nodes:
+  - The assistant role dot and timeline-item dot (`pulse-active` keyframe,
+    shared by both) now scale and emit an expanding glow ring instead of a
+    flat opacity blink.
+  - The streaming message bubble gets an ambient accent-colored box-shadow
+    that breathes alongside its existing border-left color shift
+    (`bubble-stream-pulse`).
+  - Typing-indicator dots (`typing-bounce`) now scale and fade in addition
+    to translating, and carry a static glow.
+  - The stream cursor and `.streaming-text::after` caret switched from a
+    hard `step-end` blink to an `ease-in-out` fade (mirrors VS Code's own
+    native caret) and gained a small glow.
+  - The previously dead-on-arrival `streaming-pulse` keyframe in
+    `animations.css` (used by the tab-bar streaming indicator) had a no-op
+    `transform: scale(1)` at both keyframe stops; it now actually scales
+    and emits a glow ring.
+  - All new `box-shadow`/`transform` properties are covered by existing
+    `prefers-reduced-motion` and `forced-colors: active` rules (extended,
+    not replaced) so the upgrade degrades safely in both modes.
+  - Deliberately **not** touched: `question-bar.css` (interactive control
+    surface — kept restrained so motion doesn't compete with clickable
+    affordances) and the existing SVG-based premium spinner (already a
+    separate, polished system).
+  - Verified rendered correctly in a real browser (Playwright +
+    `bypassCSP: true`, since the webview's strict CSP otherwise blocks the
+    bundled stylesheet outside the extension host) — no regressions, no
+    visual breakage.
+
 ## Unreleased Highlights (2026-06-16) — keyboard-shortcuts modal header fix
 
 - **Keyboard-shortcuts modal header no longer collides with the table's
