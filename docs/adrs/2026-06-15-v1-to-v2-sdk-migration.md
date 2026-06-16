@@ -44,6 +44,20 @@ Adopt a **strangler-fig migration**: stand up the v2 client as a first-class cit
 - **v2 raw transport (`@opencode-ai/sdk/v2/gen/client` `createClient`)** without the generated SDK class: smaller, but hand-rolled requests and churn when migrating to the typed client. Rejected for the same churn reason.
 - **Stay on v1 + per-feature casts** (status quo): rejected — questions are unfixable on v1 and the dual-API hacks accumulate.
 
+## Post-migration follow-up (2026-06-15)
+
+**Phase 2 gap: `replyToQuestion`/`rejectQuestion` used the wrong v2 sub-client.**
+
+The Phase 1 beachhead wired `SessionClient.replyToQuestion` to `client.question.reply` — the v2 *global* question endpoint (`POST /question/{requestID}/reply`) instead of the session-scoped endpoint (`POST /api/session/{sessionID}/question/{requestID}/reply`). The global endpoint returns `QuestionNotFoundError` because questions are session-scoped on the v2 server. The correct call is `client.session.question.reply({ sessionID, requestID, questionV2Reply: { answers } })`.
+
+**Fixes shipped in commit `98d29fc`**:
+- `SessionClient.replyToQuestion` now takes `(sessionId, requestID, answers)` and calls `client.session.question.reply`
+- `SessionClient.rejectQuestion` now takes `(sessionId, requestID)` and calls `client.session.question.reject`
+- `SessionManager` and `WebviewEventRouter` call sites threaded `sessionId` through
+- Structural test tightened from `replyToQuestion(requestID` to `replyToQuestion(sessionId,`
+
+Root cause: the generated SDK exposes `question` on BOTH the root client (`OpencodeClient.question` → `POST /question/{requestID}/reply`) and the session client (`Session2.question` → `POST /api/session/{sessionID}/question/{requestID}/reply`). The v2 ADR's Phase 2 note warned "session-scoped question uses `questionV2Reply`" but the call site was never updated after Phase 1.
+
 ## References
 - Beachhead commit `816a874`; `src/session/opencodeClientFactory.ts`, `AuthProvider.ts`, `SessionManager.ts`, `SessionClient.ts`.
 - Related: `docs/implementation/2026-06-15-r1-unify-stream-state.md` (R1 — sequence Phase 4 with it).
