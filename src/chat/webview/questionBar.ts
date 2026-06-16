@@ -487,9 +487,19 @@ function renderCarousel(wrapper: HTMLElement, item: QuestionBarItem): void {
   const progress = document.createElement("span")
   progress.className = "qbar-carousel-progress"
 
+  const answeredCount = () => {
+    let count = 0
+    for (let i = 0; i < total; i++) {
+      const sel = item.selections.get(i)
+      if (sel && sel.size > 0) count++
+      else if (item.cardReady.has(i)) count++
+    }
+    return count
+  }
+
   const updateProgress = () => {
-    const readyCount = item.cardReady.size
-    progress.textContent = `Card ${item._carouselIdx + 1} of ${total}${readyCount > 0 ? ` (${readyCount} ready)` : ""}`
+    const answered = answeredCount()
+    progress.textContent = `Question ${item._carouselIdx + 1} of ${total} \u2022 ${answered}/${total} answered`
     prevBtn.disabled = item._carouselIdx <= 0
     nextBtn.disabled = item._carouselIdx >= total - 1
   }
@@ -507,7 +517,12 @@ function renderCarousel(wrapper: HTMLElement, item: QuestionBarItem): void {
     item._carouselIdx = newIdx
     const oldCard = cardContainer.querySelector(".qbar-carousel-card")
     if (oldCard) oldCard.remove()
-    const card = buildCardElement(item, newIdx)
+    const card = buildCardElement(item, newIdx, () => {
+      // Auto-advance to next card after selection
+      if (item._carouselIdx < total - 1) {
+        changeCard(item._carouselIdx + 1)
+      }
+    })
     cardContainer.appendChild(card)
     updateProgress()
   }
@@ -530,7 +545,7 @@ function renderSingleCard(wrapper: HTMLElement, item: QuestionBarItem, gi: numbe
   wrapper.appendChild(card)
 }
 
-function buildCardElement(item: QuestionBarItem, gi: number): HTMLElement {
+function buildCardElement(item: QuestionBarItem, gi: number, onAdvance?: () => void): HTMLElement {
   const group = item.groups[gi]!
   const isReady = item.cardReady.has(gi)
 
@@ -591,6 +606,10 @@ function buildCardElement(item: QuestionBarItem, gi: number): HTMLElement {
           }
           btn.classList.add("selected")
           btn.setAttribute("aria-pressed", "true")
+          // Auto-advance to next card after single-select
+          if (onAdvance) {
+            setTimeout(onAdvance, 150)
+          }
         }
         item.selections.set(gi, currentSel)
         updateSubmitState()
@@ -631,16 +650,21 @@ function buildCardElement(item: QuestionBarItem, gi: number): HTMLElement {
     readyBtn.addEventListener("click", () => {
       if (item.answered) return
       item.cardReady.add(gi)
-      // Re-render just this card within the carousel
-      const container = card.closest(".qbar-carousel-cards")
-      if (container) {
-        const oldCard = container.querySelector(".qbar-carousel-card")
-        if (oldCard) {
-          const freshCard = buildCardElement(item, gi)
-          oldCard.replaceWith(freshCard)
+      updateSubmitState()
+      // Auto-advance to next card after clicking Ready
+      if (onAdvance) {
+        setTimeout(onAdvance, 150)
+      } else {
+        // Re-render just this card within the carousel (for non-carousel mode)
+        const container = card.closest(".qbar-carousel-cards")
+        if (container) {
+          const oldCard = container.querySelector(".qbar-carousel-card")
+          if (oldCard) {
+            const freshCard = buildCardElement(item, gi)
+            oldCard.replaceWith(freshCard)
+          }
         }
       }
-      updateSubmitState()
     })
     card.appendChild(readyBtn)
   }
