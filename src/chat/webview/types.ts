@@ -252,6 +252,10 @@ export interface SessionState {
   messages: ChatMessage[]
   draftText?: string
   isStreaming: boolean
+  /** Host-authoritative streaming flag — pushed via streaming_state messages.
+   *  Never set by optimistic local code paths. Used to gate abort/stop
+   *  affordances so a stale local isStreaming=false can't trap the user. */
+  isServerStreaming?: boolean
   cost?: number
   tokenUsage?: TokenUsage
   contextUsage?: ContextUsage

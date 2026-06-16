@@ -261,6 +261,7 @@ export function createState(vscode: VsCodeApi) {
       for (const id of Object.keys(state.sessions)) {
         const s = state.sessions[id]
         if (s && s.isStreaming) s.isStreaming = false
+        if (s) s.isServerStreaming = false
         // Same reasoning for subagents: no subagent run survives a webview
         // reload, and run_activity_update never fires again for a finished
         // run, so a persisted non-terminal status would stay "Running" forever.
@@ -429,6 +430,18 @@ export function createState(vscode: VsCodeApi) {
     session.isStreaming = isStreaming
     save()
     return true
+  }
+
+  function setServerStreaming(id: string, streaming: boolean): boolean {
+    const session = state.sessions[id]
+    if (!session) return false
+    session.isServerStreaming = streaming
+    save()
+    return true
+  }
+
+  function getServerStreaming(id: string): boolean {
+    return state.sessions[id]?.isServerStreaming ?? false
   }
 
   function appendMessage(id: string, msg: ChatMessage): boolean {
@@ -680,6 +693,8 @@ export function createState(vscode: VsCodeApi) {
     toggleSessionPinnedPrompt,
     getSessionPinnedPrompts,
     setStreaming,
+    setServerStreaming,
+    getServerStreaming,
     appendMessage,
     getAllSessions,
     getSessionCount,

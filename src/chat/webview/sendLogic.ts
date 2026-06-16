@@ -120,9 +120,13 @@ export function createSendLogic(deps: SendLogicDeps) {
     return { isFull, streamingNames, activeStreams, maxStreams: _maxConcurrentStreams }
   }
 
+  function isServerStreaming(active: { id: string } | null): boolean {
+    return active ? (stateManager.getState().sessions[active.id]?.isServerStreaming ?? false) : false
+  }
+
   function updateSendButtonIcon(isStreaming?: boolean, streamCapacity = getStreamCapacityState()) {
     const active = stateManager.getActiveSession()
-    const streaming = isStreaming ?? active?.isStreaming ?? false
+    const streaming = isStreaming ?? isServerStreaming(active) ?? active?.isStreaming ?? false
     els.inputArea?.classList.toggle("input-area--streaming", streaming)
     if (streaming) {
       els.sendBtn?.classList.add("stopping")
@@ -153,7 +157,9 @@ export function createSendLogic(deps: SendLogicDeps) {
     const hasText = els.promptInput.value.trim().length > 0
     const hasAttachments = attachmentManager.getAttachments().length > 0
     const active = stateManager.getActiveSession()
-    const isStreaming = active?.isStreaming || false
+    const localStreaming = active?.isStreaming || false
+    const hostStreaming = isServerStreaming(active)
+    const isStreaming = localStreaming || hostStreaming
     const streamCapacity = getStreamCapacityState()
     const blockedByStreamLimit = !isStreaming && streamCapacity.isFull
     const hasModel = isStreaming || !!resolveSendModel(active)
@@ -257,7 +263,7 @@ export function createSendLogic(deps: SendLogicDeps) {
     const text = els.promptInput.value.trim()
     let active = stateManager.getActiveSession()
 
-    if (active?.isStreaming) {
+    if (active?.isStreaming || (active && isServerStreaming(active))) {
       const kind = classifyComposerInput(text, true)
       if (kind === "slash-blocked") {
         // Never steer-leak a command to the model as literal text. Keep the
