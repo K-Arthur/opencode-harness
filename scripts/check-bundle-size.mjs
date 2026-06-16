@@ -117,6 +117,11 @@
 // command line / diff instead of a raw JSON tree (toolCallRenderer), the pure
 // resolveEventSessionTarget gate (sessionTarget.ts), and the question-bar
 // envelope-sid threading. main.js 736.0 -> 736.5KB. +4KB restores ~0.5% headroom.
+//
+// 2026-06-15 re-baseline (webview 740KB -> 744KB): pinned/recent-prompts rail
+// (recentPromptsRail.ts) and per-hunk revert UI (hunkRevertView.ts + changed-files
+// wiring) ship as real webview features. main.js 736.5 -> 740.7KB. +4KB restores
+// ~0.4% headroom.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -127,7 +132,7 @@ const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
   { path: "dist/extension.js", limitBytes: 598 * 1024, label: "extension host" },
-  { path: "dist/chat/webview/main.js", limitBytes: 740 * 1024, label: "chat webview" },
+  { path: "dist/chat/webview/main.js", limitBytes: 744 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
 
