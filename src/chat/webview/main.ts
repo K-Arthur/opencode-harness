@@ -3025,6 +3025,7 @@ function getVsCodeApi() {
         }
         sessionBeforeIndex.set(sid, refreshedMsgs.length)
         debouncedUpdateScrollMarkers(sid)
+        refreshActivityAndTasks(sid)
       }],
       ["context_usage", (msg, sid) => {
         const pct = typeof msg.percent === "number" && Number.isFinite(msg.percent) ? msg.percent : 0
@@ -3635,12 +3636,13 @@ function getVsCodeApi() {
                       restoreScrollPosition(s.id, msgList, isFirstInit && stateManager.getScrollPosition(s.id) === 0)
                     }
                   },
-                  onAllDone: () => {
+                   onAllDone: () => {
                     applyHistoryCondensation(s.id)
                     setupJumpToBottom(s.id)
                     restoreScrollPosition(s.id, msgList, isFirstInit && stateManager.getScrollPosition(s.id) === 0)
                     debouncedUpdateScrollMarkers(s.id)
                     refreshConversationTimeline(s.id)
+                    refreshActivityAndTasks(s.id)
                   },
                 })
                 loader.start()
