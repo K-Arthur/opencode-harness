@@ -1763,6 +1763,18 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     })
   }
 
+  private resolveCurrentBranch(): string {
+    try {
+      const result = spawnSync("git", ["branch", "--show-current"], {
+        cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+        timeout: 3_000,
+      })
+      return result.status === 0 ? result.stdout.toString().trim() : ""
+    } catch {
+      return ""
+    }
+  }
+
   private pushContextUsageForSession(sessionId?: string): void {
     if (!sessionId) return
     const usage = this.contextMonitor.getCurrentUsage(sessionId) ?? this.sessionStore.getContextUsage(sessionId)
@@ -1888,6 +1900,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
 
     const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name ?? ""
     const maxConcurrentStreams = vscode.workspace.getConfiguration("opencode").get<number>("sessions.maxConcurrentStreams", 5)
+    const branch = this.resolveCurrentBranch()
     this.postMessage({
       type: "init_state",
       sessions: sessionsToSend,
@@ -1895,6 +1908,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       globalModel: this.modelManager.model || "",
       workspaceName,
       maxConcurrentStreams,
+      branch,
     })
     this.pushToolOutputConfigToWebview()
     this.backfillService.setHydrated(true)

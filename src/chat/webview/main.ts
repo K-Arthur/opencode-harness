@@ -3550,6 +3550,10 @@ function getVsCodeApi() {
           els.welcomeWorkspaceName.textContent = msg.workspaceName as string
         }
 
+        if (typeof msg.branch === "string" && msg.branch) {
+          updateBranchChip(msg.branch)
+        }
+
         const initPayload = msg as Record<string, unknown>
         const hostSessions = Array.isArray(msg.sessions) ? msg.sessions as SessionState[] : []
         const legacyTabs = Array.isArray(initPayload.tabs) ? initPayload.tabs : []
@@ -4617,6 +4621,16 @@ function getVsCodeApi() {
     }
     els.contextUsage.classList.add("hidden")
     document.getElementById("ctx-window-unknown-chip")?.classList.add("hidden")
+  }
+
+  function updateBranchChip(branch: string): void {
+    const chip = document.getElementById("status-branch")
+    const name = chip?.querySelector(".status-strip-branch-name")
+    if (chip && name && branch) {
+      name.textContent = branch
+      chip.classList.remove("hidden")
+      showStatusStrip()
+    }
   }
 
   const fileTrackingDeps: FileTrackingDeps = {
