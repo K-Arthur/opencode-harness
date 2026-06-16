@@ -19,8 +19,9 @@ export interface CommandEntry {
    *   - "mcp"    — exposed by a connected MCP server (also proxied)
    *   - "skill"  — derived from a skill definition
    *   - "prompt" — user's custom prompt template
+   *   - "template" — saved prompt template
    */
-  source: "local" | "server" | "mcp" | "skill" | "prompt"
+  source: "local" | "server" | "mcp" | "skill" | "prompt" | "template"
   /** When source === "local", a fully formed slash command to insert into the prompt input. */
   insertText?: string
   /** Optional origin label (e.g. MCP server name or agent name) shown next to the badge. */
@@ -36,6 +37,13 @@ export interface StashEntry {
   isGlobal: boolean
 }
 
+export interface TemplateEntry {
+  id: string
+  name: string
+  content: string
+  tags: string[]
+}
+
 export interface CommandsModalOptions {
   /** Local (webview-resolved) commands — populated up front in main.ts. */
   localCommands: CommandEntry[]
@@ -47,18 +55,24 @@ export interface CommandsModalOptions {
   onUseStash: (stash: StashEntry) => void
   /** Delete a stash by id. */
   onDeleteStash: (id: string) => void
+  /** Use a saved template — inserts content into prompt. */
+  onUseTemplate?: (template: TemplateEntry) => void
+  /** Delete a template by id. */
+  onDeleteTemplate?: (id: string) => void
   /** Mention dropdown to hide when modal opens. */
   mentionDropdown?: HTMLElement | null
 }
 
-type Mode = "commands" | "stashes"
+type Mode = "commands" | "stashes" | "templates"
 
 export interface CommandsModalHandle {
   open(): void
   openStashList(stashes: StashEntry[]): void
+  openTemplateList(templates: TemplateEntry[]): void
   close(): void
   updateServerCommands(commands: Array<{ name: string; description?: string; template?: string }>): void
   updatePromptCommands(prompts: Array<{ name: string; description?: string }>): void
+  updateTemplateCommands(templates: Array<{ id: string; name: string; content: string; tags: string[] }>): void
 }
 
 export function setupCommandsModal(els: {
@@ -72,12 +86,13 @@ export function setupCommandsModal(els: {
   const { commandsModal, commandsList, commandsSearchInput, commandsTitle, commandsFilter, commandsModalCloseBtn } = els
   if (!commandsModal || !commandsList || !commandsSearchInput || !commandsModalCloseBtn) {
     console.warn("[commands-modal] required elements missing — modal disabled")
-    return { open() {}, openStashList() {}, close() {}, updateServerCommands() {}, updatePromptCommands() {} }
+    return { open() {}, openStashList() {}, openTemplateList() {}, close() {}, updateServerCommands() {}, updatePromptCommands() {}, updateTemplateCommands() {} }
   }
 
   let serverCommands: CommandEntry[] = []
   let promptCommands: CommandEntry[] = []
   let stashEntries: StashEntry[] = []
+  let templateEntries: TemplateEntry[] = []
   let mode: Mode = "commands"
   /** "all" | "local" | "server" | "prompt" | "stash" — filter chip state */
   let activeFilter: string = "all"
@@ -138,6 +153,20 @@ export function setupCommandsModal(els: {
     setTimeout(() => commandsSearchInput!.focus(), 0)
   }
 
+  function openTemplateList(templates: TemplateEntry[]): void {
+    mode = "templates"
+    templateEntries = templates
+    activeFilter = "all"
+    if (options.mentionDropdown) options.mentionDropdown.classList.add("hidden")
+    commandsModal!.classList.remove("hidden")
+    if (commandsTitle) commandsTitle.textContent = "Prompt templates"
+    commandsSearchInput!.value = ""
+    commandsSearchInput!.placeholder = "Search templates..."
+    renderFilters()
+    render()
+    setTimeout(() => commandsSearchInput!.focus(), 0)
+  }
+
   function close(): void {
     commandsModal!.classList.add("hidden")
     if (lastFocused && typeof lastFocused.focus === "function") {
@@ -180,6 +209,11 @@ export function setupCommandsModal(els: {
     if (mode === "commands" && !commandsModal!.classList.contains("hidden")) render()
   }
 
+  function updateTemplateCommands(templates: Array<{ id: string; name: string; content: string; tags: string[] }>): void {
+    templateEntries = templates
+    if (!commandsModal!.classList.contains("hidden")) render()
+  }
+
   function renderFilters(): void {
     if (!commandsFilter) return
     commandsFilter.innerHTML = ""
@@ -189,6 +223,10 @@ export function setupCommandsModal(els: {
           { key: "global", label: "Global" },
           { key: "session", label: "Session" },
         ]
+      : mode === "templates"
+      ? [
+          { key: "all", label: "All" },
+        ]
       : [
           { key: "all", label: "All" },
           { key: "local", label: "Built-in" },
@@ -196,6 +234,7 @@ export function setupCommandsModal(els: {
           { key: "mcp", label: "MCP" },
           { key: "skill", label: "Skill" },
           { key: "prompt", label: "Custom" },
+          { key: "template", label: "Template" },
         ]
     for (const chip of chips) {
       const btn = document.createElement("button")
@@ -222,6 +261,8 @@ export function setupCommandsModal(els: {
 
     if (mode === "stashes") {
       renderStashes(query)
+    } else if (mode === "templates") {
+      renderTemplates(query)
     } else {
       renderCommands(query)
     }
@@ -230,7 +271,12 @@ export function setupCommandsModal(els: {
   }
 
   function renderCommands(query: string): void {
-    const all = [...options.localCommands, ...serverCommands, ...promptCommands]
+    const templateCommandEntries: CommandEntry[] = templateEntries.map(t => ({
+      name: t.name,
+      description: t.tags.length > 0 ? `Template: ${t.tags.join(", ")}` : "Saved template",
+      source: "template" as const,
+    }))
+    const all = [...options.localCommands, ...serverCommands, ...promptCommands, ...templateCommandEntries]
     const inFilter = all.filter(c => activeFilter === "all" || c.source === activeFilter)
     // Fuzzy match on the command name + substring match on its description,
     // ranked best-first. An empty query keeps the source-grouped order.
@@ -268,6 +314,7 @@ export function setupCommandsModal(els: {
         entry.source === "server" ? "Server" :
         entry.source === "mcp"    ? "MCP" :
         entry.source === "skill"  ? "Skill" :
+        entry.source === "template" ? "Template" :
         "Custom"
 
       item.appendChild(left)
@@ -355,6 +402,63 @@ export function setupCommandsModal(els: {
     }
   }
 
+  function renderTemplates(query: string): void {
+    const inFilter = templateEntries.filter(() => activeFilter === "all")
+    const filtered = rankByFuzzy(inFilter, query, s => s.name, s => s.content)
+
+    if (filtered.length === 0) {
+      const empty = document.createElement("div")
+      empty.className = "commands-modal-empty"
+      empty.textContent = query ? `No templates match "${query}".` : "No saved templates yet. Right-click a message and select \"Save as template\" to create one."
+      commandsList!.appendChild(empty)
+      return
+    }
+
+    for (const tpl of filtered) {
+      const item = document.createElement("div")
+      item.className = "commands-modal-stash-item"
+
+      const header = document.createElement("div")
+      header.className = "commands-modal-stash-header"
+      const label = document.createElement("div")
+      label.className = "commands-modal-item-label"
+      label.textContent = tpl.name
+      const badge = document.createElement("span")
+      badge.className = "commands-modal-item-badge commands-modal-item-badge-local"
+      badge.textContent = tpl.tags.length > 0 ? tpl.tags.join(", ") : "Template"
+      header.appendChild(label)
+      header.appendChild(badge)
+
+      const preview = document.createElement("div")
+      preview.className = "commands-modal-stash-preview"
+      preview.textContent = tpl.content
+
+      const actions = document.createElement("div")
+      actions.className = "commands-modal-stash-actions"
+      const useBtn = document.createElement("button")
+      useBtn.className = "commands-modal-stash-btn commands-modal-stash-btn-primary"
+      useBtn.textContent = "Use"
+      useBtn.addEventListener("click", () => {
+        close()
+        options.onUseTemplate?.(tpl)
+      })
+      const delBtn = document.createElement("button")
+      delBtn.className = "commands-modal-stash-btn commands-modal-stash-btn-danger"
+      delBtn.textContent = "Delete"
+      delBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation()
+        options.onDeleteTemplate?.(tpl.id)
+      })
+      actions.appendChild(useBtn)
+      actions.appendChild(delBtn)
+
+      item.appendChild(header)
+      item.appendChild(preview)
+      item.appendChild(actions)
+      commandsList!.appendChild(item)
+    }
+  }
+
   // Wire input + close
   commandsSearchInput.addEventListener("input", () => render())
   commandsModalCloseBtn.addEventListener("click", () => close())
@@ -402,5 +506,5 @@ export function setupCommandsModal(els: {
     }
   })
 
-  return { open, openStashList, close, updateServerCommands, updatePromptCommands }
+  return { open, openStashList, openTemplateList, close, updateServerCommands, updatePromptCommands, updateTemplateCommands }
 }

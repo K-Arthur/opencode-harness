@@ -121,6 +121,23 @@ export function createSlashCommandHandler(deps: SlashCommandDeps) {
         vscode.postMessage({ type: "list_stashes" })
         clearPromptInput()
         return
+      case "/template": {
+        const subCmd = (parts[1] || "").toLowerCase()
+        if (subCmd === "list" || !subCmd) {
+          vscode.postMessage({ type: "list_templates" })
+        } else if (subCmd === "delete") {
+          const tplName = parts.slice(2).join(" ").trim()
+          if (tplName) {
+            vscode.postMessage({ type: "delete_template", id: tplName })
+          } else {
+            showSystemMessage(active.id, "Usage: /template delete <name>")
+          }
+        } else {
+          vscode.postMessage({ type: "list_templates" })
+        }
+        clearPromptInput()
+        return
+      }
       case "/compact":
         vscode.postMessage({ type: "compact_session", sessionId: active.id })
         showSystemMessage(active.id, "Compacting session...")

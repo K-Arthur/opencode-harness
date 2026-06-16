@@ -50,6 +50,7 @@ export const LOCAL_SLASH_COMMANDS: ReadonlyArray<LocalSlashCommand> = Object.fre
   { name: "compact",     description: "Compact session context to free tokens",          insertText: "/compact",     category: "session" },
   { name: "stash",       description: "Stash current prompt for reuse",                  insertText: "/stash ",      category: "prompt", usage: "<name> <content>" },
   { name: "stashes",     description: "Browse stashed prompts",                          insertText: "/stashes",     category: "prompt" },
+  { name: "template",    description: "Save and reuse prompt templates",                 insertText: "/template ",   category: "prompt", usage: "[list|delete <name>]" },
   { name: "queue",       description: "Show queued prompts",                             insertText: "/queue",       category: "prompt" },
   { name: "commands",    description: "Open the command palette",                        insertText: "/commands",    category: "conversation" },
   { name: "methodology", description: "Show or toggle automatic methodology guidance for this tab", insertText: "/methodology ", category: "session", usage: "[on|off]" },
