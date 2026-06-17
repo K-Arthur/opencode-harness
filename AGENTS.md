@@ -275,23 +275,28 @@ Error handling spans three layers: SDK errors (host-side), extension routing, an
 
 The `question` tool allows the LLM to ask the user questions during execution. Questions are session-scoped on the server — the server stores pending questions in an **in-memory `Map<QuestionID, PendingEntry>`** tied to `InstanceState`. When the server instance is disposed/recreated, all pending questions are lost.
 
-**Root cause of `QuestionNotFoundError`**: The server's question registry is volatile. If the server restarts or the instance is recreated between question creation and user answer, the reply call fails with `Question.NotFoundError`. This doesn't happen in the CLI (direct persistent connection) but does in the extension (session reattachment via `ensureSession`).
+**Architecture**: The extension treats questions as **ephemeral** (matching the server's model). Unanswered questions are NOT persisted across reconnects — only answered questions survive as transcript records. This prevents the "question exists in UI but server returns NotFoundError" mismatch.
 
 **Key files**:
 - `src/chat/QuestionExpiryDetector.ts` — categorizes reply failures (expired/transient/rejected/unknown)
-- `src/chat/webview/questionBar.ts` — `markStale()`, `getQuestionItem()`, staleness timer (5min)
-- `src/chat/WebviewEventRouter.ts` — `question_answer` handler with B10 expiry-aware catch block; `resolveCliSessionId` short-circuits for existing server session IDs (avoids unnecessary HTTP roundtrip)
+- `src/chat/webview/questionBar.ts` — `markStale()`, `getQuestionItem()`, staleness timer (5min), ephemeral `repopulateFromMessages`
+- `src/chat/WebviewEventRouter.ts` — `question_answer` handler with B10 expiry-aware catch block; `resolveCliSessionId` short-circuits for existing server session IDs
+- `src/chat/webview/css/question-bar.css` — stale warning banner styling
 - `src/session/eventHandlers/QuestionHandler.ts` — normalizes `question.asked`/`question.v2.asked` events
 
 **Error categories**:
 | Category | Pattern | Retryable | Behavior |
 |---|---|---|---|
-| `expired` | `Question.NotFoundError`, `request not found` | No | Mark as answered in all layers, remove from bar |
+| `expired` | `Question.NotFoundError`, `request not found` | No | Mark answered, remove from bar, **send answer as text prompt** |
 | `transient` | network/timeout/5xx | Yes | B9 rollback, user can retry |
 | `server_rejected` | 4xx (non-404) | No | B9 rollback, no retry |
 | `unknown` | anything else | No | B9 rollback |
 
-**Staleness detection**: Questions older than 5 minutes (`STALENESS_WARNING_MS`) are auto-flagged with a warning banner ("This question may have expired on the server") and a "Continue without answering" button. On `repopulateFromMessages`, questions from messages older than the threshold are marked stale immediately.
+**Expired answer recovery**: When a question expires on the server, the user's answer is sent as a regular text prompt via `streamCoordinator.startPrompt`. The model receives the answer and continues — no retry loop.
+
+**Staleness detection**: Questions older than 5 minutes (`STALENESS_WARNING_MS`) are auto-flagged with a warning banner ("This question may have expired on the server") and a "Continue without answering" button.
+
+**`ensureSession` optimization**: `resolveCliSessionId`, `StreamCoordinator.startPrompt`, and `SessionLifecycleService` skip the `ensureSession` HTTP roundtrip when the tab already has a real server session ID (not a local placeholder). Uses `isLocalPlaceholderSessionId()` consistently.
 
 **Two event paths for question creation**:
 1. **Server-first**: `question.asked` SSE → `QuestionHandler` → `question_asked` → `ensureQuestionBlock` (stores + posts to webview)
@@ -300,6 +305,7 @@ The `question` tool allows the LLM to ask the user questions during execution. Q
 **Answer flow**: Webview → `question_answer` → `WebviewEventRouter` → two branches:
 - **v2 path** (has `requestID`): `replyToQuestion(cliSessionId, requestID, answers)` via SDK
 - **Legacy path** (no `requestID`): `streamCoordinator.startPrompt()` as follow-up prompt
+- **Expired fallback** (v2 fails with `NotFoundError`): answer sent as text prompt via `startPrompt`
 
 ### Test Coverage
 - **Unit**: `blocks.test.ts`, `queue.test.ts`, `errorHandler.test.ts`, `errorTypes.test.ts`, `opencodeErrorMapper.test.ts`, `quotaMonitor.test.ts`, `toolLifecycle.test.ts`
