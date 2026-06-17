@@ -791,7 +791,7 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
       for (const block of msg.blocks) {
         const b = block as Record<string, unknown>
         if (b.type !== "question" || b.answered === true) continue
-        if (b.toolCallId !== toolCallId && b.id !== toolCallId) continue
+        if (b.toolCallId !== toolCallId && b.id !== toolCallId && b.requestID !== toolCallId) continue
         b.answered = true
         b.answer = answer
         b.answerSource = source
@@ -817,7 +817,7 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
       for (const block of msg.blocks) {
         const b = block as Record<string, unknown>
         if (b.type !== "question" || b.answered !== true) continue
-        if (b.toolCallId !== toolCallId && b.id !== toolCallId) continue
+        if (b.toolCallId !== toolCallId && b.id !== toolCallId && b.requestID !== toolCallId) continue
         delete b.answered
         delete b.answer
         delete b.answerSource

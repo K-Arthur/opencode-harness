@@ -212,27 +212,34 @@ export function removeQuestion(toolCallIdOrRequestId: string): void {
 
 export function markQuestionAnswered(toolCallId: string, submittedValue?: string): void {
   if (!els) return
-  clearStalenessTimer(toolCallId)
-  const item = state.items.get(toolCallId)
+  // Resolve ID: tool_start uses prt_*, question.asked uses call_*, requestID is que_*
+  // Items are keyed by toolCallId (call_*) but callers may pass any of the three.
+  let resolvedId = toolCallId
+  if (!state.items.has(resolvedId)) {
+    for (const item of state.items.values()) {
+      if (item.requestID === toolCallId) {
+        resolvedId = item.toolCallId
+        break
+      }
+    }
+  }
+  clearStalenessTimer(resolvedId)
+  const item = state.items.get(resolvedId)
   if (item) {
     item.answered = true
     if (submittedValue !== undefined) {
       item.submittedValue = submittedValue
     }
     item.answeredAt = Date.now()
-    const el = els.items.querySelector(`[data-question-id="${toolCallId}"]`)
+    const el = els.items.querySelector(`[data-question-id="${resolvedId}"]`)
     if (el) {
       el.classList.add("question-bar-item--answered")
-      // Re-render so the answer text + dismiss button are shown in the
-      // answered state instead of the still-interactive controls.
       el.replaceWith(renderAnsweredItem(item))
     }
   }
   updateSubmitState()
-  // If every pending question is now answered, schedule the auto-dismiss.
-  // Shorter than the previous 1500ms so the user gets feedback quickly.
   maybeScheduleDismiss(item?.sessionId)
-  diag(`markQuestionAnswered: ${toolCallId} value=${submittedValue?.slice(0, 50)}`)
+  diag(`markQuestionAnswered: ${resolvedId} value=${submittedValue?.slice(0, 50)}`)
 }
 
 /**
@@ -244,16 +251,22 @@ export function markQuestionAnswered(toolCallId: string, submittedValue?: string
  */
 export function unmarkQuestionAnswered(toolCallId: string): void {
   if (!els) return
-  const item = state.items.get(toolCallId)
+  // Resolve ID: callers may pass prt_*, call_*, or que_* — items are keyed by call_*
+  let resolvedId = toolCallId
+  if (!state.items.has(resolvedId)) {
+    for (const item of state.items.values()) {
+      if (item.requestID === toolCallId) {
+        resolvedId = item.toolCallId
+        break
+      }
+    }
+  }
+  const item = state.items.get(resolvedId)
   if (!item) return
   item.answered = false
   delete item.answeredAt
   delete item.submittedValue
-  // The DOM was swapped to the answered variant on markQuestionAnswered;
-  // re-render the interactive variant so the user can pick again. We build
-  // the new element via buildBarItemElement (the same builder renderBarItem
-  // uses) so the markup stays in sync.
-  const old = els.items.querySelector(`[data-question-id="${toolCallId}"]`)
+  const old = els.items.querySelector(`[data-question-id="${resolvedId}"]`)
   if (old) {
     old.replaceWith(buildBarItemElement(item))
   } else {
@@ -433,9 +446,14 @@ export function markStale(toolCallId: string): void {
 
 /** Check if a specific question has been registered in the bar's internal state
  *  (whether or not it's currently rendered in the DOM). Used by the inline
- *  renderer to decide whether the inline fallback should activate. */
+ *  renderer to decide whether the inline fallback should activate.
+ *  Resolves all ID variants (part ID, call ID, request ID). */
 export function hasQuestionInState(toolCallId: string): boolean {
-  return state.items.has(toolCallId)
+  if (state.items.has(toolCallId)) return true
+  for (const item of state.items.values()) {
+    if (item.requestID === toolCallId) return true
+  }
+  return false
 }
 
 /**
