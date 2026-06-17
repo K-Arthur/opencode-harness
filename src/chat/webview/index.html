@@ -62,6 +62,12 @@
       </div>
     </header>
 
+    <!-- Tier-B / Tier-A error banner slot. Transient infrastructure faults
+         (network, server timeout) render here as an ambient top-edge banner;
+         hard blocks (quota/auth) render here as a persistent anchor and also
+         gate the composer. Driven by src/chat/webview/errorTiers.ts. -->
+    <div id="global-status-banner" class="global-status-banner-slot" aria-live="polite" aria-atomic="true"></div>
+
     <!-- Skills management modal -->
     <div id="skills-modal" class="skills-modal hidden" role="dialog" aria-label="Manage skills" aria-modal="true">
       <div class="skills-modal-content">

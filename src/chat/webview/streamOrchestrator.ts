@@ -10,6 +10,8 @@ import { placeholderHasRenderedContent } from "./placeholderContent"
 import { finalizeStreamingText } from "./streamHandlers"
 import { generateUserMessageId } from "../../session/messageId"
 import { hasRecentErrorCard } from "./streamEndErrorPolicy"
+import { normalizeIncomingError } from "./errorWire"
+import { ErrorStateStore, routeErrorByTier, type ErrorTierDeps } from "./errorTiers"
 
 /**
  * Render the user-facing system message (if any) for a stream-end reason.
@@ -507,6 +509,18 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
   const pendingToolPartials = new Map<string, PendingToolPartial>()
   const toolChainProgressTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
+  // Spatial error-tier infrastructure. The store holds Tier-A hard blocks so
+  // the composer gate survives panel toggle; the deps resolve the live DOM
+  // slots lazily (the banner slot is added to index.html). PostMessage forwards
+  // recovery CTAs (retry / upgrade_plan / pick_model / …) to the host.
+  const errorStateStore = new ErrorStateStore()
+  const errorTierDeps: ErrorTierDeps = {
+    bannerSlot: () => document.getElementById("global-status-banner"),
+    composer: () => document.getElementById("prompt-input"),
+    sendButton: () => document.getElementById("send-btn"),
+    postMessage: (msg) => vscode.postMessage(msg),
+  }
+
   function scheduleToolUpdate(sessionId: string, toolId: string, update: { state?: ToolCallState; args?: unknown }): void {
     scheduleDebouncedToolUpdate(pendingToolUpdates, streamHandlers, sessionId, toolId, update)
   }
@@ -729,6 +743,24 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     setStreaming(sessionId, false)
     updateTabBar()
     updateModeSelectorStateLocal()
+
+    // Spatial tier routing: validate the wire payload and route hard-blocks
+    // (Tier A → composer gate) and infra faults (Tier B → ambient banner) to
+    // dedicated surfaces, bypassing the in-stream bubble. Tier C falls through
+    // to the legacy stream handler below unchanged.
+    if (errorContext !== undefined && errorContext !== null) {
+      const normalized = normalizeIncomingError(errorContext, sessionId)
+      const routed = routeErrorByTier(normalized, errorTierDeps, errorStateStore)
+      if (routed.handled && normalized.tier !== "C") {
+        const errMsgList = getMessageList(sessionId)
+        if (errMsgList) finalizeStreamingText(errMsgList)
+        if (sessionId === getState().activeSessionId) {
+          updateSendButtonIcon(false)
+          updateSendButton()
+        }
+        return
+      }
+    }
 
     const stream = streamHandlers.get(sessionId)
     if (stream) {
