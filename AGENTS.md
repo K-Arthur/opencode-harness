@@ -280,7 +280,7 @@ The `question` tool allows the LLM to ask the user questions during execution. Q
 **Key files**:
 - `src/chat/QuestionExpiryDetector.ts` — categorizes reply failures (expired/transient/rejected/unknown)
 - `src/chat/webview/questionBar.ts` — `markStale()`, `getQuestionItem()`, staleness timer (5min)
-- `src/chat/WebviewEventRouter.ts` — `question_answer` handler with B10 expiry-aware catch block
+- `src/chat/WebviewEventRouter.ts` — `question_answer` handler with B10 expiry-aware catch block; `resolveCliSessionId` short-circuits for existing server session IDs (avoids unnecessary HTTP roundtrip)
 - `src/session/eventHandlers/QuestionHandler.ts` — normalizes `question.asked`/`question.v2.asked` events
 
 **Error categories**:
