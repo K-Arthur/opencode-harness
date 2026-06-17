@@ -278,92 +278,108 @@
         <div id="tab-panels">
         </div>
         <div class="sidebar-resize-handle" role="separator" tabindex="0" aria-label="Resize sidebar" aria-valuenow="320" aria-valuemin="200" aria-valuemax="600"></div>
-        <div id="side-region" class="side-region hidden">
-          <div class="side-region-header">
-            <span class="side-region-title">Workspace Details</span>
-            <div class="side-region-actions">
-              <button class="icon-btn panel-pin-btn" data-panel="side-region" title="Pin panel" aria-label="Pin side panel" aria-pressed="false">
+        <div id="todos-panel" class="todos-panel side-panel hidden" role="region" aria-label="Todos and changed files">
+          <div class="todos-panel-header">
+            <h2 class="todos-panel-title">Todos & Files</h2>
+            <div class="panel-header-actions">
+              <button class="icon-btn panel-pin-btn" data-panel="todos" title="Pin panel" aria-label="Pin todos panel" aria-pressed="false">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M12 22s-8-6-8-12a8 8 0 0 1 16 0c0 6-8 12-8 12z"/>
-                  <circle cx="12" cy="10" r="2"/>
+                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
                 </svg>
               </button>
-              <button class="icon-btn" id="close-side-region-btn" title="Close panel" aria-label="Close side panel">
+              <button class="icon-btn" id="close-todos-btn" title="Close panel" aria-label="Close todos panel">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
               </button>
             </div>
           </div>
-          <div class="side-region-body">
-            <div id="todos-panel" class="tab-pane" role="region" aria-label="Todos and changed files">
-              <button class="side-tab" data-tab="todos" aria-expanded="true" aria-controls="todos-content">
-                <span class="side-tab-chevron">▼</span>
-                <span>Todos</span>
-              </button>
-              <div id="todos-content" class="tab-pane-content">
-                <div id="todos-list"></div>
-                <form class="todo-add-form" id="todo-add-form">
-                  <input type="text" class="todo-add-input" id="todo-add-input" placeholder="Add a task or reminder..." aria-label="New todo">
-                  <button type="submit" class="todo-add-btn">Add</button>
-                </form>
-              </div>
+          <div class="todos-panel-content">
+            <div class="todos-section">
+              <div id="todos-list"></div>
+              <form class="todo-add-form" id="todo-add-form">
+                <input type="text" class="todo-add-input" id="todo-add-input" placeholder="Add a task or reminder..." aria-label="New todo">
+                <button type="submit" class="todo-add-btn">Add</button>
+              </form>
             </div>
-            <div id="activity-panel" class="tab-pane" role="region" aria-label="Agent activity timeline">
-              <button class="side-tab" data-tab="activity" aria-expanded="false" aria-controls="activity-content">
-                <span class="side-tab-chevron">▶</span>
-                <span>Activity</span>
+          </div>
+        </div>
+        <div id="activity-panel" class="activity-panel side-panel hidden" role="region" aria-label="Agent activity timeline">
+          <div class="activity-panel-header">
+            <h2 class="activity-panel-title">Activity</h2>
+            <div class="panel-header-actions">
+              <button class="icon-btn panel-pin-btn" data-panel="activity" title="Pin panel" aria-label="Pin activity panel" aria-pressed="false">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+                </svg>
               </button>
-              <div id="activity-content" class="tab-pane-content">
-                <div id="activity-filters" class="activity-filters"></div>
-                <div id="activity-list" class="activity-panel-content" aria-live="polite"></div>
-              </div>
-            </div>
-            <div id="tasks-panel" class="tab-pane" role="region" aria-label="Commands">
-              <button class="side-tab" data-tab="tasks" aria-expanded="false" aria-controls="tasks-content">
-                <span class="side-tab-chevron">▶</span>
-                <span>Commands</span>
+              <button class="icon-btn" id="activity-close-btn" title="Close activity timeline" aria-label="Close activity timeline">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
               </button>
-              <div id="tasks-content" class="tab-pane-content">
-                <div id="tasks-filters" class="tasks-filters"></div>
-                <div id="tasks-list" class="tasks-panel-content" aria-live="polite"></div>
-              </div>
             </div>
-            <div id="subagent-panel" class="tab-pane" role="region" aria-label="Subagent activity" data-view="list">
-              <button class="side-tab" data-tab="subagent" aria-expanded="false" aria-controls="subagent-content">
-                <span class="side-tab-chevron">▶</span>
-                <span>Subagents</span>
+          </div>
+          <div id="activity-filters" class="activity-filters"></div>
+          <div id="activity-list" class="activity-panel-content" aria-live="polite"></div>
+        </div>
+        <div id="tasks-panel" class="tasks-panel side-panel hidden" role="region" aria-label="Command tasks">
+          <div class="tasks-panel-header">
+            <h2 class="tasks-panel-title">Commands</h2>
+            <div class="panel-header-actions">
+              <button class="icon-btn panel-pin-btn" data-panel="tasks" title="Pin panel" aria-label="Pin commands panel" aria-pressed="false">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+                </svg>
               </button>
-              <div id="subagent-content" class="tab-pane-content">
-                <div id="subagent-list" class="subagent-panel-content"></div>
-              </div>
-              <!-- Detail view is nested inside the subagent pane (not a sibling of tab panes) -->
-              <div id="subagent-detail-view" class="subagent-detail-view hidden" aria-label="Subagent detail">
-                <div class="subagent-detail-header">
-                  <button class="icon-btn" id="subagent-detail-back-btn" title="Back to list" aria-label="Back to subagent list">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <polyline points="15 18 9 12 15 6"/>
-                    </svg>
-                  </button>
-                  <h2 class="subagent-detail-title">Subagent Detail</h2>
-                  <div class="side-region-actions">
-                    <button class="icon-btn" id="subagent-detail-popout-btn" title="Open in editor" aria-label="Open subagent detail in editor">
-                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-                      </svg>
-                    </button>
-                    <button class="icon-btn" id="subagent-detail-close-btn" title="Close detail" aria-label="Close subagent detail">
-                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                <div class="subagent-detail-content" id="subagent-detail-content">
-                  <!-- Subagent detail will be rendered dynamically -->
-                </div>
-              </div>
+              <button class="icon-btn" id="tasks-close-btn" title="Close command tasks" aria-label="Close command tasks">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
             </div>
+          </div>
+          <div id="tasks-filters" class="tasks-filters"></div>
+          <div id="tasks-list" class="tasks-panel-content" aria-live="polite"></div>
+        </div>
+        <div id="subagent-panel" class="subagent-panel side-panel hidden" aria-label="Subagent activity">
+          <div class="subagent-panel-header">
+            <h2 class="subagent-panel-title">Subagent Activity</h2>
+            <div class="panel-header-actions">
+              <button class="icon-btn panel-pin-btn" data-panel="subagent" title="Pin panel" aria-label="Pin subagent panel" aria-pressed="false">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+                </svg>
+              </button>
+              <button class="icon-btn" id="close-subagent-btn" title="Close panel" aria-label="Close subagent panel">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="subagent-panel-content" id="subagent-list">
+            <!-- Subagent activities will be rendered dynamically -->
+          </div>
+        </div>
+        <!-- Detail view overlays the subagent list when active (absolute
+             positioning within .main-layout, which is position:relative). -->
+        <div id="subagent-detail-view" class="subagent-detail-view hidden" aria-label="Subagent detail">
+          <div class="subagent-detail-header">
+            <button class="icon-btn" id="subagent-detail-back-btn" title="Back to list" aria-label="Back to subagent list">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+            </button>
+            <h2 class="subagent-detail-title">Subagent Detail</h2>
+            <button class="icon-btn" id="subagent-detail-close-btn" title="Close detail" aria-label="Close subagent detail">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+          <div class="subagent-detail-content" id="subagent-detail-content">
+            <!-- Subagent detail will be rendered dynamically -->
           </div>
         </div>
       </div>

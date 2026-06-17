@@ -10,7 +10,8 @@ import { toCommandEntries, type RemoteCommandInfo } from "./slash-commands"
 import { createStreamHandlers, type StreamHandlers } from "./stream"
 import { upsertMessageById } from "./messageUpsert"
 import { isSwitchEventType, switchInsertIndex } from "../../session/activityCoalesce"
-import { createTabBar, createTabContent, switchToTab, removeTabContent } from "./tabs"
+import { createTabBar, createTabContent, switchToTab, removeTabContent, patchTabLabel } from "./tabs"
+import { extractTitle, dedupeTitle } from "../../session/titleExtractor"
 import { setupModelDropdown } from "./model-dropdown"
 import { setVsCodeApi, setupToolKeyboardNav, webviewLog } from "./streamHandlers"
 import { setErrorActionHandler as setCompsErrorActionHandler } from "./errorComponents"
@@ -26,7 +27,6 @@ import { updateContextChips, applyThemeVars, handleRateLimitExhausted } from "./
 import { getQuotaMonitor } from "./quotaMonitor"
 import { STREAM_LIMIT_TOOLTIP, getContextUsageTooltip, initStaticButtonTooltips } from "./tooltips"
 // context-usage-panel.ts removed — canonical UI is now context-usage-dropdown.ts
-import { setupSideRegion, type SideTabId } from "./sideRegion"
 import { setupChangedFilesDropdown, updateChangedFiles, handleDiffResponse as handleCfDiffResponse, handleFileHunks as handleCfFileHunks, setCurrentSession as setCfCurrentSession, refreshChangedFilesVisibility } from "./changed-files-dropdown"
 import type { FileHunkView } from "./hunkRevertView"
 import type { DiffLine } from "./types"
@@ -179,7 +179,6 @@ function getVsCodeApi() {
   let tasksPanelApi: ReturnType<typeof setupTasksPanel> | undefined
   let voiceInputApi: ReturnType<typeof setupVoiceInput> | undefined
   let hasQuotaState = false
-  let sideRegionApi: ReturnType<typeof setupSideRegion> | undefined
   // Per-session server-side todos. Single source of truth keyed by sessionId
   // so a background tab's todos.updated event cannot poison the active tab.
   const serverTodosBySession = new Map<string, Todo[]>()
@@ -213,7 +212,7 @@ function getVsCodeApi() {
     // and only if the user hasn't already dismissed the panel for this session.
     if (options?.autoOpen && merged.length > 0) {
       const activeSid = stateManager.getState().activeSessionId
-      const panelIsOpen = sideRegionApi?.isOpen() && sideRegionApi?.getActiveTab() === "todos"
+      const panelIsOpen = todosPanelApi?.isOpen()
       const dismissed = todosDismissedBySession.has(sessionId)
       const alreadyOpened = todosAutoOpenedForSession.has(sessionId)
       if (
@@ -222,7 +221,7 @@ function getVsCodeApi() {
         !dismissed &&
         !alreadyOpened
       ) {
-        sideRegionApi?.open("todos")
+        todosPanelApi?.open()
         todosAutoOpenedForSession.add(sessionId)
         const btn = (globalThis as any).document?.getElementById?.("todos-toggle-btn") as HTMLElement | undefined
         if (btn) btn.setAttribute("aria-pressed", "true")
@@ -342,14 +341,14 @@ function getVsCodeApi() {
 
   function setSubagentPanelOpen(open: boolean): void {
     if (open) {
-      sideRegionApi?.open("subagent")
+      subagentPanelApi?.open()
       // Opening (whether by user click or by oc:open-subagent-panel) clears
       // the dismissed flag so future run_activity_updates can re-auto-open
       // if the user closes it again.
       const sid = stateManager.getState().activeSessionId
       if (sid) subagentDismissedBySession.delete(sid)
     } else {
-      sideRegionApi?.close()
+      subagentPanelApi?.close()
       // Track explicit dismissal so the auto-open in run_activity_update
       // doesn't keep re-opening the panel during this run.
       const sid = stateManager.getState().activeSessionId
@@ -1187,7 +1186,7 @@ function getVsCodeApi() {
       id: "subagent-detail",
       priority: 60,
       isOpen: () =>
-        !els.subagentDetailView.classList.contains("hidden") && sideRegionApi?.isOpen() === true,
+        !els.subagentDetailView.classList.contains("hidden") && subagentPanelApi?.isOpen() === true,
       close: () => els.subagentDetailBackBtn.click(),
     })
     registry.register({
@@ -1206,11 +1205,16 @@ function getVsCodeApi() {
       id: "side-region",
       priority: 20,
       isOpen: () => {
-        if (!sideRegionApi?.isOpen()) return false
-        const pin = document.querySelector<HTMLElement>('.panel-pin-btn[data-panel="side-region"]')
-        return pin?.getAttribute("aria-pressed") !== "true"
+        // Check if any panel is open
+        return (todosPanelApi?.isOpen() || activityPanelApi?.isOpen() || tasksPanelApi?.isOpen() || subagentPanelApi?.isOpen()) === true
       },
-      close: () => sideRegionApi?.close(),
+      close: () => {
+        // Close all panels
+        todosPanelApi?.close()
+        activityPanelApi?.close()
+        tasksPanelApi?.close()
+        subagentPanelApi?.close()
+      },
     })
 
     // Capture phase: runs before every component-level Escape listener so a
@@ -1289,12 +1293,12 @@ function getVsCodeApi() {
       getActiveSessionId: () => stateManager.getState().activeSessionId ?? undefined,
       skillsModalOpen: () => skillsModalApi?.open?.(),
       onTodosToggleRequest: () => {
-        const wasOpen = sideRegionApi?.isOpen() && sideRegionApi?.getActiveTab() === "todos"
+        const wasOpen = todosPanelApi?.isOpen()
         if (wasOpen) {
-          sideRegionApi?.close()
+          todosPanelApi?.close()
           return false
         }
-        sideRegionApi?.open("todos")
+        todosPanelApi?.open()
         return true
       },
       onTodosToggle: (willBeVisible: boolean) => {
@@ -1380,7 +1384,7 @@ function getVsCodeApi() {
       onSearchSkills: (query: string) => vscode.postMessage({ type: "search_skills", query }),
     })
     subagentDetailViewApi = setupSubagentDetailView(els, {
-      onBack: () => { sideRegionApi?.open("subagent"); restoreSubagentDetailFocus() },
+      onBack: () => { subagentPanelApi?.open(); restoreSubagentDetailFocus() },
       onClose: () => { activeSubagentId = null; restoreSubagentDetailFocus() },
       onCancelSubagent: (subagentId: string) => vscode.postMessage({ type: "cancel_subagent", subagentId }),
       onOpenSession: (activity: SubagentActivity) => {
@@ -1397,7 +1401,7 @@ function getVsCodeApi() {
         // focus to it.
         subagentDetailInvoker = document.activeElement as HTMLElement | null
         // Ensure subagent tab is active before showing detail overlay
-        sideRegionApi?.open("subagent")
+        subagentPanelApi?.open()
         const normalizedId = activity.id.startsWith("subagent:")
           ? activity.id.slice("subagent:".length)
           : activity.id
@@ -1426,39 +1430,11 @@ function getVsCodeApi() {
       },
     })
 
-    // Initialize side region
-    const sideRegionEl = document.getElementById("side-region")
-    const tabBarEl = document.querySelector<HTMLElement>(".side-region-header")
-    const tabButtons = document.querySelectorAll<HTMLElement>(".side-tab")
-    const pinBtn = document.getElementById("close-side-region-btn")?.previousElementSibling as HTMLElement | null
-    const closeBtn = document.getElementById("close-side-region-btn")
-    if (sideRegionEl && tabBarEl && tabButtons.length > 0 && pinBtn && closeBtn) {
-      const paneMap: Record<SideTabId, HTMLElement> = {
-        todos: els.todosPanel,
-        activity: els.activityPanel,
-        tasks: els.tasksPanel,
-        subagent: els.subagentPanel,
-      }
-      sideRegionApi = setupSideRegion(sideRegionEl, tabBarEl, tabButtons, paneMap, pinBtn, closeBtn, {
-        onTabChange: (tab: SideTabId) => {
-          // Close detail view on any tab switch — it overlays the side-region body
-          subagentDetailViewApi?.close()
-          if (tab === "activity") activityPanelApi?.refresh()
-          else if (tab === "tasks") tasksPanelApi?.refresh()
-          else if (tab === "subagent") requestSubagentActivities()
-          else if (tab === "todos") {
-            const sid = stateManager.getState().activeSessionId
-            if (sid) triggerTodosRender(sid)
-          }
-        },
-      })
-    }
-
-    // Wire toggle buttons to side region
-    els.activityToggleBtn.addEventListener("click", () => { sideRegionApi?.toggle("activity") })
-    els.tasksToggleBtn.addEventListener("click", () => { sideRegionApi?.toggle("tasks") })
+    // Wire toggle buttons to individual panels
+    els.activityToggleBtn.addEventListener("click", () => { activityPanelApi?.toggle?.() })
+    els.tasksToggleBtn.addEventListener("click", () => { tasksPanelApi?.toggle?.() })
     els.subagentsToggleBtn.addEventListener("click", () => {
-      const wasOpen = sideRegionApi?.isOpen() && sideRegionApi?.getActiveTab() === "subagent"
+      const wasOpen = subagentPanelApi?.isOpen()
       if (wasOpen) {
         setSubagentPanelOpen(false)
       } else {
@@ -1478,49 +1454,6 @@ function getVsCodeApi() {
         }
       })
     })
-
-    // Wrap panel APIs to delegate visibility to side region
-    if (sideRegionApi) {
-      if (todosPanelApi) {
-        const orig = todosPanelApi
-        todosPanelApi = {
-          ...orig,
-          open: () => sideRegionApi!.open("todos"),
-          close: () => sideRegionApi!.close(),
-          isOpen: () => sideRegionApi!.isOpen() && sideRegionApi!.getActiveTab() === "todos",
-        }
-      }
-      if (activityPanelApi) {
-        const orig = activityPanelApi
-        activityPanelApi = {
-          ...orig,
-          open: () => sideRegionApi!.open("activity"),
-          close: () => sideRegionApi!.close(),
-          toggle: () => sideRegionApi!.toggle("activity"),
-          isOpen: () => sideRegionApi!.isOpen() && sideRegionApi!.getActiveTab() === "activity",
-        }
-      }
-      if (tasksPanelApi) {
-        const orig = tasksPanelApi
-        tasksPanelApi = {
-          ...orig,
-          open: () => sideRegionApi!.open("tasks"),
-          close: () => sideRegionApi!.close(),
-          toggle: () => sideRegionApi!.toggle("tasks"),
-          isOpen: () => sideRegionApi!.isOpen() && sideRegionApi!.getActiveTab() === "tasks",
-        }
-      }
-      if (subagentPanelApi) {
-        const orig = subagentPanelApi
-        subagentPanelApi = {
-          ...orig,
-          open: () => sideRegionApi!.open("subagent"),
-          close: () => sideRegionApi!.close(),
-          toggle: () => sideRegionApi!.toggle("subagent"),
-          isOpen: () => sideRegionApi!.isOpen() && sideRegionApi!.getActiveTab() === "subagent",
-        }
-      }
-    }
 
     // Pop-out to editor button — opens the active subagent's detail in a
     // dedicated VS Code editor webview panel. Sends the parent sessionId AND
@@ -2155,7 +2088,14 @@ function getVsCodeApi() {
 	  applyTimelineVisibility(tabId)
 	  showSecondaryNav()
 
-    const isActiveStreaming = activeSession?.isStreaming || false
+    // Tab switch: derive the send button from BOTH flags. The host flag wins
+    // so a tab whose backend is still generating (but whose local optimistic
+    // flag was cleared by an error/reconnect) still shows Stop. Then trigger
+    // a probe — if the host disagrees with our reading, it will reply with
+    // run_status_result and we'll reconcile. This is the recovery path for
+    // gap #9 (switchTab reads only the local flag).
+    const isActiveStreaming =
+      activeSession?.isStreaming === true || activeSession?.isServerStreaming === true
     updateSendButtonIcon(isActiveStreaming)
     if (isActiveStreaming) {
       els.promptInput.placeholder = "Guide the AI: correct errors, change direction, or add context…"
@@ -2165,6 +2105,10 @@ function getVsCodeApi() {
     if (!isActiveStreaming) {
       els.inputArea.classList.remove("steer-interrupt", "steer-queue")
     }
+    // Ask the host to confirm whether the tab's run is still active. Cheap;
+    // the host dedupes. If the host says active=true we revive the Stop button;
+    // if active=false we clear any stale flag.
+    composer.probeActiveRun?.()
     // Refresh queue UI for the switched-to tab
     composer.renderQueue(tabId)
     // B3: Refresh question bar for the switched-to tab. First repopulate from
@@ -2569,12 +2513,13 @@ function getVsCodeApi() {
   function generateTitleFromBlocks(blocks: ChatMessage["blocks"]): string {
     const textBlock = blocks.find((b) => b.type === "text")
     const text = typeof textBlock?.text === "string" ? textBlock.text : ""
-    if (!text.trim()) return ""
-    const firstSentence = text.split(/[.!?\n]/)[0] || text
-    const trimmed = firstSentence.trim()
-    if (trimmed.length === 0) return ""
-    if (trimmed.length > 40) return trimmed.slice(0, 37).trimEnd() + "..."
-    return trimmed
+    // Delegate to the shared pure extractor (also used by the host) — kills
+    // the duplicate-code smell where the webview's generator diverged from
+    // sessionUtils.generateTitleFromMessage. extractTitle handles
+    // boilerplate stripping and word-boundary truncation that the old
+    // 37-char hard-slice did not, so prompts opening with the same prefix
+    // no longer collapse to identical tab labels.
+    return extractTitle(text)
   }
 
   /* ─── JUMP-TO-BOTTOM & SCROLL MARKERS ─── */
@@ -2644,14 +2589,26 @@ function getVsCodeApi() {
       upsertMessageById(session.messages, msg)
     }
 
-    // Auto-generate title from first user message
+    // Auto-generate title from first user message.
+    //
+    // Dedupe against the live tab set so three prompts opening with the same
+    // boilerplate prefix ("# Role & Objective\n...") don't produce three
+    // visually identical tabs. The dedupe suffix (e.g. " (2)") is applied
+    // locally; the server may later override via session.updated →
+    // session_title_updated (which always wins — see handler below).
     if (msg.role === "user" && isAutoSessionName(session.name)) {
       const generated = generateTitleFromBlocks(msg.blocks)
       if (generated) {
-        session.name = generated
-        stateManager.renameSession(sessionId, generated)
-        vscode.postMessage({ type: "rename_session", sessionId, name: generated })
-        updateTabBar()
+        const existingNames = stateManager.getAllSessions()
+          .filter((s) => s.id !== sessionId)
+          .map((s) => s.name)
+          .filter((n) => typeof n === "string" && n.length > 0)
+        const deduped = dedupeTitle(generated, new Set(existingNames))
+        session.name = deduped
+        stateManager.renameSession(sessionId, deduped)
+        vscode.postMessage({ type: "rename_session", sessionId, name: deduped })
+        // In-place patch — no focus clobber, no innerHTML wipe (D4 fix).
+        patchTabLabel(els, sessionId, deduped)
       }
     }
 
@@ -3318,7 +3275,7 @@ function getVsCodeApi() {
           newIds.size > 0 &&
           !subagentDismissedBySession.has(sid)
         ) {
-          sideRegionApi?.open("subagent")
+          subagentPanelApi?.open()
           els.subagentsToggleBtn.setAttribute("aria-pressed", "true")
         }
       }],
@@ -3346,27 +3303,76 @@ function getVsCodeApi() {
         updateTabBar()
       }],
       ["streaming_state", (msg, sid) => {
-        if (sid) {
-          stateManager.setStreaming(sid, Boolean(msg.isStreaming))
-
-          const isActiveSession = sid === stateManager.getState().activeSessionId
-
-          if (isActiveSession) {
-            // Single source of truth for the streaming-only affordance (selector
-            // visibility, placeholder, input accent) — also used on tab switch.
-            syncSteerAffordance()
-          }
-
-          if (!msg.isStreaming) {
-            const sess = stateManager.getSession(sid)
-            if (sess) {
-              sess.changedFiles = []
-              stateManager.save()
-            }
-          }
-          updateTabBar()
-          updateSendButton()
+        if (!sid) return
+        const isStreaming = Boolean(msg.isStreaming)
+        // The host is the single source of truth for streaming state. Write the
+        // authoritative `isServerStreaming` flag and (when true) record the
+        // active run identity so we can correlate late chunks and reject stale
+        // pushes from a previous run. We also keep the optimistic `isStreaming`
+        // in sync so legacy readers (queue/capacity) see the same value — but
+        // the send button now reads `isServerStreaming ?? isStreaming` so a
+        // host `true` can revive a stale local `false`.
+        stateManager.setServerStreaming(sid, isStreaming)
+        // Only mutate the optimistic flag from host authority; do not let it
+        // lag the host (the whole point of the backstop).
+        if (stateManager.setStreaming(sid, isStreaming)) {
+          // fall through
         }
+        const sess = stateManager.getSession(sid)
+        if (sess) {
+          if (isStreaming) {
+            // Stash the run identity fields if the host provided them.
+            const serverMessageId = typeof msg.messageId === "string" ? msg.messageId : undefined
+            const runId = typeof msg.runId === "string" ? msg.runId : undefined
+            if (serverMessageId) sess.activeServerMessageId = serverMessageId
+            if (runId) sess.activeRunId = runId
+          } else {
+            // Clear run identity on stop so a later stale push can't revive it.
+            sess.activeServerMessageId = undefined
+            sess.activeRunId = undefined
+            sess.changedFiles = []
+          }
+          stateManager.save()
+        }
+
+        const isActiveSession = sid === stateManager.getState().activeSessionId
+        if (isActiveSession) {
+          // Single source of truth for the streaming-only affordance (selector
+          // visibility, placeholder, input accent) — also used on tab switch.
+          syncSteerAffordance()
+        }
+        updateTabBar()
+        updateSendButton()
+      }],
+      ["run_status_result", (msg, sid) => {
+        // Host's authoritative answer to a probe_run_status query. Reconcile
+        // both flags to match the host's view of reality. This is the only
+        // path that can *revive* a stale false (host says active=true) and
+        // the only path that can definitively clear a stuck true (host says
+        // active=false, server reachable).
+        if (!sid) return
+        const active = Boolean(msg.active)
+        stateManager.setServerStreaming(sid, active)
+        stateManager.setStreaming(sid, active)
+        const sess = stateManager.getSession(sid)
+        if (sess) {
+          if (active) {
+            if (typeof msg.messageId === "string") sess.activeServerMessageId = msg.messageId
+            if (typeof msg.runId === "string") sess.activeRunId = msg.runId
+          } else {
+            sess.activeServerMessageId = undefined
+            sess.activeRunId = undefined
+            // If the host confirms the run is really gone, also drop any
+            // streaming affordances left over from the dropped terminal
+            // events. This is the recovery path for Gap #6 (stuck-streaming
+            // after run completed during SSE outage).
+            streamHandlers.get(sid)?.finalizeStreamingText?.()
+            streamHandlers.get(sid)?.finalizePendingTools?.()
+          }
+          stateManager.save()
+        }
+        updateTabBar()
+        updateSendButton()
       }],
       ["active_session_changed", (_msg, sid) => {
         if (!sid || !stateManager.getSession(sid)) return
@@ -4060,6 +4066,25 @@ function getVsCodeApi() {
           updateTabBar()
         }
       }],
+      // Fast, race-free title push. Distinct from session_renamed: this
+      // handler is wired to SessionStore.setTitleAppliedCallback on the
+      // host, which fires SYNCHRONOUSLY from inside applyServerTitle /
+      // setTitle / updateName — independent of the onDidChangeSession
+      // subscriber's registration order (D3 fix). Patches the tab label
+      // in place via patchTabLabel (no innerHTML wipe, no focus clobber
+      // — D4 fix). Server titles always win over local dedupe-suffixed
+      // auto-titles.
+      ["session_title_updated", (msg) => {
+        if (typeof msg.sessionId === "string" && typeof msg.name === "string") {
+          stateManager.renameSession(msg.sessionId, msg.name)
+          // In-place patch. If the tab isn't mounted yet (race with
+          // init_state), fall back to updateTabBar so the structural
+          // rebuild happens.
+          if (!patchTabLabel(els, msg.sessionId, msg.name)) {
+            updateTabBar()
+          }
+        }
+      }],
       ["session_deleted", (msg) => {
         if (typeof msg.sessionId === "string") {
           // Check if session is actively streaming and abort if needed
@@ -4445,7 +4470,7 @@ function getVsCodeApi() {
             isLiveSubagent(subagent) &&
             !subagentDismissedBySession.has(sessionId)
           ) {
-            sideRegionApi?.open("subagent")
+            subagentPanelApi?.open()
             els.subagentsToggleBtn.setAttribute("aria-pressed", "true")
           }
           if (merged.length > 0 && sessionId === stateManager.getState().activeSessionId) {

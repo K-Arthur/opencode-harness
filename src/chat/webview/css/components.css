@@ -41,7 +41,7 @@ body.hide-tools .tool-call { display: none; }
 body.hide-diffs .diff-block { display: none; }
 body.hide-errors .msg-error { display: none; }
 body.hide-errors .tool-result-panel--error { display: none; }
-body.hide-thinking .thinking-block { display: none; }
+body.hide-thinking .thinking-block:not(.thinking-streaming) { display: none; }
 
 .toggle-label {
   display: flex;
@@ -308,14 +308,6 @@ body.hide-thinking .thinking-block { display: none; }
 }
 
 /* ─── Tab pane shared content rules ─── */
-
-.side-region-body .tab-pane {
-  padding: var(--accordion-content-padding, var(--space-3));
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
 
 .todos-section-title {
   font-size: var(--text-2xs);

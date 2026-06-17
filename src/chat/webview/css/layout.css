@@ -441,7 +441,15 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100px; /* Narrower labels for extension viewport */
+  /* Token-driven width so themes can tune the cutoff without overriding
+   * the full rule. The label budgets against size-tab-max so the close
+   * button + indicator + padding always fit inside the outer cap. */
+  max-width: var(--size-tab-label-max, 100px);
+  min-width: var(--size-tab-label-min, 48px);
+  /* Text-only transitions — never animate `all`. patchTabLabel mutates
+   * textContent in place; this rule ensures that update is color-only
+   * smooth, never a layout flash. */
+  transition: color var(--duration-fast) var(--ease-out);
 }
 
 .tab-btn .tab-indicator {
@@ -594,150 +602,14 @@
   outline-offset: -1px;
 }
 
-/**
- * Tabbed side region — replaces the four individual side panels with a single
- * containing element that holds a tab bar and tab panes. When hidden, the
- * entire region collapses. When visible, it takes --sidebar-width.
- */
-.side-region {
+/* Side panels appear as 320px right columns (one per panel) — they don't try to
+   take 100% height since .main-layout is a flex row and the chat area owns the
+   remaining width. */
+.side-panel:not(.hidden) {
   flex: 0 0 var(--sidebar-width, 320px);
-  display: flex;
-  flex-direction: column;
   height: 100%;
   min-width: 0;
   overflow: hidden;
-  background: var(--panel-bg, var(--oc-editor-bg));
-  border-left: var(--border-width-thin) solid var(--color-border);
-}
-
-.side-region.hidden {
-  display: none;
-}
-
-.side-region-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex: 0 0 auto;
-  padding: var(--accordion-header-padding, var(--space-1-5) var(--space-3));
-  border-bottom: var(--border-width-thin) solid var(--color-border);
-  background: var(--panel-bg);
-  min-height: var(--accordion-header-height, 32px);
-}
-
-.side-region-title {
-  font-size: var(--accordion-header-font, var(--text-2xs));
-  font-weight: var(--accordion-header-weight, 700);
-  text-transform: var(--accordion-header-transform, uppercase);
-  letter-spacing: var(--accordion-header-spacing, 0.08em);
-  color: var(--color-muted);
-}
-
-.side-tab {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  font-size: var(--accordion-header-font, var(--text-xs));
-  font-weight: var(--accordion-header-weight, 600);
-  text-transform: var(--accordion-header-transform, uppercase);
-  letter-spacing: var(--accordion-header-spacing, 0.05em);
-  color: var(--color-fg);
-  background: var(--panel-bg);
-  border: none;
-  border-bottom: var(--border-width-thin) solid var(--color-border);
-  padding: var(--accordion-header-padding, var(--space-1-5) var(--space-3));
-  cursor: pointer;
-  text-align: left;
-  user-select: none;
-  flex: 0 0 auto;
-  min-height: var(--accordion-header-height, 32px);
-  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
-}
-
-.side-tab:hover {
-  background: var(--oc-list-hover);
-}
-
-.side-tab:focus-visible {
-  outline: 2px solid var(--oc-focus, var(--color-accent));
-  outline-offset: -2px;
-  border-radius: 0;
-}
-
-/* Active tab state — subtle accent background */
-.side-tab[aria-expanded="true"] {
-  background: var(--oc-accent-subtle);
-  color: var(--color-accent);
-  border-bottom-color: var(--oc-accent-border);
-}
-
-.side-tab-chevron {
-  display: inline-block;
-  font-size: var(--accordion-chevron-size, var(--side-tab-chevron-size, 8px));
-  width: var(--accordion-chevron-size, 8px);
-  text-align: center;
-  transition: transform var(--duration-fast) var(--ease-out);
-  transform: rotate(0deg);
-  flex-shrink: 0;
-  color: var(--color-muted);
-}
-
-.side-tab[aria-expanded="false"] .side-tab-chevron {
-  transform: rotate(-90deg);
-}
-
-/* Active tab chevron uses accent color */
-.side-tab[aria-expanded="true"] .side-tab-chevron {
-  color: var(--color-accent);
-}
-
-.side-region-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  margin-left: auto;
-}
-
-.side-region-body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  position: relative;
-  min-height: 0;
-  isolation: isolate; /* Prevent tab content z-index from leaking to chat */
-}
-
-.side-region-body .tab-pane {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 0 0 auto;
-  border-bottom: var(--border-width-thin) solid var(--color-border);
-  position: relative; /* Contain absolute-positioned children like subagent-detail-view */
-  overflow: hidden; /* Clip subagent-detail-view to tab pane bounds */
-}
-
-.side-region-body .tab-pane.expanded {
-  flex: 1 1 0%;
-}
-
-.side-region-body .tab-pane.collapsed {
-  flex: 0 0 auto !important;
-}
-
-.tab-pane-content {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  overflow-y: auto;
-  min-height: 0;
-  padding: var(--accordion-content-padding, var(--space-3));
-}
-
-.tab-pane.collapsed .tab-pane-content {
-  display: none !important;
 }
 
 #tab-panels {
@@ -813,9 +685,10 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, #10b981 15%, transparent);
 }
 
-/* Streaming indicator on composer — subtle background tint while model is generating */
+/* Streaming indicator on composer — neutral border emphasis, no blue tint */
 #input-area.input-area--streaming {
-  background: color-mix(in srgb, var(--color-accent) 4%, var(--bg-secondary));
+  border-color: var(--color-border);
+  background: var(--bg-secondary);
 }
 
 /* Composer-active ring: scoped to the textarea via :has() so the mode/model/

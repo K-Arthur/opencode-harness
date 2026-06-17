@@ -183,11 +183,6 @@ export interface ElementRefs {
   checkpointPanel: HTMLElement | null
   recentPromptsRail: HTMLElement | null
   checkpointToggleBtn: HTMLElement
-  // Tabbed side region
-  sideRegion: HTMLElement
-  sideRegionTabBar: HTMLElement
-  sideRegionCloseBtn: HTMLElement
-  sideRegionPinBtn: HTMLElement
   todosPanel: HTMLElement
   todosList: HTMLElement
   todoAddForm: HTMLFormElement
@@ -382,11 +377,6 @@ export function getElementRefs(): ElementRefs {
     checkpointPanel: document.getElementById("checkpoint-panel"),
     recentPromptsRail: document.getElementById("recent-prompts-rail"),
     checkpointToggleBtn: requireElement("checkpoint-toggle-btn"),
-    // Tabbed side region
-    sideRegion: requireElement("side-region"),
-    sideRegionTabBar: requireElement("side-region-tabbar"),
-    sideRegionCloseBtn: requireElement("close-side-region-btn"),
-    sideRegionPinBtn: document.querySelector<HTMLElement>("#side-region .panel-pin-btn")!,
     todosPanel: requireElement("todos-panel"),
     todosList: requireElement("todos-list"),
     todoAddForm: requireElement<HTMLFormElement>("todo-add-form"),
@@ -462,6 +452,7 @@ export function toggleAllThinkingBlocks(visible: boolean): void {
   document.body.classList.toggle('hide-thinking', !visible)
   const thinkingBlocks = document.querySelectorAll<HTMLDetailsElement>('.thinking-block')
   thinkingBlocks.forEach((block) => {
+    if (block.classList.contains('thinking-streaming')) return
     block.open = visible
   })
 }

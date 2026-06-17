@@ -44,11 +44,11 @@ void describe("subagent UI reliability — wiring", () => {
       }
     })
 
-    void it("each side panel uses the shared .tab-pane class inside .side-region", () => {
+    void it("each side panel uses the shared .side-panel class", () => {
       const html2 = src("chat", "webview", "index.html")
       for (const id of ["todos-panel", "activity-panel", "tasks-panel", "subagent-panel"]) {
-        const re = new RegExp(`id="${id}"[^>]*class="[^"]*\\btab-pane\\b`)
-        assert.ok(re.test(html2), `${id} must have class="tab-pane"`)
+        const re = new RegExp(`id="${id}"[^>]*class="[^"]*\\bside-panel\\b`)
+        assert.ok(re.test(html2), `${id} must have class="side-panel"`)
       }
     })
 
@@ -62,14 +62,14 @@ void describe("subagent UI reliability — wiring", () => {
       assert.ok(/flex-direction:\s*row/.test(rule), ".main-layout must be flex-direction: row")
     })
 
-    void it(".side-region rule enforces sidebar width and full height", () => {
+    void it(".side-panel rule enforces sidebar width and full height", () => {
       const css = src("chat", "webview", "css", "layout.css")
-      assert.ok(css.includes(".side-region {"), ".side-region { rule must exist")
-      const ruleIdx = css.indexOf(".side-region {")
+      assert.ok(css.includes(".side-panel"), ".side-panel rule must exist")
+      const ruleIdx = css.indexOf(".side-panel")
       const ruleEnd = css.indexOf("}", ruleIdx)
       const rule = css.slice(ruleIdx, ruleEnd)
-      assert.ok(/flex:\s*0\s*0\s*var\(--sidebar-width,\s*320px\)/.test(rule), ".side-region must use flex: 0 0 var(--sidebar-width, 320px)")
-      assert.ok(/height:\s*100%/.test(rule), ".side-region must take height: 100%")
+      assert.ok(/flex:\s*0\s*0\s*var\(--sidebar-width,\s*320px\)/.test(rule), ".side-panel must use flex: 0 0 var(--sidebar-width, 320px)")
+      assert.ok(/height:\s*100%/.test(rule), ".side-panel must take height: 100%")
     })
   })
 

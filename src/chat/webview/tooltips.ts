@@ -458,7 +458,6 @@ const STATIC_BUTTON_TOOLTIPS: ReadonlyArray<{ id: string; tooltip: string }> = [
   { id: "timeline-toggle-btn", tooltip: TOOLTIPS.buttons.timelineToggle },
   { id: "skills-btn", tooltip: TOOLTIPS.buttons.skills },
   { id: "settings-btn", tooltip: TOOLTIPS.buttons.settings },
-  { id: "close-side-region-btn", tooltip: TOOLTIPS.buttons.closeSideRegion },
   { id: "subagent-detail-back-btn", tooltip: TOOLTIPS.buttons.subagentBack },
   { id: "subagent-detail-close-btn", tooltip: TOOLTIPS.buttons.subagentDetailClose },
   { id: "subagent-detail-popout-btn", tooltip: TOOLTIPS.buttons.subagentDetailPopout },
