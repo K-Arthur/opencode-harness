@@ -21,6 +21,7 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
   // work" cue, even when the agent only wrote prose.
   const planClass = opts?.mode === "plan" && role === "assistant" ? " message--plan-mode" : ""
   div.className = `message ${role}${planClass}`
+  if (!opts?.skipHeader) div.classList.add("message--new")
   if (msg.id) div.dataset.messageId = msg.id
   if (role) div.dataset.role = role
 

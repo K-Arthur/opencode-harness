@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Streaming UX motion budget overhaul — "Approach A" (2026-06-17).** Stripped every peripheral animation from the streaming surface so it reads like the integrated terminal / Copilot Chat — one signal, never three. Concurrent infinite animations during a 5-stream session dropped from 15+ (including box-shadow glows) to 5 caret blinks (opacity-only, GPU-composited). Removed: `thinking-pulse`, `tool-border-pulse`, `badge-pulse`, `tool-elapsed-pulse`, `tool-live-spin`, `tool-group-active-pulse`, `error-shake-in`, `subagent-badge-pulse`, `subagent-highlight-pulse`, `stagger-children`, and the entrance animation that re-fired on every token flush. Replaced with static border-left / colour state changes. Added `contain: layout` on `.message-content` and `contain: layout paint` on `.diff-block` to isolate streaming reflow from ancestors. Caret slowed from 1s `step-end` to 1.2s `ease-in-out`. Full design doc: `docs/design/2026-06-17-streaming-ux-motion-budget.md`. (`src/chat/webview/css/messages.css`, `blocks.css`, `animations.css`, `tokens.css`, `messageRenderer.ts`, `renderer.ts`)
+
 ### Added
 
 - **Stream latency tracking (2026-06-17).** StreamCoordinator now tracks P50/P95 timing: `sendTime`, `firstResponseTime`, `completeTime`, `finalizeTime` via `ActiveRunMetrics`. Logs `stream latency: first_chunk=Xms, total=Yms, finalize=Zms, messages=N` on every stream completion. Data available for `/metrics` debug surface. (`src/chat/handlers/StreamCoordinator.ts`, `StreamCoordinatorTypes.ts`)

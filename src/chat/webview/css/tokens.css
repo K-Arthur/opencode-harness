@@ -57,6 +57,10 @@
   --oc-glass-border: var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
   --oc-glass-blur: blur(12px);
 
+  /* ─── Streaming state aliases ─── */
+  --oc-stream-accent: var(--oc-accent);
+  --oc-stream-border: var(--oc-border-subtle, rgba(128, 128, 128, 0.15));
+
   /* ─── Backdrop filter scope tokens ─────────────────────────────
      Two distinct backdrop blur tokens keep cost predictable:
        --blur-surface : applied only to floating TOP-LAYER surfaces

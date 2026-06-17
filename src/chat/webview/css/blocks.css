@@ -207,13 +207,7 @@
 }
 
 .thinking-block:not([open]) {
-  animation: thinking-pulse 3s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .thinking-block:not([open]) {
-    animation: none;
-  }
+  border-left: 2px solid var(--oc-thinking-border);
 }
 
 .thinking-block:hover {
@@ -278,15 +272,8 @@
   height: 8px;
   border-radius: 50%;
   background: var(--oc-warning);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--oc-warning) 50%, transparent);
-  animation: thinking-pulse-fade 1.5s ease-in-out infinite;
   margin-left: var(--space-2);
   flex-shrink: 0;
-}
-
-@keyframes thinking-pulse-fade {
-  0%, 100% { opacity: 0.3; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1.1); }
 }
 
 /* ─── Thinking sub-type badge chip ─── */
@@ -347,24 +334,11 @@
 .tool-call--running,
 .tool-call--pending {
   border-left: 2px solid var(--color-accent);
-  animation: tool-border-pulse 1.5s ease-in-out infinite;
   background: color-mix(in srgb, var(--color-accent) 3%, var(--oc-editor-bg));
 }
 .tool-call--result,
 .tool-call--completed {
   border-left: 2px solid var(--color-success);
-}
-@media (prefers-reduced-motion: reduce) {
-  .tool-call--running,
-  .tool-call--pending {
-    animation: none;
-    border-left-color: var(--color-accent);
-  }
-}
-
-@keyframes tool-border-pulse {
-  0%, 100% { border-left-color: var(--color-accent); }
-  50% { border-left-color: color-mix(in srgb, var(--color-accent) 60%, transparent); }
 }
 
 /* Tool class-specific colours */
@@ -484,7 +458,7 @@
     letter-spacing: 0.05em;
     flex-shrink: 0;
     border: 1px solid transparent;
-    transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+    transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
     margin-left: auto; /* Always push to the right */
     margin-right: 2px; /* Small gap from edge */
     order: 10; /* Ensure it is the rightmost element */
@@ -521,14 +495,6 @@
   background: color-mix(in srgb, var(--color-accent) 15%, transparent); 
   color: var(--color-accent); 
   border-color: var(--oc-accent-border);
-  animation: badge-pulse 2s ease-in-out infinite; 
-  box-shadow: 0 0 10px var(--oc-accent-glow);
-}
-
-@keyframes badge-pulse {
-  0% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.02); opacity: 0.9; }
-  100% { transform: scale(1); opacity: 1; }
 }
 
 .tool-status--result,
@@ -583,19 +549,12 @@
   margin-left: var(--space-1);
   font-family: var(--font-mono);
   flex-shrink: 0;
-  animation: tool-elapsed-pulse 1s ease-in-out infinite;
 }
 
 /* Frozen final duration: no longer ticking, dimmer than active timers. */
 .tool-elapsed--final {
-  animation: none;
   color: var(--color-muted, #888);
   opacity: 0.8;
-}
-
-@keyframes tool-elapsed-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
 }
 
 .tool-output-size {
@@ -630,7 +589,7 @@
   line-height: var(--leading-normal);
   color: var(--color-fg);
   background: var(--oc-editor-bg);
-  transition: background-color var(--duration-normal) var(--ease-smooth), color var(--duration-normal) var(--ease-smooth), border-color var(--duration-normal) var(--ease-smooth), transform var(--duration-normal) var(--ease-smooth), opacity var(--duration-normal) var(--ease-smooth), box-shadow var(--duration-normal) var(--ease-smooth);
+  transition: background-color var(--duration-normal) var(--ease-smooth), color var(--duration-normal) var(--ease-smooth), border-color var(--duration-normal) var(--ease-smooth);
 }
 
 .tool-call[open] .tool-args-panel {
@@ -893,7 +852,7 @@
   line-height: var(--leading-normal);
   color: var(--color-fg);
   background: var(--oc-editor-bg);
-  transition: background-color var(--duration-normal) var(--ease-smooth), color var(--duration-normal) var(--ease-smooth), border-color var(--duration-normal) var(--ease-smooth), transform var(--duration-normal) var(--ease-smooth), opacity var(--duration-normal) var(--ease-smooth), box-shadow var(--duration-normal) var(--ease-smooth);
+  transition: background-color var(--duration-normal) var(--ease-smooth), color var(--duration-normal) var(--ease-smooth), border-color var(--duration-normal) var(--ease-smooth);
 }
 
 .tool-call[open] .tool-result-panel {
@@ -921,11 +880,6 @@
 
 .tool-live-indicator .codicon {
   font-size: var(--text-2xs);
-  animation: tool-live-spin 1s linear infinite;
-}
-
-@keyframes tool-live-spin {
-  to { transform: rotate(360deg); }
 }
 
 .tool-result-body {
@@ -1206,20 +1160,13 @@
   font-size: var(--text-xs);
 }
 
-/* Active / running state — pulsing left border to indicate ongoing tools */
+/* Active / running state — static left border to indicate ongoing tools */
 .tool-group--active {
   border-left: 3px solid var(--color-accent, #4db6ff);
-  animation: tool-group-active-pulse 2s ease-in-out infinite;
-}
-
-@keyframes tool-group-active-pulse {
-  0%, 100% { border-left-color: var(--color-accent, #4db6ff); box-shadow: 0 0 6px color-mix(in srgb, var(--color-accent, #4db6ff) 30%, transparent); }
-  50% { border-left-color: color-mix(in srgb, var(--color-accent, #4db6ff) 60%, white); box-shadow: 0 0 12px color-mix(in srgb, var(--color-accent, #4db6ff) 50%, transparent); }
 }
 
 .tool-group--idle {
   border-left: 1px solid var(--color-border);
-  animation: none;
 }
 
 /* Collapse controls */
@@ -1274,7 +1221,7 @@
   margin: var(--space-1) 0;
   overflow: hidden;
   background: var(--oc-editor-bg);
-  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
   box-shadow: var(--shadow-sm);
 }
 
@@ -1360,7 +1307,7 @@
   line-height: var(--leading-normal);
   color: var(--color-fg);
   background: var(--oc-editor-bg);
-  transition: background-color var(--duration-normal) var(--ease-smooth), color var(--duration-normal) var(--ease-smooth), border-color var(--duration-normal) var(--ease-smooth), transform var(--duration-normal) var(--ease-smooth), opacity var(--duration-normal) var(--ease-smooth), box-shadow var(--duration-normal) var(--ease-smooth);
+  transition: background-color var(--duration-normal) var(--ease-smooth), color var(--duration-normal) var(--ease-smooth), border-color var(--duration-normal) var(--ease-smooth);
 }
 
 .tool-card.expanded .tool-result {
@@ -1379,6 +1326,8 @@
   overflow: hidden;
   margin: var(--space-3) 0;
   box-shadow: var(--shadow-md);
+  /* Isolate layout/paint so diff content growth doesn't reflow ancestors */
+  contain: layout paint;
 }
 
 .diff-block--accepted {
@@ -1387,6 +1336,11 @@
 
 .diff-block--discarded {
   opacity: 0.5;
+}
+
+/* New diff entering from a streaming handoff — subtle left accent, no animation */
+.diff-block--entered {
+  border-left: 2px solid var(--oc-accent, var(--color-accent));
 }
 
 /* Plan-mode assistant turns: amber left border + subtle tint so prose
@@ -1854,7 +1808,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
-  transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast), opacity var(--duration-fast), box-shadow var(--duration-fast);
+  transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
   min-height: 28px;
   white-space: nowrap;
 }
@@ -1989,7 +1943,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
-  transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast), opacity var(--duration-fast), box-shadow var(--duration-fast);
+  transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
   min-height: 32px;
 }
 
@@ -2122,7 +2076,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
-  transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast), opacity var(--duration-fast), box-shadow var(--duration-fast);
+  transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
   min-height: 32px;
 }
 
@@ -2352,13 +2306,6 @@
   border-radius: var(--radius-md, 8px);
   background: var(--oc-editor-bg, var(--vscode-editor-background));
   color: var(--oc-fg, var(--vscode-editor-foreground));
-  animation: error-shake-in 0.25s ease-out;
-}
-
-@keyframes error-shake-in {
-  0% { opacity: 0; transform: translateX(-4px); }
-  50% { transform: translateX(2px); }
-  100% { opacity: 1; transform: translateX(0); }
 }
 
 .error-display-basic {
@@ -2897,27 +2844,10 @@
 
 /* ─── Subagent Task Cards ─── */
 
-@keyframes subagent-badge-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-
-/* ─── Subagent highlight pulse (triggered by oc:open-subagent-panel) ─── */
-@keyframes subagent-highlight-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 var(--oc-accent, var(--color-accent)); }
-  50% { box-shadow: 0 0 0 3px var(--oc-accent-border, rgba(0, 120, 212, 0.4)); }
-}
-
+/* ─── Subagent highlight (triggered by oc:open-subagent-panel) ─── */
 .subagent-highlight-pulse {
-  animation: subagent-highlight-pulse 1s ease-in-out 3;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .subagent-highlight-pulse {
-    animation: none;
-    outline: 2px solid var(--oc-accent, var(--color-accent));
-    outline-offset: 1px;
-  }
+  outline: 2px solid var(--oc-accent, var(--color-accent));
+  outline-offset: 1px;
 }
 
 .subagent-card {
@@ -3021,7 +2951,6 @@
   background: var(--oc-accent-subtle);
   color: var(--color-accent);
   border-color: var(--oc-accent-border, transparent);
-  animation: subagent-badge-pulse 1.5s ease-in-out infinite;
 }
 
 .subagent-card-status--completed {

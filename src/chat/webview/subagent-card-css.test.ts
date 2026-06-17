@@ -36,9 +36,9 @@ describe("subagent-card CSS contract", () => {
     })
   }
 
-  it("running status pulses but respects reduced motion", () => {
-    assert.match(blocks, /\.subagent-card-status--running\s*{[^}]*animation:\s*subagent-badge-pulse/s)
-    assert.match(blocks, /prefers-reduced-motion: reduce[\s\S]*\.subagent-card-status--running\s*{\s*animation:\s*none/)
+  it("running status is styled without animations", () => {
+    assert.match(blocks, /\.subagent-card-status--running\s*{[^}]*/s)
+    assert.ok(!blocks.includes("animation: subagent-badge-pulse"), "must not use pulse animation")
   })
 
   it("header toggle badge is styled and hides when empty", () => {

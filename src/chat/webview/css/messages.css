@@ -264,6 +264,27 @@
   font-weight: 500;
 }
 
+/* Per-turn model indicator inside the conversation timeline sidebar.
+   Compact CLI-style label, monospace + dimmed to match the message-header
+   badge. Truncation guards against long open-source model strings; the full
+   model is available via the native title tooltip. */
+.timeline-item-model {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-muted);
+  opacity: 0.6;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.timeline-item:hover .timeline-item-model,
+.timeline-item:focus-visible .timeline-item-model {
+  opacity: 0.85;
+}
+
 /* Turn whose messages are not loaded into the DOM yet (lazy history) —
    dimmed; clicking it loads the earlier page and then scrolls. */
 .timeline-item--unloaded {
@@ -322,9 +343,21 @@
   align-items: flex-start;
   gap: var(--space-1-5);
   max-width: 100%;
-  animation: message-enter var(--duration-normal) var(--ease-out) forwards;
   word-break: break-word;
   overflow-wrap: anywhere;
+}
+
+/* One-shot entrance fade for history-load and first assistant message.
+   Applied on initial render (not re-renders). Opacity-only — zero layout shift.
+   No permanent visual artifact: class is added once, animation plays once,
+   message settles to opacity:1. */
+.message--new {
+  animation: message-fade-in 200ms var(--ease-out) both;
+}
+
+@keyframes message-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .message + .message {
@@ -348,6 +381,10 @@
   min-width: 0;
   position: relative;
   width: 100%;
+  /* Isolate layout so streaming token growth doesn't reflow ancestors.
+     Uses `layout` only (not `paint`) to avoid clipping :focus-visible
+     outlines on buttons/headers near the content boundary. */
+  contain: layout;
 }
 
 .message.user .message-content {
@@ -416,7 +453,9 @@
 /* ─── Per-turn Model Indicator ─── */
 /* CLI-style notation: [claude-sonnet-4-5] rendered inline in message header.
    Monospace + dim to match code-centric developer aesthetics.
-   Low opacity at rest — revealed on message hover alongside timestamp. */
+   Low opacity at rest — revealed on message hover alongside timestamp.
+   Truncation guards against long open-source model strings
+   (e.g. provider/org/model-name:v2-beta-latest) blowing out the sidebar. */
 .message-model-badge {
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
@@ -426,6 +465,9 @@
   letter-spacing: 0;
   white-space: nowrap;
   user-select: none;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .message:hover .message-model-badge,
@@ -433,9 +475,24 @@
   opacity: 0.55;
 }
 
-/* Slightly more visible while streaming so the user sees which model is active */
+/* Slightly more visible while streaming so the user sees which model is active.
+   A colored dot (::before) gives a clear, zero-layout-cost active affordance
+   that matches the VS Code terminal's "running" color language. */
 .message.streaming .message-model-badge {
   opacity: 0.7;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0-5);
+}
+
+.message.streaming .message-model-badge::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--oc-accent, var(--vscode-terminal-ansiGreen, #3fb950));
+  flex-shrink: 0;
 }
 
 
@@ -1471,11 +1528,11 @@
   display: inline-block;
   width: 2px;
   height: 1em;
-  background: var(--color-accent);
+  background: var(--oc-stream-accent, var(--color-accent));
   margin-left: 1px;
   vertical-align: text-bottom;
   border-radius: 1px;
-  animation: cursor-blink 1s step-end infinite;
+  animation: cursor-blink 1.2s ease-in-out infinite;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════╛

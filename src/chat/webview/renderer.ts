@@ -985,6 +985,10 @@ export interface TurnSummary {
   toolCount: number
   patchCount: number
   timestamp: number
+  /** The model that produced this turn's assistant response (e.g.
+   *  "anthropic/claude-sonnet-4-5"). Undefined when no assistant message
+   *  exists for this turn or the message predates per-turn model stamping. */
+  model?: string
 }
 
 export function groupMessagesIntoTurns(messages: import("./types").ChatMessage[]): TurnSummary[] {
@@ -1006,6 +1010,13 @@ export function groupMessagesIntoTurns(messages: import("./types").ChatMessage[]
     } else if (msg.role === "assistant") {
       if (currentTurn) {
         currentTurn.assistantMessageId = msg.id || ""
+        // Capture the model that generated this turn's assistant response.
+        // Read from the message (stamped at stream start) so the timeline
+        // reflects the actual producer even if the session's active model
+        // changed later.
+        if (!currentTurn.model && typeof msg.model === "string" && msg.model) {
+          currentTurn.model = msg.model
+        }
         // Count tool calls and diffs in this assistant message
         const blocks = msg.blocks || []
         currentTurn.toolCount += blocks.filter(b => b.type === "tool-call" || b.type === "tool_call" || b.type === "tool").length
@@ -1436,7 +1447,10 @@ function toDiffBlock(block: Block): DiffBlock {
 
 function createDiffWrapper(diffBlock: DiffBlock, isPlanMode: boolean): HTMLElement {
   const wrapper = document.createElement("div")
-  wrapper.className = `diff-block diff-block--${diffBlock.state}${isPlanMode ? " diff-block--plan" : ""}`
+  const classes = [`diff-block`, `diff-block--${diffBlock.state}`]
+  if (isPlanMode) classes.push("diff-block--plan")
+  if (diffBlock.state === "pending") classes.push("diff-block--entered")
+  wrapper.className = classes.join(" ")
   wrapper.dataset.diffId = diffBlock.diffId
   return wrapper
 }
