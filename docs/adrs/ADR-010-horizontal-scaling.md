@@ -90,7 +90,9 @@ class SessionManagerRegistry {
 - `SessionManagerRegistry` + `LocalSessionProcessManager` — created and wired ✅
 - `StreamCoordinator.startPrompt` — routes per-tab calls through registry (`getSm(tabId)`) ✅
 - `spawnAndRegisterSession` — spawns process + creates SessionManager + registers ✅
-- Per-process `OPENCODE_DATA_DIR` support — requires each server to have a unique data dir
-- `SessionManagerRegistry.spawnAndRegisterSession` consumes the McpServerManager shared instance — next: per-process V2OpencodeClient isolation
-- Crash + auto-resume at the process level — next: hook `LocalSessionProcessManager.onSessionCrash` into `TabRestorationState`
-- Process pool LRU eviction for idle sessions — next: configurable idle timeout + `killSession`
+- Per-process `OPENCODE_DATA_DIR` — each spawned process gets a unique temp dir ✅
+- Crash resilience — `onProcessCrash` event with `TabRestorationState` ✅
+- LRU eviction — idle timeout + auto-kill (`processIdleTimeoutMinutes` config) ✅
+- Per-process `V2OpencodeClient` + SSE subscription — each `SessionManager` creates its own client/SSE ✅
+- Auto-spawn in `startPrompt` — per-tab mode auto-creates a process when none exists ✅
+- **All ADR-010 Phase 3 items implemented end-to-end.** Next: production hardening (Windows signal handling, multi-SSE throughput benchmarks, crash recovery E2E tests).

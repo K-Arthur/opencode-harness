@@ -942,6 +942,22 @@ export class StreamCoordinator {
 
     if (!this.reserveStreamSlotOrReject(tabId, callbacks)) return
 
+    // ADR-010: In per-tab mode, auto-spawn a dedicated process for this tab
+    // if it doesn't already have one. The spawned SessionManager is registered
+    // in the registry so getSm(tabId) routes subsequent calls to it.
+    if (this.sessionManagerRegistry?.processStrategy === "per-tab") {
+      const existing = this.sessionManagerRegistry.getProcessForTab(tabId)
+      if (!existing) {
+        log.info(`[per-tab] Auto-spawning process for tab ${tabId}`)
+        try {
+          await this.sessionManagerRegistry.spawnAndRegisterSession(undefined, tabId)
+        } catch (err) {
+          log.error(`[per-tab] Failed to spawn process for tab ${tabId}`, err)
+          callbacks.postRequestError("Failed to start per-tab AI session. Falling back to shared server.")
+        }
+      }
+    }
+
     this.initializeRunMetadata(tabId, tab, text, identity)
 
     try {

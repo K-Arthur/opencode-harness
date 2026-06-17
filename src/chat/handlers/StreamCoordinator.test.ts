@@ -605,7 +605,7 @@ describe("StreamCoordinator.ts", () => {
   void it("instructions_prepended_to_parts_on_first_turn", () => {
     const startIdx = source.indexOf("async startPrompt(")
     assert.ok(startIdx >= 0, "startPrompt must exist")
-    const block = source.slice(startIdx, startIdx + 12000)
+    const block = source.slice(startIdx, startIdx + 14000)
     assert.ok(
       block.includes("tab.instructions"),
       "startPrompt must read tab.instructions before building parts"
@@ -620,7 +620,7 @@ describe("StreamCoordinator.ts", () => {
   void it("instructions_not_re_injected_on_subsequent_turns", () => {
     const startIdx = source.indexOf("async startPrompt(")
     assert.ok(startIdx >= 0, "startPrompt must exist")
-    const block = source.slice(startIdx, startIdx + 12000)
+    const block = source.slice(startIdx, startIdx + 14000)
     assert.ok(
       block.includes(".has(cliSessionId)") ||
         /!.*injectedInstructionsSessions/.test(block) ||
@@ -857,5 +857,38 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(
       block.includes("this.sessionManagerRegistry.unassignTab(tabId)"),
       "cleanupTab must call registry.unassignTab"
+    )
+  })
+
+  // ── ADR-010: Per-tab auto-spawn in startPrompt ─────────────────────────
+  it("auto-spawns per-tab process when strategy is per-tab and no process exists", () => {
+    const fnIdx = source.indexOf("async startPrompt(")
+    assert.ok(fnIdx >= 0, "startPrompt must exist")
+    const blockEnd = source.indexOf("\n  async private?", fnIdx)
+    const block = source.slice(fnIdx, fnIdx + 6000)
+
+    assert.ok(
+      block.includes('this.sessionManagerRegistry?.processStrategy === "per-tab"') ||
+        block.includes('this.sessionManagerRegistry.processStrategy === "per-tab"'),
+      "startPrompt must check per-tab strategy before auto-spawn"
+    )
+    assert.ok(
+      block.includes("spawnAndRegisterSession(undefined, tabId") ||
+        block.includes("spawnAndRegisterSession(undefined, tabId)"),
+      "startPrompt must call spawnAndRegisterSession for tabs without a process"
+    )
+    assert.ok(
+      block.includes("getProcessForTab(tabId)"),
+      "startPrompt must check for existing process before spawning"
+    )
+  })
+
+  it("handles spawn failure gracefully in per-tab auto-spawn", () => {
+    const fnIdx = source.indexOf("async startPrompt(")
+    assert.ok(fnIdx >= 0, "startPrompt must exist")
+    const block = source.slice(fnIdx, fnIdx + 6000)
+    assert.ok(
+      block.includes("Failed to spawn process") || block.includes("postRequestError("),
+      "startPrompt must handle spawn failure with fallback"
     )
   })
