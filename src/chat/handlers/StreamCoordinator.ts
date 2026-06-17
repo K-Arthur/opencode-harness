@@ -505,24 +505,88 @@ export class StreamCoordinator {
    * Mark a question block as answered in the blocksBuffer and remove it
    * from activeToolCallIds so the stream can finalize. Called by
    * WebviewEventRouter when the user submits an answer.
+   *
+   * B10: The tool_start event assigns id=prt_*, but the question.asked event
+   * assigns toolCallId=call_* and requestID=que_*. These are DIFFERENT IDs
+   * for the same question. This method resolves the mismatch by falling back
+   * to requestID matching and single-unanswered-question heuristic.
+   *
+   * B10: Also triggers maybeFinalizeStream after clearing, because clearing
+   * activeToolCallIds without re-checking finalization leaves the stream
+   * deferred forever.
    */
   markQuestionAnswered(tabId: string, toolCallId: string): void {
     const tab = this.tabManager.getTab(tabId)
     if (!tab) return
-    const qBlock = tab.blocksBuffer.find(
+
+    // Try exact match first (b.id or b.toolCallId === toolCallId)
+    let qBlock = tab.blocksBuffer.find(
       b => b.type === "question" && (b.id === toolCallId || (b as Record<string, unknown>).toolCallId === toolCallId)
     )
+
+    // Fallback 1: match by requestID (question.asked carries requestID=que_*)
+    if (!qBlock) {
+      qBlock = tab.blocksBuffer.find(
+        b => b.type === "question" && (b as Record<string, unknown>).requestID === toolCallId
+      )
+    }
+
+    // Fallback 2: if there's exactly one unanswered question, it must be this one
+    // (handles the prt_* vs call_* ID mismatch from tool_start vs question.asked)
+    if (!qBlock) {
+      const unanswered = tab.blocksBuffer.filter(
+        b => b.type === "question" && !(b as Record<string, unknown>).answered
+      )
+      if (unanswered.length === 1) {
+        qBlock = unanswered[0]
+        log.info(`markQuestionAnswered: ID mismatch fallback — matched unanswered question ${(qBlock as Record<string, unknown>).id} for input ${toolCallId}`)
+      }
+    }
+
+    // Resolve the actual ID stored in activeToolCallIds
+    let resolvedId = toolCallId
     if (qBlock) {
       ;(qBlock as Record<string, unknown>).answered = true
-      log.info(`markQuestionAnswered: marked question ${toolCallId} as answered in blocksBuffer for ${tabId}`)
+      const blockId = (qBlock as Record<string, unknown>).id as string
+      const blockToolCallId = (qBlock as Record<string, unknown>).toolCallId as string
+      resolvedId = blockId || blockToolCallId || toolCallId
+      log.info(`markQuestionAnswered: marked question ${resolvedId} as answered in blocksBuffer for ${tabId}`)
     }
+
     const pending = this.activeToolCallIds.get(tabId)
-    if (pending && pending.has(toolCallId)) {
-      pending.delete(toolCallId)
+    if (pending) {
+      // Try the original toolCallId first, then the resolved ID
+      if (pending.has(toolCallId)) {
+        pending.delete(toolCallId)
+        log.info(`markQuestionAnswered: removed ${toolCallId} from activeToolCallIds for ${tabId}`)
+      } else if (resolvedId !== toolCallId && pending.has(resolvedId)) {
+        pending.delete(resolvedId)
+        log.info(`markQuestionAnswered: removed ${resolvedId} from activeToolCallIds for ${tabId} (ID resolution fallback)`)
+      } else {
+        // Last resort: clear any question-type tool IDs whose blocks are now answered
+        for (const id of Array.from(pending)) {
+          const block = tab.blocksBuffer.find(
+            b => (b.id === id || (b as Record<string, unknown>).toolCallId === id) && b.type === "question"
+          )
+          if (block && (block as Record<string, unknown>).answered === true) {
+            pending.delete(id)
+            log.info(`markQuestionAnswered: removed answered question ${id} from activeToolCallIds for ${tabId} (block scan)`)
+          }
+        }
+      }
       if (pending.size === 0) {
         this.activeToolCallIds.delete(tabId)
       }
-      log.info(`markQuestionAnswered: removed ${toolCallId} from activeToolCallIds for ${tabId}`)
+    }
+
+    // B10: Trigger finalization — clearing the question state without
+    // re-checking finalization leaves the stream deferred forever.
+    const callbacks = this.stuckStreamHandlers.get(tabId)
+    if (callbacks && tab.waitingForCompletion) {
+      log.info(`markQuestionAnswered: triggering maybeFinalizeStream for ${tabId}`)
+      void this.maybeFinalizeStream(tabId, callbacks, "status").catch(err =>
+        log.error("markQuestionAnswered: finalize failed", err)
+      )
     }
   }
 
@@ -535,21 +599,42 @@ export class StreamCoordinator {
   unmarkQuestionAnswered(tabId: string, toolCallId: string): void {
     const tab = this.tabManager.getTab(tabId)
     if (!tab) return
-    const qBlock = tab.blocksBuffer.find(
+
+    // B10: Same ID resolution as markQuestionAnswered — tool_start uses prt_*,
+    // question.asked uses call_*, and the caller may pass either.
+    let qBlock = tab.blocksBuffer.find(
       b => b.type === "question" && (b.id === toolCallId || (b as Record<string, unknown>).toolCallId === toolCallId)
     )
+    if (!qBlock) {
+      qBlock = tab.blocksBuffer.find(
+        b => b.type === "question" && (b as Record<string, unknown>).requestID === toolCallId
+      )
+    }
+    if (!qBlock) {
+      const answered = tab.blocksBuffer.filter(
+        b => b.type === "question" && (b as Record<string, unknown>).answered === true
+      )
+      if (answered.length === 1) {
+        qBlock = answered[0]
+      }
+    }
+
+    let resolvedId = toolCallId
     if (qBlock) {
       const rec = qBlock as Record<string, unknown>
       delete rec.answered
       delete rec.answer
       delete rec.answerSource
-      log.info(`unmarkQuestionAnswered: reverted question ${toolCallId} to pending in blocksBuffer for ${tabId}`)
+      resolvedId = (rec.id as string) || (rec.toolCallId as string) || toolCallId
+      log.info(`unmarkQuestionAnswered: reverted question ${resolvedId} to pending in blocksBuffer for ${tabId}`)
     }
+
     const pending = this.getOrCreatePendingToolIds(tabId)
-    if (!pending.has(toolCallId)) {
-      pending.add(toolCallId)
-      this.trackToolActivity(tabId, toolCallId)
-      log.info(`unmarkQuestionAnswered: re-added ${toolCallId} to activeToolCallIds for ${tabId}`)
+    const idToAdd = resolvedId || toolCallId
+    if (!pending.has(idToAdd)) {
+      pending.add(idToAdd)
+      this.trackToolActivity(tabId, idToAdd)
+      log.info(`unmarkQuestionAnswered: re-added ${idToAdd} to activeToolCallIds for ${tabId}`)
     }
   }
 
