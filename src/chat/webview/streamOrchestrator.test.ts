@@ -755,6 +755,34 @@ describe("createStreamOrchestrator", () => {
       )
     })
 
+    it("shows the aborted (user interrupt) reason message", () => {
+      const h = makeHarness()
+      h.addSession(session("s1"))
+      h.addStream("s1")
+      h.setMessageList("s1", document.createElement("div"))
+      h.api.handleStreamEnd("s1", "msg-1", undefined, "aborted")
+      assert.ok(
+        (h.calls.showSystemMessage || []).some(
+          (c) => String(c[1]).includes("Generation interrupted by user"),
+        ),
+        "must show 'Generation interrupted by user.' system message for aborted reason"
+      )
+    })
+
+    it("aborted reason is NOT retryable", () => {
+      const h = makeHarness()
+      h.addSession(session("s1"))
+      h.addStream("s1")
+      h.setMessageList("s1", document.createElement("div"))
+      h.api.handleStreamEnd("s1", "msg-1", undefined, "aborted")
+      // The third argument to showSystemMessage is retryable
+      const abortedCall = (h.calls.showSystemMessage || []).find(
+        (c) => String(c[1]).includes("Generation interrupted by user"),
+      )
+      assert.ok(abortedCall, "must find the aborted message call")
+      assert.equal(abortedCall![2], false, "aborted reason must NOT be retryable")
+    })
+
     it("shows a generic error message only when there is NO recent error card", () => {
       const h = makeHarness()
       h.addSession(session("s1"))
