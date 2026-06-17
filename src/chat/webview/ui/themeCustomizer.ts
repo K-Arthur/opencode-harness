@@ -1,3 +1,5 @@
+import { mountModalFocus, type ModalFocusHandle } from "../focus-trap"
+
 export interface ThemeCustomizerConfig {
   preset?: string
   overrides?: Record<string, string>
@@ -18,7 +20,6 @@ export interface ThemeCustomizerDeps {
   els: ThemeCustomizerElements
   postMessage: (msg: Record<string, unknown>) => void
   pushUndo: (state: { themePreset: string; themeOverrides: Record<string, string> }) => void
-  trapFocus: (container: HTMLElement) => (e: KeyboardEvent) => void
 }
 
 const PREVIEW_CSS_VAR_MAP: ReadonlyArray<[string, string]> = [
@@ -73,22 +74,16 @@ const PREVIEW_CSS_VAR_MAP: ReadonlyArray<[string, string]> = [
 ]
 
 let activePreset = "cli-default"
-let focusTrap: ((e: KeyboardEvent) => void) | null = null
-let lastFocus: HTMLElement | null = null
+let focusHandle: ModalFocusHandle | null = null
 let cachedEls: ThemeCustomizerElements | null = null
 
 export function setupThemeCustomizer(deps: ThemeCustomizerDeps): void {
-  const { els, postMessage, pushUndo, trapFocus } = deps
+  const { els, postMessage, pushUndo } = deps
   cachedEls = els
 
   els.themeCustomizerClose.addEventListener("click", () => closeThemeCustomizer())
   els.themeCustomizerPanel.addEventListener("click", (event) => {
     if (event.target === els.themeCustomizerPanel) closeThemeCustomizer()
-  })
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !els.themeCustomizerPanel.classList.contains("hidden")) {
-      closeThemeCustomizer()
-    }
   })
 
   els.themePresetCards.addEventListener("click", (event) => {
@@ -166,26 +161,22 @@ export function setupThemeCustomizer(deps: ThemeCustomizerDeps): void {
 }
 
 export function openThemeCustomizer(deps: ThemeCustomizerDeps): void {
-  const { els, postMessage, trapFocus } = deps
+  const { els, postMessage } = deps
   cachedEls = els
   els.themeCustomizerPanel.classList.remove("hidden")
   postMessage({ type: "get_theme_config" })
-  lastFocus = document.activeElement as HTMLElement | null
-  focusTrap = trapFocus(els.themeCustomizerPanel)
-  document.addEventListener("keydown", focusTrap)
-  els.themePresetCards.querySelector<HTMLButtonElement>("[data-preset]")?.focus()
+  
+  focusHandle = mountModalFocus(els.themeCustomizerPanel, {
+    initialFocus: els.themePresetCards.querySelector<HTMLElement>("[data-preset]")
+  })
 }
 
 export function closeThemeCustomizer(): void {
   const els = cachedEls
   if (els) els.themeCustomizerPanel.classList.add("hidden")
-  if (focusTrap) {
-    document.removeEventListener("keydown", focusTrap)
-    focusTrap = null
-  }
-  if (lastFocus) {
-    lastFocus.focus({ preventScroll: true })
-    lastFocus = null
+  if (focusHandle) {
+    focusHandle.release()
+    focusHandle = null
   }
 }
 

@@ -1428,7 +1428,7 @@ function getVsCodeApi() {
 
     // Initialize side region
     const sideRegionEl = document.getElementById("side-region")
-    const tabBarEl = document.querySelector<HTMLElement>(".side-region-tabbar")
+    const tabBarEl = document.querySelector<HTMLElement>(".side-region-header")
     const tabButtons = document.querySelectorAll<HTMLElement>(".side-tab")
     const pinBtn = document.getElementById("close-side-region-btn")?.previousElementSibling as HTMLElement | null
     const closeBtn = document.getElementById("close-side-region-btn")
@@ -2510,7 +2510,6 @@ function getVsCodeApi() {
     els,
     postMessage: (msg: Record<string, unknown>) => vscode.postMessage(msg),
     pushUndo: (state: { themePreset: string; themeOverrides: Record<string, string> }) => undoRedoPush(state),
-    trapFocus: (container: HTMLElement) => trapModalFocus(container),
   }
   setupThemeCustomizer(themeDeps)
 
@@ -2968,7 +2967,7 @@ function getVsCodeApi() {
                 msgList.appendChild(banner)
               }
 
-              const renderOpts = { mode: session.mode, sessionId: session.id, postMessage: (m2: Record<string, unknown>) => vscode.postMessage(m2) }
+              const renderOpts = { mode: session.mode, sessionId: session.id, sessionModel: session.model, postMessage: (m2: Record<string, unknown>) => vscode.postMessage(m2) }
               let scrollRestored = false
               const loader = createChunkedLoader({
                 container: msgList,
@@ -3077,7 +3076,7 @@ function getVsCodeApi() {
         }
 
         const session = stateManager.getSession(sid)
-        const renderOpts = { mode: session?.mode ?? "build", sessionId: sid, postMessage: (m2: Record<string, unknown>) => vscode.postMessage(m2) }
+        const renderOpts = { mode: session?.mode ?? "build", sessionId: sid, sessionModel: session?.model, postMessage: (m2: Record<string, unknown>) => vscode.postMessage(m2) }
 
         // Insert the page into session state BEFORE rendering: the timeline,
         // turn indexes and scroll markers are all derived from
@@ -3137,7 +3136,7 @@ function getVsCodeApi() {
         const msgList = getMessageList(sid)
         if (!msgList) return
         msgList.innerHTML = ""
-        const renderOpts = { mode: session?.mode ?? "build", sessionId: sid, postMessage: (m2: Record<string, unknown>) => vscode.postMessage(m2) }
+        const renderOpts = { mode: session?.mode ?? "build", sessionId: sid, sessionModel: session?.model, postMessage: (m2: Record<string, unknown>) => vscode.postMessage(m2) }
         for (const m of refreshedMsgs) {
           const el = renderMessage(m, { ...renderOpts, turnIndex: refreshedMsgs.indexOf(m) }, false)
           msgList.appendChild(el)
@@ -3733,6 +3732,7 @@ function getVsCodeApi() {
                 const renderOpts = {
                   mode: s.mode,
                   sessionId: s.id,
+                  sessionModel: s.model,
                   postMessage: (m: Record<string, unknown>) => vscode.postMessage(m),
                   hasQuestionInBar: (toolCallId: string) => questionBar.hasQuestionInState(toolCallId),
                 }
@@ -4655,6 +4655,18 @@ function getVsCodeApi() {
     subagentDismissedBySession.delete(sessionId)
     knownSubagentIdsBySession.delete(sessionId)
     streamOrchestrator.handleStreamStart(sessionId, messageId, opts)
+    // Stamp the active model onto the new streaming message so the per-turn
+    // model indicator badge can show which model generated each response.
+    const session = stateManager.getSession(sessionId)
+    if (session?.model) {
+      const msgs = session.messages
+      const streamingMsg = messageId
+        ? msgs.find((m) => m.id === messageId)
+        : msgs[msgs.length - 1]
+      if (streamingMsg && streamingMsg.role === "assistant" && !streamingMsg.model) {
+        streamingMsg.model = session.model
+      }
+    }
   }
 
   function handleStreamChunk(sessionId: string, text?: string, messageId?: string) {

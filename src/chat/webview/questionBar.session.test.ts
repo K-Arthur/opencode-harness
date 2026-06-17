@@ -65,8 +65,7 @@ describe("question bar — session attribution (multi-tab)", () => {
     const messages = [{ id: "mB", blocks: [{ type: "question", toolCallId: "qNoSid", answered: true, groups: [{ question: "Pick", options: ["A", "B"], multiSelect: false }] }] }]
     repopulateFromMessages("B", messages as any)
     
-    const el = document.querySelector('[data-question-id="qNoSid"]') as HTMLElement
-    assert.ok(el, "should be rendered in DOM")
+    assert.ok(document.querySelector('[data-question-id="qNoSid"]'), "shows on session B, which repopulateFromMessages just made active")
 
     setActiveSession("A")
     assert.ok(!document.querySelector('[data-question-id="qNoSid"]'), "must NOT be visible/present on session A")

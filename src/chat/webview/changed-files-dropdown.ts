@@ -26,6 +26,7 @@ const DIFF_CACHE_MAX = 50
 interface ChangedFilesState {
   sortMode: "changes" | "alpha"
   expandedFiles: Set<string>
+  collapsedDirs: Set<string>
   diffCache: Map<string, DiffLine[] | null | string>
   hunksCache: Map<string, FileHunkView[]>
   lastFiles: FileChange[]
@@ -37,6 +38,7 @@ function _createState(): ChangedFilesState {
   return {
     sortMode: "changes",
     expandedFiles: new Set<string>(),
+    collapsedDirs: new Set<string>(),
     diffCache: new Map<string, DiffLine[] | null | string>(),
     hunksCache: new Map<string, FileHunkView[]>(),
     lastFiles: [],
@@ -458,7 +460,7 @@ function positionPanel(anchor: Element): void {
   if (!_panel) return
   const margin = 8
   const r = anchor.getBoundingClientRect()
-  const panelW = Math.min(440, Math.max(300, window.innerWidth - margin * 2))
+  const panelW = Math.min(440, window.innerWidth - margin * 2)
   const estimatedHeight = Math.min(540, Math.max(260, _panel.getBoundingClientRect().height || 420))
   const spaceBelow = window.innerHeight - r.bottom - margin
   const spaceAbove = r.top - margin
@@ -631,10 +633,42 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
   for (const [dir, groupFiles] of groups) {
     const group = document.createElement("div")
     group.className = "cf-dir-group"
-    const header = document.createElement("div")
+    
+    const isCollapsed = state.collapsedDirs.has(dir)
+    const header = document.createElement("button")
     header.className = "cf-dir-header"
-    header.textContent = dir === "" ? "/" : dir
+    header.type = "button"
+    header.setAttribute("aria-expanded", String(!isCollapsed))
+
+    const chevron = document.createElement("span")
+    chevron.className = "cf-dir-chevron"
+    chevron.textContent = isCollapsed ? "▶" : "▼"
+    header.appendChild(chevron)
+
+    const dirTitle = document.createElement("span")
+    dirTitle.textContent = dir === "" ? "/" : dir
+    header.appendChild(dirTitle)
+
     group.appendChild(header)
+
+    const filesContainer = document.createElement("div")
+    filesContainer.className = "cf-dir-files"
+    if (isCollapsed) {
+      filesContainer.style.display = "none"
+    }
+    group.appendChild(filesContainer)
+
+    header.addEventListener("click", () => {
+      const currentlyCollapsed = state.collapsedDirs.has(dir)
+      if (currentlyCollapsed) {
+        state.collapsedDirs.delete(dir)
+      } else {
+        state.collapsedDirs.add(dir)
+      }
+      header.setAttribute("aria-expanded", String(currentlyCollapsed))
+      chevron.textContent = currentlyCollapsed ? "▼" : "▶"
+      filesContainer.style.display = currentlyCollapsed ? "" : "none"
+    })
 
     groupFiles.forEach((file) => {
       const parts = file.path.split("/")
@@ -749,6 +783,7 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
         _renderRowExpansion(row, preview, expandBtn, willExpand, sessionId, file.path)
       })
 
+      row.appendChild(expandBtn)
       row.appendChild(badge)
       row.appendChild(name)
       if (planTag) row.appendChild(planTag)
@@ -756,9 +791,8 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       row.appendChild(openBtn)
       row.appendChild(diffBtn)
       row.appendChild(undoBtn)
-      row.appendChild(expandBtn)
-      group.appendChild(row)
-      group.appendChild(preview)
+      filesContainer.appendChild(row)
+      filesContainer.appendChild(preview)
     })
 
     list.appendChild(group)

@@ -482,6 +482,12 @@ export interface RenderOptions {
    *  bar DOM. Used for the inline fallback: if the bar does NOT have the item,
    *  render interactive controls inline so the user can still answer (RC-2). */
   hasQuestionInBar?: (toolCallId: string) => boolean
+  /** The model that generated this specific message (from ChatMessage.model).
+   *  Used to render a compact per-turn model indicator in the message header. */
+  messageModel?: string
+  /** The session's currently active model (from SessionState.model).
+   *  Used as a fallback when messageModel is absent (e.g., legacy history). */
+  sessionModel?: string
 }
 
 // ---------------------------------------------------------------------------

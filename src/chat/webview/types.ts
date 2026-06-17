@@ -238,6 +238,9 @@ export interface ChatMessage {
   sessionId?: string
   tokenCount?: number
   mode?: string
+  /** The model that generated this message (e.g. "anthropic/claude-sonnet-4-5").
+   *  Stamped when the stream starts; undefined for user messages and legacy history. */
+  model?: string
 }
 
 export type SteerMode = "interrupt" | "queue"

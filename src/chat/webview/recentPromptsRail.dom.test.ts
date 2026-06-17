@@ -35,24 +35,30 @@ describe("renderRecentPromptsRail", () => {
   it("renders newest prompts first and shows pinned ones on top", () => {
     const messages = [userMsg("m1", "first task", 1), userMsg("m2", "second task", 2), userMsg("m3", "third task", 3)]
     renderRecentPromptsRail(container, { messages, pinnedIds: ["m1"], onPin: () => {}, onPick: () => {}, maxRecent: 5 })
-    const chips = [...container.querySelectorAll(".rp-chip")]
     assert.equal(container.classList.contains("hidden"), false)
-    // m1 pinned → first; then m3, m2 (newest unpinned first)
-    assert.deepEqual(chips.map((c) => c.getAttribute("data-prompt-id")), ["m1", "m3", "m2"])
-    assert.equal(chips[0]!.classList.contains("rp-chip--pinned"), true)
+    
+    // First (m1, pinned) is a featured card
+    const card = container.querySelector(".rp-featured-card")!
+    assert.ok(card, "must render the featured card")
+    assert.equal(card.getAttribute("data-prompt-id"), "m1")
+    assert.equal(card.classList.contains("rp-featured-card--pinned"), true)
+
+    // The rest (m3, m2) are chips in the remaining container
+    const chips = [...container.querySelectorAll(".rp-chip")]
+    assert.deepEqual(chips.map((c) => c.getAttribute("data-prompt-id")), ["m3", "m2"])
   })
 
-  it("invokes onPick with the prompt text when a chip is clicked", () => {
+  it("invokes onPick with the prompt text when a card or chip is clicked", () => {
     let picked = ""
     renderRecentPromptsRail(container, { messages: [userMsg("m1", "reuse me", 1)], pinnedIds: [], onPin: () => {}, onPick: (t) => { picked = t } })
-    container.querySelector<HTMLElement>(".rp-chip-text")!.click()
+    container.querySelector<HTMLElement>(".rp-card-body")!.click()
     assert.equal(picked, "reuse me")
   })
 
   it("invokes onPin with the message id when the pin button is clicked", () => {
     let pinned = ""
     renderRecentPromptsRail(container, { messages: [userMsg("m1", "x", 1)], pinnedIds: [], onPin: (id) => { pinned = id }, onPick: () => {} })
-    container.querySelector<HTMLElement>(".rp-chip-pin")!.click()
+    container.querySelector<HTMLElement>(".rp-card-pin-btn")!.click()
     assert.equal(pinned, "m1")
   })
 })

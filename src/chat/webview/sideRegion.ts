@@ -1,6 +1,6 @@
 export type SideTabId = "todos" | "activity" | "tasks" | "subagent"
 
-const STORAGE_KEY = "oc:side-region-tab"
+const STORAGE_KEY_PREFIX = "oc:side-panel-expanded:"
 
 export interface SideRegionOptions {
   onTabChange?: (tab: SideTabId) => void
@@ -19,7 +19,7 @@ const TAB_ORDER: SideTabId[] = ["todos", "activity", "tasks", "subagent"]
 
 export function setupSideRegion(
   regionEl: HTMLElement,
-  tabBarEl: HTMLElement,
+  tabBarEl: HTMLElement | null,
   tabButtons: NodeListOf<HTMLElement>,
   paneMap: Record<SideTabId, HTMLElement>,
   pinBtn: HTMLElement,
@@ -29,18 +29,32 @@ export function setupSideRegion(
   let isPinned = false
   let activeTab: SideTabId | null = null
 
-  function activate(tab: SideTabId): void {
-    activeTab = tab
-    tabButtons.forEach((btn) => {
-      const isActive = btn.dataset.tab === tab
-      btn.classList.toggle("active", isActive)
-      btn.setAttribute("aria-selected", String(isActive))
-    })
-    for (const [id, pane] of Object.entries(paneMap) as [SideTabId, HTMLElement][]) {
-      pane.classList.toggle("hidden", id !== tab)
+  function isExpanded(tab: SideTabId): boolean {
+    const val = sessionStorage.getItem(`${STORAGE_KEY_PREFIX}${tab}`)
+    if (val === null) {
+      return tab === "todos" // Default: 'todos' expanded, others collapsed
     }
-    sessionStorage.setItem(STORAGE_KEY, tab)
-    options?.onTabChange?.(tab)
+    return val === "true"
+  }
+
+  function setExpanded(tab: SideTabId, expanded: boolean): void {
+    sessionStorage.setItem(`${STORAGE_KEY_PREFIX}${tab}`, String(expanded))
+    const pane = paneMap[tab]
+    const btn = Array.from(tabButtons).find((b) => b.dataset.tab === tab)
+    if (pane) {
+      pane.classList.toggle("expanded", expanded)
+      pane.classList.toggle("collapsed", !expanded)
+      // Accordion layout removes .hidden so they stack vertically
+      pane.classList.remove("hidden")
+    }
+    if (btn) {
+      btn.setAttribute("aria-expanded", String(expanded))
+      btn.classList.toggle("active", expanded)
+    }
+    if (expanded) {
+      activeTab = tab
+      options?.onTabChange?.(tab)
+    }
   }
 
   function isOpen(): boolean {
@@ -49,8 +63,14 @@ export function setupSideRegion(
 
   function open(tab?: SideTabId): void {
     regionEl.classList.remove("hidden")
-    const target = tab || activeTab || (sessionStorage.getItem(STORAGE_KEY) as SideTabId | null) || "todos"
-    activate(target)
+    if (tab) {
+      setExpanded(tab, true)
+    } else {
+      // Ensure the UI matches stored states on open
+      TAB_ORDER.forEach((t) => {
+        setExpanded(t, isExpanded(t))
+      })
+    }
   }
 
   function close(): void {
@@ -59,23 +79,34 @@ export function setupSideRegion(
   }
 
   function toggle(tab?: SideTabId): void {
-    if (isOpen()) {
-      close()
-    } else {
+    if (!tab) {
+      if (isOpen()) close()
+      else open()
+      return
+    }
+    if (!isOpen()) {
       open(tab)
+    } else {
+      setExpanded(tab, !isExpanded(tab))
     }
   }
 
+  // switchTab will be called when the user opens a tab explicitly.
+  // We expand the target tab and make sure the sidebar is open.
   function switchTab(tab: SideTabId): void {
     if (!isOpen()) {
       open(tab)
     } else {
-      activate(tab)
+      setExpanded(tab, true)
     }
   }
 
   function getActiveTab(): SideTabId | null {
-    return activeTab
+    if (activeTab && isExpanded(activeTab)) {
+      return activeTab
+    }
+    // Fallback to first expanded tab found
+    return TAB_ORDER.find((t) => isExpanded(t)) || null
   }
 
   // Pin button
@@ -88,11 +119,13 @@ export function setupSideRegion(
   // Close button
   closeBtn.addEventListener("click", () => close())
 
-  // Tab clicks
+  // Tab (accordion header) clicks
   tabButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
       const tab = btn.dataset.tab as SideTabId | undefined
-      if (tab) switchTab(tab)
+      if (tab) {
+        toggle(tab)
+      }
     })
   })
 
@@ -104,11 +137,10 @@ export function setupSideRegion(
   }
   document.addEventListener("keydown", onKeyDown)
 
-  // Restore previously active tab
-  const savedTab = sessionStorage.getItem(STORAGE_KEY) as SideTabId | null
-  if (savedTab && TAB_ORDER.includes(savedTab)) {
-    activeTab = savedTab
-  }
+  // Initialize expanded/collapsed states in DOM
+  TAB_ORDER.forEach((t) => {
+    setExpanded(t, isExpanded(t))
+  })
 
   return {
     isOpen,

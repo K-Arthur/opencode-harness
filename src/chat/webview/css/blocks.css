@@ -661,21 +661,113 @@
 }
 
 /* Recent / pinned prompts rail (brief Phase 5) */
+/* Recent / pinned prompts rail (redesigned card layout) */
 .recent-prompts-rail {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1-5);
+  padding: var(--space-2);
   border-bottom: 1px solid var(--color-border);
 }
 .recent-prompts-rail.hidden { display: none; }
+
+.rp-featured-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 6px);
+  background: var(--oc-element-bg, var(--vscode-editor-background));
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.rp-featured-card--pinned {
+  border-color: var(--color-accent, var(--vscode-focusBorder));
+}
+.rp-featured-card:hover {
+  border-color: var(--color-accent, var(--vscode-focusBorder));
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.rp-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-2);
+  background: rgba(128, 128, 128, 0.05);
+  border-bottom: 1px solid var(--color-border);
+}
+.rp-card-title {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--color-fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.rp-card-pin-btn {
+  background: none;
+  border: none;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  padding: 2px;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+.rp-card-pin-btn:hover {
+  color: var(--color-accent, var(--vscode-focusBorder));
+}
+.rp-card-pin-btn[aria-pressed="true"] {
+  color: var(--color-accent, var(--vscode-focusBorder));
+}
+
+.rp-card-body {
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-1-5) var(--space-2);
+  cursor: pointer;
+  display: block;
+  transition: background-color 0.15s ease;
+}
+.rp-card-body:hover {
+  background-color: rgba(128, 128, 128, 0.04);
+}
+.rp-card-body:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, var(--color-accent));
+  outline-offset: -1px;
+}
+.rp-card-text {
+  font-family: var(--oc-editor-font, var(--vscode-editor-font-family), monospace);
+  font-size: var(--text-xs);
+  color: var(--color-fg);
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.rp-remaining-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  padding-top: var(--space-1-5);
+  border-top: 1px solid var(--color-border);
+}
+
 .rp-chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
   max-width: 100%;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill, 999px);
+  border-radius: var(--radius-sm, 3px);
   background: var(--oc-editor-bg);
 }
 .rp-chip--pinned { border-color: var(--color-accent, var(--vscode-focusBorder)); }
@@ -686,7 +778,13 @@
   color: var(--color-fg);
   cursor: pointer;
   font-size: var(--text-2xs);
-  padding: 2px var(--space-1);
+  padding: 1px var(--space-1);
+}
+.rp-chip-pin:focus-visible,
+.rp-chip-text:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, var(--color-accent));
+  outline-offset: -1px;
+  border-radius: var(--radius-sm);
 }
 .rp-chip-pin { color: var(--color-fg-muted); }
 .rp-chip--pinned .rp-chip-pin { color: var(--color-accent, var(--vscode-focusBorder)); }

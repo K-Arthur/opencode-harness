@@ -146,4 +146,32 @@ describe("floating webview dropdown positioning", () => {
     assert.ok(top >= 0, `panel top must be >= 0, got ${top}`)
     assert.ok(Number.isFinite(left), `panel left must be a finite number, got ${left}`)
   })
+
+  it("bounds the dropdown width below the viewport margin on small viewports and does not clip", () => {
+    Object.defineProperty(window, "innerWidth", { value: 250, configurable: true })
+    const strip = document.getElementById("changed-files-strip")!
+    const panel = document.getElementById("changed-files-dropdown")!
+    setRect(strip, { left: 10, right: 240, top: 200, bottom: 220, width: 230, height: 20 })
+    setRect(panel, { left: 0, right: 0, top: 0, bottom: 440, width: 420, height: 440 })
+
+    setupChangedFilesDropdown({
+      btn: null,
+      panel,
+      treeContainer: document.getElementById("cf-tree")!,
+      badge: document.getElementById("cf-badge")!,
+      postMessage: () => {},
+      onOpenChangedFileDiff: () => {},
+      onOpenFile: () => {},
+    })
+    setCurrentSession("session-a")
+    updateChangedFiles("session-a", [{ path: "/tmp/example.ts", added: 1, removed: 0 }])
+    strip.click()
+
+    const left = Number.parseFloat(panel.style.left)
+    const width = Number.parseFloat(panel.style.width)
+    assert.ok(!panel.classList.contains("hidden"), "clicking the strip must open the dropdown")
+    assert.equal(width, 234, "panel width must match innerWidth - margin * 2")
+    assert.ok(left >= 8, "left edge must stay within viewport margin")
+    assert.ok(left + width <= 242, "right edge must stay within viewport margin (250 - 8)")
+  })
 })

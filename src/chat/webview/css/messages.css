@@ -413,6 +413,32 @@
   letter-spacing: 0;
 }
 
+/* ─── Per-turn Model Indicator ─── */
+/* CLI-style notation: [claude-sonnet-4-5] rendered inline in message header.
+   Monospace + dim to match code-centric developer aesthetics.
+   Low opacity at rest — revealed on message hover alongside timestamp. */
+.message-model-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-muted);
+  opacity: 0;
+  transition: opacity var(--duration-fast);
+  letter-spacing: 0;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.message:hover .message-model-badge,
+.message:focus-within .message-model-badge {
+  opacity: 0.55;
+}
+
+/* Slightly more visible while streaming so the user sees which model is active */
+.message.streaming .message-model-badge {
+  opacity: 0.7;
+}
+
+
 .message-timestamp {
   opacity: 0;
   transition: opacity var(--duration-fast);
