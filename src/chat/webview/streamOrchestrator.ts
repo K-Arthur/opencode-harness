@@ -34,6 +34,8 @@ function showStreamEndReasonMessage(
       : "Response timed out. Please try again or select a different model.", true)
   } else if (reason === "hard_timeout") {
     showSystemMessage(sessionId, "Stream interrupted after extended run. Partial output preserved.", true)
+  } else if (reason === "aborted") {
+    showSystemMessage(sessionId, "Generation interrupted by user.", false)
   } else if (reason === "error") {
     // A structured error card (handleServerStatus("error") → handleStreamError)
     // is the canonical surface for a failure and is added to the session
