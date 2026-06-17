@@ -172,4 +172,15 @@ describe("WebviewEventRouter — question_answer routing", () => {
       "B10: expired path must clear activeToolCallIds via streamCoordinator.markQuestionAnswered",
     )
   })
+
+  it("B10: resolveCliSessionId short-circuits for existing server session IDs (avoids HTTP roundtrip)", () => {
+    assert.ok(
+      source.includes("startsWith(\"session-\")"),
+      "B10: resolveCliSessionId must skip ensureSession when tab already has a real server session ID",
+    )
+    assert.ok(
+      source.includes("return existingCliId"),
+      "B10: must return cached server session ID without re-verifying",
+    )
+  })
 })

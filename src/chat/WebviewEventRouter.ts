@@ -211,10 +211,23 @@ export class WebviewEventRouter {
    * `ensureSession` both creates the server session if it doesn't exist yet
    * and returns the canonical `cliSessionId`.  The tab and store are updated
    * so subsequent calls short-circuit.
+   *
+   * B10: Once a tab has a valid server-side session ID (not a local
+   * placeholder), subsequent calls return it immediately without re-verifying
+   * via an HTTP roundtrip to `sessionExists`. The session ID is stable, and
+   * re-verifying on every `question_answer` was the source of unnecessary
+   * HTTP calls that added latency without preventing `QuestionNotFoundError`
+   * (the server's question registry can be empty even when the session exists).
    */
   private async resolveCliSessionId(tabId: string): Promise<string> {
     const tab = this.opts.tabManager.getTab(tabId)
-    const cliSessionId = await this.opts.sessionManager.ensureSession(tab?.cliSessionId)
+    // B10: Short-circuit when the tab already has a real server session ID.
+    // Local placeholder IDs (session-XXXXXXXX) still need resolution.
+    const existingCliId = tab?.cliSessionId
+    if (existingCliId && !(existingCliId.startsWith("session-"))) {
+      return existingCliId
+    }
+    const cliSessionId = await this.opts.sessionManager.ensureSession(existingCliId)
     if (tab) {
       this.opts.tabManager.setCliSessionId(tabId, cliSessionId)
       this.opts.sessionStore.updateCliSessionId(tabId, cliSessionId)
