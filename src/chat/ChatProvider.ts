@@ -1201,10 +1201,14 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       const data = event.data as { requestID?: string; toolCallId?: string; messageId?: string; block?: Block } | undefined
       const block = data?.block
       if (!block || block.type !== "question") return
+      // Preserve the original session ID for reply routing. Subagent
+      // (child session) questions carry the child sessionId — the reply
+      // MUST go to that session's endpoint, not the parent's, or the
+      // server's question registry lookup fails with NotFoundError.
+      const originSessionId = block.sessionId
+      ;(block as Record<string, unknown>).originSessionId = originSessionId
       // Normalize the block's sessionId to the parent tab's ID so the
-      // question bar renders it against the correct session. Subagent
-      // (child session) questions carry the child sessionId but must
-      // appear in the parent tab's question bar (Gap 4 fix).
+      // question bar renders it against the correct session.
       if (block.sessionId !== targetId) {
         block.sessionId = targetId
       }

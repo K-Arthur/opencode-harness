@@ -27,6 +27,10 @@ export interface QuestionBarItem {
   /** Timestamp when this question was first added to the bar. Used for
    *  staleness detection (B10). */
   createdAt: number
+  /** Original server session ID that created this question. For subagent
+   *  (child session) questions, this is the child session ID — the reply
+   *  must route to this session, not the parent tab's session. */
+  originSessionId?: string
 }
 
 interface QuestionBarState {
@@ -135,6 +139,7 @@ export function addQuestion(block: QuestionBlock, messageId: string, envelopeSes
     cardReady: new Set(),
     _carouselIdx: 0,
     createdAt: Date.now(),
+    originSessionId: (block as Record<string, unknown>).originSessionId as string | undefined,
   }
 
   for (let i = 0; i < item.groups.length; i++) {
@@ -432,6 +437,7 @@ export function markStale(toolCallId: string): void {
       sessionId: item.sessionId,
       toolCallId: item.toolCallId,
       requestID: item.requestID,
+      originSessionId: item.originSessionId,
       messageId: item.messageId,
       value: "Continue without answering",
       source: "skip",
@@ -575,6 +581,7 @@ function buildBarItemElement(item: QuestionBarItem): HTMLElement {
         sessionId: item.sessionId,
         toolCallId: item.toolCallId,
         requestID: item.requestID,
+        originSessionId: item.originSessionId,
         messageId: item.messageId,
         value: "Skipped",
         source: "skip",
@@ -896,6 +903,7 @@ function submitAllAnswers(): void {
       sessionId: item.sessionId,
       toolCallId: item.toolCallId,
       requestID: item.requestID,
+      originSessionId: item.originSessionId,
       messageId: item.messageId,
       value,
       structuredAnswers,

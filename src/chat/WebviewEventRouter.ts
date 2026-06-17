@@ -386,6 +386,16 @@ export class WebviewEventRouter {
         // question.reply/reject endpoints require the server-side session
         // identifier, not the local tab ID).
         const cliSessionId = await this.resolveCliSessionId(sessionId)
+        // B10: For subagent (child session) questions, use the ORIGINAL
+        // session ID that created the question — not the parent tab's
+        // session. The server's question registry is scoped to the session
+        // that called question.ask(); replying via the parent session's
+        // endpoint looks in the wrong registry scope → NotFoundError.
+        const originSessionId = typeof msg.originSessionId === "string" ? msg.originSessionId : undefined
+        const replySessionId = originSessionId || cliSessionId
+        if (originSessionId && originSessionId !== cliSessionId) {
+          log.info(`question_answer: using originSessionId=${originSessionId} for reply (parent=${cliSessionId})`)
+        }
         const userMessageId = (msg.messageId as string) || generateUserMessageId()
         const textForPrompt = source === "response" ? `The user responded: ${value}` : value
         const answerSource: "option" | "freetext" | "skip" | "response" =
@@ -406,7 +416,7 @@ export class WebviewEventRouter {
         this.opts.streamCoordinator.markQuestionAnswered(sessionId, answerId)
         try {
           if (source === "skip") {
-            await this.opts.sessionManager.rejectQuestion(cliSessionId, requestID)
+            await this.opts.sessionManager.rejectQuestion(replySessionId, requestID)
           } else {
             // B-edge-1: prefer the per-group structured answers the webview
             // builds (string[][] — one inner array per question group, with
@@ -420,7 +430,7 @@ export class WebviewEventRouter {
                   .map((g) => g.map((v) => (typeof v === "string" ? v : String(v ?? ""))).filter((v) => v.length > 0))
               : null
             const wireAnswers = structured && structured.length > 0 ? structured : [[value]]
-            await this.opts.sessionManager.replyToQuestion(cliSessionId, requestID, wireAnswers)
+            await this.opts.sessionManager.replyToQuestion(replySessionId, requestID, wireAnswers)
           }
           this.opts.postMessage({
             type: "question_acknowledged",
