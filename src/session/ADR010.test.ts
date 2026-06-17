@@ -181,7 +181,7 @@ describe("ADR-010: Horizontal Scaling", () => {
         "must have spawnAndRegisterSession method"
       )
       assert.ok(
-        registrySource.includes("this.processManager.spawnSession(config)"),
+        registrySource.includes("this.processManager.spawnSession("),
         "spawnAndRegisterSession must delegate to processManager.spawnSession"
       )
       assert.ok(
@@ -219,6 +219,114 @@ describe("ADR-010: Horizontal Scaling", () => {
         "must reference SessionConfig type"
       )
     })
+
+    // ── Crash resilience ───────────────────────────────────────────────
+    it("fires onProcessCrash event when a managed process crashes", () => {
+      assert.ok(
+        registrySource.includes("onProcessCrash"),
+        "must have onProcessCrash event"
+      )
+      assert.ok(
+        registrySource.includes("_onProcessCrash.fire("),
+        "must fire onProcessCrash with crash details"
+      )
+      assert.ok(
+        registrySource.includes("ProcessCrashEvent"),
+        "must define ProcessCrashEvent interface"
+      )
+    })
+
+    it("produces TabRestorationState entries for crashed process tabs", () => {
+      assert.ok(
+        registrySource.includes("getCrashRestorationStates("),
+        "must have getCrashRestorationStates method"
+      )
+      assert.ok(
+        registrySource.includes("TabRestorationState"),
+        "must reference TabRestorationState type"
+      )
+      assert.ok(
+        registrySource.includes("interruptedAt: Date.now()"),
+        "restoration state must include interrupted timestamp"
+      )
+    })
+
+    it("supports cliSessionId resolver for TabRestorationState", () => {
+      assert.ok(
+        registrySource.includes("setTabCliSessionIdResolver("),
+        "must have setTabCliSessionIdResolver method"
+      )
+      assert.ok(
+        registrySource.includes("_cliSessionIdResolver"),
+        "must store the resolver internally"
+      )
+    })
+
+    it("subscribes to processManager crashes in per-tab mode", () => {
+      assert.ok(
+        registrySource.includes('this.processManager.onSessionCrash(') ||
+          registrySource.includes('processManager.onSessionCrash('),
+        "must subscribe to process manager crash events"
+      )
+      assert.ok(
+        registrySource.includes("this.handleProcessCrash(") ||
+          registrySource.includes("handleProcessCrash("),
+        "must delegate crash handling to handleProcessCrash"
+      )
+    })
+
+    // ── OPENCODE_DATA_DIR isolation ────────────────────────────────────
+    it("sets OPENCODE_DATA_DIR env var in spawnAndRegisterSession", () => {
+      assert.ok(
+        registrySource.includes("OPENCODE_DATA_DIR"),
+        "spawnAndRegisterSession must set OPENCODE_DATA_DIR for SQLite isolation"
+      )
+      assert.ok(
+        registrySource.includes("mkdtempSync"),
+        "must generate a unique temp directory per process"
+      )
+    })
+
+    // ── LRU eviction ───────────────────────────────────────────────────
+    it("arms idle timer when a process loses all its tabs", () => {
+      assert.ok(
+        registrySource.includes("armIdleTimer("),
+        "must arm idle timer when process has 0 tabs"
+      )
+      assert.ok(
+        registrySource.includes("clearIdleTimer("),
+        "must clear idle timer when tab is reassigned"
+      )
+    })
+
+    it("kills idle processes after configurable timeout", () => {
+      assert.ok(
+        registrySource.includes("idleTimeoutMs"),
+        "must compute idle timeout from config"
+      )
+      assert.ok(
+        registrySource.includes("processIdleTimeoutMinutes"),
+        "must read processIdleTimeoutMinutes from config"
+      )
+      assert.ok(
+        registrySource.includes("this.processManager.killSession("),
+        "must kill the idle process via processManager"
+      )
+    })
+
+    it("cleans up idle timers on dispose", () => {
+      const disposeIdx = registrySource.indexOf("dispose(): void")
+      assert.ok(disposeIdx >= 0, "dispose must exist")
+      const block = registrySource.slice(disposeIdx, disposeIdx + 800)
+      assert.ok(
+        block.includes("if (entry.idleTimer) clearTimeout(entry.idleTimer)"),
+        "dispose must clear each process's idle timer"
+      )
+      assert.ok(
+        block.includes("idleCheckTimer"),
+        "dispose must handle idleCheckTimer"
+      )
+    })
   })
 
   describe("package.json configuration", () => {
@@ -233,6 +341,15 @@ describe("ADR-010: Horizontal Scaling", () => {
       assert.equal(setting.type, "string", "must be string type")
       assert.equal(setting.default, "shared", "default must be shared")
       assert.deepStrictEqual(setting.enum, ["shared", "per-tab"], "must have shared and per-tab options")
+    })
+
+    it("defines opencode.sessions.processIdleTimeoutMinutes setting", () => {
+      assert.ok("opencode.sessions.processIdleTimeoutMinutes" in props, "processIdleTimeoutMinutes setting must exist")
+      const setting = props["opencode.sessions.processIdleTimeoutMinutes"] as { type?: string; default?: number; minimum?: number; maximum?: number }
+      assert.equal(setting.type, "number", "must be number type")
+      assert.equal(setting.default, 5, "default must be 5 minutes")
+      assert.equal(setting.minimum, 1, "minimum must be 1")
+      assert.equal(setting.maximum, 60, "maximum must be 60")
     })
   })
 })

@@ -228,6 +228,16 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(processManager)
     const sessionManagerRegistry = new SessionManagerRegistry(processManager)
     sessionManagerRegistry.setDefaultManager(sessionManager)
+    // Provide cliSessionId lookup for crash restoration state
+    sessionManagerRegistry.setTabCliSessionIdResolver((tabId) => sessionStore.get(tabId)?.cliSessionId)
+    // Log process crashes — TabRestorationState is built by the host
+    sessionManagerRegistry.onProcessCrash(({ processId, tabIds, timestamp }) => {
+      log.warn(`Process ${processId} crashed at ${new Date(timestamp).toISOString()}, affected tabs: [${tabIds.join(", ")}]`)
+      const states = sessionManagerRegistry.getCrashRestorationStates(processId)
+      for (const state of states) {
+        log.info(`Crash restoration queued for tab ${state.tabId} (session=${state.cliSessionId ?? "unknown"})`)
+      }
+    })
     context.subscriptions.push(sessionManagerRegistry)
 
     // Chat provider

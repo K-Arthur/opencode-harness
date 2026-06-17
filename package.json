@@ -1006,6 +1006,14 @@
           ],
           "description": "How to isolate AI sessions. 'shared' uses one server for all tabs. 'per-tab' spawns a separate server per tab for crash isolation (experimental)."
         },
+        "opencode.sessions.processIdleTimeoutMinutes": {
+          "type": "number",
+          "scope": "window",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 60,
+          "description": "Minutes before an idle per-tab process is automatically killed to free resources (per-tab strategy only)."
+        },
         "opencode.chat.wrapLongLines": {
           "type": "string",
           "default": "auto",
