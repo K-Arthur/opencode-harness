@@ -175,8 +175,8 @@ describe("WebviewEventRouter — question_answer routing", () => {
 
   it("B10: resolveCliSessionId short-circuits for existing server session IDs (avoids HTTP roundtrip)", () => {
     assert.ok(
-      source.includes("startsWith(\"session-\")"),
-      "B10: resolveCliSessionId must skip ensureSession when tab already has a real server session ID",
+      source.includes("isLocalPlaceholderSessionId"),
+      "B10: resolveCliSessionId must use isLocalPlaceholderSessionId to determine if session needs resolution",
     )
     assert.ok(
       source.includes("return existingCliId"),

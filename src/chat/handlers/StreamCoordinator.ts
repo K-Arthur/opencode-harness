@@ -12,6 +12,7 @@ import { log } from "../../utils/outputChannel"
 import type { Block, ChatMessage } from "../types"
 import type { Part } from "@opencode-ai/sdk/v2"
 import { partsToBlocks as sdkConvertPartsToBlocks } from "../../session/sdkMessageConverter"
+import { isLocalPlaceholderSessionId } from "../../session/sessionUtils"
 import type { LiveToolOutputSnapshot } from "../../session/liveToolOutput"
 import { StreamFinalizerService } from "./StreamFinalizerService"
 import { MethodologyAdvisor, type MethodologyAdvice } from "../../methodology/MethodologyAdvisor"
@@ -964,9 +965,18 @@ export class StreamCoordinator {
       this.refreshContextTokenEstimate(tabId)
 
       const localTitle = this.sessionStore.get(tabId)?.name?.trim()
-      const cliSessionId = await this.getSm(tabId).ensureSession(tab.cliSessionId, localTitle || undefined)
-      this.tabManager.setCliSessionId(tabId, cliSessionId)
-      this.sessionStore.updateCliSessionId(tabId, cliSessionId)
+      // B10: Skip ensureSession HTTP roundtrip when tab already has a real
+      // server session ID (not a local placeholder). The session ID is stable
+      // and re-verifying on every prompt adds unnecessary latency.
+      const existingCliId = tab.cliSessionId
+      let cliSessionId: string
+      if (existingCliId && !isLocalPlaceholderSessionId(existingCliId)) {
+        cliSessionId = existingCliId
+      } else {
+        cliSessionId = await this.getSm(tabId).ensureSession(existingCliId, localTitle || undefined)
+        this.tabManager.setCliSessionId(tabId, cliSessionId)
+        this.sessionStore.updateCliSessionId(tabId, cliSessionId)
+      }
       const streamMessageId = this.resolveStreamMessageAndStartActivity(tabId, tab, cliSessionId, callbacks)
 
       const eventStreamReady = await this.getSm(tabId).waitForEventStreamReady(5_000)

@@ -409,7 +409,8 @@ export function markStale(toolCallId: string): void {
   continueBtn.addEventListener("click", (e) => {
     e.stopPropagation()
     if (item.answered || !state.postMessage) return
-    item.answered = true
+    // Post the skip answer to the host first, then mark locally.
+    // markQuestionAnswered is the single source of truth for answered state.
     state.postMessage({
       type: "question_answer",
       sessionId: item.sessionId,

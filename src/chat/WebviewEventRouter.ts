@@ -38,6 +38,7 @@ import { validateWebviewMessage } from "./WebviewMessageValidator"
 import { normalizeSessionMode, resolvePlanPermission } from "./modePolicy"
 import { normalizeTodoList } from "../session/eventHandlers/TodoUpdatedHandler"
 import { categorizeQuestionReplyError } from "./QuestionExpiryDetector"
+import { isLocalPlaceholderSessionId } from "../session/sessionUtils"
 
 const crypto = globalThis.crypto
 
@@ -224,7 +225,7 @@ export class WebviewEventRouter {
     // B10: Short-circuit when the tab already has a real server session ID.
     // Local placeholder IDs (session-XXXXXXXX) still need resolution.
     const existingCliId = tab?.cliSessionId
-    if (existingCliId && !(existingCliId.startsWith("session-"))) {
+    if (existingCliId && !isLocalPlaceholderSessionId(existingCliId)) {
       return existingCliId
     }
     const cliSessionId = await this.opts.sessionManager.ensureSession(existingCliId)

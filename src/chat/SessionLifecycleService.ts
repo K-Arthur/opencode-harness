@@ -8,6 +8,7 @@ import type { StreamCoordinator } from "./handlers/StreamCoordinator"
 import type { AutoCompactor } from "./AutoCompactor"
 import type { CheckpointManager } from "../checkpoint/CheckpointManager"
 import { checkFileSecurity } from "../utils/security"
+import { isLocalPlaceholderSessionId } from "../session/sessionUtils"
 import { sdkMessagesToChatMessages } from "../session/sdkMessageConverter"
 import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
 import { log } from "../utils/outputChannel"
@@ -72,10 +73,18 @@ export class SessionLifecycleService {
     // real prompt will create the session through StreamCoordinator.
     if (this.opts.sessionManager.isRunning && session.cliSessionId) {
       try {
-        const cliSessionId = await this.opts.sessionManager.ensureSession(
-          session.cliSessionId,
-          session.name || undefined
-        )
+        // B10: Skip ensureSession HTTP roundtrip when tab already has a real
+        // server session ID. Only re-verify for local placeholder IDs.
+        const existingCliId = session.cliSessionId
+        let cliSessionId: string
+        if (!isLocalPlaceholderSessionId(existingCliId)) {
+          cliSessionId = existingCliId
+        } else {
+          cliSessionId = await this.opts.sessionManager.ensureSession(
+            existingCliId,
+            session.name || undefined
+          )
+        }
         this.opts.tabManager.setCliSessionId(sessionId, cliSessionId)
         this.opts.sessionStore.updateCliSessionId(sessionId, cliSessionId)
       } catch (err) {
