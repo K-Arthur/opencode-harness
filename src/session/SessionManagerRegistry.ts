@@ -2,6 +2,7 @@ import * as vscode from "vscode"
 import { log } from "../utils/outputChannel"
 import { SessionManager } from "./SessionManager"
 import type { LocalSessionProcessManager } from "./LocalSessionProcessManager"
+import type { SessionProcessHandle, SessionConfig } from "./SessionProcessManager"
 import type { McpServerManager } from "../mcp/McpServerManager"
 
 export type ProcessStrategy = "shared" | "per-tab"
@@ -107,6 +108,40 @@ export class SessionManagerRegistry implements vscode.Disposable {
 
   getTabCount(processId: string): number {
     return this.managed.get(processId)?.tabIds.size ?? 0
+  }
+
+  /**
+   * Spawn a new opencode server process, create a SessionManager for it, and
+   * register both in the registry. Available in "per-tab" strategy only.
+   * @returns The process handle, the new SessionManager, and the process ID.
+   */
+  async spawnAndRegisterSession(
+    config?: SessionConfig,
+    tabId?: string,
+  ): Promise<{ handle: SessionProcessHandle; sessionManager: SessionManager; processId: string }> {
+    if (this.strategy !== "per-tab") {
+      throw new Error("spawnAndRegisterSession only valid with processStrategy='per-tab'")
+    }
+
+    // 1. Spawn a new opencode serve process
+    const handle = await this.processManager.spawnSession(config)
+    const processId = handle.id
+
+    // 2. Create a SessionManager connected to this process
+    const sm = new SessionManager(this.mcpServerManager)
+    sm.serverLifecycle.setStoredPort(handle.currentPort)
+    await sm.start()
+
+    // 3. Register in the registry
+    this.registerProcess(processId, sm)
+
+    // 4. Auto-assign tab if provided
+    if (tabId) {
+      await this.assignTab(tabId, processId)
+    }
+
+    log.info(`[registry] Spawned and registered session process ${processId} on port ${handle.currentPort}`)
+    return { handle, sessionManager: sm, processId }
   }
 
   dispose(): void {

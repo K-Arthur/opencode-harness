@@ -17,10 +17,11 @@ describe("ADR-010: Horizontal Scaling", () => {
       assert.ok(interfaceSource.includes("env?:"), "SessionConfig must have env field")
     })
 
-    it("defines SessionProcessHandle with id, status, pid, start, stop, restart", () => {
+    it("defines SessionProcessHandle with id, status, pid, currentPort, start, stop, restart", () => {
       assert.ok(interfaceSource.includes("export interface SessionProcessHandle"), "SessionProcessHandle must be exported")
       assert.ok(interfaceSource.includes("readonly id: string"), "must have id field")
       assert.ok(interfaceSource.includes('readonly status: "running" | "crashed" | "stopped"'), "must have status field")
+      assert.ok(interfaceSource.includes("readonly currentPort:"), "must have currentPort field")
       assert.ok(interfaceSource.includes("start(config: SessionConfig): Promise<void>"), "must have start method")
       assert.ok(interfaceSource.includes("stop(): Promise<void>"), "must have stop method")
       assert.ok(interfaceSource.includes("restart(): Promise<void>"), "must have restart method")
@@ -171,6 +172,51 @@ describe("ADR-010: Horizontal Scaling", () => {
       assert.ok(
         registrySource.includes("implements vscode.Disposable") || registrySource.includes("Disposable"),
         "must implement Disposable"
+      )
+    })
+
+    it("has spawnAndRegisterSession method for per-tab process creation", () => {
+      assert.ok(
+        registrySource.includes("async spawnAndRegisterSession("),
+        "must have spawnAndRegisterSession method"
+      )
+      assert.ok(
+        registrySource.includes("this.processManager.spawnSession(config)"),
+        "spawnAndRegisterSession must delegate to processManager.spawnSession"
+      )
+      assert.ok(
+        registrySource.includes("this.registerProcess(processId, sm)"),
+        "spawnAndRegisterSession must auto-register the new session manager"
+      )
+      assert.ok(
+        registrySource.includes("sm.serverLifecycle.setStoredPort(handle.currentPort)"),
+        "spawnAndRegisterSession must connect to the spawned process via storedPort"
+      )
+      assert.ok(
+        registrySource.includes("await sm.start()"),
+        "spawnAndRegisterSession must start the new session manager"
+      )
+      assert.ok(
+        registrySource.includes('strategy !== "per-tab"') || registrySource.includes('strategy === "per-tab"'),
+        "spawnAndRegisterSession must guard on per-tab strategy"
+      )
+    })
+
+    it("spawnAndRegisterSession optionally auto-assigns tabs", () => {
+      assert.ok(
+        registrySource.includes("if (tabId)"),
+        "spawnAndRegisterSession must auto-assign tab when tabId is provided"
+      )
+      assert.ok(
+        registrySource.includes("await this.assignTab(tabId, processId)"),
+        "spawnAndRegisterSession must call assignTab when tabId is provided"
+      )
+    })
+
+    it("imports SessionConfig type for spawnAndRegisterSession signature", () => {
+      assert.ok(
+        registrySource.includes("SessionConfig") || interfaceSource.includes("SessionConfig"),
+        "must reference SessionConfig type"
       )
     })
   })

@@ -88,7 +88,9 @@ class SessionManagerRegistry {
 ### Not Yet Implemented
 - `processStrategy` config: `"shared"` (default) or `"per-tab"` — wired in `extension.ts` ✅
 - `SessionManagerRegistry` + `LocalSessionProcessManager` — created and wired ✅
-- `StreamCoordinator.startPrompt` — routes per-tab calls through registry ✅
-- Per-process `OPENCODE_DATA_DIR` support — requires `LocalSessionProcessManager` to be wired
-- Per-process `V2OpencodeClient` + SSE subscription — each tab still shares the default client
-- CRASH + auto-resume cycle at the process level — per-tab process lifecycle management
+- `StreamCoordinator.startPrompt` — routes per-tab calls through registry (`getSm(tabId)`) ✅
+- `spawnAndRegisterSession` — spawns process + creates SessionManager + registers ✅
+- Per-process `OPENCODE_DATA_DIR` support — requires each server to have a unique data dir
+- `SessionManagerRegistry.spawnAndRegisterSession` consumes the McpServerManager shared instance — next: per-process V2OpencodeClient isolation
+- Crash + auto-resume at the process level — next: hook `LocalSessionProcessManager.onSessionCrash` into `TabRestorationState`
+- Process pool LRU eviction for idle sessions — next: configurable idle timeout + `killSession`
