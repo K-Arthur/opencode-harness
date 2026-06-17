@@ -133,4 +133,31 @@ void describe("TabManager.ts", () => {
     assert.ok(block.includes("this._onModeChanged.fire"), "setMode must fire _onModeChanged on change")
     assert.ok(block.includes("{ tabId: id, mode }"), "event payload must include tabId and mode")
   })
+
+  // ── B7: Configurable MAX_TABS — Phase 1 immediate win ─────────────────
+
+  void it("reads maxTabs from config.get instead of hardcoded constant", () => {
+    const ctorBlock = source.slice(source.indexOf("constructor("), source.indexOf("getRestoredTabIds("))
+    assert.ok(
+      ctorBlock.includes('sessions.maxTabs'),
+      "TabManager constructor must read maxTabs from workspace config, not hardcode 20",
+    )
+  })
+
+  void it("uses maxTabs for restoredTabIds slice and createTab guard", () => {
+    const ctorBlock = source.slice(source.indexOf("constructor("), source.indexOf("getRestoredTabIds("))
+    assert.ok(
+      ctorBlock.includes("this.maxTabs"),
+      "TabManager constructor must store maxTabs from config as an instance field",
+    )
+    assert.ok(
+      !source.includes("private readonly MAX_TABS = 20"),
+      "TabManager must NOT have a hardcoded MAX_TABS = 20 — it should read from config",
+    )
+    const createTabBlock = source.slice(source.indexOf("createTab("), source.indexOf("closeTab("))
+    assert.ok(
+      createTabBlock.includes("this.maxTabs"),
+      "createTab must use the config-driven maxTabs instance field",
+    )
+  })
 })

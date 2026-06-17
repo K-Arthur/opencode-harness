@@ -28,7 +28,7 @@ export class TabManager {
   private cliSessionIndex = new Map<string, TabState>()
   private activeTabId = ""
   private maxConcurrentStreams: number
-  private readonly MAX_TABS = 20
+  private maxTabs: number
 
   private restorationStates = new Map<string, TabRestorationState>()
 
@@ -58,12 +58,13 @@ export class TabManager {
   private readonly restoredActiveId: string
 
   constructor(private readonly storage?: vscode.Memento) {
-    const saved = storage?.get<string[]>(OPEN_TABS_STORAGE_KEY, []) ?? []
-    this.restoredTabIds = Object.freeze(saved.filter((id) => typeof id === "string" && id.length > 0).slice(0, this.MAX_TABS))
-    this.restoredActiveId = storage?.get<string>(ACTIVE_TAB_STORAGE_KEY, "") ?? ""
-
     const config = vscode.workspace.getConfiguration("opencode")
     this.maxConcurrentStreams = config.get<number>("sessions.maxConcurrentStreams", 5)
+    this.maxTabs = config.get<number>("sessions.maxTabs", 20)
+
+    const saved = storage?.get<string[]>(OPEN_TABS_STORAGE_KEY, []) ?? []
+    this.restoredTabIds = Object.freeze(saved.filter((id) => typeof id === "string" && id.length > 0).slice(0, this.maxTabs))
+    this.restoredActiveId = storage?.get<string>(ACTIVE_TAB_STORAGE_KEY, "") ?? ""
 
     const raw = storage?.get<Record<string, TabRestorationState>>(RESTORATION_STATE_KEY, {}) ?? {}
     for (const [tabId, state] of Object.entries(raw)) {
@@ -141,8 +142,8 @@ export class TabManager {
       log.warn(`Tab for CLI session ${cliSessionId} already exists — returning existing tab`)
       return this.cliSessionIndex.get(cliSessionId)!
     }
-    if (this.tabs.size >= this.MAX_TABS) {
-      log.warn(`Tab creation blocked: max ${this.MAX_TABS} tabs reached`)
+    if (this.tabs.size >= this.maxTabs) {
+      log.warn(`Tab creation blocked: max ${this.maxTabs} tabs reached`)
       return null
     }
     const tab: TabState = {

@@ -34,9 +34,9 @@ describe("SessionStore — class structure", () => {
     assert.ok(source.includes("STORAGE_KEY"), "STORAGE_KEY constant must exist")
   })
 
-  it("enforces MAX_SESSIONS limit", () => {
-    assert.ok(source.includes("MAX_SESSIONS"), "must limit max sessions")
-    assert.ok(source.includes("50"), "max sessions should be 50")
+  it("enforces MAX_SESSIONS limit via getMaxSessions", () => {
+    assert.ok(source.includes("getMaxSessions"), "must have getMaxSessions() reading from config")
+    assert.ok(source.includes("50"), "default max sessions should be 50")
   })
 
   it("uses SAVE_DEBOUNCE_MS for debounced persistence", () => {

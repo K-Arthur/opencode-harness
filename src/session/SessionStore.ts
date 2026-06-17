@@ -112,14 +112,6 @@ export class SessionStore {
   private saveTimer: ReturnType<typeof setTimeout> | null = null
   private emptySessionCleanupTimer: ReturnType<typeof setInterval> | null = null
   private static readonly SAVE_DEBOUNCE_MS = 500
-  private static readonly MAX_SESSIONS = 50
-  /**
-   * Per-session message cap for the persisted globalState snapshot (NOT the
-   * in-memory store). VS Code re-serializes the whole value on every
-   * globalState.update, so the persisted size must stay bounded. Older
-   * history is restored from the server on resume/backfill.
-   */
-  private static readonly PERSIST_MAX_MESSAGES = 200
   private static readonly ONE_HOUR = 60 * 60 * 1000
   private _onSessionsChanged = new vscode.EventEmitter<void>()
   readonly onSessionsChanged = this._onSessionsChanged.event
@@ -199,7 +191,7 @@ export class SessionStore {
       // with the cap, not with total transcript size. In-memory sessions
       // keep everything; resume/backfill restore older history from the
       // server when needed. See buildPersistedSessions for the contract.
-      const obj = buildPersistedSessions(this.sessions, SessionStore.PERSIST_MAX_MESSAGES)
+      const obj = buildPersistedSessions(this.sessions, this.getPersistMaxMessages())
       await this.globalState.update(STORAGE_KEY, obj)
     } catch (err) {
       log.error("Failed to save sessions to globalState", err)
@@ -208,11 +200,12 @@ export class SessionStore {
 
   private pruneStaleSessions(): void {
     this.pruneEmptySessions()
-    if (this.sessions.size <= SessionStore.MAX_SESSIONS) return
+    const maxSessions = this.getMaxSessions()
+    if (this.sessions.size <= maxSessions) return
     const sorted = Array.from(this.sessions.values()).sort((a, b) => a.lastActiveAt - b.lastActiveAt)
     const beforePrune = this.sessions.size
     for (const oldest of sorted) {
-      if (this.sessions.size <= SessionStore.MAX_SESSIONS) break
+      if (this.sessions.size <= maxSessions) break
       if (oldest.id !== this.activeSessionId) {
         this.sessions.delete(oldest.id)
       }
@@ -226,6 +219,16 @@ export class SessionStore {
     const defaultMinutes = SessionStore.ONE_HOUR / 60 / 1000
     const configured = vscode.workspace.getConfiguration("opencode").get<number>("sessions.emptySessionTtlMinutes", defaultMinutes)
     return Math.max(1, Number.isFinite(configured) ? configured : defaultMinutes)
+  }
+
+  private getMaxSessions(): number {
+    const configured = vscode.workspace.getConfiguration("opencode").get<number>("sessions.maxSessions", 50)
+    return Math.max(10, Math.min(200, Number.isFinite(configured) ? configured : 50))
+  }
+
+  private getPersistMaxMessages(): number {
+    const configured = vscode.workspace.getConfiguration("opencode").get<number>("sessions.persistMaxMessages", 200)
+    return Math.max(50, Math.min(500, Number.isFinite(configured) ? configured : 200))
   }
 
   private getCleanupIntervalMinutes(): number {

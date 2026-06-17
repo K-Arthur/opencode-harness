@@ -139,7 +139,7 @@ describe("SessionStore.ts", () => {
     // buildPersistedSessions helper (behaviorally tested in
     // sessionUtils.test.ts); flush must route through it.
     assert.ok(block.includes("buildPersistedSessions"), "flush must build its snapshot via buildPersistedSessions")
-    assert.ok(block.includes("PERSIST_MAX_MESSAGES"), "flush must apply the persisted message cap")
+    assert.ok(block.includes("getPersistMaxMessages") || block.includes("PERSIST_MAX_MESSAGES"), "flush must apply the persisted message cap")
     assert.ok(!block.includes("pendingServerLink"), "empty pending local placeholders must not be persisted")
   })
 
@@ -318,6 +318,52 @@ describe("SessionStore.ts", () => {
   })
 })
 
+
+  // ── B8: Configurable maxSessions and persistMaxMessages — Phase 1 immediate win ──
+
+  it("has getMaxSessions method reading from config", () => {
+    assert.ok(
+      source.includes("getMaxSessions("),
+      "SessionStore must have getMaxSessions() reading sessions.maxSessions from config",
+    )
+    assert.ok(
+      source.includes("sessions.maxSessions"),
+      "getMaxSessions must reference sessions.maxSessions config key",
+    )
+  })
+
+  it("has getPersistMaxMessages method reading from config", () => {
+    assert.ok(
+      source.includes("getPersistMaxMessages("),
+      "SessionStore must have getPersistMaxMessages() reading sessions.persistMaxMessages from config",
+    )
+    assert.ok(
+      source.includes("sessions.persistMaxMessages"),
+      "getPersistMaxMessages must reference sessions.persistMaxMessages config key",
+    )
+  })
+
+  it("uses instance methods instead of static MAX_SESSIONS constant", () => {
+    assert.ok(
+      !source.includes("private static readonly MAX_SESSIONS = 50"),
+      "SessionStore must NOT have hardcoded MAX_SESSIONS = 50 — should read from config via getMaxSessions()",
+    )
+    assert.ok(
+      source.includes("this.getMaxSessions()"),
+      "pruneStaleSessions and other methods must call getMaxSessions() instead of using a static constant",
+    )
+  })
+
+  it("uses instance method instead of static PERSIST_MAX_MESSAGES constant", () => {
+    assert.ok(
+      !source.includes("private static readonly PERSIST_MAX_MESSAGES = 200"),
+      "SessionStore must NOT have hardcoded PERSIST_MAX_MESSAGES = 200 — should read from config via getPersistMaxMessages()",
+    )
+    assert.ok(
+      source.includes("this.getPersistMaxMessages()"),
+      "flush must call getPersistMaxMessages() instead of using a static constant",
+    )
+  })
 
 // ── Sprint 2 / M4: changed-file stats must REPLACE not accumulate ────────
 // session.diff carries whole-file stats (not deltas). The old addChangedFiles

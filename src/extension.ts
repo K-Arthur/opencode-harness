@@ -91,6 +91,7 @@ function logExtensionRuntime(context: vscode.ExtensionContext): void {
 
 export async function activate(context: vscode.ExtensionContext) {
   try {
+    const activationStart = performance.now()
     log.info("OpenCode Harness extension activating…")
     logExtensionRuntime(context)
 
@@ -102,8 +103,10 @@ export async function activate(context: vscode.ExtensionContext) {
     // Create McpServerManager first - it's needed for SessionManager's conditional tool routing
     const mcpServerManager = new McpServerManager(context)
     context.subscriptions.push(mcpServerManager)
+    const mcpCreatedAt = performance.now()
 
     sessionManager = new SessionManager(mcpServerManager)
+    const sessionMgrCreatedAt = performance.now()
     // Apply remote-attach config if set; otherwise restore stored port for local-spawn reuse
     const remoteUrl = vscode.workspace.getConfiguration("opencode").get<string>("serverUrl") || ""
     // Read auth token from SecretStorage; legacy plaintext settings are migrated and cleared once.
@@ -121,6 +124,7 @@ export async function activate(context: vscode.ExtensionContext) {
     const contextEngine = initContextEngine(context)
     const contextMonitor = new ContextMonitor()
     context.subscriptions.push(contextMonitor)
+    const ctxReadyAt = performance.now()
 
     const themeManager = new ThemeManager()
     context.subscriptions.push(themeManager)
@@ -225,7 +229,14 @@ export async function activate(context: vscode.ExtensionContext) {
     const agentGaze = new AgentGazeService(sessionManager)
     context.subscriptions.push(agentGaze)
 
-    log.info("OpenCode Harness extension activated")
+    const activationEnd = performance.now()
+    log.info(
+      `OpenCode Harness extension activated in ${(activationEnd - activationStart).toFixed(1)}ms` +
+      ` (mcp=${(mcpCreatedAt - activationStart).toFixed(1)}ms,` +
+      ` session=${(sessionMgrCreatedAt - mcpCreatedAt).toFixed(1)}ms,` +
+      ` ctx=${(ctxReadyAt - sessionMgrCreatedAt!).toFixed(1)}ms,` +
+      ` wiring=${(activationEnd - ctxReadyAt).toFixed(1)}ms)`,
+    )
   } catch (err) {
     log.error("Extension activation failed", err)
     vscode.window.showErrorMessage(

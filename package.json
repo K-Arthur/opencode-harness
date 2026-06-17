@@ -9,7 +9,7 @@
   },
   "description": "Open-source AI coding agent for VS Code. Chat, refactor, debug, and write code using Claude, GPT, Gemini, and 75+ models. Includes cost tracking, custom themes, permission controls, and checkpoint rollback.",
   "icon": "media/opencode-icon-256.png",
-  "version": "0.3.78",
+  "version": "0.3.80",
   "engines": {
     "vscode": "^1.98.0"
   },
@@ -900,6 +900,22 @@
           "minimum": 1,
           "description": "How often the extension prunes completely empty sessions."
         },
+        "opencode.sessions.maxSessions": {
+          "type": "number",
+          "scope": "window",
+          "default": 50,
+          "minimum": 10,
+          "maximum": 200,
+          "description": "Maximum number of sessions retained in the session store. Oldest sessions are pruned when this limit is exceeded."
+        },
+        "opencode.sessions.persistMaxMessages": {
+          "type": "number",
+          "scope": "window",
+          "default": 200,
+          "minimum": 50,
+          "maximum": 500,
+          "description": "Maximum number of messages persisted per session to globalState. Older history is fetched from the server on resume."
+        },
         "opencode.sessions.restoreOpenTabs": {
           "type": "boolean",
           "scope": "window",
@@ -967,6 +983,14 @@
           "minimum": 1,
           "maximum": 10,
           "description": "Maximum number of concurrent AI streams across all tabs."
+        },
+        "opencode.sessions.maxTabs": {
+          "type": "number",
+          "scope": "window",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Maximum number of open chat tabs."
         },
         "opencode.chat.wrapLongLines": {
           "type": "string",
