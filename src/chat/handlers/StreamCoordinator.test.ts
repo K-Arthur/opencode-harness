@@ -42,7 +42,7 @@ describe("StreamCoordinator.ts", () => {
       "startPrompt method must exist"
     )
     assert.ok(source.includes("this.contextEngine.gatherContext()"), "must gather context")
-    assert.ok(source.includes("this.sessionManager.ensureSession("), "must ensure session")
+    assert.ok(source.includes(".ensureSession("), "must ensure session")
     assert.ok(source.includes("this.tabManager.setStreaming(tabId, true)"), "must set streaming state")
   })
 
@@ -103,7 +103,7 @@ describe("StreamCoordinator.ts", () => {
       source.includes("async abort(tabId: string, callbacks: StreamCallbacks)"),
       "abort method must exist"
     )
-    assert.ok(source.includes("this.sessionManager.abortSession("), "must call abortSession")
+    assert.ok(source.includes(".abortSession("), "must call abortSession")
     assert.ok(
       source.includes('reason: "aborted"'),
       "abort must emit stream_end with reason: aborted"
@@ -667,5 +667,195 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(
       dupBlock.includes('type: "question_asked"'),
       "B7: appendToolStart must post {type:\"question_asked\"} when a stale tool-call block is promoted to a question, so the question bar gets populated",
+    )
+  })
+
+  // ── Stream latency metrics ──────────────────────────────────────────────
+  it("has ActiveRunMetrics type exported from StreamCoordinatorTypes", () => {
+    assert.ok(
+      typesSource.includes("export interface ActiveRunMetrics"),
+      "ActiveRunMetrics must be exported from StreamCoordinatorTypes.ts"
+    )
+    assert.ok(typesSource.includes("sendTime:"), "ActiveRunMetrics must have sendTime field")
+    assert.ok(typesSource.includes("firstResponseTime?:"), "ActiveRunMetrics must have firstResponseTime field")
+    assert.ok(typesSource.includes("completeTime?:"), "ActiveRunMetrics must have completeTime field")
+    assert.ok(typesSource.includes("finalizeTime?:"), "ActiveRunMetrics must have finalizeTime field")
+    assert.ok(typesSource.includes("messageCount:"), "ActiveRunMetrics must have messageCount field")
+  })
+
+  it("tracks per-tab ActiveRunMetrics via activeRunMetrics Map", () => {
+    assert.ok(
+      /private activeRunMetrics\s*=\s*new Map<string,\s*ActiveRunMetrics>\(\)/.test(source),
+      "activeRunMetrics must be a Map<string, ActiveRunMetrics>"
+    )
+  })
+
+  it("records sendTime in initializeRunMetadata", () => {
+    const fnIdx = source.indexOf("private initializeRunMetadata(")
+    assert.ok(fnIdx >= 0, "initializeRunMetadata must exist")
+    const blockEnd = source.indexOf("\n  private async ensureServerRunningForPrompt", fnIdx)
+    const block = source.slice(fnIdx, blockEnd > fnIdx ? blockEnd : fnIdx + 1500)
+    assert.ok(
+      block.includes("activeRunMetrics.set(tabId") && block.includes("sendTime: performance.now()"),
+      "initializeRunMetrics must record sendTime via performance.now()"
+    )
+  })
+
+  it("records firstResponseTime on first chunk/tool in appendChunk and appendToolStart", () => {
+    const chunkIdx = source.indexOf("appendChunk(tabId: string,")
+    assert.ok(chunkIdx >= 0, "appendChunk must exist")
+    const chunkBlock = source.slice(chunkIdx, chunkIdx + 800)
+    assert.ok(
+      chunkBlock.includes("metrics.firstResponseTime = performance.now()"),
+      "appendChunk must record firstResponseTime on first chunk"
+    )
+
+    const toolIdx = source.indexOf("appendToolStart(tabId: string,")
+    assert.ok(toolIdx >= 0, "appendToolStart must exist")
+    const toolBlock = source.slice(toolIdx, toolIdx + 800)
+    assert.ok(
+      toolBlock.includes("metrics.firstResponseTime = performance.now()"),
+      "appendToolStart must record firstResponseTime on first tool call"
+    )
+  })
+
+  it("records completeTime and finalizeTime in finalizeStream and logs latency breakdown", () => {
+    const fnIdx = source.indexOf("async finalizeStream(tabId: string, callbacks: StreamCallbacks)")
+    assert.ok(fnIdx >= 0, "finalizeStream must exist")
+    const blockEnd = source.indexOf("\n  async maybeFinalizeStream(", fnIdx)
+    const block = source.slice(fnIdx, blockEnd > fnIdx ? blockEnd : fnIdx + 2000)
+    assert.ok(
+      block.includes("metrics.completeTime = performance.now()"),
+      "finalizeStream must record completeTime"
+    )
+    assert.ok(
+      block.includes("metrics.finalizeTime = performance.now()"),
+      "finalizeStream must record finalizeTime"
+    )
+    assert.ok(
+      block.includes("stream latency: first_chunk="),
+      "finalizeStream must log latency breakdown"
+    )
+    assert.ok(
+      block.includes("logStreamTrace(\"stream.latency\""),
+      "finalizeStream must emit stream.latency trace"
+    )
+  })
+
+  it("increments messageCount on appendChunk and appendToolStart", () => {
+    const chunkIdx = source.indexOf("appendChunk(tabId: string,")
+    const chunkBlock = source.slice(chunkIdx, chunkIdx + 800)
+    assert.ok(
+      /metrics\.messageCount\+\+/.test(chunkBlock),
+      "appendChunk must increment messageCount"
+    )
+
+    const toolIdx = source.indexOf("appendToolStart(tabId: string,")
+    const toolBlock = source.slice(toolIdx, toolIdx + 800)
+    assert.ok(
+      /metrics\.messageCount\+\+/.test(toolBlock),
+      "appendToolStart must increment messageCount"
+    )
+  })
+
+  it("cleans up activeRunMetrics in cleanupTab and dispose", () => {
+    const cleanupIdx = source.indexOf("cleanupTab(tabId: string): void {")
+    assert.ok(cleanupIdx >= 0, "cleanupTab must exist")
+    const blockEnd = source.indexOf("\n  }", cleanupIdx)
+    const block = source.slice(cleanupIdx, blockEnd)
+    assert.ok(
+      block.includes("this.activeRunMetrics.delete(tabId)"),
+      "cleanupTab must delete activeRunMetrics entry"
+    )
+
+    const disposeIdx = source.indexOf("dispose(): void {")
+    assert.ok(disposeIdx >= 0, "dispose must exist")
+    const disposeBlock = source.slice(disposeIdx, disposeIdx + 1500)
+    assert.ok(
+      disposeBlock.includes("this.activeRunMetrics.clear()"),
+      "dispose must clear activeRunMetrics"
+    )
+  })
+
+  // ── ADR-010: SessionManagerRegistry integration ───────────────────────────
+  it("imports SessionManagerRegistry type", () => {
+    assert.ok(
+      source.includes('import type { SessionManagerRegistry }') || source.includes('import { SessionManagerRegistry }'),
+      "must import SessionManagerRegistry type"
+    )
+  })
+
+  it("has getSm helper method for per-tab session resolution", () => {
+    assert.ok(
+      source.includes("private getSm(tabId?: string): SessionManager"),
+      "must have getSm helper method"
+    )
+    assert.ok(
+      source.includes("this.sessionManagerRegistry?.getSessionManager(tabId)") ||
+        source.includes("this.sessionManagerRegistry.getSessionManager(tabId)"),
+      "getSm must delegate to registry.getSessionManager"
+    )
+    assert.ok(
+      source.includes("if (!this.sessionManagerRegistry) return this.sessionManager"),
+      "getSm must fall back to default sessionManager when registry is null"
+    )
+  })
+
+  it("has setSessionManagerRegistry setter", () => {
+    assert.ok(
+      source.includes("setSessionManagerRegistry(registry: SessionManagerRegistry): void"),
+      "must expose setSessionManagerRegistry setter"
+    )
+    assert.ok(
+      source.includes("this.sessionManagerRegistry = registry"),
+      "setter must store the registry reference"
+    )
+  })
+
+  it("routes per-tab session calls through getSm in startPrompt", () => {
+    const fnIdx = source.indexOf("async startPrompt(")
+    assert.ok(fnIdx >= 0, "startPrompt must exist")
+    const blockEnd = source.indexOf("\n  private async fetchFinalBlocks", fnIdx)
+    const block = source.slice(fnIdx, blockEnd > fnIdx ? blockEnd : fnIdx + 2000)
+    assert.ok(
+      block.includes("this.getSm(tabId).ensureSession("),
+      "startPrompt must route ensureSession through getSm"
+    )
+    assert.ok(
+      block.includes("this.getSm(tabId).sendPromptAsync("),
+      "startPrompt must route sendPromptAsync through getSm"
+    )
+  })
+
+  it("routes per-tab session calls through getSm in abort", () => {
+    const fnIdx = source.indexOf("async abort(tabId: string,")
+    assert.ok(fnIdx >= 0, "abort must exist")
+    const blockEnd = source.indexOf("\n  private startHeartbeat(", fnIdx)
+    const block = source.slice(fnIdx, blockEnd > fnIdx ? blockEnd : fnIdx + 1000)
+    assert.ok(
+      block.includes("this.getSm(tabId).abortSession("),
+      "abort must route abortSession through getSm"
+    )
+  })
+
+  it("routes getSessionMessages through getSm in fetchFinalBlocks", () => {
+    const fnIdx = source.indexOf("private async fetchFinalBlocks(")
+    assert.ok(fnIdx >= 0, "fetchFinalBlocks must exist")
+    const blockEnd = source.indexOf("\n  private recordFinalUsageFallback", fnIdx)
+    const block = source.slice(fnIdx, blockEnd > fnIdx ? blockEnd : fnIdx + 1000)
+    assert.ok(
+      block.includes("this.getSm(tabId).getSessionMessages("),
+      "fetchFinalBlocks must route getSessionMessages through getSm"
+    )
+  })
+
+  it("notifies registry on tab cleanup via unassignTab", () => {
+    const cleanupIdx = source.indexOf("cleanupTab(tabId: string): void {")
+    assert.ok(cleanupIdx >= 0, "cleanupTab must exist")
+    const blockEnd = source.indexOf("\n  }", cleanupIdx)
+    const block = source.slice(cleanupIdx, blockEnd)
+    assert.ok(
+      block.includes("this.sessionManagerRegistry.unassignTab(tabId)"),
+      "cleanupTab must call registry.unassignTab"
     )
   })

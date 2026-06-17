@@ -382,3 +382,70 @@ Each session is a standalone agent with its own worktree, process, and state. Ex
 - `src/chat/webview/main.ts`: Webview entry point
 - `src/chat/webview/timeline.ts`: Conversation timeline
 - `src/chat/webview/renderer.ts`: Block/diff rendering
+
+---
+
+## Phase 2 — Competitive Deep-Dive: Multi-Agent Isolation
+
+### Cline: Process-Spawned Agent Isolation
+
+**Architecture:** Cline spawns each agent task as an independent child process with its own tool sandbox. The extension host acts as an orchestrator — it dispatches work to child processes and collects results, but never shares state between agents.
+
+**Key patterns applicable to ADR-010:**
+
+1. **Process-per-task model:** Each Cline agent run gets its own `node` process. A crash in one agent's tool execution (e.g., a runaway bash command) doesn't affect other agents. The parent process monitors child health via `child.on('exit')` and `child.on('error')`.
+
+2. **Tool sandboxing:** Each agent process has its own working directory context. File operations are scoped to the agent's workspace, preventing cross-agent file conflicts. This is lighter than full worktree isolation but provides basic filesystem separation.
+
+3. **State serialization:** Agent state (conversation history, tool results) is serialized and passed between the host and child process via IPC/stdin/stdout. This means each process is stateless from the host's perspective — it can be killed and restarted without losing conversation context.
+
+4. **Failure containment:** When a child process crashes:
+   - The host detects it via the `exit` event
+   - The agent's conversation history is preserved in the host's memory
+   - A new process is spawned to continue the work
+   - The user sees a "retried" indicator, not a crash
+
+**Applicability to OpenCode:** The `LocalSessionProcessManager` (ADR-010) follows a similar pattern. Key difference: Cline's agents are short-lived (one task = one process), while OpenCode's sessions are long-lived (one session = one process for the duration of the tab). This means OpenCode needs more sophisticated health monitoring and reconnection logic.
+
+### Claude Code: Git Worktree Isolation
+
+**Architecture:** Claude Code supports `--worktree` mode where each agent session gets its own git worktree. This provides complete filesystem isolation — each agent sees its own copy of the working tree, can make independent commits, and can be rolled back without affecting other agents.
+
+**Key patterns applicable to ADR-010:**
+
+1. **Worktree creation:** `git worktree add <path> -b <branch>` creates an isolated checkout. Each agent gets a unique branch name (e.g., `agent/claude-session-123`). The worktree shares the `.git` directory with the main repo but has its own working tree.
+
+2. **Branch-per-agent:** Each agent works on its own branch. This means:
+   - No merge conflicts between concurrent agents
+   - Clean rollback: delete the worktree + branch
+   - Easy review: each agent's changes are isolated in a branch
+   - Integration: merge the branch when the agent's work is approved
+
+3. **Failure recovery:** If an agent crashes or is killed:
+   - The worktree remains on disk with all partial changes
+   - A new agent can be spawned on the same worktree to continue
+   - Or the worktree can be abandoned (git worktree remove)
+
+4. **Resource management:** Worktrees consume disk space (each is a full checkout). Claude Code limits concurrent worktrees and cleans up idle ones.
+
+**Applicability to OpenCode:** Worktree support is listed as Phase 5 in the scalability roadmap (B17). The key integration points would be:
+- `SessionProcessManager.spawnSession()` accepts a `worktreePath` parameter
+- `SessionStore` stores `worktreePath` per session
+- `TabManager` shows worktree indicator in tab bar
+- Cleanup on session delete: `git worktree remove <path>`
+
+**Recommended implementation order:**
+1. ✅ Process isolation (ADR-010 Phase 2 — done)
+2. Next: Per-session SSE subscription (requires server support)
+3. Then: Worktree isolation (ADR-010 Phase 5)
+4. Finally: LRU process eviction + background pre-fetch
+
+### Key Takeaways
+
+| Pattern | Cline | Claude Code | OpenCode (Current) | OpenCode (Target) |
+|---------|-------|-------------|--------------------|--------------------|
+| Process isolation | Per-task | Per-session | None (shared) | Per-session (ADR-010) |
+| Filesystem isolation | Tool sandbox | Git worktree | None | Worktree (Phase 5) |
+| Crash recovery | Respawn + replay | Worktree persistence | TabRestorationState | Process pool + worktree |
+| State management | Host-memory | Worktree-commits | SessionStore (globalState) | SessionStore + per-process |
+| Resource cost | Low (short-lived) | High (full checkout) | Lowest (shared) | Medium (N processes) |

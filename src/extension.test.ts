@@ -140,8 +140,7 @@ describe("extension.ts", () => {
     assert.ok(!extensionSource.includes('{ pattern: "**" }'), "inline provider must not register for every file")
   })
 
-  it("spawns the opencode server lazily (on first view engagement), not eagerly on activation", () => {
-    // R3: windows that never open the OpenCode view must not spawn a server process.
+  it("spawns the opencode server lazily with pre-warm during activation", () => {
     assert.ok(
       extensionSource.includes("createLazyStarter(() => ensureOpencodeAndStart("),
       "server start must be wrapped in a lazy starter",
@@ -150,9 +149,57 @@ describe("extension.ts", () => {
       extensionSource.includes("setServerWarmup("),
       "the lazy starter must be wired to the chat view warm-up hook",
     )
+    // B20: Pre-warm fires ensureServerReady() during activation (non-blocking).
+    // The lazy starter is idempotent, so this is safe alongside the chat-view hook.
     assert.ok(
-      !/\bvoid ensureOpencodeAndStart\(sessionManager, installer\)\.catch/.test(extensionSource),
-      "activation must NOT eagerly start the server at top level",
+      /void ensureServerReady\(\)/.test(extensionSource),
+      "B20: activation must fire ensureServerReady() for server pre-warm",
+    )
+    assert.ok(
+      extensionSource.includes("Server pre-warm completed"),
+      "B20: must log pre-warm timing",
+    )
+    assert.ok(
+      extensionSource.includes("Server pre-warm failed"),
+      "B20: must handle pre-warm errors gracefully",
+    )
+    // Pre-warm must be skipped for remote-attach mode
+    assert.ok(
+      extensionSource.includes("remoteUrl.trim().length === 0"),
+      "B20: must skip pre-warm when remote server URL is configured",
+    )
+  })
+
+  // ── ADR-010: Process pool + registry wiring ───────────────────────────
+  it("creates LocalSessionProcessManager and SessionManagerRegistry during activation", () => {
+    assert.ok(
+      extensionSource.includes("new LocalSessionProcessManager()"),
+      "must create LocalSessionProcessManager",
+    )
+    assert.ok(
+      extensionSource.includes("new SessionManagerRegistry(processManager)"),
+      "must create SessionManagerRegistry with process manager",
+    )
+    assert.ok(
+      extensionSource.includes("sessionManagerRegistry.setDefaultManager(sessionManager)"),
+      "must set the default session manager on the registry",
+    )
+  })
+
+  it("passes sessionManagerRegistry to ChatProvider", () => {
+    assert.ok(
+      extensionSource.includes("sessionManagerRegistry"),
+      "ChatProvider constructor must receive sessionManagerRegistry",
+    )
+    assert.ok(
+      extensionSource.includes("context.subscriptions.push(processManager)") ||
+        extensionSource.includes("subscriptions.push(processManager)"),
+      "processManager must be registered as a disposable",
+    )
+    assert.ok(
+      extensionSource.includes("context.subscriptions.push(sessionManagerRegistry)") ||
+        extensionSource.includes("subscriptions.push(sessionManagerRegistry)"),
+      "sessionManagerRegistry must be registered as a disposable",
     )
   })
 })

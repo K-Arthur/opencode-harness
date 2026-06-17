@@ -2,6 +2,8 @@ import * as vscode from "vscode"
 import { SessionManager } from "./session/SessionManager"
 import { SessionStore } from "./session/SessionStore"
 import { SessionExporter } from "./session/SessionExporter"
+import { LocalSessionProcessManager } from "./session/LocalSessionProcessManager"
+import { SessionManagerRegistry } from "./session/SessionManagerRegistry"
 import { ContextEngine } from "./context/ContextEngine"
 import { STATUS_BAR_TOOLTIPS } from "./statusBarTooltips"
 import { VSCodeWorkspaceAdapter } from "./context/VSCodeWorkspaceAdapter"
@@ -153,6 +155,17 @@ export async function activate(context: vscode.ExtensionContext) {
       void ensureServerReady().catch((err) => log.warn("Start after install failed", err))
     })
 
+    // B20: Pre-warm the server during activation so the first prompt doesn't
+    // pay the 1-3s startup tax. Non-blocking — errors are logged, not thrown.
+    // The lazy starter is idempotent, so this is safe alongside the chat-view
+    // warmup hook and won't double-start.
+    if (remoteUrl.trim().length === 0) {
+      const warmStart = performance.now()
+      void ensureServerReady()
+        .then(() => log.info(`Server pre-warm completed in ${(performance.now() - warmStart).toFixed(0)}ms`))
+        .catch((err) => log.warn("Server pre-warm failed (will retry on first engagement)", err))
+    }
+
     // Context file provider for viewing session context files
     const contextFileProvider = new ContextFileProvider()
     context.subscriptions.push(contextFileProvider)
@@ -208,11 +221,20 @@ export async function activate(context: vscode.ExtensionContext) {
       })
     )
 
+    // ADR-010: Process pool + registry for per-session isolation.
+    // In "shared" mode (default) the registry routes all tabs to the global sessionManager.
+    // In "per-tab" mode each tab gets its own process + session manager.
+    const processManager = new LocalSessionProcessManager()
+    context.subscriptions.push(processManager)
+    const sessionManagerRegistry = new SessionManagerRegistry(processManager)
+    sessionManagerRegistry.setDefaultManager(sessionManager)
+    context.subscriptions.push(sessionManagerRegistry)
+
     // Chat provider
     chatProviderInstance = new ChatProvider(
       context, sessionManager, contextEngine, contextMonitor,
       themeManager, rateLimitMonitor, modelManager, sessionStore,
-      checkpointManager, mcpServerManager
+      checkpointManager, mcpServerManager, sessionManagerRegistry
     )
 
     // Warm the server the first time the chat view is resolved (user opened OpenCode).

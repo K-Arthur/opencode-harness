@@ -86,8 +86,9 @@ class SessionManagerRegistry {
 - ~~Need to coordinate port allocation for multiple server instances~~ → Resolved: `PortPool` utility with atomic reservation
 
 ### Not Yet Implemented
-- `processStrategy` config: `"shared"` (default) or `"per-tab"` — not wired in `extension.ts`
-- `SessionManagerRegistry` + `LocalSessionProcessManager` — defined but never imported from `extension.ts`
-- `StreamCoordinator.startPrompt` — still uses shared `SessionManager` only
+- `processStrategy` config: `"shared"` (default) or `"per-tab"` — wired in `extension.ts` ✅
+- `SessionManagerRegistry` + `LocalSessionProcessManager` — created and wired ✅
+- `StreamCoordinator.startPrompt` — routes per-tab calls through registry ✅
 - Per-process `OPENCODE_DATA_DIR` support — requires `LocalSessionProcessManager` to be wired
-- Crash resilience: `TabRestorationState`, auto-resume, `stream_interrupted` UI ✅ completed
+- Per-process `V2OpencodeClient` + SSE subscription — each tab still shares the default client
+- CRASH + auto-resume cycle at the process level — per-tab process lifecycle management

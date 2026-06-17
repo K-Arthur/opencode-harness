@@ -28,8 +28,9 @@ import { mapRunError, type RunErrorContext } from "./runErrorMapper"
 import { logStreamTrace } from "../../session/streamTrace"
 import { modeToAgent } from "../modePolicy"
 
-import type { StreamCallbacks, ToolEndResult, ToolPartialInput, StreamLifecycleState } from "./StreamCoordinatorTypes"
-export type { StreamCallbacks, ToolEndResult, ToolPartialInput, StreamLifecycleState }
+import type { StreamCallbacks, ToolEndResult, ToolPartialInput, StreamLifecycleState, ActiveRunMetrics } from "./StreamCoordinatorTypes"
+export type { StreamCallbacks, ToolEndResult, ToolPartialInput, StreamLifecycleState, ActiveRunMetrics }
+import type { SessionManagerRegistry } from "../../session/SessionManagerRegistry"
 
 type ActiveRunState = "sending" | "accepted" | "streaming" | "finalizing" | "completed" | "failed" | "aborted" | "timeout" | "interrupted"
 
@@ -175,9 +176,13 @@ export class StreamCoordinator {
    * batch of attachment URLs per tab — overwritten on each new prompt.
    */
   private pendingAttachmentUrls = new Map<string, string[]>()
+  /** Per-tab stream latency metrics for performance instrumentation. */
+  private activeRunMetrics = new Map<string, ActiveRunMetrics>()
   /** Optional delegate: called by SubagentHeartbeat when a new child session is discovered,
    *  so the host can drain the pending event buffer and replay events through the parent tab. */
   private childSessionReplayer: ((tabId: string, childSessionId: string) => void) | null = null
+  /** ADR-010: per-tab session manager routing. In shared mode always returns this.sessionManager. */
+  private sessionManagerRegistry: SessionManagerRegistry | null = null
 
   constructor(
     private readonly sessionManager: SessionManager,
@@ -231,6 +236,18 @@ export class StreamCoordinator {
     this.tabCloseDisposable = this.tabManager.onTabClosed((tabId) => {
       this.cleanupTab(tabId)
     })
+  }
+
+  /** ADR-010: Set the session manager registry for per-tab process routing. */
+  setSessionManagerRegistry(registry: SessionManagerRegistry): void {
+    this.sessionManagerRegistry = registry
+  }
+
+  /** ADR-010: Resolve the session manager for a specific tab. Falls back to the default
+   *  shared session manager when the registry is not configured or strategy is "shared". */
+  private getSm(tabId?: string): SessionManager {
+    if (!this.sessionManagerRegistry) return this.sessionManager
+    return this.sessionManagerRegistry.getSessionManager(tabId)
   }
 
   private nextSeq(tabId: string): number {
@@ -695,7 +712,7 @@ export class StreamCoordinator {
     const key = this.toolPartialKey(tabId, toolId)
     const previous = this.toolPartialOffsets.get(key)
     try {
-      const snapshot = await this.sessionManager.getToolPartialOutput(tab.cliSessionId, toolId, previous?.token ?? 0)
+      const snapshot = await this.getSm(tabId).getToolPartialOutput(tab.cliSessionId, toolId, previous?.token ?? 0)
       if (!snapshot.available) {
         this.warnNoLiveOutputOnce(tabId)
         return
@@ -797,7 +814,7 @@ export class StreamCoordinator {
     if (!tab?.cliSessionId) return
 
     try {
-      const messages = await this.sessionManager.getSessionMessages(tab.cliSessionId)
+      const messages = await this.getSm(tabId).getSessionMessages(tab.cliSessionId)
       const lastAssistant = [...messages].reverse().find(message => message.info.role === "assistant")
       if (!lastAssistant) return
 
@@ -931,15 +948,15 @@ export class StreamCoordinator {
       this.refreshContextTokenEstimate(tabId)
 
       const localTitle = this.sessionStore.get(tabId)?.name?.trim()
-      const cliSessionId = await this.sessionManager.ensureSession(tab.cliSessionId, localTitle || undefined)
+      const cliSessionId = await this.getSm(tabId).ensureSession(tab.cliSessionId, localTitle || undefined)
       this.tabManager.setCliSessionId(tabId, cliSessionId)
       this.sessionStore.updateCliSessionId(tabId, cliSessionId)
       const streamMessageId = this.resolveStreamMessageAndStartActivity(tabId, tab, cliSessionId, callbacks)
 
-      const eventStreamReady = await this.sessionManager.waitForEventStreamReady(5_000)
+      const eventStreamReady = await this.getSm(tabId).waitForEventStreamReady(5_000)
       if (!eventStreamReady) {
-        const status = this.sessionManager.eventStreamStatus
-        if (status.state === "failed" || !this.sessionManager.isRunning) {
+        const status = this.getSm(tabId).eventStreamStatus
+        if (status.state === "failed" || !this.getSm(tabId).isRunning) {
           throw new Error(`OpenCode event stream is ${status.state}; cannot send a prompt until extension communication is connected.`)
         }
         // Still reconnecting — proceed optimistically. The server processes prompts
@@ -1000,7 +1017,7 @@ export class StreamCoordinator {
       if (callbacks.toolCallId) {
         log.info(`startPrompt forwarding question_answer toolCallId=${callbacks.toolCallId} for tab ${tabId}`)
       }
-      await this.sessionManager.sendPromptAsync(cliSessionId, parts, {
+      await this.getSm(tabId).sendPromptAsync(cliSessionId, parts, {
         model: modelRef,
         agent,
         variant,
@@ -1250,6 +1267,7 @@ export class StreamCoordinator {
       state: "sending",
     })
     this.traceRun(tabId, "run.created", { promptText: text })
+    this.activeRunMetrics.set(tabId, { sendTime: performance.now(), messageCount: 0 })
     const baselineSession = this.sessionStore.get(tabId)
     this.finalUsageBaselines.set(tabId, {
       total: baselineSession?.tokenUsage?.total ?? 0,
@@ -1384,7 +1402,7 @@ export class StreamCoordinator {
 
     try {
       const messages = await Promise.race([
-        this.sessionManager.getSessionMessages(cliSessionId),
+        this.getSm(tabId).getSessionMessages(cliSessionId),
         timeoutPromise,
       ])
       const lastAssistant = [...messages].reverse().find(message => message.info.role === "assistant")
@@ -1527,13 +1545,30 @@ export class StreamCoordinator {
 
   async finalizeStream(tabId: string, callbacks: StreamCallbacks): Promise<void> {
     this.drainDeferredChunk(tabId, true)
+    const metrics = this.activeRunMetrics.get(tabId)
+    if (metrics) metrics.completeTime = performance.now()
     this.setActiveRunState(tabId, "finalizing", { finalizeReason: "normal" })
     await this.finalizerService.finalizeStream(tabId, callbacks)
+    if (metrics) {
+      metrics.finalizeTime = performance.now()
+      const firstMs = metrics.firstResponseTime != null ? (metrics.firstResponseTime - metrics.sendTime).toFixed(0) : "n/a"
+      const totalMs = metrics.completeTime != null ? (metrics.completeTime - metrics.sendTime).toFixed(0) : "n/a"
+      const finalizeMs = metrics.completeTime != null ? (metrics.finalizeTime - metrics.completeTime).toFixed(0) : "n/a"
+      log.info(`stream latency: first_chunk=${firstMs}ms, total=${totalMs}ms, finalize=${finalizeMs}ms, messages=${metrics.messageCount}`)
+      logStreamTrace("stream.latency", {
+        tabId,
+        firstChunkMs: firstMs,
+        totalMs,
+        finalizeMs,
+        messageCount: metrics.messageCount,
+      })
+    }
     const snapshot = this.activityTracker.markRunComplete(tabId)
     this.postRunActivitySnapshot(tabId, snapshot, callbacks)
     this.activityTracker.clear(tabId)
     this.setActiveRunState(tabId, "completed", { finalizeReason: "normal" })
     this.activeRuns.delete(tabId)
+    this.activeRunMetrics.delete(tabId)
 
     // Drain host-side prompt queue after stream finalization
     // (the old "append" mode is gone — queued follow-ups are the single path).
@@ -1615,7 +1650,7 @@ export class StreamCoordinator {
 
   async abort(tabId: string, callbacks: StreamCallbacks): Promise<void> {
     const tab = this.tabManager.getTab(tabId)
-    if (!tab || !tab.cliSessionId || !this.sessionManager.isRunning) return
+    if (!tab || !tab.cliSessionId || !this.getSm(tabId).isRunning) return
     this.stopAllToolPartialPolling(tabId)
 
     // Mark first so any in-flight finalizeStream that resumes after our await
@@ -1630,7 +1665,7 @@ export class StreamCoordinator {
 
     try {
       const streamMessageId = this.ensureStreamMessageId(tabId, tab.cliSessionId || tabId)
-      await this.sessionManager.abortSession(tab.cliSessionId)
+      await this.getSm(tabId).abortSession(tab.cliSessionId)
       const snapshot = this.activityTracker.markRunCancelled(tabId, "User cancelled the run")
       this.postRunActivitySnapshot(tabId, snapshot, callbacks)
       callbacks.postMessage({
@@ -1817,7 +1852,7 @@ export class StreamCoordinator {
     try {
       await this.reconcilePendingToolCallsFromServer(tabId, callbacks)
 
-      const messages = await this.sessionManager.getSessionMessages(tab.cliSessionId)
+      const messages = await this.getSm(tabId).getSessionMessages(tab.cliSessionId)
       const lastAssistant = [...messages].reverse().find(m => m.info.role === "assistant")
       if (lastAssistant) {
         const blocks = this.partsToBlocks(lastAssistant.parts)
@@ -1879,8 +1914,14 @@ export class StreamCoordinator {
     if (this.ttfbTimeouts.has(tabId)) {
       this.clearTtfbTimeout(tabId)
       log.info(`TTFB: first chunk received for tab ${tabId}`)
+      const metrics = this.activeRunMetrics.get(tabId)
+      if (metrics && !metrics.firstResponseTime) {
+        metrics.firstResponseTime = performance.now()
+      }
     }
 
+    const metrics = this.activeRunMetrics.get(tabId)
+    if (metrics) metrics.messageCount++
     this.tabManager.appendToBuffer(tabId, text)
     this.recordRunActivity(tabId, { kind: "text", label: "Streaming" }, callbacks)
 
@@ -1935,8 +1976,14 @@ export class StreamCoordinator {
     if (this.ttfbTimeouts.has(tabId)) {
       this.clearTtfbTimeout(tabId)
       log.info(`TTFB: first tool call received for tab ${tabId}`)
+      const metrics = this.activeRunMetrics.get(tabId)
+      if (metrics && !metrics.firstResponseTime) {
+        metrics.firstResponseTime = performance.now()
+      }
     }
 
+    const metrics = this.activeRunMetrics.get(tabId)
+    if (metrics) metrics.messageCount++
     const tab = this.tabManager.getTab(tabId)
     if (!tab) return
     this.tabManager.touchActivity(tabId)
@@ -2275,6 +2322,11 @@ cleanupTab(tabId: string): void {
     this.clearPendingToolGraceTimeout(tabId)
     this.activeMessageIds.delete(tabId)
     this.activeRuns.delete(tabId)
+    this.activeRunMetrics.delete(tabId)
+    // ADR-010: notify registry that this tab is no longer associated with its process
+    if (this.sessionManagerRegistry) {
+      this.sessionManagerRegistry.unassignTab(tabId)
+    }
     this.loggedBubbleMismatches.delete(tabId)
     this.stopHeartbeat(tabId)
     this.subagentHeartbeat.stop(tabId)
@@ -2433,6 +2485,7 @@ cleanupTab(tabId: string): void {
     this.streamStates.clear()
     this.activeMessageIds.clear()
     this.activeRuns.clear()
+    this.activeRunMetrics.clear()
     this.toolCallCounts.clear()
     this.activeToolCallIds.clear()
     this.toolActivityAt.clear()

@@ -55,3 +55,12 @@ export type ToolPartialInput = {
 }
 
 export type StreamLifecycleState = "idle" | "sending" | "streaming" | "completing" | "error" | "timeout" | "interrupted"
+
+/** Per-tab stream latency metrics for performance instrumentation. */
+export interface ActiveRunMetrics {
+  sendTime: number
+  firstResponseTime?: number
+  completeTime?: number
+  finalizeTime?: number
+  messageCount: number
+}

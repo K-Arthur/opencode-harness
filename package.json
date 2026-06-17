@@ -992,6 +992,20 @@
           "maximum": 100,
           "description": "Maximum number of open chat tabs."
         },
+        "opencode.sessions.processStrategy": {
+          "type": "string",
+          "scope": "window",
+          "default": "shared",
+          "enum": [
+            "shared",
+            "per-tab"
+          ],
+          "enumDescriptions": [
+            "All tabs share one opencode server process (default, recommended).",
+            "Each tab gets its own opencode server process for isolation (experimental, requires more memory)."
+          ],
+          "description": "How to isolate AI sessions. 'shared' uses one server for all tabs. 'per-tab' spawns a separate server per tab for crash isolation (experimental)."
+        },
         "opencode.chat.wrapLongLines": {
           "type": "string",
           "default": "auto",

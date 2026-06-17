@@ -29,6 +29,7 @@ import { computeMessageCounts } from "./webview/messageCounter"
 import { RetryQueueService, CRITICAL_MESSAGE_TYPES } from "./RetryQueueService"
 import { ChatMessage, Block } from "./types"
 import { log } from "../utils/outputChannel"
+import type { SessionManagerRegistry } from "../session/SessionManagerRegistry"
 import { MessageRouter } from "./handlers/MessageRouter"
 import { ChatCommands } from "./ChatCommands"
 import { AutoCompactor } from "./AutoCompactor"
@@ -166,6 +167,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     private readonly sessionStore: SessionStore,
     private readonly checkpointManager: CheckpointManager,
     private readonly mcpServerManager: McpServerManager,
+    private readonly sessionManagerRegistry?: SessionManagerRegistry,
   ) {
     this.webviewContent = new WebviewContent(context.extensionUri)
     this.tabManager = new TabManager(context.globalState)
@@ -192,6 +194,9 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     this.streamCoordinator = new StreamCoordinator(
       sessionManager, sessionStore, contextEngine, contextMonitor, modelManager, this.tabManager, rateLimitMonitor, this.diffApplier, methodologyAdvisor
     )
+    if (this.sessionManagerRegistry) {
+      this.streamCoordinator.setSessionManagerRegistry(this.sessionManagerRegistry)
+    }
     this.streamCoordinator.setChildSessionReplayer((tabId, childSessionId) => {
       // Register permanent mapping so future child session events route directly
       // to the correct parent tab via resolveServerEventTab.
