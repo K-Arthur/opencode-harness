@@ -486,7 +486,13 @@ export class WebviewEventRouter {
               retryable: classification.retryable,
             })
           }
-          this.opts.postRequestError(classification.userFacingMessage, sessionId)
+          // B10: Only show the error banner for non-expired failures.
+          // For expired questions, the answer was already sent as a text
+          // prompt above — showing an error would confuse the user since
+          // the model IS continuing with their answer.
+          if (classification.category !== "expired") {
+            this.opts.postRequestError(classification.userFacingMessage, sessionId)
+          }
         }
         return
       }
