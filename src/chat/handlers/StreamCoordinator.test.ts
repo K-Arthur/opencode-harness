@@ -939,3 +939,75 @@ describe("StreamCoordinator.ts", () => {
       "B10: unmarkQuestionAnswered must resolve ID mismatch via requestID or single-answered heuristic",
     )
   })
+
+  // ── B10-recovery: Hard unconditional watchdog for expired-question fallback
+  //
+  // Context: the existing TTFB watchdog at setupTtfbTimeout is gated by
+  // `shouldTriggerStartupTimeout`, which returns false (skip timeout) when
+  // `run.firstActivityAt` is set. A stray tool_start event (e.g., the
+  // question tool itself, or a late tool_end from a prior run) flips
+  // firstActivityAt, silently disabling the watchdog. The expired-question
+  // fallback startPrompt would then sit in "sending" forever, forcing the
+  // user to close/reopen the tab.
+  //
+  // The fix adds a SEPARATE watchdog (setupExpiredRecoveryTimeout) armed
+  // only when `callbacks.recoveryFromExpiredQuestion` is true. It fires
+  // unconditionally after 15s, aborts the run, and posts
+  // `expired_question_recovery_failed` with the original answer text so
+  // the webview can pre-fill the prompt input for manual resend.
+  void describe("B10-recovery: hard unconditional watchdog for expired-question fallback", () => {
+    void it("declares EXPIRED_RECOVERY_TIMEOUT_MS constant (15s — shorter than the gated TTFB)", () => {
+      assert.ok(
+        source.includes("EXPIRED_RECOVERY_TIMEOUT_MS = 15_000"),
+        "B10-recovery: must declare a 15s hard timeout constant",
+      )
+    })
+
+    void it("declares expiredRecoveryTimeouts map (separate from ttfbTimeouts)", () => {
+      assert.ok(
+        source.includes("expiredRecoveryTimeouts: Map<string, ReturnType<typeof setTimeout>>"),
+        "B10-recovery: must maintain a separate map so cleanup is independent of the gated TTFB timer",
+      )
+    })
+
+    void it("adds recoveryFromExpiredQuestion + expiredRecoveryAnswerText to StreamCallbacks", () => {
+      // The contract is declared in StreamCoordinatorTypes.ts; verify the
+      // coordinator reads these fields when arming the watchdog.
+      assert.ok(
+        source.includes("callbacks.recoveryFromExpiredQuestion"),
+        "B10-recovery: emitStreamStartAndArmWatchdogs must check callbacks.recoveryFromExpiredQuestion",
+      )
+      assert.ok(
+        source.includes("callbacks.expiredRecoveryAnswerText"),
+        "B10-recovery: setupExpiredRecoveryTimeout must read callbacks.expiredRecoveryAnswerText for the webview payload",
+      )
+    })
+
+    void it("setupExpiredRecoveryTimeout fires unconditionally (does NOT call shouldTriggerStartupTimeout)", () => {
+      const fnIdx = source.indexOf("setupExpiredRecoveryTimeout(tabId: string, callbacks: StreamCallbacks)")
+      assert.ok(fnIdx >= 0, "B10-recovery: setupExpiredRecoveryTimeout method must exist")
+      const body = source.slice(fnIdx, fnIdx + 3000)
+      assert.ok(
+        !body.includes("shouldTriggerStartupTimeout"),
+        "B10-recovery: watchdog must NOT consult shouldTriggerStartupTimeout — that gate is the source of the bug",
+      )
+      assert.ok(
+        body.includes("expired_question_recovery_failed"),
+        "B10-recovery: watchdog must post expired_question_recovery_failed with the answer text",
+      )
+      assert.ok(
+        body.includes("answerText"),
+        "B10-recovery: watchdog payload must include answerText so webview can pre-fill input",
+      )
+    })
+
+    void it("cleanupTab clears expiredRecoveryTimeouts alongside ttfbTimeouts", () => {
+      const cleanupIdx = source.indexOf("cleanupTab(tabId: string): void")
+      assert.ok(cleanupIdx >= 0, "cleanupTab must exist")
+      const cleanupBody = source.slice(cleanupIdx, cleanupIdx + 1500)
+      assert.ok(
+        cleanupBody.includes("clearExpiredRecoveryTimeout(tabId)"),
+        "B10-recovery: cleanupTab must clear the recovery watchdog so it cannot fire after finalize/abort",
+      )
+    })
+  })

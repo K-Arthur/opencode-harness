@@ -85,6 +85,11 @@ export class StreamCoordinator {
   private readonly ABORT_ERROR_SUPPRESS_MS = 8000
   /** Time-to-first-byte timeout: no chunk received within 45s */
   readonly TTFB_TIMEOUT_MS = 45000
+  /** B10-recovery: Hard timeout for the expired-question fallback startPrompt.
+   *  Fires UNCONDITIONALLY after 15s — not gated by shouldTriggerStartupTimeout,
+   *  which can be silently disabled by stray activity events leaving the user
+   *  stuck "generating" indefinitely. */
+  readonly EXPIRED_RECOVERY_TIMEOUT_MS = 15_000
   /** Short grace window for terminal status to be followed by late tool_end events */
   readonly TOOL_FINALIZE_GRACE_MS = 30000
   private readonly MAX_UNACKED_STREAM_CHUNKS = 8
@@ -96,6 +101,10 @@ export class StreamCoordinator {
   private ttfbTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
   private ttfbAbortControllers: Map<string, AbortController> = new Map()
   private pendingToolGraceTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
+  /** B10-recovery: Hard, unconditional timeouts for the expired-question
+   *  fallback startPrompt. Distinct from ttfbTimeouts because these fire
+   *  regardless of activity-tracker state. */
+  private expiredRecoveryTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
   /** Tabs currently in the process of finalizing — guards against double-finalize */
   private finalizingTabs = new Set<string>()
   /** Tabs whose stream was explicitly aborted — finalizeStream must not emit its own stream_end */
@@ -1324,6 +1333,83 @@ export class StreamCoordinator {
     this.startWatchdog()
 
     this.setupTtfbTimeout(tabId, callbacks)
+
+    // B10-recovery: Arm the hard unconditional watchdog for expired-question
+    // fallbacks. This fires regardless of stray activity events; the regular
+    // TTFB watchdog above is gated by shouldTriggerStartupTimeout, which can
+    // be silently disabled when firstActivityAt is flipped by a late/stale
+    // tool_start, leaving the user stuck "generating" indefinitely.
+    if (callbacks.recoveryFromExpiredQuestion) {
+      this.setupExpiredRecoveryTimeout(tabId, callbacks)
+    }
+  }
+
+  /**
+   * B10-recovery: Hard, unconditional watchdog for the expired-question
+   * fallback startPrompt. Fires after EXPIRED_RECOVERY_TIMEOUT_MS regardless
+   * of activity. On fire: aborts the run, posts stream_end + a
+   * `expired_question_recovery_failed` message containing the original
+   * answer text so the webview can pre-fill the prompt input for manual
+   * resend, then cleanupTab. This guarantees the user is never stuck
+   * "generating" with no recovery path. */
+  private setupExpiredRecoveryTimeout(tabId: string, callbacks: StreamCallbacks): void {
+    const answerText = callbacks.expiredRecoveryAnswerText ?? ""
+    const timeout = setTimeout(() => {
+      // Unconditional fire — deliberately NOT gated by the activity-tracker
+      // startup-timeout check. That check returns false (skip timeout) when
+      // any activity has been recorded, but stray tool_start events can flip
+      // that flag, silently disabling the watchdog and leaving the user
+      // stuck "generating" indefinitely. This recovery path must fire on a
+      // bare wall-clock basis regardless of recorded activity.
+      const tab = this.tabManager.getTab(tabId)
+      const isActive = tab?.isStreaming && tab.waitingForCompletion
+      log.warn(
+        `expired_question_recovery hard timeout fired for tab ${tabId} ` +
+          `(isActive=${isActive}) — aborting recovery run and surfacing answer text for manual resend`,
+      )
+      const streamMessageId = this.activeMessageIds.get(tabId) ?? tab?.cliSessionId ?? tabId
+      // Tell the webview: the recovery failed; pre-fill the input so the
+      // user can resend manually without close/reopen.
+      callbacks.postMessage({
+        type: "expired_question_recovery_failed",
+        sessionId: tabId,
+        messageId: streamMessageId,
+        answerText,
+        reason: "no_response",
+        seq: this.nextSeq(tabId),
+      })
+      // Abort the server-side run (if any) so subsequent prompts work.
+      const cliSessionId = tab?.cliSessionId
+      if (cliSessionId && this.getSm(tabId).isRunning) {
+        void this.abort(tabId, callbacks).catch((err) =>
+          log.error(`expired_question_recovery abort failed for tab ${tabId}`, err),
+        )
+      } else {
+        // No live run to abort — just post stream_end and clean up locally.
+        this.abortRegistry.recordAbort(tabId, this.activeRuns.get(tabId)?.serverMessageId, Date.now())
+        callbacks.postMessage({
+          type: "stream_end",
+          sessionId: tabId,
+          messageId: streamMessageId,
+          blocks: [],
+          reason: "expired_recovery_timeout",
+          partial: false,
+          retryable: true,
+          seq: this.nextSeq(tabId),
+        })
+        this.cleanupTab(tabId)
+      }
+    }, this.EXPIRED_RECOVERY_TIMEOUT_MS)
+    if (typeof timeout === "object" && typeof timeout.unref === "function") timeout.unref()
+    this.expiredRecoveryTimeouts.set(tabId, timeout)
+  }
+
+  private clearExpiredRecoveryTimeout(tabId: string): void {
+    const t = this.expiredRecoveryTimeouts.get(tabId)
+    if (t) {
+      clearTimeout(t)
+      this.expiredRecoveryTimeouts.delete(tabId)
+    }
   }
 
   private resolveStreamMessageAndStartActivity(
@@ -1470,6 +1556,52 @@ export class StreamCoordinator {
           })
           this.clearTtfbTimeout(tabId)
           callbacks.postRequestError(errorContext.userMessage, tabId)
+          // G1: even in the preserve-tracking path, kick a probe so the host
+          // can correct its view if the run actually finished or is still
+          // progressing. The probe replies asynchronously and reconciles the
+          // streaming flags via run_status_result.
+          if (t.cliSessionId && eventStreamStatus.state === "connected") {
+            void this.probeActiveRun(tabId, callbacks).catch(err =>
+              log.warn(`TTFB probe failed for ${tabId}`, err),
+            )
+          }
+          return
+        }
+        // G1: before unilaterally clearing, ask the server whether the run
+        // is actually still alive. If the server says active=true, DO NOT
+        // post stream_end — preserve tracking and let the user decide.
+        // Only fall through to abort+stream_end if the server confirms the
+        // run is dead OR the server is unreachable AND state isn't accepted.
+        if (t.cliSessionId && eventStreamStatus.state === "connected") {
+          void this.probeActiveRun(tabId, callbacks)
+            .then(() => {
+              // The probe replies via run_status_result; if the run is
+              // still active, the webview's flags are reconciled there. We
+              // still need to clear local TTFB bookkeeping but skip the
+              // unilateral stream_end.
+              const stillActive = this.activeRuns.has(tabId)
+              if (stillActive) {
+                log.info(`TTFB for ${tabId}: probe says run still active — suppressing stream_end`)
+                this.clearTtfbTimeout(tabId)
+                return
+              }
+              // Run is gone — fall through to the cleanup path below.
+              log.info(`TTFB for ${tabId}: probe confirmed run gone — finalizing`)
+              abortController.abort("ttfb_timeout")
+              callbacks.postMessage({
+                type: "stream_end",
+                sessionId: tabId,
+                messageId: this.ensureStreamMessageId(tabId, t.cliSessionId),
+                blocks: [],
+                reason,
+                partial: false,
+                retryable: true,
+                seq: this.nextSeq(tabId),
+                source: "ttfb",
+              })
+              this.cleanupTab(tabId)
+            })
+            .catch(err => log.warn(`TTFB probe failed for ${tabId}`, err))
           return
         }
         abortController.abort("ttfb_timeout")
@@ -1482,6 +1614,7 @@ export class StreamCoordinator {
           partial: false,
           retryable: true,
           seq: this.nextSeq(tabId),
+          source: "ttfb",
         })
         if (eventStreamDisconnected) {
           callbacks.postRequestError(errorContext.userMessage, tabId)
@@ -1978,9 +2111,120 @@ export class StreamCoordinator {
         const info = lastAssistant.info as { id?: string }
         if (info.id && !this.activeMessageIds.has(tabId)) this.activeMessageIds.set(tabId, info.id)
         this.replayLiveStreamToWebview(tabId, callbacks)
+
+        // Gap G6: if the run already completed during the outage, the server
+        // saw the terminal events but we never did (they were lost on the
+        // dead SSE). Detect via time.completed on the last assistant and
+        // emit the dropped stream_end so the webview can clear its streaming
+        // affordances instead of waiting up to 45min for the watchdog.
+        const completedAt = (lastAssistant.info as { time?: { completed?: number } }).time?.completed
+        if (typeof completedAt === "number" && completedAt > 0) {
+          log.info(`reconcileAfterReconnect: tab ${tabId} last assistant completed at ${completedAt} — emitting dropped stream_end`)
+          // Mark the run as already-finished: skip the normal finalize path
+          // (which would re-fetch), and emit a terminal stream_end directly.
+          this.abortedTabs.add(tabId) // reuse the dedup gate so finalizeStream is a no-op
+          this.activeRuns.delete(tabId)
+          this.tabManager.setStreaming(tabId, false, { source: "reconnect", cliSessionId: tab.cliSessionId })
+          this.tabManager.setWaitingForCompletion(tabId, false)
+          this.clearTtfbTimeout(tabId)
+          this.stopHeartbeat(tabId)
+          callbacks.postMessage({
+            type: "stream_end",
+            sessionId: tabId,
+            reason: "reconnect_completed",
+            blocks,
+            partial: false,
+            source: "reconcile",
+          })
+        }
       }
     } catch (err) {
       log.warn(`reconcileAfterReconnect failed for ${tabId}`, err)
+    }
+  }
+
+  /**
+   * Host-authoritative probe: is the run for `tabId` still active on the
+   * server? Used by the webview to correct stale optimistic flags. Always
+   * replies via `run_status_result`, even on server failure (so the webview
+   * never hangs waiting).
+   *
+   * Decision procedure:
+   *   1. If we have no active run in our local `activeRuns` map AND no
+   *      cliSessionId to query, reply active=false (we know there's no run).
+   *   2. Otherwise, query the server for the last assistant message. If
+   *      time.completed is set, the run is finished → active=false.
+   *   3. If the server is unreachable, reply active=false with
+   *      serverReachable=false so the webview knows not to trust either
+   *      answer blindly (and can retry shortly).
+   *   4. If the last assistant is mid-stream (no time.completed) AND we
+   *      believe the run is live, reply active=true with the messageId/runId
+   *      so the webview can re-anchor.
+   */
+  async probeActiveRun(
+    tabId: string,
+    callbacks: { postMessage: (m: Record<string, unknown>) => void },
+  ): Promise<void> {
+    const tab = this.tabManager.getTab(tabId)
+    const localRun = this.activeRuns.get(tabId)
+    const now = Date.now()
+    const reply = (active: boolean, serverReachable: boolean, opts?: { messageId?: string; runId?: string }) => {
+      callbacks.postMessage({
+        type: "run_status_result",
+        sessionId: tabId,
+        cliSessionId: tab?.cliSessionId,
+        active,
+        runId: opts?.runId,
+        messageId: opts?.messageId,
+        probedAt: now,
+        serverReachable,
+      })
+    }
+
+    // Fast path: we know the run is no longer tracked locally.
+    if (!localRun && !tab?.cliSessionId) {
+      reply(false, true)
+      return
+    }
+
+    // If we can't reach the server (no cliSessionId, no eventStream),
+    // report unreachable so the webview knows the answer is uncertain.
+    if (!tab?.cliSessionId) {
+      reply(false, false)
+      return
+    }
+
+    try {
+      const messages = await this.getSm(tabId).getSessionMessages(tab.cliSessionId)
+      const lastAssistant = [...messages].reverse().find(m => m.info.role === "assistant")
+      if (!lastAssistant) {
+        // No assistant message at all → run is not active.
+        reply(false, true)
+        return
+      }
+      const info = lastAssistant.info as { id?: string; time?: { completed?: number } }
+      const completedAt = info.time?.completed
+      if (typeof completedAt === "number" && completedAt > 0) {
+        // Run finished. Clear any stale local tracking and tell the webview.
+        if (localRun) {
+          this.activeRuns.delete(tabId)
+          // Re-fire streaming_state:false with source="probe" so the webview
+          // knows this is a host-authoritative clear, not a guess.
+          this.tabManager.setStreaming(tabId, false, { source: "probe", cliSessionId: tab.cliSessionId })
+        }
+        reply(false, true, { messageId: info.id })
+        return
+      }
+      // Last assistant has no time.completed → may still be running. We
+      // believe it's live if our local tracker says so OR if there's no
+      // evidence it stopped.
+      const active = Boolean(localRun) || tab.isStreaming
+      reply(active, true, { messageId: info.id, runId: localRun?.assistantMessageId })
+    } catch (err) {
+      log.warn(`probeActiveRun: server query failed for ${tabId}`, err)
+      // Server unreachable — tell the webview the answer is uncertain.
+      // Default to the local flag value so we don't spuriously clear.
+      reply(Boolean(localRun) || Boolean(tab?.isStreaming), false)
     }
   }
 
@@ -2417,8 +2661,9 @@ export class StreamCoordinator {
     this.childSessionReplayer = replayer
   }
 
-cleanupTab(tabId: string): void {
+  cleanupTab(tabId: string): void {
     this.clearTtfbTimeout(tabId)
+    this.clearExpiredRecoveryTimeout(tabId)
     this.stopAllToolPartialPolling(tabId)
     this.ttfbAbortControllers.delete(tabId)
     this.tabManager.setStreaming(tabId, false)

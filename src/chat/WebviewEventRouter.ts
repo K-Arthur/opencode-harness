@@ -186,6 +186,7 @@ export class WebviewEventRouter {
     "toggle_diff_wrap", "toggle_thinking", "revert_diff", "open_changed_file_diff",
     "context_history_request", "context_cost_estimate", "context_suggestions_request",
     "send_steer_prompt",
+    "probe_run_status",
     "remove_from_queue", "edit_queue_item", "reorder_queue", "retry_queue_item",
     "request_queue_state", "resume_queue",
     "get_todos", // handler posts todos_error on unavailable server/session fetch failures
@@ -467,6 +468,13 @@ export class WebviewEventRouter {
               retryable: false,
             })
             // Send the answer as a text prompt so the model can continue.
+            // B10-recovery: Wrap in try/finally so promptsInFlight is ALWAYS
+            // released, even if startPrompt early-returns (tab not found,
+            // server down, stream-slot rejected). Previously the
+            // clearPromptsInFlight callback only fired deep inside
+            // emitStreamStartAndArmWatchdogs, leaving promptsInFlight stuck
+            // and silently dropping all future prompts in this tab — which
+            // is what forced the user to close/reopen the tab.
             if (!this.promptsInFlight.has(sessionId)) {
               this.promptsInFlight.add(sessionId)
               try {
@@ -475,11 +483,36 @@ export class WebviewEventRouter {
                   postRequestError: (m) => this.opts.postRequestError(m),
                   toolCallId: answerId,
                   clearPromptsInFlight: () => this.promptsInFlight.delete(sessionId),
+                  // B10-recovery: arm the hard 15s unconditional watchdog
+                  // so the user is never stuck "generating" indefinitely.
+                  // The webview receives `expired_question_recovery_failed`
+                  // with the answer text pre-filled if no response arrives.
+                  recoveryFromExpiredQuestion: true,
+                  expiredRecoveryAnswerText: value,
                 })
               } catch (promptErr) {
                 log.error("B10: failed to send expired question answer as prompt", promptErr)
+                this.opts.postMessage({
+                  type: "expired_question_recovery_failed",
+                  sessionId,
+                  answerText: value,
+                  reason: promptErr instanceof Error ? promptErr.message : "send_failed",
+                })
+              } finally {
+                // Defensive: clearPromptsInFlight may have already fired
+                // inside emitStreamStartAndArmWatchdogs, but if startPrompt
+                // early-returned (tab not found / server down / slot
+                // rejected) the callback was never invoked. Always clear.
                 this.promptsInFlight.delete(sessionId)
               }
+            } else {
+              log.warn(`expired question answer dropped: promptsInFlight already set for ${sessionId}; surfacing for manual resend`)
+              this.opts.postMessage({
+                type: "expired_question_recovery_failed",
+                sessionId,
+                answerText: value,
+                reason: "prompt_in_flight",
+              })
             }
           } else {
             // B9: Transient or unknown error — rollback optimistic state so
@@ -782,6 +815,17 @@ export class WebviewEventRouter {
     ["abort", async (_: Record<string, unknown>, sessionId?: string) => {
       if (sessionId) await this.opts.streamCoordinator.abort(sessionId, { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) })
     }],
+    ["probe_run_status", async (_: Record<string, unknown>, sessionId?: string) => {
+      // Host-authoritative status probe. Asks the server whether the run for
+      // this tab is still active and replies with run_status_result. The
+      // webview uses this to correct stale optimistic flags after errors,
+      // reconnects, or tab switches. Always replies, even on server failure,
+      // so the webview never hangs waiting.
+      if (!sessionId) return
+      await this.opts.streamCoordinator.probeActiveRun(sessionId, {
+        postMessage: (m) => this.opts.postMessage(m),
+      })
+    }],
     ["cancel_tool", async (msg: Record<string, unknown>, sessionId?: string) => {
       if (!sessionId) return
       await this.opts.streamCoordinator.cancelToolFromCard(sessionId, {
@@ -896,7 +940,20 @@ export class WebviewEventRouter {
       }
     }],
     ["rename_session", (msg: Record<string, unknown>, sessionId?: string) => {
-      if (sessionId && msg.name) { const ok = this.opts.sessionStore.rename(sessionId, msg.name as string); if (ok) this.opts.postMessage({ type: "session_renamed", sessionId, name: msg.name }) }
+      if (sessionId && msg.name) {
+        // Use setTitle (not rename/updateName) so the new title propagates
+        // to the opencode server via serverTitleUpdater. Without this, the
+        // webview's deduped title (e.g. "Fix bug (2)") would never reach
+        // the CLI, causing the CLI tab strip to show the un-deduped label
+        // ("Fix bug") — a mismatch when the user resumes the session from
+        // the CLI or opens it in a sibling window. setTitle also fires
+        // titleAppliedCallback (the D3 race-free IPC push) so the webview
+        // receives session_title_updated even if the rename originated
+        // elsewhere. Feedback-loop-safe: server's eventual session.updated
+        // echo is no-op'd by applyServerTitle's equality gate.
+        const ok = this.opts.sessionStore.setTitle(sessionId, msg.name as string)
+        if (ok) this.opts.postMessage({ type: "session_renamed", sessionId, name: msg.name })
+      }
     }],
     ["webview_ready", async () => {
       this.clearReadyTimeout()

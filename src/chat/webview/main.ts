@@ -13,7 +13,7 @@ import { isSwitchEventType, switchInsertIndex } from "../../session/activityCoal
 import { createTabBar, createTabContent, switchToTab, removeTabContent, patchTabLabel } from "./tabs"
 import { extractTitle, dedupeTitle } from "../../session/titleExtractor"
 import { setupModelDropdown } from "./model-dropdown"
-import { setVsCodeApi, setupToolKeyboardNav, webviewLog } from "./streamHandlers"
+import { setVsCodeApi, setupToolKeyboardNav, webviewLog, finalizeStreamingText } from "./streamHandlers"
 import { setErrorActionHandler as setCompsErrorActionHandler } from "./errorComponents"
 import { setErrorActionHandler as setRendererErrorActionHandler } from "./renderer"
 import { setMaxConcurrentStreams } from "./sendLogic"
@@ -3366,7 +3366,8 @@ function getVsCodeApi() {
             // streaming affordances left over from the dropped terminal
             // events. This is the recovery path for Gap #6 (stuck-streaming
             // after run completed during SSE outage).
-            streamHandlers.get(sid)?.finalizeStreamingText?.()
+            const activeList = getActiveMessageList(els)
+            if (activeList) finalizeStreamingText(activeList)
             streamHandlers.get(sid)?.finalizePendingTools?.()
           }
           stateManager.save()
@@ -4528,6 +4529,41 @@ function getVsCodeApi() {
           // B9: Transient error — revert to interactive state so user can retry.
           if (toolCallId) questionBar.unmarkQuestionAnswered(toolCallId)
         }
+      }],
+      ["expired_question_recovery_failed", (msg, sid) => {
+        // B10-recovery: The expired-question fallback startPrompt didn't
+        // produce a model response within the hard 15s watchdog (or threw
+        // outright). Pre-fill the prompt input with the user's original
+        // answer text so they can resend with a single keystroke — no
+        // close/reopen required. Then surface a friendly notice.
+        const answerText = typeof (msg as Record<string, unknown>).answerText === "string"
+          ? (msg as Record<string, unknown>).answerText as string
+          : ""
+        const reason = typeof (msg as Record<string, unknown>).reason === "string"
+          ? (msg as Record<string, unknown>).reason as string
+          : "unknown"
+        const targetSessionId = sid ?? stateManager.getState().activeSessionId ?? undefined
+        webviewLog(`[main] expired_question_recovery_failed (reason=${reason}); pre-filling prompt input with answer text (${answerText.length} chars)`)
+        if (answerText.length > 0) {
+          // Pre-fill the prompt input. If there's existing draft text,
+          // append a separator so we don't overwrite the user's work.
+          const existing = els.promptInput.value.trim()
+          els.promptInput.value = existing.length > 0
+            ? `${existing}\n\n[Resending expired-question answer]\n${answerText}`
+            : answerText
+          // Raise input event so autosize/character count update.
+          els.promptInput.dispatchEvent(new Event("input", { bubbles: true }))
+          els.promptInput.focus()
+          // Place cursor at end so the user can immediately edit/send.
+          const len = els.promptInput.value.length
+          try { els.promptInput.setSelectionRange(len, len) } catch { /* no-op */ }
+        }
+        // Friendly non-blocking notice — explicitly NOT an error card,
+        // because the user's answer text is preserved and ready to resend.
+        handleRequestError(
+          targetSessionId,
+          "This question expired on the server and the model didn't respond to the auto-resent answer. Your answer is in the input below — press Enter to send it as a new message.",
+        )
       }],
     ])
 

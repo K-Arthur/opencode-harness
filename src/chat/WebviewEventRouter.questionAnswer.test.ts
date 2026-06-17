@@ -192,4 +192,70 @@ describe("WebviewEventRouter — question_answer routing", () => {
       "B10: must return cached server session ID without re-verifying",
     )
   })
+
+  // ── B10-recovery: Hard unconditional watchdog for the expired-question
+  // fallback startPrompt. Previously the recovery inherited the fragile
+  // TTFB-timeout gating (shouldTriggerStartupTimeout returns false when
+  // firstActivityAt is set, which a stray tool_start can flip). The result
+  // was the user being stuck "generating" indefinitely after answering an
+  // expired question, with the only recovery being close/reopen the tab.
+  //
+  // The fix arms a SEPARATE 15s watchdog that fires UNCONDITIONALLY, and
+  // surfaces the original answer text to the webview so the user can resend
+  // manually without losing their input.
+  describe("B10-recovery: expired-question fallback hard watchdog", () => {
+    const catchBlock = handler.slice(handler.indexOf("catch (err)"))
+    const expiredBranch = catchBlock.slice(0, catchBlock.indexOf("} else"))
+
+    it("wraps the recovery startPrompt in try/finally so promptsInFlight cannot leak", () => {
+      // The structural signature: try { startPrompt } catch { ... } finally { delete }
+      assert.ok(
+        expiredBranch.includes("try {") && expiredBranch.includes("} finally {"),
+        "B10-recovery: expired branch must wrap startPrompt in try/finally",
+      )
+      assert.ok(
+        expiredBranch.includes("// Defensive: clearPromptsInFlight may have already fired"),
+        "B10-recovery: finally block must defensively clear promptsInFlight (covers startPrompt early-return paths)",
+      )
+    })
+
+    it("passes recoveryFromExpiredQuestion flag so StreamCoordinator arms the hard 15s watchdog", () => {
+      assert.ok(
+        expiredBranch.includes("recoveryFromExpiredQuestion: true"),
+        "B10-recovery: must set recoveryFromExpiredQuestion: true on the recovery startPrompt callbacks",
+      )
+    })
+
+    it("passes expiredRecoveryAnswerText so the watchdog can surface the original answer", () => {
+      assert.ok(
+        expiredBranch.includes("expiredRecoveryAnswerText: value"),
+        "B10-recovery: must thread the user's original answer text through to the watchdog",
+      )
+    })
+
+    it("on startPrompt throw: posts expired_question_recovery_failed with answerText (no silent loss)", () => {
+      const recoveryCatch = expiredBranch.slice(expiredBranch.indexOf("} catch (promptErr)"))
+      assert.ok(
+        recoveryCatch.includes('"expired_question_recovery_failed"'),
+        "B10-recovery: catch block must post expired_question_recovery_failed so the webview can pre-fill input",
+      )
+      assert.ok(
+        recoveryCatch.includes("answerText: value"),
+        "B10-recovery: catch block must include the original answer text in the recovery message",
+      )
+    })
+
+    it("when promptsInFlight is already set, posts recovery-failed instead of silently dropping", () => {
+      // The new else-branch covers the edge case where promptsInFlight was
+      // leaked from a previous run. Instead of silently dropping the answer
+      // (which is what forced tab close/reopen), surface it for manual resend.
+      // Look in the whole handler (not just `expiredBranch` slice) because the
+      // else is nested inside the expired if/else and would be truncated.
+      assert.ok(
+        handler.includes('"expired_question_recovery_failed"') &&
+          handler.includes('reason: "prompt_in_flight"'),
+        "B10-recovery: promptsInFlight-already-set branch must surface the answer text via recovery-failed message",
+      )
+    })
+  })
 })
