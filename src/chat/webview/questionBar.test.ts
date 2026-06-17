@@ -635,40 +635,40 @@ describe("questionBar", () => {
     markStale("nonexistent-id")
   })
 
-  it("B10: repopulateFromMessages marks old questions stale immediately", () => {
+  it("B10: repopulateFromMessages skips unanswered questions (ephemeral model)", () => {
     initQuestionBar(() => {})
-    setActiveSession("sess-old")
-    const oldTimestamp = Date.now() - (6 * 60 * 1000) // 6 minutes ago
-    repopulateFromMessages("sess-old", [{
-      id: "msg-old",
-      timestamp: oldTimestamp,
+    setActiveSession("sess-ephemeral")
+    repopulateFromMessages("sess-ephemeral", [{
+      id: "msg-unanswered",
       blocks: [{
         type: "question",
-        toolCallId: "q-old",
-        requestID: "req-old",
-        groups: [{ question: "Old?", options: ["A"], multiSelect: false }],
+        toolCallId: "q-unanswered",
+        requestID: "req-unanswered",
+        answered: false,
+        groups: [{ question: "Pending?", options: ["A"], multiSelect: false }],
       }],
     }])
-    const warning = document.querySelector('[data-question-id="q-old"] .question-bar-stale-warning')
-    assert.ok(warning, "old question gets staleness warning on repopulation")
+    const item = document.querySelector('[data-question-id="q-unanswered"]')
+    assert.ok(!item, "unanswered questions are NOT repopulated (server won't have them)")
   })
 
-  it("B10: repopulateFromMessages does not mark recent questions stale", () => {
+  it("B10: repopulateFromMessages restores answered questions (transcript record)", () => {
     initQuestionBar(() => {})
-    setActiveSession("sess-recent")
-    const recentTimestamp = Date.now() - 1000 // 1 second ago
-    repopulateFromMessages("sess-recent", [{
-      id: "msg-recent",
-      timestamp: recentTimestamp,
+    setActiveSession("sess-answered")
+    repopulateFromMessages("sess-answered", [{
+      id: "msg-answered",
       blocks: [{
         type: "question",
-        toolCallId: "q-recent",
-        requestID: "req-recent",
-        groups: [{ question: "Recent?", options: ["A"], multiSelect: false }],
+        toolCallId: "q-answered",
+        requestID: "req-answered",
+        answered: true,
+        answer: "A",
+        groups: [{ question: "Pick one", options: ["A", "B"], multiSelect: false }],
       }],
     }])
-    const warning = document.querySelector('[data-question-id="q-recent"] .question-bar-stale-warning')
-    assert.ok(!warning, "recent question does not get staleness warning")
+    const item = document.querySelector('[data-question-id="q-answered"]')
+    assert.ok(item, "answered questions are repopulated as transcript record")
+    assert.ok(item!.classList.contains("question-bar-item--answered"), "rendered in answered state")
   })
 
   it("B10: markQuestionAnswered clears the staleness timer", () => {

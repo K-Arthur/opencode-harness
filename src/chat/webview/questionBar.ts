@@ -130,7 +130,8 @@ export function addQuestion(block: QuestionBlock, messageId: string, envelopeSes
     allowFreeText: block.allowFreeText !== false,
     selections: new Map(),
     freeTextValue: "",
-    answered: false,
+    answered: block.answered === true,
+    submittedValue: block.answered === true ? (block as Record<string, unknown>).answer as string | undefined : undefined,
     cardReady: new Set(),
     _carouselIdx: 0,
     createdAt: Date.now(),
@@ -300,29 +301,31 @@ export function setActiveSession(sessionId: string): void {
 
 /**
  * Re-populate the question bar from a session's persisted message list.
- * Called on webview reload / init_state so pending questions survive page refresh.
+ * Only answered questions are restored (they're part of the transcript).
+ *
+ * Unanswered questions are intentionally skipped. The server's question
+ * registry is ephemeral (in-memory, workspace-scoped). On reconnect the
+ * server does not have pending questions — so the extension should not
+ * show them either. This prevents the "question exists in UI but server
+ * returns NotFoundError" mismatch.
  */
-export function repopulateFromMessages(sessionId: string, messages: Array<{ id: string; timestamp?: number; blocks: Array<{ type: string; toolCallId?: string; id?: string; requestID?: string; answered?: boolean; groups?: unknown[] }> }>): void {
+export function repopulateFromMessages(sessionId: string, messages: Array<{ id: string; timestamp?: number; blocks: Array<{ type: string; toolCallId?: string; id?: string; requestID?: string; answered?: boolean; answer?: string; answerSource?: string; groups?: unknown[] }> }>): void {
   if (!els) return
-  const staleIds: string[] = []
   for (const msg of messages) {
     if (!msg.blocks) continue
     for (const block of msg.blocks) {
-      if (block.type === "question" && !block.answered) {
+      // Only repopulate answered questions (transcript record).
+      // Unanswered questions are ephemeral — the server won't have them
+      // after reconnect, so showing them would be broken UX.
+      if (block.type === "question" && block.answered) {
         const toolCallId = block.toolCallId || block.id || ""
         if (!state.items.has(toolCallId)) {
           addQuestion(block as any, msg.id, sessionId)
-          // B10: Track questions from old messages for post-repopulation stale marking
-          if (msg.timestamp && Date.now() - msg.timestamp > STALE_THRESHOLD_MS) {
-            staleIds.push(toolCallId)
-          }
         }
       }
     }
   }
   setActiveSession(sessionId)
-  // B10: Mark old questions as stale AFTER setActiveSession re-renders the DOM
-  for (const id of staleIds) markStale(id)
 }
 
 export function clearAllQuestions(): void {
