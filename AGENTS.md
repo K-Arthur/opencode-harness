@@ -228,16 +228,31 @@ Error handling spans three layers: SDK errors (host-side), extension routing, an
 ### Error Flow
 1. **SDK errors** (`@opencode-ai/sdk/v2`) arrive at `ChatProvider.ts` as `server_error` events with shapes like `ProviderAuthError`, `APIError`, `MessageOutputLengthError`, `MessageAbortedError`
 2. **Host mapping**: `looksLikeSdkError()` checks for known error names/status codes → `mapOpencodeError()` in `opencodeErrorMapper.ts` produces a structured `ErrorContext` with category, severity, actions, and technical detail
-3. **Extension routing**: `ChatProvider.ts` sends `request_error` or `webview_request_error` messages to webview, optionally carrying the `ErrorContext`
-4. **Webview handling**: `main.ts` dispatches to `handleRequestError()` → `handleStreamError()` in `streamHandlers.ts` which:
-   - Renders an `ErrorDisplay` component (`errorComponents.ts`) with progressive disclosure
-   - Creates a persisted `ErrorBlock` in the message list via `createErrorBlock()` 
-   - Converts `ErrorContext.suggestedActions` → `ErrorActionButton[]` to flow into the block-level renderer
+3. **Host serialization**: `ChatProvider.postRequestError` converts the `ErrorContext` to a discriminated `WebviewErrorPayload` (`errorTypes.ts::toWebviewErrorPayload`) and posts it. The four payload variants (`auth_error`/`quota_error`/`infra_error`/`stream_error`) encode the host's classification.
+4. **Wire boundary (type-safe)**: `errorWire.ts` is the SOLE authority over the IPC boundary. `normalizeIncomingError(raw, sessionId)` validates inbound payloads and **never trusts a TypeScript `as` cast** — `null`, `"[object Object]"`, and partial objects degrade to a safe `UNKNOWN_INBOUND` fallback (Tier C) instead of crashing the renderer. It also derives the `ErrorTier` via `deriveTier` / `deriveTierFromPayload`.
+5. **Spatial routing**: `streamOrchestrator.handleRequestError` calls `routeErrorByTier(normalized, deps, store)` (in `errorTiers.ts`), which sends the error to one of three isolated surfaces (see **Spatial Error Tiers** below). Tier C falls through to the legacy in-stream path; Tier A/B claim dedicated surfaces and bypass the in-stream bubble.
+6. **Webview handling (Tier C)**: `handleRequestError()` → `handleStreamError()` in `streamHandlers.ts` renders an `ErrorDisplay` component (`errorComponents.ts`) with progressive disclosure and creates a persisted `ErrorBlock` in the message list.
+
+### Spatial Error Tiers (A / B / C)
+Errors are routed to a spatial surface by a single pure function — **never decided per call-site**. `deriveTier(ctx)` (host-side, from `ErrorContext`) and `deriveTierFromPayload(p)` (webview-side, from the payload `type`) are the only tier decision points. See `PLAN.md` Phase 2 for the full matrix.
+
+| Tier | Meaning | Surface | Component | Composer | Persistence |
+|---|---|---|---|---|---|
+| **A** | Hard block — quota cap, auth failure, unusable system | Persistent anchor in `#global-status-banner` | `TierAAnchor` (`errorTiers.ts`) | **Disabled** (`#prompt-input[disabled]`) until recovery | `ErrorStateStore` (survives panel toggle; reload-restore ready) |
+| **B** | Infrastructure — network drop, server timeout, transient 429/5xx | Ambient top-edge banner in `#global-status-banner`, dismissible, no focus steal | `GlobalStatusBanner` (`errorTiers.ts`) | Left enabled (user may queue) | Session-scoped (setState); not transcript-persistent |
+| **C** | Local stream fault — prompt-too-long, payload validation, model misconfig, policy refusal | Inline system turn in the conversation thread | `handleStreamError` / `renderErrorBlock` (legacy path) | Unaffected | Transcript (persisted message history) |
+
+- **Router**: `routeErrorByTier(normalized, deps, store)` in `errorTiers.ts`. The single injection point is `streamOrchestrator.handleRequestError`.
+- **Tier-A precedence**: a hard cap holds the banner slot over a later Tier-B banner (a quota cap is not displaced by a transient blip).
+- **Reconnect-while-drawn**: `applyErrorCleared(envelope, deps)` dismisses a live Tier-B banner but **never** clears a Tier-A hard cap (reconnect ≠ resolved quota/auth). Triggered by an `error_cleared` host envelope.
+- **Recovery CTAs**: action buttons forward to the host as `{type:'error_action', action, correlationId, code, metadata}`; `dismiss` is local for Tier B. Action types: `retry`, `edit`, `contact_support`, `view_details`, `dismiss`, `regenerate`, `switch_model`, `upgrade_plan`, `wait_for_reset`, `pick_model`.
+- **CSS**: `.tier-a-anchor` / `.tier-b-banner` in `blocks.css` — color comes ONLY from VS Code semantic tokens (`--vscode-errorForeground`, `--vscode-inputValidation-*Background/*Border`, `--vscode-notificationsWarningIcon-foreground`); severity refinement via `[data-severity]`. No primary hardcoded color literals.
+- **Wire envelopes** (`errorWire.ts`): `WebviewErrorPayload` (canonical), `ErrorBatchEnvelope` (`error_batch` — host coalesces multi-stream bursts), `ErrorClearedEnvelope` (`error_cleared` — dismiss Tier B on reconnect).
 
 ### Error Message Types (Host → Webview)
 | Type | Source | Handler | Notes |
 |---|---|---|---|
-| `request_error` | `MessagePostService.ts` | `main.ts:2275+` | Carries `errorContext` for structured display |
+| `request_error` | `MessagePostService.ts` | `main.ts:2275+` | Carries `errorContext` (a `WebviewErrorPayload`); validated by `normalizeIncomingError` in `errorWire.ts` |
 | `webview_request_error` | `ChatProvider.ts` | `main.ts:2272+` | Legacy path, now also carries `errorContext` |
 | `prompt_rejected` | `StreamCoordinator.ts` | `main.ts:2256+` | Shows rejection reason as in-stream error |
 | `show_error` | Any host code | `main.ts` | Shows arbitrary error message in-stream |
@@ -321,6 +336,7 @@ The `question` tool allows the LLM to ask the user questions during execution. Q
 
 ### Test Coverage
 - **Unit**: `blocks.test.ts`, `queue.test.ts`, `errorHandler.test.ts`, `errorTypes.test.ts`, `opencodeErrorMapper.test.ts`, `quotaMonitor.test.ts`, `toolLifecycle.test.ts`
+- **IPC boundary & tiers**: `errorWire.test.ts` (42 tests — `deriveTier` matrix, `deriveTierFromPayload`, `normalizeIncomingError` graceful degradation for null/`[object Object]`/malformed, host→wire→webview round-trip), `errorTiers.test.ts` (16 JSDOM tests — `routeErrorByTier` dispatch, `ErrorStateStore` persistence/reload, Tier-A precedence, reconnect-while-drawn, CTA forwarding)
 - **Question expiry**: `QuestionExpiryDetector.test.ts` (error categorization, staleness detection), `questionBar.test.ts` (markStale, createdAt, repopulation staleness), `WebviewEventRouter.questionAnswer.test.ts` (B10 structural tests)
 - **Visual**: `tests/visual/error-display.spec.ts` (rendering, actions, keyboard, states)
 - **E2E**: `tests/webview/error-handling-e2e.spec.ts` (full lifecycle: prompt_rejected, rate_limit, show_error, provider_error, duplicate coalescing)

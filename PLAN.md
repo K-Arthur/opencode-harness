@@ -1,7 +1,13 @@
 # PLAN — Frontend Error-Receiving Infrastructure (Blueprint)
 
-> **Status:** Blueprint / awaiting approval. No code changes written yet (per task Phase 1 directive).
-> **Methodology:** Supervisor + workers · plan-then-execute. This document is PHASE 1 (PLAN).
+> **Status:** IMPLEMENTING. Commits 1 & 2 (of §10) landed on `master`:
+>   - `56d85b4` feat(error-wire): type-safe IPC boundary (`errorWire.ts` + 42 tests)
+>   - `5be4217` feat(error-tiers): spatial tier components + live routing wire-up (`errorTiers.ts` + 16 tests, index.html slot, blocks.css tier classes, streamOrchestrator integration)
+>
+> **Done:** Phase 3 (discriminated union + boundary validation), Phase 4 routing/components/CSS, AGENTS.md error-handling section updated.
+> **Deferred follow-ups:** §5 host-side `postError` typed method (wire still carries the payload under `errorContext`, now validated on intake); §6 pre-existing ~30 raw CSS literals in `blocks.css` (not introduced by this work — another agent owns those files); plumb `vscode.getState/setState` into `ErrorStateStore` for Tier-A reload persistence (infrastructure is built + tested, currently in-memory in the orchestrator).
+>
+> **Methodology:** Supervisor + workers · plan-then-execute. PHASE 1 (PLAN) complete; PHASE 2 (EXECUTE) in progress.
 > **Author stance:** Principal Full-Stack Engineer, telemetry & error-propagation topology.
 
 ---
