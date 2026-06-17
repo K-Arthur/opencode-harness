@@ -238,7 +238,9 @@
 #changed-files-dropdown {
   z-index: calc(var(--z-modal, 300) + 20);
   max-width: calc(100vw - var(--space-4));
+  max-height: min(480px, calc(100vh - 100px)); /* Viewport-safe height */
   overscroll-behavior: contain;
+  overflow-y: auto;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.42), 0 0 0 1px var(--oc-border);
 }
 

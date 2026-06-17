@@ -166,11 +166,14 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     const margin = 8
     const r = btn.getBoundingClientRect()
     const dropdownW = Math.min(440, Math.max(240, window.innerWidth - margin * 2))
-    const estimatedHeight = Math.min(320, dropdown.getBoundingClientRect().height || 320)
+    // Cap estimatedHeight to CSS max-height (320px) to prevent viewport overflow
+    const cssMaxHeight = 320
+    const estimatedHeight = Math.min(cssMaxHeight, dropdown.getBoundingClientRect().height || cssMaxHeight)
     const spaceBelow = window.innerHeight - r.bottom - margin
     const spaceAbove = r.top - margin
     const openAbove = spaceBelow < Math.min(200, estimatedHeight) && spaceAbove > spaceBelow
-    const maxHeight = Math.max(200, Math.floor((openAbove ? spaceAbove : spaceBelow) - 4))
+    // Ensure maxHeight never exceeds CSS max-height to prevent viewport overflow
+    const maxHeight = Math.min(cssMaxHeight, Math.max(200, Math.floor((openAbove ? spaceAbove : spaceBelow) - 4)))
     const leftEdge = Math.min(
       Math.max(margin, r.right - dropdownW),
       Math.max(margin, window.innerWidth - dropdownW - margin),

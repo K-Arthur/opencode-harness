@@ -63,11 +63,14 @@ export function setupVariantSelector(els: ElementRefs, callbacks: VariantSelecto
     const margin = 8
     const r = btn.getBoundingClientRect()
     const dropdownW = Math.min(300, Math.max(160, window.innerWidth - margin * 2))
-    const estimatedHeight = Math.min(240, dropdown.getBoundingClientRect().height || 240)
+    // Cap estimatedHeight to CSS max-height (240px) to prevent viewport overflow
+    const cssMaxHeight = 240
+    const estimatedHeight = Math.min(cssMaxHeight, dropdown.getBoundingClientRect().height || cssMaxHeight)
     const spaceBelow = window.innerHeight - r.bottom - margin
     const spaceAbove = r.top - margin
     const openAbove = spaceBelow < Math.min(160, estimatedHeight) && spaceAbove > spaceBelow
-    const maxHeight = Math.max(160, Math.floor((openAbove ? spaceAbove : spaceBelow) - 4))
+    // Ensure maxHeight never exceeds CSS max-height to prevent viewport overflow
+    const maxHeight = Math.min(cssMaxHeight, Math.max(160, Math.floor((openAbove ? spaceAbove : spaceBelow) - 4)))
     const leftEdge = Math.min(
       Math.max(margin, r.right - dropdownW),
       Math.max(margin, window.innerWidth - dropdownW - margin),

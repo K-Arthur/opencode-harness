@@ -322,7 +322,22 @@
   --size-tab-min: 80px;
   --size-tab-max: 160px;
 
-  /* ─── Z-Index Scale ─── */
+  /* ─── Z-Index Scale ───────────────────────────────────────────────
+   *
+   * Layering contract (low → high):
+   *   0   --z-base          Base layer (normal flow)
+   *   50  --z-dropdown      Dropdowns, menus, popovers (relative to trigger)
+   *  100  --z-sticky        Sticky headers, sticky input area
+   *  200  --z-modal-backdrop  Modal overlay / backdrop
+   *  300  --z-modal         Modal content panels
+   *  350  --z-modal-menu    Menus opened FROM inside a modal (portaled to <body>)
+   *  400  --z-tooltip       Tooltips, toast notifications
+   *  500  --z-lightbox      Image lightbox / full-screen overlay
+   *
+   * IMPORTANT: Use `isolation: isolate` on container boundaries to prevent
+   * stacking contexts from leaking across sibling regions (e.g., side panel
+   * vs. chat area). Never use raw z-index values above 1000.
+   * ─────────────────────────────────────────────────────────────────── */
   --z-base: 0;
   --z-dropdown: 150;
   --z-sticky: 100;
