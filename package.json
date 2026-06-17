@@ -9,7 +9,7 @@
   },
   "description": "Open-source AI coding agent for VS Code. Chat, refactor, debug, and write code using Claude, GPT, Gemini, and 75+ models. Includes cost tracking, custom themes, permission controls, and checkpoint rollback.",
   "icon": "media/opencode-icon-256.png",
-  "version": "0.3.80",
+  "version": "0.3.82",
   "engines": {
     "vscode": "^1.98.0"
   },
@@ -1001,10 +1001,10 @@
             "per-tab"
           ],
           "enumDescriptions": [
-            "All tabs share one opencode server process (default, recommended).",
-            "Each tab gets its own opencode server process for isolation (experimental, requires more memory)."
+            "All tabs share one opencode server process — uses less memory, safe for most workflows.",
+            "Each tab gets its own opencode server process — full crash isolation but uses more memory."
           ],
-          "description": "How to isolate AI sessions. 'shared' uses one server for all tabs. 'per-tab' spawns a separate server per tab for crash isolation (experimental)."
+          "description": "Process isolation strategy. 'shared' (default) = one server for all tabs. 'per-tab' = each tab gets its own server process for full crash isolation."
         },
         "opencode.sessions.processIdleTimeoutMinutes": {
           "type": "number",
@@ -1122,20 +1122,6 @@
           "scope": "machine",
           "default": "",
           "markdownDescription": "Optional override command to record the microphone to a WAV file. Placeholders: `{output}` (target WAV path), `{duration}` (max seconds). The command should record the default input device and stop on SIGINT. Leave blank to auto-detect `rec` (sox), `arecord`, or `ffmpeg`. Machine-scoped for security."
-        },
-        "opencode.sessions.processStrategy": {
-          "type": "string",
-          "scope": "window",
-          "default": "shared",
-          "enum": [
-            "shared",
-            "per-tab"
-          ],
-          "enumDescriptions": [
-            "All tabs share one opencode server process — uses less memory, safe for most workflows.",
-            "Each tab gets its own opencode server process — full crash isolation but uses more memory."
-          ],
-          "description": "Process isolation strategy. 'shared' (default) = one server for all tabs. 'per-tab' = each tab gets its own server process for full crash isolation."
         }
       }
     }
