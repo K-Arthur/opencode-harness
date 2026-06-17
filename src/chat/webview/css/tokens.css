@@ -160,12 +160,12 @@
   --radius-xl: 10px;
   --radius-full: 9999px;
 
-  /* ─── Shadows ─── */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.15);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.2);
-  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.5);
-  --shadow-mission: 0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--oc-glass-border);
+  /* ─── Shadows (flat, VS Code-native — minimal depth) ─── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.16), 0 1px 4px rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.24);
+  --shadow-mission: 0 4px 20px rgba(0, 0, 0, 0.2), 0 0 0 1px var(--oc-glass-border);
   /* Accent glow — used by primary buttons & focused affordances.
      Defined late enough to reference --oc-accent-border/glow tokens below. */
   --shadow-glow: 0 0 0 1px var(--oc-accent-border, transparent),
@@ -311,6 +311,19 @@
   --oc-syn-operator: var(--vscode-symbolIcon-operatorForeground, #d4d4d4);
   --oc-syn-punctuation: var(--vscode-editor-foreground, #d4d4d4);
 
+  /* ─── Unified Border Widths ─── */
+  --border-width-thin: 1px;
+  --border-width-medium: 2px;
+  --border-width-thick: 3px;
+
+  /* ─── Unified Panel/Surface Tokens ─── */
+  --panel-bg: var(--oc-editor-bg);
+  --panel-border: 1px solid var(--color-border);
+  --panel-radius: var(--radius-md);
+  --panel-padding: var(--space-3);
+  --panel-header-height: 32px;
+  --panel-header-padding: var(--space-1-5) var(--space-3);
+
   /* ─── Sidebar Width ─── */
   --sidebar-width: 320px;
 
@@ -383,6 +396,42 @@
   --modal-bg: var(--oc-glass-bg);
   --modal-border: var(--oc-glass-border);
   --modal-shadow: var(--shadow-xl);
+
+  /* ─── Accordion/Sidebar Panel Tokens ─── */
+  --accordion-header-height: 32px;
+  --accordion-header-padding: var(--space-1-5) var(--space-3);
+  --accordion-header-font: var(--text-xs);
+  --accordion-header-weight: 600;
+  --accordion-header-transform: uppercase;
+  --accordion-header-spacing: 0.05em;
+  --accordion-chevron-size: 8px;
+  --accordion-content-padding: var(--space-3);
+
+  /* ─── Timeline Tokens ─── */
+  --timeline-width: 140px;
+  --timeline-item-padding: var(--space-1-5) var(--space-2);
+  --timeline-item-radius: var(--radius-md);
+  --timeline-item-gap: var(--space-0-5);
+  --timeline-dot-size: 6px;
+
+  /* ─── Context Usage Tokens ─── */
+  --ctx-bar-height: 24px;
+  --ctx-track-width: 80px;
+  --ctx-track-height: var(--space-1);
+  --ctx-dot-size: var(--space-2);
+
+  /* ─── Files Changed Dropdown Tokens ─── */
+  --cf-dropdown-max-height: min(480px, calc(100vh - 100px));
+  --cf-item-indent: var(--space-4);
+  --cf-chevron-size: var(--cf-dir-chevron-size, 7px);
+  --cf-stat-radius: var(--radius-xs);
+  --cf-stat-padding: 1px var(--space-1-5);
+
+  /* ─── Pinned Prompt Tokens ─── */
+  --rp-card-radius: var(--radius-md);
+  --rp-card-padding: var(--space-1-5) var(--space-2);
+  --rp-chip-radius: var(--radius-sm);
+  --rp-chip-padding: 1px var(--space-1);
 }
 
 /* ─── Theme Overrides ─── */
@@ -390,12 +439,12 @@
 .vscode-light {
   --oc-glass-bg: rgba(255, 255, 255, 0.85);
 
-  /* Shadows: reduce opacity for light backgrounds */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
-  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.18);
-  --shadow-mission: 0 10px 30px -10px rgba(0, 0, 0, 0.15), 0 0 0 1px var(--oc-glass-border);
+  /* Shadows: minimal depth for light backgrounds */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.1);
+  --shadow-mission: 0 4px 20px rgba(0, 0, 0, 0.08), 0 0 0 1px var(--oc-glass-border);
   --jump-btn-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 
   /* Message bubbles: light-appropriate backgrounds instead of dark-themed values

@@ -1,24 +1,26 @@
-/* Context usage bar in status strip */
+/* Context usage bar in status strip — ultra-thin minimalist metric indicator */
 .context-usage-bar {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  padding: var(--space-0-5) var(--space-2);
+  padding: var(--space-0-5) var(--space-1-5);
   cursor: pointer;
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   border-radius: var(--radius-sm);
-  transition: background var(--duration-fast, 0.2s), outline-color var(--duration-fast, 0.2s);
-  outline: 1px solid transparent;
+  transition: background var(--duration-fast) var(--ease-out), outline-color var(--duration-fast) var(--ease-out);
+  outline: var(--border-width-thin) solid transparent;
+  min-height: var(--ctx-bar-height, 24px);
 }
 
 .context-usage-bar:hover {
-  background: var(--oc-glass-bg, rgba(255, 255, 255, 0.05));
+  background: var(--oc-list-hover);
 }
 
 .context-usage-bar:focus-visible {
-  outline-color: var(--vscode-focusBorder, #007fd4);
+  outline-color: var(--oc-focus, var(--vscode-focusBorder, #007fd4));
+  outline-offset: -1px;
 }
 
 .context-usage-bar.hidden { display: none; }
@@ -34,8 +36,8 @@
 }
 
 .context-usage-label {
-  font-size: var(--text-xs);
-  color: var(--oc-muted);
+  font-size: var(--text-2xs);
+  color: var(--color-muted);
   font-weight: 500;
   flex: 0 1 auto;
   min-width: 0;
@@ -48,9 +50,9 @@
 
 /* Status dot: visible only in minimal mode */
 .context-usage-dot {
-  width: var(--space-2);
-  height: var(--space-2);
-  border-radius: 50%;
+  width: var(--ctx-dot-size, var(--space-2));
+  height: var(--ctx-dot-size, var(--space-2));
+  border-radius: var(--radius-full);
   flex-shrink: 0;
   display: none;
   background: var(--usage-good, #3fb950);
@@ -99,13 +101,13 @@
   display: none;
 }
 
-/* Custom progress track + fill — replaces native <progress> */
+/* Custom progress track + fill — ultra-thin progress tracker */
 .context-usage-track {
-  width: 80px;
+  width: var(--ctx-track-width, 80px);
   min-width: 40px;
-  height: var(--space-1);
+  height: var(--ctx-track-height, var(--space-1));
   border-radius: var(--radius-full);
-  background: var(--oc-editor-bg, rgba(128, 128, 128, 0.2));
+  background: var(--oc-editor-bg, rgba(128, 128, 128, 0.15));
   overflow: hidden;
   flex: 0 0 auto;
 }
@@ -169,30 +171,30 @@
   margin: 0 var(--space-2) var(--space-1);
   padding: var(--space-0-5) var(--space-2);
   font-size: var(--text-2xs);
-  color: var(--oc-muted);
+  color: var(--color-muted);
   background: var(--vscode-editorWidget-background, var(--oc-glass-bg));
-  border: 1px solid var(--vscode-widget-border, var(--oc-border));
-  border-radius: var(--radius-sm);
+  border: var(--border-width-thin) solid var(--vscode-widget-border, var(--oc-border));
+  border-radius: var(--rp-chip-radius, var(--radius-sm));
   cursor: pointer;
   overflow: hidden;
   flex-shrink: 0;
   min-height: var(--size-target-min);
   white-space: nowrap;
   outline: none;
-  transition: background-color var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast);
+  transition: background var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 
 .cf-strip:hover {
-  color: var(--oc-fg);
+  color: var(--color-fg);
   background: var(--vscode-list-hoverBackground, var(--oc-glass-bg));
-  border-color: var(--vscode-focusBorder, var(--oc-border));
+  border-color: var(--oc-focus, var(--vscode-focusBorder, var(--oc-border)));
 }
-.cf-strip:focus-visible { outline: 1px solid var(--vscode-focusBorder, #007fd4); outline-offset: -1px; }
+.cf-strip:focus-visible { outline: 2px solid var(--oc-focus, var(--vscode-focusBorder, #007fd4)); outline-offset: -1px; }
 .cf-strip.hidden { display: none; }
 
 .cf-strip-icon { display: flex; align-items: center; color: var(--oc-accent); flex-shrink: 0; }
-.cf-strip-label { flex-shrink: 0; font-weight: 600; color: var(--oc-fg); }
-.cf-strip-divider { color: var(--oc-muted); opacity: 0.4; flex-shrink: 0; }
+.cf-strip-label { flex-shrink: 0; font-weight: 600; color: var(--color-fg); }
+.cf-strip-divider { color: var(--color-muted); opacity: 0.4; flex-shrink: 0; }
 
 /* Aggregate +added/−removed totals next to the count label */
 .cf-strip-stats {
@@ -238,10 +240,15 @@
 #changed-files-dropdown {
   z-index: calc(var(--z-modal, 300) + 20);
   max-width: calc(100vw - var(--space-4));
-  max-height: min(480px, calc(100vh - 100px)); /* Viewport-safe height */
+  max-height: var(--cf-dropdown-max-height, min(480px, calc(100vh - 100px)));
   overscroll-behavior: contain;
   overflow-y: auto;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.42), 0 0 0 1px var(--oc-border);
+  box-shadow: var(--shadow-lg);
+  border: var(--border-width-thin) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--oc-glass-bg);
+  backdrop-filter: var(--blur-surface);
+  -webkit-backdrop-filter: var(--blur-surface);
 }
 
 /* COLOR states for per-tab monitor (tabs.ts) */

@@ -329,6 +329,26 @@ The `question` tool allows the LLM to ask the user questions during execution. Q
 
 CSS variables defined in `src/chat/webview/css/tokens.css` with VS Code token fallbacks. ThemeManager overrides injected via `applyThemeVars()`. Theme presets only style the chat webview — must NOT contribute VS Code workbench themes or call `workbench.action.setTheme`.
 
+### Unified Design System Tokens (tokens.css)
+
+All components share a strict, coordinated token system:
+
+- **Spacing:** 4px baseline grid (`--space-0` through `--space-16`)
+- **Border widths:** `--border-width-thin` (1px), `--border-width-medium` (2px), `--border-width-thick` (3px)
+- **Border radius:** `--radius-xs` (2px) through `--radius-full` (9999px)
+- **Shadows:** Flat, VS Code-native — minimal depth (`--shadow-sm` through `--shadow-xl`, `--shadow-mission`)
+- **Typography:** Dual scale (`--text-2xs` through `--text-2xl`, `--oc-font-size-2xs` through `--oc-font-size-2xl`)
+- **Z-index scale:** Layered contract from `--z-base` (0) through `--z-lightbox` (500) with explicit stacking contexts
+
+#### Component-Specific Tokens
+- **Panels:** `--panel-bg`, `--panel-border`, `--panel-radius`, `--panel-padding`, `--panel-header-height`
+- **Accordion/Sidebar:** `--accordion-header-height`, `--accordion-header-padding`, `--accordion-chevron-size`
+- **Timeline:** `--timeline-width`, `--timeline-item-padding`, `--timeline-dot-size`
+- **Context Usage:** `--ctx-bar-height`, `--ctx-track-width`, `--ctx-track-height`, `--ctx-dot-size`
+- **Files Changed:** `--cf-dropdown-max-height`, `--cf-item-indent`, `--cf-chevron-size`, `--cf-stat-radius`
+- **Pinned Prompts:** `--rp-card-radius`, `--rp-card-padding`, `--rp-chip-radius`
+
+### Theme System
 - **Theme state:** `src/theme/ThemeManager.ts` — presets, CLI file discovery, merge (preset → CLI → user), 30s TTL cache, FS watchers
 - **Theme controller:** `src/chat/ThemeController.ts` — config persistence, validation, webview push (uses `isValidCssColor`)
 - **Color validation:** `src/utils/colorValidation.ts` — shared `isValidCssColor()` accepting hex (#RGB/#RRGGBB/#RRGGBBAA), rgba, hsla, var(), transparent, color-mix()
