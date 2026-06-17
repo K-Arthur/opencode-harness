@@ -5,7 +5,7 @@ import type { QuestionBlock } from "./types"
 import {
   initQuestionBar, addQuestion, clearAllQuestions, setActiveSession, removeQuestion,
   updateQuestion, markQuestionAnswered, unmarkQuestionAnswered, clearForSession,
-  hasQuestionInState, hasQuestionRenderedInBar, reconcileBar,
+  hasQuestionInState, hasQuestionRenderedInBar, reconcileBar, repopulateFromMessages,
 } from "./questionBar"
 
 function setupDom() {
@@ -569,5 +569,125 @@ describe("questionBar", () => {
 
     const progress = document.querySelector(".qbar-carousel-progress")
     assert.ok(progress?.textContent?.includes("0/3 answered"), "starts with 0/3 answered")
+  })
+
+  // ── B10: Staleness timeout ────────────────────────────────────────────
+  it("B10: addQuestion records createdAt timestamp on the item", () => {
+    initQuestionBar(() => {})
+    const before = Date.now()
+    addQuestion(makeBlock({ id: "q-ts", toolCallId: "q-ts" }), "msg-ts")
+    const after = Date.now()
+    const { getQuestionItem } = require("./questionBar")
+    const item = getQuestionItem("q-ts")
+    assert.ok(item, "item exists")
+    assert.ok(item.createdAt >= before && item.createdAt <= after, "createdAt is set to current time")
+  })
+
+  it("B10: markStale shows staleness warning UI on the question item", () => {
+    initQuestionBar(() => {})
+    addQuestion(makeBlock({ id: "q-stale", toolCallId: "q-stale" }), "msg-stale")
+    const { markStale } = require("./questionBar")
+    markStale("q-stale")
+    const warning = document.querySelector('[data-question-id="q-stale"] .question-bar-stale-warning')
+    assert.ok(warning, "staleness warning element exists")
+    assert.ok(warning!.textContent!.includes("may have expired"), "warning text mentions expiry")
+  })
+
+  it("B10: staleness warning includes 'Continue without answering' button", () => {
+    initQuestionBar(() => {})
+    addQuestion(makeBlock({ id: "q-sw", toolCallId: "q-sw", requestID: "req-sw" }), "msg-sw")
+    const { markStale } = require("./questionBar")
+    markStale("q-sw")
+    const continueBtn = document.querySelector('[data-question-id="q-sw"] .question-bar-continue-btn') as HTMLButtonElement
+    assert.ok(continueBtn, "continue button exists")
+    assert.ok(continueBtn.textContent!.includes("Continue"), "button text includes Continue")
+  })
+
+  it("B10: 'Continue without answering' posts question_answer with source=skip", () => {
+    const posted: Array<Record<string, unknown>> = []
+    initQuestionBar((m) => posted.push(m))
+    addQuestion(makeBlock({ id: "q-cont", toolCallId: "q-cont", requestID: "req-cont" }), "msg-cont")
+    const { markStale } = require("./questionBar")
+    markStale("q-cont")
+    const continueBtn = document.querySelector('[data-question-id="q-cont"] .question-bar-continue-btn') as HTMLButtonElement
+    continueBtn.click()
+    const answer = posted.find((m) => m.type === "question_answer")
+    assert.ok(answer, "question_answer was posted")
+    assert.equal(answer!.source, "skip", "source is skip")
+    assert.equal(answer!.value, "Continue without answering", "value indicates continuation")
+    assert.equal(answer!.requestID, "req-cont", "requestID preserved")
+  })
+
+  it("B10: markStale is a no-op for already-answered questions", () => {
+    initQuestionBar(() => {})
+    addQuestion(makeBlock({ id: "q-ans", toolCallId: "q-ans" }), "msg-ans")
+    const { markStale, markQuestionAnswered } = require("./questionBar")
+    markQuestionAnswered("q-ans", "My answer")
+    markStale("q-ans")
+    const warning = document.querySelector('[data-question-id="q-ans"] .question-bar-stale-warning')
+    assert.ok(!warning, "no staleness warning on answered question")
+  })
+
+  it("B10: markStale is a no-op for unknown toolCallId", () => {
+    initQuestionBar(() => {})
+    const { markStale } = require("./questionBar")
+    // Should not throw
+    markStale("nonexistent-id")
+  })
+
+  it("B10: repopulateFromMessages marks old questions stale immediately", () => {
+    initQuestionBar(() => {})
+    setActiveSession("sess-old")
+    const oldTimestamp = Date.now() - (6 * 60 * 1000) // 6 minutes ago
+    repopulateFromMessages("sess-old", [{
+      id: "msg-old",
+      timestamp: oldTimestamp,
+      blocks: [{
+        type: "question",
+        toolCallId: "q-old",
+        requestID: "req-old",
+        groups: [{ question: "Old?", options: ["A"], multiSelect: false }],
+      }],
+    }])
+    const warning = document.querySelector('[data-question-id="q-old"] .question-bar-stale-warning')
+    assert.ok(warning, "old question gets staleness warning on repopulation")
+  })
+
+  it("B10: repopulateFromMessages does not mark recent questions stale", () => {
+    initQuestionBar(() => {})
+    setActiveSession("sess-recent")
+    const recentTimestamp = Date.now() - 1000 // 1 second ago
+    repopulateFromMessages("sess-recent", [{
+      id: "msg-recent",
+      timestamp: recentTimestamp,
+      blocks: [{
+        type: "question",
+        toolCallId: "q-recent",
+        requestID: "req-recent",
+        groups: [{ question: "Recent?", options: ["A"], multiSelect: false }],
+      }],
+    }])
+    const warning = document.querySelector('[data-question-id="q-recent"] .question-bar-stale-warning')
+    assert.ok(!warning, "recent question does not get staleness warning")
+  })
+
+  it("B10: markQuestionAnswered clears the staleness timer", () => {
+    initQuestionBar(() => {})
+    addQuestion(makeBlock({ id: "q-timer", toolCallId: "q-timer" }), "msg-timer")
+    // Answer the question — should clear the timer
+    markQuestionAnswered("q-timer", "My answer")
+    // Verify item is answered (timer cleanup is internal, but we verify no crash)
+    const { getQuestionItem } = require("./questionBar")
+    const item = getQuestionItem("q-timer")
+    assert.ok(item?.answered, "item is marked answered")
+  })
+
+  it("B10: removeQuestion clears the staleness timer", () => {
+    initQuestionBar(() => {})
+    addQuestion(makeBlock({ id: "q-rem", toolCallId: "q-rem" }), "msg-rem")
+    removeQuestion("q-rem")
+    const { getQuestionItem } = require("./questionBar")
+    const item = getQuestionItem("q-rem")
+    assert.ok(!item, "item is removed")
   })
 })

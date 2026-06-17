@@ -24,6 +24,9 @@ export interface QuestionBarItem {
   cardReady: Set<number>
   /** Current carousel index for card-by-card navigation. */
   _carouselIdx: number
+  /** Timestamp when this question was first added to the bar. Used for
+   *  staleness detection (B10). */
+  createdAt: number
 }
 
 interface QuestionBarState {
@@ -43,6 +46,12 @@ const state: QuestionBarState = {
   postMessage: null,
 }
 
+/** Per-question staleness timers. Cleared on answer/remove. */
+const staleTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+/** B10: Staleness threshold — questions older than this are auto-flagged. */
+const STALE_THRESHOLD_MS = 5 * 60 * 1000 // 5 minutes
+
 let _activeSessionId = ""
 
 let els: QuestionBarElements | null = null
@@ -52,6 +61,27 @@ let els: QuestionBarElements | null = null
 // treated as active so single-session flows keep working.
 function isActiveItem(item: QuestionBarItem): boolean {
   return !_activeSessionId || item.sessionId === _activeSessionId
+}
+
+/** B10: Arm a staleness timer for a question. When it fires, markStale is called. */
+function armStalenessTimer(toolCallId: string): void {
+  clearStalenessTimer(toolCallId)
+  const timer = setTimeout(() => {
+    staleTimers.delete(toolCallId)
+    markStale(toolCallId)
+  }, STALE_THRESHOLD_MS)
+  // Don't hold the process open if this is the only timer
+  if (typeof timer === "object" && "unref" in timer) timer.unref()
+  staleTimers.set(toolCallId, timer)
+}
+
+/** B10: Clear a staleness timer (called on answer/remove). */
+function clearStalenessTimer(toolCallId: string): void {
+  const timer = staleTimers.get(toolCallId)
+  if (timer) {
+    clearTimeout(timer)
+    staleTimers.delete(toolCallId)
+  }
 }
 
 export function initQuestionBar(postMessage: (msg: Record<string, unknown>) => void): void {
@@ -103,6 +133,7 @@ export function addQuestion(block: QuestionBlock, messageId: string, envelopeSes
     answered: false,
     cardReady: new Set(),
     _carouselIdx: 0,
+    createdAt: Date.now(),
   }
 
   for (let i = 0; i < item.groups.length; i++) {
@@ -113,6 +144,10 @@ export function addQuestion(block: QuestionBlock, messageId: string, envelopeSes
   renderBarItem(item)
   updateVisibility()
   updateSubmitState()
+
+  // B10: Arm staleness timer — after STALE_THRESHOLD_MS, show warning UI
+  armStalenessTimer(toolCallId)
+
   diag(`addQuestion: ${toolCallId} sessionId=${item.sessionId} groups=${item.groups.length}`)
 }
 
@@ -167,6 +202,7 @@ export function removeQuestion(toolCallIdOrRequestId: string): void {
     }
   }
   state.items.delete(key)
+  clearStalenessTimer(key)
   const el = els.items.querySelector(`[data-question-id="${key}"]`)
   if (el) el.remove()
   updateVisibility()
@@ -175,6 +211,7 @@ export function removeQuestion(toolCallIdOrRequestId: string): void {
 
 export function markQuestionAnswered(toolCallId: string, submittedValue?: string): void {
   if (!els) return
+  clearStalenessTimer(toolCallId)
   const item = state.items.get(toolCallId)
   if (item) {
     item.answered = true
@@ -265,28 +302,32 @@ export function setActiveSession(sessionId: string): void {
  * Re-populate the question bar from a session's persisted message list.
  * Called on webview reload / init_state so pending questions survive page refresh.
  */
-export function repopulateFromMessages(sessionId: string, messages: Array<{ id: string; blocks: Array<{ type: string; toolCallId?: string; id?: string; answered?: boolean; groups?: unknown[] }> }>): void {
+export function repopulateFromMessages(sessionId: string, messages: Array<{ id: string; timestamp?: number; blocks: Array<{ type: string; toolCallId?: string; id?: string; requestID?: string; answered?: boolean; groups?: unknown[] }> }>): void {
   if (!els) return
+  const staleIds: string[] = []
   for (const msg of messages) {
     if (!msg.blocks) continue
     for (const block of msg.blocks) {
       if (block.type === "question" && !block.answered) {
         const toolCallId = block.toolCallId || block.id || ""
         if (!state.items.has(toolCallId)) {
-          // Pass sessionId as the envelope sid: a persisted block with no
-          // sessionId of its own must attribute to the session being
-          // repopulated, not whatever tab _activeSessionId still points at
-          // (the old tab — setActiveSession(sessionId) hasn't run yet here).
           addQuestion(block as any, msg.id, sessionId)
+          // B10: Track questions from old messages for post-repopulation stale marking
+          if (msg.timestamp && Date.now() - msg.timestamp > STALE_THRESHOLD_MS) {
+            staleIds.push(toolCallId)
+          }
         }
       }
     }
   }
   setActiveSession(sessionId)
+  // B10: Mark old questions as stale AFTER setActiveSession re-renders the DOM
+  for (const id of staleIds) markStale(id)
 }
 
 export function clearAllQuestions(): void {
   if (!els) return
+  for (const key of state.items.keys()) clearStalenessTimer(key)
   state.items.clear()
   els.items.innerHTML = ""
   updateVisibility()
@@ -304,6 +345,7 @@ export function clearForSession(sessionId: string): void {
   }
   for (const key of toRemove) {
     state.items.delete(key)
+    clearStalenessTimer(key)
     const el = els.items.querySelector(`[data-question-id="${key}"]`)
     if (el) el.remove()
   }
@@ -321,6 +363,68 @@ export function hasQuestionRenderedInBar(toolCallId: string): boolean {
 
 export function getBarItem(toolCallId: string): QuestionBarItem | undefined {
   return state.items.get(toolCallId)
+}
+
+/** Alias for getBarItem — used by tests to access item state. */
+export function getQuestionItem(toolCallId: string): QuestionBarItem | undefined {
+  return state.items.get(toolCallId)
+}
+
+/**
+ * B10: Mark a question as stale (likely expired on the server). Shows a
+ * warning banner on the question card with a "Continue without answering"
+ * button that lets the user dismiss the question and let the model proceed.
+ *
+ * No-op for answered questions or unknown toolCallIds.
+ */
+export function markStale(toolCallId: string): void {
+  if (!els) return
+  const item = state.items.get(toolCallId)
+  if (!item || item.answered) return
+
+  const el = els.items.querySelector(`[data-question-id="${toolCallId}"]`)
+  if (!el) return
+
+  // Don't double-add the warning
+  if (el.querySelector(".question-bar-stale-warning")) return
+
+  const warning = document.createElement("div")
+  warning.className = "question-bar-stale-warning"
+  warning.setAttribute("role", "alert")
+
+  const icon = document.createElement("span")
+  icon.className = "question-bar-stale-icon"
+  icon.textContent = "\u26A0\uFE0F "
+  warning.appendChild(icon)
+
+  const text = document.createElement("span")
+  text.textContent = "This question may have expired on the server."
+  warning.appendChild(text)
+
+  const continueBtn = document.createElement("button")
+  continueBtn.type = "button"
+  continueBtn.className = "question-bar-continue-btn"
+  continueBtn.textContent = "Continue without answering"
+  continueBtn.setAttribute("aria-label", "Continue without answering this question")
+  continueBtn.addEventListener("click", (e) => {
+    e.stopPropagation()
+    if (item.answered || !state.postMessage) return
+    item.answered = true
+    state.postMessage({
+      type: "question_answer",
+      sessionId: item.sessionId,
+      toolCallId: item.toolCallId,
+      requestID: item.requestID,
+      messageId: item.messageId,
+      value: "Continue without answering",
+      source: "skip",
+    })
+    markQuestionAnswered(item.toolCallId, "Continue without answering")
+  })
+  warning.appendChild(continueBtn)
+
+  el.appendChild(warning)
+  diag(`markStale: ${toolCallId} — showed staleness warning`)
 }
 
 /** Check if a specific question has been registered in the bar's internal state

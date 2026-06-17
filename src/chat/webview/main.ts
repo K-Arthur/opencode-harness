@@ -2174,7 +2174,7 @@ function getVsCodeApi() {
     // in `state.items`, which is empty for never-visited tabs. Then
     // setActiveSession filters the rendered set to the active session.
     const switchedMessages = stateManager.getSession(tabId)?.messages ?? []
-    questionBar.repopulateFromMessages(tabId, switchedMessages as Array<{ id: string; blocks: Array<{ type: string; toolCallId?: string; id?: string; answered?: boolean; groups?: unknown[] }> }>)
+    questionBar.repopulateFromMessages(tabId, switchedMessages as Array<{ id: string; timestamp?: number; blocks: Array<{ type: string; toolCallId?: string; id?: string; requestID?: string; answered?: boolean; groups?: unknown[] }> }>)
     questionBar.setActiveSession(tabId)
     // Reconcile bar: clean stale answered items and restore any missing
     // from the active session that fell out of the DOM.
@@ -2789,8 +2789,8 @@ function getVsCodeApi() {
       }],
       ["stream_start", (_msg, sid) => {
         if (!sid) return
-        handleStreamStart(sid, _msg.messageId as string)
         const resumed = _msg.resumed as { existingText?: string; messageId?: string } | undefined
+        handleStreamStart(sid, _msg.messageId as string, { skipAnchor: Boolean(resumed) })
         if (resumed?.existingText) {
           const stream = streamHandlers.get(sid)
           stream?.forceRerender(resumed.existingText)
@@ -2969,6 +2969,7 @@ function getVsCodeApi() {
               }
 
               const renderOpts = { mode: session.mode, sessionId: session.id, postMessage: (m2: Record<string, unknown>) => vscode.postMessage(m2) }
+              let scrollRestored = false
               const loader = createChunkedLoader({
                 container: msgList,
                 messages: session.messages,
@@ -2978,14 +2979,19 @@ function getVsCodeApi() {
                   return renderMessage(m, { ...renderOpts, turnIndex: index }, isConsecutive)
                 },
                 onChunkDone: (rendered, total) => {
-                  if (rendered === Math.min(total, 20)) {
+                  if (!scrollRestored && rendered === Math.min(total, 20)) {
+                    scrollRestored = true
                     restoreScrollPosition(session.id, msgList, stateManager.getScrollPosition(session.id) === 0)
                   }
                 },
                 onAllDone: () => {
                   applyHistoryCondensation(session.id)
                   setupJumpToBottom(session.id)
-                  restoreScrollPosition(session.id, msgList, stateManager.getScrollPosition(session.id) === 0)
+                  // C: only restore if onChunkDone didn't already (small sessions)
+                  if (!scrollRestored) {
+                    scrollRestored = true
+                    restoreScrollPosition(session.id, msgList, stateManager.getScrollPosition(session.id) === 0)
+                  }
                   debouncedUpdateScrollMarkers(session.id)
                   refreshConversationTimeline(session.id)
                 },
@@ -3730,6 +3736,7 @@ function getVsCodeApi() {
                   postMessage: (m: Record<string, unknown>) => vscode.postMessage(m),
                   hasQuestionInBar: (toolCallId: string) => questionBar.hasQuestionInState(toolCallId),
                 }
+                let scrollRestored = false
                 const loader = createChunkedLoader({
                   container: msgList,
                   messages: s.messages,
@@ -3739,14 +3746,19 @@ function getVsCodeApi() {
                     return renderMessage(m, { ...renderOpts, turnIndex: index }, isConsecutive)
                   },
                   onChunkDone: (rendered, total) => {
-                    if (rendered === Math.min(total, 20)) {
+                    if (!scrollRestored && rendered === Math.min(total, 20)) {
+                      scrollRestored = true
                       restoreScrollPosition(s.id, msgList, isFirstInit && stateManager.getScrollPosition(s.id) === 0)
                     }
                   },
                    onAllDone: () => {
                     applyHistoryCondensation(s.id)
                     setupJumpToBottom(s.id)
-                    restoreScrollPosition(s.id, msgList, isFirstInit && stateManager.getScrollPosition(s.id) === 0)
+                    // C: only restore if onChunkDone didn't already (small sessions)
+                    if (!scrollRestored) {
+                      scrollRestored = true
+                      restoreScrollPosition(s.id, msgList, isFirstInit && stateManager.getScrollPosition(s.id) === 0)
+                    }
                     debouncedUpdateScrollMarkers(s.id)
                     refreshConversationTimeline(s.id)
                     refreshActivityAndTasks(s.id)
@@ -3761,6 +3773,12 @@ function getVsCodeApi() {
               if (!scrollAnchors.get(s.id)) {
                 const typingInd = msgList.parentElement?.querySelector(".typing-indicator") as HTMLElement | undefined
                 const anchor = createScrollAnchor(msgList, typingInd)
+                // E: non-active sessions should not auto-scroll — the user
+                // isn't looking at them. Pause the anchor so DOM changes
+                // (e.g. todos_update re-renders) don't shift their scroll.
+                if (s.id !== stateManager.getState().activeSessionId) {
+                  anchor.pause()
+                }
                 scrollAnchors.set(s.id, anchor)
               }
 
@@ -4472,14 +4490,19 @@ function getVsCodeApi() {
         if (toolCallId) questionBar.removeQuestion(toolCallId)
       }],
       ["question_unacknowledged", (_msg, _sid) => {
-        // B9: the host's optimistic answer submission failed (network blip,
-        // unknown requestID, server 4xx, missing v2 API). The host already
-        // rolled back its own optimistic state (sessionStore + streamCoordinator);
-        // the webview must unwind the bar's optimistic "Answered" variant
-        // so the user can see the failure and re-submit. Pair with the
-        // postRequestError banner the host already sent for context.
+        // B9/B10: the host's answer submission failed. Check the error
+        // category to decide whether to revert (transient — user can retry)
+        // or remove (expired — question is dead on the server).
         const toolCallId = _msg.toolCallId as string || _msg.requestID as string || ""
-        if (toolCallId) questionBar.unmarkQuestionAnswered(toolCallId)
+        const category = _msg.category as string || ""
+        if (category === "expired") {
+          // B10: Question expired on the server. Remove from bar entirely
+          // — there's no point showing interactive controls for a dead question.
+          if (toolCallId) questionBar.removeQuestion(toolCallId)
+        } else {
+          // B9: Transient error — revert to interactive state so user can retry.
+          if (toolCallId) questionBar.unmarkQuestionAnswered(toolCallId)
+        }
       }],
     ])
 
@@ -4626,12 +4649,12 @@ function getVsCodeApi() {
     streamOrchestrator.updateAgentStatus(status)
   }
 
-  function handleStreamStart(sessionId: string, messageId?: string) {
+  function handleStreamStart(sessionId: string, messageId?: string, opts?: { skipAnchor?: boolean }) {
     // Reset the subagent-panel dismissal flag at the start of each new run —
     // user dismissal is per-run; a fresh prompt should respect auto-open again.
     subagentDismissedBySession.delete(sessionId)
     knownSubagentIdsBySession.delete(sessionId)
-    streamOrchestrator.handleStreamStart(sessionId, messageId)
+    streamOrchestrator.handleStreamStart(sessionId, messageId, opts)
   }
 
   function handleStreamChunk(sessionId: string, text?: string, messageId?: string) {

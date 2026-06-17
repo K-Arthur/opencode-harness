@@ -148,6 +148,7 @@ Run all unit+contract+roundtrip: `npm test`
 | `CodeInsertionService` | `src/chat/CodeInsertionService.ts` | Insert-at-cursor + create-file-from-code |
 | `AutoModeService` | `src/chat/AutoModeService.ts` | Auto-mode confirmation gate |
 | `HostPromptQueue` | `src/chat/HostPromptQueue.ts` | Host-side prompt queue (single source of truth, workspaceState persistence) |
+| `QuestionExpiryDetector` | `src/chat/QuestionExpiryDetector.ts` | B10: Categorizes question reply failures (expired/transient/rejected) + staleness detection |
 
 ### Webview Composer Modules (delegated from composer.ts)
 
@@ -270,8 +271,39 @@ Error handling spans three layers: SDK errors (host-side), extension routing, an
 - HTTP 429 → rate-limited with provider name in message
 - `ProviderAuthError` → auth failure with provider name
 
+### Question Tool Lifecycle & Expiry (B10)
+
+The `question` tool allows the LLM to ask the user questions during execution. Questions are session-scoped on the server — the server stores pending questions in an **in-memory `Map<QuestionID, PendingEntry>`** tied to `InstanceState`. When the server instance is disposed/recreated, all pending questions are lost.
+
+**Root cause of `QuestionNotFoundError`**: The server's question registry is volatile. If the server restarts or the instance is recreated between question creation and user answer, the reply call fails with `Question.NotFoundError`. This doesn't happen in the CLI (direct persistent connection) but does in the extension (session reattachment via `ensureSession`).
+
+**Key files**:
+- `src/chat/QuestionExpiryDetector.ts` — categorizes reply failures (expired/transient/rejected/unknown)
+- `src/chat/webview/questionBar.ts` — `markStale()`, `getQuestionItem()`, staleness timer (5min)
+- `src/chat/WebviewEventRouter.ts` — `question_answer` handler with B10 expiry-aware catch block
+- `src/session/eventHandlers/QuestionHandler.ts` — normalizes `question.asked`/`question.v2.asked` events
+
+**Error categories**:
+| Category | Pattern | Retryable | Behavior |
+|---|---|---|---|
+| `expired` | `Question.NotFoundError`, `request not found` | No | Mark as answered in all layers, remove from bar |
+| `transient` | network/timeout/5xx | Yes | B9 rollback, user can retry |
+| `server_rejected` | 4xx (non-404) | No | B9 rollback, no retry |
+| `unknown` | anything else | No | B9 rollback |
+
+**Staleness detection**: Questions older than 5 minutes (`STALENESS_WARNING_MS`) are auto-flagged with a warning banner ("This question may have expired on the server") and a "Continue without answering" button. On `repopulateFromMessages`, questions from messages older than the threshold are marked stale immediately.
+
+**Two event paths for question creation**:
+1. **Server-first**: `question.asked` SSE → `QuestionHandler` → `question_asked` → `ensureQuestionBlock` (stores + posts to webview)
+2. **Tool-stream**: `tool_start` (name="question") → `StreamCoordinator.appendToolStart` → creates question block in `blocksBuffer`
+
+**Answer flow**: Webview → `question_answer` → `WebviewEventRouter` → two branches:
+- **v2 path** (has `requestID`): `replyToQuestion(cliSessionId, requestID, answers)` via SDK
+- **Legacy path** (no `requestID`): `streamCoordinator.startPrompt()` as follow-up prompt
+
 ### Test Coverage
 - **Unit**: `blocks.test.ts`, `queue.test.ts`, `errorHandler.test.ts`, `errorTypes.test.ts`, `opencodeErrorMapper.test.ts`, `quotaMonitor.test.ts`, `toolLifecycle.test.ts`
+- **Question expiry**: `QuestionExpiryDetector.test.ts` (error categorization, staleness detection), `questionBar.test.ts` (markStale, createdAt, repopulation staleness), `WebviewEventRouter.questionAnswer.test.ts` (B10 structural tests)
 - **Visual**: `tests/visual/error-display.spec.ts` (rendering, actions, keyboard, states)
 - **E2E**: `tests/webview/error-handling-e2e.spec.ts` (full lifecycle: prompt_rejected, rate_limit, show_error, provider_error, duplicate coalescing)
 

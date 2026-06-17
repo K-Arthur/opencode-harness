@@ -134,4 +134,42 @@ describe("WebviewEventRouter — question_answer routing", () => {
       "B9: catch block must post question_unacknowledged so the webview reverts the bar's 'Answered' state",
     )
   })
+
+  // ── B10: Question expiry detection ─────────────────────────────────────
+  it("B10: catch block imports and uses categorizeQuestionReplyError for error classification", () => {
+    assert.ok(
+      source.includes("categorizeQuestionReplyError"),
+      "B10: WebviewEventRouter must import categorizeQuestionReplyError from QuestionExpiryDetector",
+    )
+    const catchBlock = handler.slice(handler.indexOf("catch (err)"))
+    assert.ok(
+      catchBlock.includes("categorizeQuestionReplyError"),
+      "B10: catch block must call categorizeQuestionReplyError to classify the error",
+    )
+  })
+
+  it("B10: catch block passes error category and retryable flag to question_unacknowledged", () => {
+    const catchBlock = handler.slice(handler.indexOf("catch (err)"))
+    assert.ok(
+      catchBlock.includes("category") || catchBlock.includes("classification"),
+      "B10: catch block must pass error category to the webview",
+    )
+    assert.ok(
+      catchBlock.includes("retryable"),
+      "B10: catch block must pass retryable flag so the webview knows whether to show a retry button",
+    )
+  })
+
+  it("B10: expired questions mark as answered in sessionStore and streamCoordinator (not just skip unmark)", () => {
+    const catchBlock = handler.slice(handler.indexOf("catch (err)"))
+    const expiredBranch = catchBlock.slice(0, catchBlock.indexOf("} else"))
+    assert.ok(
+      expiredBranch.includes("markQuestionAnswered"),
+      "B10: expired path must mark question as answered so stream can finalize",
+    )
+    assert.ok(
+      expiredBranch.includes("streamCoordinator.markQuestionAnswered"),
+      "B10: expired path must clear activeToolCallIds via streamCoordinator.markQuestionAnswered",
+    )
+  })
 })

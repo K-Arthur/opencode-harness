@@ -37,6 +37,7 @@ import { handleWebviewError } from "./utils/errorHandler"
 import { validateWebviewMessage } from "./WebviewMessageValidator"
 import { normalizeSessionMode, resolvePlanPermission } from "./modePolicy"
 import { normalizeTodoList } from "../session/eventHandlers/TodoUpdatedHandler"
+import { categorizeQuestionReplyError } from "./QuestionExpiryDetector"
 
 const crypto = globalThis.crypto
 
@@ -414,22 +415,49 @@ export class WebviewEventRouter {
             requestID,
           })
         } catch (err) {
-          // B9: the SDK call failed (network blip, unknown requestID, server
-          // 4xx, missing v2 API). Without this rollback the user sees the
-          // optimistic "Answered" state forever and the server is unaware.
-          // Undo the optimistic state across all three layers and tell the
-          // webview to revert the bar so the user can retry.
-          log.error("question_answer v2 failed — rolling back optimistic answered state", err)
-          this.opts.sessionStore.unmarkQuestionAnswered(sessionId, answerId)
-          this.opts.streamCoordinator.unmarkQuestionAnswered(sessionId, answerId)
-          this.opts.postMessage({
-            type: "question_unacknowledged",
-            sessionId,
-            toolCallId: answerId,
-            requestID,
-            error: err instanceof Error ? err.message : "Failed to send answer",
-          })
-          this.opts.postRequestError(err instanceof Error ? err.message : "Failed to send answer", sessionId)
+          // B9/B10: the SDK call failed. Categorize the error to decide
+          // whether to rollback (transient → user can retry) or remove
+          // (expired → question is dead on the server, no point retrying).
+          const classification = categorizeQuestionReplyError(err)
+          log.error(
+            `question_answer v2 failed (${classification.category}, retryable=${classification.retryable}) — ${classification.technicalDetail}`,
+            err,
+          )
+
+          if (classification.category === "expired") {
+            // B10: The server no longer knows about this question. Mark it
+            // as answered in all layers so the stream can finalize — the
+            // question is dead and retrying will always fail. The webview
+            // removes it from the bar via the "expired" category signal.
+            this.opts.sessionStore.markQuestionAnswered(
+              sessionId, answerId, "Expired — server no longer has this question", "skip",
+            )
+            this.opts.streamCoordinator.markQuestionAnswered(sessionId, answerId)
+            this.opts.postMessage({
+              type: "question_unacknowledged",
+              sessionId,
+              toolCallId: answerId,
+              requestID,
+              error: classification.userFacingMessage,
+              category: "expired",
+              retryable: false,
+            })
+          } else {
+            // B9: Transient or unknown error — rollback optimistic state so
+            // the user can retry.
+            this.opts.sessionStore.unmarkQuestionAnswered(sessionId, answerId)
+            this.opts.streamCoordinator.unmarkQuestionAnswered(sessionId, answerId)
+            this.opts.postMessage({
+              type: "question_unacknowledged",
+              sessionId,
+              toolCallId: answerId,
+              requestID,
+              error: classification.userFacingMessage,
+              category: classification.category,
+              retryable: classification.retryable,
+            })
+          }
+          this.opts.postRequestError(classification.userFacingMessage, sessionId)
         }
         return
       }
