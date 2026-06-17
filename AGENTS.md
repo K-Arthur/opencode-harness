@@ -163,7 +163,7 @@ Run all unit+contract+roundtrip: `npm test`
 
 | Module | File | Responsibility |
 |--------|------|---------------|
-| `timeline` | `src/chat/webview/timeline.ts` | Conversation timeline sidebar: toggle, render, keyboard nav, progress, history condensation |
+| `timeline` | `src/chat/webview/timeline.ts` | Conversation timeline sidebar: toggle, render, keyboard nav, progress, history condensation, per-turn model indicator |
 | `thinkingToggle` | `src/chat/webview/thinkingToggle.ts` | Global thinking block visibility toggle (extracted from timeline for SRP) |
 | `scrollMarkers` | `src/chat/webview/ui/scrollMarkers.ts` | Scroll marker dots, jump-to-bottom, scrollToTurn with injected timers |
 
@@ -174,6 +174,8 @@ Run all unit+contract+roundtrip: `npm test`
 | Diff rendering | `src/chat/webview/renderer.ts` | `renderNewDiffBlock`, `createDiffTableWrapper`, `createDiffLineRow`, `createHunkHeaderRow`, `createHunkActionCell`, `toggleDiffWrap`, `renderPendingDiffActions`, `createRevertDiffButton`, `createHunkNavButtons`, `inferLanguageFromPath`, `createDiffViewToggle`, `appendSideBySideHunkRows`, `pairLinesForSideBySide`, `createSideBySideLineRow` |
 | Word-level diff | `src/chat/webview/wordDiff.ts` | `computeWordDiffs()` — character-level diff of paired removed/added lines using `diff-match-patch`, emits `<ins>`/`<del>` spans via `line.wordDiffHtml` |
 | Diff types | `src/chat/webview/types.ts` | `DiffBlock`, `DiffHunk`, `DiffLine` (with `wordDiffHtml?`) |
+| Model indicator | `src/chat/webview/messageRenderer.ts` | Per-turn model badge in message headers: `[modelShortName]` CLI-style notation, provider prefix stripped, `text-overflow: ellipsis` truncation, streaming dot `::before` pseudo-element, WCAG `aria-label` |
+| Turn summary | `src/chat/webview/renderer.ts` | `groupMessagesIntoTurns()` populates `TurnSummary.model` from `ChatMessage.model`; timeline items render compact `.timeline-item-model` badge |
 | Changed-files dropdown | `src/chat/webview/changed-files-dropdown.ts` | Per-file change tree with stats, hunk previews, per-hunk revert, per-file Undo button, bulk Revert All |
 | Hunk staging | `src/chat/diff/hunkRevertPlan.ts`, `hunkStaging.ts` | LCS-based per-hunk revert planning, host-authoritative hunk computations |
 | Host diff handlers | `src/chat/WebviewEventRouter.ts` (~lines 500-560, 660-670, 1193-1210) | `accept_diff`, `reject_diff`, `revert_diff`, `accept_hunk`, `reject_hunk`, `revert_hunk`, `get_file_hunks`, `get_file_diff`, `undo_file`, `revert_all_files` |
