@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Stream latency tracking (2026-06-17).** StreamCoordinator now tracks P50/P95 timing: `sendTime`, `firstResponseTime`, `completeTime`, `finalizeTime` via `ActiveRunMetrics`. Logs `stream latency: first_chunk=Xms, total=Yms, finalize=Zms, messages=N` on every stream completion. Data available for `/metrics` debug surface. (`src/chat/handlers/StreamCoordinator.ts`, `StreamCoordinatorTypes.ts`)
+- **Server pre-warm on activation (2026-06-17).** The opencode server now starts asynchronously during extension activation instead of deferring to first webview resolve. Fire-and-forget with error logging; falls back to lazy start on failure; skipped when remote-attach mode is configured. First-prompt latency reduced by 1-3s. (`src/extension.ts`)
+- **Per-tab process isolation — ADR-010 Phase 3 (2026-06-17).** Full horizontal scaling infrastructure:
+  - `LocalSessionProcessManager` manages per-tab `opencode serve` processes with `PortPool` allocation, crash detection, and SIGTERM→SIGKILL shutdown.
+  - `SessionManagerRegistry` routes `getSessionManager(tabId)` to per-process `SessionManager` instances via `registerProcess`/`assignTab`/`unassignTab`.
+  - `spawnAndRegisterSession()` spawns a process, creates a `SessionManager` connected via health-check, registers it, and optionally assigns a tab.
+  - Crash resilience: `onProcessCrash` fires `TabRestorationState` entries for affected tabs.
+  - `OPENCODE_DATA_DIR` isolation: each spawned process gets a unique temp directory to prevent SQLite contention.
+  - LRU eviction: idle processes (0 tabs for N minutes) are automatically killed via `processIdleTimeoutMinutes` config.
+  - `StreamCoordinator.startPrompt` auto-spawns a per-tab process when `processStrategy` is `"per-tab"`.
+  - Config: `opencode.sessions.processStrategy` (`"shared"` default, `"per-tab"` experimental).
+  - Config: `opencode.sessions.processIdleTimeoutMinutes` (default 5, range 1-60).
+  - New files: `src/session/LocalSessionProcessManager.ts`, `SessionManagerRegistry.ts`, `SessionProcessManager.ts` interface update.
+  - 133 structural tests cover all subsystems. (`src/session/*`, `src/chat/handlers/StreamCoordinator.ts`, `src/extension.ts`, `package.json`)
+
 ### Fixed
 
 - **Chat keyboard shortcuts still fired VS Code editor actions (2026-06-14).** The suppressor keybindings (`Alt+1/2/3`, `Alt+Shift+Tab`, `Ctrl+Shift+M`, `Ctrl+Shift+T`, `Ctrl+T`, `Ctrl+W`, `Ctrl+Tab`, `Ctrl+Shift+Tab`, `Ctrl+K`) were gated *only* on the `opencodeHarness.chatFocused` context key, which is driven by the webview iframe's `window.focus`/`blur`. That event never fires when the chat view is focused *without* a click inside the iframe (activity-bar reveal, the `toggleFocus` command, view-header click) — so the suppressor was inactive and VS Code's default for the chord won (e.g. `Alt+1` → `workbench.action.openEditorAtIndex1` → "opened groups in the editor view"). There is no host-side focus API for `WebviewView` (`focused`/`onDidChangeViewState` exist only on `WebviewPanel`), so the suppressors now also OR in `focusedView == 'opencode-harness.chat'`, the signal VS Code sets the moment the view is focused regardless of iframe state. This mirrors how Copilot Chat / Continue / Cody gate their webview-shortcut overrides. (`package.json`, `tests/unit/keybindings-contract.test.mjs`)
