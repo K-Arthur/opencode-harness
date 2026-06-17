@@ -892,3 +892,50 @@ describe("StreamCoordinator.ts", () => {
       "startPrompt must handle spawn failure with fallback"
     )
   })
+
+  // ── B10: ID mismatch resolution in markQuestionAnswered ─────────────────
+  // tool_start assigns id=prt_* but question.asked assigns toolCallId=call_*
+  // and requestID=que_*. markQuestionAnswered must resolve all three.
+  void describe("B10: markQuestionAnswered ID resolution", () => {
+    const markFnIdx = source.indexOf("markQuestionAnswered(tabId: string, toolCallId: string): void")
+    const markBody = markFnIdx >= 0 ? source.slice(markFnIdx, markFnIdx + 4000) : ""
+
+    void it("matches by requestID as fallback when toolCallId doesn't match", () => {
+      assert.ok(
+        markBody.includes("b.requestID === toolCallId") || markBody.includes(".requestID === toolCallId"),
+        "B10: markQuestionAnswered must try requestID matching as fallback",
+      )
+    })
+
+    void it("uses single-unanswered-question heuristic as last resort", () => {
+      assert.ok(
+        markBody.includes("unanswered.length === 1") || markBody.includes("unanswered question"),
+        "B10: markQuestionAnswered must fall back to single-unanswered-question heuristic",
+      )
+    })
+
+    void it("scans blocks to clear answered questions from activeToolCallIds", () => {
+      assert.ok(
+        markBody.includes("block scan") || markBody.includes("answered === true"),
+        "B10: markQuestionAnswered must scan blocks to find answered questions in activeToolCallIds",
+      )
+    })
+
+    void it("triggers maybeFinalizeStream after clearing question state", () => {
+      assert.ok(
+        markBody.includes("maybeFinalizeStream"),
+        "B10: markQuestionAnswered must trigger maybeFinalizeStream — without it, clearing the question state leaves the stream deferred forever",
+      )
+    })
+  })
+
+  // ── B10: ID mismatch resolution in unmarkQuestionAnswered ───────────────
+  void it("B10: unmarkQuestionAnswered resolves ID mismatch via requestID", () => {
+    const unmarkFnIdx = source.indexOf("unmarkQuestionAnswered(tabId: string, toolCallId: string): void")
+    assert.ok(unmarkFnIdx >= 0, "unmarkQuestionAnswered must exist")
+    const unmarkBody = source.slice(unmarkFnIdx, unmarkFnIdx + 2000)
+    assert.ok(
+      unmarkBody.includes("requestID") || unmarkBody.includes("answered.length === 1"),
+      "B10: unmarkQuestionAnswered must resolve ID mismatch via requestID or single-answered heuristic",
+    )
+  })

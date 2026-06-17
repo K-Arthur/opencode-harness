@@ -391,4 +391,29 @@ void describe("SessionStore addChangedFiles — stats semantics (M4)", () => {
       "M4: addChangedFiles must NOT accumulate removed counts either",
     )
   })
+
+  // ── B10: ID mismatch resolution (prt_* vs call_* vs que_*) ─────────────
+  // The server sends different IDs for the same question. SessionStore must
+  // match blocks by requestID, not just toolCallId/id, so that server-side
+  // question.replied/rejected events (which carry requestID=que_*) can find
+  // blocks stored with call_*.
+  it("markQuestionAnswered matches by requestID (not just toolCallId/id)", () => {
+    const idx = source.indexOf("markQuestionAnswered(")
+    assert.ok(idx >= 0, "markQuestionAnswered must exist")
+    const body = source.slice(idx, idx + 600)
+    assert.ok(
+      body.includes("b.requestID !== toolCallId"),
+      "B10: markQuestionAnswered must check b.requestID to resolve ID mismatch",
+    )
+  })
+
+  it("unmarkQuestionAnswered matches by requestID (not just toolCallId/id)", () => {
+    const idx = source.indexOf("unmarkQuestionAnswered(")
+    assert.ok(idx >= 0, "unmarkQuestionAnswered must exist")
+    const body = source.slice(idx, idx + 600)
+    assert.ok(
+      body.includes("b.requestID !== toolCallId"),
+      "B10: unmarkQuestionAnswered must check b.requestID to resolve ID mismatch",
+    )
+  })
 })

@@ -690,4 +690,92 @@ describe("questionBar", () => {
     const item = getQuestionItem("q-rem")
     assert.ok(!item, "item is removed")
   })
+
+  // ── ID mismatch resolution (prt_* vs call_* vs que_*) ──────────────────
+  // The server assigns different IDs to the same question:
+  //   tool_start → id=prt_* (part ID, stored in activeToolCallIds)
+  //   question.asked → tool.callID=call_* (call ID, used in question bar)
+  //                  → requestID=que_* (request ID, used in reply/reject)
+  // All state operations must resolve any of these to the correct item.
+
+  describe("ID mismatch resolution", () => {
+    it("markQuestionAnswered resolves by requestID when toolCallId doesn't match", () => {
+      initQuestionBar(() => {})
+      // Item keyed by call_* (from question.asked event)
+      addQuestion(makeBlock({
+        id: "call_abc",
+        toolCallId: "call_abc",
+        requestID: "que_xyz",
+      }), "msg-id")
+      // Called with que_* (from server's question.replied event)
+      markQuestionAnswered("que_xyz", "user answer")
+      const { getQuestionItem } = require("./questionBar")
+      const item = getQuestionItem("call_abc")
+      assert.ok(item?.answered, "item found via requestID and marked answered")
+      assert.equal(item?.submittedValue, "user answer")
+    })
+
+    it("unmarkQuestionAnswered resolves by requestID when toolCallId doesn't match", () => {
+      initQuestionBar(() => {})
+      addQuestion(makeBlock({
+        id: "call_def",
+        toolCallId: "call_def",
+        requestID: "que_uvw",
+      }), "msg-id")
+      markQuestionAnswered("call_def", "first answer")
+      // Now unmark using requestID
+      unmarkQuestionAnswered("que_uvw")
+      const { getQuestionItem } = require("./questionBar")
+      const item = getQuestionItem("call_def")
+      assert.ok(item, "item still exists")
+      assert.equal(item?.answered, false, "item reverted to unanswered via requestID")
+    })
+
+    it("hasQuestionInState resolves by requestID", () => {
+      initQuestionBar(() => {})
+      addQuestion(makeBlock({
+        id: "call_ghi",
+        toolCallId: "call_ghi",
+        requestID: "que_rst",
+      }), "msg-id")
+      assert.ok(hasQuestionInState("que_rst"), "found by requestID")
+      assert.ok(hasQuestionInState("call_ghi"), "found by toolCallId")
+      assert.ok(!hasQuestionInState("nonexistent"), "not found for unknown ID")
+    })
+
+    it("removeQuestion resolves by requestID (already had fallback)", () => {
+      initQuestionBar(() => {})
+      addQuestion(makeBlock({
+        id: "call_jkl",
+        toolCallId: "call_jkl",
+        requestID: "que_mno",
+      }), "msg-id")
+      removeQuestion("que_mno")
+      const { getQuestionItem } = require("./questionBar")
+      assert.ok(!getQuestionItem("call_jkl"), "item removed via requestID")
+    })
+
+    it("full lifecycle: tool_start ID mismatch does not break answer flow", () => {
+      const posted: Array<Record<string, unknown>> = []
+      initQuestionBar((m) => posted.push(m))
+      // Simulate tool_start creating a block with prt_* (happens in StreamCoordinator)
+      // Then question.asked arrives with call_* + que_*
+      addQuestion(makeBlock({
+        id: "call_full",
+        toolCallId: "call_full",
+        requestID: "que_full",
+        groups: [{ question: "Pick one", options: ["A", "B"], multiSelect: false }],
+      }), "msg-full")
+      // User selects an option
+      const optBtns = document.querySelectorAll(".question-bar-option")
+      ;(optBtns[0] as HTMLButtonElement).click()
+      ;(document.getElementById("question-bar-submit") as HTMLButtonElement).click()
+      // The host sends question_acknowledged with requestID (not toolCallId)
+      // This should resolve correctly
+      markQuestionAnswered("que_full", "A")
+      const { getQuestionItem } = require("./questionBar")
+      const item = getQuestionItem("call_full")
+      assert.ok(item?.answered, "question answered despite ID mismatch")
+    })
+  })
 })
