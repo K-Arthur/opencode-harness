@@ -49,8 +49,8 @@
 }
 
 .status-led.idle { background: var(--oc-muted); }
-.status-led.thinking { background: var(--oc-warning); box-shadow: 0 0 8px var(--oc-warning); animation: pulse 1s infinite; }
-.status-led.executing { background: var(--oc-success); box-shadow: 0 0 8px var(--oc-success); animation: pulse 1s infinite; }
+.status-led.thinking { background: var(--oc-warning); }
+.status-led.executing { background: var(--oc-success); }
 
 .header-info {
   display: flex;
@@ -454,7 +454,6 @@
 
 .tab-btn.streaming .tab-indicator {
   background: var(--color-accent);
-  animation: streaming-pulse 2s ease-in-out infinite;
 }
 @media (forced-colors: active) {
   .tab-btn.streaming .tab-indicator {

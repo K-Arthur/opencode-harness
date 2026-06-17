@@ -41,7 +41,7 @@ export type { StreamState, StreamElements, StreamCallbacks }
 export { stripContextFromText, reRenderMessage }
 
 export interface StreamHandlers {
-  handleStreamStart: (messageId?: string) => void
+  handleStreamStart: (messageId?: string, opts?: { skipAnchor?: boolean }) => void
   handleStreamToken: (text?: string) => void
   handleStreamChunk: (text?: string, messageId?: string) => void
   handleStreamEnd: (messageId?: string, blocks?: unknown) => void
@@ -141,8 +141,8 @@ class StreamSession implements StreamHandlers {
     if (textEl) textEl.textContent = stripContextFromText(text)
   }
 
-  handleStreamStart(messageId?: string): void {
-    handleStreamStart(this.state, this.els, this.messages, messageId, this.callbacks)
+  handleStreamStart(messageId?: string, opts?: { skipAnchor?: boolean }): void {
+    handleStreamStart(this.state, this.els, this.messages, messageId, this.callbacks, opts)
     this.callbacks?.onStreamingChange?.(true)
   }
 

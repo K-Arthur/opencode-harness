@@ -75,7 +75,7 @@ describe("reRenderMessage focus preservation (C2)", () => {
       "reRenderMessage must look up the equivalent element in newEl via data-restore-focus-id",
     )
     assert.ok(
-      /\.focus\(/.test(source.slice(source.indexOf("export function reRenderMessage("), source.indexOf("export function reRenderMessage(") + 2500)),
+      /\.focus\(/.test(source.slice(source.indexOf("export function reRenderMessage("), source.indexOf("export function reRenderMessage(") + 3000)),
       "reRenderMessage must call .focus() on the restored element after the swap",
     )
   })

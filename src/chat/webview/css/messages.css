@@ -16,7 +16,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1); /* Reduced gap for better density */
-  scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   position: relative;
   overflow-x: hidden; /* Prevent random horizontal sliders */
@@ -289,29 +288,6 @@
   background: var(--color-accent);
   border-radius: 50%;
   margin-left: auto;
-  animation: pulse-active 1.5s infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .timeline-item.streaming .timeline-item-role::after {
-    animation: none;
-    opacity: 0.7;
-  }
-}
-
-/* "Live" ping — a dot that breathes plus an expanding glow ring, built
-   entirely from transform/opacity/box-shadow so it stays compositor-only.
-   Shared by the message-role dot and the timeline-item dot above. */
-@keyframes pulse-active {
-  0%, 100% {
-    transform: scale(0.85);
-    opacity: 0.7;
-    box-shadow: 0 0 0 0 var(--oc-accent-border);
-  }
-  50% {
-    transform: scale(1.15);
-    opacity: 1;
-    box-shadow: 0 0 0 4px var(--oc-accent-glow);
-  }
 }
 
 .timeline-progress {
@@ -414,7 +390,7 @@
   color: var(--oc-fg, var(--color-fg));
 }
 
-/* Pulsing dot in assistant header while streaming */
+/* Solid dot in assistant header while streaming */
 .message.assistant.streaming .message-role::after {
   content: "";
   display: inline-block;
@@ -424,13 +400,6 @@
   background: var(--color-accent);
   border-radius: 50%;
   vertical-align: middle;
-  animation: pulse-active 1.5s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .message.assistant.streaming .message-role::after {
-    animation: none;
-    opacity: 0.7;
-  }
 }
 
 .message-token-badge {
@@ -615,7 +584,6 @@
   line-height: var(--leading-relaxed);
   width: 100%;
   border-radius: var(--radius-lg);
-  transition: border-color var(--duration-normal), background var(--duration-normal);
   position: relative;
   /* max-width handled by messages-responsive.css with container queries */
 }
@@ -624,26 +592,6 @@
   border-left-color: var(--color-accent);
   border-left-width: 3px;
   background: color-mix(in srgb, var(--color-accent) 5%, transparent);
-  /* Negative horizontal offset hugs the glow to the accent border instead
-     of radiating evenly all around a (possibly very tall) bubble. */
-  box-shadow: -1px 0 10px -3px var(--oc-accent-glow);
-  animation: bubble-stream-pulse 2s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .message.assistant.streaming .message-bubble {
-    animation: none;
-    border-left-color: var(--color-accent);
-  }
-}
-@keyframes bubble-stream-pulse {
-  0%, 100% {
-    border-left-color: var(--color-accent);
-    box-shadow: -1px 0 10px -3px var(--oc-accent-glow);
-  }
-  50% {
-    border-left-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
-    box-shadow: -1px 0 16px -2px var(--oc-accent-border);
-  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════╛
@@ -1473,10 +1421,8 @@
   margin-left: 1px;
   vertical-align: text-bottom;
   border-radius: 1px;
-  box-shadow: 0 0 4px 0 var(--oc-accent-glow);
-  /* ease-in-out (not step-end) mirrors VS Code's own native caret blink,
-     which fades rather than hard-cuts. */
-  animation: cursor-blink 1s ease-in-out infinite;
+  /* Crisp step-end timing mirrors terminal carets. */
+  animation: cursor-blink 1s step-end infinite;
 }
 
 .streaming-text {
@@ -1503,8 +1449,7 @@
   margin-left: 1px;
   vertical-align: text-bottom;
   border-radius: 1px;
-  box-shadow: 0 0 4px 0 var(--oc-accent-glow);
-  animation: cursor-blink 1s ease-in-out infinite;
+  animation: cursor-blink 1s step-end infinite;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════╛

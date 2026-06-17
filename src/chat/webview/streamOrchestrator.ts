@@ -449,7 +449,7 @@ export interface StreamOrchestratorDeps {
 }
 
 export interface StreamOrchestratorAPI {
-  handleStreamStart: (sessionId: string, messageId?: string) => void
+  handleStreamStart: (sessionId: string, messageId?: string, opts?: { skipAnchor?: boolean }) => void
   handleStreamChunk: (sessionId: string, text?: string, messageId?: string) => void
   handleStreamEnd: (sessionId: string, messageId?: string, blocks?: unknown, reason?: string, partial?: boolean) => void
   handleServerStatus: (sessionId: string, status?: string, errorContext?: unknown) => void
@@ -533,7 +533,7 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     appendSkillPill(sessionId, skillName, els.inputArea, els.inputWrapper)
   }
 
-  function handleStreamStart(sessionId: string, messageId?: string) {
+  function handleStreamStart(sessionId: string, messageId?: string, opts?: { skipAnchor?: boolean }) {
     const finalStream = ensureStreamUiReady(sessionId, {
       postMessage: vscode.postMessage,
       getSession,
@@ -554,7 +554,7 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     updateTabBar()
 
     vscode.postMessage({ type: "webview_log", level: "info", message: `handleStreamStart: Starting stream for ${sessionId} (msgId=${messageId})` })
-    finalStream.handleStreamStart(messageId)
+    finalStream.handleStreamStart(messageId, opts)
     setStreaming(sessionId, true)
     updateTabBar()
     updateModeSelectorStateLocal()

@@ -32,8 +32,17 @@ export interface ScrollAnchor {
 /** Pixels from bottom within which we consider the user "at the bottom" */
 const ANCHOR_THRESHOLD = 80
 
+/**
+ * F: grace period (ms) after a programmatic scroll during which the onScroll
+ * handler will not re-evaluate anchored state. This prevents the race where
+ * RAF-deferred scrollTop assignment triggers onScroll before the browser has
+ * settled the layout, causing isAtBottom() to return a stale result.
+ */
+const PROGRAMMATIC_SCROLL_GRACE_MS = 100
+
 export function createScrollAnchor(container: HTMLElement, typingIndicator?: HTMLElement): ScrollAnchor {
   let anchored = true
+  let lastProgrammaticScrollAt = 0
 
   function isAtBottom(): boolean {
     const scrollBottom = container.scrollTop + container.clientHeight
@@ -42,12 +51,19 @@ export function createScrollAnchor(container: HTMLElement, typingIndicator?: HTM
   }
 
   function scrollToBottom() {
+    lastProgrammaticScrollAt = performance.now()
     requestAnimationFrame(() => {
       container.scrollTop = container.scrollHeight
+      // After the scroll settles, re-check. The RAF fires ~16ms later;
+      // extend the grace window so the subsequent onScroll doesn't fight it.
+      lastProgrammaticScrollAt = performance.now()
     })
   }
 
   function onScroll() {
+    // F: suppress anchor re-evaluation during programmatic scrolls to
+    // prevent the RAF/scroll-event race from toggling anchored state.
+    if (performance.now() - lastProgrammaticScrollAt < PROGRAMMATIC_SCROLL_GRACE_MS) return
     anchored = isAtBottom()
   }
 

@@ -256,6 +256,13 @@ export function reRenderMessage(
 
   const oldEl = els.messageList.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement | null
 
+  // D: capture scroll state BEFORE the swap so we can compensate if the
+  // re-rendered message was above the viewport (prevents scroll jumps).
+  const listScrollTop = els.messageList.scrollTop
+  const oldOffsetTop = oldEl?.offsetTop ?? 0
+  const oldHeight = oldEl?.offsetHeight ?? 0
+  const wasAboveViewport = oldEl ? (oldOffsetTop + oldHeight < listScrollTop) : false
+
   // C2: capture focus BEFORE the swap. If a keyboard/SR user was focused
   // inside a tool card (e.g. on the "Copy output" button) and we just call
   // `oldEl.replaceWith(newEl)`, focus silently falls back to
@@ -276,6 +283,15 @@ export function reRenderMessage(
     oldEl.replaceWith(newEl)
   } else {
     els.messageList.appendChild(newEl)
+  }
+
+  // D: compensate scroll position if the re-rendered element was above the
+  // viewport. The height delta shifts all content below it.
+  if (wasAboveViewport && oldEl) {
+    const heightDelta = newEl.offsetHeight - oldHeight
+    if (heightDelta !== 0) {
+      els.messageList.scrollTop = listScrollTop + heightDelta
+    }
   }
 
   // C2: restore focus into the equivalent element in the new DOM.
@@ -439,6 +455,7 @@ export function handleStreamStart(
   messages: ChatMessage[],
   messageId?: string,
   callbacks?: StreamCallbacks,
+  opts?: { skipAnchor?: boolean },
 ): void {
   if (state.isStreaming) {
     // Idempotent re-emit for the SAME id → ignore.
@@ -487,7 +504,13 @@ export function handleStreamStart(
   state.chunkSeq = 0
   hideTypingIndicator(els)
 
-  els.scrollAnchor.anchor()
+  // B: On replays/reconnects, don't force-anchor — the user may be reading history.
+  // Only force-anchor on genuinely new prompts (user just sent a message).
+  if (opts?.skipAnchor) {
+    els.scrollAnchor.scrollIfAnchored()
+  } else {
+    els.scrollAnchor.anchor()
+  }
 
   const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null
   const isConsecutive = lastMsg?.role === "assistant"

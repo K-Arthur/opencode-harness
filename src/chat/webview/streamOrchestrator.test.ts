@@ -501,7 +501,7 @@ describe("createStreamOrchestrator", () => {
       h.setMessageList("s1", document.createElement("div"))
       const stream = h.addStream("s1")
       h.api.handleStreamStart("s1", "msg-1")
-      assert.deepEqual(stream.calls.find((c) => c.method === "handleStreamStart")?.args, ["msg-1"])
+      assert.deepEqual(stream.calls.find((c) => c.method === "handleStreamStart")?.args, ["msg-1", undefined])
       assert.equal(h.sessions.get("s1")!.isStreaming, true)
       assert.equal((h.deps.els as any).agentStatusLed.className, "status-led thinking")
     })
