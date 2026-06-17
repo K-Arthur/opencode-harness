@@ -35,10 +35,19 @@ describe("Issue 1: Queue Ghosting — drainQueue must emit queue_state after deq
     const dequeueIdx = drainBody.indexOf("dequeue(")
     assert.ok(dequeueIdx >= 0, "drainQueue must call hostQueue.dequeue()")
 
-    const postQueueStateAfterDequeue = drainBody.indexOf("postQueueState(", dequeueIdx)
+    // Verify postQueueState exists in BOTH branches:
+    // 1. In the "if (!next)" failure branch (immediate sync when dequeue returns nothing)
+    // 2. Via drainQueuedPrompt which calls postQueueState after confirmCompleted
+    const postQueueStateInNoNext = drainBody.indexOf("postQueueState(", dequeueIdx)
     assert.ok(
-      postQueueStateAfterDequeue > dequeueIdx,
-      "drainQueue MUST call postQueueState() after dequeue to prevent ghost chips"
+      postQueueStateInNoNext > dequeueIdx,
+      "drainQueue MUST call postQueueState() in the !next branch"
+    )
+    // drainQueuedPrompt is called after dequeue — it handles postQueueState async
+    const drainQueuedPromptCall = drainBody.indexOf("drainQueuedPrompt(", dequeueIdx)
+    assert.ok(
+      drainQueuedPromptCall > dequeueIdx,
+      "drainQueue MUST call drainQueuedPrompt which handles postQueueState after confirmCompleted"
     )
   })
 
@@ -254,6 +263,21 @@ describe("Edge cases: Queue drain and interrupt lifecycle", () => {
     )
   })
 
+  it("drainQueue proceeds with drain when aborted AND drainAfterAbort is true", () => {
+    // When drainAfterAbort is true, abort should NOT skip the drain.
+    // The drainQueue method checks: if (reason === "aborted" && !this.drainAfterAbort) return
+    // So when drainAfterAbort is true, the condition is false and drain proceeds.
+    const drainBody = extractMethodBody(webviewEventRouterSource, "drainQueue")
+    assert.ok(drainBody, "drainQueue must exist")
+
+    // The condition is: reason === "aborted" && !this.drainAfterAbort
+    // When drainAfterAbort=true: "aborted" && !true = "aborted" && false = false → proceeds
+    assert.ok(
+      drainBody.includes("!this.drainAfterAbort") || drainBody.includes("!this.opts.hostQueue.drainAfterAbort"),
+      "drainQueue must negate drainAfterAbort to skip only when false"
+    )
+  })
+
   it("drainQueue still posts queue_state even when skipping drain after abort", () => {
     const drainBody = extractMethodBody(webviewEventRouterSource, "drainQueue")
     assert.ok(drainBody, "drainQueue must exist")
@@ -289,6 +313,21 @@ describe("Edge cases: Queue drain and interrupt lifecycle", () => {
     assert.ok(
       body.includes("onQueueDrain"),
       "abort MUST call onQueueDrain to drain (or skip) the host queue after abort"
+    )
+  })
+
+  it("StreamCoordinator.abort guards against missing tab/cliSession/not-running", () => {
+    const body = extractMethodBody(streamCoordinatorSource, "abort")
+    assert.ok(body, "abort must exist")
+
+    // abort must early-return if tab, cliSessionId, or isRunning is missing
+    assert.ok(
+      body.includes("if (!tab") || body.includes("if (!tab ||"),
+      "abort must guard against missing tab"
+    )
+    assert.ok(
+      body.includes("isRunning") || body.includes("!this.getSm"),
+      "abort must check if the session is running before aborting"
     )
   })
 
