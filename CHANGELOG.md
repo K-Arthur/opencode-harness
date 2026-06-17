@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Crash resilience: `onProcessCrash` fires `TabRestorationState` entries for affected tabs.
   - `OPENCODE_DATA_DIR` isolation: each spawned process gets a unique temp directory to prevent SQLite contention.
   - LRU eviction: idle processes (0 tabs for N minutes) are automatically killed via `processIdleTimeoutMinutes` config.
+
+### Fixed
+
+- **Interrupt timeline logging — "Generation interrupted by user." marker now appears (2026-06-17).** When a user interrupted a stream (Stop button, Ctrl+Enter, or hotkey), `StreamCoordinator.abort()` correctly posted `stream_end` with `reason: "aborted"`, but `showStreamEndReasonMessage()` in `streamOrchestrator.ts` only handled `ttfb_timeout`, `timeout`, `hard_timeout`, and `error` — never `"aborted"`. This left no trace of the interruption in the conversation timeline. Added the missing `else if (reason === "aborted")` branch that calls `showSystemMessage(sessionId, "Generation interrupted by user.", false)`. The marker renders as a system message with the existing left-border accent styling. (`src/chat/webview/streamOrchestrator.ts`)
   - `StreamCoordinator.startPrompt` auto-spawns a per-tab process when `processStrategy` is `"per-tab"`.
   - Config: `opencode.sessions.processStrategy` (`"shared"` default, `"per-tab"` experimental).
   - Config: `opencode.sessions.processIdleTimeoutMinutes` (default 5, range 1-60).

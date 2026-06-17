@@ -264,6 +264,16 @@ Error handling spans three layers: SDK errors (host-side), extension routing, an
 - **Queue recovery**: `markStuckSendingAsQueued()` resets items stuck in "sending" state after stream end, allowing retry
 - **Global crash**: `window.onerror` + `window.onunhandledrejection` show `#error-boundary` overlay with user-visible message
 
+### Stream End Reasons & Timeline Markers
+`showStreamEndReasonMessage()` in `streamOrchestrator.ts` maps `stream_end` reasons to user-visible system messages in the conversation timeline:
+| Reason | Message | Retryable |
+|---|---|---|
+| `ttfb_timeout` | "The model took too long to start responding..." | Yes |
+| `timeout` | "Response timed out..." or "Response was cut off (timeout)..." | Yes |
+| `hard_timeout` | "Stream interrupted after extended run..." | Yes |
+| `aborted` | "Generation interrupted by user." | No |
+| `error` | "An error occurred..." (suppressed if error card already exists) | Yes |
+
 ### Provider-Specific Error Mapping
 `opencodeErrorMapper.ts` handles third-party OpenAI-compatible providers (GLM, DeepSeek, etc.):
 - `insufficient_quota`/`quota exceeded` in response body → QUOTA_EXCEEDED error with "Switch provider" action
