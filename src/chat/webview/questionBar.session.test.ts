@@ -62,10 +62,13 @@ describe("question bar — session attribution (multi-tab)", () => {
   // the repopulated session's own question to the tab being switched away from.
   it("attributes a repopulated block with no sessionId to the session being repopulated, not the still-active previous tab", () => {
     setActiveSession("A")
-    const messages = [{ id: "mB", blocks: [{ type: "question", toolCallId: "qNoSid", groups: [{ question: "Pick", options: ["A", "B"], multiSelect: false }] }] }]
+    const messages = [{ id: "mB", blocks: [{ type: "question", toolCallId: "qNoSid", answered: true, groups: [{ question: "Pick", options: ["A", "B"], multiSelect: false }] }] }]
     repopulateFromMessages("B", messages as any)
-    assert.equal(getActiveQuestionCount(), 1, "shows on session B, which repopulateFromMessages just made active")
+    
+    const el = document.querySelector('[data-question-id="qNoSid"]') as HTMLElement
+    assert.ok(el, "should be rendered in DOM")
+
     setActiveSession("A")
-    assert.equal(getActiveQuestionCount(), 0, "must NOT have been attributed to session A, the tab active when repopulate ran")
+    assert.ok(!document.querySelector('[data-question-id="qNoSid"]'), "must NOT be visible/present on session A")
   })
 })

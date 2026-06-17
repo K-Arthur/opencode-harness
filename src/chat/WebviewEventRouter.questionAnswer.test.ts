@@ -173,6 +173,15 @@ describe("WebviewEventRouter — question_answer routing", () => {
     )
   })
 
+  it("B10: expired questions send the user's answer as a text prompt (not lost)", () => {
+    const catchBlock = handler.slice(handler.indexOf("catch (err)"))
+    const expiredBranch = catchBlock.slice(0, catchBlock.indexOf("} else"))
+    assert.ok(
+      expiredBranch.includes("startPrompt"),
+      "B10: expired path must send the answer as a text prompt so the model gets the user's information",
+    )
+  })
+
   it("B10: resolveCliSessionId short-circuits for existing server session IDs (avoids HTTP roundtrip)", () => {
     assert.ok(
       source.includes("isLocalPlaceholderSessionId"),

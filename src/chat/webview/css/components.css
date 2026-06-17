@@ -2591,7 +2591,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 10px;
+  padding: 3px 10px 3px 24px; /* Indent file rows under directory headers */
   min-height: 24px;
   cursor: pointer;
   transition: background 0.1s;
@@ -2653,13 +2653,13 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border: none;
   background: none;
   color: var(--oc-muted);
   cursor: pointer;
-  opacity: 0;
+  opacity: 0.5;
   transition: opacity 0.1s;
 }
 .cf-file-row:hover .cf-expand-btn,
@@ -2862,12 +2862,39 @@ textarea {
 }
 .cf-dir-group:last-child { border-bottom: none; }
 .cf-dir-header {
-  padding: 4px 10px 2px;
-  font-size: 0.62rem;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  font-size: 0.65rem;
   font-weight: 600;
   color: var(--oc-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  user-select: none;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+.cf-dir-header:hover {
+  color: var(--oc-fg);
+}
+.cf-dir-header:focus-visible {
+  outline: 1px solid var(--oc-focus, var(--color-accent));
+  outline-offset: -1px;
+}
+.cf-dir-chevron {
+  display: inline-block;
+  font-size: var(--cf-dir-chevron-size);
+  width: 8px;
+  text-align: center;
+  transition: transform var(--duration-fast);
+  transform: rotate(0deg);
+}
+.cf-dir-header[aria-expanded="false"] .cf-dir-chevron {
+  transform: rotate(-90deg);
 }
 
 /* ─── Context Window Unknown chip ───────────────────────────────────────────── */

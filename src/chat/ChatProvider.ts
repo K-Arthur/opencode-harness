@@ -25,6 +25,7 @@ import { ProviderConfigManager } from "../model/ProviderConfigManager"
 import { mapToolType as mapToolTypePure, isSessionInCurrentWorkspace as isSessionInCurrentWorkspacePure, looksLikeSdkError, isAbortErrorValue } from "./chatUtils"
 import { shouldIncludeStoreActiveFallback } from "./restorablePolicy"
 import { mapOpencodeError, type OpencodeError } from "./webview/opencodeErrorMapper"
+import { toWebviewErrorPayload, type ErrorContext } from "./webview/errorTypes"
 import { computeMessageCounts } from "./webview/messageCounter"
 import { RetryQueueService, CRITICAL_MESSAGE_TYPES } from "./RetryQueueService"
 import { ChatMessage, Block } from "./types"
@@ -2042,7 +2043,15 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
   }
 
   private postRequestError(message: string, sessionId?: string, errorContext?: unknown): void {
-    this.messagePostService.postRequestError(message, sessionId, errorContext)
+    let payload = errorContext
+    if (errorContext && typeof errorContext === "object" && "category" in errorContext) {
+      try {
+        payload = toWebviewErrorPayload(errorContext as ErrorContext)
+      } catch (err) {
+        log.error("Failed to map ErrorContext to WebviewErrorPayload", err)
+      }
+    }
+    this.messagePostService.postRequestError(message, sessionId, payload)
   }
 
   /** O5: Called when webview.postMessage resolves to false (saturation / refused). */

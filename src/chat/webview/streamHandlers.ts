@@ -1,6 +1,6 @@
 import type { Block, ChatMessage, ToolCallBlock, DiffBlock, QuestionBlock, ToolCallState, DiffHunk, RunActivitySnapshot } from "./types"
 import { createTextBlock, createErrorBlock } from "./blocks"
-import { ErrorCategory, ErrorSeverity, RetryStrategyType, type ErrorContext } from "./errorTypes"
+import { ErrorCategory, ErrorSeverity, RetryStrategyType, type ErrorContext, toErrorContext, type WebviewErrorPayload } from "./errorTypes"
 import { mapOpencodeError } from "./opencodeErrorMapper"
 import { renderMessage } from "./messageRenderer"
 import { renderBlock, renderMarkdown, getMarkdownWorkerClient } from "./renderer"
@@ -1339,7 +1339,13 @@ export function handleStreamError(
   // category, severity, actions, technical detail). Only re-classify the raw
   // string when no context was carried across the wire.
   const errorContext: ErrorContext = (() => {
-    if (error.errorContext) return error.errorContext
+    if (error.errorContext) {
+      const ec = error.errorContext as any;
+      if (ec && typeof ec === "object" && "type" in ec && ["auth_error", "quota_error", "infra_error", "stream_error"].includes(ec.type)) {
+        return toErrorContext(ec as WebviewErrorPayload);
+      }
+      return error.errorContext;
+    }
     // Try to parse JSON error payloads that arrive as raw strings
     // (e.g. '{"name":"BadRequest","data":{"message":"..."}}')
     const rawMsg = error.message

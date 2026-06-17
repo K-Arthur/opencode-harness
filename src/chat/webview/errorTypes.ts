@@ -536,3 +536,190 @@ export function getDefaultActions(error: ErrorContext): ErrorAction[] {
 
   return actions;
 }
+
+/**
+ * Type-safe discriminated union error payload structures for IPC boundary propagation.
+ */
+export type WebviewErrorCategory = 'network' | 'usage' | 'generation' | 'auth' | 'model' | 'context' | 'system';
+export type WebviewErrorSeverity = 'low' | 'medium' | 'high' | 'critical';
+
+export interface BaseErrorPayload {
+  sessionId: string;
+  correlationId: string;
+  timestamp: number;
+  code: string;
+  userMessage: string;
+  technicalDetails?: string;
+  retryable: boolean;
+}
+
+export interface AuthErrorPayload extends BaseErrorPayload {
+  type: 'auth_error';
+  category: 'auth';
+  severity: 'high' | 'critical';
+  authSettingsUrl?: string;
+}
+
+export interface QuotaErrorPayload extends BaseErrorPayload {
+  type: 'quota_error';
+  category: 'usage';
+  severity: 'high';
+  resetAtMs?: number;
+  upgradeUrl?: string;
+}
+
+export interface InfrastructureErrorPayload extends BaseErrorPayload {
+  type: 'infra_error';
+  category: 'network' | 'system';
+  severity: 'high' | 'critical';
+  autoRetryCount: number;
+}
+
+export interface LocalStreamErrorPayload extends BaseErrorPayload {
+  type: 'stream_error';
+  category: 'generation' | 'context' | 'model';
+  severity: 'low' | 'medium';
+  partialContentSaved?: string;
+}
+
+export type WebviewErrorPayload = 
+  | AuthErrorPayload
+  | QuotaErrorPayload
+  | InfrastructureErrorPayload
+  | LocalStreamErrorPayload;
+
+/**
+ * Maps an ErrorContext to a type-safe WebviewErrorPayload for serialization across the IPC boundary.
+ */
+export function toWebviewErrorPayload(error: ErrorContext): WebviewErrorPayload {
+  const base: BaseErrorPayload = {
+    sessionId: error.sessionId || '',
+    correlationId: error.correlationId || '',
+    timestamp: error.timestamp || Date.now(),
+    code: error.code,
+    userMessage: error.userMessage,
+    technicalDetails: error.technicalDetails,
+    retryable: error.retryable
+  };
+
+  if (error.category === ErrorCategory.AUTH) {
+    return {
+      ...base,
+      type: 'auth_error',
+      category: 'auth',
+      severity: error.severity === ErrorSeverity.CRITICAL ? 'critical' : 'high',
+      authSettingsUrl: (error.suggestedActions?.find(a => a.action === 'edit')?.metadata?.url as string | undefined)
+    };
+  } else if (error.category === ErrorCategory.USAGE) {
+    const usageCtx = error as UsageErrorContext;
+    return {
+      ...base,
+      type: 'quota_error',
+      category: 'usage',
+      severity: 'high',
+      resetAtMs: usageCtx.quotaState?.resetAt ? new Date(usageCtx.quotaState.resetAt).getTime() : undefined,
+      upgradeUrl: (error.suggestedActions?.find(a => a.action === 'upgrade_plan')?.metadata?.url as string | undefined)
+    };
+  } else if (error.category === ErrorCategory.NETWORK || error.category === ErrorCategory.SYSTEM) {
+    return {
+      ...base,
+      type: 'infra_error',
+      category: error.category === ErrorCategory.NETWORK ? 'network' : 'system',
+      severity: error.severity === ErrorSeverity.CRITICAL ? 'critical' : 'high',
+      autoRetryCount: 0
+    };
+  } else {
+    const genCtx = error as GenerationErrorContext;
+    return {
+      ...base,
+      type: 'stream_error',
+      category: error.category === ErrorCategory.CONTEXT ? 'context' : error.category === ErrorCategory.MODEL ? 'model' : 'generation',
+      severity: error.severity === ErrorSeverity.LOW ? 'low' : 'medium',
+      partialContentSaved: genCtx.partialResponse
+    };
+  }
+}
+
+/**
+ * Maps a type-safe WebviewErrorPayload back to an ErrorContext inside the webview.
+ */
+export function toErrorContext(payload: WebviewErrorPayload): ErrorContext {
+  const actions: ErrorAction[] = [];
+  
+  if (payload.retryable) {
+    actions.push({ label: 'Retry', action: 'retry', primary: true });
+  }
+
+  if (payload.type === 'auth_error') {
+    if (payload.authSettingsUrl) {
+      actions.push({
+        label: 'Open auth settings',
+        action: 'edit',
+        primary: !payload.retryable,
+        metadata: { url: payload.authSettingsUrl }
+      });
+    }
+    actions.push({ label: 'Switch provider', action: 'switch_model' });
+  } else if (payload.type === 'quota_error') {
+    actions.push({ label: 'Switch provider', action: 'switch_model', primary: true });
+    if (payload.upgradeUrl) {
+      actions.push({
+        label: 'Open billing',
+        action: 'upgrade_plan',
+        metadata: { url: payload.upgradeUrl }
+      });
+    }
+  }
+  
+  actions.push({ label: 'Dismiss', action: 'dismiss' });
+
+  let category = ErrorCategory.SYSTEM;
+  if (payload.category === 'network') category = ErrorCategory.NETWORK;
+  else if (payload.category === 'usage') category = ErrorCategory.USAGE;
+  else if (payload.category === 'generation') category = ErrorCategory.GENERATION;
+  else if (payload.category === 'auth') category = ErrorCategory.AUTH;
+  else if (payload.category === 'model') category = ErrorCategory.MODEL;
+  else if (payload.category === 'context') category = ErrorCategory.CONTEXT;
+
+  let severity = ErrorSeverity.MEDIUM;
+  if (payload.severity === 'low') severity = ErrorSeverity.LOW;
+  else if (payload.severity === 'high') severity = ErrorSeverity.HIGH;
+  else if (payload.severity === 'critical') severity = ErrorSeverity.CRITICAL;
+
+  const context: ErrorContext = {
+    category,
+    severity,
+    code: payload.code,
+    message: payload.userMessage,
+    userMessage: payload.userMessage,
+    technicalDetails: payload.technicalDetails,
+    suggestedActions: actions,
+    retryable: payload.retryable,
+    timestamp: payload.timestamp,
+    sessionId: payload.sessionId,
+    correlationId: payload.correlationId
+  };
+
+  if (payload.type === 'quota_error' && payload.resetAtMs) {
+    const quotaCtx = context as UsageErrorContext;
+    quotaCtx.quotaState = {
+      remainingTokens: 0,
+      limitTokens: 0,
+      remainingRequests: 0,
+      limitRequests: 0,
+      resetAt: new Date(payload.resetAtMs),
+      warningThreshold: 0
+    };
+  } else if (payload.type === 'stream_error' && payload.partialContentSaved) {
+    const genCtx = context as GenerationErrorContext;
+    genCtx.partialResponse = payload.partialContentSaved;
+  } else if (payload.type === 'infra_error') {
+    const netCtx = context as NetworkErrorContext;
+    netCtx.networkStatus = 'offline';
+  }
+
+  return context;
+}
+
+
+

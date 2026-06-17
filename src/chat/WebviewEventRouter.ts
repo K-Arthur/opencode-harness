@@ -440,11 +440,11 @@ export class WebviewEventRouter {
 
           if (classification.category === "expired") {
             // B10: The server no longer knows about this question. Mark it
-            // as answered in all layers so the stream can finalize — the
-            // question is dead and retrying will always fail. The webview
-            // removes it from the bar via the "expired" category signal.
+            // as answered so the bar removes it and the stream can finalize.
+            // Then send the user's answer as a regular text prompt so the
+            // model still gets the information — no retry needed.
             this.opts.sessionStore.markQuestionAnswered(
-              sessionId, answerId, "Expired — server no longer has this question", "skip",
+              sessionId, answerId, value, source === "freetext" ? "freetext" : "option",
             )
             this.opts.streamCoordinator.markQuestionAnswered(sessionId, answerId)
             this.opts.postMessage({
@@ -456,6 +456,21 @@ export class WebviewEventRouter {
               category: "expired",
               retryable: false,
             })
+            // Send the answer as a text prompt so the model can continue.
+            if (!this.promptsInFlight.has(sessionId)) {
+              this.promptsInFlight.add(sessionId)
+              try {
+                await this.opts.streamCoordinator.startPrompt(sessionId, value, {
+                  postMessage: (m) => this.opts.postMessage(m),
+                  postRequestError: (m) => this.opts.postRequestError(m),
+                  toolCallId: answerId,
+                  clearPromptsInFlight: () => this.promptsInFlight.delete(sessionId),
+                })
+              } catch (promptErr) {
+                log.error("B10: failed to send expired question answer as prompt", promptErr)
+                this.promptsInFlight.delete(sessionId)
+              }
+            }
           } else {
             // B9: Transient or unknown error — rollback optimistic state so
             // the user can retry.

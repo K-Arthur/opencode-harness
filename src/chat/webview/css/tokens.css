@@ -107,6 +107,8 @@
   --text-lg: 16px;
   --text-xl: 18px;
   --text-2xl: 20px;
+  --cf-dir-chevron-size: 7px;
+  --side-tab-chevron-size: 8px;
 
   /* ── Sprint 1 typography system (research-grounded) ────────────────────
    * Canonical --oc-font-* scale. Body uses --vscode-font-family (UI font)
@@ -322,7 +324,7 @@
 
   /* ─── Z-Index Scale ─── */
   --z-base: 0;
-  --z-dropdown: 50;
+  --z-dropdown: 150;
   --z-sticky: 100;
   --z-modal-backdrop: 200;
   --z-modal: 300;
@@ -354,7 +356,7 @@
   --message-list-bottom-pad: 140px;
 
   /* ─── Modal Specific Tokens ─── */
-  --modal-width-sm: 320px;
+  --modal-width-sm: min(320px, 100% - var(--space-4));
   --modal-width-md: 480px;
   --modal-width-lg: 640px;
   --modal-width-xl: 680px;

@@ -14,7 +14,9 @@ import {
   createErrorContext,
   isRetryable,
   getSuggestedActions,
-  DEFAULT_RETRY_STRATEGIES
+  DEFAULT_RETRY_STRATEGIES,
+  toWebviewErrorPayload,
+  WebviewErrorPayload
 } from './errorTypes';
 import { mapOpencodeError } from './opencodeErrorMapper';
 
@@ -414,9 +416,10 @@ export class ErrorHandler {
 
     if (this.config.logToExtension && this.vscodeApi) {
       try {
+        const payload = toWebviewErrorPayload(errorContext);
         this.vscodeApi.postMessage({
           type: 'error_log',
-          errorContext
+          errorContext: payload
         });
       } catch (error) {
         console.warn('Failed to log error to extension:', error);

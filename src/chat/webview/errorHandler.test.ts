@@ -1,7 +1,7 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { ErrorHandler } from "./errorHandler"
-import { ErrorCategory, ErrorSeverity, RetryStrategyType } from "./errorTypes"
+import { ErrorCategory, ErrorSeverity, RetryStrategyType, toWebviewErrorPayload, toErrorContext } from "./errorTypes"
 
 describe("ErrorHandler", () => {
   describe("classifyError", () => {
@@ -226,6 +226,45 @@ describe("ErrorHandler", () => {
       ;(handler as any).retryRegistry.set("TEST", 3)
       handler.updateConfig({ maxRetryAttempts: 5 })
       assert.equal((handler as any).retryRegistry.size, 0)
+    })
+  })
+
+  describe("WebviewErrorPayload serialization mapping", () => {
+    it("maps AuthErrorContext to AuthErrorPayload", () => {
+      const handler = new ErrorHandler()
+      const ctx = handler.handleError({ name: "ProviderAuthError", message: "unauthorized", providerID: "anthropic" })
+      const payload = toWebviewErrorPayload(ctx)
+      assert.equal(payload.type, "auth_error")
+      assert.equal(payload.category, "auth")
+      assert.equal(payload.severity, "high")
+      
+      const mappedBack = toErrorContext(payload)
+      assert.equal(mappedBack.category, ErrorCategory.AUTH)
+      assert.equal(mappedBack.severity, ErrorSeverity.HIGH)
+      assert.equal(mappedBack.code, "AUTH_FAILED")
+    })
+
+    it("maps UsageErrorContext to QuotaErrorPayload", () => {
+      const handler = new ErrorHandler()
+      const ctx = handler.handleError({ name: "APIError", statusCode: 402, message: "quota exceeded" })
+      const payload = toWebviewErrorPayload(ctx)
+      assert.equal(payload.type, "quota_error")
+      assert.equal(payload.category, "usage")
+
+      const mappedBack = toErrorContext(payload)
+      assert.equal(mappedBack.category, ErrorCategory.USAGE)
+      assert.equal(mappedBack.code, "QUOTA_EXCEEDED")
+    })
+
+    it("maps NetworkErrorContext to InfrastructureErrorPayload", () => {
+      const handler = new ErrorHandler()
+      const ctx = handler.handleError({ message: "network timeout" })
+      const payload = toWebviewErrorPayload(ctx)
+      assert.equal(payload.type, "infra_error")
+      assert.equal(payload.category, "network")
+
+      const mappedBack = toErrorContext(payload)
+      assert.equal(mappedBack.category, ErrorCategory.NETWORK)
     })
   })
 })
