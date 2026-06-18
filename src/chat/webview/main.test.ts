@@ -1200,9 +1200,10 @@ describe("permission bar — multi-tab session attribution", () => {
   void describe("expired_question_recovery_failed handler — auto-send recovery", () => {
     const hIdx = source.indexOf('"expired_question_recovery_failed", (msg, sid) =>')
     assert.ok(hIdx >= 0, "expired_question_recovery_failed handler must exist")
-    // Grab from the handler start to the next handler listed in messageHandlers
-    const nextHandlerIdx = source.indexOf('["', hIdx + 10)
-    const first = nextHandlerIdx > hIdx ? source.slice(hIdx, nextHandlerIdx) : source.slice(hIdx)
+    // Extract from handler start to the closing of the messageHandlers Map (])
+    // The handler is the LAST entry in the Map, so we stop at "}],\n    ])"
+    const closeIdx = source.indexOf("}],\n    ])", hIdx)
+    const first = closeIdx > hIdx ? source.slice(hIdx, closeIdx) : source.slice(hIdx, hIdx + 2000)
 
     it("auto-sends via setTimeout + sendMessage (no manual Enter required)", () => {
       assert.ok(

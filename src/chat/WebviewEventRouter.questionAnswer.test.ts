@@ -181,6 +181,19 @@ describe("WebviewEventRouter — question_answer routing", () => {
     )
   })
 
+  it("B10: expired catch branch does NOT duplicate markQuestionAnswered calls (already handled optimistically)", () => {
+    const catchBlock = handler.slice(handler.indexOf("catch (err)"))
+    const expiredBranch = catchBlock.slice(0, catchBlock.indexOf("} else"))
+    // The catch block should NOT contain streamCoordinator.markQuestionAnswered
+    // (it was already called optimistically at L416-417; duplicating triggers
+    // a redundant maybeFinalizeStream that races with the recovery startPrompt)
+    const catchHasCoordinatorMark = expiredBranch.includes("streamCoordinator.markQuestionAnswered")
+    assert.ok(
+      !catchHasCoordinatorMark,
+      "B10: expired catch branch must NOT call streamCoordinator.markQuestionAnswered — it is already handled optimistically before the SDK call; a duplicate triggers a redundant maybeFinalizeStream",
+    )
+  })
+
   it("B10: resolveCliSessionId short-circuits for existing server session IDs (avoids HTTP roundtrip)", () => {
     assert.ok(
       source.includes("isLocalPlaceholderSessionId"),
