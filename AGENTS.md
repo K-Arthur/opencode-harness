@@ -260,6 +260,8 @@ Errors are routed to a spatial surface by a single pure function — **never dec
 | `server_status` (error) | `SessionManager` | `main.ts:1912+` | Maps through error context if available |
 | `rate_limit_exhausted` | `RateLimitMonitor` | `main.ts:2260+` | Shows input-area banner + in-stream error |
 | `rate_limit_state` | `RateLimitMonitor` | `main.ts:2084+` | Feeds quota bar + QuotaMonitor |
+| `run_status_result` | `StreamCoordinator.probeActiveRun` | `main.ts` | Host-authoritative answer to `probe_run_status`; reconciles both streaming flags. `serverReachable:false` means the answer is uncertain. |
+| `streaming_state` | `TabManager.setStreaming` (via `onStreamingStateChanged`) | `main.ts` | Now carries `{source, cliSessionId, messageId, runId}`; writes BOTH `isStreaming` and `isServerStreaming` (host-authoritative). |
 
 ### Error Block Rendering
 - **Block-level**: `renderErrorBlock()` in `renderer.ts` renders persisted errors from message history with header, message, detail, and action buttons (Retry/Dismiss by default)
@@ -290,6 +292,72 @@ Errors are routed to a spatial surface by a single pure function — **never dec
 | `hard_timeout` | "Stream interrupted after extended run..." | Yes |
 | `aborted` | "Generation interrupted by user." | No |
 | `error` | "An error occurred..." (suppressed if error card already exists) | Yes |
+| `reconnect_completed` | (Suppressed — emitted by `reconcileAfterReconnect` when the run completed during an SSE outage. The completed assistant message is already on the transcript; a system message would be noise.) | No |
+
+`stream_end` payloads also carry a `source?: "host" | "watchdog" | "abort" | "finalize" | "ttfb" | "reconcile"` discriminator for attribution — useful for tracing and for the webview to decide whether to show a Resume affordance.
+
+### Streaming State Stability & Host-Authoritative Probe Loop
+
+The webview's send button (Send/Stop) is the canonical user-visible streaming indicator. It is driven by TWO flags OR'd together in `updateSendButton` (`sendLogic.ts`):
+
+| Flag | Source | Purpose |
+|---|---|---|
+| `SessionState.isStreaming` | Optimistic local; set immediately on send, cleared by `stream_end` / `streaming_state:false` | Fast UI feedback before the host acks |
+| `SessionState.isServerStreaming` | **Host-authoritative**; only mutated by `streaming_state` and `run_status_result` messages | Ground truth that revives a stale optimistic `false` (or clears a stuck optimistic `true`) |
+
+The send button shows Stop when EITHER flag is true. Capacity accounting (`getStreamCapacityState`) counts sessions where either flag is true.
+
+**Run identity** is tracked alongside the flags: `SessionState.activeServerMessageId` and `SessionState.activeRunId` correlate late chunks with the active run and let the webview reject stale `streaming_state` pushes from a previous run. Both are cleared on `streaming_state:false` and on webview reload.
+
+#### Probe Loop (`probe_run_status` ↔ `run_status_result`)
+
+The webview can ask the host to confirm whether a run is still active. The host queries the server (last assistant message's `time.completed`) and replies authoritatively.
+
+```
+Webview → Host: { type: "probe_run_status", sessionId, cliSessionId? }
+Host → Webview: { type: "run_status_result", sessionId, cliSessionId?, active, runId?, messageId?, probedAt, serverReachable }
+```
+
+The webview triggers a probe in three situations:
+1. **Tab switch** (`main.ts:switchTab`) — confirms the switched-to tab's run state.
+2. **Non-terminal error** (`handleRequestError` with `mayStillBeRunning: true`) — preserves the Stop button pending probe confirmation.
+3. **Send-ack watchdog** (`SEND_ACK_WATCHDOG_MS = 5000ms`, `sendLogic.ts:sendMessage`) — fires if the host hasn't pushed `isServerStreaming:true` within 5s of send (lost `send_prompt`, silent reject, host crash mid-send).
+
+`probeActiveRun` (`StreamCoordinator.ts`) replies `active=false` if the server has a completed assistant message, `active=true` if the run is still in progress, and `serverReachable=false` on HTTP failure (so the webview knows the answer is uncertain).
+
+#### `streaming_state` Payload Extension
+
+The wire format now carries run identity for correlation:
+
+```ts
+{ type: "streaming_state"; sessionId; isStreaming; source?: "host" | "watchdog" | "reconnect" | "probe"; cliSessionId?; messageId?; runId? }
+```
+
+`source` values:
+- `"host"` — normal lifecycle (`startPrompt` / `finalizeStream` / `abort`)
+- `"watchdog"` — the 45-min stuck-stream watchdog fired (synthetic terminator)
+- `"reconnect"` — `server_disconnected` or per-tab process-crash cleanup
+- `"probe"` — answer to `probe_run_status`
+
+The webview writes BOTH flags from any `streaming_state` message, so a single host push can revive a stuck optimistic `false` (G7 fix).
+
+#### Gap Coverage (G1–G10)
+
+| Gap | Symptom | Fix |
+|---|---|---|
+| **G1** | TTFB (45s) < SSE idle watchdog (90s); TTFB unilaterally cleared streaming while backend kept generating | `setupTtfbTimeout` probes `probeActiveRun` before posting `stream_end`; suppresses stream_end if the run is still active. `source: "ttfb"` on attribution. |
+| **G2** | `handleRequestError` cleared `isStreaming` for any error (show_error, provider_error, server_status:"error") | Reads `mayStillBeRunning` from `errorContext`; preserves flag + posts `probe_run_status` when true. New `readMayStillBeRunning` helper in `streamOrchestrator.ts`. |
+| **G3** | `server_disconnected` did double-work (setStreaming + manual postMessage) and gave no attribution | Single `setStreaming(id, false, { source: "reconnect" })` call; the emitter handles the post. |
+| **G4** | `event_stream_reconnected` reconcile was gated on `tab.isStreaming` — once G1/G2/G3 cleared it, reconnect couldn't reattach | Reconcile now considers BOTH `isStreaming` tabs AND `getInterruptedTabs()` snapshot. |
+| **G5** | Transient `session.idle` (between tool calls, during provider retry) triggered premature finalize | `maybeFinalizeStream` defers status-triggered finalizes by `STATUS_FINALIZE_QUIET_MS` (1500ms); any chunk/tool cancels (`cancelPendingStatusFinalize`). |
+| **G6** | Run completed during SSE outage → terminal events lost → webview stuck "streaming" for up to 45min | `reconcileAfterReconnect` checks `time.completed` on the last assistant; emits dropped `stream_end` (reason:"reconnect_completed", source:"reconcile"). |
+| **G7** | `streaming_state` handler wrote only the optimistic flag; the authoritative backstop was dead code | Handler now writes both flags + stashes run identity; clears identity on stop so a stale push can't revive. |
+| **G8** | Optimistic `isStreaming=true` on send with no host ack → stuck Stop button | 5s `SEND_ACK_WATCHDOG_MS` timer in `sendMessage` probes if the host hasn't pushed `isServerStreaming=true`. |
+| **G9** | `switchTab` read only the local flag → misrendered Stop after an error/reconnect | Derives from `isStreaming || isServerStreaming`; calls `composer.probeActiveRun()` to reconcile. |
+| **G10** | Per-tab process crash (ADR-010) handler only logged → stuck Stop for 45min | `ChatProvider.handleProcessCrash(processId, tabIds, timestamp)` cleans up via `cleanupTab`, posts `streaming_state:false` (source:"reconnect") + `stream_interrupted`. Wired from `extension.ts:onProcessCrash`. |
+
+#### Test Coverage
+- `tests/unit/streaming-state-stability.test.mjs` (27 tests) — structural coverage for every gap, the wire format, host authority wiring, and reload state clearing.
 
 ### Provider-Specific Error Mapping
 `opencodeErrorMapper.ts` handles third-party OpenAI-compatible providers (GLM, DeepSeek, etc.):
