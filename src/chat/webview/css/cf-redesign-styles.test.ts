@@ -31,7 +31,9 @@ describe("CF Changed Files dropdown — CSS rule coverage", () => {
   it("styles .cf-collapse-all-btn matching .cf-sort-btn baseline", () => {
     const idx = combined.indexOf(".cf-collapse-all-btn")
     assert.ok(idx >= 0, ".cf-collapse-all-btn must have a CSS rule")
-    const block = combined.slice(idx, idx + 300)
+    // 500-char window accounts for consolidated multi-selector rules where
+    // properties follow after several grouped selectors (DRY CSS pattern).
+    const block = combined.slice(idx, idx + 500)
     assert.ok(block.includes("background") || block.includes("cursor"), ".cf-collapse-all-btn must set pointer styling")
   })
 

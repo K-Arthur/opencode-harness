@@ -66,6 +66,10 @@ let _btn: HTMLButtonElement | null = null
 let _panel: HTMLElement | null = null
 let _badge: HTMLElement | null = null
 let _isOpen = false
+/** Element that had focus before the dropdown opened — restored on close. */
+let _previouslyFocused: HTMLElement | null = null
+/** Roving-tabindex bookkeeping: the tree item currently carrying tabindex=0. */
+let _rovingTabId: string | null = null
 let _outsideClickHandler: ((e: MouseEvent) => void) | null = null
 let _keyHandler: ((e: KeyboardEvent) => void) | null = null
 let _resizeHandler: (() => void) | null = null
@@ -89,6 +93,8 @@ export function resetChangedFilesDropdown(): void {
   _isOpen = false
   _refreshScheduled = false
   _resizeScheduled = false
+  _previouslyFocused = null
+  _rovingTabId = null
 }
 
 /** Drop one session's state (e.g. on session deletion) */
@@ -439,6 +445,11 @@ function _open(): void {
   _panel.classList.remove("hidden")
   if (_btn) _btn.setAttribute("aria-expanded", "true")
 
+  // Record the element that had focus so we can restore it on close
+  // (WCAG 2.4.3: focus order — returning to the trigger is the expected pattern).
+  const active = document.activeElement as HTMLElement | null
+  _previouslyFocused = (active && active !== _panel) ? active : _btn
+
   // Anchor to the strip when btn is absent/detached, otherwise anchor to btn
   const anchor: Element | null =
     (_btn && _btn.isConnected) ? _btn : document.getElementById("changed-files-strip")
@@ -446,6 +457,10 @@ function _open(): void {
 
   const files = _currentSessionId ? _stateFor(_currentSessionId).lastFiles : []
   _renderTree(_treeContainer, files)
+
+  // Move focus into the dialog — first focusable element (close button or
+  // first toolbar control). WCAG 2.4.3 + ARIA dialog pattern.
+  requestAnimationFrame(() => _focusInitial())
 
   // Dismiss on outside click
   const strip = document.getElementById("changed-files-strip")
@@ -455,7 +470,7 @@ function _open(): void {
       _close()
     }
   }
-  _keyHandler = (e: KeyboardEvent) => { if (e.key === "Escape") _close() }
+  _keyHandler = (e: KeyboardEvent) => _handleDialogKeydown(e)
   _resizeHandler = () => {
     // Coalesce resize bursts to one reposition per frame — positionPanel reads
     // layout (getBoundingClientRect) and must not run on every resize event.
@@ -473,6 +488,90 @@ function _open(): void {
     document.addEventListener("keydown", _keyHandler!)
     window.addEventListener("resize", _resizeHandler!)
   })
+}
+
+/**
+ * Query all focusable elements inside the panel in DOM order, excluding those
+ * that are hidden (display:none / visibility:hidden / disabled / aria-hidden).
+ */
+function _focusableInPanel(): HTMLElement[] {
+  if (!_panel) return []
+  const sel = [
+    'button:not([disabled])',
+    '[href]',
+    'input:not([disabled])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    '[tabindex]:not([tabindex="-1"])',
+  ].join(",")
+  const candidates = Array.from(_panel.querySelectorAll<HTMLElement>(sel))
+  return candidates.filter((el) => {
+    if (el.hasAttribute("aria-hidden")) return false
+    if (el.getAttribute("disabled") !== null) return false
+    // Skip elements inside a collapsed directory group (display:none ancestor)
+    const hidden = el.closest("[data-collapsed-children='true']")
+    if (hidden && hidden !== el) return false
+    return el.offsetParent !== null || el === document.activeElement
+  })
+}
+
+/** Move focus into the dialog on open. Prefers the close button, then toolbar. */
+function _focusInitial(): void {
+  if (!_panel) return
+  // Prefer the close button so Escape is immediately obvious, then fall back
+  // to the first toolbar control, then the first tree item.
+  const closeBtn = _panel.querySelector<HTMLElement>("#cf-dropdown-close")
+  if (closeBtn) { closeBtn.focus(); return }
+  const focusable = _focusableInPanel()
+  if (focusable.length > 0) { focusable[0]!.focus(); return }
+  // Last resort: focus the panel itself
+  _panel.setAttribute("tabindex", "-1")
+  _panel.focus()
+}
+
+/**
+ * Dialog-level keydown handler: Escape closes, Tab/Shift+Tab traps focus
+ * inside the panel, and arrow-key delegation to the tree is handled by
+ * per-row listeners (added in _renderTree).
+ */
+function _handleDialogKeydown(e: KeyboardEvent): void {
+  if (e.key === "Escape") {
+    e.preventDefault()
+    e.stopPropagation()
+    _close()
+    return
+  }
+  if (e.key === "Tab") {
+    _trapTab(e)
+    return
+  }
+}
+
+/**
+ * Focus trap: when Tabbing would leave the panel, wrap to the other end.
+ * Implements the WAI-ARIA "dialog" keyboard pattern.
+ */
+function _trapTab(e: KeyboardEvent): void {
+  if (!_panel) return
+  const focusable = _focusableInPanel()
+  if (focusable.length === 0) return
+  const first = focusable[0]!
+  const last = focusable[focusable.length - 1]!
+  const active = document.activeElement as HTMLElement | null
+
+  if (e.shiftKey) {
+    // Shift+Tab on the first element → wrap to last
+    if (active === first || !_panel.contains(active)) {
+      e.preventDefault()
+      last.focus()
+    }
+  } else {
+    // Tab on the last element → wrap to first
+    if (active === last) {
+      e.preventDefault()
+      first.focus()
+    }
+  }
 }
 
 function positionPanel(anchor: Element): void {
@@ -514,6 +613,14 @@ function _close(): void {
   _outsideClickHandler = null
   _keyHandler = null
   _resizeHandler = null
+  _rovingTabId = null
+  // Restore focus to the element that opened the dialog (WCAG 2.4.3).
+  if (_previouslyFocused && typeof _previouslyFocused.focus === "function") {
+    _previouslyFocused.focus()
+    _previouslyFocused = null
+  } else if (_btn) {
+    _btn.focus()
+  }
 }
 
 // ─── Badge ────────────────────────────────────────────────────────────────────
@@ -531,15 +638,46 @@ function safeNum(n: unknown): number {
   return Number.isFinite(v) ? v : 0
 }
 
+/**
+ * Shorten a directory path for display in headers and file subtitles.
+ *
+ * Strategy (matches VS Code Source Control breadcrumbs):
+ *   1. Normalize separators to "/".
+ *   2. If the path has more than `maxSegments` segments, collapse the MIDDLE
+ *      with an ellipsis — keeping the first segment (anchor) and the last two
+ *      (most specific location). e.g. "src/chat/handlers/deep/nested" →
+ *      "src/…/deep/nested".
+ *   3. Never uppercase — return natural case for readability (WCAG 1.4.8).
+ *   4. Empty string → "/" (root group label).
+ */
+function shortenDirPath(dir: string, maxSegments = 3): string {
+  if (!dir) return "/"
+  const norm = dir.replace(/\\/g, "/").replace(/^\.\/+/, "").replace(/\/+$/, "")
+  const segments = norm.split("/").filter(Boolean)
+  if (segments.length <= maxSegments) return segments.join("/")
+  const head = segments[0] ?? ""
+  const tail = segments.slice(-2).join("/")
+  return `${head}/…/${tail}`
+}
+
+/** Abbreviated per-file directory (subtitle under filename). Even shorter. */
+function shortenFileDir(dir: string): string {
+  if (!dir) return ""
+  const norm = dir.replace(/\\/g, "/").replace(/^\.\/+/, "").replace(/\/+$/, "")
+  const segments = norm.split("/").filter(Boolean)
+  if (segments.length === 0) return ""
+  if (segments.length <= 2) return segments.join("/")
+  // For deep paths show only the last segment prefixed with …/
+  return `…/${segments[segments.length - 1] ?? ""}`
+}
+
 function _inferStatus(file: FileChange): "A" | "M" | "D" {
+  // Trust explicit git status when available.
   if (file.status) return file.status
-  // Infer from line-count stats when git status is unavailable:
-  //   added>0, removed=0 → likely a new file (Added)
-  //   removed>0, added=0 → likely a deleted file (Deleted)
-  //   both>0            → modified
-  //   both=0            → unknown, default to M
-  if (file.added > 0 && file.removed === 0) return "A"
-  if (file.removed > 0 && file.added === 0) return "D"
+  // Without git status we cannot reliably distinguish Added/Deleted from
+  // Modified based on line counts alone (a new file with only additions is
+  // indistinguishable from a modified file that only gained lines). Default
+  // to "M" — the honest representation. The UI tooltip still shows "Modified".
   return "M"
 }
 
@@ -573,7 +711,7 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
   container.innerHTML = ""
 
   if (files.length === 0) {
-    container.innerHTML = `<div class="cf-empty">No changed files in this session.</div>`
+    container.innerHTML = `<div class="cf-empty" role="status">No changed files in this session.</div>`
     return
   }
 
@@ -588,16 +726,26 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       : (b.added + b.removed) - (a.added + a.removed)
   )
 
+  // Update the dialog's descriptive subtitle (file count) for screen readers.
+  const desc = document.getElementById("cf-dropdown-desc")
+  if (desc) {
+    desc.textContent = `${files.length} file${files.length !== 1 ? "s" : ""} changed`
+  }
+
   // Summary bar — file count + aggregate added/removed across the changeset.
   const totalAdded = safe.reduce((s, f) => s + f.added, 0)
   const totalRemoved = safe.reduce((s, f) => s + f.removed, 0)
   const summary = document.createElement("div")
   summary.className = "cf-summary-bar"
+  summary.setAttribute("role", "status")
+  summary.setAttribute("aria-live", "polite")
+  summary.setAttribute("aria-atomic", "true")
   const countSpan = document.createElement("span")
   countSpan.className = "cf-summary-count"
   countSpan.textContent = `${files.length} file${files.length !== 1 ? "s" : ""}`
   const totals = document.createElement("span")
   totals.className = "cf-summary-stats"
+  totals.setAttribute("aria-label", `${totalAdded} additions, ${totalRemoved} deletions`)
   const addEl = document.createElement("span"); addEl.className = "cf-stat-added"; addEl.textContent = `+${totalAdded}`
   const remEl = document.createElement("span"); remEl.className = "cf-stat-removed"; remEl.textContent = `−${totalRemoved}`
   totals.appendChild(addEl); totals.appendChild(document.createTextNode(" ")); totals.appendChild(remEl)
@@ -606,18 +754,26 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
   container.appendChild(summary)
 
   // Controls — sort toggle + collapse-all + bulk actions.
+  // role="toolbar" gives screen readers a named group of related actions.
   const controls = document.createElement("div")
   controls.className = "cf-controls"
+  controls.setAttribute("role", "toolbar")
+  controls.setAttribute("aria-label", "Changed files actions")
   controls.innerHTML = `
-    <button class="cf-sort-btn" data-action="toggle-sort" title="Sort: ${state.sortMode === "changes" ? "most changed" : "alphabetical"}" aria-label="Toggle sort order">
+    <button class="cf-sort-btn" data-action="toggle-sort" type="button"
+      title="Sort: ${state.sortMode === "changes" ? "most changed" : "alphabetical"}"
+      aria-label="Sort by ${state.sortMode === "changes" ? "most changed" : "alphabetical"}"
+      aria-pressed="${state.sortMode === "changes" ? "true" : "false"}">
       <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
       ${state.sortMode === "changes" ? "By changes" : "A–Z"}
     </button>
-    <button class="cf-collapse-all-btn" data-action="collapse-all" title="Collapse all" aria-label="Collapse all diffs">
+    <button class="cf-collapse-all-btn" data-action="collapse-all" type="button"
+      title="Collapse all directories" aria-label="Collapse all file groups">
       <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 15l7-7 7 7"/></svg>
       Collapse all
     </button>
-    <button class="cf-revert-all-btn" data-action="revert-all" title="Revert all files to git HEAD" aria-label="Revert all files">
+    <button class="cf-revert-all-btn" data-action="revert-all" type="button"
+      title="Revert all files to git HEAD" aria-label="Revert all changed files">
       <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
       Revert All
     </button>
@@ -637,11 +793,18 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
   })
   container.appendChild(controls)
 
-  // File list, grouped by parent directory. Files at the repo root group
-  // under "/". Grouping is a layout concern only — per-row expand/collapse
-  // stays incremental (no full-tree rebuild) via _renderRowExpansion.
+  // File list, grouped by parent directory. role="tree" + per-item role=
+  // "treeitem" gives screen-reader users proper hierarchical navigation.
+  // Roving tabindex: exactly one item carries tabindex=0 (the "roving" one);
+  // all others get -1. Arrow keys move the roving slot. This is the WAI-ARIA
+  // treeview keyboard pattern (APG).
   const list = document.createElement("div")
   list.className = "cf-file-list"
+  list.setAttribute("role", "tree")
+  list.setAttribute("aria-label", "Changed files")
+  list.setAttribute("aria-multiselectable", "false")
+  // Tree-level keydown for arrow navigation (event delegation).
+  list.addEventListener("keydown", (e) => _handleTreeKeydown(e, list))
 
   const groups = new Map<string, typeof sorted>()
   for (const file of sorted) {
@@ -652,31 +815,48 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
     bucket.push(file)
   }
 
+  /** Track whether we've assigned the initial roving tabindex=0 slot. */
+  let rovingAssigned = false
+
   for (const [dir, groupFiles] of groups) {
     const group = document.createElement("div")
     group.className = "cf-dir-group"
-    
+
     const isCollapsed = state.collapsedDirs.has(dir)
+    const shortDirLabel = shortenDirPath(dir)
     const header = document.createElement("button")
     header.className = "cf-dir-header"
     header.type = "button"
+    header.setAttribute("role", "treeitem")
+    header.setAttribute("aria-level", "1")
     header.setAttribute("aria-expanded", String(!isCollapsed))
+    header.setAttribute("aria-label", `${shortDirLabel} directory${isCollapsed ? ", collapsed" : ", expanded"}`)
+    header.setAttribute("data-cf-tree-id", `dir:${dir}`)
+    // Roving tabindex: first item gets 0, rest get -1.
+    header.tabIndex = (!rovingAssigned && !isCollapsed) ? 0 : -1
+    if (!rovingAssigned && !isCollapsed) { _rovingTabId = `dir:${dir}`; rovingAssigned = true }
 
     const chevron = document.createElement("span")
     chevron.className = "cf-dir-chevron"
+    chevron.setAttribute("aria-hidden", "true")
     chevron.textContent = isCollapsed ? "▶" : "▼"
     header.appendChild(chevron)
 
     const dirTitle = document.createElement("span")
-    dirTitle.textContent = dir === "" ? "/" : dir
+    dirTitle.className = "cf-dir-path"
+    dirTitle.textContent = shortDirLabel
     header.appendChild(dirTitle)
 
     group.appendChild(header)
 
     const filesContainer = document.createElement("div")
     filesContainer.className = "cf-dir-files"
+    filesContainer.setAttribute("role", "group")
+    filesContainer.setAttribute("aria-label", shortDirLabel)
     if (isCollapsed) {
       filesContainer.style.display = "none"
+      // Marker for the focus-trap filter so it skips children of collapsed dirs.
+      filesContainer.setAttribute("data-collapsed-children", "true")
     }
     group.appendChild(filesContainer)
 
@@ -687,31 +867,44 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       } else {
         state.collapsedDirs.add(dir)
       }
-      header.setAttribute("aria-expanded", String(currentlyCollapsed))
-      chevron.textContent = currentlyCollapsed ? "▼" : "▶"
-      filesContainer.style.display = currentlyCollapsed ? "" : "none"
+      const nowExpanded = currentlyCollapsed
+      header.setAttribute("aria-expanded", String(nowExpanded))
+      header.setAttribute("aria-label", `${shortDirLabel} directory${nowExpanded ? ", expanded" : ", collapsed"}`)
+      chevron.textContent = nowExpanded ? "▼" : "▶"
+      filesContainer.style.display = nowExpanded ? "" : "none"
+      filesContainer.toggleAttribute("data-collapsed-children", !nowExpanded)
     })
 
     groupFiles.forEach((file) => {
       const parts = file.path.split("/")
       const fileName = parts[parts.length - 1] ?? file.path
       const dirParts = parts.slice(0, -1)
-      const shortDir = dirParts.length > 2
-        ? `…/${dirParts[dirParts.length - 1]}`
-        : dirParts.join("/")
+      const fileDir = dirParts.join("/")
+      const shortDir = shortenFileDir(fileDir)
       const status = _inferStatus(file)
+      const statusWord = status === "A" ? "Added" : status === "D" ? "Deleted" : "Modified"
       const isExpanded = state.expandedFiles.has(file.path)
       const totalLines = file.added + file.removed
 
       const row = document.createElement("div")
       row.className = `cf-file-row${isExpanded ? " cf-file-row--expanded" : ""}`
       row.setAttribute("data-path", file.path)
-      row.tabIndex = 0
+      row.setAttribute("role", "treeitem")
+      row.setAttribute("aria-level", "2")
+      row.setAttribute("aria-selected", "false")
+      row.setAttribute("data-cf-tree-id", `file:${file.path}`)
+      // Descriptive label: "filename, Status, +N additions −N deletions"
+      row.setAttribute("aria-label",
+        `${fileName}, ${statusWord}, ${file.added} addition${file.added !== 1 ? "s" : ""}, ${file.removed} deletion${file.removed !== 1 ? "s" : ""}`)
+      // Roving tabindex.
+      row.tabIndex = !rovingAssigned ? 0 : -1
+      if (!rovingAssigned) { _rovingTabId = `file:${file.path}`; rovingAssigned = true }
 
       const badge = document.createElement("span")
       badge.className = `cf-status-badge cf-status-badge--${status}`
       badge.textContent = status
-      badge.title = status === "A" ? "Added" : status === "D" ? "Deleted" : "Modified"
+      badge.setAttribute("aria-hidden", "true") // redundant: row label already says "Modified"
+      badge.title = statusWord
 
       const nameCol = document.createElement("span")
       nameCol.className = "cf-file-name-col"
@@ -741,6 +934,7 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
 
       const stats = document.createElement("span")
       stats.className = "cf-file-stats"
+      stats.setAttribute("aria-hidden", "true") // row label already includes counts
       const addedEl = document.createElement("span")
       addedEl.className = "cf-stat-added"
       addedEl.textContent = `+${file.added}`
@@ -752,6 +946,7 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
 
       const changeBar = document.createElement("span")
       changeBar.className = "cf-change-bar"
+      changeBar.setAttribute("aria-hidden", "true")
       changeBar.title = `${file.added} added, ${file.removed} removed`
       if (totalLines > 0) {
         const addPct = Math.round((file.added / totalLines) * 100)
@@ -760,8 +955,10 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
 
       const openBtn = document.createElement("button")
       openBtn.className = "cf-open-btn"
-      openBtn.setAttribute("aria-label", "Open file")
+      openBtn.type = "button"
+      openBtn.setAttribute("aria-label", `Open ${fileName}`)
       openBtn.title = "Open file"
+      openBtn.tabIndex = -1
       openBtn.innerHTML = `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 3h7v7M21 3l-9 9M5 7v12h12"/></svg>`
       openBtn.addEventListener("click", (e) => {
         e.stopPropagation()
@@ -773,8 +970,10 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       // expandable hunk preview — this opens a tab in the editor area.
       const diffBtn = document.createElement("button")
       diffBtn.className = "cf-open-diff-btn"
-      diffBtn.setAttribute("aria-label", "Open diff")
+      diffBtn.type = "button"
+      diffBtn.setAttribute("aria-label", `Open diff for ${fileName}`)
       diffBtn.title = "Open diff in editor"
+      diffBtn.tabIndex = -1
       diffBtn.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v18M3 12h18M8 8l-5 4 5 4M16 8l5 4-5 4"/></svg>`
       diffBtn.addEventListener("click", (e) => {
         e.stopPropagation()
@@ -783,15 +982,19 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
 
       const expandBtn = document.createElement("button")
       expandBtn.className = "cf-expand-btn"
-      expandBtn.setAttribute("aria-label", isExpanded ? "Collapse diff" : "Expand diff")
+      expandBtn.type = "button"
+      expandBtn.setAttribute("aria-label", `${isExpanded ? "Collapse" : "Expand"} diff for ${fileName}`)
       expandBtn.setAttribute("aria-expanded", String(isExpanded))
+      expandBtn.tabIndex = -1
       expandBtn.innerHTML = _expandIcon(isExpanded)
 
       // W1.E: Undo button — revert this file to git HEAD
       const undoBtn = document.createElement("button")
       undoBtn.className = "cf-undo-btn"
-      undoBtn.setAttribute("aria-label", "Undo changes to this file")
+      undoBtn.type = "button"
+      undoBtn.setAttribute("aria-label", `Revert changes to ${fileName}`)
       undoBtn.title = "Undo changes"
+      undoBtn.tabIndex = -1
       undoBtn.innerHTML = `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>`
       undoBtn.addEventListener("click", (e) => {
         e.stopPropagation()
@@ -801,16 +1004,16 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       const preview = document.createElement("div")
       preview.className = `cf-hunk-preview${isExpanded ? " cf-hunk-preview--open" : ""}`
       preview.setAttribute("data-path", file.path)
-      if (isExpanded) _renderHunk(preview, sessionId, file.path)
+      if (isExpanded) {
+        preview.setAttribute("role", "region")
+        preview.setAttribute("aria-label", `Diff preview for ${fileName}`)
+        _renderHunk(preview, sessionId, file.path)
+      }
 
       row.addEventListener("click", (e) => {
         const target = e.target as HTMLElement
         if (target.closest(".cf-expand-btn") || target.closest(".cf-open-btn")) return
         _onOpenFile(file.path)
-      })
-
-      row.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") { _onOpenFile(file.path) }
       })
 
       expandBtn.addEventListener("click", (e) => {
@@ -831,6 +1034,13 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
         }
         // Mutate only this row — never rebuild the whole tree on expand/collapse.
         _renderRowExpansion(row, preview, expandBtn, willExpand, sessionId, file.path)
+        if (willExpand) {
+          preview.setAttribute("role", "region")
+          preview.setAttribute("aria-label", `Diff preview for ${fileName}`)
+        } else {
+          preview.removeAttribute("role")
+          preview.removeAttribute("aria-label")
+        }
       })
 
       row.appendChild(expandBtn)
@@ -850,6 +1060,160 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
   }
 
   container.appendChild(list)
+
+  // If every directory happened to be collapsed, fall back to the first
+  // header so the roving slot is never orphaned.
+  if (!rovingAssigned) {
+    const firstHeader = list.querySelector<HTMLElement>(".cf-dir-header")
+    if (firstHeader) {
+      firstHeader.tabIndex = 0
+      _rovingTabId = firstHeader.getAttribute("data-cf-tree-id")
+    }
+  }
+}
+
+/**
+ * Collect all VISIBLE tree items (role=treeitem) within the tree, in DOM order.
+ * "Visible" means not inside a collapsed directory (display:none ancestor).
+ * Used by the roving-tabindex arrow-key navigation.
+ */
+function _visibleTreeItems(root: HTMLElement): HTMLElement[] {
+  const all = Array.from(root.querySelectorAll<HTMLElement>('[role="treeitem"]'))
+  return all.filter((el) => {
+    // An item is hidden if any ancestor .cf-dir-files has display:none.
+    const collapsedParent = el.closest('.cf-dir-files')
+    if (collapsedParent && (collapsedParent as HTMLElement).style.display === "none") {
+      return false
+    }
+    return true
+  })
+}
+
+/**
+ * Move the roving tabindex slot to a target tree item and focus it.
+ * Scrolls into view if off-screen (WCAG 2.4.3 — focus must be visible).
+ */
+function _moveRoving(tree: HTMLElement, target: HTMLElement | null | undefined): void {
+  if (!target) return
+  const items = _visibleTreeItems(tree)
+  items.forEach((it) => { it.tabIndex = it === target ? 0 : -1 })
+  _rovingTabId = target.getAttribute("data-cf-tree-id")
+  target.focus()
+  // scrollIntoView with block:"nearest" avoids jumping when the item is
+  // already partially visible — matches VS Code's tree scroll behavior.
+  target.scrollIntoView({ block: "nearest", inline: "nearest" })
+}
+
+/**
+ * Tree-level keyboard navigation (WAI-ARIA APG treeview pattern).
+ * Attached via event delegation on the role="tree" container. Fires only when
+ * a role="treeitem" element (or a button inside one) has focus.
+ *
+ *   ArrowDown   → next visible tree item
+ *   ArrowUp     → previous visible tree item
+ *   ArrowRight  → expand collapsed dir, or move into first child
+ *   ArrowLeft   → collapse expanded dir, or move to parent dir header
+ *   Home        → first visible tree item
+ *   End         → last visible tree item
+ *   Enter       → directory: toggle; file row: open file
+ *   Space       → file row: toggle diff preview
+ *
+ * Note: Tab/Shift+Tab are handled by the dialog-level _trapTab, not here.
+ */
+function _handleTreeKeydown(e: KeyboardEvent, tree: HTMLElement): void {
+  const target = e.target as HTMLElement
+  // Only act when a treeitem (or element within one) is focused.
+  const item = target.closest('[role="treeitem"]') as HTMLElement | null
+  if (!item) return
+
+  const items = _visibleTreeItems(tree)
+  const idx = items.indexOf(item)
+  if (idx === -1) return // focused item not in visible set
+
+  switch (e.key) {
+    case "ArrowDown": {
+      e.preventDefault()
+      const next = items[idx + 1]
+      _moveRoving(tree, next)
+      break
+    }
+    case "ArrowUp": {
+      e.preventDefault()
+      const prev = items[idx - 1]
+      _moveRoving(tree, prev)
+      break
+    }
+    case "ArrowRight": {
+      // On a collapsed directory header → expand. On an expanded directory or
+      // a file → move to first child / next item.
+      const isDir = item.classList.contains("cf-dir-header")
+      if (isDir) {
+        const expanded = item.getAttribute("aria-expanded") === "true"
+        if (!expanded) {
+          e.preventDefault()
+          item.click() // toggles via the existing click handler
+          return
+        }
+      }
+      // Move to next visible item (descendant or sibling)
+      e.preventDefault()
+      const next = items[idx + 1]
+      _moveRoving(tree, next)
+      break
+    }
+    case "ArrowLeft": {
+      const isDir = item.classList.contains("cf-dir-header")
+      if (isDir) {
+        const expanded = item.getAttribute("aria-expanded") === "true"
+        if (expanded) {
+          e.preventDefault()
+          item.click() // collapse
+          return
+        }
+      }
+      // Move to parent directory header (the closest preceding treeitem at level 1)
+      e.preventDefault()
+      for (let i = idx - 1; i >= 0; i--) {
+        const prev = items[i]!
+        if (prev.classList.contains("cf-dir-header")) {
+          _moveRoving(tree, prev)
+          return
+        }
+      }
+      break
+    }
+    case "Home": {
+      e.preventDefault()
+      _moveRoving(tree, items[0])
+      break
+    }
+    case "End": {
+      e.preventDefault()
+      _moveRoving(tree, items[items.length - 1])
+      break
+    }
+    case "Enter": {
+      // Directory header: toggle. File row: open file.
+      if (item.classList.contains("cf-dir-header")) {
+        e.preventDefault()
+        item.click()
+      } else if (item.classList.contains("cf-file-row")) {
+        e.preventDefault()
+        const path = item.getAttribute("data-path")
+        if (path) _onOpenFile(path)
+      }
+      break
+    }
+    case " ": {
+      // Space on a file row toggles the inline diff preview.
+      if (item.classList.contains("cf-file-row")) {
+        e.preventDefault()
+        const expandBtn = item.querySelector<HTMLElement>(".cf-expand-btn")
+        expandBtn?.click()
+      }
+      break
+    }
+  }
 }
 
 function _renderHunk(el: HTMLElement, sessionId: string, path: string): void {

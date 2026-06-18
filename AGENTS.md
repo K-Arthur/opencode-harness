@@ -188,11 +188,55 @@ Titles flow across three surfaces (server / CLI / webview tab strip) via two com
 | Diff types | `src/chat/webview/types.ts` | `DiffBlock`, `DiffHunk`, `DiffLine` (with `wordDiffHtml?`) |
 | Model indicator | `src/chat/webview/messageRenderer.ts` | Per-turn model badge in message headers: `[modelShortName]` CLI-style notation, provider prefix stripped, `text-overflow: ellipsis` truncation, streaming dot `::before` pseudo-element, WCAG `aria-label` |
 | Turn summary | `src/chat/webview/renderer.ts` | `groupMessagesIntoTurns()` populates `TurnSummary.model` from `ChatMessage.model`; timeline items render compact `.timeline-item-model` badge |
-| Changed-files dropdown | `src/chat/webview/changed-files-dropdown.ts` | Per-file change tree with stats, hunk previews, per-hunk revert, per-file Undo button, bulk Revert All |
+| Changed-files dropdown | `src/chat/webview/changed-files-dropdown.ts` | Per-file change tree with stats, hunk previews, per-hunk revert, per-file Undo button, bulk Revert All. **WCAG 2.1 AAA** — see accessibility section below |
 | Hunk staging | `src/chat/diff/hunkRevertPlan.ts`, `hunkStaging.ts` | LCS-based per-hunk revert planning, host-authoritative hunk computations |
 | Host diff handlers | `src/chat/WebviewEventRouter.ts` (~lines 500-560, 660-670, 1193-1210) | `accept_diff`, `reject_diff`, `revert_diff`, `accept_hunk`, `reject_hunk`, `revert_hunk`, `get_file_hunks`, `get_file_diff`, `undo_file`, `revert_all_files` |
 | Diff CSS | `src/chat/webview/css/blocks.css` (~lines 1330-1600) | `.diff-block`, `.diff-table`, `.diff-line--added`, `.diff-line--removed`, `.diff-line-num--old/new`, `.diff-wrap-toggle`, `.diff-hunk-collapse`, `.diff-hunk-nav`, `.diff-view-toggle`, `.diff-table-wrapper--side-by-side` |
 | Wrap toggles | `src/chat/webview/renderer.ts` | `readDiffWrapPreference`, `persistDiffWrapPreference`, `readCodeWrapPreference`, `persistCodeWrapPreference`, `readDiffViewModePreference`, `persistDiffViewModePreference` |
+
+### Changed Files Modal — Accessibility Architecture (v0.4.0)
+
+The Changed Files dropdown (`#changed-files-dropdown`) is a fully accessible modal dialog following WAI-ARIA APG patterns. Full redesign in v0.4.0 to match native VS Code Source Control aesthetics and WCAG 2.1 AAA compliance.
+
+**Dialog semantics:**
+- `role="dialog"` + `aria-modal="true"` + `aria-labelledby="cf-dropdown-title"` + `aria-describedby="cf-dropdown-desc"` (live file count)
+- **Focus trap**: Tab/Shift+Tab cycle within the panel (`_trapTab` in `changed-files-dropdown.ts`)
+- **Focus restore**: on close, focus returns to the trigger button (`_previouslyFocused` ref — WCAG 2.4.3)
+- **Initial focus**: moves to the close button on open (`_focusInitial`)
+
+**Tree semantics (WAI-ARIA treeview):**
+- `.cf-file-list` → `role="tree"` + `aria-label="Changed files"`
+- `.cf-dir-header` → `role="treeitem"` + `aria-level="1"` + `aria-expanded` + descriptive `aria-label` ("src/chat/handlers directory, expanded")
+- `.cf-dir-files` → `role="group"` + `aria-label`
+- `.cf-file-row` → `role="treeitem"` + `aria-level="2"` + `aria-selected` + `aria-label` ("StreamingLog.ts, Modified, 4 additions, 2 deletions")
+- Collapsed directories get `data-collapsed-children="true"` so the focus trap skips hidden children
+
+**Roving tabindex** (APG pattern): exactly one tree item carries `tabindex="0"`; all others get `-1`. Arrow keys move the roving slot. `_moveRoving()` scrolls into view (`block: "nearest"`).
+
+**Keyboard navigation** (`_handleTreeKeydown`):
+
+| Key | Action |
+|-----|--------|
+| `ArrowDown`/`ArrowUp` | Move to next/previous visible tree item |
+| `ArrowRight` | Expand collapsed dir, or descend to first child |
+| `ArrowLeft` | Collapse expanded dir, or move to parent dir header |
+| `Home`/`End` | First / last visible tree item |
+| `Enter` | Dir: toggle; File row: open file |
+| `Space` | File row: toggle inline diff preview |
+| `Escape` | Close modal (dialog-level handler) |
+| `Tab`/`Shift+Tab` | Cycle within modal (focus trap) |
+
+**Path shortening** (`shortenDirPath`, `shortenFileDir`): directory paths are shortened relative to structure — `src/chat/handlers/deep/nested` → `src/…/deep/nested` (max 3 segments for headers, last-segment-only for file subtitles). **No uppercase transform** (WCAG 1.4.8).
+
+**Focus rings**: all interactive elements use `--vscode-focusBorder` via `:focus-visible` outlines (WCAG 2.4.7). Never suppressed.
+
+**Status badges** (`_inferStatus`): without explicit git status, all files default to `M` (Modified) — line-count inference of A/D is unreliable. The badge has `aria-hidden="true"` because the row's `aria-label` already announces the status word ("Modified"/"Added"/"Deleted").
+
+**Test coverage:**
+- `changed-files-dropdown.test.ts` — summary bar, status badges, directory grouping, controls, expand/diff preview
+- `cf-redesign-styles.test.ts` — CSS rule coverage (500-char window for consolidated multi-selector rules)
+- `changed-files-isolation.test.ts` — per-session state isolation
+- `changed-files-perf.test.ts` — render coalescing, incremental expand
 
 ### Horizontal Scaling (ADR-010 — Proposed)
 

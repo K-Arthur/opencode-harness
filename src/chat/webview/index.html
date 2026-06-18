@@ -274,7 +274,7 @@
            activity, tasks, subagent) on the right. The .main-layout wrapper
            turns the four sibling panels from stacked (broken) into a true
            sidebar beside the chat. -->
-      <div class="main-layout">
+       <div class="main-layout side-region-body">
         <div id="tab-panels">
         </div>
         <div class="sidebar-resize-handle" role="separator" tabindex="0" aria-label="Resize sidebar" aria-valuenow="320" aria-valuemin="200" aria-valuemax="600"></div>
@@ -299,7 +299,9 @@
               <div id="todos-list"></div>
               <form class="todo-add-form" id="todo-add-form">
                 <input type="text" class="todo-add-input" id="todo-add-input" placeholder="Add a task or reminder..." aria-label="New todo">
-                <button type="submit" class="todo-add-btn">Add</button>
+                <button type="submit" class="todo-add-btn" aria-label="Add todo">
+                  <span class="codicon codicon-add"></span>
+                </button>
               </form>
             </div>
           </div>
@@ -342,7 +344,7 @@
           <div id="tasks-filters" class="tasks-filters"></div>
           <div id="tasks-list" class="tasks-panel-content" aria-live="polite"></div>
         </div>
-        <div id="subagent-panel" class="subagent-panel side-panel hidden" aria-label="Subagent activity">
+        <div id="subagent-panel" class="subagent-panel side-panel hidden" aria-label="Subagent activity" data-view="list">
           <div class="subagent-panel-header">
             <h2 class="subagent-panel-title">Subagent Activity</h2>
             <div class="panel-header-actions">
@@ -361,37 +363,47 @@
           <div class="subagent-panel-content" id="subagent-list">
             <!-- Subagent activities will be rendered dynamically -->
           </div>
-        </div>
-        <!-- Detail view overlays the subagent list when active (absolute
-             positioning within .main-layout, which is position:relative). -->
-        <div id="subagent-detail-view" class="subagent-detail-view hidden" aria-label="Subagent detail">
-          <div class="subagent-detail-header">
-            <button class="icon-btn" id="subagent-detail-back-btn" title="Back to list" aria-label="Back to subagent list">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polyline points="15 18 9 12 15 6"/>
-              </svg>
-            </button>
-            <h2 class="subagent-detail-title">Subagent Detail</h2>
-            <button class="icon-btn" id="subagent-detail-close-btn" title="Close detail" aria-label="Close subagent detail">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
-            </button>
-          </div>
-          <div class="subagent-detail-content" id="subagent-detail-content">
-            <!-- Subagent detail will be rendered dynamically -->
+          <!-- Detail view is nested inside #subagent-panel so the panel can
+               toggle data-view between "list" and "detail" for view switching. -->
+          <div id="subagent-detail-view" class="subagent-detail-view hidden" aria-label="Subagent detail">
+            <div class="subagent-detail-header">
+              <button class="icon-btn" id="subagent-detail-back-btn" title="Back to list" aria-label="Back to subagent list">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="15 18 9 12 15 6"/>
+                </svg>
+              </button>
+              <h2 class="subagent-detail-title">Subagent Detail</h2>
+              <button class="icon-btn" id="subagent-detail-close-btn" title="Close detail" aria-label="Close subagent detail">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <div class="subagent-detail-content" id="subagent-detail-content">
+              <!-- Subagent detail will be rendered dynamically -->
+            </div>
           </div>
         </div>
       </div>
       <!-- #context-usage-panel removed — canonical UI is now #context-usage-dropdown -->
-      <!-- Changed Files floating dropdown — anchored below the toolbar button -->
+      <!-- Changed Files floating dropdown — anchored below the toolbar button.
+           ARIA: dialog + aria-modal so screen readers trap focus and announce
+           the panel as a distinct window. aria-labelledby points at the title. -->
       <div id="changed-files-dropdown" class="cf-dropdown hidden"
-        role="region" aria-label="Changed files"
-        aria-live="polite">
+        role="dialog" aria-modal="true" aria-labelledby="cf-dropdown-title"
+        aria-describedby="cf-dropdown-desc">
         <div class="cf-dropdown-header">
-          <span class="cf-dropdown-title">Changed Files</span>
-          <button class="icon-btn" id="cf-dropdown-close" aria-label="Close changed files">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
+          <div class="cf-dropdown-header-text">
+            <span id="cf-dropdown-title" class="cf-dropdown-title">Changed Files</span>
+            <span id="cf-dropdown-desc" class="cf-dropdown-subtitle" aria-live="polite">No files changed</span>
+          </div>
+          <button class="cf-close-btn" id="cf-dropdown-close"
+            aria-label="Close changed files" type="button">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
+              stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+              stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18"/><path d="M6 6l12 12"/>
+            </svg>
           </button>
         </div>
         <div id="cf-dropdown-tree" class="cf-dropdown-tree"></div>
