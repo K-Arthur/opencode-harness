@@ -11,6 +11,7 @@ import {
   resetChangedFilesDropdown,
   handleDiffResponse,
   setCurrentSession,
+  renderTree,
 } from "./changed-files-dropdown"
 
 function setupDom() {
@@ -67,8 +68,8 @@ function renderChangedFilesList(container: HTMLElement, files: any[], options: a
   })
   setCurrentSession("test-session")
   updateChangedFiles("test-session", files)
-  // Open the dropdown to render the tree into container
-  btn.click()
+  // For inline panel, render directly into container
+  renderTree(container, files.map(f => ({ ...f, added: f.added ?? 0, removed: f.removed ?? 0 })))
 }
 
 describe("renderChangedFilesList — empty state", () => {
