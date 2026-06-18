@@ -1423,6 +1423,8 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   border: 1px solid transparent;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .message-mode-badge--plan {
   background: color-mix(in srgb, var(--vscode-notificationsWarningIcon-foreground, #ffb74d) 18%, transparent);
