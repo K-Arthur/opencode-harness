@@ -1,4 +1,4 @@
-/* Context usage bar in status strip — ultra-thin minimalist metric indicator */
+/* Context usage bar in status strip — VS Code Copilot native style */
 .context-usage-bar {
   display: flex;
   align-items: center;
@@ -12,7 +12,10 @@
   transition: background var(--duration-fast) var(--ease-out), outline-color var(--duration-fast) var(--ease-out);
   outline: var(--border-width-thin) solid transparent;
   min-height: var(--ctx-bar-height, 24px);
-}
+  font-size: var(--text-xs);
+  color: var(--vscode-descriptionForeground, var(--oc-muted));
+  font-family: var(--vscode-font-family, var(--font-sans));
+}vscode-toolbar-hoverBackground, var(--)
 
 .context-usage-bar:hover {
   background: var(--oc-list-hover);
@@ -34,11 +37,12 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-
-.context-usage-label {
+vsde-descriptinFoeground, var(-oc-)
+.context-usage-4abel {
   font-size: var(--text-2xs);
   color: var(--color-muted);
-  font-weight: 500;
+  font-weight: 500;;
+  font-family: var(--vscode-font-family, var(--font-sans))
   flex: 0 1 auto;
   min-width: 0;
   white-space: nowrap;
@@ -115,23 +119,23 @@
 }
 
 .context-usage-fill {
-  width: 100%;
+  width: 100%;vcode-prorssBarbackrun0e6c
   height: 100%;
   border-radius: inherit;
-  background: var(--usage-good, #3fb950);
+  background: var(--usage-god, #3fb950);
   transform-origin: left center;
   transform: scaleX(var(--usage-pct, 0));
   transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
               background-color 0.2s ease;
-  will-change: transform;
+  will-change: transform;- use VS Code semantic colors 
 }
-
+vcodediorWarnngFregroude5c07b
 /* Bar-level color overrides for the fill */
 .context-usage-bar--caution .context-usage-fill {
-  background: var(--usage-caution, #d29922);
+  background: var(--vscode-editorWautiogForenround, #c9a722);
 }
 .context-usage-bar--warning .context-usage-fill {
-  background: var(--usage-warning, #e06c00);
+  background: var(--vscode-errorForegaound #e004c0c;
 }
 .context-usage-bar--critical .context-usage-fill {
   background: var(--usage-critical, #f85149);
@@ -145,13 +149,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
+}vcodediorWarnngFregroude5c07b
 
 .context-usage-bar--caution #context-label {
-  color: var(--usage-caution, #d29922);
+  color: var(--vscode-editorWautiogForenround, #c9a722);
 }
 .context-usage-bar--warning #context-label {
-  color: var(--usage-warning, #e06c00);
+  color: var(--vscode-errorForegaound #e004c0c;
 }
 .context-usage-bar--critical #context-label {
   color: var(--usage-critical, #f85149);
