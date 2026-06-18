@@ -52,7 +52,7 @@ The context usage detail surface is a fixed-position dropdown anchored to `#cont
 
 OpenCode's event list includes both `file.edited` and `session.diff`; observed OpenCode 1.15.x `file.edited` payloads can be global and omit `sessionID`. The extension attributes those sessionless file edits to the sole live stream, or to the active tab when no live stream is available, before updating `SessionStore.addChangedFiles()` and posting `changed_files_update`. Empty `session.diff` arrays do not clear existing changed-file state.
 
-The visible changed-files strip is driven by `changed_files_update`, not only by old per-file chips. A live edit must make `#changed-files-strip` visible and clicking the strip must open the viewport-safe `#changed-files-dropdown`.
+The visible changed-files strip is driven by `changed_files_update`, not only by old per-file chips. A live edit must make `#changed-files-strip` visible and clicking the strip must show the viewport-safe inline `#changed-files-panel` above the message input.
 
 ## Checkpoint Panel
 

@@ -33,17 +33,17 @@ Three related UI reliability problems were identified from user screenshots and 
 
 `SessionState` gains a `contextUsage: { percent: number; tokens: number; maxTokens: number }` field. The `context_usage` handler writes to it and `stateManager.save()`. `switchTab()` reads it back and restores the toolbar dropdown on activation.
 
-**Rationale**: The toolbar dropdown pattern (button with badge → floating panel, closeable on Escape/outside-click) is consistent with the `changed-files-dropdown` and follows the Codex/Claude Code toolbar idiom. A floating panel avoids consuming message-list vertical space. Per-session persistence means users retain context state across tab switches, which was previously lost.
+**Rationale**: The toolbar button pattern (button with badge → inline panel above input) is consistent with the `changed-files-panel` and follows the VS Code native idiom. An inline panel avoids consuming message-list vertical space and doesn't block the input area. Per-session persistence means users retain context state across tab switches, which was previously lost.
 
 **Alternatives considered**:
 - Keep per-tab bar, remove status strip — two sources of truth remain; per-tab bar uses message-list space.
 - Persist in URL/localStorage — no server sync; session state already uses `stateManager` / `globalState`.
 
-### Changed-Files Toolbar Dropdown
+### Changed-Files Inline Panel
 
-**Decision**: The inline `.changed-file-chip` strip (`renderChangedFilesList` in `fileTracking.ts` driven by `changedFilesList: null` in deps) is deactivated. All `changed_files_update` messages route to `cfDropdownApi.updateChangedFiles()` which powers the `#changed-files-btn` toolbar button with count badge and `#changed-files-dropdown` floating panel.
+**Decision**: The inline `.changed-file-chip` strip (`renderChangedFilesList` in `fileTracking.ts` driven by `changedFilesList: null` in deps) is deactivated. All `changed_files_update` messages route to `cfDropdownApi.updateChangedFiles()` which powers the `#changed-files-btn` toolbar button with count badge and `#changed-files-panel` inline panel above the message input.
 
-**Rationale**: The chip strip consumed horizontal space in the tab panel area and cluttered the message list when many files changed. A toolbar button with a count badge (visible at a glance) and floating panel (accessed on demand) follows the same pattern as changed-files UIs in VS Code's Source Control sidebar, GitHub Desktop, and similar tools.
+**Rationale**: The chip strip consumed horizontal space in the tab panel area and cluttered the message list when many files changed. A toolbar button with a count badge (visible at a glance) and inline panel above the input (always accessible, doesn't block input) follows VS Code native styling and improves UX by keeping the panel visible while typing.
 
 ### Session-Scoped Chat Bar
 
