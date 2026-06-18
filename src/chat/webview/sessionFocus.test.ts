@@ -1,6 +1,11 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { shouldHonorActiveSessionChange, resolveInitStateTarget } from "./sessionFocus"
+import {
+  shouldHonorActiveSessionChange,
+  resolveInitStateTarget,
+  shouldForceFocusOnSend,
+  shouldHonorResumeSessionSwitch,
+} from "./sessionFocus"
 
 const knownSet = (ids: string[]) => (id: string | null | undefined): boolean =>
   typeof id === "string" && ids.includes(id)
@@ -159,6 +164,110 @@ describe("resolveInitStateTarget", () => {
         firstSessionId: "a",
       }),
       "b",
+    )
+  })
+})
+
+describe("shouldForceFocusOnSend", () => {
+  it("does NOT switch when the user is already viewing the target session", () => {
+    assert.equal(
+      shouldForceFocusOnSend({
+        welcomeVisible: false,
+        currentActiveId: "s1",
+        currentActiveValid: true,
+        targetId: "s1",
+      }),
+      false,
+    )
+  })
+
+  it("switches when the welcome view is showing (nothing valid to lose)", () => {
+    assert.equal(
+      shouldForceFocusOnSend({
+        welcomeVisible: true,
+        currentActiveId: null,
+        currentActiveValid: false,
+        targetId: "s1",
+      }),
+      true,
+    )
+  })
+
+  it("switches when the current tab no longer exists", () => {
+    assert.equal(
+      shouldForceFocusOnSend({
+        welcomeVisible: false,
+        currentActiveId: "ghost",
+        currentActiveValid: false,
+        targetId: "s1",
+      }),
+      true,
+    )
+  })
+
+  it("REFUSES to yank focus from a different valid tab during send (the auto-switch bug)", () => {
+    assert.equal(
+      shouldForceFocusOnSend({
+        welcomeVisible: false,
+        currentActiveId: "user-is-reading",
+        currentActiveValid: true,
+        targetId: "background-session",
+      }),
+      false,
+    )
+  })
+})
+
+describe("shouldHonorResumeSessionSwitch", () => {
+  it("honours when the user explicitly initiated the resume (history click)", () => {
+    assert.equal(
+      shouldHonorResumeSessionSwitch({
+        welcomeVisible: false,
+        currentActiveId: "other",
+        currentActiveValid: true,
+        targetId: "resumed",
+        userInitiated: true,
+      }),
+      true,
+    )
+  })
+
+  it("REFUSES to yank focus for a background/automatic resume while the user views another tab", () => {
+    assert.equal(
+      shouldHonorResumeSessionSwitch({
+        welcomeVisible: false,
+        currentActiveId: "reading",
+        currentActiveValid: true,
+        targetId: "background-resume",
+        userInitiated: false,
+      }),
+      false,
+    )
+  })
+
+  it("honours a background resume when the user is on the welcome screen", () => {
+    assert.equal(
+      shouldHonorResumeSessionSwitch({
+        welcomeVisible: true,
+        currentActiveId: null,
+        currentActiveValid: false,
+        targetId: "auto-resume",
+        userInitiated: false,
+      }),
+      true,
+    )
+  })
+
+  it("is a no-op (honoured) when already viewing the resumed session", () => {
+    assert.equal(
+      shouldHonorResumeSessionSwitch({
+        welcomeVisible: false,
+        currentActiveId: "resumed",
+        currentActiveValid: true,
+        targetId: "resumed",
+        userInitiated: false,
+      }),
+      true,
     )
   })
 })

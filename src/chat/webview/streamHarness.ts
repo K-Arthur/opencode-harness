@@ -151,6 +151,7 @@ export function createHarness(): Harness {
         },
         pause() {},
         resume() {},
+        pauseForReflow() {},
         dispose() {},
       },
     } as StreamElements & { scrollCalls: number },

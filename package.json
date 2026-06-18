@@ -9,7 +9,7 @@
   },
   "description": "Open-source AI coding agent for VS Code. Chat, refactor, debug, and write code using Claude, GPT, Gemini, and 75+ models. Includes cost tracking, custom themes, permission controls, and checkpoint rollback.",
   "icon": "media/opencode-icon-256.png",
-  "version": "0.3.98",
+  "version": "0.3.101",
   "engines": {
     "vscode": "^1.98.0"
   },
@@ -983,6 +983,20 @@
           "minimum": 1,
           "maximum": 10,
           "description": "Maximum number of concurrent AI streams across all tabs."
+        },
+        "opencode.streaming.ttfbTimeoutMs": {
+          "type": "number",
+          "scope": "window",
+          "default": 180000,
+          "minimum": 60000,
+          "maximum": 600000,
+          "description": "Time-to-first-byte timeout in milliseconds. The extension waits this long for the first stream chunk before probing the opencode server for run liveness. Slow reasoning models (GLM-5.x, Kimi, DeepSeek-R1, Qwen-QwQ) routinely take 60–180s to emit the first token; the 180s default accommodates them. Decrease for snappy first-class providers; increase if your workflow regularly hits the timeout while the model is still thinking. Range: 60000–600000ms (1–10 minutes)."
+        },
+        "opencode.streaming.logToOutputChannel": {
+          "type": "boolean",
+          "scope": "window",
+          "default": true,
+          "description": "Mirror streaming-lifecycle events (send, ttfb, probe, reconnect, abort) to the 'OpenCode' Output channel — mirrors `opencode --print-logs`. Useful for diagnosing 'Send button reverted while still generating' symptoms."
         },
         "opencode.sessions.maxTabs": {
           "type": "number",

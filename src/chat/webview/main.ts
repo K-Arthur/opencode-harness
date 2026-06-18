@@ -768,6 +768,7 @@ function getVsCodeApi() {
       toggleAllThinkingBlocks,
       vscodeSetState: (s) => vscode.setState(s),
       debouncedUpdateScrollMarkers,
+      onLayoutReflow: () => pauseActiveAnchorForReflow(150),
     })
   }
 
@@ -1460,14 +1461,17 @@ function setupTodoSkillAndSubagentPanels(): void {
 
     // Wire toggle buttons to individual panels
     els.activityToggleBtn.addEventListener("click", () => {
+      pauseActiveAnchorForReflow()
       activityPanelApi?.toggle?.()
       syncPanelVisibilityToHost()
     })
     els.tasksToggleBtn.addEventListener("click", () => {
+      pauseActiveAnchorForReflow()
       tasksPanelApi?.toggle?.()
       syncPanelVisibilityToHost()
     })
     els.subagentsToggleBtn.addEventListener("click", () => {
+      pauseActiveAnchorForReflow()
       const wasOpen = subagentPanelApi?.isOpen()
       if (wasOpen) {
         setSubagentPanelOpen(false)
@@ -1880,6 +1884,18 @@ function setupTodoSkillAndSubagentPanels(): void {
     if (autoScrollWhenUnset) {
       scrollToBottom(msgList)
     }
+  }
+
+  /** Briefly pause autoscroll on the active session's anchor so a layout
+   *  change (sidebar/panel toggle, code-block lazy render) doesn't yank
+   *  the user's scroll position. The pause is ~150ms — long enough to span
+   *  the reflow + one animation frame, short enough that the next chunk
+   *  resumes normal autoscroll. No-op when no session is active or the
+   *  anchor isn't yet wired (welcome screen, mid-init). */
+  function pauseActiveAnchorForReflow(ms = 150): void {
+    const activeId = stateManager.getState().activeSessionId
+    if (!activeId) return
+    scrollAnchors.get(activeId)?.pauseForReflow(ms)
   }
 
   function createNewTab(name?: string) {

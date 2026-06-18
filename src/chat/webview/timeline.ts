@@ -24,6 +24,11 @@ export interface TimelineDeps {
   toggleAllThinkingBlocks: (visible: boolean) => void
   vscodeSetState: (state: WebviewState) => void
   debouncedUpdateScrollMarkers: (sessionId: string) => void
+  /** Fired whenever the timeline sidebar is shown or hidden. The host
+   *  wires this to `scrollAnchor.pauseForReflow()` on the active session
+   *  so the width-change reflow doesn't yank the user's scroll position
+   *  during a stream. See scrollAnchor.ts → pauseForReflow. */
+  onLayoutReflow?: () => void
 }
 
 export { type ThinkingToggleDeps }
@@ -50,6 +55,7 @@ export function createTimeline(deps: TimelineDeps): TimelineAPI {
     toggleAllThinkingBlocks,
     vscodeSetState,
     debouncedUpdateScrollMarkers,
+    onLayoutReflow,
   } = deps
 
   const thinkingToggle = createThinkingToggle({
@@ -69,6 +75,12 @@ export function createTimeline(deps: TimelineDeps): TimelineAPI {
       headerBtn?.setAttribute("aria-pressed", pressed)
     }
     const toggle = () => {
+      // Pause autoscroll BEFORE the visibility change so the width-change
+      // reflow (every wrapped line re-wraps) doesn't yank the user's
+      // scroll position. The pause is brief (~150ms) — the next chunk
+      // after the reflow settles resumes normal autoscroll. Especially
+      // important during streaming where reflow + chunk arrival race.
+      onLayoutReflow?.()
       setTimelineVisible(!isTimelineVisible())
       syncPressed()
       applyTimelineVisibility()

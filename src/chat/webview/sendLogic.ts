@@ -3,6 +3,7 @@ import type { ElementRefs } from "./dom"
 import { TOOLTIPS } from "./tooltips"
 import { generateUserMessageId } from "../../session/messageId"
 import { classifyComposerInput } from "./slash-commands"
+import { shouldForceFocusOnSend } from "./sessionFocus"
 
 /** G8: how long to wait for the host to ack a send_prompt before probing.
  *  The host normally posts `prompt_accepted` within ~1s and
@@ -347,7 +348,26 @@ export function createSendLogic(deps: SendLogicDeps) {
 
     if (!els.tabPanels.querySelector(`.tab-panel[data-tab-id="${active.id}"]`)) {
       createTabUI(active.id, active.name || "")
-      switchToTab(active.id)
+      // Auto-switch ONLY when the user has nothing valid to look at (welcome
+      // screen or no current tab). Previously this yanked focus onto active.id
+      // whenever its panel was missing — even if the user was deliberately
+      // viewing another valid tab (a state desync could fire this during a
+      // generation, hijacking the user's view). See sessionFocus.ts.
+      const currentActiveId = stateManager.getState().activeSessionId
+      const currentValid = currentActiveId
+        ? Boolean(stateManager.getSession(currentActiveId))
+        : false
+      const welcomeVisible = !els.welcomeView.classList.contains("hidden")
+      if (
+        shouldForceFocusOnSend({
+          welcomeVisible,
+          currentActiveId,
+          currentActiveValid: currentValid,
+          targetId: active.id,
+        })
+      ) {
+        switchToTab(active.id)
+      }
       updateTabBar()
     }
 

@@ -28,6 +28,7 @@ import { SubagentHeartbeat } from "./SubagentHeartbeat"
 import { mapRunError, type RunErrorContext } from "./runErrorMapper"
 import { logStreamTrace } from "../../session/streamTrace"
 import { modeToAgent } from "../modePolicy"
+import { createStreamingLog, emit, type StreamingLogSink } from "./StreamingLog"
 
 import type { StreamCallbacks, ToolEndResult, ToolPartialInput, StreamLifecycleState, ActiveRunMetrics } from "./StreamCoordinatorTypes"
 export type { StreamCallbacks, ToolEndResult, ToolPartialInput, StreamLifecycleState, ActiveRunMetrics }
@@ -83,8 +84,32 @@ export class StreamCoordinator {
    * second or two; the window only gates abort-category errors, so it is safe to
    * keep generous. */
   private readonly ABORT_ERROR_SUPPRESS_MS = 8000
-  /** Time-to-first-byte timeout: no chunk received within 45s */
-  readonly TTFB_TIMEOUT_MS = 90000
+  /** Time-to-first-byte timeout: no chunk received within TTFB_TIMEOUT_MS.
+   *  Configurable via `opencode.streaming.ttfbTimeoutMs` (default 180_000).
+   *  Research shows reasoning models (GLM-5.x, Kimi, DeepSeek-R1, Qwen-QwQ)
+   *  routinely take 60–180s to first token; the 90s default shipped in
+   *  earlier builds was too short for many third-party providers. The value
+   *  is resolved at runtime via {@link resolveTtfbTimeoutMs} so per-workspace
+   *  overrides take effect without a code change. */
+  readonly TTFB_TIMEOUT_MS_DEFAULT = 180_000
+  /** Resolved at construction time from workspace config; mutable so tests
+   *  can override after instantiation. The TTFB watchdog reads this via
+   *  {@link resolveTtfbTimeoutMs} rather than a `readonly` field directly so
+   *  test stubs and future per-provider overrides have one injection point. */
+  private ttfbTimeoutMs: number
+  /** Backwards-compat: existing structural tests assert a public field
+   *  `TTFB_TIMEOUT_MS = <number>` exists. Exposing the resolved value here
+   *  keeps those tests green while the actual watchdog reads the runtime
+   *  value through {@link resolveTtfbTimeoutMs}. */
+  get TTFB_TIMEOUT_MS(): number { return this.ttfbTimeoutMs }
+  /** Hard floor for the configured TTFB. Anything below this silently
+   *  returns the floor — a too-short TTFB is exactly the bug that makes
+   *  the Send button revert mid-thinking. */
+  static readonly TTFB_TIMEOUT_FLOOR_MS = 60_000
+  /** Hard ceiling: keeps a misconfigured workspace from making the watchdog
+   *  effectively never fire. 10 minutes matches the longest observed
+   *  reasoning budget (DeepSeek-R1 on cold providers). */
+  static readonly TTFB_TIMEOUT_CEILING_MS = 600_000
   /** B10-recovery: Hard timeout for the expired-question fallback startPrompt.
    *  Fires UNCONDITIONALLY after 20s — not gated by shouldTriggerStartupTimeout,
    *  which can be silently disabled by stray activity events leaving the user
@@ -207,6 +232,14 @@ export class StreamCoordinator {
   private childSessionReplayer: ((tabId: string, childSessionId: string) => void) | null = null
   /** ADR-010: per-tab session manager routing. In shared mode always returns this.sessionManager. */
   private sessionManagerRegistry: SessionManagerRegistry | null = null
+  /** Streaming-lifecycle log sink. Mirrors opencode CLI's `--print-logs`
+   *  discipline: every state transition (send → ttfb → probe → stream_end)
+   *  is funneled here so users debugging a "stuck streaming" report see
+   *  the same narrative the CLI would have printed. Constructed lazily; the
+   *  first call replaces the no-op sink with one wired to the webview. */
+  private streamingLog: StreamingLogSink = {
+    log: () => { /* no-op until wireStreamingLog() is called */ },
+  }
 
   constructor(
     private readonly sessionManager: SessionManager,
@@ -222,6 +255,9 @@ export class StreamCoordinator {
   ) {
     this.methodologyAdvisor = methodologyAdvisor ?? new MethodologyAdvisor()
     this.attachmentStorage = attachmentStorage ?? createAttachmentStorage()
+    // Resolve the TTFB timeout from workspace config (one injection point;
+    // tests can override post-construction via `setTtfbTimeoutForTests`).
+    this.ttfbTimeoutMs = this.resolveTtfbTimeoutMs()
     this.subagentHeartbeat = new SubagentHeartbeat(
       this.sessionManager.sessionClient,
       {
@@ -1559,14 +1595,19 @@ export class StreamCoordinator {
   }
 
   private setupTtfbTimeout(tabId: string, callbacks: StreamCallbacks): void {
-    // TTFB (time-to-first-byte) timeout — fires if no stream chunk arrives within 90s
-    // (extended from 45s to accommodate slow third-party model providers)
+    // TTFB (time-to-first-byte) timeout — fires if no stream chunk arrives
+    // within the configured window (default 180s; configurable via
+    // `opencode.streaming.ttfbTimeoutMs`). Extended from the original 45s → 90s
+    // → 180s to accommodate slow third-party reasoning models that "think"
+    // before emitting the first content token (GLM-5.x, Kimi, DeepSeek-R1,
+    // Qwen-QwQ routinely take 60–180s).
+    const ttfbMs = this.resolveTtfbTimeoutMs()
     const abortController = new AbortController()
     this.ttfbAbortControllers.set(tabId, abortController)
     const ttfbTimeout = setTimeout(() => {
       const t = this.tabManager.getTab(tabId)
       if (t?.isStreaming && t.waitingForCompletion) {
-        if (!this.activityTracker.shouldTriggerStartupTimeout(tabId, this.TTFB_TIMEOUT_MS)) {
+        if (!this.activityTracker.shouldTriggerStartupTimeout(tabId, ttfbMs)) {
           log.info(`Startup timeout skipped for tab ${tabId} because OpenCode activity was observed`)
           this.clearTtfbTimeout(tabId)
           return
@@ -1574,7 +1615,14 @@ export class StreamCoordinator {
         const eventStreamStatus = this.sessionManager.eventStreamStatus
         const eventStreamDisconnected = eventStreamStatus.state !== "connected"
         const reason = eventStreamDisconnected ? "event_stream_disconnected" : "ttfb_timeout"
-        log.warn(`TTFB timeout for tab ${tabId} — no chunk received within ${this.TTFB_TIMEOUT_MS}ms (eventStream=${eventStreamStatus.state}, lastRaw=${eventStreamStatus.lastRawEventType || "none"})`)
+        log.warn(`TTFB timeout for tab ${tabId} — no chunk received within ${ttfbMs}ms (eventStream=${eventStreamStatus.state}, lastRaw=${eventStreamStatus.lastRawEventType || "none"})`)
+        emit(
+          this.streamingLog,
+          "ttfb_timeout",
+          tabId,
+          `TTFB fired after ${ttfbMs}ms with no chunks (eventStream=${eventStreamStatus.state})`,
+          { cliSessionId: t.cliSessionId, context: { reason, ttfbMs } },
+        )
         const snapshot = eventStreamDisconnected
           ? this.activityTracker.markRunInterrupted(tabId, "OpenCode event stream disconnected before any response events arrived.")
           : this.activityTracker.markRunFailed(tabId, {
@@ -1597,7 +1645,7 @@ export class StreamCoordinator {
           runId: snapshot?.runId,
           mayStillBeRunning: backendMayStillBeRunning,
           partialOutputPreserved: false,
-          technicalDetails: `stream=${eventStreamStatus.state};last=${eventStreamStatus.lastRawEventType || ""};timeout=${this.TTFB_TIMEOUT_MS};session=${t.cliSessionId}`,
+          technicalDetails: `stream=${eventStreamStatus.state};last=${eventStreamStatus.lastRawEventType || ""};timeout=${ttfbMs};session=${t.cliSessionId}`,
         })
         this.postRunActivitySnapshot(tabId, snapshot, callbacks)
         this.setStreamState(tabId, "timeout", { sessionId: t.cliSessionId, eventStream: eventStreamStatus.state })
@@ -1613,7 +1661,7 @@ export class StreamCoordinator {
           // the run is dead, run_status_result clears streaming flags; if
           // alive, the webview keeps showing Stop without an error flash.
           if (t.cliSessionId && eventStreamStatus.state === "connected") {
-            void this.probeActiveRun(tabId, callbacks).catch(err =>
+            void this.probeActiveRunWithRetry(tabId, callbacks).catch(err =>
               log.warn(`TTFB probe failed for ${tabId}`, err),
             )
           } else {
@@ -1627,7 +1675,7 @@ export class StreamCoordinator {
         // Only fall through to abort+stream_end if the server confirms the
         // run is dead OR the server is unreachable AND state isn't accepted.
         if (t.cliSessionId && eventStreamStatus.state === "connected") {
-          void this.probeActiveRun(tabId, callbacks)
+          void this.probeActiveRunWithRetry(tabId, callbacks)
             .then(() => {
               // The probe replies via run_status_result; if the run is
               // still active, the webview's flags are reconciled there. We
@@ -1675,8 +1723,118 @@ export class StreamCoordinator {
         }
         this.cleanupTab(tabId)
       }
-    }, this.TTFB_TIMEOUT_MS)
+    }, ttfbMs)
     this.ttfbTimeouts.set(tabId, ttfbTimeout)
+  }
+
+  /**
+   * Resolve the TTFB timeout from workspace configuration.
+   *
+   * Reads `opencode.streaming.ttfbTimeoutMs` (number; ms). Returns the
+   * configured value clamped to `[TTFB_TIMEOUT_FLOOR_MS, TTFB_TIMEOUT_CEILING_MS]`.
+   * Missing/non-numeric/out-of-range values fall back to the default. The
+   * read is lazy so changes via `WorkspaceConfiguration.update` take effect
+   * on the next stream — no extension reload required.
+   *
+   * Exposed as a method (not a property) so tests can override via
+   * `setTtfbTimeoutForTests` and so future per-provider overrides can
+   * thread model/provider context through here without touching call sites.
+   */
+  private resolveTtfbTimeoutMs(): number {
+    const fallback = this.TTFB_TIMEOUT_MS_DEFAULT
+    try {
+      const raw = vscode.workspace.getConfiguration("opencode").get<number>("streaming.ttfbTimeoutMs")
+      if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) return fallback
+      const floor = StreamCoordinator.TTFB_TIMEOUT_FLOOR_MS
+      const ceiling = StreamCoordinator.TTFB_TIMEOUT_CEILING_MS
+      return Math.min(ceiling, Math.max(floor, Math.round(raw)))
+    } catch {
+      return fallback
+    }
+  }
+
+  /** Test-only override of the resolved TTFB. Production code should never
+   *  call this; it exists so unit tests can pin the value without spinning
+   *  up a VS Code workspace configuration. */
+  setTtfbTimeoutForTests(ms: number): void {
+    this.ttfbTimeoutMs = ms
+  }
+
+  /** Wire the streaming-lifecycle log sink to the webview + OutputChannel.
+   *  Called once by ChatProvider once the webview is ready. Before this is
+   *  called, the sink is a no-op so unit tests don't need to provide a
+   *  postMessage stub. */
+  wireStreamingLog(postMessage: (msg: Record<string, unknown>) => void): void {
+    this.streamingLog = createStreamingLog({ postMessage, channel: log })
+  }
+
+  /** Number of probe retries before we give up and fall through to the
+   *  pre-existing abort+stream_end path. Research (WHATWG SSE §9.2.3 + the
+   *  harness's own SSE-reconnect bug history) shows a single probe failure
+   *  is a common transient blip — never an authoritative signal that the
+   *  run is dead. 3 retries with 1s/2s/4s backoff gives ~7s of slack for
+   *  a transient network drop without locking the UI for too long. */
+  static readonly PROBE_MAX_ATTEMPTS = 3
+  static readonly PROBE_BACKOFF_BASE_MS = 1_000
+
+  /**
+   * Probe the server for the active run's liveness, retrying transient
+   * failures with exponential backoff. Only after {@link PROBE_MAX_ATTEMPTS}
+   * consecutive failures do we re-throw to the caller — at which point the
+   * caller falls back to its existing dead-run path.
+   *
+   * This replaces the old pattern of `.catch(err => log.warn(...))` which
+   * silently swallowed probe errors AND the "single probe then stream_end"
+   * branch which unilaterally finalized the run when a single probe blipped
+   * — the exact cause of "Send reverted while still generating" on flaky
+   * networks.
+   */
+  private async probeActiveRunWithRetry(tabId: string, callbacks: StreamCallbacks): Promise<void> {
+    const maxAttempts = StreamCoordinator.PROBE_MAX_ATTEMPTS
+    const base = StreamCoordinator.PROBE_BACKOFF_BASE_MS
+    let lastErr: unknown
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await this.probeActiveRun(tabId, callbacks)
+        if (attempt > 1) {
+          log.info(`Probe for ${tabId} succeeded on attempt ${attempt}/${maxAttempts}`)
+          emit(
+            this.streamingLog,
+            "probe_result",
+            tabId,
+            `Probe succeeded on attempt ${attempt}/${maxAttempts}`,
+          )
+        }
+        return
+      } catch (err) {
+        lastErr = err
+        if (attempt === maxAttempts) break
+        const backoff = base * Math.pow(2, attempt - 1)
+        log.warn(
+          `Probe for ${tabId} failed on attempt ${attempt}/${maxAttempts}; retrying in ${backoff}ms`,
+          err,
+        )
+        emit(
+          this.streamingLog,
+          "probe_retry",
+          tabId,
+          `Probe attempt ${attempt}/${maxAttempts} failed; retrying in ${backoff}ms`,
+          { context: { error: err instanceof Error ? err.message : String(err) } },
+        )
+        await new Promise<void>(resolve => {
+          const timer = setTimeout(resolve, backoff)
+          ;(timer as unknown as { unref?: () => void }).unref?.()
+        })
+      }
+    }
+    log.warn(`Probe for ${tabId} exhausted ${maxAttempts} attempts — giving up`, lastErr)
+    emit(
+      this.streamingLog,
+      "probe_exhausted",
+      tabId,
+      `All ${maxAttempts} probe attempts failed — falling back to dead-run path`,
+    )
+    throw lastErr
   }
 
   private async fetchFinalBlocks(

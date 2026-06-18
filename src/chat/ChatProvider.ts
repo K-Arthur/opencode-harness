@@ -197,6 +197,11 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     this.streamCoordinator = new StreamCoordinator(
       sessionManager, sessionStore, contextEngine, contextMonitor, modelManager, this.tabManager, rateLimitMonitor, this.diffApplier, methodologyAdvisor
     )
+    // Wire the streaming-lifecycle log to the webview. The sink is best-effort:
+    // before the webview is ready, postMessage returns false silently; once
+    // the webview loads, streaming_log messages reach the in-webview devtools
+    // console for live debugging. The OutputChannel mirror is always on.
+    this.streamCoordinator.wireStreamingLog((msg) => this.postMessage(msg))
     if (this.sessionManagerRegistry) {
       this.streamCoordinator.setSessionManagerRegistry(this.sessionManagerRegistry)
     }

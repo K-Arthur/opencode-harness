@@ -368,9 +368,41 @@ The webview writes BOTH flags from any `streaming_state` message, so a single ho
 | **G8** | Optimistic `isStreaming=true` on send with no host ack → stuck Stop button | 5s `SEND_ACK_WATCHDOG_MS` timer in `sendMessage` probes if the host hasn't pushed `isServerStreaming=true`. |
 | **G9** | `switchTab` read only the local flag → misrendered Stop after an error/reconnect | Derives from `isStreaming || isServerStreaming`; calls `composer.probeActiveRun()` to reconcile. |
 | **G10** | Per-tab process crash (ADR-010) handler only logged → stuck Stop for 45min | `ChatProvider.handleProcessCrash(processId, tabIds, timestamp)` cleans up via `cleanupTab`, posts `streaming_state:false` (source:"reconnect") + `stream_interrupted`. Wired from `extension.ts:onProcessCrash`. |
+| **G11** | TTFB watchdog fired at a hardcoded 90s — too short for reasoning models that "think" before emitting the first token (GLM-5.x, Kimi, DeepSeek-R1, Qwen-QwQ routinely take 60–180s) | `TTFB_TIMEOUT_MS` is now configurable via `opencode.streaming.ttfbTimeoutMs` (default **180s**, range 60s–600s). Resolved at runtime through `StreamCoordinator.resolveTtfbTimeoutMs` so per-workspace overrides take effect on the next stream. Floor/ceiling enforced so a misconfigured value can't re-introduce the bug. |
+| **G12** | `.catch(err => log.warn(...))` on `probeActiveRun` silently swallowed probe failures; a single transient network blip during a slow TTFB reverted the Send button mid-thinking | New `probeActiveRunWithRetry` retries up to `PROBE_MAX_ATTEMPTS` (3) with exponential backoff (`PROBE_BACKOFF_BASE_MS` = 1s → 2s → 4s) before falling through to the dead-run path. Emits `probe_retry` / `probe_exhausted` events to the streaming log. |
+| **G13** | "Stuck streaming" reports were untriagable — the UI gave no signal beyond "it just stopped" | New `StreamingLog` module (`src/chat/handlers/StreamingLog.ts`) funnels every state transition (`send_dispatched`, `prompt_accepted`, `first_chunk`, `ttfb_warning`, `ttfb_timeout`, `probe_dispatched`, `probe_result`, `probe_retry`, `probe_exhausted`, `stream_end`, `reconnect`, `abort`) to the OpenCode Output channel AND posts `streaming_log` envelopes to the webview. Mirrors opencode CLI's `--print-logs` discipline. Wired from `ChatProvider` constructor via `streamCoordinator.wireStreamingLog(postMessage)`. Toggled by `opencode.streaming.logToOutputChannel` (default true). |
+| **G14** | Auto-tab-switch during generation: `sendMessage`'s "active panel doesn't exist" fallback yanked focus onto `active.id` whenever its panel was missing — even if the user was deliberately viewing another valid tab (state desync after init/resume could fire this mid-generation) | New `shouldForceFocusOnSend` helper in `sessionFocus.ts`. `sendLogic.ts::sendMessage` now only calls `switchToTab` when the user is on the welcome screen or has no current valid tab; otherwise the panel is created but the user stays where they are. |
+| **G15** | Sidebar/panel toggles (timeline, activity, tasks, subagents) during a stream re-wrapped every line and yanked scroll position | New `pauseForReflow(ms)` on `ScrollAnchor`. Toggles call `pauseActiveAnchorForReflow(150)` so `scrollIfAnchored` is a no-op for ~150ms (long enough to span the reflow + one animation frame); the next chunk resumes normal autoscroll. Wired in `timeline.ts::setupTimelineToggle` + activity/tasks/subagents click handlers in `main.ts`. |
+| **G16** | Scroll "haywire" during long sessions — `scrollHeight` polling during streaming raced with chunk arrival | `scrollAnchor.ts` now wires an `IntersectionObserver` sentinel as the PRIMARY "is at bottom?" signal (1px div as last child, rootMargin = ANCHOR_THRESHOLD). Cheaper and more robust than polling scrollHeight mid-stream. Falls back gracefully to scroll/wheel/touch listeners when `IntersectionObserver` is unavailable (older webview). |
 
 #### Test Coverage
 - `tests/unit/streaming-state-stability.test.mjs` (27 tests) — structural coverage for every gap, the wire format, host authority wiring, and reload state clearing.
+- `src/chat/handlers/StreamingLog.test.ts` — OutputChannel + webview mirror, malformed-payload rejection, best-effort error swallowing.
+- `src/chat/webview/sessionFocus.test.ts` — `shouldForceFocusOnSend` (auto-tab-switch guard), `shouldHonorResumeSessionSwitch` (background-resume guard), plus the existing `shouldHonorActiveSessionChange` + `resolveInitStateTarget` matrix.
+- `src/chat/webview/scrollAnchor.test.ts` — `IntersectionObserver` sentinel wiring, `pauseForReflow` guard, graceful fallback when observer unavailable.
+
+### Auto-Tab-Switch Policy (No Yank During Generation)
+
+The webview treats the user's current view as authoritative. Host pushes (`active_session_changed`, `resume_session_data`) are honoured ONLY when doing so cannot steal focus from a tab the user is deliberately viewing. Three pure helpers in `src/chat/webview/sessionFocus.ts` encode this; each is unit-tested in isolation.
+
+| Helper | Triggers when | Rule |
+|---|---|---|
+| `shouldHonorActiveSessionChange` | host pushes `active_session_changed` (every host-side `setActive`) | Honour only when welcome is visible, current tab is invalid, OR neither current nor target is streaming. Never yank onto a streaming session; never yank away from a streaming session. |
+| `shouldForceFocusOnSend` | `sendLogic.ts::sendMessage` finds the active session's panel missing (state desync after init/resume) | Switch only when the user is on the welcome screen or has no current valid tab. Otherwise create the panel but leave the user where they are. |
+| `shouldHonorResumeSessionSwitch` | `main.ts` `resume_session_data` handler (host-pushed session hydration) | Honour only when user-initiated (history click), or when the user is on the welcome screen / has no valid tab. Background resumes must never steal focus. |
+| `resolveInitStateTarget` | `init_state` (fired on every webview visibility change) | First init honours the host's restored active id. Subsequent inits preserve the user's current tab. |
+
+### Scroll Stability Architecture
+
+`src/chat/webview/scrollAnchor.ts::createScrollAnchor` controls auto-scroll during streaming. Three layers of defence (research: chat-scroll-anchoring literature + TanStack virtual issues + VS Code webview guidance):
+
+1. **Primary signal: `IntersectionObserver` sentinel.** A 1px `<div data-scroll-sentinel>` is the last child of the message list. When it intersects the viewport (within `ANCHOR_THRESHOLD = 80px`), the user is "at the bottom" and autoscroll is anchored. Cheaper than polling `scrollHeight`, doesn't force layout, doesn't race with streaming chunks.
+2. **Fallback signals: `scroll`/`wheel`/`touchmove` listeners.** Used when `IntersectionObserver` is unavailable (older webview) and for fast user-driven pause detection (e.g., wheel-up immediately pauses).
+3. **Reflow guard: `pauseForReflow(ms)`.** Sidebar/panel toggles call this BEFORE the visibility change so the width-change reflow (every wrapped line re-wraps) doesn't yank the user's scroll position. Default 150ms — long enough to span the reflow + one animation frame, short enough that the next chunk resumes normal autoscroll. Wired from:
+   - `timeline.ts::setupTimelineToggle` via `onLayoutReflow` dep → `pauseActiveAnchorForReflow(150)`
+   - `main.ts` activity/tasks/subagents toggle handlers
+
+**Native browser scroll anchoring** is left enabled (don't write `overflow-anchor: none` on the message list). The IntersectionObserver sentinel + reflow guard co-operate with it; JS-driven scrolls don't conflict with reflow-driven movements.
 
 ### Provider-Specific Error Mapping
 `opencodeErrorMapper.ts` handles third-party OpenAI-compatible providers (GLM, DeepSeek, etc.):
@@ -541,6 +573,9 @@ All dropdowns and modals support: `ArrowUp`/`ArrowDown` to navigate, `Enter`/`Sp
 
 ### Settings
 - `opencode.defaultMode`: Default session mode for new tabs (`"build"`, `"plan"`, or `"auto"`)
+- `opencode.sessions.maxConcurrentStreams`: Max concurrent AI streams across all tabs (default 5)
+- `opencode.streaming.ttfbTimeoutMs`: Time-to-first-byte timeout in ms (default 180000 = 3 minutes; range 60000–600000). Raised from the original 90s default after research showed reasoning models (GLM-5.x, Kimi, DeepSeek-R1, Qwen-QwQ) routinely take 60–180s to emit the first token. Decrease for snappy first-class providers; increase if your workflow regularly hits the timeout while the model is still thinking. Read at runtime via `StreamCoordinator.resolveTtfbTimeoutMs` so workspace changes take effect on the next stream — no reload required.
+- `opencode.streaming.logToOutputChannel`: When true (default), mirror streaming-lifecycle events (send, ttfb, probe, reconnect, abort) to the **OpenCode** Output channel. Mirrors opencode CLI's `--print-logs` discipline; useful for diagnosing "Send button reverted while still generating" symptoms.
 
 ### Implementation Details
 - ### UI/UX Patterns (v0.3.2+)

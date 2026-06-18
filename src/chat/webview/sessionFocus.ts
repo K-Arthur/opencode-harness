@@ -63,6 +63,72 @@ export function shouldHonorActiveSessionChange(ctx: ActiveSessionChangeContext):
   return true
 }
 
+export interface SendFocusContext {
+  /** True when the standalone welcome view is currently shown. */
+  welcomeVisible: boolean
+  /** The session id the webview currently displays, if any. */
+  currentActiveId: string | null | undefined
+  /** Whether `currentActiveId` still maps to a known, open session. */
+  currentActiveValid: boolean
+  /** The session id send is targeting (the one whose panel is missing). */
+  targetId: string
+}
+
+/**
+ * Decide whether `sendMessage`'s "active panel doesn't exist" fallback is
+ * allowed to switchToTab the user onto the target session.
+ *
+ * Previously this path yanked focus onto the target whenever its panel was
+ * missing — even when the user was deliberately viewing another valid tab
+ * (a state desync after init/resume could trigger it mid-generation).
+ * Per the "never auto-switch during generation" requirement we now only
+ * switch when the user has nothing valid to look at (welcome screen or no
+ * current tab); otherwise we create the panel but leave the user where
+ * they are.
+ */
+export function shouldForceFocusOnSend(ctx: SendFocusContext): boolean {
+  const { welcomeVisible, currentActiveId, currentActiveValid, targetId } = ctx
+  // Already viewing the target — no switch needed.
+  if (currentActiveId === targetId) return false
+  // No valid tab being viewed — safe to focus the target.
+  if (welcomeVisible || !currentActiveId || !currentActiveValid) return true
+  // User is on a different valid tab — do NOT yank focus during a send.
+  return false
+}
+
+export interface ResumeFocusContext {
+  /** True when the standalone welcome view is currently shown. */
+  welcomeVisible: boolean
+  /** The session id the webview currently displays, if any. */
+  currentActiveId: string | null | undefined
+  /** Whether `currentActiveId` still maps to a known, open session. */
+  currentActiveValid: boolean
+  /** The session id the host just resumed. */
+  targetId: string
+  /** Whether the resume was triggered by an explicit user action (history click). */
+  userInitiated: boolean
+}
+
+/**
+ * Decide whether `resume_session_data` should switchToTab the user onto the
+ * resumed session. The handler fires for both user-initiated resumes (clicking
+ * a session in the history list) and background/automatic ones (state sync,
+ * auto-restore). Only the user-initiated path may yank focus away from a
+ * valid tab the user is currently viewing; automatic resumes must never
+ * disrupt the user's view, especially when another tab is mid-stream.
+ */
+export function shouldHonorResumeSessionSwitch(ctx: ResumeFocusContext): boolean {
+  const { welcomeVisible, currentActiveId, currentActiveValid, targetId, userInitiated } = ctx
+  // Already viewing the target — honour is a no-op.
+  if (currentActiveId === targetId) return true
+  // No valid tab being viewed — safe to focus the resumed session.
+  if (welcomeVisible || !currentActiveId || !currentActiveValid) return true
+  // User is on a different valid tab. Only yank if they explicitly asked
+  // for this resume (e.g. clicked a session in history). Background resumes
+  // must never steal focus.
+  return userInitiated
+}
+
 export interface InitStateTargetContext {
   /** True only for the very first `init_state` of this webview lifetime. */
   isFirstInit: boolean

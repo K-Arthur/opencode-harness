@@ -282,8 +282,14 @@ describe("StreamCoordinator.ts", () => {
   })
 
   it("has TTFB_TIMEOUT_MS configured for first-byte timeout", () => {
-    assert.ok(source.includes("TTFB_TIMEOUT_MS"), "TTFB_TIMEOUT_MS constant must exist")
-    assert.ok(/TTFB_TIMEOUT_MS\s*=\s*\d+/.test(source), "TTFB_TIMEOUT_MS must be assigned a number")
+    assert.ok(source.includes("TTFB_TIMEOUT_MS"), "TTFB_TIMEOUT_MS surface must exist")
+    // Configurable architecture: a default constant + a runtime resolver +
+    // a getter for back-compat with structural tests. All three signals
+    // together indicate the TTFB is wired through `opencode.streaming.ttfbTimeoutMs`.
+    assert.ok(
+      source.includes("TTFB_TIMEOUT_MS_DEFAULT") && source.includes("resolveTtfbTimeoutMs"),
+      "TTFB must expose a configurable default + runtime resolver",
+    )
   })
 
   it("has firstChunkReceived flag on TabState-compatible stream tracking", () => {
@@ -344,13 +350,48 @@ describe("StreamCoordinator.ts", () => {
     )
   })
 
-  it("TTFB_TIMEOUT_MS is at least 90000ms for slow third-party models", () => {
-    const match = source.match(/TTFB_TIMEOUT_MS\s*=\s*(\d+)/)
-    assert.ok(match, "TTFB_TIMEOUT_MS must be assigned a number")
-    const val = parseInt(match[1]!, 10)
+  it("TTFB_TIMEOUT_MS default is at least 180000ms (raised for slow reasoning models)", () => {
+    // The default TTFB was raised from 90s → 180s after research showed
+    // reasoning models (GLM-5.x, Kimi, DeepSeek-R1, Qwen-QwQ) routinely
+    // take 60–180s to first token. The default is now configurable.
+    const match = source.match(/TTFB_TIMEOUT_MS_DEFAULT\s*=\s*(\d+(?:_\d+)*)/)
+    assert.ok(match, "TTFB_TIMEOUT_MS_DEFAULT must be assigned a number")
+    const val = parseInt(match![1]!.replace(/_/g, ""), 10)
     assert.ok(
-      val >= 90000,
-      `TTFB_TIMEOUT_MS must be >= 90000ms for slow third-party models, got ${val}`,
+      val >= 180000,
+      `TTFB_TIMEOUT_MS_DEFAULT must be >= 180000ms for slow third-party models, got ${val}`,
+    )
+  })
+
+  it("TTFB timeout is configurable via opencode.streaming.ttfbTimeoutMs", () => {
+    // The runtime resolver reads from workspace config so users can override
+    // without a code change (per research: per-provider TTFB is necessary
+    // because no single default is right for every model).
+    assert.ok(
+      /getConfiguration\(\s*["']opencode["']\s*\)\s*\.get<number>\(\s*["']streaming\.ttfbTimeoutMs["']/.test(source),
+      "TTFB must read opencode.streaming.ttfbTimeoutMs from workspace configuration",
+    )
+    assert.ok(
+      source.includes("TTFB_TIMEOUT_FLOOR_MS") && source.includes("TTFB_TIMEOUT_CEILING_MS"),
+      "TTFB must clamp the configured value to a [floor, ceiling] range",
+    )
+  })
+
+  it("probe failures are retried with exponential backoff (not silent swallowed)", () => {
+    // The old path was `.catch(err => log.warn(...))` which silently
+    // swallowed probe failures and let the UI revert to "Send" mid-stream.
+    // The new path retries up to PROBE_MAX_ATTEMPTS before giving up.
+    assert.ok(
+      source.includes("probeActiveRunWithRetry"),
+      "TTFB path must dispatch retries through probeActiveRunWithRetry",
+    )
+    assert.ok(
+      source.includes("PROBE_MAX_ATTEMPTS") && source.includes("PROBE_BACKOFF_BASE_MS"),
+      "Retry policy must expose PROBE_MAX_ATTEMPTS + PROBE_BACKOFF_BASE_MS constants",
+    )
+    assert.ok(
+      /Math\.pow\(2,\s*attempt\s*-\s*1\)/.test(source),
+      "Retry backoff must be exponential (2 ** (attempt-1))",
     )
   })
 
