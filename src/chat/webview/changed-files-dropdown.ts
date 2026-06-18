@@ -635,6 +635,10 @@ function _renderRowExpansion(
   else preview.innerHTML = ""
 }
 
+export function renderTree(container: HTMLElement, files: FileChange[]): void {
+  _renderTree(container, files)
+}
+
 function _renderTree(container: HTMLElement, files: FileChange[]): void {
   container.innerHTML = ""
 
