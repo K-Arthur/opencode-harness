@@ -1144,7 +1144,20 @@ export class StreamCoordinator {
 
       const { modelRef, agent } = await this.resolveModelAndAgentForPrompt(tabId, tab)
 
-      const parts = this.buildTextParts(tabId, tab, cliSessionId, text, callbacks, attachments)
+      // Inject per-tab instructions as a prepended text part on the first turn
+      // only. injectedInstructionsSessions tracks which CLI sessions have
+      // already received the tab's instructions to prevent re-injection on
+      // follow-up turns. Must be prepended before methodology advice + user text.
+      const instructionParts: Array<{ type: "text"; text: string }> = []
+      if (tab.instructions && !this.injectedInstructionsSessions.has(cliSessionId)) {
+        instructionParts.push({ type: "text", text: tab.instructions })
+        this.injectedInstructionsSessions.add(cliSessionId)
+      }
+
+      const parts = [
+        ...instructionParts,
+        ...this.buildTextParts(tabId, tab, cliSessionId, text, callbacks, attachments),
+      ]
 
       // Materialize each attachment to a temp file and send a `file://` URL
       // to the server. The opencode server (v1.15.x) auto-reads the OS
@@ -1376,12 +1389,9 @@ export class StreamCoordinator {
     callbacks: StreamCallbacks,
     attachments: Array<{ data: string; mimeType: string }>,
   ): Array<{ type: "text"; text: string } | { type: "file"; mime: string; url: string }> {
-    // Inject per-tab instructions as a prepended text part on the first turn only
+    // Per-tab instruction injection is handled by the caller (startPrompt) so
+    // it is prepended before methodology advice and tracked against re-injection.
     const parts: Array<{ type: "text"; text: string } | { type: "file"; mime: string; url: string }> = []
-    if (tab.instructions && !this.injectedInstructionsSessions.has(cliSessionId)) {
-      parts.push({ type: "text", text: tab.instructions })
-      this.injectedInstructionsSessions.add(cliSessionId)
-    }
 
     // Methodology advice — classify the user's prompt and prepend a short
     // strategy hint. Pure/synchronous; returns null for trivial inputs and

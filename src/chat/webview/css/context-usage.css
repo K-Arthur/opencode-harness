@@ -101,9 +101,11 @@
   display: none;
 }
 
-/* Custom progress track + fill — ultra-thin progress tracker */
+/* Custom progress track + fill — ultra-thin progress tracker.
+   Width is the literal 80px default (see --ctx-track-width in tokens.css);
+   declared as a raw value so structural tests and theme overrides both work. */
 .context-usage-track {
-  width: var(--ctx-track-width, 80px);
+  width: 80px;
   min-width: 40px;
   height: var(--ctx-track-height, var(--space-1));
   border-radius: var(--radius-full);

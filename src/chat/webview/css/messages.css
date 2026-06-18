@@ -403,6 +403,10 @@
   overflow: hidden;
   word-break: break-word;
   overflow-wrap: anywhere;
+  /* contain: layout isolates this subtree's layout from the rest of the
+     message list so streaming reflows don't trigger full-list reflow
+     (motion-budget optimization). */
+  contain: layout;
 }
 
 .message.user .message-content {
@@ -1553,7 +1557,7 @@
   margin-left: 1px;
   vertical-align: text-bottom;
   border-radius: 1px;
-  animation: cursor-blink 1.2s ease-in-out infinite;
+  animation: cursor-blink 1s step-end infinite;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════╛

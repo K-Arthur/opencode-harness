@@ -212,7 +212,10 @@ function hideKeyError(): void {
 function setSubmitLoading(loading: boolean): void {
   if (apiKeySubmitBtn) apiKeySubmitBtn.disabled = loading
   if (apiKeySubmitLabel) apiKeySubmitLabel.textContent = loading ? "Connecting..." : "Connect"
-  if (apiKeySubmitSpinner) apiKeySubmitSpinner.classList.toggle("hidden", !loading)
+  if (apiKeySubmitSpinner) {
+    apiKeySubmitSpinner.classList.toggle("hidden", !loading)
+    apiKeySubmitSpinner.classList.toggle("provider-spinner", loading)
+  }
 }
 
 export function onProviderKeyResult(providerId: string, success: boolean, error?: string): void {
@@ -428,6 +431,8 @@ export function handleOAuthStarted(providerId: string, authorizationUrl: string,
   oauthPollTimer = setInterval(() => {
     attempts++
     if (attempts > MAX_ATTEMPTS || !pendingOAuthProviderId) {
+      const pId = pendingOAuthProviderId
+      if (pId) onProviderKeyResult(pId, false, "OAuth timed out — please try again")
       stopOAuthPolling()
       return
     }
@@ -446,6 +451,13 @@ export function handleOAuthCompleted(providerId: string, ok: boolean, error?: st
   if (pendingOAuthProviderId === providerId) {
     pendingOAuthProviderId = null
     stopOAuthPolling()
+  }
+  // Forward OAuth result to the key-result handler so the UI transitions
+  // correctly (list step on success, inline error on failure).
+  if (ok) {
+    onProviderKeyResult(providerId, true)
+  } else if (error) {
+    onProviderKeyResult(providerId, false, error)
   }
   if (!ok && error) {
     console.warn(`[provider-panel] OAuth failed for ${providerId}: ${error}`)

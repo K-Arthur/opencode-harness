@@ -33,7 +33,7 @@ void describe("subagent UI reliability — wiring", () => {
 
     void it("wraps #tab-panels + the four side panels + the detail view", () => {
       // The wrapper must exist and be closed BEFORE the changed-files strip.
-      const openIdx = html.indexOf('<div class="main-layout">')
+      const openIdx = html.indexOf('<div class="main-layout')
       const closeIdx = html.indexOf("</div>", html.indexOf("<!-- #context-usage-panel removed"))
       assert.ok(openIdx > 0, ".main-layout wrapper must exist in index.html")
       assert.ok(closeIdx > openIdx, ".main-layout wrapper must be closed before the changed-files strip")

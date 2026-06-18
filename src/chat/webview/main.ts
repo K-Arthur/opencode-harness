@@ -2068,6 +2068,10 @@ function setupTodoSkillAndSubagentPanels(): void {
     composer.syncSteerModeUI()
     syncSteerAffordance()
     updateTabBar()
+    // Restore this tab's pending permission, or hide the bar.
+    const pendingPermission = pendingPermissionBySession.get(tabId)
+    if (pendingPermission) renderPermissionBar(tabId, pendingPermission)
+    else hidePermissionBar()
     // Restore draft for the new tab
     els.promptInput.value = stateManager.getDraftText(tabId)
     composer.autoResizeTextarea()
@@ -2176,16 +2180,6 @@ function setupTodoSkillAndSubagentPanels(): void {
     // Reconcile bar: clean stale answered items and restore any missing
     // from the active session that fell out of the DOM.
     questionBar.reconcileBar(tabId)
-
-    // Restore this tab's own pending permission request (if any), or hide
-    // the bar — it must never keep showing a request that belongs to the
-    // tab we just switched away from.
-    const pendingPermission = pendingPermissionBySession.get(tabId)
-    if (pendingPermission) {
-      renderPermissionBar(tabId, pendingPermission)
-    } else {
-      hidePermissionBar()
-    }
   }
 
   /**
@@ -3944,9 +3938,9 @@ function setupTodoSkillAndSubagentPanels(): void {
       ["provider_added", (msg) => {
         const id = (msg as Record<string, unknown>).id as string | undefined
         if (id) onProviderKeyResult(id, true)
-        vscode.postMessage({ type: "list_providers" })
         vscode.postMessage({ type: "get_models" })
         vscode.postMessage({ type: "discover_providers" })
+        vscode.postMessage({ type: "list_providers" })
       }],
       ["provider_deleted", () => {
         vscode.postMessage({ type: "list_providers" })

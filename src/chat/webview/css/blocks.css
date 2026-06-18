@@ -556,10 +556,12 @@
   flex-shrink: 0;
 }
 
-/* Frozen final duration: no longer ticking, dimmer than active timers. */
+/* Frozen final duration: no longer ticking, dimmer than active timers.
+   animation: none kills the pulsing so the frozen value reads as static. */
 .tool-elapsed--final {
   color: var(--color-muted, #888);
   opacity: 0.8;
+  animation: none;
 }
 
 .tool-output-size {

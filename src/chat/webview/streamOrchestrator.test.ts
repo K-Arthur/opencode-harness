@@ -962,7 +962,10 @@ describe("createStreamOrchestrator", () => {
       const msgList = document.createElement("div")
       h.setMessageList("s1", msgList)
 
-      h.api.handleRequestError(undefined, "failure")
+      // G2: pass mayStillBeRunning:false so the orchestrator treats this as a
+      // terminal error and clears the streaming flag. Without errorContext the
+      // flag is preserved (the run might still be alive).
+      h.api.handleRequestError(undefined, "failure", { mayStillBeRunning: false })
       assert.equal(h.sessions.get("s1")!.isStreaming, false)
       assert.ok(stream.calls.some((c) => c.method === "handleRequestError" && c.args[0] === "failure"))
       assert.ok(stream.calls.some((c) => c.method === "finalizePendingTools"))
@@ -978,7 +981,8 @@ describe("createStreamOrchestrator", () => {
       msgList.appendChild(live)
       h.setMessageList("s1", msgList)
 
-      h.api.handleRequestError("s1", "broken")
+      // G2: pass mayStillBeRunning:false for a terminal error.
+      h.api.handleRequestError("s1", "broken", { mayStillBeRunning: false })
       assert.equal(h.sessions.get("s1")!.isStreaming, false)
       assert.equal(msgList.querySelectorAll(".streaming-text").length, 0)
       assert.ok(stream.calls.some((c) => c.method === "handleRequestError"))

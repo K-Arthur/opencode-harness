@@ -1422,9 +1422,13 @@ export { groupConsecutiveToolCalls, renderToolGroup, truncateMiddle, formatOutpu
 
 function renderNewDiffBlock(block: Block, opts: RenderOptions): HTMLElement | null {
   const diffBlock = toDiffBlock(block)
+  // Exclude command-like paths and "File Change" placeholders from
+  // file-open interactivity. Computed once here and passed to the header
+  // builder so createDiffFilePath doesn't re-check.
+  const isCommand = checkIsCommand(diffBlock.path)
   const wrapper = createDiffWrapper(diffBlock, opts.mode === "plan")
 
-  wrapper.appendChild(createDiffHeader(diffBlock, opts, wrapper))
+  wrapper.appendChild(createDiffHeader(diffBlock, opts, wrapper, !isCommand))
   appendDiffBody(wrapper, block, diffBlock, opts)
   wrapper.appendChild(createDiffActionBar(wrapper, diffBlock, opts))
 
@@ -1455,14 +1459,14 @@ function createDiffWrapper(diffBlock: DiffBlock, isPlanMode: boolean): HTMLEleme
   return wrapper
 }
 
-function createDiffHeader(diffBlock: DiffBlock, opts: RenderOptions, wrapper: HTMLElement): HTMLElement {
+function createDiffHeader(diffBlock: DiffBlock, opts: RenderOptions, wrapper: HTMLElement, interactive: boolean): HTMLElement {
   const header = document.createElement("div")
   header.className = "diff-header"
 
   const fileInfo = document.createElement("div")
   fileInfo.className = "diff-file-info"
   if (opts.mode === "plan") fileInfo.appendChild(createPlanDiffPill())
-  fileInfo.appendChild(createDiffFilePath(diffBlock, opts))
+  fileInfo.appendChild(createDiffFilePath(diffBlock, opts, interactive))
   fileInfo.appendChild(createDiffStats(diffBlock))
 
   header.appendChild(fileInfo)
@@ -1482,12 +1486,12 @@ function createPlanDiffPill(): HTMLElement {
   return planPill
 }
 
-function createDiffFilePath(diffBlock: DiffBlock, opts: RenderOptions): HTMLElement {
+function createDiffFilePath(diffBlock: DiffBlock, opts: RenderOptions, interactive: boolean): HTMLElement {
   const filePath = document.createElement("span")
   filePath.className = "diff-file-path"
   filePath.textContent = diffBlock.path
 
-  if (!isCommandLikeDiffPath(diffBlock.path)) {
+  if (interactive) {
     filePath.style.cursor = "pointer"
     filePath.title = "Click to open file"
     filePath.addEventListener("click", (e) => {
@@ -1500,7 +1504,7 @@ function createDiffFilePath(diffBlock: DiffBlock, opts: RenderOptions): HTMLElem
   return filePath
 }
 
-function isCommandLikeDiffPath(filePath: string | undefined): boolean {
+function checkIsCommand(filePath: string | undefined): boolean {
   const lowerPath = (filePath || "").trim().toLowerCase()
   return lowerPath === "file change" ||
     lowerPath.startsWith("npm ") ||
