@@ -3534,8 +3534,12 @@ function setupTodoSkillAndSubagentPanels(): void {
         if (queuedCount > 0) {
           renderQueue(sid)
         } else {
-          const container = document.querySelector<HTMLElement>(".prompt-queue")
-          if (container) container.remove()
+          // Only remove the queue container for the specific session's tab
+          const tabPanel = document.getElementById(`tab-panel-${sid}`)
+          if (tabPanel) {
+            const container = tabPanel.querySelector<HTMLElement>(".prompt-queue")
+            if (container) container.remove()
+          }
         }
       }],
       ["permission_request", (_msg, sid) => {

@@ -1221,6 +1221,13 @@ export class StreamCoordinator {
     attachments: Array<{ data: string; mimeType: string }>,
     e: unknown,
   ): void {
+    // If the tab was intentionally aborted (e.g. by the expired-question
+    // recovery watchdog), suppress the error — the abort owns cleanup and
+    // the user will be guided to retry via the recovery-failed message.
+    if (this.abortedTabs.has(tabId)) {
+      log.info(`handlePromptSendFailure suppressed for ${tabId} — tab was intentionally aborted`)
+      return
+    }
     const message = e instanceof Error ? e.message : "Unknown error"
     log.error("Prompt failed", e)
     this.setActiveRunState(tabId, "failed", { finalizeReason: "send_failed", error: message })
@@ -1390,7 +1397,7 @@ export class StreamCoordinator {
    * "generating" with no recovery path. */
   private setupExpiredRecoveryTimeout(tabId: string, callbacks: StreamCallbacks): void {
     const answerText = callbacks.expiredRecoveryAnswerText ?? ""
-    const timeout = setTimeout(() => {
+    const timeout = setTimeout(async () => {
       // Unconditional fire — deliberately NOT gated by the activity-tracker
       // startup-timeout check. That check returns false (skip timeout) when
       // any activity has been recorded, but stray tool_start events can flip
@@ -1401,27 +1408,25 @@ export class StreamCoordinator {
       const isActive = tab?.isStreaming && tab.waitingForCompletion
       log.warn(
         `expired_question_recovery hard timeout fired for tab ${tabId} ` +
-          `(isActive=${isActive}) — aborting recovery run and surfacing answer text for manual resend`,
+          `(isActive=${isActive}) — aborting recovery run and auto-forwarding answer`,
       )
       const streamMessageId = this.activeMessageIds.get(tabId) ?? tab?.cliSessionId ?? tabId
-      // Tell the webview: the recovery failed; pre-fill the input so the
-      // user can resend manually without close/reopen.
-      callbacks.postMessage({
-        type: "expired_question_recovery_failed",
-        sessionId: tabId,
-        messageId: streamMessageId,
-        answerText,
-        reason: "no_response",
-        seq: this.nextSeq(tabId),
-      })
-      // Abort the server-side run (if any) so subsequent prompts work.
+      // Release promptsInFlight BEFORE posting the recovery-failed message so
+      // that when the webview auto-sends the answer text (via setTimeout→sendMessage→send_prompt),
+      // the host does NOT queue it behind a stale promptsInFlight guard.
+      callbacks.clearPromptsInFlight?.()
+      // Abort the server-side run FIRST so the session is clean before the
+      // webview auto-sends. Await the abort so the recovery-failed message
+      // is only posted once the abort fully completes — preventing a race
+      // where the auto-send's send_prompt arrives while abort is in-flight.
       const cliSessionId = tab?.cliSessionId
       if (cliSessionId && this.getSm(tabId).isRunning) {
-        void this.abort(tabId, callbacks).catch((err) =>
-          log.error(`expired_question_recovery abort failed for tab ${tabId}`, err),
-        )
+        try {
+          await this.abort(tabId, callbacks)
+        } catch (err) {
+          log.error(`expired_question_recovery abort failed for tab ${tabId}`, err)
+        }
       } else {
-        // No live run to abort — just post stream_end and clean up locally.
         this.abortRegistry.recordAbort(tabId, this.activeRuns.get(tabId)?.serverMessageId, Date.now())
         callbacks.postMessage({
           type: "stream_end",
@@ -1435,6 +1440,17 @@ export class StreamCoordinator {
         })
         this.cleanupTab(tabId)
       }
+      // NOW post the recovery-failed message — abort is fully complete,
+      // promptsInFlight is clear, streaming state is false. The webview
+      // will auto-send without racing against cleanup.
+      callbacks.postMessage({
+        type: "expired_question_recovery_failed",
+        sessionId: tabId,
+        messageId: streamMessageId,
+        answerText,
+        reason: "no_response",
+        seq: this.nextSeq(tabId),
+      })
     }, this.EXPIRED_RECOVERY_TIMEOUT_MS)
     if (typeof timeout === "object" && typeof timeout.unref === "function") timeout.unref()
     this.expiredRecoveryTimeouts.set(tabId, timeout)
