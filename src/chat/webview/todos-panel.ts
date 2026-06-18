@@ -21,7 +21,8 @@ export type TodosPanelEls = Pick<ElementRefs,
   | "todosList"
   | "todoAddForm"
   | "todoAddInput"
->
+  | "closeTodosBtn"
+> & Partial<Pick<ElementRefs, "todosToggleBtn">>
 
 export interface TodosPanelApi {
   renderTodos: (todos: Todo[], isLoading?: boolean, sessionId?: string) => void
@@ -454,7 +455,8 @@ function setupListKeyboardNavigation(listEl: HTMLElement, todos: Todo[], options
 export function setupTodosPanel(els: TodosPanelEls, options: TodosPanelOptions): TodosPanelApi | undefined {
   const todosPanel = els.todosPanel
   const todosList = els.todosList
-  const closeBtn = null as HTMLElement | null
+  const closeBtn = els.closeTodosBtn
+  const toggleBtn = els.todosToggleBtn ?? null
   const addForm = els.todoAddForm
   const addInput = els.todoAddInput
 
@@ -482,11 +484,10 @@ export function setupTodosPanel(els: TodosPanelEls, options: TodosPanelOptions):
 
   const onEscape = (e: KeyboardEvent) => {
     if (e.key === "Escape" && !todosPanel.classList.contains("hidden")) {
-      todosPanel.classList.add("hidden")
-      options.onPanelClose?.()
+      close()
     }
   }
-  if (closeBtn) document.addEventListener("keydown", onEscape)
+  document.addEventListener("keydown", onEscape)
 
   const onAddSubmit = (e: Event) => {
     e.preventDefault()
@@ -599,15 +600,14 @@ export function setupTodosPanel(els: TodosPanelEls, options: TodosPanelOptions):
     open: () => { todosPanel.classList.remove("hidden") },
     close: () => {
       todosPanel.classList.add("hidden")
+      toggleBtn?.focus()
       if (toastTimeout) { clearTimeout(toastTimeout); toastTimeout = null }
     },
     isOpen: () => !todosPanel.classList.contains("hidden"),
     showToast,
     dispose: () => {
-      if (closeBtn) {
-        document.removeEventListener("keydown", onEscape)
-        closeBtn.removeEventListener("click", onCloseClick)
-      }
+      document.removeEventListener("keydown", onEscape)
+      if (closeBtn) closeBtn.removeEventListener("click", onCloseClick)
       if (addForm && addInput) addForm.removeEventListener("submit", onAddSubmit)
       if (toastTimeout) { clearTimeout(toastTimeout); toastTimeout = null }
     },

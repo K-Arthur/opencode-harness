@@ -1214,6 +1214,7 @@ function getVsCodeApi() {
         activityPanelApi?.close()
         tasksPanelApi?.close()
         subagentPanelApi?.close()
+        syncPanelVisibilityToHost()
       },
     })
 
@@ -1305,9 +1306,11 @@ function getVsCodeApi() {
         const wasOpen = todosPanelApi?.isOpen()
         if (wasOpen) {
           todosPanelApi?.close()
+          syncPanelVisibilityToHost()
           return false
         }
         todosPanelApi?.open()
+        syncPanelVisibilityToHost()
         return true
       },
       onTodosToggle: (willBeVisible: boolean) => {
@@ -1332,12 +1335,25 @@ function getVsCodeApi() {
     els.promptStashToggleBtn.addEventListener("click", () => stashHandlers.toggle())
   }
 
-  function setupTodoSkillAndSubagentPanels(): void {
+  function syncPanelVisibilityToHost(): void {
+  vscode.postMessage({
+    type: "panel_visibility_state",
+    panels: {
+      todos: todosPanelApi?.isOpen() ?? false,
+      activity: activityPanelApi?.isOpen() ?? false,
+      tasks: tasksPanelApi?.isOpen() ?? false,
+      subagent: subagentPanelApi?.isOpen() ?? false,
+    },
+  } satisfies Record<string, unknown>)
+}
+
+function setupTodoSkillAndSubagentPanels(): void {
     todosPanelApi = setupTodosPanel(els, {
       onToggleTodo: toggleTodo,
       onDeleteTodo: deleteTodo,
       onEditTodo: editUserTodo,
       onAddTodo: addUserTodo,
+      onPanelClose: () => { syncPanelVisibilityToHost() },
       postMessage: (msg: Record<string, unknown>) => vscode.postMessage(msg),
       getActiveFilter: () => {
         const sid = stateManager.getState().activeSessionId
@@ -1440,8 +1456,14 @@ function getVsCodeApi() {
     })
 
     // Wire toggle buttons to individual panels
-    els.activityToggleBtn.addEventListener("click", () => { activityPanelApi?.toggle?.() })
-    els.tasksToggleBtn.addEventListener("click", () => { tasksPanelApi?.toggle?.() })
+    els.activityToggleBtn.addEventListener("click", () => {
+      activityPanelApi?.toggle?.()
+      syncPanelVisibilityToHost()
+    })
+    els.tasksToggleBtn.addEventListener("click", () => {
+      tasksPanelApi?.toggle?.()
+      syncPanelVisibilityToHost()
+    })
     els.subagentsToggleBtn.addEventListener("click", () => {
       const wasOpen = subagentPanelApi?.isOpen()
       if (wasOpen) {
@@ -1450,6 +1472,7 @@ function getVsCodeApi() {
         setSubagentPanelOpen(true)
         requestSubagentActivities()
       }
+      syncPanelVisibilityToHost()
     })
     window.addEventListener("oc:open-subagent-panel", () => {
       setSubagentPanelOpen(true)

@@ -34,7 +34,7 @@ function makeEls(): ActivityPanelEls {
     activityPanel: document.getElementById("activity-panel") as HTMLElement,
     activityFilters: document.getElementById("activity-filters") as HTMLElement,
     activityList: document.getElementById("activity-list") as HTMLElement,
-    activityClose: document.getElementById("activity-close-btn") as HTMLElement,
+    activityCloseBtn: document.getElementById("activity-close-btn") as HTMLElement,
   }
 }
 
@@ -84,7 +84,7 @@ describe("setupActivityPanel — initialization", () => {
       activityPanel: document.getElementById("activity-panel") as HTMLElement,
       activityFilters: null as unknown as HTMLElement,
       activityList: null as unknown as HTMLElement,
-      activityClose: null as unknown as HTMLElement,
+      activityCloseBtn: null as unknown as HTMLElement,
     }
     assert.equal(setupActivityPanel(els, makeDeps().deps), undefined)
   })

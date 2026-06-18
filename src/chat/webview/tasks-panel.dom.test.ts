@@ -31,7 +31,7 @@ function els(): TasksPanelEls {
     tasksPanel: document.getElementById("tasks-panel") as HTMLElement,
     tasksFilters: document.getElementById("tasks-filters") as HTMLElement,
     tasksList: document.getElementById("tasks-list") as HTMLElement,
-    tasksClose: document.getElementById("tasks-close-btn") as HTMLElement,
+    tasksCloseBtn: document.getElementById("tasks-close-btn") as HTMLElement,
   }
 }
 
