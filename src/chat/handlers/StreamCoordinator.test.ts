@@ -956,10 +956,40 @@ describe("StreamCoordinator.ts", () => {
   // `expired_question_recovery_failed` with the original answer text so
   // the webview can pre-fill the prompt input for manual resend.
   void describe("B10-recovery: hard unconditional watchdog for expired-question fallback", () => {
-    void it("declares EXPIRED_RECOVERY_TIMEOUT_MS constant (15s — shorter than the gated TTFB)", () => {
+    void it("declares EXPIRED_RECOVERY_TIMEOUT_MS constant (8s — short user-visible retry window)", () => {
       assert.ok(
-        source.includes("EXPIRED_RECOVERY_TIMEOUT_MS = 15_000"),
-        "B10-recovery: must declare a 15s hard timeout constant",
+        source.includes("EXPIRED_RECOVERY_TIMEOUT_MS = 8_000"),
+        "B10-recovery: must declare an 8s hard timeout constant (short enough to surface manual recovery before user gives up)",
+      )
+    })
+
+    void it("startPrompt clears activeMessageIds/activeRuns when recoveryFromExpiredQuestion is set (fresh bubble, not anchored to dead question)", () => {
+      const startPromptIdx = source.indexOf("async startPrompt(")
+      assert.ok(startPromptIdx >= 0, "startPrompt must exist")
+      const startPromptBody = source.slice(startPromptIdx, startPromptIdx + 3000)
+      const recoveryClearBlock = startPromptBody.indexOf("callbacks.recoveryFromExpiredQuestion")
+      assert.ok(recoveryClearBlock >= 0, "B10-recovery: startPrompt must check callbacks.recoveryFromExpiredQuestion")
+      const block = startPromptBody.slice(recoveryClearBlock, recoveryClearBlock + 600)
+      assert.ok(
+        block.includes("this.activeMessageIds.delete(tabId)"),
+        "B10-recovery: must clear activeMessageIds so the recovery gets a fresh assistant bubble (not the dead question's)",
+      )
+      assert.ok(
+        block.includes("this.activeRuns.delete(tabId)"),
+        "B10-recovery: must clear activeRuns so the recovery inherits no stale run state",
+      )
+    })
+
+    void it("startPrompt emits diagnostic logs in recovery path (pre-send state snapshot + post-send confirmation)", () => {
+      const startPromptIdx = source.indexOf("async startPrompt(")
+      const startPromptBody = source.slice(startPromptIdx, startPromptIdx + 20000)
+      assert.ok(
+        startPromptBody.includes("startPrompt recovery pre-send:"),
+        "B10-recovery: must log pre-send state (cliSessionId, parts, modelRef, eventStream state) to diagnose silent sendPromptAsync failures",
+      )
+      assert.ok(
+        startPromptBody.includes("startPrompt recovery sendPromptAsync returned without throwing"),
+        "B10-recovery: must log post-send confirmation so we can pinpoint whether sendPromptAsync itself throws asynchronously",
       )
     })
 

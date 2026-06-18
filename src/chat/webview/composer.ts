@@ -17,11 +17,12 @@ export interface ComposerDeps {
   }
   stateManager: {
     getState: () => WebviewState
-    getActiveSession: () => { id: string; isStreaming: boolean; model?: string; mode?: string; name?: string } | null
-    getSession: (id: string) => { id: string; isStreaming: boolean; model?: string; mode?: string; name?: string; messages: any[] } | undefined
-    getAllSessions: () => Array<{ id: string; isStreaming: boolean }>
+    getActiveSession: () => { id: string; isStreaming: boolean; isServerStreaming?: boolean; activeServerMessageId?: string; activeRunId?: string; model?: string; mode?: string; name?: string } | null
+    getSession: (id: string) => { id: string; isStreaming: boolean; isServerStreaming?: boolean; activeServerMessageId?: string; activeRunId?: string; model?: string; mode?: string; name?: string; messages: any[] } | undefined
+    getAllSessions: () => Array<{ id: string; isStreaming: boolean; isServerStreaming?: boolean }>
     getActiveSessionId: () => string | undefined
     setStreaming: (id: string, streaming: boolean) => void
+    setServerStreaming: (id: string, streaming: boolean) => void
     setSessionModel: (id: string, model: string) => void
     setSessionSteerMode: (id: string, mode: "interrupt" | "queue") => void
     setGlobalModel: (model: string) => void
@@ -108,6 +109,9 @@ export interface ComposerAPI {
   setSteerMode: (mode: "interrupt" | "queue") => void
   syncSteerModeUI: () => void
   getSteerMode: () => "interrupt" | "queue"
+  /** Ask the host to confirm whether the active run is still generating.
+   *  Reconciles the local streaming flags via run_status_result. */
+  probeActiveRun: () => void
   onInputChange: () => void
   onInputKeydown: (e: KeyboardEvent) => void
   onPaste: (e: ClipboardEvent) => void
@@ -144,7 +148,9 @@ export function createComposer(deps: ComposerDeps): ComposerAPI {
       getSession: stateManager.getSession,
       getAllSessions: stateManager.getAllSessions,
       setStreaming: stateManager.setStreaming,
+      setServerStreaming: stateManager.setServerStreaming,
       setSessionSteerMode: stateManager.setSessionSteerMode,
+      save: stateManager.save,
     },
     vscode: { postMessage: vscode.postMessage },
     attachmentManager: {
@@ -274,6 +280,7 @@ export function createComposer(deps: ComposerDeps): ComposerAPI {
     setSteerMode: sendLogic.setSteerMode,
     syncSteerModeUI: sendLogic.syncSteerModeUI,
     getSteerMode: sendLogic.getSteerMode,
+    probeActiveRun: sendLogic.probeActiveRun,
     onInputChange,
     onInputKeydown,
     onPaste,

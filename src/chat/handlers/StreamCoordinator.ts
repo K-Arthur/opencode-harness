@@ -86,12 +86,23 @@ export class StreamCoordinator {
   /** Time-to-first-byte timeout: no chunk received within 45s */
   readonly TTFB_TIMEOUT_MS = 45000
   /** B10-recovery: Hard timeout for the expired-question fallback startPrompt.
-   *  Fires UNCONDITIONALLY after 15s — not gated by shouldTriggerStartupTimeout,
+   *  Fires UNCONDITIONALLY after 8s — not gated by shouldTriggerStartupTimeout,
    *  which can be silently disabled by stray activity events leaving the user
-   *  stuck "generating" indefinitely. */
-  readonly EXPIRED_RECOVERY_TIMEOUT_MS = 15_000
+   *  stuck "generating" indefinitely. Kept short (vs the 45s TTFB) because the
+   *  recovery is a user-visible retry path: if the model hasn't started
+   *  responding within 8s, surface the answer for manual resend rather than
+   *  making the user wait nearly a minute. */
+  readonly EXPIRED_RECOVERY_TIMEOUT_MS = 8_000
   /** Short grace window for terminal status to be followed by late tool_end events */
   readonly TOOL_FINALIZE_GRACE_MS = 30000
+  /** G5: quiet period required before a status-triggered finalize is allowed
+   *  to run. The server can emit transient `session.idle` events between
+   *  tool calls, during provider retries, or right before the next message
+   *  part arrives. Without this guard, the stream gets finalized prematurely
+   *  and the webview send button reverts to "Send" while the model is still
+   *  working. If we observe any activity (chunk/tool/permission) during the
+   *  quiet window, we cancel the pending finalize. */
+  readonly STATUS_FINALIZE_QUIET_MS = 1500
   private readonly MAX_UNACKED_STREAM_CHUNKS = 8
   private readonly MAX_STREAM_DEFER_MS = 250
   /** Tracks last deferral log time per tab to suppress duplicate logging during long subagent waits. */
@@ -107,6 +118,10 @@ export class StreamCoordinator {
   private expiredRecoveryTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
   /** Tabs currently in the process of finalizing — guards against double-finalize */
   private finalizingTabs = new Set<string>()
+  /** G5: pending status-triggered finalizes, deferred until a quiet period
+   *  confirms the run really ended. Cleared by any activity (chunk/tool/etc)
+   *  via cancelPendingStatusFinalize, and on cleanupTab. */
+  private pendingStatusFinalizeTimers = new Map<string, ReturnType<typeof setTimeout>>()
   /** Tabs whose stream was explicitly aborted — finalizeStream must not emit its own stream_end */
   private abortedTabs = new Set<string>()
   /**
@@ -1071,8 +1086,14 @@ export class StreamCoordinator {
         this.tabManager.setCliSessionId(tabId, cliSessionId)
         this.sessionStore.updateCliSessionId(tabId, cliSessionId)
       }
+      // B10-recovery: clear stale state so the recovery gets a fresh bubble.
+      if (callbacks.recoveryFromExpiredQuestion) {
+        log.info(`startPrompt recovery mode for tab ${tabId}: fresh stream state`)
+        this.activeMessageIds.delete(tabId)
+        this.activeRuns.delete(tabId)
+        this.activeRunMetrics.delete(tabId)
+      }
       const streamMessageId = this.resolveStreamMessageAndStartActivity(tabId, tab, cliSessionId, callbacks)
-
       const eventStreamReady = await this.getSm(tabId).waitForEventStreamReady(5_000)
       if (!eventStreamReady) {
         const status = this.getSm(tabId).eventStreamStatus
@@ -1137,6 +1158,19 @@ export class StreamCoordinator {
       if (callbacks.toolCallId) {
         log.info(`startPrompt forwarding question_answer toolCallId=${callbacks.toolCallId} for tab ${tabId}`)
       }
+      // B10-recovery instrumentation: log every piece of state just before
+      // sendPromptAsync so we can pinpoint where the recovery stalls. The
+      // "Sending async prompt" log inside SessionClient is the next thing
+      // we expect to see; if it doesn't appear, the gap between these logs
+      // and SessionClient is where the silent failure lives.
+      if (callbacks.recoveryFromExpiredQuestion) {
+        log.info(
+          `startPrompt recovery pre-send: tabId=${tabId} cliSessionId=${cliSessionId} parts=${parts.length} ` +
+            `modelRef=${modelRef ? `${modelRef.providerID}/${modelRef.modelID}` : "default"} agent=${agent} ` +
+            `eventStream=${this.getSm(tabId).eventStreamStatus.state} isRunning=${this.getSm(tabId).isRunning} ` +
+            `activeMessageId=${this.activeMessageIds.get(tabId) ?? "none"}`,
+        )
+      }
       await this.getSm(tabId).sendPromptAsync(cliSessionId, parts, {
         model: modelRef,
         agent,
@@ -1145,6 +1179,9 @@ export class StreamCoordinator {
         clientRequestId: identity.clientRequestId,
         signal: abortSignal,
       })
+      if (callbacks.recoveryFromExpiredQuestion) {
+        log.info(`startPrompt recovery sendPromptAsync returned without throwing for tab ${tabId}`)
+      }
       this.armPostAcceptLifecycle(tabId, callbacks, identity, cliSessionId)
     } catch (e) {
       this.handlePromptSendFailure(tabId, tab, callbacks, identity, text, attachments, e)
@@ -1845,8 +1882,55 @@ export class StreamCoordinator {
       return false
     }
 
+    // G5: status-triggered finalizes (from session.idle / server_status
+    // non-busy) must observe a quiet period before they fire. The server can
+    // emit transient idles between tool calls, during provider retries, or
+    // right before the next message part arrives — finalizing on the first
+    // idle reverts the webview send button while the model keeps working.
+    // message_complete is authoritative (server said the message is done);
+    // only status triggers need the guard.
+    if (trigger === "status") {
+      const existing = this.pendingStatusFinalizeTimers.get(tabId)
+      if (existing) {
+        // Already pending — let the existing timer handle it; treat as deferred.
+        return false
+      }
+      const lastActivity = this.activityTracker.getSnapshot(tabId)?.lastActivityAt ?? Date.now()
+      const elapsed = Date.now() - lastActivity
+      if (elapsed < this.STATUS_FINALIZE_QUIET_MS) {
+        const armFor = this.STATUS_FINALIZE_QUIET_MS - elapsed
+        log.info(`maybeFinalizeStream: deferring status finalize for ${tabId} by ${armFor}ms (last activity ${elapsed}ms ago)`)
+        return new Promise<boolean>((resolve) => {
+          const timer = setTimeout(() => {
+            this.pendingStatusFinalizeTimers.delete(tabId)
+            // Re-enter the pipeline; if new activity arrived during the wait,
+            // cancelPendingStatusFinalize already deleted this timer and we
+            // never get here. If we do get here, the quiet period held.
+            this.maybeFinalizeStream(tabId, callbacks, "status")
+              .then(resolve)
+              .catch((err) => {
+                log.error(`Deferred status finalize failed for ${tabId}`, err)
+                resolve(false)
+              })
+          }, armFor)
+          this.pendingStatusFinalizeTimers.set(tabId, timer)
+        })
+      }
+    }
+
     await this.finalizeStream(tabId, callbacks)
     return true
+  }
+
+  /** G5: cancel any pending status-triggered finalize. Called from every
+   *  activity path (chunk, tool, permission) so transient idles don't
+   *  prematurely end the stream while the model is still working. */
+  private cancelPendingStatusFinalize(tabId: string): void {
+    const timer = this.pendingStatusFinalizeTimers.get(tabId)
+    if (timer) {
+      clearTimeout(timer)
+      this.pendingStatusFinalizeTimers.delete(tabId)
+    }
   }
 
   private getFinalizeDeferReason(tabId: string, blocks: Block[], trigger: "message_complete" | "status"): string | null {
@@ -2265,6 +2349,9 @@ export class StreamCoordinator {
   }
 
   appendChunk(tabId: string, text: string, callbacks?: StreamCallbacks, messageId?: string): void {
+    // G5: any chunk cancels a pending status-triggered finalize — the model
+    // is clearly still working.
+    this.cancelPendingStatusFinalize(tabId)
     // Clear TTFB timeout on first chunk — the model has started responding
     if (this.ttfbTimeouts.has(tabId)) {
       this.clearTtfbTimeout(tabId)
@@ -2327,6 +2414,8 @@ export class StreamCoordinator {
   }
 
   appendToolStart(tabId: string, toolCall: { id?: string; name: string; class?: string; args?: unknown; state?: string }, callbacks: StreamCallbacks): void {
+    // G5: any tool activity cancels a pending status-triggered finalize.
+    this.cancelPendingStatusFinalize(tabId)
     this.drainDeferredChunk(tabId, true)
     if (this.ttfbTimeouts.has(tabId)) {
       this.clearTtfbTimeout(tabId)
@@ -2664,6 +2753,8 @@ export class StreamCoordinator {
   cleanupTab(tabId: string): void {
     this.clearTtfbTimeout(tabId)
     this.clearExpiredRecoveryTimeout(tabId)
+    // G5: clear any pending status-finalize timer so it can't fire after cleanup.
+    this.cancelPendingStatusFinalize(tabId)
     this.stopAllToolPartialPolling(tabId)
     this.ttfbAbortControllers.delete(tabId)
     this.tabManager.setStreaming(tabId, false)
@@ -2825,6 +2916,11 @@ export class StreamCoordinator {
       clearTimeout(timer)
     }
     this.ttfbTimeouts.clear()
+    // G5: clear pending status-finalize timers on dispose.
+    for (const timer of this.pendingStatusFinalizeTimers.values()) {
+      clearTimeout(timer)
+    }
+    this.pendingStatusFinalizeTimers.clear()
     this.ttfbAbortControllers.clear()
     for (const timer of this.pendingToolGraceTimeouts.values()) {
       clearTimeout(timer)

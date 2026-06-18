@@ -4,6 +4,13 @@ import { TOOLTIPS } from "./tooltips"
 import { generateUserMessageId } from "../../session/messageId"
 import { classifyComposerInput } from "./slash-commands"
 
+/** G8: how long to wait for the host to ack a send_prompt before probing.
+ *  The host normally posts `prompt_accepted` within ~1s and
+ *  `streaming_state:true` within another second. 5s accommodates slow
+ *  server starts and provider warmups; anything beyond that is most likely
+ *  a lost message or a host that rejected the prompt without telling us. */
+const SEND_ACK_WATCHDOG_MS = 5000
+
 export interface StreamCapacityState {
   isFull: boolean
   streamingNames: string
@@ -23,10 +30,12 @@ export interface SendLogicDeps {
   els: ElementRefs
   stateManager: {
     getState: () => WebviewState
-    getActiveSession: () => { id: string; isStreaming: boolean; model?: string; mode?: string; name?: string; steerMode?: "interrupt" | "queue" } | null
-    getSession: (id: string) => { id: string; isStreaming: boolean; model?: string; mode?: string; name?: string; steerMode?: "interrupt" | "queue"; messages: any[] } | undefined
-    getAllSessions: () => Array<{ id: string; isStreaming: boolean }>
+    getActiveSession: () => { id: string; isStreaming: boolean; isServerStreaming?: boolean; activeServerMessageId?: string; activeRunId?: string; model?: string; mode?: string; name?: string; steerMode?: "interrupt" | "queue" } | null
+    getSession: (id: string) => { id: string; isStreaming: boolean; isServerStreaming?: boolean; activeServerMessageId?: string; activeRunId?: string; model?: string; mode?: string; name?: string; steerMode?: "interrupt" | "queue"; messages: any[] } | undefined
+    getAllSessions: () => Array<{ id: string; isStreaming: boolean; isServerStreaming?: boolean }>
     setStreaming: (id: string, streaming: boolean) => void
+    setServerStreaming: (id: string, streaming: boolean) => void
+    save: () => void
     setSessionSteerMode?: (id: string, mode: "interrupt" | "queue") => void
   }
   vscode: {
@@ -37,7 +46,7 @@ export interface SendLogicDeps {
     clearAttachments: () => void
   }
   streamHandlers: {
-    get: (id: string) => { showTypingIndicator: (msg: string) => void } | undefined
+    get: (id: string) => { showTypingIndicator: (msg: string) => void; finalizeStreamingText?: () => void; finalizePendingTools?: () => void } | undefined
   }
   modelDropdown: {
     getCurrentModel: () => string | undefined
@@ -107,7 +116,13 @@ export function createSendLogic(deps: SendLogicDeps) {
   }
 
   function getStreamCapacityState(): StreamCapacityState {
-    const streamingSessions = stateManager.getAllSessions().filter((s) => s.isStreaming)
+    // Count any session the host has flagged as streaming OR the optimistic
+    // local flag is set. The host flag is authoritative; the local flag is a
+    // fallback so an in-flight send (between sendMessage and the first
+    // streaming_state push) is still counted.
+    const streamingSessions = stateManager.getAllSessions().filter(
+      (s) => s.isStreaming || s.isServerStreaming === true,
+    )
     const activeStreams = streamingSessions.length
     const isFull = activeStreams >= _maxConcurrentStreams
     const streamingNames = streamingSessions
@@ -122,6 +137,23 @@ export function createSendLogic(deps: SendLogicDeps) {
 
   function isServerStreaming(active: { id: string } | null): boolean {
     return active ? (stateManager.getState().sessions[active.id]?.isServerStreaming ?? false) : false
+  }
+
+  /** Trigger a host probe of the active run's status. Used when local state is
+   *  suspected stale (after errors, reconnects, tab switches to a tab whose
+   *  backend may still be running). The host replies via `run_status_result`,
+   *  which reconciles both streaming flags authoritatively. */
+  function probeActiveRun(): void {
+    const active = stateManager.getActiveSession()
+    if (!active) return
+    // Only probe when there's genuine ambiguity: either we are not streaming
+    // (host might disagree) or we are streaming but haven't seen host ack in a
+    // while. Cheap to fire — host dedupes.
+    vscode.postMessage({
+      type: "probe_run_status",
+      sessionId: active.id,
+      // cliSessionId is optional; host knows its own mapping.
+    })
   }
 
   function updateSendButtonIcon(isStreaming?: boolean, streamCapacity = getStreamCapacityState()) {
@@ -373,6 +405,30 @@ export function createSendLogic(deps: SendLogicDeps) {
       ...(sendVariant ? { variant: sendVariant } : {}),
       ...(attachments.length > 0 ? { attachments } : {}),
     })
+
+    // G8: optimistic-local safety. The host should ack the send within a few
+    // seconds (prompt_accepted → streaming_state:true). If that never arrives
+    // (lost message, host crashed mid-send, race with the host rejecting the
+    // prompt silently), the user would be stuck looking at a Stop button with
+    // no backend run. Arm a one-shot probe; if the host confirms no run is
+    // active, the run_status_result handler clears the optimistic flag and
+    // resets the UI. If the host says active=true (we just missed the ack),
+    // no-op. The timer fires once and clears itself.
+    const sendSessionId = active.id
+    const ackWatchdog = setTimeout(() => {
+      // Only probe if we still think we're streaming AND the host hasn't
+      // pushed isServerStreaming=true (which would mean we did get an ack).
+      const sess = stateManager.getSession(sendSessionId)
+      if (!sess) return
+      if (sess.isServerStreaming === true) return // host already acked
+      if (!sess.isStreaming) return // something else cleared it
+      // Still optimistic after the watchdog — ask the host.
+      vscode.postMessage({ type: "probe_run_status", sessionId: sendSessionId })
+    }, SEND_ACK_WATCHDOG_MS)
+    // Ensure the timer doesn't keep the process alive if the webview unloads.
+    if (typeof (ackWatchdog as unknown as { unref?: () => void }).unref === "function") {
+      ;(ackWatchdog as unknown as { unref: () => void }).unref()
+    }
   }
 
   return {
@@ -387,5 +443,6 @@ export function createSendLogic(deps: SendLogicDeps) {
     setSteerMode,
     syncSteerModeUI,
     getSteerMode,
+    probeActiveRun,
   }
 }

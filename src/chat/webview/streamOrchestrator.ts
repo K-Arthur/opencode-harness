@@ -14,6 +14,31 @@ import { normalizeIncomingError } from "./errorWire"
 import { ErrorStateStore, routeErrorByTier, type ErrorTierDeps } from "./errorTiers"
 
 /**
+ * G2: read the `mayStillBeRunning` signal from an opaque errorContext
+ * payload. Returns:
+ *   - `true`  if the host explicitly says the backend run may still be alive
+ *             (the streaming flag must be preserved until a probe reconciles).
+ *   - `false` if the host explicitly says the run is gone (safe to clear).
+ *   - `undefined` if the payload is absent or doesn't carry the field —
+ *             callers should fall back to their own heuristic.
+ *
+ * The field is set by the host's runErrorMapper for transport timeouts,
+ * provider retries, and other transient errors where the model often keeps
+ * generating. Bare `show_error`/`webview_request_error` (no context) leave
+ * it undefined.
+ */
+function readMayStillBeRunning(errorContext: unknown): boolean | undefined {
+  if (!errorContext || typeof errorContext !== "object") return undefined
+  const rec = errorContext as Record<string, unknown>
+  const direct = rec.mayStillBeRunning
+  if (typeof direct === "boolean") return direct
+  // Some payloads nest under `metadata` or `errorContext`; check both.
+  const nested = (rec.metadata as Record<string, unknown> | undefined)?.mayStillBeRunning
+  if (typeof nested === "boolean") return nested
+  return undefined
+}
+
+/**
  * Render the user-facing system message (if any) for a stream-end reason.
  *
  * Extracted from `createStreamOrchestrator` so the dense reason → message
@@ -740,7 +765,24 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
       else return
     }
 
-    setStreaming(sessionId, false)
+    // G2: Do NOT unconditionally clear the streaming flag. Many error sources
+    // (show_error, provider_error, server_status:"error", rate-limit body
+    // from a third-party provider) do NOT actually terminate the active run —
+    // the model keeps generating, and clearing the flag would revert the send
+    // button to "Send" while the backend is still working. Three cases:
+    //   1. errorContext.mayStillBeRunning === true → preserve the flag, post
+    //      the error UI, and trigger a probe to reconcile authoritatively.
+    //   2. errorContext absent (bare show_error / webview_request_error with
+    //      no context) → preserve the flag if currently streaming; only clear
+    //      when we get a confirming probe or stream_end.
+    //   3. errorContext.mayStillBeRunning === false (or absent and not
+    //      streaming) → legacy behavior: clear the flag.
+    const currentlyStreaming = Boolean(getSession(sessionId)?.isStreaming)
+    const mayStillBeRunning = readMayStillBeRunning(errorContext)
+    const shouldPreserveStreaming = currentlyStreaming && mayStillBeRunning !== false
+    if (!shouldPreserveStreaming) {
+      setStreaming(sessionId, false)
+    }
     updateTabBar()
     updateModeSelectorStateLocal()
 
@@ -753,10 +795,16 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
       const routed = routeErrorByTier(normalized, errorTierDeps, errorStateStore)
       if (routed.handled && normalized.tier !== "C") {
         const errMsgList = getMessageList(sessionId)
-        if (errMsgList) finalizeStreamingText(errMsgList)
+        if (errMsgList && !shouldPreserveStreaming) finalizeStreamingText(errMsgList)
         if (sessionId === getState().activeSessionId) {
-          updateSendButtonIcon(false)
+          updateSendButtonIcon(shouldPreserveStreaming ? true : false)
           updateSendButton()
+        }
+        // G2: if we preserved the flag, kick a probe to confirm whether the
+        // run is really still alive. The probe's reply (run_status_result)
+        // will reconcile the flag authoritatively.
+        if (shouldPreserveStreaming) {
+          vscode.postMessage({ type: "probe_run_status", sessionId, cliSessionId: undefined })
         }
         return
       }
@@ -767,14 +815,20 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
       stream.handleRequestError(message, errorContext)
     }
     // A failed run also ends streaming — clear any leftover live cursor / blue
-    // backdrop, and finalize any tool still spinning.
-    const errMsgList = getMessageList(sessionId)
-    if (errMsgList) finalizeStreamingText(errMsgList)
-    stream?.finalizePendingTools()
+    // backdrop, and finalize any tool still spinning. Skip if we're preserving
+    // the streaming flag (the run may still be live).
+    if (!shouldPreserveStreaming) {
+      const errMsgList = getMessageList(sessionId)
+      if (errMsgList) finalizeStreamingText(errMsgList)
+      stream?.finalizePendingTools()
+    }
 
     if (sessionId === getState().activeSessionId) {
-      updateSendButtonIcon(false)
+      updateSendButtonIcon(shouldPreserveStreaming ? true : false)
       updateSendButton()
+      if (shouldPreserveStreaming) {
+        vscode.postMessage({ type: "probe_run_status", sessionId, cliSessionId: undefined })
+      }
     }
   }
 

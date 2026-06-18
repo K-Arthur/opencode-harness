@@ -262,6 +262,11 @@ export function createState(vscode: VsCodeApi) {
         const s = state.sessions[id]
         if (s && s.isStreaming) s.isStreaming = false
         if (s) s.isServerStreaming = false
+        // Run identity is per-run; no run survives a webview reload.
+        if (s) {
+          s.activeServerMessageId = undefined
+          s.activeRunId = undefined
+        }
         // Same reasoning for subagents: no subagent run survives a webview
         // reload, and run_activity_update never fires again for a finished
         // run, so a persisted non-terminal status would stay "Running" forever.

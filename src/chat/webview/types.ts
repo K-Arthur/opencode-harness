@@ -257,8 +257,20 @@ export interface SessionState {
   isStreaming: boolean
   /** Host-authoritative streaming flag — pushed via streaming_state messages.
    *  Never set by optimistic local code paths. Used to gate abort/stop
-   *  affordances so a stale local isStreaming=false can't trap the user. */
+   *  affordances so a stale local isStreaming=false can't trap the user.
+   *  When the host says isServerStreaming=true the send button MUST show Stop
+   *  regardless of any local heuristic. When the host says false and the local
+   *  flag is also false, the button returns to Send. The two flags are OR'd. */
   isServerStreaming?: boolean
+  /** Server-assigned ID of the message currently being generated, when
+   *  isServerStreaming is true. Cleared on stream_end. Used to correlate
+   *  late-arriving chunks and to reject stale streaming_state pushes from
+   *  a previous run. */
+  activeServerMessageId?: string
+  /** Server-assigned run id (from run_activity_update.runId) for the active
+   *  generation, when known. Used by probe_run_status to disambiguate
+   *  resumed runs after reconnect. */
+  activeRunId?: string
   cost?: number
   tokenUsage?: TokenUsage
   contextUsage?: ContextUsage
@@ -597,7 +609,13 @@ export type HostMessage =
   | { type: "session_list_update"; sessions: SessionSummary[] }
   | { type: "session_deleted"; sessionId: string }
   | { type: "session_renamed"; sessionId: string; name: string }
-  | { type: "streaming_state"; sessionId: string; isStreaming: boolean }
+  // Race-free title push. Fires directly from SessionStore.setTitleAppliedCallback
+  // (host) → patchTabLabel (webview) without going through onDidChangeSession,
+  // so the title lands even if the subscriber was registered after the
+  // SessionStore mutation. Distinct from session_renamed so the webview can
+  // choose the fast in-place patch path vs the legacy full-state-sync path.
+  | { type: "session_title_updated"; sessionId: string; name: string }
+  | { type: "streaming_state"; sessionId: string; isStreaming: boolean; source?: "host" | "local"; cliSessionId?: string; messageId?: string; runId?: string }
   | { type: "instructions_changed"; sessionId: string; instructions: string }
   | { type: "context_usage"; sessionId: string; percent: number; tokens: number; maxTokens: number; usage?: ContextUsage | UsageDelta; source?: "estimated" | "actual"; updatedAt?: number }
   | { type: "server_status"; sessionId?: string; status: string; errorContext?: unknown }
@@ -625,7 +643,7 @@ export type HostMessage =
   | { type: "token_usage"; sessionId: string; usage: UsageDelta; tokens?: number | TokenBreakdown }
   | { type: "stream_start"; sessionId: string; messageId: string; resumed?: StreamResumedInfo; isSteerPrompt?: boolean }
   | { type: "stream_chunk"; sessionId: string; text: string; messageId?: string; seq?: number }
-  | { type: "stream_end"; sessionId: string; reason?: string; blocks?: Block[]; partial?: boolean; seq?: number }
+  | { type: "stream_end"; sessionId: string; reason?: string; blocks?: Block[]; partial?: boolean; seq?: number; source?: "host" | "watchdog" | "abort" | "finalize" | "ttfb" | "reconcile" }
   | { type: "stream_interrupted"; sessionId: string; cliSessionId?: string; interruptedAt: number }
   | { type: "stream_ping"; sessionId: string; seq?: number }
   | { type: "stream_ack"; sessionId: string; seq?: number }
@@ -707,6 +725,14 @@ export type HostMessage =
   | { type: "file_diff_response"; path: string; sessionId?: string; lines: DiffLine[]; error?: string }
   | { type: "file_hunks"; path: string; sessionId?: string; hunks: Array<{ id: string; additions: number; deletions: number; lines: string[] }> }
   | { type: "hunk_reverted"; path: string; ok: boolean; reason?: string; sessionId?: string }
+  /** Host → Webview: response to `probe_run_status`. Carries the host's
+   *  authoritative view of whether a run is still active for a given
+   *  cliSessionId. The webview uses this to correct stale optimistic flags
+   *  after reconnects / dropped events. When `active` is false, the webview
+   *  should clear its local streaming flag (the run really is finished or
+   *  gone). When `active` is true, the webview should keep showing the Stop
+   *  button even if its optimistic flag was cleared. */
+  | { type: "run_status_result"; sessionId: string; cliSessionId?: string; active: boolean; runId?: string; messageId?: string; probedAt: number; serverReachable: boolean }
 
 // Backward-compatible alias — gradual migration; remove once all consumers use the union.
 export type LegacyHostMessage = HostMessage & Record<string, unknown>
@@ -789,6 +815,13 @@ export type WebviewMessage =
   | { type: "set_variant"; variant: string; sessionId: string }
   | { type: "abort"; sessionId: string }
   | { type: "cancel_tool"; sessionId: string; toolId: string; stdout?: string; stderr?: string; durationMs?: number }
+  /** Webview → Host: ask the host to probe the server for the live status of
+   *  the run associated with `cliSessionId`. The host replies with
+   *  `run_status_result`. Used by the webview when its local streaming flag
+   *  may be stale — e.g. after a server reconnect, an error that did not
+   *  carry stream_end context, or any time the send button state diverges
+   *  from observed reality. */
+  | { type: "probe_run_status"; sessionId: string; cliSessionId?: string }
   | { type: "close_tab"; sessionId: string }
   | { type: "switch_tab"; sessionId: string }
   | { type: "accept_diff"; diffId: string; path?: string; sessionId?: string }

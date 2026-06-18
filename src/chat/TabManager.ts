@@ -19,6 +19,24 @@ export interface TabState {
   methodologyDisabled?: boolean
 }
 
+/** Payload for `onStreamingStateChanged`. The optional fields carry the
+ *  host-authoritative run identity so the webview can correlate late chunks
+ *  and reject stale pushes. `source` distinguishes who flipped the flag:
+ *  - "host"    — normal lifecycle (startPrompt / finalize / abort)
+ *  - "watchdog" — the 45-min stuck-stream watchdog fired (synthetic terminator)
+ *  - "reconnect" — server_disconnected or process-crash cleanup
+ *  - "probe"   — answer to probe_run_status (run really is/isn't active)
+ *  Callers that don't fit one of those categories may omit it; the webview
+ *  treats an absent source as "host" for backward compatibility. */
+export interface StreamingStateChange {
+  tabId: string
+  isStreaming: boolean
+  source?: "host" | "watchdog" | "reconnect" | "probe"
+  cliSessionId?: string
+  messageId?: string
+  runId?: string
+}
+
 const OPEN_TABS_STORAGE_KEY = "opencode-harness.openTabs"
 const ACTIVE_TAB_STORAGE_KEY = "opencode-harness.activeTab"
 const RESTORATION_STATE_KEY = "opencode-harness.tabRestoration"
@@ -35,7 +53,7 @@ export class TabManager {
   private _onTabCreated = new vscode.EventEmitter<string>()
   private _onTabClosed = new vscode.EventEmitter<string>()
   private _onTabSwitched = new vscode.EventEmitter<string>()
-  private _onStreamingStateChanged = new vscode.EventEmitter<{ tabId: string; isStreaming: boolean }>()
+  private _onStreamingStateChanged = new vscode.EventEmitter<StreamingStateChange>()
   private _onInstructionsChanged = new vscode.EventEmitter<{ tabId: string; instructions: string }>()
   private _onModeChanged = new vscode.EventEmitter<{ tabId: string; mode: string }>()
   private _onCliSessionIdRegistered = new vscode.EventEmitter<{ tabId: string; cliSessionId: string }>()
@@ -248,7 +266,11 @@ export class TabManager {
     return { ok: true }
   }
 
-  setStreaming(id: string, isStreaming: boolean): boolean {
+  setStreaming(
+    id: string,
+    isStreaming: boolean,
+    payload?: { source?: StreamingStateChange["source"]; cliSessionId?: string; messageId?: string; runId?: string },
+  ): boolean {
     const tab = this.tabs.get(id)
     if (!tab) return false
     if (isStreaming && !tab.isStreaming) {
@@ -261,7 +283,14 @@ export class TabManager {
     }
     tab.isStreaming = isStreaming
     tab.lastActivityTime = Date.now()
-    this._onStreamingStateChanged.fire({ tabId: id, isStreaming })
+    this._onStreamingStateChanged.fire({
+      tabId: id,
+      isStreaming,
+      source: payload?.source ?? "host",
+      cliSessionId: payload?.cliSessionId ?? tab.cliSessionId,
+      messageId: payload?.messageId,
+      runId: payload?.runId,
+    })
     return true
   }
 

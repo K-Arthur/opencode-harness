@@ -237,6 +237,19 @@ export async function activate(context: vscode.ExtensionContext) {
       for (const state of states) {
         log.info(`Crash restoration queued for tab ${state.tabId} (session=${state.cliSessionId ?? "unknown"})`)
       }
+      // G10: clean up the affected tabs' streaming state. Without this, a
+      // crashed per-tab process leaves the webview showing "Stop" for up to
+      // 45 minutes (STREAM_STUCK_MS). The chat provider's handler posts
+      // streaming_state:false + stream_interrupted so the user gets an
+      // immediate Resume/Dismiss affordance. No-op for tabs that weren't
+      // streaming.
+      if (chatProviderInstance) {
+        try {
+          chatProviderInstance.handleProcessCrash(processId, tabIds, timestamp)
+        } catch (err) {
+          log.error(`[G10] handleProcessCrash failed for process ${processId}`, err)
+        }
+      }
     })
     context.subscriptions.push(sessionManagerRegistry)
 

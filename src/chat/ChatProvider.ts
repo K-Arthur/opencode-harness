@@ -428,9 +428,22 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
           }
           break
         case "renamed":
+          // Legacy path — kept for regression safety. The faster, race-free
+          // path is `setTitleAppliedCallback` below, which fires from inside
+          // applyServerTitle / setTitle / updateName themselves rather than
+          // depending on this subscriber's registration order.
           this.postMessage({ type: "session_renamed", sessionId: change.sessionId, name: change.name })
           break
       }
+    })
+
+    // Direct IPC push for session titles (D3 race fix). Fires synchronously
+    // from inside SessionStore the instant a title lands — independent of
+    // whether the onDidChangeSession subscriber above has been registered.
+    // Webview receives session_title_updated and patches the tab label in
+    // place (no innerHTML wipe, no focus clobber).
+    this.sessionStore.setTitleAppliedCallback((sessionId, name) => {
+      this.postMessage({ type: "session_title_updated", sessionId, name })
     })
   }
 
@@ -575,8 +588,16 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       this.rateLimitMonitor.onWarning((msg) => vscode.window.showWarningMessage(msg)),
       this.sessionStore.onActiveSessionChanged(() => this.syncActiveSession()),
       this.sessionManager.subscribe("ChatProvider/handleServerEvent", (event) => this.handleServerEvent(event)),
-this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
-        this.postMessage({ type: "streaming_state", sessionId: tabId, isStreaming })
+this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessionId, messageId, runId }) => {
+        this.postMessage({
+          type: "streaming_state",
+          sessionId: tabId,
+          isStreaming,
+          source,
+          cliSessionId,
+          messageId,
+          runId,
+        })
       }),
       this.tabManager.onInstructionsChanged(({ tabId, instructions }) => {
         this.postMessage({ type: "instructions_changed", sessionId: tabId, instructions })
@@ -1440,10 +1461,14 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
       for (const t of this.tabManager.getAllTabs()) {
         if (t.isStreaming) {
           this.streamCoordinator.cleanupTab(t.id)
-          this.tabManager.setStreaming(t.id, false)
+          // setStreaming already fires the onStreamingStateChanged emitter,
+          // which posts streaming_state to the webview with the extended
+          // payload (source: "reconnect" + cliSessionId so the webview knows
+          // this is a reconnect-driven clear, not normal completion). Don't
+          // double-post here.
+          this.tabManager.setStreaming(t.id, false, { source: "reconnect", cliSessionId: t.cliSessionId })
           this.tabManager.setWaitingForCompletion(t.id, false)
           this.tabManager.clearCompletionTimeout(t.id)
-          this.postMessage({ type: "streaming_state", sessionId: t.id, isStreaming: false })
         }
       }
       this.postRequestError("OpenCode server connection lost. Attempting to reconnect...")
@@ -1451,13 +1476,24 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming }) => {
     ["server_connected", () => { this.pushModelListToWebview() }],
     ["event_stream_reconnected", () => {
       log.info("Event stream reconnected — reconciling active streaming sessions and checking for interrupted tabs")
+      // Reconcile every tab that is EITHER still marked streaming OR was
+      // captured in the interrupted snapshot — the snapshot may include tabs
+      // whose flag was cleared by server_disconnected (Gap G3/G4). For each,
+      // ask the server whether its run is still active; the coordinator
+      // reattaches if so, or emits the dropped stream_end if the run already
+      // completed during the outage.
+      const candidateTabIds = new Set<string>()
       for (const t of this.tabManager.getAllTabs()) {
-        if (t.isStreaming) {
-          this.streamCoordinator.reconcileAfterReconnect(t.id, {
-            postMessage: (m) => this.postMessage(m),
-            postRequestError: (m) => this.postRequestError(m),
-          }).catch(err => log.error("Reconcile after reconnect failed", err))
-        }
+        if (t.isStreaming) candidateTabIds.add(t.id)
+      }
+      for (const snap of this.tabManager.getInterruptedTabs()) {
+        candidateTabIds.add(snap.tabId)
+      }
+      for (const tabId of candidateTabIds) {
+        this.streamCoordinator.reconcileAfterReconnect(tabId, {
+          postMessage: (m) => this.postMessage(m),
+          postRequestError: (m) => this.postRequestError(m),
+        }).catch(err => log.error("Reconcile after reconnect failed", err))
       }
       const interrupted = this.tabManager.getInterruptedTabs()
       if (interrupted.length > 0) {
@@ -2353,6 +2389,44 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
       }
     }
     return anySent
+  }
+
+  /**
+   * G10: handle a per-tab session-process crash (ADR-010 `processStrategy:
+   * "per-tab"`). The default shared-process strategy routes crashes through
+   * the normal `server_disconnected` path; this method is the entry point
+   * for crashes that affect a subset of tabs (a single per-tab process).
+   *
+   * For each affected tab: capture a streaming snapshot, clear streaming
+   * state, post `streaming_state:false` (source: "reconnect") so the webview
+   * send button reverts immediately, and post `stream_interrupted` so the
+   * user gets a Resume/Dismiss card. Without this, a crashed per-tab process
+   * would leave the webview showing "Stop" for up to 45 minutes (the
+   * STREAM_STUCK_MS watchdog).
+   */
+  handleProcessCrash(processId: string, tabIds: string[], timestamp: number): void {
+    log.warn(`[G10] Per-tab process ${processId} crashed at ${new Date(timestamp).toISOString()}, cleaning up tabs: [${tabIds.join(", ")}]`)
+    // Capture a restoration snapshot for the affected tabs only (not all
+    // streaming tabs — other tabs belong to other processes).
+    for (const tabId of tabIds) {
+      const tab = this.tabManager.getTab(tabId)
+      if (!tab) continue
+      if (tab.isStreaming) {
+        this.streamCoordinator.cleanupTab(tabId)
+        this.tabManager.setStreaming(tabId, false, { source: "reconnect", cliSessionId: tab.cliSessionId })
+        this.tabManager.setWaitingForCompletion(tabId, false)
+        this.tabManager.clearCompletionTimeout(tabId)
+        // The streaming_state event emitter already posted the clear to the
+        // webview. Also post a stream_interrupted so the user gets a resume
+        // affordance, matching the server_disconnected UX.
+        this.postMessage({
+          type: "stream_interrupted",
+          sessionId: tabId,
+          cliSessionId: tab.cliSessionId,
+          interruptedAt: timestamp,
+        })
+      }
+    }
   }
 
   dispose(): void {
