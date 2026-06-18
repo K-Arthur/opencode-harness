@@ -158,7 +158,7 @@ export class ProviderManagementService {
   async handleConnectProviderKey(providerId: string, key: string): Promise<void> {
     const client = this.deps.getV2Client()
     if (!client) {
-      this.deps.postMessage({ type: "provider_error", error: "Server not running" })
+      this.deps.postMessage({ type: "provider_error", error: "Server not running", providerId })
       return
     }
     try {
@@ -173,7 +173,7 @@ export class ProviderManagementService {
       log.info(`API key set for provider ${providerId}`)
     } catch (err) {
       log.error(`Connect provider key for ${providerId} failed`, err)
-      this.deps.postMessage({ type: "provider_error", error: "Failed to set API key" })
+      this.deps.postMessage({ type: "provider_error", error: "Failed to set API key", providerId })
     }
   }
 

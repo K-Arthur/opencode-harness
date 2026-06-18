@@ -3702,9 +3702,41 @@ textarea {
   width: 100%;
 }
 
+/* ── Step transitions (inline slide, no nested overlay) ── */
+
+.provider-step {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.provider-step--hidden {
+  display: none;
+}
+
+.provider-step--slide-in {
+  animation: providerSlideIn var(--duration-normal) var(--ease-spring);
+}
+
+.provider-step--slide-out {
+  animation: providerSlideOut var(--duration-fast) var(--ease-out);
+}
+
+@keyframes providerSlideIn {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes providerSlideOut {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(-24px); }
+}
+
+/* ── Tabs ── */
+
 .provider-panel-tabs {
   display: flex;
-  border-bottom: 1px solid var(--oc-border);
+  border-bottom: 1px solid var(--vscode-panel-border, var(--oc-border));
   padding: 0 var(--space-3);
 }
 
@@ -3713,7 +3745,7 @@ textarea {
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: var(--oc-muted);
+  color: var(--vscode-descriptionForeground, var(--oc-muted));
   font: 500 var(--text-sm)/1.2 var(--font-sans);
   cursor: pointer;
   transition: color var(--duration-fast) var(--ease-out),
@@ -3721,19 +3753,23 @@ textarea {
 }
 
 .provider-tab:hover {
-  color: var(--oc-fg);
+  color: var(--vscode-foreground, var(--oc-fg));
 }
 
 .provider-tab.active {
-  color: var(--oc-accent);
-  border-bottom-color: var(--oc-accent);
+  color: var(--vscode-textLink-foreground, var(--oc-accent));
+  border-bottom-color: var(--vscode-textLink-foreground, var(--oc-accent));
 }
+
+/* ── Body + scroll ── */
 
 .provider-panel-body {
   max-height: 400px;
   overflow-y: auto;
   padding: var(--space-2) 0;
 }
+
+/* ── Search ── */
 
 .provider-search-container {
   padding: 0 var(--space-3) var(--space-2);
@@ -3742,9 +3778,9 @@ textarea {
 .provider-search-input {
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  background: var(--oc-input-bg, var(--oc-editor-bg));
-  color: var(--oc-fg);
-  border: 1px solid var(--oc-input-border, var(--oc-border));
+  background: var(--vscode-input-background, var(--oc-input-bg));
+  color: var(--vscode-input-foreground, var(--oc-fg));
+  border: 1px solid var(--vscode-input-border, var(--oc-border));
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
   font-family: var(--font-sans);
@@ -3754,21 +3790,28 @@ textarea {
 }
 
 .provider-search-input:focus {
-  border-color: var(--oc-accent);
-  box-shadow: 0 0 0 2px var(--oc-accent-glow, rgba(99, 102, 241, 0.15));
+  border-color: var(--vscode-focusBorder, var(--oc-accent));
+  box-shadow: 0 0 0 1px var(--vscode-focusBorder, var(--oc-accent));
 }
 
 .provider-search-input::placeholder {
-  color: var(--oc-muted);
+  color: var(--vscode-input-placeholderForeground, var(--oc-muted));
 }
+
+/* ── Provider rows ── */
 
 .provider-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--oc-border);
+  border-bottom: 1px solid var(--vscode-panel-border, var(--oc-border));
   gap: var(--space-3);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.provider-row:hover {
+  background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.04));
 }
 
 .provider-row:last-child {
@@ -3785,13 +3828,15 @@ textarea {
 
 .provider-name {
   font: 500 var(--text-sm)/1.3 var(--font-sans);
-  color: var(--oc-fg);
+  color: var(--vscode-foreground, var(--oc-fg));
 }
 
 .provider-meta {
   font-size: var(--text-xs);
-  color: var(--oc-muted);
+  color: var(--vscode-descriptionForeground, var(--oc-muted));
 }
+
+/* ── Actions + status badges ── */
 
 .provider-actions {
   display: flex;
@@ -3803,6 +3848,7 @@ textarea {
 .provider-status {
   display: inline-flex;
   align-items: center;
+  gap: var(--space-1);
   padding: 2px var(--space-2);
   border-radius: var(--radius-sm);
   font-size: var(--text-2xs);
@@ -3810,40 +3856,66 @@ textarea {
   letter-spacing: 0.02em;
 }
 
+.provider-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 .provider-status-connected {
-  background: rgba(76, 175, 80, 0.15);
-  color: var(--oc-success, #4caf50);
+  background: color-mix(in srgb, var(--vscode-testing-passAction, #4caf50) 15%, transparent);
+  color: var(--vscode-testing-passAction, #4caf50);
+}
+
+.provider-status-connected::before {
+  background: var(--vscode-testing-passAction, #4caf50);
 }
 
 .provider-status-needs-key {
-  background: rgba(255, 152, 0, 0.15);
-  color: var(--oc-warning, #ff9800);
+  background: color-mix(in srgb, var(--vscode-testing-icon-unset, #ff9800) 15%, transparent);
+  color: var(--vscode-testing-icon-unset, #ff9800);
+}
+
+.provider-status-needs-key::before {
+  background: var(--vscode-testing-icon-unset, #ff9800);
 }
 
 .provider-status-needs-oauth {
-  background: rgba(33, 150, 243, 0.15);
-  color: var(--oc-info, #2196f3);
+  background: color-mix(in srgb, var(--vscode-textLink-foreground, #2196f3) 15%, transparent);
+  color: var(--vscode-textLink-foreground, #2196f3);
 }
+
+.provider-status-needs-oauth::before {
+  background: var(--vscode-textLink-foreground, #2196f3);
+}
+
+/* ── Empty state ── */
 
 .provider-empty {
   padding: var(--space-4) var(--space-3);
   text-align: center;
-  color: var(--oc-muted);
+  color: var(--vscode-descriptionForeground, var(--oc-muted));
   font-size: var(--text-sm);
 }
+
+/* ── Credentials tab ── */
 
 .provider-credential-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--oc-border);
+  border-bottom: 1px solid var(--vscode-panel-border, var(--oc-border));
   gap: var(--space-3);
 }
 
 .provider-credential-row:last-child {
   border-bottom: none;
 }
+
+/* ── Buttons ── */
 
 .btn-sm {
   padding: 4px var(--space-2);
@@ -3853,54 +3925,126 @@ textarea {
 
 .btn-danger {
   background: transparent;
-  color: var(--oc-error, #c00);
-  border: 1px solid var(--oc-error, #c00);
+  color: var(--vscode-errorForeground, #c00);
+  border: 1px solid var(--vscode-errorForeground, #c00);
 }
 
 .btn-danger:hover {
-  background: rgba(204, 0, 0, 0.1);
+  background: color-mix(in srgb, var(--vscode-errorForeground, #c00) 10%, transparent);
 }
 
-/* API Key Modal — must layer above the provider panel (.model-manager-overlay) */
-.api-key-overlay {
-  z-index: calc(var(--z-modal, 300) + 10);
+/* ── Inline API key entry (step 2) ── */
+
+.provider-key-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--vscode-panel-border, var(--oc-border));
 }
 
-.api-key-modal-content {
-  max-width: 420px;
-  width: 100%;
+.provider-key-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: none;
+  border: none;
+  color: var(--vscode-textLink-foreground, var(--oc-accent));
+  font-size: var(--text-sm);
+  cursor: pointer;
+  padding: var(--space-1) var(--space-1);
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) var(--ease-out);
 }
 
-.api-key-input {
+.provider-key-back:hover {
+  background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.08));
+}
+
+.provider-key-title {
+  font: 600 var(--text-sm)/1.3 var(--font-sans);
+  color: var(--vscode-foreground, var(--oc-fg));
+  margin: 0;
+}
+
+.provider-key-body {
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.provider-key-label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--vscode-foreground, var(--oc-fg));
+}
+
+.provider-key-input {
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  background: var(--oc-input-bg, var(--oc-editor-bg));
-  color: var(--oc-fg);
-  border: 1px solid var(--oc-input-border, var(--oc-border));
+  background: var(--vscode-input-background, var(--oc-input-bg));
+  color: var(--vscode-input-foreground, var(--oc-fg));
+  border: 1px solid var(--vscode-input-border, var(--oc-border));
   border-radius: var(--radius-md);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
-  margin-top: var(--space-1);
-}
-
-.api-key-input:focus {
   outline: none;
-  border-color: var(--oc-accent);
-  box-shadow: 0 0 0 2px var(--oc-accent-glow, rgba(99, 102, 241, 0.15));
+  transition: border-color var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
 }
 
-.api-key-hint {
-  margin-top: var(--space-2);
+.provider-key-input:focus {
+  border-color: var(--vscode-focusBorder, var(--oc-accent));
+  box-shadow: 0 0 0 1px var(--vscode-focusBorder, var(--oc-accent));
+}
+
+.provider-key-input::placeholder {
+  color: var(--vscode-input-placeholderForeground, var(--oc-muted));
+}
+
+.provider-key-hint {
   font-size: var(--text-xs);
-  color: var(--oc-muted);
+  color: var(--vscode-descriptionForeground, var(--oc-muted));
+  margin: 0;
 }
 
-.modal-actions {
+.provider-key-error {
+  font-size: var(--text-xs);
+  color: var(--vscode-errorForeground, #c00);
+  padding: var(--space-2);
+  background: color-mix(in srgb, var(--vscode-errorForeground, #c00) 8%, transparent);
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--vscode-errorForeground, #c00) 20%, transparent);
+}
+
+.provider-key-actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);
   padding: var(--space-3);
-  border-top: 1px solid var(--oc-border);
+  border-top: 1px solid var(--vscode-panel-border, var(--oc-border));
+}
+
+/* ── Spinner for connecting state ── */
+
+.provider-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--vscode-button-foreground, #fff);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: providerSpin 0.6s linear infinite;
+}
+
+@keyframes providerSpin {
+  to { transform: rotate(360deg); }
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* ─── FILE CHIP — interactive file chip in changed-files strip ─── */

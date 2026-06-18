@@ -33,10 +33,17 @@ describe("providerPanel.ts", () => {
     assert.ok(source.includes("export function handleOAuthCompleted"))
   })
 
-  it("has API key modal support", () => {
-    assert.ok(source.includes("api-key-modal"), "must reference API key modal")
-    assert.ok(source.includes("openApiKeyModal"), "must have openApiKeyModal function")
-    assert.ok(source.includes("closeApiKeyModal"), "must have closeApiKeyModal function")
+  it("exports onProviderKeyResult for host callback", () => {
+    assert.ok(source.includes("export function onProviderKeyResult"), "must export onProviderKeyResult")
+    assert.ok(source.includes("onProviderKeyResult(providerId, true)"), "must handle success")
+    assert.ok(source.includes("onProviderKeyResult(pId, false,"), "must handle failure")
+  })
+
+  it("uses inline step transitions instead of nested modal", () => {
+    assert.ok(source.includes("showKeyStep"), "must have showKeyStep for inline API key entry")
+    assert.ok(source.includes("showListStep"), "must have showListStep to return to provider list")
+    assert.ok(source.includes("provider-step--slide-in"), "must use slide-in animation for step transition")
+    assert.ok(!source.includes("apiKeyModal.classList.remove"), "must NOT use nested modal overlay")
   })
 
   it("supports tab switching between discover and credentials", () => {
@@ -51,6 +58,11 @@ describe("providerPanel.ts", () => {
     assert.ok(source.includes("Connected"), "must have Connected label")
     assert.ok(source.includes("Needs API Key"), "must have Needs API Key label")
     assert.ok(source.includes("Needs OAuth"), "must have Needs OAuth label")
+  })
+
+  it("renders inline status dot icons for connected providers", () => {
+    assert.ok(source.includes("STATUS_ICON_SVGS"), "must define status icon SVGs")
+    assert.ok(source.includes("provider-status-connected"), "must have connected status class")
   })
 
   it("handles Enter key in API key input", () => {
@@ -84,5 +96,17 @@ describe("providerPanel.ts", () => {
 
   it("skips cache update when rendering filtered results", () => {
     assert.ok(source.includes("skipCache"), "must support skipCache parameter to avoid overwriting cached data during filtering")
+  })
+
+  it("shows loading spinner during API key submission", () => {
+    assert.ok(source.includes("setSubmitLoading"), "must have setSubmitLoading function")
+    assert.ok(source.includes("provider-spinner"), "must reference spinner CSS class")
+    assert.ok(source.includes("Connecting..."), "must show connecting text while loading")
+  })
+
+  it("shows inline error on API key failure", () => {
+    assert.ok(source.includes("showKeyError"), "must have showKeyError function")
+    assert.ok(source.includes("hideKeyError"), "must have hideKeyError function")
+    assert.ok(source.includes("api-key-error"), "must reference error element")
   })
 })

@@ -703,7 +703,7 @@ export type HostMessage =
   | { type: "template_deleted"; id: string }
   | { type: "template_error"; error: string }
   | { type: "provider_added"; id: string; name: string }
-  | { type: "provider_error"; error: string }
+  | { type: "provider_error"; error: string; providerId?: string }
   | { type: "provider_list"; providers: unknown[] }
   | { type: "provider_updated"; id: string }
   | { type: "provider_deleted"; id: string }

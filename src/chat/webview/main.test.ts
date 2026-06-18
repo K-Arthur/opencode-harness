@@ -1185,14 +1185,18 @@ describe("permission bar — multi-tab session attribution", () => {
     )
   })
 
-  it("API key modal uses model-manager-overlay for correct z-index stacking", () => {
+  it("provider panel uses inline step transitions (no nested modal)", () => {
     assert.ok(
-      indexHtml.includes('id="api-key-modal"') && indexHtml.includes("model-manager-overlay"),
-      "api-key-modal must use model-manager-overlay class to layer above provider panel",
+      indexHtml.includes('id="provider-step-list"'),
+      "provider panel must have inline list step",
     )
     assert.ok(
-      indexHtml.includes("api-key-overlay"),
-      "api-key-modal must have api-key-overlay class for z-index override",
+      indexHtml.includes('id="provider-step-key"'),
+      "provider panel must have inline API key step",
+    )
+    assert.ok(
+      !indexHtml.includes('id="api-key-modal"'),
+      "must NOT have a separate nested api-key-modal overlay",
     )
   })
 

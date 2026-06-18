@@ -1157,43 +1157,50 @@
           </button>
         </div>
       </div>
-      <div class="provider-panel-tabs" role="tablist">
-        <button class="provider-tab active" role="tab" data-tab="discover" aria-selected="true">Providers</button>
-        <button class="provider-tab" role="tab" data-tab="credentials" aria-selected="false">Credentials</button>
-      </div>
-      <div class="provider-panel-body">
-        <div class="provider-tab-content" data-tab="discover">
-          <div class="provider-search-container">
-            <input type="text" id="provider-search-input" class="provider-search-input" placeholder="Search providers..." aria-label="Search providers" />
-          </div>
-          <div class="provider-discovery-list" id="provider-discovery-list"></div>
-        </div>
-        <div class="provider-tab-content hidden" data-tab="credentials">
-          <div class="provider-credential-list" id="provider-credential-list"></div>
-        </div>
-      </div>
-    </div>
-  </div>
 
-  <!-- API Key Modal -->
-  <div id="api-key-modal" class="model-manager-overlay api-key-overlay hidden" role="dialog" aria-modal="true" aria-label="Enter API key">
-    <div class="model-manager-content api-key-modal-content">
-      <div class="modal-header">
-        <h2 id="api-key-modal-title">Enter API Key</h2>
-        <button class="modal-close-btn" id="api-key-modal-close" aria-label="Close">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M18 6 6 18"/><path d="M6 6l12 12"/>
-          </svg>
-        </button>
+      <!-- Step 1: Provider list (default view) -->
+      <div id="provider-step-list" class="provider-step">
+        <div class="provider-panel-tabs" role="tablist">
+          <button class="provider-tab active" role="tab" data-tab="discover" aria-selected="true">Providers</button>
+          <button class="provider-tab" role="tab" data-tab="credentials" aria-selected="false">Credentials</button>
+        </div>
+        <div class="provider-panel-body">
+          <div class="provider-tab-content" data-tab="discover">
+            <div class="provider-search-container">
+              <input type="text" id="provider-search-input" class="provider-search-input" placeholder="Search providers..." aria-label="Search providers" />
+            </div>
+            <div class="provider-discovery-list" id="provider-discovery-list"></div>
+          </div>
+          <div class="provider-tab-content hidden" data-tab="credentials">
+            <div class="provider-credential-list" id="provider-credential-list"></div>
+          </div>
+        </div>
       </div>
-      <div class="modal-body">
-        <label for="api-key-input" id="api-key-label">API Key</label>
-        <input type="password" id="api-key-input" class="api-key-input" placeholder="sk-..." autocomplete="off" spellcheck="false" />
-        <p class="api-key-hint" id="api-key-hint">Your key is stored locally and never sent to OpenCode servers.</p>
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" id="api-key-cancel">Cancel</button>
-        <button class="btn btn-primary" id="api-key-submit">Connect</button>
+
+      <!-- Step 2: Inline API key entry (slides over step 1) -->
+      <div id="provider-step-key" class="provider-step provider-step--hidden" aria-label="Enter API key">
+        <div class="provider-key-header">
+          <button class="provider-key-back" id="api-key-back" aria-label="Back to provider list">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6"/>
+            </svg>
+            <span>Back</span>
+          </button>
+          <h3 id="api-key-title" class="provider-key-title">Enter API Key</h3>
+        </div>
+        <div class="provider-key-body">
+          <label for="api-key-input" id="api-key-label" class="provider-key-label">API Key</label>
+          <input type="password" id="api-key-input" class="provider-key-input" placeholder="sk-..." autocomplete="off" spellcheck="false" />
+          <p class="provider-key-hint" id="api-key-hint">Your key is stored locally and never sent to OpenCode servers.</p>
+          <div id="api-key-error" class="provider-key-error hidden"></div>
+        </div>
+        <div class="provider-key-actions">
+          <button class="btn btn-secondary" id="api-key-cancel">Cancel</button>
+          <button class="btn btn-primary" id="api-key-submit">
+            <span id="api-key-submit-label">Connect</span>
+            <span id="api-key-submit-spinner" class="provider-spinner hidden"></span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

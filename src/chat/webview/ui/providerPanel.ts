@@ -17,13 +17,25 @@ const STATUS_CLASSES: Record<ProviderDiscoveryItem["status"], string> = {
   needs_oauth: "provider-status-needs-oauth",
 }
 
+const STATUS_ICON_SVGS: Record<ProviderDiscoveryItem["status"], string> = {
+  connected: '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/></svg>',
+  needs_key: "",
+  needs_oauth: "",
+}
+
 let panel: HTMLElement | null = null
 let discoverList: HTMLElement | null = null
 let credentialList: HTMLElement | null = null
-let apiKeyModal: HTMLElement | null = null
+let stepList: HTMLElement | null = null
+let stepKey: HTMLElement | null = null
 let apiKeyInput: HTMLInputElement | null = null
 let apiKeyLabel: HTMLElement | null = null
 let apiKeyHint: HTMLElement | null = null
+let apiKeyTitle: HTMLElement | null = null
+let apiKeyError: HTMLElement | null = null
+let apiKeySubmitBtn: HTMLButtonElement | null = null
+let apiKeySubmitLabel: HTMLElement | null = null
+let apiKeySubmitSpinner: HTMLElement | null = null
 let searchInput: HTMLInputElement | null = null
 let focusTrap: ((e: KeyboardEvent) => void) | null = null
 let lastFocus: HTMLElement | null = null
@@ -34,16 +46,23 @@ let oauthPollTimer: ReturnType<typeof setInterval> | null = null
 let cachedProviders: ProviderDiscoveryItem[] = []
 let cachedAuthMethods: Map<string, ProviderAuthMethodInfo[]> = new Map()
 let cachedPostMessage: ((msg: Record<string, unknown>) => void) | null = null
+let connectingProviderId: string | null = null
 
 export function setupProviderPanel(deps: ProviderPanelDeps): void {
   cachedDeps = deps
   panel = document.getElementById("provider-panel")
   discoverList = document.getElementById("provider-discovery-list")
   credentialList = document.getElementById("provider-credential-list")
-  apiKeyModal = document.getElementById("api-key-modal")
+  stepList = document.getElementById("provider-step-list")
+  stepKey = document.getElementById("provider-step-key")
   apiKeyInput = document.getElementById("api-key-input") as HTMLInputElement
   apiKeyLabel = document.getElementById("api-key-label")
   apiKeyHint = document.getElementById("api-key-hint")
+  apiKeyTitle = document.getElementById("api-key-title")
+  apiKeyError = document.getElementById("api-key-error")
+  apiKeySubmitBtn = document.getElementById("api-key-submit") as HTMLButtonElement
+  apiKeySubmitLabel = document.getElementById("api-key-submit-label")
+  apiKeySubmitSpinner = document.getElementById("api-key-submit-spinner")
   searchInput = document.getElementById("provider-search-input") as HTMLInputElement
 
   if (!panel) return
@@ -57,8 +76,8 @@ export function setupProviderPanel(deps: ProviderPanelDeps): void {
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-      if (apiKeyModal && !apiKeyModal.classList.contains("hidden")) {
-        closeApiKeyModal()
+      if (stepKey && !stepKey.classList.contains("provider-step--hidden")) {
+        showListStep()
         return
       }
       if (panel && !panel.classList.contains("hidden")) {
@@ -79,7 +98,7 @@ export function setupProviderPanel(deps: ProviderPanelDeps): void {
     searchInput.addEventListener("input", () => filterProviders())
   }
 
-  setupApiKeyModal(deps)
+  setupInlineKeyEntry(deps)
 }
 
 function switchTab(tabName: string): void {
@@ -100,53 +119,113 @@ function switchTab(tabName: string): void {
   }
 }
 
-function setupApiKeyModal(deps: ProviderPanelDeps): void {
-  const closeBtn = document.getElementById("api-key-modal-close")
-  const cancelBtn = document.getElementById("api-key-cancel")
-  const submitBtn = document.getElementById("api-key-submit")
+// ── Inline step transitions ──
 
-  closeBtn?.addEventListener("click", () => closeApiKeyModal())
-  cancelBtn?.addEventListener("click", () => closeApiKeyModal())
-  submitBtn?.addEventListener("click", () => {
-    if (!apiKeyInput || !pendingOAuthProviderId) return
-    const key = apiKeyInput.value.trim()
-    if (!key) return
-    deps.postMessage({
-      type: "connect_provider_key",
-      providerId: pendingOAuthProviderId,
-      key,
-    })
-    closeApiKeyModal()
-  })
-
-  apiKeyInput?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault()
-      submitBtn?.click()
-    }
-  })
-
-  apiKeyModal?.addEventListener("click", (e) => {
-    if (e.target === apiKeyModal) closeApiKeyModal()
-  })
-}
-
-function openApiKeyModal(providerId: string, providerName: string): void {
+function showKeyStep(providerId: string, providerName: string): void {
   pendingOAuthProviderId = providerId
-  if (apiKeyModal) apiKeyModal.classList.remove("hidden")
+  connectingProviderId = null
+
+  if (apiKeyTitle) apiKeyTitle.textContent = providerName
   if (apiKeyLabel) apiKeyLabel.textContent = `API Key for ${providerName}`
   if (apiKeyHint) apiKeyHint.textContent = `Your key for ${providerName} is stored locally and never sent to OpenCode servers.`
   if (apiKeyInput) {
     apiKeyInput.value = ""
     apiKeyInput.placeholder = "sk-..."
-    setTimeout(() => apiKeyInput?.focus(), 50)
+  }
+  hideKeyError()
+  setSubmitLoading(false)
+
+  if (stepList) {
+    stepList.classList.add("provider-step--hidden")
+  }
+  if (stepKey) {
+    stepKey.classList.remove("provider-step--hidden")
+    stepKey.classList.add("provider-step--slide-in")
+    stepKey.addEventListener("animationend", () => {
+      stepKey?.classList.remove("provider-step--slide-in")
+    }, { once: true })
+  }
+  setTimeout(() => apiKeyInput?.focus(), 80)
+}
+
+function showListStep(): void {
+  pendingOAuthProviderId = null
+  connectingProviderId = null
+
+  if (stepKey) {
+    stepKey.classList.add("provider-step--hidden")
+    stepKey.classList.remove("provider-step--slide-in")
+  }
+  if (stepList) {
+    stepList.classList.remove("provider-step--hidden")
   }
 }
 
-function closeApiKeyModal(): void {
-  pendingOAuthProviderId = null
-  if (apiKeyModal) apiKeyModal.classList.add("hidden")
+function setupInlineKeyEntry(deps: ProviderPanelDeps): void {
+  const backBtn = document.getElementById("api-key-back")
+  const cancelBtn = document.getElementById("api-key-cancel")
+
+  backBtn?.addEventListener("click", () => showListStep())
+  cancelBtn?.addEventListener("click", () => showListStep())
+
+  apiKeySubmitBtn?.addEventListener("click", () => {
+    if (!apiKeyInput || !pendingOAuthProviderId) return
+    const key = apiKeyInput.value.trim()
+    if (!key) {
+      showKeyError("Please enter an API key.")
+      return
+    }
+    hideKeyError()
+    setSubmitLoading(true)
+    connectingProviderId = pendingOAuthProviderId
+    deps.postMessage({
+      type: "connect_provider_key",
+      providerId: pendingOAuthProviderId,
+      key,
+    })
+  })
+
+  apiKeyInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault()
+      apiKeySubmitBtn?.click()
+    }
+  })
+
+  apiKeyInput?.addEventListener("input", () => hideKeyError())
 }
+
+function showKeyError(msg: string): void {
+  if (apiKeyError) {
+    apiKeyError.textContent = msg
+    apiKeyError.classList.remove("hidden")
+  }
+}
+
+function hideKeyError(): void {
+  if (apiKeyError) {
+    apiKeyError.textContent = ""
+    apiKeyError.classList.add("hidden")
+  }
+}
+
+function setSubmitLoading(loading: boolean): void {
+  if (apiKeySubmitBtn) apiKeySubmitBtn.disabled = loading
+  if (apiKeySubmitLabel) apiKeySubmitLabel.textContent = loading ? "Connecting..." : "Connect"
+  if (apiKeySubmitSpinner) apiKeySubmitSpinner.classList.toggle("hidden", !loading)
+}
+
+export function onProviderKeyResult(providerId: string, success: boolean, error?: string): void {
+  if (connectingProviderId !== providerId) return
+  setSubmitLoading(false)
+  if (success) {
+    showListStep()
+  } else if (error) {
+    showKeyError(error)
+  }
+}
+
+// ── Search ──
 
 function filterProviders(): void {
   if (!cachedPostMessage) return
@@ -161,10 +240,13 @@ function filterProviders(): void {
   renderProviderDiscoveryList(filtered, cachedAuthMethods, cachedPostMessage, true)
 }
 
+// ── Open / close ──
+
 export function openProviderPanel(): void {
   if (!panel) return
   lastFocus = document.activeElement as HTMLElement
   panel.classList.remove("hidden")
+  showListStep()
   if (searchInput) {
     searchInput.value = ""
     searchInput.focus()
@@ -177,6 +259,7 @@ export function openProviderPanel(): void {
 export function closeProviderPanel(): void {
   if (!panel) return
   panel.classList.add("hidden")
+  showListStep()
   if (focusTrap) {
     document.removeEventListener("keydown", focusTrap)
     focusTrap = null
@@ -186,6 +269,8 @@ export function closeProviderPanel(): void {
     lastFocus = null
   }
 }
+
+// ── Render discovery list ──
 
 export function renderProviderDiscoveryList(
   providers: ProviderDiscoveryItem[],
@@ -231,7 +316,7 @@ export function renderProviderDiscoveryList(
     meta.className = "provider-meta"
     meta.textContent = `${provider.modelCount} model${provider.modelCount !== 1 ? "s" : ""}`
     if (provider.envVars.length > 0) {
-      meta.textContent += ` · env: ${provider.envVars.join(", ")}`
+      meta.textContent += ` \u00b7 env: ${provider.envVars.join(", ")}`
     }
     info.appendChild(meta)
 
@@ -242,7 +327,15 @@ export function renderProviderDiscoveryList(
 
     const statusBadge = document.createElement("span")
     statusBadge.className = `provider-status ${STATUS_CLASSES[provider.status]}`
-    statusBadge.textContent = STATUS_LABELS[provider.status] ?? "Unknown"
+    const iconSvg = STATUS_ICON_SVGS[provider.status]
+    if (iconSvg) {
+      const iconWrap = document.createElement("span")
+      iconWrap.innerHTML = iconSvg
+      statusBadge.appendChild(iconWrap.firstChild as Node)
+    }
+    const statusText = document.createElement("span")
+    statusText.textContent = STATUS_LABELS[provider.status] ?? "Unknown"
+    statusBadge.appendChild(statusText)
     actions.appendChild(statusBadge)
 
     if (provider.status === "needs_key") {
@@ -250,7 +343,7 @@ export function renderProviderDiscoveryList(
       connectBtn.className = "btn btn-sm btn-primary"
       connectBtn.textContent = "Add Key"
       connectBtn.addEventListener("click", () => {
-        openApiKeyModal(provider.id, provider.name)
+        showKeyStep(provider.id, provider.name)
       })
       actions.appendChild(connectBtn)
     } else if (provider.status === "needs_oauth") {
@@ -271,6 +364,8 @@ export function renderProviderDiscoveryList(
     discoverList.appendChild(row)
   }
 }
+
+// ── Render credential list ──
 
 export function renderProviderCredentialList(
   credentials: ProviderCredentialInfo[],
@@ -318,16 +413,15 @@ export function renderProviderCredentialList(
   }
 }
 
+// ── OAuth ──
+
 export function handleOAuthStarted(providerId: string, authorizationUrl: string, postMessage: (msg: Record<string, unknown>) => void): void {
   pendingOAuthProviderId = providerId
   window.open(authorizationUrl, "_blank")
 
-  // Poll for OAuth completion by re-requesting provider list every 2s.
-  // The server stores credentials in auth.json when OAuth completes;
-  // re-discovering providers will reflect the new connected status.
   stopOAuthPolling()
   let attempts = 0
-  const MAX_ATTEMPTS = 60 // 2 minutes max
+  const MAX_ATTEMPTS = 60
   oauthPollTimer = setInterval(() => {
     attempts++
     if (attempts > MAX_ATTEMPTS || !pendingOAuthProviderId) {

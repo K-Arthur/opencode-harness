@@ -62,7 +62,7 @@ import { setupModeToggle, updateModeDropdown, updateModeSelectorState, syncModeU
 import { setupInstructionsEditor } from "./ui/instructionsEditor"
 import { setupSessionModal as setupSessionModalModule, openSessionModal as openSessionModalModule, closeSessionModal as closeSessionModalModule, trapModalFocus } from "./ui/sessionModal"
 import { setupKeyboardShortcutsModal, openKeyboardShortcutsModal, closeKeyboardShortcutsModal } from "./ui/keyboardShortcutsModal"
-import { setupProviderPanel, openProviderPanel, closeProviderPanel, renderProviderDiscoveryList, renderProviderCredentialList, handleOAuthStarted, handleOAuthCompleted } from "./ui/providerPanel"
+import { setupProviderPanel, openProviderPanel, closeProviderPanel, renderProviderDiscoveryList, renderProviderCredentialList, handleOAuthStarted, handleOAuthCompleted, onProviderKeyResult } from "./ui/providerPanel"
 import type { ProviderDiscoveryItem, ProviderAuthMethodInfo, ProviderCredentialInfo } from "./types"
 import { createEscapeRegistry, visibleByClass } from "./escapeCoordinator"
 
@@ -1159,12 +1159,6 @@ function getVsCodeApi() {
       priority: 100,
       isOpen: () => isElementVisibleById("provider-panel"),
       close: () => closeProviderPanel(),
-    })
-    registry.register({
-      id: "api-key-modal",
-      priority: 100,
-      isOpen: () => isElementVisibleById("api-key-modal"),
-      close: () => document.getElementById("api-key-modal-close")?.click(),
     })
     registry.register({
       id: "settings-menu",
@@ -3883,16 +3877,19 @@ function getVsCodeApi() {
         handleRequestError(stateManager.getState().activeSessionId ?? undefined, msgText)
       }],
       ["provider_error", (msg) => {
-        const errText = typeof (msg as Record<string, unknown>).error === "string"
-          ? (msg as Record<string, unknown>).error as string
-          : "Provider configuration error."
+        const raw = msg as Record<string, unknown>
+        const errText = typeof raw.error === "string" ? raw.error as string : "Provider configuration error."
+        const pId = typeof raw.providerId === "string" ? raw.providerId as string : undefined
+        if (pId) onProviderKeyResult(pId, false, errText)
         handleRequestError(stateManager.getState().activeSessionId ?? undefined, `Provider error: ${errText}`)
       }],
       ["provider_list", (msg) => {
         const providers = (msg as Record<string, unknown>).providers as ProviderConfig[] | undefined
         if (providers) modelManager.setProviders(providers)
       }],
-      ["provider_added", () => {
+      ["provider_added", (msg) => {
+        const id = (msg as Record<string, unknown>).id as string | undefined
+        if (id) onProviderKeyResult(id, true)
         vscode.postMessage({ type: "list_providers" })
         vscode.postMessage({ type: "get_models" })
         vscode.postMessage({ type: "discover_providers" })
