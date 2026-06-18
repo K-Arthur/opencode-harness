@@ -26,6 +26,10 @@ export function createWebviewId(prefix: string): string {
   return `${prefix}-${id}`
 }
 
+export const SEND_NOW_SVG = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>'
+
+export const REORDER_HANDLE_SVG = '<svg viewBox="0 0 24 24" width="12" height="16" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>'
+
 export function formatTokenCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}K`
@@ -164,6 +168,15 @@ export function createQueueRenderer(deps: QueueRendererDeps): QueueRendererAPI {
             }
           }
         }
+      } else if (e.key === "Enter") {
+        e.preventDefault()
+        if (currentIdx >= 0) {
+          const item = items[currentIdx]
+          if (item && item.state === "queued") {
+            const sendBtn = container.querySelector<HTMLButtonElement>(`.queue-chip[data-queue-id="${item.id}"] .queue-chip-send`)
+            if (sendBtn) sendBtn.click()
+          }
+        }
       }
     })
 
@@ -191,8 +204,8 @@ export function createQueueRenderer(deps: QueueRendererDeps): QueueRendererAPI {
     if (!queueContainer) {
       queueContainer = document.createElement("div")
       queueContainer.className = "prompt-queue"
-      queueContainer.setAttribute("role", "list")
-      queueContainer.setAttribute("aria-label", "Queued prompts (Arrow keys to navigate, Delete to remove, F2 to edit, Alt+Arrow to reorder)")
+      queueContainer.setAttribute("role", "listbox")
+      queueContainer.setAttribute("aria-label", "Queued prompts. Arrow keys to navigate, Delete to remove, F2 to edit, Alt+Arrow to reorder, Enter to send now.")
       queueContainer.tabIndex = 0
       els.inputArea.insertBefore(queueContainer, els.inputWrapper)
       setupContainerKeyboardNav(queueContainer, tabId, queue)
@@ -211,7 +224,7 @@ export function createQueueRenderer(deps: QueueRendererDeps): QueueRendererAPI {
     if (totalTokens > 0) {
       const tokenLabel = document.createElement("span")
       tokenLabel.className = "queue-tokens"
-      tokenLabel.textContent = `~${formatTokenCount(totalTokens)} tokens`
+      tokenLabel.textContent = `\u223c${formatTokenCount(totalTokens)} tokens`
       tokenLabel.title = `Estimated total token cost for all queued prompts (~${totalTokens})`
       headerRow.appendChild(tokenLabel)
     }
@@ -235,29 +248,32 @@ export function createQueueRenderer(deps: QueueRendererDeps): QueueRendererAPI {
     queueContainer.appendChild(headerRow)
 
     let isActiveSet = false
-    for (const item of items) {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]!
       const chip = document.createElement("div")
       chip.className = `queue-chip queue-chip--${item.state}${item.isSteerPrompt ? " queue-chip--steer" : ""}`
       chip.dataset.queueId = item.id
       chip.setAttribute("role", "option")
+      chip.setAttribute("aria-selected", "false")
+      chip.id = `queue-chip-${item.id}`
 
       const isMovable = item.state === "queued" || item.state === "failed"
       if (isMovable) {
         chip.draggable = true
         chip.setAttribute("aria-grabbed", "false")
         chip.setAttribute("aria-label",
-          `Queued prompt ${item.position + 1} of ${items.length}: ${item.text.slice(0, 60)}`)
+          `Queued prompt ${i + 1} of ${items.length}: ${item.text.slice(0, 60)}`)
 
         const handle = document.createElement("span")
         handle.className = "queue-chip-handle"
         handle.setAttribute("aria-hidden", "true")
-        handle.innerHTML = '<svg viewBox="0 0 24 24" width="10" height="14" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>'
+        handle.innerHTML = REORDER_HANDLE_SVG
         chip.appendChild(handle)
       }
 
       const text = document.createElement("span")
       text.className = "queue-chip-text"
-      text.textContent = item.text.length > 40 ? item.text.slice(0, 40) + "\u2026" : item.text
+      text.textContent = item.text.length > 60 ? item.text.slice(0, 60) + "\u2026" : item.text
       text.title = item.text
       chip.appendChild(text)
 
@@ -272,7 +288,7 @@ export function createQueueRenderer(deps: QueueRendererDeps): QueueRendererAPI {
       if ((item.estimatedTokens ?? 0) > 0 && item.state === "queued") {
         const tokBadge = document.createElement("span")
         tokBadge.className = "queue-chip-tokens"
-        tokBadge.textContent = `~${formatTokenCount(item.estimatedTokens!)}`
+        tokBadge.textContent = `\u223c${formatTokenCount(item.estimatedTokens!)}`
         tokBadge.title = `~${item.estimatedTokens} estimated tokens`
         chip.appendChild(tokBadge)
       }
@@ -284,6 +300,20 @@ export function createQueueRenderer(deps: QueueRendererDeps): QueueRendererAPI {
       chip.appendChild(badge)
 
       if (item.state === "queued") {
+        // Send Now button — bypasses queue ordering, sends immediately
+        const sendBtn = document.createElement("button")
+        sendBtn.className = "queue-chip-send icon-btn"
+        sendBtn.setAttribute("aria-label", `Send "${item.text.slice(0, 40)}" now`)
+        sendBtn.innerHTML = SEND_NOW_SVG
+        sendBtn.addEventListener("click", (e) => {
+          e.stopPropagation()
+          postQueueAction("send_queue_item", tabId, { itemId: item.id })
+          queue.remove(item.id)
+          persistQueues()
+          renderQueue(tabId)
+        })
+        chip.appendChild(sendBtn)
+
         text.addEventListener("click", () => {
           const input = document.createElement("input")
           input.className = "queue-chip-input"
@@ -311,9 +341,10 @@ export function createQueueRenderer(deps: QueueRendererDeps): QueueRendererAPI {
 
         const removeBtn = document.createElement("button")
         removeBtn.className = "queue-chip-remove icon-btn"
-        removeBtn.setAttribute("aria-label", "Remove queued prompt")
+        removeBtn.setAttribute("aria-label", `Remove queued prompt: ${item.text.slice(0, 40)}`)
         removeBtn.innerHTML = REMOVE_SVG
-        removeBtn.addEventListener("click", () => {
+        removeBtn.addEventListener("click", (e) => {
+          e.stopPropagation()
           postQueueAction("remove_from_queue", tabId, { itemId: item.id })
           queue.remove(item.id)
           persistQueues()
@@ -327,7 +358,8 @@ export function createQueueRenderer(deps: QueueRendererDeps): QueueRendererAPI {
         retryBtn.className = "queue-chip-retry icon-btn"
         retryBtn.setAttribute("aria-label", "Retry failed prompt")
         retryBtn.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>'
-        retryBtn.addEventListener("click", () => {
+        retryBtn.addEventListener("click", (e) => {
+          e.stopPropagation()
           item.state = "queued"
           postQueueAction("retry_queue_item", tabId, { itemId: item.id })
           persistQueues()
@@ -337,9 +369,10 @@ export function createQueueRenderer(deps: QueueRendererDeps): QueueRendererAPI {
 
         const removeBtn2 = document.createElement("button")
         removeBtn2.className = "queue-chip-remove icon-btn"
-        removeBtn2.setAttribute("aria-label", "Remove failed prompt")
+        removeBtn2.setAttribute("aria-label", `Remove failed prompt: ${item.text.slice(0, 40)}`)
         removeBtn2.innerHTML = REMOVE_SVG
-        removeBtn2.addEventListener("click", () => {
+        removeBtn2.addEventListener("click", (e) => {
+          e.stopPropagation()
           postQueueAction("remove_from_queue", tabId, { itemId: item.id })
           queue.remove(item.id)
           persistQueues()

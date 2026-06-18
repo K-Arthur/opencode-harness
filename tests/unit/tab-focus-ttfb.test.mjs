@@ -86,8 +86,9 @@ void describe("TTFB stability — no premature state reversion for slow models",
   })
 
   void it("setupTtfbTimeout does NOT post stream_end when probe says run is still active", () => {
-    const idx = STREAM_COORDINATOR.indexOf("setupTtfbTimeout(")
-    assert.ok(idx >= 0, "setupTtfbTimeout must exist")
+    // Use "private" prefix to match the DEFINITION, not a call site
+    const idx = STREAM_COORDINATOR.indexOf("private setupTtfbTimeout(")
+    assert.ok(idx >= 0, "setupTtfbTimeout definition must exist")
     const block = STREAM_COORDINATOR.slice(idx, idx + 12000)
     assert.ok(
       block.includes("probeActiveRun"),
@@ -100,8 +101,9 @@ void describe("TTFB stability — no premature state reversion for slow models",
   })
 
   void it("setupTtfbTimeout delays postRequestError until probe completes", () => {
-    const idx = STREAM_COORDINATOR.indexOf("setupTtfbTimeout(")
-    assert.ok(idx >= 0, "setupTtfbTimeout must exist")
+    // Use "private" prefix to match the DEFINITION, not a call site
+    const idx = STREAM_COORDINATOR.indexOf("private setupTtfbTimeout(")
+    assert.ok(idx >= 0, "setupTtfbTimeout definition must exist")
     const block = STREAM_COORDINATOR.slice(idx, idx + 5000)
     const probeIdx = block.indexOf("probeActiveRun")
     const postRequestErrorIdx = block.indexOf("postRequestError")

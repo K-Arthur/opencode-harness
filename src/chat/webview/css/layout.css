@@ -2142,23 +2142,103 @@ button.modal-session-item:focus {
 
 .prompt-queue {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1-5);
-  padding: var(--space-1-5) var(--space-3) 0;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--oc-border);
+  background: var(--oc-panel-bg);
+  max-height: 280px;
+  overflow-y: auto;
 }
 
-.queue-chip {
-  display: inline-flex;
+.prompt-queue:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, var(--oc-accent));
+  outline-offset: -1px;
+}
+
+.queue-header {
+  display: flex;
   align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-full);
-  font-size: var(--text-xs);
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-2);
+}
+
+.queue-count {
+  font-size: var(--oc-font-size-2xs);
+  font-weight: 600;
+  color: var(--oc-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.queue-tokens {
+  font-size: var(--oc-font-size-2xs);
+  color: var(--oc-muted);
+  font-family: var(--font-mono);
+  margin-left: auto;
+  margin-right: var(--space-2);
+}
+
+.queue-clear-all {
+  font-size: var(--oc-font-size-2xs);
+  background: none;
+  border: 1px solid transparent;
+  color: var(--color-error);
+  cursor: pointer;
+  padding: var(--space-0-5) var(--space-1-5);
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+
+.queue-clear-all:hover {
+  background: var(--oc-error-subtle);
+}
+
+.queue-clear-all:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, var(--color-error));
+  outline-offset: 1px;
+  border-color: var(--vscode-focusBorder, var(--color-error));
+}
+
+/* Queue chips — individual prompt items */
+.queue-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  padding: var(--space-1-5) var(--space-2);
+  border: 1px solid var(--oc-border);
+  border-radius: var(--radius-sm);
+  background: var(--oc-editor-bg);
+  color: var(--oc-editor-fg);
+  font-size: var(--oc-font-size-xs);
+  line-height: 1.4;
+  min-height: 32px;
+  transition: background-color var(--duration-fast), border-color var(--duration-fast);
+}
+
+.queue-chip:focus-visible {
+  outline: none;
+  border-color: var(--vscode-focusBorder, var(--oc-accent));
+  box-shadow: 0 0 0 1px var(--vscode-focusBorder, var(--oc-accent));
+}
+
+.queue-chip[aria-selected="true"] {
   background: var(--oc-accent-subtle);
-  border: 1px solid var(--oc-accent-border);
-  color: var(--color-accent);
-  max-width: 200px;
-  transition: background-color var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast), opacity var(--duration-fast), box-shadow var(--duration-fast);
+  border-color: var(--oc-accent-border);
+}
+
+.queue-chip[draggable="true"] {
+  cursor: grab;
+}
+
+.queue-chip[draggable="true"]:hover .queue-chip-handle,
+.queue-chip[draggable="true"]:focus-visible .queue-chip-handle {
+  opacity: 0.85;
+}
+
+.queue-chip[draggable="true"]:active {
+  cursor: grabbing;
 }
 
 .queue-chip--sending,
@@ -2186,18 +2266,24 @@ button.modal-session-item:focus {
   white-space: nowrap;
   flex: 1;
   min-width: 0;
+  cursor: text;
+  padding: 0 var(--space-0-5);
 }
 
 .queue-chip-state {
-  font-size: var(--text-2xs);
+  font-size: var(--oc-font-size-2xs);
   font-weight: 600;
   text-transform: uppercase;
   opacity: 0.7;
   flex-shrink: 0;
+  padding: var(--space-0-5) var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--oc-muted);
+  color: var(--oc-panel-fg);
 }
 
- .queue-chip-att {
-  font-size: var(--text-2xs);
+.queue-chip-att {
+  font-size: var(--oc-font-size-2xs);
   font-weight: 700;
   color: var(--color-accent);
   background: var(--oc-accent-subtle);
@@ -2207,141 +2293,88 @@ button.modal-session-item:focus {
   line-height: 1.4;
 }
 
-.queue-chip-remove {
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  opacity: 0.5;
-  transition: opacity var(--duration-fast);
+.queue-chip-tokens {
+  font-size: var(--oc-font-size-2xs);
+  color: var(--oc-muted);
+  font-family: var(--font-mono);
   flex-shrink: 0;
+  padding: 0 var(--space-1);
 }
 
-.queue-chip-remove:hover {
-  opacity: 1;
-}
-
-/* ─── Queue Header (count + clear all) ─── */
-.queue-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 0;
-  margin-bottom: var(--space-1);
-}
-
-.queue-count {
-  font-size: var(--text-2xs);
-  font-weight: 600;
-  color: var(--color-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.queue-clear-all {
-  font-size: var(--text-2xs);
-  background: none;
-  border: none;
-  color: var(--color-error);
-  cursor: pointer;
-  padding: var(--space-0-5) var(--space-1);
-  border-radius: var(--radius-sm);
-  transition: background var(--duration-fast);
-}
-
-.queue-clear-all:hover {
-  background: var(--oc-error-subtle);
-}
-
-/* ─── Inline Edit Input (click-to-edit queued item) ─── */
+/* Inline edit input for inline text editing */
 .queue-chip-input {
-  font-size: var(--text-xs);
-  background: var(--oc-editor-bg);
-  border: 1px solid var(--oc-accent-border);
+  flex: 1;
+  min-width: 0;
+  background: var(--oc-input-bg);
+  border: 1px solid var(--vscode-focusBorder, var(--oc-accent));
   color: var(--oc-fg);
-  border-radius: var(--radius-sm);
+  font-size: var(--oc-font-size-xs);
+  font-family: inherit;
   padding: var(--space-0-5) var(--space-1);
-  width: 100%;
-  min-width: 80px;
+  border-radius: var(--radius-sm);
   outline: none;
 }
 
-.queue-chip-input:focus {
-  border-color: var(--color-accent);
-}
-
-/* ─── Retry Button (failed items) ─── */
+/* Action buttons — Send Now, Remove, Retry */
+.queue-chip-send,
+.queue-chip-remove,
 .queue-chip-retry {
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: none;
+  width: 22px;
+  height: 22px;
+  padding: var(--space-0-5);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: inherit;
   cursor: pointer;
-  opacity: 0.5;
-  transition: opacity var(--duration-fast);
+  opacity: 0.55;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity var(--duration-fast), background var(--duration-fast), border-color var(--duration-fast);
 }
 
+.queue-chip-send {
+  color: var(--color-accent);
+}
+
+.queue-chip-send:hover,
+.queue-chip-remove:hover,
 .queue-chip-retry:hover {
+  opacity: 1;
+  background: var(--oc-accent-subtle);
+  border-color: var(--oc-accent-border);
+}
+
+.queue-chip-send:focus-visible,
+.queue-chip-remove:focus-visible,
+.queue-chip-retry:focus-visible {
+  outline: none;
+  border-color: var(--vscode-focusBorder, var(--oc-accent));
   opacity: 1;
 }
 
-/* ─── Queue Hint (text below queue showing auto-send info) ─── */
-.queue-hint {
-  font-size: var(--text-2xs);
-  color: var(--color-muted);
-  padding: var(--space-1) var(--space-3);
-  font-style: italic;
+.queue-chip-remove:hover {
+  background: var(--oc-error-subtle);
+  border-color: var(--oc-error-border);
+  color: var(--color-error);
 }
 
-/* ─── Queue: token-cost badge in header + per-chip ─── */
-.queue-tokens {
-  font-size: var(--text-2xs);
-  font-weight: 500;
-  color: var(--color-muted);
-  margin-left: var(--space-2);
-  letter-spacing: 0;
-  text-transform: none;
+.queue-chip-retry:hover {
+  background: var(--oc-warning-subtle);
+  border-color: var(--oc-warning-border);
+  color: var(--color-warning);
 }
 
-.queue-chip-tokens {
-  font-size: var(--text-2xs);
-  color: var(--color-muted);
-  opacity: 0.75;
-  flex-shrink: 0;
-}
-
-/* ─── Queue: drag-to-reorder affordances ─── */
-
-/* The drag handle on each chip (visual only — whole chip is the drag source) */
+/* Drag handle */
 .queue-chip-handle {
   display: inline-flex;
   align-items: center;
-  color: currentColor;
   opacity: 0.35;
-  cursor: grab;
   flex-shrink: 0;
   margin-right: 1px;
   transition: opacity var(--duration-fast);
-}
-
-.queue-chip[draggable="true"] {
-  cursor: grab;
-}
-
-.queue-chip[draggable="true"]:hover .queue-chip-handle,
-.queue-chip[draggable="true"]:focus-visible .queue-chip-handle {
-  opacity: 0.85;
-}
-
-.queue-chip[draggable="true"]:active {
-  cursor: grabbing;
 }
 
 .queue-chip--dragging {
@@ -2349,8 +2382,6 @@ button.modal-session-item:focus {
   transform: scale(0.97);
 }
 
-/* Insertion-point markers shown during dragover. The rendered ribbon is a
- * 2px accent-colored line on the leading/trailing edge of the hovered chip. */
 .queue-chip--drop-before {
   box-shadow: -3px 0 0 0 var(--color-accent);
 }
@@ -2359,12 +2390,16 @@ button.modal-session-item:focus {
   box-shadow: 3px 0 0 0 var(--color-accent);
 }
 
-.queue-chip:focus-visible {
-  outline: 1px solid var(--color-accent);
-  outline-offset: 1px;
+/* Queue Hint (text below queue showing auto-send info) */
+.queue-hint {
+  font-size: var(--oc-font-size-2xs);
+  color: var(--oc-muted);
+  font-style: italic;
+  padding: var(--space-1) var(--space-3);
+  text-align: center;
+  border-top: 1px solid var(--oc-border);
 }
 
-/* Respect reduced-motion preferences */
 @media (prefers-reduced-motion: reduce) {
   .queue-chip,
   .queue-chip--dragging {
@@ -2372,6 +2407,8 @@ button.modal-session-item:focus {
     transform: none;
   }
 }
+
+/* ════════════════════════════════════════════════════════════════
 
 /* ═════════════════════════════════════════════════════════════════╛
    MODEL MANAGER PANEL

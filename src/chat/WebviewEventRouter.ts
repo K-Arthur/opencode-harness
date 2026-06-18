@@ -198,7 +198,7 @@ export class WebviewEventRouter {
     "send_steer_prompt",
     "probe_run_status",
     "panel_visibility_state",
-    "remove_from_queue", "edit_queue_item", "reorder_queue", "retry_queue_item",
+    "remove_from_queue", "edit_queue_item", "reorder_queue", "retry_queue_item", "send_queue_item",
     "request_queue_state", "resume_queue",
     "get_todos", // handler posts todos_error on unavailable server/session fetch failures
     "get_skills", "toggle_skill", "search_skills",
@@ -2007,6 +2007,14 @@ export class WebviewEventRouter {
       if (!sessionId || typeof msg.itemId !== "string") return
       this.opts.hostQueue.retry(sessionId, msg.itemId)
       this.postQueueState(sessionId)
+    }],
+    ["send_queue_item", async (msg: Record<string, unknown>, sessionId?: string) => {
+      if (!sessionId || typeof msg.itemId !== "string") return
+      const item = this.opts.hostQueue.peek(sessionId)
+      if (!item || item.id !== msg.itemId) return
+      // Remove the item from the queue and send it immediately
+      this.opts.hostQueue.remove(sessionId, msg.itemId)
+      this.drainQueuedPrompt(sessionId, item)
     }],
     ["request_queue_state", (msg: Record<string, unknown>, sessionId?: string) => {
       // If a specific session is requested, send state for that session.
