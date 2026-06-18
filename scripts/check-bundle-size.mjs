@@ -137,6 +137,10 @@
 // Measured 615.5KB. +6.5KB keeps ~1% headroom so the gate still trips on a
 // real regression. Webview limit unchanged.
 
+// 2026-06-18 re-baseline (host 640KB -> 642KB): provider panel redesign
+// (ProviderManagementService error messages now carry providerId for inline
+// key-entry error routing, +0.1KB minified). Webview limit unchanged.
+
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -145,7 +149,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 640 * 1024, label: "extension host" },
+  { path: "dist/extension.js", limitBytes: 642 * 1024, label: "extension host" },
   { path: "dist/chat/webview/main.js", limitBytes: 780 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
