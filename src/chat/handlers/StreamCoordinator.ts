@@ -84,7 +84,7 @@ export class StreamCoordinator {
    * keep generous. */
   private readonly ABORT_ERROR_SUPPRESS_MS = 8000
   /** Time-to-first-byte timeout: no chunk received within 45s */
-  readonly TTFB_TIMEOUT_MS = 45000
+  readonly TTFB_TIMEOUT_MS = 90000
   /** B10-recovery: Hard timeout for the expired-question fallback startPrompt.
    *  Fires UNCONDITIONALLY after 20s — not gated by shouldTriggerStartupTimeout,
    *  which can be silently disabled by stray activity events leaving the user
@@ -1543,7 +1543,8 @@ export class StreamCoordinator {
   }
 
   private setupTtfbTimeout(tabId: string, callbacks: StreamCallbacks): void {
-    // TTFB (time-to-first-byte) timeout — fires if no stream chunk arrives within 30s
+    // TTFB (time-to-first-byte) timeout — fires if no stream chunk arrives within 90s
+    // (extended from 45s to accommodate slow third-party model providers)
     const abortController = new AbortController()
     this.ttfbAbortControllers.set(tabId, abortController)
     const ttfbTimeout = setTimeout(() => {
@@ -1591,15 +1592,16 @@ export class StreamCoordinator {
             lastRawEventType: eventStreamStatus.lastRawEventType,
           })
           this.clearTtfbTimeout(tabId)
-          callbacks.postRequestError(errorContext.userMessage, tabId)
-          // G1: even in the preserve-tracking path, kick a probe so the host
-          // can correct its view if the run actually finished or is still
-          // progressing. The probe replies asynchronously and reconciles the
-          // streaming flags via run_status_result.
+          // G1: When the backend may still be running, suppress the error
+          // and probe to determine actual run state. If the probe confirms
+          // the run is dead, run_status_result clears streaming flags; if
+          // alive, the webview keeps showing Stop without an error flash.
           if (t.cliSessionId && eventStreamStatus.state === "connected") {
             void this.probeActiveRun(tabId, callbacks).catch(err =>
               log.warn(`TTFB probe failed for ${tabId}`, err),
             )
+          } else {
+            callbacks.postRequestError(errorContext.userMessage, tabId)
           }
           return
         }

@@ -14,6 +14,7 @@ describe("shouldHonorActiveSessionChange", () => {
         currentActiveValid: false,
         targetId: "s1",
         targetIsStreaming: true,
+        currentIsStreaming: false,
       }),
       true,
     )
@@ -27,6 +28,7 @@ describe("shouldHonorActiveSessionChange", () => {
         currentActiveValid: false,
         targetId: "s1",
         targetIsStreaming: false,
+        currentIsStreaming: false,
       }),
       true,
     )
@@ -40,6 +42,7 @@ describe("shouldHonorActiveSessionChange", () => {
         currentActiveValid: true,
         targetId: "s1",
         targetIsStreaming: true,
+        currentIsStreaming: true,
       }),
       true,
     )
@@ -53,6 +56,7 @@ describe("shouldHonorActiveSessionChange", () => {
         currentActiveValid: true,
         targetId: "task",
         targetIsStreaming: true,
+        currentIsStreaming: false,
       }),
       false,
     )
@@ -66,8 +70,23 @@ describe("shouldHonorActiveSessionChange", () => {
         currentActiveValid: true,
         targetId: "other",
         targetIsStreaming: false,
+        currentIsStreaming: false,
       }),
       true,
+    )
+  })
+
+  it("REFUSES to switch away from a streaming tab to ANY other tab", () => {
+    assert.equal(
+      shouldHonorActiveSessionChange({
+        welcomeVisible: false,
+        currentActiveId: "streaming-task",
+        currentActiveValid: true,
+        targetId: "other-reading",
+        targetIsStreaming: false,
+        currentIsStreaming: true,
+      }),
+      false,
     )
   })
 })

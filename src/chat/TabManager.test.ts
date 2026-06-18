@@ -112,6 +112,20 @@ void describe("TabManager.ts", () => {
     )
   })
 
+  void   void it("createTab_does_not_auto_activate_by_default", () => {
+    const idx = source.indexOf("createTab(")
+    assert.ok(idx >= 0, "createTab must exist")
+    const block = source.slice(idx, source.indexOf("closeTab(", idx))
+    assert.ok(
+      block.includes("options?.setActive") || block.includes("setActive"),
+      "createTab must have a setActive option",
+    )
+    assert.ok(
+      block.includes("options?.setActive === true"),
+      "createTab must require explicit setActive:true — must not auto-activate",
+    )
+  })
+
   void it("createTab_default_mode_is_build_not_normal", () => {
     const idx = source.indexOf("createTab(")
     assert.ok(idx >= 0, "createTab must exist")

@@ -178,7 +178,7 @@ export class TabManager {
     }
     this.tabs.set(id, tab)
     if (cliSessionId) this.cliSessionIndex.set(cliSessionId, tab)
-    if (options?.setActive !== false) this.activeTabId = id
+    if (options?.setActive === true) this.activeTabId = id
     this.persist()
     this._onTabCreated.fire(id)
     log.info(`Tab created: ${id} (session: ${cliSessionId || "pending"})`)

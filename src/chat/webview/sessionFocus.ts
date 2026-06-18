@@ -28,6 +28,8 @@ export interface ActiveSessionChangeContext {
   targetId: string
   /** Whether the target session is mid-stream ("doing a task"). */
   targetIsStreaming: boolean
+  /** Whether the current (user-visible) session is mid-stream. */
+  currentIsStreaming: boolean
 }
 
 /**
@@ -36,7 +38,7 @@ export interface ActiveSessionChangeContext {
  * focus from a task the user is deliberately viewing.
  */
 export function shouldHonorActiveSessionChange(ctx: ActiveSessionChangeContext): boolean {
-  const { welcomeVisible, currentActiveId, currentActiveValid, targetId, targetIsStreaming } = ctx
+  const { welcomeVisible, currentActiveId, currentActiveValid, targetId, targetIsStreaming, currentIsStreaming } = ctx
 
   // No tab in focus (welcome screen, or the current tab no longer exists):
   // following the host is always safe and usually desirable.
@@ -44,6 +46,11 @@ export function shouldHonorActiveSessionChange(ctx: ActiveSessionChangeContext):
 
   // Already showing the requested session — honouring is a harmless no-op.
   if (currentActiveId === targetId) return true
+
+  // The user is viewing a streaming tab. Never yank focus away from a
+  // task they are deliberately watching — host-side housekeeping should
+  // not steal the user's active view.
+  if (currentIsStreaming) return false
 
   // The user is viewing a different, valid tab. Never yank focus onto a
   // session that is streaming — that is the "switches back to a session

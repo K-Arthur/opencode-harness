@@ -344,6 +344,32 @@ describe("StreamCoordinator.ts", () => {
     )
   })
 
+  it("TTFB_TIMEOUT_MS is at least 90000ms for slow third-party models", () => {
+    const match = source.match(/TTFB_TIMEOUT_MS\s*=\s*(\d+)/)
+    assert.ok(match, "TTFB_TIMEOUT_MS must be assigned a number")
+    const val = parseInt(match[1]!, 10)
+    assert.ok(
+      val >= 90000,
+      `TTFB_TIMEOUT_MS must be >= 90000ms for slow third-party models, got ${val}`,
+    )
+  })
+
+  it("TTFB timeout suppresses postRequestError when backend may still be running", () => {
+    const ttfbIdx = source.indexOf("const ttfbTimeout = setTimeout(")
+    assert.ok(ttfbIdx >= 0, "TTFB timeout must exist")
+    const blockEnd = source.indexOf("this.ttfbTimeouts.set(", ttfbIdx)
+    const block = source.slice(ttfbIdx, blockEnd > ttfbIdx ? blockEnd : ttfbIdx + 4000)
+    assert.ok(
+      block.includes("probeActiveRun") || block.includes("mayStillBeRunning"),
+      "TTFB timeout must probeActiveRun before posting requestError when the backend may still be running",
+    )
+    assert.ok(
+      !block.includes('callbacks.postRequestError(errorContext.userMessage') ||
+      block.includes('callbacks.postRequestError(errorContext.userMessage,'),
+      "TTFB must NOT call postRequestError before the probe completes",
+    )
+  })
+
   // ── Methodology advice visibility ──────────────────────────────────────
   it("posts methodology_selected to the webview when advice is applied", () => {
     // The doc comment promised this message for as long as the advisor has

@@ -95,7 +95,6 @@ export function createSendLogic(deps: SendLogicDeps) {
     handleRequestError,
     addMessage,
     updateTabBar,
-    switchTab,
     switchToTab,
     createTabUI,
     createNewTab,
@@ -350,8 +349,6 @@ export function createSendLogic(deps: SendLogicDeps) {
       createTabUI(active.id, active.name || "")
       switchToTab(active.id)
       updateTabBar()
-    } else if (stateManager.getState().activeSessionId !== active.id) {
-      switchTab(active.id)
     }
 
     if (text.startsWith("/")) {

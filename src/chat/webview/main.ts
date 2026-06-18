@@ -3392,13 +3392,16 @@ function getVsCodeApi() {
         // The host fires this on every server-side setActive (id promotion,
         // cleanup, command-palette open). Only follow it when doing so cannot
         // steal focus from a tab the user is deliberately viewing — in
-        // particular, never yank focus onto a session that is mid-stream.
+        // particular, never yank focus onto a session that is mid-stream,
+        // and never yank focus away from a stream the user is watching.
         const currentActiveId = stateManager.getState().activeSessionId
         const target = stateManager.getSession(sid)
+        const current = currentActiveId ? stateManager.getSession(currentActiveId) : null
         const honor = shouldHonorActiveSessionChange({
           welcomeVisible: !els.welcomeView.classList.contains("hidden"),
           currentActiveId,
           currentActiveValid: Boolean(currentActiveId && stateManager.getSession(currentActiveId)),
+          currentIsStreaming: Boolean(current?.isStreaming),
           targetId: sid,
           targetIsStreaming: Boolean(target?.isStreaming),
         })
