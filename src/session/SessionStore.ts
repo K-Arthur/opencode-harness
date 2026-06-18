@@ -889,6 +889,8 @@ validateSessionName(name: string): string | null {
     this.save()
     this._onSessionsChanged.fire()
     this.fireChangeEvent({ kind: "renamed", sessionId: id, name: name.trim() })
+    // Direct IPC push (D3 fix).
+    this.titleAppliedCallback?.(id, name.trim())
     return true
   }
 
@@ -909,6 +911,35 @@ validateSessionName(name: string): string | null {
   setServerTitleUpdater(updater: (cliSessionId: string, title: string) => Promise<void>): void {
     this.serverTitleUpdater = updater
   }
+
+  /**
+   * Side-effect callback fired synchronously whenever a session title is
+   * applied (either via `setTitle`, `rename`, or `applyServerTitle`).
+   *
+   * Wired by ChatProvider to push a `session_title_updated` IPC message
+   * directly to the webview the instant a title lands in the store. This
+   * bypasses the older `onDidChangeSession` subscriber path, which was
+   * registration-order-dependent (D3 defect): if `applyServerTitle` ran
+   * before ChatProvider's constructor finished wiring its subscriber, the
+   * `renamed` event fired into the void and the webview tab stayed frozen
+   * on "Untitled session" until manual toggle.
+   *
+   * The callback receives (sessionId, newName). It is invoked AFTER the
+   * change event so consumers that read the store see consistent state.
+   */
+  private titleAppliedCallback: ((sessionId: string, name: string) => void) | null = null
+  setTitleAppliedCallback(cb: (sessionId: string, name: string) => void): void {
+    this.titleAppliedCallback = cb
+  }
+
+  /**
+   * Titles received from the server BEFORE the local session's cliSessionId
+   * is bound (the D1 defect race). Keyed by cliSessionId; flushed the moment
+   * `updateCliSessionId` resolves the mapping. Without this queue, the
+   * server's first `session.updated` event silently no-ops in
+   * `applyServerTitle` because no session yet matches the cliSessionId.
+   */
+  private pendingTitles: Map<string, string> = new Map()
 
   /**
    * Canonical, SDK-aligned setter for session title. Persists locally
@@ -932,6 +963,8 @@ validateSessionName(name: string): string | null {
     this.save()
     this._onSessionsChanged.fire()
     this.fireChangeEvent({ kind: "renamed", sessionId: id, name: trimmed })
+    // Direct IPC push (D3 fix).
+    this.titleAppliedCallback?.(id, trimmed)
 
     // Best-effort server propagation. Skip when no cliSessionId yet (local-
     // only sessions; server learns the title on first prompt).
@@ -948,6 +981,13 @@ validateSessionName(name: string): string | null {
    * Apply a title received from the server (`session.updated` SSE event).
    * Looks the local session up by cliSessionId. No-op when unknown. Does
    * NOT re-call `serverTitleUpdater` (avoid feedback loop).
+   *
+   * If the cliSessionId is not yet bound to any local session (the D1 race
+   * where the server's first `session.updated` arrives before our own
+   * `updateCliSessionId` wires the mapping), the title is queued in
+   * `pendingTitles` and re-applied on the next `updateCliSessionId` for
+   * that id. Without this queue the title would be silently dropped and
+   * the webview tab would stay on "Untitled session" until manual toggle.
    */
   applyServerTitle(cliSessionId: string, title: string): boolean {
     const trimmed = title.trim()
@@ -959,8 +999,16 @@ validateSessionName(name: string): string | null {
         this.save()
         this._onSessionsChanged.fire()
         this.fireChangeEvent({ kind: "renamed", sessionId: session.id, name: trimmed })
+        // Direct IPC push — bypasses the registration-order-dependent
+        // onDidChangeSession subscriber (fixes D3).
+        this.titleAppliedCallback?.(session.id, trimmed)
         return true
       }
+    }
+    // D1 race: cliSessionId not yet bound. Queue for late application.
+    // Avoid overwriting a newer queued title with an older one.
+    if (!this.pendingTitles.has(cliSessionId)) {
+      this.pendingTitles.set(cliSessionId, trimmed)
     }
     return false
   }
@@ -978,6 +1026,19 @@ validateSessionName(name: string): string | null {
     session.cliSessionId = cliId
     delete session.pendingServerLink
     this.save()
+
+    // Flush any title that arrived from the server before this mapping was
+    // established (D1 race fix). applyServerTitle will no-op if the cached
+    // title already matches, so this is safe to call unconditionally.
+    const pendingTitle = this.pendingTitles.get(cliId)
+    if (pendingTitle !== undefined) {
+      this.pendingTitles.delete(cliId)
+      // Defer to a microtask so the caller's own post-bind logic (e.g.
+      // pushing init_state to the webview) lands first; otherwise the
+      // session_renamed message can arrive before init_state and be
+      // dropped by the webview's "unknown session" guard.
+      queueMicrotask(() => this.applyServerTitle(cliId, pendingTitle))
+    }
   }
 
   /**

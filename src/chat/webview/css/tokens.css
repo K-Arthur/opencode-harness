@@ -338,6 +338,11 @@
   --size-target-large: 36px;
   --size-tab-min: 80px;
   --size-tab-max: 160px;
+  /* Tab label width — drives the ellipsis cutoff. Distinct from size-tab-max
+   * (the whole-button outer cap) so padding + close-button never eat into
+   * the label budget. Used by .tab-btn .tab-label in layout.css. */
+  --size-tab-label-max: 100px;
+  --size-tab-label-min: 48px;
 
   /* ─── Z-Index Scale ───────────────────────────────────────────────
    *

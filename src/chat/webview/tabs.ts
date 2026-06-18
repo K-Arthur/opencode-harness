@@ -157,6 +157,37 @@ export function createTabBar(els: ElementRefs, callbacks: TabCallbacks) {
   return { renderTabs }
 }
 
+/**
+ * Patch a single tab's label text in place, WITHOUT the full-teardown
+ * `renderTabs` rebuild (which wipes focus, IME composition state, scroll
+ * markers, and stream indicators on every other tab in the strip).
+ *
+ * Use this for the common case of a single session's title updating
+ * (server-side `session.updated` arriving, user-initiated rename,
+ * programmatic auto-title from first message). Use `renderTabs` only for
+ * structural changes: create, close, reorder, active-tab switch, stream
+ * capacity badge changes.
+ *
+ * Returns true if the tab was found and patched, false if no tab with that
+ * id exists (caller should fall back to renderTabs / hydrate-on-init).
+ */
+export function patchTabLabel(els: ElementRefs, tabId: string, newName: string): boolean {
+  const escaped = CSS.escape(tabId)
+  const btn = els.tabBar.querySelector<HTMLElement>(`.tab-btn[data-tab-id="${escaped}"]`)
+  if (!btn) return false
+  const displayName = newName || "Untitled session"
+  const label = btn.querySelector<HTMLElement>(".tab-label")
+  if (label) {
+    label.textContent = displayName
+    label.title = displayName
+  }
+  const close = btn.querySelector<HTMLElement>(".tab-close")
+  if (close) {
+    close.setAttribute("aria-label", `Close ${displayName}`)
+  }
+  return true
+}
+
 export function createTabContent(tabId: string, _tabName: string, _callbacks: TabCallbacks): HTMLElement[] {
   const view = document.createElement("div")
   view.className = "tab-panel"

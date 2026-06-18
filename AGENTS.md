@@ -150,6 +150,17 @@ Run all unit+contract+roundtrip: `npm test`
 | `HostPromptQueue` | `src/chat/HostPromptQueue.ts` | Host-side prompt queue (single source of truth, workspaceState persistence) |
 | `QuestionExpiryDetector` | `src/chat/QuestionExpiryDetector.ts` | B10: Categorizes question reply failures (expired/transient/rejected) + staleness detection |
 
+### Session Title Lifecycle
+
+Titles flow across three surfaces (server / CLI / webview tab strip) via two complementary paths. Full design: [`docs/webview-messages.md` § Session Title Propagation](docs/webview-messages.md#session-title-propagation).
+
+- **Race-free IPC push**: `SessionStore.setTitleAppliedCallback(cb)` (DI hook) fires synchronously from inside `applyServerTitle` / `setTitle` / `updateName`. ChatProvider wires it in its constructor to post `session_title_updated` → webview's `patchTabLabel` patches `.tab-label` in place (no `innerHTML` wipe, no focus/IME clobber). Bypasses the registration-order-dependent `onDidChangeSession` subscriber (which still posts `session_renamed` for regression safety).
+- **cliSessionId race queue**: `SessionStore.pendingTitles: Map<cliSessionId, title>` queues server titles that arrive before `updateCliSessionId` binds the mapping. Flushed via `queueMicrotask` on next bind.
+- **CLI consistency**: `WebviewEventRouter.rename_session` calls `setTitle` (not `rename`) so deduped titles propagate to the opencode server via `serverTitleUpdater`. Feedback-loop-safe (equality gate in `applyServerTitle`).
+- **Title generation**: shared pure module `src/session/titleExtractor.ts` — `extractTitle(text)` strips markdown headers / bracketed metadata / TODO labels and truncates at 40 chars on a word boundary; `dedupeTitle(proposed, existingSet)` appends ` (2)` / ` (3)` until unique. Imported by both host (`sessionUtils.ts`) and webview (`main.ts`) — replaces the duplicated naive 37-char-hard-slice.
+- **In-place tab patch**: `tabs.ts::patchTabLabel(els, tabId, newName)` updates only `.tab-label` textContent + `.tab-close` aria-label. Used by the `session_title_updated` handler. The legacy `renderTabs` (full `innerHTML` rebuild) is reserved for structural changes (create/close/reorder/stream-capacity).
+- **CSS tokens**: `--size-tab-label-max` (100px), `--size-tab-label-min` (48px) drive the ellipsis cutoff independent of `--size-tab-max`.
+
 ### Webview Composer Modules (delegated from composer.ts)
 
 | Module | File | Responsibility |
@@ -262,6 +273,7 @@ Errors are routed to a spatial surface by a single pure function — **never dec
 | `rate_limit_state` | `RateLimitMonitor` | `main.ts:2084+` | Feeds quota bar + QuotaMonitor |
 | `run_status_result` | `StreamCoordinator.probeActiveRun` | `main.ts` | Host-authoritative answer to `probe_run_status`; reconciles both streaming flags. `serverReachable:false` means the answer is uncertain. |
 | `streaming_state` | `TabManager.setStreaming` (via `onStreamingStateChanged`) | `main.ts` | Now carries `{source, cliSessionId, messageId, runId}`; writes BOTH `isStreaming` and `isServerStreaming` (host-authoritative). |
+| `session_title_updated` | `SessionStore.setTitleAppliedCallback` (fired from `applyServerTitle` / `setTitle` / `updateName`) | `main.ts:4077+` | Race-free title push. Patches `.tab-label` in place via `patchTabLabel` (no `innerHTML` wipe, no focus clobber). Distinct from the legacy `session_renamed` (which still fires via `onDidChangeSession` for regression safety). |
 
 ### Error Block Rendering
 - **Block-level**: `renderErrorBlock()` in `renderer.ts` renders persisted errors from message history with header, message, detail, and action buttons (Retry/Dismiss by default)

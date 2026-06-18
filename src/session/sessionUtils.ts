@@ -103,15 +103,20 @@ export function validateSessionName(name: string): string | null {
   return null
 }
 
+import { extractTitle, dedupeTitle, dedupeTitleAgainst } from "./titleExtractor"
+
+export { extractTitle, dedupeTitle, dedupeTitleAgainst }
+
+/**
+ * Generate a session title from the first user message.
+ *
+ * Delegates to the shared `extractTitle` pure module (used by both host and
+ * webview). Kept for backwards compatibility — existing callers (host-side
+ * `SessionStore.autoTitleFromMessages`, structural tests) continue to work;
+ * new code should call `extractTitle` directly.
+ */
 export function generateTitleFromMessage(text: string): string {
-  if (!text || !text.trim()) return ""
-  const firstSentence = text.split(/[.!?\n]/)[0] || text
-  const trimmed = firstSentence.trim()
-  if (trimmed.length === 0) return ""
-  if (trimmed.length > 40) {
-    return trimmed.slice(0, 37).trimEnd() + "..."
-  }
-  return trimmed
+  return extractTitle(text)
 }
 
 export type SessionClassification = "corrupted" | "archived" | "empty" | "test_named" | "orphaned" | "real"

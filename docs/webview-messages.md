@@ -345,6 +345,64 @@ Changed-file state is synchronized from the extension host:
   Historical sessions stay available in the session list, but they are not reopened by a later
   `request_state_sync` when focus returns to the webview.
 
+## Session Title Propagation
+
+Session titles flow across three surfaces (server / CLI / webview tab strip) via two complementary paths:
+
+### Host → Webview: race-free title push
+
+`SessionStore.setTitleAppliedCallback(cb)` is the DI hook fired **synchronously** from inside
+`applyServerTitle`, `setTitle`, and `updateName` the instant a title lands in the store. ChatProvider
+wires this in its constructor to post `{ type: "session_title_updated", sessionId, name }` to the
+webview, which patches the `.tab-label` in place via `patchTabLabel` (no `innerHTML` wipe, no focus
+clobber, no streaming-indicator reset on adjacent tabs).
+
+This bypasses the older `onDidChangeSession` subscriber path (which still fires the legacy
+`session_renamed` message for regression safety). The subscriber path was registration-order-
+dependent: if `applyServerTitle` ran before ChatProvider's constructor finished wiring its
+subscriber, the `renamed` event fired into the void and the webview stayed frozen on
+"Untitled session" until manual toggle.
+
+### Server title arrives before cliSessionId is bound
+
+`SessionStore.pendingTitles: Map<cliSessionId, title>` queues titles received from
+`session.updated` SSE events that arrive **before** the local session has had its `cliSessionId`
+wired (the D1 race). On `updateCliSessionId(id, cli)`, any queued title is flushed via
+`queueMicrotask(() => applyServerTitle(cli, queued))` — deferred a microtask so the caller's
+own post-bind logic (e.g. pushing `init_state` to the webview) lands first.
+
+### Webview → Server: deduped titles reach the CLI
+
+`WebviewEventRouter.rename_session` calls `SessionStore.setTitle` (not `rename`/`updateName`)
+so the new title propagates to the opencode server via `serverTitleUpdater`. Without this, a
+webview-local deduped title (e.g. `"Fix bug (2)"`) would never reach the CLI, causing the CLI
+tab strip to show the un-deduped `"Fix bug"` — a mismatch when the user resumes the session
+from the CLI or a sibling window. Feedback-loop-safe: the server's eventual `session.updated`
+echo is no-op'd by `applyServerTitle`'s equality gate.
+
+### Title generation
+
+`extractTitle(text)` and `dedupeTitle(proposed, existingSet)` live in
+`src/session/titleExtractor.ts` — a pure module (no vscode imports, deterministic) imported
+by **both** the host (`SessionStore`, `sessionUtils`) and the webview (`main.ts`). Replaces
+the previous duplicated copies of the naive 37-char-hard-slice that lived in both runtimes
+and diverged over time.
+
+- **extractTitle**: strips markdown-header tokens (`#`, `##`), bracketed metadata prefixes
+  (`[methodology]`, `[RFC 42]`), and TODO/FIXME/NOTE label separators; takes the first
+  sentence; truncates at 40 chars on a word boundary with `…`.
+- **dedupeTitle**: appends ` (2)`, ` (3)`, … until unique against the live tab set. Format
+  is ASCII (lexicographically stable, survives chat-export paths).
+- Three concurrent prompts opening with `"# Role & Objective\n..."` now produce three
+  distinct tab labels instead of three visually identical ones.
+
+### CSS tokens
+
+- `--size-tab-label-max` (default `100px`) — drives `.tab-label` ellipsis cutoff, distinct
+  from `--size-tab-max` (the whole-button outer cap) so padding + close-button never eat
+  into the label budget.
+- `--size-tab-label-min` (default `48px`) — single-word titles don't collapse.
+
 ## Diff & Checkpoint Messages
 
 - `diff_result`: `{ type, sessionId, blockId, ok, message?, checkpointCreated? }`.
