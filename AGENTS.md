@@ -400,7 +400,11 @@ The `question` tool allows the LLM to ask the user questions during execution. Q
 | `server_rejected` | 4xx (non-404) | No | B9 rollback, no retry |
 | `unknown` | anything else | No | B9 rollback |
 
-**Expired answer recovery**: When a question expires on the server, the user's answer is sent as a regular text prompt via `streamCoordinator.startPrompt`. The model receives the answer and continues — no retry loop.
+**Expired answer recovery**: When a question expires on the server, the user's answer is sent as a regular text prompt via `streamCoordinator.startPrompt`. The model receives the answer and continues — no retry loop. If the recovery `startPrompt` itself times out (20s hard watchdog in `StreamCoordinator.setupExpiredRecoveryTimeout`), the watchdog:
+1. Clears the `promptsInFlight` guard so the auto-send isn't queued
+2. Awaits the server abort to complete (preventing race with the new send)
+3. Posts `expired_question_recovery_failed` to the webview
+4. The webview handler (`main.ts`) pre-fills the prompt input and auto-sends after 100ms (via `sendMessage()`), with zero manual intervention required
 
 **Staleness detection**: Questions older than 5 minutes (`STALENESS_WARNING_MS`) are auto-flagged with a warning banner ("This question may have expired on the server") and a "Continue without answering" button.
 

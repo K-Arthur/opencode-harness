@@ -12,12 +12,12 @@ export interface StreamCallbacks {
    * B10-recovery: Set by WebviewEventRouter when this startPrompt is the
    * expired-question fallback (sending the user's answer as a fresh text
    * prompt after the v2 reply failed with QuestionNotFoundError). Arms a
-   * HARD 15s watchdog that fires unconditionally — not gated by
+   * HARD 20s watchdog that fires unconditionally — not gated by
    * activity-tracker state (which can false-positive on stray events and
    * leave the user stuck "generating" forever). On fire, the watchdog
-   * aborts the run, cleans up state, and emits
+   * clears promptsInFlight, awaits the server abort, then emits
    * `expired_question_recovery_failed` with the answer text so the webview
-   * can pre-fill the input for manual resend.
+   * can auto-send seamlessly (no manual Enter required).
    */
   recoveryFromExpiredQuestion?: boolean
   /** The user's original answer text, echoed back in the recovery-failed
