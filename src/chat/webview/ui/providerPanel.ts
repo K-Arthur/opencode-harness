@@ -342,6 +342,7 @@ export function renderProviderDiscoveryList(
       const connectBtn = document.createElement("button")
       connectBtn.className = "btn btn-sm btn-primary"
       connectBtn.textContent = "Add Key"
+      connectBtn.setAttribute("aria-label", `Add API key for ${provider.name}`)
       connectBtn.addEventListener("click", () => {
         showKeyStep(provider.id, provider.name)
       })
@@ -353,6 +354,7 @@ export function renderProviderDiscoveryList(
         const oauthBtn = document.createElement("button")
         oauthBtn.className = "btn btn-sm btn-primary"
         oauthBtn.textContent = "Connect OAuth"
+        oauthBtn.setAttribute("aria-label", `Connect ${provider.name} via OAuth`)
         oauthBtn.addEventListener("click", () => {
           postMessage({ type: "connect_provider_oauth", providerId: provider.id })
         })
@@ -404,6 +406,7 @@ export function renderProviderCredentialList(
     const removeBtn = document.createElement("button")
     removeBtn.className = "btn btn-sm btn-danger"
     removeBtn.textContent = "Remove"
+    removeBtn.setAttribute("aria-label", `Remove credential for ${cred.label}`)
     removeBtn.addEventListener("click", () => {
       postMessage({ type: "remove_provider_credential", credentialId: cred.id })
     })

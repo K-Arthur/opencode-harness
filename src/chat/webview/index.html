@@ -1161,17 +1161,17 @@
       <!-- Step 1: Provider list (default view) -->
       <div id="provider-step-list" class="provider-step">
         <div class="provider-panel-tabs" role="tablist">
-          <button class="provider-tab active" role="tab" data-tab="discover" aria-selected="true">Providers</button>
-          <button class="provider-tab" role="tab" data-tab="credentials" aria-selected="false">Credentials</button>
+          <button class="provider-tab active" role="tab" data-tab="discover" aria-selected="true" aria-controls="provider-tab-discover">Providers</button>
+          <button class="provider-tab" role="tab" data-tab="credentials" aria-selected="false" aria-controls="provider-tab-credentials">Credentials</button>
         </div>
         <div class="provider-panel-body">
-          <div class="provider-tab-content" data-tab="discover">
+          <div class="provider-tab-content" data-tab="discover" id="provider-tab-discover" role="tabpanel">
             <div class="provider-search-container">
               <input type="text" id="provider-search-input" class="provider-search-input" placeholder="Search providers..." aria-label="Search providers" />
             </div>
             <div class="provider-discovery-list" id="provider-discovery-list"></div>
           </div>
-          <div class="provider-tab-content hidden" data-tab="credentials">
+          <div class="provider-tab-content hidden" data-tab="credentials" id="provider-tab-credentials" role="tabpanel">
             <div class="provider-credential-list" id="provider-credential-list"></div>
           </div>
         </div>
@@ -1192,13 +1192,13 @@
           <label for="api-key-input" id="api-key-label" class="provider-key-label">API Key</label>
           <input type="password" id="api-key-input" class="provider-key-input" placeholder="sk-..." autocomplete="off" spellcheck="false" />
           <p class="provider-key-hint" id="api-key-hint">Your key is stored locally and never sent to OpenCode servers.</p>
-          <div id="api-key-error" class="provider-key-error hidden"></div>
+          <div id="api-key-error" class="provider-key-error hidden" role="alert"></div>
         </div>
         <div class="provider-key-actions">
-          <button class="btn btn-secondary" id="api-key-cancel">Cancel</button>
-          <button class="btn btn-primary" id="api-key-submit">
+          <button class="btn btn-secondary" id="api-key-cancel" aria-label="Cancel API key entry">Cancel</button>
+          <button class="btn btn-primary" id="api-key-submit" aria-label="Connect provider with API key">
             <span id="api-key-submit-label">Connect</span>
-            <span id="api-key-submit-spinner" class="provider-spinner hidden"></span>
+            <span id="api-key-submit-spinner" class="provider-spinner hidden" aria-hidden="true"></span>
           </button>
         </div>
       </div>

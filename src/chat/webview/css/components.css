@@ -3756,6 +3756,12 @@ textarea {
   color: var(--vscode-foreground, var(--oc-fg));
 }
 
+.provider-tab:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, var(--oc-accent));
+  outline-offset: -1px;
+  border-radius: var(--radius-sm);
+}
+
 .provider-tab.active {
   color: var(--vscode-textLink-foreground, var(--oc-accent));
   border-bottom-color: var(--vscode-textLink-foreground, var(--oc-accent));
@@ -3923,6 +3929,11 @@ textarea {
   min-height: 28px;
 }
 
+.btn-sm:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, var(--oc-accent));
+  outline-offset: 2px;
+}
+
 .btn-danger {
   background: transparent;
   color: var(--vscode-errorForeground, #c00);
@@ -3931,6 +3942,11 @@ textarea {
 
 .btn-danger:hover {
   background: color-mix(in srgb, var(--vscode-errorForeground, #c00) 10%, transparent);
+}
+
+.btn-danger:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, var(--oc-accent));
+  outline-offset: 2px;
 }
 
 /* ── Inline API key entry (step 2) ── */
@@ -3959,6 +3975,12 @@ textarea {
 
 .provider-key-back:hover {
   background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.08));
+}
+
+.provider-key-back:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, var(--oc-accent));
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 .provider-key-title {
@@ -4040,6 +4062,18 @@ textarea {
 
 @keyframes providerSpin {
   to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .provider-step--slide-in,
+  .provider-step--slide-out {
+    animation: none;
+  }
+  .provider-spinner {
+    animation: none;
+    border-top-color: var(--vscode-button-foreground, #fff);
+    opacity: 0.6;
+  }
 }
 
 .btn-primary:disabled {
