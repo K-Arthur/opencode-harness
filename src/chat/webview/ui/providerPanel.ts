@@ -24,12 +24,16 @@ let apiKeyModal: HTMLElement | null = null
 let apiKeyInput: HTMLInputElement | null = null
 let apiKeyLabel: HTMLElement | null = null
 let apiKeyHint: HTMLElement | null = null
+let searchInput: HTMLInputElement | null = null
 let focusTrap: ((e: KeyboardEvent) => void) | null = null
 let lastFocus: HTMLElement | null = null
 let activeTab = "discover"
 let pendingOAuthProviderId: string | null = null
 let cachedDeps: ProviderPanelDeps | null = null
 let oauthPollTimer: ReturnType<typeof setInterval> | null = null
+let cachedProviders: ProviderDiscoveryItem[] = []
+let cachedAuthMethods: Map<string, ProviderAuthMethodInfo[]> = new Map()
+let cachedPostMessage: ((msg: Record<string, unknown>) => void) | null = null
 
 export function setupProviderPanel(deps: ProviderPanelDeps): void {
   cachedDeps = deps
@@ -40,6 +44,7 @@ export function setupProviderPanel(deps: ProviderPanelDeps): void {
   apiKeyInput = document.getElementById("api-key-input") as HTMLInputElement
   apiKeyLabel = document.getElementById("api-key-label")
   apiKeyHint = document.getElementById("api-key-hint")
+  searchInput = document.getElementById("provider-search-input") as HTMLInputElement
 
   if (!panel) return
 
@@ -68,6 +73,10 @@ export function setupProviderPanel(deps: ProviderPanelDeps): void {
       const tabName = (tab as HTMLElement).dataset.tab
       if (tabName) switchTab(tabName)
     })
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener("input", () => filterProviders())
   }
 
   setupApiKeyModal(deps)
@@ -139,10 +148,27 @@ function closeApiKeyModal(): void {
   if (apiKeyModal) apiKeyModal.classList.add("hidden")
 }
 
+function filterProviders(): void {
+  if (!cachedPostMessage) return
+  const query = (searchInput?.value ?? "").toLowerCase().trim()
+  const filtered = query
+    ? cachedProviders.filter(
+        (p) =>
+          p.name.toLowerCase().includes(query) ||
+          p.id.toLowerCase().includes(query),
+      )
+    : cachedProviders
+  renderProviderDiscoveryList(filtered, cachedAuthMethods, cachedPostMessage, true)
+}
+
 export function openProviderPanel(): void {
   if (!panel) return
   lastFocus = document.activeElement as HTMLElement
   panel.classList.remove("hidden")
+  if (searchInput) {
+    searchInput.value = ""
+    searchInput.focus()
+  }
   if (cachedDeps) {
     focusTrap = cachedDeps.trapFocus(panel)
   }
@@ -165,14 +191,25 @@ export function renderProviderDiscoveryList(
   providers: ProviderDiscoveryItem[],
   authMethods: Map<string, ProviderAuthMethodInfo[]>,
   postMessage: (msg: Record<string, unknown>) => void,
+  skipCache = false,
 ): void {
+  if (!skipCache) {
+    cachedProviders = providers
+    cachedAuthMethods = authMethods
+    cachedPostMessage = postMessage
+    if (searchInput) searchInput.value = ""
+  }
+
   if (!discoverList) return
   discoverList.replaceChildren()
 
   if (providers.length === 0) {
     const empty = document.createElement("div")
     empty.className = "provider-empty"
-    empty.textContent = "No providers found. Start the OpenCode server to discover providers."
+    const searchActive = searchInput !== null && searchInput.value.trim().length > 0
+    empty.textContent = searchActive
+      ? `No providers matching "${searchInput!.value.trim()}".`
+      : "No providers found. Start the OpenCode server to discover providers."
     discoverList.appendChild(empty)
     return
   }

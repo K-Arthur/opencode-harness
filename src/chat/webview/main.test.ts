@@ -1170,4 +1170,85 @@ describe("permission bar — multi-tab session attribution", () => {
       "switchTab must either restore the bar for a pending permission or hide it when there is none",
     )
   })
+
+  it("provider_added handler triggers model list refresh so new models appear immediately", () => {
+    const idx = source.indexOf('["provider_added"')
+    assert.ok(idx >= 0, "provider_added handler must exist")
+    const block = source.slice(idx, idx + 300)
+    assert.ok(
+      block.includes('"get_models"'),
+      "provider_added must post get_models to refresh the model list after a provider is connected",
+    )
+    assert.ok(
+      block.includes('"discover_providers"'),
+      "provider_added must re-discover providers to update connection status",
+    )
+  })
+
+  it("API key modal uses model-manager-overlay for correct z-index stacking", () => {
+    assert.ok(
+      indexHtml.includes('id="api-key-modal"') && indexHtml.includes("model-manager-overlay"),
+      "api-key-modal must use model-manager-overlay class to layer above provider panel",
+    )
+    assert.ok(
+      indexHtml.includes("api-key-overlay"),
+      "api-key-modal must have api-key-overlay class for z-index override",
+    )
+  })
+
+  // ── B10-recovery: expired_question_recovery_failed auto-send ──
+  void describe("expired_question_recovery_failed handler — auto-send recovery", () => {
+    const hIdx = source.indexOf('"expired_question_recovery_failed", (msg, sid) =>')
+    assert.ok(hIdx >= 0, "expired_question_recovery_failed handler must exist")
+    // Grab from the handler start to the next handler listed in messageHandlers
+    const nextHandlerIdx = source.indexOf('["', hIdx + 10)
+    const first = nextHandlerIdx > hIdx ? source.slice(hIdx, nextHandlerIdx) : source.slice(hIdx)
+
+    it("auto-sends via setTimeout + sendMessage (no manual Enter required)", () => {
+      assert.ok(
+        first.includes("setTimeout(() => {"),
+        "B10-recovery: must use setTimeout to defer auto-send past stream_end handler",
+      )
+      assert.ok(
+        first.includes("sendMessage()"),
+        "B10-recovery: must call sendMessage() inside setTimeout for auto-send",
+      )
+    })
+
+    it("does NOT show an error banner — recovery is seamless", () => {
+      assert.ok(
+        !first.includes("handleRequestError"),
+        "B10-recovery: must NOT call handleRequestError — the answer is auto-sent, no manual error needed",
+      )
+    })
+
+    it("pre-fills input directly without old separator/merge logic", () => {
+      assert.ok(
+        first.includes("els.promptInput.value = answerText"),
+        "B10-recovery: must set input value directly to answerText (no existing-text merge)",
+      )
+      assert.ok(
+        !first.includes("existing.length > 0"),
+        "B10-recovery: must NOT have old separator logic (existing + \\n\\n merge was for manual resend)",
+      )
+    })
+
+    it("switches to the correct tab before sending", () => {
+      assert.ok(
+        first.includes("switchTab(targetSessionId)"),
+        "B10-recovery: must switchTab to the correct session so the send targets the right tab",
+      )
+    })
+
+    it("dispatches input event and focuses prompt for autosize/IME readiness", () => {
+      assert.ok(
+        first.includes('dispatchEvent(new Event("input"'),
+        "B10-recovery: must dispatch input event so autosize and char count update",
+      )
+      assert.ok(
+        first.includes("els.promptInput.focus()"),
+        "B10-recovery: must focus the prompt input before auto-send so the IME/selection state is correct",
+      )
+    })
+  })
 })

@@ -1163,6 +1163,9 @@
       </div>
       <div class="provider-panel-body">
         <div class="provider-tab-content" data-tab="discover">
+          <div class="provider-search-container">
+            <input type="text" id="provider-search-input" class="provider-search-input" placeholder="Search providers..." aria-label="Search providers" />
+          </div>
           <div class="provider-discovery-list" id="provider-discovery-list"></div>
         </div>
         <div class="provider-tab-content hidden" data-tab="credentials">
@@ -1173,8 +1176,8 @@
   </div>
 
   <!-- API Key Modal -->
-  <div id="api-key-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Enter API key">
-    <div class="modal-content api-key-modal-content">
+  <div id="api-key-modal" class="model-manager-overlay api-key-overlay hidden" role="dialog" aria-modal="true" aria-label="Enter API key">
+    <div class="model-manager-content api-key-modal-content">
       <div class="modal-header">
         <h2 id="api-key-modal-title">Enter API Key</h2>
         <button class="modal-close-btn" id="api-key-modal-close" aria-label="Close">

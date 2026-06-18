@@ -3891,6 +3891,8 @@ function getVsCodeApi() {
       }],
       ["provider_added", () => {
         vscode.postMessage({ type: "list_providers" })
+        vscode.postMessage({ type: "get_models" })
+        vscode.postMessage({ type: "discover_providers" })
       }],
       ["provider_deleted", () => {
         vscode.postMessage({ type: "list_providers" })

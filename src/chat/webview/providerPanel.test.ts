@@ -60,4 +60,29 @@ describe("providerPanel.ts", () => {
   it("uses trapFocus for accessibility", () => {
     assert.ok(source.includes("trapFocus"), "must use focus trapping")
   })
+
+  it("has provider search input filtering", () => {
+    assert.ok(source.includes("provider-search-input"), "must reference search input element")
+    assert.ok(source.includes("filterProviders"), "must have filterProviders function")
+    assert.ok(source.includes('addEventListener("input"'), "must listen for input events on search")
+  })
+
+  it("caches provider data for search filtering", () => {
+    assert.ok(source.includes("cachedProviders"), "must cache providers list")
+    assert.ok(source.includes("cachedAuthMethods"), "must cache auth methods")
+    assert.ok(source.includes("cachedPostMessage"), "must cache postMessage callback")
+  })
+
+  it("clears search input when opening provider panel", () => {
+    assert.ok(source.includes('searchInput.value = ""'), "must clear search on open")
+    assert.ok(source.includes("searchInput.focus()"), "must focus search input on open")
+  })
+
+  it("shows contextual empty message when search has no results", () => {
+    assert.ok(source.includes("No providers matching"), "must show search-specific empty message")
+  })
+
+  it("skips cache update when rendering filtered results", () => {
+    assert.ok(source.includes("skipCache"), "must support skipCache parameter to avoid overwriting cached data during filtering")
+  })
 })

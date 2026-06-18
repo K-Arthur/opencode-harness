@@ -3735,6 +3735,33 @@ textarea {
   padding: var(--space-2) 0;
 }
 
+.provider-search-container {
+  padding: 0 var(--space-3) var(--space-2);
+}
+
+.provider-search-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--oc-input-bg, var(--oc-editor-bg));
+  color: var(--oc-fg);
+  border: 1px solid var(--oc-input-border, var(--oc-border));
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.provider-search-input:focus {
+  border-color: var(--oc-accent);
+  box-shadow: 0 0 0 2px var(--oc-accent-glow, rgba(99, 102, 241, 0.15));
+}
+
+.provider-search-input::placeholder {
+  color: var(--oc-muted);
+}
+
 .provider-row {
   display: flex;
   align-items: center;
@@ -3834,7 +3861,11 @@ textarea {
   background: rgba(204, 0, 0, 0.1);
 }
 
-/* API Key Modal */
+/* API Key Modal — must layer above the provider panel (.model-manager-overlay) */
+.api-key-overlay {
+  z-index: calc(var(--z-modal, 300) + 10);
+}
+
 .api-key-modal-content {
   max-width: 420px;
   width: 100%;
