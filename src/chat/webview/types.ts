@@ -920,6 +920,7 @@ export type WebviewMessage =
   | { type: "edit_queue_item"; sessionId: string; itemId: string; text: string }
   | { type: "reorder_queue"; sessionId: string; fromIndex: number; toIndex: number }
   | { type: "retry_queue_item"; sessionId: string; itemId: string }
+  | { type: "send_queue_item"; sessionId: string; itemId: string }
   | { type: "request_queue_state"; sessionId?: string }
   | { type: "resume_queue"; sessionId: string }
   | { type: "get_todos"; sessionId: string }
