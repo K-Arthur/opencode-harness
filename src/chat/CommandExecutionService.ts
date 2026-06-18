@@ -149,7 +149,7 @@ export class CommandExecutionService {
     this.opts.postMessage({ type: "message", sessionId, message: userEcho })
 
     try {
-      const modelRef = tab.model ? parseModelRef(tab.model) : undefined
+      const _modelRef = tab.model ? parseModelRef(tab.model) : undefined
       const result = await this.opts.sessionManager.sendCommand(tab.cliSessionId!, commandName, args)
 
       const blocks = this.parseCommandResult(result, sessionId)
@@ -177,7 +177,7 @@ export class CommandExecutionService {
     }
   }
 
-  private parseCommandResult(result: unknown, sessionId: string): Block[] {
+  private parseCommandResult(result: unknown, _sessionId: string): Block[] {
     const blocks: Block[] = []
     const parts = (result as { parts?: unknown[] }).parts || []
     for (const part of parts) {
