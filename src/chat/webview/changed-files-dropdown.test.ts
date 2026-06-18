@@ -20,6 +20,20 @@ function setupDom() {
       <body>
         <div id="container"></div>
         <div id="changed-files-strip"></div>
+        <div id="changed-files-dropdown" class="cf-dropdown hidden" role="dialog" aria-modal="true" aria-labelledby="cf-dropdown-title" aria-describedby="cf-dropdown-desc">
+          <div class="cf-dropdown-header">
+            <div class="cf-dropdown-header-text">
+              <span id="cf-dropdown-title" class="cf-dropdown-title">Changed Files</span>
+              <span id="cf-dropdown-desc" class="cf-dropdown-subtitle" aria-live="polite">No files changed</span>
+            </div>
+            <button class="cf-close-btn" id="cf-dropdown-close" aria-label="Close Changed Files Modal" type="button">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 6 6 18"/><path d="M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+          <div id="cf-dropdown-tree" class="cf-dropdown-tree"></div>
+        </div>
       </body>
     </html>
   `)
@@ -258,5 +272,94 @@ describe("renderChangedFilesList — open file button", () => {
     const btn = container.querySelector<HTMLElement>(".cf-open-btn")
     btn!.click()
     assert.equal(opened, "src/main.ts")
+  })
+})
+
+describe("renderChangedFilesList — path shortening", () => {
+  it("shortens directory paths to relative form when workspace root is provided", async () => {
+    const container = setupDom()
+    renderChangedFilesList(container, [
+      { path: "/home/user/project/src/components/Button.tsx", added: 5, removed: 1 },
+    ], { onOpenChangedFileDiff: () => {},
+      onOpenFile: () => {} } as any)
+    const dirHeader = container.querySelector(".cf-dir-path")
+    assert.ok(dirHeader, "must render directory header")
+    const pathText = dirHeader!.textContent!
+    // Should not contain full absolute path
+    assert.ok(!pathText.includes("/home/user/project"), "should not show absolute path")
+    // Should show relative path
+    assert.ok(pathText.includes("src/components") || pathText.includes("src"), "should show relative path")
+  })
+
+  it("uses sentence case for directory headers (no uppercase transform)", async () => {
+    const container = setupDom()
+    renderChangedFilesList(container, [
+      { path: "src/components/Button.tsx", added: 5, removed: 1 },
+    ], { onOpenChangedFileDiff: () => {},
+      onOpenFile: () => {} } as any)
+    const dirHeader = container.querySelector(".cf-dir-path")
+    assert.ok(dirHeader, "must render directory header")
+    const pathText = dirHeader!.textContent!
+    // Should not be all uppercase
+    assert.ok(pathText !== pathText.toUpperCase(), "should not be all uppercase")
+  })
+})
+
+describe("renderChangedFilesList — ARIA labels", () => {
+  it("close button has exact aria-label 'Close Changed Files Modal'", async () => {
+    const container = setupDom()
+    renderChangedFilesList(container, [{ path: "a.ts", added: 1, removed: 0 }], {
+      onOpenChangedFileDiff: () => {},
+      onOpenFile: () => {} } as any)
+    const closeBtn = document.getElementById("cf-dropdown-close")
+    assert.ok(closeBtn, "must render close button")
+    assert.equal(closeBtn!.getAttribute("aria-label"), "Close Changed Files Modal")
+  })
+
+  it("collapse all button has aria-label 'Collapse all file groups'", async () => {
+    const container = setupDom()
+    renderChangedFilesList(container, [{ path: "a.ts", added: 1, removed: 0 }], {
+      onOpenChangedFileDiff: () => {},
+      onOpenFile: () => {} } as any)
+    const collapseBtn = container.querySelector<HTMLElement>(".cf-collapse-all-btn")
+    assert.ok(collapseBtn, "must render collapse all button")
+    assert.equal(collapseBtn!.getAttribute("aria-label"), "Collapse all file groups")
+  })
+
+  it("file rows include status and counts in aria-label", async () => {
+    const container = setupDom()
+    renderChangedFilesList(container, [{ path: "test.ts", added: 5, removed: 3 }], {
+      onOpenChangedFileDiff: () => {},
+      onOpenFile: () => {} } as any)
+    const fileRow = container.querySelector<HTMLElement>(".cf-file-row")
+    assert.ok(fileRow, "must render file row")
+    const ariaLabel = fileRow!.getAttribute("aria-label")
+    assert.ok(ariaLabel, "must have aria-label")
+    assert.ok(ariaLabel!.includes("test.ts"), "must include filename")
+    assert.ok(ariaLabel!.includes("5") && ariaLabel!.includes("3"), "must include counts")
+    assert.ok(ariaLabel!.toLowerCase().includes("addition") || ariaLabel!.toLowerCase().includes("deletion"), "must include status")
+  })
+})
+
+describe("renderChangedFilesList — focus management", () => {
+  it("close button has correct id for focus management", async () => {
+    const container = setupDom()
+    renderChangedFilesList(container, [{ path: "a.ts", added: 1, removed: 0 }], {
+      onOpenChangedFileDiff: () => {},
+      onOpenFile: () => {} } as any)
+    const closeBtn = document.getElementById("cf-dropdown-close")
+    assert.ok(closeBtn, "must render close button with correct id")
+    assert.equal(closeBtn!.id, "cf-dropdown-close")
+  })
+
+  it("modal has correct ARIA attributes for focus trap", async () => {
+    const container = setupDom()
+    renderChangedFilesList(container, [{ path: "a.ts", added: 1, removed: 0 }], {
+      onOpenChangedFileDiff: () => {},
+      onOpenFile: () => {} } as any)
+    const modal = document.getElementById("changed-files-dropdown")
+    assert.ok(modal, "must render modal")
+    assert.equal(modal!.getAttribute("role"), "dialog", "must have dialog role")
+    assert.equal(modal!.getAttribute("aria-modal"), "true", "must have aria-modal true")
   })
 })

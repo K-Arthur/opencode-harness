@@ -643,16 +643,32 @@ function safeNum(n: unknown): number {
  *
  * Strategy (matches VS Code Source Control breadcrumbs):
  *   1. Normalize separators to "/".
- *   2. If the path has more than `maxSegments` segments, collapse the MIDDLE
+ *   2. Remove absolute path prefix if present (e.g., /home/user/project → src/components)
+ *   3. If the path has more than `maxSegments` segments, collapse the MIDDLE
  *      with an ellipsis — keeping the first segment (anchor) and the last two
  *      (most specific location). e.g. "src/chat/handlers/deep/nested" →
  *      "src/…/deep/nested".
- *   3. Never uppercase — return natural case for readability (WCAG 1.4.8).
- *   4. Empty string → "/" (root group label).
+ *   4. Never uppercase — return natural case for readability (WCAG 1.4.8).
+ *   5. Empty string → "/" (root group label).
  */
 function shortenDirPath(dir: string, maxSegments = 3): string {
   if (!dir) return "/"
-  const norm = dir.replace(/\\/g, "/").replace(/^\.\/+/, "").replace(/\/+$/, "")
+  let norm = dir.replace(/\\/g, "/").replace(/^\.\/+/, "").replace(/\/+$/, "")
+  
+  // Remove absolute path prefix - detect common project roots
+  // This is a heuristic; ideally workspace root would be passed from host
+  const absPrefixes = [
+    /^\/home\/[^/]+\/[^/]+\//,  // /home/user/project/
+    /^\/Users\/[^/]+\/[^/]+\//, // /Users/user/project/
+    /^\/[a-zA-Z]:\\/,          // Windows drive letters
+  ]
+  for (const prefix of absPrefixes) {
+    if (prefix.test(norm)) {
+      norm = norm.replace(prefix, "")
+      break
+    }
+  }
+  
   const segments = norm.split("/").filter(Boolean)
   if (segments.length <= maxSegments) return segments.join("/")
   const head = segments[0] ?? ""
