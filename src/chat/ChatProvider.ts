@@ -14,7 +14,7 @@ import { DiffApplier } from "../diff/DiffApplier"
 import { getFileHunks } from "./diff/hunkRevertPlan"
 import { sdkMessagesToChatMessages, reasoningEventToBlock } from "../session/sdkMessageConverter"
 import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
-import { isLocalPlaceholderSessionId } from "../session/sessionUtils"
+import { isLocalPlaceholderSessionId, isAutoSessionName } from "../session/sessionUtils"
 import { activitySignature } from "../session/activityCoalesce"
 import { WebviewContent } from "./WebviewContent"
 import { TabManager, type TabState } from "./TabManager"
@@ -77,6 +77,7 @@ import { buildVoiceSetupPlan, pickPipCommand, recorderInstallCommand, uvBootstra
 type ServerEvent = { type: string; sessionId?: string; data?: unknown }
 
 export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposable {
+  static readonly PERSISTED_PANEL_STATE_KEY = "opencode.panelVisibility"
   private _view?: vscode.WebviewView
   /** Optional hook invoked when the chat view is first resolved, used to lazily
    *  spawn the opencode server (idempotent; safe to call on every re-resolve). */
@@ -408,6 +409,8 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       skillPreferences: this.skillPreferences,
       pushAllStateToWebview: () => this.pushAllStateToWebview(),
       pushVisibleStateToWebview: () => this.pushVisibleStateToWebview(),
+      pushPanelVisibilityStateToWebview: () => this.pushPanelVisibilityStateToWebview(),
+      persistPanelVisibilityState: (panels) => this.persistPanelVisibilityState(panels),
       openSubagentDetailPanel: (parentSessionId, subagentId) => this.openSubagentDetailPanel(parentSessionId, subagentId),
       postSubagentDetailToPopouts: (detail, subagentId) => this.postSubagentDetailToPopouts(detail, subagentId),
     })
@@ -1990,6 +1993,17 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       }
     }
 
+    // Auto-title any restorable session that has messages but still carries an
+    // auto-generated name (e.g. "Session abc12345"). This avoids sending
+    // "Untitled session" in the init_state payload for sessions that DO have
+    // content — the auto-title fires the D3 IPC push so the webview receives
+    // session_title_updated synchronously if we miss the init_state window.
+    for (const s of restorable) {
+      if (s.messages.length > 0 && isAutoSessionName(s.name)) {
+        this.sessionStore.autoTitleFromMessages(s.id)
+      }
+    }
+
     const sessionsToSend = restorable.map((s) => ({
       ...(() => {
         const tab = this.tabManager.getTab(s.id)
@@ -2064,11 +2078,23 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     }
   }
 
+  private persistPanelVisibilityState(panels: Record<string, boolean>): void {
+    void this.context.workspaceState.update(ChatProvider.PERSISTED_PANEL_STATE_KEY, panels)
+  }
+
+  private pushPanelVisibilityStateToWebview(): void {
+    const stored = this.context.workspaceState.get<Record<string, boolean>>(ChatProvider.PERSISTED_PANEL_STATE_KEY)
+    if (stored) {
+      this.postMessage({ type: "panel_visibility_restore", panels: stored })
+    }
+  }
+
   private pushVisibleStateToWebview(): void {
     this.messageBatcher.flush()
     log.debug("pushVisibleStateToWebview: lightweight sync")
     this.pushModelToWebview()
     this.pushRateLimitStateToWebview()
+    this.pushPanelVisibilityStateToWebview()
     const activeSessionId = this.sessionStore.activeId || this.tabManager.getActiveId()
     this.applyContextWindowFor()
     this.pushContextUsageForSession(activeSessionId)

@@ -13,15 +13,15 @@ export interface SubagentPanelOptions {
   onOpenDetail: (activity: SubagentActivity) => void
   onClearCompleted?: () => void
   onMarkRead?: (subagentId: string) => void
-  /** Jump straight to the subagent's child session (rendered only when the
-   *  activity carries a sessionId). */
   onOpenSession?: (activity: SubagentActivity) => void
+  onPanelClose?: () => void
 }
 
 export type SubagentPanelEls = Pick<ElementRefs,
   | "subagentPanel"
   | "subagentList"
-> & { closeSubagentBtn?: HTMLElement | null }
+  | "closeSubagentBtn"
+> & { subagentsToggleBtn?: HTMLElement | null }
 
 export interface SubagentPanelApi {
   renderActivities: (activities: SubagentActivity[]) => void
@@ -74,35 +74,42 @@ export function setupSubagentPanel(els: SubagentPanelEls, options: SubagentPanel
   const subagentPanel = els.subagentPanel
   const subagentList = els.subagentList
   const closeBtn = els.closeSubagentBtn
+  const toggleBtn = els.subagentsToggleBtn ?? null
 
   if (!subagentPanel || !subagentList) {
     console.warn("Subagent panel elements not found")
     return undefined
   }
 
-  const onCloseClick = () => { subagentPanel.classList.add("hidden") }
+  const onCloseClick = () => { close() }
   if (closeBtn) closeBtn.addEventListener("click", onCloseClick)
 
   const onEscape = (e: KeyboardEvent) => {
-    if (e.key === "Escape" && !subagentPanel.classList.contains("hidden")) {
-      subagentPanel.classList.add("hidden")
+    if (e.key === "Escape" && isOpen()) {
+      close()
     }
   }
-  if (closeBtn) document.addEventListener("keydown", onEscape)
+  document.addEventListener("keydown", onEscape)
+
+  function isOpen(): boolean { return !subagentPanel.classList.contains("hidden") }
+
+  function close(): void {
+    subagentPanel.classList.add("hidden")
+    toggleBtn?.focus()
+    options.onPanelClose?.()
+  }
 
   return {
     renderActivities: (activities: SubagentActivity[]) => {
       renderSubagentList(subagentList, activities, options)
     },
     open: () => { subagentPanel.classList.remove("hidden") },
-    close: () => { subagentPanel.classList.add("hidden") },
-    toggle: () => { subagentPanel.classList.toggle("hidden") },
-    isOpen: () => !subagentPanel.classList.contains("hidden"),
+    close,
+    toggle: () => { if (isOpen()) close(); else subagentPanel.classList.remove("hidden") },
+    isOpen,
     dispose: () => {
-      if (closeBtn) {
-        document.removeEventListener("keydown", onEscape)
-        closeBtn.removeEventListener("click", onCloseClick)
-      }
+      document.removeEventListener("keydown", onEscape)
+      if (closeBtn) closeBtn.removeEventListener("click", onCloseClick)
     },
   }
 }

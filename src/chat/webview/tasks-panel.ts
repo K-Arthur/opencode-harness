@@ -23,8 +23,7 @@ import {
   type CommandStatus,
 } from "./commandModel"
 
-export type TasksPanelEls = Pick<ElementRefs, "tasksPanel" | "tasksList" | "tasksFilters"> & {
-  tasksClose?: HTMLElement | null
+export type TasksPanelEls = Pick<ElementRefs, "tasksPanel" | "tasksList" | "tasksFilters" | "tasksCloseBtn"> & {
   tasksToggleBtn?: HTMLElement | null
 }
 
@@ -37,10 +36,9 @@ export interface TasksPanelDeps {
   getLiveToolOutput?: (sessionId: string, toolId: string) => LiveToolOutput | undefined
   onJump: (anchorMessageId: string) => void
   onCopy: (text: string) => void
-  /** Open the command in the integrated terminal; autorun executes it. */
   onOpenTerminal: (command: string, cwd: string | undefined, autorun: boolean) => void
-  /** Cancel the running tool card, falling back to whole-stream abort host-side. */
   onCancel: (payload: { sessionId: string; toolId: string; stdout?: string; stderr?: string }) => void
+  onPanelClose?: () => void
 }
 
 export interface TasksPanelApi {
@@ -72,7 +70,7 @@ export function setupTasksPanel(els: TasksPanelEls, deps: TasksPanelDeps): Tasks
   const panel = els.tasksPanel
   const list = els.tasksList
   const filters = els.tasksFilters
-  const closeBtn = els.tasksClose
+  const closeBtn = els.tasksCloseBtn
   const toggleBtn = els.tasksToggleBtn ?? null
   if (!panel || !list || !filters) {
     console.warn("Tasks panel elements not found")
@@ -296,6 +294,7 @@ export function setupTasksPanel(els: TasksPanelEls, deps: TasksPanelDeps): Tasks
   function close(): void {
     panel.classList.add("hidden")
     toggleBtn?.setAttribute("aria-pressed", "false")
+    deps.onPanelClose?.()
   }
   function toggle(): void { if (isOpen()) close(); else open() }
   function dispose(): void {

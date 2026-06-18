@@ -188,14 +188,17 @@ export interface ElementRefs {
   todoAddForm: HTMLFormElement
   todoAddInput: HTMLInputElement
   todosToggleBtn: HTMLElement
+  closeTodosBtn: HTMLElement
   activityToggleBtn: HTMLElement
   activityPanel: HTMLElement
   activityFilters: HTMLElement
   activityList: HTMLElement
+  activityCloseBtn: HTMLElement
   tasksToggleBtn: HTMLElement
   tasksPanel: HTMLElement
   tasksFilters: HTMLElement
   tasksList: HTMLElement
+  tasksCloseBtn: HTMLElement
   skillsBtn: HTMLElement
   skillsModal: HTMLElement
   skillsModalCloseBtn: HTMLElement
@@ -218,6 +221,7 @@ export interface ElementRefs {
   subagentDetailPopoutBtn: HTMLElement
   subagentDetailCloseBtn: HTMLElement
   subagentDetailContent: HTMLElement
+  closeSubagentBtn: HTMLElement
 }
 
 export function getElementRefs(): ElementRefs {
@@ -382,14 +386,17 @@ export function getElementRefs(): ElementRefs {
     todoAddForm: requireElement<HTMLFormElement>("todo-add-form"),
     todoAddInput: requireElement<HTMLInputElement>("todo-add-input"),
     todosToggleBtn: requireElement("todos-toggle-btn"),
+    closeTodosBtn: requireElement("close-todos-btn"),
     activityToggleBtn: requireElement("activity-toggle-btn"),
     activityPanel: requireElement("activity-panel"),
     activityFilters: requireElement("activity-filters"),
     activityList: requireElement("activity-list"),
+    activityCloseBtn: requireElement("activity-close-btn"),
     tasksToggleBtn: requireElement("tasks-toggle-btn"),
     tasksPanel: requireElement("tasks-panel"),
     tasksFilters: requireElement("tasks-filters"),
     tasksList: requireElement("tasks-list"),
+    tasksCloseBtn: requireElement("tasks-close-btn"),
     skillsBtn: requireElement("skills-btn"),
     skillsModal: requireElement("skills-modal"),
     skillsModalCloseBtn: requireElement("skills-modal-close-btn"),
@@ -405,6 +412,7 @@ export function getElementRefs(): ElementRefs {
     subagentDetailPopoutBtn: document.getElementById("subagent-detail-popout-btn")!,
     subagentDetailCloseBtn: requireElement("subagent-detail-close-btn"),
     subagentDetailContent: requireElement("subagent-detail-content"),
+    closeSubagentBtn: requireElement("close-subagent-btn"),
     // Commands modal: optional lookup so older HTML bundles still load.
     commandsModal: document.getElementById("commands-modal"),
     commandsModalCloseBtn: document.getElementById("commands-modal-close-btn"),

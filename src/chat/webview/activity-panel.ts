@@ -40,8 +40,7 @@ import {
   COMPLETION_SVG,
 } from "./icons"
 
-export type ActivityPanelEls = Pick<ElementRefs, "activityPanel" | "activityList" | "activityFilters"> & {
-  activityClose?: HTMLElement | null
+export type ActivityPanelEls = Pick<ElementRefs, "activityPanel" | "activityList" | "activityFilters" | "activityCloseBtn"> & {
   activityToggleBtn?: HTMLElement | null
 }
 
@@ -51,8 +50,8 @@ export interface ActivityPanelDeps {
   getActiveSessionId: () => string | undefined
   getFilter: (sessionId: string) => ActivityFilter
   setFilter: (sessionId: string, filter: ActivityFilter) => void
-  /** Scroll the transcript to the message that produced an event. */
   onJump: (anchorMessageId: string) => void
+  onPanelClose?: () => void
 }
 
 export interface ActivityPanelApi {
@@ -107,7 +106,7 @@ export function setupActivityPanel(els: ActivityPanelEls, deps: ActivityPanelDep
   const panel = els.activityPanel
   const list = els.activityList
   const filters = els.activityFilters
-  const closeBtn = els.activityClose
+  const closeBtn = els.activityCloseBtn
   const toggleBtn = els.activityToggleBtn ?? null
 
   if (!panel || !list || !filters) {
@@ -308,6 +307,7 @@ export function setupActivityPanel(els: ActivityPanelEls, deps: ActivityPanelDep
   function close(): void {
     panel.classList.add("hidden")
     toggleBtn?.setAttribute("aria-pressed", "false")
+    deps.onPanelClose?.()
   }
 
   function toggle(): void {

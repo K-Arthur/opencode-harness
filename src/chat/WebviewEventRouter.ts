@@ -150,6 +150,16 @@ export interface WebviewEventRouterOptions {
    * the main webview. Returns true if any popout consumed the message.
    */
   postSubagentDetailToPopouts: (detail: Record<string, unknown>, subagentId: string) => boolean
+  /**
+   * Persist panel visibility state to workspaceState so it survives
+   * webview reloads. Called when the user toggles a panel open/closed.
+   */
+  persistPanelVisibilityState?: (panels: Record<string, boolean>) => void
+  /**
+   * Push the stored panel visibility state from host to webview.
+   * Called during pushVisibleStateToWebview (on init/reconnect).
+   */
+  pushPanelVisibilityStateToWebview?: () => void
 }
 
 export class WebviewEventRouter {
@@ -187,6 +197,7 @@ export class WebviewEventRouter {
     "context_history_request", "context_cost_estimate", "context_suggestions_request",
     "send_steer_prompt",
     "probe_run_status",
+    "panel_visibility_state",
     "remove_from_queue", "edit_queue_item", "reorder_queue", "retry_queue_item",
     "request_queue_state", "resume_queue",
     "get_todos", // handler posts todos_error on unavailable server/session fetch failures
@@ -984,6 +995,10 @@ export class WebviewEventRouter {
       this.opts.streamCoordinator.handleStreamAck(sessionId, seq ?? 0, lastRenderedChunkSeq)
     }],
     ["open_settings", async () => { await this.opts.openOpenCodeConfigOrSettings() }],
+    ["panel_visibility_state", (msg: Record<string, unknown>) => {
+      const panels = msg.panels as Record<string, boolean> | undefined
+      if (panels) this.opts.persistPanelVisibilityState?.(panels)
+    }],
     ["connect_provider", async () => { await this.opts.handleConnectProvider() }],
     ["open_mcp_settings", async () => { await this.opts.mcpServerManager.openPrimaryConfigFile() }],
     ["open_mcp_config", () => { this.pushMcpServersToWebview() }],

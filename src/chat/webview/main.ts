@@ -1381,6 +1381,7 @@ function setupTodoSkillAndSubagentPanels(): void {
         stateManager.save()
       },
       onJump: (anchorMessageId) => scrollToTurnModule(scrollMarkerDeps, anchorMessageId),
+      onPanelClose: () => { syncPanelVisibilityToHost() },
     })
     tasksPanelApi = setupTasksPanel(els, {
       getMessages: (sessionId) => stateManager.getSession(sessionId)?.messages,
@@ -1403,6 +1404,7 @@ function setupTodoSkillAndSubagentPanels(): void {
         vscode.postMessage({ type: "cancel_tool", ...payload })
         abortStream()
       },
+      onPanelClose: () => { syncPanelVisibilityToHost() },
     })
     skillsModalApi = setupSkillsModal(els, {
       onToggleSkill: (skillId: string, enabled: boolean) => vscode.postMessage({ type: "toggle_skill", skillId, enabled }),
@@ -1453,6 +1455,7 @@ function setupTodoSkillAndSubagentPanels(): void {
           vscode.postMessage({ type: "mark_subagent_read", sessionId: sid, subagentId })
         }
       },
+      onPanelClose: () => { syncPanelVisibilityToHost() },
     })
 
     // Wire toggle buttons to individual panels
@@ -3862,6 +3865,14 @@ function setupTodoSkillAndSubagentPanels(): void {
         vscode.postMessage({ type: "init_ack" })
         vscode.postMessage({ type: "list_providers" })
         getQuotaMonitor().startMonitoring()
+      }],
+      ["panel_visibility_restore", (msg) => {
+        const panels = (msg as Record<string, unknown>).panels as Record<string, boolean> | undefined
+        if (!panels) return
+        if (panels.todos) todosPanelApi?.open()
+        if (panels.activity) activityPanelApi?.open()
+        if (panels.tasks) tasksPanelApi?.open()
+        if (panels.subagent) { setSubagentPanelOpen(true); requestSubagentActivities() }
       }],
       ["rate_limit_exhausted", (msg) => {
         const info = msg.info as { resetAt?: unknown } | undefined
