@@ -169,6 +169,7 @@ Titles flow across three surfaces (server / CLI / webview tab strip) via two com
 | `queueRenderer` | `src/chat/webview/queueRenderer.ts` | Queue chip UI (ARIA listbox, keyboard nav, drag-reorder, edit/remove/retry) |
 | `sendLogic` | `src/chat/webview/sendLogic.ts` | Send/abort/steer + stream capacity |
 | `inputHandlers` | `src/chat/webview/inputHandlers.ts` | Keyboard + paste + resize handlers |
+| `surfaceCoordinator` | `src/chat/webview/surfaceCoordinator.ts` | Cross-surface mutual exclusion — closes other dropdowns/modals when one opens (prevents z-index conflicts) |
 
 ### Webview Timeline Modules (delegated from timeline.ts)
 
@@ -545,7 +546,7 @@ Action placement follows progressive disclosure:
 - **Secondary controls** in Settings overflow (⋮): Checkpoints, Todos, Activity, Tasks, Timeline, MCP, Theme, Tab Instructions, Keyboard Shortcuts
 - **Contextual actions**: Diff Accept/Reject primary · Review/Open behind ⋮ menu · Session actions behind ⋮ menu
 - **Keyboard shortcut reference**: `?` or `Shift+/` opens the shortcut modal; also accessible from Settings → Keyboard Shortcuts and Welcome screen
-- **Panels auto-show**: Todos panel opens when todos arrive; Subagent panel opens when subagents start running
+- **Panels auto-show**: Todos panel opens once when first todos arrive (respects dismiss-per-session); Subagent panel uses badge-only notification (no auto-open)
 - **Steer while streaming**: Enter = Queue a follow-up (default) · ⌘/Ctrl+Enter = Interrupt & send now. A Queue ▏Interrupt segmented toggle (visible only during streaming) sets what Enter does per tab. (The old Interrupt/Append/Queue trio + Ctrl+1/2/3 was removed.) Session modes: Alt+1/2/3 (Plan/Build/Auto), work in the composer.
 - **Adding new actions**: Use keyboard shortcuts and overflow menus before adding new visible buttons. Prefer progressive disclosure over permanent controls.
 

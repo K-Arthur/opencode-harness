@@ -27,10 +27,11 @@ import { updateContextChips, applyThemeVars, handleRateLimitExhausted } from "./
 import { getQuotaMonitor } from "./quotaMonitor"
 import { STREAM_LIMIT_TOOLTIP, getContextUsageTooltip, initStaticButtonTooltips } from "./tooltips"
 // context-usage-panel.ts removed — canonical UI is now context-usage-dropdown.ts
-import { setupChangedFilesDropdown, updateChangedFiles, handleDiffResponse as handleCfDiffResponse, handleFileHunks as handleCfFileHunks, setCurrentSession as setCfCurrentSession, refreshChangedFilesVisibility } from "./changed-files-dropdown"
+import { setupChangedFilesDropdown, updateChangedFiles, handleDiffResponse as handleCfDiffResponse, handleFileHunks as handleCfFileHunks, setCurrentSession as setCfCurrentSession, refreshChangedFilesVisibility, closeChangedFilesDropdown } from "./changed-files-dropdown"
+import { createSurfaceCoordinator, type SurfaceCoordinator } from "./surfaceCoordinator"
 import type { FileHunkView } from "./hunkRevertView"
 import type { DiffLine } from "./types"
-import { setupContextUsageDropdown as setupCtxDropdown, updateUsage as updateCtxDropdown, resetContextUsageDropdown, openContextUsageDropdown } from "./context-usage-dropdown"
+import { setupContextUsageDropdown as setupCtxDropdown, updateUsage as updateCtxDropdown, resetContextUsageDropdown, openContextUsageDropdown, closeContextUsageDropdownIfOpen } from "./context-usage-dropdown"
 import { formatUsagePercent } from "./context-usage-service"
 import { showCompactBanner, hideCompactBanner } from "./compact-banner"
 import { setupPromptStash } from "./prompt-stash"
@@ -458,6 +459,7 @@ function getVsCodeApi() {
  	      }
     },
     onManageModels: () => {
+      surfaceCoord?.closeOthers("model-manager-panel")
       modelManager.open()
       vscode.postMessage({ type: "get_models" })
     },
@@ -515,9 +517,10 @@ function getVsCodeApi() {
 	        if (sid) vscode.postMessage({ type: "retry_stream", sessionId: sid })
 	        break
 	      }
-	      case "switch_model":
-	      case "pick_model":
-	        modelManager.open()
+      case "switch_model":
+      case "pick_model":
+        surfaceCoord?.closeOthers("model-manager-panel")
+        modelManager.open()
 	        vscode.postMessage({ type: "get_models" })
 	        break
 	      case "edit":
@@ -585,6 +588,7 @@ function getVsCodeApi() {
   let cfDropdownApi: { updateChangedFiles: typeof updateChangedFiles; handleDiffResponse: typeof handleCfDiffResponse; setCurrentSession: typeof setCfCurrentSession } | null = null
   let ctxDropdownApi: { updateUsage: typeof updateCtxDropdown } | null = null
   let _contextUsageRafId: number | undefined
+  let surfaceCoord: SurfaceCoordinator | null = null
 
   const tabBar = createTabBar(els, {
     onSwitch: (tabId) => switchTab(tabId),
@@ -931,6 +935,7 @@ function getVsCodeApi() {
       setupChangedFilesFeature()
       setupContextUsageFeature()
       setupEscapeCoordinator()
+      setupSurfaceCoordinator()
       const sidebarHandle = document.querySelector<HTMLElement>(".sidebar-resize-handle")
       const mainLayout = document.querySelector<HTMLElement>(".main-layout")
       if (sidebarHandle && mainLayout) {
@@ -994,6 +999,7 @@ function getVsCodeApi() {
         }
         if (key === "k" && !isTextInput(e.target)) {
           e.preventDefault()
+          surfaceCoord?.closeOthers("commands-modal")
           commandsModal.open()
           vscode.postMessage({ type: "list_commands" })
           return
@@ -1220,6 +1226,15 @@ function getVsCodeApi() {
     // Capture phase: runs before every component-level Escape listener so a
     // consumed event can never double-fire legacy document handlers.
     document.addEventListener("keydown", registry.handleKeydown, true)
+  }
+
+  function setupSurfaceCoordinator(): void {
+    surfaceCoord = createSurfaceCoordinator()
+    surfaceCoord.register({ id: "model-manager-panel", close: () => modelManager.close() })
+    surfaceCoord.register({ id: "commands-modal", close: () => commandsModal.close() })
+    surfaceCoord.register({ id: "changed-files-dropdown", close: closeChangedFilesDropdown })
+    surfaceCoord.register({ id: "context-usage-dropdown", close: closeContextUsageDropdownIfOpen })
+    surfaceCoord.register({ id: "variant-dropdown", close: () => { try { variantSelector?.close?.() } catch { /* ok */ } } })
   }
 
   function isWelcomeVisible(): boolean {
@@ -1575,6 +1590,7 @@ function getVsCodeApi() {
       onOpenFile: (path) => vscode.postMessage({ type: "open_file", path }),
       onOpenChangedFileDiff: (path, sessionId) => vscode.postMessage({ type: "open_changed_file_diff", path, sessionId }),
       isWelcomeVisible,
+      beforeToggle: () => surfaceCoord?.closeOthers("changed-files-dropdown"),
     })
     cfDropdownApi = { updateChangedFiles, handleDiffResponse: handleCfDiffResponse, setCurrentSession: setCfCurrentSession }
 
@@ -1609,6 +1625,7 @@ function getVsCodeApi() {
     if (activeSess?.contextUsage) {
       ctxDropdownApi?.updateUsage({ type: "context_usage", ...activeSess.contextUsage } as Record<string, unknown>)
     }
+    surfaceCoord?.closeOthers("context-usage-dropdown")
     openContextUsageDropdown()
   }
 
@@ -1678,7 +1695,7 @@ function getVsCodeApi() {
       const s = stateManager.getState()
       return { ...s, activeSessionId: s.activeSessionId ?? undefined }
     },
-    openModelManager: () => modelManager.open(),
+    openModelManager: () => { surfaceCoord?.closeOthers("model-manager-panel"); modelManager.open() },
     getResolvedModel: () =>
       stateManager.getState().globalModel ||
       stateManager.getActiveSession()?.model ||
@@ -3270,14 +3287,9 @@ function getVsCodeApi() {
           subagentDismissedBySession.delete(sid)
         }
 
-        if (
-          sid === stateManager.getState().activeSessionId &&
-          newIds.size > 0 &&
-          !subagentDismissedBySession.has(sid)
-        ) {
-          subagentPanelApi?.open()
-          els.subagentsToggleBtn.setAttribute("aria-pressed", "true")
-        }
+        // Badge-only notification: don't auto-open the panel. The badge
+        // (updateSubagentBadge) already shows "N running"; the user can
+        // toggle the panel manually.
       }],
       ["instructions_changed", (msg, sid) => {
         if (sid) {
@@ -4209,6 +4221,7 @@ function getVsCodeApi() {
         }
         if (msg.showInChat !== true) return
         // /commands now opens a real modal instead of dumping into chat history.
+        surfaceCoord?.closeOthers("commands-modal")
         commandsModal.open()
       }],
       ["stash_success", (msg) => {
@@ -4254,6 +4267,7 @@ function getVsCodeApi() {
         if (active) showSystemMessage(active.id, `Template error: ${errText}`)
       }],
       ["open_commands_palette", () => {
+        surfaceCoord?.closeOthers("commands-modal")
         commandsModal.open()
         // Fetch fresh so host-triggered opens (e.g. a "browse commands" CTA)
         // don't show a stale list — MCP / server commands may have changed
@@ -4465,15 +4479,9 @@ function getVsCodeApi() {
           const allIds = new Set([...prevKnownIds, subagent.id])
           knownSubagentIdsBySession.set(sessionId, allIds)
 
-          if (
-            sessionId === stateManager.getState().activeSessionId &&
-            newIds.size > 0 &&
-            isLiveSubagent(subagent) &&
-            !subagentDismissedBySession.has(sessionId)
-          ) {
-            subagentPanelApi?.open()
-            els.subagentsToggleBtn.setAttribute("aria-pressed", "true")
-          }
+          // Badge-only notification: don't auto-open the panel on new
+          // subagent activity. The badge already shows the count; users
+          // toggle the panel manually.
           if (merged.length > 0 && sessionId === stateManager.getState().activeSessionId) {
             refreshSubagentPanel(sessionId)
           }

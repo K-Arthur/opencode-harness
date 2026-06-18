@@ -1667,7 +1667,7 @@ export class WebviewEventRouter {
         const doc = await vscode.workspace.openTextDocument(uri)
         const options: vscode.TextDocumentShowOptions = {
           preview: true,
-          viewColumn: vscode.ViewColumn.Beside,
+          viewColumn: vscode.ViewColumn.Active,
         }
         if (lineNumber) {
           options.selection = new vscode.Range(lineNumber - 1, 0, lineNumber - 1, 0)

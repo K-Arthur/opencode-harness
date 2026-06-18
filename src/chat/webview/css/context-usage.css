@@ -238,8 +238,7 @@
   white-space: nowrap;
 }
 
-#context-usage-dropdown,
-#changed-files-dropdown {
+#context-usage-dropdown {
   z-index: calc(var(--z-modal, 300) + 20);
   max-width: calc(100vw - var(--space-4));
   max-height: var(--cf-dropdown-max-height, min(480px, calc(100vh - 100px)));

@@ -202,12 +202,12 @@ void describe("subagent UI reliability — wiring", () => {
       assert.ok(fn.includes("subagentDismissedBySession.add"), "close must add to dismissed set")
       assert.ok(fn.includes("subagentDismissedBySession.delete"), "open must remove from dismissed set")
     })
-    void it("auto-open honors dismissed set", () => {
+    void it("auto-open removed in favor of badge-only notification", () => {
       const block = main.slice(
         main.indexOf('["run_activity_update"'),
         main.indexOf('["instructions_changed"'),
       )
-      assert.ok(block.includes("subagentDismissedBySession.has(sid)"), "auto-open must check dismissed set")
+      assert.ok(!block.includes("subagentPanelApi?.open()"), "run_activity_update must not auto-open the panel")
     })
     void it("handleStreamStart resets per-session dismissal", () => {
       const fnIdx = main.indexOf("function handleStreamStart")

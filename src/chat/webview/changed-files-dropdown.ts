@@ -118,11 +118,14 @@ export interface ChangedFilesDropdownOptions {
   onOpenChangedFileDiff: (path: string, sessionId: string) => void
   /** Optional guard: when true, strip and dropdown are suppressed (e.g. welcome view) */
   isWelcomeVisible?: () => boolean
+  /** Called before the dropdown toggles — used by the surface coordinator to close other surfaces. */
+  beforeToggle?: () => void
 }
 
 let _onOpenFile: (path: string) => void = () => {}
 let _onOpenChangedFileDiff: (path: string, sessionId: string) => void = () => {}
 let _isWelcomeVisible: () => boolean = () => false
+let _beforeToggle: (() => void) | undefined
 
 export function setupChangedFilesDropdown(opts: ChangedFilesDropdownOptions): void {
   _btn = opts.btn
@@ -133,6 +136,7 @@ export function setupChangedFilesDropdown(opts: ChangedFilesDropdownOptions): vo
   _onOpenFile = opts.onOpenFile
   _onOpenChangedFileDiff = opts.onOpenChangedFileDiff
   _isWelcomeVisible = opts.isWelcomeVisible ?? (() => false)
+  _beforeToggle = opts.beforeToggle
 
   // Initially hidden
   _panel.classList.add("hidden")
@@ -389,10 +393,24 @@ function _setDiffCache(cache: Map<string, DiffLine[] | null | string>, path: str
 export function handleDiffResponse(sessionId: string, path: string, lines: DiffLine[] | null, error?: string): void {
   const state = _stateFor(sessionId)
   _setDiffCache(state.diffCache, path, error ? error : (lines ?? []))
+  // Lazy stats refresh: count added/removed from the resolved diff lines and
+  // push corrected stats back to the host so the chip shows accurate numbers.
+  if (_postMessage && Array.isArray(lines) && lines.length > 0) {
+    const added = lines.filter((l) => l.type === "added").length
+    const removed = lines.filter((l) => l.type === "removed").length
+    if (added > 0 || removed > 0) {
+      _postMessage({ type: "changed_files_update", sessionId, files: [{ path, added, removed }] })
+    }
+  }
   if (sessionId !== _currentSessionId) return
   document.querySelectorAll<HTMLElement>(".cf-hunk-preview--open[data-path]").forEach((el) => {
     if (el.dataset.path === path) _renderHunk(el, sessionId, path)
   })
+}
+
+/** Close the dropdown if open. Called by the surface coordinator. */
+export function closeChangedFilesDropdown(): void {
+  if (_isOpen) _close()
 }
 
 /** Host-authoritative hunks for per-hunk Revert (audit §14.3 wiring). */
@@ -409,6 +427,7 @@ export function handleFileHunks(sessionId: string, path: string, hunks: FileHunk
 // ─── Dropdown open / close ────────────────────────────────────────────────────
 
 function _toggle(): void {
+  _beforeToggle?.()
   if (_isOpen) _close()
   else _open()
 }

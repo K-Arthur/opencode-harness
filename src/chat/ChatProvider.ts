@@ -11,6 +11,7 @@ import { ModelManager } from "../model/ModelManager"
 import { CheckpointManager } from "../checkpoint/CheckpointManager"
 import { parseModelRef } from "../utils/tokenCounter"
 import { DiffApplier } from "../diff/DiffApplier"
+import { getFileHunks } from "./diff/hunkRevertPlan"
 import { sdkMessagesToChatMessages, reasoningEventToBlock } from "../session/sdkMessageConverter"
 import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
 import { isLocalPlaceholderSessionId } from "../session/sessionUtils"
@@ -1288,6 +1289,18 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
         .filter(Boolean)
       if (files.length === 0) return
 
+      // Hybrid diff counter: session.diff provides stats inline; file.edited
+      // does not. When data.changes is absent, fall back to git before/after.
+      if (changeStats.size === 0) {
+        for (const filePath of files) {
+          if (!filePath) continue
+          try {
+            const stats = this.computeDiffStatsFromGit(filePath)
+            changeStats.set(filePath, stats)
+          } catch { /* tolerate — chip shows 0/0 */ }
+        }
+      }
+
       // Persist stats so future tab-switches and get_changed_files requests
       // can report accurate additions/deletions for older files.
       const statsArray = Array.from(changeStats.entries()).map(([path, s]) => ({ path, ...s }))
@@ -1739,6 +1752,35 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
 
   private isPlanDocumentPattern(pattern: string | string[]): boolean {
     return this.diffAcceptService.isPlanDocumentPattern(pattern)
+  }
+
+  /** Compute added/removed line counts from git before/after. Used as a
+   *  fallback when the file.edited event carries no stats (only session.diff
+   *  provides them). Returns 0/0 on any error — callers tolerate this. */
+  private computeDiffStatsFromGit(filePath: string): { added: number; removed: number } {
+    const wsFolder = vscode.workspace.workspaceFolders?.[0]
+    if (!wsFolder) return { added: 0, removed: 0 }
+    let before = ""
+    try {
+      const result = require("child_process").execSync(
+        `git show HEAD:${filePath.replace(/\\/g, "/")}`,
+        { cwd: wsFolder.uri.fsPath, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024, timeout: 5000 },
+      )
+      if (typeof result === "string") before = result
+    } catch { /* untracked / new file */ }
+    let after = ""
+    try {
+      const doc = vscode.workspace.textDocuments.find(
+        (d) => d.uri.fsPath === vscode.Uri.joinPath(wsFolder.uri, filePath).fsPath,
+      )
+      after = doc?.getText() ?? ""
+    } catch { /* unreadable */ }
+    if (!before && !after) return { added: 0, removed: 0 }
+    const hunks = getFileHunks(before, after)
+    return hunks.reduce(
+      (acc, h) => ({ added: acc.added + h.additions, removed: acc.removed + h.deletions }),
+      { added: 0, removed: 0 },
+    )
   }
 
   private async handleAcceptDiff(blockId: string, sessionId?: string): Promise<void> {
