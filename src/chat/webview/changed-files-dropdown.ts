@@ -660,66 +660,15 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
     countEl.textContent = `${files.length} file${files.length !== 1 ? "s" : ""}`
   }
 
-  // Summary bar — file count + aggregate added/removed across the changeset.
-  const totalAdded = safe.reduce((s, f) => s + f.added, 0)
-  const totalRemoved = safe.reduce((s, f) => s + f.removed, 0)
-  const summary = document.createElement("div")
-  summary.className = "cf-summary-bar"
-  summary.setAttribute("role", "status")
-  summary.setAttribute("aria-live", "polite")
-  summary.setAttribute("aria-atomic", "true")
-  const countSpan = document.createElement("span")
-  countSpan.className = "cf-summary-count"
-  countSpan.textContent = `${files.length} file${files.length !== 1 ? "s" : ""}`
-  const totals = document.createElement("span")
-  totals.className = "cf-summary-stats"
-  totals.setAttribute("aria-label", `${totalAdded} additions, ${totalRemoved} deletions`)
-  const addEl = document.createElement("span"); addEl.className = "cf-stat-added"; addEl.textContent = `+${totalAdded}`
-  const remEl = document.createElement("span"); remEl.className = "cf-stat-removed"; remEl.textContent = `−${totalRemoved}`
-  totals.appendChild(addEl); totals.appendChild(document.createTextNode(" ")); totals.appendChild(remEl)
-  summary.appendChild(countSpan)
-  summary.appendChild(totals)
-  container.appendChild(summary)
-
-  // Controls — sort toggle + collapse-all + bulk actions.
-  // role="toolbar" gives screen readers a named group of related actions.
-  const controls = document.createElement("div")
-  controls.className = "cf-controls"
-  controls.setAttribute("role", "toolbar")
-  controls.setAttribute("aria-label", "Changed files actions")
-  controls.innerHTML = `
-    <button class="cf-sort-btn" data-action="toggle-sort" type="button"
-      title="Sort: ${state.sortMode === "changes" ? "most changed" : "alphabetical"}"
-      aria-label="Sort by ${state.sortMode === "changes" ? "most changed" : "alphabetical"}"
-      aria-pressed="${state.sortMode === "changes" ? "true" : "false"}">
-      <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
-      ${state.sortMode === "changes" ? "By changes" : "A–Z"}
-    </button>
-    <button class="cf-collapse-all-btn" data-action="collapse-all" type="button"
-      title="Collapse all directories" aria-label="Collapse all file groups">
-      <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 15l7-7 7 7"/></svg>
-      Collapse all
-    </button>
-    <button class="cf-revert-all-btn" data-action="revert-all" type="button"
-      title="Revert all files to git HEAD" aria-label="Revert all changed files">
-      <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-      Revert All
-    </button>
-  `
-  controls.querySelector('[data-action="toggle-sort"]')!.addEventListener("click", () => {
-    state.sortMode = state.sortMode === "changes" ? "alpha" : "changes"
-    _renderTree(container, files)
-  })
-  controls.querySelector('[data-action="collapse-all"]')!.addEventListener("click", () => {
-    state.expandedFiles.clear()
-    _renderTree(container, files)
-  })
-  controls.querySelector('[data-action="revert-all"]')!.addEventListener("click", () => {
-    if (!sessionId) return
-    if (!confirm(`Revert all ${files.length} changed files to git HEAD? This cannot be undone.`)) return
-    _postMessage?.({ type: "revert_all_files", sessionId })
-  })
-  container.appendChild(controls)
+  // Also update the panel title to show total additions/deletions
+  const titleEl = document.getElementById("cf-panel-title")
+  if (titleEl) {
+    const totalAdded = safe.reduce((s, f) => s + f.added, 0)
+    const totalRemoved = safe.reduce((s, f) => s + f.removed, 0)
+    titleEl.textContent = totalAdded > 0 || totalRemoved > 0 
+      ? `Changed Files (+${totalAdded} -${totalRemoved})`
+      : "Changed Files"
+  }
 
   // File list, grouped by parent directory. role="tree" + per-item role=
   // "treeitem" gives screen-reader users proper hierarchical navigation.
