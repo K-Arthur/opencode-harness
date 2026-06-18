@@ -450,14 +450,10 @@ export class WebviewEventRouter {
           )
 
           if (classification.category === "expired") {
-            // B10: The server no longer knows about this question. Mark it
-            // as answered so the bar removes it and the stream can finalize.
-            // Then send the user's answer as a regular text prompt so the
-            // model still gets the information — no retry needed.
-            this.opts.sessionStore.markQuestionAnswered(
-              sessionId, answerId, value, source === "freetext" ? "freetext" : "option",
-            )
-            this.opts.streamCoordinator.markQuestionAnswered(sessionId, answerId)
+            // B10: The server no longer knows about this question. The
+            // optimistic markQuestionAnswered at L416-417 already handled
+            // local state. Send the user's answer as a regular text prompt
+            // so the model still gets the information — no retry needed.
             this.opts.postMessage({
               type: "question_unacknowledged",
               sessionId,

@@ -160,16 +160,15 @@ describe("WebviewEventRouter — question_answer routing", () => {
     )
   })
 
-  it("B10: expired questions mark as answered in sessionStore and streamCoordinator (not just skip unmark)", () => {
-    const catchBlock = handler.slice(handler.indexOf("catch (err)"))
-    const expiredBranch = catchBlock.slice(0, catchBlock.indexOf("} else"))
+  it("B10: expired questions mark as answered in sessionStore and streamCoordinator optimistically (before SDK call, not duplicated in catch)", () => {
+    const optimisticBlock = handler.slice(0, handler.indexOf("catch (err)"))
     assert.ok(
-      expiredBranch.includes("markQuestionAnswered"),
-      "B10: expired path must mark question as answered so stream can finalize",
+      optimisticBlock.includes("sessionStore.markQuestionAnswered"),
+      "B10: optimistic path must mark question as answered via sessionStore before SDK call so stream can finalize",
     )
     assert.ok(
-      expiredBranch.includes("streamCoordinator.markQuestionAnswered"),
-      "B10: expired path must clear activeToolCallIds via streamCoordinator.markQuestionAnswered",
+      optimisticBlock.includes("streamCoordinator.markQuestionAnswered"),
+      "B10: optimistic path must clear activeToolCallIds via streamCoordinator.markQuestionAnswered before SDK call; catch should NOT duplicate",
     )
   })
 

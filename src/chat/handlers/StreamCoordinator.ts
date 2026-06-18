@@ -86,13 +86,12 @@ export class StreamCoordinator {
   /** Time-to-first-byte timeout: no chunk received within 45s */
   readonly TTFB_TIMEOUT_MS = 45000
   /** B10-recovery: Hard timeout for the expired-question fallback startPrompt.
-   *  Fires UNCONDITIONALLY after 8s — not gated by shouldTriggerStartupTimeout,
+   *  Fires UNCONDITIONALLY after 20s — not gated by shouldTriggerStartupTimeout,
    *  which can be silently disabled by stray activity events leaving the user
-   *  stuck "generating" indefinitely. Kept short (vs the 45s TTFB) because the
-   *  recovery is a user-visible retry path: if the model hasn't started
-   *  responding within 8s, surface the answer for manual resend rather than
-   *  making the user wait nearly a minute. */
-  readonly EXPIRED_RECOVERY_TIMEOUT_MS = 8_000
+   *  stuck "generating" indefinitely. Set at 20s to give most models a
+   *  realistic chance at TTFB before falling back; the answer text is
+   *  preserved for auto-resend regardless. */
+  readonly EXPIRED_RECOVERY_TIMEOUT_MS = 20_000
   /** Short grace window for terminal status to be followed by late tool_end events */
   readonly TOOL_FINALIZE_GRACE_MS = 30000
   /** G5: quiet period required before a status-triggered finalize is allowed

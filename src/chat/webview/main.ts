@@ -4540,10 +4540,10 @@ function getVsCodeApi() {
       }],
       ["expired_question_recovery_failed", (msg, sid) => {
         // B10-recovery: The expired-question fallback startPrompt didn't
-        // produce a model response within the hard 15s watchdog (or threw
+        // produce a model response within the hard timeout (or threw
         // outright). Pre-fill the prompt input with the user's original
-        // answer text so they can resend with a single keystroke — no
-        // close/reopen required. Then surface a friendly notice.
+        // answer text and auto-send so the user doesn't have to manually
+        // resend — seamless recovery.
         const answerText = typeof (msg as Record<string, unknown>).answerText === "string"
           ? (msg as Record<string, unknown>).answerText as string
           : ""
@@ -4551,27 +4551,22 @@ function getVsCodeApi() {
           ? (msg as Record<string, unknown>).reason as string
           : "unknown"
         const targetSessionId = sid ?? stateManager.getState().activeSessionId ?? undefined
-        webviewLog(`[main] expired_question_recovery_failed (reason=${reason}); pre-filling prompt input with answer text (${answerText.length} chars)`)
+        webviewLog(`[main] expired_question_recovery_failed (reason=${reason}); auto-forwarding answer text (${answerText.length} chars)`)
         if (answerText.length > 0) {
-          // Pre-fill the prompt input. If there's existing draft text,
-          // append a separator so we don't overwrite the user's work.
-          const existing = els.promptInput.value.trim()
-          els.promptInput.value = existing.length > 0
-            ? `${existing}\n\n[Resending expired-question answer]\n${answerText}`
-            : answerText
+          // Switch to the correct tab before sending.
+          if (targetSessionId) switchTab(targetSessionId)
+          els.promptInput.value = answerText
           // Raise input event so autosize/character count update.
           els.promptInput.dispatchEvent(new Event("input", { bubbles: true }))
           els.promptInput.focus()
-          // Place cursor at end so the user can immediately edit/send.
-          const len = els.promptInput.value.length
-          try { els.promptInput.setSelectionRange(len, len) } catch { /* no-op */ }
+          // Defer auto-send to let the stream_end handler clear streaming
+          // state first, then auto-fire the send — no manual Enter needed.
+          setTimeout(() => {
+            if (els.promptInput.value.trim().length > 0) {
+              sendMessage()
+            }
+          }, 100)
         }
-        // Friendly non-blocking notice — explicitly NOT an error card,
-        // because the user's answer text is preserved and ready to resend.
-        handleRequestError(
-          targetSessionId,
-          "This question expired on the server and the model didn't respond to the auto-resent answer. Your answer is in the input below — press Enter to send it as a new message.",
-        )
       }],
     ])
 

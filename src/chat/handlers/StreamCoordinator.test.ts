@@ -952,14 +952,14 @@ describe("StreamCoordinator.ts", () => {
   //
   // The fix adds a SEPARATE watchdog (setupExpiredRecoveryTimeout) armed
   // only when `callbacks.recoveryFromExpiredQuestion` is true. It fires
-  // unconditionally after 15s, aborts the run, and posts
+  // unconditionally after 20s, aborts the run, and posts
   // `expired_question_recovery_failed` with the original answer text so
-  // the webview can pre-fill the prompt input for manual resend.
+  // the webview can auto-resend seamlessly.
   void describe("B10-recovery: hard unconditional watchdog for expired-question fallback", () => {
-    void it("declares EXPIRED_RECOVERY_TIMEOUT_MS constant (8s — short user-visible retry window)", () => {
+    void it("declares EXPIRED_RECOVERY_TIMEOUT_MS constant (20s — realistic TTFB window)", () => {
       assert.ok(
-        source.includes("EXPIRED_RECOVERY_TIMEOUT_MS = 8_000"),
-        "B10-recovery: must declare an 8s hard timeout constant (short enough to surface manual recovery before user gives up)",
+        source.includes("EXPIRED_RECOVERY_TIMEOUT_MS = 20_000"),
+        "B10-recovery: must declare a 20s hard timeout constant (balancing model TTFB with user-visible recovery window)",
       )
     })
 
