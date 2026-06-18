@@ -22,7 +22,7 @@ export function createThinkingToggle(deps: ThinkingToggleDeps): { setup: () => v
 
   function setup() {
     const state = getState()
-    const thinkingVisible = state.displayPrefs?.thinkingVisible ?? true
+    const thinkingVisible = state.displayPrefs?.thinkingVisible ?? false
     setThinkingVisible(thinkingVisible)
     toggleAllThinkingBlocks(thinkingVisible)
     els.thinkingToggleMenuItem.setAttribute("aria-checked", String(thinkingVisible))

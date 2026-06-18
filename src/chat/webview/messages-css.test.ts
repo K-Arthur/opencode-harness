@@ -98,14 +98,16 @@ describe("messages.css", () => {
     assert.match(combined, /quota-bar--critical/, "critical state must be styled")
   })
 
-  // ── Hide-thinking: the body class must fully remove thinking blocks from
-  // the rendered layout when the user unchecks "Show thinking". A previous
-  // implementation only collapsed the <details> element, which still left
-  // the summary chip visible — the source of the user-reported bug.
-  it("hide-thinking body class fully removes thinking blocks from layout", () => {
+  // ── Hide-thinking: the body class must fully remove non-streaming thinking
+  // blocks from the rendered layout when the user unchecks "Show thinking". A
+  // previous implementation only collapsed the <details> element, which still
+  // left the summary chip visible — the source of the user-reported bug.
+  // Streaming thinking blocks (.thinking-streaming) are exempt so the user
+  // can see the model's in-progress reasoning even when the pref is off.
+  it("hide-thinking body class hides non-streaming thinking blocks from layout", () => {
     assert.match(
       componentsSource,
-      /body\.hide-thinking\s+\.thinking-block\s*{[^}]*display:\s*none/s,
+      /body\.hide-thinking\s+\.thinking-block:not\(\.thinking-streaming\)\s*{[^}]*display:\s*none/s,
       "components.css must hide .thinking-block when body has .hide-thinking class",
     )
   })

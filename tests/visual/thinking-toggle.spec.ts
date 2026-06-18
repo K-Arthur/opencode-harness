@@ -58,8 +58,13 @@ test.describe('Global Show/Hide Thinking Toggle', () => {
     const thinkingBlock = page.locator('.thinking-block')
     const thinkingBody = page.locator('.thinking-body')
 
-    // Initial state - thinking should be visible
+    // Initial state — thinking is hidden by default
+    await expect(thinkingBlock).not.toBeVisible()
+
+    // Click to show thinking
+    await toggleBtn.click()
     await expect(thinkingBlock).toHaveAttribute('open', '')
+    await expect(thinkingBlock).toBeVisible()
     await expect(thinkingBody).toBeVisible()
 
     // Click to hide thinking — the entire block should disappear from the
@@ -70,50 +75,44 @@ test.describe('Global Show/Hide Thinking Toggle', () => {
     await expect(thinkingBlock).not.toHaveAttribute('open')
     await expect(thinkingBlock).not.toBeVisible()
     await expect(thinkingBody).not.toBeVisible()
-
-    // Click to show thinking
-    await toggleBtn.click()
-    await expect(thinkingBlock).toHaveAttribute('open', '')
-    await expect(thinkingBlock).toBeVisible()
-    await expect(thinkingBody).toBeVisible()
   })
 
   test('hide-thinking body class is added when toggle is unchecked', async ({ page }) => {
     const toggleBtn = page.locator('#thinking-toggle-menu-item')
-    // Initially visible — no body class
-    await expect(page.locator('body')).not.toHaveClass(/hide-thinking/)
-
-    await toggleBtn.click()
+    // Initially hidden — body class present
     await expect(page.locator('body')).toHaveClass(/hide-thinking/)
 
     await toggleBtn.click()
     await expect(page.locator('body')).not.toHaveClass(/hide-thinking/)
+
+    await toggleBtn.click()
+    await expect(page.locator('body')).toHaveClass(/hide-thinking/)
   })
 
   test('should update aria-checked state', async ({ page }) => {
     const toggleBtn = page.locator('#thinking-toggle-menu-item')
 
-    // Initial state should be checked (visible by default)
-    await expect(toggleBtn).toHaveAttribute('aria-checked', 'true')
-
-    await toggleBtn.click()
+    // Initial state should be unchecked (hidden by default)
     await expect(toggleBtn).toHaveAttribute('aria-checked', 'false')
 
     await toggleBtn.click()
     await expect(toggleBtn).toHaveAttribute('aria-checked', 'true')
+
+    await toggleBtn.click()
+    await expect(toggleBtn).toHaveAttribute('aria-checked', 'false')
   })
 
   test('should toggle active class on button', async ({ page }) => {
     const toggleBtn = page.locator('#thinking-toggle-menu-item')
 
-    // Initial state should have active class
-    await expect(toggleBtn).toHaveClass(/active/)
-
-    await toggleBtn.click()
+    // Initial state should NOT have active class (hidden by default)
     await expect(toggleBtn).not.toHaveClass(/active/)
 
     await toggleBtn.click()
     await expect(toggleBtn).toHaveClass(/active/)
+
+    await toggleBtn.click()
+    await expect(toggleBtn).not.toHaveClass(/active/)
   })
 
   test('should apply collapsed class to all thinking blocks', async ({ page }) => {
@@ -141,12 +140,19 @@ test.describe('Global Show/Hide Thinking Toggle', () => {
     const toggleBtn = page.locator('#thinking-toggle-menu-item')
     const thinkingBlocks = page.locator('.thinking-block')
 
-    // All blocks should be visible initially
+    // All blocks should be hidden initially (default hidden)
     await expect(thinkingBlocks).toHaveCount(4) // 1 initial + 3 new
-    await expect(thinkingBlocks.nth(0)).toHaveAttribute('open', '')
-    await expect(thinkingBlocks.nth(1)).toHaveAttribute('open', '')
-    await expect(thinkingBlocks.nth(2)).toHaveAttribute('open', '')
-    await expect(thinkingBlocks.nth(3)).toHaveAttribute('open', '')
+    await expect(thinkingBlocks.nth(0)).not.toBeVisible()
+    await expect(thinkingBlocks.nth(1)).not.toBeVisible()
+    await expect(thinkingBlocks.nth(2)).not.toBeVisible()
+    await expect(thinkingBlocks.nth(3)).not.toBeVisible()
+
+    // Toggle to show — all blocks should gain open attribute
+    await toggleBtn.click()
+    for (const i of [0, 1, 2, 3]) {
+      await expect(thinkingBlocks.nth(i)).toHaveAttribute('open', '')
+      await expect(thinkingBlocks.nth(i)).toBeVisible()
+    }
 
     // Toggle to hide — all blocks should be removed from layout AND lose
     // their open attribute (defense-in-depth: hidden via body class even if
@@ -190,19 +196,23 @@ test.describe('Global Show/Hide Thinking Toggle', () => {
     const block1 = page.locator('.thinking-block').nth(0)
     const block2 = page.locator('.thinking-block').nth(1)
 
-    // Initial states
+    // Initial states — both hidden (default)
+    await expect(block1).not.toBeVisible()
+    await expect(block2).not.toBeVisible()
+
+    // Show all
+    await toggleBtn.click()
     await expect(block1).toHaveAttribute('open', '')
-    await expect(block2).not.toHaveAttribute('open')
+    await expect(block2).toHaveAttribute('open', '')
+    await expect(block1).toBeVisible()
+    await expect(block2).toBeVisible()
 
     // Collapse all
     await toggleBtn.click()
     await expect(block1).not.toHaveAttribute('open')
     await expect(block2).not.toHaveAttribute('open')
-
-    // Expand all - should open both blocks
-    await toggleBtn.click()
-    await expect(block1).toHaveAttribute('open', '')
-    await expect(block2).toHaveAttribute('open', '')
+    await expect(block1).not.toBeVisible()
+    await expect(block2).not.toBeVisible()
   })
 
   test('should have smooth transition for expand/collapse', async ({ page }) => {
@@ -214,5 +224,49 @@ test.describe('Global Show/Hide Thinking Toggle', () => {
     )
     expect(transition).toContain('max-height')
     expect(transition).toContain('opacity')
+  })
+
+  test('streaming thinking block remains visible when toggle is off', async ({ page }) => {
+    // Add a streaming thinking block (with .thinking-streaming class)
+    await page.evaluate(() => {
+      const list = document.querySelector('.message-list')
+      if (!list) return
+
+      const streamingBlock = document.createElement('details')
+      streamingBlock.className = 'thinking-block thinking-streaming'
+      streamingBlock.open = true
+      streamingBlock.innerHTML = `
+        <summary class="thinking-header">
+          <span class="thinking-label">Thinking</span>
+          <span class="thinking-pulse"></span>
+          <span class="thinking-toggle">▶</span>
+        </summary>
+        <div class="thinking-body">
+          <p>Thinking in progress...</p>
+        </div>
+      `
+      list.appendChild(streamingBlock)
+    })
+
+    const streamingBlock = page.locator('.thinking-streaming')
+
+    // Streaming block should be visible even with hide-thinking active (default state)
+    await expect(streamingBlock).toBeVisible()
+    await expect(streamingBlock).toHaveAttribute('open', '')
+
+    // Toggle to show thinking (now visible)
+    const toggleBtn = page.locator('#thinking-toggle-menu-item')
+    await toggleBtn.click()
+
+    // Streaming block should still be visible
+    await expect(streamingBlock).toBeVisible()
+    await expect(streamingBlock).toHaveAttribute('open', '')
+
+    // Toggle back to hide
+    await toggleBtn.click()
+
+    // Streaming block should still be visible (exempt from hide)
+    await expect(streamingBlock).toBeVisible()
+    await expect(streamingBlock).toHaveAttribute('open', '')
   })
 })

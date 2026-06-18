@@ -302,6 +302,11 @@
   height: 6px;
 }
 
+/* ─── Streaming thinking block ─── */
+.thinking-block.thinking-streaming {
+  border-left-color: var(--oc-accent);
+}
+
 /* ═════════════════════════════════════════════════════════════════╛
    TOOL CALL BLOCK
    ═════════════════════════════════════════════════════════════════╛ */
@@ -3429,128 +3434,6 @@
 }
 
 /* =========================================================================
-   Spatial error-tier surfaces (PLAN.md §4.2). Two isolated components share
-   the #global-status-banner slot. Colors come ONLY from VS Code semantic
-   tokens (with hex fallbacks) — no primary hardcoded color literals.
-
-   .tier-b-banner  — Tier B: ambient infrastructure fault (network/timeout),
-                     dismissible, does not touch the composer.
-   .tier-a-anchor  — Tier A: hard block (quota/auth), persistent, composer
-                     gating is applied separately in errorTiers.ts.
-   Both pull severity color from [data-severity] → a single --oc-error|
-   warning|info token defined in tokens.css, so themes override once.
-   ========================================================================= */
-
-.global-status-banner-slot:empty {
-  display: none;
-}
-
-.tier-b-banner,
-.tier-a-anchor {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--oc-gap-sm, 8px);
-  margin: 0;
-  padding: var(--oc-space-xs, 6px) var(--oc-space-sm, 10px);
-  border: 1px solid var(--vscode-inputValidation-infoBorder, transparent);
-  background: var(--vscode-inputValidation-infoBackground, transparent);
-  color: var(--vscode-foreground, inherit);
-  font-size: var(--vscode-font-size, 12px);
-  line-height: 1.4;
-}
-
-.tier-b-banner {
-  border-color: var(--vscode-inputValidation-warningBorder, var(--vscode-notificationsWarningIcon-foreground, transparent));
-  background: var(--vscode-inputValidation-warningBackground, transparent);
-}
-
-.tier-a-anchor {
-  border-left: 3px solid var(--vscode-errorForeground, var(--vscode-inputValidation-errorBorder, currentColor));
-  border-color: var(--vscode-errorForeground, var(--vscode-inputValidation-errorBorder, transparent));
-  background: var(--vscode-inputValidation-errorBackground, transparent);
-  font-weight: var(--vscode-font-weight-semibold, 600);
-}
-
-/* Severity refinement: HIGH/CRITICAL bias toward the error token regardless of tier. */
-[data-severity="critical"],
-[data-severity="high"] {
-  border-left-color: var(--vscode-errorForeground, currentColor);
-}
-
-.tier-b-banner__icon,
-.tier-a-anchor__icon {
-  flex: 0 0 auto;
-  margin-top: 1px;
-  color: var(--vscode-notificationsWarningIcon-foreground, currentColor);
-  font-weight: var(--vscode-font-weight-semibold, 600);
-}
-
-.tier-a-anchor__icon,
-[data-severity="critical"] .tier-b-banner__icon,
-[data-severity="high"] .tier-b-banner__icon {
-  color: var(--vscode-errorForeground, currentColor);
-}
-
-.tier-b-banner__body,
-.tier-a-anchor__body {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.tier-b-banner__message,
-.tier-a-anchor__message {
-  margin: 0;
-}
-
-.tier-b-banner__detail,
-.tier-a-anchor__detail {
-  margin: 2px 0 0;
-  opacity: 0.85;
-  font-size: 0.92em;
-}
-
-.tier-b-banner__actions,
-.tier-a-anchor__actions {
-  flex: 0 0 auto;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--oc-gap-xs, 4px);
-}
-
-.tier-b-banner__btn,
-.tier-a-anchor__btn {
-  border: 1px solid var(--vscode-button-border, transparent);
-  background: var(--vscode-button-secondaryBackground, transparent);
-  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground, inherit));
-  padding: 2px 10px;
-  border-radius: 2px;
-  font-size: var(--vscode-font-size, 12px);
-  cursor: pointer;
-}
-
-.tier-b-banner__btn:hover,
-.tier-a-anchor__btn:hover {
-  background: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-secondaryBackground, transparent));
-}
-
-.tier-b-banner__btn--primary,
-.tier-a-anchor__btn--primary {
-  background: var(--vscode-button-background, transparent);
-  color: var(--vscode-button-foreground, var(--vscode-foreground, inherit));
-  border-color: var(--vscode-button-background, transparent);
-}
-
-.tier-b-banner__btn--primary:hover,
-.tier-a-anchor__btn--primary:hover {
-  background: var(--vscode-button-hoverBackground, var(--vscode-button-background, transparent));
-}
-
-/* Tier-A composer-gated affordance: dim the disabled input to signal the lock. */
-#prompt-input[disabled] {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
    Spatial error-tier surfaces (PLAN.md §4.2). Two isolated components share
    the #global-status-banner slot. Colors come ONLY from VS Code semantic
    tokens (with hex fallbacks) — no primary hardcoded color literals.

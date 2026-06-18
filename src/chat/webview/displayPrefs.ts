@@ -11,7 +11,7 @@
  * reads getThinkingVisible() when it creates a new <details> element.
  */
 
-let thinkingVisible = true
+let thinkingVisible = false
 
 export function getThinkingVisible(): boolean {
   return thinkingVisible

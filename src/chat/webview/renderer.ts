@@ -1093,7 +1093,7 @@ function renderThinkingBlock(block: Block, _opts: RenderOptions): HTMLElement | 
   if (!content.trim() && !thinking.streaming) return null
 
   const details = document.createElement("details")
-  details.className = "thinking-block"
+  details.className = "thinking-block" + (thinking.streaming ? " thinking-streaming" : "")
   details.setAttribute("aria-label", thinking.streaming ? "Thinking in progress" : "Reasoning")
 
   // While streaming, always show progress. Once final, honor the user pref

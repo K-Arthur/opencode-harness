@@ -24,11 +24,45 @@ export function setupInstructionsEditor(deps: InstructionsEditorDeps): void {
     )
   }
 
+  let resizeHandler: (() => void) | null = null
+
+  function positionEditor() {
+    const btn = els.instructionsGearBtn
+    const editor = els.instructionsEditor
+    if (!btn || !editor) return
+    const margin = 8
+    const r = btn.getBoundingClientRect()
+    const editorW = 320
+    const estimatedHeight = 180
+    
+    const spaceBelow = window.innerHeight - r.bottom - margin
+    const spaceAbove = r.top - margin
+    const openAbove = spaceBelow < estimatedHeight && spaceAbove > spaceBelow
+    const maxHeight = Math.max(160, Math.floor((openAbove ? spaceAbove : spaceBelow) - 4))
+    
+    const leftEdge = Math.min(
+      Math.max(margin, r.right - editorW),
+      Math.max(margin, window.innerWidth - editorW - margin),
+    )
+    const top = openAbove
+      ? Math.max(margin, r.top - estimatedHeight - 6)
+      : Math.min(window.innerHeight - margin - estimatedHeight, r.bottom + 6)
+      
+    editor.style.position = "fixed"
+    editor.style.top = `${Math.max(margin, top)}px`
+    editor.style.left = `${leftEdge}px`
+    editor.style.right = "auto"
+    editor.style.width = `${editorW}px`
+  }
+
   function openEditor() {
     const active = getActiveSession()
     els.instructionsTextarea.value = active?.instructions ?? ""
     els.instructionsEditor.classList.remove("hidden")
     els.instructionsGearBtn.setAttribute("aria-expanded", "true")
+    positionEditor()
+    resizeHandler = () => positionEditor()
+    window.addEventListener("resize", resizeHandler)
     els.instructionsTextarea.focus()
   }
 
@@ -36,6 +70,10 @@ export function setupInstructionsEditor(deps: InstructionsEditorDeps): void {
     els.instructionsEditor.classList.add("hidden")
     els.instructionsGearBtn.setAttribute("aria-expanded", "false")
     if (saveDebounce) { clearTimeout(saveDebounce); saveDebounce = null }
+    if (resizeHandler) {
+      window.removeEventListener("resize", resizeHandler)
+      resizeHandler = null
+    }
     els.instructionsGearBtn.focus()
   }
 
