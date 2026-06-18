@@ -155,8 +155,10 @@ void describe("streaming-state stability: G1 TTFB/idle race (host)", () => {
     assert.ok(idx >= 0)
     const body = STREAM_COORDINATOR.slice(idx, idx + 8000)
     // G1: when eventStream is connected, probe before clearing.
+    // The TTFB path dispatches through probeActiveRunWithRetry, which wraps
+    // probeActiveRun with backoff. Either name satisfies the contract.
     assert.ok(
-      body.includes("probeActiveRun(tabId, callbacks)") && body.includes("suppressing stream_end"),
+      (body.includes("probeActiveRunWithRetry(tabId, callbacks)") || body.includes("probeActiveRun(tabId, callbacks)")) && body.includes("suppressing stream_end"),
       "TTFB must probe the server before posting stream_end when SSE is connected",
     )
     // The probe reply reconciles the streaming flags; if the run is still

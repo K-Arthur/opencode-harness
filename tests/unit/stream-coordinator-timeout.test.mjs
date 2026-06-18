@@ -23,7 +23,12 @@ const combinedMain = mainSource + orchestratorSource
 
 describe("StreamCoordinator timeout hardening", () => {
   it("has separate TTFB_TIMEOUT_MS constant", () => {
-    assert.ok(/readonly TTFB_TIMEOUT_MS = \d+/.test(coordinatorSource), "TTFB_TIMEOUT_MS must be defined")
+    // The TTFB surface is exposed as a numeric default plus a runtime getter
+    // (resolved from workspace config). Either form satisfies the contract.
+    assert.ok(
+      /TTFB_TIMEOUT_MS_DEFAULT\s*=\s*\d+/.test(coordinatorSource),
+      "TTFB_TIMEOUT_MS_DEFAULT must be defined as a numeric constant",
+    )
   })
 
   it("does not restore the removed chunk-inactivity timeout", () => {
@@ -34,7 +39,7 @@ describe("StreamCoordinator timeout hardening", () => {
   it("uses STREAM_STUCK_MS as the single inactivity hard cap", () => {
     const stuckVal = coordinatorSource.match(/STREAM_STUCK_MS = (\d[\d_]*)/)
     const stuckMs = stuckVal ? Number(stuckVal[1].replace(/_/g, "")) : 0
-    const ttfbMatch = coordinatorSource.match(/TTFB_TIMEOUT_MS = (\d+)/)
+    const ttfbMatch = coordinatorSource.match(/TTFB_TIMEOUT_MS_DEFAULT\s*=\s*(\d[\d_]*)/)
     assert.ok(ttfbMatch && stuckVal, "TTFB and stuck watchdog timeouts must be defined")
     assert.ok(
       stuckMs >= 2_400_000,

@@ -79,10 +79,10 @@ void describe("tab-focus stability — user's current view not stolen during gen
 
 void describe("TTFB stability — no premature state reversion for slow models", () => {
   void it("TTFB_TIMEOUT_MS is increased to 90000ms for slow third-party models", () => {
-    const match = STREAM_COORDINATOR.match(/TTFB_TIMEOUT_MS\s*=\s*(\d+)/)
-    assert.ok(match, "TTFB_TIMEOUT_MS must be defined")
-    const val = parseInt(match[1], 10)
-    assert.ok(val >= 90000, `TTFB_TIMEOUT_MS should be >= 90000ms, got ${val}`)
+    const match = STREAM_COORDINATOR.match(/TTFB_TIMEOUT_MS_DEFAULT\s*=\s*(\d[\d_]*)/)
+    assert.ok(match, "TTFB_TIMEOUT_MS_DEFAULT must be defined")
+    const val = parseInt(match[1].replace(/_/g, ""), 10)
+    assert.ok(val >= 90000, `TTFB_TIMEOUT_MS_DEFAULT should be >= 90000ms, got ${val}`)
   })
 
   void it("setupTtfbTimeout does NOT post stream_end when probe says run is still active", () => {
