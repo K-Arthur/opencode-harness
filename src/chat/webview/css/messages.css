@@ -396,14 +396,13 @@
   display: flex;
   flex-direction: column;
   max-width: 100%;
-  gap: var(--space-0-5);
   min-width: 0;
+  gap: var(--space-0-5);
   position: relative;
   width: 100%;
-  /* Isolate layout so streaming token growth doesn't reflow ancestors.
-     Uses `layout` only (not `paint`) to avoid clipping :focus-visible
-     outlines on buttons/headers near the content boundary. */
-  contain: layout;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .message.user .message-content {
@@ -510,7 +509,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--oc-accent, var(--vscode-terminal-ansiGreen, #3fb950));
+  background: var(--oc-success, var(--vscode-terminal-ansiGreen, #3fb950));
   flex-shrink: 0;
 }
 
@@ -685,15 +684,18 @@
   padding: var(--space-2) var(--space-3);
   line-height: var(--leading-relaxed);
   width: 100%;
+  min-width: 0;
   border-radius: var(--radius-lg);
   position: relative;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: anywhere;
   /* max-width handled by messages-responsive.css with container queries */
 }
 
 .message.assistant.streaming .message-bubble {
-  border-left-color: var(--color-accent);
+  border-left-color: var(--oc-success);
   border-left-width: 3px;
-  background: color-mix(in srgb, var(--color-accent) 5%, transparent);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════╛

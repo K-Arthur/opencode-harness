@@ -2607,15 +2607,62 @@ textarea {
 .cf-status-badge--M { color: var(--vscode-gitDecoration-modifiedResourceForeground, #ff9800); }
 .cf-status-badge--D { color: var(--vscode-gitDecoration-deletedResourceForeground, #f44336); }
 
+/* File name column — name + directory path stacked */
+.cf-file-name-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+}
+
 /* File name — monospace, predictable truncation */
 .cf-file-name {
-  flex: 1;
   font-size: var(--text-xs);
   color: var(--color-fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+/* Abbreviated directory path — muted, smaller */
+.cf-file-dir {
+  font-size: var(--text-2xs);
+  color: var(--color-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  opacity: 0.7;
+}
+
+/* Mini change bar — visual ratio of additions vs removals */
+.cf-change-bar {
+  display: flex;
+  width: 40px;
+  height: 4px;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  flex-shrink: 0;
+  gap: 1px;
+  background: var(--oc-editor-bg, rgba(128, 128, 128, 0.08));
+}
+.cf-change-bar-add {
+  display: block;
+  height: 100%;
+  background: var(--color-success, #4caf50);
+  border-radius: var(--radius-full);
+  min-width: 1px;
+}
+.cf-change-bar-remove {
+  display: block;
+  height: 100%;
+  background: var(--color-error, #f44336);
+  border-radius: var(--radius-full);
+  min-width: 1px;
 }
 
 /* Stat badges — compact hunk stat chips (+/- counts) */

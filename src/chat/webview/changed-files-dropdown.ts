@@ -514,10 +514,13 @@ function safeNum(n: unknown): number {
 
 function _inferStatus(file: FileChange): "A" | "M" | "D" {
   if (file.status) return file.status
-  // Without real git status, default to M (modified) for all cases.
-  // Pure additions could be new files OR appended code to existing files;
-  // pure removals could be deleted files OR trimmed code from existing files.
-  // Only git knows the difference — don't guess.
+  // Infer from line-count stats when git status is unavailable:
+  //   added>0, removed=0 → likely a new file (Added)
+  //   removed>0, added=0 → likely a deleted file (Deleted)
+  //   both>0            → modified
+  //   both=0            → unknown, default to M
+  if (file.added > 0 && file.removed === 0) return "A"
+  if (file.removed > 0 && file.added === 0) return "D"
   return "M"
 }
 
@@ -673,8 +676,13 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
     groupFiles.forEach((file) => {
       const parts = file.path.split("/")
       const fileName = parts[parts.length - 1] ?? file.path
+      const dirParts = parts.slice(0, -1)
+      const shortDir = dirParts.length > 2
+        ? `…/${dirParts[dirParts.length - 1]}`
+        : dirParts.join("/")
       const status = _inferStatus(file)
       const isExpanded = state.expandedFiles.has(file.path)
+      const totalLines = file.added + file.removed
 
       const row = document.createElement("div")
       row.className = `cf-file-row${isExpanded ? " cf-file-row--expanded" : ""}`
@@ -686,10 +694,23 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       badge.textContent = status
       badge.title = status === "A" ? "Added" : status === "D" ? "Deleted" : "Modified"
 
+      const nameCol = document.createElement("span")
+      nameCol.className = "cf-file-name-col"
+
       const name = document.createElement("span")
       name.className = "cf-file-name"
       name.textContent = fileName
       name.title = file.path
+
+      if (shortDir) {
+        const dirSpan = document.createElement("span")
+        dirSpan.className = "cf-file-dir"
+        dirSpan.textContent = shortDir
+        nameCol.appendChild(name)
+        nameCol.appendChild(dirSpan)
+      } else {
+        nameCol.appendChild(name)
+      }
 
       let planTag: HTMLElement | undefined
       if (file.isPlanDocument) {
@@ -701,11 +722,21 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
 
       const stats = document.createElement("span")
       stats.className = "cf-file-stats"
-      if (file.added > 0) {
-        const a = document.createElement("span"); a.className = "cf-stat-added"; a.textContent = `+${file.added}`; stats.appendChild(a)
-      }
-      if (file.removed > 0) {
-        const r = document.createElement("span"); r.className = "cf-stat-removed"; r.textContent = `−${file.removed}`; stats.appendChild(r)
+      const addedEl = document.createElement("span")
+      addedEl.className = "cf-stat-added"
+      addedEl.textContent = `+${file.added}`
+      const removedEl = document.createElement("span")
+      removedEl.className = "cf-stat-removed"
+      removedEl.textContent = `−${file.removed}`
+      stats.appendChild(addedEl)
+      stats.appendChild(removedEl)
+
+      const changeBar = document.createElement("span")
+      changeBar.className = "cf-change-bar"
+      changeBar.title = `${file.added} added, ${file.removed} removed`
+      if (totalLines > 0) {
+        const addPct = Math.round((file.added / totalLines) * 100)
+        changeBar.innerHTML = `<span class="cf-change-bar-add" style="width:${addPct}%"></span><span class="cf-change-bar-remove" style="width:${100 - addPct}%"></span>`
       }
 
       const openBtn = document.createElement("button")
@@ -785,8 +816,9 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
 
       row.appendChild(expandBtn)
       row.appendChild(badge)
-      row.appendChild(name)
+      row.appendChild(nameCol)
       if (planTag) row.appendChild(planTag)
+      row.appendChild(changeBar)
       row.appendChild(stats)
       row.appendChild(openBtn)
       row.appendChild(diffBtn)

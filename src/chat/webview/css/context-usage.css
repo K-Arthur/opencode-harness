@@ -160,11 +160,13 @@
   display: none;
 }
 
-/* Changed Files Always-Visible Strip — contained widget surface above the
-   input, not loose text: subtle background, hairline border, rounded. */
+/* Changed Files Always-Visible Strip — sits BELOW the input area in z-order
+   so it never blocks dropdowns (mode/model selectors) that open from #input-area.
+   #input-area uses isolation: isolate, so its dropdowns are scoped to z-index 110;
+   the strip must stay at or below z-index 100 to avoid occlusion. */
 .cf-strip {
   position: relative;
-  z-index: calc(var(--z-sticky) + 20);
+  z-index: var(--z-sticky);
   display: flex;
   align-items: center;
   gap: var(--space-1);

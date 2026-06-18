@@ -12,8 +12,9 @@ const messages = readFileSync(path.join(CSS, "messages.css"), "utf8")
 const tokens = readFileSync(path.join(CSS, "tokens.css"), "utf8")
 
 describe("Streaming edge cases — CSS structural", () => {
-  it(".message-content has contain: layout for layout isolation", () => {
-    assert.match(messages, /\.message-content\s*\{[^}]*contain:\s*layout/, "must have contain: layout")
+  it(".message-content has overflow containment for text boundaries", () => {
+    assert.match(messages, /\.message-content\s*\{[^}]*overflow:\s*hidden/, "must have overflow: hidden")
+    assert.match(messages, /\.message-content\s*\{[^}]*word-break:\s*break-word/, "must have word-break: break-word")
   })
 
   it(".diff-block has contain: layout paint for diff isolation", () => {
