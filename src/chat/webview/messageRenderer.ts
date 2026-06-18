@@ -74,12 +74,13 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
       header.appendChild(ts)
     }
 
-    // Per-turn mode badge for session history (like Copilot Session Insights)
-    if (msg.mode) {
+    // Per-turn mode badge for session history (assistant messages only)
+    const effectiveMode = msg.mode || opts?.mode
+    if (effectiveMode && role === "assistant") {
       const modeBadge = document.createElement("span")
-      modeBadge.className = `message-mode-badge message-mode-badge--${msg.mode}`
-      modeBadge.textContent = msg.mode === "plan" ? "Plan" : msg.mode === "auto" ? "Auto" : "Build"
-      modeBadge.title = `This message was produced in ${msg.mode} mode`
+      modeBadge.className = `message-mode-badge message-mode-badge--${effectiveMode}`
+      modeBadge.textContent = effectiveMode === "plan" ? "Plan" : effectiveMode === "auto" ? "Auto" : "Build"
+      modeBadge.title = `This message was produced in ${effectiveMode} mode`
       header.appendChild(modeBadge)
     }
     if (role === "user" && msg.id) {
