@@ -386,28 +386,6 @@
         </div>
       </div>
       <!-- #context-usage-panel removed — canonical UI is now #context-usage-dropdown -->
-      <!-- Changed Files floating dropdown — anchored below the toolbar button.
-           ARIA: dialog + aria-modal so screen readers trap focus and announce
-           the panel as a distinct window. aria-labelledby points at the title. -->
-      <div id="changed-files-dropdown" class="cf-dropdown hidden"
-        role="dialog" aria-modal="true" aria-labelledby="cf-dropdown-title"
-        aria-describedby="cf-dropdown-desc">
-        <div class="cf-dropdown-header">
-          <div class="cf-dropdown-header-text">
-            <span id="cf-dropdown-title" class="cf-dropdown-title">Changed Files</span>
-            <span id="cf-dropdown-desc" class="cf-dropdown-subtitle" aria-live="polite">No files changed</span>
-          </div>
-          <button class="cf-close-btn" id="cf-dropdown-close"
-            aria-label="Close Changed Files Modal" type="button">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
-              stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
-              stroke-linejoin="round" aria-hidden="true">
-              <path d="M18 6 6 18"/><path d="M6 6l12 12"/>
-            </svg>
-          </button>
-        </div>
-        <div id="cf-dropdown-tree" class="cf-dropdown-tree"></div>
-      </div>
       <!-- Context Usage floating dropdown — anchored below the toolbar button -->
       <div id="context-usage-dropdown" class="ctx-dropdown hidden"
         role="region" aria-label="Context usage details"
@@ -453,6 +431,30 @@
       </div>
 
       <div id="queue-status-region" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+
+      <!-- Changed Files panel — inline panel above input area (VS Code-style) -->
+      <div id="changed-files-panel" class="cf-panel hidden" role="region" aria-label="Changed files" aria-live="polite">
+        <div class="cf-panel-header">
+          <div class="cf-panel-header-left">
+            <span id="cf-panel-title" class="cf-panel-title">Changed Files</span>
+            <span id="cf-panel-count" class="cf-panel-count">0 files</span>
+          </div>
+          <div class="cf-panel-header-right">
+            <button class="cf-collapse-all-btn" id="cf-panel-collapse-all" type="button" aria-label="Collapse all file groups">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M5 15l7-7 7 7"/>
+              </svg>
+              Collapse all
+            </button>
+            <button class="cf-close-panel-btn" id="cf-panel-close" type="button" aria-label="Close changed files">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div id="cf-panel-tree" class="cf-panel-tree"></div>
+      </div>
 
       <div id="input-area">
       <div id="model-dropdown-container" class="hidden"></div>

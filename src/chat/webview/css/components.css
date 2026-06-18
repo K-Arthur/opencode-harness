@@ -3147,6 +3147,112 @@ textarea {
   outline-offset: var(--border-width-thin);
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   Changed Files Inline Panel (VS Code-style, above input area)
+   ═══════════════════════════════════════════════════════════════ */
+
+.cf-panel {
+  background: var(--vscode-sideBar-background, var(--oc-bg));
+  border: var(--border-width-thin) solid var(--vscode-sideBar-border, var(--oc-border));
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.08));
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+}
+
+.cf-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--border-width-thin) solid var(--vscode-sideBar-border, var(--oc-border));
+  background: var(--vscode-editorWidget-background, var(--panel-bg));
+}
+
+.cf-panel-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cf-panel-title {
+  font-size: var(--text-sm);
+  font-weight: var(--oc-font-weight-semibold);
+  color: var(--oc-fg, var(--vscode-sideBar-foreground));
+}
+
+.cf-panel-count {
+  font-size: var(--text-2xs);
+  font-weight: var(--oc-font-weight-regular);
+  color: var(--oc-muted, var(--vscode-disabledForeground));
+}
+
+.cf-panel-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.cf-panel-header-right .cf-collapse-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0-5);
+  padding: var(--space-0-5) var(--space-1);
+  font-size: var(--text-2xs);
+  font-weight: var(--oc-font-weight-medium);
+  color: var(--oc-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+
+.cf-panel-header-right .cf-collapse-all-btn:hover {
+  background: var(--oc-list-hover);
+  color: var(--oc-fg);
+}
+
+.cf-panel-header-right .cf-collapse-all-btn:focus-visible {
+  outline: var(--border-width-medium) solid var(--vscode-focusBorder, var(--oc-focus));
+  outline-offset: var(--border-width-thin);
+}
+
+.cf-close-panel-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-target-min);
+  height: var(--size-target-min);
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--oc-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+
+.cf-close-panel-btn:hover {
+  background: var(--oc-list-hover);
+  color: var(--oc-fg);
+}
+
+.cf-close-panel-btn:focus-visible {
+  outline: var(--border-width-medium) solid var(--vscode-focusBorder, var(--oc-focus));
+  outline-offset: var(--border-width-thin);
+}
+
+.cf-panel-tree {
+  overflow-y: auto;
+  flex: 1;
+  background: var(--vscode-sideBar-background, var(--oc-bg));
+}
+
 /* ─── Context Usage dropdown (floating panel) ─── */
 .ctx-toolbar-btn {
   position: relative;

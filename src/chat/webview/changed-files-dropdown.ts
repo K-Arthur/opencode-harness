@@ -108,9 +108,9 @@ export function resetSessionState(sessionId: string): void {
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export interface ChangedFilesDropdownOptions {
-  /** Toolbar button that opens/closes the dropdown — null to anchor to #changed-files-strip */
+  /** Toolbar button that opens/closes the panel — null to anchor to #changed-files-strip */
   btn: HTMLButtonElement | null
-  /** Floating panel element to populate */
+  /** Panel element to populate (now inline panel, not floating) */
   panel: HTMLElement
   /** Container inside the panel to render the file tree into */
   treeContainer: HTMLElement
@@ -122,9 +122,9 @@ export interface ChangedFilesDropdownOptions {
   onOpenFile: (path: string) => void
   /** Sprint 3 / M7: open a VS Code diff editor for a changed file */
   onOpenChangedFileDiff: (path: string, sessionId: string) => void
-  /** Optional guard: when true, strip and dropdown are suppressed (e.g. welcome view) */
+  /** Optional guard: when true, strip and panel are suppressed (e.g. welcome view) */
   isWelcomeVisible?: () => boolean
-  /** Called before the dropdown toggles — used by the surface coordinator to close other surfaces. */
+  /** Called before the panel toggles — used by the surface coordinator to close other surfaces. */
   beforeToggle?: () => void
 }
 
@@ -147,6 +147,12 @@ export function setupChangedFilesDropdown(opts: ChangedFilesDropdownOptions): vo
   // Initially hidden
   _panel.classList.add("hidden")
   if (_btn) _btn.setAttribute("aria-expanded", "false")
+
+  // Update tree container to use the new panel structure
+  const panelTree = document.getElementById("cf-panel-tree")
+  if (panelTree) {
+    _treeContainer = panelTree
+  }
   _updateBadge(0)
 
   if (_btn) {
@@ -156,8 +162,8 @@ export function setupChangedFilesDropdown(opts: ChangedFilesDropdownOptions): vo
     })
   }
 
-  // Close button inside the dropdown
-  const closeBtn = document.getElementById("cf-dropdown-close")
+  // Close button inside the panel
+  const closeBtn = document.getElementById("cf-panel-close")
   if (closeBtn) {
     closeBtn.addEventListener("click", () => _close())
   }
@@ -440,27 +446,14 @@ function _toggle(): void {
 
 function _open(): void {
   if (!_panel || !_treeContainer) return
-  if (_isWelcomeVisible()) return // Never open dropdown on welcome screen
+  if (_isWelcomeVisible()) return // Never open panel on welcome screen
   _isOpen = true
   _panel.classList.remove("hidden")
   if (_btn) _btn.setAttribute("aria-expanded", "true")
 
-  // Record the element that had focus so we can restore it on close
-  // (WCAG 2.4.3: focus order — returning to the trigger is the expected pattern).
-  const active = document.activeElement as HTMLElement | null
-  _previouslyFocused = (active && active !== _panel) ? active : _btn
-
-  // Anchor to the strip when btn is absent/detached, otherwise anchor to btn
-  const anchor: Element | null =
-    (_btn && _btn.isConnected) ? _btn : document.getElementById("changed-files-strip")
-  if (anchor) positionPanel(anchor)
-
+  // Render the tree with current files
   const files = _currentSessionId ? _stateFor(_currentSessionId).lastFiles : []
   _renderTree(_treeContainer, files)
-
-  // Move focus into the dialog — first focusable element (close button or
-  // first toolbar control). WCAG 2.4.3 + ARIA dialog pattern.
-  requestAnimationFrame(() => _focusInitial())
 
   // Dismiss on outside click
   const strip = document.getElementById("changed-files-strip")
@@ -470,23 +463,10 @@ function _open(): void {
       _close()
     }
   }
-  _keyHandler = (e: KeyboardEvent) => _handleDialogKeydown(e)
-  _resizeHandler = () => {
-    // Coalesce resize bursts to one reposition per frame — positionPanel reads
-    // layout (getBoundingClientRect) and must not run on every resize event.
-    if (_resizeScheduled) return
-    _resizeScheduled = true
-    _raf(() => {
-      _resizeScheduled = false
-      const trigger: Element | null =
-        (_btn && _btn.isConnected) ? _btn : document.getElementById("changed-files-strip")
-      if (_isOpen && trigger) positionPanel(trigger)
-    })
-  }
+  _keyHandler = (e: KeyboardEvent) => _handlePanelKeydown(e)
   requestAnimationFrame(() => {
     document.addEventListener("click", _outsideClickHandler!)
     document.addEventListener("keydown", _keyHandler!)
-    window.addEventListener("resize", _resizeHandler!)
   })
 }
 
@@ -520,7 +500,7 @@ function _focusInitial(): void {
   if (!_panel) return
   // Prefer the close button so Escape is immediately obvious, then fall back
   // to the first toolbar control, then the first tree item.
-  const closeBtn = _panel.querySelector<HTMLElement>("#cf-dropdown-close")
+  const closeBtn = _panel.querySelector<HTMLElement>("#cf-panel-close")
   if (closeBtn) { closeBtn.focus(); return }
   const focusable = _focusableInPanel()
   if (focusable.length > 0) { focusable[0]!.focus(); return }
@@ -530,77 +510,18 @@ function _focusInitial(): void {
 }
 
 /**
- * Dialog-level keydown handler: Escape closes, Tab/Shift+Tab traps focus
- * inside the panel, and arrow-key delegation to the tree is handled by
- * per-row listeners (added in _renderTree).
+ * Panel-level keydown handler: Escape closes the panel.
+ * Arrow-key delegation to the tree is handled by per-row listeners.
  */
-function _handleDialogKeydown(e: KeyboardEvent): void {
+function _handlePanelKeydown(e: KeyboardEvent): void {
   if (e.key === "Escape") {
     e.preventDefault()
     e.stopPropagation()
     _close()
     return
   }
-  if (e.key === "Tab") {
-    _trapTab(e)
-    return
-  }
 }
 
-/**
- * Focus trap: when Tabbing would leave the panel, wrap to the other end.
- * Implements the WAI-ARIA "dialog" keyboard pattern.
- */
-function _trapTab(e: KeyboardEvent): void {
-  if (!_panel) return
-  const focusable = _focusableInPanel()
-  if (focusable.length === 0) return
-  const first = focusable[0]!
-  const last = focusable[focusable.length - 1]!
-  const active = document.activeElement as HTMLElement | null
-
-  if (e.shiftKey) {
-    // Shift+Tab on the first element → wrap to last
-    if (active === first || !_panel.contains(active)) {
-      e.preventDefault()
-      last.focus()
-    }
-  } else {
-    // Tab on the last element → wrap to first
-    if (active === last) {
-      e.preventDefault()
-      first.focus()
-    }
-  }
-}
-
-function positionPanel(anchor: Element): void {
-  if (!_panel) return
-  const margin = 8
-  const r = anchor.getBoundingClientRect()
-  const panelW = Math.min(440, window.innerWidth - margin * 2)
-  const estimatedHeight = Math.min(540, Math.max(260, _panel.getBoundingClientRect().height || 420))
-  const spaceBelow = window.innerHeight - r.bottom - margin
-  const spaceAbove = r.top - margin
-  const openAbove = spaceBelow < Math.min(260, estimatedHeight) && spaceAbove > spaceBelow
-  const maxHeight = Math.max(220, Math.floor((openAbove ? spaceAbove : spaceBelow) - 4))
-  const visibleHeight = Math.min(estimatedHeight, maxHeight)
-  const leftEdge = Math.min(
-    Math.max(margin, r.right - panelW),
-    Math.max(margin, window.innerWidth - panelW - margin),
-  )
-  const top = openAbove
-    ? Math.max(margin, r.top - visibleHeight - 6)
-    : Math.min(window.innerHeight - margin - visibleHeight, r.bottom + 6)
-
-  _panel.style.position = "fixed"
-  _panel.style.top = `${Math.max(margin, top)}px`
-  _panel.style.left = `${leftEdge}px`
-  _panel.style.right = "auto"
-  _panel.style.width = `${panelW}px`
-  _panel.style.maxHeight = `${maxHeight}px`
-  _panel.style.overflow = "auto"
-}
 
 function _close(): void {
   if (!_panel) return
@@ -609,18 +530,9 @@ function _close(): void {
   if (_btn) _btn.setAttribute("aria-expanded", "false")
   if (_outsideClickHandler) document.removeEventListener("click", _outsideClickHandler)
   if (_keyHandler) document.removeEventListener("keydown", _keyHandler)
-  if (_resizeHandler) window.removeEventListener("resize", _resizeHandler)
   _outsideClickHandler = null
   _keyHandler = null
-  _resizeHandler = null
   _rovingTabId = null
-  // Restore focus to the element that opened the dialog (WCAG 2.4.3).
-  if (_previouslyFocused && typeof _previouslyFocused.focus === "function") {
-    _previouslyFocused.focus()
-    _previouslyFocused = null
-  } else if (_btn) {
-    _btn.focus()
-  }
 }
 
 // ─── Badge ────────────────────────────────────────────────────────────────────
@@ -742,10 +654,10 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       : (b.added + b.removed) - (a.added + a.removed)
   )
 
-  // Update the dialog's descriptive subtitle (file count) for screen readers.
-  const desc = document.getElementById("cf-dropdown-desc")
-  if (desc) {
-    desc.textContent = `${files.length} file${files.length !== 1 ? "s" : ""} changed`
+  // Update the panel count for screen readers and visual display.
+  const countEl = document.getElementById("cf-panel-count")
+  if (countEl) {
+    countEl.textContent = `${files.length} file${files.length !== 1 ? "s" : ""}`
   }
 
   // Summary bar — file count + aggregate added/removed across the changeset.
