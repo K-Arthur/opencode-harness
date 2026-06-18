@@ -704,9 +704,20 @@
       "imports": [],
       "format": "esm"
     },
-    "src/session/sessionUtils.ts": {
-      "bytes": 5230,
+    "src/session/titleExtractor.ts": {
+      "bytes": 8899,
       "imports": [],
+      "format": "esm"
+    },
+    "src/session/sessionUtils.ts": {
+      "bytes": 5554,
+      "imports": [
+        {
+          "path": "src/session/titleExtractor.ts",
+          "kind": "import-statement",
+          "original": "./titleExtractor"
+        }
+      ],
       "format": "esm"
     },
     "src/session/streamTrace.ts": {
@@ -869,7 +880,7 @@
       "format": "esm"
     },
     "src/session/SessionStore.ts": {
-      "bytes": 50286,
+      "bytes": 54203,
       "imports": [
         {
           "path": "vscode",
@@ -941,6 +952,79 @@
           "path": "vscode",
           "kind": "dynamic-import",
           "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/utils/portPool.ts": {
+      "bytes": 1241,
+      "imports": [
+        {
+          "path": "net",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/session/LocalSessionProcessManager.ts": {
+      "bytes": 6145,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "child_process",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        },
+        {
+          "path": "src/utils/portPool.ts",
+          "kind": "import-statement",
+          "original": "../utils/portPool"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/session/SessionManagerRegistry.ts": {
+      "bytes": 11144,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "os",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../utils/outputChannel"
+        },
+        {
+          "path": "src/session/SessionManager.ts",
+          "kind": "import-statement",
+          "original": "./SessionManager"
         }
       ],
       "format": "esm"
@@ -1131,6 +1215,22 @@
       ],
       "format": "esm"
     },
+    "src/chat/diff/hunkStaging.ts": {
+      "bytes": 7463,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/diff/hunkRevertPlan.ts": {
+      "bytes": 2176,
+      "imports": [
+        {
+          "path": "src/chat/diff/hunkStaging.ts",
+          "kind": "import-statement",
+          "original": "./hunkStaging"
+        }
+      ],
+      "format": "esm"
+    },
     "src/session/questionModel.ts": {
       "bytes": 2709,
       "imports": [],
@@ -1194,7 +1294,7 @@
       "format": "esm"
     },
     "src/chat/TabManager.ts": {
-      "bytes": 12243,
+      "bytes": 13457,
       "imports": [
         {
           "path": "vscode",
@@ -1331,7 +1431,7 @@
       "format": "esm"
     },
     "src/chat/handlers/StreamCoordinator.ts": {
-      "bytes": 103631,
+      "bytes": 128609,
       "imports": [
         {
           "path": "vscode",
@@ -1392,6 +1492,11 @@
           "path": "src/session/sdkMessageConverter.ts",
           "kind": "import-statement",
           "original": "../../session/sdkMessageConverter"
+        },
+        {
+          "path": "src/session/sessionUtils.ts",
+          "kind": "import-statement",
+          "original": "../../session/sessionUtils"
         },
         {
           "path": "src/chat/handlers/StreamFinalizerService.ts",
@@ -1525,7 +1630,7 @@
       "format": "esm"
     },
     "src/chat/webview/errorTypes.ts": {
-      "bytes": 16474,
+      "bytes": 22662,
       "imports": [],
       "format": "esm"
     },
@@ -1748,7 +1853,7 @@
       "format": "esm"
     },
     "src/chat/SessionLifecycleService.ts": {
-      "bytes": 8957,
+      "bytes": 9381,
       "imports": [
         {
           "path": "vscode",
@@ -1764,6 +1869,11 @@
           "path": "src/utils/security.ts",
           "kind": "import-statement",
           "original": "../utils/security"
+        },
+        {
+          "path": "src/session/sessionUtils.ts",
+          "kind": "import-statement",
+          "original": "../session/sessionUtils"
         },
         {
           "path": "src/session/sdkMessageConverter.ts",
@@ -1814,22 +1924,6 @@
       "imports": [],
       "format": "esm"
     },
-    "src/chat/diff/hunkStaging.ts": {
-      "bytes": 7463,
-      "imports": [],
-      "format": "esm"
-    },
-    "src/chat/diff/hunkRevertPlan.ts": {
-      "bytes": 2176,
-      "imports": [
-        {
-          "path": "src/chat/diff/hunkStaging.ts",
-          "kind": "import-statement",
-          "original": "./hunkStaging"
-        }
-      ],
-      "format": "esm"
-    },
     "src/session/messageId.ts": {
       "bytes": 2965,
       "imports": [],
@@ -1862,8 +1956,13 @@
       ],
       "format": "esm"
     },
+    "src/chat/QuestionExpiryDetector.ts": {
+      "bytes": 4772,
+      "imports": [],
+      "format": "esm"
+    },
     "src/chat/WebviewEventRouter.ts": {
-      "bytes": 118333,
+      "bytes": 126563,
       "imports": [
         {
           "path": "vscode",
@@ -1934,6 +2033,16 @@
           "path": "src/session/eventHandlers/TodoUpdatedHandler.ts",
           "kind": "import-statement",
           "original": "../session/eventHandlers/TodoUpdatedHandler"
+        },
+        {
+          "path": "src/chat/QuestionExpiryDetector.ts",
+          "kind": "import-statement",
+          "original": "./QuestionExpiryDetector"
+        },
+        {
+          "path": "src/session/sessionUtils.ts",
+          "kind": "import-statement",
+          "original": "../session/sessionUtils"
         },
         {
           "path": "child_process",
@@ -2117,7 +2226,7 @@
       "format": "esm"
     },
     "src/chat/ProviderManagementService.ts": {
-      "bytes": 10593,
+      "bytes": 10617,
       "imports": [
         {
           "path": "../model/ProviderConfigManager",
@@ -2284,7 +2393,7 @@
       "format": "esm"
     },
     "src/chat/ChatProvider.ts": {
-      "bytes": 109095,
+      "bytes": 115659,
       "imports": [
         {
           "path": "vscode",
@@ -2352,6 +2461,11 @@
           "original": "../diff/DiffApplier"
         },
         {
+          "path": "src/chat/diff/hunkRevertPlan.ts",
+          "kind": "import-statement",
+          "original": "./diff/hunkRevertPlan"
+        },
+        {
           "path": "src/session/sdkMessageConverter.ts",
           "kind": "import-statement",
           "original": "../session/sdkMessageConverter"
@@ -2415,6 +2529,11 @@
           "path": "src/chat/webview/opencodeErrorMapper.ts",
           "kind": "import-statement",
           "original": "./webview/opencodeErrorMapper"
+        },
+        {
+          "path": "src/chat/webview/errorTypes.ts",
+          "kind": "import-statement",
+          "original": "./webview/errorTypes"
         },
         {
           "path": "src/chat/webview/messageCounter.ts",
@@ -2595,6 +2714,11 @@
           "path": "src/chat/voiceSetup.ts",
           "kind": "import-statement",
           "original": "./voiceSetup"
+        },
+        {
+          "path": "child_process",
+          "kind": "require-call",
+          "external": true
         }
       ],
       "format": "esm"
@@ -3525,7 +3649,7 @@
       "format": "esm"
     },
     "src/extension.ts": {
-      "bytes": 30908,
+      "bytes": 34133,
       "imports": [
         {
           "path": "vscode",
@@ -3546,6 +3670,16 @@
           "path": "src/session/SessionExporter.ts",
           "kind": "import-statement",
           "original": "./session/SessionExporter"
+        },
+        {
+          "path": "src/session/LocalSessionProcessManager.ts",
+          "kind": "import-statement",
+          "original": "./session/LocalSessionProcessManager"
+        },
+        {
+          "path": "src/session/SessionManagerRegistry.ts",
+          "kind": "import-statement",
+          "original": "./session/SessionManagerRegistry"
         },
         {
           "path": "src/context/ContextEngine.ts",
@@ -3800,6 +3934,41 @@
           "external": true
         },
         {
+          "path": "child_process",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "net",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "os",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
           "path": "vscode",
           "kind": "require-call",
           "external": true
@@ -4010,6 +4179,11 @@
           "external": true
         },
         {
+          "path": "child_process",
+          "kind": "require-call",
+          "external": true
+        },
+        {
           "path": "vscode",
           "kind": "require-call",
           "external": true
@@ -4187,7 +4361,7 @@
           "bytesInOutput": 17
         },
         "node_modules/@opencode-ai/sdk/dist/v2/gen/core/serverSentEvents.gen.js": {
-          "bytesInOutput": 1728
+          "bytesInOutput": 1717
         },
         "node_modules/@opencode-ai/sdk/dist/v2/gen/core/pathSerializer.gen.js": {
           "bytesInOutput": 1559
@@ -4232,7 +4406,7 @@
           "bytesInOutput": 103
         },
         "src/extension.ts": {
-          "bytesInOutput": 11422
+          "bytesInOutput": 12476
         },
         "src/session/SessionManager.ts": {
           "bytesInOutput": 7287
@@ -4262,7 +4436,7 @@
           "bytesInOutput": 1376
         },
         "src/session/eventHandlers/ToolPartHandler.ts": {
-          "bytesInOutput": 2996
+          "bytesInOutput": 2992
         },
         "src/session/eventHandlers/ActivityPartHandler.ts": {
           "bytesInOutput": 1053
@@ -4334,13 +4508,16 @@
           "bytesInOutput": 8896
         },
         "src/session/SessionClient.ts": {
-          "bytesInOutput": 9741
+          "bytesInOutput": 9740
         },
         "src/session/v2ResponseMappers.ts": {
           "bytesInOutput": 861
         },
+        "src/session/titleExtractor.ts": {
+          "bytesInOutput": 460
+        },
         "src/session/sessionUtils.ts": {
-          "bytesInOutput": 1424
+          "bytesInOutput": 1303
         },
         "src/session/streamTrace.ts": {
           "bytesInOutput": 257
@@ -4352,7 +4529,7 @@
           "bytesInOutput": 2891
         },
         "src/session/SessionStore.ts": {
-          "bytesInOutput": 19381
+          "bytesInOutput": 20276
         },
         "src/session/activityCoalesce.ts": {
           "bytesInOutput": 977
@@ -4363,11 +4540,20 @@
         "src/session/SessionExporter.ts": {
           "bytesInOutput": 5403
         },
+        "src/session/LocalSessionProcessManager.ts": {
+          "bytesInOutput": 3213
+        },
+        "src/utils/portPool.ts": {
+          "bytesInOutput": 746
+        },
+        "src/session/SessionManagerRegistry.ts": {
+          "bytesInOutput": 4743
+        },
         "src/context/ContextEngine.ts": {
-          "bytesInOutput": 2011
+          "bytesInOutput": 2012
         },
         "src/utils/tokenCounter.ts": {
-          "bytesInOutput": 799
+          "bytesInOutput": 807
         },
         "src/statusBarTooltips.ts": {
           "bytesInOutput": 787
@@ -4400,13 +4586,19 @@
           "bytesInOutput": 2785
         },
         "src/chat/ChatProvider.ts": {
-          "bytesInOutput": 49093
+          "bytesInOutput": 50871
         },
         "src/monitor/UsageAnalytics.ts": {
           "bytesInOutput": 2956
         },
         "src/diff/DiffApplier.ts": {
           "bytesInOutput": 1101
+        },
+        "src/chat/diff/hunkStaging.ts": {
+          "bytesInOutput": 2119
+        },
+        "src/chat/diff/hunkRevertPlan.ts": {
+          "bytesInOutput": 275
         },
         "src/session/questionModel.ts": {
           "bytesInOutput": 1269
@@ -4421,10 +4613,10 @@
           "bytesInOutput": 166
         },
         "src/chat/TabManager.ts": {
-          "bytesInOutput": 6694
+          "bytesInOutput": 6839
         },
         "src/chat/handlers/StreamCoordinator.ts": {
-          "bytesInOutput": 45934
+          "bytesInOutput": 53805
         },
         "src/chat/handlers/StreamFinalizerService.ts": {
           "bytesInOutput": 1947
@@ -4477,6 +4669,9 @@
         "src/chat/restorablePolicy.ts": {
           "bytesInOutput": 54
         },
+        "src/chat/webview/errorTypes.ts": {
+          "bytesInOutput": 1085
+        },
         "src/chat/webview/opencodeErrorMapper.ts": {
           "bytesInOutput": 4395
         },
@@ -4520,7 +4715,7 @@
           "bytesInOutput": 947
         },
         "src/chat/SessionLifecycleService.ts": {
-          "bytesInOutput": 4070
+          "bytesInOutput": 4085
         },
         "src/session/sdkUsageSummary.ts": {
           "bytesInOutput": 527
@@ -4529,16 +4724,10 @@
           "bytesInOutput": 3416
         },
         "src/chat/WebviewEventRouter.ts": {
-          "bytesInOutput": 56601
+          "bytesInOutput": 58331
         },
         "src/chat/diff/sdkFileContentToDiffLines.ts": {
           "bytesInOutput": 992
-        },
-        "src/chat/diff/hunkStaging.ts": {
-          "bytesInOutput": 2119
-        },
-        "src/chat/diff/hunkRevertPlan.ts": {
-          "bytesInOutput": 275
         },
         "src/session/messageId.ts": {
           "bytesInOutput": 484
@@ -4551,6 +4740,9 @@
         },
         "src/chat/WebviewMessageValidator.ts": {
           "bytesInOutput": 8968
+        },
+        "src/chat/QuestionExpiryDetector.ts": {
+          "bytesInOutput": 1540
         },
         "src/chat/handlers/SteerPromptHandler.ts": {
           "bytesInOutput": 2201
@@ -4568,10 +4760,10 @@
           "bytesInOutput": 4650
         },
         "src/chat/backfillPlanner.ts": {
-          "bytesInOutput": 314
+          "bytesInOutput": 313
         },
         "src/chat/BackfillService.ts": {
-          "bytesInOutput": 4106
+          "bytesInOutput": 4104
         },
         "src/chat/MessagePostService.ts": {
           "bytesInOutput": 497
@@ -4586,7 +4778,7 @@
           "bytesInOutput": 1652
         },
         "src/chat/ProviderManagementService.ts": {
-          "bytesInOutput": 5337
+          "bytesInOutput": 5363
         },
         "src/chat/DiffAcceptService.ts": {
           "bytesInOutput": 498
@@ -4622,7 +4814,7 @@
           "bytesInOutput": 2398
         },
         "src/model/ModelManager.ts": {
-          "bytesInOutput": 10324
+          "bytesInOutput": 10333
         },
         "src/model/openRouterMetadata.ts": {
           "bytesInOutput": 1452
@@ -4640,7 +4832,7 @@
           "bytesInOutput": 7727
         },
         "src/install/OpencodeInstaller.ts": {
-          "bytesInOutput": 4385
+          "bytesInOutput": 4395
         },
         "src/utils/lazyStarter.ts": {
           "bytesInOutput": 134
@@ -4673,7 +4865,7 @@
           "bytesInOutput": 1131
         },
         "src/commands/model.ts": {
-          "bytesInOutput": 1800
+          "bytesInOutput": 1810
         },
         "src/commands/misc.ts": {
           "bytesInOutput": 1990
@@ -4706,7 +4898,7 @@
           "bytesInOutput": 845
         }
       },
-      "bytes": 630313
+      "bytes": 655512
     }
   }
 }
