@@ -161,7 +161,8 @@ void describe("generateTitleFromMessage", () => {
     const long = "This is a very long message that should definitely be truncated because it exceeds forty characters"
     const result = generateTitleFromMessage(long)
     assert.equal(result.length <= 40, true)
-    assert.equal(result.endsWith("..."), true)
+    // extractTitle uses Unicode ellipsis (U+2026) per titleExtractor.ts spec
+    assert.equal(result.endsWith("…"), true)
   })
 
   void it("handles newlines as sentence break", () => {
