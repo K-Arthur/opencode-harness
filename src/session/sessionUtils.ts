@@ -103,9 +103,9 @@ export function validateSessionName(name: string): string | null {
   return null
 }
 
-import { extractTitle, dedupeTitle, dedupeTitleAgainst } from "./titleExtractor"
+import { extractTitle, dedupeTitle, dedupeTitleAgainst, extractDiscriminator, dedupeTitleSmart } from "./titleExtractor"
 
-export { extractTitle, dedupeTitle, dedupeTitleAgainst }
+export { extractTitle, dedupeTitle, dedupeTitleAgainst, extractDiscriminator, dedupeTitleSmart }
 
 /**
  * Generate a session title from the first user message.

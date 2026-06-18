@@ -122,3 +122,99 @@ export function dedupeTitleAgainst(
   }
   return dedupeTitle(proposed, set)
 }
+
+const BOILERPLATE_RE = /^[\s>]*#{1,6}\s+|^\[[^\]\n]{1,40}\]\s*[*·\-\u2014]?\s*|^(?:TODO|FIXME|NOTE|WIP|RFC|HACK)\s*:\s*/i
+
+/**
+ * Extract a distinguishing discriminator token from the full prompt text,
+ * skipping any boilerplate and the words that already appear in the base title.
+ *
+ * Returns the longest capitalized word (length ≥ 4, starting with [A-Z]) found
+ * in the text that is NOT present in the base title. Returns "" when no
+ * suitable token exists.
+ *
+ *   extractDiscriminator("Fix bug in TabManager", "Fix bug")         → "TabManager"
+ *   extractDiscriminator("Fix bug again", "Fix bug")                 → ""
+ *   extractDiscriminator("# [Sprint 4] Refactor TabManager", "Refactor") → "TabManager"
+ *
+ * Pure, deterministic, O(n), no side effects.
+ */
+export function extractDiscriminator(fullText: string, baseTitle: string): string {
+  if (!fullText || !fullText.trim()) return ""
+
+  // Build a set of lowercase tokens from the base title for exclusion.
+  const baseTokens = new Set(
+    baseTitle
+      .toLowerCase()
+      .split(/[^a-zA-Z0-9]+/)
+      .filter(Boolean),
+  )
+
+  // Strip boilerplate from the full text before scanning for discriminators.
+  // Apply stripBoilerplate and also split on sentence boundaries to get past
+  // the first sentence (which generated the base title).
+  let cleaned = fullText
+  for (let i = 0; i < 4; i++) {
+    const before = cleaned
+    cleaned = cleaned.replace(BOILERPLATE_RE, "")
+    if (cleaned === before) break
+  }
+
+  // Collect all candidate tokens (length ≥ 4, starts with uppercase letter)
+  // from the entire cleaned text, filtering out base-title tokens.
+  const candidates: Array<{ token: string; length: number }> = []
+  const seen = new Set<string>()
+  for (const word of cleaned.split(/[^a-zA-Z0-9]+/)) {
+    if (!word || word.length < 4) continue
+    const lower = word.toLowerCase()
+    if (baseTokens.has(lower)) continue
+    if (!/^[A-Z]/.test(word)) continue
+    if (seen.has(lower)) continue
+    seen.add(lower)
+    candidates.push({ token: word, length: word.length })
+  }
+
+  if (candidates.length === 0) return ""
+
+  // Sort by length descending, pick the longest.
+  candidates.sort((a, b) => b.length - a.length)
+  return candidates[0]!.token
+}
+
+/**
+ * Smart deduplication: uses a semantic discriminator token as suffix prefix
+ * instead of opaque numeric counters.
+ *
+ *   dedupeTitleSmart("Fix bug", "Fix bug in TabManager", {"Fix bug"})
+ *     → "Fix bug (TabManager)"
+ *
+ * Falls back to numeric dedupeTitle when no discriminator token is available.
+ * On subsequent collisions of the same discriminator, escalates to numeric:
+ *
+ *   dedupeTitleSmart("Fix bug", "Fix bug in TabManager", {"Fix bug", "Fix bug (TabManager)"})
+ *     → "Fix bug (3)"
+ *
+ * Does NOT mutate the input set.
+ */
+export function dedupeTitleSmart(
+  proposed: string,
+  fullText: string,
+  existing: ReadonlySet<string>,
+): string {
+  // Fast path: no collision at all.
+  if (!existing.has(proposed)) return proposed
+
+  // Try discriminator suffix first.
+  const discriminator = extractDiscriminator(fullText, proposed)
+  if (discriminator) {
+    const suffix = ` (${discriminator})`
+    // Ensure the suffix fits within MAX_RENDERED_LENGTH.
+    if (suffix.length <= MAX_RENDERED_LENGTH && (proposed.length + suffix.length) <= MAX_RENDERED_LENGTH) {
+      const candidate = `${proposed}${suffix}`
+      if (!existing.has(candidate)) return candidate
+    }
+  }
+
+  // Fall back to standard numeric deduplication.
+  return dedupeTitle(proposed, existing)
+}

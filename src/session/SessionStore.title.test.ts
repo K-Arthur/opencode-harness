@@ -125,4 +125,42 @@ describe("SessionUpdatedHandler — Layer 6 RED (behavioral)", () => {
   it.skip("L6-T11: session.deleted event handler — deferred", () => {})
 })
 
+describe("SessionStore.appendMessage title propagation — structural", () => {
+  it("L6-T15: appendMessage fires titleAppliedCallback when auto-title generates", () => {
+    assert.match(
+      STORE_SRC,
+      /titleAppliedCallback\?\.\(session\.id,\s*generated\)/,
+      "appendMessage must invoke titleAppliedCallback after generating auto-title",
+    )
+  })
+
+  it("L6-T16: appendMessage fires rename event on auto-title generation", () => {
+    const fnBody = STORE_SRC.slice(STORE_SRC.indexOf("appendMessage("))
+    assert.match(
+      fnBody,
+      /fireChangeEvent\(\{ kind: "renamed"/,
+      "appendMessage must fire a 'renamed' change event when auto-title generates",
+    )
+  })
+
+  it("L6-T17: autoTitleFromMessages fires titleAppliedCallback when title changes", () => {
+    const fnBody = STORE_SRC.slice(STORE_SRC.indexOf("autoTitleFromMessages("))
+    assert.match(
+      fnBody,
+      /titleAppliedCallback\?\.\(id,\s*generated\)/,
+      "autoTitleFromMessages must invoke titleAppliedCallback after generating title",
+    )
+  })
+
+  it("L6-T18: autoTitleFromMessages fires rename event on title generation", () => {
+    const fnBody = STORE_SRC.slice(STORE_SRC.indexOf("autoTitleFromMessages("))
+    assert.match(
+      fnBody,
+      /fireChangeEvent\(\{ kind: "renamed"/,
+      "autoTitleFromMessages must fire a 'renamed' change event when title generates",
+    )
+  })
+})
+
 // L6-T12..T14: Playwright integration. Tracked separately.
+// L6-T19 (deferred): TabManager.setStreaming StreamingStateChange shape

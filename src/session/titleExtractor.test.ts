@@ -1,6 +1,6 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { extractTitle, dedupeTitle } from "./titleExtractor"
+import { extractTitle, dedupeTitle, extractDiscriminator, dedupeTitleSmart } from "./titleExtractor"
 
 describe("extractTitle — boilerplate stripping", () => {
   it("returns empty string for empty/whitespace input", () => {
@@ -166,5 +166,89 @@ describe("extractTitle + dedupeTitle — integration", () => {
     for (const label of labels) {
       assert.ok(label.length <= 48, `label too long: "${label}" (${label.length})`)
     }
+  })
+})
+
+describe("extractDiscriminator — unique token from full text", () => {
+  it("extracts first capitalized word from subsequent content as discriminator", () => {
+    const text = "# Role & Objective\nRefactor the TabManager state synchronization"
+    assert.equal(extractDiscriminator(text, "Role & Objective"), "TabManager")
+  })
+
+  it("returns empty string when no distinguishing token found", () => {
+    const text = "Fix bug"
+    assert.equal(extractDiscriminator(text, "Fix bug"), "")
+  })
+
+  it("skips boilerplate when extracting discriminator", () => {
+    const text = "[methodology] Refactor TabManager\n## Details\nThis is about the SessionStore"
+    // "SessionStore" (11 chars) wins over "TabManager" (10 chars) — longest capitalized token
+    assert.equal(extractDiscriminator(text, "Refactor"), "SessionStore")
+  })
+
+  it("prefers the longest new token not present in the base title", () => {
+    const text = "Fix bug in the TabManager authentication module"
+    assert.equal(extractDiscriminator(text, "Fix bug"), "TabManager")
+  })
+
+  it("falls back to empty string when all tokens appear in the base title", () => {
+    const text = "Fix the bug again"
+    assert.equal(extractDiscriminator(text, "Fix the bug"), "")
+  })
+
+  it("returns empty string for empty input", () => {
+    assert.equal(extractDiscriminator("", "base"), "")
+    assert.equal(extractDiscriminator("   ", "base"), "")
+  })
+})
+
+describe("dedupeTitleSmart — semantic deduplication with discriminator suffix", () => {
+  it("returns proposed as-is when no collision (same as dedupeTitle)", () => {
+    const existing = new Set<string>(["Other"])
+    assert.equal(dedupeTitleSmart("Fix bug", "Fix bug", existing), "Fix bug")
+  })
+
+  it("uses discriminator suffix instead of '(2)' when token available", () => {
+    const existing = new Set<string>(["Fix bug"])
+    const fullText = "Fix bug in TabManager state sync"
+    const out = dedupeTitleSmart("Fix bug", fullText, existing)
+    assert.equal(out, "Fix bug (TabManager)")
+  })
+
+  it("falls back to numeric '(2)' when no discriminator token found", () => {
+    const existing = new Set<string>(["Fix bug"])
+    const fullText = "Fix bug again"
+    const out = dedupeTitleSmart("Fix bug", fullText, existing)
+    assert.equal(out, "Fix bug (2)")
+  })
+
+  it("discriminator never exceeds MAX_RENDERED_LENGTH", () => {
+    const existing = new Set<string>(["Fix"])
+    const fullText = "Fix a very long prompt that keeps going and going with a Supercalifragilisticexpialidocious word"
+    const out = dedupeTitleSmart("Fix", fullText, existing)
+    assert.ok(out.length <= 48, `dedupeTitleSmart output too long: "${out}" (${out.length})`)
+  })
+
+  it("strips boilerplate before extracting discriminator", () => {
+    const existing = new Set<string>(["Refactor"])
+    const fullText = "# [Sprint 4] Refactor the TabManager session layer"
+    const out = dedupeTitleSmart("Refactor", fullText, existing)
+    assert.equal(out, "Refactor (TabManager)")
+  })
+
+  it("escalates from discriminator to numeric on second collision of same base", () => {
+    // Discriminator "TabManager" is already taken → fallback to dedupeTitle
+    // which starts at n=2 → "(2)" is the fallback
+    const existing = new Set<string>(["Fix bug", "Fix bug (TabManager)"])
+    const fullText = "Fix bug in TabManager state sync"
+    const out = dedupeTitleSmart("Fix bug", fullText, existing)
+    assert.equal(out, "Fix bug (2)")
+  })
+
+  it("does not mutate the input set", () => {
+    const input = new Set<string>(["Fix bug"])
+    dedupeTitleSmart("Fix bug", "Fix bug in TabManager", input)
+    assert.equal(input.size, 1)
+    assert.ok(input.has("Fix bug"))
   })
 })

@@ -705,6 +705,11 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
       const generated = this.generateTitleFromMessage(text)
       if (generated) {
         session.name = generated
+        // Direct IPC push (D3 fix) — fires synchronously so the webview
+        // receives session_title_updated before the save completes.
+        this.titleAppliedCallback?.(session.id, generated)
+        // Legacy path for regression safety.
+        this.fireChangeEvent({ kind: "renamed", sessionId: session.id, name: generated })
       }
     }
 
@@ -858,6 +863,10 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
     session.name = generated
     this.save()
     this._onSessionsChanged.fire()
+    // Direct IPC push (D3 fix) — fires synchronously.
+    this.titleAppliedCallback?.(id, generated)
+    // Legacy path for regression safety.
+    this.fireChangeEvent({ kind: "renamed", sessionId: id, name: generated })
     return true
   }
 
