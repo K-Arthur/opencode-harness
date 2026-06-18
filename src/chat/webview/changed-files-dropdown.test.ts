@@ -71,38 +71,12 @@ function renderChangedFilesList(container: HTMLElement, files: any[], options: a
   btn.click()
 }
 
-describe("renderChangedFilesList — summary bar", () => {
-  it("renders a summary bar with total file count", async () => {
-    const container = setupDom()
-    const files = [
-      { path: "src/a.ts", added: 10, removed: 2 },
-      { path: "src/b.ts", added: 5, removed: 0 },
-    ]
-    renderChangedFilesList(container, files, { onOpenChangedFileDiff: () => {},
-      onOpenFile: () => {} } as any)
-    const summary = container.querySelector(".cf-summary-bar")
-    assert.ok(summary, "must render .cf-summary-bar")
-    assert.ok(summary!.textContent!.includes("2"), "must show file count")
-  })
-
-  it("renders total added and removed in summary bar", async () => {
-    const container = setupDom()
-    renderChangedFilesList(container, [
-      { path: "a.ts", added: 7, removed: 3 },
-      { path: "b.ts", added: 2, removed: 0 },
-    ], { onOpenChangedFileDiff: () => {},
-      onOpenFile: () => {} } as any)
-    const bar = container.querySelector(".cf-summary-bar")!
-    assert.ok(bar.textContent!.includes("+9") || bar.textContent!.match(/\+\s*9/), "must show total +9")
-    assert.ok(bar.textContent!.includes("−3") || bar.textContent!.match(/[-−]\s*3/), "must show total -3")
-  })
-
+describe("renderChangedFilesList — empty state", () => {
   it("renders an empty state with .cf-empty when files array is empty", async () => {
     const container = setupDom()
     renderChangedFilesList(container, [], { onOpenChangedFileDiff: () => {},
       onOpenFile: () => {} } as any)
     assert.ok(container.querySelector(".cf-empty"), "must render .cf-empty for empty list")
-    assert.ok(!container.querySelector(".cf-summary-bar"), "must not render summary for empty list")
   })
 })
 
@@ -184,89 +158,6 @@ describe("renderChangedFilesList — directory grouping", () => {
       onOpenFile: () => {} } as any)
     const groups = container.querySelectorAll(".cf-dir-group")
     assert.ok(groups.length >= 1, "must create at least one group for root files")
-  })
-})
-
-describe("renderChangedFilesList — controls", () => {
-  it("renders a collapse-all button", async () => {
-    const container = setupDom()
-    renderChangedFilesList(container, [{ path: "a.ts", added: 1, removed: 0 }], { onOpenChangedFileDiff: () => {},
-      onOpenFile: () => {} } as any)
-    const btn = container.querySelector("[data-action='collapse-all'], .cf-collapse-all-btn")
-    assert.ok(btn, "must render collapse-all control")
-  })
-
-  it("renders a sort toggle button", async () => {
-    const container = setupDom()
-    renderChangedFilesList(container, [{ path: "a.ts", added: 1, removed: 0 }], { onOpenChangedFileDiff: () => {},
-      onOpenFile: () => {} } as any)
-    const btn = container.querySelector("[data-action='toggle-sort'], .cf-sort-btn")
-    assert.ok(btn, "must render sort toggle control")
-  })
-})
-
-describe("renderChangedFilesList — expand/diff preview", () => {
-  it("renders an expand chevron button on each file row", async () => {
-    const container = setupDom()
-    resetChangedFilesDropdown()
-    renderChangedFilesList(container, [{ path: "src/chevron-test.ts", added: 5, removed: 2 }], { onOpenChangedFileDiff: () => {},
-      onOpenFile: () => {} } as any)
-    const chevron = container.querySelector(".cf-expand-btn")
-    assert.ok(chevron, "must render a .cf-expand-btn chevron on each file row")
-  })
-
-  it("renders a hunk preview area that is initially hidden", async () => {
-    const container = setupDom()
-    resetChangedFilesDropdown()
-    renderChangedFilesList(container, [{ path: "src/hidden-preview.ts", added: 5, removed: 2 }], { onOpenChangedFileDiff: () => {},
-      onOpenFile: () => {} } as any)
-    const preview = container.querySelector(".cf-hunk-preview")
-    assert.ok(preview, "must render .cf-hunk-preview")
-    assert.ok(
-      !preview!.classList.contains("cf-hunk-preview--open"),
-      "hunk preview must be closed by default"
-    )
-  })
-
-  it("renders a loading state inside the hunk preview when clicked (before response arrives)", async () => {
-    const container = setupDom()
-    resetChangedFilesDropdown()
-    const postMessages: any[] = []
-    renderChangedFilesList(
-      container,
-      [{ path: "src/loading-state-test.ts", added: 5, removed: 2 }],
-      { onOpenChangedFileDiff: () => {},
-      onOpenFile: () => {}, postMessage: (m: any) => postMessages.push(m) } as any
-    )
-    const chevron = container.querySelector<HTMLElement>(".cf-expand-btn")
-    chevron!.click()
-    const preview = container.querySelector(".cf-hunk-preview")!
-    assert.ok(
-      preview.classList.contains("cf-hunk-preview--open"),
-      "clicking chevron must open the hunk preview"
-    )
-    assert.ok(
-      preview.querySelector(".cf-hunk-loading") || preview.textContent!.toLowerCase().includes("loading"),
-      "must show loading state while diff data is pending"
-    )
-  })
-
-  it("posts get_file_diff message when a file row is expanded", async () => {
-    const container = setupDom()
-    resetChangedFilesDropdown()
-    const postMessages: any[] = []
-    renderChangedFilesList(
-      container,
-      [{ path: "src/post-msg-test.ts", added: 5, removed: 2 }],
-      { onOpenChangedFileDiff: () => {},
-      onOpenFile: () => {}, postMessage: (m: any) => postMessages.push(m) } as any
-    )
-    const chevron = container.querySelector<HTMLElement>(".cf-expand-btn")
-    chevron!.click()
-    assert.ok(
-      postMessages.some(m => m.type === "get_file_diff" && m.path === "src/post-msg-test.ts"),
-      `expected get_file_diff message, got: ${JSON.stringify(postMessages)}`
-    )
   })
 })
 

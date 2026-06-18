@@ -929,7 +929,12 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
   }
 
   private async handleAttachFiles(): Promise<void> {
-    return this.sessionLifecycle.handleAttachFiles()
+    await this.sessionLifecycle.handleAttachFiles()
+    // Trigger context usage refresh after file attachment
+    const activeTab = this.tabManager.getActiveTab()
+    if (activeTab) {
+      this.pushContextUsageForSession(activeTab.id)
+    }
   }
 
   private handleAttachImage(sessionId: string, data: string, mimeType: string): void {
@@ -937,7 +942,13 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
   }
 
   private async handleCompactSession(sessionId?: string): Promise<void> {
-    return this.diffAcceptService.handleCompactSession(sessionId)
+    await this.diffAcceptService.handleCompactSession(sessionId)
+    // Trigger context usage refresh after compaction
+    const activeTab = this.tabManager.getActiveTab()
+    const targetSessionId = sessionId || activeTab?.id
+    if (targetSessionId) {
+      this.pushContextUsageForSession(targetSessionId)
+    }
   }
 
   private async handleExecuteCommand(sessionId?: string, command?: string, args?: string): Promise<void> {

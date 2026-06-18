@@ -1,3 +1,6 @@
+import { ContextUsageThrottler } from "../chat/ContextUsageThrottler.js"
+import type { ContextUsageData } from "../chat/ContextUsageThrottler.js"
+
 export interface ContextUsage {
   percent: number
   tokens: number
@@ -22,6 +25,7 @@ export interface ContextUsage {
 export interface ContextUsageUpdateOptions {
   source?: "estimated" | "actual"
   updatedAt?: number
+  immediate?: boolean
 }
 
 export interface ContextUsageHistory {
@@ -105,6 +109,7 @@ private currentTokens = 0
   private currentModelId?: string
   private onHistoryUpdatedEmitter = new SimpleEventEmitter<void>()
   private trackingEnabled = true
+  private throttler: ContextUsageThrottler
 
   readonly onContextChanged = this.onContextChangedEmitter.event
   readonly onHistoryUpdated = this.onHistoryUpdatedEmitter.event
@@ -124,7 +129,9 @@ private currentTokens = 0
     return this.calculatePercent(this.currentTokens)
   }
 
-  constructor() {
+  constructor(debounceMs: number = 250) {
+    this.throttler = new ContextUsageThrottler(debounceMs)
+    this.throttler.onEmit((data) => this.onContextChangedEmitter.fire(data as ContextUsage))
     this.initializeProviderPricing()
     this.loadSettings()
   }
@@ -296,7 +303,25 @@ private currentTokens = 0
         usage.projected = { withQueue: prediction.predictedTokens, overflow: prediction.willOverflow }
       }
     }
-    this.onContextChangedEmitter.fire(usage)
+
+    // Use throttled emit for regular updates, immediate for critical events
+    const data: ContextUsageData = {
+      percent: usage.percent,
+      tokens: usage.tokens,
+      maxTokens: usage.maxTokens,
+      sessionId: usage.sessionId,
+      breakdown: usage.breakdown,
+      cost: usage.cost,
+      source: usage.source,
+      updatedAt: usage.updatedAt,
+    }
+
+    if (options.immediate) {
+      this.throttler.emitImmediate(data)
+    } else {
+      this.throttler.emit(data)
+    }
+
     if (sessionId !== undefined && breakdown) {
       this.trackUsage(sessionId, this.currentTokens, breakdown, cost)
     }
@@ -317,7 +342,18 @@ private currentTokens = 0
       updatedAt: Date.now(),
     }
     this.latestUsageBySession.set(sessionId, usage)
-    this.onContextChangedEmitter.fire(usage)
+
+    // Re-emit immediately since this is a critical limit change
+    this.throttler.emitImmediate({
+      percent: usage.percent,
+      tokens: usage.tokens,
+      maxTokens: usage.maxTokens,
+      sessionId: usage.sessionId,
+      breakdown: usage.breakdown,
+      cost: usage.cost,
+      source: usage.source,
+      updatedAt: usage.updatedAt,
+    })
   }
 
   /**
@@ -355,7 +391,17 @@ private currentTokens = 0
       const prediction = this.predictUsage(pendingTokens)
       usage.projected = { withQueue: prediction.predictedTokens, overflow: prediction.willOverflow }
     }
-    this.onContextChangedEmitter.fire(usage)
+
+    // Queue changes are critical for UX, emit immediately
+    this.throttler.emitImmediate({
+      percent: usage.percent,
+      tokens: usage.tokens,
+      maxTokens: usage.maxTokens,
+      sessionId: usage.sessionId,
+      breakdown: usage.breakdown,
+      source: usage.source,
+      updatedAt: usage.updatedAt,
+    })
   }
 
   showWarning(message: string): void {
@@ -567,7 +613,16 @@ private currentTokens = 0
     return this.historyRetentionDays
   }
 
+  /**
+   * Emit a context usage update immediately, bypassing throttling.
+   * Use for critical events like compaction, file add, stream boundaries.
+   */
+  emitImmediate(data: ContextUsageData): void {
+    this.throttler.emitImmediate(data)
+  }
+
   dispose(): void {
+    this.throttler.dispose()
     this.latestUsageBySession.clear()
     this.onContextChangedEmitter.dispose()
     this.onHistoryUpdatedEmitter.dispose()

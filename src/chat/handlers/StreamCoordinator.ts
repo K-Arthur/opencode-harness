@@ -1415,6 +1415,19 @@ export class StreamCoordinator {
       seq: this.nextSeq(tabId),
     })
     this.traceRun(tabId, "stream_start")
+    
+    // Stream boundary trigger: refresh context usage immediately at stream start
+    const tab = this.tabManager.getTab(tabId)
+    if (tab) {
+      this.contextMonitor.emitImmediate({
+        percent: this.contextMonitor.percent,
+        tokens: this.contextMonitor.tokensUsed,
+        maxTokens: this.contextMonitor.limit,
+        sessionId: tabId,
+        source: "estimated",
+        updatedAt: Date.now(),
+      })
+    }
     callbacks.clearPromptsInFlight?.()
 
     this.tabManager.setWaitingForCompletion(tabId, true)
@@ -2035,6 +2048,16 @@ export class StreamCoordinator {
     this.setActiveRunState(tabId, "completed", { finalizeReason: "normal" })
     this.activeRuns.delete(tabId)
     this.activeRunMetrics.delete(tabId)
+
+    // Stream boundary trigger: refresh context usage immediately at stream end
+    this.contextMonitor.emitImmediate({
+      percent: this.contextMonitor.percent,
+      tokens: this.contextMonitor.tokensUsed,
+      maxTokens: this.contextMonitor.limit,
+      sessionId: tabId,
+      source: "estimated",
+      updatedAt: Date.now(),
+    })
 
     // Drain host-side prompt queue after stream finalization
     // (the old "append" mode is gone — queued follow-ups are the single path).
