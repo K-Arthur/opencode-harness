@@ -36,6 +36,17 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
   if (role !== "system" && !isConsecutive && !opts?.skipHeader) {
     const header = document.createElement("div")
     header.className = "message-header"
+
+    // Per-turn mode badge — lead indicator, before role/model/timestamp
+    const effectiveMode = msg.mode || opts?.mode
+    if (effectiveMode && role === "assistant") {
+      const modeBadge = document.createElement("span")
+      modeBadge.className = `message-mode-badge message-mode-badge--${effectiveMode}`
+      modeBadge.textContent = effectiveMode === "plan" ? "Plan" : effectiveMode === "auto" ? "Auto" : "Build"
+      modeBadge.title = `This message was produced in ${effectiveMode} mode`
+      header.appendChild(modeBadge)
+    }
+
     const roleSpan = document.createElement("span")
     roleSpan.className = "message-role"
     roleSpan.textContent = role === "user" ? "You" : "OpenCode"
@@ -72,16 +83,6 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
       ts.className = "message-timestamp"
       ts.textContent = formatRelativeTime(msg.timestamp)
       header.appendChild(ts)
-    }
-
-    // Per-turn mode badge for session history (assistant messages only)
-    const effectiveMode = msg.mode || opts?.mode
-    if (effectiveMode && role === "assistant") {
-      const modeBadge = document.createElement("span")
-      modeBadge.className = `message-mode-badge message-mode-badge--${effectiveMode}`
-      modeBadge.textContent = effectiveMode === "plan" ? "Plan" : effectiveMode === "auto" ? "Auto" : "Build"
-      modeBadge.title = `This message was produced in ${effectiveMode} mode`
-      header.appendChild(modeBadge)
     }
     if (role === "user" && msg.id) {
       const editBtn = document.createElement("button")
