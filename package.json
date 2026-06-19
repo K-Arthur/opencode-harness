@@ -9,7 +9,7 @@
   },
   "description": "Open-source AI coding agent for VS Code. Chat, refactor, debug, and write code using Claude, GPT, Gemini, and 75+ models. Includes cost tracking, custom themes, permission controls, and checkpoint rollback.",
   "icon": "media/opencode-icon-256.png",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "engines": {
     "vscode": "^1.98.0"
   },
