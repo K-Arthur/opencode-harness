@@ -47,64 +47,76 @@ function parseImports(source) {
 }
 
 async function main() {
-  const config = readJSONC(resolve(root, ".jcodemunch.jsonc"))
-  const layers = config.architecture.layers
-  const violations = []
+  try {
+    const config = readJSONC(resolve(root, ".jcodemunch.jsonc"))
+    const layers = config.architecture.layers
+    const violations = []
 
-  // Build a map from layer name to paths
-  const layerPaths = {}
-  for (const layer of layers) {
-    layerPaths[layer.name] = layer.paths
-  }
-
-  // For each layer, check files for forbidden imports
-  for (const layer of layers) {
-    const files = []
-    for (const pattern of layer.paths) {
-      const fullPattern = resolve(root, pattern)
-      for await (const file of glob(fullPattern, { ignore: ["**/node_modules/**", "**/dist/**"] })) {
-        try {
-          if (statSync(file).isFile()) {
-            files.push(file)
-          }
-        } catch { /* skip unreadable */ }
-      }
+    // Build a map from layer name to paths
+    const layerPaths = {}
+    for (const layer of layers) {
+      layerPaths[layer.name] = layer.paths
     }
 
-    for (const file of files) {
-      const source = readFileSync(file, "utf8")
-      const imports = parseImports(source)
-
-      for (const imp of imports) {
-        // Convert relative import to file path
-        if (!imp.startsWith(".")) continue
-        const impFile = resolve(dirname(file), imp)
-        const relImp = normalizePath(relative(root, impFile))
-
-        // Check if this import violates any may_not_import rule
-        for (const forbidden of layer.may_not_import) {
-          const forbiddenPaths = layerPaths[forbidden]
-          if (!forbiddenPaths) continue
-          for (const fp of forbiddenPaths) {
-            if (matchGlob(relImp, fp)) {
-              const relFile = normalizePath(relative(root, file))
-              violations.push(`${relFile} imports ${relImp} which is in forbidden layer "${forbidden}"`)
+    // For each layer, check files for forbidden imports
+    for (const layer of layers) {
+      const files = []
+      for (const pattern of layer.paths) {
+        const fullPattern = resolve(root, pattern)
+        for await (const file of glob(fullPattern, { ignore: ["**/node_modules/**", "**/dist/**"] })) {
+          try {
+            if (statSync(file).isFile()) {
+              files.push(file)
             }
+          } catch (e) {
+            console.error(`Warning: Could not read file ${file}: ${e.message}`)
           }
         }
       }
-    }
-  }
 
-  if (violations.length > 0) {
-    console.error("Architecture layer violations found:")
-    for (const v of violations) {
-      console.error(`  ❌ ${v}`)
+      for (const file of files) {
+        try {
+          const source = readFileSync(file, "utf8")
+          const imports = parseImports(source)
+
+          for (const imp of imports) {
+            // Convert relative import to file path
+            if (!imp.startsWith(".")) continue
+            const impFile = resolve(dirname(file), imp)
+            const relImp = normalizePath(relative(root, impFile))
+
+            // Check if this import violates any may_not_import rule
+            for (const forbidden of layer.may_not_import) {
+              const forbiddenPaths = layerPaths[forbidden]
+              if (!forbiddenPaths) continue
+              for (const fp of forbiddenPaths) {
+                if (matchGlob(relImp, fp)) {
+                  const relFile = normalizePath(relative(root, file))
+                  violations.push(`${relFile} imports ${relImp} which is in forbidden layer "${forbidden}"`)
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error(`Warning: Could not process file ${file}: ${e.message}`)
+        }
+      }
     }
+
+    if (violations.length > 0) {
+      console.error("Architecture layer violations found:")
+      for (const v of violations) {
+        console.error(`  ❌ ${v}`)
+      }
+      process.exit(1)
+    }
+
+    console.log("✅ Architecture layer rules passed — no violations found")
+  } catch (e) {
+    console.error(`Error running architecture check: ${e.message}`)
+    console.error(e.stack)
     process.exit(1)
   }
-
-  console.log("✅ Architecture layer rules passed — no violations found")
 }
 
 main()
