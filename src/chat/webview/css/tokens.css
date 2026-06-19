@@ -220,12 +220,22 @@
   --oc-warning-border: color-mix(in srgb, var(--color-warning) 20%, transparent);
 
   /* ─── Semantic Status Tokens (for tool call states, badges, LEDs) ─── */
-  --oc-status-running: hsl(210 80% 60%);
-  --oc-status-success: hsl(145 60% 50%);
-  --oc-status-error: hsl(0 70% 60%);
+  --oc-status-running: var(--vscode-terminal-ansiBlue, #3b82f6);
+  --oc-status-success: var(--vscode-terminal-ansiGreen, #22c55e);
+  --oc-status-error: var(--vscode-errorForeground, #ef4444);
   --oc-status-warning: hsl(38 90% 58%);
   --oc-status-pending: hsl(220 15% 55%);
   --oc-status-cancelled: hsl(220 12% 50%);
+  --oc-status-unknown: var(--vscode-descriptionForeground, #888888);
+  --oc-status-offline-bg: rgba(244, 67, 54, 0.1);
+  --oc-status-offline-fg: var(--vscode-errorForeground, #f44336);
+  --oc-status-offline-border: var(--vscode-errorBorder, #f44336);
+
+  /* ─── TDD Phase Colors (for subagent panel status indicators) ─── */
+  --oc-tdd-red: var(--vscode-errorForeground, #ef4444);
+  --oc-tdd-green: var(--vscode-terminal-ansiGreen, #22c55e);
+  --oc-tdd-refactor: var(--vscode-terminal-ansiMagenta, #8b5cf6);
+  --oc-tdd-coverage: var(--vscode-terminal-ansiYellow, #f59e0b);
 
   /* Subtle elevated surface — for tool cards in dark mode */
   --oc-surface-elevated: color-mix(in srgb, var(--vscode-editor-background, #1e1e1e) 85%, white 15%);

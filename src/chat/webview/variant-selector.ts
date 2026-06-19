@@ -85,6 +85,7 @@ export function setupVariantSelector(els: ElementRefs, callbacks: VariantSelecto
     dropdown.style.right = "auto"
     dropdown.style.width = `${dropdownW}px`
     dropdown.style.maxHeight = `${maxHeight}px`
+    dropdown.style.zIndex = "var(--z-dropdown)"
   }
 
   let _resizeHandler: (() => void) | null = null

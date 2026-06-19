@@ -278,9 +278,9 @@
         <div id="tab-panels">
         </div>
         <div class="sidebar-resize-handle" role="separator" tabindex="0" aria-label="Resize sidebar" aria-valuenow="320" aria-valuemin="200" aria-valuemax="600"></div>
-        <div id="todos-panel" class="todos-panel side-panel hidden" role="region" aria-label="Todos and changed files">
+        <div id="todos-panel" class="todos-panel side-panel hidden" role="region" aria-labelledby="todos-panel-title">
           <div class="todos-panel-header">
-            <h2 class="todos-panel-title">Todos & Files</h2>
+            <h2 id="todos-panel-title" class="todos-panel-title">Todos & Files</h2>
             <div class="panel-header-actions">
               <button class="icon-btn panel-pin-btn" data-panel="todos" title="Pin panel" aria-label="Pin todos panel" aria-pressed="false">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -306,9 +306,9 @@
             </div>
           </div>
         </div>
-        <div id="activity-panel" class="activity-panel side-panel hidden" role="region" aria-label="Agent activity timeline">
+        <div id="activity-panel" class="activity-panel side-panel hidden" role="region" aria-labelledby="activity-panel-title">
           <div class="activity-panel-header">
-            <h2 class="activity-panel-title">Activity</h2>
+            <h2 id="activity-panel-title" class="activity-panel-title">Activity</h2>
             <div class="panel-header-actions">
               <button class="icon-btn panel-pin-btn" data-panel="activity" title="Pin panel" aria-label="Pin activity panel" aria-pressed="false">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -325,9 +325,9 @@
           <div id="activity-filters" class="activity-filters"></div>
           <div id="activity-list" class="activity-panel-content" aria-live="polite"></div>
         </div>
-        <div id="tasks-panel" class="tasks-panel side-panel hidden" role="region" aria-label="Command tasks">
+        <div id="tasks-panel" class="tasks-panel side-panel hidden" role="region" aria-labelledby="tasks-panel-title">
           <div class="tasks-panel-header">
-            <h2 class="tasks-panel-title">Commands</h2>
+            <h2 id="tasks-panel-title" class="tasks-panel-title">Commands</h2>
             <div class="panel-header-actions">
               <button class="icon-btn panel-pin-btn" data-panel="tasks" title="Pin panel" aria-label="Pin commands panel" aria-pressed="false">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -344,9 +344,9 @@
           <div id="tasks-filters" class="tasks-filters"></div>
           <div id="tasks-list" class="tasks-panel-content" aria-live="polite"></div>
         </div>
-        <div id="subagent-panel" class="subagent-panel side-panel hidden" aria-label="Subagent activity" data-view="list">
+        <div id="subagent-panel" class="subagent-panel side-panel hidden" role="region" aria-labelledby="subagent-panel-title" data-view="list">
           <div class="subagent-panel-header">
-            <h2 class="subagent-panel-title">Subagent Activity</h2>
+            <h2 id="subagent-panel-title" class="subagent-panel-title">Subagent Activity</h2>
             <div class="panel-header-actions">
               <button class="icon-btn panel-pin-btn" data-panel="subagent" title="Pin panel" aria-label="Pin subagent panel" aria-pressed="false">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

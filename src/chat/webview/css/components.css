@@ -798,7 +798,7 @@ body.hide-thinking .thinking-block:not(.thinking-streaming) { display: none; }
   padding: var(--space-2) var(--space-3);
   font-size: var(--text-xs);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  z-index: var(--z-popover, 100);
+  z-index: var(--z-dropdown);
   pointer-events: none;
   opacity: 0;
   transition: opacity 200ms ease-in;
@@ -2840,7 +2840,7 @@ textarea {
   flex-shrink: 0;
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: var(--z-sticky);
   background: var(--vscode-editorWidget-background, var(--panel-bg, var(--oc-editor-bg)));
 }
 .cf-summary-count {

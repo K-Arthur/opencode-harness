@@ -62,10 +62,10 @@ export interface ErrorDisplayTheme {
  */
 const DEFAULT_THEME: ErrorDisplayTheme = {
   colors: {
-    low: '#3b82f6',      // Blue
-    medium: '#f59e0b',    // Amber
-    high: '#ef4444',      // Red
-    critical: '#dc2626'   // Dark red
+    low: 'var(--oc-info)',      // Blue/info
+    medium: 'var(--oc-warning)',    // Amber/warning
+    high: 'var(--oc-error)',      // Red/error
+    critical: 'var(--oc-error)'   // Dark red/error
   },
   borderRadius: '8px',
   padding: '16px',

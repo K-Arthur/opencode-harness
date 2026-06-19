@@ -3192,7 +3192,7 @@
   position: absolute;
   right: 0;
   bottom: 100%;
-  z-index: var(--z-dropdown, 200);
+  z-index: var(--z-dropdown);
   min-width: 160px;
   background: var(--oc-bg, var(--vscode-dropdown-background, #1e1e1e));
   border: 1px solid var(--oc-glass-border, var(--vscode-dropdown-border, #555));

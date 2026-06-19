@@ -44,10 +44,48 @@ const MODE_ICONS: Record<string, string> = {
 const MODE_LABELS: Record<string, string> = { plan: "Plan", auto: "Auto", build: "Build" }
 
 let _lastCycleTime = 0
+let _resizeHandler: (() => void) | null = null
 
 /** @deprecated Use `isModalOrDialogOpen` from `../keyboardShortcuts` instead */
 export function isModalOrDialogOpen(): boolean {
   return modalOpen()
+}
+
+/**
+ * Position the mode dropdown menu to avoid viewport overflow.
+ * Calculates available space above and below the trigger and decides
+ * whether to open upward or downward based on available space.
+ */
+function positionModeDropdown(els: ModeDropdownElements): void {
+  const btn = els.modeDropdownBtn
+  const menu = els.modeDropdownMenu
+  if (!btn || !menu) return
+
+  const margin = 8
+  const r = btn.getBoundingClientRect()
+  const dropdownW = Math.min(280, Math.max(220, window.innerWidth - margin * 2))
+  // CSS max-height is min(320px, 50vh) - use the same constraint
+  const cssMaxHeight = Math.min(320, Math.floor(window.innerHeight * 0.5))
+  const estimatedHeight = Math.min(cssMaxHeight, menu.getBoundingClientRect().height || cssMaxHeight)
+  const spaceBelow = window.innerHeight - r.bottom - margin
+  const spaceAbove = r.top - margin
+  const openAbove = spaceBelow < Math.min(200, estimatedHeight) && spaceAbove > spaceBelow
+  const maxHeight = Math.min(cssMaxHeight, Math.max(180, Math.floor((openAbove ? spaceAbove : spaceBelow) - 4)))
+  const left = Math.min(
+    Math.max(margin, r.right - dropdownW),
+    Math.max(margin, window.innerWidth - dropdownW - margin),
+  )
+  const top = openAbove
+    ? Math.max(margin, r.top - Math.min(estimatedHeight, maxHeight) - 6)
+    : Math.min(window.innerHeight - margin - estimatedHeight, r.bottom + 6)
+
+  menu.style.position = "fixed"
+  menu.style.left = `${left}px`
+  menu.style.right = "auto"
+  menu.style.top = `${Math.max(margin, top)}px`
+  menu.style.width = `${dropdownW}px`
+  menu.style.maxHeight = `${maxHeight}px`
+  menu.style.zIndex = "var(--z-dropdown)"
 }
 
 /** Reset the cycle debounce timer. Exposed for testing. */
@@ -127,6 +165,11 @@ export function updateModeDropdown(mode: string, els: ModeDropdownElements): voi
 export function closeModeDropdown(els: ModeDropdownElements): void {
   els.modeDropdownBtn.setAttribute("aria-expanded", "false")
   els.modeDropdownMenu.classList.add("hidden")
+  // Clean up resize handler
+  if (_resizeHandler) {
+    window.removeEventListener("resize", _resizeHandler)
+    _resizeHandler = null
+  }
 }
 
 export function updateModeSelectorState(els: ModeDropdownElements, _getActiveSession: ModeDropdownDeps["getActiveSession"]): void {
@@ -152,6 +195,11 @@ export function setupModeToggle(deps: ModeDropdownDeps): void {
     if (isOpen) {
       els.modeDropdownMenu.classList.remove("hidden")
       els.modeDropdownBtn.setAttribute("aria-expanded", "true")
+      // Position the dropdown to avoid viewport overflow
+      positionModeDropdown(els)
+      // Set up resize handler to reposition on window resize
+      _resizeHandler = () => positionModeDropdown(els)
+      window.addEventListener("resize", _resizeHandler)
       const activeOpt = els.modeDropdownMenu.querySelector('[aria-selected="true"]') as HTMLElement | null
       if (activeOpt) activeOpt.focus()
     } else {

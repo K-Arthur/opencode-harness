@@ -880,7 +880,7 @@ function getVsCodeApi() {
     const esc = (s: string): string =>
       s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 
-    const statusColor = status === "completed" ? "#22c55e" : status === "failed" ? "#ef4444" : status === "running" ? "#3b82f6" : "#888"
+    const statusColor = status === "completed" ? "var(--oc-status-success)" : status === "failed" ? "var(--oc-status-error)" : status === "running" ? "var(--oc-status-running)" : "var(--oc-status-unknown)"
 
     let html = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
@@ -909,7 +909,7 @@ function getVsCodeApi() {
         const role = typeof msg.role === "string" ? msg.role : "assistant"
         const text = typeof msg.text === "string" ? msg.text : ""
         if (!text) continue
-        html += `<div style="margin-bottom:8px;padding:8px;border-radius:4px;border-left:3px solid ${role === "user" ? "#3b82f6" : "#888"}">
+        html += `<div style="margin-bottom:8px;padding:8px;border-radius:4px;border-left:3px solid ${role === "user" ? "var(--oc-status-running)" : "var(--oc-status-unknown)"}">
           <div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-bottom:4px">${esc(role)}</div>
           <pre style="margin:0;white-space:pre-wrap;word-break:break-word;font-size:12px">${esc(text)}</pre>
         </div>`

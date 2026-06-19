@@ -56,10 +56,10 @@ const TDD_PHASE_LABELS: Record<string, string> = {
 }
 
 const TDD_PHASE_COLORS: Record<string, string> = {
-  red: '#ef4444',
-  green: '#22c55e',
-  refactor: '#8b5cf6',
-  coverage: '#f59e0b',
+  red: 'var(--oc-tdd-red)',
+  green: 'var(--oc-tdd-green)',
+  refactor: 'var(--oc-tdd-refactor)',
+  coverage: 'var(--oc-tdd-coverage)',
 }
 
 const DOMAIN_ICONS: Record<string, string> = {

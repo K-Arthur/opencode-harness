@@ -83,6 +83,7 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     dropdown.style.right = "auto"
     dropdown.style.width = `${dropdownW}px`
     dropdown.style.maxHeight = `${maxHeight}px`
+    dropdown.style.zIndex = "var(--z-dropdown)"
   }
 
   function showDropdown() {
