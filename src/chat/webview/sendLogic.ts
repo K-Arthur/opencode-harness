@@ -182,7 +182,7 @@ export function createSendLogic(deps: SendLogicDeps) {
   }
 
   function resolveSendModel(active?: { model?: string } | null): string | undefined {
-    return active?.model || modelDropdown.getCurrentModel() || stateManager.getState().globalModel
+    return active?.model ?? modelDropdown.getCurrentModel() ?? stateManager.getState().globalModel
   }
 
   function updateSendButton() {

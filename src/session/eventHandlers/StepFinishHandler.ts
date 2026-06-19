@@ -19,6 +19,7 @@ export class StepFinishHandler implements EventHandler {
     const sessionId = (part as { sessionID?: string }).sessionID
     const tokens = part.tokens as { input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } } | undefined
     const cost = part.cost as number | undefined
+    const reason = part.reason as string | undefined
 
     if (!tokens) return out
 
@@ -34,6 +35,7 @@ export class StepFinishHandler implements EventHandler {
           cacheWrite: tokens.cache?.write ?? 0,
         },
         cost: cost ?? 0,
+        reason,
       },
     })
     return out

@@ -76,6 +76,21 @@ import { buildVoiceSetupPlan, pickPipCommand, recorderInstallCommand, uvBootstra
 
 type ServerEvent = { type: string; sessionId?: string; data?: unknown }
 
+/**
+ * Model finish_reasons that indicate the turn is complete (the model is NOT
+ * about to call a tool). Used as a completion backstop in the step_finish
+ * handler. tool_use/tool_calls are deliberately excluded — those mean the
+ * model is mid-agentic-loop.
+ */
+const TERMINAL_FINISH_REASONS = new Set(["stop", "end_turn", "stop_sequence", "complete"])
+
+/**
+ * Delay before the step_finish backstop probes for finalization. Lets the
+ * server's authoritative message_complete/session.idle win when it arrives
+ * promptly; the backstop only fires if the tab is still waiting.
+ */
+const STEP_FINISH_BACKSTOP_DELAY_MS = 500
+
 export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   static readonly PERSISTED_PANEL_STATE_KEY = "opencode.panelVisibility"
   private _view?: vscode.WebviewView
@@ -1402,7 +1417,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       })
     }],
     ["step_finish", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {
-      const data = event.data as { tokens?: { input?: number; output?: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }; cost?: number } | undefined
+      const data = event.data as { tokens?: { input?: number; output?: number; reasoning?: number; cacheRead?: number; cacheWrite?: number }; cost?: number; reason?: string } | undefined
       if (data?.tokens) {
         const t = data.tokens
         const usage = {
@@ -1430,6 +1445,29 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
           cumulative: ledger?.tokenUsage,
           cumulativeCost: ledger?.cost,
         })
+      }
+      // Completion backstop: the model emits its own finish_reason via the
+      // step-finish part. A terminal reason (stop/end_turn/stop_sequence/
+      // complete) means the model is done with the turn — NOT mid-tool-loop
+      // (tool_use/tool_calls are deliberately excluded). If the server's own
+      // message_complete / session.idle was missed or delayed, this revives a
+      // stuck "streaming" Send button without waiting for the 180s watchdog.
+      // The short delay lets the server's authoritative message_complete win
+      // when it arrives promptly; maybeFinalizeStream no-ops once
+      // waitingForCompletion is cleared.
+      const reason = typeof data?.reason === "string" ? data.reason.trim().replace(/-/g, "_").toLowerCase() : ""
+      if (reason && TERMINAL_FINISH_REASONS.has(reason)) {
+        const tab = this.tabManager.getTab(tabId)
+        if (tab?.waitingForCompletion) {
+          setTimeout(() => {
+            const current = this.tabManager.getTab(tabId)
+            if (!current?.waitingForCompletion) return
+            void this.streamCoordinator.maybeFinalizeStream(tabId, {
+              postMessage: (m) => this.postMessage(m),
+              postRequestError: (m) => this.postRequestError(m),
+            }, "message_complete").catch(err => log.error(`step_finish backstop finalize failed for tab ${tabId}`, err))
+          }, STEP_FINISH_BACKSTOP_DELAY_MS)
+        }
       }
     }],
     ["server_error", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string, tab?: { id: string; isStreaming: boolean }) => {

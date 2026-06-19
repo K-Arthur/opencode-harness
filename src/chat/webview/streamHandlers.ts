@@ -1057,10 +1057,11 @@ export function handleToolUpdate(
         more.className = "tool-show-more"
         more.textContent = "Show more\u2026"
         more.addEventListener("click", () => {
-          argsPanel!.innerHTML = sanitizeHtml(escapeHtml(argsStr))
+          if (!argsPanel) return
+          argsPanel.innerHTML = sanitizeHtml(escapeHtml(argsStr))
           void getMarkdownWorkerClient().highlight(argsStr, "json").then((result) => {
-            if (result) argsPanel!.innerHTML = sanitizeHtml(result)
-          })
+            if (result && argsPanel) argsPanel.innerHTML = sanitizeHtml(result)
+          }).catch(() => { /* fallback: escapeHtml already applied above */ })
           more.remove()
         })
         argsPanel.appendChild(more)

@@ -1861,7 +1861,7 @@ function createSideBySideLineRow(pair: SideBySidePair, diffFilePath?: string): H
         leftContent.innerHTML = escapeHtml(pair.left.content)
         void getMarkdownWorkerClient().highlight(pair.left.content, lang).then(
           (result) => { if (result) leftContent.innerHTML = sanitizeHtml(result) }
-        )
+        ).catch(() => { /* fallback: escapeHtml already applied above */ })
       } else {
         leftContent.textContent = pair.left.content
       }
@@ -1886,7 +1886,7 @@ function createSideBySideLineRow(pair: SideBySidePair, diffFilePath?: string): H
         rightContent.innerHTML = escapeHtml(pair.right.content)
         void getMarkdownWorkerClient().highlight(pair.right.content, lang).then(
           (result) => { if (result) rightContent.innerHTML = sanitizeHtml(result) }
-        )
+        ).catch(() => { /* fallback: escapeHtml already applied above */ })
       } else {
         rightContent.textContent = pair.right.content
       }
@@ -2032,7 +2032,7 @@ function createDiffLineContent(line: DiffLine, diffFilePath?: string): HTMLEleme
       content.innerHTML = escapeHtml(line.content)
       void getMarkdownWorkerClient().highlight(line.content, lang).then(
         (result) => { if (result) content.innerHTML = sanitizeHtml(result) }
-      )
+      ).catch(() => { /* fallback: escapeHtml already applied above */ })
     } else {
       content.textContent = line.content
     }

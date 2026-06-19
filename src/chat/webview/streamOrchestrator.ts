@@ -633,9 +633,13 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     if (!stream) {
       vscode.postMessage({ type: "webview_log", level: "warn", message: `handleStreamChunk: No stream found for session ${sessionId}, creating...` })
       stream = createStreamHandlersForTab(sessionId)
+      if (!stream) {
+        vscode.postMessage({ type: "webview_log", level: "error", message: `handleStreamChunk: createStreamHandlersForTab returned nothing for session ${sessionId}, dropping chunk` })
+        return
+      }
       streamHandlers.set(sessionId, stream)
     }
-    const s = stream!
+    const s = stream
     chunkLogCounter++
     maybeLogStreamChunk(chunkLogCounter, sessionId, text, s.streamingMessageId, vscode.postMessage)
     s.handleStreamChunk(text, messageId)

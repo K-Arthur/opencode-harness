@@ -480,7 +480,7 @@ export function createToolArgsPanel(toolBlock: ToolCallBlock): HTMLElement | nul
         argsDiv.innerHTML = sanitizeHtml(escapeHtml(jsonStr))
         void getMarkdownWorkerClient().highlight(jsonStr, "json").then((result) => {
           if (result) argsDiv.innerHTML = sanitizeHtml(result)
-        })
+        }).catch(() => { /* fallback: escapeHtml already applied above */ })
         more2.remove()
       })
       argsDiv.appendChild(more2)
@@ -498,7 +498,7 @@ export function createToolArgsPanel(toolBlock: ToolCallBlock): HTMLElement | nul
         argsDiv.innerHTML = sanitizeHtml(escapeHtml(argsStr))
         void getMarkdownWorkerClient().highlight(argsStr, "json").then((result) => {
           if (result) argsDiv.innerHTML = sanitizeHtml(result)
-        })
+        }).catch(() => { /* fallback: escapeHtml already applied above */ })
         more.remove()
       })
       argsDiv.appendChild(more)
