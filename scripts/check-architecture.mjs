@@ -1,6 +1,5 @@
-import { readFileSync, statSync } from "node:fs"
-import { glob } from "node:fs/promises"
-import { resolve, dirname, relative } from "node:path"
+import { readFileSync, statSync, readdirSync } from "node:fs"
+import { resolve, dirname, relative, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -15,6 +14,93 @@ function readJSONC(path) {
 
 function normalizePath(p) {
   return p.replace(/\\/g, "/")
+}
+
+// Simple glob implementation for Node.js 20 compatibility
+function* globSync(pattern, options = {}) {
+  const ignore = options.ignore || []
+  const ignorePatterns = ignore.map(p => {
+    const regex = p
+      .replace(/\*\*/g, '.*')
+      .replace(/\*/g, '[^/]*')
+      .replace(/\?/g, '.')
+    return new RegExp(regex)
+  })
+
+  const baseDir = resolve(root, pattern.split('/')[0] || '.')
+  const patternParts = pattern.split('/')
+
+  function* walk(dir, remainingParts) {
+    if (remainingParts.length === 0) {
+      yield dir
+      return
+    }
+
+    const part = remainingParts[0]
+    const rest = remainingParts.slice(1)
+
+    if (part === '**') {
+      // Recursively walk all subdirectories
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const fullPath = join(dir, entry.name)
+        const relPath = relative(root, fullPath)
+
+        // Check if ignored
+        if (ignorePatterns.some(regex => regex.test(relPath))) {
+          continue
+        }
+
+        if (entry.isDirectory()) {
+          yield* walk(fullPath, remainingParts)
+          yield* walk(fullPath, rest)
+        } else if (rest.length === 0) {
+          yield fullPath
+        }
+      }
+    } else if (part.includes('*') || part.includes('?')) {
+      // Pattern matching
+      const regex = new RegExp(
+        '^' + part.replace(/\*/g, '[^/]*').replace(/\?/g, '.') + '$'
+      )
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (regex.test(entry.name)) {
+          const fullPath = join(dir, entry.name)
+          const relPath = relative(root, fullPath)
+
+          if (ignorePatterns.some(regex => regex.test(relPath))) {
+            continue
+          }
+
+          if (entry.isDirectory() && rest.length > 0) {
+            yield* walk(fullPath, rest)
+          } else if (rest.length === 0) {
+            yield fullPath
+          }
+        }
+      }
+    } else {
+      // Exact match
+      const fullPath = join(dir, part)
+      try {
+        const stat = statSync(fullPath)
+        const relPath = relative(root, fullPath)
+
+        if (ignorePatterns.some(regex => regex.test(relPath))) {
+          return
+        }
+
+        if (stat.isDirectory() && rest.length > 0) {
+          yield* walk(fullPath, rest)
+        } else if (rest.length === 0) {
+          yield fullPath
+        }
+      } catch {
+        // File doesn't exist, skip
+      }
+    }
+  }
+
+  yield* walk(baseDir, patternParts.slice(1))
 }
 
 function matchGlob(file, pattern) {
@@ -62,15 +148,18 @@ async function main() {
     for (const layer of layers) {
       const files = []
       for (const pattern of layer.paths) {
-        const fullPattern = resolve(root, pattern)
-        for await (const file of glob(fullPattern, { ignore: ["**/node_modules/**", "**/dist/**"] })) {
-          try {
-            if (statSync(file).isFile()) {
-              files.push(file)
+        try {
+          for (const file of globSync(pattern, { ignore: ["**/node_modules/**", "**/dist/**"] })) {
+            try {
+              if (statSync(file).isFile()) {
+                files.push(file)
+              }
+            } catch (e) {
+              console.error(`Warning: Could not read file ${file}: ${e.message}`)
             }
-          } catch (e) {
-            console.error(`Warning: Could not read file ${file}: ${e.message}`)
           }
+        } catch (e) {
+          console.error(`Warning: Could not glob pattern ${pattern}: ${e.message}`)
         }
       }
 
