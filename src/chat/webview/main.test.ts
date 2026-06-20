@@ -11,7 +11,9 @@ const composerSource = (() => { try { return readFileSync(path.join(__dirname, "
 const slashCommandsSource = (() => { try { return readFileSync(path.join(__dirname, "slashCommands.ts"), "utf8") } catch { return "" } })()
 const inputHandlersSource = (() => { try { return readFileSync(path.join(__dirname, "inputHandlers.ts"), "utf8") } catch { return "" } })()
 const sendLogicSource = (() => { try { return readFileSync(path.join(__dirname, "sendLogic.ts"), "utf8") } catch { return "" } })()
-const withComposer = source + "\n" + composerSource + "\n" + slashCommandsSource + "\n" + inputHandlersSource + "\n" + sendLogicSource
+const sendButtonSource = (() => { try { return readFileSync(path.join(__dirname, "sendButton.ts"), "utf8") } catch { return "" } })()
+const sendMessageSource = (() => { try { return readFileSync(path.join(__dirname, "sendMessage.ts"), "utf8") } catch { return "" } })()
+const withComposer = source + "\n" + composerSource + "\n" + slashCommandsSource + "\n" + inputHandlersSource + "\n" + sendLogicSource + "\n" + sendButtonSource + "\n" + sendMessageSource
 const themeCustomizerSource = readFileSync(path.join(__dirname, "ui", "themeCustomizer.ts"), "utf8")
 const modeDropdownSource = readFileSync(path.join(__dirname, "ui", "modeDropdown.ts"), "utf8")
 const sessionModalSource = readFileSync(path.join(__dirname, "ui", "sessionModal.ts"), "utf8")
@@ -47,8 +49,8 @@ describe("main.ts", () => {
     // opencode rejects user-message ids not starting with "msg" (BadRequest:
     // "Expected a string starting with \"msg\""). The id is reused as the local
     // optimistic bubble id, so the webview must mint a msg_ id, not createWebviewId("user").
-    assert.ok(sendLogicSource.includes("generateUserMessageId("), "sendLogic.ts must mint an opencode-compatible user message id")
-    assert.ok(!sendLogicSource.includes('createWebviewId("user")'), "sendLogic.ts must not send a server-rejected user- id")
+    assert.ok(sendMessageSource.includes("generateUserMessageId("), "sendMessage.ts must mint an opencode-compatible user message id")
+    assert.ok(!sendMessageSource.includes('createWebviewId("user")'), "sendMessage.ts must not send a server-rejected user- id")
     assert.ok(orchestratorSource.includes("generateUserMessageId("), "streamOrchestrator.ts must mint an opencode-compatible user message id")
     assert.ok(!orchestratorSource.includes('createWebviewId("user")'), "streamOrchestrator.ts must not send a server-rejected user- id")
   })
@@ -139,7 +141,7 @@ describe("main.ts", () => {
 
   it("has concurrent streaming limit of 3", () => {
     assert.ok(withComposer.includes("MAX_CONCURRENT_STREAMS ="))
-    assert.ok(withComposer.includes("activeStreams >= ") && (withComposer.includes("MAX_CONCURRENT_STREAMS") || sendLogicSource.includes("activeStreams >= _maxConcurrentStreams")))
+    assert.ok(withComposer.includes("activeStreams >= ") && (withComposer.includes("MAX_CONCURRENT_STREAMS") || sendButtonSource.includes("activeStreams >= maxStreams")))
   })
 
   it("init_state checks for .tab-panel not vscode-tab-panel", () => {
@@ -178,7 +180,7 @@ describe("main.ts", () => {
   })
 
   it("slash_command_in_sendMessage_handles_known_and_unknown", () => {
-    assert.ok(withComposer.includes('text.startsWith("/")'))
+    assert.ok(sendMessageSource.includes('text.startsWith("/")'), "sendMessage.ts must handle slash commands in the send path")
   })
 
   it("slash_unknown_routes_to_host_for_server_commands", () => {
@@ -219,13 +221,13 @@ describe("main.ts", () => {
   })
 
   it("disables send with a clear tooltip when the global stream cap is full", () => {
-    const idx = sendLogicSource.indexOf("function updateSendButton()")
-    assert.ok(idx >= 0, "updateSendButton must exist in sendLogic.ts")
-    const nextFn = sendLogicSource.indexOf("\n  function ", idx + 1)
-    const block = sendLogicSource.slice(idx, nextFn > idx ? nextFn : sendLogicSource.length)
+    const idx = sendButtonSource.indexOf("function updateSendButton(")
+    assert.ok(idx >= 0, "updateSendButton must exist in sendButton.ts")
+    const nextFn = sendButtonSource.indexOf("\nexport function ", idx + 1)
+    const block = nextFn > idx ? sendButtonSource.slice(idx, nextFn) : sendButtonSource.slice(idx, sendButtonSource.length)
     assert.ok(block.includes("getStreamCapacityState"), "send button must inspect global stream capacity")
     assert.ok(block.includes("stream-limit-blocked"), "send button must expose a blocked visual state")
-    assert.ok(sendLogicSource.includes("stream-limit-blocked") || sendLogicSource.includes("streams active"), "must explain the stream cap in the tooltip")
+    assert.ok(sendButtonSource.includes("stream-limit-blocked") || sendButtonSource.includes("streams active"), "must explain the stream cap in the tooltip")
   })
 
   it("timeline jumps use exact message-list scroll positioning", () => {
@@ -651,10 +653,10 @@ it("unified modal: server session items send resume_server_session on click", ()
     // must include the names of the currently streaming sessions, not just the
     // static tooltip string, so screen readers and sighted users know which
     // tabs to stop.
-    const idx = sendLogicSource.indexOf("function updateSendButtonIcon(")
-    assert.ok(idx >= 0, "updateSendButtonIcon must exist in sendLogic.ts")
-    const fnEnd = sendLogicSource.indexOf("\n  function ", idx + 1)
-    const block = fnEnd > idx ? sendLogicSource.slice(idx, fnEnd) : sendLogicSource.slice(idx, idx + 600)
+    const idx = sendButtonSource.indexOf("function updateSendButtonIcon(")
+    assert.ok(idx >= 0, "updateSendButtonIcon must exist in sendButton.ts")
+    const fnEnd = sendButtonSource.indexOf("\nexport function ", idx + 1)
+    const block = fnEnd > idx ? sendButtonSource.slice(idx, fnEnd) : sendButtonSource.slice(idx, idx + 600)
     assert.ok(
       block.includes("streamingNames") || block.includes("streamCapacity.streamingNames"),
       "updateSendButtonIcon must include streaming session names in the tooltip when at limit"
@@ -667,13 +669,13 @@ it("unified modal: server session items send resume_server_session on click", ()
     // not just emit the static STREAM_LIMIT_TOOLTIP.
     // Anchor on sendMessage's stream-capacity branch: other handleRequestError
     // calls (e.g. the slash-during-streaming guard) are unrelated to the cap.
-    const sendIdx = sendLogicSource.indexOf("function sendMessage(")
-    assert.ok(sendIdx >= 0, "sendMessage must exist in sendLogic.ts")
-    const capIdx = sendLogicSource.indexOf("streamCapacity.isFull", sendIdx)
+    const sendIdx = sendMessageSource.indexOf("function sendMessage(")
+    assert.ok(sendIdx >= 0, "sendMessage must exist in sendMessage.ts")
+    const capIdx = sendMessageSource.indexOf("streamCapacity.isFull", sendIdx)
     assert.ok(capIdx >= 0, "stream-capacity branch must exist in sendMessage")
-    const idx = sendLogicSource.indexOf("handleRequestError(", capIdx)
-    assert.ok(idx >= 0, "stream-limit handleRequestError call must exist in sendLogic.ts")
-    const block = sendLogicSource.slice(idx, idx + 400)
+    const idx = sendMessageSource.indexOf("handleRequestError(", capIdx)
+    assert.ok(idx >= 0, "stream-limit handleRequestError call must exist in sendMessage.ts")
+    const block = sendMessageSource.slice(idx, idx + 400)
     assert.ok(
       block.includes("streamingNames"),
       "request error on stream-limit must include streamingNames in the detail"
