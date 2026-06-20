@@ -4398,7 +4398,7 @@ function setupTodoSkillAndSubagentPanels(): void {
             updateSendButton()
             els.promptInput.focus()
             // Change send button to indicate this is an edit operation
-            const sendBtn = els.sendButton
+            const sendBtn = els.sendBtn
             if (sendBtn) {
               sendBtn.setAttribute("data-editing", "true")
               sendBtn.setAttribute("aria-label", "Update message")

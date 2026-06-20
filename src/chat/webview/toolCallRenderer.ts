@@ -18,6 +18,7 @@ import { renderJsonViewer } from "./jsonViewer"
 import { isWebSearchTool, renderWebSearchResult } from "./webSearchRenderer"
 import { isTerminalState } from "./toolState"
 import { renderLiveCommandCard } from "./liveCommandCard"
+import { renderFileEditCard } from "./fileEditCard"
 
 export interface RenderOptions {
   messageId?: string
@@ -789,6 +790,12 @@ export function renderToolCallBlock(block: Block, opts: RenderOptions): HTMLElem
   const planData = detectPlanFile(toolBlock)
   if (planData) {
     return renderPlanCard(planData, opts)
+  }
+
+  // Write-class file edits render as inline preview cards in the chat stream.
+  if (toolBlock.class === "write") {
+    const fileEditCard = renderFileEditCard(toolBlock, opts)
+    if (fileEditCard) return fileEditCard
   }
 
   const details = createToolDetailsContainer(toolBlock)

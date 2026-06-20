@@ -844,7 +844,7 @@ export class WebviewEventRouter {
       const session = this.opts.sessionStore.get(targetSessionId)
       if (session) {
         session.model = model
-        this.opts.sessionStore.save()
+        this.opts.sessionStore.persist()
         // Trigger regeneration with the new model
         void this.opts.streamCoordinator.retryFromHere(targetSessionId, {
           postMessage: (m) => this.opts.postMessage(m),

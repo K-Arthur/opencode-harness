@@ -24,6 +24,7 @@
 @import url("./activity.css")            layer(components);
 @import url("./tasks.css")               layer(components);
 @import url("./terminal.css")            layer(components);
+@import url("./file-edit.css")           layer(components);
 @import url("./voice-input.css")         layer(components);
 @import url("./blocks.css")              layer(blocks);
 @import url("./cards.css")               layer(blocks);

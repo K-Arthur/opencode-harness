@@ -7,6 +7,8 @@ const cssSource = readFileSync(path.join(__dirname, "css", "messages.css"), "utf
 const blocksSource = readFileSync(path.join(__dirname, "css", "blocks.css"), "utf8")
 const layoutSource = readFileSync(path.join(__dirname, "css", "layout.css"), "utf8")
 const componentsSource = readFileSync(path.join(__dirname, "css", "components.css"), "utf8")
+const stylesSource = readFileSync(path.join(__dirname, "css", "styles.css"), "utf8")
+const fileEditSource = readFileSync(path.join(__dirname, "css", "file-edit.css"), "utf8")
 
 describe("messages.css", () => {
   it("keeps markdown rhythm compact for the extension chat viewport", () => {
@@ -163,6 +165,37 @@ describe("messages.css", () => {
       assert.ok(match, ".tool-name base rule must exist")
       const body = match![1]!
       assert.match(body, /font-size:\s*var\(--text-xs\)/, ".tool-name must use text-xs for tighter rows")
+    })
+  })
+
+  // ── Inline file-edit preview cards
+  describe("file-edit preview cards", () => {
+    it("styles.css imports the file-edit component stylesheet", () => {
+      assert.match(
+        stylesSource,
+        /@import\s+url\("\.\/file-edit\.css"\)\s+layer\(components\)/,
+        "file-edit.css must be imported in the components layer",
+      )
+    })
+
+    it("file-edit.css defines the card surface and layout", () => {
+      assert.match(fileEditSource, /\.file-edit-card\s*{/, "base card rule must exist")
+      assert.match(fileEditSource, /\.file-edit-card__header\s*{/, "header rule must exist")
+      assert.match(fileEditSource, /\.file-edit-card__path\s*{/, "path rule must exist")
+      assert.match(fileEditSource, /\.file-edit-card__status\s*{/, "status rule must exist")
+    })
+
+    it("file-edit.css provides running and error state modifiers", () => {
+      assert.match(fileEditSource, /\.file-edit-card--running\s*[,{]/, "running state modifier must exist")
+      assert.match(fileEditSource, /\.file-edit-card--error\s*[,{]/, "error state modifier must exist")
+    })
+
+    it("file-edit.css keeps the card usable on narrow viewports", () => {
+      assert.match(
+        fileEditSource,
+        /@media\s*\(\s*max-width:\s*320px\s*\)[\s\S]*\.file-edit-card__header\s*{[^}]*flex-wrap:\s*wrap;/s,
+        "header must wrap on very narrow screens",
+      )
     })
   })
 })

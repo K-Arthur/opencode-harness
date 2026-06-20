@@ -1,0 +1,174 @@
+/* ═══════════════════════════════════════════════════════════════
+   Inline file-edit preview cards
+   ═══════════════════════════════════════════════════════════════
+
+   Write-class file edits render as compact, self-contained cards in the
+   chat stream. They are visually distinct from the default collapsible
+   tool-call details so users can scan what changed at a glance.
+
+   Uses the same theme-token surface as .oc-card and .live-command-card. */
+
+.file-edit-card {
+  --file-edit-accent: var(--oc-accent);
+  --file-edit-surface: var(--oc-accent-subtle);
+  --file-edit-border: var(--oc-accent-border);
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+  max-width: min(100%, 680px);
+  margin: var(--space-2, 8px) 0;
+  padding: var(--space-2, 8px) var(--space-2-5, 10px);
+  border: 1px solid var(--file-edit-border);
+  border-left: 2px solid var(--file-edit-accent);
+  border-radius: var(--radius-md, 8px);
+  background: var(--file-edit-surface);
+  color: var(--oc-fg);
+  font-size: var(--text-xs, 12px);
+  line-height: 1.45;
+}
+
+.file-edit-card--error,
+.file-edit-card--timed_out {
+  --file-edit-accent: var(--oc-error);
+  --file-edit-surface: var(--oc-error-subtle);
+  --file-edit-border: var(--oc-error-border);
+}
+
+.file-edit-card--running {
+  --file-edit-accent: var(--oc-warning);
+  --file-edit-surface: var(--oc-warning-subtle);
+  --file-edit-border: var(--oc-warning-border);
+}
+
+/* ── Header: icon + file path + status ── */
+.file-edit-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5, 6px);
+  min-width: 0;
+}
+
+.file-edit-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: var(--file-edit-accent);
+}
+
+.file-edit-card__path {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-xs, 12px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-edit-card__status {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--file-edit-border);
+  color: var(--file-edit-accent);
+  font-size: var(--text-2xs, 10px);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* ── Mini diff / content preview ── */
+.file-edit-card__preview {
+  margin-top: var(--space-1, 4px);
+  padding: var(--space-1-5, 6px);
+  border: 1px solid var(--file-edit-border);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--oc-panel-bg);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-2xs, 10px);
+  line-height: 1.4;
+  overflow-x: auto;
+}
+
+.file-edit-card__preview-line {
+  display: flex;
+  gap: 4px;
+  white-space: pre;
+}
+
+.file-edit-card__preview-marker {
+  flex: 0 0 auto;
+  width: 14px;
+  text-align: center;
+  user-select: none;
+}
+
+.file-edit-card__preview-line--added {
+  color: var(--color-success);
+  background: var(--oc-success-subtle);
+}
+
+.file-edit-card__preview-line--removed {
+  color: var(--color-error);
+  background: var(--oc-error-subtle);
+}
+
+.file-edit-card__preview-line--context {
+  color: var(--oc-muted);
+}
+
+.file-edit-card__preview-more {
+  padding: 2px 0;
+  color: var(--oc-muted);
+  font-style: italic;
+}
+
+/* ── Actions ── */
+.file-edit-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1, 4px);
+  margin-top: var(--space-1, 4px);
+}
+
+.file-edit-card__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--file-edit-border);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--file-edit-surface);
+  color: var(--oc-fg);
+  font-size: var(--text-2xs, 10px);
+  cursor: pointer;
+}
+
+.file-edit-card__action:hover {
+  background: var(--file-edit-border);
+}
+
+.file-edit-card__action:focus-visible {
+  outline: 2px solid var(--file-edit-accent);
+  outline-offset: 2px;
+}
+
+/* ── Narrow viewport resilience ── */
+@media (max-width: 320px) {
+  .file-edit-card__header {
+    flex-wrap: wrap;
+  }
+
+  .file-edit-card__path {
+    white-space: normal;
+    word-break: break-all;
+  }
+}
