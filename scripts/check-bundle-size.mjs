@@ -140,6 +140,13 @@
 // 2026-06-18 re-baseline (host 640KB -> 642KB): provider panel redesign
 // (ProviderManagementService error messages now carry providerId for inline
 // key-entry error routing, +0.1KB minified). Webview limit unchanged.
+//
+// 2026-06-20 re-baseline (host 660KB -> 664KB): host-side feature growth landed
+// this session — the PTY terminal panel + restore-points wiring (ChatProvider /
+// WebviewEventRouter), live-command-card host plumbing, and the MCP command-list
+// refresh — plus the MCP `source` preservation + session-title fixes. Bundle
+// measured 658.8KB at the start of the session and 661.3KB after. +4KB restores
+// ~0.4% headroom so the gate still trips on a real regression. Webview unchanged.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -149,7 +156,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 660 * 1024, label: "extension host" },
+  { path: "dist/extension.js", limitBytes: 664 * 1024, label: "extension host" },
   { path: "dist/chat/webview/main.js", limitBytes: 780 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]

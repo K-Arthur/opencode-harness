@@ -11,10 +11,17 @@ All notable changes to the **OpenCode Harness** extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+> **Note:** This changelog is maintained manually. When releasing a new version,
+> move items from `[Unreleased]` to the new version section and update the date.
+> Never leave features marked as "unreleased" after they are shipped.
+
+## [0.4.8] - 2026-06-20
 
 ### Fixed
 
+- **MCP commands now appear under the MCP filter in the commands palette (2026-06-20).** `SessionClient.listCommands()` hard-coded `source: "server"` for every command, discarding the server's real `source` (`"command" | "mcp" | "skill"`), so MCP-provided commands — though executable — never matched the **MCP** chip in the commands modal. It also read `.data` off a response the SDK types as a bare `Array<Command>` (yielding an empty list). Now preserves the reported source and accepts both the bare-array and legacy `{ location, data }` shapes. TDD: `tests/unit/session-client-list-commands.test.mjs`. (`src/session/SessionClient.ts`)
+- **Command-created sessions no longer all titled "Tab session-" (2026-06-20).** Webview tab IDs are `session-<id>` and `"session-"` is exactly 8 characters, so `Tab ${sessionId.slice(0, 8)}` produced the identical title "Tab session-" for every tab. `CommandExecutionService` now mirrors the normal send path: use the tab's own name, otherwise defer to the server's auto-title. TDD: `tests/unit/command-exec-session-title.test.mjs`. (`src/chat/CommandExecutionService.ts`)
+- **Test suite restored to fully green (2026-06-20).** Realigned 16 stale source-inspection / behavioural assertions across 9 files with the refactored module boundaries (the `StartPromptConfig` object, `setupTerminalPanel` / `MarkdownWorkerClient` extraction, exec→live-command-card rendering, changed-files floating-modal → inline panel). No source changes in that pass. Full unit suite: tsx 4237 pass / 0 fail, mjs 1004 pass / 0 fail.
 - **IDE warning cleanup (2026-06-20).** Cleared ESLint warnings across the chat send-flow, webview renderers, and host wiring: unused imports and destructured dependencies in `ChatProvider.ts`, `SessionManager.ts`, `StreamCoordinator.ts`, `composer.ts`, `sendLogic.ts`, `sendButton.ts`, and `renderer.ts`; `require()` style imports in `ChatProvider.ts` and `WebviewEventRouter.ts`; broad `any` casts in `composer.ts`, `sendLogic.ts`, `sendMessage.ts`, `streamHandlers.ts`, `renderer.ts`, and `toolCallRenderer.ts`. Added a typed `getVsCodeApi()` helper in `renderer.ts` and relaxed `renderToolGroupBadge` to accept the minimal `{ state?, error? }` shape.
 - **Small-webview overflow fixes (2026-06-20).** Prevented the conversation-history search box on the welcome screen from overflowing narrow containers (`welcome.css`) and added responsive composer breakpoints for `<=320px` / `<=280px` webviews so the send button and mode/model selectors stay on screen (`layout.css`).
 
@@ -305,94 +312,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Tests
 - Added regression coverage for Activity/Tasks HTML wiring, `rate_limit_exhausted.info.resetAt`, provider command config boundaries, steer-mode UI sync, and session pin/rename/tag behavior. (`src/chat/webview/main.test.ts`, `src/commands/providerConfigCommands.test.ts`, `src/chat/webview/steerMode.test.ts`, `src/chat/webview/sessionListRenderer.pin.test.ts`)
 - Added STT coverage for settings normalization, state transitions, MIME/base64/size validation, stale request handling, missing API key errors, disabled-provider errors, transcript cleanup, unsupported browser fallback, and message contracts. (`src/chat/voiceInputCore.test.ts`, `src/chat/VoiceInputService.test.ts`, `src/chat/WebviewMessageValidator.voiceInput.test.ts`, `src/chat/webview/voiceInput.test.ts`, `tests/webview/message-contract.test.ts`)
-
-## [Unreleased]
-
-### Fixed
-- **OpenCode streaming reliability and SDK/CLI parity.** Upgraded `@opencode-ai/sdk`
-  to `^1.16.2`, forwards webview user message IDs through `prompt_async`, tracks
-  active runs by tab/session/request/message identity, confirms accepted prompts,
-  restores recoverable failed sends, keeps accepted backend work alive across webview
-  dispose/reload and TTFB diagnostics, and adds v1/v2 event coverage for questions,
-  permissions, `session.next.*`, activity, todos, MCP tools, and unknown-event
-  fallback. (`src/session/*`, `src/chat/ChatProvider.ts`,
-  `src/chat/WebviewEventRouter.ts`, `src/chat/handlers/StreamCoordinator.ts`,
-  `src/chat/webview/*`)
-- **Question and activity rendering is more informative.** V2 question replies use
-  `/question/{requestID}/reply` or reject instead of creating unrelated prompt runs;
-  agent/retry/compaction/activity/subtask events render as compact descriptive
-  transcript components. (`src/session/eventHandlers/QuestionHandler.ts`,
-  `src/chat/webview/renderer.ts`, `src/chat/webview/questionBar.ts`,
-  `src/chat/webview/css/blocks.css`)
-- **Context usage now persists with sessions and survives webview refresh.** `SessionStore` owns
-  durable `contextUsage` (tokens, maxTokens, percent, source, timestamp, optional breakdown/cost)
-  and ignores invalid, stale, or zero fallback updates when a valid reading already exists. Host
-  hydration now includes context usage in `init_state` and `resume_session_data`; live estimates
-  are marked `estimated`, final SDK input-token readings are marked `actual`, and stale async
-  estimates cannot overwrite newer actual data. (`src/session/SessionStore.ts`,
-  `src/monitor/ContextMonitor.ts`, `src/chat/ChatProvider.ts`,
-  `src/chat/handlers/StreamCoordinator.ts`, `src/chat/SessionLifecycleService.ts`)
-- **Visibility refreshes no longer re-render entire sessions.** Focus/visibility state sync now
-  pushes lightweight model/rate-limit/context state and replays live streams instead of sending a
-  full `init_state`; repeated hydration skips unchanged message DOM and restores saved
-  per-session scroll positions. (`src/chat/ChatProvider.ts`, `src/chat/webview/main.ts`,
-  `src/chat/webview/state.ts`)
-- **Bottom status controls stay clickable in narrow panes.** The context status strip and changed
-  files strip now stack above the sticky composer, so the prompt textarea cannot intercept their
-  clicks. (`src/chat/webview/css/layout.css`, `src/chat/webview/css/context-usage.css`)
-- **Subagent activity/detail UI now hydrates and is keyboard-accessible.** `subagent_detail`
-  responses now replace the loading spinner with summary/result/message content; runtime-rendered
-  activity rows use the CSS hooks already defined for status badges and progress bars; rows can be
-  opened with Enter/Space; and child-session detail/cancel requests are validated and authorized
-  against the active tab's child-session list before SDK detail or abort calls run. (`src/chat/webview/subagentDetailView.ts`,
-  `src/chat/webview/subagent-panel.ts`, `src/chat/WebviewEventRouter.ts`, `src/chat/WebviewMessageValidator.ts`)
-- **Mode switching now works on the welcome screen.** The mode selector lives in the input
-  area, which is visible on the welcome screen, but `requestMode`/`cycleModeForward`
-  silently no-op'd because there was no active session to target with `change_mode`.
-  Choosing a mode with no active session (click, `Ctrl/Cmd+Alt+1/2/3`, or `Alt+Shift+Tab`)
-  now updates a persisted **pending mode** and the selector UI, and the next created
-  session adopts it. (`src/chat/webview/ui/modeDropdown.ts`, `src/chat/webview/state.ts`,
-  `src/chat/webview/types.ts`, `src/chat/webview/main.ts`)
-- **Welcome card no longer stuck on "No model selected".** `renderWelcomeContext` only
-  wrote the model name when `globalModel` was already populated, so the model-list race on
-  startup left the card blank. It now falls back to the active-session model and the
-  picker's current model, and refreshes when `model_list` resolves. (`src/chat/webview/ui/welcomeView.ts`,
-  `src/chat/webview/main.ts`)
-- **Extension no longer steals focus to a session "doing a task".** The host broadcasts its
-  active session via `active_session_changed` (on every `setActive`, including server-side
-  id promotion) and via `init_state` (re-sent on every visibility change). The webview
-  obeyed both unconditionally, yanking the user back to a streaming session they had
-  deliberately switched away from. Reconciliation now runs through pure helpers: the webview
-  refuses to follow a host-driven switch onto a mid-stream session while viewing another
-  valid tab, and an `init_state` refresh preserves the user's current tab instead of the
-  host's active id. (`src/chat/webview/sessionFocus.ts`, `src/chat/webview/main.ts`)
-- **Closed tabs are no longer resurrected on refresh.** `pushInitStateToWebview` is reused
-  for live visibility refreshes; its "force-include the store's active session" fallback
-  re-added a session whose tab the user had already closed. On a refresh it now only
-  re-includes the active session when it still has an open tab. (`src/chat/restorablePolicy.ts`,
-  `src/chat/ChatProvider.ts`)
-
-### Tests
-- Added behavioral SessionStore context-usage tests, webview state preservation tests, lightweight
-  visibility-sync guards, and visual context regressions for stream end, session restore,
-  background-tab usage, zero fallback preservation, scroll stability, and narrow-pane click
-  targets. (`tests/unit/session-store-context-usage-behavioral.test.mjs`,
-  `src/chat/webview/state.test.ts`, `src/chat/ChatProvider.test.ts`,
-  `src/chat/webview/main.test.ts`, `tests/visual/chat-context-usage.spec.ts`)
-- Added subagent regression coverage for detail hydration, status/progress CSS hooks,
-  keyboard-open behavior, required subagent IDs, and active-session child authorization.
-  (`src/chat/webview/subagentDetailView.test.ts`, `src/chat/webview/subagent-panel.test.ts`,
-  `src/chat/WebviewEventRouter.test.ts`)
-- Added pure-function coverage for focus reconciliation and restorable policy
-  (`src/chat/webview/sessionFocus.test.ts`, `src/chat/restorablePolicy.test.ts`) and
-  behavioural coverage for welcome-screen mode selection and the welcome model card
-  (`src/chat/webview/welcome-mode-model.test.ts`).
-
-### Added
-- **Automatic opencode CLI install.** The opencode CLI is a hard requirement, but VS Code has no install-time hook, so the extension now detects a missing binary on activation and installs it. Default behavior is **prompt-once** (Install / Manual Instructions / Not Now); a decline is remembered in `globalState` so the user isn't nagged on every reload. macOS/Linux use the official install script (downloaded, validated, then run as `bash <file>` with `shell:false` — no `curl | bash` pipe; lands in `~/.opencode/bin`); Windows uses `npm i -g opencode-ai` when npm is present, otherwise shows manual instructions. New `opencode.autoInstall` setting (`prompt` | `auto` | `off`, default `prompt`) and `OpenCode: Install CLI` command. See ADR `docs/adrs/2026-05-31-cli-auto-install.md`. (`src/install/installPlan.ts`, `src/install/OpencodeInstaller.ts`, `src/extension.ts`, `src/commands/misc.ts`, `package.json`)
-
-### Changed
-- **Binary detection now probes known install locations.** `ServerLifecycle.findOpencodeBinary()` falls back from the PATH lookup to `~/.opencode/bin/opencode` and other common install dirs. This fixes "installed but not detected" cases for GUI-launched editors, where the installer's shell-rc PATH change isn't visible to the running extension host. (`src/session/ServerLifecycle.ts`, `src/install/installPlan.ts`)
 
 ## [0.2.23] - 2026-05-31
 
