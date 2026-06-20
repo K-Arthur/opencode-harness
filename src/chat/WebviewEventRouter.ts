@@ -1,5 +1,6 @@
 import * as vscode from "vscode"
 import * as path from "path"
+import { execSync } from "node:child_process"
 import type { TabManager } from "./TabManager"
 import type { StatePushService } from "./StatePushService"
 import type { SessionLifecycleService } from "./SessionLifecycleService"
@@ -277,7 +278,7 @@ export class WebviewEventRouter {
     ["voice_cancel", (msg: Record<string, unknown>) => {
       this.opts.voiceInputService.cancel(msg.requestId)
     }],
-    ["show_diff", async (msg: Record<string, unknown>, sessionId?: string) => {
+    ["show_diff", async (msg: Record<string, unknown>, _sessionId?: string) => {
       // C1-a: This handler was previously gated on DiffHandler which has been
       // removed (the server applies edits directly). The direct filePath +
       // proposedContent path is kept for any future caller that passes them
@@ -852,7 +853,7 @@ export class WebviewEventRouter {
         })
       }
     }],
-    ["open_changed_file_diff", async (msg: Record<string, unknown>, sessionId?: string) => {
+    ["open_changed_file_diff", async (msg: Record<string, unknown>, _sessionId?: string) => {
       // M7: Open a VS Code diff editor comparing the file's git HEAD
       // (before) against its current workspace content (after). Falls back
       // to a simple "before unavailable" label for untracked / new files.
@@ -860,14 +861,13 @@ export class WebviewEventRouter {
       if (!filePath) return
 
       let beforeContent = ""
-      let beforeLabel = `${path.basename(filePath)} (Before)`
 
       // Try git HEAD first (works for tracked files even if staged/unstaged
       // changes exist — HEAD is the committed state).
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath
       if (workspaceRoot) {
         try {
-          const result = require("child_process").execSync(
+          const result = execSync(
             `git show HEAD:${filePath.replace(/\\/g, "/")}`,
             { cwd: workspaceRoot, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024, timeout: 5000 },
           )
@@ -876,7 +876,6 @@ export class WebviewEventRouter {
           }
         } catch {
           // File not tracked by git or no git repo — use empty "before"
-          beforeLabel = `${path.basename(filePath)} (Before — untracked)`
         }
       }
 
@@ -1511,6 +1510,7 @@ export class WebviewEventRouter {
       if (!session) return
       try {
         const { collectRestorePoints } = await import("../checkpoint/restorePoints")
+        interface SnapshotBlock { id: string; type: string; snapshot?: string; tool?: string; title?: string }
         const points = collectRestorePoints(session.messages
           .filter((m): m is typeof m & { id: string } => typeof m.id === "string")
           .map((m) => ({
@@ -1519,13 +1519,16 @@ export class WebviewEventRouter {
             time: m.timestamp,
             parts: (m.blocks ?? [])
               .filter((b): b is typeof b & { id: string } => typeof b.id === "string")
-              .map((b) => ({
-                id: b.id,
-                type: b.type,
-                snapshot: (b as any).snapshot,
-                tool: (b as any).tool,
-                title: (b as any).title,
-              })),
+              .map((b): SnapshotBlock => {
+                const raw = b as Record<string, unknown>
+                return {
+                  id: b.id,
+                  type: b.type,
+                  snapshot: typeof raw.snapshot === "string" ? raw.snapshot : undefined,
+                  tool: typeof raw.tool === "string" ? raw.tool : undefined,
+                  title: typeof raw.title === "string" ? raw.title : undefined,
+                }
+              }),
           })))
         this.opts.postMessage({ type: "restore_points", sessionId, points })
       } catch (err) {
@@ -1792,7 +1795,7 @@ export class WebviewEventRouter {
       })
     }],
     ["context_suggestions_request", (msg: Record<string, unknown>) => {
-      const days = typeof msg.days === "number" ? msg.days : 7
+      const _days = typeof msg.days === "number" ? msg.days : 7
       
       // Use ContextMonitor for proactive optimization suggestions
       const suggestions = this.opts.contextMonitor.generateOptimizationSuggestions()
@@ -1880,7 +1883,7 @@ export class WebviewEventRouter {
         this.opts.showErrorMessage(`OpenCode: Could not open the file — ${(err as Error).message}`)
       }
     }],
-    ["open_folder", async (msg: Record<string, unknown>, sessionId?: string) => {
+    ["open_folder", async (msg: Record<string, unknown>, _sessionId?: string) => {
       const rawDir = msg.dir as string | undefined
       if (!rawDir) return
       try {
@@ -1890,7 +1893,7 @@ export class WebviewEventRouter {
         log.error(`Failed to open folder: ${rawDir}`, err)
       }
     }],
-    ["open_url", async (msg: Record<string, unknown>, sessionId?: string) => {
+    ["open_url", async (msg: Record<string, unknown>, _sessionId?: string) => {
       const rawUrl = msg.url as string | undefined
       if (!rawUrl) return
       try {
@@ -2150,7 +2153,7 @@ export class WebviewEventRouter {
         })
       }
     }],
-    ["mark_subagent_read", (msg: Record<string, unknown>, sessionId?: string) => {
+    ["mark_subagent_read", (_msg: Record<string, unknown>, _sessionId?: string) => {
       // No-op in the host: read state is managed in the webview.
       // Host-side, this could be used to reset unread counts for SSE tracking.
     }],
@@ -2616,7 +2619,7 @@ export class WebviewEventRouter {
     if (!wsFolder) return null
     let before = ""
     try {
-      const result = require("child_process").execSync(
+      const result = execSync(
         `git show HEAD:${filePath.replace(/\\/g, "/")}`,
         { cwd: wsFolder.uri.fsPath, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024, timeout: 5000 },
       )
