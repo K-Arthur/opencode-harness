@@ -3,6 +3,24 @@
 **Last Updated:** 2026-06-20
 **Version:** v0.3.36
 
+## Unreleased Highlights (2026-06-20) — IDE warning cleanup + small-webview overflow
+
+- **Cleared remaining IDE warnings** across the chat send-flow, webview renderers,
+  and host wiring. Removed unused imports/destructured deps in `ChatProvider.ts`,
+  `SessionManager.ts`, `StreamCoordinator.ts`, `composer.ts`, `sendLogic.ts`,
+  `sendButton.ts`, `renderer.ts`, and `toolCallRenderer.ts`. Replaced `require()`
+  style imports in `ChatProvider.ts` and `WebviewEventRouter.ts` with top-level ESM
+  imports of `execSync`.
+- **Tightened `any` types** in `composer.ts`, `sendLogic.ts`, `sendMessage.ts`,
+  `streamHandlers.ts`, `renderer.ts`, and `toolCallRenderer.ts` with `unknown` /
+  narrow structural types.
+- **Fixed conversation-history search overflow** on the welcome screen
+  (`welcome.css`) and added responsive breakpoints for the composer at `<=320px`
+  / `<=280px` in `layout.css` so the send area remains usable in very narrow
+  webviews.
+- **Verification**: `npm run lint` (tsc) and `npx eslint` on the touched files
+  are now clean; relevant webview/host tests pass.
+
 ## Unreleased Highlights (2026-06-20) — checkpoint restore-point rail
 
 - **Snapshot-bearing parts are now surfaced as a "restore to here" rail** in the

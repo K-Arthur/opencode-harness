@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **IDE warning cleanup (2026-06-20).** Cleared ESLint warnings across the chat send-flow, webview renderers, and host wiring: unused imports and destructured dependencies in `ChatProvider.ts`, `SessionManager.ts`, `StreamCoordinator.ts`, `composer.ts`, `sendLogic.ts`, `sendButton.ts`, and `renderer.ts`; `require()` style imports in `ChatProvider.ts` and `WebviewEventRouter.ts`; broad `any` casts in `composer.ts`, `sendLogic.ts`, `sendMessage.ts`, `streamHandlers.ts`, `renderer.ts`, and `toolCallRenderer.ts`. Added a typed `getVsCodeApi()` helper in `renderer.ts` and relaxed `renderToolGroupBadge` to accept the minimal `{ state?, error? }` shape.
+- **Small-webview overflow fixes (2026-06-20).** Prevented the conversation-history search box on the welcome screen from overflowing narrow containers (`welcome.css`) and added responsive composer breakpoints for `<=320px` / `<=280px` webviews so the send button and mode/model selectors stay on screen (`layout.css`).
+
 ### Added
 
 - **Session SDK method coverage gaps closed (2026-06-20).** Wired three previously-unwired SDK v2 session endpoints:
