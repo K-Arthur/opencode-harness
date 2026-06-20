@@ -9,6 +9,8 @@ const syntaxHighlighterSource = readFileSync(path.join(__dirname, "syntaxHighlig
 const toolCallRendererSource = readFileSync(path.join(__dirname, "toolCallRenderer.ts"), "utf8")
 const messageRendererSource = readFileSync(path.join(__dirname, "messageRenderer.ts"), "utf8")
 const workerSource = readFileSync(path.join(__dirname, "markdownWorker.ts"), "utf8")
+const markdownWorkerClientSource = readFileSync(path.join(__dirname, "markdownWorkerClient.ts"), "utf8")
+const iconsSource = readFileSync(path.join(__dirname, "icons.ts"), "utf8")
 
 describe("renderer.ts", () => {
   it("exports renderMessage", () => {
@@ -80,7 +82,10 @@ it("has type guards for discriminated blocks", () => {
   it("supports a VS Code-safe markdown worker for large final renders", () => {
     assert.ok(source.includes("MARKDOWN_WORKER_MIN_CHARS"), "must define a worker size threshold")
     assert.ok(source.includes("window.__OC_MARKDOWN_WORKER_URI__"), "must read worker URI from webview bootstrap config")
-    assert.ok(source.includes("new Worker(objectUrl"), "must launch worker from a blob URL")
+    // The Worker is constructed inside the extracted markdownWorkerClient; the
+    // renderer delegates to it via getMarkdownWorkerClient().
+    assert.ok(markdownWorkerClientSource.includes("new Worker(objectUrl"), "markdownWorkerClient must launch worker from a blob URL")
+    assert.ok(source.includes("getMarkdownWorkerClient()"), "renderer must delegate to the markdown worker client")
     assert.ok(source.includes("renderMarkdownAsync"), "must expose async markdown rendering")
     assert.ok(source.includes("if (isStreaming) return false"), "worker path must skip active streaming text")
     assert.ok(source.includes("const rendered = sanitizeHtml(html)"), "worker output must be sanitized before caching")
@@ -210,21 +215,19 @@ it("has type guards for discriminated blocks", () => {
   })
 
 it("has SVG constants for icons", () => {
+    // Icons are defined canonically in icons.ts and consumed by renderer.ts /
+    // toolCallRenderer.ts. A constant satisfies the contract if it is present in
+    // any of those three modules (defined or referenced).
+    const hasIcon = (name: string) =>
+      source.includes(name) || toolCallRendererSource.includes(name) || iconsSource.includes(name)
     assert.ok(source.includes('from "./icons"') || toolCallRendererSource.includes('from "./icons"'), "must import icons from icons.ts")
-    assert.ok(source.includes("BRAIN_SVG") || toolCallRendererSource.includes("BRAIN_SVG"), "must have brain icon for thinking")
-    assert.ok(source.includes("TOOL_READ_SVG") || toolCallRendererSource.includes("TOOL_READ_SVG"), "must have tool read icon")
-    assert.ok(source.includes("TOOL_WRITE_SVG") || toolCallRendererSource.includes("TOOL_WRITE_SVG"), "must have tool write icon")
-    assert.ok(source.includes("TOOL_EXEC_SVG") || toolCallRendererSource.includes("TOOL_EXEC_SVG"), "must have tool exec icon")
-    assert.ok(source.includes("TOOL_META_SVG") || toolCallRendererSource.includes("TOOL_META_SVG"), "must have tool meta icon")
-    assert.ok(source.includes("COPY_SVG") || toolCallRendererSource.includes("COPY_SVG"), "must have copy icon")
-    assert.ok(source.includes("CHECK_SVG") || toolCallRendererSource.includes("CHECK_SVG"), "must have check icon")
-    assert.ok(source.includes("ERROR_SVG") || toolCallRendererSource.includes("ERROR_SVG"), "must have error icon")
-    assert.ok(source.includes("WARNING_SVG") || toolCallRendererSource.includes("WARNING_SVG"), "must have warning icon")
-    assert.ok(source.includes("SPINNER_SVG") || toolCallRendererSource.includes("SPINNER_SVG") || toolCallRendererSource.includes("SPINNER_SVG"), "must have spinner icon")
-    assert.ok(source.includes("EDIT_SVG") || toolCallRendererSource.includes("EDIT_SVG"), "must have edit icon")
-    assert.ok(source.includes("INSERT_SVG") || toolCallRendererSource.includes("INSERT_SVG"), "must have insert icon")
-    assert.ok(source.includes("NEW_FILE_SVG") || toolCallRendererSource.includes("NEW_FILE_SVG"), "must have new file icon")
-    assert.ok(source.includes("CHEVRON_RIGHT_SVG") || toolCallRendererSource.includes("CHEVRON_RIGHT_SVG"), "must have chevron icon")
+    for (const icon of [
+      "BRAIN_SVG", "TOOL_READ_SVG", "TOOL_WRITE_SVG", "TOOL_EXEC_SVG", "TOOL_META_SVG",
+      "COPY_SVG", "CHECK_SVG", "ERROR_SVG", "WARNING_SVG", "SPINNER_SVG",
+      "EDIT_SVG", "INSERT_SVG", "NEW_FILE_SVG", "CHEVRON_RIGHT_SVG",
+    ]) {
+      assert.ok(hasIcon(icon), `must have ${icon}`)
+    }
   })
 
 it("tool_call_renderer_uses_class_specific_icons", () => {

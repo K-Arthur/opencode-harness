@@ -186,7 +186,10 @@ describe("SteerPromptHandler.sendSteerPrompt", () => {
       await handler.sendSteerPrompt("session-1", prompt, callbacks)
       assert.equal(callbacks.errors.length, 0)
       assert.deepEqual(coord.calls.map(c => c.name), ["abort", "startPrompt"])
-      assert.deepEqual(coord.calls[1]!.args[4], [{ data: "aGVsbG8=", mimeType: "image/png" }])
+      // startPrompt now takes a single StartPromptConfig object; attachments
+      // ride on that object rather than a positional argument.
+      const config = coord.calls[1]!.args[0] as { attachments?: unknown }
+      assert.deepEqual(config.attachments, [{ data: "aGVsbG8=", mimeType: "image/png" }])
     })
 
     it("posts an error when the session is not found", async () => {
@@ -210,9 +213,9 @@ describe("SteerPromptHandler.sendSteerPrompt", () => {
       const prompt: SteerPrompt = { id: "p1", text: "redirect", mode: "interrupt", attachments: [], timestamp: 1, sessionId: "session-1" }
       await handler.sendSteerPrompt("session-1", prompt, callbacks)
       assert.deepEqual(coord.calls.map(c => c.name), ["abort", "startPrompt"])
-      const startArgs = coord.calls[1]!.args
-      assert.equal(startArgs[0], "session-1")
-      assert.equal(startArgs[1], "redirect")
+      const config = coord.calls[1]!.args[0] as { tabId?: string; text?: string }
+      assert.equal(config.tabId, "session-1")
+      assert.equal(config.text, "redirect")
     })
 
     it("surfaces errors thrown by the stream coordinator", async () => {

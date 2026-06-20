@@ -89,16 +89,22 @@ describe("floating webview dropdown positioning", () => {
     assert.ok(Number.parseFloat(panel.style.maxHeight) >= 180, "dropdown must keep a usable scrollable height")
   })
 
-  it("opens the changed-files strip dropdown within the viewport", () => {
+  // The changed-files surface was refactored from a JS-positioned floating
+  // modal to an inline panel anchored above the input bar via CSS (commit
+  // c36edc7). It no longer sets inline style.left/top/width — staying within the
+  // viewport is now the stylesheet's job. These tests therefore assert the
+  // inline-panel contract: clicking the strip opens the panel and renders the
+  // file tree, regardless of anchor geometry or viewport width.
+  it("opens the changed-files inline panel and renders the file tree", () => {
     const strip = document.getElementById("changed-files-strip")!
     const panel = document.getElementById("changed-files-dropdown")!
+    const tree = document.getElementById("cf-tree")!
     setRect(strip, { left: 12, right: 348, top: 218, bottom: 238, width: 336, height: 20 })
-    setRect(panel, { left: 0, right: 0, top: 0, bottom: 440, width: 420, height: 440 })
 
     setupChangedFilesDropdown({
       btn: null,
       panel,
-      treeContainer: document.getElementById("cf-tree")!,
+      treeContainer: tree,
       badge: document.getElementById("cf-badge")!,
       postMessage: () => {},
       onOpenChangedFileDiff: () => {},
@@ -108,27 +114,23 @@ describe("floating webview dropdown positioning", () => {
     updateChangedFiles("session-a", [{ path: "/tmp/example.ts", added: 1, removed: 0 }])
     strip.click()
 
-    const left = Number.parseFloat(panel.style.left)
-    const width = Number.parseFloat(panel.style.width)
-    assert.ok(!panel.classList.contains("hidden"), "clicking the strip must open the dropdown")
-    assert.ok(left >= 8, "left edge must stay within viewport margin")
-    assert.ok(left + width <= 352, "right edge must stay within viewport margin")
+    assert.ok(!panel.classList.contains("hidden"), "clicking the strip must open the panel")
+    assert.ok(tree.childElementCount > 0, "panel must render the changed-files tree")
+    assert.ok(tree.textContent?.includes("example.ts"), "tree must list the changed file")
   })
 
-  it("fallback to input-area when anchor has zero dimensions", () => {
-    // Edge case: strip is present but has zero height (hidden/invisible).
-    // The dropdown should still open and position itself near the input area.
+  it("opens the inline panel even when the strip anchor has zero dimensions", () => {
+    // Edge case: strip is present but has zero height (hidden/invisible). The
+    // inline panel does not depend on anchor geometry, so it still opens.
     const strip = document.getElementById("changed-files-strip")!
     const panel = document.getElementById("changed-files-dropdown")!
-    const inputArea = document.getElementById("input-area")!
+    const tree = document.getElementById("cf-tree")!
     setRect(strip, { left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 })
-    setRect(inputArea, { left: 12, right: 348, top: 200, bottom: 260, width: 336, height: 60 })
-    setRect(panel, { left: 0, right: 0, top: 0, bottom: 440, width: 420, height: 440 })
 
     setupChangedFilesDropdown({
       btn: null,
       panel,
-      treeContainer: document.getElementById("cf-tree")!,
+      treeContainer: tree,
       badge: document.getElementById("cf-badge")!,
       postMessage: () => {},
       onOpenChangedFileDiff: () => {},
@@ -138,26 +140,21 @@ describe("floating webview dropdown positioning", () => {
     updateChangedFiles("session-a", [{ path: "/tmp/example.ts", added: 1, removed: 0 }])
     strip.click()
 
-    // Panel must open and have valid (non-NaN, non-zero) coordinates
-    assert.ok(!panel.classList.contains("hidden"), "clicking the strip must open the dropdown even with zero-size anchor")
-    const top = Number.parseFloat(panel.style.top)
-    const left = Number.parseFloat(panel.style.left)
-    assert.ok(Number.isFinite(top), `panel top must be a finite number, got ${top}`)
-    assert.ok(top >= 0, `panel top must be >= 0, got ${top}`)
-    assert.ok(Number.isFinite(left), `panel left must be a finite number, got ${left}`)
+    assert.ok(!panel.classList.contains("hidden"), "clicking the strip must open the panel even with a zero-size anchor")
+    assert.ok(tree.childElementCount > 0, "panel must still render the changed-files tree")
   })
 
-  it("bounds the dropdown width below the viewport margin on small viewports and does not clip", () => {
+  it("opens the inline panel on a narrow viewport without JS positioning", () => {
     Object.defineProperty(window, "innerWidth", { value: 250, configurable: true })
     const strip = document.getElementById("changed-files-strip")!
     const panel = document.getElementById("changed-files-dropdown")!
+    const tree = document.getElementById("cf-tree")!
     setRect(strip, { left: 10, right: 240, top: 200, bottom: 220, width: 230, height: 20 })
-    setRect(panel, { left: 0, right: 0, top: 0, bottom: 440, width: 420, height: 440 })
 
     setupChangedFilesDropdown({
       btn: null,
       panel,
-      treeContainer: document.getElementById("cf-tree")!,
+      treeContainer: tree,
       badge: document.getElementById("cf-badge")!,
       postMessage: () => {},
       onOpenChangedFileDiff: () => {},
@@ -167,11 +164,10 @@ describe("floating webview dropdown positioning", () => {
     updateChangedFiles("session-a", [{ path: "/tmp/example.ts", added: 1, removed: 0 }])
     strip.click()
 
-    const left = Number.parseFloat(panel.style.left)
-    const width = Number.parseFloat(panel.style.width)
-    assert.ok(!panel.classList.contains("hidden"), "clicking the strip must open the dropdown")
-    assert.equal(width, 234, "panel width must match innerWidth - margin * 2")
-    assert.ok(left >= 8, "left edge must stay within viewport margin")
-    assert.ok(left + width <= 242, "right edge must stay within viewport margin (250 - 8)")
+    assert.ok(!panel.classList.contains("hidden"), "clicking the strip must open the panel")
+    // The panel is CSS-positioned inline; it must NOT set brittle inline
+    // left/width coordinates that could push it off a narrow webview.
+    assert.equal(panel.style.left, "", "inline panel must not hard-code a left coordinate")
+    assert.equal(panel.style.width, "", "inline panel must not hard-code a width")
   })
 })

@@ -144,13 +144,20 @@ describe("PTY vertical — host wiring contract", () => {
 })
 
 describe("PTY vertical — webview wiring contract", () => {
-  it("main.ts imports and sets up the terminal panel", () => {
-    assert.ok(mainSource.includes('from "./terminal-panel"'),
-      "main.ts must import the terminal panel module")
-    assert.ok(mainSource.includes("setupTerminalPanel("),
-      "main.ts must call setupTerminalPanel")
+  it("wires up the terminal panel via the extracted todoSubagentSetup module", () => {
+    // The panel construction was extracted out of main.ts into
+    // todoSubagentSetup.ts (setupTodoSubagentPanelsImpl). main.ts still owns the
+    // terminalPanelApi handle and feeds it the PTY host messages; the actual
+    // setupTerminalPanel() call now lives in the extracted module.
+    const setupSource = readFileSync(path.join(__dirname, "todoSubagentSetup.ts"), "utf8")
+    assert.ok(setupSource.includes('from "./terminal-panel"'),
+      "todoSubagentSetup must import the terminal panel module")
+    assert.ok(setupSource.includes("setupTerminalPanel("),
+      "todoSubagentSetup must call setupTerminalPanel")
     assert.ok(mainSource.includes("let terminalPanelApi"),
       "main.ts must declare terminalPanelApi")
+    assert.ok(mainSource.includes("terminalPanelApi = apis.terminalPanelApi"),
+      "main.ts must receive terminalPanelApi from the extracted setup")
   })
 
   it("main.ts handles all PTY host messages", () => {
@@ -171,9 +178,10 @@ describe("PTY vertical — webview wiring contract", () => {
     }
   })
 
-  it("main.ts wires the terminal toggle button", () => {
-    assert.ok(mainSource.includes("terminalToggleBtn.addEventListener"),
-      "main.ts must wire the terminal toggle button click")
+  it("wires the terminal toggle button in todoSubagentSetup", () => {
+    const setupSource = readFileSync(path.join(__dirname, "todoSubagentSetup.ts"), "utf8")
+    assert.ok(setupSource.includes("terminalToggleBtn.addEventListener"),
+      "todoSubagentSetup must wire the terminal toggle button click")
   })
 
   it("index.html has the terminal panel + toggle button", () => {

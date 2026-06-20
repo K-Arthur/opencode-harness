@@ -35,7 +35,10 @@ describe("StreamCoordinator transport awareness", () => {
     const sendIdx = source.indexOf("sendPromptAsync", startIdx)
     const block = source.slice(startIdx, sendIdx > startIdx ? sendIdx : startIdx + 5000)
 
-    assert.ok(block.includes("attachments:"), "startPrompt must accept attachments")
+    // attachments now arrive via the StartPromptConfig object (destructured at
+    // the top of startPrompt) rather than a positional parameter.
+    assert.ok(block.includes("attachments"), "startPrompt must accept attachments")
+    assert.ok(source.includes("attachments?: Array<{ data: string; mimeType: string }>"), "StartPromptConfig must declare attachments")
     assert.ok(block.includes('type: "file"'), "attachments must be emitted as file parts")
     assert.ok(block.includes("mime:"), "file parts must carry the MIME type")
     // Every attachment — image or not — goes through attachmentStorage.materialize

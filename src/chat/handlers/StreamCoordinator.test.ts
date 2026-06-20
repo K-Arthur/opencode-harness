@@ -37,9 +37,16 @@ describe("StreamCoordinator.ts", () => {
   })
 
   it("has startPrompt method with full lifecycle", () => {
+    // startPrompt was refactored to a single StartPromptConfig object (which
+    // bundles tabId/text/callbacks/variant/attachments/identity) to cut the
+    // parameter count; the lifecycle behaviour below is unchanged.
     assert.ok(
-      /async\s+startPrompt\s*\(\s*tabId:\s*string,\s*text:\s*string,\s*callbacks:\s*StreamCallbacks/.test(source),
+      /async\s+startPrompt\s*\(\s*config:\s*StartPromptConfig\s*\)/.test(source),
       "startPrompt method must exist"
+    )
+    assert.ok(
+      /export interface StartPromptConfig[\s\S]*?\btabId:\s*string[\s\S]*?\btext:\s*string[\s\S]*?\bcallbacks:\s*StreamCallbacks/.test(source),
+      "StartPromptConfig must carry tabId/text/callbacks"
     )
     assert.ok(source.includes("this.contextEngine.gatherContext()"), "must gather context")
     assert.ok(source.includes(".ensureSession("), "must ensure session")
@@ -220,7 +227,7 @@ describe("StreamCoordinator.ts", () => {
 
   it("has atomic stream slot reservation in startPrompt", () => {
     assert.ok(
-      /startPrompt\s*\(\s*tabId:\s*string,\s*text:\s*string,\s*callbacks:\s*StreamCallbacks/.test(source),
+      /async\s+startPrompt\s*\(\s*config:\s*StartPromptConfig\s*\)/.test(source),
       "startPrompt must exist"
     )
     assert.ok(

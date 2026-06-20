@@ -363,10 +363,13 @@ describe("stream.ts", () => {
       const harness = createHarness()
 
       handleStreamStart(harness.state, harness.els as any, harness.messages, "resp-stuck")
+      // Use a generic (non-exec) tool: exec/shell tools render as standalone
+      // live command cards (feature 440a68c) rather than the generic
+      // details.tool-call element this regression targets.
       handleToolStart(harness.state, harness.els as any, harness.messages, {
         id: "tool-stuck",
-        name: "bash",
-        class: "exec",
+        name: "read",
+        class: "read",
         args: {},
         state: "running",
       })

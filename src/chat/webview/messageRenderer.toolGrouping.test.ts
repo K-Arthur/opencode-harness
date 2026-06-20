@@ -45,6 +45,9 @@ function tool(id: string, name: string, cls: ToolCallBlock["class"]): ToolCallBl
 function childKind(el: Element): string {
   if (el.matches("details.tool-group")) return "group"
   if (el.matches("details.tool-call")) return "tool"
+  // exec/shell tools render as standalone live command cards (feature 440a68c),
+  // not as the generic details.tool-call element.
+  if (el.matches(".live-command-card")) return "command"
   if (el.classList.contains("msg-text")) return "text"
   return el.tagName.toLowerCase()
 }
@@ -74,7 +77,9 @@ describe("messageRenderer tool grouping", () => {
     assert.ok(bubble, "assistant message must render a bubble")
 
     const visibleKinds = Array.from(bubble!.children).map(childKind)
-    assert.deepEqual(visibleKinds, ["tool", "text", "tool"])
+    // exec tool (t1) → live command card; write tool (t2) → tool-call details.
+    // Both stay as separate visible rows around the text, in order.
+    assert.deepEqual(visibleKinds, ["command", "text", "tool"])
     assert.equal(bubble!.querySelectorAll(":scope > details.tool-group").length, 0)
   })
 })

@@ -8,6 +8,8 @@ import { normalizeMarkdownLanguage, escapeHtml } from "./htmlUtils"
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const rendererSource = readFileSync(resolve(__dirname, "renderer.ts"), "utf8")
 const workerSource = readFileSync(resolve(__dirname, "markdownWorker.ts"), "utf8")
+// MarkdownWorkerClient was extracted out of renderer.ts into its own module.
+const workerClientSource = readFileSync(resolve(__dirname, "markdownWorkerClient.ts"), "utf8")
 
 function normalizeMarkdownText(text: string): string {
   return text
@@ -150,7 +152,7 @@ void describe("highlight callback — no double normalization (C1 fix)", () => {
 void describe("MarkdownWorkerClient — nextId overflow guard (M2 fix)", () => {
   void it("wraps nextId using modulo instead of unbounded increment", () => {
     assert.match(
-      rendererSource,
+      workerClientSource,
       /this\.nextId\s*=\s*\(this\.nextId\s*%\s*0x7fffffff\)\s*\+\s*1/,
       "nextId must use bounded modulo increment"
     )
@@ -160,12 +162,12 @@ void describe("MarkdownWorkerClient — nextId overflow guard (M2 fix)", () => {
 void describe("worker error logging (m2 fix)", () => {
   void it("logs worker error responses via console.warn", () => {
     assert.match(
-      rendererSource,
+      workerClientSource,
       /"error"\s+in\s+message/,
       "worker onmessage must check for error property"
     )
     assert.match(
-      rendererSource,
+      workerClientSource,
       /console\.warn\(\s*"\[opencode\]\s+Markdown\s+worker\s+error:"/,
       "worker onmessage must log error via console.warn"
     )
