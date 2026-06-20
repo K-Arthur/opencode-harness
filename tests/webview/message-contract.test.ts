@@ -175,6 +175,38 @@ void describe("Message Contract Tests", () => {
     assert.strictEqual(message.renderAnsi, true)
   })
 
+  void it("validates chat_font_config message structure", () => {
+    const message: HostMessage = {
+      type: "chat_font_config",
+      fontSize: 14,
+      fontFamily: "Fira Code",
+    }
+
+    assert.strictEqual(message.type, "chat_font_config")
+    assert.strictEqual(message.fontSize, 14)
+    assert.strictEqual(message.fontFamily, "Fira Code")
+  })
+
+  void it("validates chat_dir_config message structure", () => {
+    const message: HostMessage = {
+      type: "chat_dir_config",
+      direction: "rtl",
+    }
+
+    assert.strictEqual(message.type, "chat_dir_config")
+    assert.strictEqual(message.direction, "rtl")
+  })
+
+  void it("validates chat_dir_change webview message structure", () => {
+    const message: WebviewMessage = {
+      type: "chat_dir_change",
+      direction: "ltr",
+    }
+
+    assert.strictEqual(message.type, "chat_dir_change")
+    assert.strictEqual(message.direction, "ltr")
+  })
+
   void it("validates cancel_tool webview message structure", () => {
     const message: WebviewMessage = {
       type: "cancel_tool",

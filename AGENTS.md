@@ -646,6 +646,8 @@ All dropdowns and modals support: `ArrowUp`/`ArrowDown` to navigate, `Enter`/`Sp
 ### Settings
 - `opencode.defaultMode`: Default session mode for new tabs (`"build"`, `"plan"`, or `"auto"`)
 - `opencode.sessions.maxConcurrentStreams`: Max concurrent AI streams across all tabs (default 5)
+- `opencode.chat.fontSize`: Font size (px) for chat panel input and message text, clamped 8–32 (default 14; 0 = inherit editor font size)
+- `opencode.chat.fontFamily`: CSS font-family for chat panel input and message text (default `""` = inherit editor monospace)
 - `opencode.streaming.ttfbTimeoutMs`: Time-to-first-byte timeout in ms (default 180000 = 3 minutes; range 60000–600000). Raised from the original 90s default after research showed reasoning models (GLM-5.x, Kimi, DeepSeek-R1, Qwen-QwQ) routinely take 60–180s to emit the first token. Decrease for snappy first-class providers; increase if your workflow regularly hits the timeout while the model is still thinking. Read at runtime via `StreamCoordinator.resolveTtfbTimeoutMs` so workspace changes take effect on the next stream — no reload required.
 - `opencode.streaming.logToOutputChannel`: When true (default), mirror streaming-lifecycle events (send, ttfb, probe, reconnect, abort) to the **OpenCode** Output channel. Mirrors opencode CLI's `--print-logs` discipline; useful for diagnosing "Send button reverted while still generating" symptoms.
 

@@ -80,6 +80,18 @@ Rules:
 - Output is debounced at 100ms before DOM replacement so rapid progress updates coalesce.
 - `tool_output_config` pushes `{ renderAnsi }`; ANSI rendering is opt-in through
   `opencode.toolOutput.renderAnsi`, and the default path strips ANSI/control sequences.
+- `chat_font_config` pushes `{ fontSize, fontFamily }` from `opencode.chat.fontSize`
+  (clamped 8–32) and `opencode.chat.fontFamily`. The webview applies these as
+  `--chat-font-size` and `--chat-font-family` CSS custom properties on `:root`,
+  consumed by `#prompt-input` and `.markdown-content`. An empty `fontFamily` or
+  `fontSize <= 0` clears the custom property so the inherited default applies.
+- `chat_dir_config` pushes `{ direction: "ltr" | "rtl" }` from the persisted
+  `globalState` key `opencode-harness.chatDirection`. The webview sets the `dir`
+  attribute on `<html>` and updates the toggle button's `aria-pressed` state.
+  Sent during `pushAllStateToWebview` so the direction survives reloads.
+- `chat_dir_change` (Webview → Host): The user clicks the LTR/RTL toggle button.
+  The webview sets `dir` on `<html>` immediately and posts this message so the
+  host persists the choice to `globalState` via `persistChatDirection`.
 
 The bash-card **Cancel** action posts:
 

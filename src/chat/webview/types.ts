@@ -667,6 +667,8 @@ export type HostMessage =
   | { type: "theme_vars"; vars: Record<string, string> }
   | { type: "theme_config"; config: Record<string, unknown> }
   | { type: "tool_output_config"; renderAnsi: boolean }
+  | { type: "chat_font_config"; fontSize: number; fontFamily: string }
+  | { type: "chat_dir_config"; direction: "ltr" | "rtl" }
   | { type: "theme"; theme: unknown }
   | { type: "cli_themes_list"; themes: unknown[] }
   | { type: "model_update"; model: string }
@@ -956,6 +958,8 @@ export type WebviewMessage =
   | { type: "undo_file"; path: string; sessionId?: string }
   /** W1.F: Revert all changed files to git HEAD */
   | { type: "revert_all_files"; sessionId: string }
+  /** Toggle chat text direction (LTR/RTL); host persists to globalState */
+  | { type: "chat_dir_change"; direction: "ltr" | "rtl" }
 
 // Backward-compatible alias
 export type LegacyWebviewMessage = WebviewMessage & Record<string, unknown>

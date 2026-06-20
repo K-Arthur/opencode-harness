@@ -46,6 +46,30 @@ All settings are under the `opencode.*` namespace and can be configured in VS Co
   }
   ```
 
+### `opencode.chat.fontSize`
+- **Type**: `integer`
+- **Default**: `14`
+- **Scope**: `window`
+- **Description**: Font size (in pixels) for the OpenCode chat panel input and message text. Clamped to 8–32. Set to `0` to inherit the VS Code editor font size.
+- **Example**:
+  ```json
+  {
+    "opencode.chat.fontSize": 16
+  }
+  ```
+
+### `opencode.chat.fontFamily`
+- **Type**: `string`
+- **Default**: `""`
+- **Scope**: `window`
+- **Description**: Font family for the OpenCode chat panel input and message text. Leave empty to inherit the VS Code editor monospace font. Accepts any CSS font-family string.
+- **Example**:
+  ```json
+  {
+    "opencode.chat.fontFamily": "Fira Code, monospace"
+  }
+  ```
+
 ### `opencode.theme`
 - **Type**: `object`
 - **Default**: `{ "preset": "cli-default", "overrides": {} }`
