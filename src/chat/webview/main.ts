@@ -59,10 +59,11 @@ import { ToolElapsedTracker } from "./ui/toolElapsed"
 import { setupDisplayToggles } from "./ui/displayToggles"
 import { toolPartialStore } from "./toolPartialStore"
 import { setupThemeCustomizer, openThemeCustomizer, populateCliList, applyThemeCustomizerConfig } from "./ui/themeCustomizer"
-import { setupModeToggle, updateModeDropdown, updateModeSelectorState, syncModeUI as syncModeUIModule, cycleModeForward, isModalOrDialogOpen } from "./ui/modeDropdown"
+import { setupModeToggle, updateModeDropdown, updateModeSelectorState, syncModeUI as syncModeUIModule, cycleModeForward } from "./ui/modeDropdown"
 import { setupInstructionsEditor } from "./ui/instructionsEditor"
 import { setupSessionModal as setupSessionModalModule, openSessionModal as openSessionModalModule, closeSessionModal as closeSessionModalModule, trapModalFocus } from "./ui/sessionModal"
 import { setupKeyboardShortcutsModal, openKeyboardShortcutsModal, closeKeyboardShortcutsModal } from "./ui/keyboardShortcutsModal"
+import { setupGlobalKeyboardShortcutsImpl } from "./ui/keyboardShortcuts"
 import { setupProviderPanel, openProviderPanel, closeProviderPanel, renderProviderDiscoveryList, renderProviderCredentialList, handleOAuthStarted, handleOAuthCompleted, onProviderKeyResult } from "./ui/providerPanel"
 import type { ProviderDiscoveryItem, ProviderAuthMethodInfo, ProviderCredentialInfo } from "./types"
 import { createEscapeRegistry, visibleByClass } from "./escapeCoordinator"
@@ -951,122 +952,15 @@ function getVsCodeApi() {
   }
 
   function setupGlobalKeyboardShortcuts(): void {
-    document.addEventListener("keydown", (e) => {
-      if (e.defaultPrevented) return
-      const isTextInput = (el: EventTarget | null): boolean => {
-        const target = el as HTMLElement | null
-        if (!target) return false
-        const tag = target.tagName?.toLowerCase()
-        return Boolean(target.isContentEditable || tag === "input" || tag === "textarea" || tag === "select")
-      }
-      const switchRelativeTab = (direction: 1 | -1): void => {
-        const sessions = stateManager.getAllSessions()
-        const activeId = stateManager.getState().activeSessionId
-        if (sessions.length <= 1 || !activeId) return
-        const idx = sessions.findIndex((s) => s.id === activeId)
-        if (idx < 0) return
-        const nextSession = sessions[(idx + direction + sessions.length) % sessions.length]
-        if (nextSession) switchTab(nextSession.id)
-      }
-
-      if (isModalOrDialogOpen()) return
-
-      if ((e.ctrlKey || e.metaKey) && !e.altKey) {
-        const key = e.key.toLowerCase()
-        if (!e.shiftKey && key === "t" && !isTextInput(e.target)) {
-          e.preventDefault()
-          createNewTab()
-          return
-        }
-        if (!e.shiftKey && key === "w" && !isTextInput(e.target)) {
-          const active = stateManager.getActiveSession()
-          if (active) {
-            e.preventDefault()
-            closeTab(active.id)
-          }
-          return
-        }
-        if (key === "tab" && !isTextInput(e.target)) {
-          e.preventDefault()
-          switchRelativeTab(e.shiftKey ? -1 : 1)
-          return
-        }
-      }
-
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
-        const key = e.key.toLowerCase()
-        if (key === "l" && !isTextInput(e.target)) {
-          e.preventDefault()
-          els.promptInput.focus()
-          return
-        }
-        if (key === "k" && !isTextInput(e.target)) {
-          e.preventDefault()
-          surfaceCoord?.closeOthers("commands-modal")
-          commandsModal.open()
-          vscode.postMessage({ type: "list_commands" })
-          return
-        }
-        if (key === "f" && !isTextInput(e.target)) {
-          e.preventDefault()
-          const searchBar = document.getElementById("chat-search-bar")
-          if (searchBar) {
-            searchBar.classList.toggle("hidden")
-            if (!searchBar.classList.contains("hidden")) {
-              const input = document.getElementById("chat-search-input") as HTMLInputElement | null
-              input?.focus()
-              input?.select()
-            }
-          }
-          return
-        }
-      }
-
-      if (e.key === "/" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && !isTextInput(e.target)) {
-        e.preventDefault()
-        openKeyboardShortcutsModal()
-        return
-      }
-
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.altKey) {
-        switch (e.key) {
-          case "L":
-          case "l":
-            e.preventDefault()
-            els.timelineToggleBtn.click()
-            break
-          case "T":
-          case "t":
-            e.preventDefault()
-            els.todosToggleBtn.click()
-            break
-          case "K":
-          case "k":
-            e.preventDefault()
-            els.checkpointToggleBtn.click()
-            break
-          case "A":
-          case "a":
-            e.preventDefault()
-            els.subagentsToggleBtn.click()
-            break
-          case "S":
-          case "s":
-            e.preventDefault()
-            els.skillsBtn.click()
-            break
-          case "N":
-          case "n":
-            e.preventDefault()
-            vscode.postMessage({ type: "create_tab" })
-            break
-          case "H":
-          case "h":
-            e.preventDefault()
-            els.historyBtn.click()
-            break
-        }
-      }
+    setupGlobalKeyboardShortcutsImpl({
+      els,
+      vscode,
+      stateManager,
+      switchTab,
+      createNewTab,
+      closeTab,
+      surfaceCoord,
+      commandsModal,
     })
   }
 
@@ -2435,6 +2329,29 @@ function setupTodoSkillAndSubagentPanels(): void {
 
   setupInstructionsEditorLocal()
 
+  /* ─── TEXT DIRECTION (RTL/LTR) TOGGLE ─── */
+
+  /**
+   * Toggle the `dir` attribute on <html> between "ltr" and "rtl". Affects
+   * both the prompt input and markdown message containers via inheritance.
+   * The chosen direction is sent to the host for persistence in globalState
+   * so it survives VS Code restarts.
+   */
+  function setupDirToggle(): void {
+    const btn = els.dirToggleBtn
+    if (!btn) return
+    btn.addEventListener("click", () => {
+      const current = document.documentElement.getAttribute("dir") === "rtl" ? "rtl" : "ltr"
+      const next = current === "rtl" ? "ltr" : "rtl"
+      document.documentElement.setAttribute("dir", next)
+      btn.setAttribute("aria-pressed", String(next === "rtl"))
+      btn.title = next === "rtl" ? "Text direction: RTL (click for LTR)" : "Text direction: LTR (click for RTL)"
+      vscode.postMessage({ type: "chat_dir_change", direction: next })
+    })
+  }
+
+  setupDirToggle()
+
   /* ─── AUTO MODE WARNING ─── */
 
   let undoRedo: Array<{ themePreset: string; themeOverrides: Record<string, string> }> = []
@@ -2754,6 +2671,26 @@ function setupTodoSkillAndSubagentPanels(): void {
   function setupMessageListener() {
     function isValidSessionId(id: string | undefined): id is string {
       return !!id
+    }
+
+    /**
+     * Apply chat font configuration received from the host as CSS custom
+     * properties on :root. The host clamps fontSize to 8–32 and sends 0
+     * (or omits it) to mean "inherit default". An empty fontFamily means
+     * "inherit editor monospace".
+     */
+    function applyChatFontConfig(fontSize?: number, fontFamily?: string): void {
+      const root = document.documentElement
+      if (typeof fontSize === "number" && fontSize > 0) {
+        root.style.setProperty("--chat-font-size", `${fontSize}px`)
+      } else {
+        root.style.removeProperty("--chat-font-size")
+      }
+      if (typeof fontFamily === "string" && fontFamily.trim()) {
+        root.style.setProperty("--chat-font-family", fontFamily.trim())
+      } else {
+        root.style.removeProperty("--chat-font-family")
+      }
     }
 
     type MsgHandler = (msg: LegacyHostMessage, sessionId: string | undefined) => void
@@ -3622,6 +3559,22 @@ function setupTodoSkillAndSubagentPanels(): void {
       }],
       ["tool_output_config", (msg) => {
         setToolOutputRenderAnsi((msg as Record<string, unknown>).renderAnsi === true)
+      }],
+      ["chat_font_config", (msg) => {
+        const fontSize = (msg as Record<string, unknown>).fontSize as number | undefined
+        const fontFamily = (msg as Record<string, unknown>).fontFamily as string | undefined
+        applyChatFontConfig(fontSize, fontFamily)
+      }],
+      ["chat_dir_config", (msg) => {
+        const direction = (msg as Record<string, unknown>).direction as string | undefined
+        if (direction === "ltr" || direction === "rtl") {
+          document.documentElement.setAttribute("dir", direction)
+          const btn = els.dirToggleBtn
+          if (btn) {
+            btn.setAttribute("aria-pressed", String(direction === "rtl"))
+            btn.title = direction === "rtl" ? "Text direction: RTL (click for LTR)" : "Text direction: LTR (click for RTL)"
+          }
+        }
       }],
       ["voice_recording_started", (msg) => {
         voiceInputApi?.handleRecordingStarted({

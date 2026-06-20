@@ -24,6 +24,7 @@ const settingsMenuSource = readFileSync(path.join(__dirname, "ui", "settingsMenu
 const fileTrackingSource = readFileSync(path.join(__dirname, "ui", "fileTracking.ts"), "utf8")
 const buttonSetupSource = readFileSync(path.join(__dirname, "ui", "buttonSetup.ts"), "utf8")
 const scrollMarkersSource = readFileSync(path.join(__dirname, "ui", "scrollMarkers.ts"), "utf8")
+const keyboardShortcutsSource = (() => { try { return readFileSync(path.join(__dirname, "ui", "keyboardShortcuts.ts"), "utf8") } catch { return "" } })()
 const indexHtml = readFileSync(path.join(__dirname, "index.html"), "utf8")
 const allSource = source + "\n" + themeCustomizerSource + "\n" + modeDropdownSource + "\n" + sessionModalSource + "\n" + tokenCostDisplaySource + "\n" + attachmentsSource + "\n" + welcomeViewSource + "\n" + settingsMenuSource + "\n" + fileTrackingSource + "\n" + buttonSetupSource + "\n" + scrollMarkersSource
 const sessionListRendererSource = readFileSync(path.join(__dirname, "sessionListRenderer.ts"), "utf8")
@@ -837,9 +838,9 @@ it("unified modal: server session items send resume_server_session on click", ()
     })
 
     it("handles tab shortcuts at document level, not only inside the prompt input", () => {
-      const setupIdx = source.indexOf("function setupGlobalKeyboardShortcuts()")
-      assert.ok(setupIdx >= 0, "setupGlobalKeyboardShortcuts must exist")
-      const block = source.slice(setupIdx, setupIdx + 2200)
+      const setupIdx = keyboardShortcutsSource.indexOf("function setupGlobalKeyboardShortcutsImpl(")
+      assert.ok(setupIdx >= 0, "setupGlobalKeyboardShortcutsImpl must exist in ui/keyboardShortcuts.ts")
+      const block = keyboardShortcutsSource.slice(setupIdx, setupIdx + 2200)
       assert.ok(block.includes("createNewTab()"), "document-level Ctrl/Cmd+T must create a tab")
       assert.ok(block.includes("closeTab(active.id)"), "document-level Ctrl/Cmd+W must close the active tab")
       assert.ok(block.includes("switchRelativeTab"), "document-level Ctrl/Cmd+Tab must cycle tabs")
