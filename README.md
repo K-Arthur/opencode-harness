@@ -544,6 +544,8 @@ Full settings reference (defaults, scope, and descriptions) is in [docs/configur
 
 ## Commands
 
+All commands are available via the Command Palette (`Ctrl+Shift+P`). Commands marked with *(chat focus)* only appear when the OpenCode chat view is focused.
+
 | Command ID | Title |
 |-----------|-------|
 | `opencode-harness.openChat` | OpenCode: Open Chat |
@@ -555,14 +557,40 @@ Full settings reference (defaults, scope, and descriptions) is in [docs/configur
 | `opencode-harness.insertMention` | OpenCode: Insert File Reference |
 | `opencode-harness.captureTerminal` | OpenCode: Capture Terminal Output |
 | `opencode-harness.rollback` | OpenCode: Rollback Changes |
-| `opencode-harness.selectModel` | OpenCode: Select Model |
-| `opencode-harness.showRateLimits` | OpenCode: Show Rate Limits |
-| `opencode-harness.checkCli` | OpenCode: Test CLI Connection |
-| `opencode-harness.installCli` | OpenCode: Install CLI |
-| `opencode-harness.listSessions` | OpenCode: List Sessions |
+| `opencode-harness.selectModel` | OpenCode: Choose Model |
+| `opencode-harness.setContextWindowOverride` | OpenCode: Set Context Window Override |
+| `opencode-harness.showRateLimits` | OpenCode: View Rate Limits *(chat focus)* |
+| `opencode-harness.checkCli` | OpenCode: Test CLI Connection *(chat focus)* |
+| `opencode-harness.installCli` | OpenCode: Install CLI *(chat focus)* |
+| `opencode-harness.listSessions` | OpenCode: View Sessions |
 | `opencode-harness.deleteSession` | OpenCode: Delete Session |
 | `opencode-harness.renameSession` | OpenCode: Rename Session |
 | `opencode-harness.exportConversation` | OpenCode: Export Conversation |
+| `opencode-harness.importConversationJson` | OpenCode: Import Conversation from JSON |
+| `opencode-harness.previewTheme` | OpenCode: Preview Theme *(chat focus)* |
+| `opencode-harness.continueLastSession` | OpenCode: Continue Last Session |
+| `opencode-harness.chooseHistorySession` | OpenCode: Open Past Session |
+| `opencode-harness.attachRemote` | OpenCode: Connect to Remote Server |
+| `opencode-harness.addFileToSession` | OpenCode: Add File to Session |
+| `opencode-harness.addSelectionToSession` | OpenCode: Add Selection to Session |
+| `opencode-harness.stop` | OpenCode: Stop |
+| `opencode-harness.quickChat` | OpenCode: Quick Chat |
+| `opencode-harness.generateAgentsMd` | OpenCode: Generate AGENTS.md |
+| `opencode-harness.openCommandsPalette` | OpenCode: Open Commands Palette |
+| `opencode-harness.clearSession` | OpenCode: Clear Active Session |
+| `opencode-harness.showCost` | OpenCode: Show Session Cost |
+| `opencode-harness.showHelp` | OpenCode: Show Slash Commands |
+| `opencode-harness.cycleMode` | OpenCode: Cycle Session Mode (Plan → Build → Auto) |
+| `opencode-harness.setBuildMode` | OpenCode: Set Session Mode to Build |
+| `opencode-harness.setPlanMode` | OpenCode: Set Session Mode to Plan |
+| `opencode-harness.setAutoMode` | OpenCode: Set Session Mode to Auto |
+| `opencode-harness.setDefaultMode` | OpenCode: Set Default Session Mode |
+| `opencode-harness.setupVoiceInput` | OpenCode: Set Up Voice Input |
+| `opencode-harness.retryLast` | OpenCode: Retry Last Failed Run |
+| `opencode-harness.nextTab` | OpenCode: Next Tab |
+| `opencode-harness.prevTab` | OpenCode: Previous Tab |
+| `opencode-harness.openSettings` | OpenCode: Open Settings |
+| `opencode-harness.jumpToRunningTask` | OpenCode: Jump to Running Session |
 
 ## Architecture
 

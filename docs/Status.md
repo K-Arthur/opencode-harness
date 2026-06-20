@@ -3,7 +3,7 @@
 **Last Updated:** 2026-06-20
 **Version:** v0.4.7
 
-## Unreleased Highlights (2026-06-20) — MCP command palette + session-title fixes + test-suite repair
+## Highlights v0.4.8 (2026-06-20) — MCP command palette + session-title fixes + test-suite repair
 
 - **MCP commands now appear under the MCP filter in the commands palette.**
   `SessionClient.listCommands()` hard-coded `source: "server"` for every entry,
@@ -30,7 +30,7 @@
   both fixes (`tests/unit/session-client-list-commands.test.mjs`,
   `tests/unit/command-exec-session-title.test.mjs`).
 
-## Unreleased Highlights (2026-06-20) — IDE warning cleanup + small-webview overflow
+## Highlights v0.4.7 (2026-06-20) — IDE warning cleanup + small-webview overflow
 
 - **Cleared remaining IDE warnings** across the chat send-flow, webview renderers,
   and host wiring. Removed unused imports/destructured deps in `ChatProvider.ts`,
@@ -48,7 +48,7 @@
 - **Verification**: `npm run lint` (tsc) and `npx eslint` on the touched files
   are now clean; relevant webview/host tests pass.
 
-## Unreleased Highlights (2026-06-20) — checkpoint restore-point rail
+## Highlights v0.4.4 (2026-06-20) — checkpoint restore-point rail
 
 - **Snapshot-bearing parts are now surfaced as a "restore to here" rail** in the
   checkpoint panel. The pure collector in `src/checkpoint/restorePoints.ts` is no
@@ -67,12 +67,12 @@
 - **Tests**: `src/chat/webview/ui/restorePoints.test.ts` and
   `src/chat/WebviewEventRouter.restorePoints.test.ts`.
 
-## Unreleased Highlights (2026-06-16) — marketplace icon redesign
-**Version:** v0.2.23 (+ Unreleased: opencode CLI auto-install, native local voice input, frontend overhaul, stream/dedicated-bar redesign)
+## Highlights v0.3.76 (2026-06-16) — marketplace icon redesign
+**Version:** v0.3.76 (includes: opencode CLI auto-install, native local voice input, frontend overhaul, stream/dedicated-bar redesign)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
 
-## Unreleased Highlights (2026-06-16) — marketplace icon redesign
+## Highlights v0.3.76 (2026-06-16) — marketplace icon redesign (detail)
 
 - **`media/opencode-icon-256.png` (the icon shown in the VS Code Marketplace
   and Extensions view, per `package.json`'s `icon` field) replaced** — the
@@ -110,7 +110,7 @@
   are currently unreferenced anywhere in the codebase — the user's request
   was specifically about the marketplace/extension-store icon.
 
-## Unreleased Highlights (2026-06-16) — streaming UI visual redesign
+## Highlights v0.3.76 (2026-06-16) — streaming UI visual redesign
 
 - **Streaming indicators upgraded from functional to polished**, reusing
   existing design tokens (`--oc-accent-glow`, `--oc-accent-border`) and the
@@ -144,7 +144,7 @@
     bundled stylesheet outside the extension host) — no regressions, no
     visual breakage.
 
-## Unreleased Highlights (2026-06-16) — keyboard-shortcuts modal header fix
+## Highlights v0.3.76 (2026-06-16) — keyboard-shortcuts modal header fix
 
 - **Keyboard-shortcuts modal header no longer collides with the table's
   sticky column headers.** `.keyboard-shortcuts-content` put `overflow-y:
@@ -168,7 +168,7 @@
   action bar, sticky changed-files summary bar) — none share this bug,
   since each is the sole sticky element in its own scroll container.
 
-## Unreleased Highlights (2026-06-16) — multi-tab session-attribution fixes
+## Highlights v0.3.76 (2026-06-16) — multi-tab session-attribution fixes
 
 - **Question bar no longer bleeds across tabs.** Questions arriving via the
   live-stream tool-start path (`streamHandlers.ts` → `onQuestionBlock`) always
@@ -210,7 +210,7 @@
   `main.test.ts`; existing `renderer.test.ts` coverage updated to match the
   new shared `respond()` helper.
 
-## Unreleased Highlights (2026-06-12) — navigation, wayfinding & Escape safety
+## Highlights v0.3.63 (2026-06-12) — navigation, wayfinding & Escape safety
 
 Full audit + prioritized plan: `docs/specs/2026-06-12-navigation-audit-and-plan.md`. Architecture: `docs/adrs/ADR-015-navigation-escape-coordinator.md`.
 
@@ -239,7 +239,7 @@ Full audit + prioritized plan: `docs/specs/2026-06-12-navigation-audit-and-plan.
   `keyboardShortcutsModal.dom.test.ts` (4), status-bar tooltip + integration
   command coverage — RED→GREEN committed in sequence.
 
-## Unreleased Highlights (2026-06-11) — slash/methodology/skills hardening
+## Highlights v0.3.63 (2026-06-11) — slash/methodology/skills hardening
 
 Plan + verified gap analysis: `.opencode/plans/2026-06-11-methodology-skills-slash-overhaul.md`. User/dev docs: `docs/slash-commands-and-methodology.md`.
 
@@ -249,7 +249,7 @@ Plan + verified gap analysis: `.opencode/plans/2026-06-11-methodology-skills-sla
 - **Honesty cleanups.** Skills-modal toggle copy states it controls *suggestion* only (the opencode server loads skills on its own); removed 8 dead `opencode.methodology.*` settings that configured the never-executing cascade pipeline (only `enabled` remains).
 - **Tests.** Registry/alias/help-table/classifier behavioral tests, structural guards for the single-classification-pass and typed opt-out invariants (RED→GREEN committed in sequence).
 
-## Unreleased Highlights (2026-06-10) — multi-area bugfix & feature release
+## Highlights v0.3.31 (2026-06-10) — multi-area bugfix & feature release
 
 - **Subagents no longer stuck "Running".** Run finalize (`markRunComplete`/`markRunCancelled`) now terminalizes all active subagents with the run outcome; SDK `subtask` parts no longer mislabel the parent session as `childSessionId`; webview `restore()` terminalizes stale persisted `subagentActivities` on reload. See addendum in `docs/adrs/2026-06-06-subagent-as-first-class-entity.md`.
 - **Subagent "Open session" navigation.** Cards and the detail view expose a one-click "Open session" button (when a child `sessionId` is known) → new `open_subagent_session` message imports the server child session and resumes it as a regular tab.
@@ -268,7 +268,7 @@ Plan + verified gap analysis: `.opencode/plans/2026-06-11-methodology-skills-sla
 - **Streaming-vs-done visual differentiation.** Assistant bubble left-border pulse animation during streaming. Running/pending tool calls get an animated accent left-border; completed tools get a static success border. Pulsing dot in the assistant message header during streaming. Composer background tints subtly. Respects `prefers-reduced-motion: reduce`.
 - **Model/variant selector overflow.** `.model-selector-btn` capped at `14rem` and `.variant-selector-btn` at `10rem` with `text-overflow: ellipsis`.
 
-## Unreleased Highlights
+## Highlights v0.3.27 (2026-06-09) — stream interruption + UI relocation
 
 - **Stream interruption fixed + permission/question/rate-limit UI relocated** (2026-06-09):
   - **Stream no longer stops on permission/question/rate-limit.** `StreamCoordinator` now tracks `question` tool calls separately from regular tool calls — only removed from `activeToolCallIds` when `answered === true`. New `markQuestionAnswered()` method called from both `WebviewEventRouter` paths. `rate_limit_exhausted` during active stream shows bar only, no inline error card.

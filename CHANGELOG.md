@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > move items from `[Unreleased]` to the new version section and update the date.
 > Never leave features marked as "unreleased" after they are shipped.
 
+## [Unreleased]
+
+<!-- MAINTENANCE NOTE: Keep this section empty unless it describes work that
+     has NOT shipped in any version bump. When `npm version` / `npm run
+     reinstall` bumps the version, move all accumulated entries below into a
+     new `## [x.y.z] - yyyy-mm-dd` section. Never leave shipped work under
+     [Unreleased] — that creates documentation drift. See the release
+     workflow in docs/development/rebuild-and-reinstall.md. -->
+
 ## [0.4.8] - 2026-06-20
 
 ### Fixed
@@ -472,8 +481,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Tests
 - 6 new source-string assertions across `dom.test.ts`, `messages-css.test.ts`, `main.test.ts`. Updated `tests/visual/thinking-toggle.spec.ts` to assert full block invisibility (not just body collapse) and the `hide-thinking` body class. New `tests/visual/compact-tool-blocks.spec.ts` pins row height ≤ 28 px and the flat-not-card border shape.
-
-## [Unreleased]
 
 ### Fixed
 - **Context usage counter hidden when server doesn't report limit.context** — The extension previously hid the context usage bar entirely when the opencode server didn't provide a context window limit. Now shows tokens-only display with a helpful tooltip when the limit is unknown, and users can manually set an override via the new `opencode.contextWindowOverride` setting or `OpenCode: Set Context Window Override` command. The root cause was CLI auto-fetch on startup which couldn't extract context windows; this was removed so models are now only fetched from the server (which provides full metadata). (`src/extension.ts`, `src/chat/webview/theme.ts`, `src/chat/webview/context-usage-panel.ts`, `package.json`, `src/commands/model.ts`)
