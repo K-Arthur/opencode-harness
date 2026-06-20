@@ -167,7 +167,10 @@ Titles flow across three surfaces (server / CLI / webview tab strip) via two com
 |--------|------|---------------|
 | `slashCommands` | `src/chat/webview/slashCommands.ts` | /command dispatching |
 | `queueRenderer` | `src/chat/webview/queueRenderer.ts` | Queue chip UI (ARIA listbox, keyboard nav, drag-reorder, edit/remove/retry) |
-| `sendLogic` | `src/chat/webview/sendLogic.ts` | Send/abort/steer + stream capacity |
+| `sendLogic` | `src/chat/webview/sendLogic.ts` | Factory composing sendMessage/sendButton/steerMode modules |
+| `sendMessage` | `src/chat/webview/sendMessage.ts` | Core send logic, title generation, model validation, G8 ack watchdog |
+| `sendButton` | `src/chat/webview/sendButton.ts` | Send button state, stream capacity checking, icon updates |
+| `steerMode` | `src/chat/webview/steerMode.ts` | Steer mode (interrupt/queue) UI and state management |
 | `inputHandlers` | `src/chat/webview/inputHandlers.ts` | Keyboard + paste + resize handlers |
 | `surfaceCoordinator` | `src/chat/webview/surfaceCoordinator.ts` | Cross-surface mutual exclusion — closes other dropdowns/modals when one opens (prevents z-index conflicts) |
 
@@ -184,6 +187,7 @@ Titles flow across three surfaces (server / CLI / webview tab strip) via two com
 | Module | File | Responsibility |
 |--------|------|---------------|
 | Diff rendering | `src/chat/webview/renderer.ts` | `renderNewDiffBlock`, `createDiffTableWrapper`, `createDiffLineRow`, `createHunkHeaderRow`, `createHunkActionCell`, `toggleDiffWrap`, `renderPendingDiffActions`, `createRevertDiffButton`, `createHunkNavButtons`, `inferLanguageFromPath`, `createDiffViewToggle`, `appendSideBySideHunkRows`, `pairLinesForSideBySide`, `createSideBySideLineRow` |
+| Markdown worker | `src/chat/webview/markdownWorkerClient.ts` | Web Worker client for async markdown rendering and syntax highlighting (extracted from renderer.ts to break renderer↔toolCallRenderer cycle) |
 | Word-level diff | `src/chat/webview/wordDiff.ts` | `computeWordDiffs()` — character-level diff of paired removed/added lines using `diff-match-patch`, emits `<ins>`/`<del>` spans via `line.wordDiffHtml` |
 | Diff types | `src/chat/webview/types.ts` | `DiffBlock`, `DiffHunk`, `DiffLine` (with `wordDiffHtml?`) |
 | Model indicator | `src/chat/webview/messageRenderer.ts` | Per-turn model badge in message headers: `[modelShortName]` CLI-style notation, provider prefix stripped, `text-overflow: ellipsis` truncation, streaming dot `::before` pseudo-element, WCAG `aria-label` |
