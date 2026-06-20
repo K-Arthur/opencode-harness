@@ -20,7 +20,6 @@
 import type { ElementRefs } from "./dom"
 import {
   ptyReducer,
-  isPtySupported,
   type PtyTerminalState,
   type PtyInfo,
   type PtyAction,
