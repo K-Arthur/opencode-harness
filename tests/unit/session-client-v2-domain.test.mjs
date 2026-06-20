@@ -489,4 +489,102 @@ test("all migrated domain methods require the v2 client (Server not running othe
   await assert.rejects(sc.readFile("x"), /Server not running/)
   await assert.rejects(sc.listCommands(), /Server not running/)
   await assert.rejects(sc.listAgents(), /Server not running/)
+  await assert.rejects(sc.runShell("ses_x", "ls"), /Server not running/)
+  await assert.rejects(sc.shareSession("ses_x"), /Server not running/)
+  await assert.rejects(sc.unshareSession("ses_x"), /Server not running/)
+})
+
+// --- P1.4: session.shell() — run a shell command in session context -------------
+
+test("runShell calls v2 session.shell with sessionID + command and returns the created message", async () => {
+  const calls = []
+  const v2 = {
+    session: {
+      shell: async (p) => {
+        calls.push(p)
+        // SessionShellResponses 200: { info: Message, parts: Array<Part> }
+        return { data: { info: { id: "msg_1", role: "assistant", parts: [] }, parts: [{ type: "text", text: "file.txt" }] }, error: undefined }
+      },
+    },
+  }
+  const result = await new SessionClient(undefined, () => false, () => v2).runShell("ses_1", "ls -la")
+  assert.deepEqual(calls[0], { sessionID: "ses_1", command: "ls -la" })
+  assert.ok(result.messageId, "must return a message id")
+  assert.ok(result.text, "must return the response text")
+})
+
+test("runShell passes optional model + agent when provided", async () => {
+  const calls = []
+  const v2 = {
+    session: {
+      shell: async (p) => { calls.push(p); return { data: { info: { id: "m1" }, parts: [] }, error: undefined } },
+    },
+  }
+  await new SessionClient(undefined, () => false, () => v2).runShell("ses_1", "npm test", {
+    model: { providerID: "anthropic", modelID: "claude-sonnet-4-5" },
+    agent: "builder",
+  })
+  assert.equal(calls[0].model.providerID, "anthropic")
+  assert.equal(calls[0].model.modelID, "claude-sonnet-4-5")
+  assert.equal(calls[0].agent, "builder")
+})
+
+test("runShell throws on v2 error", async () => {
+  const v2 = {
+    session: {
+      shell: async () => ({ data: undefined, error: { code: 500, message: "boom" } }),
+    },
+  }
+  await assert.rejects(
+    new SessionClient(undefined, () => false, () => v2).runShell("ses_1", "ls"),
+    /boom|Failed to run shell|500/i,
+  )
+})
+
+// --- P3.2: session.share() / session.unshare() — shareable links ----------------
+
+test("shareSession calls v2 session.share and returns the updated Session", async () => {
+  const calls = []
+  const v2 = {
+    session: {
+      share: async (p) => {
+        calls.push(p)
+        // SessionShareResponses 200: Session (flat) — mapV2Session needs id + time
+        return { data: { id: "ses_1", title: "My Session", share: { url: "https://share.example/ses_1" }, time: { created: 1, updated: 2 } }, error: undefined }
+      },
+    },
+  }
+  const result = await new SessionClient(undefined, () => false, () => v2).shareSession("ses_1")
+  assert.deepEqual(calls[0], { sessionID: "ses_1" })
+  assert.equal(result.id, "ses_1")
+  assert.ok(result.share, "must return the share object")
+  assert.equal(result.share.url, "https://share.example/ses_1")
+})
+
+test("unshareSession calls v2 session.unshare and returns the updated Session", async () => {
+  const calls = []
+  const v2 = {
+    session: {
+      unshare: async (p) => {
+        calls.push(p)
+        return { data: { id: "ses_1", title: "My Session", time: { created: 1, updated: 2 } }, error: undefined }
+      },
+    },
+  }
+  const result = await new SessionClient(undefined, () => false, () => v2).unshareSession("ses_1")
+  assert.deepEqual(calls[0], { sessionID: "ses_1" })
+  assert.equal(result.id, "ses_1")
+  assert.ok(!result.share, "share must be cleared after unshare")
+})
+
+test("shareSession throws on v2 error", async () => {
+  const v2 = {
+    session: {
+      share: async () => ({ data: undefined, error: { code: 403, message: "forbidden" } }),
+    },
+  }
+  await assert.rejects(
+    new SessionClient(undefined, () => false, () => v2).shareSession("ses_1"),
+    /forbidden|Failed to share|403/i,
+  )
 })

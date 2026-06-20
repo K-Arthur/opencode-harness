@@ -404,6 +404,15 @@ export class SessionClient {
     return true
   }
 
+  async revert(sessionId: string, messageID: string, partID?: string): Promise<boolean> {
+    const client = this.guardV2()
+    const req: { sessionID: string; messageID: string; partID?: string } = { sessionID: sessionId, messageID }
+    if (partID) req.partID = partID
+    await client.session.revert(req)
+    log.info(`Reverted ${partID ? `part ${partID}` : "message"} ${messageID} in session ${sessionId}`)
+    return true
+  }
+
   async unrevert(sessionId: string): Promise<boolean> {
     const client = this.guardV2()
     await client.session.unrevert({ sessionID: sessionId })
@@ -417,6 +426,58 @@ export class SessionClient {
     this.throwOnV2Error(resp, "Failed to fork session")
     const session = mapV2Session(resp.data as Record<string, unknown>)
     log.info(`Forked session ${sessionId} at message ${messageID} → ${session.id}`)
+    return session
+  }
+
+  /**
+   * Run a shell command within a session context (P1.4 — audit §11).
+   * The server executes the command and returns the AI's response as a
+   * one-shot message (not streamed). `shell.started`/`shell.ended` events
+   * fire via SessionNextHandler for live visibility in the terminal panel.
+   */
+  async runShell(
+    sessionId: string,
+    command: string,
+    opts?: { model?: { providerID: string; modelID: string }; agent?: string; messageID?: string },
+  ): Promise<{ messageId: string; text: string }> {
+    const client = this.guardV2()
+    const params: Record<string, unknown> = { sessionID: sessionId, command }
+    if (opts?.model) params.model = opts.model
+    if (opts?.agent) params.agent = opts.agent
+    if (opts?.messageID) params.messageID = opts.messageID
+    const resp = await client.session.shell(params as Parameters<typeof client.session.shell>[0])
+    this.throwOnV2Error(resp, "Failed to run shell command")
+    const data = resp.data as { info?: { id?: string }; parts?: Array<{ type?: string; text?: string }> } | undefined
+    const messageId = data?.info?.id ?? ""
+    const textPart = data?.parts?.find((p) => p.type === "text" && typeof p.text === "string")
+    const text = textPart?.text ?? ""
+    log.info(`Shell command in session ${sessionId}: ${command.slice(0, 60)} → msg ${messageId}`)
+    return { messageId, text }
+  }
+
+  /**
+   * Create a shareable link for a session (P3.2 — audit §11).
+   * Returns the updated Session with a `share.url` field.
+   */
+  async shareSession(sessionId: string): Promise<Session> {
+    const client = this.guardV2()
+    const resp = await client.session.share({ sessionID: sessionId })
+    this.throwOnV2Error(resp, "Failed to share session")
+    const session = mapV2Session(resp.data as Record<string, unknown>)
+    log.info(`Shared session ${sessionId}: ${session.share?.url ?? "(no url)"}`)
+    return session
+  }
+
+  /**
+   * Remove the shareable link for a session, making it private again (P3.2).
+   * Returns the updated Session with `share` cleared.
+   */
+  async unshareSession(sessionId: string): Promise<Session> {
+    const client = this.guardV2()
+    const resp = await client.session.unshare({ sessionID: sessionId })
+    this.throwOnV2Error(resp, "Failed to unshare session")
+    const session = mapV2Session(resp.data as Record<string, unknown>)
+    log.info(`Unshared session ${sessionId}`)
     return session
   }
 

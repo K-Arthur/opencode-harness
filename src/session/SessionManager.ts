@@ -248,6 +248,25 @@ export class SessionManager {
     return this.sessionClient.forkSession(sessionId, messageId)
   }
 
+  /** Run a shell command in session context (P1.4). Returns the AI's response. */
+  async runShell(
+    sessionId: string,
+    command: string,
+    opts?: { model?: { providerID: string; modelID: string }; agent?: string; messageID?: string },
+  ): Promise<{ messageId: string; text: string }> {
+    return this.sessionClient.runShell(sessionId, command, opts)
+  }
+
+  /** Create a shareable link for a session (P3.2). */
+  async shareSession(sessionId: string): Promise<Session> {
+    return this.sessionClient.shareSession(sessionId)
+  }
+
+  /** Remove the shareable link for a session (P3.2). */
+  async unshareSession(sessionId: string): Promise<Session> {
+    return this.sessionClient.unshareSession(sessionId)
+  }
+
   async getSession(id: string): Promise<Session> {
     return this.sessionClient.getSession(id)
   }
@@ -325,6 +344,10 @@ export class SessionManager {
 
   async revertMessage(sessionId: string, messageId: string): Promise<boolean> {
     return this.sessionClient.revertMessage(sessionId, messageId)
+  }
+
+  async revert(sessionId: string, messageId: string, partId?: string): Promise<boolean> {
+    return this.sessionClient.revert(sessionId, messageId, partId)
   }
 
   async unrevert(sessionId: string): Promise<boolean> {
