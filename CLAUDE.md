@@ -22,8 +22,8 @@ survive. Therefore, every agent/model and human MUST:
 - **Type**: VS Code extension (library/package for VS Code marketplace)
 - **Runtime**: TypeScript / Node.js with VS Code Extension API ^1.98.0
 - **Server**: Client to opencode HTTP server (localhost:4096) via @opencode-ai/sdk
-- **Version**: 0.2.19
-- **Status**: Production audit complete — typecheck clean, 2197 unit tests passing (+9 message-contract, +7 roundtrip), 0 failing, noUncheckedIndexedAccess enforced
+- **Version**: 0.4.7
+- **Status**: Production audit complete — typecheck clean, full unit suite green (tsx 4237 + mjs 1004 passing, 0 failing), noUncheckedIndexedAccess enforced
 
 ## Hardening Milestone (2026-05-04)
 - Full production-readiness audit completed: **151 issues identified across 5 phases**

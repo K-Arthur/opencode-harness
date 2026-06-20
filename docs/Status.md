@@ -1,7 +1,34 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-06-20
-**Version:** v0.3.36
+**Version:** v0.4.7
+
+## Unreleased Highlights (2026-06-20) — MCP command palette + session-title fixes + test-suite repair
+
+- **MCP commands now appear under the MCP filter in the commands palette.**
+  `SessionClient.listCommands()` hard-coded `source: "server"` for every entry,
+  discarding the server's real `source` (`"command" | "mcp" | "skill"`), so
+  MCP-provided commands — though executable — never matched the **MCP** chip in
+  the commands modal. It also read `.data` off a response the SDK types as a bare
+  `Array<Command>` (yielding `undefined` → an empty list). The method now
+  preserves the reported source and accepts both the bare-array and legacy
+  `{ location, data }` shapes. (`src/session/SessionClient.ts`)
+- **Command-created sessions are no longer all titled "Tab session-".** Webview
+  tab IDs are `session-<id>` and `"session-"` is exactly 8 characters, so
+  `Tab ${sessionId.slice(0, 8)}` always produced the identical, useless title
+  "Tab session-". `CommandExecutionService` now mirrors the normal send path:
+  use the tab's own name, otherwise defer to the server's auto-title.
+  (`src/chat/CommandExecutionService.ts`)
+- **Test suite restored to fully green.** Repaired 16 pre-existing failures
+  across 9 files — all brittle source-inspection / behavioural assertions left
+  pointing at code that moved or changed shape in prior refactors (the
+  `StartPromptConfig` object, `setupTerminalPanel`/`MarkdownWorkerClient`
+  extraction, exec→live-command-card rendering, changed-files floating-modal →
+  inline-panel). No source changes in that pass; behaviour was verified intact.
+- **Verification**: `npm run lint` (tsc) clean; full unit suite green —
+  **tsx 4237 pass / 0 fail, mjs 1004 pass / 0 fail**. New behavioural tests for
+  both fixes (`tests/unit/session-client-list-commands.test.mjs`,
+  `tests/unit/command-exec-session-title.test.mjs`).
 
 ## Unreleased Highlights (2026-06-20) — IDE warning cleanup + small-webview overflow
 
