@@ -140,6 +140,10 @@
         "title": "OpenCode: Export Conversation"
       },
       {
+        "command": "opencode-harness.importConversationJson",
+        "title": "OpenCode: Import Conversation from JSON"
+      },
+      {
         "command": "opencode-harness.previewTheme",
         "title": "OpenCode: Preview Theme"
       },

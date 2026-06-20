@@ -20,5 +20,5 @@ export {
 export { registerJumpToRunningTaskCommand } from "./runningTask"
 export { registerSelectModelCommand, registerSetContextWindowOverrideCommand } from "./model"
 export { registerShowRateLimitsCommand, registerCheckCliCommand, registerInstallCliCommand } from "./misc"
-export { registerExportCommand } from "./export"
+export { registerExportCommand, registerImportCommand } from "./export"
 export { registerStopCommand, registerSlashCommandShortcuts } from "./misc"

@@ -48,6 +48,7 @@ import {
   registerCheckCliCommand,
   registerInstallCliCommand,
   registerExportCommand,
+  registerImportCommand,
   registerStopCommand,
   registerSlashCommandShortcuts,
   registerGenerateAgentsMdCommand,
@@ -589,6 +590,7 @@ function registerCoreCommands(
   registerChooseHistorySessionCommand(context, sessionStore, sessionManager)
   registerAttachRemoteCommand(context, sessionManager)
   registerExportCommand(context, sessionExporter, sessionStore)
+  registerImportCommand(context, sessionStore)
   registerAddFileToSessionCommand(context, chatProvider)
   registerAddSelectionToSessionCommand(context, chatProvider)
   registerStopCommand(context, chatProvider)

@@ -1,6 +1,7 @@
 import * as vscode from "vscode"
 import { SessionExporter } from "../session/SessionExporter"
 import { SessionStore } from "../session/SessionStore"
+import { importFromFile } from "../session/SessionImporter"
 import { log } from "../utils/outputChannel"
 
 export function registerExportCommand(
@@ -69,6 +70,39 @@ export function registerExportCommand(
       } catch (err) {
         log.error("Copy conversation failed", err)
         vscode.window.showErrorMessage("Could not copy the conversation. Check the output channel for details.")
+      }
+    })
+  )
+}
+
+/**
+ * Register the "Import Conversation from JSON" command (P3.3 — audit §11).
+ * Mirrors the export format: reads a JSON file produced by exportConversationJson,
+ * parses it into an OpenCodeSession, and adds it to the SessionStore.
+ */
+export function registerImportCommand(
+  context: vscode.ExtensionContext,
+  sessionStore: SessionStore
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.importConversationJson", async () => {
+      try {
+        const imported = await importFromFile()
+        if (!imported) return // user cancelled the file dialog
+        // Create a local session shell via the store, then populate it with
+        // the imported messages. Imports are local copies — no server link.
+        const session = sessionStore.create(imported.name)
+        session.messages = imported.messages
+        session.model = imported.model
+        session.cost = imported.cost
+        session.createdAt = imported.createdAt
+        session.lastActiveAt = imported.lastActiveAt
+        vscode.window.showInformationMessage(
+          `Imported "${session.name}" (${session.messages.length} messages). It is now available in your session list.`,
+        )
+      } catch (err) {
+        log.error("Import conversation failed", err)
+        vscode.window.showErrorMessage("Could not import this conversation. Check the output channel for details.")
       }
     })
   )
