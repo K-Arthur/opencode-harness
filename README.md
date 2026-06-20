@@ -522,6 +522,12 @@ OpenCode is built with accessibility as a first-class concern:
 - **High contrast**: `forced-colors: active` media query ensures borders and focus states are visible, including new status and action buttons
 - **ARIA roles**: Tab bar uses `tablist`/`tab`/`tabpanel`, mode selector uses `radiogroup`/`radio`, subagent list uses `listbox`/`option`, aggregate stats bar uses `role="status" aria-live="polite"`
 - **Screen reader support**: Skip link, aria-labels on icon buttons, live regions for status updates; elapsed timers carry `speak: none` to suppress redundant announcements
+- **Semantic tokens**: All status indicators, TDD phase colors, and UI elements use VS Code design tokens with proper fallbacks for theme consistency
+- **Focus traps**: All modals (session, commands, skills, theme customizer, provider panel) implement proper focus trapping with focus return on close
+- **Collapsed regions**: All panels and dropdowns use `display: none` when hidden, properly removing content from tab order
+- **Sidebar panels**: All sidebar panels (todos, activity, tasks, subagent) use `aria-labelledby` pointing to their titles for screen reader context
+
+See [docs/audits/2026-06-19-webview-token-a11y/accessibility-matrix.md](docs/audits/2026-06-19-webview-token-a11y/accessibility-matrix.md) for the complete accessibility verification matrix.
 
 ## License
 
