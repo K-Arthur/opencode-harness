@@ -432,12 +432,16 @@ test("listCommands calls v2 command.list and maps response", async () => {
   const calls = []
   const v2 = {
     command: {
-      list: async (p) => { calls.push(p); return { data: [{ name: "test", template: "npm test" }], error: undefined } },
+      // v2 V2CommandListResponses 200 shape: { location, data: Array<CommandV2Info> }
+      // The SDK wraps that body in its own { data, error, response } envelope, so
+      // resp.data is { location, data: [...] } and the impl reads resp.data.data.
+      list: async (p) => { calls.push(p); return { data: { location: {}, data: [{ name: "test", template: "npm test" }] }, error: undefined } },
     },
   }
   const results = await new SessionClient(undefined, () => false, () => v2).listCommands()
   assert.equal(results.length, 1)
   assert.equal(results[0].name, "test")
+  assert.equal(results[0].source, "server") // impl infers source: "server"
   assert.equal(calls[0], undefined) // no params
 })
 
