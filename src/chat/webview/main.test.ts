@@ -26,6 +26,7 @@ const buttonSetupSource = readFileSync(path.join(__dirname, "ui", "buttonSetup.t
 const scrollMarkersSource = readFileSync(path.join(__dirname, "ui", "scrollMarkers.ts"), "utf8")
 const keyboardShortcutsSource = (() => { try { return readFileSync(path.join(__dirname, "ui", "keyboardShortcuts.ts"), "utf8") } catch { return "" } })()
 const todoSubagentSetupSource = (() => { try { return readFileSync(path.join(__dirname, "todoSubagentSetup.ts"), "utf8") } catch { return "" } })()
+const tabSwitcherSource = (() => { try { return readFileSync(path.join(__dirname, "tabSwitcher.ts"), "utf8") } catch { return "" } })()
 const indexHtml = readFileSync(path.join(__dirname, "index.html"), "utf8")
 const allSource = source + "\n" + themeCustomizerSource + "\n" + modeDropdownSource + "\n" + sessionModalSource + "\n" + tokenCostDisplaySource + "\n" + attachmentsSource + "\n" + welcomeViewSource + "\n" + settingsMenuSource + "\n" + fileTrackingSource + "\n" + buttonSetupSource + "\n" + scrollMarkersSource
 const sessionListRendererSource = readFileSync(path.join(__dirname, "sessionListRenderer.ts"), "utf8")
@@ -561,7 +562,7 @@ it("unified modal: server session items send resume_server_session on click", ()
     assert.ok(idx >= 0, "changed_files_update handler must exist")
     const block = source.slice(idx, idx + 1200)
     assert.ok(fileTrackingSource.includes("deps.getActiveSessionId() === sessionId"), "chip list must only render active session files")
-    assert.ok(source.includes("cfDropdownApi?.setCurrentSession("), "switching tabs must reset dropdown to correct session")
+    assert.ok(tabSwitcherSource.includes("cfDropdownApi?.setCurrentSession("), "switching tabs must reset dropdown to correct session")
   })
 
   // ── model selector on welcome screen ─────────────────────────────────────
@@ -750,9 +751,9 @@ it("unified modal: server session items send resume_server_session on click", ()
     it("switchTab refreshes the visible counter from the new tab's stored tokenUsage", () => {
       // Lock in: switchTab must pull token/cost data from the tab being
       // activated so a previously-displayed tab's totals don't bleed in.
-      const fnIdx = source.indexOf("function switchTab(")
-      assert.ok(fnIdx >= 0, "switchTab must exist")
-      const body = source.slice(fnIdx, fnIdx + 3000)
+      const fnIdx = tabSwitcherSource.indexOf("function switchTabImpl(")
+      assert.ok(fnIdx >= 0, "switchTabImpl must exist in tabSwitcher.ts")
+      const body = tabSwitcherSource.slice(fnIdx, fnIdx + 3000)
       assert.ok(body.includes("updateTokenDisplay("), "switchTab must call updateTokenDisplay")
       assert.ok(
         body.includes(".tokenUsage") || body.includes("selectDisplayedUsage("),
@@ -773,9 +774,9 @@ it("unified modal: server session items send resume_server_session on click", ()
       // user reloaded the webview. switchTab must call
       // questionBar.repopulateFromMessages(tabId, …messages) so the bar is
       // rebuilt from the persisted question blocks of the tab being activated.
-      const fnIdx = source.indexOf("function switchTab(")
-      assert.ok(fnIdx >= 0, "switchTab must exist")
-      const body = source.slice(fnIdx, fnIdx + 6000)
+      const fnIdx = tabSwitcherSource.indexOf("function switchTabImpl(")
+      assert.ok(fnIdx >= 0, "switchTabImpl must exist in tabSwitcher.ts")
+      const body = tabSwitcherSource.slice(fnIdx, fnIdx + 10000)
       const activeIdx = body.indexOf("questionBar.setActiveSession")
       assert.ok(activeIdx >= 0, "switchTab must call questionBar.setActiveSession")
       const repopulateIdx = body.indexOf("questionBar.repopulateFromMessages")
@@ -962,9 +963,9 @@ it("unified modal: server session items send resume_server_session on click", ()
     })
 
     it("switchTab restores the session's model on the dropdown", () => {
-      const idx = source.indexOf("function switchTab(")
-      assert.ok(idx >= 0, "switchTab must exist")
-      const block = source.slice(idx, idx + 3600)
+      const idx = tabSwitcherSource.indexOf("function switchTabImpl(")
+      assert.ok(idx >= 0, "switchTabImpl must exist in tabSwitcher.ts")
+      const block = tabSwitcherSource.slice(idx, idx + 10000)
       assert.ok(
         block.includes("modelDropdown.setCurrentModel"),
         "switchTab must call setCurrentModel so the dropdown reflects the active session's model"
@@ -1162,9 +1163,9 @@ describe("permission bar — multi-tab session attribution", () => {
   })
 
   it("switchTab restores a pending permission for the newly active session, or hides the bar if none", () => {
-    const idx = source.indexOf("function switchTab(")
-    assert.ok(idx >= 0, "switchTab must exist")
-    const block = source.slice(idx, idx + 6000)
+    const idx = tabSwitcherSource.indexOf("function switchTabImpl(")
+    assert.ok(idx >= 0, "switchTabImpl must exist in tabSwitcher.ts")
+    const block = tabSwitcherSource.slice(idx, idx + 10000)
     assert.ok(
       block.includes("pendingPermissionBySession.get(tabId)"),
       "switchTab must look up the switched-to session's pending permission",

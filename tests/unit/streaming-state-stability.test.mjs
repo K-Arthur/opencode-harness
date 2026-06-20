@@ -35,6 +35,7 @@ const SEND_LOGIC = readSrc("src/chat/webview/sendMessage.ts")
 const STREAM_ORCHESTRATOR = readSrc("src/chat/webview/streamOrchestrator.ts")
 const WEBVIEW_TYPES = readSrc("src/chat/webview/types.ts")
 const MAIN_TS = readSrc("src/chat/webview/main.ts")
+const TAB_SWITCHER = readSrc("src/chat/webview/tabSwitcher.ts")
 const EXTENSION_TS = readSrc("src/extension.ts")
 const WEBVIEW_EVENT_ROUTER = readSrc("src/chat/WebviewEventRouter.ts")
 
@@ -355,12 +356,12 @@ void describe("streaming-state stability: G9 switchTab reads both flags (webview
       /activeSession\?\.isServerStreaming === true \|\| activeSession\?\.isStreaming === true/,
     ]
     assert.ok(
-      candidates.some((re) => re.test(MAIN_TS)),
+      candidates.some((re) => re.test(MAIN_TS) || re.test(TAB_SWITCHER)),
       "switchTab must OR isStreaming and isServerStreaming",
     )
     // And must kick a probe to reconcile.
     assert.ok(
-      MAIN_TS.includes("probeActiveRun"),
+      MAIN_TS.includes("probeActiveRun") || TAB_SWITCHER.includes("probeActiveRun"),
       "switchTab must call composer.probeActiveRun to reconcile",
     )
   })
