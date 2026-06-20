@@ -195,6 +195,29 @@ void describe("SessionClient", () => {
       assert.ok(source.includes("async listAgents("), "listAgents exists")
       assert.ok(source.includes("async listCommands("), "listCommands exists")
     })
+
+    void it("listCommands preserves the server-reported source instead of hard-coding 'server'", () => {
+      // Regression: every command was tagged source:"server", so MCP-provided
+      // commands never matched the MCP filter in the commands modal.
+      assert.ok(
+        !/listCommands[\s\S]*?source:\s*"server"\s+as\s+const/.test(source),
+        "listCommands must not hard-code source to a const 'server'",
+      )
+      assert.ok(
+        /listCommands[\s\S]*?source:\s*c\.source\s*\?\?\s*"server"/.test(source),
+        "listCommands passes through c.source (defaulting to 'server' when absent)",
+      )
+    })
+
+    void it("listCommands accepts both bare-array and { data } response shapes", () => {
+      // The /command endpoint returns a bare Array<Command>; reading `.data`
+      // off it (as listSkills does for its wrapped endpoint) yielded undefined
+      // → an always-empty command list.
+      assert.ok(
+        /listCommands[\s\S]*?Array\.isArray\(raw\)/.test(source),
+        "listCommands branches on Array.isArray to support both response shapes",
+      )
+    })
   })
 
   void describe("getSessionTodos", () => {

@@ -336,10 +336,32 @@ export class SessionClient {
     const client = this.guardV2()
     const resp = await client.command.list()
     this.throwOnV2Error(resp, "Failed to list commands")
-    // v2 response shape: { location, data: Array<CommandV2Info> }
-    const data = (resp.data as { data?: Array<{ name: string; description?: string; template: string; agent?: string }> }).data ?? []
-    // Infer source: command endpoint returns server commands (MCP commands are also surfaced here)
-    return data.map(c => ({ ...c, source: "server" as const }))
+    // The /command endpoint returns a bare `Array<Command>` in current SDK
+    // builds; older builds wrapped it as `{ location, data: [...] }`. Accept
+    // either shape so the command list never silently empties on an SDK bump
+    // (reading `.data` off a bare array yielded `undefined` → no commands).
+    const raw = resp.data as unknown
+    const data = (Array.isArray(raw)
+      ? raw
+      : (raw as { data?: unknown } | null | undefined)?.data ?? []) as Array<{
+      name: string
+      description?: string
+      template?: string
+      agent?: string
+      source?: string
+    }>
+    // Preserve the server-reported `source` ("command" | "mcp" | "skill") so the
+    // commands modal can tag MCP-provided commands and surface them under the
+    // MCP filter. Previously every entry was hard-coded to "server", so the MCP
+    // filter was always empty even though MCP commands were present (and
+    // executable). Absent source (older servers) defaults to "server".
+    return data.map(c => ({
+      name: c.name,
+      description: c.description,
+      template: c.template ?? "",
+      agent: c.agent,
+      source: c.source ?? "server",
+    }))
   }
 
   async listSkills(): Promise<Array<{ name: string; description?: string; source: "skill" }>> {

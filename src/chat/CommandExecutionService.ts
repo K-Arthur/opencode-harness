@@ -59,7 +59,13 @@ export class CommandExecutionService {
 
     if (!tab.cliSessionId) {
       try {
-        const cliSessionId = await this.opts.sessionManager.ensureSession(undefined, `Tab ${sessionId.slice(0, 8)}`)
+        // Mirror the normal send path (StreamCoordinator): prefer the tab's own
+        // name, otherwise pass undefined so the server auto-titles from the
+        // first message. The previous `Tab ${sessionId.slice(0, 8)}` was broken
+        // because webview tab IDs are `session-<id>` and "session-" is exactly
+        // 8 chars, so the slice always produced the title "Tab session-".
+        const localTitle = this.opts.sessionStore.get(sessionId)?.name?.trim()
+        const cliSessionId = await this.opts.sessionManager.ensureSession(undefined, localTitle || undefined)
         this.opts.tabManager.setCliSessionId(sessionId, cliSessionId)
         this.opts.sessionStore.updateCliSessionId(sessionId, cliSessionId)
       } catch (err) {
