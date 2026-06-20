@@ -26,11 +26,14 @@ in `docs/research/2026-06-15-agent-visibility-ux-audit-and-roadmap.md` §3.
 Highlights:
 
 - **Session lifecycle** — `create/list/get/delete/update/revert/unrevert` are
-  fully supported and used. `fork`/`share`/`unshare` exist on the SDK; `fork`
-  is implemented client-side (clone up to a turn), `share`/`unshare` are not
-  yet wired.
+  fully supported and used. `fork`/`share`/`unshare` exist on the SDK and are
+  all wired: `fork` is implemented client-side (clone up to a turn),
+  `share`/`unshare` are wired via `SessionClient.shareSession`/`unshareSession`.
+  Session import from JSON mirrors the export format
+  (`SessionImporter.parseSessionExport` → `opencode-harness.importConversationJson`).
 - **Messages** — `prompt`/`promptAsync`/`messages`/`message`/`deleteMessage`/
-  `command`/`shell` are fully supported. There is **no explicit edit or
+  `command`/`shell` are fully supported. `session.shell()` is wired via
+  `SessionClient.runShell`. There is **no explicit edit or
   regenerate API**; the canonical pattern is `session.revert` + a new prompt.
 - **Streaming** — 70+ SSE event types are normalized into the extension's
   ~25 event types. The v2 `session.next.*` fine-grained protocol (tool input

@@ -317,6 +317,36 @@ to create a server session on-demand before executing the command. The resulting
 Unknown server command errors are converted to short user-facing messages instead of raw
 JSON or `[object Object]` output.
 
+## Session Export & Import
+
+The extension supports exporting and importing conversations via VS Code commands (not webview messages — these are palette-only):
+
+| Command | Format | Direction | File |
+|---------|--------|-----------|------|
+| `opencode-harness.exportConversation` | Markdown | Export | `SessionExporter.exportMarkdown` |
+| `opencode-harness.exportConversationJson` | JSON | Export | `SessionExporter.exportJson` |
+| `opencode-harness.exportConversationText` | Plain text | Export | `SessionExporter.exportPlainText` |
+| `opencode-harness.copyConversation` | Markdown | Export (clipboard) | `SessionExporter.copyToClipboard` |
+| `opencode-harness.importConversationJson` | JSON | **Import** | `SessionImporter.importFromFile` |
+
+The JSON export format (mirrored by import):
+```json
+{
+  "id": "ses_original",
+  "name": "My Exported Chat",
+  "createdAt": 1000,
+  "lastActiveAt": 2000,
+  "model": "anthropic/claude-sonnet-4-5",
+  "cost": 0.05,
+  "messages": [
+    { "id": "msg_1", "role": "user", "timestamp": 1100, "blocks": [{ "type": "text", "text": "Hello" }] },
+    { "id": "msg_2", "role": "assistant", "timestamp": 1200, "blocks": [...] }
+  ]
+}
+```
+
+Import mints a fresh session id (imports are local copies, not server sessions). Unknown block types pass through unchanged (forward-compatible). The pure parser is `parseSessionExport()` in `src/session/SessionImporter.ts`; the VS Code file-dialog adapter is `importFromFile()`.
+
 ## Context Chips & Timeline
 
 - Input context from `@file:`, `@folder:`, URL, problems, terminal, and pasted images

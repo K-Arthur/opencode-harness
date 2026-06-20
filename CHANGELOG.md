@@ -13,7 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Session SDK method coverage gaps closed (2026-06-20).** Wired three previously-unwired SDK v2 session endpoints:
+  - `session.shell()` → `SessionClient.runShell(sessionId, command, opts?)` — execute a shell command in session context; returns `{ messageId, text }`. `shell.started`/`shell.ended` events already fire via `SessionNextHandler` for live terminal visibility (P1.4).
+  - `session.share()` → `SessionClient.shareSession(sessionId)` — create a shareable link; returns the updated `Session` with `share.url` (P3.2).
+  - `session.unshare()` → `SessionClient.unshareSession(sessionId)` — remove the shareable link; returns the updated `Session` with `share` cleared (P3.2).
+  All three are delegated through `SessionManager`. TDD: 7 new tests in `session-client-v2-domain.test.mjs`. (`src/session/SessionClient.ts`, `SessionManager.ts`)
+
+- **Session import from JSON (2026-06-20).** New `SessionImporter` module mirrors the export format from `SessionExporter.json()`. The pure `parseSessionExport()` function maps the export JSON to an `OpenCodeSession`, minting a fresh session id (imports are local copies, not server sessions). Unknown block types pass through unchanged (forward-compatible). Registered as `opencode-harness.importConversationJson` command in `package.json`. TDD: 12 tests in `SessionImporter.test.ts`. (`src/session/SessionImporter.ts`, `src/commands/export.ts`, `src/extension.ts`, `package.json`)
+
 ### Changed
+
+- **Extension host bundle size fix (2026-06-20).** Extracted `groupMessagesIntoTurns` + `extractSnippet` from `renderer.ts` into a new dependency-free `turnGrouper.ts` module. The host (`WebviewEventRouter`) was importing these functions from `renderer.ts`, which transitively pulled markdown-it, dompurify, entities, linkify-it, and diff-match-patch (~173kb of webview-only deps) into the extension host bundle. The extension bundle dropped from 860.7kb to 658.8kb (limit: 660kb). `renderer.ts` re-exports from `turnGrouper.ts` so existing webview imports are unchanged. TDD: `turnGrouper.test.ts` (11 tests) enforces the no-heavy-deps contract. (`src/chat/webview/turnGrouper.ts`, `renderer.ts`, `WebviewEventRouter.ts`)
 
 - **Streaming UX motion budget overhaul — "Approach A" (2026-06-17).** Stripped every peripheral animation from the streaming surface so it reads like the integrated terminal / Copilot Chat — one signal, never three. Concurrent infinite animations during a 5-stream session dropped from 15+ (including box-shadow glows) to 5 caret blinks (opacity-only, GPU-composited). Removed: `thinking-pulse`, `tool-border-pulse`, `badge-pulse`, `tool-elapsed-pulse`, `tool-live-spin`, `tool-group-active-pulse`, `error-shake-in`, `subagent-badge-pulse`, `subagent-highlight-pulse`, `stagger-children`, and the entrance animation that re-fired on every token flush. Replaced with static border-left / colour state changes. Added `contain: layout` on `.message-content` and `contain: layout paint` on `.diff-block` to isolate streaming reflow from ancestors. Caret slowed from 1s `step-end` to 1.2s `ease-in-out`. Full design doc: `docs/design/2026-06-17-streaming-ux-motion-budget.md`. (`src/chat/webview/css/messages.css`, `blocks.css`, `animations.css`, `tokens.css`, `messageRenderer.ts`, `renderer.ts`)
 

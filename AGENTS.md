@@ -134,6 +134,18 @@ Run all unit+contract+roundtrip: `npm test`
 - **Theme system:** `src/theme/ThemeManager.ts` — CSS_VAR_MAP maps OpencodeTheme properties to CSS vars
 - **Max concurrent AI streams** configurable via `opencode.sessions.maxConcurrentStreams` (default 5)
 
+### Session SDK Method Coverage (audit §11)
+
+| Method | File | SDK endpoint | Purpose |
+|--------|------|-------------|---------|
+| `runShell` | `SessionClient.ts` / `SessionManager.ts` | `session.shell()` | Execute a shell command in session context; returns `{ messageId, text }`. `shell.started`/`shell.ended` events fire via `SessionNextHandler`. |
+| `shareSession` | `SessionClient.ts` / `SessionManager.ts` | `session.share()` | Create a shareable link; returns updated `Session` with `share.url`. |
+| `unshareSession` | `SessionClient.ts` / `SessionManager.ts` | `session.unshare()` | Remove the shareable link; returns updated `Session` with `share` cleared. |
+| `forkSession` | `SessionClient.ts` / `SessionManager.ts` | `session.fork()` | Branch a conversation at a message; returns the new `Session`. |
+| `revertMessage` | `SessionClient.ts` / `SessionManager.ts` | `session.revert()` | Revert a message (undo effects, restore previous state). |
+| `importFromFile` | `SessionImporter.ts` | (local, no SDK) | Import a session from JSON (mirrors export format). Registered as `opencode-harness.importConversationJson`. |
+| `exportJson` / `exportMarkdown` / `exportPlainText` | `SessionExporter.ts` | (local, no SDK) | Export a session to JSON/Markdown/text. Registered as `opencode-harness.exportConversation{,Json,Text}`. |
+
 ### ChatProvider Services (delegated from ChatProvider.ts)
 
 | Service | File | Responsibility |

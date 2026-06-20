@@ -13,7 +13,7 @@
  * reads the file and delegates to `parseSessionExport`.
  */
 import type { OpenCodeSession } from "./SessionStore"
-import type { ChatMessage, Block } from "../chat/webview/types"
+import type { ChatMessage, Block } from "../types"
 
 /** Shape of the JSON written by SessionExporter.json(). */
 export interface SessionExportJson {
