@@ -5,6 +5,41 @@ The chat webview renders assistant output incrementally. Text deltas may arrive 
 chunk has been flushed. The webview should recover those late chunks into the most recent
 assistant message for the active tab instead of dropping them.
 
+## Conversation Editing
+
+The extension provides comprehensive conversation editing capabilities:
+
+### Edit Message
+- **User messages**: Click the edit button (pencil icon) in the message header to edit a previous prompt
+- **SDK integration**: Uses `session.revert` for server-side revert when available, with client-side fallback
+- **Visual feedback**: Edited messages show a left border accent and visual indicators
+- **Downstream handling**: Removes all messages after the edited one (truncation)
+
+### Regenerate Response
+- **Assistant messages**: Click the regenerate button (refresh icon) to retry the last assistant turn
+- **Model selection**: Shift+Click on regenerate button opens model selector for regeneration with different model
+- **SDK integration**: Uses `streamCoordinator.retryFromHere` with TTFB timeout detection
+
+### Fork Conversation
+- **Turn-based forking**: Click the fork button (branch icon) to create a new session from a specific turn
+- **SDK integration**: Uses `session.fork` for server-side forking when available, with client-side fallback
+- **Parent tracking**: Forked sessions track `parentSessionId` and `forkedAtTurn` for navigation
+- **Session naming**: Forked sessions are named "Original Name (Fork from Turn N)"
+
+### Message Controls
+- **Edit button**: User messages have an edit button (pencil icon) for in-place editing
+- **Regenerate button**: Assistant messages have a regenerate button (refresh icon) for retry; Shift+Click opens model selector
+- **Fork button**: All turns have a fork button (branch icon) for conversation branching at that turn
+- **Revert button**: Assistant messages with code changes have a revert button to undo file changes
+
+### Webview Message Types
+- `edit_message`: User requests to edit a previous message (triggers edit_message_prefill response)
+- `edit_message_prefill`: Host sends original text back to webview to prefill input
+- `retry_stream`: User requests to regenerate the last assistant response
+- `fork_session`: User requests to fork conversation at a specific turn
+- `open_model_selector_for_regen`: User requests model selector for regeneration (Shift+Click)
+- `regenerate_with_model`: User selects a model for regeneration
+
 ## Streaming Contract
 
 - `stream_start` creates or reuses the visible assistant placeholder.
@@ -579,6 +614,70 @@ The question bar uses these ARIA attributes:
 - **Empty submit**: The submit loop skips items with no selections and no free-text; the submit button is disabled when nothing can be submitted.
 - **Multi-question aggregation**: When multiple groups exist, the bar aggregates one selection line per group. If a group has `multiSelect`, chosen options are comma-separated within that line.
 - **Stream-end cleanup**: When `stream_end` arrives, the streaming handler calls `clearAllQuestions()` to reset the bar for the next turn.
+
+## PTY Terminal (audit §14.1/§14.2)
+
+Live PTY terminal visibility via the opencode SDK PTY API. The host-side
+`PtyService` (`src/terminal/PtyService.ts`) wraps the SDK PTY endpoints; the
+webview `terminal-panel.ts` folds `pty.*` lifecycle events + byte chunks into
+renderable state via the pure `ptyReducer` from `ptyModel.ts`.
+
+PTY terminals are a **global resource** (not per-chat-session). The `ptyId` is
+carried as `sessionId` in lifecycle events, not a chat session id. The panel
+shows all PTY sessions regardless of which chat tab is active.
+
+### Capability advertisement
+
+| Direction | Message | Fields | When |
+|-----------|---------|--------|------|
+| Host → Webview | `terminal_capability` | `ptySupported: boolean` | After `init_state`, once `ptyService.listSessions()` resolves. `false` when the server doesn't expose the PTY API or the probe throws. |
+| Host → Webview | `pty_sessions` | `sessions: Array<{ id, title, command, status, pid, exitCode? }>` | Alongside `terminal_capability` when supported, and on `pty_list` requests. |
+
+When `ptySupported === false`, the terminal toggle button stays hidden and the
+Tasks panel's polling approximation remains the terminal surface (constitution
+rule #6: graceful degradation).
+
+### Lifecycle events (Host → Webview)
+
+| Message | Fields | Source event |
+|---------|--------|--------------|
+| `pty_created` | `ptyId, pty` | `pty.created` (normalized by `PtyEventHandler`) |
+| `pty_updated` | `ptyId, pty` | `pty.updated` |
+| `pty_exited` | `ptyId, pty` (with `exitCode`) | `pty.exited` |
+| `pty_deleted` | `ptyId` | `pty.deleted` |
+
+The `pty` payload is the raw `PtyInfo`-shaped object (`{ id, title, command,
+args, cwd, status, pid, exitCode? }`).
+
+### Output streaming (Host → Webview)
+
+| Message | Fields | When |
+|---------|--------|------|
+| `pty_output` | `ptyId, data: string` | Each WebSocket message chunk from the PTY. |
+| `pty_connected` | `ptyId` | WebSocket established after `pty_connect`. |
+| `pty_cancelled` | `ptyId` | After `pty_cancel` removes the session. |
+| `pty_error` | `ptyId, error: string` | connect/cancel/list failure. |
+
+### Control messages (Webview → Host)
+
+| Message | Fields | Behavior |
+|---------|--------|----------|
+| `pty_connect` | `ptyId` | Gets a connect ticket, opens the WebSocket, begins streaming `pty_output`. |
+| `pty_cancel` | `ptyId` | Calls `ptyService.removeSession()` — kills the PTY. |
+| `pty_send_input` | `ptyId, data: string` | Sends stdin bytes to the PTY. |
+| `pty_resize` | `ptyId, rows, cols` | Sets terminal dimensions. |
+| `pty_list` | — | Refreshes the session list (host replies with `pty_sessions`). |
+
+### Webview rendering
+
+`setupTerminalPanel(els, deps)` (in `terminal-panel.ts`) renders one card per
+PTY session: status dot (running/exited), command, exit code badge, live
+runtime (1s refresh), Cancel button, and a bounded stdout view (last 10k
+chars, auto-scroll to bottom). The panel auto-connects to all running PTYs on
+open so output streams immediately. Escape closes the panel.
+
+State is folded via `ptyReducer` (pure, tested in `ptyModel.test.ts`) — the
+panel itself has no domain logic, only rendering + DOM event wiring.
 
 ## Tests
 
