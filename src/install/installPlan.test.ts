@@ -4,6 +4,7 @@ import { isAbsolute, sep } from "node:path"
 import {
   buildInstallPlan,
   knownOpencodeBinaryPaths,
+  preferExeOnWindows,
   INSTALL_SCRIPT_URL,
   NPM_PACKAGE,
 } from "./installPlan"
@@ -99,6 +100,23 @@ describe("knownOpencodeBinaryPaths", () => {
     )
   })
 
+  it("never includes .cmd paths on Windows (Node.js cannot spawn .cmd with shell:false)", () => {
+    const paths = knownOpencodeBinaryPaths("win32", "C:\\Users\\tester", { APPDATA: "C:\\Users\\tester\\AppData\\Roaming" })
+    assert.ok(
+      paths.every((p) => !p.toLowerCase().endsWith(".cmd")),
+      "must not include .cmd wrapper paths — only .exe is spawnable with shell:false",
+    )
+  })
+
+  it("includes the node_modules opencode-ai bin .exe path on Windows", () => {
+    const appData = "C:\\Users\\tester\\AppData\\Roaming"
+    const paths = knownOpencodeBinaryPaths("win32", "C:\\Users\\tester", { APPDATA: appData })
+    assert.ok(
+      paths.some((p) => p.includes("node_modules") && p.includes("opencode-ai") && p.endsWith("opencode.exe")),
+      "must probe the real .exe inside node_modules\\opencode-ai\\bin on Windows",
+    )
+  })
+
   it("does not crash when env is omitted", () => {
     assert.doesNotThrow(() => knownOpencodeBinaryPaths("linux", home))
   })
@@ -106,5 +124,35 @@ describe("knownOpencodeBinaryPaths", () => {
   it("uses the platform path separator", () => {
     const paths = knownOpencodeBinaryPaths("linux", home, {})
     assert.ok(paths.every((p) => p.includes(sep)), "paths should be joined with the OS separator")
+  })
+})
+
+describe("preferExeOnWindows", () => {
+  it("returns the first non-empty line on non-Windows platforms", () => {
+    const result = preferExeOnWindows("/usr/local/bin/opencode\n/usr/bin/opencode", "linux")
+    assert.equal(result, "/usr/local/bin/opencode")
+  })
+
+  it("prefers .exe over .cmd and .ps1 on Windows", () => {
+    const whereOutput = "C:\\Users\\test\\AppData\\Roaming\\npm\\opencode.cmd\r\nC:\\Users\\test\\AppData\\Roaming\\npm\\opencode.ps1\r\nC:\\Users\\test\\AppData\\Roaming\\npm\\opencode.exe\r\n"
+    const result = preferExeOnWindows(whereOutput, "win32")
+    assert.ok(result?.toLowerCase().endsWith(".exe"), "must prefer the .exe path")
+  })
+
+  it("returns null when only .cmd and .ps1 are available on Windows", () => {
+    const whereOutput = "C:\\Users\\test\\AppData\\Roaming\\npm\\opencode.cmd\r\nC:\\Users\\test\\AppData\\Roaming\\npm\\opencode.ps1\r\n"
+    const result = preferExeOnWindows(whereOutput, "win32")
+    assert.equal(result, null, "must reject .cmd/.ps1 wrappers")
+  })
+
+  it("returns null for empty input", () => {
+    assert.equal(preferExeOnWindows("", "linux"), null)
+    assert.equal(preferExeOnWindows("", "win32"), null)
+  })
+
+  it("falls back to a non-wrapper line when no .exe is present on Windows", () => {
+    const whereOutput = "C:\\Users\\test\\AppData\\Roaming\\npm\\opencode.cmd\r\nC:\\Users\\test\\AppData\\Roaming\\npm\\opencode\r\n"
+    const result = preferExeOnWindows(whereOutput, "win32")
+    assert.ok(result && !result.toLowerCase().endsWith(".cmd"), "must not return a .cmd wrapper")
   })
 })

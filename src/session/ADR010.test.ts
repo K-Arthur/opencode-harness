@@ -60,6 +60,17 @@ describe("ADR-010: Horizontal Scaling", () => {
       )
     })
 
+    it("resolves the binary path instead of hardcoding \"opencode\"", () => {
+      assert.ok(
+        processManagerSource.includes("resolveOpencodeBinary"),
+        "must use resolveOpencodeBinary to find the binary path"
+      )
+      assert.ok(
+        !processManagerSource.includes('spawn("opencode"'),
+        "must not hardcode spawn(\"opencode\") — must resolve the binary path first"
+      )
+    })
+
     it("tracks process status (running/crashed/stopped)", () => {
       assert.ok(processManagerSource.includes('"running"'), "must track running status")
       assert.ok(processManagerSource.includes('"crashed"'), "must track crashed status")

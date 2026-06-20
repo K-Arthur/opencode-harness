@@ -6,7 +6,7 @@ import { writeFile, unlink } from "node:fs/promises"
 import { join } from "node:path"
 import { randomBytes } from "node:crypto"
 import { log } from "../utils/outputChannel"
-import { buildInstallPlan, knownOpencodeBinaryPaths, type InstallPlan } from "./installPlan"
+import { buildInstallPlan, knownOpencodeBinaryPaths, preferExeOnWindows, type InstallPlan } from "./installPlan"
 
 export type AutoInstallMode = "prompt" | "auto" | "off"
 
@@ -218,8 +218,7 @@ export class OpencodeInstaller {
       proc.stdout?.on("data", (d: Buffer) => { out += d.toString() })
       proc.on("error", () => resolve(null))
       proc.on("close", () => {
-        const first = out.split(/\r?\n/).map((l) => l.trim()).find((l) => l.length > 0)
-        resolve(first ?? null)
+        resolve(preferExeOnWindows(out, process.platform))
       })
     })
   }

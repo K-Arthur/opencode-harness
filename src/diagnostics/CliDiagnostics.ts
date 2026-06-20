@@ -114,6 +114,12 @@ export class CliDiagnostics {
       return "opencode"
     }
 
+    // On Windows, .cmd/.ps1 wrappers cannot be spawned with shell:false
+    if (process.platform === "win32" && /\.(cmd|ps1)$/i.test(raw)) {
+      log.warn(`Binary path "${raw}" is a .cmd/.ps1 wrapper. Node.js cannot spawn it with shell:false (EFTYPE/EINVAL). Falling back to "opencode" in PATH.`)
+      return "opencode"
+    }
+
     return raw
   }
 

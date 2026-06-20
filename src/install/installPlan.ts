@@ -95,11 +95,14 @@ export function knownOpencodeBinaryPaths(
   paths.push(join(homedir, ".opencode", "bin", exe))
 
   if (isWindows) {
-    // npm global prefix on Windows lives under %APPDATA%\npm.
+    // npm global prefix on Windows lives under %APPDATA%\npm. npm creates
+    // wrapper scripts (opencode.cmd, opencode.ps1) there, but the extension
+    // spawns with shell:false — only the .exe is spawnable. Probe the .exe in
+    // the npm bin dir and the real executable inside node_modules.
     const appData = env["APPDATA"]
     if (appData) {
-      paths.push(join(appData, "npm", "opencode.cmd"))
       paths.push(join(appData, "npm", exe))
+      paths.push(join(appData, "npm", "node_modules", "opencode-ai", "bin", exe))
     }
   } else {
     // Common npm global prefixes and package-manager locations on unix.
@@ -112,4 +115,40 @@ export function knownOpencodeBinaryPaths(
   }
 
   return [...new Set(paths)]
+}
+
+/**
+ * Select the best binary path from `where`/`which` output.
+ *
+ * On Windows, `where opencode` prints multiple lines — typically `opencode.cmd`,
+ * `opencode.ps1`, and (if present) `opencode.exe`. The extension spawns with
+ * `shell: false`, so only the `.exe` is spawnable; `.cmd`/`.ps1` wrappers cause
+ * EFTYPE/EINVAL errors. This helper prefers `.exe`, rejects `.ps1`/`.cmd`, and
+ * falls back to any remaining line.
+ *
+ * On non-Windows platforms, returns the first non-empty line (unchanged behavior).
+ *
+ * @param lines  Raw stdout from `where`/`which` (one path per line).
+ * @param platform  `process.platform` — only `win32` gets the .exe filter.
+ * @returns The chosen absolute path, or `null` when no usable line is found.
+ */
+export function preferExeOnWindows(
+  lines: string,
+  platform: NodeJS.Platform,
+): string | null {
+  const trimmed = lines
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+  if (trimmed.length === 0) return null
+
+  if (platform !== "win32") return trimmed[0] ?? null
+
+  const exeMatch = trimmed.find((l) => l.toLowerCase().endsWith(".exe"))
+  if (exeMatch) return exeMatch
+
+  const nonWrapper = trimmed.find(
+    (l) => !l.toLowerCase().endsWith(".cmd") && !l.toLowerCase().endsWith(".ps1"),
+  )
+  return nonWrapper ?? null
 }

@@ -1,7 +1,10 @@
 import * as vscode from "vscode"
 import { spawn, type ChildProcess } from "child_process"
+import { existsSync } from "node:fs"
+import * as os from "node:os"
 import { log } from "../utils/outputChannel"
 import { PortPool } from "../utils/portPool"
+import { knownOpencodeBinaryPaths, preferExeOnWindows } from "../install/installPlan"
 import type {
   SessionConfig,
   SessionProcessHandle,
@@ -52,8 +55,13 @@ class SessionProcessHandleImpl implements SessionProcessHandle {
 
     log.info(`[process-pool] Starting opencode serve for ${this.id} on port ${port}`)
 
+    const binaryPath = await resolveOpencodeBinary()
+    if (!binaryPath) {
+      throw new Error(`Process ${this.id} could not locate the opencode binary`)
+    }
+
     return new Promise<void>((resolve, reject) => {
-      const child = spawn("opencode", args, {
+      const child = spawn(binaryPath, args, {
         cwd,
         env,
         stdio: ["pipe", "pipe", "pipe"],
@@ -158,6 +166,43 @@ class SessionProcessHandleImpl implements SessionProcessHandle {
       this.process = null
     }
   }
+}
+
+/**
+ * Resolve the opencode binary path for spawning with shell:false.
+ *
+ * Checks the `opencode.binaryPath` setting first (rejecting .cmd/.ps1 on
+ * Windows), then probes known install directories, then falls back to a
+ * PATH lookup filtered to prefer .exe on Windows.
+ *
+ * @returns The resolved binary path, or `null` if not found.
+ */
+async function resolveOpencodeBinary(): Promise<string | null> {
+  const config = vscode.workspace.getConfiguration("opencode")
+  const customPath = config.get<string>("binaryPath")
+  if (customPath) {
+    if (!/^[/\\]|[A-Za-z]:/.test(customPath) || /[;&|`$(){}!#~<>]/.test(customPath)) {
+      log.warn(`Custom binary path "${customPath}" is invalid or unsafe. Falling back to PATH lookup.`)
+    } else if (process.platform === "win32" && /\.(cmd|ps1)$/i.test(customPath)) {
+      log.warn(`Custom binary path "${customPath}" is a .cmd/.ps1 wrapper. Node.js cannot spawn it with shell:false (EFTYPE/EINVAL). Falling back to PATH lookup.`)
+    } else {
+      return customPath
+    }
+  }
+
+  for (const candidate of knownOpencodeBinaryPaths(process.platform, os.homedir(), process.env)) {
+    if (existsSync(candidate)) return candidate
+  }
+
+  const isWindows = process.platform === "win32"
+  const cmd = isWindows ? "where" : "which"
+  return new Promise<string | null>((resolve) => {
+    const proc = spawn(cmd, ["opencode"], { shell: false })
+    let out = ""
+    proc.stdout?.on("data", (d: Buffer) => { out += d.toString() })
+    proc.on("error", () => resolve(null))
+    proc.on("close", () => resolve(preferExeOnWindows(out, process.platform)))
+  })
 }
 
 export class LocalSessionProcessManager implements SessionProcessManager, vscode.Disposable {

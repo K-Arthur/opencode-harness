@@ -504,10 +504,17 @@ If every message times out:
 
 When `opencode-ai` is installed globally via npm on Windows, `Get-Command opencode`
 returns a `.ps1` wrapper script (e.g. `C:\Users\<username>\AppData\Roaming\npm\opencode.ps1`).
-The extension spawns the binary with `shell: false`, so pointing `opencode.binaryPath`
-at the `.ps1` wrapper fails with `EFTYPE` or `EINVAL` binary-type errors.
+The extension spawns the binary with `shell: false`, so only `.exe` files are spawnable —
+`.cmd` and `.ps1` wrappers cause `EFTYPE` or `EINVAL` binary-type errors.
 
-**Fix:** set `opencode.binaryPath` to the compiled executable, not the script wrapper:
+**The extension now automatically resolves the `.exe` on Windows.** All binary lookup
+paths — `where opencode` output, known install directories, and the `opencode.binaryPath`
+setting — filter out `.cmd`/`.ps1` wrappers and prefer `.exe` files. If you set
+`opencode.binaryPath` to a `.cmd` or `.ps1` path, the extension logs a warning and falls
+back to PATH lookup instead of crashing.
+
+If auto-resolution fails (e.g. the `.exe` is in a non-standard location), set
+`opencode.binaryPath` to the compiled executable explicitly:
 
 ```json
 {

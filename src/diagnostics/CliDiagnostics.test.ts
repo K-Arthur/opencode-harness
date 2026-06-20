@@ -42,6 +42,11 @@ describe("CliDiagnostics.ts", () => {
     assert.ok(source.includes("shell metacharacters"))
   })
 
+  it("rejects .cmd/.ps1 wrapper paths on Windows", () => {
+    assert.ok(source.includes(".cmd/.ps1 wrapper"), "must check for .cmd/.ps1 wrapper extensions")
+    assert.ok(source.includes("/\\.(cmd|ps1)$/i"), "must use regex to detect .cmd/.ps1 extensions")
+  })
+
   it("checks health endpoint at /global/health", () => {
     assert.ok(source.includes("/global/health"))
   })

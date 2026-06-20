@@ -18,7 +18,7 @@ All settings are under the `opencode.*` namespace and can be configured in VS Co
     "opencode.binaryPath": "/usr/local/bin/opencode"
   }
   ```
-- **Windows note**: When `opencode-ai` is installed via `npm install -g opencode-ai`, `Get-Command opencode` returns a `.ps1` wrapper script under `%APPDATA%\npm\`. The extension spawns the binary with `shell: false`, so pointing `opencode.binaryPath` at the `.ps1` wrapper fails with `EFTYPE` or `EINVAL`. Set the path to the compiled executable instead:
+- **Windows note**: When `opencode-ai` is installed via `npm install -g opencode-ai`, `Get-Command opencode` returns a `.ps1` wrapper script under `%APPDATA%\npm\`. The extension spawns the binary with `shell: false`, so only `.exe` files are spawnable. **The extension automatically resolves `.exe` files on Windows** — `where opencode` output is filtered to prefer `.exe` and reject `.cmd`/`.ps1` wrappers, and known install directories probe the `.exe` (including `%APPDATA%\npm\node_modules\opencode-ai\bin\opencode.exe`). If you set `opencode.binaryPath` to a `.cmd` or `.ps1` path, the extension logs a warning and falls back to PATH lookup. Only set `binaryPath` manually if auto-resolution fails:
 
   ```json
   {

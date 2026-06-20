@@ -4,7 +4,7 @@ import * as os from "os"
 import * as vscode from "vscode"
 import { findFreePort } from "../utils/portFinder"
 import { log } from "../utils/outputChannel"
-import { knownOpencodeBinaryPaths } from "../install/installPlan"
+import { knownOpencodeBinaryPaths, preferExeOnWindows } from "../install/installPlan"
 import type { AuthProvider } from "./AuthProvider"
 
 export class ServerLifecycle {
@@ -238,6 +238,8 @@ export class ServerLifecycle {
     if (customPath) {
       if (!/^[/\\]|[A-Za-z]:/.test(customPath) || /[;&|`$(){}!#~<>]/.test(customPath)) {
         log.warn(`Custom binary path "${customPath}" is invalid or unsafe. Falling back to PATH lookup.`)
+      } else if (process.platform === "win32" && /\.(cmd|ps1)$/i.test(customPath)) {
+        log.warn(`Custom binary path "${customPath}" is a .cmd/.ps1 wrapper. Node.js cannot spawn it with shell:false (EFTYPE/EINVAL). Falling back to PATH lookup.`)
       } else {
         log.info(`Using custom opencode binary path: ${customPath}`)
         return customPath
@@ -250,7 +252,7 @@ export class ServerLifecycle {
     const fromPath = await new Promise<string | null>((resolve) => {
       let output = ""
       which.stdout?.on("data", (d: Buffer) => { output += d.toString() })
-      which.on("close", () => { resolve(output.trim() || null) })
+      which.on("close", () => { resolve(preferExeOnWindows(output, process.platform)) })
       which.on("error", () => resolve(null))
     })
     if (fromPath) return fromPath

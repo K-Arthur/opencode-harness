@@ -38,6 +38,10 @@ void describe("OpencodeInstaller", () => {
       assert.ok(source.includes("knownOpencodeBinaryPaths(process.platform"), "uses known paths")
       assert.ok(source.includes("existsSync(candidate)"), "checks existence on disk")
     })
+
+    void it("uses preferExeOnWindows to filter PATH lookup results", () => {
+      assert.ok(source.includes("preferExeOnWindows"), "must use preferExeOnWindows in whichOpencode")
+    })
   })
 
   void describe("ensureInstalled — prompt-once semantics", () => {

@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      [Unreleased] — that creates documentation drift. See the release
      workflow in docs/development/rebuild-and-reinstall.md. -->
 
+### Fixed
+
+- **Windows: binary resolution now always prefers `.exe` over `.cmd`/`.ps1` wrappers.** When `opencode-ai` is installed globally via npm on Windows, `where opencode` returns `.cmd` and `.ps1` wrapper scripts that Node.js cannot spawn with `shell: false` (causing `EFTYPE`/`EINVAL` errors). All binary lookup paths now filter `where` output to prefer `.exe` and reject `.cmd`/`.ps1`, known install directories probe only `.exe` files (including `%APPDATA%\npm\node_modules\opencode-ai\bin\opencode.exe`), and `opencode.binaryPath` values ending in `.cmd`/`.ps1` trigger a warning + fallback instead of crashing. Also fixed `LocalSessionProcessManager` which hardcoded `spawn("opencode", ...)` — it now resolves the binary via `binaryPath` config + known locations + PATH lookup like `ServerLifecycle`. New pure helper `preferExeOnWindows()` in `installPlan.ts`. Tests: `installPlan.test.ts`, `ServerLifecycle.test.ts`, `OpencodeInstaller.test.ts`, `CliDiagnostics.test.ts`, `ADR010.test.ts`.
+
 ## [0.4.8] - 2026-06-20
 
 ### Fixed

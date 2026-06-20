@@ -55,6 +55,17 @@ void describe("ServerLifecycle", () => {
     void it("returns null when neither PATH nor known dirs contain the binary", () => {
       assert.ok(source.includes("return null"), "returns null when nothing is found")
     })
+
+    void it("uses preferExeOnWindows to filter `where` output on Windows", () => {
+      assert.ok(source.includes("preferExeOnWindows"), "must use preferExeOnWindows to filter PATH output")
+    })
+
+    void it("rejects .cmd/.ps1 custom binary paths on Windows", () => {
+      assert.ok(
+        source.includes("/\\.(cmd|ps1)$/i.test(customPath)"),
+        "must check for .cmd/.ps1 wrapper extensions in custom binaryPath",
+      )
+    })
   })
 
   void describe("spawn()", () => {
