@@ -1,7 +1,28 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-06-16
+**Last Updated:** 2026-06-20
 **Version:** v0.3.36
+
+## Unreleased Highlights (2026-06-20) — checkpoint restore-point rail
+
+- **Snapshot-bearing parts are now surfaced as a "restore to here" rail** in the
+  checkpoint panel. The pure collector in `src/checkpoint/restorePoints.ts` is no
+  longer unused: `list_restore_points` derives `RestorePointView[]` from the
+  local session messages, and clicking **Restore** calls `session.revert` with the
+  exact `messageID` and optional `partID` for that snapshot.
+- **Host-side wiring**: `SessionClient.revert(sessionId, messageID, partID?)`
+  and `SessionManager.revert` expose the per-part revert coordinate; the
+  WebviewEventRouter handles `list_restore_points` and `restore_point`.
+- **Webview-side wiring**: `renderRestorePoints` in `fileTracking.ts` renders the
+  rail inside the existing checkpoint panel; `buttonSetup.ts` requests restore
+  points when the panel opens; `main.ts` receives `restore_points` and
+  `restore_point_result` messages. Styling lives in `layout.css`.
+- **Message contract documented** in `docs/webview-messages.md` under
+  "Restore Points (audit §14.5)".
+- **Tests**: `src/chat/webview/ui/restorePoints.test.ts` and
+  `src/chat/WebviewEventRouter.restorePoints.test.ts`.
+
+## Unreleased Highlights (2026-06-16) — marketplace icon redesign
 **Version:** v0.2.23 (+ Unreleased: opencode CLI auto-install, native local voice input, frontend overhaul, stream/dedicated-bar redesign)
 **Audit:** `docs/adrs/2026-05-04-feature-parity-audit.md`
 **TechSpec:** `docs/TechSpec.md`
