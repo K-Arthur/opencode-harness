@@ -992,8 +992,11 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
         this.postMessage({ type: "command_list", commands: customCommands, partial: true })
         return
       }
-      const commands = await this.sessionManager.listCommands()
-      this.postMessage({ type: "command_list", commands: [...customCommands, ...commands] })
+      const [commands, skills] = await Promise.all([
+        this.sessionManager.listCommands(),
+        this.sessionManager.listSkills(),
+      ])
+      this.postMessage({ type: "command_list", commands: [...customCommands, ...commands, ...skills] })
     } catch (err) {
       log.warn("Failed to refresh command list after MCP change", err)
       const customCommands = this.promptManager.getPromptCommands()
@@ -2172,8 +2175,11 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
       this.statePush.pushCommandListToWebview(customCommands)
       return
     }
-    this.sessionManager.listCommands().then((commands) => {
-      this.statePush.pushCommandListToWebview([...customCommands, ...commands])
+    Promise.all([
+      this.sessionManager.listCommands(),
+      this.sessionManager.listSkills(),
+    ]).then(([commands, skills]) => {
+      this.statePush.pushCommandListToWebview([...customCommands, ...commands, ...skills])
     }).catch(() => {
       this.statePush.pushCommandListToWebview(customCommands)
     })

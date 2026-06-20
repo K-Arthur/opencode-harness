@@ -2566,8 +2566,11 @@ export class WebviewEventRouter {
       return
     }
     try {
-      const commands = await this.opts.sessionManager.listCommands()
-      this.opts.statePush.pushCommandListToWebview([...customCommands, ...commands])
+      const [commands, skills] = await Promise.all([
+        this.opts.sessionManager.listCommands(),
+        this.opts.sessionManager.listSkills(),
+      ])
+      this.opts.statePush.pushCommandListToWebview([...customCommands, ...commands, ...skills])
     } catch (err) {
       log.warn("Failed to list commands", err)
       this.opts.statePush.pushCommandListToWebview(customCommands, true)

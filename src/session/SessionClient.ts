@@ -336,7 +336,20 @@ export class SessionClient {
     const client = this.guardV2()
     const resp = await client.command.list()
     this.throwOnV2Error(resp, "Failed to list commands")
-    return (resp.data as Array<{ name: string; description?: string; template: string; agent?: string; source?: string }>) ?? []
+    // v2 response shape: { location, data: Array<CommandV2Info> }
+    const data = (resp.data as { data?: Array<{ name: string; description?: string; template: string; agent?: string }> }).data ?? []
+    // Infer source: command endpoint returns server commands (MCP commands are also surfaced here)
+    return data.map(c => ({ ...c, source: "server" as const }))
+  }
+
+  async listSkills(): Promise<Array<{ name: string; description?: string; source: "skill" }>> {
+    const client = this.guardV2()
+    const resp = await client.v2.skill.list()
+    this.throwOnV2Error(resp, "Failed to list skills")
+    // v2 response shape: { location, data: Array<SkillV2Info> }
+    const data = (resp.data as { data?: Array<{ name: string; description?: string; slash?: boolean }> }).data ?? []
+    // Only include skills marked as slash commands
+    return data.filter(s => s.slash).map(s => ({ name: s.name, description: s.description, source: "skill" as const }))
   }
 
   async abortSession(sessionId: string): Promise<boolean> {

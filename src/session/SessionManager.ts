@@ -303,6 +303,10 @@ export class SessionManager {
     return this.sessionClient.listCommands()
   }
 
+  async listSkills(): Promise<Array<{ name: string; description?: string; source: "skill" }>> {
+    return this.sessionClient.listSkills()
+  }
+
   async abortSession(sessionId: string): Promise<boolean> {
     return this.sessionClient.abortSession(sessionId)
   }

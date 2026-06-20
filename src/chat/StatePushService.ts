@@ -41,7 +41,7 @@ export class StatePushService {
     this.opts.postMessage({ type: "theme_config", config })
   }
 
-  pushCommandListToWebview(commands: { name: string; description?: string }[], partial?: boolean): void {
+  pushCommandListToWebview(commands: { name: string; description?: string; source?: string; agent?: string }[], partial?: boolean): void {
     this.opts.postMessage({ type: "command_list", commands, partial })
   }
 
