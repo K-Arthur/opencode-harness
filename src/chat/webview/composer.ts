@@ -5,7 +5,8 @@ import type { ElementRefs } from "./dom"
 import { createQueueRenderer } from "./queueRenderer"
 import { createInputHandlers, type InputHandlerDeps } from "./inputHandlers"
 import { createSlashCommandHandler } from "./slashCommands"
-import { createSendLogic, type StreamCapacityState } from "./sendLogic"
+import { createSendLogic } from "./sendLogic"
+import type { StreamCapacityState } from "./sendButton"
 import type { RemoteCommandInfo } from "./slash-commands"
 
 export interface ComposerDeps {

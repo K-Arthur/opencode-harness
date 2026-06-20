@@ -31,7 +31,7 @@ function readSrc(rel) {
 const STREAM_COORDINATOR = readSrc("src/chat/handlers/StreamCoordinator.ts")
 const TAB_MANAGER = readSrc("src/chat/TabManager.ts")
 const CHAT_PROVIDER = readSrc("src/chat/ChatProvider.ts")
-const SEND_LOGIC = readSrc("src/chat/webview/sendLogic.ts")
+const SEND_LOGIC = readSrc("src/chat/webview/sendMessage.ts")
 const STREAM_ORCHESTRATOR = readSrc("src/chat/webview/streamOrchestrator.ts")
 const WEBVIEW_TYPES = readSrc("src/chat/webview/types.ts")
 const MAIN_TS = readSrc("src/chat/webview/main.ts")

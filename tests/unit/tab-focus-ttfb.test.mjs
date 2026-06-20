@@ -7,7 +7,7 @@ const fs = await import("node:fs")
 const root = path.resolve(import.meta.dirname, "..", "..")
 
 const SESSION_FOCUS = fs.readFileSync(path.join(root, "src", "chat", "webview", "sessionFocus.ts"), "utf8")
-const SEND_LOGIC = fs.readFileSync(path.join(root, "src", "chat", "webview", "sendLogic.ts"), "utf8")
+const SEND_LOGIC = fs.readFileSync(path.join(root, "src", "chat", "webview", "sendMessage.ts"), "utf8")
 const TAB_MANAGER = fs.readFileSync(path.join(root, "src", "chat", "TabManager.ts"), "utf8")
 const STREAM_COORDINATOR = fs.readFileSync(path.join(root, "src", "chat", "handlers", "StreamCoordinator.ts"), "utf8")
 const MAIN_TS = fs.readFileSync(path.join(root, "src", "chat", "webview", "main.ts"), "utf8")
@@ -48,7 +48,7 @@ void describe("tab-focus stability — user's current view not stolen during gen
   })
 
   void it("sendLogic.sendMessage does not auto-switch when user is on a different non-streaming tab", () => {
-    const idx = SEND_LOGIC.indexOf("function sendMessage()")
+    const idx = SEND_LOGIC.indexOf("export function sendMessage")
     assert.ok(idx >= 0, "sendMessage must exist")
     const block = SEND_LOGIC.slice(idx, idx + 2000)
     const switchCount = (block.match(/switchTab/g) || []).length +

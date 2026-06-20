@@ -4,20 +4,30 @@ import { TOOLTIPS } from "./tooltips"
 import { generateUserMessageId } from "../../session/messageId"
 import { classifyComposerInput } from "./slash-commands"
 import { shouldForceFocusOnSend } from "./sessionFocus"
-
-/** G8: how long to wait for the host to ack a send_prompt before probing.
- *  The host normally posts `prompt_accepted` within ~1s and
- *  `streaming_state:true` within another second. 5s accommodates slow
- *  server starts and provider warmups; anything beyond that is most likely
- *  a lost message or a host that rejected the prompt without telling us. */
-const SEND_ACK_WATCHDOG_MS = 5000
-
-export interface StreamCapacityState {
-  isFull: boolean
-  streamingNames: string
-  activeStreams: number
-  maxStreams: number
-}
+import {
+  generateTitle,
+  isAutoSessionName,
+  handleNoModelSelected,
+  probeActiveRun,
+  abortStream,
+  sendMessage,
+  type SendMessageDeps,
+} from "./sendMessage"
+import {
+  getStreamCapacityState,
+  isServerStreaming,
+  resolveSendModel,
+  updateSendButtonIcon,
+  updateSendButton,
+} from "./sendButton"
+import type { StreamCapacityState } from "./sendButton"
+import {
+  getCurrentSteerMode,
+  setSteerMode,
+  syncSteerModeUI,
+  getSteerMode,
+  sendSteerPrompt,
+} from "./steerMode"
 
 let _maxConcurrentStreams = 5
 export function setMaxConcurrentStreams(max: number): void {
@@ -76,14 +86,6 @@ export interface SendLogicDeps {
   hasPendingQuestion?: () => boolean
 }
 
-function createWebviewId(prefix: string): string {
-  const randomUUID = (globalThis.crypto as { randomUUID?: () => string } | undefined)?.randomUUID
-  const id = randomUUID
-    ? randomUUID.call(globalThis.crypto)
-    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-  return `${prefix}-${id}`
-}
-
 export function createSendLogic(deps: SendLogicDeps) {
   const {
     els,
@@ -108,358 +110,41 @@ export function createSendLogic(deps: SendLogicDeps) {
     STREAM_LIMIT_TOOLTIP,
   } = deps
 
-  function getCurrentSteerMode(): "interrupt" | "queue" {
-    const active = stateManager.getActiveSession()
-    // Queue is the safe default while streaming (never aborts, fully visible/editable).
-    // Interrupt is opt-in (the toggle, or a one-shot Cmd/Ctrl+Enter).
-    return active?.steerMode === "interrupt" ? "interrupt" : "queue"
-  }
+  // Helper functions for the composed modules
+  const getStreamCapacityStateFn = () => getStreamCapacityState(stateManager)
+  const isServerStreamingFn = (active: { id: string } | null) => isServerStreaming(active, stateManager)
+  const resolveSendModelFn = (active?: { model?: string } | null | undefined) => resolveSendModel(active ?? null, stateManager, modelDropdown)
+  const updateSendButtonIconFn = (isStreaming: boolean | undefined, streamCapacity: StreamCapacityState) =>
+    updateSendButtonIcon(isStreaming, streamCapacity, els, stateManager, isServerStreamingFn)
+  const updateSendButtonFn = () =>
+    updateSendButton(deps, getStreamCapacityStateFn, isServerStreamingFn, resolveSendModelFn, updateSendButtonIconFn)
+  const getCurrentSteerModeFn = () => getCurrentSteerMode(stateManager)
+  const sendSteerPromptFn = (modeOverride?: "interrupt" | "queue") =>
+    sendSteerPrompt(modeOverride, deps, getCurrentSteerModeFn, updateSendButtonFn)
 
-  function getStreamCapacityState(): StreamCapacityState {
-    // Count any session the host has flagged as streaming OR the optimistic
-    // local flag is set. The host flag is authoritative; the local flag is a
-    // fallback so an in-flight send (between sendMessage and the first
-    // streaming_state push) is still counted.
-    const streamingSessions = stateManager.getAllSessions().filter(
-      (s) => s.isStreaming || s.isServerStreaming === true,
-    )
-    const activeStreams = streamingSessions.length
-    const isFull = activeStreams >= _maxConcurrentStreams
-    const streamingNames = streamingSessions
-      .map((s) => {
-        const session = stateManager.getSession(s.id)
-        return session?.name?.split("\n")[0]?.slice(0, 30) || s.id.slice(0, 8)
-      })
-      .filter(Boolean)
-      .join(", ")
-    return { isFull, streamingNames, activeStreams, maxStreams: _maxConcurrentStreams }
-  }
-
-  function isServerStreaming(active: { id: string } | null): boolean {
-    return active ? (stateManager.getState().sessions[active.id]?.isServerStreaming ?? false) : false
-  }
-
-  /** Trigger a host probe of the active run's status. Used when local state is
-   *  suspected stale (after errors, reconnects, tab switches to a tab whose
-   *  backend may still be running). The host replies via `run_status_result`,
-   *  which reconciles both streaming flags authoritatively. */
-  function probeActiveRun(): void {
-    const active = stateManager.getActiveSession()
-    if (!active) return
-    // Only probe when there's genuine ambiguity: either we are not streaming
-    // (host might disagree) or we are streaming but haven't seen host ack in a
-    // while. Cheap to fire — host dedupes.
-    vscode.postMessage({
-      type: "probe_run_status",
-      sessionId: active.id,
-      // cliSessionId is optional; host knows its own mapping.
-    })
-  }
-
-  function updateSendButtonIcon(isStreaming?: boolean, streamCapacity = getStreamCapacityState()) {
-    const active = stateManager.getActiveSession()
-    const streaming = isStreaming ?? isServerStreaming(active) ?? active?.isStreaming ?? false
-    els.inputArea?.classList.toggle("input-area--streaming", streaming)
-    if (streaming) {
-      els.sendBtn?.classList.add("stopping")
-      els.sendBtn?.classList.remove("stream-limit-blocked")
-      els.sendBtn?.setAttribute("aria-label", "Stop generation")
-      els.sendBtn?.setAttribute("title", TOOLTIPS.chat.stop)
-    } else if (streamCapacity.isFull) {
-      els.sendBtn?.classList.remove("stopping")
-      els.sendBtn?.classList.add("stream-limit-blocked")
-      const limitLabel = streamCapacity.streamingNames
-        ? TOOLTIPS.chat.sendBlockedByLimit(streamCapacity.streamingNames)
-        : STREAM_LIMIT_TOOLTIP
-      els.sendBtn?.setAttribute("aria-label", limitLabel)
-      els.sendBtn?.setAttribute("title", limitLabel)
-    } else {
-      els.sendBtn?.classList.remove("stopping")
-      els.sendBtn?.classList.remove("stream-limit-blocked")
-      els.sendBtn?.setAttribute("aria-label", "Send message")
-      els.sendBtn?.setAttribute("title", TOOLTIPS.chat.send)
-    }
-  }
-
-  function resolveSendModel(active?: { model?: string } | null): string | undefined {
-    return active?.model ?? modelDropdown.getCurrentModel() ?? stateManager.getState().globalModel
-  }
-
-  function updateSendButton() {
-    const hasText = els.promptInput.value.trim().length > 0
-    const hasAttachments = attachmentManager.getAttachments().length > 0
-    const active = stateManager.getActiveSession()
-    const localStreaming = active?.isStreaming || false
-    const hostStreaming = isServerStreaming(active)
-    const isStreaming = localStreaming || hostStreaming
-    const streamCapacity = getStreamCapacityState()
-    const blockedByStreamLimit = !isStreaming && streamCapacity.isFull
-    const hasModel = isStreaming || !!resolveSendModel(active)
-    // Block sending while a question is pending — the user must answer the
-    // model's question first to avoid orphaning the activeToolCallIds tracking
-    // and to prevent confusing dual-stream UX (Gap 5, Deadlock 2 prevention).
-    const blockedByPendingQuestion: boolean = !isStreaming && !!active?.id && deps.hasPendingQuestion?.() === true
-    const canSubmit = hasModel && (isStreaming || ((hasText || hasAttachments) && !blockedByStreamLimit && !blockedByPendingQuestion))
-    ;(els.sendBtn as HTMLButtonElement).disabled = !canSubmit
-    els.sendBtn?.classList.toggle("stream-limit-blocked", blockedByStreamLimit)
-    const blockedByModel = !hasModel && !isStreaming
-    els.sendBtn?.classList.toggle("no-model-blocked", blockedByModel)
-    if (blockedByModel) {
-      els.sendBtn?.setAttribute("aria-label", "Select a model first")
-      els.sendBtn?.setAttribute("title", "Select a model first")
-    } else if (blockedByPendingQuestion) {
-      els.sendBtn?.setAttribute("aria-label", "Answer the model's question first")
-      els.sendBtn?.setAttribute("title", "Answer the model's question first")
-    }
-    updateSendButtonIcon(isStreaming, streamCapacity)
-    updateModeSelectorState()
-  }
-
-  function setSteerMode(mode: "interrupt" | "queue") {
-    const active = stateManager.getActiveSession()
-    if (active && stateManager.setSessionSteerMode) {
-      stateManager.setSessionSteerMode(active.id, mode)
-    }
-    document.querySelectorAll<HTMLElement>(".steer-mode-btn").forEach((btn) => {
-      const isActive = btn.dataset.mode === mode
-      btn.classList.toggle("active", isActive)
-      btn.setAttribute("aria-checked", String(isActive))
-    })
-    const btn = document.getElementById(`steer-mode-${mode}`)
-    if (btn) {
-      btn.classList.add("active")
-      btn.setAttribute("aria-checked", "true")
-    }
-    els.inputArea.classList.remove("steer-interrupt", "steer-queue")
-    els.inputArea.classList.add(`steer-${mode}`)
-  }
-
-  function syncSteerModeUI() {
-    setSteerMode(getCurrentSteerMode())
-  }
-
-  function getSteerMode(): "interrupt" | "queue" {
-    return getCurrentSteerMode()
-  }
-
-  function sendSteerPrompt(modeOverride?: "interrupt" | "queue") {
-    const active = stateManager.getActiveSession()
-    if (!active) return
-    const text = els.promptInput.value.trim()
-    const attachments = attachmentManager.getAttachments()
-    if (!text && attachments.length === 0) return
-    attachmentManager.clearAttachments()
-    renderAttachmentChips()
-    // modeOverride is a one-shot (Cmd/Ctrl+Enter → interrupt) and must NOT mutate the
-    // tab's persisted send-mode default; only the toggle (setSteerMode) does that.
-    vscode.postMessage({
-      type: "send_steer_prompt",
-      text,
-      sessionId: active.id,
-      mode: modeOverride ?? getCurrentSteerMode(),
-      ...(attachments.length > 0 ? { attachments } : {}),
-    })
-    els.promptInput.value = ""
-    autoResizeTextarea()
-    updateSendButton()
-  }
-
-  function abortStream() {
-    const active = stateManager.getActiveSession()
-    if (!active) return
-    streamHandlers.get(active.id)?.showTypingIndicator("Stopping...")
-    updateAgentStatus("idle")
-    vscode.postMessage({ type: "abort", sessionId: active.id })
-  }
-
-  function generateTitle(text: string): string {
-    if (!text.trim()) return ""
-    const firstSentence = text.split(/[.!?\n]/)[0] || text
-    const trimmed = firstSentence.trim()
-    if (trimmed.length > 40) return trimmed.slice(0, 37).trimEnd() + "..."
-    return trimmed
-  }
-
-  function isAutoSessionName(name?: string): boolean {
-    const raw = (name || "").trim()
-    return /^New Chat\b/i.test(raw) || /^Tab session\b/i.test(raw)
-  }
-
-  function handleNoModelSelected() {
-    openModelManager()
-    els.promptInput.placeholder = "Select a model to continue..."
-    updateSendButton()
-  }
-
-  function sendMessage() {
-    const text = els.promptInput.value.trim()
-    let active = stateManager.getActiveSession()
-
-    if (active?.isStreaming || (active && isServerStreaming(active))) {
-      const kind = classifyComposerInput(text, true)
-      if (kind === "slash-blocked") {
-        // Never steer-leak a command to the model as literal text. Keep the
-        // input intact so the user can run it once the stream stops.
-        handleRequestError(
-          active.id,
-          "Slash commands can't run while a response is streaming — press Stop or wait for completion, then try again.",
-        )
-        return
-      }
-      if (kind === "steer" || attachmentManager.getAttachments().length > 0) {
-        sendSteerPrompt()
-      } else {
-        abortStream()
-      }
-      return
-    }
-
-    if (!text && attachmentManager.getAttachments().length === 0) return
-
-    // Resolve model before any mutations — if missing, open picker without losing prompt
-    const sendModel = resolveSendModel(active)
-    if (!sendModel) {
-      handleNoModelSelected()
-      return
-    }
-
-    if (!active) {
-      const title = generateTitle(text)
-      const tab = createNewTab(title)
-      if (!tab) return
-      active = stateManager.getSession(tab.id) || (tab as any)
-    }
-
-    if (!active) return
-
-    hideWelcomeView()
-
-    const streamCapacity = getStreamCapacityState()
-    if (streamCapacity.isFull) {
-      updateSendButton()
-      handleRequestError(
-        active.id,
-        streamCapacity.streamingNames
-          ? TOOLTIPS.limits.streamCapWithNames(streamCapacity.streamingNames)
-          : `${STREAM_LIMIT_TOOLTIP}. Stop a streaming tab to free a slot.`,
-      )
-      return
-    }
-
-    if (!els.tabPanels.querySelector(`.tab-panel[data-tab-id="${active.id}"]`)) {
-      createTabUI(active.id, active.name || "")
-      // Auto-switch ONLY when the user has nothing valid to look at (welcome
-      // screen or no current tab). Previously this yanked focus onto active.id
-      // whenever its panel was missing — even if the user was deliberately
-      // viewing another valid tab (a state desync could fire this during a
-      // generation, hijacking the user's view). See sessionFocus.ts.
-      const currentActiveId = stateManager.getState().activeSessionId
-      const currentValid = currentActiveId
-        ? Boolean(stateManager.getSession(currentActiveId))
-        : false
-      const welcomeVisible = !els.welcomeView.classList.contains("hidden")
-      if (
-        shouldForceFocusOnSend({
-          welcomeVisible,
-          currentActiveId,
-          currentActiveValid: currentValid,
-          targetId: active.id,
-        })
-      ) {
-        switchToTab(active.id)
-      }
-      updateTabBar()
-    }
-
-    if (text.startsWith("/")) {
-      runSlashCommandText(text, active)
-      return
-    }
-
-    const attachments = attachmentManager.getAttachments()
-
-    els.promptInput.value = ""
-    autoResizeTextarea()
-    updateSendButton()
-
-    const msgObj: ChatMessage = {
-      role: "user",
-      // opencode rejects user-message ids not starting with "msg"; this id is reused as
-      // both the local optimistic bubble id and the server messageID, so they stay equal.
-      id: generateUserMessageId(),
-      blocks: [
-        ...(text ? [{ type: "text" as const, text }] : []),
-        ...attachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
-      ],
-      timestamp: Date.now(),
-      sessionId: active.id,
-    }
-
-    attachmentManager.clearAttachments()
-    renderAttachmentChips()
-
-    addMessage(active.id, msgObj)
-    stateManager.setStreaming(active.id, true)
-    updateTabBar()
-    updateModeSelectorState()
-    updateSendButton()
-
-    const stream = streamHandlers.get(active.id)
-    if (stream) stream.showTypingIndicator("Thinking...")
-    updateAgentStatus("thinking")
-
-    const sendVariant = stateManager.getState().sessions[active.id]?.variant || stateManager.getState().globalVariant || undefined
-    const clientRequestId = createWebviewId("req")
-
-    vscode.postMessage({
-      type: "send_prompt",
-      text,
-      sessionId: active.id,
-      messageId: msgObj.id,
-      clientRequestId,
-      model: sendModel,
-      mode: active.mode,
-      ...(sendVariant ? { variant: sendVariant } : {}),
-      ...(attachments.length > 0 ? { attachments } : {}),
-    })
-
-    // G8: optimistic-local safety. The host should ack the send within a few
-    // seconds (prompt_accepted → streaming_state:true). If that never arrives
-    // (lost message, host crashed mid-send, race with the host rejecting the
-    // prompt silently), the user would be stuck looking at a Stop button with
-    // no backend run. Arm a one-shot probe; if the host confirms no run is
-    // active, the run_status_result handler clears the optimistic flag and
-    // resets the UI. If the host says active=true (we just missed the ack),
-    // no-op. The timer fires once and clears itself.
-    const sendSessionId = active.id
-    const ackWatchdog = setTimeout(() => {
-      // Only probe if we still think we're streaming AND the host hasn't
-      // pushed isServerStreaming=true (which would mean we did get an ack).
-      const sess = stateManager.getSession(sendSessionId)
-      if (!sess) return
-      if (sess.isServerStreaming === true) return // host already acked
-      if (!sess.isStreaming) return // something else cleared it
-      // Still optimistic after the watchdog — ask the host.
-      vscode.postMessage({ type: "probe_run_status", sessionId: sendSessionId })
-    }, SEND_ACK_WATCHDOG_MS)
-    // Ensure the timer doesn't keep the process alive if the webview unloads.
-    if (typeof (ackWatchdog as unknown as { unref?: () => void }).unref === "function") {
-      ;(ackWatchdog as unknown as { unref: () => void }).unref()
-    }
+  // Compose sendMessage with all dependencies
+  const sendMessageDeps: SendMessageDeps = {
+    ...deps,
+    getStreamCapacityState: getStreamCapacityStateFn,
+    isServerStreaming: isServerStreamingFn,
+    resolveSendModel: resolveSendModelFn,
+    updateSendButton: updateSendButtonFn,
+    sendSteerPrompt: sendSteerPromptFn,
   }
 
   return {
-    getStreamCapacityState,
-    updateSendButtonIcon,
-    updateSendButton,
-    sendMessage,
-    abortStream,
+    getStreamCapacityState: getStreamCapacityStateFn,
+    updateSendButtonIcon: (isStreaming?: boolean, streamCapacity?: StreamCapacityState) =>
+      updateSendButtonIconFn(isStreaming, streamCapacity ?? getStreamCapacityStateFn()),
+    updateSendButton: updateSendButtonFn,
+    sendMessage: () => sendMessage(sendMessageDeps),
+    abortStream: () => abortStream(stateManager, streamHandlers, updateAgentStatus, vscode),
     generateTitle,
     isAutoSessionName,
-    sendSteerPrompt,
-    setSteerMode,
-    syncSteerModeUI,
-    getSteerMode,
-    probeActiveRun,
+    sendSteerPrompt: sendSteerPromptFn,
+    setSteerMode: (mode: "interrupt" | "queue") => setSteerMode(mode, stateManager, els),
+    syncSteerModeUI: () => syncSteerModeUI(stateManager, els),
+    getSteerMode: () => getSteerMode(stateManager),
+    probeActiveRun: () => probeActiveRun(stateManager, vscode),
   }
 }
