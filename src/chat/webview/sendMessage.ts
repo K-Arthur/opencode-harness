@@ -147,7 +147,7 @@ export function sendMessage(deps: SendMessageDeps): void {
     const title = generateTitle(text)
     const tab = createNewTab(title)
     if (!tab) return
-    active = stateManager.getSession(tab.id) || (tab as any)
+    active = stateManager.getSession(tab.id) || (tab as ReturnType<typeof stateManager.getActiveSession>)
   }
 
   if (!active) return

@@ -93,7 +93,6 @@ export function updateSendButton(
     stateManager,
     attachmentManager,
     updateModeSelectorState,
-    STREAM_LIMIT_TOOLTIP,
     hasPendingQuestion,
   } = deps
 

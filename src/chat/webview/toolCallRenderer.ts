@@ -4,7 +4,6 @@ import {
   TOOL_WRITE_SVG,
   TOOL_EXEC_SVG,
   TOOL_META_SVG,
-  CHEVRON_RIGHT_SVG,
   toolIconFor,
   toolStateOverlayFor,
 } from "./icons"
@@ -63,14 +62,15 @@ export function normalizeToolBlock(block: Block): ToolCallBlock {
     } as ToolCallBlock
   }
   const tb = block as ToolCallBlock
+  const raw = block as Record<string, unknown>
   const tbId = tb.id || `tool-${Date.now()}`
-  const tbName = tb.name || (typeof (tb as any).tool === "string" ? (tb as any).tool : undefined) || tb.toolName
+  const tbName = tb.name || (typeof raw.tool === "string" ? raw.tool : undefined) || tb.toolName
     || (tbId ? `tool:${tbId.slice(0, 8)}` : "tool")
   return {
     type: 'tool-call',
     id: tbId,
     name: tbName,
-    class: tb.class || (tb as any).toolType || 'read',
+    class: tb.class || (typeof raw.toolType === "string" ? (raw.toolType as ToolCallClass) : undefined) || 'read',
     state: tb.state || 'running',
     args: tb.args ? (typeof tb.args === 'string' ? safeJsonParse(tb.args) : tb.args) : undefined,
     result: tb.result,
@@ -195,7 +195,7 @@ export function appendToolKeyArg(
       e.stopPropagation()
       e.preventDefault()
 
-      const pm = postMessage || (window as any).vscode?.postMessage
+      const pm = postMessage || (window as unknown as { vscode?: { postMessage: (msg: Record<string, unknown>) => void } }).vscode?.postMessage
       if (!pm) return
 
       if (keyArg.startsWith("http://") || keyArg.startsWith("https://")) {
@@ -1042,7 +1042,7 @@ export function renderPlanCard(plan: PlanData, opts: RenderOptions): HTMLElement
  * Extracted so both initial render (renderToolGroup) and streaming updates
  * (updateToolGroupHeader) share the same state → label mapping.
  */
-export function renderToolGroupBadge(blocks: Block[]): HTMLSpanElement | null {
+export function renderToolGroupBadge(blocks: Array<{ state?: string; error?: unknown }>): HTMLSpanElement | null {
   if (blocks.length === 0) return null
   const hasError = blocks.some(b => {
     const s = b.state

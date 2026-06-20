@@ -1,13 +1,8 @@
 import type { WebviewState, ChatMessage } from "./types"
 import type { ElementRefs } from "./dom"
-import { TOOLTIPS } from "./tooltips"
-import { generateUserMessageId } from "../../session/messageId"
-import { classifyComposerInput } from "./slash-commands"
-import { shouldForceFocusOnSend } from "./sessionFocus"
 import {
   generateTitle,
   isAutoSessionName,
-  handleNoModelSelected,
   probeActiveRun,
   abortStream,
   sendMessage,
@@ -42,7 +37,7 @@ export interface SendLogicDeps {
   stateManager: {
     getState: () => WebviewState
     getActiveSession: () => { id: string; isStreaming: boolean; isServerStreaming?: boolean; activeServerMessageId?: string; activeRunId?: string; model?: string; mode?: string; name?: string; steerMode?: "interrupt" | "queue" } | null
-    getSession: (id: string) => { id: string; isStreaming: boolean; isServerStreaming?: boolean; activeServerMessageId?: string; activeRunId?: string; model?: string; mode?: string; name?: string; steerMode?: "interrupt" | "queue"; messages: any[] } | undefined
+    getSession: (id: string) => { id: string; isStreaming: boolean; isServerStreaming?: boolean; activeServerMessageId?: string; activeRunId?: string; model?: string; mode?: string; name?: string; steerMode?: "interrupt" | "queue"; messages: unknown[] } | undefined
     getAllSessions: () => Array<{ id: string; isStreaming: boolean; isServerStreaming?: boolean }>
     setStreaming: (id: string, streaming: boolean) => void
     setServerStreaming: (id: string, streaming: boolean) => void
@@ -91,23 +86,9 @@ export function createSendLogic(deps: SendLogicDeps) {
     els,
     stateManager,
     vscode,
-    attachmentManager,
     streamHandlers,
     modelDropdown,
-    hideWelcomeView,
-    handleRequestError,
-    addMessage,
-    updateTabBar,
-    switchToTab,
-    createTabUI,
-    createNewTab,
     updateAgentStatus,
-    updateModeSelectorState,
-    renderAttachmentChips,
-    autoResizeTextarea,
-    runSlashCommandText,
-    openModelManager,
-    STREAM_LIMIT_TOOLTIP,
   } = deps
 
   // Helper functions for the composed modules

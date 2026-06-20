@@ -11,21 +11,16 @@ import {
   CHECK_SVG,
   SUCCESS_SVG,
   ERROR_SVG,
-  SPINNER_SVG,
-  EDIT_SVG,
-  INSERT_SVG,
-  NEW_FILE_SVG,
   GEAR_SVG,
   MORE_HORIZONTAL_SVG,
 } from "./icons"
-import { renderToolCallBlock, isToolCallBlock, groupConsecutiveToolCalls } from "./toolCallRenderer"
+import { renderToolCallBlock } from "./toolCallRenderer"
 import { computeWordDiffs } from "./wordDiff"
 import { getThinkingVisible } from "./displayPrefs"
 import { loadMermaid, loadKatex } from "./vendorLoader"
 import { getMarkdownWorkerClient, resetMarkdownWorkerClient } from "./markdownWorkerClient"
 import type {
   Block,
-  ChatMessage,
   DiffBlock,
   ThinkingBlock,
   ErrorBlock,
@@ -39,6 +34,19 @@ declare global {
   interface Window {
     __OC_MARKDOWN_WORKER_URI__?: string
   }
+}
+
+declare const acquireVsCodeApi: () => {
+  postMessage(message: Record<string, unknown>): void
+  getState(): { displayPrefs?: { diffViewMode?: string; diffWrapEnabled?: boolean; codeWrapEnabled?: boolean } } | undefined
+  setState(state: Record<string, unknown>): void
+}
+
+function getVsCodeApi() {
+  if (typeof acquireVsCodeApi === "function") {
+    return acquireVsCodeApi()
+  }
+  return undefined
 }
 
 // ---------------------------------------------------------------------------
@@ -135,10 +143,6 @@ const markdownCache = new LruStringCache(250, 2 * 1024 * 1024)
 export const MARKDOWN_WORKER_MIN_CHARS = 8_000
 export const MARKDOWN_WORKER_MIN_CODE_CHARS = 4_000
 export const MARKDOWN_WORKER_TIMEOUT_MS = 8_000
-
-type WorkerMessage =
-  | { id: number; html: string }
-  | { id: number; error: string }
 
 function normalizeMarkdownForRender(text: string, isStreaming: boolean): string {
   return isStreaming ? normalizeStreamingMarkdown(text) : normalizeMarkdownText(text)
@@ -761,7 +765,7 @@ function renderCodeBlock(block: Block, _opts: RenderOptions): HTMLElement | null
   insertBtn.title = "Insert at Cursor"
   insertBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg><span>Insert</span>`
   insertBtn.addEventListener("click", () => {
-    const vscode = (window as any).acquireVsCodeApi?.()
+    const vscode = getVsCodeApi()
     if (vscode) {
       vscode.postMessage({ type: "insert_at_cursor", code, language: block.language })
     }
@@ -774,7 +778,7 @@ function renderCodeBlock(block: Block, _opts: RenderOptions): HTMLElement | null
   newFileBtn.title = "Create New File"
   newFileBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg><span>New File</span>`
   newFileBtn.addEventListener("click", () => {
-    const vscode = (window as any).acquireVsCodeApi?.()
+    const vscode = getVsCodeApi()
     if (vscode) {
       vscode.postMessage({ type: "create_file_from_code", code, language: block.language })
     }
@@ -1219,7 +1223,7 @@ function toDiffBlock(block: Block): DiffBlock {
     state: (block.state as "pending" | "accepted" | "discarded") || "pending",
     linesAdded: block.linesAdded || 0,
     linesRemoved: block.linesRemoved || 0,
-    revertable: (block as any).revertable ?? false,
+    revertable: (typeof block.revertable === "boolean" ? block.revertable : false),
   }
 }
 
@@ -1356,7 +1360,7 @@ function createDiffViewToggle(wrapper: HTMLElement, diffBlock: DiffBlock, opts: 
 }
 
 function readDiffViewModePreference(): "unified" | "side-by-side" {
-  const vscode = (window as any).acquireVsCodeApi?.()
+  const vscode = getVsCodeApi()
   if (!vscode) return "unified"
   try {
     return vscode.getState()?.displayPrefs?.diffViewMode === "side-by-side" ? "side-by-side" : "unified"
@@ -1364,7 +1368,7 @@ function readDiffViewModePreference(): "unified" | "side-by-side" {
 }
 
 function persistDiffViewModePreference(mode: "unified" | "side-by-side"): void {
-  const vscode = (window as any).acquireVsCodeApi?.()
+  const vscode = getVsCodeApi()
   if (!vscode) return
   try {
     const state = vscode.getState()
@@ -1385,7 +1389,7 @@ function toggleDiffWrap(wrapper: HTMLElement, wrapToggle: HTMLElement): void {
 }
 
 function readDiffWrapPreference(): boolean {
-  const vscode = (window as any).acquireVsCodeApi?.()
+  const vscode = getVsCodeApi()
   if (!vscode) return false
   try {
     return vscode.getState()?.displayPrefs?.diffWrapEnabled === true
@@ -1396,7 +1400,7 @@ function readDiffWrapPreference(): boolean {
 }
 
 function persistDiffWrapPreference(isWrapped: boolean): void {
-  const vscode = (window as any).acquireVsCodeApi?.()
+  const vscode = getVsCodeApi()
   if (!vscode) return
   try {
     const state = vscode.getState()
@@ -1433,7 +1437,7 @@ function toggleCodeBlockWrap(wrapper: HTMLElement, wrapToggle: HTMLElement): voi
 }
 
 function readCodeWrapPreference(): boolean {
-  const vscode = (window as any).acquireVsCodeApi?.()
+  const vscode = getVsCodeApi()
   if (!vscode) return false
   try {
     return vscode.getState()?.displayPrefs?.codeWrapEnabled === true
@@ -1441,7 +1445,7 @@ function readCodeWrapPreference(): boolean {
 }
 
 function persistCodeWrapPreference(isWrapped: boolean): void {
-  const vscode = (window as any).acquireVsCodeApi?.()
+  const vscode = getVsCodeApi()
   if (!vscode) return
   try {
     const state = vscode.getState()
@@ -1904,10 +1908,10 @@ function renderPendingDiffActions(actionBar: HTMLElement, wrapper: HTMLElement, 
     item.addEventListener("click", (e) => { e.stopPropagation(); menu.classList.add("hidden"); moreBtn.setAttribute("aria-expanded", "false"); onClick(e) })
     menu.appendChild(item)
   }
-  addMenuItem("Review Changes", `Review changes to ${diffBlock.path} in diff editor`, (e) => {
+  addMenuItem("Review Changes", `Review changes to ${diffBlock.path} in diff editor`, () => {
     opts.postMessage?.({ type: "show_diff", diffId: diffBlock.diffId, filePath: diffBlock.path })
   })
-  addMenuItem("Open File", `Open ${diffBlock.path} in editor`, (e) => {
+  addMenuItem("Open File", `Open ${diffBlock.path} in editor`, () => {
     if (diffBlock.path) opts.postMessage?.({ type: "open_file", path: diffBlock.path })
   })
   moreBtn.addEventListener("click", (e) => {

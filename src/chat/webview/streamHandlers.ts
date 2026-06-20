@@ -976,7 +976,7 @@ function updateToolGroupHeader(groupEl: HTMLElement): void {
   })
   if (blockStates.length > 0) {
     const existingBadge = groupEl.querySelector(".tool-header > .tool-status")
-    const newBadge = renderToolGroupBadge(blockStates as any)
+    const newBadge = renderToolGroupBadge(blockStates)
     if (newBadge && existingBadge) {
       existingBadge.replaceWith(newBadge)
     } else if (newBadge) {
@@ -1342,9 +1342,9 @@ export function handleStreamError(
   // string when no context was carried across the wire.
   const errorContext: ErrorContext = (() => {
     if (error.errorContext) {
-      const ec = error.errorContext as any;
+      const ec = error.errorContext as WebviewErrorPayload | ErrorContext
       if (ec && typeof ec === "object" && "type" in ec && ["auth_error", "quota_error", "infra_error", "stream_error"].includes(ec.type)) {
-        return toErrorContext(ec as WebviewErrorPayload);
+        return toErrorContext(ec as WebviewErrorPayload)
       }
       return error.errorContext;
     }

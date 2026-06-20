@@ -1,9 +1,9 @@
-import type { WebviewState, ChatMessage } from "./types"
+import type { WebviewState, ChatMessage, ModelInfo } from "./types"
 import type { CommandEntry } from "./commands-modal"
 import type { PromptQueue } from "./queue"
 import type { ElementRefs } from "./dom"
 import { createQueueRenderer } from "./queueRenderer"
-import { createInputHandlers, type InputHandlerDeps } from "./inputHandlers"
+import { createInputHandlers } from "./inputHandlers"
 import { createSlashCommandHandler } from "./slashCommands"
 import { createSendLogic } from "./sendLogic"
 import type { StreamCapacityState } from "./sendButton"
@@ -19,7 +19,7 @@ export interface ComposerDeps {
   stateManager: {
     getState: () => WebviewState
     getActiveSession: () => { id: string; isStreaming: boolean; isServerStreaming?: boolean; activeServerMessageId?: string; activeRunId?: string; model?: string; mode?: string; name?: string } | null
-    getSession: (id: string) => { id: string; isStreaming: boolean; isServerStreaming?: boolean; activeServerMessageId?: string; activeRunId?: string; model?: string; mode?: string; name?: string; messages: any[] } | undefined
+    getSession: (id: string) => { id: string; isStreaming: boolean; isServerStreaming?: boolean; activeServerMessageId?: string; activeRunId?: string; model?: string; mode?: string; name?: string; messages: unknown[] } | undefined
     getAllSessions: () => Array<{ id: string; isStreaming: boolean; isServerStreaming?: boolean }>
     getActiveSessionId: () => string | undefined
     setStreaming: (id: string, streaming: boolean) => void
@@ -28,7 +28,7 @@ export interface ComposerDeps {
     setSessionSteerMode: (id: string, mode: "interrupt" | "queue") => void
     setGlobalModel: (model: string) => void
     save: () => void
-    ensureSession: (init: any) => any
+    ensureSession: (init: unknown) => unknown
   }
   attachmentManager: {
     onPaste: (e: ClipboardEvent) => void
@@ -46,12 +46,12 @@ export interface ComposerDeps {
   modelDropdown: {
     getCurrentModel: () => string | undefined
     open: () => void
-    render: (models: any[], currentModel?: string) => void
+    render: (models: unknown[], currentModel?: string) => void
     setCurrentModel: (model: string) => void
   }
   modelManager: {
-    getAllModels: () => any[]
-    setModels: (models: any[]) => void
+    getAllModels: () => unknown[]
+    setModels: (models: unknown[]) => void
     open: () => void
   }
   commandsModal: {
@@ -63,10 +63,10 @@ export interface ComposerDeps {
     get: (id: string) => { showTypingIndicator: (msg: string) => void } | undefined
   }
   tabBar: {
-    renderTabs: (sessions: any[]) => void
+    renderTabs: (sessions: unknown[]) => void
   }
   timers: {
-    setTimeout: (fn: (...args: any[]) => void, ms: number) => any
+    setTimeout: (fn: (...args: unknown[]) => void, ms: number) => number
   }
   promptQueues: Map<string, PromptQueue>
   hideWelcomeView: () => void
@@ -80,7 +80,7 @@ export interface ComposerDeps {
   createNewTab: (name?: string) => { id: string; name: string; mode?: string } | undefined
   closeTab: (id: string) => void
   updateAgentStatus: (status: string) => void
-  syncModelViews: (models?: any[]) => void
+  syncModelViews: (models?: ModelInfo[]) => void
   updateModeSelectorState: () => void
   renderRecentSessionsList: () => void
   debouncedUpdateScrollMarkers: (sessionId: string) => void
@@ -89,6 +89,7 @@ export interface ComposerDeps {
   /** Returns true if the active session has a pending question in the bar. */
   hasPendingQuestion?: () => boolean
 }
+
 
 export interface ComposerAPI {
   setupInput: () => void
@@ -126,12 +127,11 @@ export function createComposer(deps: ComposerDeps): ComposerAPI {
   const {
     els, vscode, stateManager, attachmentManager, mention,
     modelDropdown, modelManager, commandsModal, streamHandlers,
-    tabBar, timers, promptQueues,
+    timers, promptQueues,
     hideWelcomeView, showSystemMessage, handleRequestError,
     addMessage, updateTabBar, switchTab, switchToTab,
     createTabUI, createNewTab, closeTab,
     updateAgentStatus, syncModelViews, updateModeSelectorState,
-    renderRecentSessionsList, debouncedUpdateScrollMarkers,
     STREAM_LIMIT_TOOLTIP, hasPendingQuestion,
   } = deps
 

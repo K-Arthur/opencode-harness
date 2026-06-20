@@ -1,5 +1,5 @@
 import * as vscode from "vscode"
-import { spawnSync } from "child_process"
+import { spawnSync, execSync } from "child_process"
 import { SessionManager } from "../session/SessionManager"
 import { SessionStore, type SessionContextUsage } from "../session/SessionStore"
 import { ContextEngine } from "../context/ContextEngine"
@@ -12,9 +12,8 @@ import { CheckpointManager } from "../checkpoint/CheckpointManager"
 import { parseModelRef } from "../utils/tokenCounter"
 import { DiffApplier } from "../diff/DiffApplier"
 import { getFileHunks } from "./diff/hunkRevertPlan"
-import { sdkMessagesToChatMessages, reasoningEventToBlock } from "../session/sdkMessageConverter"
-import { summarizeOpencodeMessageUsage } from "../session/sdkUsageSummary"
-import { isLocalPlaceholderSessionId, isAutoSessionName } from "../session/sessionUtils"
+import { reasoningEventToBlock } from "../session/sdkMessageConverter"
+import { isAutoSessionName } from "../session/sessionUtils"
 import { activitySignature } from "../session/activityCoalesce"
 import { WebviewContent } from "./WebviewContent"
 import { TabManager, type TabState } from "./TabManager"
@@ -23,12 +22,12 @@ import type { SubagentRunStatus } from "./handlers/runActivityTypes"
 import { PromptManager } from "../prompts/PromptManager"
 import { PromptStashManager } from "../prompts/PromptStashManager"
 import { ProviderConfigManager } from "../model/ProviderConfigManager"
-import { mapToolType as mapToolTypePure, isSessionInCurrentWorkspace as isSessionInCurrentWorkspacePure, looksLikeSdkError, isAbortErrorValue } from "./chatUtils"
+import { isSessionInCurrentWorkspace as isSessionInCurrentWorkspacePure, looksLikeSdkError, isAbortErrorValue } from "./chatUtils"
 import { shouldIncludeStoreActiveFallback } from "./restorablePolicy"
 import { mapOpencodeError, type OpencodeError } from "./webview/opencodeErrorMapper"
 import { toWebviewErrorPayload, type ErrorContext } from "./webview/errorTypes"
 import { computeMessageCounts } from "./webview/messageCounter"
-import { RetryQueueService, CRITICAL_MESSAGE_TYPES } from "./RetryQueueService"
+import { RetryQueueService } from "./RetryQueueService"
 import { ChatMessage, Block } from "./types"
 import { log } from "../utils/outputChannel"
 import type { SessionManagerRegistry } from "../session/SessionManagerRegistry"
@@ -1849,7 +1848,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
     if (!wsFolder) return { added: 0, removed: 0 }
     let before = ""
     try {
-      const result = require("child_process").execSync(
+      const result = execSync(
         `git show HEAD:${filePath.replace(/\\/g, "/")}`,
         { cwd: wsFolder.uri.fsPath, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024, timeout: 5000 },
       )
