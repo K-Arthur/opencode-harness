@@ -5,7 +5,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const rendererSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "renderer.ts"), "utf8")
+const rendererSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "turnGrouper.ts"), "utf8")
 
 describe("groupMessagesIntoTurns — Behavioral Tests", () => {
 

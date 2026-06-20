@@ -540,6 +540,19 @@ Live PTY terminal visibility via the opencode SDK PTY API (v1.17.7+). The host-s
 
 **Tests**: `src/terminal/ptyModel.test.ts` (reducer lifecycle + capability probe), `src/chat/webview/terminal-panel.test.ts` (module + wiring contract). Full message contract: [`docs/webview-messages.md` § PTY Terminal](docs/webview-messages.md#pty-terminal-audit-14142).
 
+### Session SDK Method Coverage (audit §11 — P1.4, P3.2, P3.3)
+
+The `SessionClient` wraps the opencode SDK v2 session endpoints. The following methods were added to close the audit gaps:
+
+| Method | SDK endpoint | Purpose | Audit task |
+|--------|-------------|---------|-----------|
+| `runShell(sessionId, command, opts?)` | `session.shell()` | Execute a shell command in session context; returns `{ messageId, text }`. `shell.started`/`shell.ended` events fire via `SessionNextHandler` for live terminal visibility. | P1.4 |
+| `shareSession(sessionId)` | `session.share()` | Create a shareable link; returns the updated `Session` with `share.url`. | P3.2 |
+| `unshareSession(sessionId)` | `session.unshare()` | Remove the shareable link; returns the updated `Session` with `share` cleared. | P3.2 |
+| `importFromFile()` → `parseSessionExport(json)` | (local, no SDK call) | Import a session from a JSON file mirroring the export format. Mints a fresh session id (imports are local copies). | P3.3 |
+
+All three SDK methods are delegated through `SessionManager` and tested in `tests/unit/session-client-v2-domain.test.mjs` (7 new tests). The import parser is tested in `src/session/SessionImporter.test.ts` (12 tests). The import command is registered as `opencode-harness.importConversationJson` in `package.json`.
+
 ### Component Inventory (Post-Parity Audit)
 
 | Component | File | Purpose |

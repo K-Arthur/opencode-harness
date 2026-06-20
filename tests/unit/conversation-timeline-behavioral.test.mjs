@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const timelineSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "timeline.ts"), "utf8")
-const rendererSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "renderer.ts"), "utf8")
+const rendererSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "turnGrouper.ts"), "utf8")
 const scrollMarkersSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "ui", "scrollMarkers.ts"), "utf8")
 const messagesCss = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "webview", "css", "messages.css"), "utf8")
 
