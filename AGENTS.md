@@ -182,6 +182,17 @@ Titles flow across three surfaces (server / CLI / webview tab strip) via two com
 | `thinkingToggle` | `src/chat/webview/thinkingToggle.ts` | Global thinking block visibility toggle (extracted from timeline for SRP) |
 | `scrollMarkers` | `src/chat/webview/ui/scrollMarkers.ts` | Scroll marker dots, jump-to-bottom, scrollToTurn with injected timers |
 
+### Webview Terminal Panel (audit §14.1/§14.2)
+
+| Module | File | Responsibility |
+|--------|------|---------------|
+| `terminal-panel` | `src/chat/webview/terminal-panel.ts` | Live PTY terminal visibility: `setupTerminalPanel()` folds `pty.*` lifecycle events + byte chunks into renderable state via the pure `ptyReducer` from `ptyModel.ts`. Renders one card per PTY (status dot, command, exit code, runtime, Cancel, bounded stdout). Stays hidden until `terminal_capability.ptySupported === true` (graceful degradation). |
+| `ptyModel` | `src/terminal/ptyModel.ts` | Pure `ptyReducer` (lifecycle + output chunks + ring buffer) + `isPtySupported` capability probe. Tested in `ptyModel.test.ts`. |
+| `PtyService` | `src/terminal/PtyService.ts` | Host SDK wrapper: `listSessions`, `createSession`, `getConnectToken`, `connectWebSocket`, `sendInput`, `setTerminalSize`, `removeSession`. Exposed via `SessionManager.ptyService`. |
+| `PtyEventHandler` | `src/session/eventHandlers/PtyEventHandler.ts` | Normalizes raw SDK `pty.*` events into `ServerEvent` for `EventNormalizer`. |
+
+**PTY terminals are a global resource** — the `ptyId` is carried as `sessionId` in lifecycle events, not a chat session id. The panel shows all PTYs regardless of active chat tab. Full message contract: [`docs/webview-messages.md` § PTY Terminal](docs/webview-messages.md#pty-terminal-audit-14142).
+
 ### Webview Diff Viewer Modules
 
 | Module | File | Responsibility |

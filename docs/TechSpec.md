@@ -527,6 +527,19 @@ Welcome-page session search and pasted-image attachments share a webview-side co
 - **Stream lifecycle state machine**: `StreamLifecycleState` enum (`idle | sending | streaming | completing | error | timeout`) with `setStreamState()` logging transitions for observability.
 - **Session-scoped error routing**: `postRequestError(message, sessionId?)` includes `sessionId` so the webview routes errors to the correct tab. Unknown-session `server_error` falls back to the active tab instead of being silently dropped.
 
+### PTY Terminal (audit §14.1/§14.2)
+
+Live PTY terminal visibility via the opencode SDK PTY API (v1.17.7+). The host-side `PtyService` (`src/terminal/PtyService.ts`) wraps the SDK PTY endpoints (`pty.list`, `pty.create`, `pty.connect`, `pty.remove`, `pty.input`, `pty.resize`). The webview `terminal-panel.ts` folds `pty.*` lifecycle events + byte chunks into renderable state via the pure `ptyReducer` from `ptyModel.ts`.
+
+**Architecture:**
+- **Host**: `PtyService` (SDK wrapper) → `PtyEventHandler` in `EventNormalizer` normalizes `pty.created/updated/exited/deleted` → `ChatProvider.handleServerEvent` forwards to webview as `pty_created/updated/exited/deleted`. `pushTerminalCapabilityToWebview()` probes `ptyService.listSessions()` on connect and posts `terminal_capability { ptySupported }` + `pty_sessions` for hydration.
+- **Webview**: `terminal-panel.ts` renders one card per PTY (status dot, command, exit code, runtime, Cancel, bounded stdout). `WebviewEventRouter` handles `pty_connect/cancel/send_input/resize/list`. Output streams via WebSocket → `pty_output` messages.
+- **Graceful degradation**: When `ptySupported === false`, the terminal toggle stays hidden and the Tasks panel's polling approximation remains the terminal surface (constitution rule #6).
+
+**PTY terminals are a global resource** — the `ptyId` is carried as `sessionId` in lifecycle events, not a chat session id. The panel shows all PTYs regardless of active chat tab.
+
+**Tests**: `src/terminal/ptyModel.test.ts` (reducer lifecycle + capability probe), `src/chat/webview/terminal-panel.test.ts` (module + wiring contract). Full message contract: [`docs/webview-messages.md` § PTY Terminal](docs/webview-messages.md#pty-terminal-audit-14142).
+
 ### Component Inventory (Post-Parity Audit)
 
 | Component | File | Purpose |
