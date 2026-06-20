@@ -374,7 +374,9 @@ Import mints a fresh session id (imports are local copies, not server sessions).
   A pin button (`aria-pressed`) prevents auto-close; a single close button hides the
   region. Individual panel modules (todos-panel, activity-panel, tasks-panel,
   subagent-panel) are wired as tab panes via the `SideRegionApi` (`open`, `close`,
-  `toggle`, `switchTab`). Filters (`activityFilter`, `commandFilter`) remain per-session
+  `toggle`, `switchTab`). Panel setup and toggle button wiring live in
+  `todoSubagentSetup.ts` (`setupTodoSubagentPanelsImpl`), extracted from `main.ts`.
+  Filters (`activityFilter`, `commandFilter`) remain per-session
   and refresh only for the active session.
 - `run_activity_update` snapshots carry subagent state. The `subagent_add` message
   includes `childSessionId` (linked OpenCode child session ID) and `error` (failure

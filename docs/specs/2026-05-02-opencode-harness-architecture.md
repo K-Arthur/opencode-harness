@@ -409,7 +409,10 @@ class WebviewContent {
 
 | Module | Purpose |
 |--------|---------|
-| `main.ts` | Entry point — initializes state, wires up event listeners, handles multi-tab logic |
+| `main.ts` | Entry point — initializes state, wires up event listeners, handles multi-tab logic. High-complexity functions extracted into dedicated modules (see below) |
+| `ui/keyboardShortcuts.ts` | `setupGlobalKeyboardShortcutsImpl` — document-level keyboard shortcuts (tab management, command palette, search, panel toggles). Uses `KeyboardShortcutDeps` |
+| `todoSubagentSetup.ts` | `setupTodoSubagentPanelsImpl` — todos/activity/tasks/terminal/skills/subagent panel setup + toggle button wiring. Uses `TodoSubagentSetupDeps` |
+| `tabSwitcher.ts` | `switchTabImpl` — tab switching: scroll anchors, model/cost/token displays, permission bar, question bar, todos/activity sync. Uses `TabSwitcherDeps` |
 | `state.ts` | `StateManager` — multi-session state with migration from old format |
 | `dom.ts` | `DOMElements` — cached references to all UI elements |
 | `renderer.ts` | `MessageRenderer` — renders message blocks (text, tool calls, diffs, task banners) |

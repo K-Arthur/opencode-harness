@@ -134,6 +134,18 @@ Run all unit+contract+roundtrip: `npm test`
 - **Theme system:** `src/theme/ThemeManager.ts` — CSS_VAR_MAP maps OpencodeTheme properties to CSS vars
 - **Max concurrent AI streams** configurable via `opencode.sessions.maxConcurrentStreams` (default 5)
 
+### Webview Module Decomposition
+
+`src/chat/webview/main.ts` is the IIFE entry point (~4800 lines). High-complexity functions are extracted into dedicated modules using an explicit deps-object pattern to thread IIFE-local dependencies without closure capture:
+
+| Extracted module | Function | Deps interface | Purpose |
+|---|---|---|---|
+| `ui/keyboardShortcuts.ts` | `setupGlobalKeyboardShortcutsImpl` | `KeyboardShortcutDeps` | Document-level keyboard shortcuts (tab management, command palette, search, panel toggles) |
+| `todoSubagentSetup.ts` | `setupTodoSubagentPanelsImpl` | `TodoSubagentSetupDeps` | Todos/activity/tasks/terminal/skills/subagent panel setup + toggle button wiring |
+| `tabSwitcher.ts` | `switchTabImpl` | `TabSwitcherDeps` | Tab switching: scroll anchors, model/cost/token displays, permission bar, question bar, todos/activity sync |
+
+Each extracted function is called from a thin one-liner delegation in `main.ts` that passes the deps object. The pattern follows the existing `SendLogicDeps` / `ComposerDeps` precedent.
+
 ### Session SDK Method Coverage (audit §11)
 
 | Method | File | SDK endpoint | Purpose |
@@ -403,7 +415,7 @@ Host → Webview: { type: "run_status_result", sessionId, cliSessionId?, active,
 ```
 
 The webview triggers a probe in three situations:
-1. **Tab switch** (`main.ts:switchTab`) — confirms the switched-to tab's run state.
+1. **Tab switch** (`tabSwitcher.ts:switchTabImpl`) — confirms the switched-to tab's run state.
 2. **Non-terminal error** (`handleRequestError` with `mayStillBeRunning: true`) — preserves the Stop button pending probe confirmation.
 3. **Send-ack watchdog** (`SEND_ACK_WATCHDOG_MS = 5000ms`, `sendLogic.ts:sendMessage`) — fires if the host hasn't pushed `isServerStreaming:true` within 5s of send (lost `send_prompt`, silent reject, host crash mid-send).
 
@@ -437,7 +449,7 @@ The webview writes BOTH flags from any `streaming_state` message, so a single ho
 | **G6** | Run completed during SSE outage → terminal events lost → webview stuck "streaming" for up to 45min | `reconcileAfterReconnect` checks `time.completed` on the last assistant; emits dropped `stream_end` (reason:"reconnect_completed", source:"reconcile"). |
 | **G7** | `streaming_state` handler wrote only the optimistic flag; the authoritative backstop was dead code | Handler now writes both flags + stashes run identity; clears identity on stop so a stale push can't revive. |
 | **G8** | Optimistic `isStreaming=true` on send with no host ack → stuck Stop button | 5s `SEND_ACK_WATCHDOG_MS` timer in `sendMessage` probes if the host hasn't pushed `isServerStreaming=true`. |
-| **G9** | `switchTab` read only the local flag → misrendered Stop after an error/reconnect | Derives from `isStreaming || isServerStreaming`; calls `composer.probeActiveRun()` to reconcile. |
+| **G9** | `switchTab` read only the local flag → misrendered Stop after an error/reconnect | Derives from `isStreaming || isServerStreaming`; calls `composer.probeActiveRun()` to reconcile. (Logic now in `tabSwitcher.ts:switchTabImpl`.) |
 | **G10** | Per-tab process crash (ADR-010) handler only logged → stuck Stop for 45min | `ChatProvider.handleProcessCrash(processId, tabIds, timestamp)` cleans up via `cleanupTab`, posts `streaming_state:false` (source:"reconnect") + `stream_interrupted`. Wired from `extension.ts:onProcessCrash`. |
 | **G11** | TTFB watchdog fired at a hardcoded 90s — too short for reasoning models that "think" before emitting the first token (GLM-5.x, Kimi, DeepSeek-R1, Qwen-QwQ routinely take 60–180s) | `TTFB_TIMEOUT_MS` is now configurable via `opencode.streaming.ttfbTimeoutMs` (default **180s**, range 60s–600s). Resolved at runtime through `StreamCoordinator.resolveTtfbTimeoutMs` so per-workspace overrides take effect on the next stream. Floor/ceiling enforced so a misconfigured value can't re-introduce the bug. |
 | **G12** | `.catch(err => log.warn(...))` on `probeActiveRun` silently swallowed probe failures; a single transient network blip during a slow TTFB reverted the Send button mid-thinking | New `probeActiveRunWithRetry` retries up to `PROBE_MAX_ATTEMPTS` (3) with exponential backoff (`PROBE_BACKOFF_BASE_MS` = 1s → 2s → 4s) before falling through to the dead-run path. Emits `probe_retry` / `probe_exhausted` events to the streaming log. |
