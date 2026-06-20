@@ -7,9 +7,7 @@ import {
   type FilePartInput,
   type AgentPartInput,
   type SubtaskPartInput,
-  type Event as SdkEvent,
 } from "@opencode-ai/sdk/v2"
-import { randomUUID } from "crypto"
 import * as os from "os"
 import * as fsPromises from "fs/promises"
 import * as path from "path"
@@ -29,7 +27,7 @@ import type { LiveToolOutputSnapshot } from "./liveToolOutput"
 /* ------------------------------------------------------------------ */
 
 export type { OpencodeEventType, OpencodeEvent, ModelRef, PromptOptions, EventStreamLifecycleState, EventStreamStatus } from "./sessionTypes"
-import type { OpencodeEventType, OpencodeEvent, ModelRef, PromptOptions, EventStreamLifecycleState, EventStreamStatus } from "./sessionTypes"
+import type { OpencodeEvent, ModelRef, PromptOptions, EventStreamStatus } from "./sessionTypes"
 
 export interface ContextPackage {
   openFiles: {
