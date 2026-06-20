@@ -34,6 +34,8 @@ export class ModelManager {
   private providerConfigManager?: ProviderConfigManager
   private _favoriteModels: Set<string> = new Set()
   private _disabledModels: Set<string> = new Set()
+  private _recentModels: string[] = []
+  private static readonly RECENT_MODELS_CAP = 10
   /**
    * Cross-provider context-window catalogue from OpenRouter. Populated
    * dynamically during `refreshModels` using OpenRouter's metadata API.
@@ -89,8 +91,9 @@ export class ModelManager {
   private loadCachedModels(): void {
     if (!this._globalState) return
     try {
-      this._favoriteModels = new Set(this._globalState.get<string[]>("opencode-harness.favoriteModels", []))
-      this._disabledModels = new Set(this._globalState.get<string[]>("opencode-harness.disabledModels", []))
+      this._favoriteModels = new Set(this.safeReadStringArray("opencode-harness.favoriteModels"))
+      this._disabledModels = new Set(this.safeReadStringArray("opencode-harness.disabledModels"))
+      this._recentModels = this.safeReadStringArray("opencode-harness.recentModels").slice(0, ModelManager.RECENT_MODELS_CAP)
 
       const cached = this._globalState.get<ModelInfo[]>(MODEL_CACHE_KEY, [])
       if (cached.length > 0) {
@@ -110,6 +113,24 @@ export class ModelManager {
     }
     this.loadOpenRouterCache()
     this.loadModelsDevCache()
+  }
+
+  /**
+   * Read a string array from globalState with a malformed-state fallback.
+   * Returns `[]` when the stored value is missing, not an array, or contains
+   * non-string entries — never throws. Logs a warning on malformed data so
+   * the user can spot corruption in the output channel.
+   */
+  private safeReadStringArray(key: string): string[] {
+    if (!this._globalState) return []
+    const raw = this._globalState.get<unknown>(key, [])
+    if (!Array.isArray(raw)) {
+      if (raw !== undefined && raw !== null) {
+        log.warn(`Malformed state at "${key}" (expected array, got ${typeof raw}); resetting to []`)
+      }
+      return []
+    }
+    return raw.filter((v): v is string => typeof v === "string")
   }
 
   /**
@@ -221,10 +242,35 @@ export class ModelManager {
     this.updateModelProperties(modelId, { enabled })
   }
 
+  /**
+   * Record a model as recently used. Dedupes, prepends, and caps at
+   * RECENT_MODELS_CAP. Persists to globalState so the recent list survives
+   * VS Code restarts. Called from the host's set_model handler so the host
+   * is the durable source of truth (the webview's recentModels is a derived
+   * cache hydrated from model_list payloads).
+   */
+  touchRecentModel(modelId: string): void {
+    if (!modelId) return
+    const idx = this._recentModels.indexOf(modelId)
+    if (idx >= 0) this._recentModels.splice(idx, 1)
+    this._recentModels.unshift(modelId)
+    this._recentModels.splice(ModelManager.RECENT_MODELS_CAP)
+    this.savePreferences()
+  }
+
+  /**
+   * Get the persisted recent-models list (newest first). Each entry is the
+   * full `provider/id` key.
+   */
+  getRecentModels(): string[] {
+    return [...this._recentModels]
+  }
+
   private savePreferences(): void {
     if (!this._globalState) return
     this._globalState.update("opencode-harness.favoriteModels", Array.from(this._favoriteModels))
     this._globalState.update("opencode-harness.disabledModels", Array.from(this._disabledModels))
+    this._globalState.update("opencode-harness.recentModels", this._recentModels)
   }
 
   private updateModelProperties(modelId: string, props: Partial<ModelInfo>): void {

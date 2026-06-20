@@ -92,6 +92,7 @@ const STEP_FINISH_BACKSTOP_DELAY_MS = 500
 
 export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   static readonly PERSISTED_PANEL_STATE_KEY = "opencode.panelVisibility"
+  static readonly CHAT_DIRECTION_KEY = "opencode-harness.chatDirection"
   private _view?: vscode.WebviewView
   /** Optional hook invoked when the chat view is first resolved, used to lazily
    *  spawn the opencode server (idempotent; safe to call on every re-resolve). */
@@ -438,6 +439,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       pushVisibleStateToWebview: () => this.pushVisibleStateToWebview(),
       pushPanelVisibilityStateToWebview: () => this.pushPanelVisibilityStateToWebview(),
       persistPanelVisibilityState: (panels) => this.persistPanelVisibilityState(panels),
+      persistChatDirection: (direction) => this.persistChatDirection(direction),
       openSubagentDetailPanel: (parentSessionId, subagentId) => this.openSubagentDetailPanel(parentSessionId, subagentId),
       postSubagentDetailToPopouts: (detail, subagentId) => this.postSubagentDetailToPopouts(detail, subagentId),
     })
@@ -611,6 +613,9 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
         }
         if (e.affectsConfiguration("opencode.toolOutput.renderAnsi")) {
           this.pushToolOutputConfigToWebview()
+        }
+        if (e.affectsConfiguration("opencode.chat.fontSize") || e.affectsConfiguration("opencode.chat.fontFamily")) {
+          this.pushChatFontConfigToWebview()
         }
       }),
       this.themeManager.onThemeChanged(() => this.themeController.pushThemeToWebview()),
@@ -2126,6 +2131,22 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
   }
 
   /**
+   * Push the chat font configuration (opencode.chat.fontSize / fontFamily)
+   * to the webview as CSS custom property values. The webview applies them
+   * to `--chat-font-size` and `--chat-font-family` on :root. Font size is
+   * clamped to 8–32 defensively (the package.json schema also constrains
+   * this, but a user-edited settings.json can bypass the schema).
+   */
+  private pushChatFontConfigToWebview(): void {
+    const config = vscode.workspace.getConfiguration("opencode.chat")
+    let fontSize = config.get<number>("fontSize", 14)
+    if (!Number.isFinite(fontSize) || fontSize <= 0) fontSize = 14
+    fontSize = Math.max(8, Math.min(32, Math.round(fontSize)))
+    const fontFamily = config.get<string>("fontFamily", "").trim()
+    this.postMessage({ type: "chat_font_config", fontSize, fontFamily })
+  }
+
+  /**
    * Probe whether the connected opencode server exposes the PTY API
    * (`pty.list`). When false, the webview keeps the §14.1 Hybrid-A polling
    * fallback (constitution rule #6: graceful degradation). When true, the
@@ -2179,6 +2200,8 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     this.pushModelListToWebview()
     this.themeController.pushThemeToWebview()
     this.themeController.pushThemeConfigToWebview()
+    this.pushChatFontConfigToWebview()
+    this.pushChatDirectionToWebview()
     this.pushRateLimitStateToWebview()
     this.pushCommandListToWebview()
     if (this.pendingPrompt) {
@@ -2189,6 +2212,24 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
 
   private persistPanelVisibilityState(panels: Record<string, boolean>): void {
     void this.context.workspaceState.update(ChatProvider.PERSISTED_PANEL_STATE_KEY, panels)
+  }
+
+  /**
+   * Persist the chat text direction (ltr/rtl) to globalState so it survives
+   * VS Code restarts. Called from the WebviewEventRouter when the user
+   * toggles the direction button.
+   */
+  private persistChatDirection(direction: "ltr" | "rtl"): void {
+    void this.context.globalState.update(ChatProvider.CHAT_DIRECTION_KEY, direction)
+  }
+
+  /**
+   * Push the persisted chat text direction to the webview so the toggle
+   * state is restored on reload. Called during pushAllStateToWebview.
+   */
+  private pushChatDirectionToWebview(): void {
+    const direction = this.context.globalState.get<"ltr" | "rtl">(ChatProvider.CHAT_DIRECTION_KEY, "ltr")
+    this.postMessage({ type: "chat_dir_config", direction })
   }
 
   private pushPanelVisibilityStateToWebview(): void {

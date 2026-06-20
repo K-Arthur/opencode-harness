@@ -275,18 +275,24 @@ export class MessageRouter {
   }
 
   getModelList(context: RouteContext): void {
-    const models = this.modelManager.models.map((m) => ({
-      id: m.id,
-      provider: m.provider,
-      displayName: m.displayName,
-      supportsVariants: m.supportsVariants,
-      variantNames: m.variantNames,
-      contextWindow: m.contextWindow,
-      available: m.available !== false,
-      unavailableReason: m.unavailableReason,
-      favorite: m.favorite === true,
-      enabled: m.enabled !== false,
-    }))
+    const recentModels = this.modelManager.getRecentModels()
+    const models = this.modelManager.models.map((m) => {
+      const fullId = `${m.provider}/${m.id}`
+      const recentRank = recentModels.indexOf(fullId)
+      return {
+        id: m.id,
+        provider: m.provider,
+        displayName: m.displayName,
+        supportsVariants: m.supportsVariants,
+        variantNames: m.variantNames,
+        contextWindow: m.contextWindow,
+        available: m.available !== false,
+        unavailableReason: m.unavailableReason,
+        favorite: m.favorite === true,
+        enabled: m.enabled !== false,
+        recentRank: recentRank >= 0 ? recentRank : undefined,
+      }
+    })
     context.postMessage({ type: "model_list", items: models, model: this.modelManager.model })
     if (models.length === 0) {
       this.modelManager.refreshModels(this.sessionManager.currentPort, this.sessionManager.authHeader).catch(() => {})

@@ -64,6 +64,7 @@ import { setupInstructionsEditor } from "./ui/instructionsEditor"
 import { setupSessionModal as setupSessionModalModule, openSessionModal as openSessionModalModule, closeSessionModal as closeSessionModalModule, trapModalFocus } from "./ui/sessionModal"
 import { setupKeyboardShortcutsModal, openKeyboardShortcutsModal, closeKeyboardShortcutsModal } from "./ui/keyboardShortcutsModal"
 import { setupGlobalKeyboardShortcutsImpl } from "./ui/keyboardShortcuts"
+import { setupTodoSubagentPanelsImpl } from "./todoSubagentSetup"
 import { setupProviderPanel, openProviderPanel, closeProviderPanel, renderProviderDiscoveryList, renderProviderCredentialList, handleOAuthStarted, handleOAuthCompleted, onProviderKeyResult } from "./ui/providerPanel"
 import type { ProviderDiscoveryItem, ProviderAuthMethodInfo, ProviderCredentialInfo } from "./types"
 import { createEscapeRegistry, visibleByClass } from "./escapeCoordinator"
@@ -1245,185 +1246,34 @@ function getVsCodeApi() {
 }
 
 function setupTodoSkillAndSubagentPanels(): void {
-    todosPanelApi = setupTodosPanel(els, {
-      onToggleTodo: toggleTodo,
-      onDeleteTodo: deleteTodo,
-      onEditTodo: editUserTodo,
-      onAddTodo: addUserTodo,
-      onPanelClose: () => { syncPanelVisibilityToHost() },
-      postMessage: (msg: Record<string, unknown>) => vscode.postMessage(msg),
-      getActiveFilter: () => {
-        const sid = stateManager.getState().activeSessionId
-        const session = sid ? stateManager.getSession(sid) : undefined
-        return session?.todoFilter ?? 'all'
-      },
-      setActiveFilter: (filter) => {
-        const sid = stateManager.getState().activeSessionId
-        const session = sid ? stateManager.getSession(sid) : undefined
-        if (session) {
-          session.todoFilter = filter
-          stateManager.save()
-        }
-      },
+    const apis = setupTodoSubagentPanelsImpl({
+      els,
+      vscode,
+      stateManager,
+      scrollMarkerDeps,
+      toggleTodo,
+      deleteTodo,
+      editUserTodo,
+      addUserTodo,
+      syncPanelVisibilityToHost,
+      abortStream,
+      pauseActiveAnchorForReflow,
+      setSubagentPanelOpen,
+      requestSubagentActivities,
+      restoreSubagentDetailFocus,
+      isLiveSubagent,
+      updateSubagentBadge,
+      getActiveSubagentId: () => activeSubagentId,
+      setActiveSubagentId: (id) => { activeSubagentId = id },
+      setSubagentDetailInvoker: (el) => { subagentDetailInvoker = el },
     })
-    activityPanelApi = setupActivityPanel(els, {
-      getMessages: (sessionId) => stateManager.getSession(sessionId)?.messages,
-      isStreaming: (sessionId) => stateManager.getSession(sessionId)?.isStreaming ?? false,
-      getActiveSessionId: () => stateManager.getState().activeSessionId ?? undefined,
-      getFilter: (sessionId) => stateManager.getSession(sessionId)?.activityFilter ?? "all",
-      setFilter: (sessionId, filter) => {
-        const session = stateManager.getSession(sessionId)
-        if (!session) return
-        session.activityFilter = filter
-        stateManager.save()
-      },
-      onJump: (anchorMessageId) => scrollToTurnModule(scrollMarkerDeps, anchorMessageId),
-      onPanelClose: () => { syncPanelVisibilityToHost() },
-    })
-    tasksPanelApi = setupTasksPanel(els, {
-      getMessages: (sessionId) => stateManager.getSession(sessionId)?.messages,
-      isStreaming: (sessionId) => stateManager.getSession(sessionId)?.isStreaming ?? false,
-      getActiveSessionId: () => stateManager.getState().activeSessionId ?? undefined,
-      getFilter: (sessionId) => stateManager.getSession(sessionId)?.commandFilter ?? "all",
-      setFilter: (sessionId, filter) => {
-        const session = stateManager.getSession(sessionId)
-        if (!session) return
-        session.commandFilter = filter
-        stateManager.save()
-      },
-      getLiveToolOutput: (sessionId, toolId) => toolPartialStore.get(sessionId, toolId),
-      onJump: (anchorMessageId) => scrollToTurnModule(scrollMarkerDeps, anchorMessageId),
-      // Webviews frequently lack navigator.clipboard (and `?.` on it made
-      // `.catch` throw on undefined) — copy via the host clipboard instead.
-      onCopy: (text) => vscode.postMessage({ type: "copy_text", text }),
-      onOpenTerminal: (command, cwd, autorun) => vscode.postMessage({ type: "open_terminal", command, cwd, autorun }),
-      onCancel: (payload) => {
-        vscode.postMessage({ type: "cancel_tool", ...payload })
-        abortStream()
-      },
-      onPanelClose: () => { syncPanelVisibilityToHost() },
-    })
-    terminalPanelApi = setupTerminalPanel(els, {
-      postMessage: (msg) => vscode.postMessage(msg),
-      onPanelClose: () => { syncPanelVisibilityToHost() },
-    })
-    skillsModalApi = setupSkillsModal(els, {
-      onToggleSkill: (skillId: string, enabled: boolean) => vscode.postMessage({ type: "toggle_skill", skillId, enabled }),
-      onSearchSkills: (query: string) => vscode.postMessage({ type: "search_skills", query }),
-    })
-    subagentDetailViewApi = setupSubagentDetailView(els, {
-      onBack: () => { subagentPanelApi?.open(); restoreSubagentDetailFocus() },
-      onClose: () => { activeSubagentId = null; restoreSubagentDetailFocus() },
-      onCancelSubagent: (subagentId: string) => vscode.postMessage({ type: "cancel_subagent", subagentId }),
-      onOpenSession: (activity: SubagentActivity) => {
-        if (activity.sessionId) vscode.postMessage({ type: "open_subagent_session", childSessionId: activity.sessionId, title: activity.name })
-      },
-    })
-    subagentPanelApi = setupSubagentPanel(els, {
-      onCancelSubagent: (subagentId: string) => vscode.postMessage({ type: "cancel_subagent", subagentId }),
-      onOpenSession: (activity: SubagentActivity) => {
-        if (activity.sessionId) vscode.postMessage({ type: "open_subagent_session", childSessionId: activity.sessionId, title: activity.name })
-      },
-      onOpenDetail: (activity: SubagentActivity) => {
-        // Remember the card that opened the detail so Back/Close can return
-        // focus to it.
-        subagentDetailInvoker = document.activeElement as HTMLElement | null
-        // Ensure subagent tab is active before showing detail overlay
-        subagentPanelApi?.open()
-        const normalizedId = activity.id.startsWith("subagent:")
-          ? activity.id.slice("subagent:".length)
-          : activity.id
-        activeSubagentId = normalizedId
-        vscode.postMessage({ type: "get_subagent_detail", sessionId: stateManager.getState().activeSessionId ?? "", subagentId: activity.id })
-        subagentDetailViewApi?.open(activity)
-        subagentDetailViewApi?.renderLoading?.()
-      },
-      onClearCompleted: () => {
-        const sid = stateManager.getState().activeSessionId
-        if (sid) {
-          const session = stateManager.getSession(sid)
-          if (session?.subagentActivities) {
-            const live = session.subagentActivities.filter(isLiveSubagent)
-            stateManager.setSubagentActivities(sid, live)
-            subagentPanelApi?.renderActivities(live)
-            updateSubagentBadge(live.length)
-          }
-        }
-      },
-      onMarkRead: (subagentId: string) => {
-        const sid = stateManager.getState().activeSessionId
-        if (sid) {
-          vscode.postMessage({ type: "mark_subagent_read", sessionId: sid, subagentId })
-        }
-      },
-      onPanelClose: () => { syncPanelVisibilityToHost() },
-    })
-
-    // Wire toggle buttons to individual panels
-    els.activityToggleBtn.addEventListener("click", () => {
-      pauseActiveAnchorForReflow()
-      activityPanelApi?.toggle?.()
-      syncPanelVisibilityToHost()
-    })
-    els.tasksToggleBtn.addEventListener("click", () => {
-      pauseActiveAnchorForReflow()
-      tasksPanelApi?.toggle?.()
-      syncPanelVisibilityToHost()
-    })
-    els.terminalToggleBtn.addEventListener("click", () => {
-      pauseActiveAnchorForReflow()
-      terminalPanelApi?.toggle()
-      syncPanelVisibilityToHost()
-    })
-    els.subagentsToggleBtn.addEventListener("click", () => {
-      pauseActiveAnchorForReflow()
-      const wasOpen = subagentPanelApi?.isOpen()
-      if (wasOpen) {
-        setSubagentPanelOpen(false)
-      } else {
-        setSubagentPanelOpen(true)
-        requestSubagentActivities()
-      }
-      syncPanelVisibilityToHost()
-    })
-    window.addEventListener("oc:open-subagent-panel", () => {
-      setSubagentPanelOpen(true)
-      requestSubagentActivities()
-      requestAnimationFrame(() => {
-        const firstItem = els.subagentList?.querySelector<HTMLElement>(".subagent-item")
-        if (firstItem) {
-          firstItem.scrollIntoView({ block: "nearest", behavior: "smooth" })
-          firstItem.classList.add("subagent-highlight-pulse")
-          setTimeout(() => firstItem.classList.remove("subagent-highlight-pulse"), 3000)
-        }
-      })
-    })
-
-    // Pop-out to editor button — opens the active subagent's detail in a
-    // dedicated VS Code editor webview panel. Sends the parent sessionId AND
-    // the active subagentId (tracked from the last onOpenDetail /
-    // subagent_update interaction) so the host can resolve and render the
-    // correct child session in the new panel.
-    const popoutBtn = document.getElementById("subagent-detail-popout-btn")
-    popoutBtn?.addEventListener("click", () => {
-      const sid = stateManager.getState().activeSessionId
-      if (!sid) {
-        webviewLog("[main] open_subagent_detail: no active session")
-        return
-      }
-      if (!activeSubagentId) {
-        webviewLog("[main] open_subagent_detail: no active subagent in detail view")
-        return
-      }
-      vscode.postMessage({
-        type: "open_subagent_detail",
-        sessionId: sid,
-        subagentId: activeSubagentId,
-      })
-    })
-
-    const shortcutsHelpBtn = document.getElementById("shortcuts-help-btn")
-    shortcutsHelpBtn?.addEventListener("click", () => openKeyboardShortcutsModal())
+    todosPanelApi = apis.todosPanelApi
+    activityPanelApi = apis.activityPanelApi
+    tasksPanelApi = apis.tasksPanelApi
+    terminalPanelApi = apis.terminalPanelApi
+    skillsModalApi = apis.skillsModalApi
+    subagentDetailViewApi = apis.subagentDetailViewApi
+    subagentPanelApi = apis.subagentPanelApi
   }
 
   function isUserTodoId(todoId: string): boolean {

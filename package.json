@@ -524,6 +524,20 @@
             }
           }
         },
+        "opencode.chat.fontSize": {
+          "type": "integer",
+          "default": 14,
+          "minimum": 8,
+          "maximum": 32,
+          "scope": "window",
+          "description": "Font size (in pixels) for the OpenCode chat panel input and message text. Clamped to 8–32. Defaults to 14; set to 0 to inherit the VS Code editor font size."
+        },
+        "opencode.chat.fontFamily": {
+          "type": "string",
+          "default": "",
+          "scope": "window",
+          "description": "Font family for the OpenCode chat panel input and message text. Leave empty to inherit the VS Code editor monospace font. Accepts any CSS font-family string."
+        },
         "opencode.theme": {
           "type": "object",
           "scope": "window",

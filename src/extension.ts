@@ -385,7 +385,22 @@ function initConnectionStatusBar(
         connectionStatus.text = "$(check-all) OpenCode: Connected"
         connectionStatus.tooltip = STATUS_BAR_TOOLTIPS.connection.connected(sessionManager.currentPort)
         connectionStatus.command = "opencode-harness.openChat"
-        void modelManager.refreshModels(sessionManager.currentPort, sessionManager.authHeader).catch(err => log.warn("Refresh models on connect failed", err))
+        // Show a transient "Syncing..." state during the initial model
+        // refresh so the user sees activity between connect and the model
+        // list arriving. try/finally guarantees the indicator clears even
+        // on refresh failure.
+        connectionStatus.text = "$(sync~spin) OpenCode: Syncing..."
+        connectionStatus.tooltip = "Synchronizing model list from opencode server..."
+        void (async () => {
+          try {
+            await modelManager.refreshModels(sessionManager.currentPort, sessionManager.authHeader)
+          } catch (err) {
+            log.warn("Refresh models on connect failed", err)
+          } finally {
+            connectionStatus.text = "$(check-all) OpenCode: Connected"
+            connectionStatus.tooltip = STATUS_BAR_TOOLTIPS.connection.connected(sessionManager.currentPort)
+          }
+        })()
         // Persist port for potential reuse after reload
         context.globalState.update('opencode-server-port', sessionManager.currentPort)
         break

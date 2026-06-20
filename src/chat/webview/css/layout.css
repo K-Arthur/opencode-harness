@@ -889,8 +889,8 @@
   border: none;
   border-radius: 0;
   padding: var(--space-1-5) 0;
-  font-family: inherit;
-  font-size: var(--text-base);
+  font-family: var(--chat-font-family, inherit);
+  font-size: var(--chat-font-size, var(--text-base));
   line-height: var(--leading-relaxed);
   resize: none;
   outline: none;
@@ -898,6 +898,10 @@
   max-height: 160px;
   transition: none;
   field-sizing: content;
+}
+
+[dir="rtl"] #prompt-input {
+  text-align: right;
 }
 
 #prompt-input::placeholder {

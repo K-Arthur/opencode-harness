@@ -74,6 +74,14 @@ describe("state.ts", () => {
 	    assert.ok(source.includes("recentModels"), "must persist recent models")
 	    assert.ok(source.includes("recentRank"), "must annotate models with recent rank")
 	  })
+
+	  it("safeStringArray guards against malformed non-array state", () => {
+	    assert.ok(source.includes("function safeStringArray"), "must define safeStringArray helper")
+	    assert.ok(source.includes("if (!Array.isArray(v)) return []"), "must return [] for non-arrays")
+	    assert.ok(source.includes("safeStringArray(candidate.disabledModels)"), "must guard disabledModels")
+	    assert.ok(source.includes("safeStringArray(candidate.favoriteModels)"), "must guard favoriteModels")
+	    assert.ok(source.includes("safeStringArray(candidate.recentModels)"), "must guard recentModels")
+	  })
 	})
 })
 

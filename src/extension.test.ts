@@ -111,6 +111,12 @@ describe("extension.ts", () => {
     assert.ok(extensionSource.includes("server_connected"))
   })
 
+  it("shows a transient Syncing status during initial model refresh", () => {
+    assert.ok(extensionSource.includes("OpenCode: Syncing..."), "must set Syncing... status text")
+    assert.ok(extensionSource.includes("Synchronizing model list"), "must set syncing tooltip")
+    assert.ok(extensionSource.includes("$(sync~spin) OpenCode: Syncing..."), "must use sync~spin icon")
+  })
+
   it("handles server_disconnected event", () => {
     assert.ok(extensionSource.includes("server_disconnected"))
   })

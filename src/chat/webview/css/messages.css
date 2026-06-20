@@ -1244,13 +1244,18 @@
    ═══════════════════════════════════════════════════════════════════════════════╛ */
 
 .markdown-content {
-  font-size: var(--text-sm);
+  font-family: var(--chat-font-family, inherit);
+  font-size: var(--chat-font-size, var(--text-sm));
   line-height: var(--leading-normal);
   white-space: normal;
   word-break: break-word;
   overflow-wrap: anywhere;
   max-width: 100%;
   color: var(--markdown-text, var(--color-fg));
+}
+
+[dir="rtl"] .markdown-content {
+  text-align: right;
 }
 
 .markdown-content > :first-child {

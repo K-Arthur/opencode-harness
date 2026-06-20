@@ -26,15 +26,20 @@ const DEFAULT_STATE: WebviewState = {
   toolCollapseConfig: DEFAULT_TOOL_COLLAPSE_CONFIG,
 }
 
+function safeStringArray(v: unknown): string[] {
+  if (!Array.isArray(v)) return []
+  return v.filter((x): x is string => typeof x === "string")
+}
+
 function withDefaults(candidate: Partial<WebviewState>): WebviewState {
   return {
     ...DEFAULT_STATE,
     ...candidate,
     sessions: candidate.sessions || {},
     sessionOrder: candidate.sessionOrder || [],
-    disabledModels: candidate.disabledModels || [],
-    favoriteModels: candidate.favoriteModels || [],
-    recentModels: candidate.recentModels || [],
+    disabledModels: safeStringArray(candidate.disabledModels),
+    favoriteModels: safeStringArray(candidate.favoriteModels),
+    recentModels: safeStringArray(candidate.recentModels),
     scrollPositions: candidate.scrollPositions || {},
     displayPrefs: candidate.displayPrefs,
     toolCollapseConfig: candidate.toolCollapseConfig || DEFAULT_TOOL_COLLAPSE_CONFIG,

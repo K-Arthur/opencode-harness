@@ -260,6 +260,21 @@ void describe("ChatProvider.ts", () => {
     assert.ok(source.includes("pushCommandListToWebview("), "must have pushCommandListToWebview")
   })
 
+  void it("pushes chat font config to webview", () => {
+    assert.ok(source.includes("pushChatFontConfigToWebview("), "must have pushChatFontConfigToWebview")
+    assert.ok(source.includes('type: "chat_font_config"'), "must post chat_font_config message")
+    assert.ok(source.includes("opencode.chat"), "must read opencode.chat configuration")
+    assert.ok(source.includes("Math.max(8, Math.min(32"), "must clamp font size to 8-32")
+  })
+
+  void it("persists and restores chat text direction (RTL/LTR)", () => {
+    assert.ok(source.includes("CHAT_DIRECTION_KEY"), "must define CHAT_DIRECTION_KEY")
+    assert.ok(source.includes("persistChatDirection("), "must have persistChatDirection method")
+    assert.ok(source.includes("pushChatDirectionToWebview("), "must have pushChatDirectionToWebview method")
+    assert.ok(source.includes('type: "chat_dir_config"'), "must post chat_dir_config message")
+    assert.ok(source.includes("opencode-harness.chatDirection"), "must use the chatDirection globalState key")
+  })
+
   void it("pushVisibleStateToWebview uses lightweight sync instead of re-sending init_state", () => {
     const idx = source.indexOf("private pushVisibleStateToWebview(")
     assert.ok(idx >= 0, "pushVisibleStateToWebview must exist")

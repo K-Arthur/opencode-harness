@@ -500,6 +500,44 @@ If every message times out:
 3. Check the output channel for server errors (`[opencode:stderr]`)
 4. If using a custom binary path via `opencode.binaryPath`, verify the path is correct
 
+### Windows: binary path resolution (`EFTYPE` / `EINVAL`)
+
+When `opencode-ai` is installed globally via npm on Windows, `Get-Command opencode`
+returns a `.ps1` wrapper script (e.g. `C:\Users\<username>\AppData\Roaming\npm\opencode.ps1`).
+The extension spawns the binary with `shell: false`, so pointing `opencode.binaryPath`
+at the `.ps1` wrapper fails with `EFTYPE` or `EINVAL` binary-type errors.
+
+**Fix:** set `opencode.binaryPath` to the compiled executable, not the script wrapper:
+
+```json
+{
+  "opencode.binaryPath": "C:\\Users\\<username>\\AppData\\Roaming\\npm\\node_modules\\opencode-ai\\bin\\opencode.exe"
+}
+```
+
+Then reload the VS Code window. Verify with:
+
+```powershell
+& "C:\Users\<username>\AppData\Roaming\npm\node_modules\opencode-ai\bin\opencode.exe" --version
+```
+
+### Windows: PowerShell BOM corrupts `opencode.json`
+
+Default PowerShell redirection (`Out-File`, `>`) writes UTF-8 **with a Byte Order Mark**.
+The invisible BOM at the start of `opencode.json` breaks the engine's JSON parser,
+throwing structural parse exceptions on startup.
+
+**Fix:** write config files with BOM-free UTF-8 using `[System.IO.File]::WriteAllText`:
+
+```powershell
+$path = "$env:USERPROFILE\.config\opencode\opencode.json"
+$content = '{ "model": "anthropic/claude-sonnet-4", "providers": {} }'
+[System.IO.File]::WriteAllText($path, $content, [System.Text.UTF8Encoding]::new($false))
+```
+
+`[System.Text.UTF8Encoding]::new($false)` explicitly disables BOM emission. Avoid
+`Out-File` and `>` for any JSON the opencode engine reads.
+
 ## Settings
 
 Full settings reference (defaults, scope, and descriptions) is in [docs/configuration.md](docs/configuration.md). The ones most people touch: `opencode.binaryPath`, `opencode.model`, `opencode.theme`, `opencode.autoInstall`, and `opencode.sessions.maxConcurrentStreams`.

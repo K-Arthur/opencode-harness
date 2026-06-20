@@ -79,4 +79,34 @@ describe("ModelManager.ts", () => {
   it("preserves model fields when spreading from object-map models", () => {
     assert.ok(source.includes("...model"), "must spread model object to preserve variants and other fields")
   })
+
+  it("persists recent models to globalState", () => {
+    assert.ok(source.includes("_recentModels"), "must track recent models in-memory")
+    assert.ok(source.includes("opencode-harness.recentModels"), "must persist recent models to globalState")
+    assert.ok(source.includes("RECENT_MODELS_CAP"), "must cap recent models")
+  })
+
+  it("has touchRecentModel method that dedupes and caps", () => {
+    assert.ok(source.includes("touchRecentModel("), "must expose touchRecentModel")
+    assert.ok(source.includes("this._recentModels.indexOf(modelId)"), "must dedupe existing entries")
+    assert.ok(source.includes("this._recentModels.unshift(modelId)"), "must prepend new entries")
+    assert.ok(source.includes("this._recentModels.splice(ModelManager.RECENT_MODELS_CAP)"), "must cap at RECENT_MODELS_CAP")
+  })
+
+  it("has getRecentModels getter", () => {
+    assert.ok(source.includes("getRecentModels("), "must expose getRecentModels")
+  })
+
+  it("savePreferences persists favorites, disabled, and recent models", () => {
+    assert.ok(source.includes("private savePreferences("), "must have savePreferences")
+    assert.ok(source.includes("opencode-harness.favoriteModels"), "must persist favorites")
+    assert.ok(source.includes("opencode-harness.disabledModels"), "must persist disabled")
+    assert.ok(source.includes("opencode-harness.recentModels"), "must persist recents")
+  })
+
+  it("safeReadStringArray provides malformed-state fallback", () => {
+    assert.ok(source.includes("safeReadStringArray("), "must have safeReadStringArray helper")
+    assert.ok(source.includes("Malformed state at"), "must log malformed state warnings")
+    assert.ok(source.includes("filter((v): v is string =>"), "must filter non-string entries")
+  })
 })

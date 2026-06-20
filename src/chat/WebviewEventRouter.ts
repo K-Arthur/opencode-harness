@@ -162,6 +162,11 @@ export interface WebviewEventRouterOptions {
    * Called during pushVisibleStateToWebview (on init/reconnect).
    */
   pushPanelVisibilityStateToWebview?: () => void
+  /**
+   * Persist the chat text direction (ltr/rtl) to extension globalState so
+   * it survives VS Code restarts. Called when the user toggles direction.
+   */
+  persistChatDirection?: (direction: "ltr" | "rtl") => void
 }
 
 export class WebviewEventRouter {
@@ -217,6 +222,7 @@ export class WebviewEventRouter {
     "mode_switch_request",
     "open_subagent_detail",
     "webview_error",
+    "chat_dir_change",
   ])
 
   /**
@@ -634,7 +640,11 @@ export class WebviewEventRouter {
       }
     }],
     ["set_model", (msg: Record<string, unknown>, sessionId?: string) => {
-      if (msg.model) this.opts.modelManager.setModel(msg.model as string)
+      if (msg.model) {
+        const modelId = msg.model as string
+        this.opts.modelManager.setModel(modelId)
+        this.opts.modelManager.touchRecentModel(modelId)
+      }
       if (sessionId) {
         this.opts.ensureLocalTab(sessionId)
         this.opts.tabManager.setModel(sessionId, msg.model as string)
@@ -1707,6 +1717,12 @@ export class WebviewEventRouter {
       const modelId = msg.modelId as string
       this.opts.modelManager.toggleModelFavorite(modelId)
       this.pushModelListToWebview()
+    }],
+    ["chat_dir_change", (msg: Record<string, unknown>) => {
+      const direction = msg.direction as string
+      if (direction === "ltr" || direction === "rtl") {
+        this.opts.persistChatDirection?.(direction)
+      }
     }],
     ["model_toggle", (msg: Record<string, unknown>) => {
       const modelId = msg.modelId as string

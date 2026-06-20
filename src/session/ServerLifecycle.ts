@@ -122,11 +122,17 @@ export class ServerLifecycle {
             await onReady(this.port)
             return
           }
+          // Health endpoint responded but reported unhealthy — a zombie or
+          // partially-started process is holding the port. Log explicitly so
+          // the user can distinguish this from a clean fresh start.
+          log.warn(`Zombie server detected on port ${this.storedPort} (health check returned healthy=false); starting a fresh instance`)
+        } else {
+          log.warn(`Zombie server detected on port ${this.storedPort} (health check HTTP ${resp.status}); starting a fresh instance`)
         }
       } catch (e) {
         const msg = (e as Error).message
         if (!msg.includes("Auth verification failed")) {
-          log.debug(`Stored port ${this.storedPort} health check failed, starting new server`)
+          log.debug(`Stored port ${this.storedPort} health check failed (${msg}), starting new server`)
         }
       }
     }

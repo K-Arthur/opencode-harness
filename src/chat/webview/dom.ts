@@ -61,6 +61,7 @@ export interface ElementRefs {
   instructionsTextarea: HTMLTextAreaElement
   instructionsSaveBtn: HTMLButtonElement
   instructionsCancelBtn: HTMLButtonElement
+  dirToggleBtn: HTMLButtonElement
 
   modelDropdown: HTMLDivElement
   variantDropdown: HTMLDivElement
@@ -265,6 +266,7 @@ export function getElementRefs(): ElementRefs {
     instructionsTextarea: requireElement<HTMLTextAreaElement>("instructions-textarea"),
     instructionsSaveBtn: requireElement<HTMLButtonElement>("instructions-save-btn"),
     instructionsCancelBtn: requireElement<HTMLButtonElement>("instructions-cancel-btn"),
+    dirToggleBtn: requireElement<HTMLButtonElement>("dir-toggle-btn"),
 
     modelDropdown: requireElement<HTMLDivElement>("model-dropdown-container"),
     variantDropdown: requireElement<HTMLDivElement>("variant-dropdown-container"),

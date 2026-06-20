@@ -112,6 +112,23 @@ void describe("ServerLifecycle", () => {
     })
   })
 
+  void describe("stored-port zombie detection", () => {
+    void it("logs a zombie warning when health check returns healthy=false", () => {
+      assert.ok(source.includes("Zombie server detected"), "must log zombie detection warning")
+      assert.ok(source.includes("healthy=false"), "must mention healthy=false in the warning")
+    })
+
+    void it("logs a zombie warning when health check returns non-200 HTTP status", () => {
+      assert.ok(source.includes("health check HTTP"), "must log HTTP status in zombie warning")
+    })
+
+    void it("falls through to findFreePort after zombie detection", () => {
+      const zombieIdx = source.indexOf("Zombie server detected")
+      const freePortIdx = source.indexOf("this.port = await findFreePort()")
+      assert.ok(zombieIdx >= 0 && freePortIdx > zombieIdx, "findFreePort must come after zombie detection")
+    })
+  })
+
   void describe("scheduleReconnect()", () => {
     void it("does not schedule reconnect after disposal", () => {
       assert.ok(source.includes("if (this.disposed) return"), "bails out when disposed")

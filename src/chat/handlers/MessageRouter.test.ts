@@ -69,6 +69,12 @@ describe("MessageRouter.ts", () => {
     assert.ok(source.includes('type: "model_list"'), "must post model_list message")
   })
 
+  it("getModelList includes recentRank from modelManager.getRecentModels", () => {
+    assert.ok(source.includes("this.modelManager.getRecentModels()"), "must read recent models from host")
+    assert.ok(source.includes("recentRank"), "must include recentRank in model payload")
+    assert.ok(source.includes("recentRank >= 0 ? recentRank : undefined"), "must send undefined when not recent")
+  })
+
   it("searches workspace files for mention results", () => {
     assert.ok(
       source.includes("vscode.workspace.findFiles"),
