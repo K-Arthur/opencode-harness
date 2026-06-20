@@ -10,7 +10,7 @@ import {
 } from "./icons"
 import { sanitizeHtml } from "./syntaxHighlighter"
 import { escapeHtml } from "./htmlUtils"
-import { getMarkdownWorkerClient } from "./renderer"
+import { getMarkdownWorkerClient } from "./markdownWorkerClient"
 import { isTaskTool, renderSubagentTaskCard } from "./subagentCard"
 import { isToolOutputRenderAnsiEnabled, renderAnsiToHtml, stripAnsi } from "./ansiUtils"
 import { buildGroupSummaryLabel } from "./groupSummary"

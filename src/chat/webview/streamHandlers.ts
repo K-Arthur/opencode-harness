@@ -3,7 +3,8 @@ import { createTextBlock, createErrorBlock } from "./blocks"
 import { ErrorCategory, ErrorSeverity, RetryStrategyType, type ErrorContext, toErrorContext, type WebviewErrorPayload } from "./errorTypes"
 import { mapOpencodeError } from "./opencodeErrorMapper"
 import { renderMessage } from "./messageRenderer"
-import { renderBlock, renderMarkdown, getMarkdownWorkerClient } from "./renderer"
+import { renderBlock, renderMarkdown } from "./renderer"
+import { getMarkdownWorkerClient } from "./markdownWorkerClient"
 import { sanitizeHtml } from "./syntaxHighlighter"
 import { escapeHtml } from "./htmlUtils"
 import type { RenderOptions } from "./renderer"
@@ -1059,7 +1060,7 @@ export function handleToolUpdate(
         more.addEventListener("click", () => {
           if (!argsPanel) return
           argsPanel.innerHTML = sanitizeHtml(escapeHtml(argsStr))
-          void getMarkdownWorkerClient().highlight(argsStr, "json").then((result) => {
+          void getMarkdownWorkerClient().highlight(argsStr, "json").then((result: string | undefined) => {
             if (result && argsPanel) argsPanel.innerHTML = sanitizeHtml(result)
           }).catch(() => { /* fallback: escapeHtml already applied above */ })
           more.remove()
