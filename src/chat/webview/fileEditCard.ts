@@ -1,6 +1,6 @@
 import type { ToolCallBlock } from "./types"
 import { escapeHtml } from "./htmlUtils"
-import { truncateMiddle } from "./toolCallRenderer"
+import { truncateMiddle } from "./stringUtils"
 import { isTerminalState } from "./toolState"
 
 export interface FileEditCardOptions {

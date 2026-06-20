@@ -9,6 +9,8 @@ import {
 } from "./icons"
 import { sanitizeHtml } from "./syntaxHighlighter"
 import { escapeHtml } from "./htmlUtils"
+import { truncateMiddle, formatOutputSize } from "./stringUtils"
+export { truncateMiddle, formatOutputSize } from "./stringUtils"
 import { getMarkdownWorkerClient } from "./markdownWorkerClient"
 import { isTaskTool, renderSubagentTaskCard } from "./subagentCard"
 import { isToolOutputRenderAnsiEnabled, renderAnsiToHtml, stripAnsi } from "./ansiUtils"
@@ -544,6 +546,157 @@ function renderDiffBody(text: string): { fragment: DocumentFragment; added: numb
   return { fragment, added, removed }
 }
 
+function appendCommandOutputSections(
+  resultDiv: HTMLElement,
+  stdoutRenderText: string,
+  stderrRenderText: string,
+  stderrText: string,
+  hasLiveOutput: boolean,
+): void {
+  const stdoutEl = document.createElement("div")
+  stdoutEl.className = "tool-command-output"
+  const stdoutLabel = document.createElement("div")
+  stdoutLabel.className = "tool-command-output-label"
+  stdoutLabel.textContent = "stdout"
+  stdoutEl.appendChild(stdoutLabel)
+  const stdoutBody = document.createElement("pre")
+  stdoutBody.className = "tool-result-body"
+  addTruncatedContent(stdoutBody, stdoutRenderText, 2000, 40)
+  stdoutEl.appendChild(stdoutBody)
+  resultDiv.appendChild(stdoutEl)
+
+  if (stderrText || hasLiveOutput) {
+    const stderrEl = document.createElement("div")
+    stderrEl.className = "tool-command-output tool-command-output--stderr"
+    const stderrLabel = document.createElement("div")
+    stderrLabel.className = "tool-command-output-label"
+    stderrLabel.textContent = "stderr"
+    stderrEl.appendChild(stderrLabel)
+    const stderrBody = document.createElement("pre")
+    stderrBody.className = "tool-result-body"
+    addTruncatedContent(stderrBody, stderrRenderText, 2000, 40)
+    stderrEl.appendChild(stderrBody)
+    resultDiv.appendChild(stderrEl)
+  }
+}
+
+function appendResultBody(
+  resultDiv: HTMLElement,
+  meta: HTMLElement,
+  isDiff: boolean,
+  isCommand: boolean,
+  stderrText: string,
+  hasLiveOutput: boolean,
+  isRunningCommand: boolean,
+  stdoutRenderText: string,
+  stderrRenderText: string,
+  resultText: string,
+  rawText: string,
+): void {
+  if (isDiff) {
+    const body = document.createElement("pre")
+    body.className = "tool-result-body tool-result-body--diff"
+    const { fragment, added, removed } = renderDiffBody(resultText)
+    body.appendChild(fragment)
+    meta.appendChild(document.createTextNode(` · +${added}/-${removed}`))
+    resultDiv.appendChild(meta)
+    resultDiv.appendChild(body)
+  } else if (isCommand && (stderrText || hasLiveOutput)) {
+    resultDiv.appendChild(meta)
+    appendCommandOutputSections(resultDiv, stdoutRenderText, stderrRenderText, stderrText, hasLiveOutput)
+  } else if (isRunningCommand && !hasLiveOutput && !resultText) {
+    resultDiv.appendChild(meta)
+  } else {
+    resultDiv.appendChild(meta)
+    const body = document.createElement("pre")
+    body.className = "tool-result-body"
+    addTruncatedContent(body, isToolOutputRenderAnsiEnabled() ? rawText : resultText, 2000, 40)
+    resultDiv.appendChild(body)
+  }
+}
+
+function appendExecActionBar(
+  resultDiv: HTMLElement,
+  toolBlock: ToolCallBlock,
+  opts: RenderOptions | undefined,
+  command: string,
+  copyOutputText: string,
+  liveStdout: string | undefined,
+  liveStderr: string | undefined,
+  isTerminal: boolean,
+): void {
+  const actions = document.createElement("div")
+  actions.className = "tool-result-actions"
+
+  if (command) {
+    const copyCmd = document.createElement("button")
+    copyCmd.className = "tool-result-action-btn"
+    copyCmd.textContent = "Copy command"
+    copyCmd.title = "Copy command to clipboard"
+    copyCmd.setAttribute("data-restore-focus-id", "tool-copy-command")
+    copyCmd.addEventListener("click", (e) => {
+      e.stopPropagation()
+      void navigator.clipboard?.writeText(command).catch(() => {})
+      copyCmd.textContent = "Copied!"
+      setTimeout(() => { copyCmd.textContent = "Copy command" }, 1500)
+    })
+    actions.appendChild(copyCmd)
+  }
+
+  if (copyOutputText) {
+    const copyOut = document.createElement("button")
+    copyOut.className = "tool-result-action-btn"
+    copyOut.textContent = "Copy output"
+    copyOut.title = "Copy full output to clipboard"
+    copyOut.setAttribute("data-restore-focus-id", "tool-copy-output")
+    copyOut.addEventListener("click", (e) => {
+      e.stopPropagation()
+      void navigator.clipboard?.writeText(copyOutputText).catch(() => {})
+      copyOut.textContent = "Copied!"
+      setTimeout(() => { copyOut.textContent = "Copy output" }, 1500)
+    })
+    actions.appendChild(copyOut)
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const vscodePm = (window as any).vscode?.postMessage?.bind((window as any).vscode) as ((msg: Record<string, unknown>) => void) | undefined
+  const pm: ((msg: Record<string, unknown>) => void) | undefined = opts?.postMessage ?? vscodePm
+  if (command && pm) {
+    const openTerm = document.createElement("button")
+    openTerm.className = "tool-result-action-btn"
+    openTerm.textContent = "Open in terminal"
+    openTerm.title = "Open a VS Code terminal with this command"
+    openTerm.setAttribute("data-restore-focus-id", "tool-open-terminal")
+    openTerm.addEventListener("click", (e) => {
+      e.stopPropagation()
+      pm({ type: "open_terminal", command, cwd: toolBlock.workingDir, autorun: false })
+    })
+    actions.appendChild(openTerm)
+  }
+
+  if (!isTerminal && pm) {
+    const cancel = document.createElement("button")
+    cancel.className = "tool-result-action-btn tool-result-action-btn--danger"
+    cancel.textContent = "Cancel"
+    cancel.title = "Cancel this running command"
+    cancel.setAttribute("data-restore-focus-id", "tool-cancel")
+    cancel.addEventListener("click", (e) => {
+      e.stopPropagation()
+      pm({
+        type: "cancel_tool",
+        sessionId: opts?.sessionId,
+        toolId: toolBlock.id,
+        stdout: liveStdout ?? "",
+        stderr: liveStderr ?? "",
+        durationMs: toolBlock.durationMs,
+      })
+    })
+    actions.appendChild(cancel)
+  }
+
+  if (actions.childElementCount > 0) resultDiv.appendChild(actions)
+}
+
 export function createToolResultPanel(toolBlock: ToolCallBlock, opts?: RenderOptions): HTMLElement | null {
   const toolState = toolBlock.state || 'running'
   const isTerminal = isTerminalState(toolState)
@@ -574,9 +727,6 @@ export function createToolResultPanel(toolBlock: ToolCallBlock, opts?: RenderOpt
   const meta = document.createElement("div")
   meta.className = "tool-result-meta"
 
-  const pieces: string[] = []
-
-  // Working directory (exec tools only)
   if (isCommand && toolBlock.workingDir) {
     const cwdEl = document.createElement("span")
     cwdEl.className = "tool-result-cwd"
@@ -590,11 +740,6 @@ export function createToolResultPanel(toolBlock: ToolCallBlock, opts?: RenderOpt
     ec.className = `tool-exit-code tool-exit-code--${toolBlock.exitCode === 0 ? 'ok' : 'error'}`
     ec.textContent = `exit ${toolBlock.exitCode}`
     meta.appendChild(ec)
-    pieces.push(`exit ${toolBlock.exitCode}`)
-  }
-
-  if (toolBlock.durationMs && (isTerminal || hasLiveOutput)) {
-    pieces.push(toolBlock.durationMs >= 1000 ? `${(toolBlock.durationMs / 1000).toFixed(1)}s` : `${toolBlock.durationMs}ms`)
   }
 
   if (hasLiveOutput && !isTerminal) {
@@ -622,131 +767,15 @@ export function createToolResultPanel(toolBlock: ToolCallBlock, opts?: RenderOpt
   const totalLength = (toolBlock.stdoutLength ?? stdoutText.length) + (toolBlock.stderrLength ?? stderrText.length)
   const totalLines = (toolBlock.stdoutLineCount ?? (stdoutText ? stdoutText.split("\n").length : 0)) + (toolBlock.stderrLineCount ?? (stderrText ? stderrText.split("\n").length : 0))
   const metaText = `${formatOutputSize(totalLength)}${totalLines > 1 ? `, ${totalLines} lines` : ""}`
-  pieces.push(metaText)
 
   const metaTextEl = document.createElement("span")
   metaTextEl.textContent = metaText
   meta.appendChild(metaTextEl)
 
-  if (isDiff) {
-    const body = document.createElement("pre")
-    body.className = "tool-result-body tool-result-body--diff"
-    const { fragment, added, removed } = renderDiffBody(resultText)
-    body.appendChild(fragment)
-    meta.appendChild(document.createTextNode(` · +${added}/-${removed}`))
-    resultDiv.appendChild(meta)
-    resultDiv.appendChild(body)
-  } else if (isCommand && (stderrText || hasLiveOutput)) {
-    resultDiv.appendChild(meta)
-    const stdoutEl = document.createElement("div")
-    stdoutEl.className = "tool-command-output"
-    const stdoutLabel = document.createElement("div")
-    stdoutLabel.className = "tool-command-output-label"
-    stdoutLabel.textContent = "stdout"
-    stdoutEl.appendChild(stdoutLabel)
-    const stdoutBody = document.createElement("pre")
-    stdoutBody.className = "tool-result-body"
-    addTruncatedContent(stdoutBody, stdoutRenderText, 2000, 40)
-    stdoutEl.appendChild(stdoutBody)
-    resultDiv.appendChild(stdoutEl)
+  appendResultBody(resultDiv, meta, isDiff, isCommand, stderrText, hasLiveOutput, isRunningCommand, stdoutRenderText, stderrRenderText, resultText, rawText)
 
-    if (stderrText || hasLiveOutput) {
-      const stderrEl = document.createElement("div")
-      stderrEl.className = "tool-command-output tool-command-output--stderr"
-      const stderrLabel = document.createElement("div")
-      stderrLabel.className = "tool-command-output-label"
-      stderrLabel.textContent = "stderr"
-      stderrEl.appendChild(stderrLabel)
-      const stderrBody = document.createElement("pre")
-      stderrBody.className = "tool-result-body"
-      addTruncatedContent(stderrBody, stderrRenderText, 2000, 40)
-      stderrEl.appendChild(stderrBody)
-      resultDiv.appendChild(stderrEl)
-    }
-  } else if (isRunningCommand && !hasLiveOutput && !resultText) {
-    resultDiv.appendChild(meta)
-  } else {
-    resultDiv.appendChild(meta)
-    const body = document.createElement("pre")
-    body.className = "tool-result-body"
-    addTruncatedContent(body, isToolOutputRenderAnsiEnabled() ? rawText : resultText, 2000, 40)
-    resultDiv.appendChild(body)
-  }
-
-  // Quick action buttons for exec-class (command) tools
   if (isCommand) {
-    const actions = document.createElement("div")
-    actions.className = "tool-result-actions"
-
-    const command = extractKeyArg(toolBlock.args) ?? ""
-
-    if (command) {
-      const copyCmd = document.createElement("button")
-      copyCmd.className = "tool-result-action-btn"
-      copyCmd.textContent = "Copy command"
-      copyCmd.title = "Copy command to clipboard"
-      copyCmd.setAttribute("data-restore-focus-id", "tool-copy-command")
-      copyCmd.addEventListener("click", (e) => {
-        e.stopPropagation()
-        void navigator.clipboard?.writeText(command).catch(() => {})
-        copyCmd.textContent = "Copied!"
-        setTimeout(() => { copyCmd.textContent = "Copy command" }, 1500)
-      })
-      actions.appendChild(copyCmd)
-    }
-
-    if (copyOutputText) {
-      const copyOut = document.createElement("button")
-      copyOut.className = "tool-result-action-btn"
-      copyOut.textContent = "Copy output"
-      copyOut.title = "Copy full output to clipboard"
-      copyOut.setAttribute("data-restore-focus-id", "tool-copy-output")
-      copyOut.addEventListener("click", (e) => {
-        e.stopPropagation()
-        void navigator.clipboard?.writeText(copyOutputText).catch(() => {})
-        copyOut.textContent = "Copied!"
-        setTimeout(() => { copyOut.textContent = "Copy output" }, 1500)
-      })
-      actions.appendChild(copyOut)
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const vscodePm = (window as any).vscode?.postMessage?.bind((window as any).vscode) as ((msg: Record<string, unknown>) => void) | undefined
-    const pm: ((msg: Record<string, unknown>) => void) | undefined = opts?.postMessage ?? vscodePm
-    if (command && pm) {
-      const openTerm = document.createElement("button")
-      openTerm.className = "tool-result-action-btn"
-      openTerm.textContent = "Open in terminal"
-      openTerm.title = "Open a VS Code terminal with this command"
-      openTerm.setAttribute("data-restore-focus-id", "tool-open-terminal")
-      openTerm.addEventListener("click", (e) => {
-        e.stopPropagation()
-        pm({ type: "open_terminal", command, cwd: toolBlock.workingDir, autorun: false })
-      })
-      actions.appendChild(openTerm)
-    }
-
-    if (!isTerminal && pm) {
-      const cancel = document.createElement("button")
-      cancel.className = "tool-result-action-btn tool-result-action-btn--danger"
-      cancel.textContent = "Cancel"
-      cancel.title = "Cancel this running command"
-      cancel.setAttribute("data-restore-focus-id", "tool-cancel")
-      cancel.addEventListener("click", (e) => {
-        e.stopPropagation()
-        pm({
-          type: "cancel_tool",
-          sessionId: opts?.sessionId,
-          toolId: toolBlock.id,
-          stdout: liveStdout ?? "",
-          stderr: liveStderr ?? "",
-          durationMs: toolBlock.durationMs,
-        })
-      })
-      actions.appendChild(cancel)
-    }
-
-    if (actions.childElementCount > 0) resultDiv.appendChild(actions)
+    appendExecActionBar(resultDiv, toolBlock, opts, extractKeyArg(toolBlock.args) ?? "", copyOutputText, liveStdout, liveStderr, isTerminal)
   }
 
   return resultDiv
@@ -1337,17 +1366,6 @@ export function createToolCollapseControls(
   controls.appendChild(compactBtn)
 
   container.appendChild(controls)
-}
-
-export function truncateMiddle(str: string, maxLen: number): string {
-  if (str.length <= maxLen) return str
-  const half = Math.floor((maxLen - 1) / 2)
-  return str.slice(0, half) + '\u2026' + str.slice(str.length - half)
-}
-
-export function formatOutputSize(chars: number): string {
-  if (chars < 1000) return `${chars} chars`
-  return `${(chars / 1000).toFixed(chars < 10000 ? 1 : 0)}k chars`
 }
 
 export function focusAdjacentToolSummary(current: HTMLElement, key: string): void {

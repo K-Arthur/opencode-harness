@@ -24,11 +24,7 @@ import {
   sendSteerPrompt,
 } from "./steerMode"
 
-let _maxConcurrentStreams = 5
-export function setMaxConcurrentStreams(max: number): void {
-  if (max >= 1 && max <= 10) _maxConcurrentStreams = max
-}
-export function getMaxConcurrentStreams(): number { return _maxConcurrentStreams }
+export { setMaxConcurrentStreams, getMaxConcurrentStreams } from "./streamConfig"
 /** @deprecated Use getMaxConcurrentStreams() for runtime checks */
 export const MAX_CONCURRENT_STREAMS = 5
 

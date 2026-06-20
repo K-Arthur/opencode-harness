@@ -1,7 +1,7 @@
 import type { ElementRefs } from "./dom"
 import { TOOLTIPS } from "./tooltips"
 import type { SendLogicDeps } from "./sendLogic"
-import { getMaxConcurrentStreams } from "./sendLogic"
+import { getMaxConcurrentStreams } from "./streamConfig"
 
 export interface StreamCapacityState {
   isFull: boolean
