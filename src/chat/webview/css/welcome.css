@@ -109,10 +109,12 @@
 .welcome-search-wrapper {
   width: 100%;
   max-width: 400px;
+  min-width: 0;
 }
 
 .welcome-search-input {
   width: 100%;
+  min-width: 0;
   position: relative;
   display: flex;
   align-items: center;
@@ -129,6 +131,7 @@
 
 .welcome-search-input input {
   width: 100%;
+  min-width: 0;
   padding: var(--space-2) var(--space-3) var(--space-2) calc(var(--space-3) + var(--space-4));
   background: var(--oc-editor-bg);
   border: 1px solid var(--oc-accent-border);
@@ -138,6 +141,8 @@
   font-size: var(--text-sm);
   box-sizing: border-box;
   min-height: var(--size-target-comfortable);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .welcome-search-input input:focus {
