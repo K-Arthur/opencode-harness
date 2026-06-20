@@ -411,6 +411,15 @@ export class SessionClient {
     return true
   }
 
+  async forkSession(sessionId: string, messageID: string): Promise<Session> {
+    const client = this.guardV2()
+    const resp = await client.session.fork({ sessionID: sessionId, messageID })
+    this.throwOnV2Error(resp, "Failed to fork session")
+    const session = mapV2Session(resp.data as Record<string, unknown>)
+    log.info(`Forked session ${sessionId} at message ${messageID} → ${session.id}`)
+    return session
+  }
+
   async respondToPermission(sessionId: string, permissionId: string, response: string): Promise<void> {
     const client = this.guardV2()
     if (!sessionId) throw new Error("Permission response missing session ID")

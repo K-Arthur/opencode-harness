@@ -244,6 +244,10 @@ export class SessionManager {
     return this.sessionClient.deleteSession(id)
   }
 
+  async forkSession(sessionId: string, messageId: string): Promise<Session> {
+    return this.sessionClient.forkSession(sessionId, messageId)
+  }
+
   async getSession(id: string): Promise<Session> {
     return this.sessionClient.getSession(id)
   }

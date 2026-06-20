@@ -901,6 +901,8 @@ export type WebviewMessage =
   | { type: "request_more_messages"; sessionId: string; beforeIndex: number; limit?: number }
   | { type: "stream_ack"; sessionId: string; seq?: number; lastRenderedChunkSeq?: number }
   | { type: "retry_stream"; sessionId: string }
+  | { type: "open_model_selector_for_regen"; sessionId: string; messageId: string }
+  | { type: "regenerate_with_model"; sessionId: string; messageId: string; model: string }
   | { type: "resume_stream"; sessionId: string }
   | { type: "decline_resume"; sessionId: string }
   | { type: "request_state_sync" }

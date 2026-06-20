@@ -508,6 +508,7 @@ export class WebviewEventRouter {
                     // The webview receives `expired_question_recovery_failed`
                     // with the answer text pre-filled if no response arrives.
                     recoveryFromExpiredQuestion: true,
+                    expiredRecoveryAnswerText: value,
                   },
                 })
               } catch (promptErr) {

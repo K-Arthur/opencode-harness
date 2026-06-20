@@ -114,16 +114,21 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
       })
       header.appendChild(revertBtn)
 
-      // W4.E: Regenerate button — retry this assistant turn
+      // W4.E: Regenerate button — retry this assistant turn with optional model selection
       const regenBtn = document.createElement("button")
       regenBtn.className = "message-regen-btn"
       regenBtn.setAttribute("aria-label", "Regenerate response")
-      regenBtn.title = "Regenerate this response"
+      regenBtn.title = "Regenerate this response (Shift+Click to change model)"
       regenBtn.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>'
-      regenBtn.addEventListener("click", () => {
+      regenBtn.addEventListener("click", (e) => {
         const pm = opts?.postMessage
         if (pm) {
-          pm({ type: "retry_stream", sessionId: msg.sessionId })
+          // Shift+Click opens model selector for regeneration
+          if (e.shiftKey) {
+            pm({ type: "open_model_selector_for_regen", sessionId: msg.sessionId, messageId: msg.id })
+          } else {
+            pm({ type: "retry_stream", sessionId: msg.sessionId })
+          }
         }
       })
       header.appendChild(regenBtn)

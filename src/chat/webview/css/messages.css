@@ -587,6 +587,115 @@
 }
 
 .message-revert-btn:hover {
+  opacity: 1;
+  background: var(--oc-accent-subtle);
+  border-color: var(--oc-accent-border);
+}
+
+/* ─── Edit Button (user messages) ─── */
+.message-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: var(--space-0-5);
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--duration-fast), visibility var(--duration-fast);
+  min-width: var(--size-target-min);
+  min-height: var(--size-target-min);
+  margin-left: var(--space-1);
+}
+
+.message:hover .message-edit-btn,
+.message:focus-within .message-edit-btn {
+  opacity: 0.5;
+  visibility: visible;
+}
+
+.message-edit-btn:hover {
+  opacity: 1;
+  background: var(--oc-accent-subtle);
+  border-color: var(--oc-accent-border);
+}
+
+/* ─── Editing State ─── */
+.message-editing {
+  border-left: 3px solid var(--oc-accent);
+  background: var(--oc-accent-subtle);
+  padding-left: var(--space-2);
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+
+.message-editing .message-header {
+  color: var(--oc-accent);
+}
+
+/* ─── Regenerate Button (assistant messages) ─── */
+.message-regen-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: var(--space-0-5);
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--duration-fast), visibility var(--duration-fast);
+  min-width: var(--size-target-min);
+  min-height: var(--size-target-min);
+  margin-left: var(--space-1);
+}
+
+.message:hover .message-regen-btn,
+.message:focus-within .message-regen-btn {
+  opacity: 0.5;
+  visibility: visible;
+}
+
+.message-regen-btn:hover {
+  opacity: 1;
+  background: var(--oc-accent-subtle);
+  border-color: var(--oc-accent-border);
+}
+
+/* ─── Fork Button (turn-based) ─── */
+.message-fork-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: var(--space-0-5);
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--duration-fast), visibility var(--duration-fast);
+  min-width: var(--size-target-min);
+  min-height: var(--size-target-min);
+  margin-left: var(--space-1);
+}
+
+.message:hover .message-fork-btn,
+.message:focus-within .message-fork-btn {
+  opacity: 0.5;
+  visibility: visible;
+}
+
+.message-fork-btn:hover {
+  opacity: 1;
+  background: var(--oc-accent-subtle);
+  border-color: var(--oc-accent-border);
+}
   opacity: 1 !important;
   color: var(--oc-warning);
   background: var(--oc-warning-subtle);
