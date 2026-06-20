@@ -1,5 +1,12 @@
 # OpenCode
 
+> **⚠️ Independent, unofficial, beta project.** This extension is **not
+> developed by, affiliated with, or endorsed by the OpenCode team.** It is an
+> independent, community-built VS Code client for the [opencode](https://opencode.ai)
+> CLI agent. It is currently in **beta** — features are actively evolving, and
+> some functionality depends on OpenCode SDK/server limitations (see
+> [Limitations](#limitations) and [`docs/limitations.md`](docs/limitations.md)).
+
 [![GitHub stars](https://img.shields.io/github/stars/K-Arthur/opencode-harness?style=social)](https://github.com/K-Arthur/opencode-harness/stargazers)
 
 A VS Code extension that puts a chat panel, diff viewer, and multi-session tabs
@@ -390,6 +397,29 @@ OpenCode uses AI models to assist with coding tasks. Please note:
 - **Rollback:** Revert accepted extension diffs from local file snapshots; revert server-side tool edits through OpenCode's native message rollback
 - **Permission Modes:** Control how much autonomy the AI has
 - **Cost Tracking:** Monitor and limit your AI usage
+
+### Project Status & SDK Constraints
+
+This is an **independent, unofficial, beta** VS Code client for the opencode CLI
+agent. It is **not developed by, affiliated with, or endorsed by the OpenCode
+team.** Features are actively evolving. The extension is a client over the
+opencode HTTP server (via `@opencode-ai/sdk` v2) and can only do what the SDK
+and server expose. Known constraints:
+
+- **Temperature / effort / reasoning-level** are not exposed as prompt
+  parameters by the SDK — these are server-side only and not adjustable from
+  any client.
+- **Rate-limit headers / quota** are not surfaced in the SDK types (HTTP-layer
+  only); the extension infers quota from observed token/cost usage when a
+  provider doesn't expose quota headers.
+- **Session modes (Plan / Build / Auto)** are server-determined; the client
+  requests a mode but the server enforces the policy.
+- **Live terminal stdout** uses the SDK's PTY API when the server advertises
+  it, and falls back to a polling approximation on older servers.
+- **Message edit / regenerate** have no dedicated SDK API; the extension
+  implements them via `session.revert` + a new prompt.
+
+Full detail: [`docs/limitations.md`](docs/limitations.md).
 
 ## Installation
 

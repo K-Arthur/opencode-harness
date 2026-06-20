@@ -2,6 +2,12 @@
 
 All notable changes to the **OpenCode Harness** extension will be documented in this file.
 
+> **OpenCode Harness** is an **independent, unofficial, beta** VS Code client
+> for the [opencode](https://opencode.ai) CLI agent. It is **not developed by,
+> affiliated with, or endorsed by the OpenCode team.** See
+> [`docs/limitations.md`](docs/limitations.md) for SDK constraints and beta
+> status.
+
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 

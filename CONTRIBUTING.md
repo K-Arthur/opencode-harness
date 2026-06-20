@@ -1,6 +1,15 @@
 # Contributing to OpenCode Harness
 
-Thank you for your interest in contributing to OpenCode Harness! This guide will help you get set up and follow our development workflow.
+Thank you for your interest in contributing to OpenCode Harness!
+
+> **OpenCode Harness** is an **independent, unofficial, beta** VS Code client
+> for the [opencode](https://opencode.ai) CLI agent. It is **not developed by,
+> affiliated with, or endorsed by the OpenCode team.** This is a community
+> project; all contributions are welcome. See
+> [`docs/limitations.md`](docs/limitations.md) for SDK constraints and beta
+> status.
+
+This guide will help you get set up and follow our development workflow.
 
 ## Development Setup
 

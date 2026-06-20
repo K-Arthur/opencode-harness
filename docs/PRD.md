@@ -1,12 +1,18 @@
 # PRD: OpenCode Harness
 
+> **Status:** Independent, unofficial, beta. This extension is **not developed
+> by, affiliated with, or endorsed by the OpenCode team.** It is a
+> community-built VS Code client for the opencode CLI agent. See
+> [`limitations.md`](limitations.md) for SDK constraints and beta status.
+
 ## Background & Context
 OpenCode Harness is a VS Code extension that deeply integrates the opencode AI coding agent into the editor. It provides a rich, multi-tab chat interface, real-time agent visibility, and deep workspace context awareness. The extension acts as a client to the opencode HTTP server, communicating via the official `@opencode-ai/sdk` npm package.
 
 ## Stakeholders
-- **Product Owner**: OpenCode team
+- **Product Owner**: OpenCode Harness maintainers (independent community project)
 - **Users**: Software developers and coders using VS Code
 - **Developers**: Extension maintainers, VS Code extension developers
+- **Upstream**: The [opencode](https://opencode.ai) project (separate; this extension is a client only)
 
 ## User Stories
 ### Core Chat Experience

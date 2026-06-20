@@ -86,6 +86,24 @@
   line-height: var(--leading-tight);
 }
 
+.welcome-beta-notice {
+  font-size: clamp(11px, 2.6cqw, 12px);
+  color: var(--color-muted);
+  margin: var(--space-1) 0 0 0;
+  line-height: var(--leading-tight);
+  opacity: 0.85;
+}
+
+.welcome-beta-notice a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.welcome-beta-notice a:hover,
+.welcome-beta-notice a:focus-visible {
+  text-decoration: underline;
+}
+
 /* ─── Search Bar ─── */
 
 .welcome-search-wrapper {
