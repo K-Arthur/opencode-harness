@@ -625,7 +625,7 @@
 
 /* ─── Editing State ─── */
 .message-editing {
-  border-left: 3px solid var(--oc-accent);
+  border-left: var(--radius-md) solid var(--oc-accent);
   background: var(--oc-accent-subtle);
   padding-left: var(--space-2);
   transition: background var(--duration-fast), border-color var(--duration-fast);
