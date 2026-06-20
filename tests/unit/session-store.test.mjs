@@ -99,6 +99,11 @@ describe("SessionStore — persistence", () => {
     assert.ok(source.includes("SAVE_DEBOUNCE_MS"), "must use debounce constant")
   })
 
+  it("exposes a public persist hook that delegates to save", () => {
+    assert.ok(source.includes("persist():"), "public persist method must exist")
+    assert.ok(source.includes("this.save()"), "persist must delegate to save")
+  })
+
   it("flush writes synchronously to globalState", () => {
     assert.ok(source.includes("flush():"), "flush method must exist")
     assert.ok(source.includes("globalState.update"), "must write to globalState")

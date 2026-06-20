@@ -3626,3 +3626,63 @@ button.modal-session-item:focus {
     min-height: auto;
   }
 }
+
+/* ─── Responsive composer / input area for narrow webviews ─── */
+
+@media (max-width: 420px) {
+  #input-area {
+    margin: 0 var(--space-2) var(--space-2);
+    padding: var(--space-1) var(--space-2);
+  }
+
+  #input-bottom-bar {
+    gap: var(--space-1);
+  }
+
+  .bottom-bar-left,
+  .bottom-bar-right {
+    flex-wrap: wrap;
+    gap: var(--space-0-5);
+  }
+
+  .bottom-bar-right {
+    justify-content: flex-end;
+    flex: 1;
+  }
+
+  .mode-dropdown-btn,
+  .model-selector-btn,
+  .variant-selector-btn,
+  .bottom-btn {
+    padding: var(--space-0-5) var(--space-1);
+    min-height: var(--size-target-min);
+  }
+
+  #mode-current-text {
+    display: none;
+  }
+
+  .model-selector-btn {
+    max-width: 8rem;
+  }
+
+  .variant-selector-btn {
+    max-width: 6rem;
+  }
+
+  .steer-mode-label {
+    display: none;
+  }
+}
+
+@media (max-width: 320px) {
+  .model-selector-btn,
+  .variant-selector-btn {
+    max-width: 5rem;
+  }
+
+  .send-btn {
+    width: var(--size-target-min);
+    height: var(--size-target-min);
+  }
+}

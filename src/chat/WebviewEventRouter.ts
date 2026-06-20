@@ -28,6 +28,7 @@ import type { HostPromptQueue } from "./HostPromptQueue"
 import type { ChatMessage, Block } from "./types"
 import type { ContextMonitor } from "../monitor/ContextMonitor"
 import type { UsageAnalytics } from "../monitor/UsageAnalytics"
+import { groupMessagesIntoTurns } from "./webview/renderer"
 import type { SkillPreferencesStoreLike } from "../skills/SkillPreferencesStore"
 import type { VoiceInputService } from "./VoiceInputService"
 import { log } from "../utils/outputChannel"
@@ -191,7 +192,7 @@ export class WebviewEventRouter {
     "show_diff", "list_checkpoints", "restore_checkpoint",
     "preview_theme", "get_theme_config", "update_theme_config", "list_cli_themes",
     "request_more_messages", "refresh_session_messages", "stream_ack", "retry_stream", "request_state_sync",
-    "set_instructions", "fork_session", "accept_hunk", "reject_hunk",
+    "set_instructions", "fork_session", "accept_hunk", "reject_hunk", "open_model_selector_for_regen", "regenerate_with_model",
     "get_file_hunks", "revert_hunk",
     "toggle_diff_wrap", "toggle_thinking", "revert_diff", "open_changed_file_diff",
     "context_history_request", "context_cost_estimate", "context_suggestions_request",
@@ -202,6 +203,8 @@ export class WebviewEventRouter {
     "request_queue_state", "resume_queue",
     "get_todos", // handler posts todos_error on unavailable server/session fetch failures
     "get_skills", "toggle_skill", "search_skills",
+    // PTY terminal vertical (audit §14.1/§14.2): live terminal via the SDK PTY API.
+    "pty_connect", "pty_cancel", "pty_send_input", "pty_resize", "pty_list",
     "get_changed_files", "get_file_diff", "open_file", "open_folder", "open_url", "reveal_in_explorer",
     "get_subagent_activities", "get_subagent_detail", "cancel_subagent", "mark_subagent_read", "open_subagent_session",
     "popout_get_subagent_detail", "popout_cancel_subagent",
@@ -778,15 +781,75 @@ export class WebviewEventRouter {
       }
       this.opts.postMessage({ type: "revert_result", ok: true, sessionId: sid, reverted })
     }],
-    ["fork_session", (msg: Record<string, unknown>, sessionId?: string) => {
+    ["fork_session", async (msg: Record<string, unknown>, sessionId?: string) => {
       const sourceId = sessionId ?? (typeof msg.sessionId === "string" ? msg.sessionId : undefined)
       const turnIndex = typeof msg.turnIndex === "number" ? msg.turnIndex : undefined
       if (!sourceId || turnIndex === undefined) return
+
+      const sourceSession = this.opts.sessionStore.get(sourceId)
+      if (!sourceSession) return
+
+      // Try SDK fork first when available
+      if (sourceSession.cliSessionId) {
+        try {
+          // Find the message ID at the turn index
+          const messages = sourceSession.messages
+          const turnMessages = groupMessagesIntoTurns(messages)
+          if (turnIndex >= 0 && turnIndex < turnMessages.length) {
+            const turn = turnMessages[turnIndex]
+            if (!turn) return
+            const messageId = turn.userMessageId
+            if (messageId) {
+              const forked = await this.opts.sessionManager.forkSession(sourceSession.cliSessionId, messageId)
+              if (forked) {
+                // Create local session for the forked server session
+                const localForked = this.opts.sessionStore.ensure(forked.id, `${sourceSession.name} (Fork from Turn ${turnIndex + 1})`, sourceSession.model, sourceSession.mode)
+                localForked.cliSessionId = forked.id
+                localForked.parentSessionId = sourceId
+                localForked.forkedAtTurn = turnIndex
+                this.opts.sessionStore.persist()
+                this.opts.ensureLocalTab(localForked.id, localForked.name, localForked.model, localForked.mode)
+                this.opts.tabManager.switchTab(localForked.id)
+                this.opts.postMessage({ type: "fork_created", sessionId: localForked.id, name: localForked.name, parentSessionId: sourceId, forkedAtTurn: turnIndex })
+                log.info(`Forked session using SDK: ${sourceId} → ${localForked.id}`)
+                return
+              }
+            }
+          }
+        } catch (err) {
+          log.warn(`SDK fork failed for session ${sourceId}, falling back to client-side fork`, err)
+        }
+      }
+
+      // Fallback to client-side fork
       const forked = this.opts.sessionStore.forkSession(sourceId, turnIndex)
       if (!forked) return
       this.opts.ensureLocalTab(forked.id, forked.name, forked.model, forked.mode)
       this.opts.tabManager.switchTab(forked.id)
       this.opts.postMessage({ type: "fork_created", sessionId: forked.id, name: forked.name, parentSessionId: sourceId, forkedAtTurn: turnIndex })
+    }],
+    ["open_model_selector_for_regen", (msg: Record<string, unknown>, sessionId?: string) => {
+      const targetSessionId = sessionId ?? (typeof msg.sessionId === "string" ? msg.sessionId : undefined)
+      if (!targetSessionId) return
+      // Open model manager and set a flag to indicate this is for regeneration
+      this.opts.postMessage({ type: "open_model_manager", forRegeneration: true, sessionId: targetSessionId, messageId: msg.messageId as string })
+    }],
+    ["regenerate_with_model", async (msg: Record<string, unknown>, sessionId?: string) => {
+      const targetSessionId = sessionId ?? (typeof msg.sessionId === "string" ? msg.sessionId : undefined)
+      const model = typeof msg.model === "string" ? msg.model : undefined
+      if (!targetSessionId || !model) return
+      
+      // Set the model for the session and trigger regeneration
+      const session = this.opts.sessionStore.get(targetSessionId)
+      if (session) {
+        session.model = model
+        this.opts.sessionStore.save()
+        // Trigger regeneration with the new model
+        void this.opts.streamCoordinator.retryFromHere(targetSessionId, {
+          postMessage: (m) => this.opts.postMessage(m),
+          postRequestError: (m) => this.opts.postRequestError(m),
+        })
+      }
     }],
     ["open_changed_file_diff", async (msg: Record<string, unknown>, sessionId?: string) => {
       // M7: Open a VS Code diff editor comparing the file's git HEAD
@@ -1215,6 +1278,75 @@ export class WebviewEventRouter {
       const terminal = vscode.window.createTerminal({ name: "OpenCode Task", cwd })
       terminal.show()
       terminal.sendText(command, msg.autorun === true)
+    }],
+    // PTY terminal vertical (audit §14.1/§14.2). The host PtyService wraps the
+    // SDK PTY API; output bytes stream back via pty_output messages posted from
+    // the WebSocket onmessage handler established by pty_connect.
+    ["pty_connect", async (msg: Record<string, unknown>) => {
+      const ptyId = typeof msg.ptyId === "string" ? msg.ptyId : ""
+      if (!ptyId) return
+      try {
+        const ticket = await this.opts.sessionManager.ptyService.getConnectToken(ptyId)
+        await this.opts.sessionManager.ptyService.connectWebSocket(
+          ptyId,
+          ticket.ticket,
+          (event) => {
+            const data = typeof event.data === "string"
+              ? event.data
+              : event.data instanceof ArrayBuffer
+                ? new TextDecoder().decode(event.data)
+                : ""
+            if (data) {
+              this.opts.postMessage({ type: "pty_output", ptyId, data })
+            }
+          },
+        )
+        this.opts.postMessage({ type: "pty_connected", ptyId })
+      } catch (err) {
+        log.warn(`pty_connect failed for ${ptyId}: ${err instanceof Error ? err.message : String(err)}`)
+        this.opts.postMessage({ type: "pty_error", ptyId, error: err instanceof Error ? err.message : String(err) })
+      }
+    }],
+    ["pty_cancel", async (msg: Record<string, unknown>) => {
+      const ptyId = typeof msg.ptyId === "string" ? msg.ptyId : ""
+      if (!ptyId) return
+      try {
+        await this.opts.sessionManager.ptyService.removeSession(ptyId)
+        this.opts.postMessage({ type: "pty_cancelled", ptyId })
+      } catch (err) {
+        log.warn(`pty_cancel failed for ${ptyId}: ${err instanceof Error ? err.message : String(err)}`)
+        this.opts.postMessage({ type: "pty_error", ptyId, error: err instanceof Error ? err.message : String(err) })
+      }
+    }],
+    ["pty_send_input", async (msg: Record<string, unknown>) => {
+      const ptyId = typeof msg.ptyId === "string" ? msg.ptyId : ""
+      const data = typeof msg.data === "string" ? msg.data : ""
+      if (!ptyId || !data) return
+      try {
+        await this.opts.sessionManager.ptyService.sendInput(ptyId, data)
+      } catch (err) {
+        log.warn(`pty_send_input failed for ${ptyId}: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }],
+    ["pty_resize", async (msg: Record<string, unknown>) => {
+      const ptyId = typeof msg.ptyId === "string" ? msg.ptyId : ""
+      const rows = typeof msg.rows === "number" ? msg.rows : 24
+      const cols = typeof msg.cols === "number" ? msg.cols : 80
+      if (!ptyId) return
+      try {
+        await this.opts.sessionManager.ptyService.setTerminalSize(ptyId, rows, cols)
+      } catch (err) {
+        log.warn(`pty_resize failed for ${ptyId}: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }],
+    ["pty_list", async () => {
+      try {
+        const sessions = await this.opts.sessionManager.ptyService.listSessions()
+        this.opts.postMessage({ type: "pty_sessions", sessions })
+      } catch (err) {
+        log.warn(`pty_list failed: ${err instanceof Error ? err.message : String(err)}`)
+        this.opts.postMessage({ type: "pty_sessions", sessions: [] })
+      }
     }],
     ["copy_text", async (msg: Record<string, unknown>) => {
       const text = typeof msg.text === "string" ? msg.text : ""

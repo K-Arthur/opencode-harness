@@ -180,6 +180,11 @@ export class SessionStore {
     }, SessionStore.SAVE_DEBOUNCE_MS)
   }
 
+  /** Public persistence hook for callers outside the store. */
+  persist(): void {
+    this.save()
+  }
+
   async flush(): Promise<void> {
     if (this.saveTimer) {
       clearTimeout(this.saveTimer)

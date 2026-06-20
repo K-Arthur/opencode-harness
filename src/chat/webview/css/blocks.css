@@ -3560,3 +3560,150 @@
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Live Command Card — inline terminal-like cards for exec tools
+   ═══════════════════════════════════════════════════════════════ */
+
+.live-command-card {
+  border: 1px solid var(--color-border, rgba(128, 128, 128, 0.25));
+  border-radius: var(--radius-md, 6px);
+  background: var(--oc-editor-bg, var(--vscode-editor-background, rgba(0, 0, 0, 0.2)));
+  overflow: hidden;
+  margin: var(--space-2) 0;
+  font-family: var(--font-sans);
+}
+
+.live-command-card--running {
+  border-left: 3px solid var(--vscode-charts-green, #4ec9b0);
+}
+
+.live-command-card--succeeded {
+  border-left: 3px solid var(--vscode-charts-green, #4ec9b0);
+}
+
+.live-command-card--failed {
+  border-left: 3px solid var(--vscode-charts-red, #f48771);
+}
+
+.live-command-card--cancelled {
+  border-left: 3px solid var(--color-muted, #808080);
+}
+
+.live-command-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  padding: var(--space-1-5) var(--space-2);
+  border-bottom: 1px solid var(--color-border, rgba(128, 128, 128, 0.15));
+  flex-wrap: wrap;
+  min-height: var(--size-target-comfortable);
+}
+
+.live-command-card__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+}
+
+.live-command-card__title {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.live-command-card__command {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  padding: 0;
+}
+
+.live-command-card__cwd {
+  font-size: var(--text-2xs);
+  color: var(--color-muted);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.live-command-card__status {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: var(--space-0-5) var(--space-1);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.live-command-card__status--running {
+  color: var(--vscode-charts-green, #4ec9b0);
+  background: color-mix(in srgb, var(--vscode-charts-green, #4ec9b0) 12%, transparent);
+}
+
+.live-command-card__status--succeeded {
+  color: var(--vscode-charts-green, #4ec9b0);
+  background: color-mix(in srgb, var(--vscode-charts-green, #4ec9b0) 12%, transparent);
+}
+
+.live-command-card__status--failed {
+  color: var(--vscode-charts-red, #f48771);
+  background: color-mix(in srgb, var(--vscode-charts-red, #f48771) 12%, transparent);
+}
+
+.live-command-card__status--cancelled {
+  color: var(--color-muted, #808080);
+  background: color-mix(in srgb, var(--color-muted, #808080) 12%, transparent);
+}
+
+.live-command-card__output {
+  margin: 0;
+  padding: var(--space-2);
+  font-family: var(--vscode-terminal-font-family, var(--font-mono));
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  color: var(--vscode-terminal-foreground, var(--color-fg));
+  background: var(--vscode-terminal-background, rgba(0, 0, 0, 0.3));
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.live-command-card__output:empty {
+  display: none;
+}
+
+.live-command-card__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-top: 1px solid var(--color-border, rgba(128, 128, 128, 0.15));
+  font-size: var(--text-2xs);
+  color: var(--color-muted);
+  flex-wrap: wrap;
+}
+
+.live-command-card__duration,
+.live-command-card__exit-code {
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}

@@ -17,6 +17,7 @@ import { buildGroupSummaryLabel } from "./groupSummary"
 import { renderJsonViewer } from "./jsonViewer"
 import { isWebSearchTool, renderWebSearchResult } from "./webSearchRenderer"
 import { isTerminalState } from "./toolState"
+import { renderLiveCommandCard } from "./liveCommandCard"
 
 export interface RenderOptions {
   messageId?: string
@@ -777,6 +778,11 @@ export function renderToolCallBlock(block: Block, opts: RenderOptions): HTMLElem
   // instead of a generic tool whose args leak the full prompt as raw JSON.
   if (isTaskTool(toolBlock)) {
     return renderSubagentTaskCard(toolBlock, opts)
+  }
+
+  // Exec/shell tools render as standalone live command cards in the chat stream.
+  if (toolBlock.class === "exec") {
+    return renderLiveCommandCard(toolBlock, opts)
   }
 
   // Check if this is a plan file write

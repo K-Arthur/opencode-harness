@@ -41,6 +41,26 @@ describe("messages.css", () => {
     }
   })
 
+  it("keeps the composer from overflowing in narrow webviews", () => {
+    // The input bottom bar must allow wrapping and hide the mode label text
+    // at very small widths so the mode/model/variant/send buttons fit.
+    assert.match(
+      layoutSource,
+      /@media\s*\(\s*max-width:\s*420px\s*\)[\s\S]*\.bottom-bar-left\s*,\s*\.bottom-bar-right\s*\{[^}]*flex-wrap:\s*wrap;/s,
+      "bottom bar sections must wrap on narrow viewports",
+    )
+    assert.match(
+      layoutSource,
+      /@media\s*\(\s*max-width:\s*420px\s*\)[\s\S]*#mode-current-text\s*\{[^}]*display:\s*none;/s,
+      "mode dropdown text label must be hidden on very narrow viewports",
+    )
+    assert.match(
+      layoutSource,
+      /@media\s*\(\s*max-width:\s*420px\s*\)[\s\S]*\.model-selector-btn\s*\{[^}]*max-width:/s,
+      "model selector must be capped in width on narrow viewports",
+    )
+  })
+
   it("keeps markdown code fences readable and scrollable", () => {
     assert.match(
       cssSource,
