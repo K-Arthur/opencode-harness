@@ -28,6 +28,10 @@
  *   node scripts/reinstall-extension.mjs --no-bump  # keep current version (NOT
  *                                                   # recommended — see traps above)
  *   node scripts/reinstall-extension.mjs --code=code-insiders   # target a CLI
+ *   node scripts/reinstall-extension.mjs --code=codium          # VSCodium
+ *
+ * The script auto-detects the available VS Code-compatible CLI in this order:
+ *   code → codium → code-oss → code-insiders
  *
  * Exit codes: 0 success; non-zero on any failed step (fail fast).
  */
@@ -40,7 +44,26 @@ const repoRoot = process.cwd()
 const args = process.argv.slice(2)
 const noBump = args.includes("--no-bump")
 const codeArg = args.find((a) => a.startsWith("--code="))
-const codeCli = codeArg ? codeArg.split("=")[1] : "code"
+
+/**
+ * Resolve the VS Code-compatible CLI to use. Explicit `--code=...` wins;
+ * otherwise we probe the most common open-source / fork binaries in order.
+ */
+function resolveCodeCli(explicit) {
+  if (explicit) return explicit
+  const candidates = ["code", "codium", "code-oss", "code-insiders"]
+  for (const bin of candidates) {
+    try {
+      execFileSync("which", [bin], { stdio: "pipe" })
+      return bin
+    } catch {
+      // not available; try next
+    }
+  }
+  return "code"
+}
+
+const codeCli = resolveCodeCli(codeArg ? codeArg.split("=")[1] : undefined)
 
 function run(cmd, cmdArgs, opts = {}) {
   process.stdout.write(`\n$ ${cmd} ${cmdArgs.join(" ")}\n`)
@@ -100,6 +123,8 @@ const extRoots = [
   join(homedir(), ".vscode-insiders", "extensions"),
   join(homedir(), ".vscode-server", "extensions"),
   join(homedir(), ".vscode-oss", "extensions"),
+  join(homedir(), ".config", "VSCodium", "extensions"),
+  join(homedir(), ".codium", "extensions"),
 ]
 const keepDir = `${id}-${version}`
 for (const root of extRoots) {

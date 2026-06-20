@@ -5,14 +5,29 @@ out-of-date voice/STT message, controls you already consolidated — you have hi
 the *stale build* trap. This guide explains why it happens and the one command
 that avoids it.
 
+This guide applies to **VS Code** and **VS Code-based editors** such as
+[VSCodium](https://vscodium.com), VS Code Insiders, and Code - OSS. The extension
+format is the same (`.vsix`); only the CLI name and the extension directory on
+disk differ.
+
 ## TL;DR
 
 ```bash
 npm run reinstall      # bump version → clean uninstall → build → install → prune
 ```
 
-Then **reload the VS Code window**: `Cmd/Ctrl+Shift+P` → **Developer: Reload
-Window** (or fully restart VS Code). Nothing you do on disk takes effect in the
+The script auto-detects the first available VS Code-compatible CLI in this order:
+`code` → `codium` → `code-oss` → `code-insiders`. If you prefer an explicit
+editor, pass `--code=<cli>`:
+
+```bash
+npm run reinstall -- --code=codium          # VSCodium
+npm run reinstall -- --code=code-insiders    # VS Code Insiders
+npm run reinstall -- --code=code             # explicit VS Code
+```
+
+Then **reload the window**: `Cmd/Ctrl+Shift+P` → **Developer: Reload Window**
+(or fully restart the editor). Nothing you do on disk takes effect in the
 running window until this reload.
 
 ## ⚠️ FIRST: Dev Host or installed VSIX? (they update by DIFFERENT commands)
@@ -64,22 +79,35 @@ Source: [`scripts/reinstall-extension.mjs`](../../scripts/reinstall-extension.mj
 
 1. `npm version patch --no-git-tag-version` — bump (skip with `--no-bump`).
 2. Delete every `opencode-harness-*.vsix` in the repo.
-3. `code --uninstall-extension koarthur.opencode-harness`.
+3. `<cli> --uninstall-extension koarthur.opencode-harness`.
 4. `vsce package --no-dependencies` (runs `vscode:prepublish`: **typecheck +
    production build + bundle-size check** — a failing typecheck blocks the package).
-5. `code --install-extension <new>.vsix --force`.
-6. Prune every other versioned dir under `~/.vscode*/extensions/`.
+5. `<cli> --install-extension <new>.vsix --force`.
+6. Prune every other versioned dir under the detected editor’s extension roots
+   (`~/.vscode/extensions/`, `~/.vscode-oss/extensions/`,
+   `~/.config/VSCodium/extensions/`, etc.).
 7. Print the installed version and the reload reminder.
 
 Flags:
 - `--no-bump` — keep the current version (not recommended; reintroduces trap #1).
-- `--code=code-insiders` — target VS Code Insiders / a different `code` CLI.
+- `--code=<cli>` — target a specific VS Code-compatible CLI (e.g. `codium`,
+  `code-insiders`, `code-oss`). When omitted, the script auto-detects the first
+  available binary in the order `code → codium → code-oss → code-insiders`.
 
 ## Verifying you are running the new build
 
+Use the CLI that matches your editor:
+
 ```bash
-code --list-extensions --show-versions | grep opencode   # expect the new version
-ls ~/.vscode/extensions/koarthur.opencode-harness-*   # expect exactly ONE dir
+# VS Code
+code --list-extensions --show-versions | grep opencode
+ls ~/.vscode/extensions/koarthur.opencode-harness-*
+
+# VSCodium
+codium --list-extensions --show-versions | grep opencode
+ls ~/.config/VSCodium/extensions/koarthur.opencode-harness-*
+# or, on older VSCodium builds:
+ls ~/.vscode-oss/extensions/koarthur.opencode-harness-*
 ```
 
 In the running window, the version also shows in the Extensions view. If it
@@ -131,12 +159,21 @@ after `npm run build` / the watch task rebuilds `dist/`.
 
 ## Full reset (nuclear option)
 
-If state is badly confused (multiple installs, partial uninstalls):
+If state is badly confused (multiple installs, partial uninstalls), use the CLI
+that matches your editor:
 
 ```bash
+# VS Code
 code --uninstall-extension koarthur.opencode-harness
-rm -rf ~/.vscode/extensions/koarthur.opencode-harness-*   # all versions
-rm -f opencode-harness-*.vsix                                 # all artifacts
+rm -rf ~/.vscode/extensions/koarthur.opencode-harness-*
+
+# VSCodium
+codium --uninstall-extension koarthur.opencode-harness
+rm -rf ~/.config/VSCodium/extensions/koarthur.opencode-harness-*
+rm -rf ~/.vscode-oss/extensions/koarthur.opencode-harness-*
+
+# Common clean-up
+rm -f opencode-harness-*.vsix
 npm run reinstall
 # then: Developer: Reload Window
 ```
@@ -147,7 +184,8 @@ npm run reinstall
 - A normal Marketplace update always changes the version, so trap #1 does not
   apply — but a window reload is still the fastest way to pick it up.
 - To install a specific `.vsix`: Extensions view → `…` menu → *Install from
-  VSIX…*, then reload.
+  VSIX…*, then reload. This works in VS Code, VSCodium, and other
+  VS Code-compatible editors that accept the same `.vsix` format.
 
 ## Common pitfalls (agents & humans)
 
