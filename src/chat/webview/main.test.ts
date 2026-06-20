@@ -25,6 +25,7 @@ const fileTrackingSource = readFileSync(path.join(__dirname, "ui", "fileTracking
 const buttonSetupSource = readFileSync(path.join(__dirname, "ui", "buttonSetup.ts"), "utf8")
 const scrollMarkersSource = readFileSync(path.join(__dirname, "ui", "scrollMarkers.ts"), "utf8")
 const keyboardShortcutsSource = (() => { try { return readFileSync(path.join(__dirname, "ui", "keyboardShortcuts.ts"), "utf8") } catch { return "" } })()
+const todoSubagentSetupSource = (() => { try { return readFileSync(path.join(__dirname, "todoSubagentSetup.ts"), "utf8") } catch { return "" } })()
 const indexHtml = readFileSync(path.join(__dirname, "index.html"), "utf8")
 const allSource = source + "\n" + themeCustomizerSource + "\n" + modeDropdownSource + "\n" + sessionModalSource + "\n" + tokenCostDisplaySource + "\n" + attachmentsSource + "\n" + welcomeViewSource + "\n" + settingsMenuSource + "\n" + fileTrackingSource + "\n" + buttonSetupSource + "\n" + scrollMarkersSource
 const sessionListRendererSource = readFileSync(path.join(__dirname, "sessionListRenderer.ts"), "utf8")
@@ -1018,9 +1019,9 @@ it("unified modal: server session items send resume_server_session on click", ()
       // navigator.clipboard is undefined in VS Code webviews; the old
       // `navigator.clipboard?.writeText(text).catch(...)` threw a synchronous
       // TypeError (`.catch` on undefined) on every Copy click.
-      const onCopyIdx = source.indexOf("onCopy:")
-      assert.ok(onCopyIdx >= 0, "tasks panel deps must define onCopy")
-      const onCopyBlock = source.slice(onCopyIdx, onCopyIdx + 400)
+      const onCopyIdx = todoSubagentSetupSource.indexOf("onCopy:")
+      assert.ok(onCopyIdx >= 0, "tasks panel deps must define onCopy in todoSubagentSetup.ts")
+      const onCopyBlock = todoSubagentSetupSource.slice(onCopyIdx, onCopyIdx + 400)
       assert.ok(!onCopyBlock.includes("navigator.clipboard"), "onCopy must not rely on navigator.clipboard")
       assert.ok(onCopyBlock.includes('"copy_text"') || onCopyBlock.includes("'copy_text'"), "onCopy must post copy_text to the host")
     })
