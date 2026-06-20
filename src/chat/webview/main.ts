@@ -43,6 +43,7 @@ import { createVirtualList, getVirtualList, disposeVirtualList } from "./virtual
 import { setupTodosPanel } from "./todos-panel"
 import { setupActivityPanel } from "./activity-panel"
 import { setupTasksPanel } from "./tasks-panel"
+import { setupTerminalPanel } from "./terminal-panel"
 import { mergeTodos, generateTodoId } from "./todos-logic"
 import { setupSkillsModal } from "./skills-modal"
 import * as questionBar from "./questionBar"
@@ -178,6 +179,7 @@ function getVsCodeApi() {
   let todosPanelApi: ReturnType<typeof setupTodosPanel> | null = null
   let activityPanelApi: ReturnType<typeof setupActivityPanel> | undefined
   let tasksPanelApi: ReturnType<typeof setupTasksPanel> | undefined
+  let terminalPanelApi: ReturnType<typeof setupTerminalPanel> | undefined
   let voiceInputApi: ReturnType<typeof setupVoiceInput> | undefined
   let hasQuotaState = false
   // Per-session server-side todos. Single source of truth keyed by sessionId
@@ -1407,6 +1409,10 @@ function setupTodoSkillAndSubagentPanels(): void {
       },
       onPanelClose: () => { syncPanelVisibilityToHost() },
     })
+    terminalPanelApi = setupTerminalPanel(els, {
+      postMessage: (msg) => vscode.postMessage(msg),
+      onPanelClose: () => { syncPanelVisibilityToHost() },
+    })
     skillsModalApi = setupSkillsModal(els, {
       onToggleSkill: (skillId: string, enabled: boolean) => vscode.postMessage({ type: "toggle_skill", skillId, enabled }),
       onSearchSkills: (query: string) => vscode.postMessage({ type: "search_skills", query }),
@@ -1468,6 +1474,11 @@ function setupTodoSkillAndSubagentPanels(): void {
     els.tasksToggleBtn.addEventListener("click", () => {
       pauseActiveAnchorForReflow()
       tasksPanelApi?.toggle?.()
+      syncPanelVisibilityToHost()
+    })
+    els.terminalToggleBtn.addEventListener("click", () => {
+      pauseActiveAnchorForReflow()
+      terminalPanelApi?.toggle()
       syncPanelVisibilityToHost()
     })
     els.subagentsToggleBtn.addEventListener("click", () => {
@@ -4357,13 +4368,21 @@ function setupTodoSkillAndSubagentPanels(): void {
             const msgList = getActiveMessageList(els)
             if (msgList) {
               let found = false
+              let removedCount = 0
               for (const child of Array.from(msgList.children)) {
                 const el = child as HTMLElement
                 if (el.dataset.messageId === msg.messageId) {
                   found = true
+                  // Add visual indicator that this message is being edited
+                  el.classList.add("message-editing")
                 } else if (found) {
                   el.remove()
+                  removedCount++
                 }
+              }
+              // Show system message about removed downstream messages
+              if (removedCount > 0) {
+                showSystemMessage(sid, `Removed ${removedCount} downstream message${removedCount > 1 ? 's' : ''} during edit`)
               }
             }
             const msgIdx = active.messages.findIndex((m) => m.id === msg.messageId)
@@ -4378,6 +4397,12 @@ function setupTodoSkillAndSubagentPanels(): void {
             updatePromptContextChips()
             updateSendButton()
             els.promptInput.focus()
+            // Change send button to indicate this is an edit operation
+            const sendBtn = els.sendButton
+            if (sendBtn) {
+              sendBtn.setAttribute("data-editing", "true")
+              sendBtn.setAttribute("aria-label", "Update message")
+            }
           }
         }
       }],
@@ -4617,6 +4642,53 @@ function setupTodoSkillAndSubagentPanels(): void {
             }
           }, 100)
         }
+      }],
+      // PTY terminal vertical (audit §14.1/§14.2)
+      ["terminal_capability", (msg) => {
+        const ptySupported = (msg as Record<string, unknown>).ptySupported === true
+        terminalPanelApi?.setCapability(ptySupported)
+      }],
+      ["pty_sessions", (msg) => {
+        const sessions = (msg as Record<string, unknown>).sessions
+        if (Array.isArray(sessions)) {
+          terminalPanelApi?.setSessions(sessions as Array<{ id: string; title: string; command: string; status: string; pid: number; exitCode?: number }>)
+        }
+      }],
+      ["pty_created", (msg) => {
+        const m = msg as Record<string, unknown>
+        terminalPanelApi?.applyLifecycleEvent({ type: "pty_created", ptyId: m.ptyId as string | undefined, pty: m.pty as Record<string, unknown> | undefined })
+      }],
+      ["pty_updated", (msg) => {
+        const m = msg as Record<string, unknown>
+        terminalPanelApi?.applyLifecycleEvent({ type: "pty_updated", ptyId: m.ptyId as string | undefined, pty: m.pty as Record<string, unknown> | undefined })
+      }],
+      ["pty_exited", (msg) => {
+        const m = msg as Record<string, unknown>
+        terminalPanelApi?.applyLifecycleEvent({ type: "pty_exited", ptyId: m.ptyId as string | undefined, pty: m.pty as Record<string, unknown> | undefined })
+      }],
+      ["pty_deleted", (msg) => {
+        const m = msg as Record<string, unknown>
+        terminalPanelApi?.applyLifecycleEvent({ type: "pty_deleted", ptyId: m.ptyId as string | undefined })
+      }],
+      ["pty_output", (msg) => {
+        const m = msg as Record<string, unknown>
+        const ptyId = m.ptyId as string | undefined
+        const data = m.data as string | undefined
+        if (ptyId && data) terminalPanelApi?.appendOutput(ptyId, data)
+      }],
+      ["pty_connected", (msg) => {
+        const ptyId = (msg as Record<string, unknown>).ptyId as string | undefined
+        if (ptyId) terminalPanelApi?.markConnected(ptyId)
+      }],
+      ["pty_cancelled", (msg) => {
+        const ptyId = (msg as Record<string, unknown>).ptyId as string | undefined
+        if (ptyId) terminalPanelApi?.markCancelled(ptyId)
+      }],
+      ["pty_error", (msg) => {
+        const m = msg as Record<string, unknown>
+        const ptyId = m.ptyId as string | undefined
+        const error = m.error as string | undefined
+        if (ptyId && error) terminalPanelApi?.showError(ptyId, error)
       }],
     ])
 

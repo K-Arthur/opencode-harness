@@ -1401,6 +1401,25 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
     ["activity", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {
       this.appendActivityBlock(tabId, event.data)
     }],
+    // PTY lifecycle events (audit §14.1/§14.2). PTY terminals are a global
+    // resource — the ptyId is carried as sessionId, not a chat session id.
+    // Forward to the webview so the terminal panel can fold them via ptyReducer.
+    ["pty.created", (event: { type: string; sessionId?: string; data?: unknown }) => {
+      const data = event.data as { ptyId?: string; pty?: Record<string, unknown> } | undefined
+      this.postMessage({ type: "pty_created", ptyId: data?.ptyId, pty: data?.pty })
+    }],
+    ["pty.updated", (event: { type: string; sessionId?: string; data?: unknown }) => {
+      const data = event.data as { ptyId?: string; pty?: Record<string, unknown> } | undefined
+      this.postMessage({ type: "pty_updated", ptyId: data?.ptyId, pty: data?.pty })
+    }],
+    ["pty.exited", (event: { type: string; sessionId?: string; data?: unknown }) => {
+      const data = event.data as { ptyId?: string; pty?: Record<string, unknown> } | undefined
+      this.postMessage({ type: "pty_exited", ptyId: data?.ptyId, pty: data?.pty })
+    }],
+    ["pty.deleted", (event: { type: string; sessionId?: string; data?: unknown }) => {
+      const data = event.data as { ptyId?: string } | undefined
+      this.postMessage({ type: "pty_deleted", ptyId: data?.ptyId })
+    }],
     ["agent_activity", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {
       this.appendActivityBlock(tabId, event.data, "Agent activity")
     }],
@@ -2098,12 +2117,38 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       branch,
     })
     this.pushToolOutputConfigToWebview()
+    void this.pushTerminalCapabilityToWebview()
     this.backfillService.setHydrated(true)
   }
 
   private pushToolOutputConfigToWebview(): void {
     const renderAnsi = vscode.workspace.getConfiguration("opencode").get<boolean>("toolOutput.renderAnsi", false)
     this.postMessage({ type: "tool_output_config", renderAnsi })
+  }
+
+  /**
+   * Probe whether the connected opencode server exposes the PTY API
+   * (`pty.list`). When false, the webview keeps the §14.1 Hybrid-A polling
+   * fallback (constitution rule #6: graceful degradation). When true, the
+   * webview shows the live PTY terminal panel.
+   */
+  private async pushTerminalCapabilityToWebview(): Promise<void> {
+    if (!this.sessionManager.isRunning) {
+      this.postMessage({ type: "terminal_capability", ptySupported: false })
+      return
+    }
+    let ptySupported = false
+    try {
+      const result = await this.sessionManager.ptyService.listSessions()
+      // listSessions() throws on error; reaching here means the endpoint exists.
+      ptySupported = true
+      // Also push the current set of PTY sessions so the panel can hydrate.
+      this.postMessage({ type: "pty_sessions", sessions: result })
+    } catch (err) {
+      log.debug(`PTY capability probe failed (falling back to polling): ${err instanceof Error ? err.message : String(err)}`)
+      ptySupported = false
+    }
+    this.postMessage({ type: "terminal_capability", ptySupported })
   }
 
 private isSessionInCurrentWorkspace(session: import("../session/SessionStore").OpenCodeSession): boolean {
@@ -2297,16 +2342,29 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     return this.codeInsertionService.languageExtension(language)
   }
 
-  private handleEditMessage(sessionId: string, messageId: string, text: string): void {
+  private async handleEditMessage(sessionId: string, messageId: string, text: string): Promise<void> {
     const session = this.sessionStore.get(sessionId)
     if (!session) return
 
     const msgIdx = session.messages.findIndex((m) => m.id === messageId)
     if (msgIdx === -1) return
 
-    // Clear downstream messages (all messages after the edited one)
-    const removed = this.sessionStore.truncateMessages(sessionId, msgIdx + 1)
-    log.info(`Editing message ${messageId}: removed ${removed} downstream messages`)
+    // Use SDK session.revert for proper server-side revert when available
+    if (session.cliSessionId) {
+      try {
+        await this.sessionManager.revertMessage(session.cliSessionId, messageId)
+        log.info(`Edited message ${messageId} using SDK session.revert`)
+      } catch (err) {
+        log.warn(`SDK revert failed for message ${messageId}, falling back to client-side truncation`, err)
+        // Fallback to client-side truncation if SDK revert fails
+        const removed = this.sessionStore.truncateMessages(sessionId, msgIdx + 1)
+        log.info(`Editing message ${messageId}: removed ${removed} downstream messages (fallback)`)
+      }
+    } else {
+      // Client-side fallback for sessions without server linkage
+      const removed = this.sessionStore.truncateMessages(sessionId, msgIdx + 1)
+      log.info(`Editing message ${messageId}: removed ${removed} downstream messages (offline mode)`)
+    }
 
     // Send the original text back to the webview to prefill the input
     this.postMessage({

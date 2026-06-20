@@ -24,6 +24,10 @@ export type OpencodeEventType =
   | "mcp_tools_changed"
   | "step_finish"
   | "activity"
+  | "pty.created"
+  | "pty.updated"
+  | "pty.exited"
+  | "pty.deleted"
   | "unknown_server_event"
 
 export interface OpencodeEvent {

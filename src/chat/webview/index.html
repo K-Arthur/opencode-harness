@@ -136,6 +136,12 @@
           </svg>
           Commands
         </button>
+        <button class="settings-menu-item hidden" id="terminal-toggle-btn" role="menuitem" aria-label="Toggle terminal panel" aria-pressed="false">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3"/><path d="M13 15h4"/>
+          </svg>
+          Terminal
+        </button>
         <button class="settings-menu-item" id="subagents-toggle-btn" role="menuitem" aria-label="Toggle subagent panel" aria-pressed="false">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="5" y="8" width="14" height="10" rx="2"/>
@@ -343,6 +349,19 @@
           </div>
           <div id="tasks-filters" class="tasks-filters"></div>
           <div id="tasks-list" class="tasks-panel-content" aria-live="polite"></div>
+        </div>
+        <div id="terminal-panel" class="terminal-panel side-panel hidden" role="region" aria-labelledby="terminal-panel-title">
+          <div class="terminal-panel-header">
+            <h2 id="terminal-panel-title" class="terminal-panel-title">Terminal</h2>
+            <div class="panel-header-actions">
+              <button class="icon-btn" id="terminal-close-btn" title="Close terminal panel" aria-label="Close terminal panel">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div id="terminal-list" class="terminal-panel-content" aria-live="polite"></div>
         </div>
         <div id="subagent-panel" class="subagent-panel side-panel hidden" role="region" aria-labelledby="subagent-panel-title" data-view="list">
           <div class="subagent-panel-header">

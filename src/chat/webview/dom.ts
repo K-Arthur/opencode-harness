@@ -199,6 +199,10 @@ export interface ElementRefs {
   tasksFilters: HTMLElement
   tasksList: HTMLElement
   tasksCloseBtn: HTMLElement
+  terminalToggleBtn: HTMLElement
+  terminalPanel: HTMLElement
+  terminalList: HTMLElement
+  terminalCloseBtn: HTMLElement
   skillsBtn: HTMLElement
   skillsModal: HTMLElement
   skillsModalCloseBtn: HTMLElement
@@ -397,6 +401,10 @@ export function getElementRefs(): ElementRefs {
     tasksFilters: requireElement("tasks-filters"),
     tasksList: requireElement("tasks-list"),
     tasksCloseBtn: requireElement("tasks-close-btn"),
+    terminalToggleBtn: requireElement("terminal-toggle-btn"),
+    terminalPanel: requireElement("terminal-panel"),
+    terminalList: requireElement("terminal-list"),
+    terminalCloseBtn: requireElement("terminal-close-btn"),
     skillsBtn: requireElement("skills-btn"),
     skillsModal: requireElement("skills-modal"),
     skillsModalCloseBtn: requireElement("skills-modal-close-btn"),
