@@ -34,6 +34,30 @@ import type { StreamCallbacks, ToolEndResult, ToolPartialInput, StreamLifecycleS
 export type { StreamCallbacks, ToolEndResult, ToolPartialInput, StreamLifecycleState, ActiveRunMetrics }
 import type { SessionManagerRegistry } from "../../session/SessionManagerRegistry"
 
+/** Context object grouping all StreamCoordinator dependencies to reduce constructor parameter count. */
+export interface StreamDeps {
+  sessionManager: SessionManager
+  sessionStore: SessionStore
+  contextEngine: ContextEngine
+  contextMonitor: ContextMonitor
+  modelManager: ModelManager
+  tabManager: TabManager
+  rateLimitMonitor: RateLimitMonitor
+  diffApplier: DiffApplier
+  methodologyAdvisor?: MethodologyAdvisor
+  attachmentStorage?: ReturnType<typeof createAttachmentStorage>
+}
+
+/** Configuration object for startPrompt to reduce parameter count. */
+export interface StartPromptConfig {
+  tabId: string
+  text: string
+  callbacks: StreamCallbacks
+  variant?: string
+  attachments?: Array<{ data: string; mimeType: string }>
+  identity?: PromptRunIdentity
+}
+
 type ActiveRunState = "sending" | "accepted" | "streaming" | "finalizing" | "completed" | "failed" | "aborted" | "timeout" | "interrupted"
 
 interface PromptRunIdentity {
@@ -207,6 +231,15 @@ export class StreamCoordinator {
   /** Per-tab async context estimate version; incremented by estimates and final actual usage. */
   private contextEstimateVersions = new Map<string, number>()
   private tabCloseDisposable: vscode.Disposable | null = null
+  /** Core dependencies injected via StreamDeps */
+  private readonly sessionManager: SessionManager
+  private readonly sessionStore: SessionStore
+  private readonly contextEngine: ContextEngine
+  private readonly contextMonitor: ContextMonitor
+  private readonly modelManager: ModelManager
+  private readonly tabManager: TabManager
+  private readonly rateLimitMonitor: RateLimitMonitor
+  private readonly diffApplier: DiffApplier
   /** Methodology classifier/selector — pluggable so tests can stub it */
   private readonly methodologyAdvisor: MethodologyAdvisor
   private readonly activityTracker = new RunActivityTracker()
@@ -241,20 +274,17 @@ export class StreamCoordinator {
     log: () => { /* no-op until wireStreamingLog() is called */ },
   }
 
-  constructor(
-    private readonly sessionManager: SessionManager,
-    private readonly sessionStore: SessionStore,
-    private readonly contextEngine: ContextEngine,
-    private readonly contextMonitor: ContextMonitor,
-    private readonly modelManager: ModelManager,
-    private readonly tabManager: TabManager,
-    private readonly rateLimitMonitor: RateLimitMonitor,
-    diffApplier: DiffApplier,
-    methodologyAdvisor?: MethodologyAdvisor,
-    attachmentStorage?: ReturnType<typeof createAttachmentStorage>,
-  ) {
-    this.methodologyAdvisor = methodologyAdvisor ?? new MethodologyAdvisor()
-    this.attachmentStorage = attachmentStorage ?? createAttachmentStorage()
+  constructor(deps: StreamDeps) {
+    this.sessionManager = deps.sessionManager
+    this.sessionStore = deps.sessionStore
+    this.contextEngine = deps.contextEngine
+    this.contextMonitor = deps.contextMonitor
+    this.modelManager = deps.modelManager
+    this.tabManager = deps.tabManager
+    this.rateLimitMonitor = deps.rateLimitMonitor
+    this.diffApplier = deps.diffApplier
+    this.methodologyAdvisor = deps.methodologyAdvisor ?? new MethodologyAdvisor()
+    this.attachmentStorage = deps.attachmentStorage ?? createAttachmentStorage()
     // Resolve the TTFB timeout from workspace config (one injection point;
     // tests can override post-construction via `setTtfbTimeoutForTests`).
     this.ttfbTimeoutMs = this.resolveTtfbTimeoutMs()
@@ -1062,14 +1092,8 @@ export class StreamCoordinator {
     this.postRunActivitySnapshot(tabId, snapshot, callbacks)
   }
 
-  async startPrompt(
-    tabId: string,
-    text: string,
-    callbacks: StreamCallbacks,
-    variant?: string,
-    attachments: Array<{ data: string; mimeType: string }> = [],
-    identity: PromptRunIdentity = {},
-  ): Promise<void> {
+  async startPrompt(config: StartPromptConfig): Promise<void> {
+    const { tabId, text, callbacks, variant, attachments = [], identity = {} } = config
     const tab = this.tabManager.getTab(tabId)
     if (!tab) {
       callbacks.postRequestError("Tab not found")
@@ -2535,7 +2559,11 @@ export class StreamCoordinator {
 
     if (wasTimeout && !hasAssistantOutput && lastUser) {
       log.info(`retryFromHere: TTFB timeout detected for tab ${tabId} — re-sending original user prompt`)
-      await this.startPrompt(tabId, lastUser.blocks.map(b => b.type === "text" ? b.text : "").join(" ").trim() || "Please retry the last request.", callbacks)
+      await this.startPrompt({
+        tabId,
+        text: lastUser.blocks.map(b => b.type === "text" ? b.text : "").join(" ").trim() || "Please retry the last request.",
+        callbacks,
+      })
       return
     }
 
@@ -2553,7 +2581,11 @@ export class StreamCoordinator {
     if (!cliSessionId) return
 
     log.info(`retryFromHere: retrying for tab ${tabId}`)
-    await this.startPrompt(tabId, retryPrompt, callbacks)
+    await this.startPrompt({
+      tabId,
+      text: retryPrompt,
+      callbacks,
+    })
   }
 
   appendChunk(tabId: string, text: string, callbacks?: StreamCallbacks, messageId?: string): void {

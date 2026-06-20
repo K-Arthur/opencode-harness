@@ -344,10 +344,17 @@ export class WebviewEventRouter {
           const currentTabForMode = this.opts.tabManager.getTab(sessionId)
           const userMsg: ChatMessage = { role: "user", id: userMessageId, blocks: [...textBlocks, ...imageBlocks], timestamp: Date.now(), sessionId, mode: currentTabForMode?.mode }
           this.opts.sessionStore.appendMessage(sessionId, userMsg)
-          await this.opts.streamCoordinator.startPrompt(sessionId, text, {
-            postMessage: (m) => this.opts.postMessage(m),
-            postRequestError: (m) => this.opts.postRequestError(m),
-          }, variant, attachments, { userMessageId, clientRequestId })
+          await this.opts.streamCoordinator.startPrompt({
+            tabId: sessionId,
+            text,
+            callbacks: {
+              postMessage: (m) => this.opts.postMessage(m),
+              postRequestError: (m) => this.opts.postRequestError(m),
+            },
+            variant,
+            attachments,
+            identity: { userMessageId, clientRequestId },
+          })
         } catch (err) {
           log.error("send_prompt failed", err)
           const text = typeof msg.text === "string" ? msg.text : ""
@@ -485,17 +492,20 @@ export class WebviewEventRouter {
             if (!this.promptsInFlight.has(sessionId)) {
               this.promptsInFlight.add(sessionId)
               try {
-                await this.opts.streamCoordinator.startPrompt(sessionId, value, {
-                  postMessage: (m) => this.opts.postMessage(m),
-                  postRequestError: (m) => this.opts.postRequestError(m),
-                  toolCallId: answerId,
-                  clearPromptsInFlight: () => this.promptsInFlight.delete(sessionId),
-                  // B10-recovery: arm the hard 15s unconditional watchdog
-                  // so the user is never stuck "generating" indefinitely.
-                  // The webview receives `expired_question_recovery_failed`
-                  // with the answer text pre-filled if no response arrives.
-                  recoveryFromExpiredQuestion: true,
-                  expiredRecoveryAnswerText: value,
+                await this.opts.streamCoordinator.startPrompt({
+                  tabId: sessionId,
+                  text: value,
+                  callbacks: {
+                    postMessage: (m) => this.opts.postMessage(m),
+                    postRequestError: (m) => this.opts.postRequestError(m),
+                    toolCallId: answerId,
+                    clearPromptsInFlight: () => this.promptsInFlight.delete(sessionId),
+                    // B10-recovery: arm the hard 15s unconditional watchdog
+                    // so the user is never stuck "generating" indefinitely.
+                    // The webview receives `expired_question_recovery_failed`
+                    // with the answer text pre-filled if no response arrives.
+                    recoveryFromExpiredQuestion: true,
+                  },
                 })
               } catch (promptErr) {
                 log.error("B10: failed to send expired question answer as prompt", promptErr)
@@ -574,11 +584,15 @@ export class WebviewEventRouter {
           this.opts.sessionStore.markQuestionAnswered(sessionId, toolCallId, textForPrompt, answerSource)
           this.opts.streamCoordinator.markQuestionAnswered(sessionId, toolCallId)
         }
-        await this.opts.streamCoordinator.startPrompt(sessionId, value, {
-          postMessage: (m) => this.opts.postMessage(m),
-          postRequestError: (m) => this.opts.postRequestError(m),
-          toolCallId,
-          clearPromptsInFlight: () => this.promptsInFlight.delete(sessionId),
+        await this.opts.streamCoordinator.startPrompt({
+          tabId: sessionId,
+          text: value,
+          callbacks: {
+            postMessage: (m) => this.opts.postMessage(m),
+            postRequestError: (m) => this.opts.postRequestError(m),
+            toolCallId,
+            clearPromptsInFlight: () => this.promptsInFlight.delete(sessionId),
+          },
         })
         this.opts.postMessage({
           type: "question_acknowledged",
@@ -2145,10 +2159,16 @@ export class WebviewEventRouter {
       }
       this.opts.sessionStore.appendMessage(sessionId, userMsg)
       this.opts.postMessage({ type: "add_message", sessionId, message: userMsg })
-      await this.opts.streamCoordinator.startPrompt(sessionId, item.text, {
-        postMessage: (m) => this.opts.postMessage(m),
-        postRequestError: (m) => this.opts.postRequestError(m),
-      }, undefined, item.attachments, { userMessageId, clientRequestId })
+      await this.opts.streamCoordinator.startPrompt({
+        tabId: sessionId,
+        text: item.text,
+        callbacks: {
+          postMessage: (m) => this.opts.postMessage(m),
+          postRequestError: (m) => this.opts.postRequestError(m),
+        },
+        attachments: item.attachments,
+        identity: { userMessageId, clientRequestId },
+      })
       this.opts.hostQueue.confirmCompleted(sessionId, item.id)
       this.postQueueState(sessionId)
     } catch (err) {

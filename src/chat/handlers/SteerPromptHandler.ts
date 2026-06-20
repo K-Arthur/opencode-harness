@@ -97,13 +97,12 @@ export class SteerPromptHandler {
       await this.streamCoordinator.abort(sessionId, callbacks)
       
       // Send steer prompt immediately
-      await this.streamCoordinator.startPrompt(
-        sessionId,
-        steerPrompt.text,
+      await this.streamCoordinator.startPrompt({
+        tabId: sessionId,
+        text: steerPrompt.text,
         callbacks,
-        undefined,
-        steerPrompt.attachments,
-      )
+        attachments: steerPrompt.attachments,
+      })
       
       // Track the steer prompt for history
     } catch (error) {
