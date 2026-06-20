@@ -74,7 +74,7 @@ import { shouldHonorActiveSessionChange, resolveInitStateTarget } from "./sessio
 import { resolveEventSessionTarget } from "./sessionTarget"
 import { renderRecentPromptsRail } from "./recentPromptsRail"
 import { closeSettingsMenu as closeSettingsMenuModule, setupSettingsMenuKeyboardNav as setupSettingsMenuKeyboardNavModule } from "./ui/settingsMenu"
-import { handleChangedFiles as handleChangedFilesModule, renderCheckpointPanel as renderCheckpointPanelModule, handleClearMessages as handleClearMessagesModule, type FileTrackingDeps } from "./ui/fileTracking"
+import { handleChangedFiles as handleChangedFilesModule, renderCheckpointPanel as renderCheckpointPanelModule, renderRestorePoints as renderRestorePointsModule, handleClearMessages as handleClearMessagesModule, type FileTrackingDeps } from "./ui/fileTracking"
 import { setupButtons as setupButtonsModule } from "./ui/buttonSetup"
 import { setupPermissionConfig, closePermissionConfig } from "./permissionConfig"
 import { deriveState } from "./ui/contextUsageThresholds"
@@ -4125,6 +4125,11 @@ function setupTodoSkillAndSubagentPanels(): void {
           renderCheckpointPanel(msg.checkpoints as Array<{ id: string; sessionId: string; messageId?: string; createdAt?: number; filesChanged?: string[]; action?: string }>)
         }
       }],
+      ["restore_points", (msg, sid) => {
+        if (sid && Array.isArray(msg.points)) {
+          renderRestorePoints(msg.points as import("./ui/fileTracking").RestorePointView[], sid)
+        }
+      }],
       ["checkpoint_restored", (msg, sid) => {
         if (sid) {
           if (msg.ok) {
@@ -5045,6 +5050,10 @@ function setupTodoSkillAndSubagentPanels(): void {
 
   function renderCheckpointPanel(checkpoints: Array<{ id: string; sessionId: string; messageId?: string; createdAt?: number; filesChanged?: string[]; action?: string }>) {
     renderCheckpointPanelModule(fileTrackingDeps, checkpoints)
+  }
+
+  function renderRestorePoints(points: import("./ui/fileTracking").RestorePointView[], sessionId: string) {
+    renderRestorePointsModule(fileTrackingDeps, sessionId, points)
   }
 
   function handleClearMessages(sessionId?: string) {

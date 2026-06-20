@@ -103,7 +103,10 @@ export function setupButtons(deps: ButtonSetupDeps): void {
     checkpointToggle.setAttribute("aria-pressed", String(!showing))
     if (!showing) {
       const sessionId = deps.getActiveSessionId()
-      if (sessionId) deps.postMessage({ type: "list_checkpoints", sessionId })
+      if (sessionId) {
+        deps.postMessage({ type: "list_checkpoints", sessionId })
+        deps.postMessage({ type: "list_restore_points", sessionId })
+      }
     }
   })
 

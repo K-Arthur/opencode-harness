@@ -233,6 +233,132 @@
   outline-offset: 2px;
 }
 
+/* ── Restore points rail (audit §14.5) ───────────────────────────── */
+.restore-points-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--oc-glass-border);
+}
+
+.restore-points-title {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--oc-fg);
+  margin-bottom: var(--space-1);
+}
+
+.restore-points-empty {
+  font-size: var(--text-xs);
+  color: var(--oc-muted-fg);
+  text-align: center;
+  padding: var(--space-2) 0;
+}
+
+.restore-point-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  border-radius: var(--radius-sm);
+  background: var(--oc-bg-secondary);
+  border: 1px solid var(--oc-glass-border);
+  transition: background 0.15s ease;
+}
+
+.restore-point-item:hover {
+  background: var(--oc-list-hover);
+}
+
+.restore-point-dot {
+  width: 8px;
+  height: 8px;
+  min-width: 8px;
+  border-radius: 50%;
+  background: var(--oc-warning);
+  opacity: 0.7;
+  position: relative;
+}
+
+.restore-point-dot::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  height: calc(100% + var(--space-1));
+  background: var(--oc-glass-border);
+}
+
+.restore-point-item:last-child .restore-point-dot::after {
+  display: none;
+}
+
+.restore-point-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.restore-point-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.restore-point-label {
+  font-weight: 500;
+  color: var(--oc-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.restore-point-time {
+  font-size: var(--text-2xs);
+  color: var(--oc-muted-fg);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.restore-point-meta {
+  font-size: var(--text-2xs);
+  color: var(--oc-muted-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.restore-point-restore-btn {
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
+  background: var(--oc-warning);
+  color: var(--oc-bg);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.restore-point-item:hover .restore-point-restore-btn {
+  opacity: 1;
+}
+
+.restore-point-restore-btn:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--oc-warning);
+  outline-offset: 2px;
+}
+
 .header-actions {
   display: flex;
   align-items: center;

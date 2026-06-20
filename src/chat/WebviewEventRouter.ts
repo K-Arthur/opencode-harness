@@ -189,7 +189,7 @@ export class WebviewEventRouter {
     "delete_session", "archive_session", "pin_session", "set_session_tags", "revert_message", "unrevert",
     "list_server_sessions", "delete_server_session", "resume_server_session",
     "add_mcp_server", "update_mcp_server", "remove_mcp_server", "toggle_mcp_server", "get_mcp_servers",
-    "show_diff", "list_checkpoints", "restore_checkpoint",
+    "show_diff", "list_checkpoints", "restore_checkpoint", "list_restore_points", "restore_point",
     "preview_theme", "get_theme_config", "update_theme_config", "list_cli_themes",
     "request_more_messages", "refresh_session_messages", "stream_ack", "retry_stream", "request_state_sync",
     "set_instructions", "fork_session", "accept_hunk", "reject_hunk", "open_model_selector_for_regen", "regenerate_with_model",
@@ -1503,6 +1503,50 @@ export class WebviewEventRouter {
         log.error("Failed to restore checkpoint", err)
         this.opts.postMessage({ type: "checkpoint_restored", sessionId, checkpointId: msg.checkpointId, ok: false, error: (err as Error).message })
         this.opts.showErrorMessage(`OpenCode: Could not restore checkpoint — ${(err as Error).message}. Check the output channel for details.`)
+      }
+    }],
+    ["list_restore_points", async (_msg: Record<string, unknown>, sessionId?: string) => {
+      if (!sessionId) return
+      const session = this.opts.sessionStore.get(sessionId)
+      if (!session) return
+      try {
+        const { collectRestorePoints } = await import("../checkpoint/restorePoints")
+        const points = collectRestorePoints(session.messages
+          .filter((m): m is typeof m & { id: string } => typeof m.id === "string")
+          .map((m) => ({
+            id: m.id,
+            role: m.role === "user" ? "user" : "assistant",
+            time: m.timestamp,
+            parts: (m.blocks ?? [])
+              .filter((b): b is typeof b & { id: string } => typeof b.id === "string")
+              .map((b) => ({
+                id: b.id,
+                type: b.type,
+                snapshot: (b as any).snapshot,
+                tool: (b as any).tool,
+                title: (b as any).title,
+              })),
+          })))
+        this.opts.postMessage({ type: "restore_points", sessionId, points })
+      } catch (err) {
+        log.error("Failed to list restore points", err)
+        this.opts.postMessage({ type: "restore_points", sessionId, points: [] })
+      }
+    }],
+    ["restore_point", async (msg: Record<string, unknown>, sessionId?: string) => {
+      if (!sessionId || typeof msg.messageID !== "string") return
+      const messageID = msg.messageID as string
+      const partID = typeof msg.partID === "string" ? msg.partID : undefined
+      try {
+        const ok = await this.opts.sessionManager.revert(sessionId, messageID, partID)
+        this.opts.postMessage({ type: "restore_point_result", sessionId, messageID, ok })
+        if (ok) {
+          this.opts.showInformationMessage?.(`OpenCode: Restored to ${partID ? "checkpoint" : "message"} ${messageID.slice(0, 8)}.`)
+        }
+      } catch (err) {
+        log.error("Failed to restore point", err)
+        this.opts.postMessage({ type: "restore_point_result", sessionId, messageID, ok: false, error: (err as Error).message })
+        this.opts.showErrorMessage?.(`OpenCode: Could not restore point — ${(err as Error).message}`)
       }
     }],
     ["request_more_messages", async (msg: Record<string, unknown>, sessionId?: string) => {

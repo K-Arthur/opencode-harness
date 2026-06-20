@@ -245,6 +245,103 @@ function formatRelativeTime(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" })
 }
 
+export interface RestorePointView {
+  index: number
+  messageID: string
+  partID?: string
+  snapshot: string
+  label: string
+  kind: "user-turn" | "step" | "snapshot"
+  time?: number
+}
+
+export function renderRestorePoints(deps: FileTrackingDeps, sessionId: string, points: RestorePointView[]): void {
+  const panel = deps.checkpointPanel
+  const toggleBtn = deps.checkpointToggleBtn
+  if (!panel) return
+
+  // Preserve any checkpoint list rendered by renderCheckpointPanel; if the panel
+  // is empty, we own the whole surface.
+  const list = panel.querySelector(".restore-points-list")
+  if (list) list.remove()
+
+  const container = document.createElement("div")
+  container.className = "restore-points-list"
+
+  const title = document.createElement("div")
+  title.className = "restore-points-title"
+  title.textContent = "Restore points"
+  container.appendChild(title)
+
+  if (points.length === 0) {
+    const empty = document.createElement("div")
+    empty.className = "restore-points-empty"
+    empty.textContent = "No restore points yet"
+    container.appendChild(empty)
+  } else {
+    points.forEach((point) => {
+      const item = document.createElement("div")
+      item.className = "restore-point-item"
+      item.setAttribute("role", "listitem")
+      item.setAttribute("data-restore-point-index", String(point.index))
+
+      const dot = document.createElement("span")
+      dot.className = "restore-point-dot"
+      dot.setAttribute("aria-hidden", "true")
+      item.appendChild(dot)
+
+      const content = document.createElement("div")
+      content.className = "restore-point-content"
+
+      const header = document.createElement("div")
+      header.className = "restore-point-header"
+
+      const label = document.createElement("span")
+      label.className = "restore-point-label"
+      label.textContent = point.label
+      header.appendChild(label)
+
+      if (point.time) {
+        const time = document.createElement("span")
+        time.className = "restore-point-time"
+        time.textContent = formatRelativeTime(point.time)
+        time.title = new Date(point.time).toLocaleString()
+        header.appendChild(time)
+      }
+
+      content.appendChild(header)
+
+      const meta = document.createElement("div")
+      meta.className = "restore-point-meta"
+      meta.textContent = point.kind === "user-turn" ? "Before this prompt" : "Checkpoint"
+      content.appendChild(meta)
+
+      item.appendChild(content)
+
+      const restoreBtn = document.createElement("button")
+      restoreBtn.className = "restore-point-restore-btn"
+      restoreBtn.textContent = "Restore"
+      restoreBtn.setAttribute("aria-label", `Restore to ${point.label}`)
+      restoreBtn.addEventListener("click", () => {
+        deps.postMessage({
+          type: "restore_point",
+          sessionId,
+          messageID: point.messageID,
+          partID: point.partID,
+          snapshot: point.snapshot,
+        })
+      })
+      item.appendChild(restoreBtn)
+
+      container.appendChild(item)
+    })
+  }
+
+  panel.appendChild(container)
+  panel.classList.remove("hidden")
+  toggleBtn?.setAttribute("aria-pressed", "true")
+}
+
 function formatActionLabel(action: string): string {
   const labels: Record<string, string> = {
     baseline: "Session start",

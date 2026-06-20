@@ -448,6 +448,24 @@ and diverged over time.
   `accept_diff`. Server-side message rollback uses the OpenCode `session.revert(messageID)`
   flow and reports through `revert_result`.
 
+### Restore Points (audit §14.5)
+
+Snapshot-bearing parts (`snapshot`, `step-start`, `step-finish`) inside the session transcript
+can be surfaced as a chronological "restore to here" rail. The host derives restore points from
+the local session messages, so the coordinates are available even when the server has not
+materialised explicit checkpoint objects.
+
+- `list_restore_points`: `{ type, sessionId }`. Host responds with `restore_points`.
+- `restore_points`: `{ type, sessionId, points: RestorePointView[] }`. Each point carries
+  `index`, `messageID`, `partID`, `snapshot`, `label`, `kind` (`user-turn` | `step` | `snapshot`),
+  and optional `time`.
+- `restore_point`: `{ type, sessionId, messageID, partID?, snapshot? }`. Host calls
+  `session.revert({ sessionID, messageID, partID })` and reports through `restore_point_result`.
+- `restore_point_result`: `{ type, sessionId, messageID, ok, error? }`.
+
+The webview renders the restore points in the checkpoint panel, below the extension-managed
+checkpoint list. Clicking **Restore** reverts the session to that snapshot/message boundary.
+
 ## Session Message Freshness
 
 Session messages can become stale when the server lazy-loads conversations from disk after the

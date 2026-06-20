@@ -694,6 +694,8 @@ export type HostMessage =
   | { type: "unrevert_result"; ok: boolean; sessionId?: string; error?: string }
   | { type: "checkpoint_list"; sessionId: string; checkpoints: CheckpointInfo[] }
   | { type: "checkpoint_restored"; sessionId: string; ok: boolean; checkpointId: string; error?: string }
+  | { type: "restore_points"; sessionId: string; points: { index: number; messageID: string; partID?: string; snapshot: string; label: string; kind: "user-turn" | "step" | "snapshot"; time?: number }[] }
+  | { type: "restore_point_result"; sessionId: string; ok: boolean; messageID?: string; error?: string }
   | { type: "stash_success"; name: string }
   | { type: "stash_error"; error: string }
   | { type: "stash_list"; stashes: unknown[] }
@@ -892,6 +894,8 @@ export type WebviewMessage =
   | { type: "show_diff"; filePath: string; proposedContent: string; title?: string; sessionId?: string }
   | { type: "list_checkpoints"; sessionId: string }
   | { type: "restore_checkpoint"; checkpointId: string; sessionId?: string }
+  | { type: "list_restore_points"; sessionId: string }
+  | { type: "restore_point"; sessionId: string; messageID: string; partID?: string; snapshot?: string }
   | { type: "revert_message"; sessionId?: string; messageId?: string }
   | { type: "unrevert"; sessionId?: string }
   | { type: "preview_theme"; theme: unknown }
