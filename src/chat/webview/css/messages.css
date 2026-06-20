@@ -1254,7 +1254,7 @@
   color: var(--markdown-text, var(--color-fg));
 }
 
-[dir="rtl"] .markdown-content {
+body.chat-rtl .markdown-content {
   text-align: right;
 }
 

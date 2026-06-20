@@ -330,4 +330,16 @@ void describe("Message Contract Tests", () => {
     assert.strictEqual(started.requestId, "voice-1")
     assert.strictEqual(transcribing.type, "voice_transcribing")
   })
+
+  void it("validates open_model_manager message structure", () => {
+    const message: HostMessage = {
+      type: "open_model_manager",
+      forRegeneration: true,
+      messageId: "msg-1",
+    }
+
+    assert.strictEqual(message.type, "open_model_manager")
+    assert.strictEqual(message.forRegeneration, true)
+    assert.strictEqual(typeof message.messageId, "string")
+  })
 })

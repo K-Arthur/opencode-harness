@@ -204,13 +204,23 @@ function sanitizeMcpServerConfig(name: string, value: unknown, partial = false):
 
   const raw = value as Record<string, unknown>
   const config = { ...raw } as McpServerConfig
+
+  // Accept opencode aliases: environment → env, enabled → !disabled
+  if (raw.environment !== undefined && raw.env === undefined) {
+    config.env = assertSafeRecord("env", raw.environment)
+    delete (config as Record<string, unknown>).environment
+  }
+  if (raw.enabled !== undefined && raw.disabled === undefined) {
+    config.disabled = !(raw.enabled as boolean)
+    delete (config as Record<string, unknown>).enabled
+  }
+
   const type = typeof config.type === "string" ? config.type.trim().toLowerCase() : undefined
   if (type !== undefined && !["stdio", "local", "http", "sse", "remote"].includes(type)) {
     throw new Error("MCP server type must be stdio, local, http, sse, or remote")
   }
   if (type !== undefined) config.type = type
 
-  const command = typeof config.command === "string" ? config.command.trim() : undefined
   const url = assertRemoteUrl(config.url)
 
   // Non-stdio types (http/sse/remote) require a URL; without one the server
@@ -220,18 +230,55 @@ function sanitizeMcpServerConfig(name: string, value: unknown, partial = false):
     throw new Error(`MCP ${type} server must include a url`)
   }
 
+  // Accept command as string | string[] (opencode uses array form)
+  const rawCommand = config.command as string | string[] | undefined
+  let command: string | undefined
+  let argsFromCommand: string[] | undefined
+
+  if (typeof rawCommand === "string") {
+    command = rawCommand.trim()
+  } else if (Array.isArray(rawCommand)) {
+    // Array form: [0] is binary, rest are merged into args
+    if (rawCommand.length === 0) {
+      throw new Error("MCP server command array must not be empty")
+    }
+    const binary = rawCommand[0]
+    if (typeof binary !== "string") {
+      throw new Error("MCP server command array first element must be a string")
+    }
+    command = binary.trim()
+    // Validate every element with MCP_COMMAND_PATTERN
+    for (let i = 0; i < rawCommand.length; i++) {
+      const elem = rawCommand[i]
+      if (typeof elem !== "string") {
+        throw new Error(`MCP server command array element ${i} must be a string`)
+      }
+      if (!MCP_COMMAND_PATTERN.test(elem) || elem.includes("..") || hasControlChars(elem)) {
+        throw new Error(`MCP server command array element ${i} "${elem}" contains unsafe characters and was rejected`)
+      }
+    }
+    // Merge rest into args
+    if (rawCommand.length > 1) {
+      argsFromCommand = rawCommand.slice(1).map((arg: unknown) => typeof arg === "string" ? arg : String(arg))
+    }
+  }
+
   const requiresCommand = !partial && (!type || type === "stdio" || type === "local") && !url
   if (requiresCommand && !command) {
-    throw new Error("MCP stdio/local server command must be a non-empty string")
+    throw new Error("MCP stdio/local server command must be a non-empty string or array")
   }
   if (command !== undefined) {
-    if (!MCP_COMMAND_PATTERN.test(command) || command.includes("..") || hasControlChars(command)) {
-      throw new Error(`MCP server command "${command}" contains unsafe characters and was rejected`)
-    }
     config.command = command
   }
 
-  config.args = assertSafeStringArray("args", config.args)
+  // Merge args from command array with existing args
+  if (argsFromCommand) {
+    const existingArgs = assertSafeStringArray("args", config.args) ?? []
+    config.args = [...argsFromCommand, ...existingArgs]
+  } else {
+    config.args = assertSafeStringArray("args", config.args)
+  }
+
   config.env = assertSafeRecord("env", config.env)
   config.headers = assertSafeRecord("headers", config.headers, MCP_HEADER_NAME_PATTERN)
   config.when = assertWhenCondition(config.when)

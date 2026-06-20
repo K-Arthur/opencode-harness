@@ -41,8 +41,21 @@ export class StatePushService {
     this.opts.postMessage({ type: "theme_config", config })
   }
 
-  pushCommandListToWebview(commands: { name: string; description?: string; source?: string; agent?: string }[], partial?: boolean): void {
-    this.opts.postMessage({ type: "command_list", commands, partial })
+  pushCommandListToWebview(commands: { name: string; description?: string; template?: string; source?: string; agent?: string }[], partial?: boolean): void {
+    // Trim payload to avoid exceeding HostMessageBatcher's maxPayloadBytes (256KB).
+    // Send only: name, description (fallback to truncated template ~140 chars), source, agent, isCustom.
+    // Drop full template bodies which can be very large (e.g., methodology skills).
+    const trimmed = commands.map(cmd => {
+      const description = cmd.description ?? (cmd.template ? cmd.template.slice(0, 140) + (cmd.template.length > 140 ? "..." : "") : undefined)
+      return {
+        name: cmd.name,
+        description,
+        source: cmd.source,
+        agent: cmd.agent,
+        isCustom: cmd.source === "custom",
+      }
+    })
+    this.opts.postMessage({ type: "command_list", commands: trimmed, partial })
   }
 
   pushAllStateToWebview(): void {

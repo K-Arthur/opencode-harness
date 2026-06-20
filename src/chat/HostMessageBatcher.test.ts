@@ -181,4 +181,15 @@ void describe("HostMessageBatcher", () => {
     assert.ok(warnings.some((w) => /dedup|drop|repeat/i.test(w)), "must warn when dropping a duplicate")
     batcher.dispose()
   })
+
+  void it("command_list bypasses the size guard (IMMEDIATE type)", () => {
+    const posted: Record<string, unknown>[] = []
+    const batcher = new HostMessageBatcher((msg) => { posted.push(msg) }, () => {}, { maxPayloadBytes: 256 })
+    // command_list is an IMMEDIATE type — must never be dropped by the size guard.
+    const huge = { type: "command_list", commands: Array(100).fill({ name: "test", template: "x".repeat(1024) }) }
+    batcher.post(huge)
+    assert.equal(posted.length, 1, "command_list (IMMEDIATE) must bypass the size guard")
+    assert.equal(posted[0]!.type, "command_list")
+    batcher.dispose()
+  })
 })

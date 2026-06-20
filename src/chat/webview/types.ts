@@ -673,6 +673,7 @@ export type HostMessage =
   | { type: "cli_themes_list"; themes: unknown[] }
   | { type: "model_update"; model: string }
   | { type: "variant_update"; variant: string }
+  | { type: "open_model_manager"; forRegeneration?: boolean; messageId?: string }
   | { type: "mode_change_result"; sessionId: string; mode: "plan" | "build" | "auto"; accepted: boolean; reason?: string }
   | { type: "model_list"; items: ModelInfo[] }
   | { type: "mention_results"; items: MentionItem[]; query: string }

@@ -900,7 +900,7 @@
   field-sizing: content;
 }
 
-[dir="rtl"] #prompt-input {
+body.chat-rtl #prompt-input {
   text-align: right;
 }
 

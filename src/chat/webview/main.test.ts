@@ -48,6 +48,22 @@ describe("main.ts", () => {
     assert.ok(!source.includes('id: "user-" + crypto.randomUUID()'), "send path must not crash if crypto.randomUUID is unavailable")
   })
 
+  it("context_window_unknown shows bar when tokens are available", () => {
+    assert.ok(source.includes("context_window_unknown"), "main.ts must handle context_window_unknown")
+    assert.ok(source.includes("usage && usage.tokens > 0"), "must check for token usage data")
+    assert.ok(source.includes("updateContextUsageBar(0, usage.tokens, 0)"), "must show bar in indeterminate state with tokens")
+    assert.ok(source.includes("els.contextUsage.classList.remove(\"hidden\")"), "must unhide the context bar")
+  })
+
+  it("RTL toggle uses body class instead of html dir attribute", () => {
+    assert.ok(source.includes("setupDirToggle"), "main.ts must setup RTL toggle")
+    assert.ok(source.includes("document.body.classList.add(\"chat-rtl\")"), "must add chat-rtl class to body")
+    assert.ok(source.includes("document.body.classList.remove(\"chat-rtl\")"), "must remove chat-rtl class from body")
+    assert.ok(!source.includes("document.documentElement.setAttribute(\"dir\""), "must not set dir on html element in toggle")
+    assert.ok(source.includes("chat_dir_config"), "must handle chat_dir_config message")
+    assert.ok(source.includes("document.body.classList.add(\"chat-rtl\")") || source.includes("document.body.classList.remove(\"chat-rtl\")"), "chat_dir_config must use body class")
+  })
+
   it("generates opencode-compatible user message ids in the prompt send paths", () => {
     // opencode rejects user-message ids not starting with "msg" (BadRequest:
     // "Expected a string starting with \"msg\""). The id is reused as the local

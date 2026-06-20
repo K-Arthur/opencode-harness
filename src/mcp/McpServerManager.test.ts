@@ -44,4 +44,22 @@ describe("McpServerManager.ts", () => {
     assert.ok(source.includes("MCP_TOOL_NAME_PATTERN"), "must define a safe tool-name pattern")
     assert.ok(source.includes("Rejected unsafe MCP tool name"), "must log rejected unsafe tool names")
   })
+
+  it("accepts command as string | string[] (opencode array form)", () => {
+    assert.ok(source.includes("typeof rawCommand === \"string\""), "must accept string command")
+    assert.ok(source.includes("Array.isArray(rawCommand)"), "must accept array command")
+    assert.ok(source.includes("binary = rawCommand[0]"), "must treat first array element as binary")
+    assert.ok(source.includes("argsFromCommand = rawCommand.slice(1)"), "must merge rest into args")
+  })
+
+  it("validates every element in command array with MCP_COMMAND_PATTERN", () => {
+    assert.ok(source.includes("for (let i = 0; i < rawCommand.length; i++)"), "must iterate array elements")
+    assert.ok(source.includes("MCP_COMMAND_PATTERN.test(elem)"), "must validate each element")
+    assert.ok(source.includes("contains unsafe characters"), "must reject unsafe array elements")
+  })
+
+  it("accepts opencode aliases: environment → env, enabled → !disabled", () => {
+    assert.ok(source.includes("environment → env"), "must accept environment alias")
+    assert.ok(source.includes("enabled → !disabled"), "must accept enabled alias")
+  })
 })

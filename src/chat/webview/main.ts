@@ -2087,21 +2087,25 @@ function setupTodoSkillAndSubagentPanels(): void {
   /* ─── TEXT DIRECTION (RTL/LTR) TOGGLE ─── */
 
   /**
-   * Toggle the `dir` attribute on <html> between "ltr" and "rtl". Affects
-   * both the prompt input and markdown message containers via inheritance.
-   * The chosen direction is sent to the host for persistence in globalState
-   * so it survives VS Code restarts.
+   * Toggle the `chat-rtl` class on <body> to enable RTL text direction.
+   * Affects only text-rendering elements (markdown content, prompt input)
+   * via CSS scoping, not the entire UI layout. The chosen direction is sent
+   * to the host for persistence in globalState so it survives VS Code restarts.
    */
   function setupDirToggle(): void {
     const btn = els.dirToggleBtn
     if (!btn) return
     btn.addEventListener("click", () => {
-      const current = document.documentElement.getAttribute("dir") === "rtl" ? "rtl" : "ltr"
-      const next = current === "rtl" ? "ltr" : "rtl"
-      document.documentElement.setAttribute("dir", next)
-      btn.setAttribute("aria-pressed", String(next === "rtl"))
-      btn.title = next === "rtl" ? "Text direction: RTL (click for LTR)" : "Text direction: LTR (click for RTL)"
-      vscode.postMessage({ type: "chat_dir_change", direction: next })
+      const current = document.body.classList.contains("chat-rtl")
+      const next = !current
+      if (next) {
+        document.body.classList.add("chat-rtl")
+      } else {
+        document.body.classList.remove("chat-rtl")
+      }
+      btn.setAttribute("aria-pressed", String(next))
+      btn.title = next ? "Text direction: RTL (click for LTR)" : "Text direction: LTR (click for RTL)"
+      vscode.postMessage({ type: "chat_dir_change", direction: next ? "rtl" : "ltr" })
     })
   }
 
@@ -2907,6 +2911,18 @@ function setupTodoSkillAndSubagentPanels(): void {
           document.getElementById("ctx-window-unknown-chip")?.classList.add("hidden")
           return
         }
+        // If we have token usage data, show the bar in an indeterminate state
+        // instead of hiding it completely. This allows users to see their usage
+        // even when the context window is unknown (e.g., opencode-proxy models).
+        const session = stateManager.getSession(targetId)
+        const usage = session?.contextUsage
+        if (usage && usage.tokens > 0) {
+          // Show bar with token count in indeterminate state
+          updateContextUsageBar(0, usage.tokens, 0) // 0% = indeterminate
+          els.contextUsage.classList.remove("hidden")
+          showStatusStrip()
+          return
+        }
         // Hide the context bar; if suppressStatusChip is true, skip the
         // orange "Set override" chip since models.dev likely resolved
         // the window. The "Set limit" action remains available in the
@@ -3323,7 +3339,11 @@ function setupTodoSkillAndSubagentPanels(): void {
       ["chat_dir_config", (msg) => {
         const direction = (msg as Record<string, unknown>).direction as string | undefined
         if (direction === "ltr" || direction === "rtl") {
-          document.documentElement.setAttribute("dir", direction)
+          if (direction === "rtl") {
+            document.body.classList.add("chat-rtl")
+          } else {
+            document.body.classList.remove("chat-rtl")
+          }
           const btn = els.dirToggleBtn
           if (btn) {
             btn.setAttribute("aria-pressed", String(direction === "rtl"))
@@ -3410,6 +3430,13 @@ function setupTodoSkillAndSubagentPanels(): void {
           // selected" even once a model is known.
           renderWelcomeContext()
         }
+      }],
+      ["open_model_manager", (_msg) => {
+        // Open the model manager panel, optionally for regeneration
+        // Note: modelManager.open() takes no parameters; regeneration context
+        // is handled via the host's set_model message flow.
+        modelManager.open()
+        vscode.postMessage({ type: "get_models" })
       }],
       ["init_state", (msg) => {
         if (window.__opencodeInitTimeout) {
