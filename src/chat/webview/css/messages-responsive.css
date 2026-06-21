@@ -88,18 +88,36 @@
     opacity: 1;
   }
 
-  /* Compact tool cards */
-  .tool-card {
+  /* Compact tool cards. NOTE: the real DOM uses .tool-call (generic <details>)
+     and .live-command-card with .tool-args-panel / .tool-result-panel /
+     .live-command-card__output — the old .tool-card/.tool-args/.tool-result
+     selectors here never matched, so these rules were dead. */
+  .tool-card,
+  .tool-call,
+  .live-command-card {
     padding: var(--space-2);
   }
 
-  .tool-card .tool-args {
-    display: none;
+  .tool-card .tool-args,
+  .tool-call .tool-args-panel,
+  .tool-card .tool-result,
+  .tool-call .tool-result-panel,
+  .live-command-card__output {
+    max-height: 160px;
+    overflow-y: auto;
   }
 
-  .tool-card .tool-result {
-    max-height: 200px;
-    overflow-y: auto;
+  /* On a narrow console the single-line command is ellipsis-clipped to a few
+     characters; let it wrap so the command stays readable. */
+  .live-command-card__command {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  /* The working directory is the first thing to drop on a cramped header. */
+  .live-command-card__cwd {
+    display: none;
   }
 }
 
@@ -117,8 +135,10 @@
     flex-wrap: wrap;
   }
 
-  .tool-card .tool-args {
-    max-height: 100px;
+  .tool-card .tool-args,
+  .tool-call .tool-args-panel,
+  .live-command-card__output {
+    max-height: 200px;
     overflow-y: auto;
   }
 }
@@ -138,8 +158,10 @@
     flex-wrap: nowrap;
   }
 
-  .tool-card .tool-args {
-    max-height: none;
+  .tool-card .tool-args,
+  .tool-call .tool-args-panel,
+  .live-command-card__output {
+    max-height: 320px;
   }
 }
 

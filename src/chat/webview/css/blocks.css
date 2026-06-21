@@ -3684,7 +3684,10 @@
   max-height: 200px;
   overflow-y: auto;
   white-space: pre-wrap;
-  word-break: break-all;
+  /* Wrap long unbreakable tokens (URLs, hashes) only when needed instead of
+     breaking every word, so output stays readable across console widths. */
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .live-command-card__output:empty {

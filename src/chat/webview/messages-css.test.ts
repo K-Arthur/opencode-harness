@@ -104,7 +104,9 @@ describe("messages.css", () => {
 	  })
 
 	  it("reserves space for the right-side conversation timeline only when visible", () => {
-	    assert.match(cssSource, /\.message-list\.timeline-visible\s*{[^}]*padding-right:\s*152px;/s)
+	    // Footprint is now driven by the --timeline-footprint token (calc of the
+	    // timeline width) rather than a hard-coded 152px.
+	    assert.match(cssSource, /\.message-list\.timeline-visible\s*{[^}]*padding-right:\s*var\(--timeline-footprint\);/s)
 	    assert.match(cssSource, /\.conversation-timeline\.visible\s*{[^}]*opacity:\s*1/s)
 	  })
 
