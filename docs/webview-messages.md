@@ -299,6 +299,24 @@ The host-to-webview `command_list` payload is partitioned before it reaches the 
 These replace the previous behavior where these messages were logged as "unknown host
 message type" and silently dropped.
 
+#### Inbound gate: handler ⊆ allowlist (dead-wire prevention)
+
+Webview→host messages are rejected before dispatch unless their `type` is in
+`WebviewEventRouter.VALID_WEBVIEW_TYPES` (the gate at the top of `routeMessage`). A handler
+registered in the `webviewHandlers` map but **absent from this set is dead** — the message is
+dropped before it ever reaches the handler. This silently disabled several features
+(`save_template` / `list_templates` / `delete_template` — the `/template` command —
+`save_message_as_template`, the changed-files **undo file** button `undo_file`, and
+`revert_all_files`) until they were added to the set. A guard test
+(`WebviewEventRouter.test.ts` → "dead-wire guard") now asserts that **every** handler-mapped
+type is allowlisted, so this class of bug cannot recur. When adding a webview message, add it
+to **both** the handler map and `VALID_WEBVIEW_TYPES`.
+
+`update_collapse_config` was the inverse case — posted by the webview with no host handler at
+all. Tool-call **compact mode** is a pure UI preference and now lives in webview-local
+`displayPrefs` (`getCompactMode`/`setCompactMode`), read by `messageRenderer` when it renders
+new tool blocks instead of a static `false` baseline; the dead host post was removed.
+
 #### Focus ownership (the webview decides which tab is visible)
 
 The host's `sessionStore.activeId` is only a **hint**; the webview owns which tab is

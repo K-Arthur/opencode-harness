@@ -1,9 +1,19 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-06-21
-**Version:** v0.4.9
+**Version:** v0.4.10
 
 ## Highlights (2026-06-21) — context-usage, composer chips, command cards & sidebar
+
+**Dead-wire audit (Phase 1–4).** A top-down sweep for the "handlers exist but the inbound
+`VALID_WEBVIEW_TYPES` gate rejects the message" anti-pattern found **six** dead-wired message
+types — the whole prompt-template feature (`save_template`/`list_templates`/`delete_template`),
+`save_message_as_template`, the changed-files **undo file** button (`undo_file`), and
+`revert_all_files`. All are now allowlisted, and a regression guard asserts
+handler⊆allowlist so the class can't recur. Also fixed tool-call **compact mode** reading a
+static `false` baseline (now reads the live `displayPrefs` pref). (`WebviewEventRouter.ts`,
+`messageRenderer.ts`, `displayPrefs.ts`)
+
 
 Branch `cleanup/extension-refactor`. Webview/UX hardening pass (all changes are in the
 webview bundle — require `npm run reinstall` to appear in-app):

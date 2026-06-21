@@ -24,8 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      [Unreleased] — that creates documentation drift. See the release
      workflow in docs/development/rebuild-and-reinstall.md. -->
 
+## [0.4.10] - 2026-06-21
+
 ### Fixed
 
+- **Six dead-wired webview messages revived.** Their host handlers existed but the types were missing from the inbound `VALID_WEBVIEW_TYPES` gate, so the messages were rejected before dispatch and the features silently no-op'd: the entire prompt-template feature (`save_template` / `list_templates` / `delete_template`, used by the `/template` slash command), `save_message_as_template`, the changed-files dropdown's **undo file** button (`undo_file`), and `revert_all_files`. A regression guard now asserts that every handler-mapped type is allowlisted so this class of bug cannot recur. (`WebviewEventRouter.ts`, `WebviewEventRouter.test.ts`)
+- **Tool-call "compact mode" toggle now applies to newly-rendered cards.** `messageRenderer` read a static `compactMode: false` baseline (so tool blocks rendered after the toggle ignored it) and persisted via a dead `update_collapse_config` host message. It now reads/writes the live `displayPrefs` pref (`getCompactMode`/`setCompactMode`). (`messageRenderer.ts`, `displayPrefs.ts`)
 - **Context-usage modal actions no longer silently no-op.** The floating context-usage panel's *Compact context* button posted `compact_context` (never registered on the host) and *Switch model* posted `open_model_selector` (no handler). Compact now posts `compact_session`, and a new `open_model_selector` host handler re-posts `open_model_manager`. (`context-usage-dropdown.ts`, `WebviewEventRouter.ts`)
 - **Context bar stays accurate across per-session model switches.** The bar and dropdown now recompute the percentage from `tokens / maxTokens` instead of trusting a stored percent that lags after the context window changes with the model. (`ui/tokenCostDisplay.ts`, `context-usage-dropdown.ts`)
 - **Provider usage counter no longer stuck at "0 tok"** for proxy providers (e.g. `opencode-proxy`/mimo) that emit no rate-limit headers — the quota bar falls back to the active session's cumulative `tokenUsage.total`. (`ui/tokenCostDisplay.ts`)
