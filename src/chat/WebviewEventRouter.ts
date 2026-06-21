@@ -186,6 +186,13 @@ export class WebviewEventRouter {
     "accept_permission", "mention_search", "list_sessions", "resume_session",
     "new_session", "get_models", "update_cost", "webview_ready", "init_ack", "rename_session", "webview_log",
     "open_settings", "connect_provider", "open_mcp_settings", "open_mcp_config", "attach_files", "export_chat", "export_chat_json", "export_chat_text", "copy_chat", "stash_prompt", "list_stashes", "delete_stash",     "add_provider", "list_providers", "update_provider", "delete_provider",
+    // Prompt templates + changed-file reverts: handlers exist for all of these,
+    // but they were absent from this gate, so the messages were rejected before
+    // dispatch. `undo_file` is a live dead wire (the changed-files dropdown's
+    // "undo file" button); the others have handlers + declared types and must be
+    // reachable. The dead-wire guard test enforces handler⊆allowlist.
+    "save_template", "list_templates", "delete_template", "save_message_as_template",
+    "undo_file", "revert_all_files",
     "discover_providers", "get_provider_auth_methods", "connect_provider_key",
     "connect_provider_oauth", "complete_provider_oauth", "list_provider_credentials",
     "remove_provider_credential",

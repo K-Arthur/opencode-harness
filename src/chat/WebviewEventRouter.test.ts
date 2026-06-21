@@ -50,6 +50,38 @@ describe("WebviewEventRouter context usage routing", () => {
   })
 })
 
+describe("WebviewEventRouter dead-wire guard", () => {
+  // The inbound gate rejects any message whose type isn't in VALID_WEBVIEW_TYPES
+  // *before* dispatch. A handler that isn't also allowlisted is therefore dead
+  // (the bug that silently disabled the prompt-template feature). Enforce that
+  // every handler-mapped type is allowlisted so that class of bug can't recur.
+  const validSet = blockBetween("VALID_WEBVIEW_TYPES = new Set([", "])")
+  const allowed = new Set(
+    Array.from(validSet.matchAll(/"([a-z_]+)"/g), (m) => m[1]),
+  )
+  const handlerKeys = Array.from(
+    source.matchAll(/\["([a-z_]+)",\s*(?:async\s*)?\(/g),
+    (m) => m[1] as string,
+  )
+
+  it("registers at least the known template + context handlers", () => {
+    for (const t of ["save_template", "list_templates", "delete_template", "get_context_usage"]) {
+      assert.ok(handlerKeys.includes(t), `expected a handler for ${t}`)
+    }
+  })
+
+  it("allowlists every type that has a webview handler", () => {
+    const dead = [...new Set(handlerKeys)].filter((t) => !allowed.has(t))
+    assert.deepEqual(dead, [], `handlers present but not in VALID_WEBVIEW_TYPES (dead wires): ${dead.join(", ")}`)
+  })
+
+  it("explicitly allowlists the prompt-template messages", () => {
+    for (const t of ["save_template", "list_templates", "delete_template"]) {
+      assert.ok(allowed.has(t), `${t} must be in VALID_WEBVIEW_TYPES or it is rejected before dispatch`)
+    }
+  })
+})
+
 describe("WebviewEventRouter subagent routing", () => {
   it("requires subagent identifiers on detail, cancel, and read messages", () => {
     assert.equal(validate({ sessionId: "tab-1", subagentId: "child-1" }, "get_subagent_detail"), true)

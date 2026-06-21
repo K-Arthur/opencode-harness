@@ -11,6 +11,7 @@ import { isSwitchEventType } from "./switchEvent"
 import {
   createToolCollapseControls,
 } from "./toolCallRenderer"
+import { getCompactMode, setCompactMode } from "./displayPrefs"
 import { estimateMessageTokens } from "../../utils/tokenCounter"
 
 export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecutive?: boolean): HTMLDivElement {
@@ -159,7 +160,9 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
     defaultCollapsed: true,
     collapseThreshold: 1,
     showTypeBreakdown: true,
-    compactMode: false
+    // Read the live compact-mode pref so tool blocks rendered after the toggle
+    // was flipped honour it, instead of always starting from a `false` baseline.
+    compactMode: getCompactMode()
   }
   
   const toolBlocks = (msg.blocks || []).filter(isToolCallBlock)
@@ -182,13 +185,13 @@ export function renderMessage(msg: ChatMessage, opts?: RenderOptions, isConsecut
         })
       },
       () => {
-        // Toggle compact mode
+        // Toggle compact mode. Persist into the live display-pref cache so
+        // subsequently-rendered messages inherit it (the previous
+        // `update_collapse_config` host message had no handler and was dropped
+        // by the inbound gate — a dead write path).
         config.compactMode = !config.compactMode
-        const newConfig = { ...config, compactMode: config.compactMode }
-        if (opts?.postMessage) {
-          opts.postMessage({ type: "update_collapse_config", config: newConfig })
-        }
-        // Re-render message with new config
+        setCompactMode(config.compactMode)
+        // Reflect immediately on the already-rendered groups in this message.
         bubble.querySelectorAll<HTMLElement>(".tool-group").forEach(el => {
           el.classList.toggle("tool-group--compact", config.compactMode)
         })

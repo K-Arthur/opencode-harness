@@ -20,3 +20,18 @@ export function getThinkingVisible(): boolean {
 export function setThinkingVisible(visible: boolean): void {
   thinkingVisible = visible
 }
+
+// Tool-call "compact mode" preference. Same rationale as thinkingVisible:
+// messageRenderer is dependency-light and renders new tool blocks long after
+// the toggle was flipped, so it must read the live pref rather than a static
+// `false` baseline (which previously left newly-rendered cards un-compacted and
+// routed persistence through a dead `update_collapse_config` host message).
+let compactMode = false
+
+export function getCompactMode(): boolean {
+  return compactMode
+}
+
+export function setCompactMode(value: boolean): void {
+  compactMode = value
+}
