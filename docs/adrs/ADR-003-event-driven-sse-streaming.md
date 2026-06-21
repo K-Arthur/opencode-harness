@@ -39,7 +39,7 @@ We will use **Server-Sent Events (SSE)** for real-time agent state updates:
 - Auto-reconnect logic with exponential backoff in `StreamCoordinator`
 - Stream health checks with timeout handling
 - User-friendly error messages when stream fails
-- **TTFB timeout** — `TTFB_TIMEOUT_MS = 90000` for first-byte detection (extended from 45s for slow third-party model providers). TTFB timer clears on first chunk. The separate chunk-inactivity timeout was removed; `STREAM_STUCK_MS` (45min) serves as the single inactivity hard cap.
+- **TTFB timeout** — `StreamTimeoutManager` resolves the timeout from the `opencode.streaming.ttfbTimeoutMs` workspace setting (default 180s, clamped 60s–10min) and clears it on the first chunk. The separate chunk-inactivity timeout was removed; `STREAM_STUCK_MS` (45min) serves as the single inactivity hard cap.
 - **Idempotent `finalizeStream`** — `finalizingTabs` Set prevents double-run from concurrent `message_complete` + `server_status idle` events.
 - **Session-scoped error routing** — `postRequestError(message, sessionId?)` ensures multi-tab error attribution is correct. Unknown-session events fall back to the active tab.
 - **Stream state machine** — `StreamLifecycleState` enum (`idle | sending | streaming | completing | error | timeout`) with logged transitions for observability.
@@ -53,11 +53,12 @@ We will use **Server-Sent Events (SSE)** for real-time agent state updates:
 | `response` | Agent text response (display in chat) |
 | `done` | Stream complete (update UI state) |
 | `error` | Stream error (show error, offer retry) |
-| `ttfb_timeout` | No first byte within 90s (show retryable error; probes backend before clearing) |
+| `ttfb_timeout` | No first byte within the configured TTFB duration (show retryable error; probes backend before clearing) |
 | `timeout` | Stream duration exceeded `STREAM_STUCK_MS` (45min) hard cap (preserve partial output, show recoverable state) |
 
 ## References
 
 - Architecture Spec Section 1.2: Design Principles (Event-driven)
 - `StreamCoordinator.ts`: SSE stream management
+- `StreamTimeoutManager.ts`: first-byte and stuck-stream timeout management
 - OpenAPI spec: `/event` SSE endpoint
