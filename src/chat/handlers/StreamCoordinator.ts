@@ -287,6 +287,36 @@ export class StreamCoordinator {
     this.diffApplier = deps.diffApplier
     this.methodologyAdvisor = deps.methodologyAdvisor ?? new MethodologyAdvisor()
     this.attachmentStorage = deps.attachmentStorage ?? createAttachmentStorage()
+    const capturedThis = this
+    this.streamTimeoutManager = new StreamTimeoutManager({
+      tabManager: this.tabManager,
+      sessionManager: this.sessionManager,
+      activityTracker: this.activityTracker,
+      abortRegistry: this.abortRegistry,
+      streamingLog: this.streamingLog,
+      streamWatchdog: { get current() { return capturedThis.streamWatchdog }, set current(v) { capturedThis.streamWatchdog = v } },
+      ttfbTimeouts: this.ttfbTimeouts,
+      ttfbAbortControllers: this.ttfbAbortControllers,
+      expiredRecoveryTimeouts: this.expiredRecoveryTimeouts,
+      stuckStreamHandlers: this.stuckStreamHandlers,
+      activeRuns: this.activeRuns,
+      activeMessageIds: this.activeMessageIds,
+      streamStates: this.streamStates,
+      STREAM_STUCK_MS: this.STREAM_STUCK_MS,
+      TTFB_TIMEOUT_MS_DEFAULT: this.TTFB_TIMEOUT_MS_DEFAULT,
+      TTFB_TIMEOUT_FLOOR_MS: StreamCoordinator.TTFB_TIMEOUT_FLOOR_MS,
+      TTFB_TIMEOUT_CEILING_MS: StreamCoordinator.TTFB_TIMEOUT_CEILING_MS,
+      EXPIRED_RECOVERY_TIMEOUT_MS: this.EXPIRED_RECOVERY_TIMEOUT_MS,
+      ttfbTimeoutMs: () => this.ttfbTimeoutMs,
+      getSm: (tabId) => this.getSm(tabId),
+      ensureStreamMessageId: (tabId, cliSessionId) => this.ensureStreamMessageId(tabId, cliSessionId),
+      nextSeq: (tabId) => this.nextSeq(tabId),
+      cleanupTab: (tabId) => this.cleanupTab(tabId),
+      abort: (tabId, cbs) => this.abort(tabId, cbs),
+      setStreamState: (tabId, state, ctx) => this.setStreamState(tabId, state, ctx),
+      setActiveRunState: (tabId, state, ctx) => this.setActiveRunState(tabId, state, ctx),
+      postRunActivitySnapshot: (tabId, snapshot, cbs) => this.postRunActivitySnapshot(tabId, snapshot, cbs),
+    })
     // Resolve the TTFB timeout from workspace config (one injection point;
     // tests can override post-construction via `setTtfbTimeoutForTests`).
     this.ttfbTimeoutMs = this.resolveTtfbTimeoutMs()
@@ -362,36 +392,6 @@ export class StreamCoordinator {
       recordToolRunActivity: (tabId, activity, cbs) => this.recordToolRunActivity(tabId, activity, cbs),
       postRunActivitySnapshot: (tabId, snapshot, cbs) => this.postRunActivitySnapshot(tabId, snapshot, cbs),
       maybeFinalizeStream: (tabId, cbs, trigger) => this.maybeFinalizeStream(tabId, cbs, trigger),
-    })
-    const capturedThis = this
-    this.streamTimeoutManager = new StreamTimeoutManager({
-      tabManager: this.tabManager,
-      sessionManager: this.sessionManager,
-      activityTracker: this.activityTracker,
-      abortRegistry: this.abortRegistry,
-      streamingLog: this.streamingLog,
-      streamWatchdog: { get current() { return capturedThis.streamWatchdog }, set current(v) { capturedThis.streamWatchdog = v } },
-      ttfbTimeouts: this.ttfbTimeouts,
-      ttfbAbortControllers: this.ttfbAbortControllers,
-      expiredRecoveryTimeouts: this.expiredRecoveryTimeouts,
-      stuckStreamHandlers: this.stuckStreamHandlers,
-      activeRuns: this.activeRuns,
-      activeMessageIds: this.activeMessageIds,
-      streamStates: this.streamStates,
-      STREAM_STUCK_MS: this.STREAM_STUCK_MS,
-      TTFB_TIMEOUT_MS_DEFAULT: this.TTFB_TIMEOUT_MS_DEFAULT,
-      TTFB_TIMEOUT_FLOOR_MS: StreamCoordinator.TTFB_TIMEOUT_FLOOR_MS,
-      TTFB_TIMEOUT_CEILING_MS: StreamCoordinator.TTFB_TIMEOUT_CEILING_MS,
-      EXPIRED_RECOVERY_TIMEOUT_MS: this.EXPIRED_RECOVERY_TIMEOUT_MS,
-      ttfbTimeoutMs: this.ttfbTimeoutMs,
-      getSm: (tabId) => this.getSm(tabId),
-      ensureStreamMessageId: (tabId, cliSessionId) => this.ensureStreamMessageId(tabId, cliSessionId),
-      nextSeq: (tabId) => this.nextSeq(tabId),
-      cleanupTab: (tabId) => this.cleanupTab(tabId),
-      abort: (tabId, cbs) => this.abort(tabId, cbs),
-      setStreamState: (tabId, state, ctx) => this.setStreamState(tabId, state, ctx),
-      setActiveRunState: (tabId, state, ctx) => this.setActiveRunState(tabId, state, ctx),
-      postRunActivitySnapshot: (tabId, snapshot, cbs) => this.postRunActivitySnapshot(tabId, snapshot, cbs),
     })
     this.tabCloseDisposable = this.tabManager.onTabClosed((tabId) => {
       this.cleanupTab(tabId)

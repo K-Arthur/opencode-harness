@@ -342,7 +342,7 @@ describe("StreamCoordinator.ts", () => {
   it("TTFB timeout distinguishes event stream disconnects from model first-byte timeout", () => {
     const ttfbIdx = timeoutManagerSource.indexOf("const ttfbTimeout = setTimeout(")
     assert.ok(ttfbIdx >= 0, "TTFB timeout must exist in StreamTimeoutManager")
-    const blockEnd = timeoutManagerSource.indexOf("\n    this.ttfbTimeouts.set", ttfbIdx)
+    const blockEnd = timeoutManagerSource.indexOf("\n    this.deps.ttfbTimeouts.set", ttfbIdx)
     const block = timeoutManagerSource.slice(ttfbIdx, blockEnd > ttfbIdx ? blockEnd : ttfbIdx + 2000)
     assert.ok(
       block.includes("event_stream_disconnected"),
@@ -410,7 +410,7 @@ describe("StreamCoordinator.ts", () => {
   it("TTFB timeout suppresses postRequestError when backend may still be running", () => {
     const ttfbIdx = timeoutManagerSource.indexOf("const ttfbTimeout = setTimeout(")
     assert.ok(ttfbIdx >= 0, "TTFB timeout must exist in StreamTimeoutManager")
-    const blockEnd = timeoutManagerSource.indexOf("this.ttfbTimeouts.set(", ttfbIdx)
+    const blockEnd = timeoutManagerSource.indexOf("this.deps.ttfbTimeouts.set(", ttfbIdx)
     const block = timeoutManagerSource.slice(ttfbIdx, blockEnd > ttfbIdx ? blockEnd : ttfbIdx + 4000)
     assert.ok(
       block.includes("probeActiveRun") || block.includes("mayStillBeRunning"),
@@ -662,7 +662,7 @@ describe("StreamCoordinator.ts", () => {
   it("does not abort accepted backend work on first-byte diagnostics", () => {
     const ttfbIdx = timeoutManagerSource.indexOf("const ttfbTimeout = setTimeout(")
     assert.ok(ttfbIdx >= 0, "TTFB timeout must exist in StreamTimeoutManager")
-    const blockEnd = timeoutManagerSource.indexOf("this.ttfbTimeouts.set(", ttfbIdx)
+    const blockEnd = timeoutManagerSource.indexOf("this.deps.ttfbTimeouts.set(", ttfbIdx)
     const block = timeoutManagerSource.slice(ttfbIdx, blockEnd > ttfbIdx ? blockEnd : ttfbIdx + 4000)
 
     assert.ok(block.includes('acceptedRun?.state === "accepted"'), "TTFB path must detect accepted backend runs")

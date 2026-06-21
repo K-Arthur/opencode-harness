@@ -46,7 +46,8 @@ export interface StreamTimeoutManagerDeps {
   readonly TTFB_TIMEOUT_FLOOR_MS: number
   readonly TTFB_TIMEOUT_CEILING_MS: number
   readonly EXPIRED_RECOVERY_TIMEOUT_MS: number
-  ttfbTimeoutMs: number | null
+  /** Dynamic getter so the manager sees StreamCoordinator's resolved/overridden value. */
+  ttfbTimeoutMs: () => number | null
   /** Resolve the session manager for a tab (ADR-010 per-tab routing). */
   getSm: (tabId?: string) => SessionManager
   /** Ensure a stream message ID exists — delegated to StreamCoordinator. */
@@ -156,7 +157,7 @@ export class StreamTimeoutManager {
   }
 
   setupTtfbTimeout(tabId: string, callbacks: StreamCallbacks): void {
-    const ttfbMs = this.deps.ttfbTimeoutMs ?? this.resolveTtfbTimeoutMs()
+    const ttfbMs = this.deps.ttfbTimeoutMs() ?? this.resolveTtfbTimeoutMs()
     const abortController = new AbortController()
     this.deps.ttfbAbortControllers.set(tabId, abortController)
     const ttfbTimeout = setTimeout(() => {

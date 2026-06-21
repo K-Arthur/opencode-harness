@@ -27,7 +27,7 @@ function blockBetween(startNeedle: string, endNeedle: string): string {
 
 describe("WebviewEventRouter — restore points", () => {
   it("registers list_restore_points and restore_point in VALID_WEBVIEW_TYPES", () => {
-    const block = blockBetween("VALID_WEBVIEW_TYPES = new Set([", ")")
+    const block = blockBetween("VALID_WEBVIEW_TYPES = new Set([", "])")
     assert.ok(block.includes(`"list_restore_points"`), "list_restore_points must be recognized")
     assert.ok(block.includes(`"restore_point"`), "restore_point must be recognized")
   })
