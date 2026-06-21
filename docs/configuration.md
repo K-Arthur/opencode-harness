@@ -51,6 +51,7 @@ All settings are under the `opencode.*` namespace and can be configured in VS Co
 - **Default**: `14`
 - **Scope**: `window`
 - **Description**: Font size (in pixels) for the OpenCode chat panel input and message text. Clamped to 8–32. Set to `0` to inherit the VS Code editor font size.
+- **How to access**: VS Code Settings UI (`Ctrl+,` → search `opencode chat font`), or edit `settings.json` directly. Changes apply live to the chat panel without a reload.
 - **Example**:
   ```json
   {
@@ -63,12 +64,15 @@ All settings are under the `opencode.*` namespace and can be configured in VS Co
 - **Default**: `""`
 - **Scope**: `window`
 - **Description**: Font family for the OpenCode chat panel input and message text. Leave empty to inherit the VS Code editor monospace font. Accepts any CSS font-family string.
+- **How to access**: VS Code Settings UI (`Ctrl+,` → search `opencode chat font`), or edit `settings.json` directly. Changes apply live to the chat panel without a reload.
 - **Example**:
   ```json
   {
     "opencode.chat.fontFamily": "Fira Code, monospace"
   }
   ```
+
+> **RTL / LTR text direction**: For right-to-left languages, use the toggle button in the chat footer bar (next to the attach button). This is a UI-only control — no VS Code setting is needed. The choice persists across restarts. See the [Chat Appearance section](../README.md#chat-appearance) in the README.
 
 ### `opencode.theme`
 - **Type**: `object`

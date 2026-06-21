@@ -130,6 +130,8 @@ anything the opencode CLI itself doesn't support.
 - **Token/cost/context tracking** in the status strip, persisted across reloads.
 - **Quota bar** — color-coded remaining-quota display with warning/critical notifications; falls back to observed token/cost usage when a provider doesn't expose quota headers. See [Rate Limit Monitoring](#rate-limit-monitoring).
 - **Theme system** — mirrors your opencode CLI theme automatically, or pick a preset/customize colors. See [Theme Customization](#theme-customization).
+- **Chat font customization** — set font family and size for the chat panel; see [Chat Appearance](#chat-appearance).
+- **RTL/LTR text direction** — toggle button in the chat footer for right-to-left languages; see [Chat Appearance](#chat-appearance).
 - **Inline code actions** — CodeLens for Explain, Refactor, and Generate Tests.
 
 ### Fallback behavior
@@ -289,6 +291,45 @@ OpenCode reads your `opencode` CLI's `tui.json` to find its active theme and loa
 - **Settings → Customize theme** (chat header) — a modal for the most common overrides (preset, accent, panel colors, input border, heading color, diff-added background) that writes straight to `opencode.theme` and refreshes immediately.
 
 Settings are saved globally, so themes work without a workspace folder open.
+
+## Chat Appearance
+
+### Font size and family
+
+You can customize the font used in the chat panel — both the prompt input and
+AI message text — via VS Code settings. There is no in-panel font picker; use
+the VS Code Settings UI or `settings.json`.
+
+**Via the Settings UI:** `Ctrl+,` (or `Cmd+,` on macOS) → search `opencode chat font`.
+
+**Via `settings.json`:**
+
+```json
+{
+  "opencode.chat.fontSize": 16,
+  "opencode.chat.fontFamily": "Fira Code, monospace"
+}
+```
+
+| Setting | Type | Default | Range | Notes |
+|---------|------|---------|-------|-------|
+| `opencode.chat.fontSize` | integer | `14` | 8–32 | Pixels. Set to `0` to inherit the VS Code editor font size. |
+| `opencode.chat.fontFamily` | string | `""` | any CSS font-family | Empty string inherits the VS Code editor monospace font. |
+
+Changes apply live — no panel reload needed. See [`docs/configuration.md`](docs/configuration.md) for full details.
+
+### RTL / LTR text direction
+
+For right-to-left languages (Persian, Arabic, Hebrew, etc.), a toggle button in
+the chat footer bar switches text alignment between LTR and RTL. The button is
+labeled with a paragraph-direction icon and sits next to the attach and
+instructions buttons in the bottom-left of the input area.
+
+- **Click the toggle** — switches the prompt input and AI message text between
+  left-aligned (LTR) and right-aligned (RTL). Only text content is affected; the
+  UI layout (buttons, panels, toolbars) stays in its default direction.
+- **Persistence** — your choice is saved and restored across VS Code restarts.
+- **No setting needed** — this is a UI-only toggle, not a VS Code setting.
 
 ## Rate Limit Monitoring
 
