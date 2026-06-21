@@ -805,6 +805,30 @@ open so output streams immediately. Escape closes the panel.
 State is folded via `ptyReducer` (pure, tested in `ptyModel.test.ts`) — the
 panel itself has no domain logic, only rendering + DOM event wiring.
 
+## Development Diagnostics
+
+The webview can emit structured log messages to the host for debugging. These are sent as `webview_log` messages:
+
+```ts
+{
+  type: "webview_log",
+  level: "info" | "warn" | "error",
+  message: string,
+}
+```
+
+### Anti-staleness warnings
+
+Development builds (`process.env.NODE_ENV === "development"`) run a lightweight `devStalenessWarn` helper that logs `[anti-staleness]` warnings when the webview detects stale state. These are no-ops in production because `process` is undefined in the browser webview runtime.
+
+Current checks:
+
+- `context_usage` — warns when an incoming usage update has an older `updatedAt` than the stored session reading.
+- `commands-modal` — warns when the server command list shrinks unexpectedly.
+- `model-dropdown` — warns when `setCurrentModel` is called with a model id that does not match any rendered option.
+
+See `docs/development/anti-staleness-checklist.md` for the full review checklist and `tests/FEATURE_MANIFEST.md` §11 for the structural contract.
+
 ## Tests
 
 The relevant coverage lives in:
