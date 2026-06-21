@@ -103,9 +103,12 @@ export function updateUsage(data: Record<string, unknown>): void {
 }
 
 function normalizeUsage(data: Record<string, unknown>): ContextUsage {
-  const percent = typeof data.percent === "number" && Number.isFinite(data.percent) ? data.percent : 0
   const tokens = typeof data.tokens === "number" && Number.isFinite(data.tokens) ? Math.max(0, data.tokens) : 0
   const maxTokens = typeof data.maxTokens === "number" && Number.isFinite(data.maxTokens) ? Math.max(0, data.maxTokens) : 0
+  // Recompute percent from tokens/maxTokens rather than trusting the stored
+  // value, which can lag after a model switch changes the context window.
+  // Matches the recalculation in updateContextBarFromSession (tokenCostDisplay.ts).
+  const percent = maxTokens > 0 ? Math.min(100, Math.max(0, (tokens / maxTokens) * 100)) : 0
   const cost = typeof data.cost === "number" && Number.isFinite(data.cost) ? data.cost : undefined
   const sessionId = typeof data.sessionId === "string" ? data.sessionId : undefined
   const breakdown = data.breakdown && typeof data.breakdown === "object"

@@ -158,7 +158,7 @@
 
 @container message-view (min-width: 400px) {
   .message-list.timeline-visible .message.assistant .message-bubble {
-    max-width: calc(90cqw - 152px);
+    max-width: calc(90cqw - var(--timeline-footprint));
   }
 }
 

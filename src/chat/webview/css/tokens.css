@@ -424,6 +424,8 @@
 
   /* ─── Timeline Tokens ─── */
   --timeline-width: 140px;
+  /* Total space the timeline reserves: width + padding(8px×2) + border(1px) + right-offset(4px) + gap(2px) */
+  --timeline-footprint: calc(var(--timeline-width) + 23px);
   --timeline-item-padding: var(--space-1-5) var(--space-2);
   --timeline-item-radius: var(--radius-md);
   --timeline-item-gap: var(--space-0-5);

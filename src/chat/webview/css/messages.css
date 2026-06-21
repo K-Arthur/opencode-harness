@@ -25,7 +25,7 @@
 }
 
 .message-list.timeline-visible {
-  padding-right: 152px;
+  padding-right: var(--timeline-footprint);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════╛
@@ -350,6 +350,7 @@
 
   .message-list.timeline-visible {
     padding-right: var(--space-3);
+    --timeline-footprint: 0px; /* Timeline hidden; don't narrow bubbles */
   }
 }
 

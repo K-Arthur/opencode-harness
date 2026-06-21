@@ -2204,6 +2204,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     this.pushChatDirectionToWebview()
     this.pushRateLimitStateToWebview()
     this.pushCommandListToWebview()
+    this.pushMcpServersToWebview()
     if (this.pendingPrompt) {
       this.postMessage({ type: "prefill_prompt", ...this.pendingPrompt })
       this.pendingPrompt = undefined
@@ -2244,6 +2245,9 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     log.debug("pushVisibleStateToWebview: lightweight sync")
     this.pushModelToWebview()
     this.pushRateLimitStateToWebview()
+    this.pushChatFontConfigToWebview()
+    this.pushCommandListToWebview()
+    this.pushMcpServersToWebview()
     this.pushPanelVisibilityStateToWebview()
     const activeSessionId = this.sessionStore.activeId || this.tabManager.getActiveId()
     this.applyContextWindowFor()
