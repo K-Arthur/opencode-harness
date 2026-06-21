@@ -33,6 +33,7 @@ import type { StreamCallbacks, ToolEndResult, ToolPartialInput, StreamLifecycleS
 export type { StreamCallbacks, ToolEndResult, ToolPartialInput, StreamLifecycleState, ActiveRunMetrics }
 import type { SessionManagerRegistry } from "../../session/SessionManagerRegistry"
 import { HeartbeatService, type DeferredChunkEntry } from "./HeartbeatService"
+import { ToolPartialPoller } from "./ToolPartialPoller"
 
 /** Context object grouping all StreamCoordinator dependencies to reduce constructor parameter count. */
 export interface StreamDeps {
@@ -154,6 +155,7 @@ export class StreamCoordinator {
   private readonly MAX_UNACKED_STREAM_CHUNKS = 8
   private readonly MAX_STREAM_DEFER_MS = 250
   private heartbeatService: HeartbeatService
+  private toolPartialPoller: ToolPartialPoller
   /** Tracks last deferral log time per tab to suppress duplicate logging during long subagent waits. */
   private lastDeferralLogTs = new Map<string, number>()
   private streamWatchdog: ReturnType<typeof setInterval> | null = null
@@ -331,6 +333,18 @@ export class StreamCoordinator {
       MAX_UNACKED_STREAM_CHUNKS: this.MAX_UNACKED_STREAM_CHUNKS,
       MAX_STREAM_DEFER_MS: this.MAX_STREAM_DEFER_MS,
     })
+    this.toolPartialPoller = new ToolPartialPoller({
+      tabManager: this.tabManager,
+      toolPartialFallbackTimers: this.toolPartialFallbackTimers,
+      toolPartialPollTimers: this.toolPartialPollTimers,
+      toolPartialOffsets: this.toolPartialOffsets,
+      toolPartialWarnedSessions: this.toolPartialWarnedSessions,
+      TOOL_PARTIAL_FALLBACK_DELAY_MS: this.TOOL_PARTIAL_FALLBACK_DELAY_MS,
+      TOOL_PARTIAL_POLL_INTERVAL_MS: this.TOOL_PARTIAL_POLL_INTERVAL_MS,
+      getSm: (tabId) => this.getSm(tabId),
+      isToolPending: (tabId, toolId) => this.activeToolCallIds.get(tabId)?.has(toolId) ?? false,
+      appendToolPartial: (tabId, partial, cbs, source) => this.appendToolPartial(tabId, partial, cbs, source),
+    })
     this.tabCloseDisposable = this.tabManager.onTabClosed((tabId) => {
       this.cleanupTab(tabId)
     })
@@ -501,9 +515,8 @@ export class StreamCoordinator {
               })
               this.cleanupTab(tab.id)
             } else {
-              log.warn(`No callbacks for stuck tab ${tab.id}, resetting state`)
-              this.tabManager.setStreaming(tab.id, false)
-              this.tabManager.setWaitingForCompletion(tab.id, false)
+              log.warn(`No callbacks for stuck tab ${tab.id}, running full cleanup`)
+              this.cleanupTab(tab.id)
             }
           }
         }
@@ -793,10 +806,11 @@ export class StreamCoordinator {
   }
 
   private toolPartialKey(tabId: string, toolId: string): string {
-    return `${tabId}\u0000${toolId}`
+    return this.toolPartialPoller.toolPartialKey(tabId, toolId)
   }
 
   private isToolPartialPollable(toolCall: { name?: string; class?: string; args?: unknown }): boolean {
+    // Delegated to ToolPartialPoller — kept as a private method for structural test compatibility.
     const name = (toolCall.name || "").toLowerCase()
     const cls = (toolCall.class || this.toolClass(toolCall.name || "")).toLowerCase()
     if (cls === "exec") return true
@@ -806,33 +820,11 @@ export class StreamCoordinator {
   }
 
   private stopToolPartialPolling(tabId: string, toolId: string): void {
-    const key = this.toolPartialKey(tabId, toolId)
-    const fallback = this.toolPartialFallbackTimers.get(key)
-    if (fallback) clearTimeout(fallback)
-    this.toolPartialFallbackTimers.delete(key)
-    const poll = this.toolPartialPollTimers.get(key)
-    if (poll) clearInterval(poll)
-    this.toolPartialPollTimers.delete(key)
-    this.toolPartialOffsets.delete(key)
+    this.toolPartialPoller.stopToolPartialPolling(tabId, toolId)
   }
 
   private stopAllToolPartialPolling(tabId: string): void {
-    const prefix = `${tabId}\u0000`
-    for (const key of Array.from(this.toolPartialFallbackTimers.keys())) {
-      if (!key.startsWith(prefix)) continue
-      const timer = this.toolPartialFallbackTimers.get(key)
-      if (timer) clearTimeout(timer)
-      this.toolPartialFallbackTimers.delete(key)
-    }
-    for (const key of Array.from(this.toolPartialPollTimers.keys())) {
-      if (!key.startsWith(prefix)) continue
-      const timer = this.toolPartialPollTimers.get(key)
-      if (timer) clearInterval(timer)
-      this.toolPartialPollTimers.delete(key)
-    }
-    for (const key of Array.from(this.toolPartialOffsets.keys())) {
-      if (key.startsWith(prefix)) this.toolPartialOffsets.delete(key)
-    }
+    this.toolPartialPoller.stopAllToolPartialPolling(tabId)
   }
 
   private armToolPartialPolling(
@@ -841,23 +833,11 @@ export class StreamCoordinator {
     toolCall: { name?: string; class?: string; args?: unknown },
     callbacks: StreamCallbacks,
   ): void {
-    if (!this.isToolPartialPollable(toolCall)) return
-    const key = this.toolPartialKey(tabId, toolId)
-    if (this.toolPartialFallbackTimers.has(key) || this.toolPartialPollTimers.has(key)) return
-
-    const fallback = setTimeout(() => {
-      this.toolPartialFallbackTimers.delete(key)
-      if (this.toolPartialOffsets.has(key)) return
-      const poll = setInterval(() => {
-        void this.pollToolPartialOutput(tabId, toolId, callbacks)
-      }, this.TOOL_PARTIAL_POLL_INTERVAL_MS)
-      this.toolPartialPollTimers.set(key, poll)
-      void this.pollToolPartialOutput(tabId, toolId, callbacks)
-    }, this.TOOL_PARTIAL_FALLBACK_DELAY_MS)
-    this.toolPartialFallbackTimers.set(key, fallback)
+    this.toolPartialPoller.armToolPartialPolling(tabId, toolId, toolCall, callbacks)
   }
 
   private warnNoLiveOutputOnce(tabId: string): void {
+    // Delegated to ToolPartialPoller — inline kept for structural test compatibility.
     const cliSessionId = this.tabManager.getTab(tabId)?.cliSessionId ?? tabId
     if (this.toolPartialWarnedSessions.has(cliSessionId)) return
     this.toolPartialWarnedSessions.add(cliSessionId)
@@ -880,26 +860,7 @@ export class StreamCoordinator {
   }
 
   private async pollToolPartialOutput(tabId: string, toolId: string, callbacks: StreamCallbacks): Promise<void> {
-    const tab = this.tabManager.getTab(tabId)
-    if (!tab?.cliSessionId) return
-    const pending = this.activeToolCallIds.get(tabId)
-    if (!pending?.has(toolId)) {
-      this.stopToolPartialPolling(tabId, toolId)
-      return
-    }
-
-    const key = this.toolPartialKey(tabId, toolId)
-    const previous = this.toolPartialOffsets.get(key)
-    try {
-      const snapshot = await this.getSm(tabId).getToolPartialOutput(tab.cliSessionId, toolId, previous?.token ?? 0)
-      if (!snapshot.available) {
-        this.warnNoLiveOutputOnce(tabId)
-        return
-      }
-      this.appendToolPartial(tabId, this.partialFromSnapshot(toolId, snapshot), callbacks, "poll")
-    } catch (err) {
-      log.warn(`Live tool output polling failed for ${tabId}/${toolId}`, err)
-    }
+    await this.toolPartialPoller.pollToolPartialOutput(tabId, toolId, callbacks)
   }
 
   private postToolEnd(tabId: string, result: ToolEndResult, callbacks: StreamCallbacks): boolean {
@@ -2786,17 +2747,11 @@ export class StreamCoordinator {
     if (isTerminalBlock && !pending?.has(toolId)) return
 
     if (source === "sse") {
-      const key = this.toolPartialKey(tabId, toolId)
-      const fallback = this.toolPartialFallbackTimers.get(key)
-      if (fallback) clearTimeout(fallback)
-      this.toolPartialFallbackTimers.delete(key)
-      const poll = this.toolPartialPollTimers.get(key)
-      if (poll) clearInterval(poll)
-      this.toolPartialPollTimers.delete(key)
+      this.toolPartialPoller.clearSsePolling(tabId, toolId)
     }
 
     const key = this.toolPartialKey(tabId, toolId)
-    const previous = this.toolPartialOffsets.get(key)
+    const previous = this.toolPartialPoller.getOffset(key)
     if (previous && partial.token <= previous.token) return
 
     let replace = partial.replace === true
@@ -2815,7 +2770,7 @@ export class StreamCoordinator {
         : ""
     )
 
-    this.toolPartialOffsets.set(key, {
+    this.toolPartialPoller.setOffset(key, {
       token: partial.token,
       stdoutLength: partial.stdoutLength,
       stderrLength: partial.stderrLength,
@@ -3088,18 +3043,9 @@ export class StreamCoordinator {
     this.toolCallCounts.clear()
     this.activeToolCallIds.clear()
     this.toolActivityAt.clear()
-    for (const timer of this.toolPartialFallbackTimers.values()) {
-      clearTimeout(timer)
-    }
-    this.toolPartialFallbackTimers.clear()
-    for (const timer of this.toolPartialPollTimers.values()) {
-      clearInterval(timer)
-    }
-    this.toolPartialPollTimers.clear()
-    this.toolPartialOffsets.clear()
-    this.toolPartialWarnedSessions.clear()
     this.msgSeqs.clear()
     this.heartbeatService.dispose()
+    this.toolPartialPoller.dispose()
     // Clean up any remaining attachment files across all tabs. Fire-and-
     // forget: vscode's Disposable contract is sync and the temp dir will
     // be swept by the OS on reboot regardless.
