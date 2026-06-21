@@ -171,7 +171,7 @@ Each extracted function is called from a thin one-liner delegation in `main.ts` 
 | `DiffAcceptService` | `src/chat/DiffAcceptService.ts` | Diff accept + plan permission |
 | `CodeInsertionService` | `src/chat/CodeInsertionService.ts` | Insert-at-cursor + create-file-from-code |
 | `AutoModeService` | `src/chat/AutoModeService.ts` | Auto-mode confirmation gate |
-| `HostPromptQueue` | `src/chat/HostPromptQueue.ts` | Host-side prompt queue (single source of truth, workspaceState persistence) |
+| `HostPromptQueue` | `src/chat/HostPromptQueue.ts` | Host-side prompt queue (single source of truth, workspaceState persistence; auto-prunes completed/failed items when queue is full) |
 | `QuestionExpiryDetector` | `src/chat/QuestionExpiryDetector.ts` | B10: Categorizes question reply failures (expired/transient/rejected) + staleness detection |
 
 ### Session Title Lifecycle
@@ -232,6 +232,7 @@ Titles flow across three surfaces (server / CLI / webview tab strip) via two com
 | Host diff handlers | `src/chat/WebviewEventRouter.ts` (~lines 500-560, 660-670, 1193-1210) | `accept_diff`, `reject_diff`, `revert_diff`, `accept_hunk`, `reject_hunk`, `revert_hunk`, `get_file_hunks`, `get_file_diff`, `undo_file`, `revert_all_files` |
 | Diff CSS | `src/chat/webview/css/blocks.css` (~lines 1330-1600) | `.diff-block`, `.diff-table`, `.diff-line--added`, `.diff-line--removed`, `.diff-line-num--old/new`, `.diff-wrap-toggle`, `.diff-hunk-collapse`, `.diff-hunk-nav`, `.diff-view-toggle`, `.diff-table-wrapper--side-by-side` |
 | Wrap toggles | `src/chat/webview/renderer.ts` | `readDiffWrapPreference`, `persistDiffWrapPreference`, `readCodeWrapPreference`, `persistCodeWrapPreference`, `readDiffViewModePreference`, `persistDiffViewModePreference` |
+| DiffApplier | `src/diff/DiffApplier.ts` | Side-by-side diff viewer via `opencode-diff://` content provider; LRU-evicts old entries (max 100 documents) to prevent memory leaks |
 
 ### Changed Files Modal — Accessibility Architecture (v0.4.0)
 
@@ -458,6 +459,7 @@ The webview writes BOTH flags from any `streaming_state` message, so a single ho
 | **G15** | Sidebar/panel toggles (timeline, activity, tasks, subagents) during a stream re-wrapped every line and yanked scroll position | New `pauseForReflow(ms)` on `ScrollAnchor`. Toggles call `pauseActiveAnchorForReflow(150)` so `scrollIfAnchored` is a no-op for ~150ms (long enough to span the reflow + one animation frame); the next chunk resumes normal autoscroll. Wired in `timeline.ts::setupTimelineToggle` + activity/tasks/subagents click handlers in `main.ts`. |
 | **G16** | Scroll "haywire" during long sessions — `scrollHeight` polling during streaming raced with chunk arrival | `scrollAnchor.ts` now wires an `IntersectionObserver` sentinel as the PRIMARY "is at bottom?" signal (1px div as last child, rootMargin = ANCHOR_THRESHOLD). Cheaper and more robust than polling scrollHeight mid-stream. Falls back gracefully to scroll/wheel/touch listeners when `IntersectionObserver` is unavailable (older webview). |
 | **G17** | Send button stuck "streaming" when the server's `message_complete` / `session.idle` is missed or delayed — the model's own `finish_reason` (emitted via the `step-finish` part) was discarded by `StepFinishHandler`, so the only completion signals were server-level. | `StepFinishHandler` now preserves the `reason` field on the normalized `step_finish` event. `ChatProvider`'s `step_finish` handler treats terminal reasons (`stop`/`end_turn`/`stop_sequence`/`complete` — `tool_use`/`tool_calls` deliberately excluded since those mean mid-loop) as a completion **backstop**: after a `STEP_FINISH_BACKSTOP_DELAY_MS` (500ms) delay, it probes `maybeFinalizeStream`. The delay lets the server's authoritative `message_complete` win when prompt; `maybeFinalizeStream` no-ops once `waitingForCompletion` is cleared. Drop-in safety net — no change to the primary completion path. |
+| **G18** | Stuck-stream watchdog fired with no `stuckStreamHandlers` callbacks → host cleared `isStreaming` via `tabManager.setStreaming(false)` but never posted `streaming_state:false` to webview → permanent Stop button. | Watchdog fallback now calls `cleanupTab(tabId)` instead of manual flag-clearing. `cleanupTab` triggers `onStreamingStateChanged` → ChatProvider posts `streaming_state:false` → webview reconciles both flags. |
 
 #### Test Coverage
 - `tests/unit/streaming-state-stability.test.mjs` (27 tests) — structural coverage for every gap, the wire format, host authority wiring, and reload state clearing.
