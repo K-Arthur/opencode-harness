@@ -32,6 +32,7 @@ import { createStreamingLog, emit, type StreamingLogSink } from "./StreamingLog"
 import type { StreamCallbacks, ToolEndResult, ToolPartialInput, StreamLifecycleState, ActiveRunMetrics } from "./StreamCoordinatorTypes"
 export type { StreamCallbacks, ToolEndResult, ToolPartialInput, StreamLifecycleState, ActiveRunMetrics }
 import type { SessionManagerRegistry } from "../../session/SessionManagerRegistry"
+import { HeartbeatService, type DeferredChunkEntry } from "./HeartbeatService"
 
 /** Context object grouping all StreamCoordinator dependencies to reduce constructor parameter count. */
 export interface StreamDeps {
@@ -152,6 +153,7 @@ export class StreamCoordinator {
   readonly STATUS_FINALIZE_QUIET_MS = 1500
   private readonly MAX_UNACKED_STREAM_CHUNKS = 8
   private readonly MAX_STREAM_DEFER_MS = 250
+  private heartbeatService: HeartbeatService
   /** Tracks last deferral log time per tab to suppress duplicate logging during long subagent waits. */
   private lastDeferralLogTs = new Map<string, number>()
   private streamWatchdog: ReturnType<typeof setInterval> | null = null
@@ -219,12 +221,7 @@ export class StreamCoordinator {
   private msgSeqs = new Map<string, number>()
   /** Per-tab chunk sequence counter — used for rendered-chunk ACK backpressure. */
   private postedChunkSeqs = new Map<string, number>()
-  private deferredChunks = new Map<string, {
-    text: string
-    messageId?: string
-    callbacks: StreamCallbacks
-    timer: ReturnType<typeof setTimeout>
-  }>()
+  private deferredChunks = new Map<string, DeferredChunkEntry>()
   /** Per-tab token/cost totals at prompt start, used to dedupe final SDK usage fallback */
   private finalUsageBaselines = new Map<string, { total: number; cost: number }>()
   /** Per-tab async context estimate version; incremented by estimates and final actual usage. */
@@ -322,6 +319,18 @@ export class StreamCoordinator {
       storeAssistantMessage: (id, msgId, blocks, tokenTotal) => this.storeAssistantMessage(id, msgId, blocks, tokenTotal),
       nextSeq: (id) => this.nextSeq(id),
     })
+    this.heartbeatService = new HeartbeatService({
+      tabManager: this.tabManager,
+      heartbeatSeqs: this.heartbeatSeqs,
+      heartbeatAckedSeqs: this.heartbeatAckedSeqs,
+      heartbeatAckedChunkSeqs: this.heartbeatAckedChunkSeqs,
+      heartbeatTimers: this.heartbeatTimers,
+      lastForceRerenderSeqs: this.lastForceRerenderSeqs,
+      postedChunkSeqs: this.postedChunkSeqs,
+      deferredChunks: this.deferredChunks,
+      MAX_UNACKED_STREAM_CHUNKS: this.MAX_UNACKED_STREAM_CHUNKS,
+      MAX_STREAM_DEFER_MS: this.MAX_STREAM_DEFER_MS,
+    })
     this.tabCloseDisposable = this.tabManager.onTabClosed((tabId) => {
       this.cleanupTab(tabId)
     })
@@ -345,11 +354,7 @@ export class StreamCoordinator {
     return seq
   }
 
-  private nextChunkSeq(tabId: string): number {
-    const seq = (this.postedChunkSeqs.get(tabId) || 0) + 1
-    this.postedChunkSeqs.set(tabId, seq)
-    return seq
-  }
+  // nextChunkSeq moved to HeartbeatService — postedChunkSeqs is owned by the service.
 
   /**
    * Classify the outgoing prompt, prepend a methodology hint to `parts`, and
@@ -2265,120 +2270,27 @@ export class StreamCoordinator {
   }
 
   private startHeartbeat(tabId: string, callbacks: StreamCallbacks): void {
-    this.stopHeartbeat(tabId)
-    this.heartbeatSeqs.set(tabId, 0)
-    this.heartbeatAckedSeqs.set(tabId, 0)
-    const timer = setInterval(() => {
-      const tab = this.tabManager.getTab(tabId)
-      if (!tab?.isStreaming) {
-        this.stopHeartbeat(tabId)
-        return
-      }
-      const seq = (this.heartbeatSeqs.get(tabId) || 0) + 1
-      this.heartbeatSeqs.set(tabId, seq)
-      callbacks.postMessage({
-        type: "stream_ping",
-        sessionId: tabId,
-        seq,
-      })
-      const ackedSeq = this.heartbeatAckedSeqs.get(tabId) || 0
-      // Only send force_rerender once per "missed-ack window" — re-arm when acks catch up.
-      // Previously this would fire every 5s indefinitely if the webview ever stopped acking,
-      // saturating the message channel and worsening recovery.
-      const lastRerenderSeq = this.lastForceRerenderSeqs.get(tabId) || 0
-      if (seq - ackedSeq > 2 && seq > lastRerenderSeq) {
-        // Only log the first missed ping to avoid spamming the output
-        if (seq - ackedSeq === 3) {
-          log.warn(`Heartbeat: tab ${tabId} missed ${seq - ackedSeq} pings, sending force_rerender (seq=${seq})`)
-        }
-        const fullText = tab.streamingBuffer || ""
-        callbacks.postMessage({
-          type: "force_rerender",
-          sessionId: tabId,
-          text: fullText,
-        })
-        this.lastForceRerenderSeqs.set(tabId, seq)
-      } else if (seq - ackedSeq <= 2) {
-        this.lastForceRerenderSeqs.set(tabId, 0)
-      }
-    }, 5000)
-    this.heartbeatTimers.set(tabId, timer)
+    this.heartbeatService.startHeartbeat(tabId, callbacks)
   }
 
   private stopHeartbeat(tabId: string): void {
-    const timer = this.heartbeatTimers.get(tabId)
-    if (timer) {
-      clearInterval(timer)
-      this.heartbeatTimers.delete(tabId)
-    }
-    this.heartbeatSeqs.delete(tabId)
-    this.heartbeatAckedSeqs.delete(tabId)
-    this.heartbeatAckedChunkSeqs.delete(tabId)
-    this.lastForceRerenderSeqs.delete(tabId)
+    this.heartbeatService.stopHeartbeat(tabId)
   }
 
   handleStreamAck(tabId: string, seq: number, lastRenderedChunkSeq?: number): void {
-    if (seq > 0) this.heartbeatAckedSeqs.set(tabId, seq)
-    if (lastRenderedChunkSeq !== undefined) {
-      this.heartbeatAckedChunkSeqs.set(tabId, lastRenderedChunkSeq)
-    }
-    this.drainDeferredChunk(tabId)
-  }
-
-  private unackedStreamChunkCount(tabId: string): number {
-    const posted = this.postedChunkSeqs.get(tabId) || 0
-    const rendered = this.heartbeatAckedChunkSeqs.get(tabId) || 0
-    return Math.max(0, posted - rendered)
-  }
-
-  private shouldDeferStreamChunk(tabId: string): boolean {
-    return this.unackedStreamChunkCount(tabId) >= this.MAX_UNACKED_STREAM_CHUNKS
-  }
-
-  private postChunkToWebview(tabId: string, text: string, callbacks: StreamCallbacks, messageId?: string): void {
-    callbacks.postMessage({
-      type: "stream_chunk",
-      sessionId: tabId,
-      text,
-      messageId,
-      seq: this.nextChunkSeq(tabId),
-    })
+    this.heartbeatService.handleStreamAck(tabId, seq, lastRenderedChunkSeq)
   }
 
   private postOrDeferChunk(tabId: string, text: string, callbacks: StreamCallbacks, messageId?: string): void {
-    if (!this.shouldDeferStreamChunk(tabId)) {
-      this.postChunkToWebview(tabId, text, callbacks, messageId)
-      return
-    }
-
-    const existing = this.deferredChunks.get(tabId)
-    if (existing) {
-      existing.text += text
-      existing.callbacks = callbacks
-      existing.messageId = messageId ?? existing.messageId
-      return
-    }
-
-    const timer = setTimeout(() => this.drainDeferredChunk(tabId, true), this.MAX_STREAM_DEFER_MS)
-    this.deferredChunks.set(tabId, { text, messageId, callbacks, timer })
+    this.heartbeatService.postOrDeferChunk(tabId, text, callbacks, messageId)
   }
 
   private drainDeferredChunk(tabId: string, force = false): void {
-    const deferred = this.deferredChunks.get(tabId)
-    if (!deferred) return
-    if (!force && this.shouldDeferStreamChunk(tabId)) return
-
-    clearTimeout(deferred.timer)
-    this.deferredChunks.delete(tabId)
-    this.postChunkToWebview(tabId, deferred.text, deferred.callbacks, deferred.messageId)
+    this.heartbeatService.drainDeferredChunk(tabId, force)
   }
 
   private clearDeferredChunk(tabId: string): void {
-    const deferred = this.deferredChunks.get(tabId)
-    if (deferred) {
-      clearTimeout(deferred.timer)
-      this.deferredChunks.delete(tabId)
-    }
+    this.heartbeatService.clearDeferredChunk(tabId)
   }
 
   replayLiveStreamToWebview(tabId: string, callbacks: StreamCallbacks): void {
@@ -3165,10 +3077,6 @@ export class StreamCoordinator {
       clearTimeout(timer)
     }
     this.pendingToolGraceTimeouts.clear()
-    for (const timer of this.heartbeatTimers.values()) {
-      clearInterval(timer)
-    }
-    this.heartbeatTimers.clear()
     this.subagentHeartbeat.stopAll()
     this.finalizingTabs.clear()
     this.abortedTabs.clear()
@@ -3190,16 +3098,8 @@ export class StreamCoordinator {
     this.toolPartialPollTimers.clear()
     this.toolPartialOffsets.clear()
     this.toolPartialWarnedSessions.clear()
-    this.heartbeatSeqs.clear()
-    this.heartbeatAckedSeqs.clear()
-    this.heartbeatAckedChunkSeqs.clear()
-    this.lastForceRerenderSeqs.clear()
     this.msgSeqs.clear()
-    this.postedChunkSeqs.clear()
-    for (const deferred of this.deferredChunks.values()) {
-      clearTimeout(deferred.timer)
-    }
-    this.deferredChunks.clear()
+    this.heartbeatService.dispose()
     // Clean up any remaining attachment files across all tabs. Fire-and-
     // forget: vscode's Disposable contract is sync and the temp dir will
     // be swept by the OS on reboot regardless.

@@ -5,6 +5,7 @@ import { resolve } from "node:path"
 
 const source = readFileSync(resolve(__dirname, "StreamCoordinator.ts"), "utf8")
 const typesSource = readFileSync(resolve(__dirname, "StreamCoordinatorTypes.ts"), "utf8")
+const heartbeatSource = readFileSync(resolve(__dirname, "HeartbeatService.ts"), "utf8")
 
 describe("StreamCoordinator.ts", () => {
   it("exports StreamCallbacks interface", () => {
@@ -191,7 +192,10 @@ describe("StreamCoordinator.ts", () => {
     assert.ok(source.includes("postedChunkSeqs"), "must track chunk seq separately from heartbeat seq")
     assert.ok(source.includes("deferredChunks"), "must coalesce deferred chunks")
     assert.ok(source.includes("postOrDeferChunk"), "appendChunk must route through backpressure gate")
-    assert.ok(source.includes("this.drainDeferredChunk(tabId)"), "ACKs must drain deferred chunks")
+    assert.ok(
+      source.includes("drainDeferredChunk(tabId)") || heartbeatSource.includes("this.drainDeferredChunk(tabId)"),
+      "ACKs must drain deferred chunks (in StreamCoordinator or HeartbeatService)",
+    )
   })
 
   it("has cleanupTab and no implicit context builder in the prompt path", () => {
