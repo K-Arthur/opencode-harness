@@ -958,36 +958,14 @@
           "default": false,
           "description": "Enable Test-Driven Development orchestration. When enabled, coding tasks will follow Red-Green-Refactor cycles with automatic test generation and verification."
         },
-        "opencode.tdd.minCoverage": {
-          "type": "number",
-          "scope": "window",
-          "default": 80,
-          "minimum": 0,
-          "maximum": 100,
-          "description": "Minimum test coverage percentage required to complete the TDD cycle."
-        },
-        "opencode.tdd.maxIterations": {
-          "type": "number",
-          "scope": "window",
-          "default": 5,
-          "minimum": 1,
-          "maximum": 10,
-          "description": "Maximum number of iterations allowed per TDD phase before marking it as failed."
-        },
+
         "opencode.sadd.enabled": {
           "type": "boolean",
           "scope": "window",
           "default": false,
           "description": "Enable Sub-Agent Driven Development (SADD). When enabled, the AI decomposes complex tasks into parallel subtasks, each run by a separate sub-agent. This can speed up multi-file changes but uses more tokens."
         },
-        "opencode.sadd.maxSubagents": {
-          "type": "number",
-          "scope": "window",
-          "default": 4,
-          "minimum": 1,
-          "maximum": 8,
-          "description": "Maximum number of sub-agents that can run in parallel for a single task when Sub-Agent Driven Development is enabled."
-        },
+
         "opencode.methodology.enabled": {
           "type": "boolean",
           "scope": "window",
@@ -1010,12 +988,7 @@
           "maximum": 600000,
           "description": "Time-to-first-byte timeout in milliseconds. The extension waits this long for the first stream chunk before probing the opencode server for run liveness. Slow reasoning models (GLM-5.x, Kimi, DeepSeek-R1, Qwen-QwQ) routinely take 60–180s to emit the first token; the 180s default accommodates them. Decrease for snappy first-class providers; increase if your workflow regularly hits the timeout while the model is still thinking. Range: 60000–600000ms (1–10 minutes)."
         },
-        "opencode.streaming.logToOutputChannel": {
-          "type": "boolean",
-          "scope": "window",
-          "default": true,
-          "description": "Mirror streaming-lifecycle events (send, ttfb, probe, reconnect, abort) to the 'OpenCode' Output channel — mirrors `opencode --print-logs`. Useful for diagnosing 'Send button reverted while still generating' symptoms."
-        },
+
         "opencode.sessions.maxTabs": {
           "type": "number",
           "scope": "window",
@@ -1046,22 +1019,7 @@
           "maximum": 60,
           "description": "Minutes before an idle per-tab process is automatically killed to free resources (per-tab strategy only)."
         },
-        "opencode.chat.wrapLongLines": {
-          "type": "string",
-          "default": "auto",
-          "enum": [
-            "on",
-            "off",
-            "auto"
-          ],
-          "enumDescriptions": [
-            "Always wrap long lines in code blocks, diffs, and tool output.",
-            "Never wrap — always use horizontal scrolling.",
-            "Use per-context defaults: wrap markdown and diffs, scroll code."
-          ],
-          "scope": "window",
-          "description": "Controls how long lines are displayed in code blocks, diffs, and tool output. 'auto' wraps conversational content but scrolls structured content like code."
-        },
+
         "opencode.defaultMode": {
           "type": "string",
           "default": "build",
