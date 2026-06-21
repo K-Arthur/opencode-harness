@@ -254,6 +254,10 @@ The host-to-webview `command_list` payload is partitioned before it reaches the 
 - `mode_change_result`: Host acknowledgement for a `change_mode` request. When
   `accepted` is false, the payload carries the previous mode so the webview can keep the
   visible selector in sync after invalid payloads or cancelled Auto-mode confirmation.
+- `open_model_manager`: Host message to open the model manager panel. Optional
+  `forRegeneration` flag indicates the panel was opened for model selection during
+  regeneration; optional `messageId` identifies the message being regenerated.
+  Payload: `{ type, forRegeneration?, messageId? }`.
 - `plan_complete`: Host notification that the agent wrote a plan document in Plan mode.
   The webview renders a "Planning Complete" banner with "Switch to Build" and "Stay in Plan"
   buttons. The sessionId identifies the tab. Payload: `{ type, sessionId, planName? }`.
