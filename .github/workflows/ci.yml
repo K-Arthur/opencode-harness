@@ -110,13 +110,13 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
 
+      - name: Install dependencies
+        run: npm ci
+
       - name: Install Playwright browsers
         run: |
           rm -rf ~/.cache/ms-playwright
           npx playwright install --with-deps chromium --force
-
-      - name: Install dependencies
-        run: npm ci
 
       - name: Build extension
         run: npm run build
@@ -141,13 +141,13 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
 
+      - name: Install dependencies
+        run: npm ci
+
       - name: Install Playwright browsers
         run: |
           rm -rf ~/.cache/ms-playwright
           npx playwright install --with-deps chromium --force
-
-      - name: Install dependencies
-        run: npm ci
 
       - name: Build extension
         run: npm run build
