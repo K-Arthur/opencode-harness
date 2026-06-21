@@ -147,6 +147,16 @@
 // refresh — plus the MCP `source` preservation + session-title fixes. Bundle
 // measured 658.8KB at the start of the session and 661.3KB after. +4KB restores
 // ~0.4% headroom so the gate still trips on a real regression. Webview unchanged.
+//
+// 2026-06-21 re-baseline (host 664KB -> 680KB): the 0.4.10 hardening release —
+// dead-wire audit fixes (open_model_selector handler, six revived webview
+// message types in WebviewEventRouter, visibility-sync pushes in ChatProvider)
+// plus the context-usage/model-aware host plumbing — measured the host bundle at
+// 673.0KB. The growth is correctness work, not bloat (91.5% first-party src:
+// WebviewEventRouter 62KB, ChatProvider 53KB, StreamCoordinator 43KB). +16KB
+// sets the gate at 680KB (~1% headroom) so it still trips on a real regression.
+// Webview unchanged. Paydown lever: the @opencode-ai/sdk gen (56KB) could be
+// tree-shaken if the SDK exposed per-endpoint entry points.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -156,7 +166,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 664 * 1024, label: "extension host" },
+  { path: "dist/extension.js", limitBytes: 680 * 1024, label: "extension host" },
   { path: "dist/chat/webview/main.js", limitBytes: 780 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]

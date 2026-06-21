@@ -263,7 +263,7 @@
       "format": "esm"
     },
     "src/install/installPlan.ts": {
-      "bytes": 4290,
+      "bytes": 5861,
       "imports": [
         {
           "path": "node:path",
@@ -274,7 +274,7 @@
       "format": "esm"
     },
     "src/session/ServerLifecycle.ts": {
-      "bytes": 9523,
+      "bytes": 10339,
       "imports": [
         {
           "path": "child_process",
@@ -445,7 +445,7 @@
       "format": "esm"
     },
     "src/session/eventHandlers/StepFinishHandler.ts": {
-      "bytes": 1383,
+      "bytes": 1452,
       "imports": [
         {
           "path": "./types",
@@ -742,7 +742,7 @@
       "format": "esm"
     },
     "src/session/SessionClient.ts": {
-      "bytes": 20956,
+      "bytes": 25867,
       "imports": [
         {
           "path": "@opencode-ai/sdk/v2",
@@ -804,7 +804,7 @@
       "format": "esm"
     },
     "src/session/SessionManager.ts": {
-      "bytes": 16711,
+      "bytes": 17777,
       "imports": [
         {
           "path": "vscode",
@@ -813,11 +813,6 @@
         },
         {
           "path": "@opencode-ai/sdk/v2",
-          "kind": "import-statement",
-          "external": true
-        },
-        {
-          "path": "crypto",
           "kind": "import-statement",
           "external": true
         },
@@ -880,7 +875,7 @@
       "format": "esm"
     },
     "src/session/SessionStore.ts": {
-      "bytes": 54203,
+      "bytes": 54308,
       "imports": [
         {
           "path": "vscode",
@@ -968,7 +963,7 @@
       "format": "esm"
     },
     "src/session/LocalSessionProcessManager.ts": {
-      "bytes": 6145,
+      "bytes": 8061,
       "imports": [
         {
           "path": "vscode",
@@ -981,6 +976,16 @@
           "external": true
         },
         {
+          "path": "node:fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:os",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
           "path": "src/utils/outputChannel.ts",
           "kind": "import-statement",
           "original": "../utils/outputChannel"
@@ -989,12 +994,17 @@
           "path": "src/utils/portPool.ts",
           "kind": "import-statement",
           "original": "../utils/portPool"
+        },
+        {
+          "path": "src/install/installPlan.ts",
+          "kind": "import-statement",
+          "original": "../install/installPlan"
         }
       ],
       "format": "esm"
     },
     "src/session/SessionManagerRegistry.ts": {
-      "bytes": 11144,
+      "bytes": 11531,
       "imports": [
         {
           "path": "vscode",
@@ -1087,9 +1097,19 @@
       ],
       "format": "esm"
     },
+    "src/chat/ContextUsageThrottler.ts": {
+      "bytes": 3796,
+      "imports": [],
+      "format": "esm"
+    },
     "src/monitor/ContextMonitor.ts": {
-      "bytes": 19750,
+      "bytes": 21447,
       "imports": [
+        {
+          "path": "src/chat/ContextUsageThrottler.ts",
+          "kind": "import-statement",
+          "original": "../chat/ContextUsageThrottler.js"
+        },
         {
           "path": "vscode",
           "kind": "require-call",
@@ -1195,7 +1215,7 @@
       "format": "esm"
     },
     "src/diff/DiffApplier.ts": {
-      "bytes": 3208,
+      "bytes": 3660,
       "imports": [
         {
           "path": "vscode",
@@ -1430,8 +1450,77 @@
       "imports": [],
       "format": "esm"
     },
+    "src/chat/handlers/StreamingLog.ts": {
+      "bytes": 5928,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/handlers/HeartbeatService.ts": {
+      "bytes": 5894,
+      "imports": [
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/handlers/ToolPartialPoller.ts": {
+      "bytes": 7677,
+      "imports": [
+        {
+          "path": "src/chat/handlers/toolClassifier.ts",
+          "kind": "import-statement",
+          "original": "./toolClassifier"
+        },
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/handlers/ToolCallTracker.ts": {
+      "bytes": 12007,
+      "imports": [
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../../utils/outputChannel"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/chat/handlers/StreamTimeoutManager.ts": {
+      "bytes": 18003,
+      "imports": [
+        {
+          "path": "src/utils/outputChannel.ts",
+          "kind": "import-statement",
+          "original": "../../utils/outputChannel"
+        },
+        {
+          "path": "src/chat/handlers/StreamingLog.ts",
+          "kind": "import-statement",
+          "original": "./StreamingLog"
+        },
+        {
+          "path": "src/chat/handlers/runErrorMapper.ts",
+          "kind": "import-statement",
+          "original": "./runErrorMapper"
+        },
+        {
+          "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
     "src/chat/handlers/StreamCoordinator.ts": {
-      "bytes": 128609,
+      "bytes": 113124,
       "imports": [
         {
           "path": "vscode",
@@ -1557,6 +1646,31 @@
           "path": "src/chat/modePolicy.ts",
           "kind": "import-statement",
           "original": "../modePolicy"
+        },
+        {
+          "path": "src/chat/handlers/StreamingLog.ts",
+          "kind": "import-statement",
+          "original": "./StreamingLog"
+        },
+        {
+          "path": "src/chat/handlers/HeartbeatService.ts",
+          "kind": "import-statement",
+          "original": "./HeartbeatService"
+        },
+        {
+          "path": "src/chat/handlers/ToolPartialPoller.ts",
+          "kind": "import-statement",
+          "original": "./ToolPartialPoller"
+        },
+        {
+          "path": "src/chat/handlers/ToolCallTracker.ts",
+          "kind": "import-statement",
+          "original": "./ToolCallTracker"
+        },
+        {
+          "path": "src/chat/handlers/StreamTimeoutManager.ts",
+          "kind": "import-statement",
+          "original": "./StreamTimeoutManager"
         }
       ],
       "format": "esm"
@@ -1667,7 +1781,7 @@
       "format": "esm"
     },
     "src/chat/handlers/MessageRouter.ts": {
-      "bytes": 10679,
+      "bytes": 10942,
       "imports": [
         {
           "path": "vscode",
@@ -1796,7 +1910,7 @@
       "format": "esm"
     },
     "src/chat/HostMessageBatcher.ts": {
-      "bytes": 12630,
+      "bytes": 12648,
       "imports": [
         {
           "path": "src/chat/BatchEngine.ts",
@@ -1843,7 +1957,7 @@
       "format": "esm"
     },
     "src/chat/StatePushService.ts": {
-      "bytes": 1766,
+      "bytes": 2461,
       "imports": [],
       "format": "esm"
     },
@@ -1899,7 +2013,7 @@
       "format": "esm"
     },
     "src/chat/CommandExecutionService.ts": {
-      "bytes": 7560,
+      "bytes": 8028,
       "imports": [
         {
           "path": "vscode",
@@ -1929,6 +2043,11 @@
       "imports": [],
       "format": "esm"
     },
+    "src/chat/webview/turnGrouper.ts": {
+      "bytes": 4391,
+      "imports": [],
+      "format": "esm"
+    },
     "src/chat/webview/fuzzyMatch.ts": {
       "bytes": 5967,
       "imports": [],
@@ -1946,7 +2065,7 @@
       "format": "esm"
     },
     "src/chat/WebviewMessageValidator.ts": {
-      "bytes": 19893,
+      "bytes": 20534,
       "imports": [
         {
           "path": "src/chat/modePolicy.ts",
@@ -1961,8 +2080,13 @@
       "imports": [],
       "format": "esm"
     },
+    "src/checkpoint/restorePoints.ts": {
+      "bytes": 3231,
+      "imports": [],
+      "format": "esm"
+    },
     "src/chat/WebviewEventRouter.ts": {
-      "bytes": 126563,
+      "bytes": 138717,
       "imports": [
         {
           "path": "vscode",
@@ -1971,6 +2095,11 @@
         },
         {
           "path": "path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:child_process",
           "kind": "import-statement",
           "external": true
         },
@@ -1998,6 +2127,11 @@
           "path": "src/session/messageId.ts",
           "kind": "import-statement",
           "original": "../session/messageId"
+        },
+        {
+          "path": "src/chat/webview/turnGrouper.ts",
+          "kind": "import-statement",
+          "original": "./webview/turnGrouper"
         },
         {
           "path": "src/utils/outputChannel.ts",
@@ -2045,20 +2179,15 @@
           "original": "../session/sessionUtils"
         },
         {
-          "path": "child_process",
-          "kind": "require-call",
-          "external": true
-        },
-        {
-          "path": "child_process",
-          "kind": "require-call",
-          "external": true
+          "path": "src/checkpoint/restorePoints.ts",
+          "kind": "dynamic-import",
+          "original": "../checkpoint/restorePoints"
         }
       ],
       "format": "esm"
     },
     "src/chat/handlers/SteerPromptHandler.ts": {
-      "bytes": 5927,
+      "bytes": 5936,
       "imports": [
         {
           "path": "./StreamCoordinator",
@@ -2079,7 +2208,7 @@
       "format": "esm"
     },
     "src/chat/HostPromptQueue.ts": {
-      "bytes": 7702,
+      "bytes": 8052,
       "imports": [
         {
           "path": "vscode",
@@ -2393,7 +2522,7 @@
       "format": "esm"
     },
     "src/chat/ChatProvider.ts": {
-      "bytes": 115659,
+      "bytes": 125310,
       "imports": [
         {
           "path": "vscode",
@@ -2471,14 +2600,9 @@
           "original": "../session/sdkMessageConverter"
         },
         {
-          "path": "../session/sdkUsageSummary",
+          "path": "src/session/sessionUtils.ts",
           "kind": "import-statement",
-          "external": true
-        },
-        {
-          "path": "../session/sessionUtils",
-          "kind": "import-statement",
-          "external": true
+          "original": "../session/sessionUtils"
         },
         {
           "path": "src/session/activityCoalesce.ts",
@@ -2714,11 +2838,6 @@
           "path": "src/chat/voiceSetup.ts",
           "kind": "import-statement",
           "original": "./voiceSetup"
-        },
-        {
-          "path": "child_process",
-          "kind": "require-call",
-          "external": true
         }
       ],
       "format": "esm"
@@ -2807,7 +2926,7 @@
       "format": "esm"
     },
     "src/model/ModelManager.ts": {
-      "bytes": 22779,
+      "bytes": 24634,
       "imports": [
         {
           "path": "vscode",
@@ -2848,7 +2967,7 @@
       "format": "esm"
     },
     "src/diagnostics/CliDiagnostics.ts": {
-      "bytes": 6150,
+      "bytes": 6480,
       "imports": [
         {
           "path": "vscode",
@@ -2869,7 +2988,7 @@
       "format": "esm"
     },
     "src/mcp/McpServerManager.ts": {
-      "bytes": 19576,
+      "bytes": 21308,
       "imports": [
         {
           "path": "fs",
@@ -2900,7 +3019,7 @@
       "format": "esm"
     },
     "src/install/OpencodeInstaller.ts": {
-      "bytes": 9377,
+      "bytes": 9337,
       "imports": [
         {
           "path": "vscode",
@@ -3234,8 +3353,19 @@
       ],
       "format": "esm"
     },
+    "src/session/SessionImporter.ts": {
+      "bytes": 4145,
+      "imports": [
+        {
+          "path": "vscode",
+          "kind": "dynamic-import",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
     "src/commands/export.ts": {
-      "bytes": 2805,
+      "bytes": 4294,
       "imports": [
         {
           "path": "vscode",
@@ -3253,6 +3383,11 @@
           "external": true
         },
         {
+          "path": "src/session/SessionImporter.ts",
+          "kind": "import-statement",
+          "original": "../session/SessionImporter"
+        },
+        {
           "path": "src/utils/outputChannel.ts",
           "kind": "import-statement",
           "original": "../utils/outputChannel"
@@ -3261,7 +3396,7 @@
       "format": "esm"
     },
     "src/commands/index.ts": {
-      "bytes": 1090,
+      "bytes": 1113,
       "imports": [
         {
           "path": "src/commands/rollback.ts",
@@ -3649,7 +3784,7 @@
       "format": "esm"
     },
     "src/extension.ts": {
-      "bytes": 34133,
+      "bytes": 34911,
       "imports": [
         {
           "path": "vscode",
@@ -3939,6 +4074,16 @@
           "external": true
         },
         {
+          "path": "node:fs",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "node:os",
+          "kind": "require-call",
+          "external": true
+        },
+        {
           "path": "net",
           "kind": "require-call",
           "external": true
@@ -4094,6 +4239,11 @@
           "external": true
         },
         {
+          "path": "vscode",
+          "kind": "require-call",
+          "external": true
+        },
+        {
           "path": "node:fs",
           "kind": "require-call",
           "external": true
@@ -4144,12 +4294,7 @@
           "external": true
         },
         {
-          "path": "child_process",
-          "kind": "require-call",
-          "external": true
-        },
-        {
-          "path": "child_process",
+          "path": "node:child_process",
           "kind": "require-call",
           "external": true
         },
@@ -4175,11 +4320,6 @@
         },
         {
           "path": "path",
-          "kind": "require-call",
-          "external": true
-        },
-        {
-          "path": "child_process",
           "kind": "require-call",
           "external": true
         },
@@ -4350,6 +4490,11 @@
         },
         {
           "path": "vscode",
+          "kind": "dynamic-import",
+          "external": true
+        },
+        {
+          "path": "vscode",
           "kind": "require-call",
           "external": true
         }
@@ -4405,11 +4550,14 @@
         "src/session/opencodeClientFactory.ts": {
           "bytesInOutput": 103
         },
+        "src/checkpoint/restorePoints.ts": {
+          "bytesInOutput": 757
+        },
         "src/extension.ts": {
-          "bytesInOutput": 12476
+          "bytesInOutput": 12712
         },
         "src/session/SessionManager.ts": {
-          "bytesInOutput": 7287
+          "bytesInOutput": 7667
         },
         "src/utils/outputChannel.ts": {
           "bytesInOutput": 2410
@@ -4421,13 +4569,13 @@
           "bytesInOutput": 2103
         },
         "src/session/ServerLifecycle.ts": {
-          "bytesInOutput": 5386
+          "bytesInOutput": 5867
         },
         "src/utils/portFinder.ts": {
           "bytesInOutput": 265
         },
         "src/install/installPlan.ts": {
-          "bytesInOutput": 1122
+          "bytesInOutput": 1432
         },
         "src/session/eventHandlers/TextPartHandler.ts": {
           "bytesInOutput": 491
@@ -4466,7 +4614,7 @@
           "bytesInOutput": 176
         },
         "src/session/eventHandlers/StepFinishHandler.ts": {
-          "bytesInOutput": 436
+          "bytesInOutput": 456
         },
         "src/session/eventHandlers/FallbackHandler.ts": {
           "bytesInOutput": 517
@@ -4508,7 +4656,7 @@
           "bytesInOutput": 8896
         },
         "src/session/SessionClient.ts": {
-          "bytesInOutput": 9740
+          "bytesInOutput": 11376
         },
         "src/session/v2ResponseMappers.ts": {
           "bytesInOutput": 861
@@ -4529,7 +4677,7 @@
           "bytesInOutput": 2891
         },
         "src/session/SessionStore.ts": {
-          "bytesInOutput": 20276
+          "bytesInOutput": 20298
         },
         "src/session/activityCoalesce.ts": {
           "bytesInOutput": 977
@@ -4541,13 +4689,13 @@
           "bytesInOutput": 5403
         },
         "src/session/LocalSessionProcessManager.ts": {
-          "bytesInOutput": 3213
+          "bytesInOutput": 4140
         },
         "src/utils/portPool.ts": {
           "bytesInOutput": 746
         },
         "src/session/SessionManagerRegistry.ts": {
-          "bytesInOutput": 4743
+          "bytesInOutput": 4867
         },
         "src/context/ContextEngine.ts": {
           "bytesInOutput": 2012
@@ -4564,8 +4712,11 @@
         "src/context/ContextFileProvider.ts": {
           "bytesInOutput": 1487
         },
+        "src/chat/ContextUsageThrottler.ts": {
+          "bytesInOutput": 1205
+        },
         "src/monitor/ContextMonitor.ts": {
-          "bytesInOutput": 7731
+          "bytesInOutput": 8374
         },
         "src/terminal/TerminalBridge.ts": {
           "bytesInOutput": 1442
@@ -4586,13 +4737,13 @@
           "bytesInOutput": 2785
         },
         "src/chat/ChatProvider.ts": {
-          "bytesInOutput": 50871
+          "bytesInOutput": 54753
         },
         "src/monitor/UsageAnalytics.ts": {
           "bytesInOutput": 2956
         },
         "src/diff/DiffApplier.ts": {
-          "bytesInOutput": 1101
+          "bytesInOutput": 1382
         },
         "src/chat/diff/hunkStaging.ts": {
           "bytesInOutput": 2119
@@ -4616,7 +4767,7 @@
           "bytesInOutput": 6839
         },
         "src/chat/handlers/StreamCoordinator.ts": {
-          "bytesInOutput": 53805
+          "bytesInOutput": 44375
         },
         "src/chat/handlers/StreamFinalizerService.ts": {
           "bytesInOutput": 1947
@@ -4654,6 +4805,21 @@
         "src/chat/modePolicy.ts": {
           "bytesInOutput": 1011
         },
+        "src/chat/handlers/StreamingLog.ts": {
+          "bytesInOutput": 564
+        },
+        "src/chat/handlers/HeartbeatService.ts": {
+          "bytesInOutput": 2808
+        },
+        "src/chat/handlers/ToolPartialPoller.ts": {
+          "bytesInOutput": 3564
+        },
+        "src/chat/handlers/ToolCallTracker.ts": {
+          "bytesInOutput": 5587
+        },
+        "src/chat/handlers/StreamTimeoutManager.ts": {
+          "bytesInOutput": 8195
+        },
         "src/prompts/PromptManager.ts": {
           "bytesInOutput": 2006
         },
@@ -4682,7 +4848,7 @@
           "bytesInOutput": 3130
         },
         "src/chat/handlers/MessageRouter.ts": {
-          "bytesInOutput": 4690
+          "bytesInOutput": 4804
         },
         "src/chat/ChatCommands.ts": {
           "bytesInOutput": 3710
@@ -4700,7 +4866,7 @@
           "bytesInOutput": 2030
         },
         "src/chat/HostMessageBatcher.ts": {
-          "bytesInOutput": 6350
+          "bytesInOutput": 6365
         },
         "src/chat/PendingEventBuffer.ts": {
           "bytesInOutput": 1388
@@ -4712,7 +4878,7 @@
           "bytesInOutput": 397
         },
         "src/chat/StatePushService.ts": {
-          "bytesInOutput": 947
+          "bytesInOutput": 1156
         },
         "src/chat/SessionLifecycleService.ts": {
           "bytesInOutput": 4085
@@ -4721,16 +4887,19 @@
           "bytesInOutput": 527
         },
         "src/chat/CommandExecutionService.ts": {
-          "bytesInOutput": 3416
+          "bytesInOutput": 3450
         },
         "src/chat/WebviewEventRouter.ts": {
-          "bytesInOutput": 58331
+          "bytesInOutput": 63903
         },
         "src/chat/diff/sdkFileContentToDiffLines.ts": {
           "bytesInOutput": 992
         },
         "src/session/messageId.ts": {
           "bytesInOutput": 484
+        },
+        "src/chat/webview/turnGrouper.ts": {
+          "bytesInOutput": 1527
         },
         "src/chat/webview/fuzzyMatch.ts": {
           "bytesInOutput": 957
@@ -4739,16 +4908,16 @@
           "bytesInOutput": 253
         },
         "src/chat/WebviewMessageValidator.ts": {
-          "bytesInOutput": 8968
+          "bytesInOutput": 9265
         },
         "src/chat/QuestionExpiryDetector.ts": {
           "bytesInOutput": 1540
         },
         "src/chat/handlers/SteerPromptHandler.ts": {
-          "bytesInOutput": 2201
+          "bytesInOutput": 2229
         },
         "src/chat/HostPromptQueue.ts": {
-          "bytesInOutput": 2580
+          "bytesInOutput": 2739
         },
         "src/skills/SkillPreferencesStore.ts": {
           "bytesInOutput": 405
@@ -4814,7 +4983,7 @@
           "bytesInOutput": 2398
         },
         "src/model/ModelManager.ts": {
-          "bytesInOutput": 10333
+          "bytesInOutput": 11062
         },
         "src/model/openRouterMetadata.ts": {
           "bytesInOutput": 1452
@@ -4826,13 +4995,13 @@
           "bytesInOutput": 866
         },
         "src/diagnostics/CliDiagnostics.ts": {
-          "bytesInOutput": 3381
+          "bytesInOutput": 3593
         },
         "src/mcp/McpServerManager.ts": {
-          "bytesInOutput": 7727
+          "bytesInOutput": 8419
         },
         "src/install/OpencodeInstaller.ts": {
-          "bytesInOutput": 4395
+          "bytesInOutput": 4350
         },
         "src/utils/lazyStarter.ts": {
           "bytesInOutput": 134
@@ -4871,7 +5040,10 @@
           "bytesInOutput": 1990
         },
         "src/commands/export.ts": {
-          "bytesInOutput": 1687
+          "bytesInOutput": 2254
+        },
+        "src/session/SessionImporter.ts": {
+          "bytesInOutput": 1362
         },
         "src/methodology/index.ts": {
           "bytesInOutput": 0
@@ -4898,7 +5070,7 @@
           "bytesInOutput": 845
         }
       },
-      "bytes": 655512
+      "bytes": 689176
     }
   }
 }
