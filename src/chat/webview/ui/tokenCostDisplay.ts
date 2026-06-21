@@ -228,7 +228,21 @@ export function updateQuotaBar(deps: TokenCostDeps, state?: RateLimitWebviewStat
   } else {
     deps.els.quotaProgressBar.style.setProperty("--p", "0")
     deps.els.quotaLabel.textContent = `${provider} usage`
-    const observed = typeof state.usedTokens === "number" && Number.isFinite(state.usedTokens) ? `${formatNumber(state.usedTokens)} tok` : "observed"
+    // state.usedTokens comes from the host's per-window rate-limit accumulator,
+    // which only increments on the SDK final-usage stream path and stays 0 for
+    // proxy providers (e.g. opencode-proxy/mimo) that emit no rate-limit
+    // headers. Fall back to the active session's known cumulative total — data
+    // the webview already trusts — so the counter reflects real usage instead
+    // of a permanent "0 tok".
+    const activeId = deps.getActiveSessionId?.()
+    const sessionTotal = activeId ? deps.getSession(activeId)?.tokenUsage?.total : undefined
+    const observedTokens =
+      typeof state.usedTokens === "number" && Number.isFinite(state.usedTokens) && state.usedTokens > 0
+        ? state.usedTokens
+        : typeof sessionTotal === "number" && Number.isFinite(sessionTotal) && sessionTotal > 0
+          ? sessionTotal
+          : undefined
+    const observed = observedTokens !== undefined ? `${formatNumber(observedTokens)} tok` : "observed"
     const cost = typeof state.usedCost === "number" && Number.isFinite(state.usedCost) ? ` · $${state.usedCost.toFixed(4)}` : ""
     deps.els.quotaDetail.textContent = `${observed}${cost}`
     deps.els.quotaBar.classList.add("quota-bar--observed")
