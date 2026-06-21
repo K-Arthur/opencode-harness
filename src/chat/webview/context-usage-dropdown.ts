@@ -308,7 +308,9 @@ function _render(container: HTMLElement, usage: ContextUsage | null): void {
       const sid = btn.dataset.sid
       switch (action) {
         case "compact":
-          _postMessage?.({ type: "compact_context", sessionId: sid })
+          // Host handler is registered as "compact_session" (WebviewEventRouter);
+          // "compact_context" was never wired and silently no-op'd.
+          _postMessage?.({ type: "compact_session", sessionId: sid })
           break
         case "new-session":
           _postMessage?.({ type: "new_session" })

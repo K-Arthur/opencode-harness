@@ -198,7 +198,7 @@ export class WebviewEventRouter {
     "show_diff", "list_checkpoints", "restore_checkpoint", "list_restore_points", "restore_point",
     "preview_theme", "get_theme_config", "update_theme_config", "list_cli_themes",
     "request_more_messages", "refresh_session_messages", "stream_ack", "retry_stream", "request_state_sync",
-    "set_instructions", "fork_session", "accept_hunk", "reject_hunk", "open_model_selector_for_regen", "regenerate_with_model",
+    "set_instructions", "fork_session", "accept_hunk", "reject_hunk", "open_model_selector", "open_model_selector_for_regen", "regenerate_with_model",
     "get_file_hunks", "revert_hunk",
     "toggle_diff_wrap", "toggle_thinking", "revert_diff", "open_changed_file_diff",
     "context_history_request", "context_cost_estimate", "context_suggestions_request",
@@ -839,6 +839,12 @@ export class WebviewEventRouter {
       this.opts.ensureLocalTab(forked.id, forked.name, forked.model, forked.mode)
       this.opts.tabManager.switchTab(forked.id)
       this.opts.postMessage({ type: "fork_created", sessionId: forked.id, name: forked.name, parentSessionId: sourceId, forkedAtTurn: turnIndex })
+    }],
+    ["open_model_selector", () => {
+      // Plain "switch model" affordance (e.g. the context-usage dropdown action).
+      // Round-trips through the host so the webview opens its model manager via
+      // the canonical "open_model_manager" message — no regeneration context.
+      this.opts.postMessage({ type: "open_model_manager" })
     }],
     ["open_model_selector_for_regen", (msg: Record<string, unknown>, sessionId?: string) => {
       const targetSessionId = sessionId ?? (typeof msg.sessionId === "string" ? msg.sessionId : undefined)

@@ -329,7 +329,13 @@ export function updateContextBarFromSession(deps: TokenCostDeps, sessionId: stri
     return
   }
 
-  const pct = Math.min(100, Math.max(0, usage.percent))
+  // Recompute the percent from the tokens/window actually being displayed
+  // rather than trusting the stored `usage.percent`. When a session switches
+  // models mid-conversation the window (maxTokens) changes but a previously
+  // stored percent can lag behind — recomputing keeps the percent, the
+  // "X / Y" denominator, and the fill bar perfectly consistent regardless of
+  // which model the session is currently on.
+  const pct = Math.min(100, Math.max(0, (usage.tokens / usage.maxTokens) * 100))
 
   ctxBar.classList.remove("hidden")
   const model = session.model ? session.model.split("/").pop() || session.model : ""
