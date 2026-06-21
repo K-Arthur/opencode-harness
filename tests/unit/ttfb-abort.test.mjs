@@ -6,18 +6,19 @@ import { fileURLToPath } from "node:url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const coordinatorSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "handlers", "StreamCoordinator.ts"), "utf8")
+const timeoutManagerSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "handlers", "StreamTimeoutManager.ts"), "utf8")
 const sessionClientSource = readFileSync(path.join(__dirname, "..", "..", "src", "session", "SessionClient.ts"), "utf8")
 const sessionManagerTypes = readFileSync(path.join(__dirname, "..", "..", "src", "session", "sessionTypes.ts"), "utf8")
 const sessionTypesSource = readFileSync(path.join(__dirname, "..", "..", "src", "session", "sessionTypes.ts"), "utf8")
 
 describe("T1.1 — TTFB timeout cancels in-flight request", () => {
   it("creates an AbortController per tab before calling sendPromptAsync", () => {
-    assert.ok(coordinatorSource.includes("new AbortController()"), "must create AbortController")
-    assert.ok(coordinatorSource.includes("ttfbAbortControllers.set(tabId, abortController)"), "must store abort controller per tab")
+    assert.ok(timeoutManagerSource.includes("new AbortController()"), "must create AbortController")
+    assert.ok(timeoutManagerSource.includes("this.deps.ttfbAbortControllers.set(tabId, abortController)"), "must store abort controller per tab")
   })
 
   it("calls abortController.abort() on TTFB timeout before stream_end", () => {
-    assert.ok(coordinatorSource.includes('abortController.abort("ttfb_timeout")'), "must abort with ttfb_timeout reason")
+    assert.ok(timeoutManagerSource.includes('abortController.abort("ttfb_timeout")'), "must abort with ttfb_timeout reason")
   })
 
   it("passes abort signal through to sendPromptAsync", () => {
@@ -34,7 +35,7 @@ describe("T1.1 — TTFB timeout cancels in-flight request", () => {
   })
 
   it("dispose clears ttfbAbortControllers", () => {
-    assert.ok(coordinatorSource.includes("this.ttfbAbortControllers.clear()"), "dispose must clear abort controllers")
+    assert.ok(timeoutManagerSource.includes("this.deps.ttfbAbortControllers.clear()"), "dispose must clear abort controllers")
   })
 
   it("sendPromptAsync accepts signal in PromptOptions", () => {

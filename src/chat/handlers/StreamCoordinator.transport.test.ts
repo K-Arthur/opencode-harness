@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 
 const source = readFileSync(resolve(__dirname, "StreamCoordinator.ts"), "utf8")
+const timeoutManagerSource = readFileSync(resolve(__dirname, "StreamTimeoutManager.ts"), "utf8")
 
 describe("StreamCoordinator transport awareness", () => {
   it("waits for the event stream before sending async prompts", () => {
@@ -18,8 +19,8 @@ describe("StreamCoordinator transport awareness", () => {
   })
 
   it("maps first-byte timeout to event_stream_disconnected when transport drops", () => {
-    assert.ok(source.includes('reason = eventStreamDisconnected ? "event_stream_disconnected" : "ttfb_timeout"'))
-    assert.ok(source.includes("OpenCode event stream disconnected before any response events arrived."))
+    assert.ok(timeoutManagerSource.includes('reason = eventStreamDisconnected ? "event_stream_disconnected" : "ttfb_timeout"'))
+    assert.ok(timeoutManagerSource.includes("OpenCode event stream disconnected before any response events arrived."))
   })
 
   it("uses a single stream watchdog and no chunk-inactivity completion timer", () => {

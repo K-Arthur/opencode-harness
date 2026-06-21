@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const coordinatorSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "handlers", "StreamCoordinator.ts"), "utf8")
+const timeoutManagerSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "handlers", "StreamTimeoutManager.ts"), "utf8")
 const coordinatorTypesSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "handlers", "StreamCoordinatorTypes.ts"), "utf8")
 const finalizerSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "handlers", "StreamFinalizerService.ts"), "utf8")
 const providerSource = readFileSync(path.join(__dirname, "..", "..", "src", "chat", "ChatProvider.ts"), "utf8")
@@ -65,14 +66,14 @@ describe("StreamCoordinator error handling", () => {
   })
 
   it("posts stream_end with retryable TTFB or transport timeout when first byte never arrives", () => {
-    assert.ok(coordinatorSource.includes('"event_stream_disconnected"'), "must distinguish transport disconnect from model TTFB")
-    assert.ok(coordinatorSource.includes('"ttfb_timeout"'), "must still preserve model TTFB reason when transport is connected")
-    assert.ok(coordinatorSource.includes("retryable: true"), "ttfb_timeout must be retryable")
+    assert.ok(timeoutManagerSource.includes('"event_stream_disconnected"'), "must distinguish transport disconnect from model TTFB")
+    assert.ok(timeoutManagerSource.includes('"ttfb_timeout"'), "must still preserve model TTFB reason when transport is connected")
+    assert.ok(timeoutManagerSource.includes("retryable: true"), "ttfb_timeout must be retryable")
   })
 
   it("server terminal events and watchdog replace chunk inactivity finalization", () => {
     assert.ok(coordinatorSource.includes("maybeFinalizeStream"), "server events must drive normal finalization")
-    assert.ok(coordinatorSource.includes('reason: "hard_timeout"'), "watchdog must emit hard_timeout for total silence")
+    assert.ok(timeoutManagerSource.includes('reason: "hard_timeout"'), "watchdog must emit hard_timeout for total silence")
     assert.ok(!coordinatorSource.includes("resetCompletionTimeout"), "chunk inactivity finalization must stay removed")
   })
 

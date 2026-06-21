@@ -6,6 +6,7 @@ import { resolve } from "node:path"
 const source = readFileSync(resolve(__dirname, "StreamCoordinator.ts"), "utf8")
 const typesSource = readFileSync(resolve(__dirname, "StreamCoordinatorTypes.ts"), "utf8")
 const heartbeatSource = readFileSync(resolve(__dirname, "HeartbeatService.ts"), "utf8")
+const timeoutManagerSource = readFileSync(resolve(__dirname, "StreamTimeoutManager.ts"), "utf8")
 
 describe("StreamCoordinator.ts", () => {
   it("exports StreamCallbacks interface", () => {
@@ -206,15 +207,15 @@ describe("StreamCoordinator.ts", () => {
 
   it("has dispose method", () => {
     assert.ok(source.includes("dispose(): void"), "dispose must exist")
-    assert.ok(source.includes("this.streamWatchdog"), "dispose must clear watchdog")
+    assert.ok(source.includes("this.streamTimeoutManager.dispose()"), "dispose must delegate timeout cleanup to streamTimeoutManager")
     assert.ok(source.includes("this.stuckStreamHandlers.clear()"), "dispose must clear stuck handlers")
   })
 
   it("emits partial hard_timeout stream_end when the watchdog detects a stuck stream", () => {
-    const watchdogIdx = source.indexOf("private startWatchdog(")
-    assert.ok(watchdogIdx >= 0, "startWatchdog must exist")
-    const blockEnd = source.indexOf("\n  private stopWatchdog(", watchdogIdx)
-    const block = source.slice(watchdogIdx, blockEnd > watchdogIdx ? blockEnd : watchdogIdx + 2500)
+    const watchdogIdx = timeoutManagerSource.indexOf("startWatchdog(): void")
+    assert.ok(watchdogIdx >= 0, "startWatchdog must exist in StreamTimeoutManager")
+    const blockEnd = timeoutManagerSource.indexOf("\n  stopWatchdog(): void", watchdogIdx)
+    const block = timeoutManagerSource.slice(watchdogIdx, blockEnd > watchdogIdx ? blockEnd : watchdogIdx + 2500)
     assert.ok(
       block.includes("STREAM_STUCK_MS"),
       "watchdog must compare against STREAM_STUCK_MS"
@@ -339,10 +340,10 @@ describe("StreamCoordinator.ts", () => {
 
   // ── Event-stream aware TTFB ───────────────────────────────────────────
   it("TTFB timeout distinguishes event stream disconnects from model first-byte timeout", () => {
-    const ttfbIdx = source.indexOf("const ttfbTimeout = setTimeout(")
-    assert.ok(ttfbIdx >= 0, "TTFB timeout must exist")
-    const blockEnd = source.indexOf("\n      this.ttfbTimeouts.set", ttfbIdx)
-    const block = source.slice(ttfbIdx, blockEnd > ttfbIdx ? blockEnd : ttfbIdx + 2000)
+    const ttfbIdx = timeoutManagerSource.indexOf("const ttfbTimeout = setTimeout(")
+    assert.ok(ttfbIdx >= 0, "TTFB timeout must exist in StreamTimeoutManager")
+    const blockEnd = timeoutManagerSource.indexOf("\n    this.ttfbTimeouts.set", ttfbIdx)
+    const block = timeoutManagerSource.slice(ttfbIdx, blockEnd > ttfbIdx ? blockEnd : ttfbIdx + 2000)
     assert.ok(
       block.includes("event_stream_disconnected"),
       "TTFB timeout must report event_stream_disconnected when transport is down"
@@ -379,11 +380,11 @@ describe("StreamCoordinator.ts", () => {
     // without a code change (per research: per-provider TTFB is necessary
     // because no single default is right for every model).
     assert.ok(
-      /getConfiguration\(\s*["']opencode["']\s*\)\s*\.get<number>\(\s*["']streaming\.ttfbTimeoutMs["']/.test(source),
+      /getConfiguration\(\s*["']opencode["']\s*\)\s*\.get<number>\(\s*["']streaming\.ttfbTimeoutMs["']/.test(timeoutManagerSource),
       "TTFB must read opencode.streaming.ttfbTimeoutMs from workspace configuration",
     )
     assert.ok(
-      source.includes("TTFB_TIMEOUT_FLOOR_MS") && source.includes("TTFB_TIMEOUT_CEILING_MS"),
+      timeoutManagerSource.includes("TTFB_TIMEOUT_FLOOR_MS") && timeoutManagerSource.includes("TTFB_TIMEOUT_CEILING_MS"),
       "TTFB must clamp the configured value to a [floor, ceiling] range",
     )
   })
@@ -397,20 +398,20 @@ describe("StreamCoordinator.ts", () => {
       "TTFB path must dispatch retries through probeActiveRunWithRetry",
     )
     assert.ok(
-      source.includes("PROBE_MAX_ATTEMPTS") && source.includes("PROBE_BACKOFF_BASE_MS"),
+      timeoutManagerSource.includes("PROBE_MAX_ATTEMPTS") && timeoutManagerSource.includes("PROBE_BACKOFF_BASE_MS"),
       "Retry policy must expose PROBE_MAX_ATTEMPTS + PROBE_BACKOFF_BASE_MS constants",
     )
     assert.ok(
-      /Math\.pow\(2,\s*attempt\s*-\s*1\)/.test(source),
+      /Math\.pow\(2,\s*attempt\s*-\s*1\)/.test(timeoutManagerSource),
       "Retry backoff must be exponential (2 ** (attempt-1))",
     )
   })
 
   it("TTFB timeout suppresses postRequestError when backend may still be running", () => {
-    const ttfbIdx = source.indexOf("const ttfbTimeout = setTimeout(")
-    assert.ok(ttfbIdx >= 0, "TTFB timeout must exist")
-    const blockEnd = source.indexOf("this.ttfbTimeouts.set(", ttfbIdx)
-    const block = source.slice(ttfbIdx, blockEnd > ttfbIdx ? blockEnd : ttfbIdx + 4000)
+    const ttfbIdx = timeoutManagerSource.indexOf("const ttfbTimeout = setTimeout(")
+    assert.ok(ttfbIdx >= 0, "TTFB timeout must exist in StreamTimeoutManager")
+    const blockEnd = timeoutManagerSource.indexOf("this.ttfbTimeouts.set(", ttfbIdx)
+    const block = timeoutManagerSource.slice(ttfbIdx, blockEnd > ttfbIdx ? blockEnd : ttfbIdx + 4000)
     assert.ok(
       block.includes("probeActiveRun") || block.includes("mayStillBeRunning"),
       "TTFB timeout must probeActiveRun before posting requestError when the backend may still be running",
@@ -659,13 +660,13 @@ describe("StreamCoordinator.ts", () => {
   })
 
   it("does not abort accepted backend work on first-byte diagnostics", () => {
-    const startIdx = source.indexOf("async startPrompt(")
-    assert.ok(startIdx >= 0, "startPrompt must exist")
-    const blockEnd = source.indexOf("\n  private async fetchFinalBlocks", startIdx)
-    const block = source.slice(startIdx, blockEnd > startIdx ? blockEnd : startIdx + 14000)
+    const ttfbIdx = timeoutManagerSource.indexOf("const ttfbTimeout = setTimeout(")
+    assert.ok(ttfbIdx >= 0, "TTFB timeout must exist in StreamTimeoutManager")
+    const blockEnd = timeoutManagerSource.indexOf("this.ttfbTimeouts.set(", ttfbIdx)
+    const block = timeoutManagerSource.slice(ttfbIdx, blockEnd > ttfbIdx ? blockEnd : ttfbIdx + 4000)
 
     assert.ok(block.includes('acceptedRun?.state === "accepted"'), "TTFB path must detect accepted backend runs")
-    assert.ok(block.includes('this.setActiveRunState(tabId, "interrupted"'), "accepted diagnostics must mark the run interrupted, not killed")
+    assert.ok(block.includes('setActiveRunState(tabId, "interrupted"'), "accepted diagnostics must mark the run interrupted, not killed")
     const acceptedBranch = block.slice(block.indexOf('acceptedRun?.state === "accepted"'))
     assert.ok(acceptedBranch.indexOf('return') >= 0 && acceptedBranch.indexOf('abortController.abort("ttfb_timeout")') > acceptedBranch.indexOf('return'),
       "accepted TTFB branch must return before aborting the backend request")
@@ -1086,15 +1087,15 @@ describe("StreamCoordinator.ts", () => {
         "B10-recovery: emitStreamStartAndArmWatchdogs must check callbacks.recoveryFromExpiredQuestion",
       )
       assert.ok(
-        source.includes("callbacks.expiredRecoveryAnswerText"),
+        timeoutManagerSource.includes("callbacks.expiredRecoveryAnswerText"),
         "B10-recovery: setupExpiredRecoveryTimeout must read callbacks.expiredRecoveryAnswerText for the webview payload",
       )
     })
 
     void it("setupExpiredRecoveryTimeout fires unconditionally (does NOT call shouldTriggerStartupTimeout)", () => {
-      const fnIdx = source.indexOf("setupExpiredRecoveryTimeout(tabId: string, callbacks: StreamCallbacks)")
-      assert.ok(fnIdx >= 0, "B10-recovery: setupExpiredRecoveryTimeout method must exist")
-      const body = source.slice(fnIdx, fnIdx + 3000)
+      const fnIdx = timeoutManagerSource.indexOf("setupExpiredRecoveryTimeout(tabId: string, callbacks: StreamCallbacks)")
+      assert.ok(fnIdx >= 0, "B10-recovery: setupExpiredRecoveryTimeout method must exist in StreamTimeoutManager")
+      const body = timeoutManagerSource.slice(fnIdx, fnIdx + 3000)
       assert.ok(
         !body.includes("shouldTriggerStartupTimeout"),
         "B10-recovery: watchdog must NOT consult shouldTriggerStartupTimeout — that gate is the source of the bug",

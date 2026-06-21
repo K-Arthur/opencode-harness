@@ -29,6 +29,7 @@ function readSrc(rel) {
 }
 
 const STREAM_COORDINATOR = readSrc("src/chat/handlers/StreamCoordinator.ts")
+const STREAM_TIMEOUT_MANAGER = readSrc("src/chat/handlers/StreamTimeoutManager.ts")
 const TAB_MANAGER = readSrc("src/chat/TabManager.ts")
 const CHAT_PROVIDER = readSrc("src/chat/ChatProvider.ts")
 const SEND_LOGIC = readSrc("src/chat/webview/sendMessage.ts")
@@ -118,8 +119,8 @@ void describe("streaming-state stability: host authority (Phase C)", () => {
     )
     // The probe must always reply (even on server failure) so the webview
     // never hangs waiting.
-    const idx = STREAM_COORDINATOR.indexOf("async probeActiveRun(")
-    const body = STREAM_COORDINATOR.slice(idx, idx + 6000)
+    const idx = STREAM_TIMEOUT_MANAGER.indexOf("async probeActiveRun(")
+    const body = STREAM_TIMEOUT_MANAGER.slice(idx, idx + 6000)
     assert.ok(body.includes("run_status_result"), "probe must reply via run_status_result")
     assert.ok(body.includes("serverReachable"), "probe reply must include serverReachable")
     assert.ok(
@@ -152,9 +153,9 @@ void describe("streaming-state stability: host authority (Phase C)", () => {
 
 void describe("streaming-state stability: G1 TTFB/idle race (host)", () => {
   void it("TTFB handler probes before unilaterally clearing when SSE is connected", () => {
-    const idx = STREAM_COORDINATOR.indexOf("setupTtfbTimeout(tabId: string, callbacks: StreamCallbacks)")
+    const idx = STREAM_TIMEOUT_MANAGER.indexOf("setupTtfbTimeout(tabId: string, callbacks: StreamCallbacks)")
     assert.ok(idx >= 0)
-    const body = STREAM_COORDINATOR.slice(idx, idx + 8000)
+    const body = STREAM_TIMEOUT_MANAGER.slice(idx, idx + 8000)
     // G1: when eventStream is connected, probe before clearing.
     // The TTFB path dispatches through probeActiveRunWithRetry, which wraps
     // probeActiveRun with backoff. Either name satisfies the contract.

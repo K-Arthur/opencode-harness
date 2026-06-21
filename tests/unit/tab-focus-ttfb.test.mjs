@@ -10,6 +10,7 @@ const SESSION_FOCUS = fs.readFileSync(path.join(root, "src", "chat", "webview", 
 const SEND_LOGIC = fs.readFileSync(path.join(root, "src", "chat", "webview", "sendMessage.ts"), "utf8")
 const TAB_MANAGER = fs.readFileSync(path.join(root, "src", "chat", "TabManager.ts"), "utf8")
 const STREAM_COORDINATOR = fs.readFileSync(path.join(root, "src", "chat", "handlers", "StreamCoordinator.ts"), "utf8")
+const STREAM_TIMEOUT_MANAGER = fs.readFileSync(path.join(root, "src", "chat", "handlers", "StreamTimeoutManager.ts"), "utf8")
 const MAIN_TS = fs.readFileSync(path.join(root, "src", "chat", "webview", "main.ts"), "utf8")
 
 void describe("tab-focus stability — user's current view not stolen during generation", () => {
@@ -86,10 +87,10 @@ void describe("TTFB stability — no premature state reversion for slow models",
   })
 
   void it("setupTtfbTimeout does NOT post stream_end when probe says run is still active", () => {
-    // Use "private" prefix to match the DEFINITION, not a call site
-    const idx = STREAM_COORDINATOR.indexOf("private setupTtfbTimeout(")
-    assert.ok(idx >= 0, "setupTtfbTimeout definition must exist")
-    const block = STREAM_COORDINATOR.slice(idx, idx + 12000)
+    // Use method signature to match the DEFINITION, not a call site
+    const idx = STREAM_TIMEOUT_MANAGER.indexOf("setupTtfbTimeout(tabId: string, callbacks: StreamCallbacks)")
+    assert.ok(idx >= 0, "setupTtfbTimeout definition must exist in StreamTimeoutManager")
+    const block = STREAM_TIMEOUT_MANAGER.slice(idx, idx + 12000)
     assert.ok(
       block.includes("probeActiveRun"),
       "setupTtfbTimeout must call probeActiveRun to check backend",
@@ -101,10 +102,10 @@ void describe("TTFB stability — no premature state reversion for slow models",
   })
 
   void it("setupTtfbTimeout delays postRequestError until probe completes", () => {
-    // Use "private" prefix to match the DEFINITION, not a call site
-    const idx = STREAM_COORDINATOR.indexOf("private setupTtfbTimeout(")
-    assert.ok(idx >= 0, "setupTtfbTimeout definition must exist")
-    const block = STREAM_COORDINATOR.slice(idx, idx + 5000)
+    // Use method signature to match the DEFINITION, not a call site
+    const idx = STREAM_TIMEOUT_MANAGER.indexOf("setupTtfbTimeout(tabId: string, callbacks: StreamCallbacks)")
+    assert.ok(idx >= 0, "setupTtfbTimeout definition must exist in StreamTimeoutManager")
+    const block = STREAM_TIMEOUT_MANAGER.slice(idx, idx + 5000)
     const probeIdx = block.indexOf("probeActiveRun")
     const postRequestErrorIdx = block.indexOf("postRequestError")
     if (postRequestErrorIdx >= 0) {
