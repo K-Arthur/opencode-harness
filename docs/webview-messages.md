@@ -102,6 +102,32 @@ The bash-card **Cancel** action posts:
 SDK 1.17.6 has no per-tool abort, so v1 stops live polling, renders a synthetic cancelled
 tool result with captured output, and then falls back to the existing whole-stream `abort`.
 
+#### Live command card update contract
+
+Exec/shell tool calls render as standalone `.live-command-card` elements
+(`liveCommandCard.ts`) instead of the generic tool card. Two invariants keep them live:
+
+- **Discoverability.** The card sets `data-block-id` (not just `data-tool-id`). The
+  streaming update functions locate tool DOM by `[data-block-id]`; without it the card is
+  never found and never updated — the symptom being a card stuck on its first render
+  ("RUNNING" forever, command showing the tool name like `bash`).
+- **Dedicated updater.** `handleToolUpdate` / `handleToolPartial` / `handleToolEnd`
+  special-case `.live-command-card` (alongside `.subagent-card`) and route through
+  `applyLiveCommandCardUpdate`, which updates the card's own
+  `__command` / `__output` / `__status` / `__icon` / `__footer` in place. The generic
+  selectors (`.tool-status`, `.tool-result-panel`) do **not** exist on the card, so the
+  generic path must not run for it.
+
+#### Responsive tool cards
+
+Tool cards adapt to the message-view container width via container queries in
+`css/messages-responsive.css`, keyed on the **real** classes (`.tool-call`,
+`.live-command-card`, `.tool-args-panel`, `.tool-result-panel`,
+`.live-command-card__output`) — earlier rules targeted non-existent `.tool-card`/`.tool-args`
+classes and never applied. On narrow consoles (<400px) the command wraps instead of being
+ellipsis-clipped and the working-dir chip is dropped from the header. Output uses
+`overflow-wrap: anywhere` so long tokens wrap without shredding every word.
+
 ### Text/Tool Interleave Invariants
 
 When a `stream_tool_start` event arrives mid-stream (i.e. `state.currentBlockBuffer` is non-empty):
@@ -258,6 +284,10 @@ The host-to-webview `command_list` payload is partitioned before it reaches the 
   `forRegeneration` flag indicates the panel was opened for model selection during
   regeneration; optional `messageId` identifies the message being regenerated.
   Payload: `{ type, forRegeneration?, messageId? }`.
+- `open_model_selector`: Webview→Host request for a plain "switch model" affordance
+  (e.g. the **Switch model** action in the context-usage dropdown). The host re-posts
+  `open_model_manager` (no regeneration context). Payload: `{ type }`. Previously the
+  dropdown posted this type with no host handler, so the button silently no-op'd.
 - `plan_complete`: Host notification that the agent wrote a plan document in Plan mode.
   The webview renders a "Planning Complete" banner with "Switch to Build" and "Stay in Plan"
   buttons. The sessionId identifies the tab. Payload: `{ type, sessionId, planName? }`.
@@ -322,6 +352,36 @@ The backend sends session-scoped context events from `ContextMonitor`/`ChatProvi
 `ContextMonitor.setTokenLimit()` must not emit sessionless stale usage. Final SDK usage in
 `StreamCoordinator` is an accumulation fallback only; full-history summaries from session
 backfill replace the stored session summary.
+
+**Model-aware percent (multi-model sessions).** The context bar/dropdown always
+**recompute** the displayed percentage from `tokens / maxTokens` rather than trusting the
+stored `percent`. When a session switches models mid-conversation the window (`maxTokens`)
+changes but a previously stored percent can lag; recomputing keeps the percentage, the
+`X / Y` denominator, and the fill bar consistent regardless of the current model. The
+recompute lives in `updateContextBarFromSession` (`ui/tokenCostDisplay.ts`) and
+`normalizeUsage` (`context-usage-dropdown.ts`).
+
+**Provider quota counter (`rate_limit_state`).** The quota bar's observed-usage fallback
+shows `state.usedTokens` from the host's per-window rate-limit accumulator. That accumulator
+only increments on the SDK final-usage stream path and is `0` for proxy providers that emit
+no rate-limit headers (e.g. `opencode-proxy`/mimo). When it is absent/0, the bar falls back
+to the active session's known cumulative `tokenUsage.total` so the counter reflects real
+usage instead of a permanent "0 tok".
+
+#### Context-usage dropdown actions (Webview → Host)
+
+The floating context-usage panel (`context-usage-dropdown.ts`) exposes four recovery
+actions, each posting an already-registered host message type:
+
+| Button | Message | Handler |
+| --- | --- | --- |
+| Compact context | `compact_session` | `WebviewEventRouter` → `sessionLifecycle.handleCompactSession` |
+| New session | `new_session` | `WebviewEventRouter` |
+| Switch model | `open_model_selector` | `WebviewEventRouter` → re-posts `open_model_manager` |
+| Set limit | `open_context_window_override_dialog` | `WebviewEventRouter` |
+
+(Before the fix, **Compact context** posted `compact_context` and **Switch model** posted an
+unhandled `open_model_selector` with no host handler — both silently no-op'd.)
 
 ### Remote Command Execution
 

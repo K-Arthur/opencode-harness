@@ -30,6 +30,22 @@
 
 - The webview CSP (set in `src/chat/WebviewContent.ts`) includes `data:` in `img-src` so base64 image chips render natively without an extra extension-host round trip.
 
+## Mention Chips (`@file:` / `@folder:` / `@url:` / `@problems:` / `@terminal:`)
+
+- Typed mentions are surfaced as styled, per-kind context chips above the composer, not left
+  as raw `@file:…` text. `onInputChange` (`inputHandlers.ts`) calls
+  `updatePromptContextChips()` on **every** edit so chips appear/update live as the user types
+  — previously chips only refreshed when a mention was inserted via the picker, so a
+  hand-typed mention stayed as plain text.
+- `parsePromptMentions` (`ui/attachments.ts`) derives a clean label per mention: files show
+  the basename (and switch to the `image` kind for image extensions so they get an image
+  icon), folders get a trailing slash, urls show the hostname, and `problems`/`terminal` get
+  friendly labels. The full path/URL is preserved in the chip `title` (hover tooltip); the
+  raw token is retained for removal.
+- Chips are differentiated by `data-kind` (file/image/folder/url/problems/terminal) with
+  per-kind colour and a `::before` SVG icon in `css/components.css`; `theme.ts`
+  `updateContextChips` renders the label + tooltip + remove button.
+
 ## New Session Identity
 
 - The webview may create a temporary `session-<8 hex chars>` id so the composer can show the first user message immediately.

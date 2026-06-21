@@ -1,7 +1,37 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-06-20
-**Version:** v0.4.7
+**Last Updated:** 2026-06-21
+**Version:** v0.4.9
+
+## Highlights (2026-06-21) — context-usage, composer chips, command cards & sidebar
+
+Branch `cleanup/extension-refactor`. Webview/UX hardening pass (all changes are in the
+webview bundle — require `npm run reinstall` to appear in-app):
+
+- **Context-usage modal actions repaired.** *Compact context* posted an unhandled
+  `compact_context` (now `compact_session`) and *Switch model* posted an unhandled
+  `open_model_selector` (now a registered host handler that re-posts `open_model_manager`).
+  Both previously no-op'd. (`context-usage-dropdown.ts`, `WebviewEventRouter.ts`)
+- **Model-aware context bar.** The bar/dropdown recompute percent from `tokens / maxTokens`
+  so multi-model sessions stay consistent after a window change. (`ui/tokenCostDisplay.ts`,
+  `context-usage-dropdown.ts`)
+- **Provider quota counter no longer stuck at "0 tok"** for proxy providers — falls back to
+  the active session's cumulative `tokenUsage.total`. (`ui/tokenCostDisplay.ts`)
+- **Composer mention chips.** Typed `@file:`/`@folder:`/`@url:`/image mentions now render as
+  styled, per-kind chips (basename/hostname labels, image-vs-file icons, full-path tooltip)
+  and refresh live on every edit. (`inputHandlers.ts`, `ui/attachments.ts`, `theme.ts`, css)
+- **Live bash/command cards were stuck "RUNNING".** The card now sets `data-block-id` so the
+  streaming layer can find it, and a dedicated `applyLiveCommandCardUpdate` updates its own
+  structure in place (command text, output, status, footer). (`liveCommandCard.ts`,
+  `streamHandlers.ts`)
+- **Responsive tool cards.** Breakpoints now target the real classes (`.tool-call`,
+  `.live-command-card`, …) instead of dead `.tool-card` selectors; command wraps on narrow
+  consoles. (`css/messages-responsive.css`, `css/blocks.css`)
+- **Sidebar panels.** Panel pin buttons use a pin icon (filled when pinned) instead of a
+  star; Todos & Files spacing fixed (collapsed empty status container, first-line alignment);
+  leading section icons added. (`index.html`, `css/components.css`, `css/layout.css`)
+- **Verification:** tsc clean; mjs unit suite 1196 pass / 0 fail; all touched tsx suites green
+  (incl. new tests for the mention parser and live-command-card updater).
 
 ## Highlights v0.4.8 (2026-06-20) — MCP command palette + session-title fixes + test-suite repair
 
