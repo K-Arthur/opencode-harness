@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      [Unreleased] — that creates documentation drift. See the release
      workflow in docs/development/rebuild-and-reinstall.md. -->
 
+## [0.4.11] - 2026-06-21
+
+### Fixed
+
+- **StreamCoordinator activation crash fixed.** The constructor called `resolveTtfbTimeoutMs()` before `StreamTimeoutManager` was initialized, causing `TypeError: Cannot read properties of undefined` on extension activation. `StreamTimeoutManager` is now constructed first, and its TTFB timeout dependency is a dynamic getter so it reflects the resolved workspace-config value and test overrides. (`StreamCoordinator.ts`, `StreamTimeoutManager.ts`)
+- **TTFB/restore-points structural tests realigned** with the refactored `StreamTimeoutManager` and `VALID_WEBVIEW_TYPES` layout. (`StreamCoordinator.test.ts`, `WebviewEventRouter.restorePoints.test.ts`)
+
 ## [0.4.10] - 2026-06-21
 
 ### Fixed
