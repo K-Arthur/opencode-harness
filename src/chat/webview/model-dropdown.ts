@@ -1,6 +1,7 @@
 import type { ModelInfo } from "./types"
 import type { ElementRefs } from "./dom"
 import { CHECK_SVG, GEAR_SVG } from "./icons"
+import { devStalenessWarn } from "./streamHandlers"
 
 export interface ModelDropdownCallbacks {
   onSelect: (modelId: string) => void
@@ -391,12 +392,22 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     // filter, enabled toggles, model-list refresh), so index N at sync time
     // may point to a different model than index N at render time.
     const options = getOptions()
+    let matched = false
     for (const opt of options) {
       const optionModelId = opt.dataset.modelId
       if (!optionModelId) continue
       const isSelected = optionModelId === modelId
       opt.classList.toggle("selected", isSelected)
       opt.setAttribute("aria-selected", isSelected ? "true" : "false")
+      if (isSelected) matched = true
+    }
+    // Dev-only diagnostic: a non-matching modelId means the dropdown is out of
+    // sync with the live model list (e.g. stale selection or missing model).
+    if (options.length > 0 && !matched) {
+      devStalenessWarn(
+        "model-dropdown",
+        `setCurrentModel(${modelId}) did not match any rendered option`,
+      )
     }
   }
 

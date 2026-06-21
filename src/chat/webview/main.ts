@@ -13,7 +13,7 @@ import { isSwitchEventType, switchInsertIndex } from "../../session/activityCoal
 import { createTabBar, createTabContent, switchToTab, removeTabContent, patchTabLabel } from "./tabs"
 import { extractTitle, dedupeTitle } from "../../session/titleExtractor"
 import { setupModelDropdown } from "./model-dropdown"
-import { setVsCodeApi, setupToolKeyboardNav, webviewLog, finalizeStreamingText } from "./streamHandlers"
+import { setVsCodeApi, setupToolKeyboardNav, webviewLog, finalizeStreamingText, devStalenessWarn } from "./streamHandlers"
 import { setErrorActionHandler as setCompsErrorActionHandler } from "./errorComponents"
 import { setErrorActionHandler as setRendererErrorActionHandler } from "./renderer"
 import { setMaxConcurrentStreams } from "./sendLogic"
@@ -2879,6 +2879,15 @@ function setupTodoSkillAndSubagentPanels(): void {
         const existingUsage = sess?.contextUsage
         const keepExisting = !contextUsageHasFill(incomingUsage) && contextUsageHasFill(existingUsage)
         const effectiveUsage = keepExisting ? existingUsage! : incomingUsage
+        // Dev-only diagnostic: catch regressions where an older update would
+        // overwrite a newer reading. Production builds are no-ops because
+        // `process` is undefined in the browser webview.
+        if (existingUsage && existingUsage.updatedAt && incomingUsage.updatedAt && incomingUsage.updatedAt < existingUsage.updatedAt) {
+          devStalenessWarn(
+            "context_usage",
+            `incoming ${incomingUsage.updatedAt} is older than existing ${existingUsage.updatedAt} for session=${targetId}`,
+          )
+        }
         // Persist per-session so it survives tab switches, but never let an
         // empty fallback update erase a valid prior context reading.
         if (sess) {

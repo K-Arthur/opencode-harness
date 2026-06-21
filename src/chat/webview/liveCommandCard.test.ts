@@ -89,4 +89,50 @@ describe("liveCommandCard", () => {
     assert.ok(el!.classList.contains("live-command-card"))
     assert.equal(el!.querySelector(".live-command-card__command")?.textContent, "npm test")
   })
+
+  it("exposes data-block-id so the streaming layer can locate the card", async () => {
+    const { renderLiveCommandCard } = await import("./liveCommandCard")
+    const el = renderLiveCommandCard(execBlock())
+    assert.equal(el.dataset.blockId, "exec-1")
+  })
+})
+
+describe("applyLiveCommandCardUpdate", () => {
+  beforeEach(() => setupDom())
+
+  it("fills the command in once real args arrive (was the name fallback)", async () => {
+    const { renderLiveCommandCard, applyLiveCommandCardUpdate } = await import("./liveCommandCard")
+    // No command in args → first render falls back to the tool name.
+    const el = renderLiveCommandCard(execBlock({ args: {} }))
+    assert.equal(el.querySelector(".live-command-card__command")?.textContent, "bash")
+    applyLiveCommandCardUpdate(el, { args: { command: "git status" } })
+    assert.equal(el.querySelector(".live-command-card__command")?.textContent, "git status")
+  })
+
+  it("streams stdout into the live output area", async () => {
+    const { renderLiveCommandCard, applyLiveCommandCardUpdate } = await import("./liveCommandCard")
+    const el = renderLiveCommandCard(execBlock())
+    applyLiveCommandCardUpdate(el, { stdout: "line 1\nline 2\n" })
+    assert.ok(el.querySelector(".live-command-card__output")?.textContent?.includes("line 2"))
+  })
+
+  it("resolves a running card to succeeded on completion", async () => {
+    const { renderLiveCommandCard, applyLiveCommandCardUpdate } = await import("./liveCommandCard")
+    const el = renderLiveCommandCard(execBlock())
+    assert.ok(el.classList.contains("live-command-card--running"))
+    applyLiveCommandCardUpdate(el, { state: "completed", exitCode: 0, durationMs: 1250 })
+    assert.ok(el.classList.contains("live-command-card--succeeded"))
+    assert.ok(!el.classList.contains("live-command-card--running"))
+    assert.equal(el.querySelector(".live-command-card__status")?.textContent, "Succeeded")
+    assert.ok(el.textContent?.includes("1.25s"))
+    assert.ok(el.textContent?.includes("exit 0"))
+  })
+
+  it("marks a non-zero exit as failed", async () => {
+    const { renderLiveCommandCard, applyLiveCommandCardUpdate } = await import("./liveCommandCard")
+    const el = renderLiveCommandCard(execBlock())
+    applyLiveCommandCardUpdate(el, { state: "result", exitCode: 1 })
+    assert.ok(el.classList.contains("live-command-card--failed"))
+    assert.equal(el.querySelector(".live-command-card__status")?.textContent, "Failed")
+  })
 })

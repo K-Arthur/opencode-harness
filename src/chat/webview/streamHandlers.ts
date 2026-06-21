@@ -10,6 +10,7 @@ import { escapeHtml } from "./htmlUtils"
 import type { RenderOptions } from "./renderer"
 import { createToolResultPanel, renderToolGroup, renderToolGroupBadge } from "./toolCallRenderer"
 import { applySubagentCardUpdate } from "./subagentCard"
+import { applyLiveCommandCardUpdate } from "./liveCommandCard"
 import type { ScrollAnchor } from "./scrollAnchor"
 import type { LiveToolOutput } from "./toolPartialStore"
 import { CHECK_SVG, SUCCESS_SVG, SPINNER_SVG } from "./icons"
@@ -349,6 +350,17 @@ export function webviewLog(msg: string, level: "info" | "warn" | "error" | strin
   if (level === "error") console.error(`[Webview] ${msg}`)
   else if (level === "warn") console.warn(`[Webview] ${msg}`)
   else console.info(`[Webview] ${msg}`)
+}
+
+/**
+ * Development-only diagnostic for the silent staleness anti-pattern.
+ * In production webview builds `process` is undefined, so this is a no-op.
+ */
+export function devStalenessWarn(check: string, detail: string): void {
+  const env = (globalThis as unknown as { process?: { env?: { NODE_ENV?: string } } }).process?.env?.NODE_ENV
+  if (env === "development") {
+    webviewLog(`[anti-staleness] ${check}: ${detail}`, "warn")
+  }
 }
 
 export interface StreamElements {
@@ -1026,6 +1038,20 @@ export function handleToolUpdate(
     return
   }
 
+  // Live command cards have their own structure (.live-command-card__*); the
+  // generic selectors below don't match, so route through the dedicated updater
+  // — otherwise the card stays stuck on its first render (always "RUNNING",
+  // command showing the tool name).
+  if (toolEl.classList.contains("live-command-card")) {
+    applyLiveCommandCardUpdate(toolEl, {
+      state: update.state,
+      args: update.args,
+      result: update.result,
+      error: update.error,
+    })
+    return
+  }
+
   if (update.state) {
     setToolStateClass(toolEl, update.state)
     const badge = toolEl.querySelector(".tool-status")
@@ -1136,6 +1162,26 @@ export function handleToolPartial(
     durationMs: live.durationMs ?? found.block.durationMs,
     exitCode: live.exitCode ?? found.block.exitCode,
   }
+
+  // Live command cards stream their output into their own .live-command-card__output
+  // element; the generic result-panel path below would append a stray panel that
+  // never shows. Update the card in place instead.
+  if (toolEl.classList.contains("live-command-card")) {
+    applyLiveCommandCardUpdate(toolEl, {
+      state: block.state,
+      args: block.args,
+      stdout: block.partialStdout,
+      stderr: block.partialStderr,
+      durationMs: block.durationMs,
+      exitCode: block.exitCode,
+    })
+    const grp = toolEl.closest(".tool-group") as HTMLElement | null
+    if (grp) updateToolGroupHeader(grp)
+    const anchor = (els as unknown as { scrollAnchor: ScrollAnchor }).scrollAnchor
+    anchor?.scrollIfAnchored()
+    return
+  }
+
   const fresh = createToolResultPanel(block, {
     messageId: found.messageId,
     postMessage,
@@ -1171,6 +1217,20 @@ export function handleToolEnd(
       durationMs: result.durationMs,
       stale: result.stale,
     })
+    return
+  }
+
+  // Live command cards: finalise status + output via the dedicated updater so
+  // the card resolves from "RUNNING" to succeeded/failed instead of staying stuck.
+  if (toolEl.classList.contains("live-command-card")) {
+    const liveState = result.stale ? "stale" : result.ok ? "completed" : "error"
+    applyLiveCommandCardUpdate(toolEl, {
+      state: liveState,
+      result: result.result,
+      durationMs: result.durationMs,
+    })
+    const grp = toolEl.closest(".tool-group") as HTMLElement | null
+    if (grp) updateToolGroupHeader(grp)
     return
   }
 

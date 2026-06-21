@@ -365,3 +365,109 @@ describe("Feature Manifest — webview UI elements", () => {
     })
   }
 })
+
+// ── Anti-Staleness Contract (FM-ANTISTALE-*) ────────────────────────────
+// These tests assert the presence of the live-state re-derivation patterns
+// documented in tests/FEATURE_MANIFEST.md §11. They do not execute the
+// webview; they guard against future refactors removing the anti-staleness
+// plumbing.
+
+const mainTs = readFileSync(path.join(root, "src", "chat", "webview", "main.ts"), "utf8")
+const tabSwitcherTs = readFileSync(path.join(root, "src", "chat", "webview", "tabSwitcher.ts"), "utf8")
+const modelDropdownTs = readFileSync(path.join(root, "src", "chat", "webview", "model-dropdown.ts"), "utf8")
+const chatProviderTs = readFileSync(path.join(root, "src", "chat", "ChatProvider.ts"), "utf8")
+const sessionManagerRegistryTs = readFileSync(path.join(root, "src", "session", "SessionManagerRegistry.ts"), "utf8")
+const cliDiagnosticsTs = readFileSync(path.join(root, "src", "diagnostics", "CliDiagnostics.ts"), "utf8")
+const cssFiles = ["messages.css", "components.css", "layout.css", "context-usage.css", "cards.css"].map((f) =>
+  readFileSync(path.join(root, "src", "chat", "webview", "css", f), "utf8"),
+)
+const cssSource = cssFiles.join("\n")
+
+function getHandlerBlock(source, type) {
+  const marker = `["${type}"`
+  const idx = source.indexOf(marker)
+  assert.ok(idx >= 0, `${marker} handler must exist`)
+  const rest = source.slice(idx + marker.length)
+  const nextTuple = rest.search(/\],\s*\[/)
+  return nextTuple === -1 ? rest : rest.slice(0, nextTuple)
+}
+
+describe("Feature Manifest — anti-staleness contract", () => {
+  it("FM-ANTISTALE-001: context_usage handler preserves actual readings against empty updates", () => {
+    const block = getHandlerBlock(mainTs, "context_usage")
+    assert.ok(block.includes("const existingUsage = sess?.contextUsage"), "handler must inspect prior usage")
+    assert.ok(block.includes("contextUsageHasFill(existingUsage)"), "handler must detect valid prior fill")
+    assert.ok(block.includes("contextUsageHasFill(incomingUsage)"), "handler must detect empty incoming fill")
+    assert.ok(
+      block.includes("!contextUsageHasFill(incomingUsage) && contextUsageHasFill(existingUsage)"),
+      "handler must keep existing when incoming has no fill and existing does",
+    )
+  })
+
+  it("FM-ANTISTALE-002: switchTab re-derives context usage from the active session", () => {
+    assert.ok(tabSwitcherTs.includes("ctxDropdownApi?.updateUsage"), "switchTab must update context dropdown")
+    assert.ok(tabSwitcherTs.includes("updateContextUsageBar"), "switchTab must update context usage bar")
+  })
+
+  it("FM-ANTISTALE-003: context_window_unknown hides the context bar when the window is unknown", () => {
+    const block = getHandlerBlock(mainTs, "context_window_unknown")
+    assert.ok(block.includes("contextUsage.classList.add(\"hidden\")"), "handler must hide the context usage bar")
+    assert.ok(block.includes("updateContextUsageBar(0, usage.tokens, 0)"), "handler must show indeterminate usage when fill exists")
+  })
+
+  it("FM-ANTISTALE-004: ChatProvider re-pushes command list on MCP and prompt changes", () => {
+    assert.ok(chatProviderTs.includes("pushCommandListToWebview()"), "ChatProvider must define pushCommandListToWebview")
+    assert.ok(
+      chatProviderTs.includes("refreshCommandListQuietly()"),
+      "ChatProvider must define refreshCommandListQuietly for MCP/tool changes",
+    )
+    assert.ok(
+      chatProviderTs.includes("this.promptManager.onChanged(() => this.pushCommandListToWebview())"),
+      "prompt changes must trigger a command list refresh",
+    )
+  })
+
+  it("FM-ANTISTALE-005: command_list handler updates all consumers from the same payload", () => {
+    const block = getHandlerBlock(mainTs, "command_list")
+    assert.ok(block.includes("cachedRemoteCommands ="), "command_list must update cached remote commands")
+    assert.ok(block.includes("commandsModal.updateServerCommands(remoteCommands)"), "command_list must update commands modal")
+    assert.ok(block.includes("mention.updateServerCommands(commandSuggestions)"), "command_list must update mentions")
+  })
+
+  it("FM-ANTISTALE-006: model_update handler does not clobber the active session's model", () => {
+    const block = getHandlerBlock(mainTs, "model_update")
+    assert.ok(block.includes("setGlobalModel"), "model_update must update global model")
+    assert.ok(block.includes("setCurrentModel"), "model_update must update dropdown UI")
+    assert.ok(!block.includes("setSessionModel"), "model_update must NOT call setSessionModel")
+  })
+
+  it("FM-ANTISTALE-007: model dropdown re-syncs selection by data-model-id", () => {
+    assert.ok(modelDropdownTs.includes("function setCurrentModel"), "model dropdown must define setCurrentModel")
+    assert.ok(modelDropdownTs.includes("dataset.modelId"), "setCurrentModel must read canonical model id from data-model-id")
+    assert.ok(modelDropdownTs.includes('classList.toggle("selected"'), "setCurrentModel must toggle selected class")
+  })
+
+  it("FM-ANTISTALE-008: CSS applies word/overflow containment to dynamic text containers", () => {
+    const rules = ["overflow-wrap: anywhere", "word-break: break-word", "word-break: break-all", "max-width: 100%"]
+    const present = rules.filter((r) => cssSource.includes(r))
+    assert.ok(present.length >= 3, `CSS must contain at least 3 of ${rules.join(", ")}; found ${present.length}`)
+  })
+
+  it("FM-ANTISTALE-009: font and direction config changes are pushed to the webview", () => {
+    assert.ok(chatProviderTs.includes("pushChatFontConfigToWebview"), "ChatProvider must push font config")
+    assert.ok(chatProviderTs.includes("pushChatDirectionToWebview"), "ChatProvider must push direction config")
+    assert.ok(chatProviderTs.includes('type: "chat_font_config"'), "ChatProvider must post chat_font_config")
+    assert.ok(chatProviderTs.includes('type: "chat_dir_config"'), "ChatProvider must post chat_dir_config")
+  })
+
+  it("FM-ANTISTALE-010: per-tab spawn creates a unique OPENCODE_DATA_DIR", () => {
+    assert.ok(sessionManagerRegistryTs.includes("OPENCODE_DATA_DIR"), "spawn must set OPENCODE_DATA_DIR")
+    assert.ok(sessionManagerRegistryTs.includes("mkdtempSync"), "spawn must create a unique temp directory")
+  })
+
+  it("FM-ANTISTALE-011: Windows .cmd/.ps1 wrappers fall back to opencode in PATH", () => {
+    assert.ok(cliDiagnosticsTs.includes(".cmd"), "CliDiagnostics must mention .cmd wrappers")
+    assert.ok(cliDiagnosticsTs.includes(".ps1"), "CliDiagnostics must mention .ps1 wrappers")
+    assert.ok(cliDiagnosticsTs.includes('return "opencode"'), "CliDiagnostics must fall back to opencode in PATH")
+  })
+})

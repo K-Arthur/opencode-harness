@@ -417,3 +417,23 @@ Resolved in the webview via `src/chat/webview/slash-commands.ts` (`LOCAL_SLASH_C
 3. No test asserting *every* webview UI element ID in the manifest exists in `index.html`.
 4. No integration test programmatically executing every command via `vscode.commands.executeCommand`.
 5. No test asserting state-key backward-compatibility mappings are present when schemas change.
+
+---
+
+## 11. Anti-Staleness Contract (FM-ANTISTALE-*)
+
+These entries are not user-facing features; they are engineering guardrails that prevent the "silent staleness anti-pattern" (trusting a cached or stale value instead of re-deriving from the live source of truth). They are asserted by source-presence tests in `tests/unit/feature-manifest.test.mjs`.
+
+| ID | Contract | Live source of truth | Handler / file | Invariant |
+|---|---|---|---|---|
+| FM-ANTISTALE-001 | Context usage never downgrades from `actual` to empty | `ContextMonitor` token emission | `src/chat/webview/main.ts` `context_usage` handler | Empty/estimated `context_usage` does not overwrite a prior `actual` reading for the same session. |
+| FM-ANTISTALE-002 | Tab switch restores live session context | `session.contextUsage` | `src/chat/webview/tabSwitcher.ts` | `switchTab` calls `ctxDropdownApi.updateUsage` and `updateContextUsageBar` for the newly active session. |
+| FM-ANTISTALE-003 | `context_window_unknown` hides the bar when the window is unknown | `ContextMonitor` unknown-window signal | `src/chat/webview/main.ts` `context_window_unknown` handler | Handler hides the context usage bar and shows an indeterminate usage state when fill data exists. |
+| FM-ANTISTALE-004 | MCP/tool changes re-push command list | `SessionManager.listCommands()` + `listSkills()` + `PromptManager` | `src/chat/ChatProvider.ts` `refreshCommandListQuietly` / `pushCommandListToWebview` | `command_list` is pushed after MCP connection changes and prompt file changes. |
+| FM-ANTISTALE-005 | Command list updates all consumers | `command_list` message | `src/chat/webview/main.ts` `command_list` handler | `cachedRemoteCommands`, `commandsModal`, and `mention` are all updated from the same payload. |
+| FM-ANTISTALE-006 | Host model push cannot clobber per-session model | `model_update` message | `src/chat/webview/main.ts` `model_update` handler | `model_update` updates the global preference and dropdown but does **not** call `setSessionModel` on the active session. |
+| FM-ANTISTALE-007 | Model dropdown re-syncs by canonical id | `model-dropdown.ts` DOM | `src/chat/webview/model-dropdown.ts` `setCurrentModel` | Selection re-sync matches `data-model-id` rather than positional index. |
+| FM-ANTISTALE-008 | Long-text containers have CSS containment | Static CSS | `src/chat/webview/css/*.css` | Every text container that renders dynamic content has `overflow-wrap: anywhere` or `word-break: break-word` and `max-width: 100%`. |
+| FM-ANTISTALE-009 | Font and direction config changes propagate immediately | `vscode.workspace.onDidChangeConfiguration` | `src/chat/ChatProvider.ts` | `pushChatFontConfigToWebview` and `pushChatDirectionToWebview` are called on relevant config changes and during init. |
+| FM-ANTISTALE-010 | Per-process data isolation on spawn | `SessionManagerRegistry.spawnAndRegisterSession` | `src/session/SessionManagerRegistry.ts` | Each spawned process receives a unique `OPENCODE_DATA_DIR` via `mkdtempSync`. |
+| FM-ANTISTALE-011 | Windows binary wrapper fallback | `CliDiagnostics.resolveBinaryPath` | `src/diagnostics/CliDiagnostics.ts` | `.cmd` and `.ps1` wrappers on Windows fall back to `opencode` in PATH because they cannot be spawned with `shell: false`. |

@@ -144,9 +144,22 @@ flowchart LR
 | Font / RTL | `ChatProvider.test.ts` | Change `opencode.chat.fontSize` and `opencode.chat.direction` in settings and confirm immediate UI change. |
 | Process spawn | `ADR010.test.ts`, `LocalSessionProcessManager.test.ts` | On Windows, verify `.exe` discovery and that `.cmd`/`.ps1` fallbacks do not crash. |
 
+## Implemented Hardening (Post-Audit)
+
+To prevent future regressions, the following anti-staleness guardrails were added:
+
+- **Feature Manifest Contract:** Added §11 "Anti-Staleness Contract" (`FM-ANTISTALE-001` through `FM-ANTISTALE-011`) to `tests/FEATURE_MANIFEST.md` documenting the live-state re-derivation invariants for every audited area.
+- **Source-Presence Tests:** Added a new `describe("Feature Manifest — anti-staleness contract")` block in `tests/unit/feature-manifest.test.mjs` that asserts the required handler strings and state patterns are present in source. This will fail the build if a refactor removes the re-derivation path.
+- **Dev-Only Diagnostics:** Added `devStalenessWarn` in `src/chat/webview/streamHandlers.ts` and wired it into:
+  - `main.ts` `context_usage` handler — warns when an incoming usage update has an older `updatedAt` than the stored reading.
+  - `commands-modal.ts` `updateServerCommands` — warns when the server command list shrinks unexpectedly.
+  - `model-dropdown.ts` `setCurrentModel` — warns when the requested model id does not match any rendered option.
+  These diagnostics are no-ops in production webview builds because `process` is undefined in the browser runtime.
+- **Developer Checklist:** Created `docs/development/anti-staleness-checklist.md` with review questions and red flags for future live-state UI work.
+
 ## Conclusion
 
-No dead-wire or silent-staleness regressions were found in the current codebase. The targeted plumbing is present and actively triggered. The recommended next step is to keep the existing test coverage intact and add a lightweight regression test for each Track 0 area if not already present, ensuring future refactors cannot re-introduce the anti-pattern.
+No dead-wire or silent-staleness regressions were found in the current codebase. The targeted plumbing is present and actively triggered. The post-audit hardening locks these invariants into the feature manifest and test suite, and adds lightweight diagnostics to surface regressions during development. Future refactors that remove the live-state re-derivation paths will fail CI immediately.
 
 ## Files Referenced
 
@@ -170,3 +183,9 @@ No dead-wire or silent-staleness regressions were found in the current codebase.
 - `src/chat/webview/css/messages-responsive.css`
 - `src/chat/webview/css/layout.css`
 - `src/chat/webview/css/components.css`
+- `src/chat/webview/streamHandlers.ts`
+- `src/chat/webview/commands-modal.ts`
+- `src/chat/webview/model-dropdown.ts`
+- `tests/FEATURE_MANIFEST.md`
+- `tests/unit/feature-manifest.test.mjs`
+- `docs/development/anti-staleness-checklist.md`

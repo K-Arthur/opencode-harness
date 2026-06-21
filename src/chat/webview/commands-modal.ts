@@ -7,6 +7,7 @@
 
 import { dedupServerCommands } from "./slash-commands"
 import { rankByFuzzy } from "./fuzzyMatch"
+import { devStalenessWarn } from "./streamHandlers"
 
 export interface CommandEntry {
   /** Without leading slash. */
@@ -97,6 +98,8 @@ export function setupCommandsModal(els: {
   /** "all" | "local" | "server" | "prompt" | "stash" — filter chip state */
   let activeFilter: string = "all"
   let lastFocused: HTMLElement | null = null
+  /** Dev-only diagnostic: tracks the previous server command count to detect unexpected shrinkage. */
+  let lastServerCommandCount = 0
 
   /** Selected index used by keyboard navigation (ArrowDown/Up/Enter). */
   let selectedIdx = 0
@@ -177,6 +180,16 @@ export function setupCommandsModal(els: {
   function updateServerCommands(
     commands: Array<{ name: string; description?: string; template?: string; agent?: string; source?: string }>,
   ): void {
+    // Dev-only diagnostic: a sudden shrink in the server command list can
+    // indicate a stale or partial refresh (e.g. MCP server dropped). This
+    // does not block the update; it only surfaces regressions during development.
+    if (commands.length < lastServerCommandCount && lastServerCommandCount > 0) {
+      devStalenessWarn(
+        "commands-modal",
+        `server command list shrank from ${lastServerCommandCount} to ${commands.length}`,
+      )
+    }
+    lastServerCommandCount = commands.length
     // Drop server commands whose names collide with built-ins so users
     // don't see duplicate rows for /clear, /help, etc.
     serverCommands = dedupServerCommands(commands).map(c => {
