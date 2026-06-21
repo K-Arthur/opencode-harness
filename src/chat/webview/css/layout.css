@@ -763,12 +763,23 @@
 .side-panel .activity-panel-title,
 .side-panel .tasks-panel-title,
 .side-panel .subagent-panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
   font-size: var(--text-2xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--color-muted);
   margin: 0;
+}
+
+/* Leading section icon for panel headers */
+.side-panel .panel-title-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.9;
 }
 
 /* Panel header action buttons (pin, close) */

@@ -307,6 +307,11 @@ body.hide-thinking .thinking-block:not(.thinking-streaming) { display: none; }
   color: var(--oc-accent, var(--color-accent));
 }
 
+/* Pinned: fill the pin head so it reads as "stuck in" rather than outlined. */
+.panel-pin-btn[aria-pressed="true"] svg path {
+  fill: currentColor;
+}
+
 /* ─── Tab pane shared content rules ─── */
 
 .todos-section-title {
@@ -523,8 +528,10 @@ body.hide-thinking .thinking-block:not(.thinking-streaming) { display: none; }
 
 .todo-item {
   display: flex;
-  align-items: center;
-  gap: var(--space-2-5);
+  /* Top-align so multi-line todos keep the checkbox and priority badge on the
+     first text line instead of floating to the vertical middle. */
+  align-items: flex-start;
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   transition: background var(--duration-fast), opacity var(--duration-fast);
@@ -556,6 +563,8 @@ body.hide-thinking .thinking-block:not(.thinking-streaming) { display: none; }
   justify-content: center;
   flex-shrink: 0;
   background: transparent;
+  /* Nudge down so the box centres on the first text line under flex-start. */
+  margin-top: 2px;
   transition: border-color var(--duration-fast), background var(--duration-fast), transform 0.1s ease;
 }
 
@@ -608,6 +617,14 @@ body.hide-thinking .thinking-block:not(.thinking-streaming) { display: none; }
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  margin-top: 4px; /* align the LED with the first text line */
+}
+
+/* The status container is appended to every todo but only holds the LED for
+   in-progress items. Collapse it when empty so it doesn't add a phantom
+   ~12px + gap left-indent to every other row. */
+.todo-status-container:empty {
+  display: none;
 }
 
 .todo-status-led {
@@ -637,6 +654,8 @@ body.hide-thinking .thinking-block:not(.thinking-streaming) { display: none; }
 .todo-tags {
   display: flex;
   gap: var(--space-1);
+  flex-shrink: 0;
+  margin-top: 1px; /* keep priority/user badges on the first text line */
 }
 
 .todo-tag {
