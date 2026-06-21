@@ -227,6 +227,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     this.streamCoordinator.wireStreamingLog((msg) => this.postMessage(msg))
     if (this.sessionManagerRegistry) {
       this.streamCoordinator.setSessionManagerRegistry(this.sessionManagerRegistry)
+      this.sessionManagerRegistry.setStreamingStateResolver((tabId) => this.tabManager.getTab(tabId)?.isStreaming ?? false)
     }
     this.streamCoordinator.setChildSessionReplayer((tabId, childSessionId) => {
       // Register permanent mapping so future child session events route directly

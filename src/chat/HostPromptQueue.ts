@@ -41,11 +41,20 @@ export class HostPromptQueue {
   /**
    * Enqueue a prompt. Returns the assigned ID.
    * Rejects (returns null) if the session already has MAX_QUEUED_PER_SESSION items.
+   * Prunes completed/failed items before rejecting.
    */
   enqueue(sessionId: string, item: Omit<QueuedPrompt, "id" | "state" | "createdAt">): string | null {
-    const queue = this.queues.get(sessionId) ?? []
+    let queue = this.queues.get(sessionId) ?? []
     if (queue.length >= HostPromptQueue.MAX_QUEUED_PER_SESSION) {
-      return null
+      const before = queue.length
+      queue = queue.filter(q => q.state === "queued" || q.state === "sending")
+      if (queue.length < before) {
+        this.queues.set(sessionId, queue)
+        this.persist()
+      }
+      if (queue.length >= HostPromptQueue.MAX_QUEUED_PER_SESSION) {
+        return null
+      }
     }
     const id = `qp-${crypto.randomUUID()}`
     const prompt: QueuedPrompt = {

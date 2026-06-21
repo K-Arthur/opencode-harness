@@ -24,6 +24,7 @@ export interface ProposedEdit {
  * persisted to extension context).
  */
 export class DiffApplier {
+  private static readonly MAX_DOCUMENTS = 100
   private diffDocuments = new Map<string, string>()
   private diffDocumentProvider?: vscode.Disposable
 
@@ -59,6 +60,7 @@ export class DiffApplier {
 
     this.diffDocuments.set(originalUri.toString(), originalContent)
     this.diffDocuments.set(proposedUri.toString(), proposedContent)
+    this.evictOldEntries()
 
     await vscode.commands.executeCommand("vscode.diff", originalUri, proposedUri, title || `Diff: ${filePath}`)
   }
@@ -80,5 +82,16 @@ export class DiffApplier {
       provideTextDocumentContent: (uri: vscode.Uri) => this.diffDocuments.get(uri.toString()) ?? "",
     }
     this.diffDocumentProvider = vscode.workspace.registerTextDocumentContentProvider("opencode-diff", boundProvider)
+  }
+
+  private evictOldEntries(): void {
+    if (this.diffDocuments.size <= DiffApplier.MAX_DOCUMENTS) return
+    const evictCount = this.diffDocuments.size - DiffApplier.MAX_DOCUMENTS
+    const keys = this.diffDocuments.keys()
+    for (let i = 0; i < evictCount; i++) {
+      const next = keys.next()
+      if (next.done) break
+      this.diffDocuments.delete(next.value)
+    }
   }
 }

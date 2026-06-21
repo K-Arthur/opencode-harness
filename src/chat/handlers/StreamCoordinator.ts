@@ -34,6 +34,7 @@ export type { StreamCallbacks, ToolEndResult, ToolPartialInput, StreamLifecycleS
 import type { SessionManagerRegistry } from "../../session/SessionManagerRegistry"
 import { HeartbeatService, type DeferredChunkEntry } from "./HeartbeatService"
 import { ToolPartialPoller } from "./ToolPartialPoller"
+import { ToolCallTracker } from "./ToolCallTracker"
 
 /** Context object grouping all StreamCoordinator dependencies to reduce constructor parameter count. */
 export interface StreamDeps {
@@ -156,6 +157,7 @@ export class StreamCoordinator {
   private readonly MAX_STREAM_DEFER_MS = 250
   private heartbeatService: HeartbeatService
   private toolPartialPoller: ToolPartialPoller
+  private toolCallTracker: ToolCallTracker
   /** Tracks last deferral log time per tab to suppress duplicate logging during long subagent waits. */
   private lastDeferralLogTs = new Map<string, number>()
   private streamWatchdog: ReturnType<typeof setInterval> | null = null
@@ -344,6 +346,20 @@ export class StreamCoordinator {
       getSm: (tabId) => this.getSm(tabId),
       isToolPending: (tabId, toolId) => this.activeToolCallIds.get(tabId)?.has(toolId) ?? false,
       appendToolPartial: (tabId, partial, cbs, source) => this.appendToolPartial(tabId, partial, cbs, source),
+    })
+    this.toolCallTracker = new ToolCallTracker({
+      tabManager: this.tabManager,
+      activityTracker: this.activityTracker,
+      activeToolCallIds: this.activeToolCallIds,
+      toolCallCounts: this.toolCallCounts,
+      toolActivityAt: this.toolActivityAt,
+      pendingToolGraceTimeouts: this.pendingToolGraceTimeouts,
+      TOOL_FINALIZE_GRACE_MS: this.TOOL_FINALIZE_GRACE_MS,
+      getSm: (tabId) => this.getSm(tabId),
+      stopToolPartialPolling: (tabId, toolId) => this.stopToolPartialPolling(tabId, toolId),
+      recordToolRunActivity: (tabId, activity, cbs) => this.recordToolRunActivity(tabId, activity, cbs),
+      postRunActivitySnapshot: (tabId, snapshot, cbs) => this.postRunActivitySnapshot(tabId, snapshot, cbs),
+      maybeFinalizeStream: (tabId, cbs, trigger) => this.maybeFinalizeStream(tabId, cbs, trigger),
     })
     this.tabCloseDisposable = this.tabManager.onTabClosed((tabId) => {
       this.cleanupTab(tabId)
@@ -775,34 +791,19 @@ export class StreamCoordinator {
   }
 
   private clearPendingToolGraceTimeout(tabId: string): void {
-    const timer = this.pendingToolGraceTimeouts.get(tabId)
-    if (!timer) return
-    clearTimeout(timer)
-    this.pendingToolGraceTimeouts.delete(tabId)
+    this.toolCallTracker.clearPendingToolGraceTimeout(tabId)
   }
 
   private getOrCreatePendingToolIds(tabId: string): Set<string> {
-    let pending = this.activeToolCallIds.get(tabId)
-    if (!pending) {
-      pending = new Set<string>()
-      this.activeToolCallIds.set(tabId, pending)
-    }
-    return pending
+    return this.toolCallTracker.getOrCreatePendingToolIds(tabId)
   }
 
   private getLastPendingToolId(tabId: string): string | undefined {
-    const pending = this.activeToolCallIds.get(tabId)
-    if (!pending || pending.size === 0) return undefined
-    return Array.from(pending)[pending.size - 1]
+    return this.toolCallTracker.getLastPendingToolId(tabId)
   }
 
   private trackToolActivity(tabId: string, toolId: string): void {
-    let activity = this.toolActivityAt.get(tabId)
-    if (!activity) {
-      activity = new Map<string, number>()
-      this.toolActivityAt.set(tabId, activity)
-    }
-    activity.set(toolId, Date.now())
+    this.toolCallTracker.trackToolActivity(tabId, toolId)
   }
 
   private toolPartialKey(tabId: string, toolId: string): string {
@@ -864,197 +865,27 @@ export class StreamCoordinator {
   }
 
   private postToolEnd(tabId: string, result: ToolEndResult, callbacks: StreamCallbacks): boolean {
-    const tab = this.tabManager.getTab(tabId)
-    if (!tab) return false
-
-    const pending = this.activeToolCallIds.get(tabId)
-    let toolId = result.id && result.id !== "unknown" ? result.id : undefined
-    if (!toolId || (pending && !pending.has(toolId))) {
-      if (pending && pending.size === 1) {
-        toolId = pending.values().next().value
-      } else if (pending && pending.size > 1) {
-        log.warn(`postToolEnd: ambiguous ID "${result.id}" with ${pending.size} pending tools — picking most recently active`)
-        const activity = this.toolActivityAt.get(tabId)
-        let latestTime = 0
-        for (const id of pending) {
-          const t = activity?.get(id) ?? 0
-          if (t > latestTime) { latestTime = t; toolId = id }
-        }
-      }
-    }
-    if (!toolId) return false
-
-    this.stopToolPartialPolling(tabId, toolId)
-
-    if (pending) {
-      pending.delete(toolId)
-      if (pending.size === 0) {
-        this.activeToolCallIds.delete(tabId)
-        this.clearPendingToolGraceTimeout(tabId)
-      }
-    }
-    this.toolActivityAt.get(tabId)?.delete(toolId)
-
-    const block = tab.blocksBuffer.find(b => (b.type === "tool-call" || b.type === "question") && b.id === toolId)
-    this.recordToolRunActivity(tabId, {
-      id: toolId,
-      name: typeof block?.name === "string" ? block.name : "tool",
-      status: result.stale ? "unresolved" : result.ok ? "completed" : "failed",
-      result: result.result,
-      error: result.ok ? undefined : result.result,
-    }, callbacks)
-
-    callbacks.postMessage({
-      type: "stream_tool_end",
-      sessionId: tabId,
-      toolId,
-      result: { ...result, id: toolId },
-    })
-
-    if (block) {
-      block.state = result.state ?? (result.stale ? "stale" : result.ok ? "result" : "error")
-      block.result = result.result
-      block.durationMs = result.durationMs
-      // M1: persist the defensively-extracted exit code / stderr on the
-      // block so history replay + backfill re-render the bash card with
-      // the colored exit-code chip and the stdout/stderr split panels.
-      // These are no-ops when undefined (the common case for non-bash
-      // tools and for servers that don't ship structured metadata).
-      if (typeof result.exitCode === "number") {
-        ;(block as Record<string, unknown>).exitCode = result.exitCode
-      }
-      if (typeof result.stderr === "string") {
-        ;(block as Record<string, unknown>).stderr = result.stderr
-      }
-      if (result.resultTruncated) {
-        ;(block as Record<string, unknown>).resultTruncated = true
-      }
-    }
-    return true
+    return this.toolCallTracker.postToolEnd(tabId, result, callbacks)
   }
 
   private resetPendingToolGraceTimeout(tabId: string, callbacks: StreamCallbacks): void {
-    if (this.pendingToolGraceTimeouts.has(tabId)) return
-
-    const timeout = setTimeout(() => {
-      this.pendingToolGraceTimeouts.delete(tabId)
-      void this.markUnresolvedPendingToolCalls(tabId, callbacks)
-        .then(() => this.markUnresolvedActiveSubagents(tabId, callbacks))
-        .then(() => this.maybeFinalizeStream(tabId, callbacks, "status"))
-        .catch(err => log.error("Pending tool grace finalization failed", err))
-    }, this.TOOL_FINALIZE_GRACE_MS)
-    this.pendingToolGraceTimeouts.set(tabId, timeout)
+    this.toolCallTracker.resetPendingToolGraceTimeout(tabId, callbacks)
   }
 
   private async reconcilePendingToolCallsFromServer(tabId: string, callbacks: StreamCallbacks): Promise<void> {
-    const pending = this.activeToolCallIds.get(tabId)
-    if (!pending || pending.size === 0) return
-
-    const tab = this.tabManager.getTab(tabId)
-    if (!tab?.cliSessionId) return
-
-    try {
-      const messages = await this.getSm(tabId).getSessionMessages(tab.cliSessionId)
-      const lastAssistant = [...messages].reverse().find(message => message.info.role === "assistant")
-      if (!lastAssistant) return
-
-      const messageInfo = lastAssistant.info as { id?: string }
-      for (const part of lastAssistant.parts) {
-        if (!this.isRecord(part) || part.type !== "tool") continue
-        const state: Record<string, unknown> = this.isRecord(part.state) ? part.state as Record<string, unknown> : {}
-        const status = typeof state.status === "string" ? state.status : ""
-        if (status !== "completed" && status !== "error") continue
-
-        const resolvedId = this.stableToolPartId(part, messageInfo.id)
-        const currentPending = this.activeToolCallIds.get(tabId)
-        if (!currentPending || currentPending.size === 0) break
-
-        const fallbackId = currentPending.size === 1 ? currentPending.values().next().value : undefined
-        const toolId = resolvedId && currentPending.has(resolvedId) ? resolvedId : fallbackId
-        if (!toolId) continue
-
-        const toolName = typeof part.tool === "string" ? part.tool : ""
-        const isQuestionTool = toolName.toLowerCase() === "question"
-        if (isQuestionTool) {
-          const qBlock = tab.blocksBuffer.find(
-            b => b.type === "question" && (b.id === toolId || (b as Record<string, unknown>).toolCallId === toolId)
-          )
-          if (qBlock && !(qBlock as Record<string, unknown>).answered) {
-            log.info(`reconcilePendingToolCallsFromServer: keeping question tool ${toolId} pending (not yet answered)`)
-            continue
-          }
-        }
-
-        const result = typeof state.output === "string"
-          ? state.output
-          : state.output !== undefined
-            ? JSON.stringify(state.output)
-            : typeof state.error === "string"
-              ? state.error
-              : ""
-        this.postToolEnd(tabId, { id: toolId, ok: status === "completed", result }, callbacks)
-      }
-    } catch (err) {
-      log.warn(`Failed to reconcile pending tools for ${tabId}`, err)
-    }
+    await this.toolCallTracker.reconcilePendingToolCallsFromServer(tabId, callbacks)
   }
 
   private stableToolPartId(part: Record<string, unknown>, messageId?: string): string | undefined {
-    if (typeof part.id === "string" && part.id) return part.id
-    if (typeof part.callID === "string" && part.callID) return part.callID
-    const partMessageId = typeof part.messageID === "string" ? part.messageID : messageId
-    const tool = typeof part.tool === "string" ? part.tool : "tool"
-    return partMessageId ? `${partMessageId}:${tool}` : undefined
+    return this.toolCallTracker.stableToolPartId(part, messageId)
   }
 
   private async markUnresolvedPendingToolCalls(tabId: string, callbacks: StreamCallbacks): Promise<void> {
-    await this.reconcilePendingToolCallsFromServer(tabId, callbacks)
-
-    const pending = this.activeToolCallIds.get(tabId)
-    if (!pending || pending.size === 0) return
-
-    const ids = Array.from(pending)
-    log.warn(`Marking ${ids.length} pending tool call(s) unresolved for ${tabId} after terminal server status`)
-    for (const toolId of ids) {
-      const tab = this.tabManager.getTab(tabId)
-      // B6: question tools are intentionally kept pending while the agent is
-      // suspended waiting for an answer (reconcilePendingToolCallsFromServer
-      // `continue`s past them). Flagging them as "unresolved" here would (a)
-      // post a stream_tool_unresolved message the webview has no handler for,
-      // and (b) record a misleading "unresolved" run-activity entry. The
-      // question block in blocksBuffer IS the user-visible state — leave it.
-      const isQuestionBlock = tab?.blocksBuffer.some(b => {
-        if (b.type !== "question") return false
-        const rec = b as Record<string, unknown>
-        return b.id === toolId || rec.toolCallId === toolId
-      })
-      if (isQuestionBlock) {
-        log.info(`markUnresolvedPendingToolCalls: skipping question tool ${toolId} (still awaiting answer)`)
-        continue
-      }
-      const block = tab?.blocksBuffer.find(b => b.type === "tool-call" && b.id === toolId)
-      this.recordToolRunActivity(tabId, {
-        id: toolId,
-        name: typeof block?.name === "string" ? block.name : "tool",
-        status: "unresolved",
-        error: "Tool did not emit a completion event before the server became idle.",
-      }, callbacks)
-      callbacks.postMessage({
-        type: "stream_tool_unresolved",
-        sessionId: tabId,
-        toolCallId: toolId,
-        message: "Tool did not emit a completion event before the server became idle.",
-      })
-    }
+    await this.toolCallTracker.markUnresolvedPendingToolCalls(tabId, callbacks)
   }
 
   private markUnresolvedActiveSubagents(tabId: string, callbacks: StreamCallbacks): void {
-    const active = this.activityTracker.getSnapshot(tabId)?.activeSubagentCount ?? 0
-    if (active === 0) return
-    const message = "Subagent did not emit a completion event before the server became idle."
-    log.warn(`Marking ${active} active subagent(s) unresolved for ${tabId} after terminal server status`)
-    const snapshot = this.activityTracker.markActiveSubagentsUnresolved(tabId, message)
-    this.postRunActivitySnapshot(tabId, snapshot, callbacks)
+    this.toolCallTracker.markUnresolvedActiveSubagents(tabId, callbacks)
   }
 
   async startPrompt(config: StartPromptConfig): Promise<void> {
@@ -2837,9 +2668,7 @@ export class StreamCoordinator {
   }
 
   private getStableToolId(tabId: string): string {
-    const count = (this.toolCallCounts.get(tabId) || 0) + 1
-    this.toolCallCounts.set(tabId, count)
-    return `tool-${count}`
+    return this.toolCallTracker.getStableToolId(tabId)
   }
 
   appendToolEnd(tabId: string, result: ToolEndResult, callbacks: StreamCallbacks): void {
@@ -3040,12 +2869,10 @@ export class StreamCoordinator {
     this.activeMessageIds.clear()
     this.activeRuns.clear()
     this.activeRunMetrics.clear()
-    this.toolCallCounts.clear()
-    this.activeToolCallIds.clear()
-    this.toolActivityAt.clear()
     this.msgSeqs.clear()
     this.heartbeatService.dispose()
     this.toolPartialPoller.dispose()
+    this.toolCallTracker.dispose()
     // Clean up any remaining attachment files across all tabs. Fire-and-
     // forget: vscode's Disposable contract is sync and the temp dir will
     // be swept by the OS on reboot regardless.

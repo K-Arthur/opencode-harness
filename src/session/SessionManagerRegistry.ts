@@ -153,7 +153,7 @@ export class SessionManagerRegistry implements vscode.Disposable {
       states.push({
         tabId,
         cliSessionId: this.tabManagerCliSessionId(tabId),
-        wasStreaming: true,
+        wasStreaming: this._streamingStateResolver?.(tabId) ?? false,
         interruptedAt: Date.now(),
       })
     }
@@ -234,11 +234,18 @@ export class SessionManagerRegistry implements vscode.Disposable {
   }
 
   private _cliSessionIdResolver: ((tabId: string) => string | undefined) | null = null
+  private _streamingStateResolver: ((tabId: string) => boolean) | null = null
 
   /** Set a resolver that maps tab IDs to their current CLI session IDs,
    *  used when building TabRestorationState after a process crash. */
   setTabCliSessionIdResolver(resolver: (tabId: string) => string | undefined): void {
     this._cliSessionIdResolver = resolver
+  }
+
+  /** Set a resolver that maps tab IDs to their current streaming state,
+   *  used when building TabRestorationState after a process crash. */
+  setStreamingStateResolver(resolver: (tabId: string) => boolean): void {
+    this._streamingStateResolver = resolver
   }
 
   // ── LRU eviction ──────────────────────────────────────────────────

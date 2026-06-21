@@ -295,9 +295,18 @@ function validateSessionTags(msg: Record<string, unknown>, msgType: string, deps
   return true
 }
 
+const TERMINAL_COMMAND_MAX_LENGTH = 10000
+const CONTROL_CHAR_RE = /[\x00-\x08\x0e-\x1f\x7f]/
+
 function validateOpenTerminal(msg: Record<string, unknown>, _msgType: string, deps: WebviewMessageValidatorDeps): boolean {
   if (typeof msg.command !== "string" || !msg.command.trim()) {
     return reject(deps, "Invalid command in open_terminal")
+  }
+  if (msg.command.length > TERMINAL_COMMAND_MAX_LENGTH) {
+    return reject(deps, "Command too long in open_terminal")
+  }
+  if (CONTROL_CHAR_RE.test(msg.command)) {
+    return reject(deps, "Control characters in open_terminal command")
   }
   if (msg.cwd !== undefined && typeof msg.cwd !== "string") {
     return reject(deps, "Invalid cwd in open_terminal")
@@ -415,10 +424,20 @@ const WEBVIEW_MESSAGE_VALIDATORS: Record<string, MessageValidator> = {
   voice_cancel: validateVoiceRequest,
 }
 
+const _unvalidatedTypeWarnings = new Set<string>()
+
 export function validateWebviewMessage(
   msg: Record<string, unknown>,
   msgType: string,
   deps: WebviewMessageValidatorDeps
 ): boolean {
-  return WEBVIEW_MESSAGE_VALIDATORS[msgType]?.(msg, msgType, deps) ?? true
+  const validator = WEBVIEW_MESSAGE_VALIDATORS[msgType]
+  if (!validator) {
+    if (!_unvalidatedTypeWarnings.has(msgType)) {
+      _unvalidatedTypeWarnings.add(msgType)
+      deps.warn(`Webview message type "${msgType}" has no validator — accepted by default`)
+    }
+    return true
+  }
+  return validator(msg, msgType, deps)
 }
