@@ -196,6 +196,7 @@ export function createAttachmentManager(deps: AttachmentDeps) {
     const mentions = parsePromptMentions(deps.els.promptInput.value)
     const chips: import("../types").ContextChip[] = mentions.map((mention) => ({
       label: mention.label,
+      title: mention.title,
       kind: mention.kind,
       removable: true,
       onRemove: () => {
@@ -244,15 +245,77 @@ export function createAttachmentManager(deps: AttachmentDeps) {
   }
 }
 
-export function parsePromptMentions(text: string): Array<{ token: string; label: string; kind: string }> {
+export interface PromptMention {
+  /** Raw matched token, e.g. `@file:"src/a b.ts"` — used for removal. */
+  token: string
+  /** Clean, human-readable chip label, e.g. `a b.ts`. */
+  label: string
+  /** Full value for the chip tooltip, e.g. the full path or URL. */
+  title: string
+  /** Chip kind drives the icon/colour: file | image | folder | url | problems | terminal. */
+  kind: string
+}
+
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i
+
+/** Strip the `@kind:` prefix and surrounding quotes from a mention token. */
+function mentionValue(token: string): string {
+  const colon = token.indexOf(":")
+  const raw = colon === -1 ? token : token.slice(colon + 1)
+  return raw.replace(/^["']/, "").replace(/["']$/, "")
+}
+
+/** Last non-empty path segment (basename) of a slash/backslash path. */
+function basename(value: string): string {
+  const segments = value.split(/[\\/]/).filter(Boolean)
+  return segments[segments.length - 1] || value
+}
+
+/**
+ * Parse `@file:` / `@folder:` / `@url:` / `@problems:` / `@terminal:` mentions
+ * out of the prompt text and derive a specialised, readable chip for each.
+ * Files use the basename and switch to the `image` kind for image extensions
+ * so the chip surfaces an image icon instead of a generic file icon; the full
+ * path/URL is preserved in `title` for the hover tooltip.
+ */
+export function parsePromptMentions(text: string): PromptMention[] {
   const pattern = /@(file|folder|url|problems|terminal):(?:"[^"]+"|'[^']+'|\S+)/g
   const seen = new Set<string>()
-  const matches: Array<{ token: string; label: string; kind: string }> = []
+  const matches: PromptMention[] = []
   for (const match of text.matchAll(pattern)) {
     const token = match[0]
     if (!token || seen.has(token)) continue
     seen.add(token)
-    matches.push({ token, label: token, kind: match[1] || "file" })
+    const rawKind = match[1] || "file"
+    const value = mentionValue(token)
+    let label = value
+    let kind = rawKind
+    let title = value
+    switch (rawKind) {
+      case "file":
+        label = basename(value)
+        kind = IMAGE_EXT.test(value) ? "image" : "file"
+        break
+      case "folder":
+        label = `${basename(value)}/`
+        break
+      case "url":
+        try {
+          label = new URL(value).hostname || value
+        } catch {
+          label = value
+        }
+        break
+      case "problems":
+        label = "Problems"
+        title = "Workspace problems"
+        break
+      case "terminal":
+        label = "Terminal"
+        title = "Terminal output"
+        break
+    }
+    matches.push({ token, label, title, kind })
   }
   return matches
 }

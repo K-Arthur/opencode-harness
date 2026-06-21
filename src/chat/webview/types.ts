@@ -454,6 +454,8 @@ export interface SessionSummary {
 
 export interface ContextChip {
   label?: string
+  /** Full value (path/URL) surfaced as the chip's hover tooltip. */
+  title?: string
   kind?: string
   removable?: boolean
   onRemove?: () => void

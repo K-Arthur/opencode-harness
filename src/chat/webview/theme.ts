@@ -20,7 +20,11 @@ export function updateContextChips(els: ElementRefs, chips?: ContextChip[]) {
 	    const el = document.createElement("span")
 	    el.className = "context-chip"
 	    if (chip.kind) el.dataset.kind = chip.kind
+    // Full path/URL on hover — the visible label is only the basename/host,
+    // so the tooltip is the user's only way to disambiguate same-named files.
+    if (chip.title) el.title = chip.title
     const label = document.createElement("span")
+    label.className = "context-chip-label"
     label.textContent = chip.label || ""
     el.appendChild(label)
     if (chip.removable !== false) {

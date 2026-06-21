@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { JSDOM } from "jsdom"
-import { createAttachmentManager } from "./attachments"
+import { createAttachmentManager, parsePromptMentions } from "./attachments"
 
 class FakeFileReader {
   result: string | null = null
@@ -157,5 +157,50 @@ describe("attachments.ts", () => {
     assert.equal(manager.getAttachments().length, 0, "internal state must be cleared")
     assert.equal(snapshot.length, 1, "snapshot must survive clearAttachments — this is the root cause of images showing as attached but not being sent")
     assert.equal(snapshot[0]!.mimeType, "image/png")
+  })
+})
+
+describe("parsePromptMentions", () => {
+  it("uses the basename as the file chip label and keeps the full path as title", () => {
+    const [m] = parsePromptMentions("see @file:src/chat/webview/GEMINI.md please")
+    assert.ok(m)
+    assert.equal(m!.kind, "file")
+    assert.equal(m!.label, "GEMINI.md")
+    assert.equal(m!.title, "src/chat/webview/GEMINI.md")
+    assert.equal(m!.token, "@file:src/chat/webview/GEMINI.md")
+  })
+
+  it("switches file mentions with an image extension to the image kind", () => {
+    const [m] = parsePromptMentions("@file:assets/diagram.PNG")
+    assert.equal(m!.kind, "image")
+    assert.equal(m!.label, "diagram.PNG")
+  })
+
+  it("renders folder mentions with a trailing slash", () => {
+    const [m] = parsePromptMentions("@folder:src/utils")
+    assert.equal(m!.kind, "folder")
+    assert.equal(m!.label, "utils/")
+  })
+
+  it("renders url mentions as the hostname", () => {
+    const [m] = parsePromptMentions("@url:https://example.com/a/b?c=1")
+    assert.equal(m!.kind, "url")
+    assert.equal(m!.label, "example.com")
+    assert.equal(m!.title, "https://example.com/a/b?c=1")
+  })
+
+  it("gives problems and terminal mentions friendly labels", () => {
+    const labels = parsePromptMentions("@problems:all and @terminal:foo").map((m) => `${m.kind}:${m.label}`)
+    assert.deepEqual(labels, ["problems:Problems", "terminal:Terminal"])
+  })
+
+  it("unquotes quoted paths containing spaces", () => {
+    const [m] = parsePromptMentions('@file:"my folder/a b.ts"')
+    assert.equal(m!.label, "a b.ts")
+    assert.equal(m!.title, "my folder/a b.ts")
+  })
+
+  it("de-duplicates identical mention tokens", () => {
+    assert.equal(parsePromptMentions("@file:a.ts @file:a.ts").length, 1)
   })
 })

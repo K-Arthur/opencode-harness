@@ -6,7 +6,7 @@ export interface InputHandlerDeps {
   els: ElementRefs
   vscode: { postMessage: (msg: Record<string, unknown>) => void; getState: <T>() => T | undefined; setState: (state: WebviewState) => void }
   stateManager: { getState: () => WebviewState; getActiveSession: () => { id: string; isStreaming: boolean; model?: string; mode?: string; name?: string } | null; getAllSessions: () => Array<{ id: string; isStreaming: boolean }>; save: () => void }
-  attachmentManager: { onPaste: (e: ClipboardEvent) => void; getAttachments: () => Array<{ data: string; mimeType: string }>; attachImageBlob: (file: File) => void; attachFileBlob: (file: File, mimeType: string) => void }
+  attachmentManager: { onPaste: (e: ClipboardEvent) => void; getAttachments: () => Array<{ data: string; mimeType: string }>; attachImageBlob: (file: File) => void; attachFileBlob: (file: File, mimeType: string) => void; updatePromptContextChips: () => void }
   mention: { handleTrigger: () => void; handleKeydown: (e: KeyboardEvent) => void }
   commandsModal: { open: () => void }
   timers: { setTimeout: (fn: (...args: any[]) => void, ms: number) => any }
@@ -44,7 +44,11 @@ export function createInputHandlers(deps: InputHandlerDeps): InputHandlers {
     el.style.overflow = prev
   }
 
-  function onInputChange(): void { autoResizeTextarea(); mention.handleTrigger(); updateSendButton() }
+  // Refresh the context chips on every edit so typed/edited @file:/@folder:/@url:
+  // mentions surface as styled chips live — previously chips only updated when a
+  // mention was inserted via the picker, leaving manually-typed mentions as raw
+  // "@file:…" text in the composer.
+  function onInputChange(): void { autoResizeTextarea(); mention.handleTrigger(); attachmentManager.updatePromptContextChips(); updateSendButton() }
 
   // Composer submit. Not streaming → send a fresh prompt. Streaming → steer: plain
   // Enter uses the tab's send-mode default (Queue), Cmd/Ctrl+Enter forces Interrupt.
