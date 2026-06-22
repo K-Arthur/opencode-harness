@@ -4,7 +4,7 @@ import { TOOLTIPS } from "./tooltips"
 import { generateUserMessageId } from "../../session/messageId"
 import { classifyComposerInput } from "./slash-commands"
 import { shouldForceFocusOnSend } from "./sessionFocus"
-import type { SendLogicDeps } from "./sendLogic"
+import type { SendLogicDeps, SendMessageDeps, StreamCapacityState } from "./sendTypes"
 
 /** G8: how long to wait for the host to ack a send_prompt before probing.
  *  The host normally posts `prompt_accepted` within ~1s and
@@ -75,14 +75,6 @@ export function abortStream(
   streamHandlers.get(active.id)?.showTypingIndicator("Stopping...")
   updateAgentStatus("idle")
   vscode.postMessage({ type: "abort", sessionId: active.id })
-}
-
-export interface SendMessageDeps extends SendLogicDeps {
-  getStreamCapacityState: () => import("./sendButton").StreamCapacityState
-  isServerStreaming: (active: { id: string } | null) => boolean
-  resolveSendModel: (active?: { model?: string } | null) => string | undefined
-  updateSendButton: () => void
-  sendSteerPrompt: (modeOverride?: "interrupt" | "queue") => void
 }
 
 export function sendMessage(deps: SendMessageDeps): void {

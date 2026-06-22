@@ -1,14 +1,7 @@
 import type { ElementRefs } from "./dom"
 import { TOOLTIPS } from "./tooltips"
-import type { SendLogicDeps } from "./sendLogic"
+import type { SendLogicDeps, StreamCapacityState } from "./sendTypes"
 import { getMaxConcurrentStreams } from "./streamConfig"
-
-export interface StreamCapacityState {
-  isFull: boolean
-  streamingNames: string
-  activeStreams: number
-  maxStreams: number
-}
 
 export function getStreamCapacityState(
   stateManager: SendLogicDeps["stateManager"],

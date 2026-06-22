@@ -1,5 +1,5 @@
 import type { ElementRefs } from "./dom"
-import type { SendLogicDeps } from "./sendLogic"
+import type { SendLogicDeps } from "./sendTypes"
 
 export function getCurrentSteerMode(
   stateManager: SendLogicDeps["stateManager"],

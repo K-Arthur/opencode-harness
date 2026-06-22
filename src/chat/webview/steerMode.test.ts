@@ -10,7 +10,8 @@
 import { describe, it, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
 import { JSDOM } from "jsdom"
-import { createSendLogic, type SendLogicDeps } from "./sendLogic"
+import { createSendLogic } from "./sendLogic"
+import type { SendLogicDeps } from "./sendTypes"
 
 let dom: JSDOM
 

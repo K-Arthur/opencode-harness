@@ -6,7 +6,7 @@ import { createQueueRenderer } from "./queueRenderer"
 import { createInputHandlers } from "./inputHandlers"
 import { createSlashCommandHandler } from "./slashCommands"
 import { createSendLogic } from "./sendLogic"
-import type { StreamCapacityState } from "./sendButton"
+import type { StreamCapacityState } from "./sendTypes"
 import type { RemoteCommandInfo } from "./slash-commands"
 
 export interface ComposerDeps {
