@@ -122,7 +122,7 @@ jobs:
         run: npm run build
 
       - name: Serve webview and run visual tests
-        run: npx playwright test
+        run: npx playwright test --project=chromium --project=chromium-webview
         timeout-minutes: 10
 
   screenshots-verify:

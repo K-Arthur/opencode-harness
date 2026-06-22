@@ -4,9 +4,15 @@ export default defineConfig({
   testDir: './tests/visual',
   timeout: 30000,
   expect: {
-    toHaveScreenshot: { 
+    toHaveScreenshot: {
       maxDiffPixels: 25,
-      threshold: 0.04
+      threshold: 0.04,
+      // Use media/screenshots/dark/ as the single source of truth for
+      // screenshot baselines — the same PNGs shipped to the marketplace.
+      // {testDir} resolves to the project's testDir (absolute); for
+      // screenshots-verify that is <repo>/tests/visual/screenshots, so
+      // ../../../media/screenshots/dark/ reaches <repo>/media/screenshots/dark/.
+      pathTemplate: '{testDir}/../../../media/screenshots/dark/{arg}{ext}',
     },
     timeout: 10000
   },
