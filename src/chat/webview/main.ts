@@ -1,4 +1,4 @@
-import type { ChatMessage, LegacyHostMessage, MentionItem, SessionSummary, ModelInfo, ContextChip, ToolCallState, UsageDelta, Todo, ContextUsage, RunActivitySnapshot, SubagentActivity, SessionState, ToolCallBlock } from "./types"
+import type { ChatMessage, LegacyHostMessage, MentionItem, SessionSummary, ModelInfo, ContextChip, ToolCallState, UsageDelta, Todo, ContextUsage, RunActivitySnapshot, SubagentActivity, SessionState, ToolCallBlock, QuestionBlock } from "./types"
 import type { AttachmentEls } from "./ui/attachments"
 import { timers } from "./timerRegistry"
 import { createState } from "./state"
@@ -44,11 +44,10 @@ import { setupTodosPanel } from "./todos-panel"
 import { setupActivityPanel } from "./activity-panel"
 import { setupTasksPanel } from "./tasks-panel"
 import { setupTerminalPanel } from "./terminal-panel"
-import { mergeTodos, generateTodoId } from "./todos-logic"
 import * as questionBar from "./questionBar"
 import { type SubagentPanelApi } from "./subagent-panel"
 import { type SubagentDetailViewApi } from "./subagentDetailView"
-import { reconcileSubagentStatuses, computeNewSubagentIds, capCompletedSubagents } from "./subagentReconciler"
+import { reconcileSubagentStatuses, capCompletedSubagents } from "./subagentReconciler"
 import { setupSidebarResize } from "./sidebarResize"
 import { applySubagentCardUpdate } from "./subagentCard"
 import { setThinkingVisible, getThinkingVisible } from "./displayPrefs"
@@ -77,7 +76,7 @@ import { renderRecentPromptsRail } from "./recentPromptsRail"
 import { closeSettingsMenu as closeSettingsMenuModule, setupSettingsMenuKeyboardNav as setupSettingsMenuKeyboardNavModule } from "./ui/settingsMenu"
 import { handleChangedFiles as handleChangedFilesModule, renderCheckpointPanel as renderCheckpointPanelModule, renderRestorePoints as renderRestorePointsModule, handleClearMessages as handleClearMessagesModule, type FileTrackingDeps } from "./ui/fileTracking"
 import { setupButtons as setupButtonsModule } from "./ui/buttonSetup"
-import { setupPermissionConfig, closePermissionConfig } from "./permissionConfig"
+import { setupPermissionConfig } from "./permissionConfig"
 import { deriveState } from "./ui/contextUsageThresholds"
 import { updateScrollMarkers as updateScrollMarkersModule, setupJumpToBottom as setupJumpToBottomModule, scrollToTurn as scrollToTurnModule, type ScrollMarkerDeps } from "./ui/scrollMarkers"
 import { createStreamOrchestrator, type StreamOrchestratorAPI } from "./streamOrchestrator"
@@ -203,11 +202,8 @@ function getVsCodeApi() {
   const todosDismissedBySession = todosApi.todosDismissedBySession
   const todosAutoOpenedForSession = todosApi.todosAutoOpenedForSession
 
-  function getServerTodos(sessionId: string): Todo[] { return todosApi.getServerTodos(sessionId) }
   function setServerTodos(sessionId: string, todos: Todo[]): void { todosApi.setServerTodos(sessionId, todos) }
-  function getMergedTodos(sessionId: string, serverTodos: Todo[]): Todo[] { return todosApi.getMergedTodos(sessionId, serverTodos) }
   function triggerTodosRender(sessionId: string, options?: { autoOpen?: boolean }) { todosApi.triggerTodosRender(sessionId, options) }
-  function isUserTodoId(todoId: string): boolean { return todosApi.isUserTodoId(todoId) }
   function toggleTodo(todoOrId: string | Todo): void { todosApi.toggleTodo(todoOrId) }
   function deleteTodo(todoId: string): void { todosApi.deleteTodo(todoId) }
   function addUserTodo(content: string): void { todosApi.addUserTodo(content) }
@@ -246,10 +242,8 @@ function getVsCodeApi() {
     })
   }
 
-  function normalizeSubagentStatus(status: string): SubagentActivity["status"] { return subagentsApi.normalizeSubagentStatus(status) }
   function isLiveSubagent(activity: SubagentActivity): boolean { return subagentsApi.isLiveSubagent(activity) }
   function mapSubagentRunStatusToCardState(status: string | undefined): string | undefined { return subagentsApi.mapSubagentRunStatusToCardState(status) }
-  function getSubagentActivities(sessionId?: string): SubagentActivity[] { return subagentsApi.getSubagentActivities(sessionId) }
   function updateSubagentBadge(activeCount: number): void { subagentsApi.updateSubagentBadge(activeCount) }
   function refreshSubagentPanel(sessionId?: string): void { subagentsApi.refreshSubagentPanel(sessionId) }
   function setSubagentPanelOpen(open: boolean): void { subagentsApi.setSubagentPanelOpen(open) }
@@ -1948,7 +1942,7 @@ function setupTodoSkillAndSubagentPanels(): void {
 
   const providerAuthMethods = new Map<string, ProviderAuthMethodInfo[]>()
   let providerDiscoveryItems: ProviderDiscoveryItem[] = []
-  let providerCredentials: ProviderCredentialInfo[] = []
+  let _providerCredentials: ProviderCredentialInfo[] = []
 
   setupProviderPanel({
     postMessage: (msg) => vscode.postMessage(msg),
@@ -2788,8 +2782,6 @@ function setupTodoSkillAndSubagentPanels(): void {
         }
 
         // Auto-open policy: only on NEW subagent ids, not on activity churn
-        const prevKnownIds = knownSubagentIdsBySession.get(sid) ?? new Set()
-        const newIds = computeNewSubagentIds(prevKnownIds, incomingSubagents)
         const allIds = new Set(incomingSubagents.map(a => a.id))
         knownSubagentIdsBySession.set(sid, allIds)
 
@@ -3021,7 +3013,7 @@ function setupTodoSkillAndSubagentPanels(): void {
           promptQueues.set(sid, q)
         }
         q.syncFromHost(msg.items as import("./queue").QueueItem[])
-        const queuedCount = msg.items.filter((i: any) => i.state === "queued").length
+        const queuedCount = (msg.items as import("./queue").QueueItem[]).filter((i) => i.state === "queued").length
         if (queuedCount > 0) {
           renderQueue(sid)
         } else {
@@ -3288,7 +3280,7 @@ function setupTodoSkillAndSubagentPanels(): void {
               // the bar's state and shows the compact pointer, not the
               // redundant interactive controls (RC-2 ordering fix).
               if (s.id === stateManager.getState().activeSessionId) {
-                questionBar.repopulateFromMessages(s.id, s.messages as any)
+                questionBar.repopulateFromMessages(s.id, s.messages)
               }
 
               if (shouldRenderHydratedMessages(s.id, msgList, s.messages)) {
@@ -3486,7 +3478,7 @@ function setupTodoSkillAndSubagentPanels(): void {
       ["provider_credential_list", (msg) => {
         const credentials = (msg as Record<string, unknown>).credentials as ProviderCredentialInfo[] | undefined
         if (credentials) {
-          providerCredentials = credentials
+          _providerCredentials = credentials
           renderProviderCredentialList(credentials, (m) => vscode.postMessage(m))
         }
       }],
@@ -4052,7 +4044,6 @@ function setupTodoSkillAndSubagentPanels(): void {
 
           // Auto-open only if this is a NEW subagent id
           const prevKnownIds = knownSubagentIdsBySession.get(sessionId) ?? new Set()
-          const newIds = computeNewSubagentIds(prevKnownIds, [subagent])
           const allIds = new Set([...prevKnownIds, subagent.id])
           knownSubagentIdsBySession.set(sessionId, allIds)
 
@@ -4084,12 +4075,12 @@ function setupTodoSkillAndSubagentPanels(): void {
         requestStateSyncDebounced()
       }],
       ["question_asked", (msg, sid) => {
-        const block = msg.block as any
+        const block = msg.block as Record<string, unknown>
         const messageId = msg.messageId as string || ""
         if (block && block.type === "question") {
           // Pass the envelope sid so a background session's question is never
           // attributed to the tab the user is currently viewing (multi-tab fix).
-          questionBar.addQuestion(block, messageId, sid)
+          questionBar.addQuestion(block as unknown as QuestionBlock, messageId, sid)
         }
       }],
       ["question_acknowledged", (_msg, _sid) => {

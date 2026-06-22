@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 import { SessionManager } from "../../session/SessionManager"
-import { SessionStore } from "../../session/SessionStore"
+import { SessionStore, type OpenCodeSession } from "../../session/SessionStore"
 import { ModelManager } from "../../model/ModelManager"
 import { log } from "../../utils/outputChannel"
 
@@ -210,7 +210,7 @@ export class MessageRouter {
     context.postMessage({ type: "mention_results", items })
   }
 
-  async handleListSessions(sessionStore: any, context: RouteContext, query = ""): Promise<void> {
+  async handleListSessions(sessionStore: SessionStore, context: RouteContext, query = ""): Promise<void> {
     // Return all non-archived sessions so CLI-created sessions from any
     // workspace surface in the unified Session History modal. The webview
     // badges cross-workspace sessions via the separate server_session_list
@@ -225,7 +225,7 @@ export class MessageRouter {
     }
 
     const normalizedQuery = query.trim().toLowerCase()
-    const matchesQuery = (s: any): boolean => {
+    const matchesQuery = (s: OpenCodeSession): boolean => {
       if (!normalizedQuery) return true
       const textFields = [
         s.id,
@@ -249,7 +249,7 @@ export class MessageRouter {
     context.postMessage({
       type: "session_list",
       query: query.trim(),
-      sessions: all.map((s: any) => ({
+      sessions: all.map((s: OpenCodeSession) => ({
         id: s.id,
         cliSessionId: s.cliSessionId,
         title: SessionStore.displayName(s),
