@@ -24,13 +24,20 @@
           "sessionId": "session-refactor",
           "blocks": [
             {
+              "type": "thinking",
+              "content": "The user wants exponential backoff. I need to: 1) Find the current fixed-delay implementation, 2) Replace it with Math.min(base * 2^attempt, cap), 3) Add jitter to prevent thundering herd. Let me start by searching for the retry code.",
+              "tokenCount": 84,
+              "streaming": false
+            },
+            {
               "type": "text",
               "text": "I'll refactor the retry logic to use exponential backoff. Let me first look at the current implementation."
             },
             {
-              "type": "tool",
+              "type": "tool-call",
               "id": "t1",
-              "tool": "rg",
+              "name": "rg",
+              "class": "read",
               "state": "completed",
               "args": { "pattern": "retryDelay|backoff|setTimeout", "path": "src/chat/RetryQueueService.ts" },
               "result": "src/chat/RetryQueueService.ts:42:    const delay = this.config.retryDelayMs || 1000\nsrc/chat/RetryQueueService.ts:58:    setTimeout(() => this.processQueue(), delay)"
@@ -40,11 +47,16 @@
               "text": "Found the current fixed-delay pattern. Now I'll apply the refactored implementation with exponential backoff:"
             },
             {
-              "type": "tool",
+              "type": "tool-call",
               "id": "t2",
-              "tool": "edit",
+              "name": "edit",
+              "class": "write",
               "state": "completed",
-              "args": { "file": "src/chat/RetryQueueService.ts", "description": "Replace fixed delay with exponential backoff" },
+              "args": {
+                "path": "src/chat/RetryQueueService.ts",
+                "oldString": "    const delay = this.config.retryDelayMs || 1000\n    if (attempt >= this.config.maxRetries) {",
+                "newString": "    const baseDelay = this.config.retryDelayMs || 1000\n    const delay = Math.min(baseDelay * Math.pow(2, attempt), 30_000)\n    const jitter = delay * 0.1 * Math.random()\n    if (attempt >= this.config.maxRetries) {"
+              },
               "result": "Applied edit to src/chat/RetryQueueService.ts"
             },
             {

@@ -28,17 +28,19 @@
               "text": "Let me search for the type error in the session converter."
             },
             {
-              "type": "tool",
+              "type": "tool-call",
               "id": "t1",
-              "tool": "rg",
+              "name": "rg",
+              "class": "read",
               "state": "completed",
               "args": { "pattern": "Type.*not assignable|incompatible|Conversion|converter", "path": "src/session/" },
               "result": "src/session/sdkMessageConverter.ts:87: Type 'string | undefined' is not assignable to type 'string'\nsrc/session/sdkMessageConverter.ts:142: Conversion of type 'unknown' to type 'Block' may be a mistake"
             },
             {
-              "type": "tool",
+              "type": "tool-call",
               "id": "t2",
-              "tool": "read",
+              "name": "read",
+              "class": "read",
               "state": "completed",
               "args": { "file": "src/session/sdkMessageConverter.ts", "startLine": 80, "endLine": 150 },
               "result": "Found two type errors at lines 87 and 142"
@@ -48,20 +50,28 @@
               "text": "Found two issues:\n1. Line 87: `sessionName` can be `undefined` but the target type requires `string`\n2. Line 142: Unsafe cast from `unknown` to `Block`\n\nFixing both:"
             },
             {
-              "type": "tool",
+              "type": "tool-call",
               "id": "t3",
-              "tool": "edit",
+              "name": "edit",
+              "class": "write",
               "state": "completed",
-              "args": { "file": "src/session/sdkMessageConverter.ts", "description": "Fix type errors: add fallback for undefined sessionName, add proper type guard for Block cast" },
+              "args": {
+                "path": "src/session/sdkMessageConverter.ts",
+                "oldString": "    const sessionName: string = session.name",
+                "newString": "    const sessionName: string = session.name || \"Untitled\""
+              },
               "result": "Applied edit to src/session/sdkMessageConverter.ts"
             },
             {
-              "type": "tool",
+              "type": "tool-call",
               "id": "t4",
-              "tool": "run",
+              "name": "run",
+              "class": "exec",
               "state": "completed",
               "args": { "command": "npx tsc --noEmit 2>&1 | head -20" },
-              "result": "No errors found. TypeScript compilation succeeded."
+              "result": "No errors found. TypeScript compilation succeeded.",
+              "exitCode": 0,
+              "durationMs": 4200
             },
             {
               "type": "text",

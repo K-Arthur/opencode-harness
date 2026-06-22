@@ -40,8 +40,8 @@
           "sessionId": "session-2",
           "blocks": [
             { "type": "text", "text": "I'll refactor the retry logic to use exponential backoff with jitter." },
-            { "type": "tool", "id": "t1", "tool": "rg", "state": "completed", "args": { "pattern": "retryDelay" }, "result": "Found retryDelay in RetryQueueService.ts:42" },
-            { "type": "tool", "id": "t2", "tool": "edit", "state": "completed", "args": { "file": "src/chat/RetryQueueService.ts" }, "result": "Applied exponential backoff" }
+            { "type": "tool-call", "id": "t1", "name": "rg", "class": "read", "state": "completed", "args": { "pattern": "retryDelay" }, "result": "Found retryDelay in RetryQueueService.ts:42" },
+            { "type": "tool-call", "id": "t2", "name": "edit", "class": "write", "state": "completed", "args": { "path": "src/chat/RetryQueueService.ts", "oldString": "const delay = this.config.retryDelayMs || 1000", "newString": "const delay = Math.min(this.config.retryDelayMs * Math.pow(2, attempt), 30_000)" }, "result": "Applied exponential backoff" }
           ]
         }
       ],

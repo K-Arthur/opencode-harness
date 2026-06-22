@@ -36,9 +36,10 @@
               "text": "I'll add connection-drop error handling to both files. Let me analyze the current error paths first."
             },
             {
-              "type": "tool",
+              "type": "tool-call",
               "id": "t1",
-              "tool": "rg",
+              "name": "rg",
+              "class": "read",
               "state": "completed",
               "args": { "pattern": "catch|error|disconnect|abort", "path": "src/chat/StreamCoordinator.ts" },
               "result": "src/chat/StreamCoordinator.ts:89:    } catch (err) {\nsrc/chat/StreamCoordinator.ts:90:      log.error(\"Stream error:\", err)\nsrc/chat/StreamCoordinator.ts:156:      case \"aborted\":"
@@ -48,19 +49,29 @@
               "text": "I can see the current error handling is minimal — errors are logged but not surfaced to the user. Here's my plan:\n\n1. Add a `ConnectionDropError` class with retry metadata\n2. Wrap stream operations in retry-aware error boundaries\n3. Push `show_error` messages to the webview on terminal failures\n\nLet me implement this:"
             },
             {
-              "type": "tool",
+              "type": "tool-call",
               "id": "t2",
-              "tool": "edit",
+              "name": "edit",
+              "class": "write",
               "state": "completed",
-              "args": { "file": "src/chat/StreamCoordinator.ts", "description": "Add ConnectionDropError and retry wrapper" },
+              "args": {
+                "path": "src/chat/StreamCoordinator.ts",
+                "oldString": "    } catch (err) {\n      log.error(\"Stream error:\", err)\n    }",
+                "newString": "    } catch (err) {\n      if (err instanceof ConnectionDropError && err.attempt < MAX_RETRIES) {\n        await this.scheduleRetry(err.attempt + 1)\n        return\n      }\n      log.error(\"Stream error:\", err)\n      this.surfaceError(err)\n    }"
+              },
               "result": "Applied edit to src/chat/StreamCoordinator.ts"
             },
             {
-              "type": "tool",
+              "type": "tool-call",
               "id": "t3",
-              "tool": "edit",
+              "name": "edit",
+              "class": "write",
               "state": "completed",
-              "args": { "file": "src/chat/MessageRouter.ts", "description": "Route connection errors to webview" },
+              "args": {
+                "path": "src/chat/MessageRouter.ts",
+                "oldString": "  private routeError(err: unknown): void {\n    log.error(err)\n  }",
+                "newString": "  private routeError(err: unknown): void {\n    log.error(err)\n    this.postMessage({ type: \"show_error\", error: toUserMessage(err) })\n  }"
+              },
               "result": "Applied edit to src/chat/MessageRouter.ts"
             },
             {

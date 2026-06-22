@@ -53,8 +53,16 @@ function extractToolNames(data: Record<string, unknown>): string[] {
       const blocks = (m as Record<string, unknown>).blocks
       if (!Array.isArray(blocks)) continue
       for (const b of blocks) {
-        if (b && typeof b === "object" && typeof (b as Record<string, unknown>).tool === "string") {
-          names.push((b as Record<string, unknown>).tool as string)
+        if (b && typeof b === "object") {
+          const block = b as Record<string, unknown>
+          const toolName = typeof block.tool === "string"
+            ? block.tool
+            : typeof block.name === "string"
+              ? block.name
+              : null
+          if (toolName && (block.type === "tool" || block.type === "tool-call" || block.type === "tool_call")) {
+            names.push(toolName)
+          }
         }
       }
     }
