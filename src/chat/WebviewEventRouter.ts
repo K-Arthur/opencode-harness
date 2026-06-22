@@ -33,6 +33,7 @@ import { groupMessagesIntoTurns } from "./webview/turnGrouper"
 import type { SkillPreferencesStoreLike } from "../skills/SkillPreferencesStore"
 import type { VoiceInputService } from "./VoiceInputService"
 import { log } from "../utils/outputChannel"
+import { PtyRouter } from "./routers/PtyRouter"
 import { computeMessageCounts } from "./webview/messageCounter"
 import { rankByFuzzy } from "./webview/fuzzyMatch"
 import { handleWebviewError } from "./utils/errorHandler"
@@ -173,6 +174,8 @@ export class WebviewEventRouter {
   private promptsInFlight = new Set<string>()
   private promptSafetyTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private static readonly PROMPT_SAFETY_TIMEOUT_MS = 30_000
+
+  readonly ptyRouter: PtyRouter
 
   /** H3: Timeout for webview_ready message to prevent unbounded queue growth */
   private readyTimeout?: ReturnType<typeof setTimeout>
@@ -1302,75 +1305,7 @@ export class WebviewEventRouter {
       terminal.show()
       terminal.sendText(command, msg.autorun === true)
     }],
-    // PTY terminal vertical (audit §14.1/§14.2). The host PtyService wraps the
-    // SDK PTY API; output bytes stream back via pty_output messages posted from
-    // the WebSocket onmessage handler established by pty_connect.
-    ["pty_connect", async (msg: Record<string, unknown>) => {
-      const ptyId = typeof msg.ptyId === "string" ? msg.ptyId : ""
-      if (!ptyId) return
-      try {
-        const ticket = await this.opts.sessionManager.ptyService.getConnectToken(ptyId)
-        await this.opts.sessionManager.ptyService.connectWebSocket(
-          ptyId,
-          ticket.ticket,
-          (event) => {
-            const data = typeof event.data === "string"
-              ? event.data
-              : event.data instanceof ArrayBuffer
-                ? new TextDecoder().decode(event.data)
-                : ""
-            if (data) {
-              this.opts.postMessage({ type: "pty_output", ptyId, data })
-            }
-          },
-        )
-        this.opts.postMessage({ type: "pty_connected", ptyId })
-      } catch (err) {
-        log.warn(`pty_connect failed for ${ptyId}: ${err instanceof Error ? err.message : String(err)}`)
-        this.opts.postMessage({ type: "pty_error", ptyId, error: err instanceof Error ? err.message : String(err) })
-      }
-    }],
-    ["pty_cancel", async (msg: Record<string, unknown>) => {
-      const ptyId = typeof msg.ptyId === "string" ? msg.ptyId : ""
-      if (!ptyId) return
-      try {
-        await this.opts.sessionManager.ptyService.removeSession(ptyId)
-        this.opts.postMessage({ type: "pty_cancelled", ptyId })
-      } catch (err) {
-        log.warn(`pty_cancel failed for ${ptyId}: ${err instanceof Error ? err.message : String(err)}`)
-        this.opts.postMessage({ type: "pty_error", ptyId, error: err instanceof Error ? err.message : String(err) })
-      }
-    }],
-    ["pty_send_input", async (msg: Record<string, unknown>) => {
-      const ptyId = typeof msg.ptyId === "string" ? msg.ptyId : ""
-      const data = typeof msg.data === "string" ? msg.data : ""
-      if (!ptyId || !data) return
-      try {
-        await this.opts.sessionManager.ptyService.sendInput(ptyId, data)
-      } catch (err) {
-        log.warn(`pty_send_input failed for ${ptyId}: ${err instanceof Error ? err.message : String(err)}`)
-      }
-    }],
-    ["pty_resize", async (msg: Record<string, unknown>) => {
-      const ptyId = typeof msg.ptyId === "string" ? msg.ptyId : ""
-      const rows = typeof msg.rows === "number" ? msg.rows : 24
-      const cols = typeof msg.cols === "number" ? msg.cols : 80
-      if (!ptyId) return
-      try {
-        await this.opts.sessionManager.ptyService.setTerminalSize(ptyId, rows, cols)
-      } catch (err) {
-        log.warn(`pty_resize failed for ${ptyId}: ${err instanceof Error ? err.message : String(err)}`)
-      }
-    }],
-    ["pty_list", async () => {
-      try {
-        const sessions = await this.opts.sessionManager.ptyService.listSessions()
-        this.opts.postMessage({ type: "pty_sessions", sessions })
-      } catch (err) {
-        log.warn(`pty_list failed: ${err instanceof Error ? err.message : String(err)}`)
-        this.opts.postMessage({ type: "pty_sessions", sessions: [] })
-      }
-    }],
+    // PTY terminal handlers are registered in the constructor via PtyRouter
     ["copy_text", async (msg: Record<string, unknown>) => {
       const text = typeof msg.text === "string" ? msg.text : ""
       if (!text.trim()) return
@@ -2301,7 +2236,15 @@ export class WebviewEventRouter {
 
   pendingOpenSessionId?: string
 
-  constructor(private opts: WebviewEventRouterOptions) {}
+  constructor(private opts: WebviewEventRouterOptions) {
+    this.ptyRouter = new PtyRouter({
+      sessionManager: opts.sessionManager,
+      postMessage: opts.postMessage,
+    })
+    for (const [key, handler] of this.ptyRouter.getHandlers()) {
+      this.webviewHandlers.set(key, handler as (msg: Record<string, unknown>, sessionId?: string) => void | Promise<void>)
+    }
+  }
 
   /**
    * Initialize the router: restore host queue state and wire queue drain callback.

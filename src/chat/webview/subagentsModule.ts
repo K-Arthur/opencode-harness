@@ -18,8 +18,6 @@ export interface SubagentsModuleDeps {
   els: {
     subagentsBadge?: HTMLElement | null
     subagentsToggleBtn: HTMLElement
-    subagentDetailView: HTMLElement
-    subagentDetailBackBtn: HTMLElement
   }
   vscode: { postMessage: (msg: Record<string, unknown>) => void }
 }
@@ -31,8 +29,9 @@ export function createSubagentsModule(deps: SubagentsModuleDeps) {
   let subagentDetailInvoker: HTMLElement | null = null
   let _panelApi: SubagentsModuleDeps["subagentPanelApi"] = deps.subagentPanelApi
 
-  const isLiveSubagent = (activity: SubagentActivity): boolean =>
-    activity.status === "running" || activity.status === "pending"
+  function isLiveSubagent(activity: SubagentActivity): boolean {
+    return activity.status === "running" || activity.status === "pending"
+  }
 
   function normalizeSubagentStatus(status: string): SubagentActivity["status"] {
     switch (status) {

@@ -58,7 +58,7 @@ export function createTodosModule(deps: TodosModuleDeps) {
       if (activeSid === sessionId && !panelIsOpen && !dismissed && !alreadyOpened) {
         _panelApi.open()
         todosAutoOpenedForSession.add(sessionId)
-        const btn = (globalThis as any).document?.getElementById?.("todos-toggle-btn") as HTMLElement | undefined
+        const btn = deps.els.todosToggleBtn
         if (btn) btn.setAttribute("aria-pressed", "true")
         webviewLog(`[main] todos panel auto-opened for session ${sessionId} (${merged.length} items)`)
       }
