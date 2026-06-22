@@ -77,7 +77,7 @@ describe("ModelManager.ts", () => {
   })
 
   it("preserves model fields when spreading from object-map models", () => {
-    assert.ok(source.includes("...model"), "must spread model object to preserve variants and other fields")
+    assert.ok(source.includes("...m"), "must spread model object to preserve variants and other fields")
   })
 
   it("persists recent models to globalState", () => {

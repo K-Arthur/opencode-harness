@@ -451,15 +451,15 @@ export class ModelManager {
           })
           if (ctx === undefined) unresolvedContextWindowCount++
 
-          const variants = m.variants
-          const variantNames = variants && typeof variants === "object"
-            ? Object.keys(variants).filter(k => {
-                const v = variants[k]
+          const variantNames = m.variants && typeof m.variants === "object"
+            ? Object.keys(m.variants).filter(k => {
+                const v = m.variants![k]
                 return v && typeof v === "object" && v.disabled !== true
               })
             : undefined
 
           models.push({
+            ...m,
             id: m.id,
             provider: p.id,
             displayName: m.name || m.id,
