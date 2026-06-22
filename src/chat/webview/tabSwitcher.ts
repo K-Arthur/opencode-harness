@@ -236,7 +236,7 @@ export function switchTabImpl(deps: TabSwitcherDeps, tabId: string, notifyHost =
   // in `state.items`, which is empty for never-visited tabs. Then
   // setActiveSession filters the rendered set to the active session.
   const switchedMessages = stateManager.getSession(tabId)?.messages ?? []
-  questionBar.repopulateFromMessages(tabId, switchedMessages as Array<{ id: string; timestamp?: number; blocks: Array<{ type: string; toolCallId?: string; id?: string; requestID?: string; answered?: boolean; groups?: unknown[] }> }>)
+  questionBar.repopulateFromMessages(tabId, switchedMessages)
   questionBar.setActiveSession(tabId)
   // Reconcile bar: clean stale answered items and restore any missing
   // from the active session that fell out of the DOM.

@@ -63,7 +63,7 @@ describe("question bar — session attribution (multi-tab)", () => {
   it("attributes a repopulated block with no sessionId to the session being repopulated, not the still-active previous tab", () => {
     setActiveSession("A")
     const messages = [{ id: "mB", blocks: [{ type: "question", toolCallId: "qNoSid", answered: true, groups: [{ question: "Pick", options: ["A", "B"], multiSelect: false }] }] }]
-    repopulateFromMessages("B", messages as any)
+    repopulateFromMessages("B", messages)
     
     assert.ok(document.querySelector('[data-question-id="qNoSid"]'), "shows on session B, which repopulateFromMessages just made active")
 
