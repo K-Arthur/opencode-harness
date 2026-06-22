@@ -5,6 +5,22 @@ import { resolveContextWindow, resolveModelOutputLimit } from "./contextWindowRe
 import { fetchOpenRouterModels, isCacheFresh as isOpenRouterCacheFresh } from "./openRouterMetadata"
 import { fetchModelsDevModels, isCacheFresh as isModelsDevCacheFresh, type ModelsDevEntry } from "./modelsDevMetadata"
 
+interface ServerProvider {
+  id: string
+  models: unknown[] | Record<string, unknown>
+}
+
+interface ServerModel {
+  id: string
+  name?: string
+  reasoning?: boolean
+  capabilities?: { reasoning?: boolean }
+  limit?: { context?: number; output?: number }
+  variants?: Record<string, { disabled?: boolean }>
+  available?: boolean
+  unavailableReason?: string
+}
+
 export interface ModelInfo {
   id: string
   provider: string
@@ -393,7 +409,7 @@ export class ModelManager {
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
 
       const text = await resp.text()
-      let data: any
+      let data: unknown
       try {
         data = JSON.parse(text)
       } catch (err) {
@@ -401,28 +417,32 @@ export class ModelManager {
       }
 
       const models: ModelInfo[] = []
-      const providersRaw = Array.isArray(data) ? data : data?.providers
+      const providersRaw = Array.isArray(data) ? data : (data as Record<string, unknown>)?.providers
       if (!Array.isArray(providersRaw)) {
         throw new Error(`Unexpected server response shape: expected array or { providers: [...] }, got ${typeof data}`)
       }
       const providers = providersRaw
       let unresolvedContextWindowCount = 0
       for (const provider of providers) {
-        if (!provider || typeof provider !== 'object' || !provider.id) continue
-        const providerModels = Array.isArray(provider.models)
-          ? provider.models
-          : Object.entries(provider.models || {}).map(([id, model]: [string, any]) => ({
-              ...model,
-              id: model.id || id,
-              name: model.name,
-              reasoning: model.capabilities?.reasoning === true || model.reasoning === true,
-            }))
+        if (!provider || typeof provider !== 'object' || !(provider as ServerProvider).id) continue
+        const p = provider as ServerProvider
+        const providerModels = (Array.isArray(p.models)
+          ? p.models
+          : Object.entries(p.models || {}).map(([id, model]) => {
+              const m = model as Record<string, unknown>
+              return {
+                ...m,
+                id: (m.id as string) || id,
+                name: m.name,
+                reasoning: (m.capabilities as { reasoning?: boolean })?.reasoning === true || m.reasoning === true,
+              }
+            })) as ServerModel[]
 
         for (const m of providerModels) {
           const reasoning = m.reasoning === true || 
                             (m.name && (m.name.includes("Thinking") || m.name.includes("Reasoning") || m.name.includes("O1"))) ||
                             (m.id && (m.id.includes("thinking") || m.id.includes("reasoning") || m.id.includes("o1")))
-          const modelKey = `${provider.id}/${m.id}`
+          const modelKey = `${p.id}/${m.id}`
           
           const ctx = resolveContextWindow(modelKey, m.limit?.context, {
             log: (msg) => log.debug(msg),
@@ -431,16 +451,17 @@ export class ModelManager {
           })
           if (ctx === undefined) unresolvedContextWindowCount++
 
-          const variantNames = m.variants && typeof m.variants === "object"
-            ? Object.keys(m.variants).filter(k => {
-                const v = m.variants[k]
+          const variants = m.variants
+          const variantNames = variants && typeof variants === "object"
+            ? Object.keys(variants).filter(k => {
+                const v = variants[k]
                 return v && typeof v === "object" && v.disabled !== true
               })
             : undefined
 
           models.push({
             id: m.id,
-            provider: provider.id,
+            provider: p.id,
             displayName: m.name || m.id,
             contextWindow: ctx,
             outputLimit: m.limit?.output || undefined,

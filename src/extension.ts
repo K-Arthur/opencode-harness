@@ -193,7 +193,7 @@ export async function activate(context: vscode.ExtensionContext) {
     const connectionStatus = initConnectionStatusBar(context, sessionManager, sessionStore, modelManager)
 
     // Methodology system — orchestrator + outcome tracker + status bar
-    const methStatus = initMethodology(context)
+    initMethodology(context)
 
     // Server start is deferred to first engagement (see ensureServerReady wired to
     // the chat view below) so windows where OpenCode is never opened don't spawn a
@@ -355,7 +355,7 @@ function initContextEngine(context: vscode.ExtensionContext): ContextEngine {
   return engine
 }
 
-function initModelManager(context: vscode.ExtensionContext, sessionManager: SessionManager): ModelManager {
+function initModelManager(context: vscode.ExtensionContext, _sessionManager: SessionManager): ModelManager {
   const manager = new ModelManager()
   manager.setGlobalState(context.globalState)
   context.subscriptions.push(manager)

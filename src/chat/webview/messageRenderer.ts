@@ -1,4 +1,4 @@
-import type { Block, ChatMessage, ToolCollapseConfig } from "./types"
+import type { ChatMessage } from "./types"
 import {
   isToolCallBlock,
   renderBlock,

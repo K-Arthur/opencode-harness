@@ -1,4 +1,4 @@
-import type { ToolCallBlock } from "./types"
+import type { ToolCallBlock, VsCodeApi } from "./types"
 import { escapeHtml } from "./htmlUtils"
 import { truncateMiddle } from "./stringUtils"
 import { isTerminalState } from "./toolState"
@@ -42,7 +42,7 @@ export function renderFileEditCard(
   const postMessage =
     opts.postMessage ??
     (typeof window !== "undefined"
-      ? (window as any).vscode?.postMessage?.bind((window as any).vscode)
+      ? (window as unknown as { vscode?: VsCodeApi }).vscode?.postMessage?.bind((window as unknown as { vscode?: VsCodeApi }).vscode)
       : undefined)
 
   const wrapper = document.createElement("div")

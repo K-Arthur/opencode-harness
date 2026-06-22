@@ -1541,11 +1541,8 @@ body.chat-rtl #prompt-input {
 }
 
 /* ─── MESSAGES CONTAINER ─── */
-
-.messages-container {
-  /* scroll-behavior: smooth removed — causes scroll jitter during streaming.
-     Smooth scroll is applied explicitly on user-initiated actions only. */
-}
+/* scroll-behavior: smooth removed — causes scroll jitter during streaming.
+   Smooth scroll is applied explicitly on user-initiated actions only. */
 
 /* ─── MODEL DROPDOWN PANEL ─── */
 
