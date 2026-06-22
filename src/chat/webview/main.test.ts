@@ -518,8 +518,8 @@ it("unified modal: server session items send resume_server_session on click", ()
       "main.ts must keep todos in a Map<sid, Todo[]> — not a single `currentTodosList`")
     assert.ok(!source.includes("let currentTodosList"),
       "the legacy `currentTodosList` global must be gone (it was the C1 cross-tab leak source)")
-    assert.ok(source.includes("getServerTodos("),
-      "triggerTodosRender must read through getServerTodos(sid)")
+    assert.ok(source.includes("todosApi.triggerTodosRender"),
+      "triggerTodosRender must delegate to the todos module so it reads per-session server todos")
   })
 
   it("closeTab cleans up per-session server todos", () => {
