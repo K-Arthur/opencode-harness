@@ -192,13 +192,17 @@ void describe("subagent UI reliability — wiring", () => {
 
   void describe("F. user-dismissal respected", () => {
     const main = src("chat", "webview", "main.ts")
-    void it("declares subagentDismissedBySession set", () => {
-      assert.ok(/subagentDismissedBySession\s*=\s*new\s+Set<string>/.test(main), "must declare the dismissed set")
+    const subagentsMod = src("chat", "webview", "subagentsModule.ts")
+    void it("declares subagentDismissedBySession set in subagentsModule", () => {
+      assert.ok(/subagentDismissedBySession\s*=\s*new\s+Set<string>/.test(subagentsMod), "must declare the dismissed set")
+    })
+    void it("main.ts delegates subagentDismissedBySession to module", () => {
+      assert.ok(/subagentDismissedBySession\s*=\s*subagentsApi\.subagentDismissedBySession/.test(main), "main.ts must delegate to subagentsModule")
     })
     void it("setSubagentPanelOpen tracks explicit close", () => {
-      const fnIdx = main.indexOf("function setSubagentPanelOpen")
-      const fnEnd = main.indexOf("\n  function ", fnIdx + 5)
-      const fn = main.slice(fnIdx, fnEnd === -1 ? undefined : fnEnd)
+      const fnIdx = subagentsMod.indexOf("function setSubagentPanelOpen")
+      const fnEnd = subagentsMod.indexOf("\n  function ", fnIdx + 5)
+      const fn = subagentsMod.slice(fnIdx, fnEnd === -1 ? undefined : fnEnd)
       assert.ok(fn.includes("subagentDismissedBySession.add"), "close must add to dismissed set")
       assert.ok(fn.includes("subagentDismissedBySession.delete"), "open must remove from dismissed set")
     })

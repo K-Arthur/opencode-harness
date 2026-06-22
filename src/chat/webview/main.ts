@@ -88,6 +88,8 @@ import { setToolOutputRenderAnsi } from "./ansiUtils"
 import { normalizeSessionMode } from "../modePolicy"
 import type { VoiceInputSettings } from "../voiceInputCore"
 import { TimestampUpdater } from "./timestampUpdater"
+import { createTodosModule } from "./todosModule"
+import { createSubagentsModule } from "./subagentsModule"
 
 declare const acquireVsCodeApi: (() => {
   postMessage(message: Record<string, unknown>): void
@@ -170,6 +172,19 @@ function getVsCodeApi() {
   const stateManager = createState(vscode)
   _stateManagerRef = stateManager
   const els = getElementRefs()
+
+  // Extracted modules
+  const todosApi = createTodosModule({
+    els,
+    stateManager,
+    todosPanelApi: null,
+  })
+  const subagentsApi = createSubagentsModule({
+    stateManager,
+    subagentPanelApi: undefined,
+    els,
+    vscode,
+  })
   els.promptInput.dataset.testid = els.promptInput.dataset.testid || "prompt-input"
   els.sendBtn.dataset.testid = els.sendBtn.dataset.testid || "send-button"
 
@@ -183,56 +198,20 @@ function getVsCodeApi() {
   let terminalPanelApi: ReturnType<typeof setupTerminalPanel> | undefined
   let voiceInputApi: ReturnType<typeof setupVoiceInput> | undefined
   let hasQuotaState = false
-  // Per-session server-side todos. Single source of truth keyed by sessionId
-  // so a background tab's todos.updated event cannot poison the active tab.
-  const serverTodosBySession = new Map<string, Todo[]>()
-  // Tracks whether the user has manually closed the todos panel for a given
-  // session. Once dismissed, that session won't auto-open on subsequent
-  // todo deliveries — the user must re-open it explicitly.
-  const todosDismissedBySession = new Set<string>()
-  // Tracks whether we've already auto-opened for a session, to avoid re-opening
-  // after the user closes the panel.
-  const todosAutoOpenedForSession = new Set<string>()
+  // Per-session server-side todos delegated to todosModule
+  const serverTodosBySession = todosApi.serverTodosBySession
+  const todosDismissedBySession = todosApi.todosDismissedBySession
+  const todosAutoOpenedForSession = todosApi.todosAutoOpenedForSession
 
-  function getServerTodos(sessionId: string): Todo[] {
-    return serverTodosBySession.get(sessionId) ?? []
-  }
-
-  function setServerTodos(sessionId: string, todos: Todo[]): void {
-    serverTodosBySession.set(sessionId, todos)
-  }
-
-  function getMergedTodos(sessionId: string, serverTodos: Todo[]): Todo[] {
-    const session = stateManager.getSession(sessionId)
-    return mergeTodos(session, serverTodos)
-  }
-
-  function triggerTodosRender(sessionId: string, options?: { autoOpen?: boolean }) {
-    if (!todosPanelApi) return
-    const merged = getMergedTodos(sessionId, getServerTodos(sessionId))
-    todosPanelApi.renderTodos(merged, false, sessionId)
-
-    // Auto-open: only on first non-empty delivery for an active session,
-    // and only if the user hasn't already dismissed the panel for this session.
-    if (options?.autoOpen && merged.length > 0) {
-      const activeSid = stateManager.getState().activeSessionId
-      const panelIsOpen = todosPanelApi?.isOpen()
-      const dismissed = todosDismissedBySession.has(sessionId)
-      const alreadyOpened = todosAutoOpenedForSession.has(sessionId)
-      if (
-        activeSid === sessionId &&
-        !panelIsOpen &&
-        !dismissed &&
-        !alreadyOpened
-      ) {
-        todosPanelApi?.open()
-        todosAutoOpenedForSession.add(sessionId)
-        const btn = (globalThis as any).document?.getElementById?.("todos-toggle-btn") as HTMLElement | undefined
-        if (btn) btn.setAttribute("aria-pressed", "true")
-        webviewLog(`[main] todos panel auto-opened for session ${sessionId} (${merged.length} items)`)
-      }
-    }
-  }
+  function getServerTodos(sessionId: string): Todo[] { return todosApi.getServerTodos(sessionId) }
+  function setServerTodos(sessionId: string, todos: Todo[]): void { todosApi.setServerTodos(sessionId, todos) }
+  function getMergedTodos(sessionId: string, serverTodos: Todo[]): Todo[] { return todosApi.getMergedTodos(sessionId, serverTodos) }
+  function triggerTodosRender(sessionId: string, options?: { autoOpen?: boolean }) { todosApi.triggerTodosRender(sessionId, options) }
+  function isUserTodoId(todoId: string): boolean { return todosApi.isUserTodoId(todoId) }
+  function toggleTodo(todoOrId: string | Todo): void { todosApi.toggleTodo(todoOrId) }
+  function deleteTodo(todoId: string): void { todosApi.deleteTodo(todoId) }
+  function addUserTodo(content: string): void { todosApi.addUserTodo(content) }
+  function editUserTodo(todoId: string, newContent: string): void { todosApi.editUserTodo(todoId, newContent) }
 
   function refreshActivityAndTasks(sessionId?: string): void {
     activityPanelApi?.refresh(sessionId)
@@ -267,143 +246,17 @@ function getVsCodeApi() {
     })
   }
 
-  // Maps a server-reported subagent status string to a SubagentActivity status.
-  // Unknown/non-canonical values are coerced to "unknown" (NOT "pending") so they
-  // are NOT treated as live by isLiveSubagent. This prevents subagents from
-  // appearing to be running forever when the server sends a status string the
-  // webview doesn't recognize (e.g. a new status type from a future opencode
-  // version). The reconciler will then mark them as completed when the server
-  // drops them from the snapshot. See subagentReconciler.ts.
-  function normalizeSubagentStatus(status: string): SubagentActivity["status"] {
-    switch (status) {
-      case "queued":
-      case "waiting":
-      case "running":
-      case "completed":
-      case "failed":
-      case "cancelled":
-      case "pending":
-      case "unknown":
-        return status
-      default:
-        return "unknown"
-    }
-  }
-
-  function isLiveSubagent(activity: SubagentActivity): boolean {
-    return activity.status === "running" || activity.status === "pending"
-  }
-
-  /**
-   * Map a SubagentRunStatus (from RunActivityTracker snapshot) to the generic
-   * tool-state name applySubagentCardUpdate understands. The card's own
-   * `statusFromUpdate` then maps it to the final SubagentCardStatus.
-   * Keeps inline-card liveness aligned with the panel's tracker view.
-   */
-  function mapSubagentRunStatusToCardState(status: string | undefined): string | undefined {
-    switch (status) {
-      case "queued":
-      case "waiting":
-      case "unknown":
-        return "pending"
-      case "running":
-        return "running"
-      case "completed":
-        return "completed"
-      case "failed":
-        return "error"
-      case "cancelled":
-        return "error"
-      default:
-        return status
-    }
-  }
-
-  function getSubagentActivities(sessionId?: string): SubagentActivity[] {
-    const session = sessionId ? stateManager.getSession(sessionId) : stateManager.getActiveSession() ?? undefined
-    return session?.subagentActivities ?? []
-  }
-
-  function updateSubagentBadge(activeCount: number): void {
-    const badge = els.subagentsBadge
-    if (!badge) return
-    if (activeCount > 0) {
-      badge.textContent = String(activeCount)
-      badge.classList.remove("hidden")
-      els.subagentsToggleBtn.setAttribute("aria-label", `Toggle subagent panel (${activeCount} running)`)
-    } else {
-      badge.classList.add("hidden")
-      els.subagentsToggleBtn.setAttribute("aria-label", "Toggle subagent panel")
-    }
-  }
-
-  function refreshSubagentPanel(sessionId?: string): void {
-    const activities = getSubagentActivities(sessionId)
-    subagentPanelApi?.renderActivities(activities)
-    updateSubagentBadge(activities.filter(isLiveSubagent).length)
-  }
-
-  function setSubagentPanelOpen(open: boolean): void {
-    if (open) {
-      subagentPanelApi?.open()
-      // Opening (whether by user click or by oc:open-subagent-panel) clears
-      // the dismissed flag so future run_activity_updates can re-auto-open
-      // if the user closes it again.
-      const sid = stateManager.getState().activeSessionId
-      if (sid) subagentDismissedBySession.delete(sid)
-    } else {
-      subagentPanelApi?.close()
-      // Track explicit dismissal so the auto-open in run_activity_update
-      // doesn't keep re-opening the panel during this run.
-      const sid = stateManager.getState().activeSessionId
-      if (sid) subagentDismissedBySession.add(sid)
-    }
-    els.subagentsToggleBtn.setAttribute("aria-pressed", String(open))
-  }
-
-  function requestSubagentActivities(sessionId?: string): void {
-    const sid = sessionId ?? stateManager.getState().activeSessionId ?? undefined
-    if (sid) {
-      vscode.postMessage({ type: "get_subagent_activities", sessionId: sid })
-    }
-  }
-
-  function mergeSubagentActivities(sessionId: string, incoming: SubagentActivity[]): SubagentActivity[] {
-    const session = stateManager.getSession(sessionId)
-    if (!session) return []
-    const merged = new Map<string, SubagentActivity>()
-    for (const existing of session.subagentActivities ?? []) {
-      merged.set(existing.id, existing)
-    }
-    for (const activity of incoming) {
-      merged.set(activity.id, { ...merged.get(activity.id), ...activity })
-    }
-    const activities = [...merged.values()]
-    stateManager.setSubagentActivities(sessionId, activities)
-    if (sessionId === stateManager.getState().activeSessionId) {
-      subagentPanelApi?.renderActivities(activities)
-      updateSubagentBadge(activities.filter(isLiveSubagent).length)
-    }
-    return activities
-  }
-
-  function runSubagentsToActivities(activity: RunActivitySnapshot): SubagentActivity[] {
-    return (activity.subagents ?? []).map((subagent): SubagentActivity => {
-      const rawStatus = typeof subagent.status === "string" ? subagent.status : "unknown"
-      const status = normalizeSubagentStatus(rawStatus)
-      return {
-        id: subagent.childSessionId || subagent.id,
-        sessionId: subagent.childSessionId,
-        parentSessionId: activity.cliSessionId || activity.tabId,
-        name: subagent.agentName || "subagent",
-        status,
-        currentActivity: subagent.currentActivity,
-        isLive: rawStatus === "queued" || rawStatus === "running" || rawStatus === "waiting" || rawStatus === "unknown",
-        unreadActivityCount: subagent.unreadActivityCount ?? 0,
-        error: subagent.error,
-      }
-    })
-  }
+  function normalizeSubagentStatus(status: string): SubagentActivity["status"] { return subagentsApi.normalizeSubagentStatus(status) }
+  function isLiveSubagent(activity: SubagentActivity): boolean { return subagentsApi.isLiveSubagent(activity) }
+  function mapSubagentRunStatusToCardState(status: string | undefined): string | undefined { return subagentsApi.mapSubagentRunStatusToCardState(status) }
+  function getSubagentActivities(sessionId?: string): SubagentActivity[] { return subagentsApi.getSubagentActivities(sessionId) }
+  function updateSubagentBadge(activeCount: number): void { subagentsApi.updateSubagentBadge(activeCount) }
+  function refreshSubagentPanel(sessionId?: string): void { subagentsApi.refreshSubagentPanel(sessionId) }
+  function setSubagentPanelOpen(open: boolean): void { subagentsApi.setSubagentPanelOpen(open) }
+  function requestSubagentActivities(sessionId?: string): void { subagentsApi.requestSubagentActivities(sessionId) }
+  function mergeSubagentActivities(sessionId: string, incoming: SubagentActivity[]): SubagentActivity[] { return subagentsApi.mergeSubagentActivities(sessionId, incoming) }
+  function runSubagentsToActivities(activity: RunActivitySnapshot): SubagentActivity[] { return subagentsApi.runSubagentsToActivities(activity) }
+  function restoreSubagentDetailFocus(): void { subagentsApi.restoreSubagentDetailFocus() }
 
   // These hold late-bound panel APIs whose handlers receive loosely-typed
   // webview message payloads (msg.skills/activities are unknown); typing them
@@ -413,33 +266,8 @@ function getVsCodeApi() {
   let skillsModalApi: any = null
   let subagentPanelApi: SubagentPanelApi | undefined
   let subagentDetailViewApi: SubagentDetailViewApi | undefined
-  /**
-   * Sessions where the user has explicitly closed the subagent panel.
-   * `run_activity_update` will skip the auto-open for these sessions until
-   * the user re-opens it (or until the next run starts and clears it).
-   */
-  const subagentDismissedBySession = new Set<string>()
-  const knownSubagentIdsBySession = new Map<string, Set<string>>()
-
-  // Tracks the most recently *interacted-with* subagent id, so the "Open in
-  // editor" button in the detail view knows which subagent to pop out. We
-  // intentionally track interaction rather than "the only one in the panel"
-  // because the panel can show multiple subagents at once. Updated on
-  // - onOpenDetail (the user clicks a panel item)
-  // - subagent_update (a live update arrives while the detail view is open)
-  // Cleared when the detail view closes.
-  let activeSubagentId: string | null = null
-  // The subagent card (or other control) that opened the detail view, so focus
-  // can return to it on Back/Close instead of being dropped on <body> (WCAG 2.4.3).
-  let subagentDetailInvoker: HTMLElement | null = null
-
-  function restoreSubagentDetailFocus(): void {
-    const invoker = subagentDetailInvoker
-    subagentDetailInvoker = null
-    if (invoker && invoker.isConnected && typeof invoker.focus === "function") {
-      invoker.focus({ preventScroll: true })
-    }
-  }
+  const subagentDismissedBySession = subagentsApi.subagentDismissedBySession
+  const knownSubagentIdsBySession = subagentsApi.knownSubagentIdsBySession
 
   const modelDropdown = setupModelDropdown(els, {
     onOpen: () => {
@@ -1262,98 +1090,23 @@ function setupTodoSkillAndSubagentPanels(): void {
       restoreSubagentDetailFocus,
       isLiveSubagent,
       updateSubagentBadge,
-      getActiveSubagentId: () => activeSubagentId,
-      setActiveSubagentId: (id) => { activeSubagentId = id },
-      setSubagentDetailInvoker: (el) => { subagentDetailInvoker = el },
+      getActiveSubagentId: () => subagentsApi.getActiveSubagentId(),
+      setActiveSubagentId: (id) => { subagentsApi.setActiveSubagentId(id) },
+      setSubagentDetailInvoker: (el) => { subagentsApi.setSubagentDetailInvoker(el) },
     })
     todosPanelApi = apis.todosPanelApi
+    if (todosPanelApi) {
+      todosApi.setPanelApi(todosPanelApi)
+    }
     activityPanelApi = apis.activityPanelApi
     tasksPanelApi = apis.tasksPanelApi
     terminalPanelApi = apis.terminalPanelApi
     skillsModalApi = apis.skillsModalApi
     subagentDetailViewApi = apis.subagentDetailViewApi
     subagentPanelApi = apis.subagentPanelApi
-  }
-
-  function isUserTodoId(todoId: string): boolean {
-    return todoId.startsWith("todo-")
-  }
-
-  function toggleTodo(todoOrId: string | Todo): void {
-    const todoId = typeof todoOrId === "string" ? todoOrId : todoOrId.id
-    if (!isUserTodoId(todoId)) return
-    const activeSid = stateManager.getState().activeSessionId
-    if (!activeSid) return
-    const session = stateManager.getSession(activeSid)
-    if (!session) return
-    const todo = session.userTodos?.find(t => t.id === todoId)
-    if (!todo) return
-    todo.status = todo.status === "completed" ? "pending" : "completed"
-    stateManager.save()
-    triggerTodosRender(activeSid)
-  }
-
-  function deleteTodo(todoId: string): void {
-    if (!isUserTodoId(todoId)) return
-    const activeSid = stateManager.getState().activeSessionId
-    if (!activeSid) return
-    const session = stateManager.getSession(activeSid)
-    if (!session) return
-    session.userTodos = session.userTodos?.filter(t => t.id !== todoId) || []
-    stateManager.save()
-    triggerTodosRender(activeSid)
-  }
-
-  function addUserTodo(content: string): void {
-    const activeSid = stateManager.getState().activeSessionId
-    if (!activeSid) return
-    const session = stateManager.getSession(activeSid)
-    if (!session) return
-
-    const normalized = content.trim().normalize("NFC")
-    if (!normalized) return
-    if (normalized.length > 500) {
-      console.warn("Todo content exceeds 500 character limit")
-      return
+    if (subagentPanelApi) {
+      subagentsApi.setPanelApi(subagentPanelApi)
     }
-
-    session.userTodos ??= []
-    const dupKey = normalized.toLowerCase()
-    const exists = session.userTodos.some(
-      t => t.content.trim().normalize("NFC").toLowerCase() === dupKey
-    )
-    if (exists) {
-      console.warn("Duplicate todo ignored")
-      return
-    }
-
-    const id = generateTodoId()
-    session.userTodos.push({
-      id,
-      content: normalized,
-      status: "pending",
-      createdAt: Date.now()
-    })
-    stateManager.save()
-    triggerTodosRender(activeSid)
-  }
-
-  function editUserTodo(todoId: string, newContent: string): void {
-    const activeSid = stateManager.getState().activeSessionId
-    if (!activeSid) return
-    const session = stateManager.getSession(activeSid)
-    if (!session) return
-
-    const normalized = newContent.trim().normalize("NFC")
-    if (!normalized || normalized.length > 500) return
-
-    const todo = session.userTodos?.find(t => t.id === todoId)
-    if (!todo) return
-
-    todo.content = normalized
-    webviewLog(`[todos] edited user todo ${todoId}`)
-    stateManager.save()
-    triggerTodosRender(activeSid)
   }
 
   function setupChangedFilesFeature(): void {
@@ -4315,7 +4068,7 @@ function setupTodoSkillAndSubagentPanels(): void {
           const normalized = subagent.id.startsWith("subagent:")
             ? subagent.id.slice("subagent:".length)
             : subagent.id
-          activeSubagentId = normalized
+          subagentsApi.setActiveSubagentId(normalized)
         }
         if (subagentDetailViewApi && msg.subagent) {
           const subagent = msg.subagent as Record<string, unknown>
