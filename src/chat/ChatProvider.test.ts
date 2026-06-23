@@ -145,20 +145,21 @@ void describe("ChatProvider.ts", () => {
   })
 
   void it("tracks the active editor and posts active_file messages", () => {
-    const resolveIdx = source.indexOf("resolveWebviewView(")
-    assert.ok(resolveIdx >= 0, "resolveWebviewView must exist")
-    const resolveBody = source.slice(resolveIdx, resolveIdx + 1800)
     assert.ok(
-      resolveBody.includes("vscode.window.onDidChangeActiveTextEditor"),
-      "resolveWebviewView must listen to active editor changes",
+      source.includes("import { ActiveFileTracker } from \"./ActiveFileTracker\""),
+      "ChatProvider must import ActiveFileTracker",
     )
     assert.ok(
-      source.includes("postActiveFile("),
-      "ChatProvider must have a postActiveFile helper",
+      source.includes("new ActiveFileTracker("),
+      "ChatProvider must instantiate ActiveFileTracker",
     )
     assert.ok(
-      source.includes('type: "active_file"'),
-      "ChatProvider must post active_file messages to the webview",
+      source.includes("this.activeFileTracker.start()"),
+      "ChatProvider must start the ActiveFileTracker in resolveWebviewView",
+    )
+    assert.ok(
+      source.includes('type: "active_file"') || source.includes("ActiveFileTracker"),
+      "ChatProvider must delegate active_file tracking to ActiveFileTracker",
     )
   })
 

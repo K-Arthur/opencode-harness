@@ -275,6 +275,16 @@ function validateOptionalEnabled(msg: Record<string, unknown>, msgType: string, 
   return true
 }
 
+function validateToggleActiveFile(msg: Record<string, unknown>, msgType: string, deps: WebviewMessageValidatorDeps): boolean {
+  if (!requiredStringValidator("sessionId", (type) => `Invalid sessionId in ${type}`)(msg, msgType, deps)) {
+    return false
+  }
+  if (typeof msg.include !== "boolean") {
+    return reject(deps, "Invalid include flag in toggle_active_file")
+  }
+  return true
+}
+
 function validatePinSession(msg: Record<string, unknown>, msgType: string, deps: WebviewMessageValidatorDeps): boolean {
   if (!requiredStringValidator("targetSessionId", (type) => `Invalid targetSessionId in ${type}`)(msg, msgType, deps)) {
     return false
@@ -422,6 +432,7 @@ const WEBVIEW_MESSAGE_VALIDATORS: Record<string, MessageValidator> = {
   voice_start: validateVoiceRequest,
   voice_stop: validateVoiceRequest,
   voice_cancel: validateVoiceRequest,
+  toggle_active_file: validateToggleActiveFile,
 }
 
 const _unvalidatedTypeWarnings = new Set<string>()

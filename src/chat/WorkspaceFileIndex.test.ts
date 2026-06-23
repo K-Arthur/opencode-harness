@@ -130,4 +130,56 @@ describe("WorkspaceFileIndex", () => {
     assert.equal(index.asRelativePath(fakeWorkspaceFsPath(join(root, "src", "a.ts"))), "src/a.ts")
     assert.equal(index.asRelativePath(fakeWorkspaceFsPath("/tmp/other.ts")), null)
   })
+
+  it("asRelativePath handles Windows-style backslash separators", () => {
+    const winRoot = "C:\\workspace"
+    const deps = {
+      vscode: {
+        workspace: {
+          workspaceFolders: [{ uri: { fsPath: winRoot } as vscode.Uri }],
+          findFiles: async () => [],
+          asRelativePath: (uri: vscode.Uri) => uri.fsPath,
+          onDidCreateFiles: () => ({ dispose: () => {} }),
+          onDidDeleteFiles: () => ({ dispose: () => {} }),
+          onDidRenameFiles: () => ({ dispose: () => {} }),
+        },
+      } as unknown as typeof vscode,
+      postMessage: () => {},
+    }
+    index = new WorkspaceFileIndex(deps)
+    assert.equal(index.asRelativePath({ fsPath: "C:\\workspace\\src\\a.ts" } as vscode.Uri), "src\\a.ts")
+    assert.equal(index.asRelativePath({ fsPath: "C:\\other\\a.ts" } as vscode.Uri), null)
+  })
+
+  it("pushes workspace_files to webview after file watcher fires", async () => {
+    let createHandler: (() => void) | null = null
+    const deps = {
+      vscode: {
+        workspace: {
+          workspaceFolders: [{ uri: fakeWorkspaceFsPath(root) }],
+          findFiles: async () => [fakeWorkspaceFsPath(join(root, "README.md"))],
+          asRelativePath: (uri: vscode.Uri) => uri.fsPath.replace(root + "/", ""),
+          onDidCreateFiles: (handler: () => void) => { createHandler = handler; return { dispose: () => {} } },
+          onDidDeleteFiles: () => ({ dispose: () => {} }),
+          onDidRenameFiles: () => ({ dispose: () => {} }),
+        },
+      } as unknown as typeof vscode,
+      postMessage: (m: Record<string, unknown>) => posted.push(m),
+    }
+    index = new WorkspaceFileIndex(deps)
+    await index.refresh()
+    index.watch()
+    assert.equal(posted.length, 0)
+    const handler = createHandler as (() => void) | null
+    if (handler) {
+      handler()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    assert.equal(posted.length, 1)
+    const msg = posted[0]
+    if (msg) {
+      assert.equal(msg.type, "workspace_files")
+      assert.deepEqual(msg.files, ["README.md"])
+    }
+  })
 })
