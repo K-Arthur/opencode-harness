@@ -162,6 +162,25 @@ typing `@jcodemunch /tri` will not surface a Matt Pocock skill's `/triage`.
 The `MentionItem.origin` field (populated from the `agent` field in
 `command_list` messages) drives this filter.
 
+### Expandable detail panels in the commands palette
+
+Each command row in the commands palette (`/commands` modal) can show an
+expandable detail panel with longer documentation:
+
+- **Skill commands**: the full prompt template from the server's `template`
+  field — this is the primary use case. Skill prompts are often multi-paragraph
+  and serve as the skill's documentation, letting users read what a skill does
+  before invoking it.
+- **Local commands**: usage hints (`/<cmd> <args>`), aliases, and category.
+- **Server/MCP commands without a template**: no chevron is shown; the row is
+  not expandable.
+
+The detail panel is toggled by a chevron button (▸/▼) on the right side of
+the row, or by **Right Arrow** (expand) / **Left Arrow** (collapse) keyboard
+shortcuts when the row is selected. Expanded state persists across re-renders
+(filter changes, search queries) via a `Set<string>` of command names in
+`commands-modal.ts`.
+
 ## Methodology guidance
 
 When `opencode.methodology.enabled` is on (default), each outgoing prompt is

@@ -279,6 +279,28 @@ The host-to-webview `command_list` payload is partitioned before it reaches the 
 - Inline slash suggestions receive the combined command list so custom prompt commands
   remain discoverable while typing.
 
+### Expandable Detail Panels
+
+Each command row in the palette can show an expandable detail panel with longer
+documentation:
+
+- **Skill/server commands**: the full prompt template from the server's `template`
+  field is shown when it's longer than the description. This is the primary use case —
+  skill prompts are often multi-paragraph and serve as the skill's documentation.
+- **Local commands**: usage hints (`/<cmd> <args>`), aliases, and category are shown.
+- **Commands without detail** (e.g. plain server commands with no template): no chevron
+  is rendered and the row is not expandable.
+
+The detail panel is toggled by:
+
+1. **Chevron button** (▸/▼) on the right side of the command row
+2. **Right Arrow** key — expands the selected row's detail
+3. **Left Arrow** key — collapses the selected row's detail
+
+The panel renders the content in a `<pre>` block with `white-space: pre-wrap` for
+readable line wrapping. Expanded state persists across re-renders (filter changes,
+search queries) via a `Set<string>` of command names.
+
 ### State Sync Messages
 
 - `webview_ready`: Webview announces that it can receive host state. The host responds
