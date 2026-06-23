@@ -8,7 +8,14 @@
 ## Runtime Dependencies
 | Package | Purpose | Version |
 |---------|---------|---------|
-| `@opencode-ai/sdk` | SDK client for OpenCode server | ^latest |
+| `@opencode-ai/sdk` | SDK client for OpenCode server | ^1.17.9 |
+| `diff-match-patch` | Text diffing for DiffApplier | ^1.0.5 |
+| `dompurify` | HTML sanitizer for webview | ^3.4.11 |
+| `highlight.js` | Syntax highlighting for code blocks | ^11.11.1 |
+| `katex` | LaTeX math rendering | ^0.17.0 |
+| `markdown-it` | Markdown parser | ^14.2.0 |
+| `markdown-it-task-lists` | Task list plugin for markdown-it | ^2.1.1 |
+| `mermaid` | Diagram rendering | ^11.15.0 |
 
 Checkpoint snapshots use VS Code `workspace.fs` and `WorkspaceEdit`; no runtime git helper is approved for checkpoint rollback.
 
@@ -31,3 +38,9 @@ Checkpoint snapshots use VS Code `workspace.fs` and `WorkspaceEdit`; no runtime 
 | `@playwright/test` | Playwright test framework |
 | `jsdom` | DOM implementation for webview tests |
 | `@types/jsdom` | TypeScript definitions for jsdom |
+
+## Audit Log
+
+| Date | Packages bumped | Audit status |
+|------|----------------|--------------|
+| 2026-06-22 | `@opencode-ai/sdk` 1.17.7→1.17.9, `dompurify` 3.4.10→3.4.11, `@playwright/test` 1.60→1.61, `@typescript-eslint/*` 8.61.0→8.61.1, `mocha` 11.7.6 (floor) | 0 HIGH/CRITICAL from direct deps; 2 pre-existing transitive HIGH (`form-data`, `undici` via stryker) unchanged |
