@@ -1,5 +1,5 @@
 import type { CommandEntry } from "./commands-modal"
-import { resolveLocalCommand, resolveMcpNamespace, resolveNamespacedCommand, type RemoteCommandInfo, type AmbiguityInfo } from "./slash-commands"
+import { resolveLocalCommand, resolveMcpNamespace, resolveNamespacedCommand, type RemoteCommandInfo } from "./slash-commands"
 
 export interface SlashCommandDeps {
   stateManager: {

@@ -1,4 +1,5 @@
 import * as vscode from "vscode"
+import { Minimatch } from "minimatch"
 
 export interface WorkspaceFileIndexDeps {
   vscode: typeof vscode
@@ -8,12 +9,29 @@ export interface WorkspaceFileIndexDeps {
 export class WorkspaceFileIndex {
   private files: string[] = []
   private disposables: vscode.Disposable[] = []
+  private excludePatterns: Minimatch[] = []
 
   constructor(private readonly deps: WorkspaceFileIndexDeps) {}
 
   /**
+   * Set glob patterns from opencode.jsonc `ignore`/`exclude` keys to filter
+   * out of the file index. Invalid patterns are logged and skipped.
+   */
+  setExcludePatterns(patterns: string[]): void {
+    this.excludePatterns = []
+    for (const pattern of patterns) {
+      try {
+        this.excludePatterns.push(new Minimatch(pattern, { dot: true, matchBase: true }))
+      } catch (err) {
+        console.warn(`[WorkspaceFileIndex] invalid exclude pattern "${pattern}"`, err)
+      }
+    }
+  }
+
+  /**
    * Build the workspace file list from the current workspace folders.
-   * Excludes node_modules and returns paths relative to the first workspace folder.
+   * Excludes node_modules and any config-defined exclude patterns.
+   * Returns paths relative to the first workspace folder.
    */
   async refresh(): Promise<void> {
     const folders = this.deps.vscode.workspace.workspaceFolders
@@ -22,17 +40,21 @@ export class WorkspaceFileIndex {
       return
     }
 
-    const root = folders[0]!.uri.fsPath
     try {
       const uris = await this.deps.vscode.workspace.findFiles("**/*", "**/node_modules/**", 5000)
       this.files = uris
         .map((uri) => this.deps.vscode.workspace.asRelativePath(uri))
         .filter((relative) => relative && !relative.startsWith("../") && !relative.includes("node_modules"))
+        .filter((relative) => !this.matchesExcludePattern(relative))
         .sort()
     } catch (err) {
       console.warn("[WorkspaceFileIndex] refresh failed", err)
       this.files = []
     }
+  }
+
+  private matchesExcludePattern(relativePath: string): boolean {
+    return this.excludePatterns.some((mm) => mm.match(relativePath))
   }
 
   /**

@@ -15,6 +15,28 @@ const ALLOWED_IMAGE_MIMES = [
   "image/heif",
 ] as const
 
+const ALLOWED_DOCUMENT_MIMES = [
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+  "text/html",
+  "text/css",
+  "text/javascript",
+  "application/json",
+  "application/xml",
+  "application/pdf",
+  "application/x-yaml",
+  "application/x-sh",
+] as const
+
+const DOCUMENT_ICONS: Record<string, string> = {
+  "text/plain": "\u{1F4C4}",
+  "text/markdown": "\u{1F4DD}",
+  "text/csv": "\u{1F4CA}",
+  "application/pdf": "\u{1F4D5}",
+  "application/json": "\u{1F4E6}",
+}
+
 export interface Attachment {
   data: string
   mimeType: string
@@ -123,6 +145,10 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
 
   // W4.A: Support non-image file attachments (PDF, etc.)
   function attachFileBlob(blob: Blob, mimeType: string): void {
+    if (!ALLOWED_DOCUMENT_MIMES.includes(mimeType as typeof ALLOWED_DOCUMENT_MIMES[number])) {
+      deps.postMessage({ type: "show_error", message: `Unsupported file type: ${mimeType}` })
+      return
+    }
     if (blob.size > MAX_ATTACHMENT_BYTES) {
       deps.postMessage({ type: "show_error", message: `File attachment exceeds 10 MB limit.` })
       return
@@ -225,7 +251,7 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
       } else {
         const icon = document.createElement("span")
         icon.className = "attachment-chip-icon"
-        icon.textContent = att.mimeType === "application/pdf" ? "PDF" : "FILE"
+        icon.textContent = DOCUMENT_ICONS[att.mimeType] || "FILE"
         chip.appendChild(icon)
       }
       const remove = document.createElement("button")
