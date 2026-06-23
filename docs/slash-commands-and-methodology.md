@@ -54,37 +54,57 @@ Run `/help` for the generated table. Highlights:
 - Everything else (server, MCP, skill, custom-prompt commands): browse with
   `/commands` or Ctrl+Shift+/.
 
-### MCP namespace resolution (`/server:tool` and `/server tool`)
+### MCP namespace resolution (`/server:tool`, `/server tool`, and `@server /tool`)
 
 Users naturally type the namespace they see in the UI, but the opencode server
 registers every command (MCP tool, skill, built-in) as a flat top-level name.
-The slash dispatcher detects two namespace patterns and rewrites them before
+The slash dispatcher detects three namespace patterns and rewrites them before
 forwarding:
 
 **Colon syntax** (`/prefix:command`):
 
 - `/jcodemunch:triage` → executes `/triage`
 - `/jcodemunch:triage my-issue` → executes `/triage` with args `my-issue`
-- `/wrongprefix:triage` → executes `/triage` (broad match on suffix)
+- `/wrongprefix:triage` → executes `/triage` (broad match on suffix, only if
+  unambiguous — see below)
 
 **Space syntax** (`/server tool`):
 
 - `/jcodemunch triage` → executes `/triage`
 - `/jcodemunch triage my-issue` → executes `/triage` with args `my-issue`
 
-The colon case uses a two-tier match: first an exact MCP origin+tool match,
-then a broad match where the suffix matches any remote command name (skill,
-server, or MCP) — the prefix is discarded because the server ignores it. The
-space case requires the prefix to be a known MCP `origin` (to avoid ambiguity
-with commands like `/cost` that take arguments).
+**Hierarchical syntax** (`@namespace /command`):
 
-If neither pattern matches, the command is forwarded as-is so the server can
+- `@jcodemunch /triage` → executes `/triage`
+- `@jcodemunch /triage my-issue` → executes `/triage` with args `my-issue`
+- `@wrongns /triage` → forwards `/triage` as-is (strict — no broad match)
+
+The colon case uses a two-tier match: first an exact MCP origin+tool match,
+then a **broad match** where the suffix matches any remote command name (skill,
+server, or MCP) — but only when the suffix is **unambiguous** (exactly one
+command has that name). If multiple commands from different sources share the
+suffix, the match is ambiguous: the dispatcher logs an error to the output
+channel via a `log_ambiguity` message, shows a user-facing system message
+listing the conflicting sources, and forwards the command as-is so the user
+can re-disambiguate with `/namespace:command`. The space case requires the
+prefix to be a known MCP `origin` (to avoid ambiguity with commands like
+`/cost` that take arguments).
+
+The hierarchical `@namespace /command` syntax is **strict**: the namespace
+must match a known MCP `origin` AND the command must belong to that origin.
+There is no broad-match fallback — the user explicitly namespaced the
+invocation, so silently picking a different source would violate their intent.
+This is the recommended syntax when multiple sources export commands with the
+same name (e.g. jcodemunch MCP's `/triage` vs a Matt Pocock skill's `/triage`).
+
+If no pattern matches, the command is forwarded as-is so the server can
 still attempt it. If a command is also not in the cached server list, a
 **non-blocking tip** is shown pointing to `/commands`.
 
-Implementation: `resolveMcpNamespace()` in `slash-commands.ts` (pure, tested).
-The cached remote command list is populated from `command_list` messages and
-passed to the handler via `getServerCommands()` in `SlashCommandDeps`.
+Implementation: `resolveMcpNamespace()` and `resolveNamespacedCommand()` in
+`slash-commands.ts` (pure, tested). The cached remote command list is populated
+from `command_list` messages and passed to the handler via
+`getServerCommands()` in `SlashCommandDeps`.
 
 ### Command list fetch failures
 
@@ -123,6 +143,24 @@ so you can tell command sources apart without opening the palette
 `MAX_COMMAND_RESULTS` (50) fuzzy-ranked rows and appends a non-interactive
 `.dropdown-more` "+N more" hint — kept off `.dropdown-item` so keyboard
 navigation never lands on it.
+
+### Match highlighting and namespace-scoped dropdown
+
+Both the inline dropdown and the commands palette highlight the matched
+characters in the command label using `<mark class="match">` elements
+(accent-colored, bold). The highlight ranges are computed by
+`findMatchRanges()` in `fuzzyMatch.ts`, which mirrors the greedy
+left-to-right walk used by `fuzzyScore` so the highlighted substrings
+correspond exactly to the scored match. The HTML is built by
+`highlightRanges()`, which HTML-escapes the label text before wrapping so
+the output is safe for `innerHTML`.
+
+When the user types `@namespace /` (e.g. `@jcodemunch /tri`), the inline
+dropdown is **scoped** to only commands whose `origin` matches the typed
+namespace. This prevents cross-contamination from other sources — e.g.
+typing `@jcodemunch /tri` will not surface a Matt Pocock skill's `/triage`.
+The `MentionItem.origin` field (populated from the `agent` field in
+`command_list` messages) drives this filter.
 
 ## Methodology guidance
 

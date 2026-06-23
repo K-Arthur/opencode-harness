@@ -193,7 +193,7 @@ Titles flow across three surfaces (server / CLI / webview tab strip) via two com
 
 | Module | File | Responsibility |
 |--------|------|---------------|
-| `slashCommands` | `src/chat/webview/slashCommands.ts` | /command dispatching |
+| `slashCommands` | `src/chat/webview/slashCommands.ts` | /command dispatching, MCP namespace resolution (`/ns:cmd`, `/ns cmd`, `@ns /cmd`), ambiguity logging |
 | `queueRenderer` | `src/chat/webview/queueRenderer.ts` | Queue chip UI (ARIA listbox, keyboard nav, drag-reorder, edit/remove/retry) |
 | `sendLogic` | `src/chat/webview/sendLogic.ts` | Factory composing sendMessage/sendButton/steerMode modules |
 | `sendMessage` | `src/chat/webview/sendMessage.ts` | Core send logic, title generation, model validation, G8 ack watchdog |

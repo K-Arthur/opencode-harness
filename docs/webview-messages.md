@@ -39,6 +39,9 @@ The extension provides comprehensive conversation editing capabilities:
 - `fork_session`: User requests to fork conversation at a specific turn
 - `open_model_selector_for_regen`: User requests model selector for regeneration (Shift+Click)
 - `regenerate_with_model`: User selects a model for regeneration
+- `log_ambiguity`: Webview signals an ambiguous slash command (multiple sources share the
+  same command name) so the host can log it to the output channel. Carries `prefix`,
+  `suffix`, and `candidates` (array of `{ name, source, origin }`).
 
 ## Streaming Contract
 
@@ -231,6 +234,11 @@ Slash commands use the same mention dropdown surface as `@` context mentions:
   descriptions stay in sync.
 - The dropdown is triggered when `/` starts the current token, either at the beginning of
   the input or after whitespace.
+- The `@namespace /command` hierarchical syntax (e.g. `@jcodemunch /triage`) is also
+  routed through the slash dispatcher. When the dropdown detects `@namespace /`, it
+  scopes suggestions to only commands from that server's origin.
+- Matched characters in command labels are highlighted with `<mark class="match">`
+  elements (accent-colored, bold) in both the inline dropdown and the commands palette.
 - Rows use `command-item` markup with an SVG icon, monospace command label, and muted
   description text.
 - The webview handles UI-only commands such as `/model`, `/new`, `/export`, `/compact`,
@@ -241,6 +249,9 @@ Slash commands use the same mention dropdown surface as `@` context mentions:
 - Custom prompt commands resolve after local commands.
 - Runtime OpenCode server commands are forwarded without the leading slash, because the
   OpenCode server command API expects names like `init` or `review`, not `/init`.
+- When a slash command is ambiguous (multiple sources share the same name and no
+  namespace was specified), the webview posts a `log_ambiguity` message so the host can
+  log the conflict to the output channel.
 
 Server, MCP, skill, and custom prompt commands are proactively loaded on webview boot via
 `list_commands`, so the inline dropdown is populated immediately without requiring the user
