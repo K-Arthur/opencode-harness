@@ -263,7 +263,7 @@ export function createContextTrayManager(deps: ContextTrayDeps) {
       bar.className = "context-tray-token-bar"
       const fill = document.createElement("div")
       fill.className = "context-tray-token-fill"
-      fill.style.width = `${tokenPct}%`
+      fill.style.transform = `scaleX(${tokenPct / 100})`
       bar.appendChild(fill)
       deps.itemsEl.appendChild(bar)
     } else {

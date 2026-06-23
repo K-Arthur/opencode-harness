@@ -1590,7 +1590,7 @@ textarea {
 
 /* Document size badge */
 .context-chip .chip-size-badge {
-  font-size: 9px;
+  font-size: var(--text-2xs);
   opacity: 0.6;
   padding: 0 2px;
 }
