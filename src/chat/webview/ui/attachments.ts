@@ -256,7 +256,8 @@ export function createAttachmentManager(deps: AttachmentDeps) {
 
   function setActiveFile(path: string | null): void {
     activeFile = path
-    if (path && !dismissedActiveFiles.has(path)) {
+    // When switching to a file, always clear it from dismissed set so it reappears
+    if (path) {
       dismissedActiveFiles.delete(path)
     }
     updatePromptContextChips()
@@ -264,6 +265,8 @@ export function createAttachmentManager(deps: AttachmentDeps) {
 
   function setWorkspaceFiles(files: string[]): void {
     workspaceFiles = files
+    // Clear dismissed set when workspace files are refreshed to prevent unbounded growth
+    dismissedActiveFiles.clear()
   }
 
   function getWorkspaceFiles(): string[] {

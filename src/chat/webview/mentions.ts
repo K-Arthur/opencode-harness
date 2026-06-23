@@ -435,7 +435,14 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
       // user can type the file/url/etc. without an intervening space.
       if (text.endsWith(":")) trailing = ""
     } else {
-      text = (item.prefix || "") + (item.display || "")
+      const display = item.display || ""
+      const prefix = item.prefix || ""
+      // Quote file paths with spaces to ensure proper parsing
+      if (prefix.startsWith("@file:") && /\s/.test(display)) {
+        text = `${prefix}"${display}"`
+      } else {
+        text = prefix + display
+      }
     }
     const before = val.slice(0, atIdx)
     const after = val.slice(cursor)
