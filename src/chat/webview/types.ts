@@ -4,6 +4,29 @@ import type { VoiceInputSettings } from "../voiceInputCore"
 
 export type MessageRole = "user" | "assistant" | "system"
 
+export type ContextItemType = "active_file" | "picked_file" | "image" | "document"
+
+export interface AttachedContextItem {
+  id: string
+  type: ContextItemType
+  path?: string
+  languageId?: string
+  mimeType?: string
+  data?: string
+  sizeBytes?: number
+  lineCount?: number
+  isActive: boolean
+  tokenEstimate?: number
+  selection?: { startLine: number; endLine: number; text: string }
+}
+
+export interface ContextTraySummary {
+  fileCount: number
+  imageCount: number
+  documentCount: number
+  totalTokens: number
+}
+
 // ---------------------------------------------------------------------------
 // New discriminated block types (preferred for new code)
 // ---------------------------------------------------------------------------
@@ -438,6 +461,11 @@ export interface MentionItem {
    * same way the commands palette modal does.
    */
   badge?: string
+  /**
+   * MCP server name / agent that contributed this command. Used by the
+   * `@namespace /` dropdown filter to scope suggestions to a single server.
+   */
+  origin?: string
 }
 
 export interface SessionSummary {
@@ -460,8 +488,6 @@ export interface ContextChip {
   removable?: boolean
   onRemove?: () => void
 }
-
-export type ContextItemType = "active_file" | "picked_file" | "image" | "document"
 
 export interface AttachedContextItem {
   id: string
@@ -841,7 +867,7 @@ export type WebviewMessage =
   | { type: "webview_ready" }
   | { type: "init_ack" }
   | { type: "create_tab" }
-  | { type: "send_prompt"; sessionId: string; text: string; messageId: string; clientRequestId?: string; model: string; mode?: string; variant?: string; attachments?: Attachment[]; isSteerPrompt?: boolean; contextItems?: Array<{ type: string; path: string; selection?: { startLine: number; endLine: number; text: string } }> }
+  | { type: "send_prompt"; sessionId: string; text: string; messageId: string; clientRequestId?: string; model: string; mode?: string; variant?: string; attachments?: Attachment[]; isSteerPrompt?: boolean; contextItems?: AttachedContextItem[] }
   | { type: "send_steer_prompt"; id: string; text: string; attachments: Attachment[]; mode: "interrupt" | "queue"; sessionId: string }
   | { type: "change_mode"; mode: string; sessionId: string }
   | { type: "set_model"; model: string; sessionId?: string }
@@ -911,6 +937,7 @@ export type WebviewMessage =
   | { type: "remove_provider_credential"; credentialId: string }
   | { type: "compact_session"; sessionId: string }
   | { type: "execute_command"; command: string; arguments?: string; sessionId?: string }
+  | { type: "log_ambiguity"; prefix: string; suffix: string; candidates: Array<{ name: string; source?: string; origin?: string }> }
   | { type: "list_commands" }
   | { type: "insert_at_cursor"; code: string; language?: string }
   | { type: "create_file_from_code"; code: string; language?: string; filePath?: string }

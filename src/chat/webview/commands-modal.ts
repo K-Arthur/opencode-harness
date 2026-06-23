@@ -6,7 +6,7 @@
  */
 
 import { dedupServerCommands } from "./slash-commands"
-import { rankByFuzzy } from "./fuzzyMatch"
+import { rankByFuzzy, findMatchRanges, highlightRanges } from "./fuzzyMatch"
 import { devStalenessWarn } from "./streamHandlers"
 
 export interface CommandEntry {
@@ -313,7 +313,13 @@ export function setupCommandsModal(els: {
       left.className = "commands-modal-item-main"
       const label = document.createElement("div")
       label.className = "commands-modal-item-label"
-      label.textContent = `/${entry.name}`
+      const labelText = `/${entry.name}`
+      const ranges = query ? findMatchRanges(query, labelText) : null
+      if (ranges && ranges.length > 0) {
+        label.innerHTML = highlightRanges(labelText, ranges)
+      } else {
+        label.textContent = labelText
+      }
       const desc = document.createElement("div")
       desc.className = "commands-modal-item-desc"
       desc.textContent = entry.description

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { fuzzyScore, scoreCommandMatch, rankByFuzzy } from "./fuzzyMatch"
+import { fuzzyScore, scoreCommandMatch, rankByFuzzy, findMatchRanges, highlightRanges } from "./fuzzyMatch"
 
 describe("fuzzyScore", () => {
   it("returns 0 for an empty query (matches everything, no ranking signal)", () => {
@@ -181,5 +181,65 @@ describe("fuzzyMatch — properties", () => {
         assert.ok(Number.isFinite(score), `score for ("${query}","${text}") must be finite`)
       }
     }
+  })
+})
+
+describe("findMatchRanges", () => {
+  it("returns an empty array for an empty query", () => {
+    assert.deepEqual(findMatchRanges("", "anything"), [])
+  })
+
+  it("returns null when the query is not a subsequence", () => {
+    assert.equal(findMatchRanges("xyz", "code-review"), null)
+  })
+
+  it("returns a single contiguous range for a prefix match", () => {
+    const ranges = findMatchRanges("co", "code-review")
+    assert.deepEqual(ranges, [[0, 2]])
+  })
+
+  it("returns multiple ranges for a scattered match", () => {
+    // "cr" -> [c]ode-[r]eview → ranges [0,1] and [5,6]
+    const ranges = findMatchRanges("cr", "code-review")
+    assert.deepEqual(ranges, [[0, 1], [5, 6]])
+  })
+
+  it("is case-insensitive", () => {
+    const ranges = findMatchRanges("REVIEW", "code-review")
+    assert.ok(ranges !== null)
+    assert.equal(ranges!.length, 1)
+    assert.deepEqual(ranges![0], [5, 11])
+  })
+
+  it("returns a single range for a contiguous mid-string match", () => {
+    const ranges = findMatchRanges("review", "code-review")
+    assert.deepEqual(ranges, [[5, 11]])
+  })
+})
+
+describe("highlightRanges", () => {
+  it("returns escaped text with no marks when ranges is null", () => {
+    const html = highlightRanges("code-review", null)
+    assert.equal(html, "code-review")
+  })
+
+  it("returns escaped text with no marks when ranges is empty", () => {
+    const html = highlightRanges("code-review", [])
+    assert.equal(html, "code-review")
+  })
+
+  it("wraps a contiguous match in <mark> tags", () => {
+    const html = highlightRanges("code-review", [[0, 2]])
+    assert.equal(html, '<mark class="match">co</mark>de-review')
+  })
+
+  it("wraps multiple ranges in <mark> tags", () => {
+    const html = highlightRanges("code-review", [[0, 1], [5, 6]])
+    assert.equal(html, '<mark class="match">c</mark>ode-<mark class="match">r</mark>eview')
+  })
+
+  it("escapes HTML special characters", () => {
+    const html = highlightRanges("<script>", [[0, 1]])
+    assert.equal(html, '<mark class="match">&lt;</mark>script&gt;')
   })
 })

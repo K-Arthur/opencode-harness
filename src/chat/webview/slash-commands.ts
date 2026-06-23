@@ -195,6 +195,19 @@ export interface ResolvedNamespace {
 }
 
 /**
+ * Information passed to the `onAmbiguous` callback when a command name is
+ * shared across multiple sources and cannot be safely resolved.
+ */
+export interface AmbiguityInfo {
+  /** The typed prefix (namespace the user specified). */
+  prefix: string
+  /** The command name that matched multiple sources. */
+  suffix: string
+  /** All remote commands sharing the ambiguous name. */
+  candidates: ReadonlyArray<RemoteCommandInfo>
+}
+
+/**
  * Resolve a namespace-prefixed command invocation to its canonical form.
  *
  * The opencode server registers every command (MCP tool, skill, built-in) as a
@@ -213,22 +226,29 @@ export interface ResolvedNamespace {
  * Resolution order for the colon case:
  *   1. Exact MCP match — prefix matches a known MCP `origin`, suffix matches
  *      a tool from that server.
- *   2. Broad match — suffix matches ANY remote command name (skill, server,
- *      or MCP). The prefix was an incorrect namespace the server ignores.
+ *   2. Broad match — suffix matches exactly ONE remote command name (skill,
+ *      server, or MCP). If multiple commands share the name the match is
+ *      ambiguous: `onAmbiguous` is invoked (if provided) and `null` is
+ *      returned so the caller can forward as-is or surface an error.
  *
  * The space case is MCP-only (prefix must be a known origin) because a bare
  * word like `/cost` with trailing args is ambiguous.
  *
- * Returns `null` when no match is found; the caller should forward as-is.
+ * Returns `null` when no match is found or the match is ambiguous; the caller
+ * should forward as-is.
  *
  * @param typedCommand  The first token incl. leading slash (e.g. "/jcodemunch:triage").
  * @param args          Everything after the first token (e.g. "my-issue").
  * @param remoteCommands  The cached server/MCP/skill command list.
+ * @param onAmbiguous   Optional callback invoked when a suffix matches multiple
+ *                      commands from different sources. Lets the caller log
+ *                      without coupling this pure function to I/O.
  */
 export function resolveMcpNamespace(
   typedCommand: string,
   args: string,
   remoteCommands: ReadonlyArray<RemoteCommandInfo>,
+  onAmbiguous?: (info: AmbiguityInfo) => void,
 ): ResolvedNamespace | null {
   const cleaned = typedCommand.replace(/^\//, "")
 
@@ -248,9 +268,16 @@ export function resolveMcpNamespace(
     if (exactMcp) return { command: `/${exactMcp.name}`, arguments: args }
 
     // 2. Broad match: suffix matches any remote command (skill/server/MCP).
-    //    The prefix was a namespace the server doesn't use.
-    const anyMatch = remoteCommands.find((c) => c.name.toLowerCase() === suffix)
-    if (anyMatch) return { command: `/${anyMatch.name}`, arguments: args }
+    //    The prefix was a namespace the server doesn't use. Only resolve when
+    //    the suffix is unambiguous — if multiple commands share the name we
+    //    cannot safely pick one.
+    const candidates = remoteCommands.filter((c) => c.name.toLowerCase() === suffix)
+    if (candidates.length === 1) {
+      return { command: `/${candidates[0]!.name}`, arguments: args }
+    }
+    if (candidates.length > 1 && onAmbiguous) {
+      onAmbiguous({ prefix, suffix, candidates })
+    }
 
     return null
   }
@@ -271,4 +298,42 @@ export function resolveMcpNamespace(
 
   if (!match) return null
   return { command: `/${match.name}`, arguments: remainingArgs }
+}
+
+/**
+ * Resolve an `@namespace /command` hierarchical invocation to its canonical
+ * flat form. The opencode server registers MCP tools as top-level commands
+ * (e.g. `/triage`), but users may type `@jcodemunch /triage` to explicitly
+ * scope the command to a specific server.
+ *
+ * Unlike {@link resolveMcpNamespace}, this resolver is **strict**: the
+ * namespace must match a known MCP `origin` AND the command must belong to
+ * that origin. There is no broad-match fallback — the user explicitly
+ * namespaced the invocation, so silently picking a different source would
+ * violate their intent.
+ *
+ *   `@jcodemunch /triage my-issue` → command="/triage" args="my-issue"
+ *   `@wrongns /triage`              → null (no match, forward as-is)
+ *
+ * @param namespace  The MCP server name (without `@`).
+ * @param command    The command name (with or without leading `/`).
+ * @param args       Everything after the command token.
+ * @param remoteCommands  The cached server/MCP/skill command list.
+ * @returns `null` when no exact match is found; the caller should forward as-is.
+ */
+export function resolveNamespacedCommand(
+  namespace: string,
+  command: string,
+  args: string,
+  remoteCommands: ReadonlyArray<RemoteCommandInfo>,
+): ResolvedNamespace | null {
+  const ns = namespace.toLowerCase()
+  const cmd = command.replace(/^\//, "").toLowerCase()
+  if (!ns || !cmd) return null
+
+  const match = remoteCommands.find(
+    (c) => c.origin?.toLowerCase() === ns && c.name.toLowerCase() === cmd,
+  )
+  if (!match) return null
+  return { command: `/${match.name}`, arguments: args }
 }

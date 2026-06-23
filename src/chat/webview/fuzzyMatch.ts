@@ -147,3 +147,88 @@ export function rankByFuzzy<T>(
   scored.sort((a, b) => (b.score - a.score) || (a.idx - b.idx))
   return scored.map((s) => s.item)
 }
+
+/**
+ * Find the character indices in `text` that the fuzzy subsequence `query`
+ * matches. Returns an array of `[start, end]` ranges (contiguous runs of
+ * matched characters) for highlight rendering, or `null` when the query is
+ * not a subsequence of `text`.
+ *
+ * The walk mirrors {@link fuzzyScore}'s greedy left-to-right strategy so the
+ * highlighted ranges correspond exactly to the scored match.
+ *
+ * @param query  The search query (case-insensitive).
+ * @param text   The text to match against.
+ * @returns Array of `[start, end]` half-open ranges, or `null` if no match.
+ */
+export function findMatchRanges(query: string, text: string): Array<[number, number]> | null {
+  if (query.length === 0) return []
+  const q = query.toLowerCase()
+  const t = text.toLowerCase()
+
+  const matchedIndices: number[] = []
+  let qi = 0
+  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
+    if (t.charCodeAt(ti) !== q.charCodeAt(qi)) continue
+    matchedIndices.push(ti)
+    qi++
+  }
+
+  if (qi < q.length) return null
+
+  // Collapse consecutive indices into contiguous [start, end) ranges.
+  const ranges: Array<[number, number]> = []
+  let runStart = matchedIndices[0]!
+  let prev = matchedIndices[0]!
+  for (let i = 1; i < matchedIndices.length; i++) {
+    const idx = matchedIndices[i]!
+    if (idx === prev + 1) {
+      prev = idx
+      continue
+    }
+    ranges.push([runStart, prev + 1])
+    runStart = idx
+    prev = idx
+  }
+  ranges.push([runStart, prev + 1])
+  return ranges
+}
+
+/**
+ * Build highlighted HTML from `text` wrapping matched character ranges in
+ * `<mark class="match">` elements. Returns the input text (HTML-escaped) with
+ * no marks when `ranges` is null, empty, or the query didn't match.
+ *
+ * The text is HTML-escaped before wrapping so the output is safe to assign
+ * via `innerHTML`.
+ *
+ * @param text    The original text to render.
+ * @param ranges  Matched ranges from {@link findMatchRanges}.
+ * @returns HTML string with `<mark>` wrappers around matched substrings.
+ */
+export function highlightRanges(text: string, ranges: Array<[number, number]> | null): string {
+  if (!ranges || ranges.length === 0) return escapeHtml(text)
+  const escaped: string[] = []
+  for (let i = 0; i < text.length; i++) {
+    escaped.push(escapeHtml(text[i]!))
+  }
+  const chars = escaped
+  const open = '<mark class="match">'
+  const close = "</mark>"
+  // Walk ranges in reverse so insertions don't shift earlier indices.
+  for (let r = ranges.length - 1; r >= 0; r--) {
+    const [start, end] = ranges[r]!
+    chars.splice(end, 0, close)
+    chars.splice(start, 0, open)
+  }
+  return chars.join("")
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}

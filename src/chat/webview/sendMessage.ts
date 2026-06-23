@@ -5,6 +5,7 @@ import { generateUserMessageId } from "../../session/messageId"
 import { classifyComposerInput } from "./slash-commands"
 import { shouldForceFocusOnSend } from "./sessionFocus"
 import type { SendLogicDeps, SendMessageDeps, StreamCapacityState } from "./sendTypes"
+import type { AttachedContextItem } from "./types"
 
 /** G8: how long to wait for the host to ack a send_prompt before probing.
  *  The host normally posts `prompt_accepted` within ~1s and
@@ -183,27 +184,33 @@ export function sendMessage(deps: SendMessageDeps): void {
     updateTabBar()
   }
 
-  if (text.startsWith("/")) {
+  if (text.startsWith("/") || /^@\S+\s+\//.test(text)) {
     runSlashCommandText(text, active)
     return
   }
 
   const attachments = attachmentManager.getAttachments()
+  let contextItems = attachmentManager.getContextItems()
+  
+  // Filter context items to only include active files and picked files that are active
+  contextItems = contextItems.filter((item: AttachedContextItem) => item.isActive && (item.type === "active_file" || item.type === "picked_file"))
+  
+  // If active file is included but not in contextItems, add it
   const activeFilePath = attachmentManager.isActiveFileIncluded() ? attachmentManager.getActiveFile() : null
   const activeFileSelection = attachmentManager.getActiveFileSelection()
+  if (activeFilePath && !contextItems.some((item: AttachedContextItem) => item.type === "active_file")) {
+    contextItems.push({
+      id: `active-${Date.now()}`,
+      type: "active_file",
+      path: activeFilePath,
+      isActive: true,
+      tokenEstimate: 0,
+      ...(activeFileSelection ? { selection: activeFileSelection } : {}),
+    })
+  }
 
   // Build the text with active file context injected
   let sendText = text
-  const contextItems: Array<{ type: string; path: string; selection?: { startLine: number; endLine: number; text: string } }> = []
-  if (activeFilePath) {
-    if (!sendText.includes(`@file:${activeFilePath}`)) {
-      const quotedPath = /\s/.test(activeFilePath) ? `"${activeFilePath}"` : activeFilePath
-      sendText = `@file:${quotedPath}\n${sendText}`
-    }
-    if (activeFileSelection) {
-      contextItems.push({ type: "active_file", path: activeFilePath, selection: activeFileSelection })
-    }
-  }
 
   els.promptInput.value = ""
   autoResizeTextarea()

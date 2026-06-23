@@ -213,6 +213,11 @@ describe("main.ts", () => {
     assert.ok(slashCommandsSource.includes("getServerCommands"), "must accept a getServerCommands dependency")
   })
 
+  it("slash handler supports @namespace /command hierarchical syntax", () => {
+    assert.ok(slashCommandsSource.includes("resolveNamespacedCommand"), "must call resolveNamespacedCommand for @namespace /command")
+    assert.ok(sendMessageSource.includes("@\\S+\\s+\\/"), "sendMessage must route @namespace / patterns to the slash dispatcher")
+  })
+
   it("slash handler shows non-blocking guidance for unrecognised commands", () => {
     assert.ok(slashCommandsSource.includes("isKnownRemote"), "must check whether the command is in the cached server list")
     assert.ok(slashCommandsSource.includes("/commands"), "guidance message must point users to /commands")

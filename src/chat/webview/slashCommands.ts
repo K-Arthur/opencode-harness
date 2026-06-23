@@ -1,5 +1,5 @@
 import type { CommandEntry } from "./commands-modal"
-import { resolveLocalCommand, resolveMcpNamespace, type RemoteCommandInfo } from "./slash-commands"
+import { resolveLocalCommand, resolveMcpNamespace, resolveNamespacedCommand, type RemoteCommandInfo, type AmbiguityInfo } from "./slash-commands"
 
 export interface SlashCommandDeps {
   stateManager: {
@@ -50,6 +50,44 @@ export function createSlashCommandHandler(deps: SlashCommandDeps) {
     text: string,
     active: ActiveSession,
   ): void {
+    // ── @namespace /command hierarchical syntax ──
+    // Detect `@jcodemunch /triage args` before the normal slash dispatch.
+    // The @ prefix binds the namespace to the following /command, routing
+    // through strict origin+name matching (no broad-match fallback).
+    const nsMatch = text.match(/^@(\S+)\s+\/(\S+)\s*(.*)$/)
+    if (nsMatch) {
+      const namespace = nsMatch[1]!
+      const command = nsMatch[2]!
+      const nsArgs = nsMatch[3] || ""
+      const remoteCommands = deps.getServerCommands?.() ?? []
+      const resolvedNs = resolveNamespacedCommand(namespace, command, nsArgs, remoteCommands)
+      if (resolvedNs) {
+        vscode.postMessage({
+          type: "execute_command",
+          command: resolvedNs.command,
+          arguments: resolvedNs.arguments,
+          sessionId: active.id,
+        })
+      } else {
+        const cmdName = command.toLowerCase()
+        const isKnownRemote = remoteCommands.some((c) => c.name.toLowerCase() === cmdName)
+        if (!isKnownRemote) {
+          showSystemMessage(
+            active.id,
+            `\`@${namespace} /${command}\` did not match a command from \`${namespace}\`. Forwarding as-is — use \`/commands\` to browse available commands.`,
+          )
+        }
+        vscode.postMessage({
+          type: "execute_command",
+          command: `/${command}`,
+          arguments: nsArgs,
+          sessionId: active.id,
+        })
+      }
+      clearPromptInput()
+      return
+    }
+
     const parts = text.split(/\s+/)
     const typed = (parts[0] || "").toLowerCase()
     // Aliases (e.g. /export-md) normalize to their canonical command so the
@@ -163,7 +201,21 @@ export function createSlashCommandHandler(deps: SlashCommandDeps) {
         // as a top-level command (e.g. `/triage`). If we detect this pattern,
         // rewrite to the canonical form so the command succeeds.
         const remoteCommands = deps.getServerCommands?.() ?? []
-        const resolved = resolveMcpNamespace(cmd, commandArgs, remoteCommands)
+        const resolved = resolveMcpNamespace(cmd, commandArgs, remoteCommands, (info) => {
+          const sources = info.candidates
+            .map((c) => `${c.source ?? "unknown"}${c.origin ? `:${c.origin}` : ""}`)
+            .join(", ")
+          showSystemMessage(
+            active.id,
+            `\`${cmd}\` is ambiguous — \`${info.suffix}\` is provided by: ${sources}. Use \`/namespace:command\` to disambiguate.`,
+          )
+          vscode.postMessage({
+            type: "log_ambiguity",
+            prefix: info.prefix,
+            suffix: info.suffix,
+            candidates: info.candidates.map((c) => ({ name: c.name, source: c.source, origin: c.origin })),
+          })
+        })
         if (resolved) {
           vscode.postMessage({
             type: "execute_command",

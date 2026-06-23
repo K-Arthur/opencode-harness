@@ -385,6 +385,7 @@ const WEBVIEW_MESSAGE_VALIDATORS: Record<string, MessageValidator> = {
   rename_session: validateRenameSession,
   compact_banner_action: requiredStringValidator("action", () => "Invalid action in compact_banner_action"),
   execute_command: requiredStringValidator("command", () => "Invalid command in execute_command"),
+  log_ambiguity: requiredStringValidator("suffix", () => "Invalid suffix in log_ambiguity"),
   restore_checkpoint: requiredStringValidator("checkpointId", () => "Invalid checkpointId in restore_checkpoint"),
   delete_stash: requiredStringValidator("id", (msgType) => `Invalid id in ${msgType}`),
   delete_provider: requiredStringValidator("id", (msgType) => `Invalid id in ${msgType}`),

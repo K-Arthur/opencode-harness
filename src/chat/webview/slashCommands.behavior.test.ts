@@ -169,3 +169,43 @@ describe("slash command handler — colon namespace syntax (/prefix:command)", (
     assert.equal(tip, undefined, "must not tip after successful rewrite")
   })
 })
+
+describe("slash command handler — @namespace /command hierarchical syntax", () => {
+  it("rewrites @jcodemunch /triage -> /triage", () => {
+    handler.runSlashCommandText("@jcodemunch /triage", { id: "tab-1", isStreaming: false })
+    const msg = lastExec()
+    assert.equal(msg.command, "/triage")
+    assert.equal(msg.arguments, "")
+  })
+
+  it("preserves arguments after @namespace /command", () => {
+    handler.runSlashCommandText("@jcodemunch /triage my-issue", { id: "tab-1", isStreaming: false })
+    const msg = lastExec()
+    assert.equal(msg.command, "/triage")
+    assert.equal(msg.arguments, "my-issue")
+  })
+
+  it("handles namespace case-insensitively", () => {
+    handler.runSlashCommandText("@JCODEMUNCH /Triage", { id: "tab-1", isStreaming: false })
+    const msg = lastExec()
+    assert.equal(msg.command, "/triage")
+  })
+
+  it("forwards as-is when the namespace does not match any origin", () => {
+    handler.runSlashCommandText("@wrongns /triage", { id: "tab-1", isStreaming: false })
+    const msg = lastExec()
+    assert.equal(msg.command, "/triage", "must forward the command as-is")
+  })
+
+  it("shows a tip when @namespace /command does not match", () => {
+    handler.runSlashCommandText("@wrongns /totally-unknown", { id: "tab-1", isStreaming: false })
+    const tip = systemMessages.find((m) => m.message.includes("/commands"))
+    assert.ok(tip, "must show a guidance tip for unknown @namespace /command")
+  })
+
+  it("does NOT show a tip when @namespace /command resolves successfully", () => {
+    handler.runSlashCommandText("@jcodemunch /triage", { id: "tab-1", isStreaming: false })
+    const tip = systemMessages.find((m) => m.message.includes("/commands"))
+    assert.equal(tip, undefined, "must not tip after successful @namespace resolution")
+  })
+})

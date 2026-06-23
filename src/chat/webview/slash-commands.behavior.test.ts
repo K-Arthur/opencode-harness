@@ -1,6 +1,6 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { resolveMcpNamespace, type RemoteCommandInfo } from "./slash-commands"
+import { resolveMcpNamespace, resolveNamespacedCommand, type RemoteCommandInfo, type AmbiguityInfo } from "./slash-commands"
 
 const CMD_LIST: RemoteCommandInfo[] = [
   { name: "triage", source: "mcp", origin: "jcodemunch" },
@@ -89,9 +89,9 @@ describe("resolveMcpNamespace — colon syntax (/prefix:command)", () => {
     assert.deepEqual(result, { command: "/triage", arguments: "my-issue" })
   })
 
-  it("broad-matches /wrongprefix:triage -> /triage (skill/server match)", () => {
-    // The prefix doesn't match any MCP origin, but 'triage' exists as an MCP
-    // command under a different origin. The broad match rewrites anyway.
+  it("broad-matches /wrongprefix:triage -> /triage (unambiguous skill/server match)", () => {
+    // The prefix doesn't match any MCP origin, but 'triage' exists as exactly
+    // one remote command. The broad match rewrites because it's unambiguous.
     const result = resolveMcpNamespace("/wrongprefix:triage", "", CMD_LIST)
     assert.deepEqual(result, { command: "/triage", arguments: "" })
   })
@@ -99,6 +99,32 @@ describe("resolveMcpNamespace — colon syntax (/prefix:command)", () => {
   it("broad-matches /namespace:deploy -> /deploy (skill command)", () => {
     const result = resolveMcpNamespace("/myagent:deploy", "", CMD_LIST)
     assert.deepEqual(result, { command: "/deploy", arguments: "" })
+  })
+
+  it("returns null and calls onAmbiguous when the suffix matches multiple commands", () => {
+    // Two commands named 'triage' from different sources — the broad match
+    // must not silently pick one.
+    const ambiguous: RemoteCommandInfo[] = [
+      { name: "triage", source: "mcp", origin: "jcodemunch" },
+      { name: "triage", source: "skill" },
+    ]
+    let ambiguityInfo: AmbiguityInfo | undefined
+    const result = resolveMcpNamespace("/wrongns:triage", "", ambiguous, (info) => {
+      ambiguityInfo = info
+    })
+    assert.equal(result, null, "must not resolve an ambiguous suffix")
+    assert.ok(ambiguityInfo, "onAmbiguous must be called")
+    assert.equal(ambiguityInfo!.suffix, "triage")
+    assert.equal(ambiguityInfo!.candidates.length, 2)
+  })
+
+  it("returns null without calling onAmbiguous when the suffix matches nothing", () => {
+    let called = false
+    const result = resolveMcpNamespace("/wrongns:nonexistent", "", CMD_LIST, () => {
+      called = true
+    })
+    assert.equal(result, null)
+    assert.equal(called, false, "onAmbiguous must not fire when there are zero candidates")
   })
 
   it("handles colon syntax case-insensitively", () => {
@@ -127,6 +153,51 @@ describe("resolveMcpNamespace — colon syntax (/prefix:command)", () => {
     // not rewrite it to /generation unless that's a real remote command.
     const localOnly: RemoteCommandInfo[] = []
     const result = resolveMcpNamespace("/diagnose:generation", "", localOnly)
+    assert.equal(result, null)
+  })
+})
+
+describe("resolveNamespacedCommand — @namespace /command syntax", () => {
+  it("resolves @jcodemunch /triage -> /triage", () => {
+    const result = resolveNamespacedCommand("jcodemunch", "triage", "", CMD_LIST)
+    assert.deepEqual(result, { command: "/triage", arguments: "" })
+  })
+
+  it("preserves arguments after the command", () => {
+    const result = resolveNamespacedCommand("jcodemunch", "triage", "my-issue", CMD_LIST)
+    assert.deepEqual(result, { command: "/triage", arguments: "my-issue" })
+  })
+
+  it("handles namespace and command case-insensitively", () => {
+    const result = resolveNamespacedCommand("JCODEMUNCH", "Triage", "", CMD_LIST)
+    assert.deepEqual(result, { command: "/triage", arguments: "" })
+  })
+
+  it("accepts a command with a leading slash", () => {
+    const result = resolveNamespacedCommand("jcodemunch", "/triage", "", CMD_LIST)
+    assert.deepEqual(result, { command: "/triage", arguments: "" })
+  })
+
+  it("returns null when the namespace does not match any origin", () => {
+    const result = resolveNamespacedCommand("wrongns", "triage", "", CMD_LIST)
+    assert.equal(result, null)
+  })
+
+  it("returns null when the command does not belong to that namespace", () => {
+    // review-pr belongs to github-mcp, not jcodemunch
+    const result = resolveNamespacedCommand("jcodemunch", "review-pr", "", CMD_LIST)
+    assert.equal(result, null)
+  })
+
+  it("returns null for an empty namespace or command", () => {
+    assert.equal(resolveNamespacedCommand("", "triage", "", CMD_LIST), null)
+    assert.equal(resolveNamespacedCommand("jcodemunch", "", "", CMD_LIST), null)
+  })
+
+  it("is strict: does NOT broad-match across sources", () => {
+    // 'deploy' is a skill command with no origin — even if the user types
+    // @anything /deploy, it must not resolve (no origin match).
+    const result = resolveNamespacedCommand("anything", "deploy", "", CMD_LIST)
     assert.equal(result, null)
   })
 })

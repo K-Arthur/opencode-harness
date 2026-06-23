@@ -205,6 +205,7 @@ export class WebviewEventRouter {
     "remove_provider_credential",
     "compact_session", "execute_command", "open_terminal", "copy_text", "list_commands",
     "get_workspace_files",
+    "log_ambiguity",
     "toggle_active_file",
     "insert_at_cursor", "create_file_from_code", "compact_banner_action",
     "edit_message", "attach_image",
@@ -1267,6 +1268,13 @@ export class WebviewEventRouter {
     }],
     ["compact_session", async (_: Record<string, unknown>, sessionId?: string) => { await this.opts.sessionLifecycle.handleCompactSession(sessionId) }],
     ["execute_command", async (msg: Record<string, unknown>, sessionId?: string) => { await this.opts.commandExec.handleExecuteCommand(sessionId, msg.command as string, msg.arguments as string) }],
+    ["log_ambiguity", async (msg: Record<string, unknown>) => {
+      const prefix = typeof msg.prefix === "string" ? msg.prefix : "?"
+      const suffix = typeof msg.suffix === "string" ? msg.suffix : "?"
+      const candidates = Array.isArray(msg.candidates) ? msg.candidates : []
+      const sources = candidates.map((c: Record<string, unknown>) => `${c.source ?? "unknown"}${c.origin ? `:${c.origin}` : ""}`).join(", ")
+      log.warn(`Ambiguous slash command: /${prefix}:${suffix} — matched: ${sources}`)
+    }],
     ["list_commands", async () => { await this.handleListCommands() }],
     ["insert_at_cursor", async (msg: Record<string, unknown>) => { await this.opts.handleInsertAtCursor(msg.code as string, msg.language as string) }],
     ["create_file_from_code", async (msg: Record<string, unknown>) => { await this.opts.handleCreateFileFromCode(msg.code as string, msg.language as string) }],

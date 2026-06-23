@@ -2391,6 +2391,12 @@ textarea {
   font-size: var(--text-sm);
   color: var(--color-fg);
 }
+.commands-modal-item-label mark.match,
+.dropdown-label mark.match {
+  background: transparent;
+  color: var(--color-accent, var(--oc-accent, inherit));
+  font-weight: 700;
+}
 .commands-modal-item-desc {
   font-size: var(--text-2xs);
   color: var(--color-muted);

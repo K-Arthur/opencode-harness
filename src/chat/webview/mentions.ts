@@ -14,7 +14,7 @@ import {
   BUG_SVG,
 } from "./icons"
 import { toMentionItems, dedupServerCommands } from "./slash-commands"
-import { rankByFuzzy } from "./fuzzyMatch"
+import { rankByFuzzy, findMatchRanges, highlightRanges } from "./fuzzyMatch"
 
 // Icons live here (webview-only) rather than in the registry: the registry is
 // also bundled into the extension host for /help generation, and the SVG
@@ -60,7 +60,13 @@ export interface MentionState {
   mode: "mention" | "command"
 }
 
-export function setupMentions(els: ElementRefs, state: MentionState, postMessage: (msg: Record<string, unknown>) => void, getWorkspaceFiles: () => string[] = () => []) {
+export function setupMentions(
+  els: ElementRefs,
+  state: MentionState,
+  postMessage: (msg: Record<string, unknown>) => void,
+  getWorkspaceFiles: () => string[] = () => [],
+  onFileMention: (path: string) => void = () => {}
+) {
   let serverCommands: MentionItem[] = []
   let _resizeHandler: (() => void) | null = null
 
@@ -111,6 +117,33 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     const val = els.promptInput.value
     const cursorPos = els.promptInput.selectionStart
     const textBefore = val.slice(0, cursorPos)
+
+    // ── @namespace /command hierarchical dropdown scoping ──
+    // When the user types `@jcodemunch /tri`, scope the dropdown to only
+    // commands from that MCP server origin. This prevents cross-contamination
+    // from other sources (e.g. a Matt Pocock skill with the same name).
+    const nsSlashMatch = textBefore.match(/(?:^|\s)@(\S+)\s+\/([\w:-]*)$/)
+    if (nsSlashMatch) {
+      const namespace = nsSlashMatch[1]!.toLowerCase()
+      state.mode = "command"
+      state.query = nsSlashMatch[2]!
+      els.mentionDropdown.classList.add("command-mode")
+      els.mentionDropdown.classList.remove("mention-mode")
+      showDropdown()
+      // Filter to only commands whose origin matches the typed namespace.
+      // Local commands are excluded — the user explicitly scoped to a server.
+      const scoped = serverCommands.filter(
+        (c) => c.origin?.toLowerCase() === namespace,
+      )
+      const ranked = rankByFuzzy(
+        scoped,
+        state.query,
+        (c) => c.display ?? "",
+        (c) => c.description ?? "",
+      )
+      renderCommandResults(ranked.slice(0, MAX_COMMAND_RESULTS), ranked.length)
+      return
+    }
 
     // Trigger when the current token starts with "/". The old anchor (`^`)
     // only fired when the slash sat at position 0, so typing "hello /clear"
@@ -203,7 +236,13 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
       content.className = "dropdown-content"
       const label = document.createElement("span")
       label.className = "dropdown-label"
-      label.textContent = `/${item.display || ""}`
+      const labelText = `/${item.display || ""}`
+      const ranges = state.query ? findMatchRanges(state.query, labelText) : null
+      if (ranges && ranges.length > 0) {
+        label.innerHTML = highlightRanges(labelText, ranges)
+      } else {
+        label.textContent = labelText
+      }
       content.appendChild(label)
       if (item.description) {
         const desc = document.createElement("span")
@@ -283,7 +322,7 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
   }
 
   function updateServerCommands(
-    commands: Array<{ name: string; description?: string; source?: string; isCustom?: boolean }>,
+    commands: Array<{ name: string; description?: string; source?: string; isCustom?: boolean; agent?: string }>,
   ) {
     serverCommands = commands.map(c => {
       // Mirror the commands-palette badge taxonomy: custom prompts → "Custom",
@@ -305,6 +344,7 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
         description: c.description || `${badge} command`,
         icon,
         badge,
+        origin: c.agent || undefined,
       }
     })
   }
@@ -452,6 +492,12 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     hideDropdown()
     els.promptInput.focus()
     window.dispatchEvent(new CustomEvent("oc-input-changed"))
+    
+    // Notify attachment manager of file mentions for context tracking
+    if (item.prefix === "@file:" && item.display && !item.insertText?.endsWith(":")) {
+      const path = item.display.replace(/^["']/, "").replace(/["']$/, "")
+      onFileMention(path)
+    }
   }
 
   els.mentionDropdown.addEventListener("mouseleave", () => {
