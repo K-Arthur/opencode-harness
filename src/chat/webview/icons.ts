@@ -200,3 +200,11 @@ export function toolStateOverlayFor(state: string): string | null {
     default: return null
   }
 }
+
+// ─── Document Type Icons (for attachment chips) ───
+export const DOC_TEXT_SVG = SVG(`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8 13" x2="16 13"/><line x1="8 17" x2="16 17"/>`, 14)
+export const DOC_MARKDOWN_SVG = SVG(`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 18l2-3 2 3"/><path d="M14 18l2-3 2 3"/>`, 14)
+export const DOC_CSV_SVG = SVG(`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 14h8"/><path d="M8 17h8"/><path d="M8 11h8"/>`, 14)
+export const DOC_PDF_SVG = SVG(`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 18v-6h2a2 2 0 0 1 0 4H8"/>`, 14)
+export const DOC_JSON_SVG = SVG(`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13a2 2 0 0 0-2 2v1a2 2 0 0 1-2 2 2 2 0 0 1 2 2v1a2 2 0 0 0 2 2"/><path d="M15 13a2 2 0 0 1 2 2v1a2 2 0 0 0 2 2 2 2 0 0 0-2 2v1a2 2 0 0 1-2 2"/>`, 14)
+export const DOC_GENERIC_SVG = SVG(`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`, 14)

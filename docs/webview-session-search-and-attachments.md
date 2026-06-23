@@ -20,6 +20,21 @@
 - Image attachments are forwarded to OpenCode as SDK `file` parts with data URLs so native vision support and the `opencode-easy-vision` plugin can inspect them. The SDK contract (`FilePartInput`, `node_modules/@opencode-ai/sdk/dist/gen/types.gen.d.ts`) is `{ type: "file", mime, url }`; the url field is a free-form string and accepts `data:`, `file://`, or `http(s)://` schemes.
 - Host-side `webview_request_error` messages are handled by the webview and clear optimistic streaming state, so the send button recovers after rejected or invalid requests.
 
+### Document attachments (non-image files)
+
+- `attachFileBlob` validates the MIME type against `ALLOWED_DOCUMENT_MIMES` (text/plain,
+  text/markdown, text/csv, text/html, text/css, text/javascript, application/json,
+  application/xml, application/pdf, application/x-yaml, application/x-sh) before accepting
+  the file. Unsupported types trigger a `show_error` message to the user.
+- Document attachment chips render type-specific inline SVG icons from `DOCUMENT_ICONS`
+  (`DOC_TEXT_SVG` for text, `DOC_MARKDOWN_SVG` for markdown, `DOC_CSV_SVG` for csv,
+  `DOC_PDF_SVG` for pdf, `DOC_JSON_SVG` for json) with `DOC_GENERIC_SVG` fallback,
+  instead of generic "FILE" text. All SVGs follow the project's 1.5px stroke icon
+  system (`src/chat/webview/icons.ts`) — no emoji.
+- Both image and document attachments are tracked as `AttachedContextItem` entries in the
+  `AttachmentManager`'s context items array, in parallel with the legacy `pendingAttachments`
+  array used for the SDK payload.
+
 ### Paste robustness
 
 - The paste handler in `src/chat/webview/ui/attachments.ts` walks `DataTransferItemList` first, then falls back to `DataTransfer.files` (some Linux desktop clipboards surface pasted images only via `files`).

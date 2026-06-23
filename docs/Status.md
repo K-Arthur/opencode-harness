@@ -1,7 +1,38 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-06-21
-**Version:** v0.4.10
+**Last Updated:** 2026-06-23
+**Version:** v0.4.11
+
+## Highlights (2026-06-23) — AttachedContextItem integration & document attachment support
+
+**Rich context metadata for `send_prompt`.** The webview now tracks all context items
+through the `AttachedContextItem` structure (`src/chat/webview/types.ts`) with fields for
+`type`, `path`, `languageId`, `lineCount`, `selection`, `isActive`, and `tokenEstimate`.
+The `send_prompt` message includes a `contextItems` array alongside the existing
+`attachments` field. (`src/chat/webview/ui/attachments.ts`, `sendMessage.ts`, `types.ts`)
+
+Key changes:
+
+- **`AttachmentManager` interface** formalized with `getContextItems()`,
+  `clearSentContextItems()`, `syncContextItemsWithPrompt()`, and `getContextSummary()`.
+- **`@file:` injection restored** — active file path is prefixed into `sendText` so the
+  backend resolves the file content. Paths with spaces are quoted.
+- **Quote stripping fixed** in `syncContextItemsWithPrompt` — was only stripping the
+  leading quote from `@file:"path with spaces"` tokens; now strips both.
+- **Post-send cleanup** — `clearSentContextItems()` removes per-send items (picked files,
+  images) while preserving the active file context item for the next send.
+- **`isActive` flag consistency** — derived from `isActiveFileIncluded()` which checks both
+  the toggle state and the dismissed set, so dismissed files are correctly excluded.
+- **Selection in context items** — `updateActiveFileContextItem` now includes `selection`
+  data when available.
+- **Image/file attachments tracked as context items** — `attachImageBlob`/`attachFileBlob`
+  call `addImageAttachment()` in parallel with the legacy `pendingAttachments` array.
+  Chip removal also removes the corresponding context item.
+- **Document MIME validation** — `attachFileBlob` validates against `ALLOWED_DOCUMENT_MIMES`
+  before acceptance; `DOCUMENT_ICONS` renders type-specific emoji icons in attachment chips.
+- **Dead code cleanup** — removed unused `AmbiguityInfo` import in `slashCommands.ts`,
+  unused `root` variable in `WorkspaceFileIndex.ts`.
+- **Verification:** tsc clean; build clean; 1951 tests pass / 0 fail / 1 skipped.
 
 ## Highlights (2026-06-21) — context-usage, composer chips, command cards & sidebar
 

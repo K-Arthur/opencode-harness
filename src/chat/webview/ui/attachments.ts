@@ -1,4 +1,4 @@
-import { REMOVE_SVG } from "../icons"
+import { REMOVE_SVG, DOC_TEXT_SVG, DOC_MARKDOWN_SVG, DOC_CSV_SVG, DOC_PDF_SVG, DOC_JSON_SVG, DOC_GENERIC_SVG } from "../icons"
 import type { AttachedContextItem, ContextTraySummary } from "../types"
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
@@ -30,11 +30,11 @@ const ALLOWED_DOCUMENT_MIMES = [
 ] as const
 
 const DOCUMENT_ICONS: Record<string, string> = {
-  "text/plain": "\u{1F4C4}",
-  "text/markdown": "\u{1F4DD}",
-  "text/csv": "\u{1F4CA}",
-  "application/pdf": "\u{1F4D5}",
-  "application/json": "\u{1F4E6}",
+  "text/plain": DOC_TEXT_SVG,
+  "text/markdown": DOC_MARKDOWN_SVG,
+  "text/csv": DOC_CSV_SVG,
+  "application/pdf": DOC_PDF_SVG,
+  "application/json": DOC_JSON_SVG,
 }
 
 export interface Attachment {
@@ -251,7 +251,7 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
       } else {
         const icon = document.createElement("span")
         icon.className = "attachment-chip-icon"
-        icon.textContent = DOCUMENT_ICONS[att.mimeType] || "FILE"
+        icon.innerHTML = DOCUMENT_ICONS[att.mimeType] || DOC_GENERIC_SVG
         chip.appendChild(icon)
       }
       const remove = document.createElement("button")

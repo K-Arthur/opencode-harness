@@ -144,7 +144,7 @@ Run all unit+contract+roundtrip: `npm test`
 | `todoSubagentSetup.ts` | `setupTodoSubagentPanelsImpl` | `TodoSubagentSetupDeps` | Todos/activity/tasks/terminal/skills/subagent panel setup + toggle button wiring |
 | `tabSwitcher.ts` | `switchTabImpl` | `TabSwitcherDeps` | Tab switching: scroll anchors, model/cost/token displays, permission bar, question bar, todos/activity sync |
 | `ui/contextTray.ts` | `createContextTrayManager` | `ContextTrayDeps` | Collapsible context tray: active file/image/document chips, token estimation (128K budget bar), `getAttachmentsForPayload()` |
-| `ui/attachments.ts` | `createAttachmentManager` | `AttachmentDeps` | Active file chip + toggle, selection tracking, image/document attachment CRUD, `isActiveFileIncluded()` payload gate |
+| `ui/attachments.ts` | `createAttachmentManager` | `AttachmentDeps` | Active file chip + toggle, selection tracking, image/document attachment CRUD, `AttachedContextItem` management (`getContextItems`, `clearSentContextItems`, `syncContextItemsWithPrompt`), `isActiveFileIncluded()` payload gate |
 
 Each extracted function is called from a thin one-liner delegation in `main.ts` that passes the deps object. The pattern follows the existing `SendLogicDeps` / `ComposerDeps` precedent.
 
