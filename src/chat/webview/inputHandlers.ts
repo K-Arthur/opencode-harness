@@ -114,8 +114,18 @@ export function createInputHandlers(deps: InputHandlerDeps): InputHandlers {
       const files = e.dataTransfer?.files
       if (files && files.length > 0) {
         const fileMentions: string[] = []
-        const allowedMimes = ["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"] as const
-        for (const f of Array.from(files)) { if (allowedMimes.includes(f.type as typeof allowedMimes[number])) { if (f.type === "application/pdf") { attachmentManager.attachFileBlob(f, "application/pdf") } else { attachmentManager.attachImageBlob(f) } } else { const relPath = (f as { webkitRelativePath?: string }).webkitRelativePath || f.name; fileMentions.push(`@file:${relPath}`) } }
+        const imageMimes = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/bmp", "image/tiff", "image/svg+xml", "image/avif", "image/heic", "image/heif"] as const
+        const docMimes = ["text/plain", "text/markdown", "text/csv", "text/html", "text/css", "text/javascript", "application/json", "application/xml", "application/pdf", "application/x-yaml", "application/x-sh"] as const
+        for (const f of Array.from(files)) {
+          if (imageMimes.includes(f.type as typeof imageMimes[number])) {
+            attachmentManager.attachImageBlob(f)
+          } else if (docMimes.includes(f.type as typeof docMimes[number])) {
+            attachmentManager.attachFileBlob(f, f.type)
+          } else {
+            const relPath = (f as { webkitRelativePath?: string }).webkitRelativePath || f.name
+            fileMentions.push(`@file:${relPath}`)
+          }
+        }
         if (fileMentions.length > 0) insertTextAtCursor(fileMentions.join(" "))
       }
     })

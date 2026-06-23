@@ -7,7 +7,34 @@ const ALLOWED_IMAGE_MIMES = [
   "image/gif",
   "image/webp",
   "image/svg+xml",
+  "image/bmp",
+  "image/tiff",
+  "image/avif",
+  "image/heic",
+  "image/heif",
 ] as const
+
+const ALLOWED_DOCUMENT_MIMES = [
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+  "text/html",
+  "text/css",
+  "text/javascript",
+  "application/json",
+  "application/xml",
+  "application/pdf",
+  "application/x-yaml",
+  "application/x-sh",
+] as const
+
+const DOCUMENT_ICONS: Record<string, string> = {
+  "text/plain": "\u{1F4C4}",
+  "text/markdown": "\u{1F4DD}",
+  "text/csv": "\u{1F4CA}",
+  "application/pdf": "\u{1F4D5}",
+  "application/json": "\u{1F4E6}",
+}
 
 export interface Attachment {
   data: string

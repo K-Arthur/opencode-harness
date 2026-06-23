@@ -1548,6 +1548,53 @@ textarea {
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'%3E%3C/path%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'%3E%3C/path%3E%3C/svg%3E");
 }
 
+/* Image chip hover-enlarge preview */
+.context-chip[data-kind="image"]:hover {
+  transform: scale(1.05);
+  z-index: var(--z-dropdown, 10);
+}
+
+.context-chip[data-kind="image"]:hover::before {
+  display: none;
+}
+
+.context-chip[data-kind="image"] .chip-image-preview {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 200px;
+  max-height: 150px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--oc-border);
+  z-index: var(--z-dropdown, 10);
+  margin-bottom: var(--space-1);
+}
+
+.context-chip[data-kind="image"]:hover .chip-image-preview {
+  display: block;
+}
+
+/* Toggle chip for active file include/exclude */
+.context-chip[data-kind="toggle"] {
+  border-style: dashed;
+  opacity: 0.8;
+  cursor: default;
+}
+
+.context-chip[data-kind="toggle"]::before {
+  display: none;
+}
+
+/* Document size badge */
+.context-chip .chip-size-badge {
+  font-size: 9px;
+  opacity: 0.6;
+  padding: 0 2px;
+}
+
 /* ─── SKILL BADGE ─── */
 
 .skill-badge {

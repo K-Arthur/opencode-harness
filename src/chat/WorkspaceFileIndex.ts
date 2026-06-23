@@ -51,7 +51,8 @@ export class WorkspaceFileIndex {
     if (!folders || folders.length === 0) return null
     const root = folders[0]!.uri.fsPath
     const p = uri.fsPath
-    if (!p.startsWith(root + "/") && p !== root) return null
+    const sep = root.endsWith("\\") || p.includes("\\") ? "\\" : "/"
+    if (!p.startsWith(root + sep) && p !== root) return null
     return p === root ? "" : p.slice(root.length + 1)
   }
 
@@ -67,9 +68,9 @@ export class WorkspaceFileIndex {
    */
   watch(): void {
     this.disposables.push(
-      this.deps.vscode.workspace.onDidCreateFiles(() => this.refresh()),
-      this.deps.vscode.workspace.onDidDeleteFiles(() => this.refresh()),
-      this.deps.vscode.workspace.onDidRenameFiles(() => this.refresh()),
+      this.deps.vscode.workspace.onDidCreateFiles(() => this.refresh().then(() => this.handleGetFiles())),
+      this.deps.vscode.workspace.onDidDeleteFiles(() => this.refresh().then(() => this.handleGetFiles())),
+      this.deps.vscode.workspace.onDidRenameFiles(() => this.refresh().then(() => this.handleGetFiles())),
     )
   }
 

@@ -958,14 +958,12 @@
           "default": false,
           "description": "Enable Test-Driven Development orchestration. When enabled, coding tasks will follow Red-Green-Refactor cycles with automatic test generation and verification."
         },
-
         "opencode.sadd.enabled": {
           "type": "boolean",
           "scope": "window",
           "default": false,
           "description": "Enable Sub-Agent Driven Development (SADD). When enabled, the AI decomposes complex tasks into parallel subtasks, each run by a separate sub-agent. This can speed up multi-file changes but uses more tokens."
         },
-
         "opencode.methodology.enabled": {
           "type": "boolean",
           "scope": "window",
@@ -988,7 +986,6 @@
           "maximum": 600000,
           "description": "Time-to-first-byte timeout in milliseconds. The extension waits this long for the first stream chunk before probing the opencode server for run liveness. Slow reasoning models (GLM-5.x, Kimi, DeepSeek-R1, Qwen-QwQ) routinely take 60–180s to emit the first token; the 180s default accommodates them. Decrease for snappy first-class providers; increase if your workflow regularly hits the timeout while the model is still thinking. Range: 60000–600000ms (1–10 minutes)."
         },
-
         "opencode.sessions.maxTabs": {
           "type": "number",
           "scope": "window",
@@ -1019,7 +1016,6 @@
           "maximum": 60,
           "description": "Minutes before an idle per-tab process is automatically killed to free resources (per-tab strategy only)."
         },
-
         "opencode.defaultMode": {
           "type": "string",
           "default": "build",
@@ -1175,6 +1171,7 @@
     "diff-match-patch": "^1.0.5",
     "dompurify": "^3.4.11",
     "highlight.js": "^11.11.1",
+    "jsonc-parser": "^3.3.1",
     "katex": "^0.17.0",
     "markdown-it": "^14.2.0",
     "markdown-it-task-lists": "^2.1.1",

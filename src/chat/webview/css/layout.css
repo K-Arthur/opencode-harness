@@ -839,6 +839,103 @@
   gap: var(--space-1);
 }
 
+/* ─── CONTEXT TRAY ─── */
+
+#context-tray {
+  padding: var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--oc-border);
+  background: var(--oc-bg);
+  flex-shrink: 0;
+}
+
+.context-tray-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  cursor: pointer;
+  user-select: none;
+  font-size: var(--font-size-xs);
+  color: var(--vscode-descriptionForeground, var(--oc-text-secondary));
+  padding: var(--space-0-5) 0;
+}
+
+.context-tray-summary:hover {
+  color: var(--vscode-foreground, var(--oc-text));
+}
+
+.context-tray-toggle {
+  font-size: 10px;
+  opacity: 0.7;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+#context-tray[aria-expanded="true"] .context-tray-toggle {
+  transform: rotate(180deg);
+}
+
+.context-tray-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-1) 0;
+}
+
+.context-tray-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-1-5);
+  border-radius: var(--radius-sm);
+  background: var(--vscode-badge-background, var(--oc-badge-bg));
+  color: var(--vscode-badge-foreground, var(--oc-badge-fg));
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-tray-item-icon {
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+.context-tray-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.context-tray-item-remove {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  font-size: 12px;
+  opacity: 0.6;
+  line-height: 1;
+}
+
+.context-tray-item-remove:hover {
+  opacity: 1;
+}
+
+.context-tray-token-bar {
+  height: 2px;
+  background: var(--oc-border);
+  border-radius: 1px;
+  margin-top: var(--space-0-5);
+  overflow: hidden;
+}
+
+.context-tray-token-fill {
+  height: 100%;
+  background: var(--vscode-focusBorder, var(--oc-accent));
+  transition: width var(--duration-normal) var(--ease-out);
+}
+
 /* ─── INPUT AREA (Antigravity Cockpit) ─── */
 
 #input-area {
