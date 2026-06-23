@@ -26,6 +26,9 @@ export interface SendLogicDeps {
   attachmentManager: {
     getAttachments: () => Array<{ data: string; mimeType: string }>
     clearAttachments: () => void
+    isActiveFileIncluded: () => boolean
+    getActiveFile: () => string | null
+    getActiveFileSelection: () => { startLine: number; endLine: number; text: string } | null
   }
   streamHandlers: {
     get: (id: string) => { showTypingIndicator: (msg: string) => void; finalizeStreamingText?: () => void; finalizePendingTools?: () => void } | undefined

@@ -189,6 +189,21 @@ export function sendMessage(deps: SendMessageDeps): void {
   }
 
   const attachments = attachmentManager.getAttachments()
+  const activeFilePath = attachmentManager.isActiveFileIncluded() ? attachmentManager.getActiveFile() : null
+  const activeFileSelection = attachmentManager.getActiveFileSelection()
+
+  // Build the text with active file context injected
+  let sendText = text
+  const contextItems: Array<{ type: string; path: string; selection?: { startLine: number; endLine: number; text: string } }> = []
+  if (activeFilePath) {
+    if (!sendText.includes(`@file:${activeFilePath}`)) {
+      const quotedPath = /\s/.test(activeFilePath) ? `"${activeFilePath}"` : activeFilePath
+      sendText = `@file:${quotedPath}\n${sendText}`
+    }
+    if (activeFileSelection) {
+      contextItems.push({ type: "active_file", path: activeFilePath, selection: activeFileSelection })
+    }
+  }
 
   els.promptInput.value = ""
   autoResizeTextarea()
@@ -200,7 +215,7 @@ export function sendMessage(deps: SendMessageDeps): void {
     // both the local optimistic bubble id and the server messageID, so they stay equal.
     id: generateUserMessageId(),
     blocks: [
-      ...(text ? [{ type: "text" as const, text }] : []),
+      ...(sendText ? [{ type: "text" as const, text: sendText }] : []),
       ...attachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
     ],
     timestamp: Date.now(),
@@ -225,7 +240,7 @@ export function sendMessage(deps: SendMessageDeps): void {
 
   vscode.postMessage({
     type: "send_prompt",
-    text,
+    text: sendText,
     sessionId: active.id,
     messageId: msgObj.id,
     clientRequestId,
@@ -233,6 +248,7 @@ export function sendMessage(deps: SendMessageDeps): void {
     mode: active.mode,
     ...(sendVariant ? { variant: sendVariant } : {}),
     ...(attachments.length > 0 ? { attachments } : {}),
+    ...(contextItems.length > 0 ? { contextItems } : {}),
   })
 
   // G8: optimistic-local safety. The host should ack the send within a few

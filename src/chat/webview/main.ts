@@ -2326,8 +2326,12 @@ function setupTodoSkillAndSubagentPanels(): void {
       }],
       ["mention_results", (msg) => { mention.renderResults(msg.items as MentionItem[] | undefined) }],
       ["active_file", (msg) => {
-        const activeFile = typeof msg.path === "string" ? msg.path : null
-        attachmentManager.setActiveFile(activeFile)
+        const path = typeof msg.path === "string" ? msg.path : null
+        const rawSelection = msg.selection
+        const selection = rawSelection && typeof rawSelection === "object" && "startLine" in rawSelection && "endLine" in rawSelection && "text" in rawSelection
+          ? { startLine: rawSelection.startLine as number, endLine: rawSelection.endLine as number, text: rawSelection.text as string }
+          : null
+        attachmentManager.setActiveFile({ path, selection })
       }],
       ["workspace_files", (msg) => {
         const files = Array.isArray(msg.files) ? msg.files : []

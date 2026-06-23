@@ -38,6 +38,9 @@ export interface ComposerDeps {
     renderAttachmentChips: () => void
     attachImageBlob: (file: File) => void
     attachFileBlob: (file: File, mimeType: string) => void
+    isActiveFileIncluded: () => boolean
+    getActiveFile: () => string | null
+    getActiveFileSelection: () => { startLine: number; endLine: number; text: string } | null
   }
   mention: {
     handleTrigger: () => void
@@ -157,6 +160,9 @@ export function createComposer(deps: ComposerDeps): ComposerAPI {
     attachmentManager: {
       getAttachments: attachmentManager.getAttachments,
       clearAttachments: attachmentManager.clearAttachments,
+      isActiveFileIncluded: attachmentManager.isActiveFileIncluded,
+      getActiveFile: attachmentManager.getActiveFile,
+      getActiveFileSelection: attachmentManager.getActiveFileSelection,
     },
     streamHandlers,
     modelDropdown: { getCurrentModel: modelDropdown.getCurrentModel },

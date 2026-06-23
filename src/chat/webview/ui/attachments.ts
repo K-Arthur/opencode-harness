@@ -20,6 +20,19 @@ export interface AttachmentEls {
   promptInput: HTMLTextAreaElement
 }
 
+export interface ActiveFileSelectionInfo {
+  startLine: number
+  endLine: number
+  text: string
+}
+
+export interface ActiveFileInfo {
+  path: string | null
+  languageId?: string
+  lineCount?: number
+  selection?: ActiveFileSelectionInfo | null
+}
+
 export interface AttachmentDeps {
   els: AttachmentEls
   postMessage: (msg: Record<string, unknown>) => void
@@ -33,6 +46,8 @@ export function createAttachmentManager(deps: AttachmentDeps) {
   const pendingAttachments: Attachment[] = []
   let workspaceFiles: string[] = []
   let activeFile: string | null = null
+  let activeFileSelection: ActiveFileSelectionInfo | null = null
+  let activeFileIncluded = true
   const dismissedActiveFiles = new Set<string>()
 
   function getAttachments(): Attachment[] {
@@ -214,9 +229,13 @@ export function createAttachmentManager(deps: AttachmentDeps) {
     // Add active file chip if there is an active file and it hasn't been dismissed
     if (activeFile && !dismissedActiveFiles.has(activeFile)) {
       const basename = activeFile.split(/[\\/]/).pop() || activeFile
+      const selectionLabel = activeFileSelection
+        ? ` (L${activeFileSelection.startLine}-${activeFileSelection.endLine})`
+        : ""
+      const toggleIcon = activeFileIncluded ? "\u{1F441}" : "\u{1F6AB}"
       chips.push({
-        label: basename,
-        title: activeFile,
+        label: `${toggleIcon} ${basename}${selectionLabel}`,
+        title: activeFile + selectionLabel,
         kind: "file",
         removable: true,
         onRemove: () => {
@@ -225,6 +244,12 @@ export function createAttachmentManager(deps: AttachmentDeps) {
           }
           updatePromptContextChips()
         },
+      })
+      // Add toggle chip for include/exclude
+      chips.push({
+        label: activeFileIncluded ? "Included" : "Excluded",
+        kind: "toggle",
+        removable: false,
       })
     }
 
@@ -254,13 +279,36 @@ export function createAttachmentManager(deps: AttachmentDeps) {
     renderAttachmentChips()
   }
 
-  function setActiveFile(path: string | null): void {
+  function setActiveFile(info: ActiveFileInfo | null): void {
+    const path = info?.path ?? null
     activeFile = path
+    activeFileSelection = info?.selection ?? null
+    // Reset to included when switching files (per-session reset)
+    activeFileIncluded = true
     // When switching to a file, always clear it from dismissed set so it reappears
     if (path) {
       dismissedActiveFiles.delete(path)
     }
     updatePromptContextChips()
+  }
+
+  function toggleActiveFileInclude(): void {
+    activeFileIncluded = !activeFileIncluded
+    const session = deps.getActiveSession()
+    deps.postMessage({
+      type: "toggle_active_file",
+      sessionId: session?.id ?? "",
+      include: activeFileIncluded,
+    })
+    updatePromptContextChips()
+  }
+
+  function isActiveFileIncluded(): boolean {
+    return activeFileIncluded && !!activeFile && !dismissedActiveFiles.has(activeFile)
+  }
+
+  function getActiveFileSelection(): ActiveFileSelectionInfo | null {
+    return activeFileSelection
   }
 
   function setWorkspaceFiles(files: string[]): void {
@@ -289,6 +337,9 @@ export function createAttachmentManager(deps: AttachmentDeps) {
     setWorkspaceFiles,
     getWorkspaceFiles,
     getActiveFile,
+    toggleActiveFileInclude,
+    isActiveFileIncluded,
+    getActiveFileSelection,
   }
 }
 
