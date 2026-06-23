@@ -138,6 +138,30 @@ void describe("ChatProvider.ts", () => {
     assert.ok(source.includes("import { ChatFileOps } from \"./ChatFileOps\""), "must import ChatFileOps")
   })
 
+  void it("imports and uses WorkspaceFileIndex for workspace file indexing", () => {
+    assert.ok(source.includes("import { WorkspaceFileIndex } from \"./WorkspaceFileIndex\""), "ChatProvider must import WorkspaceFileIndex")
+    assert.ok(source.includes("new WorkspaceFileIndex("), "ChatProvider must instantiate WorkspaceFileIndex")
+    assert.ok(source.includes("workspaceFileIndex.watch()"), "ChatProvider must start watching workspace file changes")
+  })
+
+  void it("tracks the active editor and posts active_file messages", () => {
+    const resolveIdx = source.indexOf("resolveWebviewView(")
+    assert.ok(resolveIdx >= 0, "resolveWebviewView must exist")
+    const resolveBody = source.slice(resolveIdx, resolveIdx + 1800)
+    assert.ok(
+      resolveBody.includes("vscode.window.onDidChangeActiveTextEditor"),
+      "resolveWebviewView must listen to active editor changes",
+    )
+    assert.ok(
+      source.includes("postActiveFile("),
+      "ChatProvider must have a postActiveFile helper",
+    )
+    assert.ok(
+      source.includes('type: "active_file"'),
+      "ChatProvider must post active_file messages to the webview",
+    )
+  })
+
   void it("delegates message validation guards for send_prompt and mention_search", () => {
     assert.ok(source.includes('msg.type === "send_prompt"') || eventRouterSource.includes('"send_prompt"'), "must handle send_prompt")
     assert.ok(source.includes('msg.type === "mention_search"') || eventRouterSource.includes('"mention_search"'), "must handle mention_search")

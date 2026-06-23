@@ -24,6 +24,7 @@ import type { ThemeManager } from "../theme/ThemeManager"
 import type { ThemeController } from "./ThemeController"
 import type { PromptManager } from "../prompts/PromptManager"
 import type { ChatFileOps } from "./ChatFileOps"
+import type { WorkspaceFileIndex } from "./WorkspaceFileIndex"
 import type { SteerPromptHandler } from "./handlers/SteerPromptHandler"
 import type { HostPromptQueue } from "./HostPromptQueue"
 import type { ChatMessage, Block } from "./types"
@@ -91,6 +92,7 @@ export interface WebviewEventRouterOptions {
   themeController: ThemeController
   promptManager: PromptManager
   fileOps: ChatFileOps
+  workspaceFileIndex: WorkspaceFileIndex
   contextMonitor: ContextMonitor
   usageAnalytics: UsageAnalytics
   steerPromptHandler: SteerPromptHandler
@@ -200,6 +202,7 @@ export class WebviewEventRouter {
     "connect_provider_oauth", "complete_provider_oauth", "list_provider_credentials",
     "remove_provider_credential",
     "compact_session", "execute_command", "open_terminal", "copy_text", "list_commands",
+    "get_workspace_files",
     "insert_at_cursor", "create_file_from_code", "compact_banner_action",
     "edit_message", "attach_image",
     "delete_session", "archive_session", "pin_session", "set_session_tags", "revert_message", "unrevert",
@@ -1028,6 +1031,7 @@ export class WebviewEventRouter {
       await this.opts.messageRouter.handleAcceptPermission(sessionId, msg.permissionId as string, msg.response as string)
     }],
     ["mention_search", async (msg: Record<string, unknown>) => { await this.opts.messageRouter.handleMentionSearch(msg.query as string || "", { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) }) }],
+    ["get_workspace_files", () => { this.opts.workspaceFileIndex?.handleGetFiles() }],
     ["list_sessions", async (msg: Record<string, unknown>) => { await this.opts.messageRouter.handleListSessions(this.opts.sessionStore, { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) }, typeof msg.query === "string" ? msg.query : "") }],
     ["resume_session", async (msg: Record<string, unknown>) => { if (msg.sessionId) await this.opts.sessionLifecycle.handleResumeSession(msg.sessionId as string) }],
     ["new_session", async () => {
@@ -1069,6 +1073,7 @@ export class WebviewEventRouter {
       this.clearReadyTimeout()
       this.webviewReady = true
       this.opts.pushAllStateToWebview()
+      this.opts.workspaceFileIndex?.handleGetFiles()
       if (this.earlyMessageQueue.length > 0) {
         const queue = this.earlyMessageQueue
         this.earlyMessageQueue = []

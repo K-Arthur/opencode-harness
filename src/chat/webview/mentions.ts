@@ -60,7 +60,7 @@ export interface MentionState {
   mode: "mention" | "command"
 }
 
-export function setupMentions(els: ElementRefs, state: MentionState, postMessage: (msg: Record<string, unknown>) => void) {
+export function setupMentions(els: ElementRefs, state: MentionState, postMessage: (msg: Record<string, unknown>) => void, getWorkspaceFiles: () => string[] = () => []) {
   let serverCommands: MentionItem[] = []
   let _resizeHandler: (() => void) | null = null
 
@@ -148,7 +148,23 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
       els.mentionDropdown.classList.add("mention-mode")
       els.mentionDropdown.classList.remove("command-mode")
       showDropdown()
-      postMessage({ type: "mention_search", query: state.query })
+
+      // Strip optional "file:" prefix for local fuzzy search
+      const searchQuery = state.query.replace(/^file:/i, "").toLowerCase()
+      const workspaceFiles = getWorkspaceFiles()
+      const ranked = rankByFuzzy(
+        workspaceFiles.map((f) => ({ display: f, description: "" })),
+        searchQuery,
+        (f) => f.display.toLowerCase(),
+        () => "",
+      )
+      const fileItems: MentionItem[] = ranked.slice(0, 50).map((f) => ({
+        display: f.display,
+        description: "",
+        icon: "",
+        prefix: "@file:",
+      }))
+      renderMentionResults(fileItems)
     } else {
       hideDropdown()
     }
@@ -231,6 +247,41 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     window.dispatchEvent(new CustomEvent("oc-input-changed"))
   }
 
+  function renderMentionResults(items: MentionItem[]) {
+    els.mentionDropdown.innerHTML = ""
+    if (items.length === 0) {
+      const empty = document.createElement("div")
+      empty.className = "dropdown-empty"
+      empty.textContent = "No matching files"
+      els.mentionDropdown.appendChild(empty)
+      state.selectedIndex = -1
+      return
+    }
+    state.selectedIndex = 0
+    items.forEach((item, i) => {
+      const div = document.createElement("div")
+      div.className = "dropdown-item mention-item" + (i === 0 ? " selected" : "")
+      div.id = `mention-file-opt-${i}`
+      div.setAttribute("role", "option")
+      div.setAttribute("aria-selected", String(i === 0))
+      div.tabIndex = -1
+      div.dataset.file = item.display || ""
+      const icon = document.createElement("span")
+      icon.className = "dropdown-icon"
+      icon.textContent = "\U0001F4C4"
+      div.appendChild(icon)
+      const content = document.createElement("span")
+      content.className = "dropdown-content"
+      const label = document.createElement("span")
+      label.className = "dropdown-label"
+      label.textContent = item.display || ""
+      content.appendChild(label)
+      div.appendChild(content)
+      div.addEventListener("click", () => insertMention(item))
+      els.mentionDropdown.appendChild(div)
+    })
+  }
+
   function updateServerCommands(
     commands: Array<{ name: string; description?: string; source?: string; isCustom?: boolean }>,
   ) {
@@ -300,7 +351,14 @@ export function setupMentions(els: ElementRefs, state: MentionState, postMessage
     } else if (e.key === "Enter" && state.selectedIndex >= 0) {
       e.preventDefault()
       const selectedEnter = items[state.selectedIndex]
-      if (selectedEnter) selectedEnter.click()
+      if (selectedEnter) {
+        if (state.mode === "command") {
+          insertCommand({ display: selectedEnter.dataset.command || "", description: "", icon: "" })
+        } else {
+          const file = selectedEnter.dataset.file || ""
+          insertMention({ display: file, description: "", icon: "", prefix: "@file:" })
+        }
+      }
     } else if (e.key === "Escape") {
       hideDropdown()
     }

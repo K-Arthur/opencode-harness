@@ -462,7 +462,8 @@ function getVsCodeApi() {
   const mention = setupMentions(
     els,
     { query: "", selectedIndex: -1, mode: "mention" as const },
-    (msg) => vscode.postMessage(msg)
+    (msg) => vscode.postMessage(msg),
+    () => attachmentManager.getWorkspaceFiles()
   )
 
   // ── Commands palette (full modal). Triggered by /commands, Ctrl+/, or list_stashes flow.
@@ -2324,6 +2325,14 @@ function setupTodoSkillAndSubagentPanels(): void {
         }
       }],
       ["mention_results", (msg) => { mention.renderResults(msg.items as MentionItem[] | undefined) }],
+      ["active_file", (msg) => {
+        const activeFile = typeof msg.path === "string" ? msg.path : null
+        attachmentManager.setActiveFile(activeFile)
+      }],
+      ["workspace_files", (msg) => {
+        const files = Array.isArray(msg.files) ? msg.files : []
+        attachmentManager.setWorkspaceFiles(files)
+      }],
       ["mode_change_result", (msg, sid) => {
         const sessionId = typeof msg.sessionId === "string" ? msg.sessionId : sid
         const mode = normalizeSessionMode(msg.mode)

@@ -679,6 +679,8 @@ export type HostMessage =
   | { type: "mode_change_result"; sessionId: string; mode: "plan" | "build" | "auto"; accepted: boolean; reason?: string }
   | { type: "model_list"; items: ModelInfo[] }
   | { type: "mention_results"; items: MentionItem[]; query: string }
+  | { type: "active_file"; path: string | null }
+  | { type: "workspace_files"; files: string[] }
   | { type: "session_list"; sessions: SessionSummary[]; query?: string }
   | { type: "server_session_list"; sessions: unknown[] }
   | { type: "server_session_deleted"; sessionId: string }
@@ -840,6 +842,7 @@ export type WebviewMessage =
   | { type: "revert_diff"; diffId: string; path: string; sessionId?: string }
   | { type: "accept_permission"; sessionId?: string; permissionId?: string; response?: string }
   | { type: "mention_search"; query: string }
+  | { type: "get_workspace_files" }
   | { type: "list_sessions"; limit?: number; query?: string }
   | { type: "resume_session"; sessionId: string }
   | { type: "new_session" }

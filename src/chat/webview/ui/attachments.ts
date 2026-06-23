@@ -31,6 +31,9 @@ export interface AttachmentDeps {
 
 export function createAttachmentManager(deps: AttachmentDeps) {
   const pendingAttachments: Attachment[] = []
+  let workspaceFiles: string[] = []
+  let activeFile: string | null = null
+  const dismissedActiveFiles = new Set<string>()
 
   function getAttachments(): Attachment[] {
     // Return a shallow copy — clearAttachments() mutates the internal array
@@ -208,6 +211,23 @@ export function createAttachmentManager(deps: AttachmentDeps) {
       },
     }))
 
+    // Add active file chip if there is an active file and it hasn't been dismissed
+    if (activeFile && !dismissedActiveFiles.has(activeFile)) {
+      const basename = activeFile.split(/[\\/]/).pop() || activeFile
+      chips.push({
+        label: basename,
+        title: activeFile,
+        kind: "file",
+        removable: true,
+        onRemove: () => {
+          if (activeFile) {
+            dismissedActiveFiles.add(activeFile)
+          }
+          updatePromptContextChips()
+        },
+      })
+    }
+
     if (pendingAttachments.length > 0) {
       const hasImages = pendingAttachments.some(a => a.mimeType.startsWith("image/"))
       const hasFiles = pendingAttachments.some(a => !a.mimeType.startsWith("image/"))
@@ -234,6 +254,26 @@ export function createAttachmentManager(deps: AttachmentDeps) {
     renderAttachmentChips()
   }
 
+  function setActiveFile(path: string | null): void {
+    activeFile = path
+    if (path && !dismissedActiveFiles.has(path)) {
+      dismissedActiveFiles.delete(path)
+    }
+    updatePromptContextChips()
+  }
+
+  function setWorkspaceFiles(files: string[]): void {
+    workspaceFiles = files
+  }
+
+  function getWorkspaceFiles(): string[] {
+    return [...workspaceFiles]
+  }
+
+  function getActiveFile(): string | null {
+    return activeFile
+  }
+
   return {
     getAttachments,
     attachImageBlob,
@@ -242,6 +282,10 @@ export function createAttachmentManager(deps: AttachmentDeps) {
     renderAttachmentChips,
     updatePromptContextChips,
     clearAttachments,
+    setActiveFile,
+    setWorkspaceFiles,
+    getWorkspaceFiles,
+    getActiveFile,
   }
 }
 

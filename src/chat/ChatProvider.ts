@@ -35,6 +35,7 @@ import { MessageRouter } from "./handlers/MessageRouter"
 import { ChatCommands } from "./ChatCommands"
 import { AutoCompactor } from "./AutoCompactor"
 import { ChatFileOps } from "./ChatFileOps"
+import { WorkspaceFileIndex } from "./WorkspaceFileIndex"
 import { HostMessageBatcher } from "./HostMessageBatcher"
 import { PendingEventBuffer } from "./PendingEventBuffer"
 import { McpServerManager } from "../mcp/McpServerManager"
@@ -110,6 +111,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
  private autoCompactor: AutoCompactor
   private backfillService: BackfillService
   private fileOps = new ChatFileOps()
+  private workspaceFileIndex = new WorkspaceFileIndex({ vscode, postMessage: (msg) => this.postMessage(msg) })
   private themeController: ThemeController
   private statePush: StatePushService
   private sessionLifecycle: SessionLifecycleService
@@ -394,6 +396,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       themeController: this.themeController,
       promptManager: this.promptManager,
       fileOps: this.fileOps,
+      workspaceFileIndex: this.workspaceFileIndex,
       contextMonitor: this.contextMonitor,
       usageAnalytics: this.usageAnalytics,
       steerPromptHandler: this.steerPromptHandler,
@@ -595,6 +598,18 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     // State will be pushed when webview sends 'webview_ready' message
 
     // Subscriptions
+    this.workspaceFileIndex.watch()
+    this.disposables.push({
+      dispose: () => this.workspaceFileIndex.dispose(),
+    })
+
+    this.disposables.push(
+      vscode.window.onDidChangeActiveTextEditor((editor) => {
+        this.postActiveFile(editor)
+      }),
+    )
+    this.postActiveFile(vscode.window.activeTextEditor)
+
     this.disposables.push(
       this.modelManager.onModelChanged((model) => {
         this.pushModelToWebview(model)
@@ -2289,7 +2304,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     // H3: Buffer messages if webview isn't ready yet.
     // Allow init_state, theme_vars, model_update, and model_list through
     // so the webview is fully initialized on first load.
-    const passthrough = ["init_state", "theme_vars", "theme_config", "tool_output_config", "rate_limit_state", "model_update", "model_list", "webview_ready", "session_list_update"]
+    const passthrough = ["init_state", "theme_vars", "theme_config", "tool_output_config", "rate_limit_state", "model_update", "model_list", "webview_ready", "session_list_update", "active_file", "workspace_files"]
     if (!this.eventRouter.webviewReady && !passthrough.includes(msg.type as string)) {
       // Use centralized queue enforcement in WebviewEventRouter
       this.eventRouter.enqueueMessage(msg)
@@ -2302,6 +2317,11 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     if (msg.type === "stream_end") {
       this.notifyTurnComplete()
     }
+  }
+
+  private postActiveFile(editor: vscode.TextEditor | undefined): void {
+    const path = editor?.document?.uri ? this.workspaceFileIndex.asRelativePath(editor.document.uri) : null
+    this.postMessage({ type: "active_file", path })
   }
 
   private postRawMessage(msg: Record<string, unknown>): boolean | Thenable<boolean> | undefined {
