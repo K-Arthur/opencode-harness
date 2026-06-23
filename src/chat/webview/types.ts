@@ -461,6 +461,28 @@ export interface ContextChip {
   onRemove?: () => void
 }
 
+export type ContextItemType = "active_file" | "picked_file" | "image" | "document"
+
+export interface AttachedContextItem {
+  id: string
+  type: ContextItemType
+  path?: string
+  languageId?: string
+  mimeType?: string
+  data?: string
+  sizeBytes?: number
+  lineCount?: number
+  isActive: boolean
+  tokenEstimate?: number
+}
+
+export interface ContextTraySummary {
+  fileCount: number
+  imageCount: number
+  documentCount: number
+  totalTokens: number
+}
+
 export interface TokenBreakdown {
   input: number
   output: number
@@ -843,6 +865,7 @@ export type WebviewMessage =
   | { type: "accept_permission"; sessionId?: string; permissionId?: string; response?: string }
   | { type: "mention_search"; query: string }
   | { type: "get_workspace_files" }
+  | { type: "toggle_active_file"; sessionId: string; include: boolean }
   | { type: "list_sessions"; limit?: number; query?: string }
   | { type: "resume_session"; sessionId: string }
   | { type: "new_session" }
