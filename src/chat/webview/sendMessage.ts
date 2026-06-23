@@ -190,27 +190,19 @@ export function sendMessage(deps: SendMessageDeps): void {
   }
 
   const attachments = attachmentManager.getAttachments()
-  let contextItems = attachmentManager.getContextItems()
-  
-  // Filter context items to only include active files and picked files that are active
-  contextItems = contextItems.filter((item: AttachedContextItem) => item.isActive && (item.type === "active_file" || item.type === "picked_file"))
-  
-  // If active file is included but not in contextItems, add it
-  const activeFilePath = attachmentManager.isActiveFileIncluded() ? attachmentManager.getActiveFile() : null
-  const activeFileSelection = attachmentManager.getActiveFileSelection()
-  if (activeFilePath && !contextItems.some((item: AttachedContextItem) => item.type === "active_file")) {
-    contextItems.push({
-      id: `active-${Date.now()}`,
-      type: "active_file",
-      path: activeFilePath,
-      isActive: true,
-      tokenEstimate: 0,
-      ...(activeFileSelection ? { selection: activeFileSelection } : {}),
-    })
-  }
+  const contextItems = attachmentManager.getContextItems().filter(
+    (item: AttachedContextItem) => item.isActive && (item.type === "active_file" || item.type === "picked_file"),
+  )
 
-  // Build the text with active file context injected
+  // Inject active file @file: mention into the prompt text so the backend
+  // knows which file to read. The contextItems array carries metadata but
+  // the @file: token in the text is what triggers the backend file reader.
   let sendText = text
+  const activeFilePath = attachmentManager.isActiveFileIncluded() ? attachmentManager.getActiveFile() : null
+  if (activeFilePath && !sendText.includes(`@file:${activeFilePath}`)) {
+    const quotedPath = /\s/.test(activeFilePath) ? `"${activeFilePath}"` : activeFilePath
+    sendText = `@file:${quotedPath}\n${sendText}`
+  }
 
   els.promptInput.value = ""
   autoResizeTextarea()
@@ -230,6 +222,7 @@ export function sendMessage(deps: SendMessageDeps): void {
   }
 
   attachmentManager.clearAttachments()
+  attachmentManager.clearSentContextItems()
   renderAttachmentChips()
 
   addMessage(active.id, msgObj)

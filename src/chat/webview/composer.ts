@@ -1,4 +1,4 @@
-import type { WebviewState, ChatMessage, ModelInfo } from "./types"
+import type { WebviewState, ChatMessage, ModelInfo, AttachedContextItem, ContextTraySummary } from "./types"
 import type { CommandEntry } from "./commands-modal"
 import type { PromptQueue } from "./queue"
 import type { ElementRefs } from "./dom"
@@ -41,6 +41,19 @@ export interface ComposerDeps {
     isActiveFileIncluded: () => boolean
     getActiveFile: () => string | null
     getActiveFileSelection: () => { startLine: number; endLine: number; text: string } | null
+    getContextItems: () => AttachedContextItem[]
+    clearSentContextItems: () => void
+    setWorkspaceFiles: (files: string[]) => void
+    getWorkspaceFiles: () => string[]
+    toggleActiveFileInclude: () => void
+    getContextSummary: () => ContextTraySummary
+    addPickedFile: (path: string) => void
+    removePickedFile: (path: string) => void
+    addImageAttachment: (data: string, mimeType: string) => void
+    removeImageAttachment: (id: string) => void
+    clearContextItems: () => void
+    syncContextItemsWithPrompt: () => void
+    setActiveFile: (info: { path: string | null; selection?: { startLine: number; endLine: number; text: string }; languageId?: string; lineCount?: number } | null) => void
   }
   mention: {
     handleTrigger: () => void
@@ -163,6 +176,8 @@ export function createComposer(deps: ComposerDeps): ComposerAPI {
       isActiveFileIncluded: attachmentManager.isActiveFileIncluded,
       getActiveFile: attachmentManager.getActiveFile,
       getActiveFileSelection: attachmentManager.getActiveFileSelection,
+      getContextItems: attachmentManager.getContextItems,
+      clearSentContextItems: attachmentManager.clearSentContextItems,
     },
     streamHandlers,
     modelDropdown: { getCurrentModel: modelDropdown.getCurrentModel },

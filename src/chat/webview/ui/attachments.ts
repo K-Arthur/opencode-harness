@@ -1,4 +1,5 @@
 import { REMOVE_SVG } from "../icons"
+import type { AttachedContextItem, ContextTraySummary } from "../types"
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 const ALLOWED_IMAGE_MIMES = [
@@ -14,31 +15,35 @@ const ALLOWED_IMAGE_MIMES = [
   "image/heif",
 ] as const
 
-const ALLOWED_DOCUMENT_MIMES = [
-  "text/plain",
-  "text/markdown",
-  "text/csv",
-  "text/html",
-  "text/css",
-  "text/javascript",
-  "application/json",
-  "application/xml",
-  "application/pdf",
-  "application/x-yaml",
-  "application/x-sh",
-] as const
-
-const DOCUMENT_ICONS: Record<string, string> = {
-  "text/plain": "\u{1F4C4}",
-  "text/markdown": "\u{1F4DD}",
-  "text/csv": "\u{1F4CA}",
-  "application/pdf": "\u{1F4D5}",
-  "application/json": "\u{1F4E6}",
-}
-
 export interface Attachment {
   data: string
   mimeType: string
+}
+
+export interface AttachmentManager {
+  getAttachments: () => Attachment[]
+  attachImageBlob: (blob: Blob) => void
+  attachFileBlob: (blob: Blob, mimeType: string) => void
+  onPaste: (e: ClipboardEvent) => void
+  renderAttachmentChips: () => void
+  updatePromptContextChips: () => void
+  clearAttachments: () => void
+  setActiveFile: (info: ActiveFileInfo | null) => void
+  setWorkspaceFiles: (files: string[]) => void
+  getWorkspaceFiles: () => string[]
+  getActiveFile: () => string | null
+  toggleActiveFileInclude: () => void
+  isActiveFileIncluded: () => boolean
+  getActiveFileSelection: () => ActiveFileSelectionInfo | null
+  getContextItems: () => AttachedContextItem[]
+  getContextSummary: () => ContextTraySummary
+  addPickedFile: (path: string) => void
+  removePickedFile: (path: string) => void
+  addImageAttachment: (data: string, mimeType: string) => void
+  removeImageAttachment: (id: string) => void
+  clearContextItems: () => void
+  clearSentContextItems: () => void
+  syncContextItemsWithPrompt: () => void
 }
 
 export interface AttachmentEls {
@@ -67,15 +72,18 @@ export interface AttachmentDeps {
   autoResizeTextarea: () => void
   updateContextChips: (els: AttachmentEls, chips?: import("../types").ContextChip[]) => void
   getActiveSession: () => { id: string } | undefined
+  onInputChanged?: () => void
 }
 
-export function createAttachmentManager(deps: AttachmentDeps) {
+export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager {
   const pendingAttachments: Attachment[] = []
+  const contextItems: AttachedContextItem[] = []
   let workspaceFiles: string[] = []
   let activeFile: string | null = null
   let activeFileSelection: ActiveFileSelectionInfo | null = null
   let activeFileIncluded = true
   const dismissedActiveFiles = new Set<string>()
+  let nextContextId = 0
 
   function getAttachments(): Attachment[] {
     // Return a shallow copy — clearAttachments() mutates the internal array
@@ -98,6 +106,7 @@ export function createAttachmentManager(deps: AttachmentDeps) {
       const base64Match = result.match(/^data:(image\/[\w.+-]+);base64,(.+)$/)
       if (base64Match && base64Match[1] && base64Match[2]) {
         pendingAttachments.push({ data: base64Match[2], mimeType: base64Match[1] })
+        addImageAttachment(base64Match[2], base64Match[1])
         console.log(`[opencode-harness] attachImageBlob: attached ${base64Match[1]} (${base64Match[2].length} chars base64), total=${pendingAttachments.length}`)
         renderAttachmentChips()
         updatePromptContextChips()
@@ -125,6 +134,7 @@ export function createAttachmentManager(deps: AttachmentDeps) {
       const base64Match = result.match(/^data:[\w./+-]+;base64,(.+)$/)
       if (base64Match && base64Match[1]) {
         pendingAttachments.push({ data: base64Match[1], mimeType })
+        addImageAttachment(base64Match[1], mimeType)
         renderAttachmentChips()
         updatePromptContextChips()
         deps.updateSendButton()
@@ -224,6 +234,8 @@ export function createAttachmentManager(deps: AttachmentDeps) {
       remove.setAttribute("aria-label", "Remove attachment")
       remove.innerHTML = REMOVE_SVG
       remove.addEventListener("click", () => {
+        const ctxIdx = contextItems.findIndex((item) => item.type === "image" && item.data === att.data)
+        if (ctxIdx !== -1) contextItems.splice(ctxIdx, 1)
         pendingAttachments.splice(idx, 1)
         renderAttachmentChips()
         updatePromptContextChips()
@@ -237,6 +249,30 @@ export function createAttachmentManager(deps: AttachmentDeps) {
     updatePromptContextChips()
   }
 
+  function syncContextItemsWithPrompt(): void {
+    const mentions = parsePromptMentions(deps.els.promptInput.value)
+    const fileMentions = mentions.filter((m) => m.kind === "file" && m.token.startsWith("@file:"))
+    const currentPickedFiles = contextItems.filter((item) => item.type === "picked_file").map((item) => item.path)
+    const newPickedFiles = fileMentions.map((m) => {
+      const path = m.token.replace(/^@file:/, "").replace(/^["']/, "").replace(/["']$/, "")
+      return path
+    })
+
+    // Remove picked files no longer in prompt
+    for (const path of currentPickedFiles) {
+      if (path && !newPickedFiles.includes(path)) {
+        removePickedFile(path)
+      }
+    }
+    // Add new picked files
+    for (const path of newPickedFiles) {
+      if (path && !currentPickedFiles.includes(path)) {
+        addPickedFile(path)
+      }
+    }
+    deps.onInputChanged?.()
+  }
+
   function updatePromptContextChips(): void {
     const mentions = parsePromptMentions(deps.els.promptInput.value)
     const chips: import("../types").ContextChip[] = mentions.map((mention) => ({
@@ -247,6 +283,7 @@ export function createAttachmentManager(deps: AttachmentDeps) {
       onRemove: () => {
         deps.els.promptInput.value = removePromptToken(deps.els.promptInput.value, mention.token)
         deps.autoResizeTextarea()
+        syncContextItemsWithPrompt()
         updatePromptContextChips()
         deps.updateSendButton()
         deps.els.promptInput.focus()
@@ -268,6 +305,7 @@ export function createAttachmentManager(deps: AttachmentDeps) {
         onRemove: () => {
           if (activeFile) {
             dismissedActiveFiles.add(activeFile)
+            updateActiveFileContextItem({ path: activeFile, selection: activeFileSelection })
           }
           updatePromptContextChips()
         },
@@ -316,6 +354,8 @@ export function createAttachmentManager(deps: AttachmentDeps) {
     if (path) {
       dismissedActiveFiles.delete(path)
     }
+    // Update or remove active file from context items
+    updateActiveFileContextItem(info)
     updatePromptContextChips()
   }
 
@@ -352,6 +392,104 @@ export function createAttachmentManager(deps: AttachmentDeps) {
     return activeFile
   }
 
+  function getContextItems(): AttachedContextItem[] {
+    return [...contextItems]
+  }
+
+  function getContextSummary(): ContextTraySummary {
+    const fileCount = contextItems.filter((item) => item.type === "active_file" || item.type === "picked_file").length
+    const imageCount = contextItems.filter((item) => item.type === "image").length
+    const documentCount = contextItems.filter((item) => item.type === "document").length
+    const totalTokens = contextItems.reduce((sum, item) => sum + (item.tokenEstimate ?? 0), 0)
+    return { fileCount, imageCount, documentCount, totalTokens }
+  }
+
+  function updateActiveFileContextItem(info: ActiveFileInfo | null): void {
+    // Remove existing active file item
+    const existingIdx = contextItems.findIndex((item) => item.type === "active_file")
+    if (existingIdx !== -1) {
+      contextItems.splice(existingIdx, 1)
+    }
+
+    if (info?.path && info.path !== null) {
+      const item: AttachedContextItem = {
+        id: `active-${nextContextId++}`,
+        type: "active_file",
+        path: info.path,
+        languageId: info.languageId,
+        lineCount: info.lineCount,
+        isActive: isActiveFileIncluded(),
+        tokenEstimate: estimateFileTokens(info.path, info.lineCount),
+        ...(info.selection ? { selection: info.selection } : {}),
+      }
+      contextItems.push(item)
+    }
+  }
+
+  function addPickedFile(path: string): void {
+    const existing = contextItems.find((item) => item.type === "picked_file" && item.path === path)
+    if (existing) return
+
+    const item: AttachedContextItem = {
+      id: `picked-${nextContextId++}`,
+      type: "picked_file",
+      path,
+      isActive: true,
+      tokenEstimate: estimateFileTokens(path),
+    }
+    contextItems.push(item)
+  }
+
+  function removePickedFile(path: string): void {
+    const idx = contextItems.findIndex((item) => item.type === "picked_file" && item.path === path)
+    if (idx !== -1) {
+      contextItems.splice(idx, 1)
+    }
+  }
+
+  function addImageAttachment(data: string, mimeType: string): void {
+    const sizeBytes = Math.ceil((data.length * 3) / 4) // base64 to bytes approximation
+    const item: AttachedContextItem = {
+      id: `image-${nextContextId++}`,
+      type: "image",
+      mimeType,
+      data,
+      sizeBytes,
+      isActive: true,
+      tokenEstimate: 0, // Images are handled separately by the host
+    }
+    contextItems.push(item)
+  }
+
+  function removeImageAttachment(id: string): void {
+    const idx = contextItems.findIndex((item) => item.id === id)
+    if (idx !== -1) {
+      contextItems.splice(idx, 1)
+    }
+  }
+
+  function clearContextItems(): void {
+    contextItems.length = 0
+    nextContextId = 0
+  }
+
+  function clearSentContextItems(): void {
+    for (let i = contextItems.length - 1; i >= 0; i--) {
+      const item = contextItems[i]!
+      if (item.type !== "active_file") {
+        contextItems.splice(i, 1)
+      }
+    }
+  }
+
+  function estimateFileTokens(path: string, lineCount?: number): number {
+    // Rough estimation: ~50 tokens per 1KB of code, or ~2 tokens per line
+    if (lineCount) {
+      return lineCount * 2
+    }
+    return path.length / 25
+  }
+
   return {
     getAttachments,
     attachImageBlob,
@@ -367,6 +505,15 @@ export function createAttachmentManager(deps: AttachmentDeps) {
     toggleActiveFileInclude,
     isActiveFileIncluded,
     getActiveFileSelection,
+    getContextItems,
+    getContextSummary,
+    addPickedFile,
+    removePickedFile,
+    addImageAttachment,
+    removeImageAttachment,
+    clearContextItems,
+    clearSentContextItems,
+    syncContextItemsWithPrompt,
   }
 }
 

@@ -463,7 +463,8 @@ function getVsCodeApi() {
     els,
     { query: "", selectedIndex: -1, mode: "mention" as const },
     (msg) => vscode.postMessage(msg),
-    () => attachmentManager.getWorkspaceFiles()
+    () => attachmentManager.getWorkspaceFiles(),
+    (path) => attachmentManager.addPickedFile(path)
   )
 
   // ── Commands palette (full modal). Triggered by /commands, Ctrl+/, or list_stashes flow.
@@ -2331,7 +2332,9 @@ function setupTodoSkillAndSubagentPanels(): void {
         const selection = rawSelection && typeof rawSelection === "object" && "startLine" in rawSelection && "endLine" in rawSelection && "text" in rawSelection
           ? { startLine: rawSelection.startLine as number, endLine: rawSelection.endLine as number, text: rawSelection.text as string }
           : null
-        attachmentManager.setActiveFile({ path, selection })
+        const languageId = typeof msg.languageId === "string" ? msg.languageId : undefined
+        const lineCount = typeof msg.lineCount === "number" ? msg.lineCount : undefined
+        attachmentManager.setActiveFile({ path, selection, languageId, lineCount })
       }],
       ["workspace_files", (msg) => {
         const files = Array.isArray(msg.files) ? msg.files : []

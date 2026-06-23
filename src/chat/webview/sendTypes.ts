@@ -1,5 +1,5 @@
 import type { ElementRefs } from "./dom"
-import type { ChatMessage, WebviewState } from "./types"
+import type { ChatMessage, WebviewState, AttachedContextItem } from "./types"
 
 export interface StreamCapacityState {
   isFull: boolean
@@ -29,6 +29,8 @@ export interface SendLogicDeps {
     isActiveFileIncluded: () => boolean
     getActiveFile: () => string | null
     getActiveFileSelection: () => { startLine: number; endLine: number; text: string } | null
+    getContextItems: () => AttachedContextItem[]
+    clearSentContextItems: () => void
   }
   streamHandlers: {
     get: (id: string) => { showTypingIndicator: (msg: string) => void; finalizeStreamingText?: () => void; finalizePendingTools?: () => void } | undefined
