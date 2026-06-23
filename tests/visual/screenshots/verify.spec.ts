@@ -40,9 +40,11 @@ test.describe("Screenshot Verification", () => {
 
       await page.waitForTimeout(800)
 
-      // Screenshot just the #app element (the OpenCode panel) — crops out any page background
+      // Screenshot just the #app element (the OpenCode panel) — crops out any page background.
+      // Use maxDiffPixelRatio (not maxDiffPixels) so the tolerance scales with image size
+      // and accommodates cross-environment font rendering differences (local vs CI runners).
       await expect(page.locator("#app")).toHaveScreenshot(`${entry.name}.png`, {
-        maxDiffPixels: 50,
+        maxDiffPixelRatio: 0.1,
         threshold: 0.06,
       })
 

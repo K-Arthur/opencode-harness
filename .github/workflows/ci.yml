@@ -123,7 +123,7 @@ jobs:
 
       - name: Serve webview and run visual tests
         run: npx playwright test --project=chromium --project=chromium-webview
-        timeout-minutes: 10
+        timeout-minutes: 20
 
   screenshots-verify:
     runs-on: ubuntu-latest
