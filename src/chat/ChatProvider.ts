@@ -12,6 +12,7 @@ import { CheckpointManager } from "../checkpoint/CheckpointManager"
 import { parseModelRef } from "../utils/tokenCounter"
 import { DiffApplier } from "../diff/DiffApplier"
 import { getFileHunks } from "./diff/hunkRevertPlan"
+import { classifyFileStatuses, type FileStatus } from "./diff/fileStatusClassifier"
 import { reasoningEventToBlock } from "../session/sdkMessageConverter"
 import { isAutoSessionName } from "../session/sessionUtils"
 import { activitySignature } from "../session/activityCoalesce"
@@ -36,6 +37,7 @@ import { ChatCommands } from "./ChatCommands"
 import { AutoCompactor } from "./AutoCompactor"
 import { ChatFileOps } from "./ChatFileOps"
 import { WorkspaceFileIndex } from "./WorkspaceFileIndex"
+import { ActiveFileTracker } from "./ActiveFileTracker"
 import { HostMessageBatcher } from "./HostMessageBatcher"
 import { PendingEventBuffer } from "./PendingEventBuffer"
 import { McpServerManager } from "../mcp/McpServerManager"
@@ -112,6 +114,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private backfillService: BackfillService
   private fileOps = new ChatFileOps()
   private workspaceFileIndex = new WorkspaceFileIndex({ vscode, postMessage: (msg) => this.postMessage(msg) })
+  private activeFileTracker = new ActiveFileTracker({ vscode, postMessage: (msg) => this.postMessage(msg), workspaceFileIndex: this.workspaceFileIndex })
   private themeController: ThemeController
   private statePush: StatePushService
   private sessionLifecycle: SessionLifecycleService
@@ -397,6 +400,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       promptManager: this.promptManager,
       fileOps: this.fileOps,
       workspaceFileIndex: this.workspaceFileIndex,
+      activeFileTracker: this.activeFileTracker,
       contextMonitor: this.contextMonitor,
       usageAnalytics: this.usageAnalytics,
       steerPromptHandler: this.steerPromptHandler,
@@ -603,12 +607,10 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       dispose: () => this.workspaceFileIndex.dispose(),
     })
 
-    this.disposables.push(
-      vscode.window.onDidChangeActiveTextEditor((editor) => {
-        this.postActiveFile(editor)
-      }),
-    )
-    this.postActiveFile(vscode.window.activeTextEditor)
+    this.activeFileTracker.start()
+    this.disposables.push({
+      dispose: () => this.activeFileTracker.dispose(),
+    })
 
     this.disposables.push(
       this.modelManager.onModelChanged((model) => {
@@ -1370,9 +1372,36 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       // can report accurate additions/deletions for older files.
       const statsArray = Array.from(changeStats.entries()).map(([path, s]) => ({ path, ...s }))
       this.sessionStore.addChangedFiles(tabId, files, statsArray)
+
+      // Classify file statuses (A/M/D) via git status + before/after inference.
+      // Without this, every file defaults to "Modified" in the UI even when
+      // it was added or deleted.
+      const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+      const statusMap = wsRoot
+        ? classifyFileStatuses(files, {
+            workspaceRoot: wsRoot,
+            deps: { execSync, existsSync: (p: import("node:fs").PathLike) => {
+              try {
+                const fs = require("node:fs")
+                return fs.existsSync(vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0]!.uri, p.toString()).fsPath)
+              } catch { return false }
+            } },
+          })
+        : new Map<string, FileStatus>()
+
+      // Emit explicit workspace_file_added / workspace_file_deleted events
+      // for added and deleted files, so the webview can apply special styling
+      // (strikethrough for deleted, green badge for added).
       for (const file of files) {
+        const status = statusMap.get(file)
+        if (status === "A") {
+          this.postMessage({ type: "workspace_file_added", sessionId: tabId, path: file })
+        } else if (status === "D") {
+          this.postMessage({ type: "workspace_file_deleted", sessionId: tabId, path: file })
+        }
         this.postMessage({ type: "file_edited", sessionId: tabId, file })
       }
+
       // Merge stored cumulative stats with the current batch (current batch wins on conflict)
       const storedStats = this.sessionStore.getChangedFileStats(tabId)
       this.postMessage({
@@ -1385,6 +1414,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
             path,
             added: current?.added ?? stored?.added ?? 0,
             removed: current?.removed ?? stored?.removed ?? 0,
+            status: statusMap.get(path) ?? stored?.status,
             isPlanDocument: this.isPlanDocumentPattern(path),
           }
         }),
@@ -2317,11 +2347,6 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     if (msg.type === "stream_end") {
       this.notifyTurnComplete()
     }
-  }
-
-  private postActiveFile(editor: vscode.TextEditor | undefined): void {
-    const path = editor?.document?.uri ? this.workspaceFileIndex.asRelativePath(editor.document.uri) : null
-    this.postMessage({ type: "active_file", path })
   }
 
   private postRawMessage(msg: Record<string, unknown>): boolean | Thenable<boolean> | undefined {

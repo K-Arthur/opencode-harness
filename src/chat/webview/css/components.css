@@ -2682,6 +2682,23 @@ textarea {
 .cf-status-badge--M { color: var(--vscode-gitDecoration-modifiedResourceForeground, #ff9800); }
 .cf-status-badge--D { color: var(--vscode-gitDecoration-deletedResourceForeground, #f44336); }
 
+/* Deleted files: strikethrough + grayed filename in the dropdown panel */
+.cf-file-row[data-status="D"] .cf-file-name {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+/* Banner shown above all-removed diff lines when a file was deleted */
+.cf-hunk-deleted-banner {
+  padding: var(--space-1) var(--space-2);
+  margin-bottom: var(--space-1);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--vscode-gitDecoration-deletedResourceForeground, var(--color-error, #f44336));
+  background: var(--vscode-diffEditor-removedTextBackground, var(--diff-removed-bg, rgba(244,67,54,0.06)));
+  border-radius: var(--radius-sm, 3px);
+}
+
 /* File name column — name + directory path stacked */
 .cf-file-name-col {
   flex: 1;
@@ -2813,8 +2830,8 @@ textarea {
   overflow-y: auto;
 }
 .cf-hunk-line { display: block; }
-.cf-hunk-line--added  { color: var(--vscode-gitDecoration-addedResourceForeground, var(--color-success, #4caf50)); background: var(--vscode-diffEditor.insertedTextBackground, var(--diff-added-bg, rgba(76,175,80,0.06))); }
-.cf-hunk-line--removed { color: var(--vscode-gitDecoration-deletedResourceForeground, var(--color-error, #f44336)); background: var(--vscode-diffEditor.removedTextBackground, var(--diff-removed-bg, rgba(244,67,54,0.06))); }
+.cf-hunk-line--added  { color: var(--vscode-gitDecoration-addedResourceForeground, var(--color-success, #4caf50)); background: var(--vscode-diffEditor-insertedTextBackground, var(--diff-added-bg, rgba(76,175,80,0.06))); }
+.cf-hunk-line--removed { color: var(--vscode-gitDecoration-deletedResourceForeground, var(--color-error, #f44336)); background: var(--vscode-diffEditor-removedTextBackground, var(--diff-removed-bg, rgba(244,67,54,0.06))); }
 .cf-hunk-line--context { color: var(--color-muted); }
 .cf-hunk-more  { display: block; color: var(--color-muted); font-style: italic; padding: 1px 0; font-size: var(--text-2xs); }
 .cf-hunk-more-btn {

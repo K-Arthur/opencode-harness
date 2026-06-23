@@ -3991,6 +3991,22 @@ function setupTodoSkillAndSubagentPanels(): void {
         // to render based on its current session.
         cfDropdownApi?.updateChangedFiles(sid, files as any) // eslint-disable-line @typescript-eslint/no-explicit-any -- bridges to changed-files dropdown API shape
       }],
+      ["workspace_file_added", (msg) => {
+        const sid = typeof msg.sessionId === "string" ? msg.sessionId : null
+        const p = typeof msg.path === "string" ? msg.path : ""
+        if (!sid || !p) return
+        webviewLog(`[main] workspace_file_added: ${p}`)
+        // The aggregate changed_files_update already carries the status field;
+        // this explicit event is a no-op signal for future use (e.g. animations).
+      }],
+      ["workspace_file_deleted", (msg) => {
+        const sid = typeof msg.sessionId === "string" ? msg.sessionId : null
+        const p = typeof msg.path === "string" ? msg.path : ""
+        if (!sid || !p) return
+        webviewLog(`[main] workspace_file_deleted: ${p}`)
+        // The aggregate changed_files_update already carries the status field;
+        // this explicit event is a no-op signal for future use (e.g. animations).
+      }],
       ["file_diff_response", (msg) => {
         const sid = typeof msg.sessionId === "string" ? msg.sessionId : null
         if (!sid) {
@@ -4000,7 +4016,8 @@ function setupTodoSkillAndSubagentPanels(): void {
         const path = typeof msg.path === "string" ? msg.path : ""
         const lines = Array.isArray(msg.lines) ? msg.lines as DiffLine[] : null
         const error = typeof msg.error === "string" ? msg.error : undefined
-        if (path) cfDropdownApi?.handleDiffResponse(sid, path, lines, error)
+        const deleted = msg.deleted === true
+        if (path) cfDropdownApi?.handleDiffResponse(sid, path, lines, error, deleted)
       }],
       ["file_hunks", (msg, envSid) => {
         const sid = typeof msg.sessionId === "string" ? msg.sessionId : envSid

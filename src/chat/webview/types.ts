@@ -649,6 +649,8 @@ export type HostMessage =
   | { type: "todos_error"; sessionId: string; message: string }
   | { type: "changed_files_update"; sessionId: string; files: FileChange[] }
   | { type: "file_edited"; sessionId: string; file: string }
+  | { type: "workspace_file_added"; sessionId: string; path: string }
+  | { type: "workspace_file_deleted"; sessionId: string; path: string }
   | { type: "message"; sessionId: string; message: ChatMessage }
   | { type: "prompt_accepted"; sessionId: string; messageId: string; clientRequestId?: string }
   | { type: "prompt_send_failed"; sessionId: string; messageId?: string; clientRequestId?: string; text: string; reason: string; attachments?: Attachment[] }
@@ -701,7 +703,7 @@ export type HostMessage =
   | { type: "mode_change_result"; sessionId: string; mode: "plan" | "build" | "auto"; accepted: boolean; reason?: string }
   | { type: "model_list"; items: ModelInfo[] }
   | { type: "mention_results"; items: MentionItem[]; query: string }
-  | { type: "active_file"; path: string | null }
+  | { type: "active_file"; path: string | null; languageId?: string; lineCount?: number; selection?: { startLine: number; endLine: number; text: string } | null }
   | { type: "workspace_files"; files: string[] }
   | { type: "session_list"; sessions: SessionSummary[]; query?: string }
   | { type: "server_session_list"; sessions: unknown[] }
@@ -753,7 +755,7 @@ export type HostMessage =
   | { type: "subagent_update"; sessionId: string; subagent: unknown }
   | { type: "show_error"; message: string }
   /** Response to get_file_diff — carries unified diff lines for a given path. */
-  | { type: "file_diff_response"; path: string; sessionId?: string; lines: DiffLine[]; error?: string }
+  | { type: "file_diff_response"; path: string; sessionId?: string; lines: DiffLine[]; error?: string; deleted?: boolean; truncated?: boolean }
   | { type: "file_hunks"; path: string; sessionId?: string; hunks: Array<{ id: string; additions: number; deletions: number; lines: string[] }> }
   | { type: "hunk_reverted"; path: string; ok: boolean; reason?: string; sessionId?: string }
   /** Host → Webview: response to `probe_run_status`. Carries the host's

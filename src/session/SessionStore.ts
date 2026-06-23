@@ -46,7 +46,7 @@ export interface OpenCodeSession {
   contextUsage?: SessionContextUsage
   changedFiles?: string[]
   /** Per-file cumulative diff stats, keyed by normalized path. */
-  changedFileStats?: Record<string, { added: number; removed: number }>
+  changedFileStats?: Record<string, { added: number; removed: number; status?: "A" | "M" | "D" }>
   workspacePath?: string
   /** ID of the session this was forked from, if any. */
   parentSessionId?: string
@@ -1239,7 +1239,7 @@ validateSessionName(name: string): string | null {
   addChangedFiles(
     id: string,
     files: string[],
-    stats?: Array<{ path: string; added: number; removed: number }>,
+    stats?: Array<{ path: string; added: number; removed: number; status?: "A" | "M" | "D" }>,
   ): void {
     const session = this.sessions.get(id)
     if (!session) return
@@ -1271,6 +1271,7 @@ validateSessionName(name: string): string | null {
         stored[key] = {
           added: Number.isFinite(s.added) ? s.added : 0,
           removed: Number.isFinite(s.removed) ? s.removed : 0,
+          status: s.status,
         }
       }
       session.changedFileStats = stored
@@ -1289,7 +1290,7 @@ validateSessionName(name: string): string | null {
     this.addChangedFiles(id, [filePath])
   }
 
-  getChangedFileStats(id: string): Record<string, { added: number; removed: number }> {
+  getChangedFileStats(id: string): Record<string, { added: number; removed: number; status?: "A" | "M" | "D" }> {
     return this.sessions.get(id)?.changedFileStats ?? {}
   }
 

@@ -402,7 +402,7 @@ function _setDiffCache(cache: Map<string, DiffLine[] | null | string>, path: str
 }
 
 /** Called by main.ts when file_diff_response arrives. sessionId is REQUIRED. */
-export function handleDiffResponse(sessionId: string, path: string, lines: DiffLine[] | null, error?: string): void {
+export function handleDiffResponse(sessionId: string, path: string, lines: DiffLine[] | null, error?: string, deleted?: boolean): void {
   const state = _stateFor(sessionId)
   _setDiffCache(state.diffCache, path, error ? error : (lines ?? []))
   // Lazy stats refresh: count added/removed from the resolved diff lines and
@@ -416,7 +416,7 @@ export function handleDiffResponse(sessionId: string, path: string, lines: DiffL
   }
   if (sessionId !== _currentSessionId) return
   document.querySelectorAll<HTMLElement>(".cf-hunk-preview--open[data-path]").forEach((el) => {
-    if (el.dataset.path === path) _renderHunk(el, sessionId, path)
+    if (el.dataset.path === path) _renderHunk(el, sessionId, path, deleted)
   })
 }
 
@@ -770,6 +770,7 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       const row = document.createElement("div")
       row.className = `cf-file-row${isExpanded ? " cf-file-row--expanded" : ""}`
       row.setAttribute("data-path", file.path)
+      row.setAttribute("data-status", status)
       row.setAttribute("role", "treeitem")
       row.setAttribute("aria-level", "2")
       row.setAttribute("aria-selected", "false")
@@ -1097,7 +1098,7 @@ function _handleTreeKeydown(e: KeyboardEvent, tree: HTMLElement): void {
   }
 }
 
-function _renderHunk(el: HTMLElement, sessionId: string, path: string): void {
+function _renderHunk(el: HTMLElement, sessionId: string, path: string, deleted?: boolean): void {
   const state = _stateFor(sessionId)
   // Prefer host-authoritative hunks with per-hunk Revert when available.
   const hunks = state.hunksCache.get(path)
@@ -1123,13 +1124,23 @@ function _renderHunk(el: HTMLElement, sessionId: string, path: string): void {
     return
   }
 
+  el.innerHTML = ""
+
+  // When the file was deleted, show a banner above the all-removed diff lines.
+  if (deleted) {
+    const banner = document.createElement("div")
+    banner.className = "cf-hunk-deleted-banner"
+    banner.setAttribute("role", "status")
+    banner.textContent = "File deleted — all lines removed"
+    el.appendChild(banner)
+  }
+
   // M3: the preview is capped at 60 lines by default. A "Show all N lines"
   // button expands to a higher cap (500 lines). Beyond that, an "Open full
   // diff" CTA routes to the VS Code diff editor (M7).
   const isExpanded = state.expandedHunks.has(path)
   const cap = isExpanded ? 500 : 60
   const lines = data.slice(0, cap)
-  el.innerHTML = ""
   const pre = document.createElement("pre")
   pre.className = "cf-hunk-code"
   const frag = document.createDocumentFragment()

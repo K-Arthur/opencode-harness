@@ -25,6 +25,7 @@ import type { ThemeController } from "./ThemeController"
 import type { PromptManager } from "../prompts/PromptManager"
 import type { ChatFileOps } from "./ChatFileOps"
 import type { WorkspaceFileIndex } from "./WorkspaceFileIndex"
+import type { ActiveFileTracker } from "./ActiveFileTracker"
 import type { SteerPromptHandler } from "./handlers/SteerPromptHandler"
 import type { HostPromptQueue } from "./HostPromptQueue"
 import type { ChatMessage, Block } from "./types"
@@ -93,6 +94,7 @@ export interface WebviewEventRouterOptions {
   promptManager: PromptManager
   fileOps: ChatFileOps
   workspaceFileIndex: WorkspaceFileIndex
+  activeFileTracker?: ActiveFileTracker
   contextMonitor: ContextMonitor
   usageAnalytics: UsageAnalytics
   steerPromptHandler: SteerPromptHandler
@@ -203,6 +205,7 @@ export class WebviewEventRouter {
     "remove_provider_credential",
     "compact_session", "execute_command", "open_terminal", "copy_text", "list_commands",
     "get_workspace_files",
+    "toggle_active_file",
     "insert_at_cursor", "create_file_from_code", "compact_banner_action",
     "edit_message", "attach_image",
     "delete_session", "archive_session", "pin_session", "set_session_tags", "revert_message", "unrevert",
@@ -1032,6 +1035,11 @@ export class WebviewEventRouter {
     }],
     ["mention_search", async (msg: Record<string, unknown>) => { await this.opts.messageRouter.handleMentionSearch(msg.query as string || "", { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) }) }],
     ["get_workspace_files", () => { this.opts.workspaceFileIndex?.handleGetFiles() }],
+    ["toggle_active_file", (msg: Record<string, unknown>) => {
+      const sid = typeof msg.sessionId === "string" ? msg.sessionId : ""
+      const include = msg.include === true
+      this.opts.activeFileTracker?.handleToggleActiveFile(sid, include)
+    }],
     ["list_sessions", async (msg: Record<string, unknown>) => { await this.opts.messageRouter.handleListSessions(this.opts.sessionStore, { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) }, typeof msg.query === "string" ? msg.query : "") }],
     ["resume_session", async (msg: Record<string, unknown>) => { if (msg.sessionId) await this.opts.sessionLifecycle.handleResumeSession(msg.sessionId as string) }],
     ["new_session", async () => {
@@ -1808,6 +1816,7 @@ export class WebviewEventRouter {
         path,
         added: stats[path]?.added ?? 0,
         removed: stats[path]?.removed ?? 0,
+        status: stats[path]?.status,
       }))
       this.opts.postMessage({ type: "changed_files_update", files, sessionId })
     }],
@@ -1818,16 +1827,50 @@ export class WebviewEventRouter {
       // unhandled — expansion silently showed nothing.
       const path = typeof msg.path === "string" ? msg.path : ""
       if (!path) return
-      const respond = (lines: DiffLine[] | null, error?: string) =>
-        this.opts.postMessage({ type: "file_diff_response", sessionId, path, lines, error })
+      const respond = (lines: DiffLine[] | null, error?: string, opts?: { deleted?: boolean; truncated?: boolean }) =>
+        this.opts.postMessage({ type: "file_diff_response", sessionId, path, lines, error, deleted: opts?.deleted, truncated: opts?.truncated })
       if (!this.opts.sessionManager.isRunning) {
         respond(null, "opencode server is not running")
         return
       }
       try {
         const content = await this.opts.sessionManager.getFileContent(path)
-        respond(sdkFileContentToDiffLines(content as SdkFileContentLike))
+        const lines = sdkFileContentToDiffLines(content as SdkFileContentLike)
+        // Boundary check: cap payload size to prevent webview freezing on
+        // very large diffs (e.g. whole-file rewrites of minified files).
+        const MAX_DIFF_PAYLOAD_BYTES = 5 * 1024 * 1024
+        const serialized = JSON.stringify(lines)
+        if (serialized.length > MAX_DIFF_PAYLOAD_BYTES) {
+          respond(lines.slice(0, 500), undefined, { truncated: true })
+          return
+        }
+        respond(lines)
       } catch (err) {
+        // SDK read failed — check if the file was deleted. If so, read git
+        // HEAD content and construct all-removed DiffLine[] so the user sees
+        // what was removed rather than a silent failure.
+        const wsFolder = vscode.workspace.workspaceFolders?.[0]
+        if (wsFolder) {
+          try {
+            const headContent = execSync(
+              `git show HEAD:${path.replace(/\\/g, "/")}`,
+              { cwd: wsFolder.uri.fsPath, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024, timeout: 5000 },
+            )
+            if (typeof headContent === "string" && headContent.length > 0) {
+              // File exists in git HEAD but SDK read failed → likely deleted.
+              const headLines = headContent.split("\n")
+              const diffLines: DiffLine[] = headLines.map((line, i) => ({
+                type: "removed" as const,
+                oldLine: i + 1,
+                content: line,
+              }))
+              respond(diffLines, undefined, { deleted: true })
+              return
+            }
+          } catch {
+            // Not in git HEAD either — truly unknown failure.
+          }
+        }
         log.warn(`get_file_diff failed for ${path}`, err)
         respond(null, err instanceof Error ? err.message : "Failed to load diff")
       }

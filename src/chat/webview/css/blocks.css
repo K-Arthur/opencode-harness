@@ -1738,8 +1738,8 @@
   font-weight: bold;
 }
 
-.diff-line--added .diff-line-content { background: var(--diff-added-bg); color: var(--diff-added-fg); }
-.diff-line--removed .diff-line-content { background: var(--diff-removed-bg); color: var(--diff-removed-fg); }
+.diff-line--added .diff-line-content { background: var(--vscode-diffEditor-insertedTextBackground, var(--diff-added-bg)); color: var(--diff-added-fg); }
+.diff-line--removed .diff-line-content { background: var(--vscode-diffEditor-removedTextBackground, var(--diff-removed-bg)); color: var(--diff-removed-fg); }
 .diff-line--context .diff-line-content { color: var(--diff-context-color, var(--color-muted)); }
 
 /* Tinted line-number gutter so the colour cue extends edge-to-edge. */
