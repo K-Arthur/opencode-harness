@@ -92,6 +92,13 @@ Rules:
   `globalState` key `opencode-harness.chatDirection`. The webview sets the `dir`
   attribute on `<html>` and updates the toggle button's `aria-pressed` state.
   Sent during `pushAllStateToWebview` so the direction survives reloads.
+- `opencode_config` pushes `{ config: WorkspaceConfigPayload, status, path }`
+  from the workspace `opencode.jsonc` (or `opencode.json`) file. `status` is
+  `"ok"`, `"parse_error"`, or `"not_found"`. The webview updates a config
+  status badge (gear icon = loaded, warning icon = parse error) and renders
+  any workspace `rules`/`instructions` in the instructions editor panel.
+  Sent during `pushAllStateToWebview` and whenever the config file changes
+  (hot-reloaded via a file system watcher).
 - `chat_dir_change` (Webview → Host): The user clicks the LTR/RTL toggle button.
   The webview sets `dir` on `<html>` immediately and posts this message so the
   host persists the choice to `globalState` via `persistChatDirection`.
@@ -449,12 +456,20 @@ not been dismissed), `sendMessage.ts` enriches the `send_prompt` payload:
 
 1. **`@file:` mention injection**: The text is prefixed with `@file:<path>` (quoted if the
    path contains spaces) so the opencode server resolves the file content.
-2. **`contextItems` array**: When a selection exists, a `{ type: "active_file", path,
-   selection: { startLine, endLine, text } }` entry is included for non-workspace file
-   content injection.
+2. **`contextItems` array**: An array of `AttachedContextItem` objects is included in the
+   `send_prompt` message. Each item carries rich metadata: `id`, `type`
+   (`active_file` | `picked_file` | `image` | `document`), `path`, `languageId`,
+   `lineCount`, `selection` (`{ startLine, endLine, text }`), `isActive`, and
+   `tokenEstimate`. Only active items of type `active_file` or `picked_file` are sent;
+   image and document attachments remain in the existing `attachments` field.
+
+After each send, `clearSentContextItems()` removes per-send items (picked files, images)
+from the context item list while preserving the active file entry for the next send.
 
 Dismissed (removed) active files are excluded from the payload — `isActiveFileIncluded()`
-checks both the toggle state and the dismissed set.
+checks both the toggle state and the dismissed set. The `isActive` flag on each context
+item is derived from `isActiveFileIncluded()`, ensuring consistency between the toggle
+UI and the sent payload.
 
 #### Context Tray UI
 
@@ -463,14 +478,49 @@ summarizes all attached context items:
 
 - **Summary line**: Shows item counts (e.g. "2 files, 1 image · ~1,536 tokens (1%)") and a
   toggle arrow. Click or Enter/Space to expand.
-- **Expanded view**: Each item renders as a chip with an icon (eye/🚫 for active file,
-  🖼 for image, 📄 for document, 📁 for picked file), label, token estimate, and remove
-  button.
+- **Expanded view**: Each item renders as a chip with an inline SVG icon (eye/eye-slash
+  for active file, image thumbnail for image, document SVG for document, folder SVG for
+  picked file), label, token estimate, and remove button.
 - **Token budget bar**: A 2px bar at the bottom showing total estimated tokens as a
   percentage of a 128K budget, animated via `transform: scaleX()`.
 - **Multimodal support**: Images support hover-enlarge preview. Documents show line-count
   badges. Extended MIME types for drag-and-drop: bmp, tiff, avif, heic, heif (images);
   text, markdown, csv, html, css, js, json, xml, pdf, yaml, sh (documents).
+
+#### AttachedContextItem model
+
+All context items are tracked through the `AttachedContextItem` structure
+(`src/chat/webview/types.ts`):
+
+```ts
+interface AttachedContextItem {
+  id: string
+  type: "active_file" | "picked_file" | "image" | "document"
+  path?: string
+  languageId?: string
+  mimeType?: string
+  data?: string
+  sizeBytes?: number
+  lineCount?: number
+  isActive: boolean
+  tokenEstimate?: number
+  selection?: { startLine: number; endLine: number; text: string }
+}
+```
+
+The `AttachmentManager` (`ui/attachments.ts`) owns the `contextItems` array and exposes:
+
+- `getContextItems()` — returns a shallow copy of all context items
+- `getContextSummary()` — returns `{ fileCount, imageCount, documentCount, totalTokens }`
+- `addPickedFile(path)` / `removePickedFile(path)` — sync picked files with `@file:` mentions
+- `addImageAttachment(data, mimeType)` / `removeImageAttachment(id)` — track image attachments
+- `clearSentContextItems()` — removes per-send items after `send_prompt`, preserves active file
+- `syncContextItemsWithPrompt()` — reconciles picked files with `@file:` tokens in the prompt text
+
+Image/file attachments added via `attachImageBlob`/`attachFileBlob` are tracked as context
+items in parallel with the legacy `pendingAttachments` array. Removing an attachment chip
+also removes the corresponding context item. Document MIME types are validated against
+`ALLOWED_DOCUMENT_MIMES` before acceptance.
 
 #### Context-usage dropdown actions (Webview → Host)
 

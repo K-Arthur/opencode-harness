@@ -121,6 +121,11 @@ anything the opencode CLI itself doesn't support.
 - Add, edit, remove, and toggle MCP servers from a config panel in the chat UI, with connection status indicators.
 - Configs (commands, args, env, headers, URLs) are validated before use and stored in opencode's own config files first — VS Code settings are a fallback only.
 
+### Workspace config (`opencode.jsonc`)
+- The extension reads `opencode.jsonc` (or `opencode.json`) from the workspace root, supporting JSONC syntax (comments + trailing commas). Config changes are hot-reloaded — no reload needed.
+- Supported keys: `model`, `small_model`, `modelOverrides` (per-mode model selection), `ignore`/`exclude` (glob patterns for file indexing), `rules` and `instructions` (injected into system prompts).
+- A status bar indicator shows config load state; the webview displays workspace rules in the instructions editor. Invalid configs fall back to global settings. See [Configuration Reference](docs/configuration.md#workspace-config-opencodejsonc).
+
 ### Permissions & safety
 - **Plan / Build / Auto modes** — Plan blocks mutating actions except direct writes to `.opencode/plans/*.md`; Build uses the normal approval flow; Auto applies changes after a one-time confirmation.
 - **Checkpoints** — snapshot files before an extension-managed diff is applied, with rollback.

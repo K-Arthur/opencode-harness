@@ -17,8 +17,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-<!-- MAINTENANCE NOTE: Keep this section empty unless it describes work that
-     has NOT shipped in any version bump. When `npm version` / `npm run
+### Added
+
+- **Workspace config (`opencode.jsonc`) support** — the extension now discovers,
+  parses, and hot-reloads `opencode.jsonc` (or `opencode.json`) files in the
+  workspace root. Supported keys: `model`, `small_model`, `modelOverrides`,
+  `ignore`/`exclude` (glob patterns for workspace file indexing), `rules`, and
+  `instructions`. JSONC syntax (comments + trailing commas) is handled by the
+  `jsonc-parser` library. A status bar indicator shows config load state
+  (loaded / parse error / not found), and the webview displays workspace rules
+  in the instructions editor. Invalid configs fall back to global VS Code
+  settings gracefully. See [Configuration Reference](docs/configuration.md).
+
+### Changed
+
+- Consolidated hand-rolled JSONC parsing in `McpServerManager`,
+  `OllamaConfigService`, and `check-architecture.mjs` into a shared
+  `parseJsonc` utility (`src/utils/jsonc.ts`).
+- `ModelManager.getModeModel` now consults workspace `modelOverrides` first,
+  then VS Code `opencode.modeModels` settings, then the fallback/current model.
+- `WorkspaceFileIndex` now filters files against `ignore`/`exclude` glob
+  patterns from workspace config (via `minimatch`), in addition to the
+  hardcoded `node_modules` exclusion.
+
+<!-- MAINTENANCE NOTE: Keep this section empty unless it describes work that has
+     NOT shipped in any version bump. When `npm version` / `npm run
      reinstall` bumps the version, move all accumulated entries below into a
      new `## [x.y.z] - yyyy-mm-dd` section. Never leave shipped work under
      [Unreleased] — that creates documentation drift. See the release

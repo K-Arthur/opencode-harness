@@ -195,6 +195,95 @@ servers are also sanitized before they are shown or routed.
   | `"off"` | Never auto-compact |
 - **Description**: Controls automatic session compaction when context usage reaches 80%.
 
+## Workspace Config (`opencode.jsonc`)
+
+The extension discovers and parses `opencode.jsonc` (or `opencode.json`) files in the
+workspace root, supporting JSONC syntax (comments and trailing commas). Config changes
+are hot-reloaded via a file system watcher — no reload required.
+
+### Discovery order
+
+The extension checks these locations (first found wins, `OPENCODE_CONFIG` overrides all):
+
+1. `OPENCODE_CONFIG` environment variable (if set, points to a config file path)
+2. Workspace root `opencode.jsonc`
+3. Workspace root `opencode.json`
+4. Workspace `.opencode/opencode.jsonc`
+5. Workspace `.opencode/opencode.json`
+
+### Supported keys
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `model` | `string` | Default model ID in `provider/model` format. Applied to `ModelManager` on load and on change. |
+| `small_model` | `string` | Small/fast model ID for lightweight tasks. Stored in `ModelManager.workspaceSmallModel`. |
+| `modelOverrides` | `Record<string, string>` | Mode-to-model overrides (e.g. `{ "build": "anthropic/claude-sonnet-4", "plan": "openai/o3" }`). Consulted by `getModeModel()` before VS Code settings. |
+| `ignore` | `string[]` | Glob patterns for files to exclude from workspace file indexing (e.g. `["dist/**", "*.test.ts"]`). Merged with `exclude`. |
+| `exclude` | `string[]` | Additional glob exclusion patterns, same as `ignore`. Both are merged and applied via `minimatch`. |
+| `rules` | `string[]` | Workspace-specific rules injected into system prompts (e.g. `["Always use TypeScript strict mode", "Write tests first"]`). |
+| `instructions` | `string` | Free-form instructions string, prepended to rules in the system prompt. |
+
+### Fallback behavior
+
+- If the config file is **missing**, the extension falls back to global VS Code settings and
+  shows "no config" in the status bar.
+- If the config file has a **parse error**, the extension logs the error, falls back to
+  global settings, and shows a warning indicator in the status bar. Clicking the status bar
+  item opens the config file for editing.
+- `node_modules` is always excluded from workspace file indexing, regardless of config.
+
+### Status bar indicator
+
+A status bar item on the left side shows the current config state:
+- **$(settings-gear) config** (accent color) — config loaded successfully
+- **$(warning) config!** (warning background) — parse error, click to open the file
+- **Hidden** — no config file found in the workspace
+
+Clicking the status bar item runs the `opencode-harness.openConfigFile` command, which
+opens the discovered config file in the editor.
+
+### Webview integration
+
+When the config is loaded or changed, the host pushes an `opencode_config` message to the
+webview containing the parsed config payload, status, and file path. The webview:
+- Updates the config status badge next to the model dropdown
+- Renders workspace `rules` and `instructions` in the instructions editor panel
+
+### Example
+
+```jsonc
+{
+  // Default model for all sessions
+  "model": "anthropic/claude-sonnet-4-20250514",
+
+  // Small model for lightweight tasks
+  "small_model": "anthropic/claude-haiku-3-5",
+
+  // Mode-specific overrides (highest priority)
+  "modelOverrides": {
+    "build": "anthropic/claude-sonnet-4-20250514",
+    "plan": "openai/o3"
+  },
+
+  // Exclude these from workspace file indexing
+  "ignore": [
+    "dist/**",
+    "coverage/**",
+    "*.test.ts"
+  ],
+
+  // Workspace rules injected into system prompts
+  "rules": [
+    "Always use TypeScript strict mode",
+    "Write tests before implementation",
+    "Prefer functional composition over inheritance"
+  ],
+
+  // Free-form instructions (prepended to rules)
+  "instructions": "This is a TypeScript library. All public APIs must have JSDoc comments."
+}
+```
+
 ### `opencode.sessions.emptySessionTtlMinutes`
 - **Type**: `number`
 - **Default**: `60`
