@@ -3979,3 +3979,55 @@ button.modal-session-item:focus {
     height: var(--size-target-min);
   }
 }
+
+/* Config status badge — shows workspace config (opencode.jsonc) state */
+.config-status-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-xs);
+  padding: 1px var(--space-1);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  vertical-align: middle;
+  margin-left: var(--space-1);
+  cursor: default;
+}
+.config-status-badge.config-ok {
+  background: color-mix(in srgb, var(--oc-accent) 15%, transparent);
+  color: var(--oc-accent);
+}
+.config-status-badge.config-error {
+  background: color-mix(in srgb, var(--oc-danger, #f85149) 15%, transparent);
+  color: var(--oc-danger, #f85149);
+}
+.config-status-badge[hidden] {
+  display: none;
+}
+
+/* Workspace rules display — read-only rules from opencode.jsonc */
+.workspace-rules-display {
+  margin: var(--space-1) 0 var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--oc-border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--oc-editor-bg) 50%, transparent);
+}
+.workspace-rules-display[hidden] {
+  display: none;
+}
+.workspace-rules-label {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  font-weight: 500;
+  margin-bottom: var(--space-1);
+}
+.workspace-rules-list {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--oc-fg);
+}
+.workspace-rules-list li {
+  margin-bottom: var(--space-1);
+  line-height: 1.4;
+}

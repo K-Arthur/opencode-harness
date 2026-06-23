@@ -182,4 +182,156 @@ describe("WorkspaceFileIndex", () => {
       assert.deepEqual(msg.files, ["README.md"])
     }
   })
+
+  it("excludes files matching config ignore glob patterns", async () => {
+    mkdirSync(join(root, "dist"), { recursive: true })
+    writeFileSync(join(root, "dist", "bundle.js"), "")
+    writeFileSync(join(root, "app.log"), "")
+    const deps = {
+      vscode: {
+        workspace: {
+          workspaceFolders: [{ uri: fakeWorkspaceFsPath(root) }],
+          findFiles: async () => [
+            fakeWorkspaceFsPath(join(root, "README.md")),
+            fakeWorkspaceFsPath(join(root, "dist", "bundle.js")),
+            fakeWorkspaceFsPath(join(root, "app.log")),
+            fakeWorkspaceFsPath(join(root, "node_modules", "foo", "index.js")),
+          ],
+          asRelativePath: (uri: vscode.Uri) => uri.fsPath.replace(root + "/", ""),
+          onDidCreateFiles: () => ({ dispose: () => {} }),
+          onDidDeleteFiles: () => ({ dispose: () => {} }),
+          onDidRenameFiles: () => ({ dispose: () => {} }),
+        },
+      } as unknown as typeof vscode,
+      postMessage: () => {},
+    }
+    index = new WorkspaceFileIndex(deps)
+    index.setExcludePatterns(["*.log", "dist/**"])
+    await index.refresh()
+    const files = index.getFiles()
+    assert.deepEqual(files, ["README.md"])
+    assert.ok(!files.some((f) => f.includes("dist")), "dist/ must be excluded")
+    assert.ok(!files.some((f) => f.endsWith(".log")), "*.log must be excluded")
+  })
+
+  it("excludes files matching config exclude glob patterns (alias for ignore)", async () => {
+    writeFileSync(join(root, "secret.env"), "")
+    const deps = {
+      vscode: {
+        workspace: {
+          workspaceFolders: [{ uri: fakeWorkspaceFsPath(root) }],
+          findFiles: async () => [
+            fakeWorkspaceFsPath(join(root, "README.md")),
+            fakeWorkspaceFsPath(join(root, "secret.env")),
+          ],
+          asRelativePath: (uri: vscode.Uri) => uri.fsPath.replace(root + "/", ""),
+          onDidCreateFiles: () => ({ dispose: () => {} }),
+          onDidDeleteFiles: () => ({ dispose: () => {} }),
+          onDidRenameFiles: () => ({ dispose: () => {} }),
+        },
+      } as unknown as typeof vscode,
+      postMessage: () => {},
+    }
+    index = new WorkspaceFileIndex(deps)
+    index.setExcludePatterns(["*.env"])
+    await index.refresh()
+    const files = index.getFiles()
+    assert.deepEqual(files, ["README.md"])
+  })
+
+  it("merges config patterns with hardcoded node_modules exclusion", async () => {
+    const deps = {
+      vscode: {
+        workspace: {
+          workspaceFolders: [{ uri: fakeWorkspaceFsPath(root) }],
+          findFiles: async () => [
+            fakeWorkspaceFsPath(join(root, "README.md")),
+            fakeWorkspaceFsPath(join(root, "node_modules", "foo", "index.js")),
+          ],
+          asRelativePath: (uri: vscode.Uri) => uri.fsPath.replace(root + "/", ""),
+          onDidCreateFiles: () => ({ dispose: () => {} }),
+          onDidDeleteFiles: () => ({ dispose: () => {} }),
+          onDidRenameFiles: () => ({ dispose: () => {} }),
+        },
+      } as unknown as typeof vscode,
+      postMessage: () => {},
+    }
+    index = new WorkspaceFileIndex(deps)
+    index.setExcludePatterns(["*.log"])
+    await index.refresh()
+    const files = index.getFiles()
+    assert.deepEqual(files, ["README.md"])
+    assert.ok(!files.some((f) => f.includes("node_modules")))
+  })
+
+  it("empty patterns array results in only hardcoded exclusions", async () => {
+    const deps = {
+      vscode: {
+        workspace: {
+          workspaceFolders: [{ uri: fakeWorkspaceFsPath(root) }],
+          findFiles: async () => [
+            fakeWorkspaceFsPath(join(root, "README.md")),
+            fakeWorkspaceFsPath(join(root, "node_modules", "foo", "index.js")),
+          ],
+          asRelativePath: (uri: vscode.Uri) => uri.fsPath.replace(root + "/", ""),
+          onDidCreateFiles: () => ({ dispose: () => {} }),
+          onDidDeleteFiles: () => ({ dispose: () => {} }),
+          onDidRenameFiles: () => ({ dispose: () => {} }),
+        },
+      } as unknown as typeof vscode,
+      postMessage: () => {},
+    }
+    index = new WorkspaceFileIndex(deps)
+    index.setExcludePatterns([])
+    await index.refresh()
+    const files = index.getFiles()
+    assert.deepEqual(files, ["README.md"])
+  })
+
+  it("invalid glob pattern is skipped without crash", async () => {
+    const deps = {
+      vscode: {
+        workspace: {
+          workspaceFolders: [{ uri: fakeWorkspaceFsPath(root) }],
+          findFiles: async () => [fakeWorkspaceFsPath(join(root, "README.md"))],
+          asRelativePath: (uri: vscode.Uri) => uri.fsPath.replace(root + "/", ""),
+          onDidCreateFiles: () => ({ dispose: () => {} }),
+          onDidDeleteFiles: () => ({ dispose: () => {} }),
+          onDidRenameFiles: () => ({ dispose: () => {} }),
+        },
+      } as unknown as typeof vscode,
+      postMessage: () => {},
+    }
+    index = new WorkspaceFileIndex(deps)
+    index.setExcludePatterns(["[invalid"])
+    await index.refresh()
+    const files = index.getFiles()
+    assert.deepEqual(files, ["README.md"])
+  })
+
+  it("setExcludePatterns triggers refresh", async () => {
+    writeFileSync(join(root, "temp.log"), "")
+    const deps = {
+      vscode: {
+        workspace: {
+          workspaceFolders: [{ uri: fakeWorkspaceFsPath(root) }],
+          findFiles: async () => [
+            fakeWorkspaceFsPath(join(root, "README.md")),
+            fakeWorkspaceFsPath(join(root, "temp.log")),
+          ],
+          asRelativePath: (uri: vscode.Uri) => uri.fsPath.replace(root + "/", ""),
+          onDidCreateFiles: () => ({ dispose: () => {} }),
+          onDidDeleteFiles: () => ({ dispose: () => {} }),
+          onDidRenameFiles: () => ({ dispose: () => {} }),
+        },
+      } as unknown as typeof vscode,
+      postMessage: () => {},
+    }
+    index = new WorkspaceFileIndex(deps)
+    await index.refresh()
+    assert.ok(index.getFiles().includes("temp.log"))
+    index.setExcludePatterns(["*.log"])
+    await index.refresh()
+    assert.ok(!index.getFiles().includes("temp.log"))
+  })
 })

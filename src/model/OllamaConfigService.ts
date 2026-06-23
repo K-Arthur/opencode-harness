@@ -1,6 +1,7 @@
 import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
+import { parseJsonc } from "../utils/jsonc"
 
 /**
  * Canonical Ollama host. Every endpoint (tags, show, OpenAI-compatible
@@ -367,102 +368,16 @@ function redactValue(value: unknown): unknown {
   return value
 }
 
-export function stripJsonComments(content: string): string {
-  let result = ""
-  let inString = false
-  let escaped = false
-
-  for (let i = 0; i < content.length; i++) {
-    const char = content[i]
-    const next = content[i + 1]
-    if (char === undefined) break
-
-    if (inString) {
-      result += char
-      if (escaped) {
-        escaped = false
-      } else if (char === "\\") {
-        escaped = true
-      } else if (char === "\"") {
-        inString = false
-      }
-      continue
-    }
-
-    if (char === "\"") {
-      inString = true
-      result += char
-      continue
-    }
-
-    if (char === "/" && next === "/") {
-      i += 2
-      while (i < content.length && content[i] !== "\n" && content[i] !== "\r") i++
-      i--
-      continue
-    }
-
-    if (char === "/" && next === "*") {
-      i += 2
-      while (i < content.length && !(content[i] === "*" && content[i + 1] === "/")) {
-        if (content[i] === "\n" || content[i] === "\r") result += content[i]
-        i++
-      }
-      i++
-      continue
-    }
-
-    result += char
-  }
-
-  return result
-}
-
-export function removeJsonTrailingCommas(content: string): string {
-  let result = ""
-  let inString = false
-  let escaped = false
-
-  for (let i = 0; i < content.length; i++) {
-    const char = content[i]
-    if (char === undefined) break
-
-    if (inString) {
-      result += char
-      if (escaped) {
-        escaped = false
-      } else if (char === "\\") {
-        escaped = true
-      } else if (char === "\"") {
-        inString = false
-      }
-      continue
-    }
-
-    if (char === "\"") {
-      inString = true
-      result += char
-      continue
-    }
-
-    if (char === ",") {
-      let j = i + 1
-      while (j < content.length && /\s/.test(content[j] ?? "")) j++
-      if (content[j] === "}" || content[j] === "]") continue
-    }
-
-    result += char
-  }
-
-  return result
-}
-
 export function parseOpenCodeConfig(content: string): OpenCodeConfig {
-  const normalized = removeJsonTrailingCommas(stripJsonComments(content)).trim()
-  if (!normalized) return {}
-  const parsed = JSON.parse(normalized) as unknown
-  if (!isRecord(parsed)) throw new Error("OpenCode config must be a JSON object")
-  return parsed as OpenCodeConfig
+  const result = parseJsonc(content)
+  if (result.errors.length > 0) {
+    throw new Error(`OpenCode config parse error: ${result.errors.map((e) => e.message).join(", ")}`)
+  }
+  const config = result.config
+  if (config === null || config === undefined || typeof config !== "object" || Array.isArray(config)) {
+    return {}
+  }
+  return config as OpenCodeConfig
 }
 
 export function serializeOpenCodeConfig(config: OpenCodeConfig): string {

@@ -482,6 +482,7 @@
       <div id="input-area">
       <div id="model-dropdown-container" class="hidden"></div>
       <div id="variant-dropdown-container" class="hidden"></div>
+      <span id="config-status-badge" class="config-status-badge" hidden title="Workspace config"></span>
 
       <div id="input-wrapper">
         <textarea id="prompt-input" rows="1"
@@ -538,6 +539,7 @@
           <div class="instructions-editor hidden" id="instructions-editor"
                role="dialog" aria-modal="true" aria-labelledby="instructions-editor-label">
             <label class="instructions-editor-label" id="instructions-editor-label" for="instructions-textarea">Custom instructions (injected once at session start)</label>
+            <div id="workspace-rules-display" class="workspace-rules-display" hidden></div>
             <textarea class="instructions-textarea" id="instructions-textarea" rows="4" placeholder="E.g. Always write tests first. Use TypeScript strict mode."></textarea>
             <div class="instructions-editor-actions">
               <button class="instructions-save-btn" id="instructions-save-btn" aria-label="Save custom instructions (Ctrl+Enter)">Save</button>

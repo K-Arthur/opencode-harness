@@ -113,4 +113,22 @@ describe("PromptManager.ts", () => {
     assert.ok(source.includes("firstLine.startsWith"), "must check for heading prefix")
     assert.ok(source.includes(".replace(/^#+\\s*/, \"\")"), "must strip # heading markers")
   })
+
+  it("has setWorkspaceRules method for opencode.jsonc integration", () => {
+    assert.ok(source.includes("setWorkspaceRules("), "must expose setWorkspaceRules")
+    assert.ok(source.includes("rules: string[]"), "must accept rules array")
+    assert.ok(source.includes("instructions: string"), "must accept instructions string")
+  })
+
+  it("has getWorkspaceRules method that concatenates rules and instructions", () => {
+    assert.ok(source.includes("getWorkspaceRules(): string"), "must expose getWorkspaceRules")
+    assert.ok(source.includes("_workspaceInstructions"), "must use workspace instructions")
+    assert.ok(source.includes("_workspaceRules"), "must use workspace rules array")
+    assert.ok(source.includes(".join("), "must join parts into a single string")
+  })
+
+  it("deduplicates workspace rules", () => {
+    assert.ok(source.includes("seen.has("), "must deduplicate rules")
+    assert.ok(source.includes("Set<string>"), "must use Set for dedup tracking")
+  })
 })

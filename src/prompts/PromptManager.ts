@@ -20,6 +20,8 @@ export class PromptManager implements vscode.Disposable {
   private prompts: CustomPrompt[] = []
   private watchers: vscode.Disposable[] = []
   private onChangeCallbacks: Array<() => void> = []
+  private _workspaceRules: string[] = []
+  private _workspaceInstructions: string = ""
 
   scanWorkspace(): void {
     this.prompts = []
@@ -83,6 +85,34 @@ export class PromptManager implements vscode.Disposable {
   getPrompt(name: string): CustomPrompt | undefined {
     const normalized = name.toLowerCase()
     return this.prompts.find((p) => p.name.toLowerCase() === normalized)
+  }
+
+  /**
+   * Set workspace rules and instructions from opencode.jsonc.
+   * These are appended to system prompts sent to the LLM.
+   */
+  setWorkspaceRules(rules: string[], instructions: string): void {
+    this._workspaceRules = rules.filter((r) => typeof r === "string" && r.trim())
+    this._workspaceInstructions = (typeof instructions === "string" && instructions.trim()) || ""
+  }
+
+  /**
+   * Get concatenated workspace rules and instructions for system prompt injection.
+   * Instructions appear first, then rules array entries. Deduplicated.
+   */
+  getWorkspaceRules(): string {
+    const parts: string[] = []
+    if (this._workspaceInstructions) {
+      parts.push(this._workspaceInstructions)
+    }
+    const seen = new Set<string>(this._workspaceInstructions ? [this._workspaceInstructions] : [])
+    for (const rule of this._workspaceRules) {
+      if (!seen.has(rule)) {
+        seen.add(rule)
+        parts.push(rule)
+      }
+    }
+    return parts.join("\n\n")
   }
 
   onChanged(callback: () => void): void {

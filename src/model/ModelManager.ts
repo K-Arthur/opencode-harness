@@ -4,6 +4,7 @@ import { ProviderConfigManager } from "./ProviderConfigManager"
 import { resolveContextWindow, resolveModelOutputLimit } from "./contextWindowResolver"
 import { fetchOpenRouterModels, isCacheFresh as isOpenRouterCacheFresh } from "./openRouterMetadata"
 import { fetchModelsDevModels, isCacheFresh as isModelsDevCacheFresh, type ModelsDevEntry } from "./modelsDevMetadata"
+import type { WorkspaceConfig } from "../config/types"
 
 interface ServerProvider {
   id: string
@@ -51,6 +52,8 @@ export class ModelManager {
   private _favoriteModels: Set<string> = new Set()
   private _disabledModels: Set<string> = new Set()
   private _recentModels: string[] = []
+  private _workspaceModelOverrides: Map<string, string> = new Map()
+  private _workspaceSmallModel: string | undefined
   private static readonly RECENT_MODELS_CAP = 10
   /**
    * Cross-provider context-window catalogue from OpenRouter. Populated
@@ -88,6 +91,37 @@ export class ModelManager {
   /** Inject provider config manager. Call once after construction. */
   setProviderConfigManager(providerConfigManager: ProviderConfigManager): void {
     this.providerConfigManager = providerConfigManager
+  }
+
+  /**
+   * Apply workspace config from opencode.jsonc. Sets the default model if
+   * configured, records mode-based overrides, and stores the small model.
+   * Invalid values are logged and skipped.
+   */
+  applyWorkspaceConfig(config: WorkspaceConfig): void {
+    if (config.model && typeof config.model === "string" && config.model.trim()) {
+      this.setModel(config.model.trim())
+    }
+
+    if (config.small_model && typeof config.small_model === "string" && config.small_model.trim()) {
+      this._workspaceSmallModel = config.small_model.trim()
+    }
+
+    if (config.modelOverrides && typeof config.modelOverrides === "object" && !Array.isArray(config.modelOverrides)) {
+      this._workspaceModelOverrides.clear()
+      for (const [mode, modelId] of Object.entries(config.modelOverrides)) {
+        if (typeof modelId === "string" && modelId.trim()) {
+          this._workspaceModelOverrides.set(mode, modelId.trim())
+        }
+      }
+    }
+  }
+
+  /**
+   * Get the workspace-configured small model (if any).
+   */
+  get workspaceSmallModel(): string | undefined {
+    return this._workspaceSmallModel
   }
 
   /**
@@ -343,7 +377,15 @@ export class ModelManager {
     }
   }
 
+  /**
+   * Get the model for a specific mode, consulting workspace overrides first,
+   * then VS Code settings, then the fallback/current model.
+   */
   getModeModel(mode: string, fallbackModel?: string): string {
+    const workspaceOverride = this._workspaceModelOverrides.get(mode)
+    if (workspaceOverride && workspaceOverride.trim()) {
+      return workspaceOverride
+    }
     const modeModels = vscode.workspace.getConfiguration("opencode").get<Record<string, string>>("modeModels", {})
     const override = modeModels?.[mode]
     if (override && typeof override === "string" && override.trim()) {

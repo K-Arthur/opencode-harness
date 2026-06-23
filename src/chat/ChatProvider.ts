@@ -23,6 +23,7 @@ import type { SubagentRunStatus } from "./handlers/runActivityTypes"
 import { PromptManager } from "../prompts/PromptManager"
 import { PromptStashManager } from "../prompts/PromptStashManager"
 import { ProviderConfigManager } from "../model/ProviderConfigManager"
+import type { OpenCodeConfigService } from "../config/OpenCodeConfigService"
 import { isSessionInCurrentWorkspace as isSessionInCurrentWorkspacePure, looksLikeSdkError, isAbortErrorValue } from "./chatUtils"
 import { shouldIncludeStoreActiveFallback } from "./restorablePolicy"
 import { mapOpencodeError, type OpencodeError } from "./webview/opencodeErrorMapper"
@@ -191,6 +192,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     private readonly checkpointManager: CheckpointManager,
     private readonly mcpServerManager: McpServerManager,
     private readonly sessionManagerRegistry?: SessionManagerRegistry,
+    private readonly configService?: OpenCodeConfigService,
   ) {
     this.webviewContent = new WebviewContent(context.extensionUri)
     this.tabManager = new TabManager(context.globalState)
@@ -2251,6 +2253,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     this.pushRateLimitStateToWebview()
     this.pushCommandListToWebview()
     this.pushMcpServersToWebview()
+    this.pushWorkspaceConfigToWebview()
     if (this.pendingPrompt) {
       this.postMessage({ type: "prefill_prompt", ...this.pendingPrompt })
       this.pendingPrompt = undefined
@@ -2277,6 +2280,53 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
   private pushChatDirectionToWebview(): void {
     const direction = this.context.globalState.get<"ltr" | "rtl">(ChatProvider.CHAT_DIRECTION_KEY, "ltr")
     this.postMessage({ type: "chat_dir_config", direction })
+  }
+
+  /**
+   * Push workspace config from opencode.jsonc to the webview so the model
+   * selector, workspace rules display, and config status badge stay in sync.
+   */
+  pushWorkspaceConfigToWebview(): void {
+    if (!this.configService) return
+    const config = this.configService.getConfig()
+    this.postMessage({
+      type: "opencode_config",
+      config: {
+        model: config.model,
+        smallModel: config.small_model,
+        modelOverrides: config.modelOverrides,
+        ignore: config.ignore,
+        rules: config.rules,
+        instructions: config.instructions,
+      },
+      status: this.configService.getStatus(),
+      path: this.configService.getConfigPath(),
+    })
+  }
+
+  /**
+   * Apply workspace config to internal services (model manager, prompt manager,
+   * workspace file index) and push the updated config to the webview.
+   * Called on initial load and on config file changes.
+   */
+  applyWorkspaceConfig(): void {
+    if (!this.configService) return
+    const config = this.configService.getConfig()
+
+    this.modelManager.applyWorkspaceConfig(config)
+
+    const ignorePatterns = [
+      ...(Array.isArray(config.ignore) ? config.ignore : []),
+      ...(Array.isArray(config.exclude) ? config.exclude : []),
+    ]
+    this.workspaceFileIndex.setExcludePatterns(ignorePatterns)
+    void this.workspaceFileIndex.refresh()
+
+    const rules = Array.isArray(config.rules) ? config.rules : []
+    const instructions = typeof config.instructions === "string" ? config.instructions : ""
+    this.promptManager.setWorkspaceRules(rules, instructions)
+
+    this.pushWorkspaceConfigToWebview()
   }
 
   private pushPanelVisibilityStateToWebview(): void {

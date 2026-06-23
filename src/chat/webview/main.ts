@@ -69,6 +69,7 @@ import { createEscapeRegistry, visibleByClass } from "./escapeCoordinator"
 
 import { handleTokenUsage as handleTokenUsageModule, accumulateTokenUsage as accumulateTokenUsageModule, accumulateCost as accumulateCostModule, applyTokenUsageTotals as applyTokenUsageTotalsModule, rememberStepUsage, isDuplicateRecentStepUsage, handleRateLimitState as handleRateLimitStateModule, updateCostDisplay as updateCostDisplayModule, updateTokenDisplay as updateTokenDisplayModule, clearTokenDisplay as clearTokenDisplayModule, updateContextBarFromSession as updateContextBarFromSessionModule, type TokenCostDeps, type RateLimitWebviewState } from "./ui/tokenCostDisplay"
 import { createAttachmentManager } from "./ui/attachments"
+import { setupDragDrop } from "./ui/dragDrop"
 import { showWelcomeView as showWelcomeViewModule, hideWelcomeView as hideWelcomeViewModule, renderWelcomeContext as renderWelcomeContextModule, setupWelcomeActions as setupWelcomeActionsModule, setupWelcomeSuggestions as setupWelcomeSuggestionsModule, setupWelcomeResponsive as setupWelcomeResponsiveModule, type WelcomeViewDeps } from "./ui/welcomeView"
 import { shouldHonorActiveSessionChange, resolveInitStateTarget } from "./sessionFocus"
 import { resolveEventSessionTarget } from "./sessionTarget"
@@ -520,6 +521,16 @@ function getVsCodeApi() {
     autoResizeTextarea,
     updateContextChips: (_attachmentEls: AttachmentEls, chips?: ContextChip[]) => updateContextChips(els, chips),
     getActiveSession: () => stateManager.getActiveSession(),
+  })
+
+  // Set up drag-and-drop file upload on the entire app container
+  setupDragDrop({
+    els: {
+      app: els.app,
+      inputArea: els.inputArea,
+    },
+    postMessage: (msg) => vscode.postMessage(msg),
+    attachmentManager,
   })
 
   /* ─── INIT ─── */
@@ -2201,6 +2212,64 @@ function setupTodoSkillAndSubagentPanels(): void {
       }
     }
 
+    /**
+     * Apply workspace config from opencode.jsonc to the webview UI.
+     * Updates the config status badge and workspace rules display.
+     */
+    function applyWorkspaceConfig(config: Record<string, unknown> | undefined, status: string | undefined, path: string | undefined): void {
+      const badge = document.getElementById("config-status-badge")
+      if (badge) {
+        badge.classList.remove("config-ok", "config-error", "config-notfound")
+        if (status === "ok") {
+          badge.classList.add("config-ok")
+          badge.title = path ? `Workspace config: ${path}` : "Workspace config loaded"
+          badge.textContent = "config"
+          badge.removeAttribute("hidden")
+        } else if (status === "parse_error") {
+          badge.classList.add("config-error")
+          badge.title = path ? `Config parse error in ${path}` : "Config parse error"
+          badge.textContent = "config!"
+          badge.removeAttribute("hidden")
+        } else {
+          badge.classList.add("config-notfound")
+          badge.title = "No workspace config (opencode.jsonc)"
+          badge.setAttribute("hidden", "")
+        }
+      }
+
+      const rulesDisplay = document.getElementById("workspace-rules-display")
+      if (rulesDisplay) {
+        const rules = Array.isArray(config?.rules) ? (config!.rules as string[]) : []
+        const instructions = typeof config?.instructions === "string" ? (config!.instructions as string) : ""
+        const parts: string[] = []
+        if (instructions.trim()) parts.push(instructions.trim())
+        for (const rule of rules) {
+          if (typeof rule === "string" && rule.trim() && !parts.includes(rule.trim())) {
+            parts.push(rule.trim())
+          }
+        }
+        if (parts.length > 0) {
+          rulesDisplay.innerHTML = ""
+          const label = document.createElement("div")
+          label.className = "workspace-rules-label"
+          label.textContent = "Workspace rules (from opencode.jsonc)"
+          rulesDisplay.appendChild(label)
+          const list = document.createElement("ul")
+          list.className = "workspace-rules-list"
+          for (const part of parts) {
+            const li = document.createElement("li")
+            li.textContent = part
+            list.appendChild(li)
+          }
+          rulesDisplay.appendChild(list)
+          rulesDisplay.removeAttribute("hidden")
+        } else {
+          rulesDisplay.setAttribute("hidden", "")
+          rulesDisplay.innerHTML = ""
+        }
+      }
+    }
+
     type MsgHandler = (msg: LegacyHostMessage, sessionId: string | undefined) => void
 
     const messageHandlers = new Map<string, MsgHandler>([
@@ -3120,6 +3189,12 @@ function setupTodoSkillAndSubagentPanels(): void {
             btn.title = direction === "rtl" ? "Text direction: RTL (click for LTR)" : "Text direction: LTR (click for RTL)"
           }
         }
+      }],
+      ["opencode_config", (msg) => {
+        const config = (msg as Record<string, unknown>).config as Record<string, unknown> | undefined
+        const status = (msg as Record<string, unknown>).status as string | undefined
+        const path = (msg as Record<string, unknown>).path as string | undefined
+        applyWorkspaceConfig(config, status, path)
       }],
       ["voice_recording_started", (msg) => {
         voiceInputApi?.handleRecordingStarted({

@@ -792,9 +792,23 @@ export type HostMessage =
    *  gone). When `active` is true, the webview should keep showing the Stop
    *  button even if its optimistic flag was cleared. */
   | { type: "run_status_result"; sessionId: string; cliSessionId?: string; active: boolean; runId?: string; messageId?: string; probedAt: number; serverReachable: boolean }
+  | { type: "opencode_config"; config: WorkspaceConfigPayload; status: "ok" | "parse_error" | "not_found"; path?: string }
 
 // Backward-compatible alias — gradual migration; remove once all consumers use the union.
 export type LegacyHostMessage = HostMessage & Record<string, unknown>
+
+/**
+ * Workspace config payload sent to the webview via `opencode_config` messages.
+ * Subset of WorkspaceConfig focused on UI-relevant fields.
+ */
+export interface WorkspaceConfigPayload {
+  model?: string
+  smallModel?: string
+  modelOverrides?: Record<string, string>
+  ignore?: string[]
+  rules?: string[]
+  instructions?: string
+}
 
 export interface VsCodeApi {
   postMessage(message: Record<string, unknown>): void

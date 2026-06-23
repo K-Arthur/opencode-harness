@@ -1,15 +1,20 @@
 import { readFileSync, statSync, readdirSync } from "node:fs"
 import { resolve, dirname, relative, join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { parse as parseJsonc } from "jsonc-parser"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = resolve(__dirname, "..")
 
-// Parse JSONC (strip comments)
+// Parse JSONC (comments + trailing commas) via jsonc-parser
 function readJSONC(path) {
   const raw = readFileSync(path, "utf8")
-  const cleaned = raw.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "")
-  return JSON.parse(cleaned)
+  const errors = []
+  const parsed = parseJsonc(raw, errors, { allowTrailingComma: true, disallowComments: false })
+  if (errors.length > 0) {
+    throw new Error(`JSONC parse errors in ${path}: ${errors.length} error(s)`)
+  }
+  return parsed
 }
 
 function normalizePath(p) {

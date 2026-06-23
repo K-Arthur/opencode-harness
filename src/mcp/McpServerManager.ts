@@ -3,6 +3,7 @@ import * as os from "os"
 import * as path from "path"
 import * as vscode from "vscode"
 import { log } from "../utils/outputChannel"
+import { parseJsonc } from "../utils/jsonc"
 
 /**
  * Condition that determines when an MCP server's tools should be available.
@@ -530,8 +531,16 @@ export class McpServerManager {
     if (!fs.existsSync(configPath)) return {}
     try {
       const content = fs.readFileSync(configPath, "utf8")
-      if (!content.trim()) return {}
-      return JSON.parse(this.stripJsonComments(content).replace(/,\s*([}\]])/g, "$1")) as Record<string, unknown>
+      const result = parseJsonc(content)
+      if (result.errors.length > 0) {
+        log.warn(`Failed to parse OpenCode config at ${configPath}: ${result.errors.map((e) => e.message).join(", ")}`)
+        return {}
+      }
+      const config = result.config
+      if (config === null || config === undefined || typeof config !== "object" || Array.isArray(config)) {
+        return {}
+      }
+      return config as Record<string, unknown>
     } catch (err) {
       log.warn(`Failed to read OpenCode config at ${configPath}`, err)
       return {}
@@ -555,46 +564,6 @@ export class McpServerManager {
 
   private isDisabled(config: McpServerConfig): boolean {
     return config.disabled === true || config.enabled === false
-  }
-
-  private stripJsonComments(content: string): string {
-    let output = ""
-    let inString = false
-    let quote = ""
-    for (let i = 0; i < content.length; i++) {
-      const char = content[i]
-      const next = content[i + 1]
-      if (inString) {
-        output += char
-        if (char === "\\" && next) {
-          output += next
-          i++
-        } else if (char === quote) {
-          inString = false
-          quote = ""
-        }
-        continue
-      }
-      if (char === "\"" || char === "'") {
-        inString = true
-        quote = char
-        output += char
-        continue
-      }
-      if (char === "/" && next === "/") {
-        while (i < content.length && content[i] !== "\n") i++
-        output += "\n"
-        continue
-      }
-      if (char === "/" && next === "*") {
-        i += 2
-        while (i < content.length && !(content[i] === "*" && content[i + 1] === "/")) i++
-        i++
-        continue
-      }
-      output += char
-    }
-    return output
   }
 
   refresh(): void {

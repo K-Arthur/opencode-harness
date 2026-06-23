@@ -109,4 +109,20 @@ describe("ModelManager.ts", () => {
     assert.ok(source.includes("Malformed state at"), "must log malformed state warnings")
     assert.ok(source.includes("filter((v): v is string =>"), "must filter non-string entries")
   })
+
+  it("has applyWorkspaceConfig method for opencode.jsonc integration", () => {
+    assert.ok(source.includes("applyWorkspaceConfig("), "must expose applyWorkspaceConfig")
+    assert.ok(source.includes("config.model"), "must read model from workspace config")
+    assert.ok(source.includes("config.small_model"), "must read small_model from workspace config")
+    assert.ok(source.includes("config.modelOverrides"), "must read modelOverrides from workspace config")
+  })
+
+  it("has getModeModel method that consults workspace overrides", () => {
+    assert.ok(source.includes("getModeModel("), "must expose getModeModel")
+    assert.ok(source.includes("_workspaceModelOverrides"), "must consult workspace overrides")
+  })
+
+  it("has workspaceSmallModel getter", () => {
+    assert.ok(source.includes("get workspaceSmallModel"), "must expose workspaceSmallModel getter")
+  })
 })

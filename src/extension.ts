@@ -21,6 +21,8 @@ import { RateLimitMonitor } from "./monitor/RateLimitMonitor"
 import { ModelManager } from "./model/ModelManager"
 import { CliDiagnostics } from "./diagnostics/CliDiagnostics"
 import { McpServerManager } from "./mcp/McpServerManager"
+import { OpenCodeConfigService, type ConfigLogger } from "./config/OpenCodeConfigService"
+import { ConfigStatusBar } from "./config/ConfigStatusBar"
 import { OpencodeInstaller, type AutoInstallMode } from "./install/OpencodeInstaller"
 import { log } from "./utils/outputChannel"
 import { createLazyStarter } from "./utils/lazyStarter"
@@ -107,6 +109,39 @@ export async function activate(context: vscode.ExtensionContext) {
     const mcpServerManager = new McpServerManager(context)
     context.subscriptions.push(mcpServerManager)
     const mcpCreatedAt = performance.now()
+
+    // Workspace config service (opencode.jsonc discovery, parsing, watcher)
+    const configLogger: ConfigLogger = {
+      warn: (msg, err) => log.warn(msg, err),
+      error: (msg, err) => log.error(msg, err),
+      info: (msg) => log.info(msg),
+    }
+    const configService = new OpenCodeConfigService(vscode, configLogger)
+    context.subscriptions.push(configService)
+    configService.watch()
+    void configService.refresh()
+
+    // Status bar indicator for workspace config
+    const configStatusBar = new ConfigStatusBar(vscode)
+    configStatusBar.show()
+    context.subscriptions.push(configStatusBar)
+    context.subscriptions.push(
+      configService.onConfigChanged((result) => {
+        configStatusBar.update(result.status, result.path)
+      })
+    )
+
+    // Command: open the workspace config file (clicked from status bar)
+    context.subscriptions.push(
+      vscode.commands.registerCommand("opencode-harness.openConfigFile", async () => {
+        const configPath = configService.getConfigPath()
+        if (configPath) {
+          await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(configPath))
+        } else {
+          vscode.window.showInformationMessage("No opencode.jsonc config file found in this workspace.")
+        }
+      })
+    )
 
     sessionManager = new SessionManager(mcpServerManager)
     const sessionMgrCreatedAt = performance.now()
@@ -258,8 +293,16 @@ export async function activate(context: vscode.ExtensionContext) {
     chatProviderInstance = new ChatProvider(
       context, sessionManager, contextEngine, contextMonitor,
       themeManager, rateLimitMonitor, modelManager, sessionStore,
-      checkpointManager, mcpServerManager, sessionManagerRegistry
+      checkpointManager, mcpServerManager, sessionManagerRegistry, configService
     )
+
+    // Apply workspace config on initial load and on config file changes
+    context.subscriptions.push(
+      configService.onConfigChanged(() => {
+        chatProviderInstance?.applyWorkspaceConfig()
+      })
+    )
+    chatProviderInstance.applyWorkspaceConfig()
 
     // Warm the server the first time the chat view is resolved (user opened OpenCode).
     chatProviderInstance.setServerWarmup(() => {
