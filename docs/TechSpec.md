@@ -152,6 +152,34 @@ context indicator.
 session without emitting sessionless stale usage. If that session already has recorded context
 fill, the monitor re-emits the latest usage for that session with the new denominator.
 
+### Active File Tracking & Context Tray
+
+The extension tracks the user's active VS Code editor and surfaces it as context in the chat
+webview through a three-layer system:
+
+- **`ActiveFileTracker`** (`src/chat/ActiveFileTracker.ts`): Host-side tracker that listens to
+  `onDidChangeActiveTextEditor` and `onDidChangeTextEditorSelection`. Posts `active_file`
+  messages to the webview with path, languageId, lineCount, and selection info. When a
+  non-empty selection exists, `getActiveFileContent()` returns only the selected lines;
+  otherwise it returns the full file content. Manages per-session include/exclude state via
+  `handleToggleActiveFile()`, which resets when switching files.
+- **`WorkspaceFileIndex`** (`src/chat/WorkspaceFileIndex.ts`): Indexes workspace files via
+  `vscode.workspace.findFiles`, excluding `node_modules`. Watches file create/delete/rename
+  and posts `workspace_files` messages to the webview. Provides `asRelativePath()` for
+  resolving URIs to workspace-relative paths.
+- **`ContextTrayManager`** (`src/chat/webview/ui/contextTray.ts`): Webview-side manager for
+  all attached context items (`active_file`, `picked_file`, `image`, `document`). Provides
+  token estimation (768 tokens/image, ~chars/4 for text), a collapsible tray UI with item
+  chips and a token budget bar (128K budget), and `getAttachmentsForPayload()` which returns
+  only image/document items as `Attachment[]`.
+- **`AttachmentManager`** (`src/chat/webview/ui/attachments.ts`): Manages the active file
+  chip, toggle state, and selection info. `isActiveFileIncluded()` gates whether the active
+  file is injected into `send_prompt`. Dismissed files are excluded from the payload.
+
+The `send_prompt` message is enriched by `sendMessage.ts` when the active file is included:
+the text is prefixed with `@file:<path>` (quoted if the path contains spaces), and a
+`contextItems` array carries selection metadata for non-workspace file content injection.
+
 Token usage has two write modes:
 
 - `SessionStore.updateTokenUsage(sessionId, summary)` replaces stored totals with a

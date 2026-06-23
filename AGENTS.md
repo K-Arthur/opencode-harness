@@ -143,6 +143,8 @@ Run all unit+contract+roundtrip: `npm test`
 | `ui/keyboardShortcuts.ts` | `setupGlobalKeyboardShortcutsImpl` | `KeyboardShortcutDeps` | Document-level keyboard shortcuts (tab management, command palette, search, panel toggles) |
 | `todoSubagentSetup.ts` | `setupTodoSubagentPanelsImpl` | `TodoSubagentSetupDeps` | Todos/activity/tasks/terminal/skills/subagent panel setup + toggle button wiring |
 | `tabSwitcher.ts` | `switchTabImpl` | `TabSwitcherDeps` | Tab switching: scroll anchors, model/cost/token displays, permission bar, question bar, todos/activity sync |
+| `ui/contextTray.ts` | `createContextTrayManager` | `ContextTrayDeps` | Collapsible context tray: active file/image/document chips, token estimation (128K budget bar), `getAttachmentsForPayload()` |
+| `ui/attachments.ts` | `createAttachmentManager` | `AttachmentDeps` | Active file chip + toggle, selection tracking, image/document attachment CRUD, `isActiveFileIncluded()` payload gate |
 
 Each extracted function is called from a thin one-liner delegation in `main.ts` that passes the deps object. The pattern follows the existing `SendLogicDeps` / `ComposerDeps` precedent.
 
@@ -173,6 +175,8 @@ Each extracted function is called from a thin one-liner delegation in `main.ts` 
 | `AutoModeService` | `src/chat/AutoModeService.ts` | Auto-mode confirmation gate |
 | `HostPromptQueue` | `src/chat/HostPromptQueue.ts` | Host-side prompt queue (single source of truth, workspaceState persistence; auto-prunes completed/failed items when queue is full) |
 | `QuestionExpiryDetector` | `src/chat/QuestionExpiryDetector.ts` | B10: Categorizes question reply failures (expired/transient/rejected) + staleness detection |
+| `ActiveFileTracker` | `src/chat/ActiveFileTracker.ts` | Tracks active VS Code editor + selection, posts `active_file` messages, manages per-session include/exclude toggle |
+| `WorkspaceFileIndex` | `src/chat/WorkspaceFileIndex.ts` | Indexes workspace files via `findFiles`, watches create/delete/rename, posts `workspace_files` messages |
 
 ### Session Title Lifecycle
 

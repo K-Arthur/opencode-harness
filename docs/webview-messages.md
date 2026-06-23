@@ -386,6 +386,59 @@ no rate-limit headers (e.g. `opencode-proxy`/mimo). When it is absent/0, the bar
 to the active session's known cumulative `tokenUsage.total` so the counter reflects real
 usage instead of a permanent "0 tok".
 
+### Active File Tracking & Context Tray
+
+The extension tracks the user's active VS Code editor and surfaces it as context in the
+chat webview. This is a three-layer system: host-side tracking, webview-side state, and a
+collapsible context tray UI.
+
+#### Host → Webview messages
+
+- `active_file`: `{ type, path: string | null, languageId?, lineCount?, selection? }`.
+  Posted by `ActiveFileTracker` whenever the active editor or selection changes. `path` is
+  relative to the first workspace folder, or `null` when no editor is open. `selection` is
+  `{ startLine, endLine, text }` when the user has a non-empty selection, `null` otherwise.
+- `workspace_files`: `{ type, files: string[] }`. Posted by `WorkspaceFileIndex` after
+  workspace file refresh (initial load, file create/delete/rename). Contains relative paths
+  sorted alphabetically, excluding `node_modules`.
+
+#### Webview → Host messages
+
+- `toggle_active_file`: `{ type, sessionId, include: boolean }`. Posted when the user
+  toggles the active file inclusion state. The host records the per-session include/exclude
+  preference via `ActiveFileTracker.handleToggleActiveFile()`. The toggle state resets to
+  `included` when switching to a different file or starting a new chat session.
+
+#### Send prompt enrichment
+
+When the active file is included (`isActiveFileIncluded()` returns `true` and the file has
+not been dismissed), `sendMessage.ts` enriches the `send_prompt` payload:
+
+1. **`@file:` mention injection**: The text is prefixed with `@file:<path>` (quoted if the
+   path contains spaces) so the opencode server resolves the file content.
+2. **`contextItems` array**: When a selection exists, a `{ type: "active_file", path,
+   selection: { startLine, endLine, text } }` entry is included for non-workspace file
+   content injection.
+
+Dismissed (removed) active files are excluded from the payload — `isActiveFileIncluded()`
+checks both the toggle state and the dismissed set.
+
+#### Context Tray UI
+
+The context tray (`#context-tray`) is a collapsible bar above the context chips that
+summarizes all attached context items:
+
+- **Summary line**: Shows item counts (e.g. "2 files, 1 image · ~1,536 tokens (1%)") and a
+  toggle arrow. Click or Enter/Space to expand.
+- **Expanded view**: Each item renders as a chip with an icon (eye/🚫 for active file,
+  🖼 for image, 📄 for document, 📁 for picked file), label, token estimate, and remove
+  button.
+- **Token budget bar**: A 2px bar at the bottom showing total estimated tokens as a
+  percentage of a 128K budget, animated via `transform: scaleX()`.
+- **Multimodal support**: Images support hover-enlarge preview. Documents show line-count
+  badges. Extended MIME types for drag-and-drop: bmp, tiff, avif, heic, heif (images);
+  text, markdown, csv, html, css, js, json, xml, pdf, yaml, sh (documents).
+
 #### Context-usage dropdown actions (Webview → Host)
 
 The floating context-usage panel (`context-usage-dropdown.ts`) exposes four recovery
