@@ -305,8 +305,14 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
   function render(modelsList: ModelInfo[], currentModel: string) {
     models = modelsList
     _currentModel = currentModel
-    
+
     updateList()
+    // The dropdown may have opened while the list was still loading. Once the
+    // host sends the models, the content height changes, so re-position to keep
+    // the menu inside the viewport.
+    if (isOpen) {
+      positionDropdown()
+    }
   }
 
   function getDisplayModels(): ModelInfo[] {

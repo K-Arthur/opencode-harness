@@ -8,6 +8,11 @@ import {
   expectNoBrowserErrors,
 } from './webviewTestHarness'
 
+async function selectModel(page: Page, model: string) {
+  await dispatchHostMessage(page, { type: 'model_update', model })
+  await expect(page.locator('#model-label')).toHaveText(model.split('/').pop() || model)
+}
+
 test.describe('Webview host contract', () => {
   test.beforeEach(async ({ page }) => {
     await installVsCodeApi(page)
@@ -36,6 +41,7 @@ test.describe('Webview host contract', () => {
   })
 
   test('host can insert attached file mentions into the prompt', async ({ page }) => {
+    await selectModel(page, 'openai/gpt-4o')
     await page.locator('#prompt-input').fill('review')
     await dispatchHostMessage(page, {
       type: 'insert_text',

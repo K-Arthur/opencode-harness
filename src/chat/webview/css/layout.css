@@ -1051,6 +1051,8 @@ body.chat-rtl #prompt-input {
   display: flex;
   align-items: center;
   gap: var(--space-0-5);
+  min-width: 0; /* allow the right section to shrink so selectors truncate instead of overflowing */
+  flex-wrap: wrap;
 }
 
 .bottom-btn {
@@ -1358,6 +1360,14 @@ body.chat-rtl #prompt-input {
 
 .model-selector-btn[aria-expanded="true"] .chevron {
   transform: rotate(180deg);
+}
+
+.model-selector-btn #model-label,
+.variant-selector-btn .variant-label-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ─── VARIANT SELECTOR BUTTON ─── */
@@ -3941,9 +3951,9 @@ button.modal-session-item:focus {
     display: none;
   }
 
-  .model-selector-btn .btn-label,
-  .variant-selector-btn .btn-label,
-  .mode-dropdown-btn .btn-label {
+  .model-selector-btn #model-label,
+  .variant-selector-btn .variant-label-text,
+  .mode-dropdown-btn #mode-current-text {
     display: none;
   }
 

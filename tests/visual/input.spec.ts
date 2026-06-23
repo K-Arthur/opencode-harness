@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { installVsCodeApi, expectNoWebviewErrors } from './webviewTestHarness'
+import { installVsCodeApi, dispatchHostMessage, expectNoWebviewErrors } from './webviewTestHarness'
 
 test.describe('Input Area', () => {
   test.beforeEach(async ({ page }) => {
@@ -45,7 +45,9 @@ test.describe('Input Area', () => {
     const modeDropdown = page.locator('#mode-dropdown')
     await expect(modeDropdown).toBeVisible()
     await expect(modeDropdown.locator('#mode-dropdown-btn')).toHaveAttribute('aria-haspopup', 'listbox')
-    await expect(modeDropdown.locator('#mode-current-text')).toBeVisible()
+    // The mode text label is intentionally hidden at the narrow viewport (≤420px)
+    // so the model selector and send button have room; the button itself remains visible.
+    await expect(modeDropdown.locator('#mode-dropdown-btn')).toBeVisible()
   })
 
   test('should have send button with correct initial state', async ({ page }) => {
@@ -55,10 +57,14 @@ test.describe('Input Area', () => {
     // The important thing is it exists and is visible
   })
 
-  test('should enable send button when input has text', async ({ page }) => {
+  test('should enable send button when input has text and a model is selected', async ({ page }) => {
     const textarea = page.locator('#prompt-input')
     const sendBtn = page.locator('#send-btn')
-    
+
+    // Send button is gated by model selection: simulate the host setting a model.
+    await dispatchHostMessage(page, { type: 'model_update', model: 'openai/gpt-4o' })
+    await expect(page.locator('#model-label')).toHaveText('gpt-4o')
+
     await textarea.fill('Hello, OpenCode!')
     await expect(sendBtn).toBeEnabled()
   })
