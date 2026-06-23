@@ -24,7 +24,7 @@ Changed-file tracking also had two competing paths: live `file_edited` events up
 
 ## Public Contracts
 
-- `changed_files_update`: `{ type, sessionId, files: Array<{ path: string; added: number; removed: number }> }`
+- `changed_files_update`: `{ type, sessionId, files: Array<{ path: string; added: number; removed: number; status?: "A" | "M" | "D"; isPlanDocument?: boolean }> }` (status field added 2026-06-23; see ADR 2026-06-23-file-status-classification-deleted-diff.md)
 - `file_edited`: `{ type, sessionId, file }`
 - `checkpoint_list`: checkpoint objects include `id`, `sessionId`, `messageId`, `createdAt`, `filesChanged`, and optional `action`
 - `checkpoint_restored`: `{ type, sessionId, checkpointId, ok, error? }`

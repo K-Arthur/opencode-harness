@@ -194,8 +194,9 @@ The debug Extension Development Host must open the intended workspace folder. If
 - `DiffHandler` - Tracks and presents code diffs
 - `DiffApplier` - Previews diffs through read-only virtual documents and `vscode.diff`; applies accepted edits through `WorkspaceEdit`
 - `CheckpointManager` - Stores explicit file snapshots in extension storage and restores them through `workspace.fs`/`WorkspaceEdit` without changing git state
-- `SessionStore.addChangedFiles(sessionId, files)` - Canonical backend changed-file registration with path normalization, dedupe, stable order, and persistence
-- `changed_files_update` - Canonical frontend sync for the changed-files strip/dropdown. The host posts `{ type, sessionId, files: Array<{ path, added, removed }> }` after backend persistence; `file_edited` remains a compatibility incremental event.
+- `SessionStore.addChangedFiles(sessionId, files)` - Canonical backend changed-file registration with path normalization, dedupe, stable order, and persistence. Stats entries now include optional `status` ("A"|"M"|"D").
+- `fileStatusClassifier` (`src/chat/diff/fileStatusClassifier.ts`) - Classifies changed files as Added/Modified/Deleted via `git status --porcelain` with before/after content inference fallback. Injectable I/O for unit-testability.
+- `changed_files_update` - Canonical frontend sync for the changed-files strip/dropdown. The host posts `{ type, sessionId, files: Array<{ path, added, removed, status?, isPlanDocument? }> }` after backend persistence; `file_edited` remains a compatibility incremental event. `workspace_file_added`/`workspace_file_deleted` are emitted as explicit signals for added/deleted files.
 - `ContextMonitor` - Tracks context usage and provides optimization suggestions
 - `SkillManager` - Manages skill enablement and performance tracking
 - `SkillPreferencesStore` - Persists per-skill enable/disable preferences in `vscode.Memento` (`globalState`); consulted by `WebviewEventRouter.resolveAllSkills` for the modal and by the methodology advisor's skill hinter

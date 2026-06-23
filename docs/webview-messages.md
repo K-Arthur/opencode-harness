@@ -471,24 +471,59 @@ Import mints a fresh session id (imports are local copies, not server sessions).
 
 Changed-file state is synchronized from the extension host:
 
-- `changed_files_update`: `{ type, sessionId, files: Array<{ path: string; added: number; removed: number }> }`
+- `changed_files_update`: `{ type, sessionId, files: Array<{ path: string; added: number; removed: number; status?: "A" | "M" | "D"; isPlanDocument?: boolean }> }`
   is the canonical state message. The webview replaces that session's changed-file list with
   this payload. It re-renders the chip bar and todos panel only when the update belongs to
   the active session, preventing stale changed-file chips from leaking across tabs.
+  The optional `status` field carries the authoritative git classification
+  (A=added, M=modified, D=deleted) from `fileStatusClassifier.ts`; when absent the
+  frontend falls back to "M" via `_inferStatus()`.
 - `file_edited`: `{ type, sessionId, file }` is retained as a live incremental event for
   compatibility and immediate feedback. It merges through the same dedupe path as
   `changed_files_update`.
+- `workspace_file_added`: `{ type, sessionId, path }` is emitted alongside
+  `changed_files_update` when a file is classified as Added (status "A"). It is a
+  no-op signal in the webview today, reserved for future use (e.g. entrance animations).
+- `workspace_file_deleted`: `{ type, sessionId, path }` is emitted alongside
+  `changed_files_update` when a file is classified as Deleted (status "D"). It is a
+  no-op signal in the webview today, reserved for future use (e.g. exit animations).
+- `file_diff_response`: `{ type, path, sessionId?, lines: DiffLine[], error?, deleted?, truncated? }`
+  carries the per-file diff for the changed-files dropdown's inline expansion.
+  - `deleted: true` indicates the file was deleted — all `lines` are type `"removed"`
+    and a "File deleted" banner is rendered above them.
+  - `truncated: true` indicates the diff exceeded the 5MB payload cap and was
+    truncated to 500 lines; the user is directed to the full VS Code diff editor.
 - OpenCode `file.edited` SSE events can be sessionless. The host must resolve those global
   file events to a live or active tab before posting `file_edited`/`changed_files_update`; the
   webview should never receive or persist changed files under an empty session id.
 - The compact `#changed-files-strip` is the primary visible surface. It appears from
   `changed_files_update` and opens the full `#changed-files-dropdown`, which must stay within
   the webview viewport and scroll internally.
+- File rows in the dropdown carry a `data-status` attribute (`"A"`, `"M"`, or `"D"`)
+  for CSS targeting. Deleted files (`data-status="D"`) render with strikethrough and
+  reduced opacity on the filename.
 - The frontend clears changed files on stream start for the active turn, then expects the
   backend store to re-sync any subsequent file events for that session.
 - Open buttons post `{ type: "open_file", path }`; the extension host resolves relative paths
   against the session workspace first, then open VS Code workspace folders, and supports
   `#L12` line fragments.
+
+### File Status Classification
+
+The host classifies each changed file as Added (A), Modified (M), or Deleted (D) via
+`src/chat/diff/fileStatusClassifier.ts`. The classification strategy is layered:
+
+1. **`git status --porcelain -- <path>`** — authoritative XY status codes from git.
+   Batched into a single call for multi-file events.
+2. **Before/after content inference** (fallback when git status is empty or git is
+   unavailable):
+   - `git show HEAD:path` succeeds + file exists on disk → **M** (tracked, modified)
+   - `git show HEAD:path` succeeds + file does NOT exist → **D** (tracked, deleted)
+   - `git show HEAD:path` fails + file exists → **A** (untracked, added)
+   - `git show HEAD:path` fails + file doesn't exist → `null` (unknown)
+
+The classifier accepts injected `execSync`/`existsSync` deps for exhaustively
+unit-testable behavior (34 tests in `fileStatusClassifier.test.ts`).
 
 ## Session Deletion & Empty Sessions
 
