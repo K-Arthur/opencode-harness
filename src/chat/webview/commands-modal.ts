@@ -221,6 +221,19 @@ export function setupCommandsModal(els: {
         rawSource === "mcp" ? "mcp" :
         rawSource === "skill" ? "skill" :
         "server"
+      const detailParts: string[] = []
+      // Always include the description so users can expand and read the full
+      // text even when the row's one-line label is truncated.
+      if (c.description) detailParts.push(c.description)
+      // Append the full template when it is present and adds more context than
+      // the description alone (common for skill / MCP commands).
+      if (c.template && c.template.length > (c.description?.length ?? 0)) {
+        detailParts.push(c.template)
+      }
+      // Fallback to a generic note for commands that have no metadata at all.
+      if (detailParts.length === 0) {
+        detailParts.push(mappedSource === "mcp" ? "MCP-provided command" : "Server command")
+      }
       return {
         name: c.name,
         description: c.description || c.template || (mappedSource === "mcp" ? "MCP-provided command" : "Server command"),
@@ -229,11 +242,9 @@ export function setupCommandsModal(els: {
         // shown as an origin chip next to the badge so users can tell which
         // server contributed which command.
         origin: c.agent || undefined,
-        // Store the full template as detail when it exists and is longer than
-        // the description — this is the "docs" shown in the expandable panel.
-        // Skill commands often have a multi-line prompt template that serves
-        // as documentation for what the skill does.
-        detail: c.template && c.template.length > (c.description?.length ?? 0) ? c.template : undefined,
+        // detail is always populated so every command row has a chevron and an
+        // expandable panel for reading more info.
+        detail: detailParts.join("\n\n"),
       }
     })
     if (mode === "commands" && !commandsModal!.classList.contains("hidden")) render()
@@ -244,6 +255,7 @@ export function setupCommandsModal(els: {
       name: p.name,
       description: p.description || "Custom prompt",
       source: "prompt" as const,
+      detail: p.description || "Custom prompt",
     }))
     if (mode === "commands" && !commandsModal!.classList.contains("hidden")) render()
   }
@@ -314,6 +326,7 @@ export function setupCommandsModal(els: {
       name: t.name,
       description: t.tags.length > 0 ? `Template: ${t.tags.join(", ")}` : "Saved template",
       source: "template" as const,
+      detail: t.tags.length > 0 ? `Template: ${t.tags.join(", ")}` : "Saved template",
     }))
     const all = [...options.localCommands, ...serverCommands, ...promptCommands, ...templateCommandEntries]
     const inFilter = all.filter(c => activeFilter === "all" || c.source === activeFilter)

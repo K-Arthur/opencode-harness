@@ -124,6 +124,9 @@ export function toCommandEntries(): Array<{
 }> {
   return LOCAL_SLASH_COMMANDS.map((cmd) => {
     const parts: string[] = []
+    // Always include the full description in the detail panel so users can
+    // read it even when the row truncates the one-line summary.
+    parts.push(cmd.description)
     if (cmd.usage) parts.push(`Usage: /${cmd.name} ${cmd.usage}`)
     if (cmd.aliases?.length) parts.push(`Aliases: ${cmd.aliases.map((a) => `/${a}`).join(", ")}`)
     parts.push(`Category: ${cmd.category}`)

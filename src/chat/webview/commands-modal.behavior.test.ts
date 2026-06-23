@@ -275,7 +275,7 @@ describe("commands modal — expandable detail panel", () => {
     assert.ok(chevron, "skill command with template must show a chevron")
   })
 
-  it("does NOT show a chevron when there is no detail", () => {
+  it("shows a chevron even on plain server commands with only a description", () => {
     const { handle } = buildHandle()
     handle.open()
     handle.updateServerCommands([
@@ -284,7 +284,7 @@ describe("commands modal — expandable detail panel", () => {
     const plainRow = list.querySelector<HTMLElement>('.commands-modal-item[data-command="plain"]')
     assert.ok(plainRow)
     const chevron = plainRow!.querySelector('.commands-modal-item-chevron')
-    assert.equal(chevron, null, "command without template must not show a chevron")
+    assert.ok(chevron, "plain server command must still show a chevron so the description can be read")
   })
 
   it("detail panel is hidden by default and expands on chevron click", () => {
@@ -305,21 +305,21 @@ describe("commands modal — expandable detail panel", () => {
     assert.ok(!detailAfter!.classList.contains("hidden"), "detail must be visible after chevron click")
   })
 
-  it("detail panel shows the full template content", () => {
+  it("detail panel shows both the description and template content", () => {
     const { handle } = buildHandle()
     handle.open()
+    const description = "Triage"
     const templateContent = "You are a triage expert. Analyze the issue and classify it."
     handle.updateServerCommands([
-      { name: "triage", description: "Triage", template: templateContent, source: "skill" },
+      { name: "triage", description, template: templateContent, source: "skill" },
     ])
-    const chevron = list.querySelector<HTMLElement>('.commands-modal-item-chevron')!
+    const triageWrapper = list.querySelector<HTMLElement>('.commands-modal-item-wrapper[data-command="triage"]')!
+    const chevron = triageWrapper.querySelector<HTMLElement>('.commands-modal-item-chevron')!
     chevron.click()
-    // Scope to the triage row's wrapper to avoid matching local command detail panels.
-    const triageWrapper = list.querySelector<HTMLElement>('.commands-modal-item-wrapper[data-command="triage"]')
-    assert.ok(triageWrapper)
-    const detailContent = triageWrapper!.querySelector<HTMLElement>('.commands-modal-item-detail-content')
+    const detailContent = triageWrapper.querySelector<HTMLElement>('.commands-modal-item-detail-content')
     assert.ok(detailContent)
-    assert.equal(detailContent!.textContent, templateContent)
+    assert.ok(detailContent!.textContent!.includes(description), "detail must include the description")
+    assert.ok(detailContent!.textContent!.includes(templateContent), "detail must include the template")
   })
 
   it("collapses on second chevron click", () => {
@@ -389,5 +389,22 @@ describe("commands modal — expandable detail panel", () => {
       .find((c) => c.textContent?.includes("Usage"))
     assert.ok(detailContent, "detail must contain usage info for /model")
     assert.ok(detailContent!.textContent!.includes("/model <id>"))
+  })
+
+  it("MCP command with only description shows detail panel with description", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    const mcpDescription = "Step-by-step guide for using jcodemunch-mcp tools in Claude Code."
+    handle.updateServerCommands([
+      { name: "jcodemunch:workflow", description: mcpDescription, agent: "jcodemunch", source: "mcp" },
+    ])
+    const wrapper = list.querySelector<HTMLElement>('.commands-modal-item-wrapper[data-command="jcodemunch:workflow"]')
+    assert.ok(wrapper, "MCP command wrapper must render")
+    const chevron = wrapper!.querySelector('.commands-modal-item-chevron')
+    assert.ok(chevron, "MCP command with only a description must show a chevron")
+    ;(chevron as HTMLElement).click()
+    const detailContent = wrapper!.querySelector('.commands-modal-item-detail-content')
+    assert.ok(detailContent)
+    assert.ok(detailContent!.textContent!.includes(mcpDescription))
   })
 })
