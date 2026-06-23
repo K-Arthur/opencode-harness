@@ -29,6 +29,13 @@ export interface CommandEntry {
   origin?: string
   /** Optional direct callback for local commands that don't route through the slash dispatcher. */
   run?: () => void
+  /**
+   * Longer documentation shown in an expandable detail panel under the row.
+   * For skill/server commands this is the full prompt template; for local
+   * commands it includes usage hints and aliases. When absent, the row is
+   * not expandable.
+   */
+  detail?: string
 }
 
 export interface StashEntry {
@@ -104,6 +111,9 @@ export function setupCommandsModal(els: {
   /** Selected index used by keyboard navigation (ArrowDown/Up/Enter). */
   let selectedIdx = 0
 
+  /** Track which command names have their detail panel expanded. */
+  const expandedDetails = new Set<string>()
+
   /** Currently rendered focusable rows (commands or stash primary buttons). */
   function focusableRows(): HTMLElement[] {
     return Array.from(
@@ -126,6 +136,17 @@ export function setupCommandsModal(els: {
         r.scrollIntoView({ block: "nearest" })
       }
     })
+  }
+
+  /** Toggle the detail panel for a command row. */
+  function toggleDetail(commandName: string): void {
+    if (expandedDetails.has(commandName)) {
+      expandedDetails.delete(commandName)
+    } else {
+      expandedDetails.add(commandName)
+    }
+    // Re-render to reflect the expanded/collapsed state.
+    render()
   }
 
   function open(): void {
@@ -208,6 +229,11 @@ export function setupCommandsModal(els: {
         // shown as an origin chip next to the badge so users can tell which
         // server contributed which command.
         origin: c.agent || undefined,
+        // Store the full template as detail when it exists and is longer than
+        // the description — this is the "docs" shown in the expandable panel.
+        // Skill commands often have a multi-line prompt template that serves
+        // as documentation for what the skill does.
+        detail: c.template && c.template.length > (c.description?.length ?? 0) ? c.template : undefined,
       }
     })
     if (mode === "commands" && !commandsModal!.classList.contains("hidden")) render()
@@ -304,6 +330,10 @@ export function setupCommandsModal(els: {
     }
 
     for (const entry of filtered) {
+      const wrapper = document.createElement("div")
+      wrapper.className = "commands-modal-item-wrapper"
+      wrapper.dataset.command = entry.name
+
       const item = document.createElement("button")
       item.className = "commands-modal-item"
       item.setAttribute("role", "option")
@@ -349,11 +379,45 @@ export function setupCommandsModal(els: {
       }
       item.appendChild(badge)
 
+      // Chevron toggle for expandable detail panel. Only shown when the
+      // entry has a `detail` field (skill template, local usage/aliases).
+      if (entry.detail) {
+        const chevron = document.createElement("button")
+        chevron.className = "commands-modal-item-chevron"
+        chevron.setAttribute("aria-label", "Toggle documentation")
+        chevron.setAttribute("aria-expanded", String(expandedDetails.has(entry.name)))
+        chevron.innerHTML = expandedDetails.has(entry.name) ? "\u25BC" : "\u25B8"
+        chevron.addEventListener("click", (ev) => {
+          ev.stopPropagation()
+          toggleDetail(entry.name)
+        })
+        item.appendChild(chevron)
+      }
+
       item.addEventListener("click", () => {
         close()
         options.onRun(entry)
       })
-      commandsList!.appendChild(item)
+      wrapper.appendChild(item)
+
+      // Expandable detail panel — shown when the user toggles the chevron.
+      // The panel is a separate sibling of the button row so it doesn't
+      // interfere with the click-to-run action.
+      if (entry.detail) {
+        const detailPanel = document.createElement("div")
+        detailPanel.className = "commands-modal-item-detail"
+        detailPanel.dataset.command = entry.name
+        if (!expandedDetails.has(entry.name)) {
+          detailPanel.classList.add("hidden")
+        }
+        const pre = document.createElement("pre")
+        pre.className = "commands-modal-item-detail-content"
+        pre.textContent = entry.detail
+        detailPanel.appendChild(pre)
+        wrapper.appendChild(detailPanel)
+      }
+
+      commandsList!.appendChild(wrapper)
     }
   }
 
@@ -521,6 +585,30 @@ export function setupCommandsModal(els: {
       if (target) {
         e.preventDefault()
         target.click()
+      }
+    }
+    if (e.key === "ArrowRight") {
+      // Expand the selected row's detail panel if it has one.
+      const rows = focusableRows()
+      const target = rows[selectedIdx]
+      if (target) {
+        const name = target.dataset.command
+        if (name && !expandedDetails.has(name)) {
+          e.preventDefault()
+          toggleDetail(name)
+        }
+      }
+    }
+    if (e.key === "ArrowLeft") {
+      // Collapse the selected row's detail panel if it's expanded.
+      const rows = focusableRows()
+      const target = rows[selectedIdx]
+      if (target) {
+        const name = target.dataset.command
+        if (name && expandedDetails.has(name)) {
+          e.preventDefault()
+          toggleDetail(name)
+        }
       }
     }
   })

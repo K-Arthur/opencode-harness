@@ -263,3 +263,131 @@ describe("commands modal — legacy source fallback", () => {
     assert.equal(row!.querySelector(".commands-modal-item-badge")?.textContent, "Server")
   })
 })
+
+describe("commands modal — expandable detail panel", () => {
+  it("shows a chevron toggle on commands with a detail field", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    handle.updateServerCommands([
+      { name: "triage", description: "Triage issues", template: "You are a triage expert. Analyze the issue and...", source: "skill" },
+    ])
+    const chevron = list.querySelector<HTMLElement>('.commands-modal-item-chevron')
+    assert.ok(chevron, "skill command with template must show a chevron")
+  })
+
+  it("does NOT show a chevron when there is no detail", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    handle.updateServerCommands([
+      { name: "plain", description: "No template here", source: "command" },
+    ])
+    const plainRow = list.querySelector<HTMLElement>('.commands-modal-item[data-command="plain"]')
+    assert.ok(plainRow)
+    const chevron = plainRow!.querySelector('.commands-modal-item-chevron')
+    assert.equal(chevron, null, "command without template must not show a chevron")
+  })
+
+  it("detail panel is hidden by default and expands on chevron click", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    handle.updateServerCommands([
+      { name: "triage", description: "Triage", template: "Full skill prompt content here", source: "skill" },
+    ])
+    const triageWrapper = list.querySelector<HTMLElement>('.commands-modal-item-wrapper[data-command="triage"]')
+    assert.ok(triageWrapper)
+    const detail = triageWrapper!.querySelector<HTMLElement>('.commands-modal-item-detail')
+    assert.ok(detail, "detail panel must exist in the DOM")
+    assert.ok(detail!.classList.contains("hidden"), "detail must be hidden initially")
+
+    const chevron = triageWrapper!.querySelector<HTMLElement>('.commands-modal-item-chevron')!
+    chevron.click()
+    const detailAfter = list.querySelector<HTMLElement>('.commands-modal-item-wrapper[data-command="triage"]')!.querySelector<HTMLElement>('.commands-modal-item-detail')
+    assert.ok(!detailAfter!.classList.contains("hidden"), "detail must be visible after chevron click")
+  })
+
+  it("detail panel shows the full template content", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    const templateContent = "You are a triage expert. Analyze the issue and classify it."
+    handle.updateServerCommands([
+      { name: "triage", description: "Triage", template: templateContent, source: "skill" },
+    ])
+    const chevron = list.querySelector<HTMLElement>('.commands-modal-item-chevron')!
+    chevron.click()
+    // Scope to the triage row's wrapper to avoid matching local command detail panels.
+    const triageWrapper = list.querySelector<HTMLElement>('.commands-modal-item-wrapper[data-command="triage"]')
+    assert.ok(triageWrapper)
+    const detailContent = triageWrapper!.querySelector<HTMLElement>('.commands-modal-item-detail-content')
+    assert.ok(detailContent)
+    assert.equal(detailContent!.textContent, templateContent)
+  })
+
+  it("collapses on second chevron click", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    handle.updateServerCommands([
+      { name: "triage", description: "Triage", template: "content", source: "skill" },
+    ])
+    const triageWrapper = () => list.querySelector<HTMLElement>('.commands-modal-item-wrapper[data-command="triage"]')!
+    const chevron = () => triageWrapper().querySelector<HTMLElement>('.commands-modal-item-chevron')!
+    chevron().click()
+    assert.ok(!triageWrapper().querySelector('.commands-modal-item-detail')!.classList.contains("hidden"))
+    chevron().click()
+    assert.ok(triageWrapper().querySelector('.commands-modal-item-detail')!.classList.contains("hidden"))
+  })
+
+  it("Right Arrow expands the selected row's detail", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    handle.updateServerCommands([
+      { name: "triage", description: "Triage", template: "content", source: "skill" },
+    ])
+    // The first row is selected by default; navigate to the skill row.
+    // Local commands come first, so ArrowDown until we reach 'triage'.
+    const rows = list.querySelectorAll<HTMLElement>(".commands-modal-item")
+    const triageIdx = Array.from(rows).findIndex((r) => r.dataset.command === "triage")
+    assert.ok(triageIdx >= 0, "triage row must exist")
+    for (let i = 0; i < triageIdx; i++) press("ArrowDown")
+
+    press("ArrowRight")
+    const triageWrapper = list.querySelector<HTMLElement>('.commands-modal-item-wrapper[data-command="triage"]')
+    assert.ok(
+      !triageWrapper!.querySelector('.commands-modal-item-detail')!.classList.contains("hidden"),
+      "Right Arrow must expand the selected row's detail",
+    )
+  })
+
+  it("Left Arrow collapses the selected row's detail", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    handle.updateServerCommands([
+      { name: "triage", description: "Triage", template: "content", source: "skill" },
+    ])
+    const rows = list.querySelectorAll<HTMLElement>(".commands-modal-item")
+    const triageIdx = Array.from(rows).findIndex((r) => r.dataset.command === "triage")
+    for (let i = 0; i < triageIdx; i++) press("ArrowDown")
+
+    press("ArrowRight")
+    const triageWrapper = list.querySelector<HTMLElement>('.commands-modal-item-wrapper[data-command="triage"]')
+    assert.ok(!triageWrapper!.querySelector('.commands-modal-item-detail')!.classList.contains("hidden"))
+    // After Right Arrow, render() resets selectedIdx to 0. Re-navigate to triage.
+    for (let i = 0; i < triageIdx; i++) press("ArrowDown")
+    press("ArrowLeft")
+    const triageWrapper2 = list.querySelector<HTMLElement>('.commands-modal-item-wrapper[data-command="triage"]')
+    assert.ok(triageWrapper2!.querySelector('.commands-modal-item-detail')!.classList.contains("hidden"))
+  })
+
+  it("local commands show usage and aliases in the detail panel", () => {
+    const { handle } = buildHandle()
+    handle.open()
+    // /model has a usage hint; /export has an alias.
+    const modelChevron = Array.from(list.querySelectorAll<HTMLElement>(".commands-modal-item-chevron"))
+      .find((c) => (c.closest(".commands-modal-item") as HTMLElement | null)?.dataset.command === "model")
+    assert.ok(modelChevron, "/model must have a chevron (it has usage info)")
+    modelChevron!.click()
+    const detailContent = Array.from(list.querySelectorAll<HTMLElement>(".commands-modal-item-detail-content"))
+      .find((c) => c.textContent?.includes("Usage"))
+    assert.ok(detailContent, "detail must contain usage info for /model")
+    assert.ok(detailContent!.textContent!.includes("/model <id>"))
+  })
+})

@@ -2444,6 +2444,53 @@ textarea {
   text-align: center;
 }
 
+/* Wrapper holds a command row + its expandable detail panel. */
+.commands-modal-item-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Chevron toggle button for expandable detail. */
+.commands-modal-item-chevron {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-fast), background var(--duration-fast);
+}
+.commands-modal-item-chevron:hover {
+  color: var(--color-fg);
+  background: var(--oc-list-hover);
+}
+.commands-modal-item-chevron:focus-visible {
+  outline: 2px solid var(--oc-accent);
+  outline-offset: 1px;
+}
+
+/* Expandable detail panel below a command row. */
+.commands-modal-item-detail {
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  background: color-mix(in srgb, var(--oc-bg), transparent 60%);
+  border: 1px solid var(--oc-glass-border);
+  border-radius: var(--radius-md);
+  margin: 0 var(--space-1) var(--space-1);
+  overflow-x: auto;
+}
+.commands-modal-item-detail.hidden { display: none; }
+.commands-modal-item-detail-content {
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-normal);
+  color: var(--color-fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Stash list view */
 .commands-modal-stash-item {
   display: flex;

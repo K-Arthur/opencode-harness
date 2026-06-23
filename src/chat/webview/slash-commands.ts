@@ -120,13 +120,21 @@ export function toCommandEntries(): Array<{
   description: string
   source: "local"
   insertText: string
+  detail?: string
 }> {
-  return LOCAL_SLASH_COMMANDS.map((cmd) => ({
-    name: cmd.name,
-    description: cmd.description,
-    source: "local" as const,
-    insertText: cmd.insertText,
-  }))
+  return LOCAL_SLASH_COMMANDS.map((cmd) => {
+    const parts: string[] = []
+    if (cmd.usage) parts.push(`Usage: /${cmd.name} ${cmd.usage}`)
+    if (cmd.aliases?.length) parts.push(`Aliases: ${cmd.aliases.map((a) => `/${a}`).join(", ")}`)
+    parts.push(`Category: ${cmd.category}`)
+    return {
+      name: cmd.name,
+      description: cmd.description,
+      source: "local" as const,
+      insertText: cmd.insertText,
+      detail: parts.join("\n"),
+    }
+  })
 }
 
 /**
