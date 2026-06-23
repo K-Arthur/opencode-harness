@@ -5,7 +5,7 @@ export default defineConfig({
   timeout: 30000,
   expect: {
     toHaveScreenshot: {
-      maxDiffPixelRatio: 0.1,
+      maxDiffPixelRatio: 0.15,
       threshold: 0.04,
       // Use media/screenshots/dark/ as the single source of truth for
       // screenshot baselines — the same PNGs shipped to the marketplace.

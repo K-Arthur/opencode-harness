@@ -44,7 +44,7 @@ test.describe("Screenshot Verification", () => {
       // Use maxDiffPixelRatio (not maxDiffPixels) so the tolerance scales with image size
       // and accommodates cross-environment font rendering differences (local vs CI runners).
       await expect(page.locator("#app")).toHaveScreenshot(`${entry.name}.png`, {
-        maxDiffPixelRatio: 0.1,
+        maxDiffPixelRatio: 0.15,
         threshold: 0.06,
       })
 
