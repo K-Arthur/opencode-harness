@@ -158,6 +158,58 @@ describe("attachments.ts", () => {
     assert.equal(snapshot.length, 1, "snapshot must survive clearAttachments — this is the root cause of images showing as attached but not being sent")
     assert.equal(snapshot[0]!.mimeType, "image/png")
   })
+
+  it("setActiveFile with selection info stores selection and resets to included", () => {
+    const { manager } = setupManager()
+    manager.setActiveFile({ path: "src/main.ts", selection: { startLine: 5, endLine: 10, text: "selected" } })
+    assert.equal(manager.getActiveFile(), "src/main.ts")
+    assert.equal(manager.isActiveFileIncluded(), true)
+    const sel = manager.getActiveFileSelection()
+    assert.ok(sel)
+    assert.equal(sel!.startLine, 5)
+    assert.equal(sel!.endLine, 10)
+  })
+
+  it("toggleActiveFileInclude flips state and posts toggle_active_file", () => {
+    const { manager, posted } = setupManager()
+    manager.setActiveFile({ path: "src/main.ts" })
+    assert.equal(manager.isActiveFileIncluded(), true)
+
+    manager.toggleActiveFileInclude()
+    assert.equal(manager.isActiveFileIncluded(), false)
+    assert.equal(posted[0]!.type, "toggle_active_file")
+    assert.equal(posted[0]!.include, false)
+
+    manager.toggleActiveFileInclude()
+    assert.equal(manager.isActiveFileIncluded(), true)
+    assert.equal(posted[1]!.type, "toggle_active_file")
+    assert.equal(posted[1]!.include, true)
+  })
+
+  it("isActiveFileIncluded returns false when active file is dismissed", () => {
+    const { manager } = setupManager()
+    manager.setActiveFile({ path: "src/main.ts" })
+    assert.equal(manager.isActiveFileIncluded(), true)
+
+    // Dismiss by setting to null (simulates remove chip)
+    manager.setActiveFile({ path: null })
+    assert.equal(manager.isActiveFileIncluded(), false)
+  })
+
+  it("setActiveFile resets to included when switching files", () => {
+    const { manager } = setupManager()
+    manager.setActiveFile({ path: "src/a.ts" })
+    manager.toggleActiveFileInclude()
+    assert.equal(manager.isActiveFileIncluded(), false)
+
+    manager.setActiveFile({ path: "src/b.ts" })
+    assert.equal(manager.isActiveFileIncluded(), true, "switching files should reset to included")
+  })
+
+  it("isActiveFileIncluded returns false when no active file exists", () => {
+    const { manager } = setupManager()
+    assert.equal(manager.isActiveFileIncluded(), false)
+  })
 })
 
 describe("parsePromptMentions", () => {

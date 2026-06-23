@@ -237,4 +237,61 @@ describe("ContextTrayManager", () => {
     manager.toggleActiveFile(false)
     assert.equal(manager.getActiveFilePath(), undefined)
   })
+
+  it("removed image item is excluded from getAttachmentsForPayload", () => {
+    setupDom()
+    const manager = createContextTrayManager({
+      trayEl: document.getElementById("context-tray") as HTMLElement,
+      summaryEl: document.getElementById("context-tray-summary") as HTMLElement,
+      itemsEl: document.getElementById("context-tray-items") as HTMLElement,
+      postMessage: () => {},
+    })
+    manager.addImage({ data: "img1", mimeType: "image/png", sizeBytes: 4 })
+    const id = manager.getItems()[0]!.id
+    manager.removeItem(id)
+    assert.equal(manager.getAttachmentsForPayload().length, 0)
+  })
+
+  it("removed document item is excluded from getAttachmentsForPayload", () => {
+    setupDom()
+    const manager = createContextTrayManager({
+      trayEl: document.getElementById("context-tray") as HTMLElement,
+      summaryEl: document.getElementById("context-tray-summary") as HTMLElement,
+      itemsEl: document.getElementById("context-tray-items") as HTMLElement,
+      postMessage: () => {},
+    })
+    manager.addDocument({ data: "ZG9jMQ==", mimeType: "application/pdf", sizeBytes: 4, lineCount: 2 })
+    const id = manager.getItems()[0]!.id
+    manager.removeItem(id)
+    assert.equal(manager.getAttachmentsForPayload().length, 0)
+  })
+
+  it("removed active file is excluded from getActiveFilePath", () => {
+    setupDom()
+    const manager = createContextTrayManager({
+      trayEl: document.getElementById("context-tray") as HTMLElement,
+      summaryEl: document.getElementById("context-tray-summary") as HTMLElement,
+      itemsEl: document.getElementById("context-tray-items") as HTMLElement,
+      postMessage: () => {},
+    })
+    manager.setActiveFile({ path: "src/main.ts", languageId: "typescript", lineCount: 42 })
+    manager.setActiveFile(null)
+    assert.equal(manager.getActiveFilePath(), undefined)
+  })
+
+  it("getAttachmentsForPayload excludes active_file and picked_file items", () => {
+    setupDom()
+    const manager = createContextTrayManager({
+      trayEl: document.getElementById("context-tray") as HTMLElement,
+      summaryEl: document.getElementById("context-tray-summary") as HTMLElement,
+      itemsEl: document.getElementById("context-tray-items") as HTMLElement,
+      postMessage: () => {},
+    })
+    manager.setActiveFile({ path: "src/a.ts", languageId: "typescript", lineCount: 10 })
+    manager.addPickedFile("src/b.ts")
+    manager.addImage({ data: "img", mimeType: "image/png", sizeBytes: 3 })
+    const attachments = manager.getAttachmentsForPayload()
+    assert.equal(attachments.length, 1)
+    assert.equal(attachments[0]!.data, "img")
+  })
 })
