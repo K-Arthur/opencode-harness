@@ -379,10 +379,10 @@ export function getElementRefs(): ElementRefs {
     tokenDisplay: optionalElement("token-display"),
     costDisplay: optionalElement("cost-display"),
 
-    // File change tracking — canonical toolbar dropdown
+    // File change tracking — canonical inline panel (rendered above the input area)
     changedFilesBtn: document.getElementById("changed-files-btn") as HTMLButtonElement | null,
-    changedFilesDropdown: document.getElementById("changed-files-dropdown"),
-    cfDropdownTree: document.getElementById("cf-dropdown-tree"),
+    changedFilesDropdown: document.getElementById("changed-files-panel"),
+    cfDropdownTree: document.getElementById("cf-panel-tree"),
     cfCountBadge: document.getElementById("cf-count-badge"),
 
     // Checkpoint/undo panel (Phase 5)

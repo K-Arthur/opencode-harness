@@ -65,8 +65,9 @@ test.describe("Context Usage", () => {
 
     const bar = page.locator("#context-usage")
     await expect(bar).not.toHaveClass(/hidden/, { timeout: 5000 })
-    await expect(page.locator("#context-label")).toContainText("25%")
-    await expect(page.locator("#context-label")).toContainText(/50k|50K|50,000/)
+    const label = page.locator("#context-label")
+    await expect(label).toContainText("25%")
+    await expect(label).toHaveAttribute("title", /50[\s,]?000\s*\/\s*200[\s,]?000/)
 
     expectNoBrowserErrors(captured)
   })
@@ -156,8 +157,9 @@ test.describe("Context Usage", () => {
 
     const bar = page.locator("#context-usage")
     await expect(bar).not.toHaveClass(/hidden/, { timeout: 5000 })
-    await expect(page.locator("#context-label")).toContainText("33%")
-    await expect(page.locator("#context-label")).toContainText(/33k|33K|33,000/)
+    const label = page.locator("#context-label")
+    await expect(label).toContainText("33%")
+    await expect(label).toHaveAttribute("title", /33[\s,]?000\s*\/\s*100[\s,]?000/)
 
     expectNoBrowserErrors(captured)
   })
@@ -224,8 +226,9 @@ test.describe("Context Usage", () => {
 
     const bar = page.locator("#context-usage")
     await expect(bar).not.toHaveClass(/hidden/, { timeout: 5000 })
-    await expect(page.locator("#context-label")).toContainText("32%")
-    await expect(page.locator("#context-label")).toContainText(/64k|64K|64,000/)
+    const label = page.locator("#context-label")
+    await expect(label).toContainText("32%")
+    await expect(label).toHaveAttribute("title", /64[\s,]?000\s*\/\s*200[\s,]?000/)
 
     expectNoBrowserErrors(captured)
   })
@@ -305,8 +308,9 @@ test.describe("Context Usage", () => {
     const contextBar = page.locator("#context-usage")
     await expect(contextBar).not.toHaveClass(/hidden/, { timeout: 5000 })
     await expect(page.locator("#status-model")).toHaveText("big-pickle")
-    await expect(page.locator("#context-label")).toContainText("25%")
-    await expect(page.locator("#context-label")).toContainText(/50k|50K|50,000/)
+    const label = page.locator("#context-label")
+    await expect(label).toContainText("25%")
+    await expect(label).toHaveAttribute("title", /50[\s,]?000\s*\/\s*200[\s,]?000/)
     await expect(page.locator("#status-cost")).toHaveText("$0.1234")
 
     expectNoBrowserErrors(captured)
@@ -382,15 +386,11 @@ test.describe("Changed Files", () => {
 
     const strip = page.locator("#changed-files-strip")
     await expect(strip).not.toHaveClass(/hidden/, { timeout: 5000 })
-    await expect(page.locator(".cf-strip-chip")).toHaveCount(3)
-
-    // Filenames (not full paths) should be visible in chips
-    await expect(page.locator(".cf-strip-chip").nth(0)).toHaveText("index.ts")
-    await expect(page.locator(".cf-strip-chip").nth(1)).toHaveText("utils.ts")
-    await expect(page.locator(".cf-strip-chip").nth(2)).toHaveText("Button.tsx")
-
-    // Full path should be in the chip's title attribute for hover/accessibility
-    await expect(page.locator(".cf-strip-chip").nth(0)).toHaveAttribute("title", "src/index.ts")
+    // The strip teases one representative chip and folds the rest into "+N more".
+    await expect(page.locator(".file-chip")).toHaveCount(1)
+    await expect(strip).toContainText("+2 more")
+    await expect(page.locator(".file-chip").nth(0)).toContainText("index.ts")
+    await expect(page.locator(".file-chip").nth(0)).toHaveAttribute("title", "src/index.ts")
 
     expectNoBrowserErrors(captured)
   })
@@ -416,7 +416,7 @@ test.describe("Changed Files", () => {
 
     const strip = page.locator("#changed-files-strip")
     await expect(strip).toHaveClass(/hidden/)
-    await expect(page.locator(".cf-strip-chip")).toHaveCount(0)
+    await expect(page.locator(".file-chip")).toHaveCount(0)
 
     expectNoBrowserErrors(captured)
   })
@@ -453,10 +453,11 @@ test.describe("Changed Files", () => {
       ],
     })
 
-    await expect(page.locator("#changed-files-strip")).not.toHaveClass(/hidden/, { timeout: 5000 })
-    await expect(page.locator(".cf-strip-chip")).toHaveCount(2)
-    await expect(page.locator(".cf-strip-chip").nth(0)).toHaveText("router.go")
-    await expect(page.locator(".cf-strip-chip").nth(1)).toHaveText("handler.rs")
+    const strip = page.locator("#changed-files-strip")
+    await expect(strip).not.toHaveClass(/hidden/, { timeout: 5000 })
+    await expect(page.locator(".file-chip")).toHaveCount(1)
+    await expect(strip).toContainText("+1 more")
+    await expect(page.locator(".file-chip").nth(0)).toContainText("router.go")
 
     expectNoBrowserErrors(captured)
   })
@@ -490,12 +491,13 @@ test.describe("Changed Files", () => {
     const strip = page.locator("#changed-files-strip")
     await expect(strip).not.toHaveClass(/hidden/, { timeout: 5000 })
     await expect(strip).toContainText("settings.json")
-    await strip.click()
+    // Click the strip element itself (not the chip) to toggle the panel.
+    await strip.evaluate((el) => (el as HTMLElement).click())
 
-    const dropdown = page.locator("#changed-files-dropdown")
-    await expect(dropdown).not.toHaveClass(/hidden/, { timeout: 5000 })
-    const box = await dropdown.boundingBox()
-    expect(box, "changed files dropdown must be visible").not.toBeNull()
+    const panel = page.locator("#changed-files-panel")
+    await expect(panel).not.toHaveClass(/hidden/, { timeout: 5000 })
+    const box = await panel.boundingBox()
+    expect(box, "changed files panel must be visible").not.toBeNull()
     expect(box!.x).toBeGreaterThanOrEqual(0)
     expect(box!.y).toBeGreaterThanOrEqual(0)
     expect(box!.x + box!.width).toBeLessThanOrEqual(360)

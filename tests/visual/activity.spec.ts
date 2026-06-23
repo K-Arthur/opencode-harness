@@ -7,6 +7,11 @@ import { installVsCodeApi, expectNoWebviewErrors } from "./webviewTestHarness"
  * styled by the real activity.css. (Event-row derivation is covered exhaustively
  * by the jsdom unit tests in activity-panel.dom.test.ts / activityModel.test.ts.)
  */
+async function openSettingsMenu(page: import("@playwright/test").Page) {
+  await page.locator("#settings-btn").click()
+  await expect(page.locator("#settings-menu")).not.toHaveClass(/hidden/)
+}
+
 test.describe("Agent Activity Timeline", () => {
   test.beforeEach(async ({ page }) => {
     await installVsCodeApi(page)
@@ -35,10 +40,12 @@ test.describe("Agent Activity Timeline", () => {
     const panel = page.locator("#activity-panel")
     await expect(panel).toBeHidden()
 
+    await openSettingsMenu(page)
     await page.locator("#activity-toggle-btn").click()
 
     await expect(panel).toBeVisible()
-    await expect(panel).toHaveAttribute("aria-label", "Agent activity timeline")
+    await expect(panel).toHaveAttribute("aria-labelledby", "activity-panel-title")
+    await expect(page.locator("#activity-panel-title")).toHaveText("Activity")
     await expect(page.locator("#activity-toggle-btn")).toHaveAttribute("aria-pressed", "true")
 
     const chips = page.locator(".activity-filter-chip")
@@ -48,15 +55,18 @@ test.describe("Agent Activity Timeline", () => {
   })
 
   test("toggling again closes the panel and resets aria-pressed", async ({ page }) => {
+    await openSettingsMenu(page)
     await page.locator("#activity-toggle-btn").click()
     await expect(page.locator("#activity-panel")).toBeVisible()
 
+    await openSettingsMenu(page)
     await page.locator("#activity-toggle-btn").click()
     await expect(page.locator("#activity-panel")).toBeHidden()
     await expect(page.locator("#activity-toggle-btn")).toHaveAttribute("aria-pressed", "false")
   })
 
   test("the close button dismisses the panel", async ({ page }) => {
+    await openSettingsMenu(page)
     await page.locator("#activity-toggle-btn").click()
     await expect(page.locator("#activity-panel")).toBeVisible()
     await page.locator("#activity-close-btn").click()
@@ -64,6 +74,7 @@ test.describe("Agent Activity Timeline", () => {
   })
 
   test("filter chips are pill-shaped and themed (real activity.css applied)", async ({ page }) => {
+    await openSettingsMenu(page)
     await page.locator("#activity-toggle-btn").click()
     const chip = page.locator('.activity-filter-chip[data-filter="all"]')
     // border-radius: 999px in activity.css resolves to a large pixel radius.

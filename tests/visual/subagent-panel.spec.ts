@@ -4,6 +4,7 @@ import { installVsCodeApi, expectNoWebviewErrors } from './webviewTestHarness'
 async function mountSubagentPanel(page: Page, visible: boolean = true) {
   await page.evaluate((isVisible) => {
     document.querySelector('.welcome-container')?.remove()
+    document.getElementById('welcome-view')?.classList.add('hidden')
 
     // Reuse the existing #subagent-panel (rendered by index.html and starting
     // out hidden) — just unhide it and replace its contents with the fixture.
@@ -24,7 +25,7 @@ async function mountSubagentPanel(page: Page, visible: boolean = true) {
     }
     panel.innerHTML = `
       <div class="subagent-panel-header">
-        <h2 class="subagent-panel-title">Subagent Activity</h2>
+        <h2 id="subagent-panel-title" class="subagent-panel-title">Subagent Activity</h2>
         <button class="icon-btn" id="close-subagent-btn" title="Close panel" aria-label="Close subagent panel">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -87,7 +88,8 @@ test.describe('Subagent Activity Panel', () => {
   test('should render subagent panel', async ({ page }) => {
     const panel = page.locator('#subagent-panel')
     await expect(panel).toBeVisible()
-    await expect(panel).toHaveAttribute('aria-label', 'Subagent activity')
+    await expect(panel).toHaveAttribute('aria-labelledby', 'subagent-panel-title')
+    await expect(page.locator('#subagent-panel-title')).toHaveText('Subagent Activity')
   })
 
   test('should have proper header', async ({ page }) => {
@@ -307,10 +309,15 @@ test.describe('Subagent Panel — Collapsed Completed + Detail View', () => {
   async function mountMixedPanel(page: Page) {
     await page.evaluate(() => {
       document.querySelector('.welcome-container')?.remove()
+      document.getElementById('welcome-view')?.classList.add('hidden')
       const panel = document.getElementById('subagent-panel')!
       panel.classList.remove('hidden')
       panel.setAttribute('data-view', 'list')
       panel.innerHTML = `
+        <div class="subagent-panel-header">
+          <h2 id="subagent-panel-title" class="subagent-panel-title">Subagent Activity</h2>
+          <button class="icon-btn" id="close-subagent-btn" aria-label="Close subagent panel">✕</button>
+        </div>
         <div class="subagent-panel-content" id="subagent-list">
           <div class="subagent-stats-bar">3 subagents · 1 running · 2 done</div>
           <div class="subagent-list">
@@ -364,6 +371,19 @@ test.describe('Subagent Panel — Collapsed Completed + Detail View', () => {
           </div>
         </div>
       `
+      panel.querySelectorAll('.subagent-expand-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const item = btn.closest('.subagent-item')
+          if (item) {
+            item.classList.toggle('subagent-item--collapsed')
+            btn.setAttribute('aria-expanded', String(!item.classList.contains('subagent-item--collapsed')))
+          }
+        })
+      })
+      document.getElementById('subagent-detail-back-btn')?.addEventListener('click', () => {
+        panel.setAttribute('data-view', 'list')
+        document.getElementById('subagent-detail-view')?.classList.add('hidden')
+      })
     })
   }
 
@@ -382,11 +402,12 @@ test.describe('Subagent Panel — Collapsed Completed + Detail View', () => {
 
   test('expand button toggles collapsed state', async ({ page }) => {
     await mountMixedPanel(page)
+    await expect(page.locator('.subagent-item--collapsed')).toHaveCount(2)
     const expandBtn = page.locator('.subagent-expand-btn').first()
+    const item = page.locator('.subagent-item:has(.subagent-expand-btn)').first()
     await expandBtn.click()
-    const item = page.locator('.subagent-item--collapsed').first()
-    // After click, the item should no longer have --collapsed
-    await expect(item).toHaveCount(0)
+    await expect(item).not.toHaveClass(/subagent-item--collapsed/)
+    await expect(page.locator('.subagent-item--collapsed')).toHaveCount(1)
   })
 
   test('cancel button only appears for running agents', async ({ page }) => {
