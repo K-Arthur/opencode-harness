@@ -26,6 +26,7 @@ export function optionalElement<T extends HTMLElement>(id: string): T | null {
 }
 
 export interface ElementRefs {
+  app: HTMLElement
   tabPanels: HTMLElement
   tabBar: HTMLElement
   newTabBtn: HTMLElement
@@ -231,6 +232,7 @@ export interface ElementRefs {
 
 export function getElementRefs(): ElementRefs {
   return {
+    app: requireElement("app"),
     tabPanels: requireElement("tab-panels"),
     tabBar: requireElement("tab-bar"),
     newTabBtn: requireElement("new-tab-btn"),

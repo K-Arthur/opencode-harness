@@ -170,3 +170,17 @@ Replace `<your-model-id>` with your active model:
 - GPT-4o / GPT-5 / o1 / Llama → use the model id as printed by your runner
 
 The `model=` parameter rides on the existing `plan_turn` call — it does **not** add a separate tool invocation. If `plan_turn` is not appropriate for a non-code task, call `announce_model(model="...")` once instead.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues in `K-Arthur/opencode-harness`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default canonical names. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context repo. See `docs/agents/domain.md`.
