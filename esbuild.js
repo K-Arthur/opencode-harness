@@ -11,6 +11,11 @@ const extensionConfig = {
   external: ["vscode"],
   format: "cjs",
   platform: "node",
+  // Prefer the ESM ("module") entry over UMD ("main") so esbuild can follow
+  // and bundle internal imports. Some packages (e.g. jsonc-parser) ship a UMD
+  // build whose require() calls inside the factory wrapper are not bundled,
+  // causing "Cannot find module './impl/format'" at runtime.
+  mainFields: ["module", "main"],
   outdir: "dist",
   sourcemap: !production,
   minify: production,
