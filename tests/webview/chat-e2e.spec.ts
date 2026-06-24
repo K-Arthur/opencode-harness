@@ -191,19 +191,20 @@ test.describe("Chat Webview E2E", () => {
     const strip = page.locator("#changed-files-strip")
     await expect(strip).not.toHaveClass(/hidden/, { timeout: 5000 })
 
-    // Strip must show a "4 files changed" label
+    // Strip must show a "4 files changed" label and the first chip
     await expect(strip).toContainText("4 files changed")
-
-    // File basenames appear as chips in the strip
     await expect(strip).toContainText("foo.ts")
-    await expect(strip).toContainText("bar.py")
-    await expect(strip).toContainText("README.md")
-    await expect(strip).toContainText("config.json")
+    await expect(strip).toContainText("+3 more")
 
-    // Clicking the strip opens the full dropdown tree
-    await strip.click()
-    const tree = page.locator("#cf-dropdown-tree")
+    // Clicking the strip opens the inline panel tree
+    await strip.locator(".cf-strip-label").click()
+    const tree = page.locator("#cf-panel-tree")
     await expect(tree).toBeVisible({ timeout: 3000 })
+
+    // Full file list is visible inside the panel
+    await expect(tree).toContainText("bar.py")
+    await expect(tree).toContainText("README.md")
+    await expect(tree).toContainText("config.json")
 
     expectNoBrowserErrors(captured)
   })
@@ -246,13 +247,8 @@ test.describe("Chat Webview E2E", () => {
     const strip = page.locator("#changed-files-strip")
     await expect(strip).not.toHaveClass(/hidden/, { timeout: 5000 })
     await expect(strip).toContainText("5 files changed")
-
-    // All 5 basenames appear in the strip chips
     await expect(strip).toContainText("Main.kt")
-    await expect(strip).toContainText("deploy.sh")
-    await expect(strip).toContainText("workflow.yaml")
-    await expect(strip).toContainText("index.html")
-    await expect(strip).toContainText("migration.sql")
+    await expect(strip).toContainText("+4 more")
 
     expectNoBrowserErrors(captured)
   })
@@ -404,20 +400,20 @@ test.describe("Chat Webview E2E", () => {
     const strip = page.locator("#changed-files-strip")
     await expect(strip).not.toHaveClass(/hidden/, { timeout: 5000 })
 
-    await strip.click()
+    await strip.locator(".cf-strip-label").click()
 
-    const dropdown = page.locator("#changed-files-dropdown")
-    await expect(dropdown).not.toHaveClass(/hidden/, { timeout: 3000 })
-    await expect(dropdown).toBeVisible()
+    const panel = page.locator("#changed-files-panel")
+    await expect(panel).not.toHaveClass(/hidden/, { timeout: 3000 })
+    await expect(panel).toBeVisible()
 
-    // Dropdown must be positioned on-screen (right edge not off-screen)
-    const box = await dropdown.boundingBox()
+    // Panel must be positioned on-screen (right edge not off-screen)
+    const box = await panel.boundingBox()
     expect(box).not.toBeNull()
     expect(box!.x).toBeGreaterThan(-10)           // not off-screen left
     expect(box!.x + box!.width).toBeLessThan(2000) // not off-screen right
 
-    // Dropdown must be closeable
+    // Panel must be closeable
     await page.keyboard.press("Escape")
-    await expect(dropdown).toHaveClass(/hidden/, { timeout: 2000 })
+    await expect(panel).toHaveClass(/hidden/, { timeout: 2000 })
   })
 })

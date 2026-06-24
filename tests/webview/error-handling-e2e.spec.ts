@@ -58,15 +58,19 @@ test.describe('Error Handling E2E — Full Lifecycle', () => {
     await page.waitForTimeout(100)
 
     // Input-area banner should exist
-    const banner = page.locator('.rate-limit-notice')
+    const banner = page.locator('#rate-limit-bar')
     await expect(banner).toBeVisible()
-
-    // In-stream error should exist
-    const error = page.locator('.msg-error')
-    await expect(error).toBeVisible()
+    await expect(banner).toContainText('Rate limit exceeded')
   })
 
   test('rate_limit_state feeds quota monitor and shows quota bar', async ({ page }) => {
+    await dispatchHostMessage(page, {
+      type: 'init_state',
+      tabs: [{ id: 'tab-1', cliSessionId: 'sess-1', isStreaming: false }],
+      activeSessionId: 'tab-1',
+      maxConcurrentStreams: 5,
+    })
+
     await dispatchHostMessage(page, {
       type: 'rate_limit_state',
       state: {
@@ -187,9 +191,12 @@ test.describe('Error Handling E2E — Full Lifecycle', () => {
 
     await page.waitForTimeout(100)
 
-    const error = page.locator('.msg-error')
-    await expect(error).toBeVisible()
-    await expect(error).toContainText('quota')
+    // USAGE + HIGH + non-retryable is a Tier A hard block: it renders in the
+    // global-status-banner slot and gates the composer.
+    const banner = page.locator('#global-status-banner .tier-a-anchor')
+    await expect(banner).toBeVisible()
+    await expect(banner).toContainText('Your usage quota is exhausted')
+    await expect(page.locator('#prompt-input')).toHaveAttribute('disabled', 'true')
   })
 
   test('duplicate error coalescing - same error only shown once', async ({ page }) => {
@@ -235,10 +242,10 @@ test.describe('Error Handling E2E — Full Lifecycle', () => {
 
     await page.waitForTimeout(100)
 
-    // Count error messages - should be 1, not 2 (duplicate coalescing)
-    const errorCount = await page.evaluate(() => {
-      return document.querySelectorAll('.msg-error').length
-    })
-    expect(errorCount).toBe(1)
+    // SYSTEM + retryable is a Tier B ambient banner; the second error replaces
+    // the first, so only one banner remains.
+    const banners = page.locator('#global-status-banner .tier-b-banner')
+    await expect(banners).toHaveCount(1)
+    await expect(banners.first()).toContainText('The OpenCode server returned an error')
   })
 })
