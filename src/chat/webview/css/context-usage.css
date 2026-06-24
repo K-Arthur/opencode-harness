@@ -162,13 +162,11 @@
   display: none;
 }
 
-/* Changed Files Always-Visible Strip — sits BELOW the input area in z-order
-   so it never blocks dropdowns (mode/model selectors) that open from #input-area.
-   #input-area uses isolation: isolate, so its dropdowns are scoped to z-index 110;
-   the strip must stay at or below z-index 100 to avoid occlusion. */
+/* Changed Files Always-Visible Strip — sits above #input-area so it is clickable,
+   but below the fixed dropdowns (z-index 150) that now live in #dropdown-portal. */
 .cf-strip {
   position: relative;
-  z-index: var(--z-sticky);
+  z-index: calc(var(--z-sticky) + 20);
   display: flex;
   align-items: center;
   gap: var(--space-1);

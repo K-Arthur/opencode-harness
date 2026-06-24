@@ -491,8 +491,7 @@ test.describe("Changed Files", () => {
     const strip = page.locator("#changed-files-strip")
     await expect(strip).not.toHaveClass(/hidden/, { timeout: 5000 })
     await expect(strip).toContainText("settings.json")
-    // Click the strip element itself (not the chip) to toggle the panel.
-    await strip.evaluate((el) => (el as HTMLElement).click())
+    await strip.locator(".cf-strip-label").click()
 
     const panel = page.locator("#changed-files-panel")
     await expect(panel).not.toHaveClass(/hidden/, { timeout: 5000 })

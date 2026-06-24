@@ -480,8 +480,6 @@
       </div>
 
       <div id="input-area">
-      <div id="model-dropdown-container" class="hidden"></div>
-      <div id="variant-dropdown-container" class="hidden"></div>
       <span id="config-status-badge" class="config-status-badge" hidden title="Workspace config"></span>
 
       <div id="input-wrapper">
@@ -494,8 +492,6 @@
                   aria-controls="mention-dropdown slash-autocomplete"
                   autocomplete="off"
                   spellcheck="true"></textarea>
-        <div id="mention-dropdown" class="dropdown hidden" role="listbox" aria-label="File mentions"></div>
-        <div id="slash-autocomplete" class="slash-autocomplete hidden" role="listbox" aria-label="Slash commands"></div>
       </div>
       <div id="voice-input-status" class="voice-input-status" aria-live="polite" aria-atomic="true"></div>
 
@@ -563,32 +559,6 @@
                 <path d="m6 9 6 6 6-6"/>
               </svg>
             </button>
-            <div class="mode-dropdown-menu hidden" id="mode-dropdown-menu" role="listbox" aria-label="Session mode">
-              <button class="mode-option mode-option--plan" id="mode-opt-plan" role="option" aria-selected="false" data-mode="plan" aria-keyshortcuts="Alt+1">
-                <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3v18"/><path d="M7 3v18"/><path d="M3 7.5h18"/><path d="M3 16.5h18"/><path d="M17 3a2 2 0 0 1 2 2"/><path d="M17 21a2 2 0 0 0 2-2"/><path d="M7 3a2 2 0 0 0-2 2"/><path d="M7 21a2 2 0 0 1-2-2"/></svg>
-                <span class="mode-option-label">
-                  <span class="mode-option-name">Plan</span>
-                  <span class="mode-option-desc">Review changes before applying (safest for exploration)</span>
-                </span>
-                <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-              </button>
-              <button class="mode-option mode-option--auto" id="mode-opt-auto" role="option" aria-selected="false" data-mode="auto" aria-keyshortcuts="Alt+3">
-                <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                <span class="mode-option-label">
-                  <span class="mode-option-name">Auto</span>
-                  <span class="mode-option-desc">Agent applies changes automatically (review recommended)</span>
-                </span>
-                <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-              </button>
-              <button class="mode-option mode-option--build" id="mode-opt-build" role="option" aria-selected="false" data-mode="build" aria-keyshortcuts="Alt+2">
-                <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3L6.91 6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-                <span class="mode-option-label">
-                  <span class="mode-option-name">Build</span>
-                  <span class="mode-option-desc">Full agent access including execute commands (use with caution)</span>
-                </span>
-                <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-              </button>
-            </div>
           </div>
            <button class="model-selector-btn" id="model-selector-btn" title="Select model" aria-label="Select model" aria-haspopup="listbox" aria-expanded="false">
               <span id="model-label">Default</span>
@@ -668,6 +638,41 @@
         <input type="checkbox" id="toggle-errors" checked>
         <span class="toggle-label-text">Errors</span>
       </label>
+    </div>
+
+    <!-- Fixed-position dropdowns live outside #input-area so they can stack above
+         the changed-files strip while the strip sits above the input area. -->
+    <div id="dropdown-portal" aria-hidden="true">
+      <div id="model-dropdown-container" class="hidden"></div>
+      <div id="variant-dropdown-container" class="hidden"></div>
+      <div id="mention-dropdown" class="dropdown hidden" role="listbox" aria-label="File mentions"></div>
+      <div id="slash-autocomplete" class="slash-autocomplete hidden" role="listbox" aria-label="Slash commands"></div>
+      <div id="mode-dropdown-menu" class="mode-dropdown-menu hidden" role="listbox" aria-label="Session mode">
+        <button class="mode-option mode-option--plan" id="mode-opt-plan" role="option" aria-selected="false" data-mode="plan" aria-keyshortcuts="Alt+1">
+          <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3v18"/><path d="M7 3v18"/><path d="M3 7.5h18"/><path d="M3 16.5h18"/><path d="M17 3a2 2 0 0 1 2 2"/><path d="M17 21a2 2 0 0 0 2-2"/><path d="M7 3a2 2 0 0 0-2 2"/><path d="M7 21a2 2 0 0 1-2-2"/></svg>
+          <span class="mode-option-label">
+            <span class="mode-option-name">Plan</span>
+            <span class="mode-option-desc">Review changes before applying (safest for exploration)</span>
+          </span>
+          <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+        </button>
+        <button class="mode-option mode-option--auto" id="mode-opt-auto" role="option" aria-selected="false" data-mode="auto" aria-keyshortcuts="Alt+3">
+          <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <span class="mode-option-label">
+            <span class="mode-option-name">Auto</span>
+            <span class="mode-option-desc">Agent applies changes automatically (review recommended)</span>
+          </span>
+          <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+        </button>
+        <button class="mode-option mode-option--build" id="mode-opt-build" role="option" aria-selected="false" data-mode="build" aria-keyshortcuts="Alt+2">
+          <svg class="mode-option-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3L6.91 6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          <span class="mode-option-label">
+            <span class="mode-option-name">Build</span>
+            <span class="mode-option-desc">Full agent access including execute commands (use with caution)</span>
+          </span>
+          <svg class="mode-option-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+        </button>
+      </div>
     </div>
 
     <!-- Standalone welcome view — shown when no sessions exist -->

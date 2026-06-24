@@ -950,12 +950,18 @@
   z-index: calc(var(--z-sticky) + 10); /* Ensure it's above the jump-to-bottom button and welcome view */
   transition: border-color var(--duration-fast) var(--ease-out),
               box-shadow var(--duration-fast) var(--ease-out);
-  isolation: isolate; /* Prevent dropdown z-index from leaking to chat area */
 }
 
 #input-area.drag-over {
   border-color: var(--color-accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 20%, transparent);
+}
+
+/* Fixed-position dropdowns are portaled outside #input-area so they can stack
+   above the changed-files strip while the strip stays above the input area. */
+#dropdown-portal {
+  position: static;
+  z-index: auto;
 }
 
 /* Steering mode indicators — input border accent matches the active send-mode
