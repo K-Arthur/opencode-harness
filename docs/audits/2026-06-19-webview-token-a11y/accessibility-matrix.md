@@ -188,7 +188,7 @@
 
 ---
 
-### Changed Files Dropdown (`changed-files-dropdown.ts`)
+### Changed Files Panel (`changed-files-dropdown.ts`)
 
 | Aspect | Implementation | Status |
 |--------|---------------|--------|
@@ -196,9 +196,9 @@
 | Roving tabindex | Bookkeeping in `_rovingTabId` (line 72) | ✅ Implemented |
 | Arrow navigation | Arrow keys navigate tree items | ✅ Implemented |
 | Enter to expand/collapse | Toggles file expansion | ✅ Implemented |
-| Escape to close | Closes dropdown | ✅ Implemented |
+| Escape to close | Closes panel | ✅ Implemented |
 | Focus return | `_previouslyFocused` restored on close (line 70) | ✅ Implemented |
-| z-index | `var(--z-dropdown)` | ✅ Fixed in Phase 2 |
+| z-index | `var(--z-dropdown)` for dropdowns; strip uses portal layering | ✅ Fixed in Phase 2 |
 
 **Verification:**
 - Tree ARIA pattern for hierarchical file list
@@ -206,7 +206,7 @@
 - Arrow keys navigate through tree
 - Enter expands/collapses files
 - Focus returns to trigger on close
-- z-index token normalized
+- z-index token normalized; dropdowns portaled to avoid strip occlusion
 
 ---
 

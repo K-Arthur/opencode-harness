@@ -81,19 +81,19 @@ The webview frontend is **highly mature** with a robust cascade-layer CSS archit
 
 ---
 
-### 4. Changed Files Dropdown
+### 4. Changed Files Panel
 **File:** `src/chat/webview/changed-files-dropdown.ts` (1168 lines)  
-**Purpose:** Toolbar button → floating dropdown for changed files with diff hunks  
+**Purpose:** Inline panel (`#changed-files-panel`) below the changed-files strip, showing changed files with diff hunks  
 **Deficiencies:**
 
 | Category | Issue | Location | Severity |
 |----------|-------|----------|----------|
-| Z-index | Uses `var(--z-dropdown)` but may conflict with other dropdowns | CSS context-usage.css:244 | LOW |
+| Z-index | Resolved: fixed dropdowns were moved to `#dropdown-portal` so the strip can sit above `#input-area` without occluding dropdowns | CSS context-usage.css, layout.css | LOW |
 | ARIA/semantics | Has roving tabindex and `role="tree"` — generally good, but verify `aria-expanded` on parent | Lines 61-78 | LOW |
 | Layout/overflow | Tree structure needs `overflow-y: auto` and text ellipsis on long file paths | CSS needs audit | TBD |
 | Focus/keyboard | Focus return on close exists (`_previouslyFocused`) — verify it works reliably | Line 70 | LOW |
 
-**Recommendation:** CSS audit for overflow/ellipsis. Verify z-index doesn't occlude other dropdowns. Test keyboard navigation end-to-end.
+**Recommendation:** CSS audit for overflow/ellipsis. Test keyboard navigation end-to-end.
 
 ---
 

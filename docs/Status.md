@@ -1,7 +1,25 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-06-23
+**Last Updated:** 2026-06-24
 **Version:** v0.4.11
+
+## Highlights (2026-06-24) — Changed-files strip interaction fix
+
+**Fixed the changed-files strip being unclickable.** The strip (`#changed-files-strip`)
+was rendered underneath the sticky composer (`#input-area`) because the composer created a
+stacking context at z-index 110 while the strip was at z-index 100. Raising the strip would
+have blocked the model, mode, and mention dropdowns that lived inside the composer.
+
+Resolution: fixed-position dropdowns are now moved to a root-level `#dropdown-portal`
+(`src/chat/webview/index.html`) so they participate in the root stacking order above the
+strip. The strip's z-index was raised to `calc(var(--z-sticky) + 20)` (120) so it sits above
+the composer but below the portaled dropdowns (150 / 201). The input area's `isolation: isolate`
+was removed because it is no longer needed for dropdown containment. Visual regression tests
+for the strip and all dropdowns pass; `npm run reinstall` is still needed to load the change
+in the VS Code Extension Host.
+
+Files: `src/chat/webview/index.html`, `src/chat/webview/css/layout.css`,
+`src/chat/webview/css/context-usage.css`, `tests/visual/chat-context-usage.spec.ts`.
 
 ## Highlights (2026-06-23) — AttachedContextItem integration & document attachment support
 
@@ -376,7 +394,7 @@ Plan + verified gap analysis: `.opencode/plans/2026-06-11-methodology-skills-sla
 - **Test coverage** — 43 new tests across `RateLimitMonitor.test.ts` (17 tests: helpers + adapters + NaN rejection) and `errorHandler.test.ts` (24 tests: classification, retry, jitter, correlation IDs, history, stats, config).
 - **Plan / Build / Auto reliability** — user prompts no longer render as `PROPOSED PLAN`; Plan-mode prose styling is assistant-only. Mode changes are host-acknowledged before the dropdown updates, invalid modes are rejected, Auto warning persistence writes `opencode.autoModeConfirmed`, and the selector exposes tooltips plus `Ctrl/Cmd+Alt+1/2/3` shortcuts.
 - **Plan-mode permission guard** — only direct edits/writes to `.opencode/plans/*.md` are allowed in Plan mode. Shell and external-directory permission requests remain rejected even if their pattern mentions a plan file.
-- **Changed-Files dropdown no longer freezes during streaming** — rapid `changed_files_update` events are coalesced into one `requestAnimationFrame` render (was a full `innerHTML` tree rebuild per event); expand/collapse mutates only the affected row; the strip skips unchanged rebuilds; resize is rAF-throttled; previews build via `DocumentFragment`. Review finding: the inline diff accept/reject/apply pipeline is currently unreachable dead code (opencode applies edits server-side) — documented in CHANGELOG, left unwired pending a wire-or-remove decision. (`src/chat/webview/changed-files-dropdown.ts`)
+- **Changed-Files panel no longer freezes during streaming** — rapid `changed_files_update` events are coalesced into one `requestAnimationFrame` render (was a full `innerHTML` tree rebuild per event); expand/collapse mutates only the affected row; the strip skips unchanged rebuilds; resize is rAF-throttled; previews build via `DocumentFragment`. Review finding: the inline diff accept/reject/apply pipeline is currently unreachable dead code (opencode applies edits server-side) — documented in CHANGELOG, left unwired pending a wire-or-remove decision. (`src/chat/webview/changed-files-dropdown.ts`)
 - **"Question from model" block fixed** — model questions now render their text + all answer options and are interactive immediately (mid-stream), not just after `stream_end`. Args are normalized defensively (flat `{question,options}` and Claude-style nested `{questions:[…]}`) by the pure `parseQuestionArgs`; the block refreshes in place as input streams in, is persisted as a real `question` block, and supports multiple question groups + multi-select. Covered by `questionModel.test.ts`, `question-block.test.ts`, and `question-refresh.test.ts`. (`src/chat/webview/questionModel.ts`, `renderer.ts`, `streamHandlers.ts`, `streamEndHandler.ts`, `src/chat/handlers/StreamCoordinator.ts`, `src/session/sdkMessageConverter.ts`)
 
 ## v0.2.18 Highlights

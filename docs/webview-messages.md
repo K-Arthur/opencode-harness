@@ -624,7 +624,7 @@ Changed-file state is synchronized from the extension host:
   `changed_files_update` when a file is classified as Deleted (status "D"). It is a
   no-op signal in the webview today, reserved for future use (e.g. exit animations).
 - `file_diff_response`: `{ type, path, sessionId?, lines: DiffLine[], error?, deleted?, truncated? }`
-  carries the per-file diff for the changed-files dropdown's inline expansion.
+  carries the per-file diff for the changed-files panel's inline expansion.
   - `deleted: true` indicates the file was deleted — all `lines` are type `"removed"`
     and a "File deleted" banner is rendered above them.
   - `truncated: true` indicates the diff exceeded the 5MB payload cap and was
@@ -633,9 +633,13 @@ Changed-file state is synchronized from the extension host:
   file events to a live or active tab before posting `file_edited`/`changed_files_update`; the
   webview should never receive or persist changed files under an empty session id.
 - The compact `#changed-files-strip` is the primary visible surface. It appears from
-  `changed_files_update` and opens the full `#changed-files-dropdown`, which must stay within
+  `changed_files_update` and opens the inline `#changed-files-panel`, which must stay within
   the webview viewport and scroll internally.
-- File rows in the dropdown carry a `data-status` attribute (`"A"`, `"M"`, or `"D"`)
+- The strip sits above the composer (`#input-area`) in the stacking order. Fixed dropdowns
+  (`#model-dropdown-container`, `#variant-dropdown-container`, `#mention-dropdown`,
+  `#slash-autocomplete`, `#mode-dropdown-menu`) are portaled in `#dropdown-portal` so they
+  can still render above the strip.
+- File rows in the panel carry a `data-status` attribute (`"A"`, `"M"`, or `"D"`)
   for CSS targeting. Deleted files (`data-status="D"`) render with strikethrough and
   reduced opacity on the filename.
 - The frontend clears changed files on stream start for the active turn, then expects the

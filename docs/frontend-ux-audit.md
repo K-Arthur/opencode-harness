@@ -79,7 +79,7 @@ Webview-local persistence  WebviewState via vscode.setState (state.ts; schema-ve
 |---|---|---|
 | Streaming render | `liveTextRenderer.ts`, `streamHandlers.ts`, `streamOrchestrator.ts` | Strong |
 | Tool cards | `toolCallRenderer.ts`, `toolGrouping.ts` | Strong (state machine, grouping, kbd nav) |
-| Diffs / changed files | `changed-files-dropdown.ts`, diff blocks in `renderer.ts` | Strong (accept/reject/revert, partial hunks) |
+| Diffs / changed files | `changed-files-dropdown.ts` (strip + inline `#changed-files-panel`), diff blocks in `renderer.ts` | Strong (accept/reject/revert, partial hunks) |
 | Tabs / sessions | `tabs.ts`, `sessionListRenderer.ts` | Good (kbd nav, a11y) |
 | Questions / cost approval | `questionBar.ts` (wired via `main.ts`), `ui/tokenCostDisplay.ts` | Strong (wired) |
 | Errors / empty / loading | `errorHandler.ts`, `errorComponents.ts`, `ui/welcomeView.ts` | Strong |

@@ -231,7 +231,7 @@ Titles flow across three surfaces (server / CLI / webview tab strip) via two com
 | Diff types | `src/chat/webview/types.ts` | `DiffBlock`, `DiffHunk`, `DiffLine` (with `wordDiffHtml?`) |
 | Model indicator | `src/chat/webview/messageRenderer.ts` | Per-turn model badge in message headers: `[modelShortName]` CLI-style notation, provider prefix stripped, `text-overflow: ellipsis` truncation, streaming dot `::before` pseudo-element, WCAG `aria-label` |
 | Turn summary | `src/chat/webview/renderer.ts` | `groupMessagesIntoTurns()` populates `TurnSummary.model` from `ChatMessage.model`; timeline items render compact `.timeline-item-model` badge |
-| Changed-files dropdown | `src/chat/webview/changed-files-dropdown.ts` | Per-file change tree with stats, hunk previews, per-hunk revert, per-file Undo button, bulk Revert All. **WCAG 2.1 AAA** — see accessibility section below |
+| Changed-files panel | `src/chat/webview/changed-files-dropdown.ts` | Inline `#changed-files-panel` with per-file change tree, stats, hunk previews, per-hunk revert, per-file Undo button, bulk Revert All. **WCAG 2.1 AAA** — see accessibility section below |
 | Hunk staging | `src/chat/diff/hunkRevertPlan.ts`, `hunkStaging.ts` | LCS-based per-hunk revert planning, host-authoritative hunk computations |
 | Host diff handlers | `src/chat/WebviewEventRouter.ts` (~lines 500-560, 660-670, 1193-1210) | `accept_diff`, `reject_diff`, `revert_diff`, `accept_hunk`, `reject_hunk`, `revert_hunk`, `get_file_hunks`, `get_file_diff`, `undo_file`, `revert_all_files` |
 | Diff CSS | `src/chat/webview/css/blocks.css` (~lines 1330-1600) | `.diff-block`, `.diff-table`, `.diff-line--added`, `.diff-line--removed`, `.diff-line-num--old/new`, `.diff-wrap-toggle`, `.diff-hunk-collapse`, `.diff-hunk-nav`, `.diff-view-toggle`, `.diff-table-wrapper--side-by-side` |
@@ -240,12 +240,12 @@ Titles flow across three surfaces (server / CLI / webview tab strip) via two com
 
 ### Changed Files Modal — Accessibility Architecture (v0.4.0)
 
-The Changed Files dropdown (`#changed-files-dropdown`) is a fully accessible modal dialog following WAI-ARIA APG patterns. Full redesign in v0.4.0 to match native VS Code Source Control aesthetics and WCAG 2.1 AAA compliance.
+The Changed Files panel (`#changed-files-panel`) is an inline, fully accessible region following WAI-ARIA APG patterns, toggled from the `#changed-files-strip`. Redesigned in v0.4.0 to match native VS Code Source Control aesthetics and WCAG 2.1 AAA compliance.
 
 **Dialog semantics:**
-- `role="dialog"` + `aria-modal="true"` + `aria-labelledby="cf-dropdown-title"` + `aria-describedby="cf-dropdown-desc"` (live file count)
+- `role="region"` + `aria-label="Changed files"` (live file count)
 - **Focus trap**: Tab/Shift+Tab cycle within the panel (`_trapTab` in `changed-files-dropdown.ts`)
-- **Focus restore**: on close, focus returns to the trigger button (`_previouslyFocused` ref — WCAG 2.4.3)
+- **Focus restore**: on close, focus returns to the trigger (`_previouslyFocused` ref — WCAG 2.4.3)
 - **Initial focus**: moves to the close button on open (`_focusInitial`)
 
 **Tree semantics (WAI-ARIA treeview):**
