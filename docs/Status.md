@@ -1,7 +1,7 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-06-24
-**Version:** v0.4.11
+**Version:** v0.4.12
 
 ## Highlights (2026-06-24) — Changed-files strip interaction fix
 

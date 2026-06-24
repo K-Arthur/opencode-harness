@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+<!-- MAINTENANCE NOTE: Keep this section empty unless it describes work that has
+     NOT shipped in any version bump. When `npm version` / `npm run
+     reinstall` bumps the version, move all accumulated entries below into a
+     new `## [x.y.z] - yyyy-mm-dd` section. Never leave shipped work under
+     [Unreleased] — that creates documentation drift. See the release
+     workflow in docs/development/rebuild-and-reinstall.md. -->
+
+## [0.4.12] - 2026-06-24
+
 ### Added
 
 - **Workspace config (`opencode.jsonc`) support** — the extension now discovers,
@@ -28,6 +37,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (loaded / parse error / not found), and the webview displays workspace rules
   in the instructions editor. Invalid configs fall back to global VS Code
   settings gracefully. See [Configuration Reference](docs/configuration.md).
+- **Attached context item model** — every context item sent with a prompt is now
+  tracked as an `AttachedContextItem` with `type`, `path`, `languageId`,
+  `lineCount`, `selection`, `isActive`, and `tokenEstimate`. `send_prompt` now
+  includes a `contextItems` array alongside `attachments`. (`attachments.ts`,
+  `sendMessage.ts`, `types.ts`)
+- **Local fuzzy `@file` search** — typing `@` in the composer shows fuzzy file
+  suggestions with basename, directory, and file-kind icons. (`mentions.ts`,
+  `WorkspaceFileIndex.ts`)
+- **Context tray UI** — a collapsible tray above the composer shows active file,
+  image, and document chips with a 128K token budget bar, plus a unified
+  `getAttachmentsForPayload()` helper. (`ui/contextTray.ts`, `ui/attachments.ts`)
+- **Expandable command detail panels** — every row in the `/commands` palette can
+  expand to show skill documentation, usage examples, and command metadata.
+  (`commands-modal.ts`, `CommandExecutionService.ts`)
+- **File status classification** — changed files are now classified as Added,
+  Modified, or Deleted via `git status --porcelain` with a content-inference
+  fallback, and the changed-files panel reflects the status. (`fileStatusClassifier.ts`)
+- **CI screenshot baseline workflow** — `.github/workflows/screenshots-update.yml`
+  lets CI regenerate and commit visual screenshot baselines on demand.
 
 ### Changed
 
@@ -39,13 +67,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `WorkspaceFileIndex` now filters files against `ignore`/`exclude` glob
   patterns from workspace config (via `minimatch`), in addition to the
   hardcoded `node_modules` exclusion.
+- **Refactored webview modules** — extracted `todosModule.ts`,
+  `subagentsModule.ts`, and `PtyRouter.ts` from `main.ts` to reduce file size and
+  break dependency cycles. Also broke the `sendButton`↔`sendLogic`↔`sendMessage`↔
+  `steerMode` cycle. (`src/chat/webview/ui/`, `src/chat/WebviewEventRouter.ts`)
+- **Replaced emoji document icons with inline SVGs** so attachment chips look
+  consistent across themes and platforms. (`icons.ts`, `ui/attachments.ts`)
+- **Responsive composer** — the input bar and model selector now scale and
+  truncate correctly at narrow widths (down to 280px). (`input.spec.ts`,
+  `css/layout.css`, `model-dropdown.ts`)
+- **Changed-files surface is now an inline panel** — the strip opens
+  `#changed-files-panel` directly below the composer; fixed dropdowns were moved
+  to a root-level `#dropdown-portal` so the strip can sit above the composer
+  while dropdowns still render above the strip. (`changed-files-dropdown.ts`,
+  `index.html`, `css/context-usage.css`, `css/layout.css`)
+- **Re-baselined bundle size limits** — host limit raised to 725KB and webview
+  to 790KB to account for legitimate first-party growth; paydown levers
+  (SDK-gen tree-shaking, moving highlight.js off the main webview bundle) are
+  documented. (`scripts/check-bundle-size.mjs`)
 
-<!-- MAINTENANCE NOTE: Keep this section empty unless it describes work that has
-     NOT shipped in any version bump. When `npm version` / `npm run
-     reinstall` bumps the version, move all accumulated entries below into a
-     new `## [x.y.z] - yyyy-mm-dd` section. Never leave shipped work under
-     [Unreleased] — that creates documentation drift. See the release
-     workflow in docs/development/rebuild-and-reinstall.md. -->
+### Fixed
+
+- **Changed-files strip was unclickable** because it was layered underneath the
+  sticky composer. The strip now has its own z-index above the composer and the
+  dropdown portal keeps model/mode/mention/slash dropdowns above the strip.
+- **Restored document MIME type validation and icons** for file attachments,
+  with `ALLOWED_DOCUMENT_MIMES` and `DOCUMENT_ICONS` validation. (`attachments.ts`)
+- **Resolved failing visual regression tests** across activity panel,
+  context-usage, compact tool blocks, and subagent panel fixtures. (`tests/visual/`)
+- **Prefer ESM entry over UMD for node bundling** to avoid duplicate module
+  evaluation and smaller host bundle. (`esbuild.js`)
+- **Resolved lint and structural test failures** across `main.ts`,
+  `MessageRouter.ts`, `tabSwitcher.ts`, `ModelManager`, and mode-dropdown tests.
 
 ## [0.4.11] - 2026-06-21
 
