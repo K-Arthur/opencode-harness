@@ -61,7 +61,9 @@ export class QuestionHandler implements EventHandler {
       ? props.id
       : typeof props.requestID === "string"
         ? props.requestID
-        : undefined
+        : typeof event.id === "string"
+          ? event.id
+          : undefined
 
     if (event.type === "question.asked" || event.type === "question.v2.asked") {
       const groups = toGroups(props.questions)

@@ -105,3 +105,52 @@ test("normalizes session and permission lifecycle events", () => {
   assert.equal(normalized[2].sessionId, sessionID)
   assert.equal(normalized[3].sessionId, sessionID)
 })
+
+test("V2Event format (data field) is normalized to properties for question events", () => {
+  const sessionID = "ses_v2"
+  const requestID = "que_v2_1"
+  const callID = "call_v2_1"
+
+  const normalized = collect([
+    {
+      id: "evt_1",
+      type: "question.v2.asked",
+      data: {
+        id: requestID,
+        sessionID,
+        questions: [{ question: "Which option?", header: "Choice", options: [{ label: "A", description: "Option A" }], multiple: false, custom: true }],
+        tool: { messageID: "msg_v2", callID },
+      },
+    },
+  ])
+
+  assert.equal(normalized.length, 1)
+  assert.equal(normalized[0].type, "question_asked")
+  assert.equal(normalized[0].sessionId, sessionID)
+  assert.equal(normalized[0].data.requestID, requestID)
+  assert.equal(normalized[0].data.toolCallId, callID)
+  assert.equal(normalized[0].data.block.type, "question")
+  assert.equal(normalized[0].data.block.groups.length, 1)
+  assert.equal(normalized[0].data.block.groups[0].question, "Which option?")
+})
+
+test("V2Event format uses event.id as fallback when data.id is absent", () => {
+  const sessionID = "ses_v2_fallback"
+  const eventID = "que_fallback_1"
+
+  const normalized = collect([
+    {
+      id: eventID,
+      type: "question.v2.asked",
+      data: {
+        sessionID,
+        questions: [{ question: "Continue?", header: "Confirm", options: [{ label: "Yes", description: "" }, { label: "No", description: "" }], multiple: false, custom: false }],
+      },
+    },
+  ])
+
+  assert.equal(normalized.length, 1)
+  assert.equal(normalized[0].type, "question_asked")
+  assert.equal(normalized[0].sessionId, sessionID)
+  assert.equal(normalized[0].data.requestID, eventID)
+})

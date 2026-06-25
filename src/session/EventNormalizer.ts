@@ -147,7 +147,12 @@ export function createSdkEventNormalizer(): SdkEventNormalizer {
 }
 
 function unwrapSyncEvent(event: SdkEventLike): SdkEventLike {
-  if (event.type !== "sync") return event
+  if (event.type !== "sync") {
+    if (!event.properties && event.data && typeof event.data === "object") {
+      return { ...event, properties: event.data }
+    }
+    return event
+  }
   const syncEvent = (event as unknown as { syncEvent?: unknown }).syncEvent
   if (!syncEvent || typeof syncEvent !== "object") return event
   const rec = syncEvent as { type?: unknown; data?: unknown }

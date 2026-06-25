@@ -39,6 +39,11 @@ export interface NormalizedOpencodeEvent {
 export interface SdkEventLike {
   type: string
   properties?: Record<string, unknown>
+  /** V2Event format uses `data` instead of `properties`. Normalized to
+   *  `properties` by the SSE parser so handlers only need to check one field. */
+  data?: Record<string, unknown>
+  /** Event ID (present in both Event and V2Event formats). */
+  id?: string
 }
 
 export interface PartLike {

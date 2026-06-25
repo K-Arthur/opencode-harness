@@ -136,12 +136,12 @@ function isSdkEventLike(value: unknown): value is SdkEventLike {
 }
 
 function unwrapOpenCodeEvent(value: unknown): SdkEventLike | null {
-  if (isSdkEventLike(value)) return unwrapSyncEvent(value)
+  if (isSdkEventLike(value)) return normalizeEventFormat(unwrapSyncEvent(value))
 
   if (typeof value !== "object" || value === null) return null
 
   const payload = (value as { payload?: unknown }).payload
-  return isSdkEventLike(payload) ? unwrapSyncEvent(payload) : null
+  return isSdkEventLike(payload) ? normalizeEventFormat(unwrapSyncEvent(payload)) : null
 }
 
 function unwrapSyncEvent(event: SdkEventLike): SdkEventLike {
@@ -154,4 +154,20 @@ function unwrapSyncEvent(event: SdkEventLike): SdkEventLike {
     type: rec.type.replace(/\.1$/, ""),
     properties: rec.data as Record<string, unknown>,
   }
+}
+
+/**
+ * Normalize V2Event format (with `data` field) to Event format (with
+ * `properties` field). The SDK v1.17.x server may send events in either
+ * format; all handlers read `event.properties`, so we map `data` →
+ * `properties` here to keep them format-agnostic. The event `id` is
+ * preserved for handlers that need it (e.g. QuestionHandler uses it as
+ * a fallback for the question request ID when `properties.id` is absent).
+ */
+function normalizeEventFormat(event: SdkEventLike): SdkEventLike {
+  if (event.properties) return event
+  if (event.data && typeof event.data === "object") {
+    return { ...event, properties: event.data }
+  }
+  return event
 }
