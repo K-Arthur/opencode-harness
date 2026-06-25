@@ -8,7 +8,7 @@
 ## Runtime Dependencies
 | Package | Purpose | Version |
 |---------|---------|---------|
-| `@opencode-ai/sdk` | SDK client for OpenCode server | ^1.17.9 |
+| `@opencode-ai/sdk` | SDK client for OpenCode server | ^1.17.11 |
 | `diff-match-patch` | Text diffing for DiffApplier | ^1.0.5 |
 | `dompurify` | HTML sanitizer for webview | ^3.4.11 |
 | `highlight.js` | Syntax highlighting for code blocks | ^11.11.1 |
@@ -47,3 +47,4 @@ Checkpoint snapshots use VS Code `workspace.fs` and `WorkspaceEdit`; no runtime 
 |------|----------------|--------------|
 | 2026-06-22 | `@opencode-ai/sdk` 1.17.7→1.17.9, `dompurify` 3.4.10→3.4.11, `@playwright/test` 1.60→1.61, `@typescript-eslint/*` 8.61.0→8.61.1, `mocha` 11.7.6 (floor) | 0 HIGH/CRITICAL from direct deps; 2 pre-existing transitive HIGH (`form-data`, `undici` via stryker) unchanged |
 | 2026-06-23 | `jsonc-parser` ^3.3.1 added (JSONC config parsing), `minimatch` ^10.0.1 added (glob exclusion patterns) | 0 HIGH/CRITICAL |
+| 2026-06-25 | `@opencode-ai/sdk` 1.17.9→1.17.11 (v1.17.10 MCP instructions, v1.17.11 session snapshots) | Pending npm audit |

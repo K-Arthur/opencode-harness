@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **OpenCode SDK v1.17.11 alignment** — bumped `@opencode-ai/sdk` from `^1.17.9` to `^1.17.11` to align with the June 2026 OpenCode core updates. New features now supported:
+  - **"Max" thinking variant** — the variant selector now includes "Max" alongside "Default", "Low", "Medium", and "High" for GLM-5.2 and other reasoning backends that support extended thinking levels (v1.17.9).
+  - **MCP server cwd, timeout, and OAuth configuration** — extended `McpServerConfig` interface and sanitizer to validate `cwd` (working directory for local servers, v1.17.4), `timeout` (operation timeout in milliseconds, v1.17.4+), and `oauth` (OAuth configuration for remote servers with `clientId`, `clientSecret`, `scope`, `callbackPort`, `redirectUri` fields, v1.15.9/v1.17.4). Updated `package.json` schema for `opencode.mcpServers` to include these fields.
+  - **Provider custom headers** — added `headers` and `headerTimeout` fields to `ProviderConfig` interface and `ProviderConfigManager` to support per-provider custom headers (v1.17.9 Copilot headers) and header timeout configuration (v1.15.11). New accessors `getHeaders()` and `getHeaderTimeout()`.
 - **Diff review / accept / reject** — changed-file rows in the
   changed-files dropdown now carry accept (✓) and reject (✕) buttons.
   Accept writes the current working-tree content to disk; reject reverts
@@ -38,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `git show HEAD` + hunk computation, disk read when the file isn't open
   in an editor, and CRLF→LF normalization before diffing. Fixes the
   "+0 -0" bug in WSL2/Docker environments.
+
+### Changed
+
+- **Event coverage updated** — added SDK v1.17.11 new event types to `SAFE_IGNORED_EVENT_TYPES`: `integration.connection.updated` and `session.next.revert.*` (cleared, committed, staged). These are server-side state management events that the extension does not need to handle directly.
 
 <!-- MAINTENANCE NOTE: Keep this section empty unless it describes work that has
      NOT shipped in any version bump. When `npm version` / `npm run

@@ -8,6 +8,8 @@ export interface ProviderConfig {
   baseUrl?: string
   enabled: boolean
   models: string[]
+  headers?: Record<string, string>
+  headerTimeout?: number
 }
 
 export interface ProviderConfigManagerOptions {
@@ -73,6 +75,8 @@ export class ProviderConfigManager {
       baseUrl: config.baseUrl?.trim(),
       enabled: config.enabled ?? true,
       models: config.models || [],
+      headers: config.headers,
+      headerTimeout: config.headerTimeout,
       id,
     }
     this.configs.set(id, fullConfig)
@@ -148,6 +152,22 @@ export class ProviderConfigManager {
     }
     const config = this.configs.get(providerId)
     return config?.baseUrl
+  }
+
+  getHeaders(providerId: string): Record<string, string> | undefined {
+    if (!providerId || providerId.trim().length === 0) {
+      return undefined
+    }
+    const config = this.configs.get(providerId)
+    return config?.headers
+  }
+
+  getHeaderTimeout(providerId: string): number | undefined {
+    if (!providerId || providerId.trim().length === 0) {
+      return undefined
+    }
+    const config = this.configs.get(providerId)
+    return config?.headerTimeout
   }
 
   dispose(): void {

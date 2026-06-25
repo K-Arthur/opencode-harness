@@ -559,6 +559,40 @@
               "enabled": {
                 "type": "boolean",
                 "description": "Enable this MCP server."
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Working directory for local MCP servers (v1.17.4)."
+              },
+              "timeout": {
+                "type": "number",
+                "description": "Timeout in milliseconds for MCP server operations (v1.17.4+)."
+              },
+              "oauth": {
+                "type": ["object", "boolean"],
+                "description": "OAuth configuration for remote MCP servers (v1.15.9/v1.17.4). Set to false to disable OAuth auto-detection.",
+                "properties": {
+                  "clientId": {
+                    "type": "string",
+                    "description": "OAuth client ID."
+                  },
+                  "clientSecret": {
+                    "type": "string",
+                    "description": "OAuth client secret."
+                  },
+                  "scope": {
+                    "type": "string",
+                    "description": "OAuth scope."
+                  },
+                  "callbackPort": {
+                    "type": "number",
+                    "description": "OAuth callback port."
+                  },
+                  "redirectUri": {
+                    "type": "string",
+                    "description": "OAuth redirect URI."
+                  }
+                }
               }
             }
           }
@@ -1206,7 +1240,7 @@
     "serialize-javascript": "^7.0.0"
   },
   "dependencies": {
-    "@opencode-ai/sdk": "^1.17.9",
+    "@opencode-ai/sdk": "^1.17.11",
     "diff-match-patch": "^1.0.5",
     "dompurify": "^3.4.11",
     "highlight.js": "^11.11.1",

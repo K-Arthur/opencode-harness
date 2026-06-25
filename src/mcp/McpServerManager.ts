@@ -101,6 +101,26 @@ export interface McpServerConfig {
   url?: string
   headers?: Record<string, string>
   /**
+   * Working directory for local MCP servers (v1.17.4).
+   * When set, the server starts from this workspace-relative directory.
+   */
+  cwd?: string
+  /**
+   * Timeout in milliseconds for MCP server operations (v1.17.4+).
+   */
+  timeout?: number
+  /**
+   * OAuth configuration for remote MCP servers (v1.15.9/v1.17.4).
+   * Set to false to disable OAuth auto-detection.
+   */
+  oauth?: {
+    clientId?: string
+    clientSecret?: string
+    scope?: string
+    callbackPort?: number
+    redirectUri?: string
+  } | false
+  /**
    * Condition that determines when this server's tools should be available.
    * If undefined, the server is always available (subject to disabled/enabled).
    *
@@ -197,6 +217,74 @@ function assertWhenCondition(value: unknown): McpServerWhenCondition | undefined
   }
 }
 
+function assertCwd(value: unknown): string | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== "string") throw new Error("MCP server cwd must be a string")
+  if (hasControlChars(value)) throw new Error("MCP server cwd contains control characters")
+  if (value.length > 4096) throw new Error("MCP server cwd exceeds maximum length (4096 characters)")
+  return value.trim()
+}
+
+function assertTimeout(value: unknown): number | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    throw new Error("MCP server timeout must be a positive number (milliseconds)")
+  }
+  if (value > 300000) throw new Error("MCP server timeout exceeds maximum (300000ms / 5 minutes)")
+  return value
+}
+
+function assertOAuthConfig(value: unknown): { clientId?: string; clientSecret?: string; scope?: string; callbackPort?: number; redirectUri?: string } | false | undefined {
+  if (value === undefined || value === false) return value === false ? false : undefined
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("MCP server oauth must be an object or false")
+  }
+  const oauth = value as Record<string, unknown>
+  const result: { clientId?: string; clientSecret?: string; scope?: string; callbackPort?: number; redirectUri?: string } = {}
+  
+  if (oauth.clientId !== undefined) {
+    if (typeof oauth.clientId !== "string" || hasControlChars(oauth.clientId) || oauth.clientId.length > 500) {
+      throw new Error("MCP server oauth.clientId must be a safe string (max 500 chars)")
+    }
+    result.clientId = oauth.clientId.trim()
+  }
+  
+  if (oauth.clientSecret !== undefined) {
+    if (typeof oauth.clientSecret !== "string" || hasControlChars(oauth.clientSecret) || oauth.clientSecret.length > 500) {
+      throw new Error("MCP server oauth.clientSecret must be a safe string (max 500 chars)")
+    }
+    result.clientSecret = oauth.clientSecret.trim()
+  }
+  
+  if (oauth.scope !== undefined) {
+    if (typeof oauth.scope !== "string" || hasControlChars(oauth.scope) || oauth.scope.length > 1000) {
+      throw new Error("MCP server oauth.scope must be a safe string (max 1000 chars)")
+    }
+    result.scope = oauth.scope.trim()
+  }
+  
+  if (oauth.callbackPort !== undefined) {
+    if (typeof oauth.callbackPort !== "number" || !Number.isInteger(oauth.callbackPort) || oauth.callbackPort < 1 || oauth.callbackPort > 65535) {
+      throw new Error("MCP server oauth.callbackPort must be a valid port number (1-65535)")
+    }
+    result.callbackPort = oauth.callbackPort
+  }
+  
+  if (oauth.redirectUri !== undefined) {
+    if (typeof oauth.redirectUri !== "string" || hasControlChars(oauth.redirectUri) || oauth.redirectUri.length > 2000) {
+      throw new Error("MCP server oauth.redirectUri must be a safe string (max 2000 chars)")
+    }
+    try {
+      new URL(oauth.redirectUri)
+    } catch {
+      throw new Error("MCP server oauth.redirectUri must be a valid URL")
+    }
+    result.redirectUri = oauth.redirectUri.trim()
+  }
+  
+  return result
+}
+
 function sanitizeMcpServerConfig(name: string, value: unknown, partial = false): McpServerConfig {
   assertValidServerName(name)
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -283,6 +371,9 @@ function sanitizeMcpServerConfig(name: string, value: unknown, partial = false):
   config.env = assertSafeRecord("env", config.env)
   config.headers = assertSafeRecord("headers", config.headers, MCP_HEADER_NAME_PATTERN)
   config.when = assertWhenCondition(config.when)
+  config.cwd = assertCwd(config.cwd)
+  config.timeout = assertTimeout(config.timeout)
+  config.oauth = assertOAuthConfig(config.oauth)
   if (url !== undefined) config.url = url
   if (config.disabled !== undefined && typeof config.disabled !== "boolean") throw new Error("MCP server disabled flag must be boolean")
   if (config.enabled !== undefined && typeof config.enabled !== "boolean") throw new Error("MCP server enabled flag must be boolean")

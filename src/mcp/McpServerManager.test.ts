@@ -62,4 +62,26 @@ describe("McpServerManager.ts", () => {
     assert.ok(source.includes("environment → env"), "must accept environment alias")
     assert.ok(source.includes("enabled → !disabled"), "must accept enabled alias")
   })
+
+  it("validates cwd field for local MCP servers (v1.17.4)", () => {
+    assert.ok(source.includes("assertCwd"), "must validate cwd field")
+    assert.ok(source.includes("cwd must be a string"), "must check cwd type")
+    assert.ok(source.includes("cwd exceeds maximum length"), "must enforce cwd length limit")
+  })
+
+  it("validates timeout field for MCP servers (v1.17.4+)", () => {
+    assert.ok(source.includes("assertTimeout"), "must validate timeout field")
+    assert.ok(source.includes("timeout must be a positive number"), "must check timeout type and positivity")
+    assert.ok(source.includes("timeout exceeds maximum"), "must enforce timeout cap")
+  })
+
+  it("validates oauth field for remote MCP servers (v1.15.9/v1.17.4)", () => {
+    assert.ok(source.includes("assertOAuthConfig"), "must validate oauth field")
+    assert.ok(source.includes("oauth must be an object or false"), "must check oauth type")
+    assert.ok(source.includes("oauth.clientId must be a safe string"), "must validate clientId")
+    assert.ok(source.includes("oauth.clientSecret must be a safe string"), "must validate clientSecret")
+    assert.ok(source.includes("oauth.scope must be a safe string"), "must validate scope")
+    assert.ok(source.includes("oauth.callbackPort must be a valid port number"), "must validate callbackPort")
+    assert.ok(source.includes("oauth.redirectUri must be a valid URL"), "must validate redirectUri")
+  })
 })

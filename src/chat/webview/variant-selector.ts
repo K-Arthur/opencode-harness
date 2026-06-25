@@ -6,7 +6,7 @@ export interface VariantSelectorCallbacks {
   onSelect: (variant: string) => void
 }
 
-const DEFAULT_VARIANTS = ["Default", "Low", "Medium", "High"]
+const DEFAULT_VARIANTS = ["Default", "Low", "Medium", "High", "Max"]
 
 export function setupVariantSelector(els: ElementRefs, callbacks: VariantSelectorCallbacks) {
   let isOpen = false
