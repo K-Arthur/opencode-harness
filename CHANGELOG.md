@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+<!-- MAINTENANCE NOTE: Keep this section empty unless it describes work that has
+     NOT shipped in any version bump. When `npm version` / `npm run
+     reinstall` bumps the version, move all accumulated entries below into a
+     new `## [x.y.z] - yyyy-mm-dd` section. Never leave shipped work under
+     [Unreleased] — that creates documentation drift. See the release
+     workflow in docs/development/rebuild-and-reinstall.md. -->
+
+## [0.4.13] - 2026-06-25
+
 ### Added
 
 - **OpenCode SDK v1.17.11 alignment** — bumped `@opencode-ai/sdk` from `^1.17.9` to `^1.17.11` to align with the June 2026 OpenCode core updates. New features now supported:
@@ -53,6 +62,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `workspacePath` (from the opencode server directory) instead of the
   VS Code window's first workspace folder. Fixes diff stats and diff loading
   in debug panels and multi-root workspaces.
+- **Inline diff in file-edit cards** — the "Show diff" button on file-edit
+  cards now renders a unified diff inline from the tool arguments
+  (`oldString`/`newString` or `content`) instead of relying on a host
+  round-trip that only updated the changed-files dropdown. The diff is
+  shown/hidden in place with a toggle button.
 
 ### Changed
 
@@ -62,12 +76,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   returns the relative path after the matched workspace-root suffix instead of
   concatenating the unmatched prefix. Fixes container path resolution.
 
-<!-- MAINTENANCE NOTE: Keep this section empty unless it describes work that has
-     NOT shipped in any version bump. When `npm version` / `npm run
-     reinstall` bumps the version, move all accumulated entries below into a
-     new `## [x.y.z] - yyyy-mm-dd` section. Never leave shipped work under
-     [Unreleased] — that creates documentation drift. See the release
-     workflow in docs/development/rebuild-and-reinstall.md. -->
+### Fixed
+
+- **File-edit card diffs not showing** — the "Show diff" button on file-edit
+  cards previously sent a `get_file_diff` message to the host, but the
+  response only updated the changed-files dropdown, not the card itself.
+  The card now renders an inline unified diff directly from the tool
+  arguments, eliminating the host round-trip dependency.
+- **Events displayed out of order after session compaction** — after a
+  session compaction, server chunks that arrived before the resumed
+  session was ready would render into the pre-compaction bubble, making
+  post-compaction events appear before the compaction notice. The
+  webview now resets the per-session stream state on `session_compacted`
+  before resuming, so new chunks render in the correct post-compaction
+  bubble.
+- **Sessionless file_edited attribution after compaction** —
+  `file.edited` events with no session ID were dropped during the
+  transient non-streaming gap after compaction (the local streaming flag
+  is briefly false). The attribution logic now falls back to the active
+  tab when it has an active CLI session, preserving edit visibility
+  while still guarding against idle-tab attribution for external tools.
 
 ## [0.4.12] - 2026-06-24
 

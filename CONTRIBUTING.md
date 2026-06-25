@@ -136,8 +136,11 @@ npm install -g @vscode/vsce
 npx @vscode/vsce package --no-dependencies --allow-missing-repository
 
 # Install the packaged extension
-code --install-extension opencode-harness-*.vsix --force
+code --install-extension opencode-harness-*.vsix --force          # VS Code
+codium --install-extension opencode-harness-*.vsix --force        # VSCodium
 ```
+
+The recommended workflow for development is `npm run reinstall` (bumps version, uninstalls old, builds, installs, prunes stale dirs). See [`docs/development/rebuild-and-reinstall.md`](docs/development/rebuild-and-reinstall.md) for details.
 
 The `.vsix` file contains:
 - `dist/extension.js` — bundled extension

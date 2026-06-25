@@ -1,7 +1,15 @@
 # Status.md
 
-## Last Updated: 2026-06-15
-## Project State: v1→v2 SDK migration in progress (questions + safe void session calls on v2; Phase 2b+ mapping layer pending) + lazy server spawn (R3) + timing-independent abort suppression (R2) + steering/queueing + keyboard redesign + prior fixes (TDD)
+## Last Updated: 2026-06-25
+## Project State: v0.4.13 shipped — inline file-edit diffs, compaction event ordering fix, sessionless file_edited attribution fix + SDK v1.17.11 alignment + diff review/accept/reject + session-aware baseline diffs
+
+### v0.4.13 (2026-06-25): Inline diffs + compaction ordering + SDK v1.17.11
+- **Inline diff in file-edit cards** — the "Show diff" button on file-edit cards now renders a unified diff inline from the tool arguments (`oldString`/`newString` or `content`) instead of relying on a host round-trip that only updated the changed-files dropdown.
+- **Events displayed out of order after session compaction** — the webview now resets the per-session stream state on `session_compacted` before resuming, so server chunks that arrive before the resumed session is ready render in the correct post-compaction bubble.
+- **Sessionless file_edited attribution after compaction** — `file.edited` events with no session ID now fall back to the active tab when it has an active CLI session, covering the transient non-streaming gap after compaction while still guarding against idle-tab attribution for external tools.
+- **SDK v1.17.11 alignment** — "Max" thinking variant, MCP server cwd/timeout/OAuth config, provider custom headers.
+- **Diff review / accept / reject** — changed-file rows carry accept (✓) and reject (✕) buttons with session-aware baseline and undoable checkpoints.
+- **Verification:** typecheck clean; unit 1966 pass / 0 fail; message-contract 23/23; production build green; `.vsix` packaged at `opencode-harness-0.4.13.vsix` (2.1 MB).
 
 ### Migration progress (2026-06-15): v1→v2 SDK strangler — Phases 1 + 2 (partial)
 - **Phase 1 (done, `816a874`):** v2 client first-class; question reply/reject on v2 (bug fixed).

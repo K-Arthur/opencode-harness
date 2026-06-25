@@ -471,6 +471,8 @@ Full detail: [`docs/limitations.md`](docs/limitations.md).
 
 ## Installation
 
+### From the VS Code Marketplace (VS Code)
+
 1. Open the Extensions view in VS Code (`Ctrl+Shift+X`), search "OpenCode", and click Install.
 2. The extension needs the `opencode` CLI as its agent backend. If it's missing, the extension detects that on first activation and offers to install it for you (see [`opencode.autoInstall`](docs/configuration.md), or run **`OpenCode: Install CLI`** any time). To install it manually instead:
    ```bash
@@ -482,9 +484,24 @@ Full detail: [`docs/limitations.md`](docs/limitations.md).
 4. **Linux only:** some setups need `libsecret` for credential storage (`sudo pacman -S libsecret` / `sudo apt install libsecret-1-dev` / `sudo dnf install libsecret-devel`, depending on distro).
 5. Open the OpenCode panel from the Activity Bar (or `Ctrl+Alt+O`), pick a model, and start chatting.
 
+### From the VSX Registry (VSCodium / Code - OSS)
+
+1. Open the Extensions view in VSCodium (`Ctrl+Shift+X`), search "OpenCode", and click Install. The extension is published on the [VSX Registry](https://vscode.marketplace.visualstudio.com/) under `koarthur.opencode-harness`.
+2. Follow steps 2–5 above for CLI installation and provider configuration — the setup is identical regardless of editor.
+
+### From a `.vsix` file (offline / manual)
+
+1. Download the latest `opencode-harness-*.vsix` from the [GitHub Releases page](https://github.com/K-Arthur/opencode-harness/releases).
+2. Install it via the CLI:
+   ```bash
+   code --install-extension opencode-harness-0.4.13.vsix        # VS Code
+   codium --install-extension opencode-harness-0.4.13.vsix      # VSCodium
+   ```
+3. Reload the window (`Cmd/Ctrl+Shift+P` → **Developer: Reload Window**).
+
 If the panel doesn't connect, open the **OUTPUT** panel (`Ctrl+Shift+U` → "OpenCode Harness") for activation logs — see [Troubleshooting](#troubleshooting-common-issues) below.
 
-Building from source, running a dev host, or packaging your own `.vsix` is covered in [CONTRIBUTING.md](CONTRIBUTING.md).
+Building from source, running a dev host, or packaging your own `.vsix` is covered in [CONTRIBUTING.md](CONTRIBUTING.md) and [`docs/development/rebuild-and-reinstall.md`](docs/development/rebuild-and-reinstall.md).
 
 ## Troubleshooting Common Issues
 
@@ -692,3 +709,4 @@ MIT
 - **GitHub Issues:** [Report bugs or request features](https://github.com/K-Arthur/opencode-harness/issues)
 - **GitHub Discussions:** [Ask questions and share tips](https://github.com/K-Arthur/opencode-harness/discussions)
 - **VS Code Marketplace:** [Rate and review](https://marketplace.visualstudio.com/items?itemName=koarthur.opencode-harness)
+- **VSX Registry (VSCodium):** [Install on VSCodium](https://vscode.marketplace.visualstudio.com/items?itemName=koarthur.opencode-harness)
