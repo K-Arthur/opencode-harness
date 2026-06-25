@@ -758,6 +758,46 @@ function registerCoreCommands(
       }
     })
   )
+
+  // Review/accept/reject changed files
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.reviewFileChanges", (path?: string) => {
+      try {
+        void chatProvider.reviewFileChanges(path).catch((err) => log.error("reviewFileChanges command failed", err))
+      } catch (err) {
+        log.error("reviewFileChanges command failed", err)
+      }
+    })
+  )
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.acceptFileChanges", (path?: string) => {
+      try {
+        void chatProvider.acceptFileChanges(path).catch((err) => log.error("acceptFileChanges command failed", err))
+      } catch (err) {
+        log.error("acceptFileChanges command failed", err)
+      }
+    })
+  )
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.rejectFileChanges", (path?: string) => {
+      try {
+        void chatProvider.rejectFileChanges(path).catch((err) => log.error("rejectFileChanges command failed", err))
+      } catch (err) {
+        log.error("rejectFileChanges command failed", err)
+      }
+    })
+  )
+
+  // Send a problem from the Problems panel to the active OpenCode chat
+  context.subscriptions.push(
+    vscode.commands.registerCommand("opencode-harness.sendProblemToOpencode", (item?: unknown) => {
+      try {
+        void chatProvider.sendProblemToOpencode(item).catch((err) => log.error("sendProblemToOpencode command failed", err))
+      } catch (err) {
+        log.error("sendProblemToOpencode command failed", err)
+      }
+    })
+  )
 }
 
 function initMethodology(context: vscode.ExtensionContext): vscode.StatusBarItem {

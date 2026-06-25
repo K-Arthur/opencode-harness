@@ -246,6 +246,22 @@
       {
         "command": "opencode-harness.suppressKey",
         "title": "OpenCode: (internal) Suppress conflicting key while chat focused"
+      },
+      {
+        "command": "opencode-harness.reviewFileChanges",
+        "title": "OpenCode: Review Changes"
+      },
+      {
+        "command": "opencode-harness.acceptFileChanges",
+        "title": "OpenCode: Accept Changes"
+      },
+      {
+        "command": "opencode-harness.rejectFileChanges",
+        "title": "OpenCode: Reject Changes"
+      },
+      {
+        "command": "opencode-harness.sendProblemToOpencode",
+        "title": "OpenCode: Send Problem to OpenCode"
       }
     ],
     "keybindings": [
@@ -370,6 +386,22 @@
     "menus": {
       "commandPalette": [
         {
+          "command": "opencode-harness.reviewFileChanges",
+          "when": "false"
+        },
+        {
+          "command": "opencode-harness.acceptFileChanges",
+          "when": "false"
+        },
+        {
+          "command": "opencode-harness.rejectFileChanges",
+          "when": "false"
+        },
+        {
+          "command": "opencode-harness.sendProblemToOpencode",
+          "when": "false"
+        },
+        {
           "command": "opencode-harness.showRateLimits",
           "when": "opencodeHarness.chatFocused"
         },
@@ -425,6 +457,13 @@
           "command": "opencode-harness.addFileToSession",
           "group": "opencode@1",
           "when": "resourceScheme == file"
+        }
+      ],
+      "problems/context": [
+        {
+          "command": "opencode-harness.sendProblemToOpencode",
+          "group": "opencode@1",
+          "when": "true"
         }
       ]
     },

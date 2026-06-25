@@ -4057,6 +4057,10 @@ function setupTodoSkillAndSubagentPanels(): void {
           })
         }
       }],
+      ["user_context", (msg) => {
+        const text = typeof msg.text === "string" ? msg.text : ""
+        if (text) composer.insertIntoPrompt(text)
+      }],
       ["changed_files_update", (msg) => {
         // Strict: never fall back to the active tab for changed-file sync.
         const sid = typeof msg.sessionId === "string" ? msg.sessionId : null

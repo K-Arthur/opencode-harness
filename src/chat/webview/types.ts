@@ -674,6 +674,7 @@ export type HostMessage =
   | { type: "todos_update"; sessionId: string; todos: unknown[] }
   | { type: "todos_error"; sessionId: string; message: string }
   | { type: "changed_files_update"; sessionId: string; files: FileChange[] }
+  | { type: "user_context"; text: string; source?: string }
   | { type: "file_edited"; sessionId: string; file: string }
   | { type: "workspace_file_added"; sessionId: string; path: string }
   | { type: "workspace_file_deleted"; sessionId: string; path: string }
@@ -1028,6 +1029,10 @@ export type WebviewMessage =
   | { type: "reveal_in_explorer"; path: string }
   /** W1.E: Undo changes to a single file (revert to git HEAD) */
   | { type: "undo_file"; path: string; sessionId?: string }
+  /** Accept all current changes in a file (write disk content back). */
+  | { type: "accept_file_changes"; path: string; sessionId?: string }
+  /** Reject all current changes in a file (revert to git HEAD). */
+  | { type: "reject_file_changes"; path: string; sessionId?: string }
   /** W1.F: Revert all changed files to git HEAD */
   | { type: "revert_all_files"; sessionId: string }
   /** Toggle chat text direction (LTR/RTL); host persists to globalState */

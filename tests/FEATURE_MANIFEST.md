@@ -85,6 +85,10 @@
 | FM-CMD-044 | `opencode-harness.openSettings` | Open Settings | stable | `src/extension.ts` |
 | FM-CMD-045 | `opencode-harness.jumpToRunningTask` | Jump to Running Session | stable | `src/commands/runningTask.ts` |
 | FM-CMD-046 | `opencode-harness.suppressKey` | (internal) Suppress conflicting key | internal | `src/extension.ts` |
+| FM-CMD-047 | `opencode-harness.reviewFileChanges` | Review Changes | preview | `src/chat/ChatProvider.ts` |
+| FM-CMD-048 | `opencode-harness.acceptFileChanges` | Accept Changes | preview | `src/chat/ChatProvider.ts` |
+| FM-CMD-049 | `opencode-harness.rejectFileChanges` | Reject Changes | preview | `src/chat/ChatProvider.ts` |
+| FM-CMD-050 | `opencode-harness.sendProblemToOpencode` | Send Problem to OpenCode | preview | `src/chat/ChatProvider.ts` |
 
 ---
 
@@ -180,21 +184,31 @@
 | FM-MENU-005 | `opencode-harness.clearTestSessions` | `false` (hidden) | internal |
 | FM-MENU-006 | `opencode-harness.openStoredSession` | `false` (hidden) | internal |
 | FM-MENU-007 | `opencode-harness.suppressKey` | `false` (hidden) | internal |
+| FM-MENU-008 | `opencode-harness.reviewFileChanges` | `false` (hidden) | preview |
+| FM-MENU-009 | `opencode-harness.acceptFileChanges` | `false` (hidden) | preview |
+| FM-MENU-010 | `opencode-harness.rejectFileChanges` | `false` (hidden) | preview |
+| FM-MENU-011 | `opencode-harness.sendProblemToOpencode` | `false` (hidden) | preview |
 
 ### 5b. Editor Context Menu (`editor/context`)
 
 | ID | Command | Group | When | Status |
 |---|---|---|---|---|
-| FM-MENU-008 | `opencode-harness.explainCode` | `opencode@1` | `editorHasSelection` | stable |
-| FM-MENU-009 | `opencode-harness.refactorCode` | `opencode@2` | `editorHasSelection` | stable |
-| FM-MENU-010 | `opencode-harness.generateTests` | `opencode@3` | `editorHasSelection` | stable |
-| FM-MENU-011 | `opencode-harness.addSelectionToSession` | `opencode@4` | `editorHasSelection` | stable |
+| FM-MENU-012 | `opencode-harness.explainCode` | `opencode@1` | `editorHasSelection` | stable |
+| FM-MENU-013 | `opencode-harness.refactorCode` | `opencode@2` | `editorHasSelection` | stable |
+| FM-MENU-014 | `opencode-harness.generateTests` | `opencode@3` | `editorHasSelection` | stable |
+| FM-MENU-015 | `opencode-harness.addSelectionToSession` | `opencode@4` | `editorHasSelection` | stable |
 
 ### 5c. Explorer Context Menu (`explorer/context`)
 
 | ID | Command | Group | When | Status |
 |---|---|---|---|---|
-| FM-MENU-012 | `opencode-harness.addFileToSession` | `opencode@1` | `resourceScheme == file` | stable |
+| FM-MENU-016 | `opencode-harness.addFileToSession` | `opencode@1` | `resourceScheme == file` | stable |
+
+### 5d. Problems Context Menu (`problems/context`)
+
+| ID | Command | Group | When | Status |
+|---|---|---|---|---|
+| FM-MENU-017 | `opencode-harness.sendProblemToOpencode` | `opencode@1` | `true` | preview |
 
 ---
 

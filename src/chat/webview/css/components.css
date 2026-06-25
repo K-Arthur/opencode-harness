@@ -3015,6 +3015,46 @@ textarea {
 .cf-undo-btn:focus-visible { opacity: 1; }
 .cf-undo-btn:hover { color: var(--color-fg); }
 
+/* Per-file Accept button */
+.cf-accept-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-target-min);
+  height: var(--size-target-min);
+  border: none;
+  background: none;
+  color: var(--oc-success);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+.cf-file-row:hover .cf-accept-btn,
+.cf-accept-btn:focus-visible { opacity: 1; }
+.cf-accept-btn:hover { color: var(--color-fg); }
+
+/* Per-file Reject button */
+.cf-reject-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-target-min);
+  height: var(--size-target-min);
+  border: none;
+  background: none;
+  color: var(--oc-error);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+.cf-file-row:hover .cf-reject-btn,
+.cf-reject-btn:focus-visible { opacity: 1; }
+.cf-reject-btn:hover { color: var(--color-fg); }
+
 /* Open file icon button */
 .cf-open-btn {
   flex-shrink: 0;
@@ -3056,6 +3096,8 @@ textarea {
    users must see where focus is, even when the button is normally hidden
    until hover). */
 .cf-undo-btn:focus-visible,
+.cf-accept-btn:focus-visible,
+.cf-reject-btn:focus-visible,
 .cf-open-btn:focus-visible,
 .cf-open-diff-btn:focus-visible,
 .cf-expand-btn:focus-visible {

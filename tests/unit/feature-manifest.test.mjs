@@ -84,6 +84,10 @@ const EXPECTED_COMMANDS = [
   "opencode-harness.openSettings",
   "opencode-harness.jumpToRunningTask",
   "opencode-harness.suppressKey",
+  "opencode-harness.reviewFileChanges",
+  "opencode-harness.acceptFileChanges",
+  "opencode-harness.rejectFileChanges",
+  "opencode-harness.sendProblemToOpencode",
 ]
 
 const EXPECTED_CONFIG_KEYS = [
@@ -153,6 +157,10 @@ const EXPECTED_PALETTE_COMMANDS = [
   "opencode-harness.clearTestSessions",
   "opencode-harness.openStoredSession",
   "opencode-harness.suppressKey",
+  "opencode-harness.reviewFileChanges",
+  "opencode-harness.acceptFileChanges",
+  "opencode-harness.rejectFileChanges",
+  "opencode-harness.sendProblemToOpencode",
 ]
 
 const EXPECTED_EDITOR_CONTEXT_COMMANDS = [
@@ -164,6 +172,10 @@ const EXPECTED_EDITOR_CONTEXT_COMMANDS = [
 
 const EXPECTED_EXPLORER_CONTEXT_COMMANDS = [
   "opencode-harness.addFileToSession",
+]
+
+const EXPECTED_PROBLEMS_CONTEXT_COMMANDS = [
+  "opencode-harness.sendProblemToOpencode",
 ]
 
 const EXPECTED_ACTIVATION_EVENTS = [
@@ -320,6 +332,16 @@ describe("Feature Manifest — explorer context menu", () => {
   for (const cmd of EXPECTED_EXPLORER_CONTEXT_COMMANDS) {
     it(`explorer/context includes "${cmd}"`, () => {
       assert.ok(explorerCommands.has(cmd), `Missing explorer/context entry: ${cmd}`)
+    })
+  }
+})
+
+const pkgProblemsContext = pkg.contributes.menus["problems/context"] ?? []
+describe("Feature Manifest — problems context menu", () => {
+  const problemsCommands = new Set(pkgProblemsContext.map((m) => m.command))
+  for (const cmd of EXPECTED_PROBLEMS_CONTEXT_COMMANDS) {
+    it(`problems/context includes "${cmd}"`, () => {
+      assert.ok(problemsCommands.has(cmd), `Missing problems/context entry: ${cmd}`)
     })
   }
 })

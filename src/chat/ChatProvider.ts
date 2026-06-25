@@ -11,8 +11,9 @@ import { ModelManager } from "../model/ModelManager"
 import { CheckpointManager } from "../checkpoint/CheckpointManager"
 import { parseModelRef } from "../utils/tokenCounter"
 import { DiffApplier } from "../diff/DiffApplier"
-import { getFileHunks } from "./diff/hunkRevertPlan"
 import { classifyFileStatuses, type FileStatus } from "./diff/fileStatusClassifier"
+import { computeFileDiffStats } from "./diff/fileDiffStats"
+import { readFileSync, existsSync, writeFileSync } from "node:fs"
 import { reasoningEventToBlock } from "../session/sdkMessageConverter"
 import { isAutoSessionName } from "../session/sessionUtils"
 import { activitySignature } from "../session/activityCoalesce"
@@ -1384,8 +1385,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
             workspaceRoot: wsRoot,
             deps: { execSync, existsSync: (p: import("node:fs").PathLike) => {
               try {
-                const fs = require("node:fs")
-                return fs.existsSync(vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0]!.uri, p.toString()).fsPath)
+                return existsSync(vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0]!.uri, p.toString()).fsPath)
               } catch { return false }
             } },
           })
@@ -1899,27 +1899,19 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
   private computeDiffStatsFromGit(filePath: string): { added: number; removed: number } {
     const wsFolder = vscode.workspace.workspaceFolders?.[0]
     if (!wsFolder) return { added: 0, removed: 0 }
-    let before = ""
-    try {
-      const result = execSync(
-        `git show HEAD:${filePath.replace(/\\/g, "/")}`,
-        { cwd: wsFolder.uri.fsPath, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024, timeout: 5000 },
-      )
-      if (typeof result === "string") before = result
-    } catch { /* untracked / new file */ }
-    let after = ""
-    try {
-      const doc = vscode.workspace.textDocuments.find(
-        (d) => d.uri.fsPath === vscode.Uri.joinPath(wsFolder.uri, filePath).fsPath,
-      )
-      after = doc?.getText() ?? ""
-    } catch { /* unreadable */ }
-    if (!before && !after) return { added: 0, removed: 0 }
-    const hunks = getFileHunks(before, after)
-    return hunks.reduce(
-      (acc, h) => ({ added: acc.added + h.additions, removed: acc.removed + h.deletions }),
-      { added: 0, removed: 0 },
-    )
+
+    return computeFileDiffStats(filePath, wsFolder.uri.fsPath, {
+      execSync,
+      readFileSync: (p: string) => readFileSync(p, "utf-8"),
+      getOpenDocumentText: (absPath: string) => {
+        const doc = vscode.workspace.textDocuments.find((d) => d.uri.fsPath === absPath)
+        return doc?.getText()
+      },
+      log: {
+        debug: (msg: string) => log.debug(msg),
+        warn: (msg: string) => log.warn(msg),
+      },
+    })
   }
 
   private async handleAcceptDiff(blockId: string, sessionId?: string): Promise<void> {
@@ -2761,6 +2753,98 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
         })
       }
     }
+  }
+
+  async reviewFileChanges(path?: string): Promise<void> {
+    const filePath = path
+    if (!filePath) return
+    const wsFolder = vscode.workspace.workspaceFolders?.[0]
+    if (!wsFolder) return
+
+    const relativePath = this.normalizeWorkspacePath(filePath, wsFolder.uri.fsPath)
+    const absPath = this.absoluteWorkspacePath(relativePath, wsFolder.uri.fsPath)
+
+    let headContent = ""
+    try {
+      headContent = execSync(`git show HEAD:${relativePath}`, { cwd: wsFolder.uri.fsPath, encoding: "utf-8", timeout: 5000 })
+    } catch {
+      headContent = ""
+    }
+
+    const uri = vscode.Uri.file(absPath)
+    const headDoc = await vscode.workspace.openTextDocument({ language: "text", content: headContent })
+
+    await vscode.commands.executeCommand(
+      "vscode.diff",
+      headDoc.uri,
+      uri,
+      `OpenCode: ${relativePath} (HEAD → Working Tree)`,
+      { viewColumn: vscode.ViewColumn.Active, preserveFocus: false },
+    )
+  }
+
+  async acceptFileChanges(path?: string): Promise<void> {
+    const filePath = path
+    if (!filePath) return
+    const wsFolder = vscode.workspace.workspaceFolders?.[0]
+    if (!wsFolder) return
+
+    const relativePath = this.normalizeWorkspacePath(filePath, wsFolder.uri.fsPath)
+    const absPath = this.absoluteWorkspacePath(relativePath, wsFolder.uri.fsPath)
+
+    const doc = vscode.workspace.textDocuments.find((d) => d.uri.fsPath === absPath)
+    const content = doc?.getText() ?? readFileSync(absPath, "utf-8")
+    writeFileSync(absPath, content, "utf-8")
+  }
+
+  async rejectFileChanges(path?: string): Promise<void> {
+    const filePath = path
+    if (!filePath) return
+    const wsFolder = vscode.workspace.workspaceFolders?.[0]
+    if (!wsFolder) return
+
+    const relativePath = this.normalizeWorkspacePath(filePath, wsFolder.uri.fsPath)
+    execSync(`git checkout HEAD -- "${relativePath}"`, { cwd: wsFolder.uri.fsPath, encoding: "utf-8", timeout: 10000 })
+  }
+
+  async sendProblemToOpencode(item?: unknown): Promise<void> {
+    const problem = item as {
+      resource?: vscode.Uri
+      marker?: vscode.Diagnostic
+      diagnostics?: vscode.Diagnostic[]
+    } | undefined
+    const uri = problem?.resource
+    const diagnostic = problem?.marker ?? problem?.diagnostics?.[0]
+    if (!uri || !diagnostic) {
+      void vscode.window.showInformationMessage("Open a problem from the Problems panel to send it to OpenCode.")
+      return
+    }
+
+    const severity = diagnostic.severity === vscode.DiagnosticSeverity.Error ? "error" : diagnostic.severity === vscode.DiagnosticSeverity.Warning ? "warning" : "info"
+    const range = diagnostic.range
+    const text = `I have a problem in ${uri.fsPath} at line ${range.start.line + 1}, column ${range.start.character + 1}.\\n\\nSeverity: ${severity}\\nSource: ${diagnostic.source ?? "unknown"}\\n\\n${diagnostic.message}\\n\\nPlease help me fix it.`
+
+    this.postMessage({ type: "user_context", text, source: "problem" })
+  }
+
+  private normalizeWorkspacePath(filePath: string, workspaceRoot: string): string {
+    let p = filePath.replace(/\\/g, "/").trim()
+    const root = workspaceRoot.replace(/\\/g, "/")
+    if (p.startsWith(root + "/")) return p.slice(root.length + 1)
+    if (p.startsWith("/")) {
+      const pSegments = p.split("/").filter(Boolean)
+      const rootSegments = root.split("/").filter(Boolean)
+      for (let i = 1; i <= Math.min(rootSegments.length, pSegments.length); i++) {
+        if (pSegments.slice(-i).join("/") === rootSegments.slice(-i).join("/")) {
+          return pSegments.slice(0, pSegments.length - i).join("/") || "."
+        }
+      }
+    }
+    return p
+  }
+
+  private absoluteWorkspacePath(relativePath: string, workspaceRoot: string): string {
+    return workspaceRoot.replace(/\\/g, "/") + (relativePath ? `/${relativePath}` : "")
   }
 
   dispose(): void {

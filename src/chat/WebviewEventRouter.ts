@@ -199,7 +199,7 @@ export class WebviewEventRouter {
     // "undo file" button); the others have handlers + declared types and must be
     // reachable. The dead-wire guard test enforces handler⊆allowlist.
     "save_template", "list_templates", "delete_template", "save_message_as_template",
-    "undo_file", "revert_all_files",
+    "undo_file", "revert_all_files", "accept_file_changes", "reject_file_changes",
     "discover_providers", "get_provider_auth_methods", "connect_provider_key",
     "connect_provider_oauth", "complete_provider_oauth", "list_provider_credentials",
     "remove_provider_credential",
@@ -783,6 +783,26 @@ export class WebviewEventRouter {
       } catch (err) {
         log.warn(`undo_file failed for ${filePath}`, err)
         this.opts.postMessage({ type: "hunk_reverted", path: filePath, ok: false, sessionId })
+      }
+    }],
+    // Accept all changes in a file (write current content back to disk)
+    ["accept_file_changes", async (msg: Record<string, unknown>, _sessionId?: string) => {
+      const filePath = typeof msg.path === "string" ? msg.path : undefined
+      if (!filePath) return
+      try {
+        await vscode.commands.executeCommand("opencode-harness.acceptFileChanges", filePath)
+      } catch (err) {
+        log.warn(`accept_file_changes failed for ${filePath}`, err)
+      }
+    }],
+    // Reject all changes in a file (restore from git HEAD)
+    ["reject_file_changes", async (msg: Record<string, unknown>, _sessionId?: string) => {
+      const filePath = typeof msg.path === "string" ? msg.path : undefined
+      if (!filePath) return
+      try {
+        await vscode.commands.executeCommand("opencode-harness.rejectFileChanges", filePath)
+      } catch (err) {
+        log.warn(`reject_file_changes failed for ${filePath}`, err)
       }
     }],
     // W1.F: Revert all changed files to git HEAD

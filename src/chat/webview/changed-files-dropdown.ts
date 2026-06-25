@@ -883,6 +883,32 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
         _postMessage?.({ type: "undo_file", path: file.path, sessionId })
       })
 
+      // Accept button — keep all current changes
+      const acceptBtn = document.createElement("button")
+      acceptBtn.className = "cf-accept-btn"
+      acceptBtn.type = "button"
+      acceptBtn.setAttribute("aria-label", `Accept changes to ${fileName}`)
+      acceptBtn.title = "Accept changes"
+      acceptBtn.tabIndex = -1
+      acceptBtn.innerHTML = `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>`
+      acceptBtn.addEventListener("click", (e) => {
+        e.stopPropagation()
+        _postMessage?.({ type: "accept_file_changes", path: file.path, sessionId })
+      })
+
+      // Reject button — revert to git HEAD
+      const rejectBtn = document.createElement("button")
+      rejectBtn.className = "cf-reject-btn"
+      rejectBtn.type = "button"
+      rejectBtn.setAttribute("aria-label", `Reject changes to ${fileName}`)
+      rejectBtn.title = "Reject changes"
+      rejectBtn.tabIndex = -1
+      rejectBtn.innerHTML = `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>`
+      rejectBtn.addEventListener("click", (e) => {
+        e.stopPropagation()
+        _postMessage?.({ type: "reject_file_changes", path: file.path, sessionId })
+      })
+
       const preview = document.createElement("div")
       preview.className = `cf-hunk-preview${isExpanded ? " cf-hunk-preview--open" : ""}`
       preview.setAttribute("data-path", file.path)
@@ -894,7 +920,7 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
 
       row.addEventListener("click", (e) => {
         const target = e.target as HTMLElement
-        if (target.closest(".cf-expand-btn") || target.closest(".cf-open-btn")) return
+        if (target.closest(".cf-expand-btn") || target.closest(".cf-open-btn") || target.closest(".cf-accept-btn") || target.closest(".cf-reject-btn")) return
         _onOpenFile(file.path)
       })
 
@@ -934,6 +960,8 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       row.appendChild(openBtn)
       row.appendChild(diffBtn)
       row.appendChild(undoBtn)
+      row.appendChild(acceptBtn)
+      row.appendChild(rejectBtn)
       filesContainer.appendChild(row)
       filesContainer.appendChild(preview)
     })
