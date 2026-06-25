@@ -56,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **V2Event format normalization** — the SDK v1.17.11 server emits events in V2Event format (with a `data` field) instead of the legacy Event format (with a `properties` field). All event handlers read `event.properties`, so V2Event-formatted question events arrived with empty properties — no `sessionID`, `requestID`, or `questions` — silently breaking the entire question flow (no question bar rendered, no answer routing). Fixed by normalizing `data` → `properties` at the SSE parser layer (`sseParser.ts:normalizeEventFormat`) and in `EventNormalizer.unwrapSyncEvent`. `QuestionHandler` now falls back to `event.id` for the request ID when `properties.id` and `properties.requestID` are both absent. `SdkEventLike` extended with `data` and `id` fields. Regression tests added in `session-event-normalizer.test.mjs`.
 - **Event coverage updated** — added SDK v1.17.11 new event types to `SAFE_IGNORED_EVENT_TYPES`: `integration.connection.updated` and `session.next.revert.*` (cleared, committed, staged). These are server-side state management events that the extension does not need to handle directly.
 - **Fixed path normalization suffix matching** — `fileDiffStats.ts` now correctly
   returns the relative path after the matched workspace-root suffix instead of

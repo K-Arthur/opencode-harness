@@ -79,6 +79,33 @@ The Phase 1 beachhead wired `SessionClient.replyToQuestion` to `client.question.
 
 Root cause: the generated SDK exposes `question` on BOTH the root client (`OpencodeClient.question` → `POST /question/{requestID}/reply`) and the session client (`Session2.question` → `POST /api/session/{sessionID}/question/{requestID}/reply`). The v2 ADR's Phase 2 note warned "session-scoped question uses `questionV2Reply`" but the call site was never updated after Phase 1.
 
+### Phase 7 — V2Event format normalization (2026-06-25, commit `6783a1a`)
+
+The SDK v1.17.11 server switched to emitting SSE events in **V2Event format**
+(with a `data` field) instead of the legacy **Event format** (with a `properties`
+field). The `SdkEventLike` interface and all event handlers read
+`event.properties` exclusively, so V2Event-formatted events arrived with
+`properties === undefined` — silently breaking question events (no `sessionID`,
+`requestID`, or `questions`), which in turn broke the entire question flow (no
+question bar rendered, no answer routing).
+
+**Fixes shipped in commit `6783a1a`:**
+- `sseParser.ts:normalizeEventFormat` — maps `data` → `properties` at the SSE
+  ingest boundary so all handlers receive a unified `properties` field
+- `EventNormalizer.unwrapSyncEvent` — applies the same normalization on the
+  non-sync path (defense in depth)
+- `QuestionHandler` — falls back to `event.id` (V2Event envelope ID) for the
+  request ID when `properties.id` and `properties.requestID` are both absent
+- `SdkEventLike` — extended with `data` and `id` fields to reflect both formats
+- Regression tests in `session-event-normalizer.test.mjs` covering both the
+  `data` → `properties` normalization and the `event.id` fallback
+
+Root cause: the v2 SDK types define both `Event` (with `properties`) and
+`V2Event` (with `data`) unions. Phase 4 noted "No event normalizer changes
+needed — it uses `SdkEventLike` (local type)" — true at the time because the
+server was still sending Event format. The v1.17.11 server switched to V2Event
+format without a version-gated migration path, exposing the assumption.
+
 ## References
 - Beachhead commit `816a874`; `src/session/opencodeClientFactory.ts`, `AuthProvider.ts`, `SessionManager.ts`, `SessionClient.ts`.
 - Related: `docs/implementation/2026-06-15-r1-unify-stream-state.md` (R1 — sequence Phase 4 with it).

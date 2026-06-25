@@ -68,6 +68,22 @@ The legacy `question` tool-part fallback remains for older event streams. V2
 answers do not consume a new stream slot and do not create a fresh unrelated
 assistant run.
 
+### V2Event format normalization (SDK v1.17.11+)
+
+The SDK v1.17.11 server emits events in **V2Event format** (with a `data` field)
+instead of the legacy **Event format** (with a `properties` field). Both formats
+carry the same payload; only the field name differs. The SSE parser
+(`sseParser.ts:normalizeEventFormat`) normalizes `data` → `properties` at the
+ingest boundary so all handlers (`QuestionHandler`, `SessionNextHandler`, etc.)
+can read `event.properties` uniformly regardless of which format the server
+sends. `EventNormalizer.unwrapSyncEvent` applies the same normalization on the
+non-sync path as defense in depth.
+
+`QuestionHandler` resolves the request ID with a three-level fallback:
+`properties.id` → `properties.requestID` → `event.id` (the V2Event envelope ID).
+This covers the case where a V2Event question event carries the request ID only
+at the event envelope level.
+
 ## Event And Part Coverage
 
 The manifest in `src/session/eventCoverage.ts` classifies SDK v1/v2 server
