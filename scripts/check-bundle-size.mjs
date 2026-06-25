@@ -167,6 +167,12 @@
 // so the gate still trips on a real regression, while unblocking the package step
 // needed for `npm run reinstall`. The real paydown levers remain: tree-shaking the
 // SDK gen and moving highlight.js fully off the main webview bundle.
+//
+// 2026-06-25 re-baseline (host 725KB -> 740KB): review/accept/reject workflow and
+// session baseline resolver (SessionBaselineResolver, fileDiffStats, ChatProvider
+// diff-review plumbing) added legitimate first-party host code. Production build
+// now measures 733.7KB. +15KB keeps ~0.8% headroom so the gate still trips on real
+// bloat. Webview limit unchanged.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -176,7 +182,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 725 * 1024, label: "extension host" },
+  { path: "dist/extension.js", limitBytes: 740 * 1024, label: "extension host" },
   { path: "dist/chat/webview/main.js", limitBytes: 790 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
