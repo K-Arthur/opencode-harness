@@ -80,9 +80,9 @@ import { setupButtons as setupButtonsModule } from "./ui/buttonSetup"
 import { setupPermissionConfig } from "./permissionConfig"
 import { deriveState } from "./ui/contextUsageThresholds"
 import { updateScrollMarkers as updateScrollMarkersModule, setupJumpToBottom as setupJumpToBottomModule, scrollToTurn as scrollToTurnModule, type ScrollMarkerDeps } from "./ui/scrollMarkers"
-import { createStreamOrchestrator, type StreamOrchestratorAPI } from "./streamOrchestrator"
-import { createTimeline, type TimelineAPI } from "./timeline"
-import { createComposer, type ComposerAPI } from "./composer"
+import { createStreamOrchestrator } from "./streamOrchestrator"
+import { createTimeline } from "./timeline"
+import { createComposer } from "./composer"
 import { setupVoiceInput } from "./voiceInput"
 import { setToolOutputRenderAnsi } from "./ansiUtils"
 import { normalizeSessionMode } from "../modePolicy"
@@ -90,7 +90,7 @@ import type { VoiceInputSettings } from "../voiceInputCore"
 import { TimestampUpdater } from "./timestampUpdater"
 import { createTodosModule } from "./todosModule"
 import { createSubagentsModule } from "./subagentsModule"
-import { setupPanels, type PanelSetupAPI } from "./panelSetup"
+import { setupPanels } from "./panelSetup"
 
 declare const acquireVsCodeApi: (() => {
   postMessage(message: Record<string, unknown>): void
@@ -658,9 +658,9 @@ function getVsCodeApi() {
     try {
       // Create all panel-level UI modules (model dropdown, composer, etc.)
       const panelApi = setupPanels({
-        els: els as any,
+        els,
         vscode,
-        stateManager: stateManager as any,
+        stateManager,
         openProviderPanel,
         onTabSwitch: (tabId) => switchTab(tabId),
         onTabClose: (tabId) => closeTab(tabId),
@@ -672,6 +672,9 @@ function getVsCodeApi() {
       tabBar = panelApi.tabBar
       mcpConfig = panelApi.mcpConfig
       syncModelViews = panelApi.syncModelViews
+
+      setCompsErrorActionHandler(errorActionHandler)
+      setRendererErrorActionHandler(errorActionHandler)
 
       setupCoreInteractionControls()
       setupSessionUtilities()

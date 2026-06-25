@@ -1,4 +1,4 @@
-import type { ChatMessage, ContextUsage, ModelInfo } from "./types"
+import type { ModelInfo } from "./types"
 import type { ElementRefs } from "./dom"
 
 import { setupModelDropdown } from "./model-dropdown"
@@ -20,7 +20,6 @@ export interface PanelSetupDeps {
     setModelDisabled: (modelId: string, disabled: boolean) => void
     toggleModelFavorite?: (modelId: string) => boolean
     applyModelState: (models: ModelInfo[]) => ModelInfo[]
-    getAllModels: () => ModelInfo[]
   }
   openProviderPanel: () => void
   onTabSwitch: (tabId: string) => void
