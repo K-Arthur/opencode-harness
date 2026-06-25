@@ -13,6 +13,7 @@ import { parseModelRef } from "../utils/tokenCounter"
 import { DiffApplier } from "../diff/DiffApplier"
 import { classifyFileStatuses, type FileStatus } from "./diff/fileStatusClassifier"
 import { computeFileDiffStats } from "./diff/fileDiffStats"
+import { getBaselineContent } from "./SessionBaselineResolver"
 import { readFileSync, existsSync, writeFileSync } from "node:fs"
 import { reasoningEventToBlock } from "../session/sdkMessageConverter"
 import { isAutoSessionName } from "../session/sessionUtils"
@@ -1345,10 +1346,9 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
           if (typeof change.path !== "string") continue
           const changedPath = normalizeFilePath(change.path)
           if (!changedPath) continue
-          changeStats.set(changedPath, {
-            added: Number.isFinite(change.added) ? Number(change.added) : 0,
-            removed: Number.isFinite(change.removed) ? Number(change.removed) : 0,
-          })
+          const added = Number.isFinite(change.added) ? Number(change.added) : 0
+          const removed = Number.isFinite(change.removed) ? Number(change.removed) : 0
+          changeStats.set(changedPath, { added, removed })
         }
       }
       const files = Array.from(new Set([
@@ -1359,14 +1359,34 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
         .filter(Boolean)
       if (files.length === 0) return
 
+      // Get the session directory for git operations
+      const wsRoot = this.sessionStore.getSessionDirectory(tabId)
+
+      // Capture baseline SHA on first file edit if not already set
+      if (wsRoot && !this.sessionStore.getBaselineSha(tabId)) {
+        try {
+          const sha = execSync("git rev-parse HEAD", { cwd: wsRoot, encoding: "utf-8", timeout: 5000 }).trim()
+          if (sha) {
+            this.sessionStore.setBaselineSha(tabId, sha)
+            log.debug(`Captured baseline SHA ${sha} for session ${tabId}`)
+          }
+        } catch {
+          // Git not available — baseline will fall back to HEAD later
+        }
+      }
+
       // Hybrid diff counter: session.diff provides stats inline; file.edited
-      // does not. When data.changes is absent, fall back to git before/after.
-      if (changeStats.size === 0) {
+      // does not. When data.changes is absent or all zeros, fall back to git before/after.
+      const hasZeroStats = Array.from(changeStats.values()).every((s) => s.added === 0 && s.removed === 0)
+      if (changeStats.size === 0 || hasZeroStats) {
         for (const filePath of files) {
           if (!filePath) continue
           try {
-            const stats = this.computeDiffStatsFromGit(filePath)
-            changeStats.set(filePath, stats)
+            const stats = this.computeDiffStatsFromGit(filePath, wsRoot)
+            // Only overwrite if git gave us non-zero stats (server may have sent zero for binary files)
+            if (stats.added > 0 || stats.removed > 0) {
+              changeStats.set(filePath, stats)
+            }
           } catch { /* tolerate — chip shows 0/0 */ }
         }
       }
@@ -1379,17 +1399,16 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       // Classify file statuses (A/M/D) via git status + before/after inference.
       // Without this, every file defaults to "Modified" in the UI even when
       // it was added or deleted.
-      const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
       const statusMap = wsRoot
         ? classifyFileStatuses(files, {
             workspaceRoot: wsRoot,
             deps: { execSync, existsSync: (p: import("node:fs").PathLike) => {
               try {
-                return existsSync(vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0]!.uri, p.toString()).fsPath)
+                return existsSync(vscode.Uri.joinPath(vscode.Uri.file(wsRoot), p.toString()).fsPath)
               } catch { return false }
             } },
           })
-        : new Map<string, FileStatus>()
+        : new Map<string, "A" | "M" | "D">()
 
       // Emit explicit workspace_file_added / workspace_file_deleted events
       // for added and deleted files, so the webview can apply special styling
@@ -1896,11 +1915,11 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
   /** Compute added/removed line counts from git before/after. Used as a
    *  fallback when the file.edited event carries no stats (only session.diff
    *  provides them). Returns 0/0 on any error — callers tolerate this. */
-  private computeDiffStatsFromGit(filePath: string): { added: number; removed: number } {
-    const wsFolder = vscode.workspace.workspaceFolders?.[0]
-    if (!wsFolder) return { added: 0, removed: 0 }
+  private computeDiffStatsFromGit(filePath: string, workspaceRoot?: string): { added: number; removed: number } {
+    const wsRoot = workspaceRoot ?? this.sessionStore.getSessionDirectory(this.sessionStore.activeId || "")
+    if (!wsRoot) return { added: 0, removed: 0 }
 
-    return computeFileDiffStats(filePath, wsFolder.uri.fsPath, {
+    return computeFileDiffStats(filePath, wsRoot, {
       execSync,
       readFileSync: (p: string) => readFileSync(p, "utf-8"),
       getOpenDocumentText: (absPath: string) => {
@@ -2755,56 +2774,117 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     }
   }
 
-  async reviewFileChanges(path?: string): Promise<void> {
+  async reviewFileChanges(path?: string, sessionId?: string): Promise<void> {
     const filePath = path
+    const sid = sessionId ?? this.sessionStore.activeId ?? ""
     if (!filePath) return
-    const wsFolder = vscode.workspace.workspaceFolders?.[0]
-    if (!wsFolder) return
 
-    const relativePath = this.normalizeWorkspacePath(filePath, wsFolder.uri.fsPath)
-    const absPath = this.absoluteWorkspacePath(relativePath, wsFolder.uri.fsPath)
-
-    let headContent = ""
-    try {
-      headContent = execSync(`git show HEAD:${relativePath}`, { cwd: wsFolder.uri.fsPath, encoding: "utf-8", timeout: 5000 })
-    } catch {
-      headContent = ""
+    const wsRoot = this.sessionStore.getSessionDirectory(sid)
+    if (!wsRoot) {
+      vscode.window.showWarningMessage("No workspace directory available for diff review")
+      return
     }
 
+    const relativePath = this.normalizeWorkspacePath(filePath, wsRoot)
+    const absPath = this.absoluteWorkspacePath(relativePath, wsRoot)
+
+    // Resolve baseline content via SessionBaselineResolver
+    const baselineContent = await getBaselineContent(sid, relativePath, {
+      sessionStore: this.sessionStore,
+      checkpointManager: this.checkpointManager,
+      execSync,
+      log: { debug: (msg) => log.debug(msg), warn: (msg) => log.warn(msg), info: (msg) => log.info(msg) },
+    })
+
     const uri = vscode.Uri.file(absPath)
-    const headDoc = await vscode.workspace.openTextDocument({ language: "text", content: headContent })
+    const baselineDoc = await vscode.workspace.openTextDocument({ language: "text", content: baselineContent })
 
     await vscode.commands.executeCommand(
       "vscode.diff",
-      headDoc.uri,
+      baselineDoc.uri,
       uri,
-      `OpenCode: ${relativePath} (HEAD → Working Tree)`,
+      `OpenCode: ${relativePath} (Baseline → Working Tree)`,
       { viewColumn: vscode.ViewColumn.Active, preserveFocus: false },
     )
   }
 
-  async acceptFileChanges(path?: string): Promise<void> {
+  async acceptFileChanges(path?: string, sessionId?: string): Promise<void> {
     const filePath = path
+    const sid = sessionId ?? this.sessionStore.activeId ?? ""
     if (!filePath) return
-    const wsFolder = vscode.workspace.workspaceFolders?.[0]
-    if (!wsFolder) return
 
-    const relativePath = this.normalizeWorkspacePath(filePath, wsFolder.uri.fsPath)
-    const absPath = this.absoluteWorkspacePath(relativePath, wsFolder.uri.fsPath)
+    const wsRoot = this.sessionStore.getSessionDirectory(sid)
+    if (!wsRoot) {
+      vscode.window.showWarningMessage("No workspace directory available for accept changes")
+      return
+    }
+
+    const relativePath = this.normalizeWorkspacePath(filePath, wsRoot)
+    const absPath = this.absoluteWorkspacePath(relativePath, wsRoot)
+
+    // Pre-action checkpoint for undo
+    await this.checkpointManager.snapshotBeforeAction(sid, "accept", [absPath])
 
     const doc = vscode.workspace.textDocuments.find((d) => d.uri.fsPath === absPath)
     const content = doc?.getText() ?? readFileSync(absPath, "utf-8")
     writeFileSync(absPath, content, "utf-8")
+
+    // Show undo notification
+    const checkpoints = await this.checkpointManager.listCheckpoints(sid)
+    const latestCheckpoint = checkpoints[checkpoints.length - 1]
+    if (latestCheckpoint) {
+      const undoAction = "Undo"
+      const selection = await vscode.window.showInformationMessage(
+        `Accepted changes to ${relativePath}`,
+        undoAction,
+      )
+      if (selection === undoAction) {
+        await this.checkpointManager.restore(latestCheckpoint.id)
+      }
+    }
   }
 
-  async rejectFileChanges(path?: string): Promise<void> {
+  async rejectFileChanges(path?: string, sessionId?: string): Promise<void> {
     const filePath = path
+    const sid = sessionId ?? this.sessionStore.activeId ?? ""
     if (!filePath) return
-    const wsFolder = vscode.workspace.workspaceFolders?.[0]
-    if (!wsFolder) return
 
-    const relativePath = this.normalizeWorkspacePath(filePath, wsFolder.uri.fsPath)
-    execSync(`git checkout HEAD -- "${relativePath}"`, { cwd: wsFolder.uri.fsPath, encoding: "utf-8", timeout: 10000 })
+    const wsRoot = this.sessionStore.getSessionDirectory(sid)
+    if (!wsRoot) {
+      vscode.window.showWarningMessage("No workspace directory available for reject changes")
+      return
+    }
+
+    const relativePath = this.normalizeWorkspacePath(filePath, wsRoot)
+    const absPath = this.absoluteWorkspacePath(relativePath, wsRoot)
+
+    // Pre-action checkpoint for undo
+    await this.checkpointManager.snapshotBeforeAction(sid, "reject", [absPath])
+
+    // Revert to baseline SHA if available, otherwise HEAD
+    const baselineSha = this.sessionStore.getBaselineSha(sid)
+    const ref = baselineSha ?? "HEAD"
+    try {
+      execSync(`git checkout ${ref} -- "${relativePath}"`, { cwd: wsRoot, encoding: "utf-8", timeout: 10000 })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      vscode.window.showErrorMessage(`Failed to revert ${relativePath}: ${msg}`)
+      return
+    }
+
+    // Show undo notification
+    const checkpoints = await this.checkpointManager.listCheckpoints(sid)
+    const latestCheckpoint = checkpoints[checkpoints.length - 1]
+    if (latestCheckpoint) {
+      const undoAction = "Undo"
+      const selection = await vscode.window.showInformationMessage(
+        `Rejected changes to ${relativePath}`,
+        undoAction,
+      )
+      if (selection === undoAction) {
+        await this.checkpointManager.restore(latestCheckpoint.id)
+      }
+    }
   }
 
   async sendProblemToOpencode(item?: unknown): Promise<void> {

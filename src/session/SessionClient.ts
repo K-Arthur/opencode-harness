@@ -410,9 +410,9 @@ export class SessionClient {
    * authoritative per-file diff (structured `patch.hunks` and/or unified
    * `diff` string) for the changed-files view.
    */
-  async readFile(path: string, directory?: string): Promise<unknown> {
+  async readFile(path: string, directory?: string, messageId?: string): Promise<unknown> {
     const client = this.guardV2()
-    const resp = await client.file.read({ path, ...(directory ? { directory } : {}) })
+    const resp = await client.file.read({ path, ...(directory ? { directory } : {}), ...(messageId ? { messageID: messageId } : {}) })
     this.throwOnV2Error(resp, `Failed to read file '${path}'`)
     return resp.data
   }

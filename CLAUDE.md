@@ -54,6 +54,16 @@ survive. Therefore, every agent/model and human MUST:
 11. **Pure functions**: Domain logic, validation, transformations = pure. Side effects at edges.
 12. **Immutability by default**: `const` over `let`, `readonly` on properties.
 
+### Code Quality Gates (2026-06-25 triage)
+Before editing any hotspot file, confirm you do not regress complexity or add deps:
+- `src/chat/webview/main.ts` — 84 deps, I=1.0, 3 top-5 hotspots. Extract to new modules, never add imports.
+- `src/chat/webview/toolCallRenderer.ts` — `createToolResultPanel` (cc=105). Extract sub-functions, never add branches.
+- `src/chat/webview/messageRenderer.ts` — `renderMessage` (cc=90). Extract, don't enlarge.
+- `src/chat/webview/streamOrchestrator.ts` — `createStreamOrchestrator` (cc=102), I=0.875.
+- `src/chat/handlers/StreamCoordinator.ts` — Ce=31, I=0.816. Inject deps, don't import.
+
+Pre-commit self-check: `get_repo_health` → confirm `cycle_count` ≤ current, `avg_complexity` not regressed.
+
 ### Testing
 13. **Coverage**: ≥80% overall, ≥90% new/changed code, ≥65% mutation score (MSI).
 14. **TDD gates**: `test:` commit before `feat:` commit. Red phase evidence required.

@@ -286,8 +286,8 @@ export class SessionManager {
   }
 
   /** Read a workspace file (and its server-computed diff) for the changed-files view. */
-  async getFileContent(path: string, directory?: string): Promise<unknown> {
-    return this.sessionClient.readFile(path, directory)
+  async getFileContent(path: string, directory?: string, messageId?: string): Promise<unknown> {
+    return this.sessionClient.readFile(path, directory, messageId)
   }
 
   async sendPrompt(

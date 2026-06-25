@@ -48,8 +48,8 @@ describe("WebviewEventRouter — get_file_diff routing", () => {
   })
 
   it("reads the file from the server and normalizes it to DiffLine[]", () => {
-    assert.ok(handler.includes("this.opts.sessionManager.getFileContent(path)"),
-      "must fetch the file (and its server diff) by path")
+    assert.ok(handler.includes("this.opts.sessionManager.getFileContent(path, directory"),
+      "must fetch the file (and its server diff) by path and directory")
     assert.ok(handler.includes("sdkFileContentToDiffLines("), "must normalize via the pure converter")
   })
 

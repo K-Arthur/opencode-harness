@@ -299,6 +299,14 @@ The Changed Files panel (`#changed-files-panel`) is an inline, fully accessible 
 - All disposables must be pushed to `context.subscriptions`
 - Extension activation must be fast (<500ms target)
 
+### Hotspot Awareness (2026-06-25 triage)
+Full triage: `docs/triage/2026-06-25.md`. Summary:
+- 0 dependency cycles ✅ (Phase 1 resolved), 46 unstable modules, avg complexity 5.49
+- `main.ts` god file (84 deps, 3 top-5 hotspots) — extract, don't add
+- `createToolResultPanel` (cc=105), `renderMessage` (cc=90) — break up, not enlarge
+- `StreamCoordinator` (Ce=31) — inject, don't import
+- 97.1% symbol reachability but 100 untested symbols — `ChatProvider` (30+ untested) highest risk
+
 ## Code Navigation
 
 Use jCodemunch-MCP tools for code exploration. Use `Read` only when editing a file (harness requires Read before Edit/Write).

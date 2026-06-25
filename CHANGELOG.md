@@ -42,10 +42,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `git show HEAD` + hunk computation, disk read when the file isn't open
   in an editor, and CRLF→LF normalization before diffing. Fixes the
   "+0 -0" bug in WSL2/Docker environments.
+- **Session-aware diff review** — diff review, accept, and reject now operate
+  on the file state when the session started, not the current git HEAD.
+  Captures a git baseline SHA at the first file edit; resolves via
+  `SessionBaselineResolver` with fallback to current HEAD for legacy sessions.
+  Works even when the VS Code window has no workspace folder open (debug panel).
+- **Undoable accept/reject** — accept and reject actions create a pre-action
+  checkpoint and show an "Undo" notification that restores the file state.
+- **Session directory resolution** — file operations now use the session's
+  `workspacePath` (from the opencode server directory) instead of the
+  VS Code window's first workspace folder. Fixes diff stats and diff loading
+  in debug panels and multi-root workspaces.
 
 ### Changed
 
 - **Event coverage updated** — added SDK v1.17.11 new event types to `SAFE_IGNORED_EVENT_TYPES`: `integration.connection.updated` and `session.next.revert.*` (cleared, committed, staged). These are server-side state management events that the extension does not need to handle directly.
+- **Fixed path normalization suffix matching** — `fileDiffStats.ts` now correctly
+  returns the relative path after the matched workspace-root suffix instead of
+  concatenating the unmatched prefix. Fixes container path resolution.
 
 <!-- MAINTENANCE NOTE: Keep this section empty unless it describes work that has
      NOT shipped in any version bump. When `npm version` / `npm run

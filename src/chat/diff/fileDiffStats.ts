@@ -83,9 +83,11 @@ function normalizePath(rawPath: string, workspaceRoot: string): string | undefin
   }
 
   if (matchLen > 0) {
-    // Return the unmatched prefix of p (the part before the matched suffix)
-    const unmatched = pSegments.slice(0, pSegments.length - matchLen).join("/")
-    return unmatched ? `${unmatched}/${wsSegments.slice(-matchLen).join("/")}` : wsSegments.slice(-matchLen).join("/")
+    // Return the part of p after the matched workspace-root suffix
+    // e.g. p = "/container/workspace/foo/bar.txt", wsRoot = "/workspace/foo"
+    // → matchLen = 2, matched suffix = "workspace/foo", result = "bar.txt"
+    const result = pSegments.slice(pSegments.length - matchLen).join("/")
+    return result
   }
 
   // WSL UNC path: //wsl$/Ubuntu/home/user/foo → try to match home/user/foo

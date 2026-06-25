@@ -48,6 +48,8 @@ export interface OpenCodeSession {
   /** Per-file cumulative diff stats, keyed by normalized path. */
   changedFileStats?: Record<string, { added: number; removed: number; status?: "A" | "M" | "D" }>
   workspacePath?: string
+  /** Git commit SHA at the time of the first file edit for this session. Used as the baseline for review/accept/reject. */
+  baselineCommitSha?: string
   /** ID of the session this was forked from, if any. */
   parentSessionId?: string
   /** Index of the last turn included in the fork (0-based). */
@@ -1332,6 +1334,36 @@ validateSessionName(name: string): string | null {
       session.workspacePath = workspacePath
       this.save()
     }
+  }
+
+  /**
+   * Get the working directory for a session.
+   * Resolution order: session workspacePath → VS Code workspace folders → undefined.
+   */
+  getSessionDirectory(id: string): string | undefined {
+    const session = this.sessions.get(id)
+    if (!session) return undefined
+    if (session.workspacePath) return session.workspacePath
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+  }
+
+  /**
+   * Set the git baseline SHA for a session.
+   * Captured once at the first file edit to enable session-aware diff review.
+   */
+  setBaselineSha(id: string, sha: string): void {
+    const session = this.sessions.get(id)
+    if (session) {
+      session.baselineCommitSha = sha
+      this.save()
+    }
+  }
+
+  /**
+   * Get the git baseline SHA for a session.
+   */
+  getBaselineSha(id: string): string | undefined {
+    return this.sessions.get(id)?.baselineCommitSha
   }
 
   /**

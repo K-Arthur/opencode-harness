@@ -645,19 +645,20 @@ Changed-file state is synchronized from the extension host:
 - The frontend clears changed files on stream start for the active turn, then expects the
   backend store to re-sync any subsequent file events for that session.
 - Open buttons post `{ type: "open_file", path }`; the extension host resolves relative paths
-  against the session workspace first, then open VS Code workspace folders, and supports
-  `#L12` line fragments.
+  against the session's `workspacePath` (from the opencode server directory) first,
+  then VS Code workspace folders, and supports `#L12` line fragments.
 - **Diff review** (`open_changed_file_diff`): `{ type, path, sessionId }` opens a real VS Code
-  diff editor comparing git HEAD content against the current workspace file. The host resolves
-  the absolute path via the first workspace folder, normalizes it the same way
-  `fileDiffStats.ts` does, reads HEAD content via `git show HEAD:<relativePath>`, and invokes
-  `vscode.diff` in the active editor column.
+  diff editor comparing the file's session baseline (git SHA at first edit) against its current
+  workspace content. The host resolves the path via the session's directory, reads baseline
+  content via `SessionBaselineResolver` (SHA → checkpoint → HEAD → empty), and invokes
+  `vscode.diff` in the active editor column. Works even when the VS Code window has no workspace folder.
 - **Accept changes** (`accept_file_changes`): `{ type, path, sessionId? }` writes the current
   editor/disk content back to disk, effectively accepting all working-tree changes for that
-  file. Dispatched to the `opencode-harness.acceptFileChanges` command.
+  file. Creates a pre-action checkpoint and shows an "Undo" notification. Dispatched to
+  the `opencode-harness.acceptFileChanges` command.
 - **Reject changes** (`reject_file_changes`): `{ type, path, sessionId? }` reverts the file to
-  git HEAD via `git checkout HEAD -- <path>`. Dispatched to the
-  `opencode-harness.rejectFileChanges` command.
+  its session baseline SHA (or HEAD if no baseline) via `git checkout`. Creates a pre-action
+  checkpoint and shows an "Undo" notification. Dispatched to the `opencode-harness.rejectFileChanges` command.
 - **User context** (`user_context`): `{ type, text, source? }` is a host→webview message that
   inserts formatted text into the composer prompt. Used by the "Send Problem to OpenCode"
   command to inject diagnostic information (file path, line/column, severity, source, message)

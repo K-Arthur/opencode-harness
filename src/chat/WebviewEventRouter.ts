@@ -9,7 +9,8 @@ import type { SessionStore } from "../session/SessionStore"
 import type { SessionManager } from "../session/SessionManager"
 import type { DiffLine } from "./webview/types"
 import { sdkFileContentToDiffLines, type SdkFileContentLike } from "./diff/sdkFileContentToDiffLines"
-import { getFileHunks, planHunkRevert } from "./diff/hunkRevertPlan"
+import { getFileHunks, planHunkRevert, type FileHunkSummary } from "./diff/hunkRevertPlan"
+import { getBaselineContent } from "./SessionBaselineResolver"
 import type { ModelManager } from "../model/ModelManager"
 import type { DiffApplier } from "../diff/DiffApplier"
 import type { StreamCoordinator } from "./handlers/StreamCoordinator"
@@ -702,16 +703,16 @@ export class WebviewEventRouter {
       const filePath = typeof msg.path === "string" ? msg.path : undefined
       const hunkId = typeof msg.hunkId === "string" ? msg.hunkId : undefined
       if (!filePath || !hunkId) return
-      const ba = await this.getFileBeforeAfter(filePath)
+      const ba = await this.getFileBeforeAfter(filePath, sessionId)
       if (!ba) return
       const plan = planHunkRevert(ba.before, ba.after, hunkId)
       if (!plan) {
         this.opts.postMessage({ type: "hunk_result", hunkId, ok: false, rejected: true, reason: "stale", sessionId })
         return
       }
-      const wsFolder = vscode.workspace.workspaceFolders?.[0]
-      if (!wsFolder) return
-      const uri = vscode.Uri.joinPath(wsFolder.uri, filePath)
+      const wsRoot = this.opts.sessionStore.getSessionDirectory(sessionId ?? this.opts.sessionStore.activeId ?? "")
+      if (!wsRoot) return
+      const uri = vscode.Uri.joinPath(vscode.Uri.file(wsRoot), filePath)
       try {
         const doc = await vscode.workspace.openTextDocument(uri)
         const edit = new vscode.WorkspaceEdit()
@@ -732,7 +733,7 @@ export class WebviewEventRouter {
     ["get_file_hunks", async (msg: Record<string, unknown>, sessionId?: string) => {
       const filePath = typeof msg.path === "string" ? msg.path : undefined
       if (!filePath) return
-      const ba = await this.getFileBeforeAfter(filePath)
+      const ba = await this.getFileBeforeAfter(filePath, sessionId)
       if (!ba) return
       this.opts.postMessage({ type: "file_hunks", path: filePath, hunks: getFileHunks(ba.before, ba.after), sessionId })
     }],
@@ -740,16 +741,16 @@ export class WebviewEventRouter {
       const filePath = typeof msg.path === "string" ? msg.path : undefined
       const hunkId = typeof msg.hunkId === "string" ? msg.hunkId : undefined
       if (!filePath || !hunkId) return
-      const ba = await this.getFileBeforeAfter(filePath)
+      const ba = await this.getFileBeforeAfter(filePath, sessionId)
       if (!ba) return
       const plan = planHunkRevert(ba.before, ba.after, hunkId)
       if (!plan) {
         this.opts.postMessage({ type: "hunk_reverted", path: filePath, ok: false, reason: "stale", sessionId })
         return
       }
-      const wsFolder = vscode.workspace.workspaceFolders?.[0]
-      if (!wsFolder) return
-      const uri = vscode.Uri.joinPath(wsFolder.uri, filePath)
+      const wsRoot = this.opts.sessionStore.getSessionDirectory(sessionId ?? this.opts.sessionStore.activeId ?? "")
+      if (!wsRoot) return
+      const uri = vscode.Uri.joinPath(vscode.Uri.file(wsRoot), filePath)
       try {
         const doc = await vscode.workspace.openTextDocument(uri)
         const edit = new vscode.WorkspaceEdit()
@@ -768,11 +769,11 @@ export class WebviewEventRouter {
     ["undo_file", async (msg: Record<string, unknown>, sessionId?: string) => {
       const filePath = typeof msg.path === "string" ? msg.path : undefined
       if (!filePath) return
-      const ba = await this.getFileBeforeAfter(filePath)
+      const ba = await this.getFileBeforeAfter(filePath, sessionId)
       if (!ba) return
-      const wsFolder = vscode.workspace.workspaceFolders?.[0]
-      if (!wsFolder) return
-      const uri = vscode.Uri.joinPath(wsFolder.uri, filePath)
+      const wsRoot = this.opts.sessionStore.getSessionDirectory(sessionId ?? this.opts.sessionStore.activeId ?? "")
+      if (!wsRoot) return
+      const uri = vscode.Uri.joinPath(vscode.Uri.file(wsRoot), filePath)
       try {
         const doc = await vscode.workspace.openTextDocument(uri)
         const edit = new vscode.WorkspaceEdit()
@@ -813,7 +814,7 @@ export class WebviewEventRouter {
       const filePaths = Object.keys(fileStats)
       let reverted = 0
       for (const filePath of filePaths) {
-        const ba = await this.getFileBeforeAfter(filePath)
+        const ba = await this.getFileBeforeAfter(filePath, sessionId)
         if (!ba) continue
         const wsFolder = vscode.workspace.workspaceFolders?.[0]
         if (!wsFolder) continue
@@ -906,44 +907,36 @@ export class WebviewEventRouter {
         })
       }
     }],
-    ["open_changed_file_diff", async (msg: Record<string, unknown>, _sessionId?: string) => {
-      // M7: Open a VS Code diff editor comparing the file's git HEAD
+    ["open_changed_file_diff", async (msg: Record<string, unknown>, sessionId?: string) => {
+      // M7: Open a VS Code diff editor comparing the file's baseline
       // (before) against its current workspace content (after). Falls back
       // to a simple "before unavailable" label for untracked / new files.
       const filePath = typeof msg.path === "string" ? msg.path : undefined
+      const sid = sessionId ?? this.opts.sessionStore.activeId ?? ""
       if (!filePath) return
 
-      let beforeContent = ""
-
-      // Try git HEAD first (works for tracked files even if staged/unstaged
-      // changes exist — HEAD is the committed state).
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath
-      if (workspaceRoot) {
-        try {
-          const result = execSync(
-            `git show HEAD:${filePath.replace(/\\/g, "/")}`,
-            { cwd: workspaceRoot, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024, timeout: 5000 },
-          )
-          if (typeof result === "string") {
-            beforeContent = result
-          }
-        } catch {
-          // File not tracked by git or no git repo — use empty "before"
-        }
+      const wsRoot = this.opts.sessionStore.getSessionDirectory(sid)
+      if (!wsRoot) {
+        this.opts.postMessage({ type: "error", message: "No workspace directory available for diff" })
+        return
       }
+
+      // Resolve baseline content via SessionBaselineResolver
+      const beforeContent = await getBaselineContent(sid, filePath, {
+        sessionStore: this.opts.sessionStore,
+        checkpointManager: this.opts.checkpointManager,
+        execSync,
+        log: { debug: (msg) => log.debug(msg), warn: (msg) => log.warn(msg), info: (msg) => log.info(msg) },
+      })
 
       // Read current file content as the "after" side
       let afterContent = ""
-      const workspaceUri = vscode.workspace.workspaceFolders?.[0]
-        ? vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, filePath)
-        : undefined
-      if (workspaceUri) {
-        try {
-          const doc = await vscode.workspace.openTextDocument(workspaceUri)
-          afterContent = doc.getText()
-        } catch {
-          // File doesn't exist yet — will show empty right side
-        }
+      const workspaceUri = vscode.Uri.joinPath(vscode.Uri.file(wsRoot), filePath)
+      try {
+        const doc = await vscode.workspace.openTextDocument(workspaceUri)
+        afterContent = doc.getText()
+      } catch {
+        // File doesn't exist yet — will show empty right side
       }
 
       const afterLabel = `${path.basename(filePath)} (After)`
@@ -1027,11 +1020,11 @@ export class WebviewEventRouter {
       // Revert ALL changes in this diff block by restoring git HEAD content.
       const filePath = typeof msg.path === "string" ? msg.path : undefined
       if (!filePath) return
-      const ba = await this.getFileBeforeAfter(filePath)
+      const ba = await this.getFileBeforeAfter(filePath, sessionId)
       if (!ba) return
-      const wsFolder = vscode.workspace.workspaceFolders?.[0]
-      if (!wsFolder) return
-      const uri = vscode.Uri.joinPath(wsFolder.uri, filePath)
+      const wsRoot = this.opts.sessionStore.getSessionDirectory(sessionId ?? this.opts.sessionStore.activeId ?? "")
+      if (!wsRoot) return
+      const uri = vscode.Uri.joinPath(vscode.Uri.file(wsRoot), filePath)
       try {
         const doc = await vscode.workspace.openTextDocument(uri)
         const edit = new vscode.WorkspaceEdit()
@@ -1729,11 +1722,11 @@ export class WebviewEventRouter {
       // Revert ALL changes in this diff block (same as reject_diff).
       const filePath = typeof msg.path === "string" ? msg.path : undefined
       if (!filePath) return
-      const ba = await this.getFileBeforeAfter(filePath)
+      const ba = await this.getFileBeforeAfter(filePath, sessionId)
       if (!ba) return
-      const wsFolder = vscode.workspace.workspaceFolders?.[0]
-      if (!wsFolder) return
-      const uri = vscode.Uri.joinPath(wsFolder.uri, filePath)
+      const wsRoot = this.opts.sessionStore.getSessionDirectory(sessionId ?? this.opts.sessionStore.activeId ?? "")
+      if (!wsRoot) return
+      const uri = vscode.Uri.joinPath(vscode.Uri.file(wsRoot), filePath)
       try {
         const doc = await vscode.workspace.openTextDocument(uri)
         const edit = new vscode.WorkspaceEdit()
@@ -1849,11 +1842,13 @@ export class WebviewEventRouter {
       this.opts.postMessage({ type: "changed_files_update", files, sessionId })
     }],
     ["get_file_diff", async (msg: Record<string, unknown>, sessionId?: string) => {
-      // Per-file diff for the changed-files dropdown's inline expansion. opencode
-      // applies edits server-side, so we read the file (with its diff) from the
-      // server and normalize it into DiffLine[] for the webview. Previously
-      // unhandled — expansion silently showed nothing.
+      // Per-file diff for the changed-files dropdown's inline expansion and edit-card diffs.
+      // opencode applies edits server-side, so we read the file (with its diff) from the
+      // server and normalize it into DiffLine[] for the webview. Falls back to local
+      // baseline computation when the server returns no diff.
       const path = typeof msg.path === "string" ? msg.path : ""
+      const toolId = typeof msg.toolId === "string" ? msg.toolId : undefined
+      const sid = sessionId ?? this.opts.sessionStore.activeId ?? ""
       if (!path) return
       const respond = (lines: DiffLine[] | null, error?: string, opts?: { deleted?: boolean; truncated?: boolean }) =>
         this.opts.postMessage({ type: "file_diff_response", sessionId, path, lines, error, deleted: opts?.deleted, truncated: opts?.truncated })
@@ -1862,8 +1857,51 @@ export class WebviewEventRouter {
         return
       }
       try {
-        const content = await this.opts.sessionManager.getFileContent(path)
+        const directory = this.opts.sessionStore.getSessionDirectory(sid)
+        const content = await this.opts.sessionManager.getFileContent(path, directory, toolId)
         const lines = sdkFileContentToDiffLines(content as SdkFileContentLike)
+        
+        // If server returned no diff, fall back to local baseline computation
+        if (lines.length === 0 && directory) {
+          const baselineContent = await getBaselineContent(sid, path, {
+            sessionStore: this.opts.sessionStore,
+            checkpointManager: this.opts.checkpointManager,
+            execSync,
+            log: { debug: (msg) => log.debug(msg), warn: (msg) => log.warn(msg), info: (msg) => log.info(msg) },
+          })
+          if (baselineContent) {
+            // Read current file content
+            let afterContent = ""
+            try {
+              const doc = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(vscode.Uri.file(directory), path))
+              afterContent = doc.getText()
+            } catch {
+              // File doesn't exist
+            }
+            // Compute local diff using getFileHunks (returns FileHunkSummary with unified diff lines)
+            const hunks = getFileHunks(baselineContent, afterContent)
+            const localLines = hunks.flatMap((hunk: FileHunkSummary) => {
+              const out: DiffLine[] = []
+              let oldLine = 0
+              let newLine = 0
+              for (const line of hunk.lines) {
+                if (line.startsWith("+")) {
+                  out.push({ type: "added", newLine: newLine++, content: line.slice(1) })
+                } else if (line.startsWith("-")) {
+                  out.push({ type: "removed", oldLine: oldLine++, content: line.slice(1) })
+                } else if (line.startsWith(" ")) {
+                  out.push({ type: "context", oldLine: oldLine++, newLine: newLine++, content: line.slice(1) })
+                }
+              }
+              return out
+            })
+            if (localLines.length > 0) {
+              respond(localLines)
+              return
+            }
+          }
+        }
+        
         // Boundary check: cap payload size to prevent webview freezing on
         // very large diffs (e.g. whole-file rewrites of minified files).
         const MAX_DIFF_PAYLOAD_BYTES = 5 * 1024 * 1024
@@ -1875,19 +1913,21 @@ export class WebviewEventRouter {
         respond(lines)
       } catch (err) {
         // SDK read failed — check if the file was deleted. If so, read git
-        // HEAD content and construct all-removed DiffLine[] so the user sees
+        // baseline content and construct all-removed DiffLine[] so the user sees
         // what was removed rather than a silent failure.
-        const wsFolder = vscode.workspace.workspaceFolders?.[0]
-        if (wsFolder) {
+        const wsRoot = this.opts.sessionStore.getSessionDirectory(sid)
+        if (wsRoot) {
           try {
-            const headContent = execSync(
-              `git show HEAD:${path.replace(/\\/g, "/")}`,
-              { cwd: wsFolder.uri.fsPath, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024, timeout: 5000 },
-            )
-            if (typeof headContent === "string" && headContent.length > 0) {
-              // File exists in git HEAD but SDK read failed → likely deleted.
-              const headLines = headContent.split("\n")
-              const diffLines: DiffLine[] = headLines.map((line, i) => ({
+            const baselineContent = await getBaselineContent(sid, path, {
+              sessionStore: this.opts.sessionStore,
+              checkpointManager: this.opts.checkpointManager,
+              execSync,
+              log: { debug: (msg) => log.debug(msg), warn: (msg) => log.warn(msg), info: (msg) => log.info(msg) },
+            })
+            if (typeof baselineContent === "string" && baselineContent.length > 0) {
+              // File exists in baseline but SDK read failed → likely deleted.
+              const baselineLines = baselineContent.split("\n")
+              const diffLines: DiffLine[] = baselineLines.map((line, i) => ({
                 type: "removed" as const,
                 oldLine: i + 1,
                 content: line,
@@ -1896,7 +1936,7 @@ export class WebviewEventRouter {
               return
             }
           } catch {
-            // Not in git HEAD either — truly unknown failure.
+            // Baseline lookup failed — truly unknown failure.
           }
         }
         log.warn(`get_file_diff failed for ${path}`, err)
@@ -2658,26 +2698,26 @@ export class WebviewEventRouter {
   }
 
   /**
-   * Resolve a changed file's before (git HEAD) / after (current workspace)
-   * content — the source for hunk computation and reverts. Mirrors the
-   * open_changed_file_diff logic; untracked/missing files yield "".
+   * Resolve a changed file's before (git baseline) / after (current workspace)
+   * content — the source for hunk computation and reverts. Uses session-aware
+   * baseline resolution via SessionBaselineResolver.
    */
-  private async getFileBeforeAfter(filePath: string): Promise<{ before: string; after: string } | null> {
-    const wsFolder = vscode.workspace.workspaceFolders?.[0]
-    if (!wsFolder) return null
-    let before = ""
-    try {
-      const result = execSync(
-        `git show HEAD:${filePath.replace(/\\/g, "/")}`,
-        { cwd: wsFolder.uri.fsPath, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024, timeout: 5000 },
-      )
-      if (typeof result === "string") before = result
-    } catch {
-      // Untracked / new file or no git repo — before stays "".
-    }
+  private async getFileBeforeAfter(filePath: string, sessionId?: string): Promise<{ before: string; after: string } | null> {
+    const sid = sessionId ?? this.opts.sessionStore.activeId ?? ""
+    const wsRoot = this.opts.sessionStore.getSessionDirectory(sid)
+    if (!wsRoot) return null
+
+    // Resolve baseline content via SessionBaselineResolver
+    const before = await getBaselineContent(sid, filePath, {
+      sessionStore: this.opts.sessionStore,
+      checkpointManager: this.opts.checkpointManager,
+      execSync,
+      log: { debug: (msg) => log.debug(msg), warn: (msg) => log.warn(msg), info: (msg) => log.info(msg) },
+    })
+
     let after = ""
     try {
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(wsFolder.uri, filePath))
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(vscode.Uri.file(wsRoot), filePath))
       after = doc.getText()
     } catch {
       // File deleted / unreadable — after stays "".
