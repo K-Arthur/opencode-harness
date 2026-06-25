@@ -17,6 +17,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Diff review / accept / reject** — changed-file rows in the
+  changed-files dropdown now carry accept (✓) and reject (✕) buttons.
+  Accept writes the current working-tree content to disk; reject reverts
+  the file to git HEAD via `git checkout HEAD -- <path>`. The existing
+  "Open diff" button opens a VS Code diff editor (HEAD → Working Tree)
+  in the active column. Backed by new commands
+  `opencode-harness.reviewFileChanges`, `acceptFileChanges`, and
+  `rejectFileChanges`.
+- **Send Problem to OpenCode** — right-click a diagnostic in the VS Code
+  Problems panel and choose "OpenCode: Send Problem to OpenCode" to
+  insert a formatted markdown snippet (file path, line/column, severity,
+  source, message) into the chat composer. Registered as
+  `opencode-harness.sendProblemToOpencode` in the `problems/context` menu.
+- **Robust diff stats for WSL2/Docker** — new `fileDiffStats.ts` module
+  with path normalization (backslashes, UNC prefixes, container path
+  suffix matching), `git diff --numstat` fast path, fallback to
+  `git show HEAD` + hunk computation, disk read when the file isn't open
+  in an editor, and CRLF→LF normalization before diffing. Fixes the
+  "+0 -0" bug in WSL2/Docker environments.
+
 <!-- MAINTENANCE NOTE: Keep this section empty unless it describes work that has
      NOT shipped in any version bump. When `npm version` / `npm run
      reinstall` bumps the version, move all accumulated entries below into a

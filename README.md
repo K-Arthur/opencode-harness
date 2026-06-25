@@ -107,6 +107,7 @@ anything the opencode CLI itself doesn't support.
 
 ### Diffs & file changes
 - **Side-by-side diff viewer** using VS Code's native `vscode.diff` view, with Accept/Discard controls.
+- **Per-file accept / reject** — each changed-file row in the dropdown has accept (✓) and reject (✕) buttons to keep or revert working-tree changes without opening the full diff editor.
 - **Undoable applies** — accepted diffs go through `WorkspaceEdit` with a pre-accept snapshot for local revert; server-managed edits get opencode's own message-revert instead.
 - **Changed-file tracking** — a synced chip bar and todos panel show every file touched in the session.
 - **File action buttons** — Open / Copy Path / Reveal in Explorer inline on write/edit tool results.
@@ -221,6 +222,7 @@ If you rely on one of the overridden defaults, reassign the OpenCode shortcut in
 
 - Right-click a file in Explorer and choose **OpenCode: Add File to Session** to send its contents into the active chat.
 - Select code in an editor and choose **OpenCode: Add Selection to Session** to send the selected range with file path, line numbers, and language.
+- Right-click a diagnostic in the Problems panel and choose **OpenCode: Send Problem to OpenCode** to insert a formatted snippet (file, line/column, severity, message) into the chat composer.
 - File attachments warn before sending sensitive paths such as `.env`, credentials, private keys, and files containing common prompt-injection phrases.
 - Image attachments larger than 10 MB are rejected before they reach the chat.
 - Open-file context is budgeted by estimated tokens, not raw character count, and truncated with an inline marker when the configured context limit is reached.
