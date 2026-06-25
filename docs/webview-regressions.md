@@ -61,3 +61,21 @@ An empty checkpoint response leaves the panel open and shows `No checkpoints yet
 ## Mixed Tool Groups
 
 Grouped tool-call summaries must represent the whole group, not just the first child tool. A group containing read, write, and exec calls renders as `tools` with `tool-call--mixed` styling and the breakdown `(1 read, 1 write, 1 exec)`. Individual child rows keep their original read/write/exec classes.
+
+## E2E Test Fragility (2026-06)
+
+A recurring pattern: an agent refactors a webview UI surface (changed-files strip, question bar, error banners) and commits the source change without updating the Playwright selectors. The next time the tree is reset or another agent touches the same area, the webview E2E suite fails on stale selectors. The failures are then “fixed” again by another agent, often by weakening assertions or skipping the suite, which hides real regressions.
+
+**Root causes observed:**
+
+- Tests relying on implementation-detail selectors (e.g., `.rate-limit-notice`, `.msg-error`) instead of canonical IDs (`#rate-limit-bar`, `#global-status-banner`).
+- UI changes committed without the matching test update.
+- Test fixes left uncommitted and lost to the next `oc-ckp-*` checkpoint reset.
+- Suites that genuinely hang because the underlying message contract changed (e.g., question bar population) being skipped permanently rather than investigated.
+
+**Prevention:**
+
+- Any change to `src/chat/webview/*` DOM or message contract must include the corresponding `tests/webview/*` update in the same branch.
+- Prefer stable selectors: `id` for unique elements, `data-testid` for components, class names only for styling.
+- Run `npx playwright test --project=chromium-webview` before committing webview work.
+- If a suite must be skipped, use `test.describe.skip` with a comment that names the follow-up issue, and do not leave it skipped across multiple releases.

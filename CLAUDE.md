@@ -69,6 +69,8 @@ Pre-commit self-check: `get_repo_health` → confirm `cycle_count` ≤ current, 
 14. **TDD gates**: `test:` commit before `feat:` commit. Red phase evidence required.
 15. **Test naming**: `rejects_expired_tokens` not `test_auth`. One behavior per test.
 16. **Property-based**: Add fast-check tests for pure functions with wide input ranges.
+17. **Webview E2E coupling**: Any DOM or message-contract change in `src/chat/webview/` must include the matching `tests/webview/` update. Run the relevant project before committing (`--project=chromium-webview` for webview, `--project=chromium` for visual). Do not commit source-only UI changes.
+18. **Preserve test fixes**: the checkpoint process discards uncommitted changes. A test fix that is not committed is a regression that will come back. Commit green tests immediately.
 
 ### Security
 17. **Zero secrets in code**: API keys, tokens → environment variables only.

@@ -48,6 +48,7 @@ OpenCode follows a modular, event-driven Client-Server model:
 -   **Design Token System:** Use CSS custom properties defined in `src/chat/webview/css/tokens.css` for all UI styling (spacing, typography, colors, animations).
 -   **Accessibility First:** Adhere to WCAG standards. Use focus-visible rings, ARIA roles, and respect `prefers-reduced-motion`.
 -   **Safety First:** Ensure `CheckpointManager` creates a snapshot before any file modifications.
+-   **Test Discipline:** Any DOM or message-contract change in `src/chat/webview/` must include the corresponding Playwright test update. Run the relevant project before committing: `npx playwright test --project=chromium-webview` for webview tests, `npx playwright test --project=chromium` for visual tests, and `npm run test:unit` for host code. Commit test fixes immediately — the checkpoint reset will discard uncommitted work.
 
 ## Project Structure
 

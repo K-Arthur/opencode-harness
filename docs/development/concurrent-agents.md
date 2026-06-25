@@ -86,6 +86,9 @@ This is the fragile mode you have been in. Make it survivable:
    `git add -A` while others have in-flight work — stage only your files.
 4. **Never** run `git stash` / `git reset --hard` / `git checkout -- .` against
    the shared tree.
+5. **Test fixes are the first thing dropped.** If you fix a failing test, commit
+   it immediately with the same care as a feature fix. The next agent will
+   assume the suite is green; an uncommitted fix is the same as a broken suite.
 
 ## Practical limits
 

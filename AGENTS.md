@@ -54,6 +54,38 @@ other's work. To make concurrent work safe:
 
 Full rationale + worktree recipes: [`docs/development/concurrent-agents.md`](docs/development/concurrent-agents.md).
 
+## Test Discipline — Keep the CI Green
+
+The webview and visual tests are tightly coupled to DOM structure and message
+contracts. When agents change UI without updating the matching tests, the
+pipeline fails. Treat test maintenance as part of the feature, not an
+afterthought.
+
+### Rules
+
+1. **Run the relevant test suite before committing any change.**
+   - Webview DOM/message-contract changes: `npx playwright test --project=chromium-webview`
+   - Visual UI changes: `npx playwright test --project=chromium`
+   - Extension-host changes: `npm run test:unit`
+   - If a full run is too slow, at least run the spec file(s) touching the
+     changed code.
+2. **If you change a UI selector or DOM structure, update the matching test
+   selectors.** Do not leave brittle selectors for the next agent to fix.
+   Prefer stable `data-testid` or `id` attributes for tests.
+3. **Never weaken a test or skip it without explicit user direction.** If a test
+   fails, fix the root cause or the test, but do not comment it out, raise
+   arbitrary timeouts, or change assertions to match broken behavior.
+4. **Never commit a UI/behavior change without a corresponding test commit.** The
+   test update must be in the same branch and precede or accompany the feature
+   or fix commit.
+5. **If a test suite is flaky, quarantine it, don't ignore it.** Use
+   `test.fixme` or `test.describe.skip` with a clear comment explaining the
+   reason and the plan to re-enable. Do not silently delete tests.
+6. **After fixing a failing test, run the full relevant suite.** A fix for one
+   test may break another.
+7. **Because the workspace is ephemeral, uncommitted test fixes are lost.**
+   Commit them immediately after they pass (see the top-level rule).
+
 ## What This Is
 
 VS Code extension that integrates the opencode AI agent into VS Code. TypeScript/Node.js, built with esbuild. Client-server architecture: extension connects to an opencode HTTP server (localhost:4096) via `@opencode-ai/sdk/v2` (v2 client). Does not embed or spawn the CLI directly for chat.
