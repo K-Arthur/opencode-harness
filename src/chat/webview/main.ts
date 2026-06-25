@@ -3741,6 +3741,10 @@ function setupTodoSkillAndSubagentPanels(): void {
         if (sid) {
           showSystemMessage(sid, "Session compacted successfully.")
           hideCompactBanner(sid)
+          // Clear the local streaming state so any server chunks that arrive
+          // before the resumed session starts fresh do not render into the
+          // pre-compaction bubble.
+          streamOrchestrator?.resetStream(sid)
           // Re-fetch the session so the visual message list reflects the
           // post-compact state. Before this, the chat said "compacted" but
           // continued to show the old (uncompacted) messages — making

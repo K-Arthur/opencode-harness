@@ -77,6 +77,7 @@ function makeFakeStream(): StreamHandlers & { calls: Array<{ method: string; arg
     handleStreamToken: rec("handleStreamToken"),
     handleStreamChunk: rec("handleStreamChunk"),
     handleStreamEnd: rec("handleStreamEnd"),
+    resetStream: rec("resetStream"),
     handleStreamError: rec("handleStreamError"),
     handleRequestError: rec("handleRequestError"),
     handleToolStart: rec("handleToolStart"),

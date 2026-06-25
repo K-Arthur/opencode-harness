@@ -31,6 +31,7 @@ import {
   reRenderMessage,
   handleSkillIndicator,
   finalizeAllPendingTools,
+  resetStreamState,
 } from "./streamHandlers"
 import "./streamEndHandler"
 
@@ -43,6 +44,9 @@ export interface StreamHandlers {
   handleStreamToken: (text?: string) => void
   handleStreamChunk: (text?: string, messageId?: string) => void
   handleStreamEnd: (messageId?: string, blocks?: unknown) => void
+  /** Reset local streaming state without rendering a final message. Used after
+   *  session compaction so stale chunks don't render into the old bubble. */
+  resetStream: () => void
   handleStreamError: (error: { code: string; message: string; detail?: string; retryable?: boolean }) => void
   handleRequestError: (message?: string, errorContext?: unknown) => void
   handleToolStart: (toolCall: { id: string; name: string; class?: string; args?: unknown; state?: ToolCallState }) => void
@@ -156,6 +160,27 @@ class StreamSession implements StreamHandlers {
     const lastRenderedChunkSeq = this.state.chunkSeq
     handleStreamEnd(this.state, this.els, this.messages, this.saveState, messageId, blocks)
     this.callbacks?.onRenderFlush?.(lastRenderedChunkSeq, true)
+    this.callbacks?.onStreamingChange?.(false)
+  }
+
+  resetStream(): void {
+    if (this.state.renderQueue) {
+      this.state.renderQueue.forceFlush()
+      this.state.renderQueue.destroy()
+      this.state.renderQueue = null
+    }
+    resetStreamState(this.state)
+    this.state.isStreaming = false
+    this.state.streamingMessageId = null
+    this.state.streamingBuffer = ""
+    this.state.currentBlockBuffer = ""
+    this.state.currentBlockEl = null
+    this.state.currentBlockIndex = -1
+    this.state.lastStreamTextEl = null
+    this.state.streamingBlockId = null
+    this.state.streamingToolCallId = null
+    this.state.rafPending = false
+    this.state.chunkSeq = 0
     this.callbacks?.onStreamingChange?.(false)
   }
 

@@ -161,6 +161,59 @@
   outline-offset: 2px;
 }
 
+/* ── Inline diff (Show diff) ── */
+.file-edit-card__diff {
+  margin-top: var(--space-1, 4px);
+  padding: var(--space-1-5, 6px);
+  border: 1px solid var(--file-edit-border);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--oc-panel-bg);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-2xs, 10px);
+  line-height: 1.4;
+  overflow-x: auto;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.file-edit-card__diff-lines {
+  display: flex;
+  flex-direction: column;
+}
+
+.file-edit-card__diff-line {
+  display: flex;
+  gap: 4px;
+  white-space: pre;
+}
+
+.file-edit-card__diff-marker {
+  flex: 0 0 auto;
+  width: 14px;
+  text-align: center;
+  user-select: none;
+}
+
+.file-edit-card__diff-line--added {
+  color: var(--color-success);
+  background: var(--oc-success-subtle);
+}
+
+.file-edit-card__diff-line--removed {
+  color: var(--color-error);
+  background: var(--oc-error-subtle);
+}
+
+.file-edit-card__diff-line--context {
+  color: var(--oc-muted);
+}
+
+.file-edit-card__diff-more {
+  padding: 2px 0;
+  color: var(--oc-muted);
+  font-style: italic;
+}
+
 /* ── Narrow viewport resilience ── */
 @media (max-width: 320px) {
   .file-edit-card__header {

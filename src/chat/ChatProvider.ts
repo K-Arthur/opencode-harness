@@ -1771,22 +1771,27 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
     if (event.sessionId || event.type !== "file_edited") return undefined
 
     // A file.edited event with no sessionID cannot be attributed by the server.
-    // Credit it ONLY to a session whose agent is actively streaming right now —
-    // a live edit produced by that running session. We deliberately do NOT fall
-    // back to a merely-active (idle) tab: that fallback is how edits made outside
-    // opencode (another tool/model writing files on disk) leaked into whichever
-    // session happened to be open, polluting its changed-files dropdown. If zero
-    // or several sessions are streaming, attribution is ambiguous — drop it
-    // rather than guess, so the dropdown only ever shows this session's edits.
+    // First, credit it to a uniquely streaming session — the safest signal of a
+    // live edit produced by that run. If no tab is streaming (e.g. after a
+    // session compaction/resume cycle where the local streaming flag was reset),
+    // fall back to the active tab only when it has an active CLI session. This
+    // prevents external edits from leaking into an idle open tab while still
+    // keeping this session's edits visible during transient non-streaming gaps.
     const liveTabs = this.tabManager.getAllTabs().filter((t) => t.isStreaming || t.waitingForCompletion)
-    const tab = liveTabs.length === 1 ? liveTabs[0] : undefined
-
-    if (tab) {
-      log.debug(`Attributed sessionless file_edited event to streaming tab: ${tab.id}`)
-    } else {
-      log.warn(`Dropping sessionless file_edited event: ${liveTabs.length === 0 ? "no streaming session" : "ambiguous (multiple streaming sessions)"}`)
+    const liveTab = liveTabs[0]
+    if (liveTabs.length === 1 && liveTab) {
+      log.debug(`Attributed sessionless file_edited event to streaming tab: ${liveTab.id}`)
+      return liveTab
     }
-    return tab
+
+    const activeTab = this.tabManager.getActiveTab()
+    if (liveTabs.length === 0 && activeTab?.cliSessionId) {
+      log.debug(`Attributed sessionless file_edited event to active tab: ${activeTab.id}`)
+      return activeTab
+    }
+
+    log.warn(`Dropping sessionless file_edited event: ${liveTabs.length === 0 ? "no streaming or active session" : "ambiguous (multiple streaming sessions)"}`)
+    return undefined
   }
 
   private bufferServerEventIfNeeded(event: ServerEvent, tab: TabState | undefined, isHighFrequency: boolean): boolean {

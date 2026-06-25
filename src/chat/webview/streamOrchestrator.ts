@@ -481,6 +481,10 @@ export interface StreamOrchestratorAPI {
   handleStreamStart: (sessionId: string, messageId?: string, opts?: { skipAnchor?: boolean }) => void
   handleStreamChunk: (sessionId: string, text?: string, messageId?: string) => void
   handleStreamEnd: (sessionId: string, messageId?: string, blocks?: unknown, reason?: string, partial?: boolean) => void
+  /** Resets the local streaming state for a session after compaction. The server
+   *  may continue sending chunks for the pre-compact message; without a reset
+   *  those chunks would render into the old bubble instead of the new one. */
+  resetStream: (sessionId: string) => void
   handleServerStatus: (sessionId: string, status?: string, errorContext?: unknown) => void
   handleRequestError: (sessionId: string | undefined, message?: string, errorContext?: unknown) => void
   handleDiffResult: (sessionId?: string, blockId?: string, ok?: boolean, message?: string, checkpointCreated?: boolean) => void
@@ -643,6 +647,23 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     chunkLogCounter++
     maybeLogStreamChunk(chunkLogCounter, sessionId, text, s.streamingMessageId, vscode.postMessage)
     s.handleStreamChunk(text, messageId)
+  }
+
+  function resetStream(sessionId: string): void {
+    const stream = streamHandlers.get(sessionId)
+    if (stream) {
+      try {
+        stream.resetStream()
+      } catch (err) {
+        vscode.postMessage({ type: "webview_log", level: "warn", message: `resetStream: stream handler threw: ${err instanceof Error ? err.message : err}` })
+      }
+      streamHandlers.delete(sessionId)
+    }
+    setStreaming(sessionId, false)
+    updateTabBar()
+    updateModeSelectorStateLocal()
+    updateAgentStatus("idle")
+    vscode.postMessage({ type: "webview_log", level: "info", message: `resetStream: cleared streaming state for ${sessionId}` })
   }
 
   /**
@@ -909,6 +930,7 @@ export function createStreamOrchestrator(deps: StreamOrchestratorDeps): StreamOr
     handleStreamStart,
     handleStreamChunk,
     handleStreamEnd,
+    resetStream,
     handleServerStatus,
     handleRequestError,
     handleDiffResult,

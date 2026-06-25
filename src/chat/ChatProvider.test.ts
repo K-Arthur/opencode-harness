@@ -613,22 +613,22 @@ void it("file_edited server events register changed files in backend store befor
   assert.ok(!block.includes("if (!tab?.isStreaming) return"), "backend changed-file registration must not be streaming-only")
 })
 
-void it("sessionless file_edited events are credited only to a uniquely streaming tab (no idle-active-tab fallback)", () => {
+void it("sessionless file_edited events are credited to streaming tab, with active CLI-session fallback", () => {
   // Session-exclusivity: a file.edited event with no sessionID can't be
-  // attributed by the server. Crediting it to a merely-active (idle) tab is how
-  // edits made outside opencode (another tool/model writing files on disk)
-  // leaked into whichever session was open, polluting its changed-files
-  // dropdown. We now only credit it when exactly one session is streaming.
+  // attributed by the server. The primary signal is a uniquely streaming tab.
+  // After a compaction/resume cycle the local streaming flag may briefly be
+  // false, so we also allow attributing to the active tab when it has a CLI
+  // session (the server-side run is still attached). We still refuse to credit
+  // an idle tab that has no active CLI session, preserving the original guard
+  // against external tools polluting the changed-files dropdown.
   const idx = source.indexOf("private resolveSessionlessFileEditTab(")
   assert.ok(idx >= 0, "resolveSessionlessFileEditTab must exist")
-  const block = source.slice(idx, idx + 1400)
+  const block = source.slice(idx, idx + 1600)
   assert.ok(block.includes('event.type !== "file_edited"'), "guards to file_edited events")
   assert.ok(block.includes("getAllTabs().filter"), "must inspect streaming tabs")
-  assert.ok(
-    block.includes("liveTabs.length === 1 ? liveTabs[0] : undefined"),
-    "attribute only when exactly one session is streaming",
-  )
-  assert.ok(!block.includes("getActiveTab()"), "must NOT fall back to the active tab — that was the cross-session leak")
+  assert.ok(block.includes("liveTabs.length === 1"), "attribute uniquely streaming tab")
+  assert.ok(block.includes("getActiveTab()"), "must check active tab as fallback")
+  assert.ok(block.includes("activeTab?.cliSessionId"), "active-tab fallback must require a CLI session")
   assert.ok(block.includes("Dropping sessionless file_edited"), "must log+drop ambiguous/idle sessionless edits")
 })
 

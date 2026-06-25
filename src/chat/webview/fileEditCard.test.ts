@@ -66,14 +66,23 @@ describe("fileEditCard", () => {
     assert.equal(el!.querySelector(".file-edit-card__status")?.textContent, "Running")
   })
 
-  it("renders a 'Show diff' action that posts to the host", async () => {
+  it("renders an inline diff when 'Show diff' is clicked", async () => {
     const { renderFileEditCard } = await import("./fileEditCard")
-    const messages: Record<string, unknown>[] = []
-    const el = renderFileEditCard(writeBlock(), { postMessage: (m) => messages.push(m) })
+    const el = renderFileEditCard(
+      writeBlock({
+        name: "edit",
+        args: { path: "src/foo.ts", oldString: "const x = 1", newString: "const x = 2" },
+      }),
+    )
     const btn = el!.querySelector(".file-edit-card__diff-btn") as HTMLButtonElement | null
     assert.ok(btn, "expected a Show diff button")
     btn!.click()
-    assert.deepEqual(messages, [{ type: "get_file_diff", path: "src/foo.ts", toolId: "write-1" }])
+    assert.equal(btn!.textContent, "Hide diff")
+    const diff = el!.querySelector(".file-edit-card__diff")
+    assert.ok(diff, "expected inline diff container")
+    assert.equal(diff!.children.length > 0, true, "expected inline diff lines")
+    assert.ok(diff!.textContent?.includes("const x = 1"))
+    assert.ok(diff!.textContent?.includes("const x = 2"))
   })
 
   it("renders an 'Open file' action that posts to the host", async () => {

@@ -9,6 +9,7 @@ export interface FileEditCardOptions {
 }
 
 const MAX_PREVIEW_LINES = 50
+const MAX_DIFF_LINES = 200
 
 /**
  * Renders a compact inline preview card for write-class file edits.
@@ -100,14 +101,24 @@ export function renderFileEditCard(
   const diffBtn = document.createElement("button")
   diffBtn.className = "file-edit-card__diff-btn file-edit-card__action"
   diffBtn.textContent = "Show diff"
+  const diffContainer = document.createElement("div")
+  diffContainer.className = "file-edit-card__diff"
+  diffContainer.style.display = "none"
   diffBtn.addEventListener("click", (e) => {
     e.stopPropagation()
     e.preventDefault()
-    postMessage?.({ type: "get_file_diff", path: filePath, toolId: toolBlock.id })
+    const isHidden = diffContainer.style.display === "none"
+    diffContainer.style.display = isHidden ? "block" : "none"
+    diffBtn.textContent = isHidden ? "Hide diff" : "Show diff"
+    if (isHidden && diffContainer.children.length === 0) {
+      const diff = buildInlineDiff(obj)
+      if (diff) diffContainer.appendChild(diff)
+    }
   })
   actions.appendChild(diffBtn)
 
   wrapper.appendChild(actions)
+  wrapper.appendChild(diffContainer)
 
   return wrapper
 }
@@ -180,6 +191,71 @@ function buildContentPreview(content: string): DocumentFragment {
     fragment.appendChild(more)
   }
   return fragment
+}
+
+/**
+ * Build an inline unified diff from the tool arguments. This gives the user
+ * an actual diff view in the file-edit card instead of relying on the host
+ * file_diff_response, which is only wired to the changed-files dropdown.
+ */
+function buildInlineDiff(obj: Record<string, unknown>): HTMLElement | null {
+  const oldStr = firstStringField(obj, ["oldString", "old_string", "old", "search"])
+  const newStr = firstStringField(obj, ["newString", "new_string", "new", "replace"])
+  const content = firstStringField(obj, ["content", "contents", "text", "fileText"])
+
+  const lines: Array<{ text: string; kind: "context" | "added" | "removed" }> = []
+
+  if (oldStr !== null || newStr !== null) {
+    const oldLines = (oldStr ?? "").split("\n")
+    const newLines = (newStr ?? "").split("\n")
+    const maxLen = Math.max(oldLines.length, newLines.length)
+    for (let i = 0; i < maxLen; i++) {
+      const oldLine = oldLines[i]
+      const newLine = newLines[i]
+      if (oldLine !== undefined && oldLine !== newLine) {
+        lines.push({ text: oldLine, kind: "removed" })
+      }
+      if (newLine !== undefined && oldLine !== newLine) {
+        lines.push({ text: newLine, kind: "added" })
+      }
+      if (oldLine === newLine && oldLine !== undefined) {
+        lines.push({ text: oldLine, kind: "context" })
+      }
+    }
+  } else if (content !== null) {
+    content.split("\n").forEach((line) => lines.push({ text: line, kind: "added" }))
+  } else {
+    return null
+  }
+
+  const container = document.createElement("div")
+  container.className = "file-edit-card__diff-lines"
+  const visible = lines.slice(0, MAX_DIFF_LINES)
+  for (const line of visible) {
+    container.appendChild(createDiffLine(line.text, line.kind))
+  }
+  if (lines.length > MAX_DIFF_LINES) {
+    const more = document.createElement("div")
+    more.className = "file-edit-card__diff-more"
+    more.textContent = `+ ${lines.length - MAX_DIFF_LINES} more lines`
+    container.appendChild(more)
+  }
+  return container
+}
+
+function createDiffLine(text: string, kind: "context" | "added" | "removed"): HTMLDivElement {
+  const line = document.createElement("div")
+  line.className = `file-edit-card__diff-line file-edit-card__diff-line--${kind}`
+  const marker = document.createElement("span")
+  marker.className = "file-edit-card__diff-marker"
+  marker.setAttribute("aria-hidden", "true")
+  marker.textContent = kind === "removed" ? "-" : kind === "added" ? "+" : " "
+  const content = document.createElement("span")
+  content.className = "file-edit-card__diff-content"
+  content.textContent = escapeHtml(text) || " "
+  line.appendChild(marker)
+  line.appendChild(content)
+  return line
 }
 
 function createPreviewLine(text: string, kind: "context" | "added" | "removed"): HTMLDivElement {
