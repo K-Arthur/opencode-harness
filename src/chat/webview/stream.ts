@@ -1,7 +1,5 @@
 import type { ChatMessage } from "../../types"
 import type { ScrollAnchor } from "./scrollAnchor"
-import { renderMessage } from "./messageRenderer"
-import type { SdkMessageEvent } from "../../types"
 import type { DiffHunk, RunActivitySnapshot, ToolCallBlock, ToolCallState } from "./types"
 import type { ErrorContext } from "./errorTypes"
 import type { LiveToolOutput } from "./toolPartialStore"
@@ -172,7 +170,7 @@ class StreamSession implements StreamHandlers {
   }
 
   handleToolStart(toolCall: { id: string; name: string; class?: string; args?: unknown; state?: ToolCallState }): void {
-    handleToolStart(this.state, this.els, this.messages, toolCall, this.callbacks?.postMessage)
+    handleToolStart(this.state, this.els, this.messages, toolCall, this.callbacks?.postMessage, this.callbacks)
   }
 
   handleToolUpdate(toolId: string, update: { state?: ToolCallState; result?: string; error?: string; args?: unknown }): void {
