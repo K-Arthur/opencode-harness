@@ -90,6 +90,7 @@ import type { VoiceInputSettings } from "../voiceInputCore"
 import { TimestampUpdater } from "./timestampUpdater"
 import { createTodosModule } from "./todosModule"
 import { createSubagentsModule } from "./subagentsModule"
+import { setupPanels, type PanelSetupAPI } from "./panelSetup"
 
 declare const acquireVsCodeApi: (() => {
   postMessage(message: Record<string, unknown>): void
@@ -188,8 +189,18 @@ function getVsCodeApi() {
   els.promptInput.dataset.testid = els.promptInput.dataset.testid || "prompt-input"
   els.sendBtn.dataset.testid = els.sendBtn.dataset.testid || "send-button"
 
-  // Core UI modules
-  let modelManager: ReturnType<typeof setupModelManager>
+  // Core UI modules (created by setupPanels)
+  let modelManager!: ReturnType<typeof setupModelManager>
+  let modelDropdown!: ReturnType<typeof setupModelDropdown>
+  let variantSelector!: ReturnType<typeof setupVariantSelector>
+  let tabBar!: ReturnType<typeof createTabBar>
+  let mcpConfig!: ReturnType<typeof setupMcpConfig>
+  let syncModelViews!: () => void
+
+  // Created by wire functions inside setupPanels
+  let streamOrchestrator!: import("./streamOrchestrator").StreamOrchestratorAPI
+  let timeline!: import("./timeline").TimelineAPI
+  let composer!: import("./composer").ComposerAPI
   
   // Panel APIs
   let todosPanelApi: ReturnType<typeof setupTodosPanel> | null = null
@@ -264,163 +275,57 @@ function getVsCodeApi() {
   const subagentDismissedBySession = subagentsApi.subagentDismissedBySession
   const knownSubagentIdsBySession = subagentsApi.knownSubagentIdsBySession
 
-  const modelDropdown = setupModelDropdown(els, {
-    onOpen: () => {
-      vscode.postMessage({ type: "get_models" })
-    },
- 	    onSelect: (modelId) => {
- 	      // Always update global preference + UI, regardless of whether a session is active.
- 	      // This allows model selection to work on the welcome screen before any session exists.
- 	      stateManager.setGlobalModel(modelId)
- 	      modelDropdown.setCurrentModel(modelId)
- 	      syncModelViews()
- 	      const model = modelManager.getEnabledModels().find((m) => `${m.provider}/${m.id}` === modelId)
- 	      variantSelector.setModel(model || null)
- 	      const active = stateManager.getActiveSession()
- 	      if (active) {
- 	        stateManager.setSessionModel(active.id, modelId)
- 	        vscode.postMessage({ type: "set_model", model: modelId, sessionId: active.id })
- 	      } else {
- 	        vscode.postMessage({ type: "set_model", model: modelId })
- 	      }
-    },
-    onManageModels: () => {
-      surfaceCoord?.closeOthers("model-manager-panel")
-      modelManager.open()
-      vscode.postMessage({ type: "get_models" })
-    },
-  })
-
-  modelManager = setupModelManager(els, {
-	    onToggleModel: (modelId, enabled) => {
-	      modelManager.updateModelEnabled(modelId, enabled)
-	      stateManager.setModelDisabled(modelId, !enabled)
-	      vscode.postMessage({ type: "model_toggle", modelId, enabled })
-	      syncModelViews()
-	    },
-	    onToggleFavorite: (modelId) => {
-	      const favorite = stateManager.toggleModelFavorite(modelId)
-	      modelManager.updateModelFavorite(modelId, favorite)
-	      vscode.postMessage({ type: "model_favorite", modelId })
-	      syncModelViews()
-	    },
-	    onSelectModel: (modelId) => {
-	      const active = stateManager.getActiveSession()
-	      if (active) {
-	        stateManager.setSessionModel(active.id, modelId)
-	      }
-	      stateManager.setGlobalModel(modelId)
-	      modelDropdown.setCurrentModel(modelId)
-	      syncModelViews()
-	      const model = modelManager.getAllModels().find((m) => `${m.provider}/${m.id}` === modelId)
-	      variantSelector.setModel(model || null)
-	      vscode.postMessage({ type: "set_model", model: modelId, sessionId: active?.id })
-	      modelManager.close()
-	    },
-		onConnectProvider: () => {
-			openProviderPanel()
-			vscode.postMessage({ type: "discover_providers" })
-			vscode.postMessage({ type: "list_provider_credentials" })
-		},
-		onDeleteProvider: (id: string) => {
-			vscode.postMessage({ type: "delete_provider", id })
-		},
-	})
-
-	  // Make the error-display action buttons functional. Previously these clicks
-	  // only hit a console.log; now they dispatch to real host/local behaviour.
-	  const errorActionHandler = (action: { label: string; action: string; primary?: boolean; metadata?: Record<string, unknown> }) => {
-	    const url = action.metadata && typeof action.metadata.url === "string" ? action.metadata.url : undefined
-	    if (url) {
-	      vscode.postMessage({ type: "open_url", url })
-	      return
-	    }
-	    switch (action.action) {
-	      case "retry":
-	      case "regenerate":
-	      case "wait_for_reset": {
-	        const sid = stateManager.getState().activeSessionId
-	        if (sid) vscode.postMessage({ type: "retry_stream", sessionId: sid })
-	        break
-	      }
+  const errorActionHandler = (action: { label: string; action: string; primary?: boolean; metadata?: Record<string, unknown> }) => {
+    const url = action.metadata && typeof action.metadata.url === "string" ? action.metadata.url : undefined
+    if (url) {
+      vscode.postMessage({ type: "open_url", url })
+      return
+    }
+    switch (action.action) {
+      case "retry":
+      case "regenerate":
+      case "wait_for_reset": {
+        const sid = stateManager.getState().activeSessionId
+        if (sid) vscode.postMessage({ type: "retry_stream", sessionId: sid })
+        break
+      }
       case "switch_model":
       case "pick_model":
-        surfaceCoord?.closeOthers("model-manager-panel")
-        modelManager.open()
-	        vscode.postMessage({ type: "get_models" })
-	        break
-	      case "edit":
-	        openProviderPanel()
-	        vscode.postMessage({ type: "discover_providers" })
-	        vscode.postMessage({ type: "list_provider_credentials" })
-	        break
-	      case "dismiss": {
-	        const sid = stateManager.getState().activeSessionId
-	        if (sid) {
-	          const session = stateManager.getSession(sid)
-	          if (session) {
-	            const errIdx = session.messages.findIndex(m => m.role === "system" && m.blocks?.[0]?.type === "error")
-	            if (errIdx >= 0) {
-	              session.messages.splice(errIdx, 1)
-	              stateManager.save()
-	              const msgList = getActiveMessageList(els)
-	              if (msgList) {
-	                const errEl = msgList.querySelector(".msg-error")?.closest("[data-message-id]") as HTMLElement | null
-	                if (errEl) errEl.remove()
-	              }
-	            }
-	          }
-	        }
-	        break
-	      }
-	    }
-	  }
-	  setCompsErrorActionHandler(errorActionHandler)
-	  setRendererErrorActionHandler(errorActionHandler)
-
-	  const variantSelector = setupVariantSelector(els, {
-    onSelect: (variant) => {
-      const normalized = variant === "Default" ? "" : variant
-      stateManager.setGlobalVariant(normalized)
-      const active = stateManager.getActiveSession()
-      if (active) {
-        stateManager.setSessionVariant(active.id, normalized)
-        vscode.postMessage({ type: "set_variant", variant: normalized, sessionId: active.id })
+        vscode.postMessage({ type: "get_models" })
+        break
+      case "edit":
+        openProviderPanel()
+        vscode.postMessage({ type: "discover_providers" })
+        vscode.postMessage({ type: "list_provider_credentials" })
+        break
+      case "dismiss": {
+        const sid = stateManager.getState().activeSessionId
+        if (sid) {
+          const session = stateManager.getSession(sid)
+          if (session) {
+            const errIdx = session.messages.findIndex(m => m.role === "system" && m.blocks?.[0]?.type === "error")
+            if (errIdx >= 0) {
+              session.messages.splice(errIdx, 1)
+              stateManager.save()
+              const msgList = getActiveMessageList(els)
+              if (msgList) {
+                const errEl = msgList.querySelector(".msg-error")?.closest("[data-message-id]") as HTMLElement | null
+                if (errEl) errEl.remove()
+              }
+            }
+          }
+        }
+        break
       }
-    },
-	  })
-
-  function syncModelViews(models = modelManager.getAllModels()) {
-    const modelsWithState = stateManager.applyModelState(models)
-    // The render's checkmark follows the ACTIVE session's model when one is
-    // present; only fall back to the global default on the welcome screen.
-    // Using globalModel unconditionally made compaction / cross-window
-    // model pushes flip the picker off the model the user had chosen for
-    // the current session.
-    const active = stateManager.getActiveSession()
-    const currentModel = active?.model || stateManager.getState().globalModel
-    modelManager.setModels(modelsWithState)
-    modelDropdown.render(modelsWithState, currentModel)
+    }
   }
-
-  const mcpConfig = setupMcpConfig(els, {
-    onAddServer: (name, config) => vscode.postMessage({ type: "add_mcp_server", name, config }),
-    onUpdateServer: (name, config) => vscode.postMessage({ type: "update_mcp_server", name, config }),
-    onRemoveServer: (name) => vscode.postMessage({ type: "remove_mcp_server", name }),
-    onToggleServer: (name, disabled) => vscode.postMessage({ type: "toggle_mcp_server", name, disabled }),
-    onClose: () => {},
-  })
 
   let cfDropdownApi: { updateChangedFiles: typeof updateChangedFiles; handleDiffResponse: typeof handleCfDiffResponse; setCurrentSession: typeof setCfCurrentSession } | null = null
   let ctxDropdownApi: { updateUsage: typeof updateCtxDropdown } | null = null
   let _contextUsageRafId: number | undefined
   let surfaceCoord: SurfaceCoordinator | null = null
 
-  const tabBar = createTabBar(els, {
-    onSwitch: (tabId) => switchTab(tabId),
-    onClose: (tabId) => closeTab(tabId),
-    onNew: () => createNewTab(),
-  })
+  // tabBar is created by setupPanels in init()
 
   // Streaming state per session
   const streamHandlers = new Map<string, ReturnType<typeof createStreamHandlers>>()
@@ -460,14 +365,6 @@ function getVsCodeApi() {
     title: string
   }>()
 
-  const mention = setupMentions(
-    els,
-    { query: "", selectedIndex: -1, mode: "mention" as const },
-    (msg) => vscode.postMessage(msg),
-    () => attachmentManager.getWorkspaceFiles(),
-    (path) => attachmentManager.addPickedFile(path)
-  )
-
   // ── Commands palette (full modal). Triggered by /commands, Ctrl+/, or list_stashes flow.
   // Local entries mirror the in-prompt slash switch below so any future addition is one-stop.
   // Local slash commands live in the canonical registry (slash-commands.ts)
@@ -487,6 +384,14 @@ function getVsCodeApi() {
     composer.insertIntoPrompt(text)
   }
 
+  const mention = setupMentions(
+    els,
+    { query: "", selectedIndex: -1, mode: "mention" as const },
+    (msg) => vscode.postMessage(msg),
+    () => attachmentManager.getWorkspaceFiles(),
+    (path) => attachmentManager.addPickedFile(path),
+  )
+
   const commandsModal = setupCommandsModal({
     commandsModal: els.commandsModal,
     commandsList: els.commandsList,
@@ -500,7 +405,6 @@ function getVsCodeApi() {
     onRun: (entry) => runCommandEntry(entry),
     onInsert: (text) => insertIntoPrompt(text),
     onUseStash: (stash) => {
-      // Insert the stash content into the prompt for review before sending.
       insertIntoPrompt(stash.content)
     },
     onDeleteStash: (id) => vscode.postMessage({ type: "delete_stash", id }),
@@ -523,7 +427,6 @@ function getVsCodeApi() {
     getActiveSession: () => stateManager.getActiveSession(),
   })
 
-  // Set up drag-and-drop file upload on the entire app container
   setupDragDrop({
     els: {
       app: els.app,
@@ -541,15 +444,11 @@ function getVsCodeApi() {
 
   /* ─── STREAM ORCHESTRATOR ─── */
 
-  let streamOrchestrator!: StreamOrchestratorAPI
-
   function wireStreamOrchestrator() {
     streamOrchestrator = createStreamOrchestrator({
       vscode,
       els,
       streamHandlers,
-      // Bridges to StreamOrchestratorDeps' narrower shapes (same pattern as the
-      // ComposerDeps note below). Tracked, not blind-fixed — see repo any policy.
       /* eslint-disable @typescript-eslint/no-explicit-any */
       getState: () => stateManager.getState() as any,
       getSession: (id) => stateManager.getSession(id) as any,
@@ -583,8 +482,6 @@ function getVsCodeApi() {
     })
   }
 
-  let timeline!: TimelineAPI
-
   function wireTimeline() {
     timeline = createTimeline({
       els,
@@ -610,17 +507,8 @@ function getVsCodeApi() {
     })
   }
 
-  let composer!: ComposerAPI
-
   function wireComposer() {
     composer = createComposer({
-      // NOTE: these `as any` casts bridge main.ts's concrete objects to
-      // createComposer's intentionally-narrower ComposerDeps interface (e.g.
-      // ComposerDeps.vscode.getState is generic `<T>()`, modelDropdown/tabBar/
-      // updateAgentStatus use looser signatures). Removing them surfaces real
-      // structural mismatches — proper resolution is to align ComposerDeps with
-      // these concrete types (a reviewed cross-module refactor), per the repo's
-      // "no-explicit-any needs review, not blind-fix" policy. Tracked, not blind-fixed.
       /* eslint-disable @typescript-eslint/no-explicit-any */
       els: els as any,
       vscode: vscode as any,
@@ -768,6 +656,23 @@ function getVsCodeApi() {
       return
     }
     try {
+      // Create all panel-level UI modules (model dropdown, composer, etc.)
+      const panelApi = setupPanels({
+        els: els as any,
+        vscode,
+        stateManager: stateManager as any,
+        openProviderPanel,
+        onTabSwitch: (tabId) => switchTab(tabId),
+        onTabClose: (tabId) => closeTab(tabId),
+        onTabNew: () => createNewTab(),
+      })
+      modelDropdown = panelApi.modelDropdown
+      modelManager = panelApi.modelManager
+      variantSelector = panelApi.variantSelector
+      tabBar = panelApi.tabBar
+      mcpConfig = panelApi.mcpConfig
+      syncModelViews = panelApi.syncModelViews
+
       setupCoreInteractionControls()
       setupSessionUtilities()
       setupTodoSkillAndSubagentPanels()
