@@ -85,6 +85,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to 790KB to account for legitimate first-party growth; paydown levers
   (SDK-gen tree-shaking, moving highlight.js off the main webview bundle) are
   documented. (`scripts/check-bundle-size.mjs`)
+- **Split CI visual job** into separate `visual` and `webview` jobs to avoid the
+  combined Playwright suite timing out and to isolate failure domains.
+  (`.github/workflows/ci.yml`)
 
 ### Fixed
 
@@ -95,6 +98,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with `ALLOWED_DOCUMENT_MIMES` and `DOCUMENT_ICONS` validation. (`attachments.ts`)
 - **Resolved failing visual regression tests** across activity panel,
   context-usage, compact tool blocks, and subagent panel fixtures. (`tests/visual/`)
+- **Fixed webview E2E selectors** for the compact changed-files strip, inline
+  changed-files panel, error-tier routing (Tier A/B/C surfaces), and question-bar
+  fallback controls. (`tests/webview/`)
+- **Wired stream callbacks through `handleToolStart`** so live question-tool blocks
+  can post answers back to the host during streaming. (`src/chat/webview/stream.ts`)
 - **Prefer ESM entry over UMD for node bundling** to avoid duplicate module
   evaluation and smaller host bundle. (`esbuild.js`)
 - **Resolved lint and structural test failures** across `main.ts`,
