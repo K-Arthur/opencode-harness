@@ -42,12 +42,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inclusion). The chip renders an eye/eye-off toggle button.
 - **Pill-style document attachments** — non-image attachment chips now use a
   compact pill layout with an inline icon, matching the context chip style.
-- **Drag-and-drop overlay reliability** — added `forceHideOverlay()` and an
-  emergency hide timeout; `dragleave` now checks `isOutsideApp()` before
-  decrementing the counter, preventing the overlay from flickering or
-  sticking when dragging within the app container.
+- **Drag-and-drop overlay reliability** — `forceHideOverlay()` plus a 3 s
+  emergency hide timeout, a window-exit fallback, and a symmetric
+  enter/leave counter so the "Drop files here" overlay dismisses correctly
+  on drop and when the cursor leaves the panel. `setupDragDrop()` is now
+  idempotent to avoid stacked, competing listeners.
+- **Activity-bar running indicator** — the OpenCode activity-bar icon shows a
+  badge while any session is streaming (`WebviewView.badge`, driven by
+  `TabManager.onStreamingStateChanged`) and clears when all runs finish.
 
 ### Fixed
+
+- **Active-file context pill never appeared** — `ActiveFileTracker.start()`
+  posts the current file during `resolveWebviewView`, before the webview has
+  registered its message handlers, and `active_file` is a passthrough message
+  (not queued), so the only post was dropped. The host now re-posts via
+  `ActiveFileTracker.repost()` from the `webview_ready` handler, so the pill +
+  eye toggle render on first open (and after reconnect), not just after
+  switching editors.
+- **Drag overlay could stick on screen** — `dragenter` incremented the counter
+  on every child element entered while `dragleave` only decremented when
+  leaving the app bounds, so the counter leaked upward and never reached zero.
+  Replaced with a canonical symmetric counter; the overlay now hides reliably
+  when the drag leaves the panel or completes.
+- **Context chip remove (×) button unstyled** — `.context-chip-remove` had no
+  visual CSS (only accessibility sizing) and rendered with native button
+  chrome. It now matches `.context-chip-toggle` (transparent, muted, hover
+  feedback) using theme tokens.
+- **"Send to OpenCode" from a problem never showed** — the action was
+  contributed to `problems/context`, which is not a valid VS Code menu point
+  (markers have no extensible context menu), so it was silently dropped. It is
+  now surfaced as a Quick Fix via a `CodeActionProvider` on diagnostics —
+  reachable from the editor lightbulb and the Problems-panel "Quick Fix…"
+  affordance — invoking the existing `sendProblemToOpencode` command.
+- **Active-file inclusion single-sourced** — removed the unused host-side
+  inclusion API (`includeState`, `handleToggleActiveFile`, `isIncluded`,
+  `getActiveFileContent`) and the parallel `contextTray` toggle that posted an
+  empty `sessionId`. Inclusion is gated solely in the webview via the `@file:`
+  mention, which the opencode server resolves into file content.
 
 - **Status bar preserves "running" on reconnect** — the
   `event_stream_reconnected` handler no longer unconditionally overwrites the

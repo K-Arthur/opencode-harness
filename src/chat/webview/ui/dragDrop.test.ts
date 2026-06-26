@@ -5,9 +5,11 @@
 import assert from "node:assert"
 import { describe, it, mock, beforeEach, afterEach } from "node:test"
 import type { Mock } from "node:test"
+import { JSDOM } from "jsdom"
 import { setupDragDrop, type DragDropDeps } from "./dragDrop"
 
 describe("dragDrop module", () => {
+  let dom: JSDOM
   let mockApp: HTMLElement
   let mockInputArea: HTMLElement
   let mockPostMessage: Mock<(msg: Record<string, unknown>) => void>
@@ -16,6 +18,28 @@ describe("dragDrop module", () => {
   let mockAddPickedFile: Mock<(path: string) => void>
 
   beforeEach(() => {
+    dom = new JSDOM("<!DOCTYPE html><body></body>")
+    const win = dom.window
+    globalThis.document = win.document
+    ;(globalThis as unknown as { window: unknown }).window = win
+    // jsdom does not implement DragEvent; provide a minimal shim that carries
+    // the fields the handlers read (relatedTarget, dataTransfer) on top of the
+    // jsdom Event (which supplies preventDefault/stopPropagation + dispatch).
+    class DragEventShim extends win.Event {
+      relatedTarget: EventTarget | null
+      dataTransfer: DataTransfer | null
+      constructor(
+        type: string,
+        init: { bubbles?: boolean; cancelable?: boolean; relatedTarget?: EventTarget | null; dataTransfer?: DataTransfer | null } = {},
+      ) {
+        super(type, init)
+        this.relatedTarget = init.relatedTarget ?? null
+        this.dataTransfer = init.dataTransfer ?? null
+      }
+    }
+    ;(globalThis as unknown as { DragEvent: unknown }).DragEvent = DragEventShim
+    ;(win as unknown as { DragEvent: unknown }).DragEvent = DragEventShim
+
     mockApp = document.createElement("div")
     mockApp.id = "app"
     document.body.appendChild(mockApp)
@@ -31,7 +55,9 @@ describe("dragDrop module", () => {
   })
 
   afterEach(() => {
-    document.body.innerHTML = ""
+    // Close jsdom so its pending timers (e.g. the 3s emergency hide) don't leak
+    // into later tests or keep the process alive.
+    dom.window.close()
   })
 
   function makeDeps(): DragDropDeps {
@@ -120,10 +146,8 @@ describe("dragDrop module", () => {
   it("should process image files from external drag", () => {
     setupDragDrop(makeDeps())
 
-    // Create mock file
-    const mockFile = new Blob(["test"], { type: "image/png" }) as any
-    mockFile.name = "test.png"
-    mockFile.size = 1024
+    // Plain File-like object (Node's Blob.size is read-only, so we can't mutate one)
+    const mockFile = { type: "image/png", name: "test.png", size: 1024 } as unknown as File
 
     const mockDataTransfer = {
       types: [],
@@ -146,10 +170,7 @@ describe("dragDrop module", () => {
   it("should process document files from external drag", () => {
     setupDragDrop(makeDeps())
 
-    // Create mock file
-    const mockFile = new Blob(["test"], { type: "application/json" }) as any
-    mockFile.name = "test.json"
-    mockFile.size = 1024
+    const mockFile = { type: "application/json", name: "test.json", size: 1024 } as unknown as File
 
     const mockDataTransfer = {
       types: [],
@@ -173,10 +194,8 @@ describe("dragDrop module", () => {
   it("should show error for oversized files", () => {
     setupDragDrop(makeDeps())
 
-    // Create mock file larger than 10MB
-    const mockFile = new Blob(["test"], { type: "image/png" }) as any
-    mockFile.name = "huge.png"
-    mockFile.size = 11 * 1024 * 1024
+    // File-like object larger than 10MB
+    const mockFile = { type: "image/png", name: "huge.png", size: 11 * 1024 * 1024 } as unknown as File
 
     const mockDataTransfer = {
       types: [],
@@ -200,10 +219,7 @@ describe("dragDrop module", () => {
   it("should show error for unsupported file types", () => {
     setupDragDrop(makeDeps())
 
-    // Create mock file with unsupported type
-    const mockFile = new Blob(["test"], { type: "application/zip" }) as any
-    mockFile.name = "test.zip"
-    mockFile.size = 1024
+    const mockFile = { type: "application/zip", name: "test.zip", size: 1024 } as unknown as File
 
     const mockDataTransfer = {
       types: [],
@@ -273,30 +289,43 @@ describe("dragDrop module", () => {
     assert.ok(!document.querySelector(".drop-overlay"), "Overlay should be removed immediately on drop")
   })
 
-  it("should not decrement counter on dragleave when related target is inside app", () => {
+  it("keeps overlay visible while moving across child elements (paired enter/leave)", () => {
     setupDragDrop(makeDeps())
 
-    // Create a child element inside app
     const child = document.createElement("div")
     mockApp.appendChild(child)
 
-    // Trigger dragenter
-    const dragEnterEvent = new DragEvent("dragenter", {
-      bubbles: true,
-      cancelable: true,
-    })
-    mockApp.dispatchEvent(dragEnterEvent)
+    // Drag enters the app → counter 1, overlay shown.
+    mockApp.dispatchEvent(new DragEvent("dragenter", { bubbles: true, cancelable: true }))
+    assert.ok(document.querySelector(".drop-overlay"), "overlay visible after entering app")
 
-    // Trigger dragleave to child (relatedTarget is child, which is inside app)
-    const dragLeaveEvent = new DragEvent("dragleave", {
-      bubbles: true,
-      cancelable: true,
-      relatedTarget: child,
-    })
-    mockApp.dispatchEvent(dragLeaveEvent)
+    // Real browsers fire dragenter on the child BEFORE dragleave on the parent,
+    // so the counter goes 1 → 2 → 1 and never reaches zero mid-panel.
+    child.dispatchEvent(new DragEvent("dragenter", { bubbles: true, cancelable: true }))
+    mockApp.dispatchEvent(new DragEvent("dragleave", { bubbles: true, cancelable: true, relatedTarget: child }))
 
-    // Overlay should still be visible (counter not decremented)
-    assert.ok(document.querySelector(".drop-overlay"), "Overlay should remain visible when dragleave to child")
+    assert.ok(document.querySelector(".drop-overlay"), "overlay remains while traversing children")
+  })
+
+  it("hides overlay after traversing children and then leaving the panel (no counter leak)", () => {
+    setupDragDrop(makeDeps())
+
+    const child = document.createElement("div")
+    mockApp.appendChild(child)
+
+    // Enter the app, then traverse several children. Each move is a paired
+    // enter(child) + leave(parent), so the counter stays at 1 — it must NOT
+    // leak upward (the old bug that left the overlay permanently stuck).
+    mockApp.dispatchEvent(new DragEvent("dragenter", { bubbles: true, cancelable: true }))
+    for (let i = 0; i < 3; i++) {
+      child.dispatchEvent(new DragEvent("dragenter", { bubbles: true, cancelable: true }))
+      mockApp.dispatchEvent(new DragEvent("dragleave", { bubbles: true, cancelable: true, relatedTarget: child }))
+    }
+    assert.ok(document.querySelector(".drop-overlay"), "overlay still visible mid-drag")
+
+    // Cursor leaves the panel entirely → counter reaches 0 → overlay hides.
+    mockApp.dispatchEvent(new DragEvent("dragleave", { bubbles: true, cancelable: true, relatedTarget: document.body }))
+    assert.ok(!document.querySelector(".drop-overlay"), "overlay hidden once the drag leaves the panel")
   })
 
   it("should hide overlay on document-level dragleave (window exit)", () => {
@@ -321,28 +350,25 @@ describe("dragDrop module", () => {
     assert.ok(!document.querySelector(".drop-overlay"), "Overlay should be removed on document dragleave")
   })
 
-  it("should trigger emergency hide timeout after dragleave outside app", () => {
+  it("self-heals via emergency timeout if a drag goes silent with the counter still positive", () => {
     setupDragDrop(makeDeps())
 
-    // Trigger dragenter to show overlay
-    const dragEnterEvent = new DragEvent("dragenter", {
-      bubbles: true,
-      cancelable: true,
-    })
-    mockApp.dispatchEvent(dragEnterEvent)
+    const child = document.createElement("div")
+    mockApp.appendChild(child)
 
-    // Trigger dragleave outside app
-    const dragLeaveEvent = new DragEvent("dragleave", {
-      bubbles: true,
-      cancelable: true,
-      relatedTarget: document.body, // Outside app
-    })
-    mockApp.dispatchEvent(dragLeaveEvent)
+    // Enter app (counter 1) then enter a child (counter 2), then a single
+    // dragleave (counter 1). The counter is still > 0, so the overlay stays —
+    // but if the drag now goes silent (no drop, no further events), the 3s
+    // emergency timeout must remove it so it can never get stuck.
+    mockApp.dispatchEvent(new DragEvent("dragenter", { bubbles: true, cancelable: true }))
+    child.dispatchEvent(new DragEvent("dragenter", { bubbles: true, cancelable: true }))
+    mockApp.dispatchEvent(new DragEvent("dragleave", { bubbles: true, cancelable: true, relatedTarget: child }))
 
-    // Overlay should be removed after emergency timeout (3s)
+    assert.ok(document.querySelector(".drop-overlay"), "overlay still visible while counter > 0")
+
     return new Promise((resolve) => {
       setTimeout(() => {
-        assert.ok(!document.querySelector(".drop-overlay"), "Overlay should be removed by emergency timeout")
+        assert.ok(!document.querySelector(".drop-overlay"), "Overlay removed by emergency timeout")
         resolve(undefined)
       }, 3100)
     })

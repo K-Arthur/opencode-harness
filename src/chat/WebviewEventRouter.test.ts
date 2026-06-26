@@ -127,6 +127,10 @@ describe("WebviewEventRouter host state sync", () => {
       !handler.includes("statePush.pushAllStateToWebview()"),
       "webview_ready must not send a push_all_state message back to the webview",
     )
+    assert.ok(
+      handler.includes("activeFileTracker?.repost()"),
+      "webview_ready must re-post the active file so the context pill appears on first open (the eager post in start() races ahead of webview wiring)",
+    )
   })
 
   it("request_state_sync asks ChatProvider to push visible host state directly", () => {

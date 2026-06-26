@@ -88,7 +88,9 @@ export function createContextTrayManager(deps: ContextTrayDeps) {
     if (item) {
       item.isActive = include
     }
-    deps.postMessage({ type: "toggle_active_file", sessionId: "", include })
+    // Inclusion is gated webview-side (see attachments.ts `isActiveFileIncluded`);
+    // the host keeps no per-session inclusion state, so no message is posted here.
+    // This avoids the prior empty-`sessionId` post and keeps a single toggle path.
     render()
   }
 

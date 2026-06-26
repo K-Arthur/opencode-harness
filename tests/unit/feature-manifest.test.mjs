@@ -174,9 +174,10 @@ const EXPECTED_EXPLORER_CONTEXT_COMMANDS = [
   "opencode-harness.addFileToSession",
 ]
 
-const EXPECTED_PROBLEMS_CONTEXT_COMMANDS = [
-  "opencode-harness.sendProblemToOpencode",
-]
+// "problems/context" is NOT a valid VS Code menu contribution point — VS Code
+// does not expose a context menu for Problems-panel markers, so any entry there
+// is silently dropped (the bug that made "Send to OpenCode" never appear). The
+// action is now surfaced via a CodeActionProvider registered in src/extension.ts.
 
 const EXPECTED_ACTIVATION_EVENTS = [
   "onStartupFinished",
@@ -336,14 +337,20 @@ describe("Feature Manifest — explorer context menu", () => {
   }
 })
 
-const pkgProblemsContext = pkg.contributes.menus["problems/context"] ?? []
-describe("Feature Manifest — problems context menu", () => {
-  const problemsCommands = new Set(pkgProblemsContext.map((m) => m.command))
-  for (const cmd of EXPECTED_PROBLEMS_CONTEXT_COMMANDS) {
-    it(`problems/context includes "${cmd}"`, () => {
-      assert.ok(problemsCommands.has(cmd), `Missing problems/context entry: ${cmd}`)
-    })
-  }
+describe("Feature Manifest — problems action surfacing", () => {
+  it("does not use the invalid problems/context menu point", () => {
+    assert.ok(
+      !("problems/context" in pkg.contributes.menus),
+      'problems/context is not a real VS Code menu id; "Send to OpenCode" must be surfaced via a CodeActionProvider, not this menu',
+    )
+  })
+  it("still declares the sendProblemToOpencode command for the code action to invoke", () => {
+    const commandIds = new Set(pkg.contributes.commands.map((c) => c.command))
+    assert.ok(
+      commandIds.has("opencode-harness.sendProblemToOpencode"),
+      "sendProblemToOpencode command must remain declared so the Quick Fix can invoke it",
+    )
+  })
 })
 
 describe("Feature Manifest — activation events", () => {

@@ -823,6 +823,36 @@ function registerCoreCommands(
       }
     })
   )
+
+  // Surface "Send to OpenCode" as a Quick Fix on diagnostics. VS Code does not
+  // expose a context menu for Problems-panel markers, so a code action is the
+  // reliable way to reach this from a problem: it appears on the editor
+  // lightbulb and via the "Quick Fix…" affordance on a Problems-panel entry.
+  context.subscriptions.push(
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: "file" },
+      {
+        provideCodeActions(document, range, ctx) {
+          const diagnostics = ctx.diagnostics.length > 0
+            ? ctx.diagnostics
+            : vscode.languages
+                .getDiagnostics(document.uri)
+                .filter((d) => d.range.intersection(range) !== undefined)
+          const diagnostic = diagnostics[0]
+          if (!diagnostic) return undefined
+          const action = new vscode.CodeAction("Send to OpenCode", vscode.CodeActionKind.QuickFix)
+          action.diagnostics = [diagnostic]
+          action.command = {
+            command: "opencode-harness.sendProblemToOpencode",
+            title: "Send to OpenCode",
+            arguments: [{ resource: document.uri, diagnostics: [diagnostic] }],
+          }
+          return [action]
+        },
+      },
+      { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] },
+    )
+  )
 }
 
 function initMethodology(context: vscode.ExtensionContext): vscode.StatusBarItem {

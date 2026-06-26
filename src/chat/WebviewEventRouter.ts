@@ -1050,10 +1050,12 @@ export class WebviewEventRouter {
     }],
     ["mention_search", async (msg: Record<string, unknown>) => { await this.opts.messageRouter.handleMentionSearch(msg.query as string || "", { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) }) }],
     ["get_workspace_files", () => { this.opts.workspaceFileIndex?.handleGetFiles() }],
-    ["toggle_active_file", (msg: Record<string, unknown>) => {
-      const sid = typeof msg.sessionId === "string" ? msg.sessionId : ""
-      const include = msg.include === true
-      this.opts.activeFileTracker?.handleToggleActiveFile(sid, include)
+    ["toggle_active_file", () => {
+      // Active-file inclusion is gated entirely in the webview via
+      // `isActiveFileIncluded()` (it controls whether the `@file:` mention is
+      // prepended to the prompt). The host keeps no inclusion state, so this
+      // message needs no host-side handling — the handler exists only so the
+      // message is recognised and not logged as unknown.
     }],
     ["list_sessions", async (msg: Record<string, unknown>) => { await this.opts.messageRouter.handleListSessions(this.opts.sessionStore, { postMessage: (m) => this.opts.postMessage(m), postRequestError: (m) => this.opts.postRequestError(m) }, typeof msg.query === "string" ? msg.query : "") }],
     ["resume_session", async (msg: Record<string, unknown>) => { if (msg.sessionId) await this.opts.sessionLifecycle.handleResumeSession(msg.sessionId as string) }],
@@ -1097,6 +1099,11 @@ export class WebviewEventRouter {
       this.webviewReady = true
       this.opts.pushAllStateToWebview()
       this.opts.workspaceFileIndex?.handleGetFiles()
+      // Re-deliver the active file now that the webview's handlers exist. The
+      // eager post in ActiveFileTracker.start() races ahead of webview wiring
+      // (active_file is a passthrough message, so it isn't queued), so without
+      // this the context pill never appears until the user switches editors.
+      this.opts.activeFileTracker?.repost()
       if (this.earlyMessageQueue.length > 0) {
         const queue = this.earlyMessageQueue
         this.earlyMessageQueue = []

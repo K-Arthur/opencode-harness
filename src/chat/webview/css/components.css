@@ -1502,6 +1502,30 @@ textarea {
   opacity: 1;
 }
 
+.context-chip-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin-left: var(--space-0-5);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  min-height: 16px;
+  color: inherit;
+  font-size: var(--text-sm);
+  line-height: 1;
+  opacity: 0.6;
+  border-radius: var(--radius-sm);
+  transition: opacity var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out);
+}
+
+.context-chip-remove:hover {
+  opacity: 1;
+  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+}
+
 .context-chip[title]:hover::after {
   content: attr(title);
   position: absolute;

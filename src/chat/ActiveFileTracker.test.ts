@@ -127,67 +127,30 @@ describe("ActiveFileTracker", () => {
     tracker.dispose()
   })
 
-  it("handleToggleActiveFile records include state per session", () => {
-    const { deps } = makeDeps()
-    const tracker = new ActiveFileTracker(deps)
-    tracker.handleToggleActiveFile("session-1", true)
-    assert.equal(tracker.isIncluded("session-1"), true)
-    tracker.handleToggleActiveFile("session-1", false)
-    assert.equal(tracker.isIncluded("session-1"), false)
-    tracker.dispose()
-  })
-
-  it("isIncluded returns false for unknown sessions", () => {
-    const { deps } = makeDeps()
-    const tracker = new ActiveFileTracker(deps)
-    assert.equal(tracker.isIncluded("unknown"), false)
-    tracker.dispose()
-  })
-
-  it("getActiveFileContent returns full content when no selection", async () => {
-    const { deps, setActiveEditor } = makeDeps()
+  it("repost re-delivers the current active file (covers the webview_ready race)", () => {
+    const { deps, posted, setActiveEditor } = makeDeps()
     const tracker = new ActiveFileTracker(deps)
     setActiveEditor(makeEditor("/workspace/src/main.ts"))
     tracker.start()
-    const content = await tracker.getActiveFileContent()
-    assert.ok(content)
-    assert.equal(content!.path, "src/main.ts")
-    assert.equal(content!.languageId, "typescript")
-    assert.equal(content!.content, "line1\nline2\nline3")
-    assert.equal(content!.selection, undefined)
+    // start() posts once; the webview may not be ready to receive it yet.
+    assert.equal(posted.length, 1)
+    // The webview signals ready → host calls repost() to re-deliver.
+    tracker.repost()
+    assert.equal(posted.length, 2)
+    assert.equal(posted[1]!.type, "active_file")
+    assert.equal(posted[1]!.path, "src/main.ts")
     tracker.dispose()
   })
 
-  it("getActiveFileContent returns selected text when selection exists", async () => {
-    const { deps, setActiveEditor } = makeDeps()
-    const tracker = new ActiveFileTracker(deps)
-    setActiveEditor(makeEditor("/workspace/src/main.ts", makeSelection(5, 10)))
-    tracker.start()
-    const content = await tracker.getActiveFileContent()
-    assert.ok(content)
-    assert.equal(content!.content, "selected text")
-    assert.ok(content!.selection, "selection should be present")
-    assert.equal(content!.selection!.startLine, 5)
-    assert.equal(content!.selection!.endLine, 10)
-    tracker.dispose()
-  })
-
-  it("getActiveFileContent returns null when no editor is open", async () => {
-    const { deps, setActiveEditor } = makeDeps()
+  it("repost reflects the editor active at repost time", () => {
+    const { deps, posted, setActiveEditor } = makeDeps()
     const tracker = new ActiveFileTracker(deps)
     setActiveEditor(undefined)
     tracker.start()
-    const content = await tracker.getActiveFileContent()
-    assert.equal(content, null)
-    tracker.dispose()
-  })
-
-  it("clearSession removes toggle state for that session", () => {
-    const { deps } = makeDeps()
-    const tracker = new ActiveFileTracker(deps)
-    tracker.handleToggleActiveFile("session-1", true)
-    tracker.clearSession("session-1")
-    assert.equal(tracker.isIncluded("session-1"), false)
+    assert.equal(posted[0]!.path, null)
+    setActiveEditor(makeEditor("/workspace/src/other.ts"))
+    tracker.repost()
+    assert.equal(posted[1]!.path, "src/other.ts")
     tracker.dispose()
   })
 

@@ -3,6 +3,34 @@
 **Last Updated:** 2026-06-26
 **Version:** v0.4.14
 
+## Highlights (2026-06-26) — Context-pill, drag, problems & activity-bar fixes
+
+**Resolved follow-up bugs in the v0.4.14 UI/UX work.**
+
+- **Active-file context pill now renders on first open** — the eager
+  `active_file` post in `ActiveFileTracker.start()` raced ahead of the
+  webview's handler wiring (and `active_file` is a non-queued passthrough
+  message), so the pill never appeared until an editor switch. The host now
+  re-posts via `ActiveFileTracker.repost()` from the `webview_ready` handler.
+- **Drag overlay no longer sticks** — replaced the asymmetric enter/leave
+  counter (incremented on every child, decremented only when leaving the app)
+  with a canonical symmetric counter; `setupDragDrop()` is idempotent.
+- **Context chip `×` styled** — `.context-chip-remove` now matches the chip
+  toggle (transparent, muted, hover) instead of native button chrome.
+- **"Send to OpenCode" reachable from problems** — moved off the invalid
+  `problems/context` menu (silently dropped by VS Code) to a Quick Fix
+  `CodeActionProvider` on diagnostics.
+- **Activity-bar running indicator** — `WebviewView.badge` reflects active
+  streaming sessions, driven by `TabManager.onStreamingStateChanged`.
+- **Active-file inclusion single-sourced** — removed dead host inclusion API
+  and the parallel `contextTray` toggle (empty `sessionId`); inclusion is
+  gated webview-side via the `@file:` mention.
+
+Files: `src/chat/ActiveFileTracker.ts`, `src/chat/WebviewEventRouter.ts`,
+`src/chat/ChatProvider.ts`, `src/extension.ts`, `package.json`,
+`src/chat/webview/ui/dragDrop.ts`, `src/chat/webview/ui/contextTray.ts`,
+`src/chat/webview/css/components.css`.
+
 ## Highlights (2026-06-26) — Reconnection state sync & UI/UX improvements
 
 **Closed all identified gaps in connection/reconnection handling and improved
@@ -44,8 +72,10 @@ Files: `src/extension.ts`, `src/chat/ChatProvider.ts`,
   with eye/eye-off toggle button.
 - **Pill-style document attachments** — compact pill layout for non-image
   attachments.
-- **Drag-and-drop overlay reliability** — `isOutsideApp()` check on
-  `dragleave`, `forceHideOverlay()`, emergency hide timeout.
+- **Drag-and-drop overlay reliability** — symmetric enter/leave counter,
+  `forceHideOverlay()`, window-exit fallback, and a 3 s emergency hide
+  timeout (see the fixes section above; the earlier `isOutsideApp()` decrement
+  gate leaked the counter and is gone).
 - **Diff line numbers** — `getFileHunks` exposes `oldStart` / `newStart`;
   `WebviewEventRouter` initializes counters from hunk positions.
 - **Edit/patch/apply tool cards** — `isEditLikeTool` detects by name

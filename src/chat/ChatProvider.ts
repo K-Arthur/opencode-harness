@@ -592,6 +592,8 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
     // H15: Reset ready state on re-solve to handle webview recreation
     this.eventRouter.webviewReady = false
     this.eventRouter.startReadyTimeout()
+    // Reflect any in-flight run on the freshly-resolved view's activity-bar icon.
+    this.updateActivityBarBadge()
 
     webviewView.webview.options = {
       enableScripts: true,
@@ -656,6 +658,7 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
           messageId,
           runId,
         })
+        this.updateActivityBarBadge()
       }),
       this.tabManager.onInstructionsChanged(({ tabId, instructions }) => {
         this.postMessage({ type: "instructions_changed", sessionId: tabId, instructions })
@@ -927,6 +930,19 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       .getAllTabs()
       .filter((tab) => tab.isStreaming)
       .map((tab) => tab.id)
+  }
+
+  /**
+   * Show a running indicator on the OpenCode activity-bar icon while any
+   * session is streaming, and clear it when all runs finish. Uses the
+   * `WebviewView.badge` API (VS Code 1.74+). No-op until the view resolves.
+   */
+  private updateActivityBarBadge(): void {
+    if (!this._view) return
+    const count = this.getStreamingSessionIds().length
+    this._view.badge = count > 0
+      ? { value: count, tooltip: count === 1 ? "OpenCode is running" : `OpenCode is running (${count} sessions)` }
+      : undefined
   }
 
   /** Fires whenever a tab starts or stops streaming. */

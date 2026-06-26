@@ -9,7 +9,7 @@
   },
   "description": "[Beta · Independent/Unofficial] Open-source AI coding agent client for VS Code — a community-built GUI for the opencode CLI agent. Chat, refactor, debug, and write code using Claude, GPT, Gemini, and 75+ models. Includes cost tracking, custom themes, permission controls, and checkpoint rollback. Not developed by the OpenCode team.",
   "icon": "media/opencode-icon-256.png",
-  "version": "0.4.12",
+  "version": "0.4.14",
   "engines": {
     "vscode": "^1.98.0"
   },
@@ -458,13 +458,6 @@
           "group": "opencode@1",
           "when": "resourceScheme == file"
         }
-      ],
-      "problems/context": [
-        {
-          "command": "opencode-harness.sendProblemToOpencode",
-          "group": "opencode@1",
-          "when": "true"
-        }
       ]
     },
     "configuration": {
@@ -569,7 +562,10 @@
                 "description": "Timeout in milliseconds for MCP server operations (v1.17.4+)."
               },
               "oauth": {
-                "type": ["object", "boolean"],
+                "type": [
+                  "object",
+                  "boolean"
+                ],
                 "description": "OAuth configuration for remote MCP servers (v1.15.9/v1.17.4). Set to false to disable OAuth auto-detection.",
                 "properties": {
                   "clientId": {

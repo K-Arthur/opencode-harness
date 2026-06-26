@@ -9,13 +9,6 @@ export interface ActiveFileSelection {
   text: string
 }
 
-export interface ActiveFileContent {
-  path: string
-  languageId: string
-  content: string
-  selection?: ActiveFileSelection
-}
-
 export interface ActiveFileTrackerDeps {
   vscode: typeof vscode
   postMessage: (msg: Record<string, unknown>) => void
@@ -24,7 +17,6 @@ export interface ActiveFileTrackerDeps {
 
 export class ActiveFileTracker {
   private disposables: vscode.Disposable[] = []
-  private readonly includeState = new Map<string, boolean>()
 
   constructor(private readonly deps: ActiveFileTrackerDeps) {}
 
@@ -37,6 +29,21 @@ export class ActiveFileTracker {
         this.postActiveFile(event.textEditor)
       }),
     )
+    this.postActiveFile(this.deps.vscode.window.activeTextEditor)
+  }
+
+  /**
+   * Re-deliver the current active file to the webview.
+   *
+   * `start()` posts the active file eagerly during `resolveWebviewView`, but
+   * that fires before the webview script has registered its message handlers
+   * (it signals `webview_ready` only after wiring up). Because `active_file`
+   * is a passthrough message it is sent immediately rather than queued, so the
+   * initial post is dropped and the context pill never appears until the user
+   * switches editors. The host calls `repost()` from the `webview_ready`
+   * handler so the pill shows on first open and after reconnect/restore.
+   */
+  repost(): void {
     this.postActiveFile(this.deps.vscode.window.activeTextEditor)
   }
 
@@ -126,38 +133,10 @@ export class ActiveFileTracker {
     }
   }
 
-  handleToggleActiveFile(sessionId: string, include: boolean): void {
-    this.includeState.set(sessionId, include)
-  }
-
-  isIncluded(sessionId: string): boolean {
-    return this.includeState.get(sessionId) === true
-  }
-
-  clearSession(sessionId: string): void {
-    this.includeState.delete(sessionId)
-  }
-
-  async getActiveFileContent(): Promise<ActiveFileContent | null> {
-    const editor = this.deps.vscode.window.activeTextEditor
-    if (!editor?.document?.uri) return null
-    const relativePath = this.deps.workspaceFileIndex.asRelativePath(editor.document.uri)
-    if (!relativePath) return null
-    const doc = await this.deps.vscode.workspace.openTextDocument(editor.document.uri)
-    const selection = this.extractSelection(editor)
-    return {
-      path: relativePath,
-      languageId: doc.languageId,
-      content: selection ? selection.text : doc.getText(),
-      selection: selection ?? undefined,
-    }
-  }
-
   dispose(): void {
     for (const d of this.disposables) {
       try { d.dispose() } catch { /* ignore */ }
     }
     this.disposables = []
-    this.includeState.clear()
   }
 }

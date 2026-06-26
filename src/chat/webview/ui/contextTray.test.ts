@@ -69,7 +69,7 @@ describe("ContextTrayManager", () => {
     assert.equal(manager.getItems().length, 0)
   })
 
-  it("toggleActiveFile flips isActive and posts toggle_active_file message", () => {
+  it("toggleActiveFile flips isActive without posting (inclusion is gated webview-side)", () => {
     setupDom()
     const posted: Array<Record<string, unknown>> = []
     const manager = createContextTrayManager({
@@ -83,13 +83,13 @@ describe("ContextTrayManager", () => {
 
     manager.toggleActiveFile(false)
     assert.equal(manager.getItems()[0]!.isActive, false)
-    assert.equal(posted[0]!.type, "toggle_active_file")
-    assert.equal(posted[0]!.include, false)
 
     manager.toggleActiveFile(true)
     assert.equal(manager.getItems()[0]!.isActive, true)
-    assert.equal(posted[1]!.type, "toggle_active_file")
-    assert.equal(posted[1]!.include, true)
+
+    // The host keeps no per-session inclusion state, so no message is posted —
+    // this previously posted with an empty sessionId, the bug we removed.
+    assert.equal(posted.filter((m) => m.type === "toggle_active_file").length, 0)
   })
 
   it("addImage adds an image item with token estimate", () => {
