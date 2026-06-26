@@ -173,6 +173,15 @@
 // diff-review plumbing) added legitimate first-party host code. Production build
 // now measures 733.7KB. +15KB keeps ~0.8% headroom so the gate still trips on real
 // bloat. Webview limit unchanged.
+//
+// 2026-06-26 re-baseline (host 740KB -> 748KB, webview 790KB -> 792KB):
+// reconnection state sync (CLI session ID restoration, server_status re-push,
+// streaming_state re-push, reconnect_sync permission/question bar cleanup in
+// ChatProvider + StreamCoordinator + extension.ts) and UI/UX improvements
+// (ActiveFileTracker binary/size guards, toggleable context chips, pill-style
+// attachments, drag-drop overlay reliability, XML/YAML icons, folder context
+// type, diff line number fix, isEditLikeTool expansion). Host measures 741.6KB,
+// webview measures 790.3KB. +8KB host / +2KB webview keeps ~0.8% headroom.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -182,8 +191,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 740 * 1024, label: "extension host" },
-  { path: "dist/chat/webview/main.js", limitBytes: 790 * 1024, label: "chat webview" },
+  { path: "dist/extension.js", limitBytes: 748 * 1024, label: "extension host" },
+  { path: "dist/chat/webview/main.js", limitBytes: 792 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
 
