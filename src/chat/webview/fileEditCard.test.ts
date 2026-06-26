@@ -156,6 +156,16 @@ describe("fileEditCard", () => {
     assert.ok(el!.classList.contains("file-edit-card"))
   })
 
+  it("renders apply-name tools as file-edit cards", async () => {
+    const { renderToolCallBlock } = await import("./toolCallRenderer")
+    const el = renderToolCallBlock(
+      writeBlock({ name: "apply_changes", class: "read", args: { path: "src/foo.ts", oldString: "a", newString: "b" } }),
+      {},
+    )
+    assert.ok(el, "apply-name tools should render as a file-edit-card")
+    assert.ok(el!.classList.contains("file-edit-card"))
+  })
+
   it("extracts file paths from common alternate arg keys", async () => {
     const { renderToolCallBlock } = await import("./toolCallRenderer")
     for (const key of ["filePath", "file_path", "target"]) {

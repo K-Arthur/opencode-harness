@@ -12,16 +12,24 @@ const MAX_PREVIEW_LINES = 50
 const MAX_DIFF_LINES = 200
 
 /**
- * Renders a compact inline preview card for write-class file edits.
+ * Detects write/edit/patch/apply file-edit tools. The file-edit card is a
+ * better UX than the generic tool-call details panel because it shows the
+ * file path in the header and an inline diff preview.
  *
- * Returns null for non-write tools or write tools without a file path so the
- * caller can fall back to the default tool-call details panel.
+ * Match by tool class (server-authoritative) or by tool name heuristic for
+ * servers that do not emit class="write" on edit/patch/apply tools. This must
+ * stay in sync with the verb list in toolCallRenderer.formatToolSummary.
  */
 export function isEditLikeTool(toolBlock: ToolCallBlock): boolean {
   const cls = toolBlock.class || "read"
   const name = (toolBlock.name || "").toLowerCase()
   if (cls === "write") return true
-  if (name.includes("edit") || name.includes("write") || name.includes("patch")) return true
+  if (
+    name.includes("edit") ||
+    name.includes("write") ||
+    name.includes("patch") ||
+    name.includes("apply")
+  ) return true
   return false
 }
 
