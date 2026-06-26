@@ -1,7 +1,38 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-06-26
-**Version:** v0.4.14
+**Version:** v0.4.15
+
+## Highlights (2026-06-26) — Tool cards, compact diff, context bar & ARIA fixes
+
+**File-edit card rendering, context usage accuracy, and accessibility.**
+
+- **Tool cards show file paths and diffs** — fixed `data-tool-id` → `data-block-id`
+  mismatch so `handleToolUpdate` finds file-edit cards for state transitions.
+  Added upgrade path so a generic `<details>` card (rendered during pending
+  state with empty args) is replaced by a proper file-edit card when real args
+  arrive via `stream_tool_update`.
+- **Compact diff preview** — inline preview capped at 5 lines (was 50);
+  "Show diff" expanded view capped at 40 (was 200). Header now shows `+N / -M`
+  stats chips for at-a-glance scope assessment.
+- **Context bar compaction reset** — `ContextMonitor.resetSession()`,
+  `SessionStore.resetContextUsage()`, and the webview `session_compacted`
+  handler all clear stale pre-compaction token counts so the bar hides
+  correctly instead of continuing to show the old high fill level.
+- **Clearer context panel copy** — "No breakdown available" → "Token breakdown
+  not reported by model"; source pill labels `ESTIMATED`/`ACTUAL` →
+  `approx`/`exact` with tooltip explanations.
+- **ARIA/WCAG** — `aria-pressed` on chip toggle buttons, `type="button"` on
+  all interactive buttons, `:focus-visible` outlines on chip action buttons.
+  File-edit card diff toggle carries `aria-expanded`, `aria-controls`,
+  `role="region"` per WCAG 2.1 SC 4.1.2.
+
+Files: `src/chat/ChatProvider.ts`, `src/chat/webview/fileEditCard.ts`,
+`src/chat/webview/streamHandlers.ts`, `src/chat/webview/toolCallRenderer.ts`,
+`src/chat/webview/main.ts`, `src/chat/webview/context-usage-dropdown.ts`,
+`src/chat/webview/theme.ts`, `src/chat/webview/css/file-edit.css`,
+`src/chat/webview/css/components.css`, `src/monitor/ContextMonitor.ts`,
+`src/session/SessionStore.ts`.
 
 ## Highlights (2026-06-26) — Context-pill, drag, problems & activity-bar fixes
 

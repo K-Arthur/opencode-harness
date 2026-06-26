@@ -24,6 +24,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      [Unreleased] — that creates documentation drift. See the release
      workflow in docs/development/rebuild-and-reinstall.md. -->
 
+## [0.4.15] - 2026-06-26
+
+### Fixed
+
+- **Tool cards now show file paths and diffs** — file-edit cards were using
+  `data-tool-id` instead of `data-block-id`, so `handleToolUpdate`'s
+  `querySelector('[data-block-id="..."]')` never found them and state updates
+  (Running → Done) were silently dropped. Changed to `data-block-id` to match
+  the generic card convention. Also fixed the upgrade path: when
+  `stream_tool_start` arrives with empty args `{}` (pending state), a generic
+  `<details>` card renders with `data-tool-name` and `data-tool-class`; the
+  subsequent `stream_tool_update` with real args now replaces it with a proper
+  file-edit card showing the file path and inline diff.
+- **Diff preview size capped** — the inline preview is limited to 5 visible
+  lines (was 50) and the "Show diff" expanded view to 40 (was 200), keeping
+  the card compact for fast-paced coding. A `+N / -M` stats chip in the card
+  header shows scope at a glance without opening the diff.
+- **Context bar resets correctly after compaction** — after `session_compacted`
+  fires, the pre-compaction token count was retained in `ContextMonitor`,
+  `SessionStore`, and the webview session state, so the bar kept showing the
+  old (high) fill level. All three layers now clear their cached usage on
+  compaction; the bar hides until the first real token count arrives from the
+  resumed session.
+- **Context breakdown copy** — "No breakdown available" changed to "Token
+  breakdown not reported by model" to accurately describe why the section is
+  empty (the server simply does not emit per-category breakdown for most
+  models, which is normal, not an error).
+- **Source pill labels** — the `ESTIMATED` / `ACTUAL` pills now read `approx`
+  and `exact` with descriptive tooltips, reducing confusion about why the
+  count is labeled as approximate.
+- **ARIA/WCAG: toggle button state** — the eye-icon toggle on context chips
+  now carries `aria-pressed` (true = included, false = excluded) so screen
+  readers announce the on/off state correctly.
+- **ARIA/WCAG: button types** — explicit `type="button"` added to context chip
+  remove/toggle buttons and file-edit card "Open file" / "Show diff" buttons,
+  preventing accidental `submit` semantics in edge cases.
+- **ARIA/WCAG: focus-visible on chip buttons** — `.context-chip-toggle` and
+  `.context-chip-remove` now have `:focus-visible` outlines using the accent
+  token, making keyboard navigation visible.
+
 ## [0.4.14] - 2026-06-26
 
 ### Added
