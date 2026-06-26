@@ -17,12 +17,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-<!-- MAINTENANCE NOTE: Keep this section empty unless it describes work that has
-     NOT shipped in any version bump. When `npm version` / `npm run
-     reinstall` bumps the version, move all accumulated entries below into a
-     new `## [x.y.z] - yyyy-mm-dd` section. Never leave shipped work under
-     [Unreleased] — that creates documentation drift. See the release
-     workflow in docs/development/rebuild-and-reinstall.md. -->
+### Added
+
+- **Active file safety guards** — `ActiveFileTracker` now skips binary files
+  (by language ID) and files larger than 1 MB, posting `active_file: null`
+  with a `reason` field (`"binary_file"` or `"file_too_large"`) so the webview
+  can show an appropriate empty state instead of attaching unusable content.
+- **Folder context type** — added `picked_folder` to `ContextItemType` and
+  indexed directories in `WorkspaceFileIndex.refresh()` so `@folder:`
+  references can resolve.
+- **XML and YAML document icons** — new `DOC_XML_SVG` and `DOC_YAML_SVG`
+  icons with MIME-type and extension-based fallback in `getIconForFile()`.
+- **Toggleable context chips** — `ContextChip` now supports `onToggle` and
+  `isIncluded` fields for chips that have an on/off state (e.g., active file
+  inclusion). The chip renders an eye/eye-off toggle button.
+- **Pill-style document attachments** — non-image attachment chips now use a
+  compact pill layout with an inline icon, matching the context chip style.
+- **Drag-and-drop overlay reliability** — added `forceHideOverlay()` and an
+  emergency hide timeout; `dragleave` now checks `isOutsideApp()` before
+  decrementing the counter, preventing the overlay from flickering or
+  sticking when dragging within the app container.
+
+### Fixed
+
+- **Status bar preserves "running" on reconnect** — the
+  `event_stream_reconnected` handler no longer unconditionally overwrites the
+  running indicator with "Connected". `wireRunningIndicator` now subscribes
+  to reconnect events and re-evaluates the streaming count, so "N running"
+  is preserved when sessions are still active.
+- **Stale per-tab status badge after reconnect** — `reconcileAfterReconnect`
+  now pushes `server_status: "idle"` (if run completed) or `"thinking"` (if
+  still active) for reconciled tabs; non-candidate tabs get `"idle"` from
+  the reconnect handler.
+- **CLI session IDs not restored on reconnect** — `server_disconnected`
+  invalidates `SessionStore` CLI session IDs, but for an event-stream-only
+  reconnect the server is still running and the IDs are still valid. The
+  reconnect handler now re-registers them from `TabManager` so `get_todos`
+  and other server-fetch handlers don't silently fail.
+- **Stale streaming state after reconnect** — non-streaming tabs now get a
+  re-pushed `streaming_state: false` in case the webview missed the
+  `server_disconnected` clear (message could be queued/dropped).
+- **Stale pending permissions after reconnect** — the `reconnect_sync`
+  webview handler now clears `pendingPermissionBySession` entries and hides
+  the permission bar for the active session.
+- **Stale question bar after reconnect** — `reconnect_sync` now calls
+  `questionBar.repopulateFromMessages()` and `reconcileBar()` for each
+  session, mirroring the tab-switch pattern.
+- **Diff line numbers starting from 0** — `getFileHunks` now exposes
+  `oldStart` and `newStart` from the hunk summary, and
+  `WebviewEventRouter` initializes line counters from these values instead
+  of 0, producing correct line numbers in diff views.
+- **Edit/patch/apply tool cards not showing diffs** — `isEditLikeTool` now
+  detects tools by name (`edit`, `write`, `patch`, `apply`) in addition to
+  `class: "write"`, so tools arriving with `class: "read"` but an edit-like
+  name render as file-edit cards with the file path and inline diff.
 
 ## [0.4.13] - 2026-06-25
 

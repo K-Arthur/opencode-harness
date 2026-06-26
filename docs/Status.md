@@ -3,18 +3,63 @@
 **Last Updated:** 2026-06-26
 **Version:** v0.4.13
 
-## Highlights (2026-06-26) — Theme engine overhaul
+## Highlights (2026-06-26) — Reconnection state sync & UI/UX improvements
 
-**Refactored the theme system into a modular, high-availability pipeline.**
+**Closed all identified gaps in connection/reconnection handling and improved
+context tray / drag-and-drop UX.**
 
-- `src/theme/ThemeAnalyzer.ts` — reads the active VS Code theme kind, resolves effective presets, checks whether market themes are installed, and maps presets to VS Code workbench themes.
-- `src/theme/ThemeStateMutator.ts` — safely merges and resets OpenCode color/token overrides under the `workbench.colorCustomizations.opencodeHarness` namespace, preserving unrelated user settings and supporting workspace and global configuration targets.
-- `src/theme/ThemeWebviewBridge.ts` — listens for VS Code `onDidChangeActiveColorTheme` and `onDidChangeConfiguration` events and pushes live CSS variable updates to the chat webview.
-- `src/theme/ThemeManager.ts` now exposes `activateTheme()`, `applyOverrides()`, and `resetToDefault()` and returns `{ themeManager }` as the extension's public API.
-- Added TDD integration tests in `tests/integration/themeEngine.test.ts` covering merge preservation, invalid market-theme fallback, and workspace-scoped isolation.
-- Webview theme customizer reorganized with a default-open "Common" section, collapsed advanced sections, and clearer **Cancel** / **Restore defaults** / **Apply** actions. Color pickers now show the current theme color when no override is set; preset cards render hardcoded color swatches.
-- Files: `src/theme/ThemeAnalyzer.ts`, `src/theme/ThemeStateMutator.ts`, `src/theme/ThemeWebviewBridge.ts`, `src/theme/ThemeManager.ts`, `src/extension.ts`, `src/chat/webview/index.html`, `src/chat/webview/ui/themeCustomizer.ts`, `tests/integration/themeEngine.test.ts`.
-- Verification: typecheck clean; unit tests pass; integration tests 43/43; message-contract 23/23; roundtrip 7/7; webview tests pass.
+### Reconnection state sync
+
+- **Status bar preserves "running" on reconnect** — `wireRunningIndicator`
+  now subscribes to `event_stream_reconnected` / `server_connected` /
+  `server_disconnected` events and re-evaluates the streaming count. The
+  indicator no longer reverts to "Connected" when sessions are still active.
+- **CLI session IDs restored** — `event_stream_reconnected` re-registers
+  CLI session IDs from `TabManager` into `SessionStore` so `get_todos` and
+  other server-fetch handlers don't silently fail after
+  `server_disconnected` invalidated them.
+- **Per-tab `server_status` re-pushed** — `reconcileAfterReconnect` now
+  pushes `idle` or `thinking` for reconciled tabs; non-candidate tabs get
+  `idle` from the reconnect handler.
+- **`streaming_state: false` re-pushed** for non-streaming tabs in case the
+  webview missed the `server_disconnected` clear.
+- **Stale permissions cleared** — `reconnect_sync` clears
+  `pendingPermissionBySession` and hides the permission bar.
+- **Question bar reconciled** — `reconnect_sync` calls
+  `questionBar.repopulateFromMessages()` and `reconcileBar()`.
+
+Files: `src/extension.ts`, `src/chat/ChatProvider.ts`,
+`src/chat/handlers/StreamCoordinator.ts`, `src/chat/webview/main.ts`,
+`tests/unit/streaming-state-stability.test.mjs`.
+
+### UI/UX improvements
+
+- **Active file safety guards** — `ActiveFileTracker` skips binary files
+  and files > 1 MB with a `reason` field for the webview.
+- **Folder context type** — `picked_folder` added to `ContextItemType`;
+  `WorkspaceFileIndex` now indexes directories.
+- **XML/YAML document icons** — extension-based icon fallback via
+  `getIconForFile()`.
+- **Toggleable context chips** — `ContextChip.onToggle` / `isIncluded`
+  with eye/eye-off toggle button.
+- **Pill-style document attachments** — compact pill layout for non-image
+  attachments.
+- **Drag-and-drop overlay reliability** — `isOutsideApp()` check on
+  `dragleave`, `forceHideOverlay()`, emergency hide timeout.
+- **Diff line numbers** — `getFileHunks` exposes `oldStart` / `newStart`;
+  `WebviewEventRouter` initializes counters from hunk positions.
+- **Edit/patch/apply tool cards** — `isEditLikeTool` detects by name
+  (`edit`, `write`, `patch`, `apply`) in addition to `class: "write"`.
+
+Files: `src/chat/ActiveFileTracker.ts`, `src/chat/WorkspaceFileIndex.ts`,
+`src/chat/WebviewEventRouter.ts`, `src/chat/diff/hunkRevertPlan.ts`,
+`src/chat/webview/types.ts`, `src/chat/webview/theme.ts`,
+`src/chat/webview/icons.ts`, `src/chat/webview/ui/attachments.ts`,
+`src/chat/webview/ui/dragDrop.ts`, `src/chat/webview/css/components.css`,
+`src/chat/webview/css/layout.css`, `src/chat/webview/fileEditCard.ts`.
+
+Verification: typecheck clean; build clean; unit tests 1966/1966 pass;
+eslint clean.
 
 ## Highlights (2026-06-24) — Changed-files strip interaction fix
 
