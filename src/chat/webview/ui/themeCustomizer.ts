@@ -13,6 +13,7 @@ export interface ThemeCustomizerElements {
   themeCliList: HTMLElement
   themeCustomizerSave: HTMLButtonElement
   themeCustomizerReset: HTMLButtonElement
+  themeCustomizerCancel: HTMLButtonElement
   themePreviewSwatch: HTMLElement
 }
 
@@ -82,6 +83,7 @@ export function setupThemeCustomizer(deps: ThemeCustomizerDeps): void {
   cachedEls = els
 
   els.themeCustomizerClose.addEventListener("click", () => closeThemeCustomizer())
+  els.themeCustomizerCancel.addEventListener("click", () => closeThemeCustomizer())
   els.themeCustomizerPanel.addEventListener("click", (event) => {
     if (event.target === els.themeCustomizerPanel) closeThemeCustomizer()
   })

@@ -984,9 +984,36 @@
         </div>
 
         <!-- Color override sections -->
-        <div class="theme-customizer-hint">Color overrides — hex or rgba, leave empty to use preset default</div>
+        <div class="theme-customizer-hint">Overrides apply immediately in the preview. Use hex, rgba, or CSS variables.</div>
 
         <details class="theme-section-collapsible" open>
+          <summary>Common</summary>
+          <div class="theme-customizer-grid">
+            <label class="theme-field"><span>Accent</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Accent color" data-target="tc-accentColor"><input type="text" id="tc-accentColor" data-theme-field="accentColor" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Panel background</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Panel background" data-target="tc-panelBg"><input type="text" id="tc-panelBg" data-theme-field="panelBg" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Panel text</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Panel text" data-target="tc-panelFg"><input type="text" id="tc-panelFg" data-theme-field="panelFg" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Editor background</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Editor background" data-target="tc-editorBg"><input type="text" id="tc-editorBg" data-theme-field="editorBg" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Error</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Error color" data-target="tc-errorColor"><input type="text" id="tc-errorColor" data-theme-field="errorColor" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Success</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Success color" data-target="tc-successColor"><input type="text" id="tc-successColor" data-theme-field="successColor" placeholder="#..."></div>
+            </label>
+            <label class="theme-field"><span>Warning</span>
+              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Warning color" data-target="tc-warningColor"><input type="text" id="tc-warningColor" data-theme-field="warningColor" placeholder="#..."></div>
+            </label>
+          </div>
+        </details>
+
+        <details class="theme-section-collapsible">
           <summary>Messages</summary>
           <div class="theme-customizer-grid">
             <label class="theme-field"><span>User message background</span>
@@ -1106,27 +1133,6 @@
         <details class="theme-section-collapsible">
           <summary>Advanced</summary>
           <div class="theme-customizer-grid">
-            <label class="theme-field"><span>Panel background</span>
-              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Panel background" data-target="tc-panelBg"><input type="text" id="tc-panelBg" data-theme-field="panelBg" placeholder="#..."></div>
-            </label>
-            <label class="theme-field"><span>Panel text</span>
-              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Panel text" data-target="tc-panelFg"><input type="text" id="tc-panelFg" data-theme-field="panelFg" placeholder="#..."></div>
-            </label>
-            <label class="theme-field"><span>Editor background</span>
-              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Editor background" data-target="tc-editorBg"><input type="text" id="tc-editorBg" data-theme-field="editorBg" placeholder="#..."></div>
-            </label>
-            <label class="theme-field"><span>Accent color</span>
-              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Accent color" data-target="tc-accentColor"><input type="text" id="tc-accentColor" data-theme-field="accentColor" placeholder="#..."></div>
-            </label>
-            <label class="theme-field"><span>Error color</span>
-              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Error color" data-target="tc-errorColor"><input type="text" id="tc-errorColor" data-theme-field="errorColor" placeholder="#..."></div>
-            </label>
-            <label class="theme-field"><span>Success color</span>
-              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Success color" data-target="tc-successColor"><input type="text" id="tc-successColor" data-theme-field="successColor" placeholder="#..."></div>
-            </label>
-            <label class="theme-field"><span>Warning color</span>
-              <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Warning color" data-target="tc-warningColor"><input type="text" id="tc-warningColor" data-theme-field="warningColor" placeholder="#..."></div>
-            </label>
             <label class="theme-field"><span>Border color</span>
               <div class="theme-color-row"><input type="color" class="theme-color-picker" aria-label="Border color" data-target="tc-borderColor"><input type="text" id="tc-borderColor" data-theme-field="borderColor" placeholder="#..."></div>
             </label>
@@ -1173,8 +1179,9 @@
       </div>
 
       <div class="theme-customizer-actions">
-        <button class="btn btn-secondary" id="theme-customizer-reset" type="button">Reset overrides</button>
-        <button class="btn btn-primary" id="theme-customizer-save" type="button">Save theme</button>
+        <button class="btn btn-ghost" id="theme-customizer-cancel" type="button">Cancel</button>
+        <button class="btn btn-secondary" id="theme-customizer-reset" type="button">Restore defaults</button>
+        <button class="btn btn-primary" id="theme-customizer-save" type="button">Apply</button>
       </div>
     </div>
   </div>

@@ -2,6 +2,8 @@ import * as vscode from "vscode"
 import * as fs from "fs"
 import * as path from "path"
 import { log } from "../utils/outputChannel"
+import { ThemeAnalyzer, type ThemeActivationRequest } from "./ThemeAnalyzer"
+import { ThemeStateMutator } from "./ThemeStateMutator"
 
 export interface OpencodeTheme {
   primaryColor?: string
@@ -464,6 +466,8 @@ export class ThemeManager {
   private cliThemeCacheTimestamp = 0
 
   private fileWatchers: vscode.FileSystemWatcher[] = []
+  private readonly analyzer = new ThemeAnalyzer()
+  private readonly mutator = new ThemeStateMutator()
 
   constructor() {
     this.currentKind = vscode.window.activeColorTheme.kind
@@ -630,7 +634,7 @@ export class ThemeManager {
     return themes
   }
 
-  private loadConfig(): void {
+  loadConfig(): void {
     const config = vscode.workspace.getConfiguration("opencode")
     const themeObj = config.get<{ preset?: string; overrides?: OpencodeTheme }>("theme")
     const validPresets: ThemePreset[] = ["cli-default", "light", "dark", "high-contrast", "high-contrast-dark", "high-contrast-light"]
@@ -638,6 +642,87 @@ export class ThemeManager {
       this.currentPreset = themeObj.preset as ThemePreset
     }
     this.userOverrides = themeObj?.overrides || {}
+  }
+
+  /**
+   * Activates a theme for the OpenCode chat panel. When the request includes a
+   * built-in preset that implies a different VS Code mode (light/dark/hc), the
+   * workbench color theme is also switched. When a market theme is requested
+   * that is not installed, a warning is shown and the active theme kind is kept.
+   */
+  async activateTheme(request: ThemeActivationRequest): Promise<void> {
+    const target = vscode.workspace.workspaceFolders
+      ? vscode.ConfigurationTarget.Workspace
+      : vscode.ConfigurationTarget.Global
+
+    if (request.marketTheme) {
+      if (!this.analyzer.isMarketThemeAvailable(request.marketTheme)) {
+        log.warn(`Market theme "${request.marketTheme}" is not installed`)
+        await vscode.window.showWarningMessage(
+          `Theme "${request.marketTheme}" is not installed. Staying on the current VS Code theme.`
+        )
+        return
+      }
+
+      await vscode.workspace.getConfiguration("workbench").update("colorTheme", request.marketTheme, target)
+      this.currentKind = vscode.window.activeColorTheme.kind
+      this.emitUpdate()
+      return
+    }
+
+    const preset = request.preset ?? "cli-default"
+    const validPresets: ThemePreset[] = ["cli-default", "light", "dark", "high-contrast", "high-contrast-dark", "high-contrast-light"]
+    if (!validPresets.includes(preset as ThemePreset)) {
+      log.warn(`Ignoring invalid theme preset: ${preset}`)
+      return
+    }
+
+    const effectivePreset = this.analyzer.resolveEffectivePreset(preset)
+    const targetKind = this.analyzer.getTargetKindForPreset(effectivePreset)
+
+    if (targetKind !== undefined) {
+      const workbenchTheme = this.analyzer.getWorkbenchThemeForMode(targetKind)
+      if (workbenchTheme) {
+        await vscode.workspace.getConfiguration("workbench").update("colorTheme", workbenchTheme, target)
+      }
+    }
+
+    const opencode = vscode.workspace.getConfiguration("opencode")
+    await opencode.update("theme", { preset, overrides: {} }, target)
+    this.currentPreset = preset as ThemePreset
+    this.userOverrides = {}
+    this.emitUpdate()
+  }
+
+  /**
+   * Applies a set of OpenCode color overrides to the workbench customizations
+   * under the opencodeHarness namespace without erasing unrelated user settings.
+   */
+  async applyOverrides(
+    overrides: OpencodeTheme,
+    target: vscode.ConfigurationTarget
+  ): Promise<void> {
+    const flat: Record<string, string> = {}
+    for (const [key, value] of Object.entries(overrides)) {
+      if (typeof value === "string") {
+        flat[key] = value
+      }
+    }
+
+    await this.mutator.applyColorCustomizations(flat, target)
+    await this.mutator.applyTokenColorCustomizations({}, target)
+    this.emitUpdate()
+  }
+
+  /**
+   * Resets OpenCode theme state to defaults and removes the opencodeHarness
+   * namespace from workbench color customizations.
+   */
+  async resetToDefault(target: vscode.ConfigurationTarget): Promise<void> {
+    await this.mutator.reset(target)
+    this.currentPreset = "cli-default"
+    this.userOverrides = {}
+    this.emitUpdate()
   }
 
   private invalidateCliCache(): void {

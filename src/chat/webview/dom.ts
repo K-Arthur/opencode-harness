@@ -153,6 +153,7 @@ export interface ElementRefs {
   themePreviewSwatch: HTMLDivElement
   themeCustomizerReset: HTMLButtonElement
   themeCustomizerSave: HTMLButtonElement
+  themeCustomizerCancel: HTMLButtonElement
 
   // Status strip (below tab bar)
   statusStrip: HTMLElement
@@ -357,6 +358,7 @@ export function getElementRefs(): ElementRefs {
     themePreviewSwatch: requireElement<HTMLDivElement>("theme-preview-swatch"),
     themeCustomizerReset: requireElement<HTMLButtonElement>("theme-customizer-reset"),
     themeCustomizerSave: requireElement<HTMLButtonElement>("theme-customizer-save"),
+    themeCustomizerCancel: requireElement<HTMLButtonElement>("theme-customizer-cancel"),
 
     // Status strip (below tab bar)
     statusStrip: requireElement("status-strip"),

@@ -17,6 +17,7 @@ import { runQuickChat } from "./inline/QuickChatCommand"
 import { AgentGazeService } from "./decorations/AgentGazeService"
 import { ChatProvider } from "./chat/ChatProvider"
 import { ThemeManager } from "./theme/ThemeManager"
+import { ThemeWebviewBridge } from "./theme/ThemeWebviewBridge"
 import { RateLimitMonitor } from "./monitor/RateLimitMonitor"
 import { ModelManager } from "./model/ModelManager"
 import { CliDiagnostics } from "./diagnostics/CliDiagnostics"
@@ -296,6 +297,14 @@ export async function activate(context: vscode.ExtensionContext) {
       checkpointManager, mcpServerManager, sessionManagerRegistry, configService
     )
 
+    const themeWebviewBridge = new ThemeWebviewBridge(
+      themeManager,
+      (msg) => chatProviderInstance?.postMessage(msg)
+    )
+    context.subscriptions.push(themeWebviewBridge)
+    themeWebviewBridge.pushThemeUpdate()
+    themeWebviewBridge.pushThemeConfig()
+
     // Apply workspace config on initial load and on config file changes
     context.subscriptions.push(
       configService.onConfigChanged(() => {
@@ -326,6 +335,8 @@ export async function activate(context: vscode.ExtensionContext) {
       ` ctx=${(ctxReadyAt - sessionMgrCreatedAt!).toFixed(1)}ms,` +
       ` wiring=${(activationEnd - ctxReadyAt).toFixed(1)}ms)`,
     )
+
+    return { themeManager }
   } catch (err) {
     log.error("Extension activation failed", err)
     vscode.window.showErrorMessage(

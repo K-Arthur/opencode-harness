@@ -2,7 +2,7 @@ import { defineConfig } from "@vscode/test-cli"
 
 export default defineConfig({
   // Integration tests run inside the Extension Development Host
-  files: "tests/integration/**/*.test.mjs",
+  files: "tests/integration/**/*.test.{mjs,ts}",
   version: "stable",
   workspaceFolder: "./",
   mocha: {
@@ -10,5 +10,6 @@ export default defineConfig({
     timeout: 30000,
     color: true,
     reporter: "spec",
+    require: ["tsx/cjs"],
   },
 })

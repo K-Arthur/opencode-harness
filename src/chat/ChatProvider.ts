@@ -2441,7 +2441,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     })
   }
 
-  private postMessage(msg: Record<string, unknown>): void {
+  postMessage(msg: Record<string, unknown>): void {
     if (!this._view) return
 
     // H3: Buffer messages if webview isn't ready yet.
