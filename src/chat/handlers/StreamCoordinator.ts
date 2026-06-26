@@ -1899,6 +1899,20 @@ export class StreamCoordinator {
             partial: false,
             source: "reconcile",
           })
+          // Push a server_status so the webview's per-tab status badge is correct.
+          callbacks.postMessage({
+            type: "server_status",
+            sessionId: tabId,
+            status: "idle",
+          })
+        } else {
+          // Run is still active — push a busy status so the webview shows
+          // "thinking" instead of a stale idle/ready badge from before the outage.
+          callbacks.postMessage({
+            type: "server_status",
+            sessionId: tabId,
+            status: "thinking",
+          })
         }
       }
     } catch (err) {

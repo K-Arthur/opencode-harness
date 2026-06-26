@@ -1647,6 +1647,17 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
     ["server_connected", () => { this.pushModelListToWebview() }],
     ["event_stream_reconnected", () => {
       log.info("Event stream reconnected — reconciling active streaming sessions and checking for interrupted tabs")
+      // Restore CLI session IDs in SessionStore. server_disconnected
+      // invalidated them, but for an event-stream-only reconnect (server
+      // still running), the CLI session IDs are still valid — TabManager
+      // tabs still hold them. Without this, get_todos and other
+      // server-fetch handlers that read cliSessionId from SessionStore
+      // silently fail after reconnect.
+      for (const t of this.tabManager.getAllTabs()) {
+        if (t.cliSessionId) {
+          this.sessionStore.updateCliSessionId(t.id, t.cliSessionId)
+        }
+      }
       // Reconcile every tab that is EITHER still marked streaming OR was
       // captured in the interrupted snapshot — the snapshot may include tabs
       // whose flag was cleared by server_disconnected (Gap G3/G4). For each,
@@ -1665,6 +1676,28 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
           postMessage: (m) => this.postMessage(m),
           postRequestError: (m) => this.postRequestError(m),
         }).catch(err => log.error("Reconcile after reconnect failed", err))
+      }
+
+      // Push server_status:idle for non-candidate tabs so their per-tab status
+      // badge is correct after reconnect. Candidate tabs get their status from
+      // reconcileAfterReconnect (idle or thinking).
+      for (const t of this.tabManager.getAllTabs()) {
+        if (!candidateTabIds.has(t.id)) {
+          this.postMessage({ type: "server_status", sessionId: t.id, status: "idle" })
+          // Re-push streaming_state:false in case the webview missed the
+          // server_disconnected clear (message could be queued/dropped if the
+          // webview wasn't ready). Without this, a non-streaming tab could
+          // show a stale "Stop" button after reconnect.
+          if (!t.isStreaming) {
+            this.postMessage({
+              type: "streaming_state",
+              sessionId: t.id,
+              isStreaming: false,
+              source: "reconnect",
+              cliSessionId: t.cliSessionId,
+            })
+          }
+        }
       }
       const interrupted = this.tabManager.getInterruptedTabs()
       if (interrupted.length > 0) {

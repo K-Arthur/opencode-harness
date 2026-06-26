@@ -472,11 +472,6 @@ function initConnectionStatusBar(
         connectionStatus.tooltip = STATUS_BAR_TOOLTIPS.connection.error
         connectionStatus.command = "opencode-harness.openChat"
         break
-      case "event_stream_reconnected":
-        connectionStatus.text = "$(check-all) OpenCode: Connected"
-        connectionStatus.tooltip = STATUS_BAR_TOOLTIPS.connection.connected(sessionManager.currentPort)
-        connectionStatus.command = "opencode-harness.openChat"
-        break
       case "sessions_recovered": {
         // Server reported its persisted sessions on connect. Import any that
         // the extension does not yet know about so CLI-created sessions
@@ -516,6 +511,11 @@ function initConnectionStatusBar(
  * running session (Quick Pick when several). When streaming stops, the item
  * reverts to the plain connection state. The connection-event subscription in
  * initConnectionStatusBar keeps owning connect/disconnect/error transitions.
+ *
+ * Also listens for reconnect events so the indicator correctly preserves the
+ * "running" state when the event stream reconnects while sessions are still
+ * active — without this, the event_stream_reconnected handler would
+ * unconditionally overwrite the running indicator with "Connected".
  */
 function wireRunningIndicator(
   context: vscode.ExtensionContext,
@@ -545,6 +545,15 @@ function wireRunningIndicator(
     connectionStatus.command = "opencode-harness.openChat"
   }
   context.subscriptions.push(chatProvider.onStreamingStateChanged(() => update()))
+  // Re-evaluate on reconnect/connect/disconnect so the running indicator is
+  // preserved or restored correctly when the event stream comes back.
+  context.subscriptions.push(
+    sessionManager.subscribe("wireRunningIndicator", (event) => {
+      if (event.type === "event_stream_reconnected" || event.type === "server_connected" || event.type === "server_disconnected") {
+        update()
+      }
+    })
+  )
 }
 
 function registerInlineProviders(context: vscode.ExtensionContext, chatProvider: ChatProvider): void {

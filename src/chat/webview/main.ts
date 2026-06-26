@@ -2298,11 +2298,26 @@ function setupTodoSkillAndSubagentPanels(): void {
           vscode.postMessage({ type: "get_subagent_activities", sessionId: sid })
           vscode.postMessage({ type: "get_changed_files", sessionId: sid })
           vscode.postMessage({ type: "get_context_usage", sessionId: sid })
+          // Clear stale pending permissions for this session. If a permission
+          // request was dropped during the outage, the server may have already
+          // timed it out or the run may have completed. The next permission
+          // event (if any) will re-populate the bar.
+          if (pendingPermissionBySession.has(sid)) {
+            pendingPermissionBySession.delete(sid)
+            if (sid === activeId) hidePermissionBar()
+          }
+          // Reconcile the question bar from persisted messages — a question
+          // block may have been answered or expired on the server while the
+          // stream was down. This mirrors the tab-switch pattern.
+          const sessionMessages = stateManager.getSession(sid)?.messages ?? []
+          questionBar.repopulateFromMessages(sid, sessionMessages)
+          questionBar.reconcileBar(sid)
         }
         // Refresh the active session's panels immediately
         if (activeId && ids.includes(activeId)) {
           triggerTodosRender(activeId)
           refreshActivityAndTasks(activeId)
+          questionBar.setActiveSession(activeId)
         }
       }],
 ["stream_ping", (_msg, sid) => {
