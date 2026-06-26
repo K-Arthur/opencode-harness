@@ -139,6 +139,61 @@ describe("subagentCard — rendering", () => {
   })
 })
 
+describe("subagentCard — dynamic title resolution", () => {
+  beforeEach(() => setupDom())
+
+  it("shows the real agentName in the title when a subagent_type is specified", async () => {
+    const { renderSubagentTaskCard } = await import("./subagentCard")
+    const el = renderSubagentTaskCard(taskBlock())
+    assert.match(el.querySelector(".subagent-card-title")?.textContent || "", /Subagent: explore/)
+    // Purpose shows as subtitle when title came from agentName
+    assert.equal(el.querySelector(".subagent-card-purpose")?.textContent, "Audit UI components")
+  })
+
+  it("shows the purpose in the title when agentName is the generic 'subagent' fallback", async () => {
+    const { renderSubagentTaskCard } = await import("./subagentCard")
+    const el = renderSubagentTaskCard(taskBlock({
+      args: { description: "Refactor the auth module", prompt: "Do the refactor" },
+    }))
+    assert.match(el.querySelector(".subagent-card-title")?.textContent || "", /Subagent: Refactor the auth module/)
+    // Purpose subtitle is suppressed when title already came from purpose
+    assert.equal(el.querySelector(".subagent-card-purpose"), null)
+  })
+
+  it("shows bare 'Subagent' when neither agentName nor purpose is available", async () => {
+    const { renderSubagentTaskCard } = await import("./subagentCard")
+    const el = renderSubagentTaskCard(taskBlock({ args: {} }))
+    assert.match(el.querySelector(".subagent-card-title")?.textContent || "", /Subagent: Subagent/)
+    assert.equal(el.querySelector(".subagent-card-purpose"), null)
+  })
+
+  it("truncates long purpose in the title to 80 characters", async () => {
+    const { renderSubagentTaskCard } = await import("./subagentCard")
+    const longPurpose = "A".repeat(120)
+    const el = renderSubagentTaskCard(taskBlock({ args: { description: longPurpose } }))
+    const titleText = el.querySelector(".subagent-card-title")?.textContent || ""
+    assert.ok(titleText.length < longPurpose.length + 20, "title must be truncated")
+    assert.ok(titleText.endsWith("..."), "truncated title must end with ellipsis")
+  })
+
+  it("uses the resolved title in the card aria-label", async () => {
+    const { renderSubagentTaskCard } = await import("./subagentCard")
+    const el = renderSubagentTaskCard(taskBlock({
+      args: { description: "Fix the bug", prompt: "Do it" },
+    }))
+    assert.match(el.getAttribute("aria-label") || "", /Fix the bug/)
+  })
+
+  it("uses the resolved title in the activity link aria-label", async () => {
+    const { renderSubagentTaskCard } = await import("./subagentCard")
+    const el = renderSubagentTaskCard(taskBlock({
+      args: { description: "Fix the bug", prompt: "Do it" },
+    }))
+    const link = el.querySelector(".subagent-card-activity-link") as HTMLElement
+    assert.match(link.getAttribute("aria-label") || "", /Fix the bug/)
+  })
+})
+
 describe("subagentCard — live updates", () => {
   beforeEach(() => setupDom())
 

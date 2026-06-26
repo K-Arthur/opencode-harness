@@ -2286,6 +2286,25 @@ function setupTodoSkillAndSubagentPanels(): void {
           }
         }
       }],
+      ["reconnect_sync", (msg) => {
+        const ids = Array.isArray(msg.sessionIds) ? msg.sessionIds as string[] : []
+        const activeId = stateManager.getState().activeSessionId
+        webviewLog(`[main] reconnect_sync for ${ids.length} session(s)`)
+        for (const sid of ids) {
+          if (!isValidSessionId(sid)) continue
+          // Re-request state that requires a server round-trip — these were
+          // dropped during the outage and the webview's cached state is stale.
+          vscode.postMessage({ type: "get_todos", sessionId: sid })
+          vscode.postMessage({ type: "get_subagent_activities", sessionId: sid })
+          vscode.postMessage({ type: "get_changed_files", sessionId: sid })
+          vscode.postMessage({ type: "get_context_usage", sessionId: sid })
+        }
+        // Refresh the active session's panels immediately
+        if (activeId && ids.includes(activeId)) {
+          triggerTodosRender(activeId)
+          refreshActivityAndTasks(activeId)
+        }
+      }],
 ["stream_ping", (_msg, sid) => {
         if (sid) {
           const stream = streamHandlers.get(sid)

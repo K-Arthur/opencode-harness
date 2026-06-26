@@ -99,6 +99,23 @@ function buildTiming(block: ToolCallBlock, status: SubagentCardStatus): HTMLElem
   return el
 }
 
+/**
+ * Resolve the display title for a subagent card. When the agentName is the
+ * generic "subagent" fallback (no subagent_type/name/agent was specified),
+ * prefer the task description (purpose) so the card shows what the subagent
+ * is actually doing instead of the useless literal "subagent".
+ */
+function resolveSubagentTitle(inv: TaskInvocation): string {
+  if (inv.agentName && inv.agentName !== "subagent") return inv.agentName
+  if (inv.purpose) return inv.purpose.length > 80 ? `${inv.purpose.slice(0, 77)}...` : inv.purpose
+  return "Subagent"
+}
+
+/** True when the title was derived from the purpose (so the subtitle would duplicate it). */
+function isTitleFromPurpose(inv: TaskInvocation): boolean {
+  return (!inv.agentName || inv.agentName === "subagent") && Boolean(inv.purpose)
+}
+
 function buildSummary(inv: TaskInvocation, status: SubagentCardStatus, block: ToolCallBlock): HTMLElement {
   const summary = document.createElement("summary")
   summary.className = "subagent-card-header"
@@ -116,10 +133,13 @@ function buildSummary(inv: TaskInvocation, status: SubagentCardStatus, block: To
 
   const title = document.createElement("span")
   title.className = "subagent-card-title"
-  title.textContent = `Subagent: ${inv.agentName}`
+  title.textContent = `Subagent: ${resolveSubagentTitle(inv)}`
   titleWrap.appendChild(title)
 
-  if (inv.purpose) {
+  // Show the purpose as a subtitle only when the title came from the agentName
+  // (i.e. a real agent type was specified). When the title already came from
+  // the purpose, showing it again as a subtitle would be redundant.
+  if (inv.purpose && !isTitleFromPurpose(inv)) {
     const purpose = document.createElement("span")
     purpose.className = "subagent-card-purpose"
     purpose.textContent = inv.purpose
@@ -173,7 +193,7 @@ function buildActivityLink(block: ToolCallBlock, inv: TaskInvocation): HTMLEleme
   const link = document.createElement("button")
   link.className = "subagent-card-activity-link"
   link.textContent = "View activity →"
-  link.setAttribute("aria-label", `View activity for ${inv.agentName}`)
+  link.setAttribute("aria-label", `View activity for ${resolveSubagentTitle(inv)}`)
   // Opening the side panel is an intra-webview action — dispatch a DOM event the
   // host webview (main.ts) listens for, rather than round-tripping to the host.
   link.addEventListener("click", (e) => {
@@ -219,7 +239,7 @@ export function renderSubagentTaskCard(block: ToolCallBlock, _opts: SubagentCard
   const card = document.createElement("details")
   card.className = `subagent-card subagent-card--${status}`
   card.dataset.blockId = block.id
-  card.setAttribute("aria-label", `Subagent ${invocation.agentName}, ${STATUS_LABEL[status]}`)
+  card.setAttribute("aria-label", `Subagent ${resolveSubagentTitle(invocation)}, ${STATUS_LABEL[status]}`)
   // Running and failed subagents expand by default so progress/errors are
   // visible; completed ones collapse to keep the transcript scannable.
   card.open = status === "running" || status === "failed"

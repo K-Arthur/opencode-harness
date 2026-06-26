@@ -1678,6 +1678,53 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
           })
         }
       }
+
+      // Re-sync changed files for ALL sessions — the Files Changed panel goes
+      // stale during an outage because file_edited events are dropped. Without
+      // this, the panel stops tracking changes until the next file_edited event
+      // arrives, which may never happen if the agent finished editing during
+      // the outage.
+      for (const session of this.sessionStore.list()) {
+        const files = this.sessionStore.getChangedFiles(session.id)
+        if (files.length === 0) continue
+        const stats = this.sessionStore.getChangedFileStats(session.id)
+        this.postMessage({
+          type: "changed_files_update",
+          sessionId: session.id,
+          files: files.map((path) => ({
+            path,
+            added: stats[path]?.added ?? 0,
+            removed: stats[path]?.removed ?? 0,
+            status: stats[path]?.status,
+          })),
+        })
+      }
+
+      // Re-push context usage for ALL sessions — the context usage bar goes
+      // stale during an outage because context_usage messages (emitted by
+      // contextMonitor.onContextChanged) are dropped. Without this, the bar
+      // shows outdated token counts until the next token event fires.
+      for (const session of this.sessionStore.list()) {
+        this.pushContextUsageForSession(session.id)
+      }
+
+      // Re-push host-side state that could have changed during the outage.
+      // Rate limit state, model list, and session list are all host-authoritative
+      // and may have drifted while the event stream was down.
+      this.pushRateLimitStateToWebview()
+      this.pushModelListToWebview()
+      this.postSessionListUpdate(this.sessionStore.list())
+
+      // Tell the webview to re-request server-fetched state (todos, subagent
+      // activities) for all sessions. These require a server round-trip via
+      // get_todos / get_subagent_activities, which the webview initiates. If
+      // CLI session IDs aren't re-registered yet (they're invalidated on
+      // server_disconnected), the requests will silently fail and the next
+      // server event will update the state — this is safe by design.
+      const allSessionIds = this.sessionStore.list().map(s => s.id)
+      if (allSessionIds.length > 0) {
+        this.postMessage({ type: "reconnect_sync", sessionIds: allSessionIds })
+      }
     }],
     ["sessions_recovered", async () => {
       log.info("sessions_recovered: re-pushing init state with recovered sessions")
@@ -2400,7 +2447,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     // H3: Buffer messages if webview isn't ready yet.
     // Allow init_state, theme_vars, model_update, and model_list through
     // so the webview is fully initialized on first load.
-    const passthrough = ["init_state", "theme_vars", "theme_config", "tool_output_config", "rate_limit_state", "model_update", "model_list", "webview_ready", "session_list_update", "active_file", "workspace_files"]
+    const passthrough = ["init_state", "theme_vars", "theme_config", "tool_output_config", "rate_limit_state", "model_update", "model_list", "webview_ready", "session_list_update", "active_file", "workspace_files", "reconnect_sync"]
     if (!this.eventRouter.webviewReady && !passthrough.includes(msg.type as string)) {
       // Use centralized queue enforcement in WebviewEventRouter
       this.eventRouter.enqueueMessage(msg)

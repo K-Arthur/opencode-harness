@@ -1,6 +1,7 @@
 import * as vscode from "vscode"
 import * as path from "path"
 import { execSync } from "node:child_process"
+import { realpathSync } from "node:fs"
 import type { TabManager } from "./TabManager"
 import type { StatePushService } from "./StatePushService"
 import type { SessionLifecycleService } from "./SessionLifecycleService"
@@ -2757,10 +2758,11 @@ export class WebviewEventRouter {
 
     if (path.isAbsolute(filePath)) {
       const absolutePath = path.resolve(filePath)
-      if (roots.length > 0 && !roots.some(root => this.isPathInsideRoot(absolutePath, root))) {
+      const realPath = this.resolveRealPath(absolutePath)
+      if (roots.length > 0 && !roots.some(root => this.isPathInsideRoot(realPath, root))) {
         throw new Error(`Refusing to open "${rawPath}" because it is outside the session workspace`)
       }
-      const uri = vscode.Uri.file(absolutePath)
+      const uri = vscode.Uri.file(realPath)
       await this.assertOpenableFile(uri, rawPath)
       return { uri, lineNumber: parsed.lineNumber }
     }
@@ -2814,7 +2816,7 @@ export class WebviewEventRouter {
     const seen = new Set<string>()
     return roots
       .filter(Boolean)
-      .map(root => path.resolve(root))
+      .map(root => this.resolveRealPath(path.resolve(root)))
       .filter(root => {
         const key = this.normalizeFsPath(root)
         if (seen.has(key)) return false
@@ -2823,8 +2825,29 @@ export class WebviewEventRouter {
       })
   }
 
+  /**
+   * Resolve a filesystem path to its canonical form by following symlinks.
+   * This ensures that workspace boundary checks compare canonical paths,
+   * not lexical ones — a symlinked workspace root (e.g. /home/user/proj →
+   * /data/projects/proj) would otherwise cause valid in-workspace files to
+   * be rejected because path.resolve() does NOT resolve symlinks.
+   *
+   * Falls back to path.resolve() when the file doesn't exist yet (new files,
+   * deleted files, permission issues) — in that case there's no symlink to
+   * follow, so the lexical path is the best we can do.
+   */
+  private resolveRealPath(filePath: string): string {
+    try {
+      return realpathSync(filePath)
+    } catch {
+      return path.resolve(filePath)
+    }
+  }
+
   private isPathInsideRoot(filePath: string, rootPath: string): boolean {
-    const relative = path.relative(rootPath, filePath)
+    const realFile = this.resolveRealPath(filePath)
+    const realRoot = this.resolveRealPath(rootPath)
+    const relative = path.relative(realRoot, realFile)
     return relative === "" || (!!relative && !relative.startsWith("..") && !path.isAbsolute(relative))
   }
 

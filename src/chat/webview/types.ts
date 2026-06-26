@@ -698,6 +698,7 @@ export type HostMessage =
   | { type: "stream_chunk"; sessionId: string; text: string; messageId?: string; seq?: number }
   | { type: "stream_end"; sessionId: string; reason?: string; blocks?: Block[]; partial?: boolean; seq?: number; source?: "host" | "watchdog" | "abort" | "finalize" | "ttfb" | "reconcile" }
   | { type: "stream_interrupted"; sessionId: string; cliSessionId?: string; interruptedAt: number }
+  | { type: "reconnect_sync"; sessionIds: string[] }
   | { type: "stream_ping"; sessionId: string; seq?: number }
   | { type: "stream_ack"; sessionId: string; seq?: number }
   | { type: "stream_tool_start"; sessionId: string; toolCall: ToolCallData }

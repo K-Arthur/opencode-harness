@@ -800,6 +800,62 @@ function addTruncatedContent(container: HTMLElement, text: string, maxChars: num
   }
 }
 
+/**
+ * Map a tool call to the panel it should navigate to when its card is clicked.
+ * Returns the panel name (matching the `oc:open-panel` event contract) or null
+ * when the tool has no associated panel.
+ */
+function panelNameForTool(toolBlock: ToolCallBlock): string | null {
+  const name = (toolBlock.name || "").toLowerCase()
+  if (name.includes("todo")) return "todos"
+  if (toolBlock.class === "exec" || name.includes("bash") || name.includes("shell") || name.includes("command") || name.includes("terminal")) return "tasks"
+  return null
+}
+
+/**
+ * Attach panel-navigation behaviour to a tool card's summary header. Clicking
+ * the summary (or pressing Enter/Space) dispatches an intra-webview
+ * `oc:open-panel` CustomEvent — same pattern as the subagent card's
+ * `oc:open-subagent-panel`. The event is handled by todoSubagentSetup.ts,
+ * which opens the corresponding side panel and syncs visibility to the host.
+ */
+function attachPanelNavigation(summary: HTMLElement, panelName: string): void {
+  summary.dataset.panelNav = panelName
+  summary.style.cursor = "pointer"
+
+  const navigate = (e: Event) => {
+    // Only trigger when the click lands on the summary itself or the tool-name
+    // text — not on interactive children (file path chips, action buttons).
+    const target = e.target as HTMLElement
+    if (target.closest("button, .tool-arg, .tool-file-actions, .tool-status")) return
+    e.stopPropagation()
+    e.preventDefault()
+    try {
+      window.dispatchEvent(
+        new CustomEvent("oc:open-panel", { detail: { panel: panelName } }),
+      )
+    } catch {
+      // No-op outside a DOM environment.
+    }
+  }
+
+  summary.addEventListener("click", navigate)
+  summary.addEventListener("keydown", (e: KeyboardEvent) => {
+    if (e.key !== "Enter" && e.key !== " ") return
+    const target = e.target as HTMLElement
+    if (target.closest("button, .tool-arg, .tool-file-actions, .tool-status")) return
+    e.stopPropagation()
+    e.preventDefault()
+    try {
+      window.dispatchEvent(
+        new CustomEvent("oc:open-panel", { detail: { panel: panelName } }),
+      )
+    } catch {
+      // No-op outside a DOM environment.
+    }
+  })
+}
+
 export function renderToolCallBlock(block: Block, opts: RenderOptions): HTMLElement | null {
   const toolBlock = normalizeToolBlock(block)
 
@@ -830,6 +886,13 @@ export function renderToolCallBlock(block: Block, opts: RenderOptions): HTMLElem
   const details = createToolDetailsContainer(toolBlock)
   const summary = createToolSummary(toolBlock, details, opts)
   details.appendChild(summary)
+
+  // Attach panel navigation to the summary for tools that have an associated
+  // side panel (todo tools → todos panel, exec/command tools → tasks panel).
+  const panelName = panelNameForTool(toolBlock)
+  if (panelName) {
+    attachPanelNavigation(summary, panelName)
+  }
 
   const argsPanel = createToolArgsPanel(toolBlock)
   if (argsPanel) details.appendChild(argsPanel)

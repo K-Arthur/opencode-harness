@@ -404,6 +404,14 @@
   outline-offset: -2px;
 }
 
+/* Panel-navigable tool cards: clicking the summary opens the associated side
+   panel (todos, tasks, etc.). A subtle accent border on hover signals that
+   the header is clickable beyond just expanding/collapsing the details. */
+.tool-header[data-panel-nav]:hover {
+  border-left-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 6%, var(--oc-list-hover));
+}
+
 .tool-icon {
   display: flex;
   align-items: center;

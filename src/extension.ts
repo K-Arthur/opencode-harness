@@ -461,6 +461,11 @@ function initConnectionStatusBar(
         connectionStatus.tooltip = STATUS_BAR_TOOLTIPS.connection.error
         connectionStatus.command = "opencode-harness.openChat"
         break
+      case "event_stream_reconnected":
+        connectionStatus.text = "$(check-all) OpenCode: Connected"
+        connectionStatus.tooltip = STATUS_BAR_TOOLTIPS.connection.connected(sessionManager.currentPort)
+        connectionStatus.command = "opencode-harness.openChat"
+        break
       case "sessions_recovered": {
         // Server reported its persisted sessions on connect. Import any that
         // the extension does not yet know about so CLI-created sessions

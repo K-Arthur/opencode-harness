@@ -241,6 +241,38 @@ export function setupTodoSubagentPanelsImpl(deps: TodoSubagentSetupDeps): TodoSu
     })
   })
 
+  // Panel navigation from tool card clicks. Tool cards dispatch
+  // `oc:open-panel` CustomEvents (see attachPanelNavigation in
+  // toolCallRenderer.ts) to navigate the user to the relevant side panel.
+  window.addEventListener("oc:open-panel", (e) => {
+    const detail = (e as CustomEvent).detail as { panel?: string } | undefined
+    const panel = detail?.panel
+    if (!panel) return
+    pauseActiveAnchorForReflow()
+    switch (panel) {
+      case "todos":
+        todosPanelApi?.open()
+        els.todosToggleBtn?.setAttribute("aria-pressed", "true")
+        break
+      case "activity":
+        activityPanelApi?.toggle?.()
+        break
+      case "tasks":
+        tasksPanelApi?.toggle?.()
+        break
+      case "terminal":
+        terminalPanelApi?.toggle()
+        break
+      case "subagents":
+        setSubagentPanelOpen(true)
+        requestSubagentActivities()
+        break
+      default:
+        return
+    }
+    syncPanelVisibilityToHost()
+  })
+
   const popoutBtn = document.getElementById("subagent-detail-popout-btn")
   popoutBtn?.addEventListener("click", () => {
     const sid = stateManager.getState().activeSessionId
