@@ -1502,6 +1502,12 @@ textarea {
   opacity: 1;
 }
 
+.context-chip-toggle:focus-visible {
+  outline: 2px solid var(--oc-accent);
+  outline-offset: 1px;
+  border-radius: var(--radius-sm);
+}
+
 .context-chip-remove {
   background: none;
   border: none;
@@ -1524,6 +1530,12 @@ textarea {
 .context-chip-remove:hover {
   opacity: 1;
   background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+}
+
+.context-chip-remove:focus-visible {
+  outline: 2px solid var(--oc-accent);
+  outline-offset: 1px;
+  border-radius: var(--radius-sm);
 }
 
 .context-chip[title]:hover::after {

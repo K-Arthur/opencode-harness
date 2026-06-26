@@ -142,6 +142,7 @@ export function renderFileEditCard(
 
   const openBtn = document.createElement("button")
   openBtn.className = "file-edit-card__open-btn file-edit-card__action"
+  openBtn.setAttribute("type", "button")
   openBtn.textContent = "Open file"
   openBtn.setAttribute("aria-label", `Open ${filePath} in editor`)
   openBtn.addEventListener("click", (e) => {
@@ -159,6 +160,7 @@ export function renderFileEditCard(
 
   const diffBtn = document.createElement("button")
   diffBtn.className = "file-edit-card__diff-btn file-edit-card__action"
+  diffBtn.setAttribute("type", "button")
   diffBtn.textContent = "Show diff"
   diffBtn.setAttribute("aria-expanded", "false")
   diffBtn.setAttribute("aria-controls", `diff-${toolBlock.id}`)

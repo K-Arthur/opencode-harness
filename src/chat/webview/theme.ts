@@ -32,9 +32,12 @@ export function updateContextChips(els: ElementRefs, chips?: ContextChip[]) {
     if (chip.onToggle) {
       const toggle = document.createElement("button")
       toggle.className = "context-chip-toggle"
-      const toggleIcon = chip.isIncluded === false ? "\u{1F6AB}" : "\u{1F441}" // eye-off : eye
+      toggle.setAttribute("type", "button")
+      const included = chip.isIncluded !== false
+      const toggleIcon = included ? "\u{1F441}" : "\u{1F6AB}" // eye : eye-off
       toggle.textContent = toggleIcon
-      toggle.setAttribute("aria-label", chip.isIncluded === false ? "Include file in context" : "Exclude file from context")
+      toggle.setAttribute("aria-label", included ? "Exclude file from context" : "Include file in context")
+      toggle.setAttribute("aria-pressed", included ? "true" : "false")
       toggle.addEventListener("click", () => {
         chip.onToggle?.()
       })
@@ -44,6 +47,7 @@ export function updateContextChips(els: ElementRefs, chips?: ContextChip[]) {
     if (chip.removable !== false) {
       const rem = document.createElement("button")
       rem.className = "context-chip-remove"
+      rem.setAttribute("type", "button")
       rem.textContent = "\u00D7"
       rem.setAttribute("aria-label", "Remove context chip")
       rem.addEventListener("click", () => {
