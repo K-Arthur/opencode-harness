@@ -4,7 +4,7 @@ import type { VoiceInputSettings } from "../voiceInputCore"
 
 export type MessageRole = "user" | "assistant" | "system"
 
-export type ContextItemType = "active_file" | "picked_file" | "image" | "document"
+export type ContextItemType = "active_file" | "picked_file" | "picked_folder" | "image" | "document"
 
 export interface AttachedContextItem {
   id: string
@@ -487,6 +487,10 @@ export interface ContextChip {
   kind?: string
   removable?: boolean
   onRemove?: () => void
+  /** Toggle handler for chips that support on/off state (e.g., active file inclusion). */
+  onToggle?: () => void
+  /** Current on/off state for toggleable chips. */
+  isIncluded?: boolean
 }
 
 export interface AttachedContextItem {

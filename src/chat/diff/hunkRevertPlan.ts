@@ -17,6 +17,8 @@ import { computeHunks, applyHunkSelection, countHunkChanges, type StagingHunk } 
 
 export interface FileHunkSummary {
   id: string
+  oldStart: number
+  newStart: number
   additions: number
   deletions: number
   /** Unified-diff lines for this hunk (prefixed " "/"-"/"+"). */
@@ -27,7 +29,7 @@ export interface FileHunkSummary {
 export function getFileHunks(before: string, after: string): FileHunkSummary[] {
   return computeHunks(before, after).map((h) => {
     const c = countHunkChanges(h)
-    return { id: h.id, additions: c.additions, deletions: c.deletions, lines: h.lines }
+    return { id: h.id, oldStart: h.oldStart, newStart: h.newStart, additions: c.additions, deletions: c.deletions, lines: h.lines }
   })
 }
 

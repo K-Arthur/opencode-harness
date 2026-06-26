@@ -1464,18 +1464,42 @@ textarea {
   font-size: var(--text-xs);
   font-weight: 600;
   font-family: var(--font-mono);
-  background: var(--oc-accent-subtle, rgba(0, 120, 212, 0.08));
-  color: var(--color-accent);
+  background: var(--vscode-badge-background, var(--oc-accent-subtle, rgba(0, 120, 212, 0.08)));
+  color: var(--vscode-badge-foreground, var(--color-accent));
   border: 1px solid var(--oc-accent-border, rgba(0, 120, 212, 0.25));
   cursor: pointer;
   max-width: 320px;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   vertical-align: middle;
   margin: 0 4px;
   transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
   position: relative;
+}
+
+.context-chip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.context-chip-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  min-height: 20px;
+  font-size: var(--text-sm);
+  opacity: 0.7;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.context-chip-toggle:hover {
+  opacity: 1;
 }
 
 .context-chip[title]:hover::after {
@@ -1575,17 +1599,6 @@ textarea {
 
 .context-chip[data-kind="image"]:hover .chip-image-preview {
   display: block;
-}
-
-/* Toggle chip for active file include/exclude */
-.context-chip[data-kind="toggle"] {
-  border-style: dashed;
-  opacity: 0.8;
-  cursor: default;
-}
-
-.context-chip[data-kind="toggle"]::before {
-  display: none;
 }
 
 /* Document size badge */

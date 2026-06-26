@@ -1,4 +1,4 @@
-import { REMOVE_SVG, DOC_TEXT_SVG, DOC_MARKDOWN_SVG, DOC_CSV_SVG, DOC_PDF_SVG, DOC_JSON_SVG, DOC_GENERIC_SVG } from "../icons"
+import { REMOVE_SVG, DOC_TEXT_SVG, DOC_MARKDOWN_SVG, DOC_CSV_SVG, DOC_PDF_SVG, DOC_JSON_SVG, DOC_XML_SVG, DOC_YAML_SVG, DOC_GENERIC_SVG } from "../icons"
 import type { AttachedContextItem, ContextTraySummary } from "../types"
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
@@ -35,11 +35,45 @@ const DOCUMENT_ICONS: Record<string, string> = {
   "text/csv": DOC_CSV_SVG,
   "application/pdf": DOC_PDF_SVG,
   "application/json": DOC_JSON_SVG,
+  "application/xml": DOC_XML_SVG,
+  "text/xml": DOC_XML_SVG,
+  "application/x-yaml": DOC_YAML_SVG,
+  "text/yaml": DOC_YAML_SVG,
+}
+
+// Extension-based fallback for when MIME type is unreliable
+const EXTENSION_ICONS: Record<string, string> = {
+  ".md": DOC_MARKDOWN_SVG,
+  ".markdown": DOC_MARKDOWN_SVG,
+  ".txt": DOC_TEXT_SVG,
+  ".csv": DOC_CSV_SVG,
+  ".json": DOC_JSON_SVG,
+  ".xml": DOC_XML_SVG,
+  ".yaml": DOC_YAML_SVG,
+  ".yml": DOC_YAML_SVG,
+  ".toml": DOC_TEXT_SVG,
+  ".ini": DOC_TEXT_SVG,
+  ".log": DOC_TEXT_SVG,
+}
+
+function getIconForFile(filename: string, mimeType: string): string {
+  // Try MIME type first
+  if (DOCUMENT_ICONS[mimeType]) {
+    return DOCUMENT_ICONS[mimeType]
+  }
+  // Fallback to extension
+  const ext = filename.toLowerCase().split(".").pop()
+  if (ext) {
+    const icon = EXTENSION_ICONS[`.${ext}` as keyof typeof EXTENSION_ICONS]
+    if (icon) return icon
+  }
+  return DOC_GENERIC_SVG
 }
 
 export interface Attachment {
   data: string
   mimeType: string
+  filename?: string
 }
 
 export interface AttachmentManager {
@@ -85,6 +119,7 @@ export interface ActiveFileInfo {
   languageId?: string
   lineCount?: number
   selection?: ActiveFileSelectionInfo | null
+  reason?: "binary_file" | "file_too_large"
 }
 
 export interface AttachmentDeps {
@@ -251,7 +286,8 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
       } else {
         const icon = document.createElement("span")
         icon.className = "attachment-chip-icon"
-        icon.innerHTML = DOCUMENT_ICONS[att.mimeType] || DOC_GENERIC_SVG
+        const filename = att.filename || "file"
+        icon.innerHTML = getIconForFile(filename, att.mimeType)
         chip.appendChild(icon)
       }
       const remove = document.createElement("button")
@@ -278,6 +314,7 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
   function syncContextItemsWithPrompt(): void {
     const mentions = parsePromptMentions(deps.els.promptInput.value)
     const fileMentions = mentions.filter((m) => m.kind === "file" && m.token.startsWith("@file:"))
+    const folderMentions = mentions.filter((m) => m.kind === "folder" && m.token.startsWith("@folder:"))
     const currentPickedFiles = contextItems.filter((item) => item.type === "picked_file").map((item) => item.path)
     const newPickedFiles = fileMentions.map((m) => {
       const path = m.token.replace(/^@file:/, "").replace(/^["']/, "").replace(/["']$/, "")
@@ -294,6 +331,26 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
     for (const path of newPickedFiles) {
       if (path && !currentPickedFiles.includes(path)) {
         addPickedFile(path)
+      }
+    }
+
+    // Handle folder mentions
+    const currentPickedFolders = contextItems.filter((item) => item.type === "picked_folder").map((item) => item.path)
+    const newPickedFolders = folderMentions.map((m) => {
+      const path = m.token.replace(/^@folder:/, "").replace(/^["']/, "").replace(/["']$/, "")
+      return path
+    })
+
+    // Remove picked folders no longer in prompt
+    for (const path of currentPickedFolders) {
+      if (path && !newPickedFolders.includes(path)) {
+        removePickedFolder(path)
+      }
+    }
+    // Add new picked folders
+    for (const path of newPickedFolders) {
+      if (path && !currentPickedFolders.includes(path)) {
+        addPickedFolder(path)
       }
     }
     deps.onInputChanged?.()
@@ -322,9 +379,8 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
       const selectionLabel = activeFileSelection
         ? ` (L${activeFileSelection.startLine}-${activeFileSelection.endLine})`
         : ""
-      const toggleIcon = activeFileIncluded ? "\u{1F441}" : "\u{1F6AB}"
       chips.push({
-        label: `${toggleIcon} ${basename}${selectionLabel}`,
+        label: `${basename}${selectionLabel}`,
         title: activeFile + selectionLabel,
         kind: "file",
         removable: true,
@@ -335,12 +391,10 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
           }
           updatePromptContextChips()
         },
-      })
-      // Add toggle chip for include/exclude
-      chips.push({
-        label: activeFileIncluded ? "Included" : "Excluded",
-        kind: "toggle",
-        removable: false,
+        onToggle: () => {
+          toggleActiveFileInclude()
+        },
+        isIncluded: activeFileIncluded,
       })
     }
 
@@ -372,6 +426,14 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
 
   function setActiveFile(info: ActiveFileInfo | null): void {
     const path = info?.path ?? null
+    // If host suppressed the file (binary/too large), don't show it at all
+    if (info?.reason && path === null) {
+      activeFile = null
+      activeFileSelection = null
+      updateActiveFileContextItem(null)
+      updatePromptContextChips()
+      return
+    }
     activeFile = path
     activeFileSelection = info?.selection ?? null
     // Reset to included when switching files (per-session reset)
@@ -468,6 +530,27 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
 
   function removePickedFile(path: string): void {
     const idx = contextItems.findIndex((item) => item.type === "picked_file" && item.path === path)
+    if (idx !== -1) {
+      contextItems.splice(idx, 1)
+    }
+  }
+
+  function addPickedFolder(path: string): void {
+    const existing = contextItems.find((item) => item.type === "picked_folder" && item.path === path)
+    if (existing) return
+
+    const item: AttachedContextItem = {
+      id: `picked-folder-${nextContextId++}`,
+      type: "picked_folder",
+      path,
+      isActive: true,
+      tokenEstimate: estimateFileTokens(path),
+    }
+    contextItems.push(item)
+  }
+
+  function removePickedFolder(path: string): void {
+    const idx = contextItems.findIndex((item) => item.type === "picked_folder" && item.path === path)
     if (idx !== -1) {
       contextItems.splice(idx, 1)
     }

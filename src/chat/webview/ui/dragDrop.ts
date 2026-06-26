@@ -154,10 +154,16 @@ export function setupDragDrop(deps: DragDropDeps): void {
   let overlay: HTMLElement | null = null
   let dragCounter = 0
   let rafId: number | undefined
+  let emergencyHideTimeout: number | undefined
 
   function showOverlay(): void {
     if (!overlay) {
       overlay = createOverlay()
+    }
+    // Clear any emergency hide timeout when overlay is shown
+    if (emergencyHideTimeout) {
+      clearTimeout(emergencyHideTimeout)
+      emergencyHideTimeout = undefined
     }
   }
 
@@ -172,6 +178,29 @@ export function setupDragDrop(deps: DragDropDeps): void {
         overlay = null
       }
     })
+  }
+
+  function forceHideOverlay(): void {
+    if (overlay) {
+      overlay.remove()
+      overlay = null
+    }
+    dragCounter = 0
+    if (rafId) {
+      cancelAnimationFrame(rafId)
+      rafId = undefined
+    }
+    if (emergencyHideTimeout) {
+      clearTimeout(emergencyHideTimeout)
+      emergencyHideTimeout = undefined
+    }
+  }
+
+  // Check if the related target is outside the app bounds
+  function isOutsideApp(relatedTarget: EventTarget | null): boolean {
+    if (!relatedTarget) return true
+    const target = relatedTarget as Node
+    return !els.app.contains(target)
   }
 
   // dragenter: increment counter, show overlay
@@ -190,28 +219,73 @@ export function setupDragDrop(deps: DragDropDeps): void {
     showOverlay()
   })
 
-  // dragleave: decrement counter, hide overlay if no more drags
+  // dragleave: decrement counter only if leaving app bounds, hide overlay if no more drags
   els.app.addEventListener("dragleave", (e) => {
     e.preventDefault()
     e.stopPropagation()
-    dragCounter--
-    if (dragCounter <= 0) {
-      dragCounter = 0
-      hideOverlay()
+    // Only decrement if we're actually leaving the app container
+    if (isOutsideApp(e.relatedTarget)) {
+      dragCounter--
+      if (dragCounter <= 0) {
+        dragCounter = 0
+        hideOverlay()
+      }
     }
   })
 
-  // drop: process files, hide overlay
+  // drop: process files, force-hide overlay
   els.app.addEventListener("drop", (e) => {
     e.preventDefault()
     e.stopPropagation()
-    dragCounter = 0
-    hideOverlay()
+    forceHideOverlay()
 
     const dataTransfer = e.dataTransfer
     if (!dataTransfer) return
 
     const { workspaceFiles, externalFiles } = parseDataTransfer(dataTransfer)
     processDroppedItems(workspaceFiles, externalFiles, attachmentManager, postMessage)
+  })
+
+  // Document-level dragleave fallback: if the drag leaves the window entirely, hide the overlay
+  document.addEventListener("dragleave", (e) => {
+    if (e.relatedTarget === null) {
+      // Drag left the window
+      forceHideOverlay()
+    }
+  })
+
+  // Emergency hide timeout: overlay cannot survive more than 3 seconds after last drag event
+  els.app.addEventListener("dragenter", () => {
+    if (emergencyHideTimeout) {
+      clearTimeout(emergencyHideTimeout)
+      emergencyHideTimeout = undefined
+    }
+  })
+
+  els.app.addEventListener("dragover", () => {
+    if (emergencyHideTimeout) {
+      clearTimeout(emergencyHideTimeout)
+      emergencyHideTimeout = undefined
+    }
+  })
+
+  function setEmergencyHideTimeout(): void {
+    if (emergencyHideTimeout) {
+      clearTimeout(emergencyHideTimeout)
+    }
+    emergencyHideTimeout = window.setTimeout(() => {
+      forceHideOverlay()
+    }, 3000)
+  }
+
+  // Set emergency timeout on dragleave (outside app) and drop
+  els.app.addEventListener("dragleave", (e) => {
+    if (isOutsideApp(e.relatedTarget)) {
+      setEmergencyHideTimeout()
+    }
+  })
+
+  els.app.addEventListener("drop", () => {
+    setEmergencyHideTimeout()
   })
 }

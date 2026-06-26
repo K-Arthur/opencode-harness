@@ -1883,8 +1883,9 @@ export class WebviewEventRouter {
             const hunks = getFileHunks(baselineContent, afterContent)
             const localLines = hunks.flatMap((hunk: FileHunkSummary) => {
               const out: DiffLine[] = []
-              let oldLine = 0
-              let newLine = 0
+              // Initialize line numbers from the hunk's starting positions
+              let oldLine = hunk.oldStart
+              let newLine = hunk.newStart
               for (const line of hunk.lines) {
                 if (line.startsWith("+")) {
                   out.push({ type: "added", newLine: newLine++, content: line.slice(1) })

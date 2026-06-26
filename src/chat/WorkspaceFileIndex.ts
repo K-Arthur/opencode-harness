@@ -32,6 +32,7 @@ export class WorkspaceFileIndex {
    * Build the workspace file list from the current workspace folders.
    * Excludes node_modules and any config-defined exclude patterns.
    * Returns paths relative to the first workspace folder.
+   * Includes both files and directories for @folder: references.
    */
   async refresh(): Promise<void> {
     const folders = this.deps.vscode.workspace.workspaceFolders
@@ -41,12 +42,24 @@ export class WorkspaceFileIndex {
     }
 
     try {
-      const uris = await this.deps.vscode.workspace.findFiles("**/*", "**/node_modules/**", 5000)
-      this.files = uris
+      // Get files
+      const fileUris = await this.deps.vscode.workspace.findFiles("**/*", "**/node_modules/**", 5000)
+      const filePaths = fileUris
         .map((uri) => this.deps.vscode.workspace.asRelativePath(uri))
         .filter((relative) => relative && !relative.startsWith("../") && !relative.includes("node_modules"))
         .filter((relative) => !this.matchesExcludePattern(relative))
-        .sort()
+
+      // Get directories by reading the workspace
+      const dirUris = await this.deps.vscode.workspace.findFiles("**/", "**/node_modules/**", 5000)
+      const dirPaths = dirUris
+        .map((uri) => this.deps.vscode.workspace.asRelativePath(uri))
+        .filter((relative) => relative && !relative.startsWith("../") && !relative.includes("node_modules"))
+        .filter((relative) => !this.matchesExcludePattern(relative))
+        .map((relative) => relative.replace(/\/$/, "")) // Remove trailing slash for consistency
+
+      // Deduplicate and sort
+      const uniquePaths = new Set([...filePaths, ...dirPaths])
+      this.files = Array.from(uniquePaths).sort()
     } catch (err) {
       console.warn("[WorkspaceFileIndex] refresh failed", err)
       this.files = []

@@ -190,4 +190,46 @@ describe("ActiveFileTracker", () => {
     assert.equal(tracker.isIncluded("session-1"), false)
     tracker.dispose()
   })
+
+  it("suppresses active file for binary file types", () => {
+    const { deps, posted, setActiveEditor } = makeDeps()
+    const tracker = new ActiveFileTracker(deps)
+    const editor = makeEditor("/workspace/image.png")
+    editor.document.languageId = "png"
+    setActiveEditor(editor)
+    tracker.start()
+    assert.equal(posted.length, 1)
+    assert.equal(posted[0]!.type, "active_file")
+    assert.equal(posted[0]!.path, null)
+    assert.equal(posted[0]!.reason, "binary_file")
+    tracker.dispose()
+  })
+
+  it("suppresses active file for files larger than 1 MB", () => {
+    const { deps, posted, setActiveEditor } = makeDeps()
+    const tracker = new ActiveFileTracker(deps)
+    const editor = makeEditor("/workspace/large.ts")
+    editor.document.getText = () => "x".repeat(2 * 1024 * 1024) // 2 MB
+    setActiveEditor(editor)
+    tracker.start()
+    assert.equal(posted.length, 1)
+    assert.equal(posted[0]!.type, "active_file")
+    assert.equal(posted[0]!.path, null)
+    assert.equal(posted[0]!.reason, "file_too_large")
+    tracker.dispose()
+  })
+
+  it("allows active file for text files under 1 MB", () => {
+    const { deps, posted, setActiveEditor } = makeDeps()
+    const tracker = new ActiveFileTracker(deps)
+    const editor = makeEditor("/workspace/src/main.ts")
+    editor.document.getText = () => "x".repeat(500 * 1024) // 500 KB
+    setActiveEditor(editor)
+    tracker.start()
+    assert.equal(posted.length, 1)
+    assert.equal(posted[0]!.type, "active_file")
+    assert.equal(posted[0]!.path, "src/main.ts")
+    assert.equal(posted[0]!.reason, undefined)
+    tracker.dispose()
+  })
 })

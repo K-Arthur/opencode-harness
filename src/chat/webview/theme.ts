@@ -1,4 +1,4 @@
-import type { ContextChip, ContextUsage } from "./types"
+import type { ContextChip } from "./types"
 import type { ElementRefs } from "./dom"
 import { timers } from "./timerRegistry"
 
@@ -27,6 +27,20 @@ export function updateContextChips(els: ElementRefs, chips?: ContextChip[]) {
     label.className = "context-chip-label"
     label.textContent = chip.label || ""
     el.appendChild(label)
+
+    // Add toggle button for chips that support on/off state (e.g., active file inclusion)
+    if (chip.onToggle) {
+      const toggle = document.createElement("button")
+      toggle.className = "context-chip-toggle"
+      const toggleIcon = chip.isIncluded === false ? "\u{1F6AB}" : "\u{1F441}" // eye-off : eye
+      toggle.textContent = toggleIcon
+      toggle.setAttribute("aria-label", chip.isIncluded === false ? "Include file in context" : "Exclude file from context")
+      toggle.addEventListener("click", () => {
+        chip.onToggle?.()
+      })
+      el.appendChild(toggle)
+    }
+
     if (chip.removable !== false) {
       const rem = document.createElement("button")
       rem.className = "context-chip-remove"

@@ -243,4 +243,108 @@ describe("dragDrop module", () => {
     assert.strictEqual(preventDefaultSpy.mock.calls.length, 1)
     assert.strictEqual(stopPropagationSpy.mock.calls.length, 1)
   })
+
+  it("should force-hide overlay on drop immediately", () => {
+    setupDragDrop(makeDeps())
+
+    // Trigger dragenter to show overlay
+    const dragEnterEvent = new DragEvent("dragenter", {
+      bubbles: true,
+      cancelable: true,
+    })
+    mockApp.dispatchEvent(dragEnterEvent)
+
+    // Overlay should be visible
+    assert.ok(document.querySelector(".drop-overlay"), "Overlay should be visible after dragenter")
+
+    // Trigger drop
+    const mockDataTransfer = {
+      types: [],
+      files: [],
+    }
+    const dropEvent = new DragEvent("drop", {
+      bubbles: true,
+      cancelable: true,
+      dataTransfer: mockDataTransfer as any,
+    })
+    mockApp.dispatchEvent(dropEvent)
+
+    // Overlay should be removed immediately (no RAF delay)
+    assert.ok(!document.querySelector(".drop-overlay"), "Overlay should be removed immediately on drop")
+  })
+
+  it("should not decrement counter on dragleave when related target is inside app", () => {
+    setupDragDrop(makeDeps())
+
+    // Create a child element inside app
+    const child = document.createElement("div")
+    mockApp.appendChild(child)
+
+    // Trigger dragenter
+    const dragEnterEvent = new DragEvent("dragenter", {
+      bubbles: true,
+      cancelable: true,
+    })
+    mockApp.dispatchEvent(dragEnterEvent)
+
+    // Trigger dragleave to child (relatedTarget is child, which is inside app)
+    const dragLeaveEvent = new DragEvent("dragleave", {
+      bubbles: true,
+      cancelable: true,
+      relatedTarget: child,
+    })
+    mockApp.dispatchEvent(dragLeaveEvent)
+
+    // Overlay should still be visible (counter not decremented)
+    assert.ok(document.querySelector(".drop-overlay"), "Overlay should remain visible when dragleave to child")
+  })
+
+  it("should hide overlay on document-level dragleave (window exit)", () => {
+    setupDragDrop(makeDeps())
+
+    // Trigger dragenter to show overlay
+    const dragEnterEvent = new DragEvent("dragenter", {
+      bubbles: true,
+      cancelable: true,
+    })
+    mockApp.dispatchEvent(dragEnterEvent)
+
+    // Trigger document-level dragleave with null relatedTarget (drag left window)
+    const dragLeaveEvent = new DragEvent("dragleave", {
+      bubbles: true,
+      cancelable: true,
+      relatedTarget: null,
+    })
+    document.dispatchEvent(dragLeaveEvent)
+
+    // Overlay should be removed
+    assert.ok(!document.querySelector(".drop-overlay"), "Overlay should be removed on document dragleave")
+  })
+
+  it("should trigger emergency hide timeout after dragleave outside app", () => {
+    setupDragDrop(makeDeps())
+
+    // Trigger dragenter to show overlay
+    const dragEnterEvent = new DragEvent("dragenter", {
+      bubbles: true,
+      cancelable: true,
+    })
+    mockApp.dispatchEvent(dragEnterEvent)
+
+    // Trigger dragleave outside app
+    const dragLeaveEvent = new DragEvent("dragleave", {
+      bubbles: true,
+      cancelable: true,
+      relatedTarget: document.body, // Outside app
+    })
+    mockApp.dispatchEvent(dragLeaveEvent)
+
+    // Overlay should be removed after emergency timeout (3s)
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        assert.ok(!document.querySelector(".drop-overlay"), "Overlay should be removed by emergency timeout")
+        resolve(undefined)
+      }, 3100)
+    })
+  })
 })
