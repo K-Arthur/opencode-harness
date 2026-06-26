@@ -163,7 +163,7 @@ Run all unit+contract+roundtrip: `npm test`
 - **Webview provider:** `src/chat/ChatProvider.ts` — thin orchestrator, delegates to services
 - **Per-tab state:** `TabManager.ts`, **streaming:** `StreamCoordinator.ts`, **routing:** `MessageRouter.ts`
 - **Server lifecycle:** `src/session/SessionManager.ts`
-- **Theme system:** `src/theme/ThemeManager.ts` — CSS_VAR_MAP maps OpencodeTheme properties to CSS vars
+- **Theme system:** `src/theme/ThemeManager.ts` now delegates to `ThemeAnalyzer` (preset/theme-kind resolution), `ThemeStateMutator` (namespace-isolated merges under `workbench.colorCustomizations.opencodeHarness`), and `ThemeWebviewBridge` (live CSS variable sync). `ThemeManager` exposes `activateTheme()`, `applyOverrides()`, and `resetToDefault()`.
 - **Max concurrent AI streams** configurable via `opencode.sessions.maxConcurrentStreams` (default 5)
 
 ### Webview Module Decomposition
@@ -612,11 +612,14 @@ All components share a strict, coordinated token system:
 - **Pinned Prompts:** `--rp-card-radius`, `--rp-card-padding`, `--rp-chip-radius`
 
 ### Theme System
-- **Theme state:** `src/theme/ThemeManager.ts` — presets, CLI file discovery, merge (preset → CLI → user), 30s TTL cache, FS watchers
+- **Theme state:** `src/theme/ThemeManager.ts` — presets, CLI file discovery, merge (preset → CLI → user), 30s TTL cache, FS watchers; public API `activateTheme()`, `applyOverrides()`, `resetToDefault()`
+- **Theme analyzer:** `src/theme/ThemeAnalyzer.ts` — reads active VS Code theme kind, resolves effective presets, maps presets to VS Code workbench themes, checks market theme availability
+- **Theme state mutator:** `src/theme/ThemeStateMutator.ts` — safe deep merges and resets of OpenCode color/token overrides under the `workbench.colorCustomizations.opencodeHarness` namespace; preserves unrelated user settings; supports workspace and global targets
+- **Theme webview bridge:** `src/theme/ThemeWebviewBridge.ts` — listens for VS Code theme/configuration changes and pushes live CSS variable updates to the chat webview
 - **Theme controller:** `src/chat/ThemeController.ts` — config persistence, validation, webview push (uses `isValidCssColor`)
 - **Color validation:** `src/utils/colorValidation.ts` — shared `isValidCssColor()` accepting hex (#RGB/#RRGGBB/#RRGGBBAA), rgba, hsla, var(), transparent, color-mix()
 - **Webview apply:** `src/chat/webview/theme.ts` — `applyThemeVars()` with XSS protection (blocks url/expression/javascript/data:text-html)
-- **Webview customizer:** `src/chat/webview/ui/themeCustomizer.ts` — preset cards, CLI theme browser, color pickers, preview swatch
+- **Webview customizer:** `src/chat/webview/ui/themeCustomizer.ts` — preset cards, CLI theme browser, color pickers, preview swatch; Common section, collapsed advanced sections, Cancel/Apply/Restore defaults actions
 - **XDG paths:** `getXdgConfigDir()` / `getHomeDir()` module-level helpers in ThemeManager.ts (single source of truth)
 - **CLI theme dedup:** `discoverCliThemes()` canonicalizes paths via `fs.realpathSync` to skip symlinked duplicates
 

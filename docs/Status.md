@@ -1,7 +1,20 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-06-24
-**Version:** v0.4.12
+**Last Updated:** 2026-06-26
+**Version:** v0.4.13
+
+## Highlights (2026-06-26) — Theme engine overhaul
+
+**Refactored the theme system into a modular, high-availability pipeline.**
+
+- `src/theme/ThemeAnalyzer.ts` — reads the active VS Code theme kind, resolves effective presets, checks whether market themes are installed, and maps presets to VS Code workbench themes.
+- `src/theme/ThemeStateMutator.ts` — safely merges and resets OpenCode color/token overrides under the `workbench.colorCustomizations.opencodeHarness` namespace, preserving unrelated user settings and supporting workspace and global configuration targets.
+- `src/theme/ThemeWebviewBridge.ts` — listens for VS Code `onDidChangeActiveColorTheme` and `onDidChangeConfiguration` events and pushes live CSS variable updates to the chat webview.
+- `src/theme/ThemeManager.ts` now exposes `activateTheme()`, `applyOverrides()`, and `resetToDefault()` and returns `{ themeManager }` as the extension's public API.
+- Added TDD integration tests in `tests/integration/themeEngine.test.ts` covering merge preservation, invalid market-theme fallback, and workspace-scoped isolation.
+- Webview theme customizer reorganized with a default-open "Common" section, collapsed advanced sections, and clearer **Cancel** / **Restore defaults** / **Apply** actions. Color pickers now show the current theme color when no override is set; preset cards render hardcoded color swatches.
+- Files: `src/theme/ThemeAnalyzer.ts`, `src/theme/ThemeStateMutator.ts`, `src/theme/ThemeWebviewBridge.ts`, `src/theme/ThemeManager.ts`, `src/extension.ts`, `src/chat/webview/index.html`, `src/chat/webview/ui/themeCustomizer.ts`, `tests/integration/themeEngine.test.ts`.
+- Verification: typecheck clean; unit tests pass; integration tests 43/43; message-contract 23/23; roundtrip 7/7; webview tests pass.
 
 ## Highlights (2026-06-24) — Changed-files strip interaction fix
 

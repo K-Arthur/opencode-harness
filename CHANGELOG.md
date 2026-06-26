@@ -67,6 +67,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`oldString`/`newString` or `content`) instead of relying on a host
   round-trip that only updated the changed-files dropdown. The diff is
   shown/hidden in place with a toggle button.
+- **Theme engine overhaul** — refactored `ThemeManager` into a modular,
+  high-availability theme system. New subagent modules:
+  - `ThemeAnalyzer` — reads VS Code active color theme kind, resolves preset
+    mappings, and checks whether market themes are installed.
+  - `ThemeStateMutator` — safely merges OpenCode color/token overrides under
+    the `workbench.colorCustomizations.opencodeHarness` namespace, preserving
+    unrelated user settings and supporting both workspace and global targets.
+  - `ThemeWebviewBridge` — listens for VS Code theme/configuration changes and
+    pushes live CSS variable updates to the chat webview.
+  - Added `ThemeManager.activateTheme()`, `applyOverrides()`, and
+    `resetToDefault()` for explicit theme control.
+  - Added integration tests for merge preservation, invalid market-theme
+    fallback, and workspace-scoped isolation.
+  - Extension now returns `{ themeManager }` as its public API so integration
+    tests can verify theme behavior.
+- **Theme customizer UX refresh** — reorganized the webview theme customizer
+  with a prominent "Common" section, collapsed advanced sections by default,
+  a "Cancel" button, and clearer "Apply"/"Restore defaults" labels. Color
+  pickers now show the current theme color when no override is set, and
+  preset cards render hardcoded color swatches instead of unreliable CSS
+  variables.
 
 ### Changed
 

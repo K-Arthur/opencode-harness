@@ -257,9 +257,13 @@ The debug Extension Development Host must open the intended workspace folder. If
 The following features were audited against the opencode CLI and enhanced for the VS Code extension context:
 
 ### Theming
+- **Theme engine architecture**: `ThemeManager` delegates analysis, mutation, and webview sync to three subagent modules:
+  - `ThemeAnalyzer` — reads VS Code active color theme kind, resolves effective presets, checks market theme availability, and maps presets to VS Code workbench themes.
+  - `ThemeStateMutator` — deep-merges and resets OpenCode color/token overrides under the `workbench.colorCustomizations.opencodeHarness` namespace, preserving unrelated user settings and supporting workspace and global targets.
+  - `ThemeWebviewBridge` — listens for VS Code `onDidChangeActiveColorTheme` and `onDidChangeConfiguration` events and pushes live CSS variable updates to the chat webview.
 - **File watching**: `ThemeManager` watches `tui.json` and theme `.json` files via `createFileSystemWatcher`; auto-reloads on change.
 - **Quick-pick preset command**: `opencode-harness.previewTheme` opens a VS Code QuickPick with all 4 presets + discovered CLI themes and applies the selection live. Labeled "Quick-pick preset" in the settings menu to distinguish it from the in-webview modal.
-- **Personalized modal**: The settings menu "Customize theme" entry opens a webview theme customizer that sends `get_theme_config` / `update_theme_config`; `ChatProvider` validates and writes `opencode.theme`, then pushes refreshed CSS variables. The modal supports 7 color override fields (accent, panel bg/fg, user message bg, input border, markdown heading, diff added bg) each with a paired `<input type="color">` picker synced bidirectionally with the text field. A **Preview** button applies the config without saving or closing. A **Reset overrides** button clears all overrides and restores preset defaults.
+- **Personalized modal**: The settings menu "Customize theme" entry opens a webview theme customizer that sends `get_theme_config` / `update_theme_config`; `ChatProvider` validates and writes `opencode.theme`, then pushes refreshed CSS variables. The modal is organized into a default-open "Common" section, "Messages", "Syntax", "Diff", "Tools", "Markdown", and "Advanced" sections, each with paired `<input type="color">` pickers and text inputs. Color pickers display the current theme color when no override is set and update the live preview swatch as the user edits. Actions are **Cancel** (close without saving), **Restore defaults** (clear overrides), and **Apply** (save and close).
 - **CLI field parity**: `ThemeManager.FIELD_MAP` maps CLI fields for primary/secondary/accent, panel/editor/element backgrounds, active/subtle borders, semantic colors, syntax variables/punctuation, diff metadata/backgrounds/line numbers, and Markdown text/link/code/list/image fields.
 - **CSS variable cascade**: `ThemeManager.CSS_VAR_MAP` injects computed values into `:root` via a nonce-guarded `<style>` tag. `--bg-secondary` and `--bg-tertiary` are intentionally excluded from injection so that `tokens.css`'s `color-mix()` depth layering (96%/90% panel/fg blend) is preserved. `--bg-primary` and `--oc-glass-bg` continue to be injected.
 - **Light-theme correctness**: `tokens.css` `.vscode-light` block declares overrides for `--user-message-bg`, `--oc-user-msg-bg`, `--bg-code`, `--oc-tool-bg`, and all shadow tokens directly on `<body>`. Because CSS custom properties declared on `body` are inherited by all descendants, these light-theme values override any stale dark values that `ThemeManager` may have injected into `:root` — ensuring message bubbles and code blocks render correctly in light VS Code themes.
@@ -603,7 +607,10 @@ All three SDK methods are delegated through `SessionManager` and tested in `test
 | `ModelManager` | `src/model/ModelManager.ts` | Model list from server, caching, QuickPick |
 | `RateLimitMonitor` | `src/monitor/RateLimitMonitor.ts` | Rate limit headers, countdown, status bar |
 | `CheckpointManager` | `src/checkpoint/CheckpointManager.ts` | Extension-local file snapshots, `WorkspaceEdit` restore |
-| `ThemeManager` | `src/theme/ThemeManager.ts` | Theme presets, CLI theme files, CSS variable injection |
+| `ThemeManager` | `src/theme/ThemeManager.ts` | Theme presets, CLI theme files, CSS variable injection; orchestrates `ThemeAnalyzer`, `ThemeStateMutator`, and `ThemeWebviewBridge` |
+| `ThemeAnalyzer` | `src/theme/ThemeAnalyzer.ts` | Active VS Code theme kind, preset resolution, market theme availability |
+| `ThemeStateMutator` | `src/theme/ThemeStateMutator.ts` | Safe namespace-isolated merge/reset of `workbench.colorCustomizations.opencodeHarness` |
+| `ThemeWebviewBridge` | `src/theme/ThemeWebviewBridge.ts` | Listens for VS Code theme/config changes and pushes live CSS variable updates to the webview |
 | `PromptManager` | `src/prompts/PromptManager.ts` | Custom slash commands from `.opencode/prompts/*.md` |
 | `InlineActionProvider` | `src/inline/InlineActionProvider.ts` | CodeLens actions (Explain, Refactor, Generate Tests) |
 | `ChunkBatcher` | `src/chat/ChunkBatcher.ts` | Streaming text chunk batching (50ms flush) |
