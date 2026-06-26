@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+<!-- MAINTENANCE NOTE: Keep this section empty unless it describes work that has
+     NOT shipped in any version bump. When `npm version` / `npm run
+     reinstall` bumps the version, move all accumulated entries below into a
+     new `## [x.y.z] - yyyy-mm-dd` section. Never leave shipped work under
+     [Unreleased] — that creates documentation drift. See the release
+     workflow in docs/development/rebuild-and-reinstall.md. -->
+
+## [0.4.14] - 2026-06-26
+
 ### Added
 
 - **Active file safety guards** — `ActiveFileTracker` now skips binary files

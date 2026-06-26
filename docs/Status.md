@@ -1,7 +1,7 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-06-26
-**Version:** v0.4.13
+**Version:** v0.4.14
 
 ## Highlights (2026-06-26) — Reconnection state sync & UI/UX improvements
 
