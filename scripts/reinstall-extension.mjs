@@ -25,8 +25,9 @@
  *
  * USAGE
  *   node scripts/reinstall-extension.mjs            # bump patch, full reinstall
- *   node scripts/reinstall-extension.mjs --no-bump  # keep current version (NOT
- *                                                   # recommended — see traps above)
+ *   node scripts/reinstall-extension.mjs --no-bump  # keep current version —
+ *                                                   # safe for dev cycles as long as
+ *                                                   # you always reload the window
  *   node scripts/reinstall-extension.mjs --code=code-insiders   # target a CLI
  *   node scripts/reinstall-extension.mjs --code=codium          # VSCodium
  *

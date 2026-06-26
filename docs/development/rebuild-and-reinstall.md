@@ -89,7 +89,10 @@ Source: [`scripts/reinstall-extension.mjs`](../../scripts/reinstall-extension.mj
 7. Print the installed version and the reload reminder.
 
 Flags:
-- `--no-bump` — keep the current version (not recommended; reintroduces trap #1).
+- `--no-bump` — keep the current version. Safe for development cycles as long as
+  you always run **Developer: Reload Window** afterward (the reload is what actually
+  picks up the new code; the version bump is just a safety net for users who might
+  skip the reload). Reintroduces trap #1 only if you forget to reload.
 - `--code=<cli>` — target a specific VS Code-compatible CLI (e.g. `codium`,
   `code-insiders`, `code-oss`). When omitted, the script auto-detects the first
   available binary in the order `code → codium → code-oss → code-insiders`.

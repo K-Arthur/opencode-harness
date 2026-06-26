@@ -8,8 +8,11 @@ export interface FileEditCardOptions {
   mode?: string
 }
 
-const MAX_PREVIEW_LINES = 50
-const MAX_DIFF_LINES = 200
+// Keep the inline preview short — this is a fast-paced coding context where
+// the card is visible for every edit. 5 lines is enough to spot the change;
+// the "Show diff" button reveals the full hunk on demand.
+const MAX_PREVIEW_LINES = 5
+const MAX_DIFF_LINES = 40
 
 /**
  * Detects write/edit/patch/apply file-edit tools. The file-edit card is a
@@ -75,7 +78,9 @@ export function renderFileEditCard(
     stateClasses.push("file-edit-card--error")
   }
   wrapper.className = stateClasses.join(" ")
-  wrapper.dataset.toolId = toolBlock.id
+  // Use data-block-id (same attribute as generic tool cards) so handleToolUpdate
+  // can find and update this element via querySelector('[data-block-id="..."]').
+  wrapper.dataset.blockId = toolBlock.id
 
   const header = document.createElement("div")
   header.className = "file-edit-card__header"
@@ -94,8 +99,32 @@ export function renderFileEditCard(
 
   const status = document.createElement("span")
   status.className = "file-edit-card__status"
+  status.setAttribute("aria-live", "polite")
   status.textContent = statusLabel(state)
   header.appendChild(status)
+
+  // Show +added/-removed counts so the user can assess scope without opening
+  // the diff. Only compute once at render time; the counts come from the args.
+  const stats = diffStats(obj)
+  if (stats) {
+    const statsEl = document.createElement("span")
+    statsEl.className = "file-edit-card__stats"
+    statsEl.setAttribute("aria-label", `${stats.added} lines added, ${stats.removed} lines removed`)
+    statsEl.setAttribute("aria-hidden", "false")
+    if (stats.added > 0) {
+      const a = document.createElement("span")
+      a.className = "file-edit-card__stats-added"
+      a.textContent = `+${stats.added}`
+      statsEl.appendChild(a)
+    }
+    if (stats.removed > 0) {
+      const r = document.createElement("span")
+      r.className = "file-edit-card__stats-removed"
+      r.textContent = `-${stats.removed}`
+      statsEl.appendChild(r)
+    }
+    header.appendChild(statsEl)
+  }
 
   wrapper.appendChild(header)
 
@@ -103,6 +132,7 @@ export function renderFileEditCard(
   if (preview) {
     const previewEl = document.createElement("div")
     previewEl.className = "file-edit-card__preview"
+    previewEl.setAttribute("aria-hidden", "true")
     previewEl.appendChild(preview)
     wrapper.appendChild(previewEl)
   }
@@ -113,6 +143,7 @@ export function renderFileEditCard(
   const openBtn = document.createElement("button")
   openBtn.className = "file-edit-card__open-btn file-edit-card__action"
   openBtn.textContent = "Open file"
+  openBtn.setAttribute("aria-label", `Open ${filePath} in editor`)
   openBtn.addEventListener("click", (e) => {
     e.stopPropagation()
     e.preventDefault()
@@ -120,17 +151,24 @@ export function renderFileEditCard(
   })
   actions.appendChild(openBtn)
 
+  const diffContainer = document.createElement("div")
+  diffContainer.className = "file-edit-card__diff"
+  diffContainer.setAttribute("role", "region")
+  diffContainer.setAttribute("aria-label", "Diff view")
+  diffContainer.hidden = true
+
   const diffBtn = document.createElement("button")
   diffBtn.className = "file-edit-card__diff-btn file-edit-card__action"
   diffBtn.textContent = "Show diff"
-  const diffContainer = document.createElement("div")
-  diffContainer.className = "file-edit-card__diff"
-  diffContainer.style.display = "none"
+  diffBtn.setAttribute("aria-expanded", "false")
+  diffBtn.setAttribute("aria-controls", `diff-${toolBlock.id}`)
+  diffContainer.id = `diff-${toolBlock.id}`
   diffBtn.addEventListener("click", (e) => {
     e.stopPropagation()
     e.preventDefault()
-    const isHidden = diffContainer.style.display === "none"
-    diffContainer.style.display = isHidden ? "block" : "none"
+    const isHidden = diffContainer.hidden
+    diffContainer.hidden = !isHidden
+    diffBtn.setAttribute("aria-expanded", isHidden ? "true" : "false")
     diffBtn.textContent = isHidden ? "Hide diff" : "Show diff"
     if (isHidden && diffContainer.children.length === 0) {
       const diff = buildInlineDiff(obj)
@@ -154,6 +192,16 @@ function statusLabel(state: string): string {
   if (state === "retried") return "Retried"
   if (isTerminalState(state)) return "Done"
   return state
+}
+
+function diffStats(obj: Record<string, unknown>): { added: number; removed: number } | null {
+  const oldStr = firstStringField(obj, ["oldString", "old_string", "old", "search"])
+  const newStr = firstStringField(obj, ["newString", "new_string", "new", "replace"])
+  const content = firstStringField(obj, ["content", "contents", "text", "fileText"])
+  if (oldStr === null && newStr === null && content === null) return null
+  const oldLines = (oldStr ?? "").split("\n").filter(Boolean)
+  const newLines = (newStr ?? content ?? "").split("\n").filter(Boolean)
+  return { added: newLines.length, removed: oldLines.length }
 }
 
 function firstStringField(obj: Record<string, unknown>, keys: string[]): string | null {

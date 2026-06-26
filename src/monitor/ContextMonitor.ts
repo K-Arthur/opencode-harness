@@ -224,6 +224,16 @@ private currentTokens = 0
   }
 
   /**
+   * Clear all per-session state after compaction or tab close, so stale
+   * pre-compaction token counts are not served by getCurrentUsage().
+   * The next real context_usage event will repopulate the entry.
+   */
+  resetSession(sessionId: string): void {
+    this.latestUsageBySession.delete(sessionId)
+    this.limitBySession.delete(sessionId)
+  }
+
+  /**
    * Read the autoCompact setting from VS Code configuration.
    */
   getAutoCompactSetting(): "ask" | "auto" | "off" {

@@ -1139,6 +1139,18 @@ validateSessionName(name: string): string | null {
     return usage ? SessionStore.cloneContextUsage(usage) : undefined
   }
 
+  /**
+   * Unconditionally clear persisted context usage for a session.
+   * Used after compaction so the stale pre-compaction count is not served as
+   * a fallback — bypasses the merge protection that blocks zero-token updates.
+   */
+  resetContextUsage(id: string): void {
+    const session = this.sessions.get(id)
+    if (!session) return
+    session.contextUsage = undefined
+    this.save()
+  }
+
   updateContextUsage(id: string, usage: SessionContextUsage): boolean {
     const session = this.sessions.get(id)
     if (!session) return false

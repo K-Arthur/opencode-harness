@@ -247,7 +247,7 @@ function _render(container: HTMLElement, usage: ContextUsage | null): void {
       </div>
     `
   } else {
-    breakdownHtml = '<p class="cup-muted">No breakdown available.</p>'
+    breakdownHtml = '<p class="cup-muted">Token breakdown not reported by model.</p>'
   }
 
   const outputLimitHtml = usage.outputLimit
@@ -272,7 +272,11 @@ function _render(container: HTMLElement, usage: ContextUsage | null): void {
 
   const summaryText = buildSummaryText(usage.tokens, usage.maxTokens, usage.percent)
   const sourcePill = usage.source
-    ? `<span class="cup-source-pill cup-source-pill--${usage.source}">${usage.source}</span>`
+    ? `<span class="cup-source-pill cup-source-pill--${usage.source}" title="${
+        usage.source === "estimated"
+          ? "Heuristic estimate. Exact count is reported by the model after each response."
+          : "Exact token count as reported by the model API."
+      }">${usage.source === "estimated" ? "approx" : "exact"}</span>`
     : ""
 
   // Actions row — only show actions the host supports

@@ -1466,7 +1466,16 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       if (!block) return
       this.postMessage({ type: "message", sessionId: tabId, message: { role: "system", blocks: [block], timestamp: Date.now(), sessionId: tabId } })
     }],
-    ["session_compacted", (event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => { log.info(`Session compacted for ${tabId}`); this.postMessage({ type: "session_compacted", sessionId: tabId }) }],
+    ["session_compacted", (_event: { type: string; sessionId?: string; data?: unknown }, tabId: string) => {
+      log.info(`Session compacted for ${tabId}`)
+      // Reset stale pre-compaction token counts so the UI doesn't keep
+      // showing the old (high) fill after the history was summarized.
+      // The bar hides until the next real context_usage event arrives
+      // from the resumed session.
+      this.contextMonitor.resetSession(tabId)
+      this.sessionStore.resetContextUsage(tabId)
+      this.postMessage({ type: "session_compacted", sessionId: tabId })
+    }],
     ["session_updated", (event: { type: string; sessionId?: string; data?: unknown }) => {
       const data = event.data as { title?: string } | undefined
       const cliSessionId = event.sessionId

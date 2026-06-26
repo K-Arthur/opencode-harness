@@ -3779,6 +3779,17 @@ function setupTodoSkillAndSubagentPanels(): void {
           // before the resumed session starts fresh do not render into the
           // pre-compaction bubble.
           streamOrchestrator?.resetStream(sid)
+          // Clear stale pre-compaction context usage so the bar hides until the
+          // first real token count arrives from the resumed session.
+          const compactedSess = stateManager.getSession(sid)
+          if (compactedSess) {
+            compactedSess.contextUsage = undefined
+            stateManager.save()
+          }
+          if (stateManager.getState().activeSessionId === sid) {
+            updateContextUsageBar(0, 0, 0)
+            resetContextUsageDropdown()
+          }
           // Re-fetch the session so the visual message list reflects the
           // post-compact state. Before this, the chat said "compacted" but
           // continued to show the old (uncompacted) messages — making

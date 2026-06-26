@@ -97,6 +97,8 @@ export function createToolDetailsContainer(toolBlock: ToolCallBlock): HTMLDetail
   const details = document.createElement("details")
   details.className = `tool-call tool-call--${toolClass} tool-call--${toolState}`
   details.dataset.blockId = toolBlock.id
+  details.dataset.toolName = toolBlock.name
+  details.dataset.toolClass = toolClass
   if (toolState === 'result' && toolBlock.error) {
     details.className += ' tool-call--error'
   }

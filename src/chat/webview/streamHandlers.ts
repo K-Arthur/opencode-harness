@@ -9,6 +9,7 @@ import { sanitizeHtml } from "./syntaxHighlighter"
 import { escapeHtml } from "./htmlUtils"
 import type { RenderOptions } from "./renderer"
 import { createToolResultPanel, renderToolGroup, renderToolGroupBadge } from "./toolCallRenderer"
+import { isEditLikeTool, renderFileEditCard } from "./fileEditCard"
 import { applySubagentCardUpdate } from "./subagentCard"
 import { applyLiveCommandCardUpdate } from "./liveCommandCard"
 import type { ScrollAnchor } from "./scrollAnchor"
@@ -1016,6 +1017,16 @@ export function toolBadgeText(state?: string, hasError?: boolean): string | null
   return null
 }
 
+function fileEditStatusLabel(state: string, error?: string): string {
+  if (error || state === "error" || state === "timed_out") return "Error"
+  if (state === "pending") return "Pending"
+  if (state === "running") return "Running"
+  if (state === "stale") return "Stale"
+  if (state === "cancelled") return "Cancelled"
+  if (state === "completed" || state === "result") return "Done"
+  return state
+}
+
 export function handleToolUpdate(
   els: StreamElements,
   toolId: string,
@@ -1052,6 +1063,48 @@ export function handleToolUpdate(
     return
   }
 
+  // File-edit cards have their own status element (.file-edit-card__status) and
+  // state classes (.file-edit-card--<state>). The generic setToolStateClass /
+  // .tool-status selectors below don't match — route state updates through a
+  // dedicated handler so the status label and state class stay correct.
+  if (toolEl.classList.contains("file-edit-card")) {
+    if (update.state) {
+      const stateEl = toolEl.querySelector(".file-edit-card__status") as HTMLElement | null
+      if (stateEl) stateEl.textContent = fileEditStatusLabel(update.state, update.error)
+      toolEl.className = toolEl.className.replace(/file-edit-card--\S+/g, "").trim() +
+        ` file-edit-card--${update.state}` +
+        ((update.error || update.state === "error" || update.state === "timed_out") ? " file-edit-card--error" : "")
+      const parentGroup = toolEl.closest(".tool-group") as HTMLElement | null
+      if (parentGroup) updateToolGroupHeader(parentGroup)
+    }
+    return
+  }
+
+  // Generic write-class tool cards that started with empty args (the tool was
+  // still "pending" when first rendered) get upgraded to a file-edit card as
+  // soon as the args arrive with a recognisable file path.
+  if (update.args !== undefined && toolEl.tagName === "DETAILS") {
+    const toolName = toolEl.dataset.toolName ?? ""
+    const toolClass = toolEl.dataset.toolClass ?? "read"
+    const syntheticBlock = {
+      type: "tool-call" as const,
+      id: toolId,
+      name: toolName,
+      class: toolClass as import("./types").ToolCallClass,
+      state: (update.state ?? "running") as import("./types").ToolCallState,
+      args: update.args,
+    }
+    if (isEditLikeTool(syntheticBlock)) {
+      const freshCard = renderFileEditCard(syntheticBlock)
+      if (freshCard) {
+        toolEl.replaceWith(freshCard)
+        const scrollAnchor = (els as unknown as { scrollAnchor: ScrollAnchor }).scrollAnchor
+        scrollAnchor?.scrollIfAnchored()
+        return
+      }
+    }
+  }
+
   if (update.state) {
     setToolStateClass(toolEl, update.state)
     const badge = toolEl.querySelector(".tool-status")
@@ -1082,7 +1135,7 @@ export function handleToolUpdate(
       if (truncated) {
         const more = document.createElement("button")
         more.className = "tool-show-more"
-        more.textContent = "Show more\u2026"
+        more.textContent = "Show more…"
         more.addEventListener("click", () => {
           if (!argsPanel) return
           argsPanel.innerHTML = sanitizeHtml(escapeHtml(argsStr))

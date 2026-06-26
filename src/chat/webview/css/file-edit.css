@@ -84,6 +84,24 @@
   letter-spacing: 0.03em;
 }
 
+/* ── Diff stats (+added / -removed) ── */
+.file-edit-card__stats {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1, 4px);
+  font-size: var(--text-2xs, 10px);
+  font-family: var(--font-mono, monospace);
+}
+
+.file-edit-card__stats-added {
+  color: var(--color-success, #4caf50);
+}
+
+.file-edit-card__stats-removed {
+  color: var(--color-error, #f44336);
+}
+
 /* ── Mini diff / content preview ── */
 .file-edit-card__preview {
   margin-top: var(--space-1, 4px);
