@@ -131,12 +131,20 @@ export function setupThemeCustomizer(deps: ThemeCustomizerDeps): void {
   els.themeCustomizerPanel.addEventListener("change", (event) => {
     const textInput = event.target as HTMLInputElement
     if (textInput.type !== "text" || !textInput.id) return
+    const picker = els.themeCustomizerPanel.querySelector<HTMLInputElement>(
+      `input[type="color"][data-target="${textInput.id}"]`
+    )
     const value = textInput.value.trim()
-    if (/^#([0-9a-fA-F]{6})$/.test(value)) {
-      const picker = els.themeCustomizerPanel.querySelector<HTMLInputElement>(
-        `input[type="color"][data-target="${textInput.id}"]`
-      )
-      if (picker) picker.value = value
+    if (picker) {
+      if (/^#([0-9a-fA-F]{6})$/.test(value)) {
+        picker.value = value
+      } else {
+        const key = textInput.dataset.themeField
+        if (key) {
+          const base = getCurrentThemeColor(key)
+          if (base) picker.value = base
+        }
+      }
     }
     updatePreviewSwatch(els)
   })
@@ -247,14 +255,48 @@ function filterCliList(els: ThemeCustomizerElements, query: string): void {
 }
 
 function syncAllColorPickers(els: ThemeCustomizerElements): void {
-  getThemeFields(els).forEach(({ input }) => {
+  getThemeFields(els).forEach(({ input, key }) => {
     const picker = els.themeCustomizerPanel.querySelector<HTMLInputElement>(
       `input[type="color"][data-target="${input.id}"]`
     )
-    if (picker && /^#[0-9a-fA-F]{6}$/.test(input.value.trim())) {
-      picker.value = input.value.trim()
+    if (!picker) return
+    const override = input.value.trim()
+    if (/^#[0-9a-fA-F]{6}$/.test(override)) {
+      picker.value = override
+    } else {
+      const base = getCurrentThemeColor(key)
+      if (base) picker.value = base
     }
   })
+}
+
+function getCurrentThemeColor(fieldKey: string): string | undefined {
+  const cssVar = PREVIEW_CSS_VAR_MAP.find(([key]) => key === fieldKey)?.[1]
+  if (!cssVar) return undefined
+  return resolveCssVarToHex(cssVar)
+}
+
+function resolveCssVarToHex(varName: string): string | undefined {
+  const temp = document.createElement("div")
+  temp.style.position = "absolute"
+  temp.style.visibility = "hidden"
+  temp.style.width = "1px"
+  temp.style.height = "1px"
+  temp.style.backgroundColor = `var(${varName})`
+  document.body.appendChild(temp)
+  const rgb = getComputedStyle(temp).backgroundColor
+  document.body.removeChild(temp)
+  return rgbToHex(rgb)
+}
+
+function rgbToHex(rgb: string): string | undefined {
+  const match = rgb.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/)
+  if (!match) return undefined
+  const [r, g, b] = [match[1], match[2], match[3]].map((n) => {
+    const hex = Number(n).toString(16)
+    return hex.length === 1 ? `0${hex}` : hex
+  })
+  return `#${r}${g}${b}`
 }
 
 function updatePreviewSwatch(els: ThemeCustomizerElements): void {
