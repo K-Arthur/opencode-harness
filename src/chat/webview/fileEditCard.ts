@@ -17,11 +17,19 @@ const MAX_DIFF_LINES = 200
  * Returns null for non-write tools or write tools without a file path so the
  * caller can fall back to the default tool-call details panel.
  */
+export function isEditLikeTool(toolBlock: ToolCallBlock): boolean {
+  const cls = toolBlock.class || "read"
+  const name = (toolBlock.name || "").toLowerCase()
+  if (cls === "write") return true
+  if (name.includes("edit") || name.includes("write") || name.includes("patch")) return true
+  return false
+}
+
 export function renderFileEditCard(
   toolBlock: ToolCallBlock,
   opts: FileEditCardOptions = {},
 ): HTMLElement | null {
-  if (toolBlock.class !== "write") return null
+  if (!isEditLikeTool(toolBlock)) return null
 
   const args = toolBlock.args
   const obj =
@@ -37,7 +45,13 @@ export function renderFileEditCard(
         ? obj.file
         : typeof obj.filename === "string"
           ? obj.filename
-          : null
+          : typeof obj.filePath === "string"
+            ? obj.filePath
+            : typeof obj.file_path === "string"
+              ? obj.file_path
+              : typeof obj.target === "string"
+                ? obj.target
+                : null
   if (!filePath || !filePath.trim()) return null
 
   const postMessage =

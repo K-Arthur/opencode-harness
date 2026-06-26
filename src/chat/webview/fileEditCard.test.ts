@@ -133,4 +133,40 @@ describe("fileEditCard", () => {
     assert.ok(el!.classList.contains("file-edit-card"))
     assert.equal(el!.querySelector(".file-edit-card__path")?.textContent, "src/foo.ts")
   })
+
+  it("renders edit-name tools even when class is not 'write'", async () => {
+    const { renderToolCallBlock } = await import("./toolCallRenderer")
+    const el = renderToolCallBlock(
+      writeBlock({ name: "edit", class: "read", args: { path: "src/foo.ts", oldString: "a", newString: "b" } }),
+      {},
+    )
+    assert.ok(el, "edit-name tools should render as a file-edit-card")
+    assert.ok(el!.classList.contains("file-edit-card"))
+    assert.equal(el!.querySelector(".file-edit-card__path")?.textContent, "src/foo.ts")
+    assert.ok(el!.querySelector(".file-edit-card__preview"), "expected mini diff preview")
+  })
+
+  it("renders patch-name tools as file-edit cards", async () => {
+    const { renderToolCallBlock } = await import("./toolCallRenderer")
+    const el = renderToolCallBlock(
+      writeBlock({ name: "patch_file", class: "read", args: { path: "src/foo.ts", oldString: "a", newString: "b" } }),
+      {},
+    )
+    assert.ok(el, "patch-name tools should render as a file-edit-card")
+    assert.ok(el!.classList.contains("file-edit-card"))
+  })
+
+  it("extracts file paths from common alternate arg keys", async () => {
+    const { renderToolCallBlock } = await import("./toolCallRenderer")
+    for (const key of ["filePath", "file_path", "target"]) {
+      const args = { content: "x" } as Record<string, unknown>
+      args[key] = `src/${key}.ts`
+      const el = renderToolCallBlock(
+        writeBlock({ name: "edit", class: "read", args }),
+        {},
+      )
+      assert.ok(el, `expected card for path key ${key}`)
+      assert.equal(el!.querySelector(".file-edit-card__path")?.textContent, `src/${key}.ts`)
+    }
+  })
 })

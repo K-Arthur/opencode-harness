@@ -19,7 +19,7 @@ import { renderJsonViewer } from "./jsonViewer"
 import { isWebSearchTool, renderWebSearchResult } from "./webSearchRenderer"
 import { isTerminalState } from "./toolState"
 import { renderLiveCommandCard } from "./liveCommandCard"
-import { renderFileEditCard } from "./fileEditCard"
+import { isEditLikeTool, renderFileEditCard } from "./fileEditCard"
 
 export interface RenderOptions {
   messageId?: string
@@ -436,10 +436,7 @@ export function createToolArgsPanel(toolBlock: ToolCallBlock): HTMLElement | nul
 
   // Write/edit tools: show the change as a diff (edit) or a code block (write),
   // not a JSON-escaped string with literal \n noise.
-  const isWriteTool =
-    toolBlock.class === "write" ||
-    ["edit", "write", "patch"].some((k) => (toolBlock.name?.toLowerCase() ?? "").includes(k))
-  if (isWriteTool) {
+  if (isEditLikeTool(toolBlock)) {
     const parsedW = typeof args === "string" ? safeJsonParse(args) : args
     const obj = parsedW && typeof parsedW === "object" ? (parsedW as Record<string, unknown>) : null
     if (obj) {
@@ -877,8 +874,8 @@ export function renderToolCallBlock(block: Block, opts: RenderOptions): HTMLElem
     return renderPlanCard(planData, opts)
   }
 
-  // Write-class file edits render as inline preview cards in the chat stream.
-  if (toolBlock.class === "write") {
+  // Write/edit/patch file edits render as inline preview cards in the chat stream.
+  if (isEditLikeTool(toolBlock)) {
     const fileEditCard = renderFileEditCard(toolBlock, opts)
     if (fileEditCard) return fileEditCard
   }
