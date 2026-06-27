@@ -1,7 +1,19 @@
 # Status.md
 
-## Last Updated: 2026-06-26
-## Project State: v0.4.13 shipped — inline file-edit diffs, compaction event ordering fix, sessionless file_edited attribution fix + SDK v1.17.11 alignment + diff review/accept/reject + session-aware baseline diffs + theme engine overhaul
+## Last Updated: 2026-06-27
+## Project State: v0.4.20 — subagent tool card CSS regression fix + ephemeral-tree hardening + file mention chips + active-file pill fix
+
+### v0.4.20 (2026-06-27): Subagent tool card CSS regression fix + ephemeral-tree hardening
+- **Subagent panel CSS restored** — state-specific classes (`.subagent-item--running/completed/failed`), TDD-layout variant classes (`.subagent-header`, `.subagent-status`), and detail-view badge colors were missing from `components.css` after an ephemeral-tree wipe. Added left-border accent colors, fixed `.subagent-item-progress-bar` (removed `width: 100%` conflicting with `scaleX`), and fixed `.subagent-detail-status-badge--running` (accent color instead of success-green).
+- **File-edit card CSS gaps** — added missing `.file-edit-card__duration`, `.file-edit-card__open-btn`, `.file-edit-card__diff-btn`, `.file-edit-card__diff-content`, `.file-edit-card__preview-content` CSS rules that were only styled via shared base classes.
+- **CSS coverage structural test** — new `src/chat/webview/css/cssCoverage.test.ts` asserts every class emitted by `subagentCard.ts` and `fileEditCard.ts` has at least one matching CSS rule. Catches the exact failure mode (renderer emits a class, CSS was wiped) that caused this regression. Runs as part of `npm run test:unit`.
+- **Visual tests strengthened** — `subagent-panel.spec.ts` now includes computed-style assertions for state border colors and progress bar transform, not just text content. Progress bar fixture updated to use `--p` custom property.
+- **Ephemeral-tree hardening** — three new automated guards:
+  - `scripts/detect-wiped-work.mjs` — detects if uncommitted work was wiped by the checkpoint process via stash/reflog inspection
+  - `scripts/check-workspace-state.mjs` — session-start recovery + CSS coverage check
+  - `.opencode/hooks/pre-commit-css-coverage.sh` — pre-commit hook blocking renderer/CSS mismatches
+- **Documentation** — new `docs/development/css-regression-prevention.md` guide; `AGENTS.md` updated with "CSS / Styling Work" subsection in the coordination protocol.
+- **Verification:** typecheck clean; unit 1970 pass / 0 fail; production build green.
 
 ### v0.4.13 (2026-06-25): Inline diffs + compaction ordering + SDK v1.17.11 + theme engine overhaul
 - **Inline diff in file-edit cards** — the "Show diff" button on file-edit cards now renders a unified diff inline from the tool arguments (`oldString`/`newString` or `content`) instead of relying on a host round-trip that only updated the changed-files dropdown.
