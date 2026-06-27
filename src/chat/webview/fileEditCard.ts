@@ -2,6 +2,7 @@ import type { ToolCallBlock, VsCodeApi } from "./types"
 import { escapeHtml } from "./htmlUtils"
 import { truncateMiddle } from "./stringUtils"
 import { isTerminalState } from "./toolState"
+import { EDIT_SVG } from "./icons"
 
 export interface FileEditCardOptions {
   postMessage?: (msg: Record<string, unknown>) => void
@@ -88,7 +89,7 @@ export function renderFileEditCard(
   const icon = document.createElement("span")
   icon.className = "file-edit-card__icon"
   icon.setAttribute("aria-hidden", "true")
-  icon.textContent = "📝"
+  icon.innerHTML = EDIT_SVG
   header.appendChild(icon)
 
   const path = document.createElement("span")

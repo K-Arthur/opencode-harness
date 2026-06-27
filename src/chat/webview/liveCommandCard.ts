@@ -8,6 +8,7 @@
  */
 import type { ToolCallBlock } from "./types"
 import { renderAnsiToHtml, stripAnsi, isToolOutputRenderAnsiEnabled } from "./ansiUtils"
+import { PLAY_SVG, SUCCESS_SVG, ERROR_SVG, STATE_CANCELLED_SVG } from "./icons"
 
 export interface LiveCommandCardOptions {
   messageId?: string
@@ -79,7 +80,7 @@ export function renderLiveCommandCard(toolBlock: ToolCallBlock, opts?: LiveComma
   const header = document.createElement("div")
   header.className = "live-command-card__header"
 
-  const icon = createElement("span", "live-command-card__icon", status === "running" ? "▶" : status === "succeeded" ? "✓" : status === "failed" ? "✗" : "◆")
+  const icon = createElement("span", "live-command-card__icon", status === "running" ? PLAY_SVG : status === "succeeded" ? SUCCESS_SVG : status === "failed" ? ERROR_SVG : STATE_CANCELLED_SVG)
   icon.setAttribute("aria-hidden", "true")
   header.appendChild(icon)
 
@@ -129,11 +130,11 @@ export function renderLiveCommandCard(toolBlock: ToolCallBlock, opts?: LiveComma
 }
 
 const STATUS_ICON: Record<LiveCommandCardStatus, string> = {
-  running: "▶",
-  succeeded: "✓",
-  failed: "✗",
-  cancelled: "◆",
-  unknown: "◆",
+  running: PLAY_SVG,
+  succeeded: SUCCESS_SVG,
+  failed: ERROR_SVG,
+  cancelled: STATE_CANCELLED_SVG,
+  unknown: STATE_CANCELLED_SVG,
 }
 
 const STATUS_CLASSES = [

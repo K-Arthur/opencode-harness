@@ -449,12 +449,10 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
 
   function toggleActiveFileInclude(): void {
     activeFileIncluded = !activeFileIncluded
-    const session = deps.getActiveSession()
-    deps.postMessage({
-      type: "toggle_active_file",
-      sessionId: session?.id ?? "",
-      include: activeFileIncluded,
-    })
+    // Inclusion is gated webview-side via isActiveFileIncluded() (controls whether
+    // @file: mention is prepended to the prompt). The host keeps no inclusion
+    // state, so no message is posted here. This avoids the prior empty-sessionId
+    // post and keeps a single toggle path.
     updatePromptContextChips()
   }
 

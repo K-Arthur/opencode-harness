@@ -42,9 +42,17 @@
               <polyline points="12 6 12 12 16 14"/>
             </svg>
           </button>
-          <!-- badge sinks for backward-compat — invisible, no toolbar buttons -->
+          <!-- badge sinks for backward-compat -->
           <span id="cf-count-badge" class="hidden" aria-hidden="true"></span>
           <span id="ctx-pct-badge" class="hidden" aria-hidden="true"></span>
+          <button class="icon-btn" id="changed-files-btn" title="Changed files" aria-label="Changed files" aria-haspopup="dialog" aria-controls="changed-files-panel">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <path d="M12 18v-6"/>
+              <path d="M9 15l3 3 3-3"/>
+            </svg>
+          </button>
           <button class="icon-btn" id="skills-btn" title="Manage skills" aria-label="Manage skills" aria-haspopup="dialog" aria-controls="skills-modal">
             <!-- Sparkles — conveys AI/agent capabilities -->
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -261,7 +269,13 @@
         <button id="ctx-window-unknown-chip" class="ctx-window-unknown-chip hidden"
           aria-label="Context window unknown — click to set an override"
           title="Context window size is unknown for this model. Click to set an override.">
-          <span class="ctx-window-unknown-icon">⚠</span>
+          <span class="ctx-window-unknown-icon">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/>
+              <path d="M12 9v4"/>
+              <path d="M12 17h.01"/>
+            </svg>
+          </span>
           <span class="ctx-window-unknown-label">Context window unknown</span>
           <span class="ctx-window-unknown-action">Set override →</span>
         </button>
@@ -481,6 +495,10 @@
 
       <div id="input-area">
       <span id="config-status-badge" class="config-status-badge" hidden title="Workspace config"></span>
+
+      <div id="context-bar" class="hidden">
+        <div id="context-chips"></div>
+      </div>
 
       <div id="input-wrapper">
         <textarea id="prompt-input" rows="1"
@@ -809,10 +827,6 @@
         <span id="context-tray-toggle" class="context-tray-toggle">&#9662;</span>
       </div>
       <div id="context-tray-items" class="context-tray-items hidden"></div>
-    </div>
-
-    <div id="context-bar" class="hidden">
-      <div id="context-chips"></div>
     </div>
 
     <!-- #context-monitor-panel removed — canonical UI is now #context-usage-dropdown -->

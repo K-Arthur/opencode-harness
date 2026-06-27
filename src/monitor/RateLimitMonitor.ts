@@ -79,7 +79,7 @@ export class RateLimitMonitor {
         return
       }
       const remainingSec = Math.ceil(remainingMs / 1000)
-      this.statusBarItem.text = `⚠ ${remainingSec}s`
+      this.statusBarItem.text = `$(warning) ${remainingSec}s`
       this.statusBarItem.tooltip = `Rate limit exhausted — resets in ${remainingSec}s`
       this.statusBarItem.show()
     }, 1000)

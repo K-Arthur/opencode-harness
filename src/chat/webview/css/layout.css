@@ -827,9 +827,8 @@
 /* ─── CONTEXT BAR ─── */
 
 #context-bar {
-  padding: var(--space-1-5) var(--space-3);
-  border-bottom: 1px solid var(--oc-border);
-  background: var(--oc-bg);
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
   flex-shrink: 0;
 }
 
@@ -3841,7 +3840,7 @@ button.modal-session-item:focus {
   color: color-mix(in srgb, var(--oc-accent, #e8a838) 70%, var(--oc-muted));
 }
 .mode-plan #input-area::before {
-  content: "🔍";
+  /* Search icon removed — use background-image or SVG element in HTML if needed */
   position: absolute;
   left: -20px;
   top: 50%;

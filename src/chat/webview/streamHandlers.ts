@@ -1008,12 +1008,14 @@ export function setToolStateClass(el: HTMLElement, state: string): void {
 }
 
 export function toolBadgeText(state?: string, hasError?: boolean): string | null {
-  if (state === "pending") return "\u25cb Pending"
-  if (state === "running") return "\u25c9 Running"
+  // Return text-only badges without symbols — the badge already has an icon
+  // via toolStateOverlayFor (see icons.ts STATE_*_SVG).
+  if (state === "pending") return "Pending"
+  if (state === "running") return "Running"
   if (state === "stale") return "Stale"
-  if (state === "unresolved") return "\u26a0 Incomplete"
-  if (hasError || state === "error") return "\u2717 Error"
-  if (state === "completed" || state === "result") return "\u2713 Done"
+  if (state === "unresolved") return "Incomplete"
+  if (hasError || state === "error") return "Error"
+  if (state === "completed" || state === "result") return "Done"
   return null
 }
 
@@ -1284,6 +1286,28 @@ export function handleToolEnd(
     })
     const grp = toolEl.closest(".tool-group") as HTMLElement | null
     if (grp) updateToolGroupHeader(grp)
+    return
+  }
+
+  // File edit cards: update status label and state class to resolve from "running"
+  if (toolEl.classList.contains("file-edit-card")) {
+    const state = result.stale ? "stale" : result.ok ? "completed" : "error"
+    const stateEl = toolEl.querySelector(".file-edit-card__status") as HTMLElement | null
+    if (stateEl) stateEl.textContent = fileEditStatusLabel(state, !result.ok ? "error" : undefined)
+    toolEl.className = toolEl.className.replace(/file-edit-card--\S+/g, "").trim() +
+        ` file-edit-card--${state}` +
+        (!result.ok ? " file-edit-card--error" : "")
+    if (result.durationMs) {
+      const header = toolEl.querySelector(".file-edit-card__header")
+      if (header && !header.querySelector(".file-edit-card__duration")) {
+        const dur = document.createElement("span")
+        dur.className = "file-edit-card__duration"
+        dur.textContent = `${result.durationMs}ms`
+        header.appendChild(dur)
+      }
+    }
+    const parentGroup = toolEl.closest(".tool-group") as HTMLElement | null
+    if (parentGroup) updateToolGroupHeader(parentGroup)
     return
   }
 

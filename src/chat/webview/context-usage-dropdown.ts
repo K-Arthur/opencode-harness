@@ -11,6 +11,7 @@ import {
   formatUsagePercent,
   type ContextBreakdown,
 } from "./context-usage-service"
+import { WARNING_SVG } from "./icons"
 
 function escapeHtml(input: unknown): string {
   if (typeof input !== "string") return ""
@@ -217,7 +218,7 @@ function _render(container: HTMLElement, usage: ContextUsage | null): void {
   let criticalHtml = ""
   if (color === "critical") {
     criticalHtml = `<div class="ctx-critical-banner" role="alert">
-      <span aria-hidden="true">⚠</span> Context nearly full (${escapeHtml(formatUsagePercent(usage.percent))}) — consider compacting or starting a new session.
+      <span aria-hidden="true">${WARNING_SVG}</span> Context nearly full (${escapeHtml(formatUsagePercent(usage.percent))}) — consider compacting or starting a new session.
     </div>`
   }
 

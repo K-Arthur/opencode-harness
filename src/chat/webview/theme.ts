@@ -108,7 +108,7 @@ export function updateContextUsage(contextMonitorEl: HTMLElement, usage?: { perc
         progressFill.classList.remove("context-warning", "context-critical", "context-good")
       }
       if (contextText) {
-        contextText.textContent = `${usage.tokens.toLocaleString()} tok · set limit ⚙`
+        contextText.textContent = `${usage.tokens.toLocaleString()} tok · set limit`
         contextText.title = "Context window limit not reported by server or OpenRouter cache. Click to set a manual override."
         contextText.classList.add("context-text--unknown-limit")
         contextMonitorEl.classList.add("context-monitor--needs-override")

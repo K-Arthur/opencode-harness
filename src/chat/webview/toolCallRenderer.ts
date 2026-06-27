@@ -6,6 +6,8 @@ import {
   TOOL_META_SVG,
   toolIconFor,
   toolStateOverlayFor,
+  CHECK_SVG,
+  STATE_PENDING_SVG,
 } from "./icons"
 import { sanitizeHtml } from "./syntaxHighlighter"
 import { escapeHtml } from "./htmlUtils"
@@ -1084,7 +1086,7 @@ export function renderPlanCard(plan: PlanData, opts: RenderOptions): HTMLElement
     item.className = `plan-card-todo plan-card-todo--${statusValue}`
     const checkbox = document.createElement("span")
     checkbox.className = "plan-card-todo-checkbox"
-    checkbox.textContent = statusValue === 'completed' ? '✓' : '○'
+    checkbox.innerHTML = statusValue === 'completed' ? CHECK_SVG : STATE_PENDING_SVG
     item.appendChild(checkbox)
 
     const text = document.createElement("span")

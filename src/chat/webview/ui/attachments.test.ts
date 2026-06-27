@@ -170,20 +170,20 @@ describe("attachments.ts", () => {
     assert.equal(sel!.endLine, 10)
   })
 
-  it("toggleActiveFileInclude flips state and posts toggle_active_file", () => {
+  it("toggleActiveFileInclude flips state without posting (inclusion is gated webview-side)", () => {
     const { manager, posted } = setupManager()
     manager.setActiveFile({ path: "src/main.ts" })
     assert.equal(manager.isActiveFileIncluded(), true)
 
     manager.toggleActiveFileInclude()
     assert.equal(manager.isActiveFileIncluded(), false)
-    assert.equal(posted[0]!.type, "toggle_active_file")
-    assert.equal(posted[0]!.include, false)
+    // The host keeps no per-session inclusion state, so no message is posted
+    // this previously posted with an empty sessionId, the bug we removed.
+    assert.equal(posted.filter((m) => m.type === "toggle_active_file").length, 0)
 
     manager.toggleActiveFileInclude()
     assert.equal(manager.isActiveFileIncluded(), true)
-    assert.equal(posted[1]!.type, "toggle_active_file")
-    assert.equal(posted[1]!.include, true)
+    assert.equal(posted.filter((m) => m.type === "toggle_active_file").length, 0)
   })
 
   it("isActiveFileIncluded returns false when active file is dismissed", () => {

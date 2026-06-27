@@ -2345,7 +2345,8 @@ function setupTodoSkillAndSubagentPanels(): void {
           : null
         const languageId = typeof msg.languageId === "string" ? msg.languageId : undefined
         const lineCount = typeof msg.lineCount === "number" ? msg.lineCount : undefined
-        attachmentManager.setActiveFile({ path, selection, languageId, lineCount })
+        const reason = typeof msg.reason === "string" ? msg.reason as "binary_file" | "file_too_large" : undefined
+        attachmentManager.setActiveFile({ path, selection, languageId, lineCount, reason })
       }],
       ["workspace_files", (msg) => {
         const files = Array.isArray(msg.files) ? msg.files : []
@@ -3088,6 +3089,9 @@ function setupTodoSkillAndSubagentPanels(): void {
             if (!session.changedFiles.includes(filePath)) {
               session.changedFiles.push(filePath)
               stateManager.save()
+              // Update the dropdown immediately so the strip appears without
+              // waiting for the separate changed_files_update message
+              cfDropdownApi?.updateChangedFiles(sid, session.changedFiles.map(p => ({ path: p, added: 0, removed: 0 })))
             }
           }
         }
@@ -4363,7 +4367,7 @@ function setupTodoSkillAndSubagentPanels(): void {
       els.statusMethodology.textContent = ""
       return
     }
-    els.statusMethodology.textContent = `◆ ${info.label}`
+    els.statusMethodology.textContent = info.label
     els.statusMethodology.title =
       `Methodology (${info.auto ? "auto-selected" : "manual"}): ${info.label}` +
       (info.strategy ? ` · ${info.strategy}` : "") +

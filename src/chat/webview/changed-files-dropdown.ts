@@ -18,6 +18,7 @@
 import type { FileChange, DiffLine } from "./types"
 import { renderHunksWithRevert, type FileHunkView } from "./hunkRevertView"
 import { renderFileChipListHtml } from "./file-chip-list"
+import { WARNING_SVG, CHEVRON_RIGHT_SVG, CHEVRON_DOWN_SVG } from "./icons"
 
 // ─── Per-session state ────────────────────────────────────────────────────────
 
@@ -720,7 +721,7 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
     const chevron = document.createElement("span")
     chevron.className = "cf-dir-chevron"
     chevron.setAttribute("aria-hidden", "true")
-    chevron.textContent = isCollapsed ? "▶" : "▼"
+    chevron.innerHTML = isCollapsed ? CHEVRON_RIGHT_SVG : CHEVRON_DOWN_SVG
     header.appendChild(chevron)
 
     const dirTitle = document.createElement("span")
@@ -751,7 +752,7 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       const nowExpanded = currentlyCollapsed
       header.setAttribute("aria-expanded", String(nowExpanded))
       header.setAttribute("aria-label", `${shortDirLabel} directory${nowExpanded ? ", expanded" : ", collapsed"}`)
-      chevron.textContent = nowExpanded ? "▼" : "▶"
+      chevron.innerHTML = nowExpanded ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG
       filesContainer.style.display = nowExpanded ? "" : "none"
       filesContainer.toggleAttribute("data-collapsed-children", !nowExpanded)
     })
@@ -1144,7 +1145,7 @@ function _renderHunk(el: HTMLElement, sessionId: string, path: string, deleted?:
     return
   }
   if (typeof data === "string") {
-    el.innerHTML = `<div class="cf-hunk-error">⚠ ${data}</div>`
+    el.innerHTML = `<div class="cf-hunk-error">${WARNING_SVG} ${data}</div>`
     return
   }
   if (data.length === 0) {

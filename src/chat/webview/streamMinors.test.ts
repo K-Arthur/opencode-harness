@@ -7,16 +7,16 @@ describe("m1: toolBadgeText centralizes tool state -> badge mapping", () => {
     const dom = installDom()
     try {
       const { toolBadgeText } = await import("./streamHandlers")
-      assert.equal(toolBadgeText("pending"), "○ Pending")
-      assert.equal(toolBadgeText("running"), "◉ Running")
+      assert.equal(toolBadgeText("pending"), "Pending")
+      assert.equal(toolBadgeText("running"), "Running")
       assert.equal(toolBadgeText("stale"), "Stale")
-      assert.equal(toolBadgeText("error"), "✗ Error")
-      assert.equal(toolBadgeText("completed"), "✓ Done")
-      assert.equal(toolBadgeText("result"), "✓ Done")
+      assert.equal(toolBadgeText("error"), "Error")
+      assert.equal(toolBadgeText("completed"), "Done")
+      assert.equal(toolBadgeText("result"), "Done")
       // hasError forces Error, but only after pending/running/stale (preserves
       // the original if/else precedence).
-      assert.equal(toolBadgeText("completed", true), "✗ Error")
-      assert.equal(toolBadgeText("pending", true), "○ Pending")
+      assert.equal(toolBadgeText("completed", true), "Error")
+      assert.equal(toolBadgeText("pending", true), "Pending")
       assert.equal(toolBadgeText("unknown-state"), null)
     } finally {
       dom.restore()

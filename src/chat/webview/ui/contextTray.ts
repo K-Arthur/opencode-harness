@@ -1,4 +1,5 @@
 import type { AttachedContextItem, ContextTraySummary, Attachment } from "../types"
+import { EYE_SVG, EYE_OFF_SVG, FILE_SVG, NEW_FILE_SVG } from "../icons"
 
 const IMAGE_TOKEN_ESTIMATE = 768
 const ACTIVE_FILE_ID = "__active_file__"
@@ -182,10 +183,10 @@ export function createContextTrayManager(deps: ContextTrayDeps) {
   }
 
   function getItemIcon(item: AttachedContextItem): string {
-    if (item.type === "active_file") return item.isActive ? "\u{1F441}" : "\u{1F6AB}"
-    if (item.type === "image") return "\u{1F5BC}"
-    if (item.type === "document") return "\u{1F4C4}"
-    return "\u{1F4C1}"
+    if (item.type === "active_file") return item.isActive ? EYE_SVG : EYE_OFF_SVG
+    if (item.type === "image") return FILE_SVG
+    if (item.type === "document") return NEW_FILE_SVG
+    return FILE_SVG
   }
 
   function getItemLabel(item: AttachedContextItem): string {
@@ -233,7 +234,7 @@ export function createContextTrayManager(deps: ContextTrayDeps) {
 
         const icon = document.createElement("span")
         icon.className = "context-tray-item-icon"
-        icon.textContent = getItemIcon(item)
+        icon.innerHTML = getItemIcon(item)
         el.appendChild(icon)
 
         const label = document.createElement("span")

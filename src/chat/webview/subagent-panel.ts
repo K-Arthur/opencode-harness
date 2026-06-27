@@ -6,6 +6,8 @@ import {
   DOMAIN_DATABASE_SVG,
   DOMAIN_API_SVG,
   DOMAIN_SHARED_SVG,
+  CHEVRON_RIGHT_SVG,
+  CHEVRON_DOWN_SVG,
 } from "./icons"
 
 export interface SubagentPanelOptions {
@@ -295,13 +297,13 @@ function renderSubagentList(container: HTMLElement, activities: SubagentActivity
       expandBtn.setAttribute("aria-label", "Toggle details")
       expandBtn.setAttribute("aria-expanded", "false")
       expandBtn.type = "button"
-      expandBtn.textContent = "▶"
+      expandBtn.innerHTML = CHEVRON_RIGHT_SVG
       expandBtn.addEventListener("click", (e) => {
         e.stopPropagation()
         item.classList.toggle("subagent-item--collapsed")
         const collapsed = item.classList.contains("subagent-item--collapsed")
         expandBtn.setAttribute("aria-expanded", String(!collapsed))
-        expandBtn.textContent = collapsed ? "▶" : "▼"
+        expandBtn.innerHTML = collapsed ? CHEVRON_RIGHT_SVG : CHEVRON_DOWN_SVG
       })
       header.appendChild(nameWrap)
       header.appendChild(status)

@@ -209,9 +209,17 @@
 }
 
 .question-bar-option.selected::before {
-  content: "✓";
-  font-size: 0.9em;
-  line-height: 1;
+  /* CSS-drawn checkmark */
+  content: '';
+  width: 8px;
+  height: 4px;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  margin-top: -4px;
 }
 
 .question-bar-option:focus-visible {

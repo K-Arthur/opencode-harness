@@ -41,6 +41,7 @@ function makeDeps() {
         },
         get activeTextEditor() { return activeEditor },
         set activeTextEditor(v: typeof activeEditor) { activeEditor = v },
+        get visibleTextEditors() { return activeEditor ? [activeEditor] : [] },
       },
       workspace: {
         workspaceFolders: [{ uri: { fsPath: "/workspace" } }],

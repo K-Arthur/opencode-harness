@@ -1071,9 +1071,18 @@ body.hide-thinking .thinking-block:not(.thinking-streaming) { display: none; }
 }
 
 .skill-item-toggle.checked::after {
-  content: '✓';
-  color: var(--oc-accent-fg);
-  font-size: var(--text-xs);
+  /* CSS-drawn checkmark */
+  content: '';
+  width: 10px;
+  height: 5px;
+  border-left: 2px solid var(--oc-accent-fg);
+  border-bottom: 2px solid var(--oc-accent-fg);
+  transform: rotate(-45deg);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin-top: -5px;
+  margin-left: -5px;
 }
 
 .skill-item-content {
@@ -1177,6 +1186,51 @@ body.hide-thinking .thinking-block:not(.thinking-streaming) { display: none; }
   border-color: var(--oc-accent);
 }
 
+/* State-specific accents — left border + subtle background tint so the
+ * panel item's status is visible at a glance without animation. Mirrors the
+ * inline card's --completed/--failed border treatment in blocks.css. */
+.subagent-item--running {
+  border-left: 3px solid var(--oc-accent, var(--color-accent));
+}
+
+.subagent-item--completed {
+  border-left: 3px solid var(--color-success, #2ea043);
+}
+
+.subagent-item--failed {
+  border-left: 3px solid var(--oc-error, #f85149);
+  background: var(--oc-error-subtle, rgba(248, 81, 73, 0.04));
+}
+
+/* TDD-enhanced layout variant — uses .subagent-header / .subagent-status
+ * instead of .subagent-item-header / .subagent-item-status. */
+.subagent-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.subagent-status {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+}
+
+.subagent-item--running .subagent-status {
+  color: var(--oc-accent, var(--color-accent));
+}
+
+.subagent-item--completed .subagent-status {
+  color: var(--color-success, #2ea043);
+}
+
+.subagent-item--failed .subagent-status {
+  color: var(--oc-error, #f85149);
+}
+
 .subagent-item-header {
   display: flex;
   justify-content: space-between;
@@ -1228,7 +1282,6 @@ body.hide-thinking .thinking-block:not(.thinking-streaming) { display: none; }
 
 .subagent-item-progress-bar {
   height: 100%;
-  width: 100%;
   background: var(--oc-accent);
   transform-origin: left center;
   transform: scaleX(var(--p, 0));
@@ -3653,9 +3706,9 @@ textarea {
 }
 
 .subagent-detail-status-badge--running {
-  background: var(--oc-success-subtle);
-  color: var(--color-success);
-  border: 1px solid var(--color-success);
+  background: var(--oc-accent-subtle, rgba(0, 122, 204, 0.12));
+  color: var(--oc-accent, var(--color-accent));
+  border: 1px solid var(--oc-accent-border, transparent);
 }
 
 .subagent-detail-status-badge--completed {

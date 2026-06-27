@@ -32,7 +32,8 @@ export class ActiveFileTracker {
     }
     return (
       this.deps.vscode.window.activeTextEditor ??
-      this.deps.vscode.window.visibleTextEditors[0]
+      this.deps.vscode.window.visibleTextEditors[0] ??
+      undefined
     )
   }
 

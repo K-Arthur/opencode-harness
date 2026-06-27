@@ -24,7 +24,7 @@ describe("question-bar CSS conventions", () => {
 
   it("selection feedback is not color-only (a check glyph marks the choice)", () => {
     assert.match(bar, /\.question-bar-option\.selected/, "selected state must be styled")
-    assert.match(bar, /\.question-bar-option\.selected::before[\s\S]*?content:\s*"✓"/, "selected adds a non-color cue")
+    assert.match(bar, /\.question-bar-option\.selected::before[\s\S]*?content:\s*''/, "selected adds a non-color cue via CSS-drawn checkmark")
   })
 
   it("never pushes the composer off-screen — bounded height with internal scroll", () => {

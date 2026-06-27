@@ -45,7 +45,7 @@ export class SessionExporter {
           const args = block.args ? JSON.stringify(block.args, null, 2) : ""
           const result = block.result ? this.truncate(String(block.result), 2000) : ""
           lines.push(`<details>`)
-          lines.push(`<summary>🔧 Tool: ${name}</summary>`)
+          lines.push(`<summary>Tool: ${name}</summary>`)
           lines.push("")
           if (args) {
             lines.push("**Arguments:**")

@@ -9,6 +9,7 @@ import {
   CHEVRON_RIGHT_SVG,
   COPY_SVG,
   CHECK_SVG,
+  CLOSE_SVG,
   SUCCESS_SVG,
   ERROR_SVG,
   GEAR_SVG,
@@ -1738,7 +1739,7 @@ function createHunkActionCell(
   actionCell.className = "diff-hunk-actions"
 
   if (diffBlock.state === "pending" && hunkState === "pending") {
-    actionCell.appendChild(createHunkButton("accept", "✓", "Accept this hunk", () => {
+    actionCell.appendChild(createHunkButton("accept", CHECK_SVG, "Accept this hunk", () => {
       opts.postMessage?.({
         type: "accept_hunk",
         diffId: diffBlock.diffId,
@@ -1748,15 +1749,15 @@ function createHunkActionCell(
       })
       hunkRow.classList.replace(`diff-hunk--${hunkState}`, "diff-hunk--accepted")
     }))
-    actionCell.appendChild(createHunkButton("reject", "✗", "Reject this hunk", () => {
+    actionCell.appendChild(createHunkButton("reject", CLOSE_SVG, "Reject this hunk", () => {
       opts.postMessage?.({ type: "reject_hunk", diffId: diffBlock.diffId, hunkId, path: diffBlock.path })
       hunkRow.classList.replace(`diff-hunk--${hunkState}`, "diff-hunk--rejected")
     }))
   } else if (hunkState === "accepted") {
-    actionCell.textContent = "✓"
+    actionCell.innerHTML = CHECK_SVG
     actionCell.className += " diff-hunk-accepted-chip"
   } else if (hunkState === "rejected") {
-    actionCell.textContent = "✗"
+    actionCell.innerHTML = CLOSE_SVG
     actionCell.className += " diff-hunk-rejected-chip"
   }
 
@@ -1766,7 +1767,7 @@ function createHunkActionCell(
 function createHunkButton(kind: "accept" | "reject", text: string, title: string, onClick: () => void): HTMLElement {
   const button = document.createElement("button")
   button.className = `diff-hunk-btn diff-hunk-btn--${kind}`
-  button.textContent = text
+  button.innerHTML = text
   button.title = title
   button.addEventListener("click", (e) => {
     e.stopPropagation()

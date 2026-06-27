@@ -13,6 +13,7 @@
  */
 import type { ElementRefs } from "./dom"
 import type { ChatMessage } from "./types"
+import { STATE_PENDING_SVG, PLAY_SVG, SUCCESS_SVG, ERROR_SVG, STATE_CANCELLED_SVG } from "./icons"
 import type { LiveToolOutput } from "./toolPartialStore"
 import {
   buildCommandTasks,
@@ -58,12 +59,12 @@ const FILTER_LABELS: Record<CommandFilter, string> = {
   succeeded: "Succeeded",
 }
 const STATUS_ICON: Record<CommandStatus, string> = {
-  pending: "○",
-  running: "▷",
-  succeeded: "✓",
-  failed: "✗",
-  cancelled: "⊘",
-  unknown: "•",
+  pending: STATE_PENDING_SVG,
+  running: PLAY_SVG,
+  succeeded: SUCCESS_SVG,
+  failed: ERROR_SVG,
+  cancelled: STATE_CANCELLED_SVG,
+  unknown: STATE_CANCELLED_SVG,
 }
 
 export function setupTasksPanel(els: TasksPanelEls, deps: TasksPanelDeps): TasksPanelApi | undefined {
