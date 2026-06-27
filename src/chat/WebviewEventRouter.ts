@@ -462,6 +462,10 @@ export class WebviewEventRouter {
         this.opts.sessionStore.appendMessage(sessionId, userMsg)
         this.opts.sessionStore.markQuestionAnswered(sessionId, answerId, textForPrompt, answerSource)
         this.opts.streamCoordinator.markQuestionAnswered(sessionId, answerId)
+        // Flipped true only when the v2 reply/reject lands, so the happy-path
+        // continuation below runs exclusively on success — the expired and
+        // transient catch branches own their own resume / rollback.
+        let resumeAfterReply = false
         try {
           if (source === "skip") {
             await this.opts.sessionManager.rejectQuestion(replySessionId, requestID)
@@ -486,6 +490,7 @@ export class WebviewEventRouter {
             toolCallId: answerId,
             requestID,
           })
+          resumeAfterReply = true
         } catch (err) {
           // B9/B10: the SDK call failed. Categorize the error to decide
           // whether to rollback (transient → user can retry) or remove
@@ -582,6 +587,48 @@ export class WebviewEventRouter {
           // the model IS continuing with their answer.
           if (classification.category !== "expired") {
             this.opts.postRequestError(classification.userFacingMessage, sessionId)
+          }
+        }
+
+        // Happy-path continuation. opencode's `question` tool ENDS the
+        // assistant turn — the local stream finalizes the instant the answer
+        // is recorded (streamCoordinator.markQuestionAnswered →
+        // maybeFinalizeStream above). The v2 question.reply endpoint records
+        // the answer server-side but does NOT start a new turn, so on its own
+        // it leaves the user stranded on a finished stream, forced to type
+        // "Continue" by hand (generation blocked). Forward the answer as a
+        // follow-up prompt to resume generation — the documented design (ADR
+        // 2026-06-05): answers are forwarded as prompts, which cleanly unblock
+        // the agent. Reuses the per-session in-flight guard so a double-submit
+        // can't fire two streams; `toolCallId` threads the continuation into
+        // the same assistant bubble that already holds the question block
+        // (StreamCoordinator H2a). Runs AFTER the reply try/catch so a resume
+        // failure is never misclassified as a reply failure.
+        if (resumeAfterReply) {
+          if (this.promptsInFlight.has(sessionId)) {
+            log.warn(`question_answer resume skipped: prompt already in flight for ${sessionId}`)
+          } else {
+            this.promptsInFlight.add(sessionId)
+            try {
+              await this.opts.streamCoordinator.startPrompt({
+                tabId: sessionId,
+                text: value,
+                callbacks: {
+                  postMessage: (m) => this.opts.postMessage(m),
+                  postRequestError: (m) => this.opts.postRequestError(m),
+                  toolCallId: answerId,
+                  clearPromptsInFlight: () => this.promptsInFlight.delete(sessionId),
+                },
+              })
+            } catch (resumeErr) {
+              log.error("question_answer: failed to resume generation after reply", resumeErr)
+              this.opts.postRequestError(
+                resumeErr instanceof Error ? resumeErr.message : "Failed to resume generation after answering.",
+                sessionId,
+              )
+            } finally {
+              this.promptsInFlight.delete(sessionId)
+            }
           }
         }
         return

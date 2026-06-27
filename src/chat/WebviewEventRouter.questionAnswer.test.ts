@@ -7,6 +7,9 @@
  *   - drop empty values
  *   - reuse send_prompt's in-flight guard so double-submits don't fire twice
  *   - prefer the v2 question reply/reject API when requestID is present
+ *   - resume generation after a successful reply by forwarding the answer as a
+ *     follow-up prompt (the question tool ends the turn; reply alone never
+ *     restarts it, so without this the stream blocks)
  *   - keep the legacy no-requestID fallback through streamCoordinator.startPrompt
  */
 import { describe, it } from "node:test"
@@ -70,8 +73,8 @@ describe("WebviewEventRouter — question_answer routing", () => {
     assert.ok(handler.includes("if (requestID)"), "must branch before the legacy startPrompt fallback")
     assert.ok(handler.includes("this.opts.sessionManager.replyToQuestion(replySessionId,"), "must use the v2 question reply API with resolved session ID (originSessionId or cliSessionId)")
     assert.ok(handler.includes("this.opts.sessionManager.rejectQuestion(replySessionId,"), "must use the v2 question reject API for skipped answers with resolved session ID")
-    assert.ok(handler.indexOf("if (requestID)") < handler.indexOf("this.promptsInFlight.has(sessionId)"),
-      "v2 replies must not consume a prompt stream slot")
+    assert.ok(handler.indexOf("if (requestID)") < handler.indexOf("No model selected"),
+      "the v2 requestID branch must run before the legacy no-requestID startPrompt fallback")
   })
 
   it("stores toolCallId in the user message block for downstream correlation", () => {
@@ -114,6 +117,52 @@ describe("WebviewEventRouter — question_answer routing", () => {
       handler.includes("structured.length > 0 ? structured : [[value]]"),
       "v2 reply must pass structured answers when present, else fall back to [[value]]",
     )
+  })
+
+  // ── Resume-after-reply: continue generation on the v2 happy path ─────────
+  // opencode's `question` tool ENDS the assistant turn, so the local stream
+  // finalizes the instant the answer is recorded (streamCoordinator.
+  // markQuestionAnswered → maybeFinalizeStream). The v2 question.reply
+  // endpoint records the answer but never starts a new turn. Without a
+  // follow-up prompt the user is stranded on a finished stream and must type
+  // "Continue" by hand (generation blocked) — the regression this guards.
+  describe("resume-after-reply: continue generation on the v2 happy path", () => {
+    it("forwards the answer as a follow-up prompt after a successful reply", () => {
+      assert.ok(
+        handler.includes("resumeAfterReply = true"),
+        "must flip resumeAfterReply once the v2 reply/reject lands",
+      )
+      const resumeIdx = handler.indexOf("if (resumeAfterReply)")
+      assert.ok(resumeIdx >= 0, "must have an if (resumeAfterReply) continuation block")
+      const resumeBlock = handler.slice(resumeIdx)
+      assert.ok(
+        resumeBlock.includes("this.opts.streamCoordinator.startPrompt("),
+        "happy path must resume generation via startPrompt so the turn continues",
+      )
+      assert.ok(resumeBlock.includes("text: value"), "resume prompt must carry the user's answer text")
+      assert.ok(
+        resumeBlock.includes("toolCallId: answerId"),
+        "resume must thread toolCallId so the continuation renders in the question's bubble",
+      )
+    })
+
+    it("guards the resume with promptsInFlight so it cannot fire two streams", () => {
+      const resumeBlock = handler.slice(handler.indexOf("if (resumeAfterReply)"))
+      assert.ok(
+        resumeBlock.includes("this.promptsInFlight.has(sessionId)") &&
+          resumeBlock.includes("this.promptsInFlight.add(sessionId)") &&
+          resumeBlock.includes("} finally {") &&
+          resumeBlock.includes("this.promptsInFlight.delete(sessionId)"),
+        "resume must reuse the in-flight guard and release it in finally",
+      )
+    })
+
+    it("runs the resume AFTER the reply try/catch so a resume failure is not a reply failure", () => {
+      assert.ok(
+        handler.indexOf("catch (err)") < handler.indexOf("if (resumeAfterReply)"),
+        "resume must live outside the reply try/catch so startPrompt errors aren't classified as reply errors",
+      )
+    })
   })
 
   // ── B9: optimistic "Answered" rollback on reply failure ──────────────────
