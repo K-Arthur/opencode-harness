@@ -1,19 +1,19 @@
 # Status.md
 
 ## Last Updated: 2026-06-27
-## Project State: v0.4.20 — subagent tool card CSS regression fix + ephemeral-tree hardening + file mention chips + active-file pill fix
+## Project State: v0.4.20 — emoji→SVG icons + active file toggle fix + file mention search + file edit card fix + changed files dropdown
 
-### v0.4.20 (2026-06-27): Subagent tool card CSS regression fix + ephemeral-tree hardening
-- **Subagent panel CSS restored** — state-specific classes (`.subagent-item--running/completed/failed`), TDD-layout variant classes (`.subagent-header`, `.subagent-status`), and detail-view badge colors were missing from `components.css` after an ephemeral-tree wipe. Added left-border accent colors, fixed `.subagent-item-progress-bar` (removed `width: 100%` conflicting with `scaleX`), and fixed `.subagent-detail-status-badge--running` (accent color instead of success-green).
-- **File-edit card CSS gaps** — added missing `.file-edit-card__duration`, `.file-edit-card__open-btn`, `.file-edit-card__diff-btn`, `.file-edit-card__diff-content`, `.file-edit-card__preview-content` CSS rules that were only styled via shared base classes.
-- **CSS coverage structural test** — new `src/chat/webview/css/cssCoverage.test.ts` asserts every class emitted by `subagentCard.ts` and `fileEditCard.ts` has at least one matching CSS rule. Catches the exact failure mode (renderer emits a class, CSS was wiped) that caused this regression. Runs as part of `npm run test:unit`.
-- **Visual tests strengthened** — `subagent-panel.spec.ts` now includes computed-style assertions for state border colors and progress bar transform, not just text content. Progress bar fixture updated to use `--p` custom property.
-- **Ephemeral-tree hardening** — three new automated guards:
-  - `scripts/detect-wiped-work.mjs` — detects if uncommitted work was wiped by the checkpoint process via stash/reflog inspection
-  - `scripts/check-workspace-state.mjs` — session-start recovery + CSS coverage check
-  - `.opencode/hooks/pre-commit-css-coverage.sh` — pre-commit hook blocking renderer/CSS mismatches
-- **Documentation** — new `docs/development/css-regression-prevention.md` guide; `AGENTS.md` updated with "CSS / Styling Work" subsection in the coordination protocol.
-- **Verification:** typecheck clean; unit 1970 pass / 0 fail; production build green.
+### v0.4.20 (2026-06-27): Emoji→SVG icons + active file toggle + file mention + file edit cards
+- **Emoji → SVG icon replacement** — all emoji/Unicode symbols in webview UI, HTML, CSS, extension host files, and dead code replaced with SVG icons from `icons.ts`. CSS pseudo-elements use CSS-drawn shapes. VS Code status bar items use codicon syntax.
+- **Active file context toggle** — moved `#context-bar` inside `#input-area` in `index.html`. Propagated `reason` field for suppressed files. Removed dead `toggle_active_file` postMessage. Re-posted active file on tab switch.
+- **File edit cards stuck as running** — added branch in `handleToolEnd` to resolve file edit cards from "running" to completed/error/stale state.
+- **Changed files dropdown** — updated dropdown immediately on `file_edited` message. Added changed files toolbar button back to HTML with SVG icon.
+- **File mention search** — `MessageRouter` now uses `WorkspaceFileIndex` as primary source with `vscode.workspace.findFiles` fallback, deduplicating results. `WorkspaceFileIndex` refreshed on `webview_ready`. Webview proactively requests files on `@` mention trigger.
+- **ActiveFileTracker crash fix** — `bestEditor()` safely handles undefined `visibleTextEditors` array.
+- **Subagent panel CSS restored** — state-specific classes and detail-view badge colors restored after ephemeral-tree wipe.
+- **CSS coverage structural test** — `src/chat/webview/css/cssCoverage.test.ts` asserts every renderer class has a matching CSS rule.
+- **Ephemeral-tree hardening** — `detect-wiped-work.mjs`, `check-workspace-state.mjs`, pre-commit CSS coverage hook.
+- **Verification:** typecheck clean; unit 1970 pass / 0 fail; production build green. Playwright webview tests require browser install (`npx playwright install chromium`).
 
 ### v0.4.13 (2026-06-25): Inline diffs + compaction ordering + SDK v1.17.11 + theme engine overhaul
 - **Inline diff in file-edit cards** — the "Show diff" button on file-edit cards now renders a unified diff inline from the tool arguments (`oldString`/`newString` or `content`) instead of relying on a host round-trip that only updated the changed-files dropdown.

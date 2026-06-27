@@ -26,6 +26,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Emoji → SVG icon replacement** — all emoji/Unicode symbols in webview UI,
+  HTML, CSS, extension host files, and dead code replaced with SVG icons from
+  `icons.ts` for consistent rendering. CSS pseudo-elements now use CSS-drawn
+  shapes (checkmarks) instead of emoji. VS Code status bar items use codicon
+  syntax (`$(warning)`) instead of emoji.
+- **Active file context toggle** — moved `#context-bar` inside `#input-area` in
+  `index.html` for proper placement. Propagated `reason` field in active_file
+  handler for suppressed files (binary/too large). Removed dead
+  `toggle_active_file` postMessage. Re-posted active file on tab switch.
+- **File edit cards stuck as running** — added branch in `handleToolEnd` to
+  resolve file edit cards from "running" to completed/error/stale state.
+- **Changed files dropdown** — updated dropdown immediately on `file_edited`
+  message. Added changed files toolbar button back to HTML with SVG icon.
+- **ActiveFileTracker crash on no editor** — `bestEditor()` now safely handles
+  undefined `visibleTextEditors` array. Test mock updated to provide
+  `visibleTextEditors` getter.
 - **Subagent panel CSS regression** — state-specific classes
   (`.subagent-item--running/completed/failed`), TDD-layout variant classes
   (`.subagent-header`, `.subagent-status`), and detail-view badge colors were
@@ -41,6 +57,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **File mention search with WorkspaceFileIndex** — `MessageRouter` now uses
+  `WorkspaceFileIndex` as primary source for file mention search, with
+  `vscode.workspace.findFiles` as fallback. Results from both sources are
+  deduplicated. This provides cached, filtered results that include
+  directories.
+- **WorkspaceFileIndex refresh on webview_ready** — the file index is refreshed
+  when the webview becomes ready, ensuring the cache is up-to-date before the
+  webview requests files.
+- **Proactive workspace file request on mention trigger** — the webview now
+  posts `get_workspace_files` when the user types `@`, ensuring the mention
+  dropdown has the latest file list.
 - **CSS coverage structural test** (`src/chat/webview/css/cssCoverage.test.ts`)
   — asserts every class emitted by `subagentCard.ts` and `fileEditCard.ts` has
   at least one matching CSS rule. Catches the exact failure mode (renderer

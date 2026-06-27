@@ -1,38 +1,42 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-06-26
+**Last Updated:** 2026-06-27
 **Version:** v0.4.20
 
-## Highlights (2026-06-26) — Active-file pill, mention chips, SVG icons & usage-bar fixes
+## Highlights (2026-06-27) — Emoji→SVG, active file toggle, file mention search, file edit cards & changed files dropdown
 
-**Composer context surfaces fixed end to end.**
+**Comprehensive UI fix pass: emoji replacement, active file toggle, file mention search, and regression fixes.**
 
-- **Active-file pill stays visible while typing** — clicking the composer fires
-  `onDidChangeActiveTextEditor(undefined)` (a webview is not a `TextEditor`);
-  the old handler treated that as "no file" and hid the pill. `ActiveFileTracker`
-  now caches `lastKnownEditor` and resolves through a `bestEditor()` cascade
-  (`lastKnownEditor → activeTextEditor → visibleTextEditors[0]`), only clearing
-  the pill when every visible editor is closed. `repost()` (on `webview_ready`)
-  uses the same cascade so the pill shows on first open too.
-- **File mentions render as chips on insert** — the `oc-input-changed` listener
-  now calls `updatePromptContextChips()` + `syncContextItemsWithPrompt()`, so
-  picking a file from the `@` dropdown produces a styled chip instead of raw
-  `@file:path` text.
-- **SVG icons replace broken emoji** — the mention dropdown's `"\U0001F4C4"`
-  (invalid capital-`\U` escape, rendered as literal `U0001F4C4`) and all other
-  webview emoji are now inline SVG from `icons.ts`.
-- **Dropdown positioning** — `positionDropdown()` runs after rows are appended,
-  fixing the zero-height-fallback that opened the menu ~260px off.
-- **`.context-chip-remove` styling** — the chip `×` button now has real CSS
-  mirroring `.context-chip-toggle` instead of native button chrome.
-- **Estimated usage no longer regresses actual** — a late `estimated`
-  `context_usage` emit below a stored `actual` is now ignored, so the bar stops
-  jumping backwards mid-session.
+- **Emoji → SVG icon replacement** — all emoji/Unicode symbols across webview UI
+  files, HTML, CSS, extension host files, and dead code replaced with SVG icons
+  from `icons.ts`. CSS pseudo-elements use CSS-drawn shapes (checkmarks). VS Code
+  status bar items use codicon syntax (`$(warning)`).
+- **Active file context toggle** — moved `#context-bar` inside `#input-area` in
+  `index.html` for proper placement. Propagated `reason` field in active_file
+  handler for suppressed files (binary/too large). Removed dead
+  `toggle_active_file` postMessage. Re-posted active file on tab switch.
+- **File edit cards stuck as running** — added branch in `handleToolEnd` to
+  resolve file edit cards from "running" to completed/error/stale state.
+- **Changed files dropdown** — updated dropdown immediately on `file_edited`
+  message. Added changed files toolbar button back to HTML with SVG icon.
+- **File mention search with WorkspaceFileIndex** — `MessageRouter` now uses
+  `WorkspaceFileIndex` as primary source for file mention search, with
+  `vscode.workspace.findFiles` as fallback. Results deduplicated. `WorkspaceFileIndex`
+  refreshed on `webview_ready`. Webview proactively requests files on `@` trigger.
+- **ActiveFileTracker crash fix** — `bestEditor()` safely handles undefined
+  `visibleTextEditors` array.
 
-Files: `src/chat/ActiveFileTracker.ts`, `src/chat/webview/inputHandlers.ts`,
-`src/chat/webview/mentions.ts`, `src/chat/webview/icons.ts`,
-`src/chat/webview/theme.ts`, `src/chat/webview/recent-sessions.ts`,
-`src/chat/webview/main.ts`, `src/chat/webview/css/components.css`.
+Files: `src/chat/handlers/MessageRouter.ts`, `src/chat/WebviewEventRouter.ts`,
+`src/chat/ActiveFileTracker.ts`, `src/chat/ChatProvider.ts`,
+`src/chat/webview/mentions.ts`, `src/chat/webview/index.html`,
+`src/chat/webview/streamHandlers.ts`, `src/chat/webview/fileEditCard.ts`,
+`src/chat/webview/changed-files-dropdown.ts`, `src/chat/webview/theme.ts`,
+`src/chat/webview/renderer.ts`, `src/chat/webview/tasks-panel.ts`,
+`src/chat/webview/subagent-panel.ts`, `src/chat/webview/ui/contextTray.ts`,
+`src/chat/webview/ui/attachments.ts`, `src/chat/webview/css/components.css`,
+`src/chat/webview/css/question-bar.css`, `src/chat/webview/css/layout.css`,
+`src/chat/webview/css/file-edit.css`, `src/monitor/RateLimitMonitor.ts`,
+`src/session/SessionExporter.ts`.
 
 ## Highlights (2026-06-26) — Tool cards, compact diff, context bar & ARIA fixes
 
