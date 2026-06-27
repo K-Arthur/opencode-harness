@@ -1,7 +1,41 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-06-27
-**Version:** v0.4.21
+**Version:** v0.4.23
+
+## Highlights (2026-06-27) — v2 SDK error messages, SVG icon fix, tab attention indicator, diff compact mode
+
+**Regression fix pass: v2 SDK audit, SVG icon rendering, tab switching, CSS tokens, diff display.**
+
+- **SVG icons rendered as literal text** — `textContent` on SVG strings
+  displayed raw `<svg>` markup instead of the icon. Switched to `innerHTML`
+  in `liveCommandCard.ts` (initial render + status update) and
+  `tasks-panel.ts`. Regression from the emoji-to-SVG conversion.
+- **Auto-tab-switch on background resumes** — background sessions with pending
+  questions or permissions no longer steal focus. A pulsing attention
+  indicator (`data-needs-attention`) marks tabs needing user input. Scroll
+  restoration on streaming tabs now anchors to bottom (prevents scroll jump).
+- **CSS preset design tokens** — context-chip, context-chip-toggle, and
+  live-command-card styles now use `--oc-*` semantic variables instead of
+  raw `--vscode-*` variables.
+- **Diff display compact mode** — `buildDiffPreview` in `fileEditCard.ts`
+  now counts all preview lines (added/removed/context) toward
+  `MAX_PREVIEW_LINES` (5). `MAX_DIFF_LINES` reduced 40→15.
+- **v2 SDK error messages** — `throwOnV2Error` produced `Command failed: {}`
+  on empty error objects. New `v2ErrorDetail` helper extracts message →
+  field JSON → HTTP status code. Applied to `SessionClient` + `PtyService`.
+- **`file.read` shape mismatch** — removed dead `messageID` parameter not
+  accepted by the v2 SDK `file.read` signature.
+- **AGENTS.md** — added Focused-Change Discipline (Anti-Regression Protocol)
+  and Tab Attention Indicator policy sections.
+
+Files: `src/session/v2ErrorDetail.ts` (new), `src/session/SessionClient.ts`,
+`src/session/PtyService.ts`, `src/chat/CommandExecutionService.ts`,
+`src/chat/webview/liveCommandCard.ts`, `src/chat/webview/tasks-panel.ts`,
+`src/chat/webview/main.ts`, `src/chat/webview/tabSwitcher.ts`,
+`src/chat/webview/fileEditCard.ts`, `src/chat/webview/css/layout.css`,
+`src/chat/webview/css/components.css`, `src/chat/webview/css/blocks.css`,
+`AGENTS.md`, `scripts/check-bundle-size.mjs`.
 
 ## Highlights (2026-06-27) — Emoji→SVG, active file toggle, file mention search, file edit cards & changed files dropdown
 

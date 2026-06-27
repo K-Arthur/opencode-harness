@@ -1,7 +1,17 @@
 # Status.md
 
 ## Last Updated: 2026-06-27
-## Project State: v0.4.21 — emoji→SVG icons + active file toggle fix + file mention search + file edit card fix + changed files dropdown
+## Project State: v0.4.23 — v2 SDK error messages + SVG icon fix + tab attention indicator + diff compact mode
+
+### v0.4.23 (2026-06-27): Regression fixes + v2 SDK audit
+- **SVG icons rendered as literal text** — `textContent` on SVG strings showed raw markup. Switched to `innerHTML` in `liveCommandCard.ts` (render + update) and `tasks-panel.ts`.
+- **Auto-tab-switch on background resumes** — background sessions with pending questions/permissions no longer steal focus. Pulsing `data-needs-attention` indicator marks tabs needing input. Streaming tabs anchor to bottom on switch (prevents scroll jump).
+- **CSS preset design tokens** — context-chip, context-chip-toggle, live-command-card styles now use `--oc-*` semantic variables instead of raw `--vscode-*`.
+- **Diff display compact mode** — `buildDiffPreview` now counts added/removed lines toward `MAX_PREVIEW_LINES` (5). `MAX_DIFF_LINES` reduced 40→15.
+- **v2 SDK error messages** — `throwOnV2Error` produced `Command failed: {}` on empty error objects. New `v2ErrorDetail` helper extracts message → field JSON → HTTP status. Applied to `SessionClient` + `PtyService`.
+- **`file.read` shape mismatch** — removed dead `messageID` parameter not accepted by v2 SDK `file.read` signature.
+- **AGENTS.md** — added Focused-Change Discipline and Tab Attention Indicator sections.
+- **Bundle limit** — webview 794KB→796KB (measures 794.5KB).
 
 ### v0.4.21 (2026-06-27): Rebuild + reinstall
 - **Rebuilt and reinstalled** — version bumped to 0.4.21, extension packaged and installed. Bundle sizes: extension.js 743.8KB (limit 748KB), main.js 793.3KB (limit 794KB). All within limits.

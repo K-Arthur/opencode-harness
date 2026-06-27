@@ -24,6 +24,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      [Unreleased] — that creates documentation drift. See the release
      workflow in docs/development/rebuild-and-reinstall.md. -->
 
+## [0.4.23] - 2026-06-27
+
+### Fixed
+
+- **SVG icons rendered as literal text** — `textContent` on an SVG string
+  displays the raw markup (`<svg>...</svg>`) instead of the icon. Switched to
+  `innerHTML` for live-command-card icons (initial render + status update) and
+  task-panel status icons. Regression from the emoji-to-SVG conversion.
+- **Auto-tab-switch on background resumes** — background sessions with pending
+  questions or permissions no longer steal focus. A pulsing attention
+  indicator (`data-needs-attention`) marks tabs needing user input. The user
+  clicks the tab when ready. Scroll restoration on streaming tabs now anchors
+  to bottom instead of restoring a stale saved position (prevents scroll jump).
+- **CSS preset design tokens** — context-chip, context-chip-toggle, and
+  live-command-card styles now use `--oc-*` semantic variables instead of raw
+  `--vscode-*` variables, ensuring correct preset/theme switching.
+- **Diff display compact mode** — `buildDiffPreview` in `fileEditCard.ts` only
+  capped context lines at 5; added/removed lines were unbounded, showing the
+  full diff. Now all preview lines count toward `MAX_PREVIEW_LINES` (5).
+  Reduced `MAX_DIFF_LINES` from 40 to 15 for the inline diff view.
+- **v2 SDK error messages** — `throwOnV2Error` produced `Command failed: {}`
+  when the server returned an empty error object. New `v2ErrorDetail` helper
+  extracts the error message, falls back to field JSON, then to HTTP status
+  code. Applied to all `SessionClient` and `PtyService` error paths.
+- **`file.read` shape mismatch** — `readFile` passed `messageID` to
+  `client.file.read`, but the v2 SDK signature does not accept it. Removed
+  the dead parameter.
+
+### Added
+
+- **Tab attention indicator** — `markTabNeedsAttention` /
+  `clearTabNeedsAttention` functions in `main.ts` with a `needsAttention` set.
+  Wired to `permission_request`, `question_asked`, and `switchTab` events.
+  CSS pulse animation in `layout.css` (respects `prefers-reduced-motion`).
+- **Focused-Change Discipline (Anti-Regression Protocol)** in `AGENTS.md` —
+  rules for focused commits, no auto-switching, CSS token usage, SVG via
+  `innerHTML`, and CSS coverage testing.
+
 ## [0.4.21] - 2026-06-27
 
 ### Fixed

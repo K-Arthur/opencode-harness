@@ -106,6 +106,30 @@ needed — it uses `SdkEventLike` (local type)" — true at the time because the
 server was still sending Event format. The v1.17.11 server switched to V2Event
 format without a version-gated migration path, exposing the assumption.
 
+### Phase 8 — v2 SDK error detail + file.read shape audit (2026-06-27, commit `6d57e4b`)
+
+A full audit of all 27 `client.*` call sites in `SessionClient.ts` plus
+`PtyService.ts` and `resolveSessionQuestionApi.ts` against the v2 SDK type
+definitions found two issues:
+
+1. **`throwOnV2Error` produced `Command failed: {}`** — when the server
+   returned an empty error object (`{}`), `JSON.stringify({})` produced the
+   useless string `"{}"`. New `v2ErrorDetail` helper
+   (`src/session/v2ErrorDetail.ts`) extracts `error.message`, falls back to
+   field JSON, then to `HTTP {status}`. Applied to `SessionClient`,
+   `PtyService`, and the `sendPromptAsync` error path.
+
+2. **`file.read` passed an unsupported `messageID`** — `readFile` forwarded
+   `messageID` to `client.file.read`, but the v2 SDK `File.read` signature
+   only accepts `{ directory?, workspace?, path }`. The extra field was
+   silently ignored by the SDK's param builder (it only maps known keys),
+   so it was dead code rather than a fatal error. Removed.
+
+All other call sites (session.create/delete/get/update/list/messages/prompt/
+promptAsync/command/shell/revert/unrevert/fork/share/unshare/abort/summarize/
+diff/children/todo, permission.reply, command.list, pty.create/get/remove/
+list/update/connectToken) match their v2 signatures correctly.
+
 ## References
 - Beachhead commit `816a874`; `src/session/opencodeClientFactory.ts`, `AuthProvider.ts`, `SessionManager.ts`, `SessionClient.ts`.
 - Related: `docs/implementation/2026-06-15-r1-unify-stream-state.md` (R1 — sequence Phase 4 with it).
