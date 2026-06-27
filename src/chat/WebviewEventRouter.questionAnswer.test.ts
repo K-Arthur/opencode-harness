@@ -163,6 +163,57 @@ describe("WebviewEventRouter — question_answer routing", () => {
         "resume must live outside the reply try/catch so startPrompt errors aren't classified as reply errors",
       )
     })
+
+    // Edge case: another prompt is already streaming for this session when
+    // the resume tries to fire (race, stuck flag, double-submit). Silently
+    // dropping would reproduce the "blocked after answering" bug. The resume
+    // must surface the answer text via the recovery channel so the webview
+    // can auto-forward it once the in-flight stream drains — mirroring the
+    // expired path's prompt_in_flight branch.
+    it("surfaces answer text for auto-resend when the resume finds promptsInFlight already set", () => {
+      const resumeBlock = handler.slice(handler.indexOf("if (resumeAfterReply)"))
+      const inFlightBranch = resumeBlock.slice(
+        resumeBlock.indexOf("this.promptsInFlight.has(sessionId)"),
+        resumeBlock.indexOf("} else {"),
+      )
+      assert.ok(
+        inFlightBranch.includes('"expired_question_recovery_failed"'),
+        "resume in-flight branch must post expired_question_recovery_failed (not silently drop)",
+      )
+      assert.ok(
+        inFlightBranch.includes("answerText: value"),
+        "resume in-flight branch must carry the answer text for webview auto-forward",
+      )
+      assert.ok(
+        inFlightBranch.includes('reason: "resume_in_flight"'),
+        "resume in-flight branch must use a distinct reason so logs/telemetry distinguish it from the expired path",
+      )
+    })
+
+    // Edge case: the v2 reply succeeded (server has the answer) but the
+    // follow-up startPrompt threw — tab gone, server down, slot rejected.
+    // A bare postRequestError banner carries no answer text and triggers no
+    // auto-recovery, leaving the user stuck. The resume catch must surface
+    // the answer text via the recovery channel so the webview auto-forwards
+    // it — mirroring the expired path's catch block.
+    it("surfaces answer text for auto-resend when the resume startPrompt throws", () => {
+      const resumeBlock = handler.slice(handler.indexOf("if (resumeAfterReply)"))
+      const catchIdx = resumeBlock.indexOf("catch (resumeErr)")
+      assert.ok(catchIdx >= 0, "resume must have a catch (resumeErr) block")
+      const resumeCatch = resumeBlock.slice(catchIdx)
+      assert.ok(
+        resumeCatch.includes('"expired_question_recovery_failed"'),
+        "resume catch must post expired_question_recovery_failed so the webview can auto-forward the answer",
+      )
+      assert.ok(
+        resumeCatch.includes("answerText: value"),
+        "resume catch must carry the answer text (no silent loss)",
+      )
+      assert.ok(
+        resumeCatch.includes("resumeErr instanceof Error"),
+        "resume catch must surface the underlying error message as the reason",
+      )
+    })
   })
 
   // ── B9: optimistic "Answered" rollback on reply failure ──────────────────

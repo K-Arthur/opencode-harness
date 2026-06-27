@@ -606,7 +606,19 @@ export class WebviewEventRouter {
         // failure is never misclassified as a reply failure.
         if (resumeAfterReply) {
           if (this.promptsInFlight.has(sessionId)) {
-            log.warn(`question_answer resume skipped: prompt already in flight for ${sessionId}`)
+            // Edge case: another prompt is already streaming for this session
+            // (race, stuck flag, or user double-submit). Silently dropping
+            // here would reproduce the exact "blocked after answering" bug
+            // this fix targets. Surface the answer text via the same
+            // recovery channel the expired path uses so the webview can
+            // auto-forward it once the in-flight stream drains.
+            log.warn(`question_answer resume skipped: prompt already in flight for ${sessionId}; surfacing for auto-resend`)
+            this.opts.postMessage({
+              type: "expired_question_recovery_failed",
+              sessionId,
+              answerText: value,
+              reason: "resume_in_flight",
+            })
           } else {
             this.promptsInFlight.add(sessionId)
             try {
@@ -621,11 +633,18 @@ export class WebviewEventRouter {
                 },
               })
             } catch (resumeErr) {
+              // The v2 reply succeeded (server has the answer) but the
+              // follow-up prompt that resumes generation threw — tab gone,
+              // server down, slot rejected. Post the answer text via the
+              // recovery channel so the webview auto-forwards it (no silent
+              // loss, no manual "Continue"). Mirrors the expired-path catch.
               log.error("question_answer: failed to resume generation after reply", resumeErr)
-              this.opts.postRequestError(
-                resumeErr instanceof Error ? resumeErr.message : "Failed to resume generation after answering.",
+              this.opts.postMessage({
+                type: "expired_question_recovery_failed",
                 sessionId,
-              )
+                answerText: value,
+                reason: resumeErr instanceof Error ? resumeErr.message : "resume_failed",
+              })
             } finally {
               this.promptsInFlight.delete(sessionId)
             }
@@ -1059,6 +1078,8 @@ export class WebviewEventRouter {
       // back here is what forced visible snap-backs to a stale tab once the
       // user had already moved on to a different one.
       if (sessionId) { this.opts.ensureLocalTab(sessionId); this.opts.tabManager.switchTab(sessionId); this.opts.sessionStore.setActive(sessionId, { silent: true }) }
+      // Re-deliver the active file so the context pill appears when switching tabs
+      this.opts.activeFileTracker?.repost()
     }],
     ["accept_diff", async (_msg: Record<string, unknown>, _sessionId?: string) => {
       // opencode applies edits server-side; accept is a UI bookmark.
