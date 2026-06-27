@@ -54,6 +54,35 @@ other's work. To make concurrent work safe:
 
 Full rationale + worktree recipes: [`docs/development/concurrent-agents.md`](docs/development/concurrent-agents.md).
 
+## ⚠️ CSS / Styling Work — Most Vulnerable to Ephemeral-Tree Loss
+
+CSS changes are the **most vulnerable** to ephemeral-tree loss because visual
+tests assert DOM structure and text content, not computed styles. A renderer
+can emit a class that has no CSS rule, and every test passes — the regression
+is only visible to a human looking at the UI. This is exactly how the subagent
+tool card regression happened: the side panel CSS was wiped, tests stayed green.
+
+**Rules for CSS/styling work:**
+
+1. **Commit CSS in the same commit as the renderer changes that use it.**
+   Never leave CSS uncommitted — the checkpoint process can fire at any time.
+2. **Run `npx tsx --test src/chat/webview/css/cssCoverage.test.ts` before
+   committing any UI change.** This structural test catches renderer classes
+   with no CSS rule — the exact failure mode that caused the subagent card
+   regression.
+3. **Add computed-style assertions to visual tests** when adding or restoring
+   CSS. Assert `borderLeftWidth`, `transform`, `backgroundColor`, etc. — not
+   just text content. See `tests/visual/subagent-panel.spec.ts` for examples.
+4. **If styling "reverted," check `git stash list` first.** The CSS was likely
+   wiped by the checkpoint process, not lost. Recover with
+   `git checkout "stash@{0}" -- <css-files>`.
+5. **Use the automated guards:**
+   - `scripts/detect-wiped-work.mjs` — detect if work was wiped
+   - `scripts/check-workspace-state.mjs` — session-start state check
+   - `.opencode/hooks/pre-commit-css-coverage.sh` — pre-commit CSS gate
+
+Full guide: [`docs/development/css-regression-prevention.md`](docs/development/css-regression-prevention.md).
+
 ## Test Discipline — Keep the CI Green
 
 The webview and visual tests are tightly coupled to DOM structure and message

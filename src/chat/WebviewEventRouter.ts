@@ -1166,6 +1166,9 @@ export class WebviewEventRouter {
       this.clearReadyTimeout()
       this.webviewReady = true
       this.opts.pushAllStateToWebview()
+      // Refresh the workspace file index on webview ready to ensure the cache
+      // is up-to-date, then send the files to the webview
+      await this.opts.workspaceFileIndex?.refresh()
       this.opts.workspaceFileIndex?.handleGetFiles()
       // Re-deliver the active file now that the webview's handlers exist. The
       // eager post in ActiveFileTracker.start() races ahead of webview wiring

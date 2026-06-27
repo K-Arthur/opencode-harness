@@ -192,6 +192,11 @@ export function setupMentions(
       els.mentionDropdown.classList.remove("command-mode")
       showDropdown()
 
+      // Proactively request fresh workspace files from the host to ensure
+      // the mention dropdown has the latest file list (e.g., after new files
+      // were created but not yet synced via the watch mechanism)
+      postMessage({ type: "get_workspace_files" })
+
       // Strip optional "file:" prefix for local fuzzy search
       const searchQuery = state.query.replace(/^file:/i, "").toLowerCase()
       const workspaceFiles = getWorkspaceFiles()

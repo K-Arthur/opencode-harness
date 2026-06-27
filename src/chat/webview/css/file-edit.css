@@ -136,6 +136,11 @@
   user-select: none;
 }
 
+.file-edit-card__preview-content {
+  flex: 1 1 auto;
+  white-space: pre;
+}
+
 .file-edit-card__preview-line--added {
   color: var(--color-success);
   background: var(--oc-success-subtle);
@@ -187,6 +192,15 @@
   outline-offset: 2px;
 }
 
+/* Specific action variants — inherit from .file-edit-card__action above. */
+.file-edit-card__open-btn {
+  color: var(--file-edit-accent);
+}
+
+.file-edit-card__diff-btn {
+  color: var(--oc-fg);
+}
+
 /* ── Inline diff (Show diff) ── */
 .file-edit-card__diff {
   margin-top: var(--space-1, 4px);
@@ -218,6 +232,11 @@
   width: 14px;
   text-align: center;
   user-select: none;
+}
+
+.file-edit-card__diff-content {
+  flex: 1 1 auto;
+  white-space: pre;
 }
 
 .file-edit-card__diff-line--added {

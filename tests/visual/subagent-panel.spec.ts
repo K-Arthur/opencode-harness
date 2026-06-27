@@ -39,7 +39,7 @@ async function mountSubagentPanel(page: Page, visible: boolean = true) {
             <span class="subagent-item-status subagent-item-status--running">Running</span>
           </div>
           <div class="subagent-item-progress">
-            <div class="subagent-item-progress-bar" style="width: 65%"></div>
+            <div class="subagent-item-progress-bar" style="--p: 0.65"></div>
           </div>
           <div class="subagent-item-output">Analyzing code structure...</div>
           <div class="subagent-item-actions">
@@ -128,8 +128,23 @@ test.describe('Subagent Activity Panel', () => {
 
   test('should render progress bar', async ({ page }) => {
     const progressBar = page.locator('.subagent-item').nth(0).locator('.subagent-item-progress-bar')
-    const width = await progressBar.evaluate(el => el.style.width)
-    expect(width).toBe('65%')
+    const p = await progressBar.evaluate(el => el.style.getPropertyValue('--p'))
+    expect(p).toBe('0.65')
+  })
+
+  test('progress bar uses scaleX transform, not width', async ({ page }) => {
+    const progressBar = page.locator('.subagent-item').nth(0).locator('.subagent-item-progress-bar')
+    const transform = await progressBar.evaluate(el => window.getComputedStyle(el).transform)
+    // A non-zero --p produces a matrix transform, not 'none'
+    expect(transform).not.toBe('none')
+    expect(transform).toMatch(/matrix/)
+  })
+
+  test('running item has accent left border', async ({ page }) => {
+    const runningItem = page.locator('.subagent-item-status--running').first()
+    const item = runningItem.locator('..')
+    const borderLeft = await item.evaluate(el => window.getComputedStyle(el).borderLeftWidth)
+    expect(parseFloat(borderLeft)).toBeGreaterThan(0)
   })
 
   test('should render subagent output', async ({ page }) => {
@@ -391,6 +406,27 @@ test.describe('Subagent Panel — Collapsed Completed + Detail View', () => {
     await mountMixedPanel(page)
     const collapsed = page.locator('.subagent-item--collapsed')
     await expect(collapsed).toHaveCount(2)
+  })
+
+  test('running item has accent left border (mixed panel)', async ({ page }) => {
+    await mountMixedPanel(page)
+    const runningItem = page.locator('.subagent-item--running')
+    const borderLeft = await runningItem.evaluate(el => window.getComputedStyle(el).borderLeftWidth)
+    expect(parseFloat(borderLeft)).toBeGreaterThan(0)
+  })
+
+  test('completed item has success-tinted left border (mixed panel)', async ({ page }) => {
+    await mountMixedPanel(page)
+    const completedItem = page.locator('.subagent-item--completed')
+    const borderLeft = await completedItem.evaluate(el => window.getComputedStyle(el).borderLeftWidth)
+    expect(parseFloat(borderLeft)).toBeGreaterThan(0)
+  })
+
+  test('failed item has error-tinted left border (mixed panel)', async ({ page }) => {
+    await mountMixedPanel(page)
+    const failedItem = page.locator('.subagent-item--failed')
+    const borderLeft = await failedItem.evaluate(el => window.getComputedStyle(el).borderLeftWidth)
+    expect(parseFloat(borderLeft)).toBeGreaterThan(0)
   })
 
   test('collapsed items hide progress bar', async ({ page }) => {

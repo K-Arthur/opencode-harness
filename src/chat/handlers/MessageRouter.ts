@@ -3,6 +3,7 @@ import { SessionManager } from "../../session/SessionManager"
 import { SessionStore, type OpenCodeSession } from "../../session/SessionStore"
 import { ModelManager } from "../../model/ModelManager"
 import { log } from "../../utils/outputChannel"
+import type { WorkspaceFileIndex } from "../WorkspaceFileIndex"
 
 export interface RouteContext {
   postMessage: (msg: Record<string, unknown>) => void
@@ -57,7 +58,8 @@ export class MessageRouter {
 
   constructor(
     private readonly sessionManager: SessionManager,
-    private readonly modelManager: ModelManager
+    private readonly modelManager: ModelManager,
+    private readonly workspaceFileIndex?: WorkspaceFileIndex
   ) {}
 
   /**
@@ -173,19 +175,39 @@ export class MessageRouter {
       items.push({ prefix: "@terminal:", display: "terminal", description: "Capture terminal output", insertText: "@terminal" })
     }
 
-    // Build proper glob pattern for path-aware search
-    // If query contains path separator, search for path; otherwise match filename
-    let glob: string
     const trimmedQuery = query.replace(/^@/, '')
+    const seen = new Set<string>()
 
+    // Primary: use WorkspaceFileIndex (cached, filtered, includes directories)
+    if (this.workspaceFileIndex) {
+      const indexedFiles = this.workspaceFileIndex.getFiles()
+      for (const file of indexedFiles) {
+        const lowerFile = file.toLowerCase()
+        // Match against query
+        if (trimmedQuery.length > 0 && !lowerFile.includes(trimmedQuery.toLowerCase())) {
+          continue
+        }
+        // Deduplicate
+        if (seen.has(file)) continue
+        seen.add(file)
+
+        const isDir = !file.includes('.') || file.endsWith('/')
+        items.push({
+          prefix: isDir ? "@folder:" : "@file:",
+          display: file,
+          description: isDir ? "Folder" : "File"
+        })
+      }
+    }
+
+    // Fallback: use vscode.workspace.findFiles for broader coverage
+    // This catches files that might not be in the cached index yet
+    let glob: string
     if (query.includes("/")) {
-      // Path-based search: match files under the specified path prefix
       glob = `**/${query}*`
     } else if (trimmedQuery.length > 0) {
-      // Filename-based search
       glob = `**/*${trimmedQuery}*`
     } else {
-      // Empty query - show common files (limit to avoid performance issues)
       glob = `**/*`
     }
 
@@ -201,10 +223,14 @@ export class MessageRouter {
           if (!relative.toLowerCase().includes(trimmedQuery.toLowerCase())) continue
         }
 
+        // Deduplicate against WorkspaceFileIndex results
+        if (seen.has(relative)) continue
+        seen.add(relative)
+
         items.push({ prefix: "@file:", display: relative, description: "File" })
       }
     } catch (err) {
-      log.warn("Mention file search failed", err)
+      log.warn("Mention file search fallback failed", err)
     }
 
     context.postMessage({ type: "mention_results", items })
