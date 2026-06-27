@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      [Unreleased] — that creates documentation drift. See the release
      workflow in docs/development/rebuild-and-reinstall.md. -->
 
+## [0.4.21] - 2026-06-27
+
 ### Fixed
 
 - **Emoji → SVG icon replacement** — all emoji/Unicode symbols in webview UI,

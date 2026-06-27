@@ -1,7 +1,7 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-06-27
-**Version:** v0.4.20
+**Version:** v0.4.21
 
 ## Highlights (2026-06-27) — Emoji→SVG, active file toggle, file mention search, file edit cards & changed files dropdown
 

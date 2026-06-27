@@ -1,7 +1,10 @@
 # Status.md
 
 ## Last Updated: 2026-06-27
-## Project State: v0.4.20 — emoji→SVG icons + active file toggle fix + file mention search + file edit card fix + changed files dropdown
+## Project State: v0.4.21 — emoji→SVG icons + active file toggle fix + file mention search + file edit card fix + changed files dropdown
+
+### v0.4.21 (2026-06-27): Rebuild + reinstall
+- **Rebuilt and reinstalled** — version bumped to 0.4.21, extension packaged and installed. Bundle sizes: extension.js 743.8KB (limit 748KB), main.js 793.3KB (limit 794KB). All within limits.
 
 ### v0.4.20 (2026-06-27): Emoji→SVG icons + active file toggle + file mention + file edit cards
 - **Emoji → SVG icon replacement** — all emoji/Unicode symbols in webview UI, HTML, CSS, extension host files, and dead code replaced with SVG icons from `icons.ts`. CSS pseudo-elements use CSS-drawn shapes. VS Code status bar items use codicon syntax.
