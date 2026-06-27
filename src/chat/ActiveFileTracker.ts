@@ -25,8 +25,23 @@ export class ActiveFileTracker {
 
   constructor(private readonly deps: ActiveFileTrackerDeps) {}
 
+  /** Best available text editor: cached → active → any visible. */
+  private bestEditor(): vscode.TextEditor | undefined {
+    if (this.lastKnownEditor && !this.lastKnownEditor.document.isClosed) {
+      return this.lastKnownEditor
+    }
+    return (
+      this.deps.vscode.window.activeTextEditor ??
+      this.deps.vscode.window.visibleTextEditors[0]
+    )
+  }
+
   start(): void {
-    const initial = this.deps.vscode.window.activeTextEditor
+    // Capture the best available editor immediately (handles the common case
+    // where resolveWebviewView fires while a text file is already open in
+    // another editor group — activeTextEditor is undefined in that case
+    // because the sidebar is what triggered the resolve).
+    const initial = this.bestEditor()
     if (initial) this.lastKnownEditor = initial
 
     this.disposables.push(
@@ -35,14 +50,25 @@ export class ActiveFileTracker {
           // A real text editor gained focus — update the pill and cache it.
           this.lastKnownEditor = editor
           this.postActiveFile(editor)
-        } else if (this.deps.vscode.window.visibleTextEditors.length === 0) {
-          // All text editors are now closed — hide the pill.
-          this.lastKnownEditor = undefined
-          this.postActiveFile(undefined)
+        } else {
+          const visible = this.deps.vscode.window.visibleTextEditors
+          if (visible.length === 0) {
+            // All text editors are now closed — hide the pill.
+            this.lastKnownEditor = undefined
+            this.postActiveFile(undefined)
+          } else if (!this.lastKnownEditor) {
+            // A non-editor panel (webview/sidebar) got focus and we have never
+            // tracked any editor yet — surface the first visible one so the
+            // pill appears on first load without the user having to click the file.
+            const fallback = visible[0]
+            if (fallback) {
+              this.lastKnownEditor = fallback
+              this.postActiveFile(fallback)
+            }
+          }
+          // else: lastKnownEditor is set and webview/panel got focus
+          // → keep the pill showing the last known file (do nothing).
         }
-        // else: a non-editor panel (webview / terminal) got focus while a text
-        // editor is still visible → keep showing the last file in the pill.
-        // We intentionally do NOT call postActiveFile(undefined) here.
       }),
       this.deps.vscode.window.onDidChangeTextEditorSelection((event) => {
         if (event.textEditor) this.lastKnownEditor = event.textEditor
@@ -56,19 +82,13 @@ export class ActiveFileTracker {
    * Re-deliver the current active file to the webview.
    *
    * Called from the `webview_ready` handler so the pill shows on first open
-   * and after reconnect/restore. Uses the last known text editor rather than
-   * `window.activeTextEditor`, which returns undefined whenever the webview
-   * panel itself has focus — avoiding a spurious `path: null` post that would
-   * hide the pill while the user types their prompt.
+   * and after reconnect/restore. Uses `bestEditor()` which falls back through
+   * lastKnownEditor → activeTextEditor → visibleTextEditors[0], so it works
+   * even when the sidebar panel itself has focus (making activeTextEditor
+   * undefined) but a text file is open in another editor group.
    */
   repost(): void {
-    // Guard: if the cached editor's document was closed since we last saw it,
-    // fall back to the live activeTextEditor (which may also be undefined).
-    const editor =
-      this.lastKnownEditor && !this.lastKnownEditor.document.isClosed
-        ? this.lastKnownEditor
-        : this.deps.vscode.window.activeTextEditor
-    this.postActiveFile(editor)
+    this.postActiveFile(this.bestEditor())
   }
 
   private isBinaryFile(languageId: string): boolean {
