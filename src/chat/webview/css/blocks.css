@@ -3575,28 +3575,28 @@
    ═══════════════════════════════════════════════════════════════ */
 
 .live-command-card {
-  border: 1px solid var(--color-border, rgba(128, 128, 128, 0.25));
-  border-radius: var(--radius-md, 6px);
-  background: var(--oc-editor-bg, var(--vscode-editor-background, rgba(0, 0, 0, 0.2)));
+  border: 1px solid var(--oc-border);
+  border-radius: var(--radius-md);
+  background: var(--oc-editor-bg);
   overflow: hidden;
   margin: var(--space-2) 0;
   font-family: var(--font-sans);
 }
 
 .live-command-card--running {
-  border-left: 3px solid var(--vscode-charts-green, #4ec9b0);
+  border-left: 3px solid var(--oc-accent);
 }
 
 .live-command-card--succeeded {
-  border-left: 3px solid var(--vscode-charts-green, #4ec9b0);
+  border-left: 3px solid var(--oc-success);
 }
 
 .live-command-card--failed {
-  border-left: 3px solid var(--vscode-charts-red, #f48771);
+  border-left: 3px solid var(--oc-error);
 }
 
 .live-command-card--cancelled {
-  border-left: 3px solid var(--color-muted, #808080);
+  border-left: 3px solid var(--oc-muted);
 }
 
 .live-command-card__header {
@@ -3604,7 +3604,7 @@
   align-items: center;
   gap: var(--space-1-5);
   padding: var(--space-1-5) var(--space-2);
-  border-bottom: 1px solid var(--color-border, rgba(128, 128, 128, 0.15));
+  border-bottom: 1px solid var(--oc-border);
   flex-wrap: wrap;
   min-height: var(--size-target-comfortable);
 }
@@ -3663,23 +3663,23 @@
 }
 
 .live-command-card__status--running {
-  color: var(--vscode-charts-green, #4ec9b0);
-  background: color-mix(in srgb, var(--vscode-charts-green, #4ec9b0) 12%, transparent);
+  color: var(--oc-accent);
+  background: var(--oc-accent-subtle);
 }
 
 .live-command-card__status--succeeded {
-  color: var(--vscode-charts-green, #4ec9b0);
-  background: color-mix(in srgb, var(--vscode-charts-green, #4ec9b0) 12%, transparent);
+  color: var(--oc-success);
+  background: color-mix(in srgb, var(--oc-success) 12%, transparent);
 }
 
 .live-command-card__status--failed {
-  color: var(--vscode-charts-red, #f48771);
-  background: color-mix(in srgb, var(--vscode-charts-red, #f48771) 12%, transparent);
+  color: var(--oc-error);
+  background: var(--oc-error-subtle);
 }
 
 .live-command-card__status--cancelled {
-  color: var(--color-muted, #808080);
-  background: color-mix(in srgb, var(--color-muted, #808080) 12%, transparent);
+  color: var(--oc-muted);
+  background: color-mix(in srgb, var(--oc-muted) 12%, transparent);
 }
 
 .live-command-card__output {

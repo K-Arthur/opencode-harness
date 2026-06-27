@@ -1517,9 +1517,9 @@ textarea {
   font-size: var(--text-xs);
   font-weight: 600;
   font-family: var(--font-mono);
-  background: var(--vscode-badge-background, var(--oc-accent-subtle, rgba(0, 120, 212, 0.08)));
-  color: var(--vscode-badge-foreground, var(--color-accent));
-  border: 1px solid var(--oc-accent-border, rgba(0, 120, 212, 0.25));
+  background: var(--oc-accent-subtle);
+  color: var(--color-accent);
+  border: 1px solid var(--oc-accent-border);
   cursor: pointer;
   max-width: 320px;
   white-space: nowrap;
@@ -1547,8 +1547,9 @@ textarea {
   min-width: 20px;
   min-height: 20px;
   font-size: var(--text-sm);
+  color: var(--oc-muted);
   opacity: 0.7;
-  transition: opacity var(--duration-fast) var(--ease-out);
+  transition: opacity var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 
 .context-chip-toggle:hover {
