@@ -12,6 +12,7 @@ import {
   HISTORY_SVG,
   CODE_SVG,
   BUG_SVG,
+  FILE_SVG,
 } from "./icons"
 import { toMentionItems, dedupServerCommands } from "./slash-commands"
 import { rankByFuzzy, findMatchRanges, highlightRanges } from "./fuzzyMatch"
@@ -319,7 +320,7 @@ export function setupMentions(
       div.dataset.file = item.display || ""
       const icon = document.createElement("span")
       icon.className = "dropdown-icon"
-      icon.textContent = "\U0001F4C4"
+      icon.innerHTML = FILE_SVG
       div.appendChild(icon)
       const content = document.createElement("span")
       content.className = "dropdown-content"
@@ -450,7 +451,7 @@ export function setupMentions(
       if (iconStr.includes("<svg")) {
         icon.innerHTML = iconStr
       } else {
-        icon.textContent = iconStr || "\uD83D\uDCC4"
+        icon.innerHTML = iconStr || FILE_SVG
       }
       div.appendChild(icon)
       const content = document.createElement("span")

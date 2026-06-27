@@ -43,6 +43,11 @@ export const PLUS_SVG = SVG(`<path d="M12 5v14"/><path d="M5 12h14"/>`, 14)
 export const CHECK_SVG = SVG(`<path d="m20 6-9 9-5-5"/>`, 14)
 export const BRANCH_SVG = SVG(`<line x1="6" y1="3" x2="6" y2="15"/><circle cx="6" cy="15" r="2"/><path d="M18 9a8 8 0 0 1-8 8"/><circle cx="18" cy="9" r="2"/>`, 14)
 
+// ─── File / Folder ───
+export const FILE_SVG = SVG(`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`, 14)
+export const EYE_SVG = SVG(`<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`, 12)
+export const EYE_OFF_SVG = SVG(`<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>`, 12)
+
 // ─── Tool Call Icons ───
 export const TOOL_READ_SVG = SVG(`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`, 16)
 export const TOOL_WRITE_SVG = SVG(`<path d="M12 20h9a2 2 0 0 0 2-2v-9"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>`, 16)

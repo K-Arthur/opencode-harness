@@ -6,7 +6,7 @@ export interface InputHandlerDeps {
   els: ElementRefs
   vscode: { postMessage: (msg: Record<string, unknown>) => void; getState: <T>() => T | undefined; setState: (state: WebviewState) => void }
   stateManager: { getState: () => WebviewState; getActiveSession: () => { id: string; isStreaming: boolean; model?: string; mode?: string; name?: string } | null; getAllSessions: () => Array<{ id: string; isStreaming: boolean }>; save: () => void }
-  attachmentManager: { onPaste: (e: ClipboardEvent) => void; getAttachments: () => Array<{ data: string; mimeType: string }>; attachImageBlob: (file: File) => void; attachFileBlob: (file: File, mimeType: string) => void; updatePromptContextChips: () => void }
+  attachmentManager: { onPaste: (e: ClipboardEvent) => void; getAttachments: () => Array<{ data: string; mimeType: string }>; attachImageBlob: (file: File) => void; attachFileBlob: (file: File, mimeType: string) => void; updatePromptContextChips: () => void; syncContextItemsWithPrompt: () => void }
   mention: { handleTrigger: () => void; handleKeydown: (e: KeyboardEvent) => void }
   commandsModal: { open: () => void }
   timers: { setTimeout: (fn: (...args: any[]) => void, ms: number) => any }
@@ -106,7 +106,7 @@ export function createInputHandlers(deps: InputHandlerDeps): InputHandlers {
     if (interruptBtn) interruptBtn.addEventListener("click", () => setSteerMode("interrupt"))
     if (queueBtn) queueBtn.addEventListener("click", () => setSteerMode("queue"))
     els.sendBtn?.setAttribute("title", TOOLTIPS.chat.send)
-    window.addEventListener("oc-input-changed", () => { autoResizeTextarea(); updateSendButton() })
+    window.addEventListener("oc-input-changed", () => { autoResizeTextarea(); attachmentManager.updatePromptContextChips(); attachmentManager.syncContextItemsWithPrompt(); updateSendButton() })
     els.inputArea.addEventListener("dragover", (e) => { e.preventDefault(); e.stopPropagation(); els.inputArea.classList.add("drag-over") })
     els.inputArea.addEventListener("dragleave", (e) => { e.preventDefault(); e.stopPropagation(); els.inputArea.classList.remove("drag-over") })
     els.inputArea.addEventListener("drop", (e) => {

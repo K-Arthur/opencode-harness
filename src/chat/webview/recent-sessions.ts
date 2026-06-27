@@ -1,4 +1,5 @@
 import type { ChatMessage, SessionSummary } from "./types"
+import { BUG_SVG, SPARKLE_SVG, REFRESH_SVG, MESSAGE_SVG } from "./icons"
 
 type WelcomeLocalSession = {
   id: string
@@ -139,13 +140,13 @@ export function renderRecentSessions(
       indicator.className = "recent-item-indicator"
       const titleLower = (session.title || "").toLowerCase();
       if (titleLower.includes("fix") || titleLower.includes("bug")) {
-        indicator.textContent = "🐛";
+        indicator.innerHTML = BUG_SVG;
       } else if (titleLower.includes("feat") || titleLower.includes("add")) {
-        indicator.textContent = "✨";
+        indicator.innerHTML = SPARKLE_SVG;
       } else if (titleLower.includes("refactor")) {
-        indicator.textContent = "♻️";
+        indicator.innerHTML = REFRESH_SVG;
       } else {
-        indicator.textContent = "💬";
+        indicator.innerHTML = MESSAGE_SVG;
       }
       item.appendChild(indicator)
       

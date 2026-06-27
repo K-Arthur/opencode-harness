@@ -1,6 +1,7 @@
 import type { ContextChip } from "./types"
 import type { ElementRefs } from "./dom"
 import { timers } from "./timerRegistry"
+import { EYE_SVG, EYE_OFF_SVG } from "./icons"
 
 const warnTheme = (...args: unknown[]) => console.warn("[opencode-harness]", ...args)
 const appliedThemeVarKeys = new Set<string>()
@@ -34,8 +35,7 @@ export function updateContextChips(els: ElementRefs, chips?: ContextChip[]) {
       toggle.className = "context-chip-toggle"
       toggle.setAttribute("type", "button")
       const included = chip.isIncluded !== false
-      const toggleIcon = included ? "\u{1F441}" : "\u{1F6AB}" // eye : eye-off
-      toggle.textContent = toggleIcon
+      toggle.innerHTML = included ? EYE_SVG : EYE_OFF_SVG
       toggle.setAttribute("aria-label", included ? "Exclude file from context" : "Include file in context")
       toggle.setAttribute("aria-pressed", included ? "true" : "false")
       toggle.addEventListener("click", () => {

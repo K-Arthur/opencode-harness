@@ -32,12 +32,17 @@ export class ActiveFileTracker {
     this.disposables.push(
       this.deps.vscode.window.onDidChangeActiveTextEditor((editor) => {
         if (editor) {
+          // A real text editor gained focus — update the pill and cache it.
           this.lastKnownEditor = editor
+          this.postActiveFile(editor)
         } else if (this.deps.vscode.window.visibleTextEditors.length === 0) {
-          // All text editors closed — clear the cached editor so the pill hides.
+          // All text editors are now closed — hide the pill.
           this.lastKnownEditor = undefined
+          this.postActiveFile(undefined)
         }
-        this.postActiveFile(editor)
+        // else: a non-editor panel (webview / terminal) got focus while a text
+        // editor is still visible → keep showing the last file in the pill.
+        // We intentionally do NOT call postActiveFile(undefined) here.
       }),
       this.deps.vscode.window.onDidChangeTextEditorSelection((event) => {
         if (event.textEditor) this.lastKnownEditor = event.textEditor
