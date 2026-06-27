@@ -17,34 +17,53 @@ export interface ActiveFileTrackerDeps {
 
 export class ActiveFileTracker {
   private disposables: vscode.Disposable[] = []
+  // Last non-undefined editor seen. Webview focus sets activeTextEditor to
+  // undefined, so repost() uses this cached value to keep the pill visible
+  // while the user types in the chat input about the file they had open.
+  // Cleared only when all visible text editors are gone (user closed them).
+  private lastKnownEditor: vscode.TextEditor | undefined
 
   constructor(private readonly deps: ActiveFileTrackerDeps) {}
 
   start(): void {
+    const initial = this.deps.vscode.window.activeTextEditor
+    if (initial) this.lastKnownEditor = initial
+
     this.disposables.push(
       this.deps.vscode.window.onDidChangeActiveTextEditor((editor) => {
+        if (editor) {
+          this.lastKnownEditor = editor
+        } else if (this.deps.vscode.window.visibleTextEditors.length === 0) {
+          // All text editors closed — clear the cached editor so the pill hides.
+          this.lastKnownEditor = undefined
+        }
         this.postActiveFile(editor)
       }),
       this.deps.vscode.window.onDidChangeTextEditorSelection((event) => {
+        if (event.textEditor) this.lastKnownEditor = event.textEditor
         this.postActiveFile(event.textEditor)
       }),
     )
-    this.postActiveFile(this.deps.vscode.window.activeTextEditor)
+    this.postActiveFile(initial)
   }
 
   /**
    * Re-deliver the current active file to the webview.
    *
-   * `start()` posts the active file eagerly during `resolveWebviewView`, but
-   * that fires before the webview script has registered its message handlers
-   * (it signals `webview_ready` only after wiring up). Because `active_file`
-   * is a passthrough message it is sent immediately rather than queued, so the
-   * initial post is dropped and the context pill never appears until the user
-   * switches editors. The host calls `repost()` from the `webview_ready`
-   * handler so the pill shows on first open and after reconnect/restore.
+   * Called from the `webview_ready` handler so the pill shows on first open
+   * and after reconnect/restore. Uses the last known text editor rather than
+   * `window.activeTextEditor`, which returns undefined whenever the webview
+   * panel itself has focus — avoiding a spurious `path: null` post that would
+   * hide the pill while the user types their prompt.
    */
   repost(): void {
-    this.postActiveFile(this.deps.vscode.window.activeTextEditor)
+    // Guard: if the cached editor's document was closed since we last saw it,
+    // fall back to the live activeTextEditor (which may also be undefined).
+    const editor =
+      this.lastKnownEditor && !this.lastKnownEditor.document.isClosed
+        ? this.lastKnownEditor
+        : this.deps.vscode.window.activeTextEditor
+    this.postActiveFile(editor)
   }
 
   private isBinaryFile(languageId: string): boolean {

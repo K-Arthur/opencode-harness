@@ -76,26 +76,35 @@ export function setupMentions(
     if (!input || !dropdown) return
     const margin = 8
     const r = input.getBoundingClientRect()
-    const dropdownW = Math.min(520, Math.max(240, window.innerWidth - margin * 2))
-    const estimatedHeight = Math.min(320, dropdown.getBoundingClientRect().height || 320)
+    // Measure actual rendered height AFTER content is populated.
+    // If still empty (height 0), cap at 260 (the CSS max-height).
+    const actualH = dropdown.getBoundingClientRect().height
+    const contentH = actualH > 0 ? actualH : 260
+    const dropdownW = Math.min(520, Math.max(280, r.width))
     const spaceAbove = r.top - margin
-    const maxHeight = Math.max(200, Math.floor(spaceAbove - 4))
-    const leftEdge = Math.max(margin, Math.min(r.left, window.innerWidth - dropdownW - margin))
-    const top = Math.max(margin, r.top - Math.min(estimatedHeight, maxHeight) - 6)
+    const spaceBelow = window.innerHeight - r.bottom - margin
+    // Prefer opening upward (above the input) so it covers message history
+    // rather than the toolbar. Fall back to below if there's more room there.
+    const openAbove = spaceAbove >= Math.min(contentH, 180) || spaceAbove >= spaceBelow
+    const maxH = Math.max(160, Math.floor(openAbove ? spaceAbove - 4 : spaceBelow - 4))
+    const clampedH = Math.min(contentH, maxH)
+    const left = Math.max(margin, Math.min(r.left, window.innerWidth - dropdownW - margin))
+    const top = openAbove
+      ? Math.max(margin, r.top - clampedH - 6)
+      : Math.min(window.innerHeight - margin - clampedH, r.bottom + 6)
 
-    dropdown.style.position = "fixed"
-    dropdown.style.top = `${top}px`
-    dropdown.style.left = `${leftEdge}px`
+    dropdown.style.top = `${Math.max(margin, top)}px`
+    dropdown.style.left = `${left}px`
     dropdown.style.right = "auto"
     dropdown.style.width = `${dropdownW}px`
-    dropdown.style.maxHeight = `${maxHeight}px`
-    dropdown.style.zIndex = "var(--z-dropdown)"
+    dropdown.style.maxHeight = `${maxH}px`
   }
 
   function showDropdown() {
     els.mentionDropdown.classList.remove("hidden")
     els.promptInput.setAttribute("aria-expanded", "true")
-    positionDropdown()
+    // positionDropdown() is called by renderMentionResults / renderCommandResults
+    // after content is populated, so we get accurate height measurements.
     if (!_resizeHandler) {
       _resizeHandler = () => positionDropdown()
       window.addEventListener("resize", _resizeHandler)
@@ -211,6 +220,7 @@ export function setupMentions(
       empty.textContent = "No matching commands"
       els.mentionDropdown.appendChild(empty)
       state.selectedIndex = -1
+      positionDropdown()
       return
     }
     state.selectedIndex = 0
@@ -272,6 +282,7 @@ export function setupMentions(
       more.textContent = `+${totalMatches - commands.length} more \u2014 keep typing to narrow`
       els.mentionDropdown.appendChild(more)
     }
+    positionDropdown()
   }
 
   function insertCommand(item: MentionItem) {
@@ -294,6 +305,7 @@ export function setupMentions(
       empty.textContent = "No matching files"
       els.mentionDropdown.appendChild(empty)
       state.selectedIndex = -1
+      positionDropdown()
       return
     }
     state.selectedIndex = 0
@@ -319,6 +331,7 @@ export function setupMentions(
       div.addEventListener("click", () => insertMention(item))
       els.mentionDropdown.appendChild(div)
     })
+    positionDropdown()
   }
 
   function updateServerCommands(

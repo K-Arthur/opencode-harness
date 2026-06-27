@@ -1680,13 +1680,19 @@ textarea {
 /* ─── DROPDOWN ─── */
 
 .dropdown {
-  position: absolute;
-  background: var(--oc-editor-bg);
-  border: 1px solid var(--oc-border);
+  position: fixed;
+  /* Use VS Code's quickInput background — the token designed for floating
+     pickers/dropdowns. Fallback chain ensures a solid (never transparent)
+     surface even in themes that leave --vscode-editor-background unset. */
+  background: var(--vscode-quickInput-background,
+               var(--vscode-editorWidget-background,
+               var(--vscode-sideBar-background,
+               var(--oc-editor-bg, #1e1e2e))));
+  border: 1px solid var(--vscode-widget-border, var(--oc-border));
   border-radius: var(--radius-md);
   max-height: 260px;
   overflow-y: auto;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.3);
   z-index: var(--z-dropdown);
   padding: var(--space-1);
 }
