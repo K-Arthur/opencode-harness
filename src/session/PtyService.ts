@@ -2,6 +2,7 @@ import * as vscode from "vscode"
 import type { V2OpencodeClient } from "./opencodeClientFactory"
 import type { PtySessionInfo, PtyOutputEvent, PtyConnectToken } from "./ptyTypes"
 import { log } from "../utils/outputChannel"
+import { v2ErrorDetail } from "./v2ErrorDetail"
 
 function mapSdkPty(sdk: { id: string; title: string; command: string; status: string; pid: number; exitCode?: number }): PtySessionInfo {
   return {
@@ -47,7 +48,7 @@ export class PtyService {
   }): Promise<PtySessionInfo> {
     const client = this.guard()
     const resp = await client.pty.create(options)
-    if (resp.error) throw new Error(`PTY create failed: ${JSON.stringify(resp.error)}`)
+    if (resp.error) throw new Error(`PTY create failed: ${v2ErrorDetail(resp.error, (resp as { response?: { status?: number } }).response?.status)}`)
     const data = resp.data as Record<string, unknown>
     log.info(`PTY session created: ${data.id as string}`)
     return mapSdkPty(data as Parameters<typeof mapSdkPty>[0])
@@ -56,7 +57,7 @@ export class PtyService {
   async getSession(ptyId: string): Promise<PtySessionInfo> {
     const client = this.guard()
     const resp = await client.pty.get({ ptyID: ptyId })
-    if (resp.error) throw new Error(`PTY get failed: ${JSON.stringify(resp.error)}`)
+    if (resp.error) throw new Error(`PTY get failed: ${v2ErrorDetail(resp.error, (resp as { response?: { status?: number } }).response?.status)}`)
     return mapSdkPty(resp.data as Parameters<typeof mapSdkPty>[0])
   }
 
@@ -68,14 +69,14 @@ export class PtyService {
     }
     const client = this.guard()
     const resp = await client.pty.remove({ ptyID: ptyId })
-    if (resp.error) throw new Error(`PTY remove failed: ${JSON.stringify(resp.error)}`)
+    if (resp.error) throw new Error(`PTY remove failed: ${v2ErrorDetail(resp.error, (resp as { response?: { status?: number } }).response?.status)}`)
     log.info(`PTY session removed: ${ptyId}`)
   }
 
   async listSessions(): Promise<PtySessionInfo[]> {
     const client = this.guard()
     const resp = await client.pty.list()
-    if (resp.error) throw new Error(`PTY list failed: ${JSON.stringify(resp.error)}`)
+    if (resp.error) throw new Error(`PTY list failed: ${v2ErrorDetail(resp.error, (resp as { response?: { status?: number } }).response?.status)}`)
     const items = resp.data as Array<Record<string, unknown>> | undefined
     return (items ?? []).map((item) => mapSdkPty(item as Parameters<typeof mapSdkPty>[0]))
   }
@@ -83,14 +84,14 @@ export class PtyService {
   async updateSession(ptyId: string, options: { title?: string; size?: { rows: number; cols: number } }): Promise<PtySessionInfo> {
     const client = this.guard()
     const resp = await client.pty.update({ ptyID: ptyId, ...options })
-    if (resp.error) throw new Error(`PTY update failed: ${JSON.stringify(resp.error)}`)
+    if (resp.error) throw new Error(`PTY update failed: ${v2ErrorDetail(resp.error, (resp as { response?: { status?: number } }).response?.status)}`)
     return mapSdkPty(resp.data as Parameters<typeof mapSdkPty>[0])
   }
 
   async getConnectToken(ptyId: string): Promise<PtyConnectToken> {
     const client = this.guard()
     const resp = await client.pty.connectToken({ ptyID: ptyId })
-    if (resp.error) throw new Error(`PTY connect-token failed: ${JSON.stringify(resp.error)}`)
+    if (resp.error) throw new Error(`PTY connect-token failed: ${v2ErrorDetail(resp.error, (resp as { response?: { status?: number } }).response?.status)}`)
     const data = resp.data as { ticket: string; expires_in: number }
     return { ticket: data.ticket, expiresIn: data.expires_in }
   }

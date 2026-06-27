@@ -20,6 +20,7 @@ import {
 } from "./v2ResponseMappers"
 import type { ModelRef, PromptOptions as BasePromptOptions } from "./sessionTypes"
 import { isLocalPlaceholderSessionId } from "./sessionUtils"
+import { v2ErrorDetail } from "./v2ErrorDetail"
 import { logStreamTrace } from "./streamTrace"
 import { extractLiveToolOutput, type LiveToolOutputSnapshot } from "./liveToolOutput"
 import { resolveSessionQuestionApi } from "./resolveSessionQuestionApi"
@@ -84,8 +85,10 @@ export class SessionClient {
     return client
   }
 
-  private throwOnV2Error(resp: { error?: unknown }, label: string): void {
-    if (resp.error) throw new Error(`${label}: ${JSON.stringify(resp.error)}`)
+  private throwOnV2Error(resp: { error?: unknown; response?: { status?: number } }, label: string): void {
+    if (!resp.error) return
+    const detail = v2ErrorDetail(resp.error, resp.response?.status)
+    throw new Error(`${label}: ${detail}`)
   }
 
   private assertResponseSize(data: unknown, label: string): void {
@@ -281,9 +284,9 @@ export class SessionClient {
             ])
           : client.session.promptAsync(v2Params, v2Options))
 
-        const responseData = resp as { error?: unknown; data?: unknown }
+        const responseData = resp as { error?: unknown; data?: unknown; response?: { status?: number } }
         if (responseData.error) {
-          const errorMsg = JSON.stringify(responseData.error)
+          const errorMsg = v2ErrorDetail(responseData.error, responseData.response?.status)
           if (this.isRetryableError(responseData.error) && attempt < this.MAX_RETRIES) {
             lastError = new Error(`Async prompt failed: ${errorMsg}`)
             log.warn(`Prompt attempt ${attempt + 1} failed, retrying...`, lastError)
@@ -410,9 +413,9 @@ export class SessionClient {
    * authoritative per-file diff (structured `patch.hunks` and/or unified
    * `diff` string) for the changed-files view.
    */
-  async readFile(path: string, directory?: string, messageId?: string): Promise<unknown> {
+  async readFile(path: string, directory?: string, _messageId?: string): Promise<unknown> {
     const client = this.guardV2()
-    const resp = await client.file.read({ path, ...(directory ? { directory } : {}), ...(messageId ? { messageID: messageId } : {}) })
+    const resp = await client.file.read({ path, ...(directory ? { directory } : {}) })
     this.throwOnV2Error(resp, `Failed to read file '${path}'`)
     return resp.data
   }

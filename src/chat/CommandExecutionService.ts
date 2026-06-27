@@ -178,7 +178,7 @@ export class CommandExecutionService {
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : "Command execution failed"
-      log.error("Command execution failed", err)
+      log.error(`Command execution failed: /${commandName}${args ? ` ${args}` : ""} (session ${sessionId})`, err)
       this.opts.postRequestError(message, sessionId)
     }
   }
