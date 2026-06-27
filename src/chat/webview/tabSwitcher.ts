@@ -193,10 +193,21 @@ export function switchTabImpl(deps: TabSwitcherDeps, tabId: string, notifyHost =
   const msgList = getActiveMessageList(els)
   if (msgList) {
     attachScrollPersistence(tabId, msgList)
+    const isActiveStreaming =
+      activeSession?.isStreaming === true || activeSession?.isServerStreaming === true
     const savedScroll = stateManager.getScrollPosition(tabId)
-    if (savedScroll > 0) {
+    if (savedScroll > 0 && !isActiveStreaming) {
+      // Restore the user's saved scroll position for non-streaming tabs.
+      // Pause the anchor first so the sentinel observer doesn't immediately
+      // re-anchor if the restored position happens to be near the bottom.
+      const anchor = scrollAnchors.get(tabId)
+      anchor?.pause()
       restoreScrollPosition(tabId, msgList)
-    } else if (notifyHost) {
+    } else {
+      // No saved position, or the tab is streaming — anchor to the bottom
+      // so the user sees the latest content. A stale saved position on a
+      // streaming tab would put the user mid-transcript while new content
+      // arrives below, which is the "scroll jumped" symptom.
       const anchor = scrollAnchors.get(tabId)
       if (anchor) anchor.anchor()
       else scrollToBottom(msgList)

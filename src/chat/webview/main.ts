@@ -71,7 +71,7 @@ import { handleTokenUsage as handleTokenUsageModule, accumulateTokenUsage as acc
 import { createAttachmentManager } from "./ui/attachments"
 import { setupDragDrop } from "./ui/dragDrop"
 import { showWelcomeView as showWelcomeViewModule, hideWelcomeView as hideWelcomeViewModule, renderWelcomeContext as renderWelcomeContextModule, setupWelcomeActions as setupWelcomeActionsModule, setupWelcomeSuggestions as setupWelcomeSuggestionsModule, setupWelcomeResponsive as setupWelcomeResponsiveModule, type WelcomeViewDeps } from "./ui/welcomeView"
-import { shouldHonorActiveSessionChange, resolveInitStateTarget } from "./sessionFocus"
+import { shouldHonorActiveSessionChange, shouldHonorResumeSessionSwitch, resolveInitStateTarget } from "./sessionFocus"
 import { resolveEventSessionTarget } from "./sessionTarget"
 import { renderRecentPromptsRail } from "./recentPromptsRail"
 import { closeSettingsMenu as closeSettingsMenuModule, setupSettingsMenuKeyboardNav as setupSettingsMenuKeyboardNavModule } from "./ui/settingsMenu"
@@ -364,6 +364,15 @@ function getVsCodeApi() {
     pattern?: string | string[]
     title: string
   }>()
+
+  // Track user-initiated resume requests (history clicks) so resume_session_data
+  // can distinguish them from background/automatic resumes. User-initiated
+  // resumes are allowed to switch tabs; automatic ones must not steal focus.
+  const userInitiatedResumes = new Set<string>()
+
+  // Track sessions that need user attention (unanswered questions, pending permissions)
+  // so we can show a visual indicator on the tab without auto-switching.
+  const needsAttention = new Set<string>()
 
   // ── Commands palette (full modal). Triggered by /commands, Ctrl+/, or list_stashes flow.
   // Local entries mirror the in-prompt slash switch below so any future addition is one-stop.
@@ -1448,6 +1457,7 @@ function setupTodoSkillAndSubagentPanels(): void {
     const respond = (response: "once" | "always" | "reject") => {
       vscode.postMessage({ type: "accept_permission", sessionId: sid, permissionId, response, permissionType, pattern })
       pendingPermissionBySession.delete(sid)
+      clearTabNeedsAttention(sid)
       hidePermissionBar()
     }
 
@@ -1475,7 +1485,31 @@ function setupTodoSkillAndSubagentPanels(): void {
     permBar.classList.remove("hidden")
   }
 
+  /**
+   * Mark a background tab as needing user attention (unanswered question or
+   * pending permission). Shows a visual indicator on the tab strip instead of
+   * auto-switching. Cleared when the user manually switches to that tab.
+   */
+  function markTabNeedsAttention(sid: string): void {
+    if (!stateManager.getSession(sid)) return
+    needsAttention.add(sid)
+    const btn = els.tabBar.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(sid)}"]`)
+    if (btn) btn.setAttribute("data-needs-attention", "true")
+  }
+
+  /**
+   * Clear the attention indicator for a tab — called when the user switches
+   * to it (they're now looking at it, so the indicator is no longer needed).
+   */
+  function clearTabNeedsAttention(sid: string): void {
+    if (!needsAttention.has(sid)) return
+    needsAttention.delete(sid)
+    const btn = els.tabBar.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(sid)}"]`)
+    if (btn) btn.removeAttribute("data-needs-attention")
+  }
+
   function switchTab(tabId: string, notifyHost = true) {
+    clearTabNeedsAttention(tabId)
     switchTabImpl({
       els,
       vscode,
@@ -1524,6 +1558,8 @@ function setupTodoSkillAndSubagentPanels(): void {
       switchTab(targetId)
       return
     }
+    // Mark as user-initiated so resume_session_data can switch tabs
+    userInitiatedResumes.add(targetId)
     vscode.postMessage({ type: "resume_session", sessionId: targetId })
   }
 
@@ -1624,6 +1660,12 @@ function setupTodoSkillAndSubagentPanels(): void {
       isStreaming: s.isStreaming,
     }))
     tabBar.renderTabs(tabs, activeId, getStreamCapacityState())
+    // Re-apply attention indicators after the tab strip is rebuilt (renderTabs
+    // wipes innerHTML, so data-needs-attention attributes must be restored).
+    for (const sid of needsAttention) {
+      const btn = els.tabBar.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(sid)}"]`)
+      if (btn) btn.setAttribute("data-needs-attention", "true")
+    }
   }
 
   function getMessageList(tabId: string): HTMLDivElement | null {
@@ -2518,8 +2560,26 @@ function setupTodoSkillAndSubagentPanels(): void {
               vl.start()
             }
           }
-          switchTab(session.id)
-          hideWelcomeView()
+
+          // Only switch tabs if this is a user-initiated resume (history click)
+          // or if the user has nothing valid to look at (welcome screen or no current tab).
+          // Background/automatic resumes must never steal focus from a tab the user
+          // is deliberately viewing, especially when that tab is mid-stream.
+          const userInitiated = userInitiatedResumes.has(session.id)
+          userInitiatedResumes.delete(session.id)
+          const welcomeVisible = !els.welcomeView.classList.contains("hidden")
+          const currentActiveId = stateManager.getState().activeSessionId
+          const currentActiveValid = currentActiveId ? Boolean(stateManager.getSession(currentActiveId)) : false
+          if (shouldHonorResumeSessionSwitch({
+            welcomeVisible,
+            currentActiveId,
+            currentActiveValid,
+            targetId: session.id,
+            userInitiated,
+          })) {
+            switchTab(session.id)
+            hideWelcomeView()
+          }
           updateTabBar()
           renderRecentSessionsList()
         }
@@ -3075,7 +3135,11 @@ function setupTodoSkillAndSubagentPanels(): void {
         // Record per-session first so the request survives tab switches even
         // though it belongs to a tab the user isn't currently looking at.
         pendingPermissionBySession.set(sid, { permissionId, permissionType, pattern, title })
-        if (sid !== stateManager.getState().activeSessionId) return
+        if (sid !== stateManager.getState().activeSessionId) {
+          // Mark the tab as needing attention instead of auto-switching.
+          markTabNeedsAttention(sid)
+          return
+        }
         renderPermissionBar(sid, { permissionId, permissionType, pattern, title })
       }],
       ["file_edited", (msg, sid) => {
@@ -4165,6 +4229,11 @@ function setupTodoSkillAndSubagentPanels(): void {
           // Pass the envelope sid so a background session's question is never
           // attributed to the tab the user is currently viewing (multi-tab fix).
           questionBar.addQuestion(block as unknown as QuestionBlock, messageId, sid)
+          // If the question is for a background tab, mark it as needing attention
+          // instead of auto-switching the user to it.
+          if (sid && sid !== stateManager.getState().activeSessionId) {
+            markTabNeedsAttention(sid)
+          }
         }
       }],
       ["question_acknowledged", (_msg, _sid) => {
