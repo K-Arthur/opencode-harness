@@ -183,11 +183,10 @@
 // type, diff line number fix, isEditLikeTool expansion). Host measures 741.6KB,
 // webview measures 790.3KB. +8KB host / +2KB webview keeps ~0.8% headroom.
 //
-// 2026-06-26 re-baseline (webview 792KB -> 794KB):
-// file-edit card upgrade path (data-block-id fix, generic→file-edit card
-// replacement in handleToolUpdate), compact diff stats chips, context bar
-// compaction reset in session_compacted handler, aria-pressed + focus-visible
-// on context chip buttons. Webview measures 792.3KB. +2KB headroom.
+// 2026-06-27 re-baseline (webview 794KB -> 796KB):
+// tab attention indicator (needsAttention set, markTabNeedsAttention,
+// clearTabNeedsAttention), file-edit-card diff preview fix (buildDiffPreview
+// line counting), v2ErrorDetail shared helper import. Webview measures 794.5KB.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -198,7 +197,7 @@ const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
   { path: "dist/extension.js", limitBytes: 748 * 1024, label: "extension host" },
-  { path: "dist/chat/webview/main.js", limitBytes: 794 * 1024, label: "chat webview" },
+  { path: "dist/chat/webview/main.js", limitBytes: 796 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
 
