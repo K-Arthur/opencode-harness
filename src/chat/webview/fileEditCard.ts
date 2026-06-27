@@ -13,7 +13,7 @@ export interface FileEditCardOptions {
 // the card is visible for every edit. 5 lines is enough to spot the change;
 // the "Show diff" button reveals the full hunk on demand.
 const MAX_PREVIEW_LINES = 5
-const MAX_DIFF_LINES = 40
+const MAX_DIFF_LINES = 15
 
 /**
  * Detects write/edit/patch/apply file-edit tools. The file-edit card is a
@@ -235,17 +235,29 @@ function buildDiffPreview(oldStr: string, newStr: string): DocumentFragment {
   const oldLines = oldStr.split("\n")
   const newLines = newStr.split("\n")
   const maxLines = Math.max(oldLines.length, newLines.length)
-  for (let i = 0; i < maxLines; i++) {
+  let rendered = 0
+  for (let i = 0; i < maxLines && rendered < MAX_PREVIEW_LINES; i++) {
     const oldLine = oldLines[i]
     const newLine = newLines[i]
-    if (oldLine === newLine && i < MAX_PREVIEW_LINES) {
+    if (oldLine === newLine) {
       fragment.appendChild(createPreviewLine(oldLine ?? "", "context"))
-    } else if (oldLine !== undefined) {
-      fragment.appendChild(createPreviewLine(oldLine, "removed"))
+      rendered++
+    } else {
+      if (oldLine !== undefined) {
+        fragment.appendChild(createPreviewLine(oldLine, "removed"))
+        rendered++
+      }
+      if (newLine !== undefined && rendered < MAX_PREVIEW_LINES) {
+        fragment.appendChild(createPreviewLine(newLine, "added"))
+        rendered++
+      }
     }
-    if (newLine !== undefined && oldLine !== newLine) {
-      fragment.appendChild(createPreviewLine(newLine, "added"))
-    }
+  }
+  if (maxLines > MAX_PREVIEW_LINES) {
+    const more = document.createElement("div")
+    more.className = "file-edit-card__preview-more"
+    more.textContent = `+ ${maxLines - MAX_PREVIEW_LINES} more lines`
+    fragment.appendChild(more)
   }
   return fragment
 }
