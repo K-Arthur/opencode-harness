@@ -166,7 +166,7 @@ export function setupTasksPanel(els: TasksPanelEls, deps: TasksPanelDeps): Tasks
     const icon = document.createElement("span")
     icon.className = "task-card-icon"
     icon.setAttribute("aria-hidden", "true")
-    icon.textContent = STATUS_ICON[task.status]
+    icon.innerHTML = STATUS_ICON[task.status]
     header.appendChild(icon)
 
     const cmd = document.createElement("code")

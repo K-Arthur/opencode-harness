@@ -80,7 +80,8 @@ export function renderLiveCommandCard(toolBlock: ToolCallBlock, opts?: LiveComma
   const header = document.createElement("div")
   header.className = "live-command-card__header"
 
-  const icon = createElement("span", "live-command-card__icon", status === "running" ? PLAY_SVG : status === "succeeded" ? SUCCESS_SVG : status === "failed" ? ERROR_SVG : STATE_CANCELLED_SVG)
+  const icon = createElement("span", "live-command-card__icon")
+  icon.innerHTML = status === "running" ? PLAY_SVG : status === "succeeded" ? SUCCESS_SVG : status === "failed" ? ERROR_SVG : STATE_CANCELLED_SVG
   icon.setAttribute("aria-hidden", "true")
   header.appendChild(icon)
 
@@ -217,7 +218,7 @@ export function applyLiveCommandCardUpdate(card: HTMLElement, update: LiveComman
     card.classList.remove(...STATUS_CLASSES)
     card.classList.add(`live-command-card--${status}`)
     const icon = card.querySelector(".live-command-card__icon")
-    if (icon) icon.textContent = STATUS_ICON[status]
+    if (icon) icon.innerHTML = STATUS_ICON[status]
     const statusEl = card.querySelector(".live-command-card__status")
     if (statusEl) {
       statusEl.textContent = status.charAt(0).toUpperCase() + status.slice(1)
