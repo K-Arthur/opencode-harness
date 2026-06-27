@@ -102,6 +102,14 @@
   color: var(--color-error, #f44336);
 }
 
+/* ── Duration (shown after tool completes) ── */
+.file-edit-card__duration {
+  flex: 0 0 auto;
+  font-size: var(--text-2xs, 10px);
+  color: var(--oc-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Mini diff / content preview ── */
 .file-edit-card__preview {
   margin-top: var(--space-1, 4px);
