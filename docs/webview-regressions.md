@@ -54,6 +54,28 @@ OpenCode's event list includes both `file.edited` and `session.diff`; observed O
 
 The visible changed-files strip is driven by `changed_files_update`, not only by old per-file chips. A live edit must make `#changed-files-strip` visible and clicking the strip must show the viewport-safe inline `#changed-files-panel` above the message input.
 
+## Active-File Pill Disappears On Composer Focus (v0.4.20)
+
+The pill above the composer that shows the currently-open editor kept vanishing as soon as the user clicked into the chat input. Root cause: focusing the webview/sidebar fires `vscode.window.onDidChangeActiveTextEditor(undefined)` because a webview is not a `TextEditor`. The old handler treated `undefined` as "no file open" and posted `active_file: { path: null }`, hiding the pill — even though the user's file was still open one panel over (`visibleTextEditors` still listed it).
+
+**Fix** (`ActiveFileTracker.ts`): cache the last non-undefined editor as `lastKnownEditor` and resolve the file to post through a `bestEditor()` cascade — `lastKnownEditor → window.activeTextEditor → visibleTextEditors[0]`. The `onDidChangeActiveTextEditor` handler only posts `path: null` (hides the pill) when **all** `visibleTextEditors` are gone; when a non-editor panel grabs focus it leaves the pill on the last known file. `repost()` (invoked from the `webview_ready` handler) uses the same cascade so the pill also appears on first open, including the case where clicking the sidebar is what triggered `resolveWebviewView` (making `activeTextEditor` undefined at capture time).
+
+## File Mention Chips Not Rendered On Insert (v0.4.20)
+
+Picking a file from the `@` mention dropdown inserted raw `@file:path` text into the composer with no styled chip. `insertMention()` dispatches a `window` `oc-input-changed` event, but the listener in `inputHandlers.ts` only called `autoResizeTextarea()` + `updateSendButton()` — it never re-rendered chips. (Manually *typing* `@file:` worked because `onInputChange`, bound to the `input` event, already called `updatePromptContextChips()`.)
+
+**Fix**: the `oc-input-changed` listener now also calls `attachmentManager.updatePromptContextChips()` and `attachmentManager.syncContextItemsWithPrompt()`. The chip pipeline is: `oc-input-changed` → `updatePromptContextChips()` → `parsePromptMentions()` (regex `@(file|folder|url|problems|terminal):…`) → `updateContextChips(els, chips)` renders into `#context-chips` and un-hides `#context-bar`.
+
+## Emoji Rendered As Literal Escape Text (v0.4.20)
+
+The mention dropdown's file row showed the literal string `U0001F4C4` instead of a file glyph. The source used `"\U0001F4C4"` — capital `\U` is **not** a valid JavaScript unicode escape (only lowercase `\u{…}` / `\uXXXX` are), so the string was emitted verbatim. All webview emoji (mention file icon, context-chip eye/eye-off toggle, recent-session indicators) were replaced with inline SVG from `icons.ts` to avoid both the escape hazard and platform emoji inconsistency.
+
+## Estimated Usage Regresses Actual Reading (v0.4.20)
+
+The status-strip context bar jumped backwards mid-session (e.g. to `165` tokens) after showing a correct high count. Stream start/end boundary emits in `StreamCoordinator` post `context_usage` with `source: "estimated"` and the monitor's heuristic count, which can be far below the last API-reported `actual`. The `keepExisting` guard in the `context_usage` handler originally only blocked **zero-fill** updates.
+
+**Fix** (`main.ts` `context_usage` handler): `keepExisting` now also holds when an incoming `estimated` value is lower than a stored `actual` value (`estimatedRegressesActual`). An `estimated` update is only allowed through when it is *higher* than the stored actual — meaning the session genuinely grew between API responses. This is distinct from the post-compaction reset (v0.4.15), which intentionally clears all cached usage.
+
 ## Checkpoint Panel
 
 An empty checkpoint response leaves the panel open and shows `No checkpoints yet`. This makes the toolbar action visibly responsive even when the active session has not produced restorable checkpoints.

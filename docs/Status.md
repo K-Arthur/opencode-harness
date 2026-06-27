@@ -1,7 +1,38 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-06-26
-**Version:** v0.4.15
+**Version:** v0.4.20
+
+## Highlights (2026-06-26) — Active-file pill, mention chips, SVG icons & usage-bar fixes
+
+**Composer context surfaces fixed end to end.**
+
+- **Active-file pill stays visible while typing** — clicking the composer fires
+  `onDidChangeActiveTextEditor(undefined)` (a webview is not a `TextEditor`);
+  the old handler treated that as "no file" and hid the pill. `ActiveFileTracker`
+  now caches `lastKnownEditor` and resolves through a `bestEditor()` cascade
+  (`lastKnownEditor → activeTextEditor → visibleTextEditors[0]`), only clearing
+  the pill when every visible editor is closed. `repost()` (on `webview_ready`)
+  uses the same cascade so the pill shows on first open too.
+- **File mentions render as chips on insert** — the `oc-input-changed` listener
+  now calls `updatePromptContextChips()` + `syncContextItemsWithPrompt()`, so
+  picking a file from the `@` dropdown produces a styled chip instead of raw
+  `@file:path` text.
+- **SVG icons replace broken emoji** — the mention dropdown's `"\U0001F4C4"`
+  (invalid capital-`\U` escape, rendered as literal `U0001F4C4`) and all other
+  webview emoji are now inline SVG from `icons.ts`.
+- **Dropdown positioning** — `positionDropdown()` runs after rows are appended,
+  fixing the zero-height-fallback that opened the menu ~260px off.
+- **`.context-chip-remove` styling** — the chip `×` button now has real CSS
+  mirroring `.context-chip-toggle` instead of native button chrome.
+- **Estimated usage no longer regresses actual** — a late `estimated`
+  `context_usage` emit below a stored `actual` is now ignored, so the bar stops
+  jumping backwards mid-session.
+
+Files: `src/chat/ActiveFileTracker.ts`, `src/chat/webview/inputHandlers.ts`,
+`src/chat/webview/mentions.ts`, `src/chat/webview/icons.ts`,
+`src/chat/webview/theme.ts`, `src/chat/webview/recent-sessions.ts`,
+`src/chat/webview/main.ts`, `src/chat/webview/css/components.css`.
 
 ## Highlights (2026-06-26) — Tool cards, compact diff, context bar & ARIA fixes
 

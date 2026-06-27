@@ -24,6 +24,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      [Unreleased] — that creates documentation drift. See the release
      workflow in docs/development/rebuild-and-reinstall.md. -->
 
+## [0.4.20] - 2026-06-26
+
+### Fixed
+
+- **Active-file context pill stays visible while typing** — the pill that shows
+  the currently-open editor above the composer kept disappearing the moment the
+  user clicked into the chat input. Clicking the webview fires
+  `onDidChangeActiveTextEditor(undefined)` because the sidebar is not a text
+  editor, and the old handler posted `active_file: null`, hiding the pill.
+  `ActiveFileTracker` now caches the last real editor (`lastKnownEditor`) and a
+  new `bestEditor()` helper resolves through `lastKnownEditor → activeTextEditor
+  → visibleTextEditors[0]`. The pill is only cleared when *all* visible text
+  editors are gone (user closed every file). `repost()` (called on
+  `webview_ready`) uses the same helper, so the pill also appears on first open
+  even when the sidebar itself triggered `resolveWebviewView`.
+- **File mentions render as chips on insert** — selecting a file from the `@`
+  mention dropdown inserted raw `@file:path` text with no styled chip. The
+  insertion path dispatches `oc-input-changed`, but that listener only resized
+  the textarea and refreshed the send button. It now also calls
+  `updatePromptContextChips()` and `syncContextItemsWithPrompt()`, so the chip
+  renders immediately (manual typing of `@file:` was already covered by
+  `onInputChange`).
+- **Mention dropdown / indicators use SVG icons, not broken emoji** — the file
+  row in the mention dropdown rendered the literal text `U0001F4C4` (an invalid
+  capital-`\U` JS escape) instead of a file glyph. All emoji across the webview
+  (mention dropdown file icon, context-chip eye/eye-off toggle, recent-session
+  bug/sparkle/refresh/message indicators) were replaced with inline SVG from
+  `icons.ts`, which render consistently regardless of platform emoji support.
+- **Mention/command dropdown positions correctly** — `positionDropdown()` ran
+  before the result rows were appended, so it measured a zero-height container
+  and fell back to a 260px estimate, opening the dropdown far above the input.
+  It now runs after all rows (including the `+N more` row) are in the DOM.
+- **`.context-chip-remove` styling** — the chip `×` button had no visual CSS
+  (only accessibility hit-area sizing), so it rendered with default native
+  button chrome. It now mirrors `.context-chip-toggle`: transparent background,
+  no border, muted inherited color, hover opacity feedback.
+- **Estimated usage no longer overwrites a higher actual reading** — a late
+  heuristic `estimated` `context_usage` event could clobber an exact `actual`
+  token count with a lower value, making the bar jump backwards.
+
 ## [0.4.15] - 2026-06-26
 
 ### Fixed
