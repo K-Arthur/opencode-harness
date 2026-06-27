@@ -833,3 +833,50 @@ Replace `<your-model-id>` with your active model:
 
 The `model=` parameter rides on the existing `plan_turn` call — it does **not** add a separate tool invocation. If `plan_turn` is not appropriate for a non-code task, call `announce_model(model="...")` once instead.
 
+## Focused-Change Discipline (Anti-Regression Protocol)
+
+Regressions are most often introduced by models making "while I'm here" changes that
+are unrelated to the requested fix. The following rules are mandatory:
+
+1. **Fix only the requested issue.** Do not refactor, restyle, or "improve" code
+   that is not directly part of the bug report. A styling tweak to a file you
+   happened to open is a regression source, not a contribution.
+2. **One logical change per commit.** If the user reports three regressions, make
+   three focused commits — not one omnibus commit that also rewrites a CSS file.
+3. **Never auto-switch tabs unless the user explicitly requested it.** Background
+   sessions that need user input (questions, permissions) must set a
+   `data-needs-attention` indicator on the tab strip. The user clicks the tab
+   when ready. See the **Tab Attention Indicator** section below.
+4. **Prefer notification surfaces over focus theft.** If a background tab requires
+   an action, mark the tab with the attention indicator. Do NOT call `switchTab`
+   or `switchToTab` for sessions the user is not currently viewing.
+5. **CSS changes must use preset design tokens.** Use `--oc-*` semantic variables
+   (e.g. `--oc-accent`, `--oc-accent-subtle`, `--oc-border`, `--oc-muted`,
+   `--oc-success`, `--oc-error`) from `tokens.css`. Do NOT reference raw
+   `--vscode-*` variables directly in component CSS — they bypass the theme
+   system and break preset switching. The only exception is terminal-output
+   blocks (`--vscode-terminal-*`) which intentionally match the terminal theme.
+6. **SVG icons must be set via `innerHTML`, not `textContent`.** Setting
+   `textContent` to an SVG string renders it as literal text (users see
+   `<svg>...</svg>` instead of an icon). This is a recurring regression when
+   emoji icons are replaced with SVGs.
+7. **Commit CSS in the same commit as the renderer changes that use it.** Never
+   leave CSS uncommitted — the checkpoint process can wipe it between turns.
+8. **Run `npx tsx --test src/chat/webview/css/cssCoverage.test.ts` before
+   committing any UI change.** This catches renderer classes with no CSS rule.
+
+### Tab Attention Indicator
+
+When a background session has an unanswered question (`question_asked`) or a
+pending permission (`permission_request`), the webview marks the tab with
+`data-needs-attention="true"` instead of auto-switching. The tab's
+`.tab-indicator` dot pulses with the accent color. The indicator is cleared
+when the user manually switches to that tab or when the action is resolved
+(permission answered / question acknowledged).
+
+Key files:
+- `src/chat/webview/main.ts` — `markTabNeedsAttention`, `clearTabNeedsAttention`,
+  `needsAttention` set
+- `src/chat/webview/css/layout.css` — `.tab-btn[data-needs-attention="true"]`
+  pulse animation
+
