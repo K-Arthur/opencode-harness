@@ -2651,7 +2651,18 @@ function setupTodoSkillAndSubagentPanels(): void {
         }
         const sess = stateManager.getSession(targetId)
         const existingUsage = sess?.contextUsage
-        const keepExisting = !contextUsageHasFill(incomingUsage) && contextUsageHasFill(existingUsage)
+        // Also block a lower "estimated" value from overwriting a higher "actual"
+        // reading. Stream-start/end boundary emits (StreamCoordinator) fire with
+        // source:"estimated" and the monitor's current heuristic count, which can be
+        // far below the last API-reported actual (e.g. 165 vs 50,000 tokens). Only
+        // let an estimated update through when it is HIGHER than the stored actual —
+        // which means the session genuinely grew between API responses.
+        const estimatedRegressesActual =
+          incomingUsage.source === "estimated" &&
+          existingUsage?.source === "actual" &&
+          contextUsageHasFill(existingUsage) &&
+          (existingUsage.tokens ?? 0) > (incomingUsage.tokens ?? 0)
+        const keepExisting = (!contextUsageHasFill(incomingUsage) && contextUsageHasFill(existingUsage)) || estimatedRegressesActual
         const effectiveUsage = keepExisting ? existingUsage! : incomingUsage
         // Dev-only diagnostic: catch regressions where an older update would
         // overwrite a newer reading. Production builds are no-ops because
