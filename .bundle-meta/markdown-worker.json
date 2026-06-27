@@ -1,0 +1,1458 @@
+{
+  "inputs": {
+    "node_modules/highlight.js/lib/core.js": {
+      "bytes": 75941,
+      "imports": [],
+      "format": "cjs"
+    },
+    "node_modules/highlight.js/es/core.js": {
+      "bytes": 202,
+      "imports": [
+        {
+          "path": "node_modules/highlight.js/lib/core.js",
+          "kind": "import-statement",
+          "original": "../lib/core.js"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/mdurl/lib/decode.mjs": {
+      "bytes": 2843,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/mdurl/lib/encode.mjs": {
+      "bytes": 2211,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/mdurl/lib/format.mjs": {
+      "bytes": 485,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/mdurl/lib/parse.mjs": {
+      "bytes": 9733,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/mdurl/index.mjs": {
+      "bytes": 200,
+      "imports": [
+        {
+          "path": "node_modules/mdurl/lib/decode.mjs",
+          "kind": "import-statement",
+          "original": "./lib/decode.mjs"
+        },
+        {
+          "path": "node_modules/mdurl/lib/encode.mjs",
+          "kind": "import-statement",
+          "original": "./lib/encode.mjs"
+        },
+        {
+          "path": "node_modules/mdurl/lib/format.mjs",
+          "kind": "import-statement",
+          "original": "./lib/format.mjs"
+        },
+        {
+          "path": "node_modules/mdurl/lib/parse.mjs",
+          "kind": "import-statement",
+          "original": "./lib/parse.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/uc.micro/properties/Any/regex.mjs": {
+      "bytes": 145,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/uc.micro/categories/Cc/regex.mjs": {
+      "bytes": 35,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/uc.micro/categories/Cf/regex.mjs": {
+      "bytes": 264,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/uc.micro/categories/P/regex.mjs": {
+      "bytes": 2042,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/uc.micro/categories/S/regex.mjs": {
+      "bytes": 2551,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/uc.micro/categories/Z/regex.mjs": {
+      "bytes": 73,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/uc.micro/index.mjs": {
+      "bytes": 302,
+      "imports": [
+        {
+          "path": "node_modules/uc.micro/properties/Any/regex.mjs",
+          "kind": "import-statement",
+          "original": "./properties/Any/regex.mjs"
+        },
+        {
+          "path": "node_modules/uc.micro/categories/Cc/regex.mjs",
+          "kind": "import-statement",
+          "original": "./categories/Cc/regex.mjs"
+        },
+        {
+          "path": "node_modules/uc.micro/categories/Cf/regex.mjs",
+          "kind": "import-statement",
+          "original": "./categories/Cf/regex.mjs"
+        },
+        {
+          "path": "node_modules/uc.micro/categories/P/regex.mjs",
+          "kind": "import-statement",
+          "original": "./categories/P/regex.mjs"
+        },
+        {
+          "path": "node_modules/uc.micro/categories/S/regex.mjs",
+          "kind": "import-statement",
+          "original": "./categories/S/regex.mjs"
+        },
+        {
+          "path": "node_modules/uc.micro/categories/Z/regex.mjs",
+          "kind": "import-statement",
+          "original": "./categories/Z/regex.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/entities/lib/esm/generated/decode-data-html.js": {
+      "bytes": 47724,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/entities/lib/esm/generated/decode-data-xml.js": {
+      "bytes": 279,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/entities/lib/esm/decode_codepoint.js": {
+      "bytes": 2112,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/entities/lib/esm/decode.js": {
+      "bytes": 19810,
+      "imports": [
+        {
+          "path": "node_modules/entities/lib/esm/generated/decode-data-html.js",
+          "kind": "import-statement",
+          "original": "./generated/decode-data-html.js"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/generated/decode-data-xml.js",
+          "kind": "import-statement",
+          "original": "./generated/decode-data-xml.js"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/decode_codepoint.js",
+          "kind": "import-statement",
+          "original": "./decode_codepoint.js"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/decode_codepoint.js",
+          "kind": "import-statement",
+          "original": "./decode_codepoint.js"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/entities/lib/esm/generated/encode-html.js": {
+      "bytes": 27039,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/entities/lib/esm/escape.js": {
+      "bytes": 3965,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/entities/lib/esm/encode.js": {
+      "bytes": 2569,
+      "imports": [
+        {
+          "path": "node_modules/entities/lib/esm/generated/encode-html.js",
+          "kind": "import-statement",
+          "original": "./generated/encode-html.js"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/escape.js",
+          "kind": "import-statement",
+          "original": "./escape.js"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/entities/lib/esm/index.js": {
+      "bytes": 4057,
+      "imports": [
+        {
+          "path": "node_modules/entities/lib/esm/decode.js",
+          "kind": "import-statement",
+          "original": "./decode.js"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/encode.js",
+          "kind": "import-statement",
+          "original": "./encode.js"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/escape.js",
+          "kind": "import-statement",
+          "original": "./escape.js"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/escape.js",
+          "kind": "import-statement",
+          "original": "./escape.js"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/encode.js",
+          "kind": "import-statement",
+          "original": "./encode.js"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/decode.js",
+          "kind": "import-statement",
+          "original": "./decode.js"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/common/utils.mjs": {
+      "bytes": 8556,
+      "imports": [
+        {
+          "path": "node_modules/mdurl/index.mjs",
+          "kind": "import-statement",
+          "original": "mdurl"
+        },
+        {
+          "path": "node_modules/uc.micro/index.mjs",
+          "kind": "import-statement",
+          "original": "uc.micro"
+        },
+        {
+          "path": "node_modules/entities/lib/esm/index.js",
+          "kind": "import-statement",
+          "original": "entities"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/helpers/parse_link_label.mjs": {
+      "bytes": 985,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/helpers/parse_link_destination.mjs": {
+      "bytes": 1543,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/helpers/parse_link_title.mjs": {
+      "bytes": 1851,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/helpers/index.mjs": {
+      "bytes": 275,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/helpers/parse_link_label.mjs",
+          "kind": "import-statement",
+          "original": "./parse_link_label.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/helpers/parse_link_destination.mjs",
+          "kind": "import-statement",
+          "original": "./parse_link_destination.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/helpers/parse_link_title.mjs",
+          "kind": "import-statement",
+          "original": "./parse_link_title.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/renderer.mjs": {
+      "bytes": 8929,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "./common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/ruler.mjs": {
+      "bytes": 8478,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/token.mjs": {
+      "bytes": 3799,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_core/state_core.mjs": {
+      "bytes": 325,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/token.mjs",
+          "kind": "import-statement",
+          "original": "../token.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_core/normalize.mjs": {
+      "bytes": 351,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_core/block.mjs": {
+      "bytes": 333,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_core/inline.mjs": {
+      "bytes": 289,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_core/linkify.mjs": {
+      "bytes": 4248,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_core/replacements.mjs": {
+      "bytes": 2633,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_core/smartquotes.mjs": {
+      "bytes": 5957,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_core/text_join.mjs": {
+      "bytes": 1147,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/parser_core.mjs": {
+      "bytes": 1509,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/ruler.mjs",
+          "kind": "import-statement",
+          "original": "./ruler.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_core/state_core.mjs",
+          "kind": "import-statement",
+          "original": "./rules_core/state_core.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_core/normalize.mjs",
+          "kind": "import-statement",
+          "original": "./rules_core/normalize.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_core/block.mjs",
+          "kind": "import-statement",
+          "original": "./rules_core/block.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_core/inline.mjs",
+          "kind": "import-statement",
+          "original": "./rules_core/inline.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_core/linkify.mjs",
+          "kind": "import-statement",
+          "original": "./rules_core/linkify.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_core/replacements.mjs",
+          "kind": "import-statement",
+          "original": "./rules_core/replacements.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_core/smartquotes.mjs",
+          "kind": "import-statement",
+          "original": "./rules_core/smartquotes.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_core/text_join.mjs",
+          "kind": "import-statement",
+          "original": "./rules_core/text_join.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/state_block.mjs": {
+      "bytes": 5895,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/token.mjs",
+          "kind": "import-statement",
+          "original": "../token.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/table.mjs": {
+      "bytes": 7087,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/code.mjs": {
+      "bytes": 686,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/fence.mjs": {
+      "bytes": 2412,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/blockquote.mjs": {
+      "bytes": 6056,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/hr.mjs": {
+      "bytes": 1070,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/list.mjs": {
+      "bytes": 9103,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/reference.mjs": {
+      "bytes": 5829,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/common/html_blocks.mjs": {
+      "bytes": 799,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/common/html_re.mjs": {
+      "bytes": 992,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/html_block.mjs": {
+      "bytes": 2851,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/html_blocks.mjs",
+          "kind": "import-statement",
+          "original": "../common/html_blocks.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/common/html_re.mjs",
+          "kind": "import-statement",
+          "original": "../common/html_re.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/heading.mjs": {
+      "bytes": 1512,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/lheading.mjs": {
+      "bytes": 2577,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_block/paragraph.mjs": {
+      "bytes": 1511,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/parser_block.mjs": {
+      "bytes": 3986,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/ruler.mjs",
+          "kind": "import-statement",
+          "original": "./ruler.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/state_block.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/state_block.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/table.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/table.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/code.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/code.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/fence.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/fence.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/blockquote.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/blockquote.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/hr.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/hr.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/list.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/list.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/reference.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/reference.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/html_block.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/html_block.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/heading.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/heading.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/lheading.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/lheading.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_block/paragraph.mjs",
+          "kind": "import-statement",
+          "original": "./rules_block/paragraph.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/state_inline.mjs": {
+      "bytes": 4627,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/token.mjs",
+          "kind": "import-statement",
+          "original": "../token.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/text.mjs": {
+      "bytes": 2101,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/linkify.mjs": {
+      "bytes": 1904,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/newline.mjs": {
+      "bytes": 1199,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/escape.mjs": {
+      "bytes": 1419,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/backticks.mjs": {
+      "bytes": 1674,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/strikethrough.mjs": {
+      "bytes": 2935,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/emphasis.mjs": {
+      "bytes": 3520,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/link.mjs": {
+      "bytes": 3724,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/image.mjs": {
+      "bytes": 3638,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/autolink.mjs": {
+      "bytes": 2012,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/html_inline.mjs": {
+      "bytes": 1163,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/html_re.mjs",
+          "kind": "import-statement",
+          "original": "../common/html_re.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/entity.mjs": {
+      "bytes": 1500,
+      "imports": [
+        {
+          "path": "node_modules/entities/lib/esm/index.js",
+          "kind": "import-statement",
+          "original": "entities"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "../common/utils.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/balance_pairs.mjs": {
+      "bytes": 4084,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/rules_inline/fragments_join.mjs": {
+      "bytes": 1267,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/parser_inline.mjs": {
+      "bytes": 5434,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/ruler.mjs",
+          "kind": "import-statement",
+          "original": "./ruler.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/state_inline.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/state_inline.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/text.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/text.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/linkify.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/linkify.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/newline.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/newline.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/escape.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/escape.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/backticks.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/backticks.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/strikethrough.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/strikethrough.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/emphasis.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/emphasis.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/link.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/link.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/image.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/image.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/autolink.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/autolink.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/html_inline.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/html_inline.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/entity.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/entity.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/balance_pairs.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/balance_pairs.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/rules_inline/fragments_join.mjs",
+          "kind": "import-statement",
+          "original": "./rules_inline/fragments_join.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/linkify-it/lib/re.mjs": {
+      "bytes": 5556,
+      "imports": [
+        {
+          "path": "node_modules/uc.micro/index.mjs",
+          "kind": "import-statement",
+          "original": "uc.micro"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/linkify-it/index.mjs": {
+      "bytes": 17814,
+      "imports": [
+        {
+          "path": "node_modules/linkify-it/lib/re.mjs",
+          "kind": "import-statement",
+          "original": "./lib/re.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/punycode.js/punycode.es6.js": {
+      "bytes": 12780,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/presets/default.mjs": {
+      "bytes": 1281,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/presets/zero.mjs": {
+      "bytes": 1652,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/presets/commonmark.mjs": {
+      "bytes": 1909,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/lib/index.mjs": {
+      "bytes": 17899,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/common/utils.mjs",
+          "kind": "import-statement",
+          "original": "./common/utils.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/helpers/index.mjs",
+          "kind": "import-statement",
+          "original": "./helpers/index.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/renderer.mjs",
+          "kind": "import-statement",
+          "original": "./renderer.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/parser_core.mjs",
+          "kind": "import-statement",
+          "original": "./parser_core.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/parser_block.mjs",
+          "kind": "import-statement",
+          "original": "./parser_block.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/parser_inline.mjs",
+          "kind": "import-statement",
+          "original": "./parser_inline.mjs"
+        },
+        {
+          "path": "node_modules/linkify-it/index.mjs",
+          "kind": "import-statement",
+          "original": "linkify-it"
+        },
+        {
+          "path": "node_modules/mdurl/index.mjs",
+          "kind": "import-statement",
+          "original": "mdurl"
+        },
+        {
+          "path": "node_modules/punycode.js/punycode.es6.js",
+          "kind": "import-statement",
+          "original": "punycode.js"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/presets/default.mjs",
+          "kind": "import-statement",
+          "original": "./presets/default.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/presets/zero.mjs",
+          "kind": "import-statement",
+          "original": "./presets/zero.mjs"
+        },
+        {
+          "path": "node_modules/markdown-it/lib/presets/commonmark.mjs",
+          "kind": "import-statement",
+          "original": "./presets/commonmark.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it/index.mjs": {
+      "bytes": 42,
+      "imports": [
+        {
+          "path": "node_modules/markdown-it/lib/index.mjs",
+          "kind": "import-statement",
+          "original": "./lib/index.mjs"
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/markdown-it-task-lists/index.js": {
+      "bytes": 3832,
+      "imports": [],
+      "format": "cjs"
+    },
+    "src/chat/webview/htmlUtils.ts": {
+      "bytes": 1017,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/javascript.js": {
+      "bytes": 17756,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/typescript.js": {
+      "bytes": 21359,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/python.js": {
+      "bytes": 9190,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/rust.js": {
+      "bytes": 6130,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/go.js": {
+      "bytes": 3195,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/bash.js": {
+      "bytes": 6523,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/json.js": {
+      "bytes": 1343,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/css.js": {
+      "bytes": 18884,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/markdown.js": {
+      "bytes": 5253,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/sql.js": {
+      "bytes": 11990,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/diff.js": {
+      "bytes": 1214,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/java.js": {
+      "bytes": 6233,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/cpp.js": {
+      "bytes": 12689,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/yaml.js": {
+      "bytes": 5022,
+      "imports": [],
+      "format": "esm"
+    },
+    "node_modules/highlight.js/es/languages/xml.js": {
+      "bytes": 7007,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/chat/webview/markdownWorker.ts": {
+      "bytes": 4926,
+      "imports": [
+        {
+          "path": "node_modules/highlight.js/es/core.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/core"
+        },
+        {
+          "path": "node_modules/markdown-it/index.mjs",
+          "kind": "import-statement",
+          "original": "markdown-it"
+        },
+        {
+          "path": "node_modules/markdown-it-task-lists/index.js",
+          "kind": "import-statement",
+          "original": "markdown-it-task-lists"
+        },
+        {
+          "path": "src/chat/webview/htmlUtils.ts",
+          "kind": "import-statement",
+          "original": "./htmlUtils"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/javascript.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/javascript"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/typescript.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/typescript"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/python.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/python"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/rust.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/rust"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/go.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/go"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/bash.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/bash"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/json.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/json"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/css.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/css"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/markdown.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/markdown"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/sql.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/sql"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/diff.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/diff"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/java.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/java"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/cpp.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/cpp"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/yaml.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/yaml"
+        },
+        {
+          "path": "node_modules/highlight.js/es/languages/xml.js",
+          "kind": "import-statement",
+          "original": "highlight.js/lib/languages/xml"
+        }
+      ],
+      "format": "esm"
+    }
+  },
+  "outputs": {
+    "dist/chat/webview/markdownWorker.js": {
+      "imports": [],
+      "exports": [],
+      "entryPoint": "src/chat/webview/markdownWorker.ts",
+      "inputs": {
+        "node_modules/highlight.js/lib/core.js": {
+          "bytesInOutput": 20645
+        },
+        "node_modules/markdown-it-task-lists/index.js": {
+          "bytesInOutput": 1850
+        },
+        "node_modules/highlight.js/es/core.js": {
+          "bytesInOutput": 35
+        },
+        "node_modules/markdown-it/lib/common/utils.mjs": {
+          "bytesInOutput": 2833
+        },
+        "node_modules/mdurl/index.mjs": {
+          "bytesInOutput": 74
+        },
+        "node_modules/mdurl/lib/decode.mjs": {
+          "bytesInOutput": 1311
+        },
+        "node_modules/mdurl/lib/encode.mjs": {
+          "bytesInOutput": 828
+        },
+        "node_modules/mdurl/lib/format.mjs": {
+          "bytesInOutput": 249
+        },
+        "node_modules/mdurl/lib/parse.mjs": {
+          "bytesInOutput": 2380
+        },
+        "node_modules/uc.micro/index.mjs": {
+          "bytesInOutput": 77
+        },
+        "node_modules/uc.micro/properties/Any/regex.mjs": {
+          "bytesInOutput": 138
+        },
+        "node_modules/uc.micro/categories/Cc/regex.mjs": {
+          "bytesInOutput": 28
+        },
+        "node_modules/uc.micro/categories/Cf/regex.mjs": {
+          "bytesInOutput": 257
+        },
+        "node_modules/uc.micro/categories/P/regex.mjs": {
+          "bytesInOutput": 2035
+        },
+        "node_modules/uc.micro/categories/S/regex.mjs": {
+          "bytesInOutput": 2544
+        },
+        "node_modules/uc.micro/categories/Z/regex.mjs": {
+          "bytesInOutput": 66
+        },
+        "node_modules/entities/lib/esm/generated/decode-data-html.js": {
+          "bytesInOutput": 47190
+        },
+        "node_modules/entities/lib/esm/generated/decode-data-xml.js": {
+          "bytesInOutput": 133
+        },
+        "node_modules/entities/lib/esm/decode_codepoint.js": {
+          "bytesInOutput": 605
+        },
+        "node_modules/entities/lib/esm/decode.js": {
+          "bytesInOutput": 4985
+        },
+        "node_modules/entities/lib/esm/generated/encode-html.js": {
+          "bytesInOutput": 23424
+        },
+        "node_modules/entities/lib/esm/escape.js": {
+          "bytesInOutput": 619
+        },
+        "node_modules/entities/lib/esm/index.js": {
+          "bytesInOutput": 223
+        },
+        "node_modules/markdown-it/lib/helpers/index.mjs": {
+          "bytesInOutput": 91
+        },
+        "node_modules/markdown-it/lib/helpers/parse_link_label.mjs": {
+          "bytesInOutput": 270
+        },
+        "node_modules/markdown-it/lib/helpers/parse_link_destination.mjs": {
+          "bytesInOutput": 501
+        },
+        "node_modules/markdown-it/lib/helpers/parse_link_title.mjs": {
+          "bytesInOutput": 431
+        },
+        "node_modules/markdown-it/lib/renderer.mjs": {
+          "bytesInOutput": 2545
+        },
+        "node_modules/markdown-it/lib/ruler.mjs": {
+          "bytesInOutput": 1993
+        },
+        "node_modules/markdown-it/lib/token.mjs": {
+          "bytesInOutput": 770
+        },
+        "node_modules/markdown-it/lib/rules_core/state_core.mjs": {
+          "bytesInOutput": 117
+        },
+        "node_modules/markdown-it/lib/rules_core/normalize.mjs": {
+          "bytesInOutput": 106
+        },
+        "node_modules/markdown-it/lib/rules_core/block.mjs": {
+          "bytesInOutput": 168
+        },
+        "node_modules/markdown-it/lib/rules_core/inline.mjs": {
+          "bytesInOutput": 144
+        },
+        "node_modules/markdown-it/lib/rules_core/linkify.mjs": {
+          "bytesInOutput": 1492
+        },
+        "node_modules/markdown-it/lib/rules_core/replacements.mjs": {
+          "bytesInOutput": 1076
+        },
+        "node_modules/markdown-it/lib/rules_core/smartquotes.mjs": {
+          "bytesInOutput": 1713
+        },
+        "node_modules/markdown-it/lib/rules_core/text_join.mjs": {
+          "bytesInOutput": 348
+        },
+        "node_modules/markdown-it/lib/parser_core.mjs": {
+          "bytesInOutput": 354
+        },
+        "node_modules/markdown-it/lib/rules_block/state_block.mjs": {
+          "bytesInOutput": 2016
+        },
+        "node_modules/markdown-it/lib/rules_block/table.mjs": {
+          "bytesInOutput": 2486
+        },
+        "node_modules/markdown-it/lib/rules_block/code.mjs": {
+          "bytesInOutput": 285
+        },
+        "node_modules/markdown-it/lib/rules_block/fence.mjs": {
+          "bytesInOutput": 707
+        },
+        "node_modules/markdown-it/lib/rules_block/blockquote.mjs": {
+          "bytesInOutput": 1549
+        },
+        "node_modules/markdown-it/lib/rules_block/hr.mjs": {
+          "bytesInOutput": 393
+        },
+        "node_modules/markdown-it/lib/rules_block/list.mjs": {
+          "bytesInOutput": 2624
+        },
+        "node_modules/markdown-it/lib/rules_block/reference.mjs": {
+          "bytesInOutput": 1799
+        },
+        "node_modules/markdown-it/lib/common/html_blocks.mjs": {
+          "bytesInOutput": 489
+        },
+        "node_modules/markdown-it/lib/common/html_re.mjs": {
+          "bytesInOutput": 469
+        },
+        "node_modules/markdown-it/lib/rules_block/html_block.mjs": {
+          "bytesInOutput": 872
+        },
+        "node_modules/markdown-it/lib/rules_block/heading.mjs": {
+          "bytesInOutput": 653
+        },
+        "node_modules/markdown-it/lib/rules_block/lheading.mjs": {
+          "bytesInOutput": 879
+        },
+        "node_modules/markdown-it/lib/rules_block/paragraph.mjs": {
+          "bytesInOutput": 505
+        },
+        "node_modules/markdown-it/lib/parser_block.mjs": {
+          "bytesInOutput": 1226
+        },
+        "node_modules/markdown-it/lib/rules_inline/state_inline.mjs": {
+          "bytesInOutput": 1592
+        },
+        "node_modules/markdown-it/lib/rules_inline/text.mjs": {
+          "bytesInOutput": 385
+        },
+        "node_modules/markdown-it/lib/rules_inline/linkify.mjs": {
+          "bytesInOutput": 843
+        },
+        "node_modules/markdown-it/lib/rules_inline/newline.mjs": {
+          "bytesInOutput": 457
+        },
+        "node_modules/markdown-it/lib/rules_inline/escape.mjs": {
+          "bytesInOutput": 612
+        },
+        "node_modules/markdown-it/lib/rules_inline/backticks.mjs": {
+          "bytesInOutput": 582
+        },
+        "node_modules/markdown-it/lib/rules_inline/strikethrough.mjs": {
+          "bytesInOutput": 1116
+        },
+        "node_modules/markdown-it/lib/rules_inline/emphasis.mjs": {
+          "bytesInOutput": 1116
+        },
+        "node_modules/markdown-it/lib/rules_inline/link.mjs": {
+          "bytesInOutput": 1147
+        },
+        "node_modules/markdown-it/lib/rules_inline/image.mjs": {
+          "bytesInOutput": 1176
+        },
+        "node_modules/markdown-it/lib/rules_inline/autolink.mjs": {
+          "bytesInOutput": 1079
+        },
+        "node_modules/markdown-it/lib/rules_inline/html_inline.mjs": {
+          "bytesInOutput": 505
+        },
+        "node_modules/markdown-it/lib/rules_inline/entity.mjs": {
+          "bytesInOutput": 631
+        },
+        "node_modules/markdown-it/lib/rules_inline/balance_pairs.mjs": {
+          "bytesInOutput": 795
+        },
+        "node_modules/markdown-it/lib/rules_inline/fragments_join.mjs": {
+          "bytesInOutput": 263
+        },
+        "node_modules/markdown-it/lib/parser_inline.mjs": {
+          "bytesInOutput": 1406
+        },
+        "node_modules/linkify-it/lib/re.mjs": {
+          "bytesInOutput": 2511
+        },
+        "node_modules/linkify-it/index.mjs": {
+          "bytesInOutput": 6788
+        },
+        "node_modules/punycode.js/punycode.es6.js": {
+          "bytesInOutput": 2389
+        },
+        "node_modules/markdown-it/lib/presets/default.mjs": {
+          "bytesInOutput": 202
+        },
+        "node_modules/markdown-it/lib/presets/zero.mjs": {
+          "bytesInOutput": 324
+        },
+        "node_modules/markdown-it/lib/presets/commonmark.mjs": {
+          "bytesInOutput": 512
+        },
+        "node_modules/markdown-it/lib/index.mjs": {
+          "bytesInOutput": 2756
+        },
+        "node_modules/markdown-it/index.mjs": {
+          "bytesInOutput": 0
+        },
+        "src/chat/webview/markdownWorker.ts": {
+          "bytesInOutput": 1856
+        },
+        "src/chat/webview/htmlUtils.ts": {
+          "bytesInOutput": 471
+        },
+        "node_modules/highlight.js/es/languages/javascript.js": {
+          "bytesInOutput": 6473
+        },
+        "node_modules/highlight.js/es/languages/typescript.js": {
+          "bytesInOutput": 7746
+        },
+        "node_modules/highlight.js/es/languages/python.js": {
+          "bytesInOutput": 3422
+        },
+        "node_modules/highlight.js/es/languages/rust.js": {
+          "bytesInOutput": 2855
+        },
+        "node_modules/highlight.js/es/languages/go.js": {
+          "bytesInOutput": 1383
+        },
+        "node_modules/highlight.js/es/languages/bash.js": {
+          "bytesInOutput": 3135
+        },
+        "node_modules/highlight.js/es/languages/json.js": {
+          "bytesInOutput": 392
+        },
+        "node_modules/highlight.js/es/languages/css.js": {
+          "bytesInOutput": 13188
+        },
+        "node_modules/highlight.js/es/languages/markdown.js": {
+          "bytesInOutput": 2055
+        },
+        "node_modules/highlight.js/es/languages/sql.js": {
+          "bytesInOutput": 6465
+        },
+        "node_modules/highlight.js/es/languages/diff.js": {
+          "bytesInOutput": 483
+        },
+        "node_modules/highlight.js/es/languages/java.js": {
+          "bytesInOutput": 2614
+        },
+        "node_modules/highlight.js/es/languages/cpp.js": {
+          "bytesInOutput": 5898
+        },
+        "node_modules/highlight.js/es/languages/yaml.js": {
+          "bytesInOutput": 1831
+        },
+        "node_modules/highlight.js/es/languages/xml.js": {
+          "bytesInOutput": 1878
+        }
+      },
+      "bytes": 233584
+    }
+  }
+}
