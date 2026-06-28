@@ -1,7 +1,7 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-06-27
-**Version:** v0.4.23
+**Version:** v0.4.24
 
 ## Highlights (2026-06-27) — Question-answer recovery crash, empty question bar persistence
 
