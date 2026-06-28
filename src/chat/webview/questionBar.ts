@@ -335,7 +335,7 @@ export function setActiveSession(sessionId: string): void {
  * show them either. This prevents the "question exists in UI but server
  * returns NotFoundError" mismatch.
  */
-export function repopulateFromMessages(sessionId: string, messages: Array<{ id?: string; timestamp?: number; blocks: Array<{ type: string; toolCallId?: string; id?: string; requestID?: string; answered?: boolean; answer?: string; answerSource?: string; groups?: unknown[] }> }>): void {
+export function repopulateFromMessages(sessionId: string, messages: Array<{ id?: string; timestamp?: number; blocks: Array<{ type: string; toolCallId?: string; id?: string; requestID?: string; answered?: boolean; answer?: string; answerSource?: string; groups?: unknown[]; text?: string; allowFreeText?: boolean }> }>): void {
   if (!els) return
   for (const msg of messages) {
     if (!msg.blocks) continue
