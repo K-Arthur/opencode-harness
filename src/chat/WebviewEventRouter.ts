@@ -779,7 +779,7 @@ export class WebviewEventRouter {
       }
       const wsRoot = this.opts.sessionStore.getSessionDirectory(sessionId ?? this.opts.sessionStore.activeId ?? "")
       if (!wsRoot) return
-      const uri = vscode.Uri.joinPath(vscode.Uri.file(wsRoot), filePath)
+      const uri = this.resolveWorkspaceUri(filePath, wsRoot)
       try {
         const doc = await vscode.workspace.openTextDocument(uri)
         const edit = new vscode.WorkspaceEdit()
@@ -817,7 +817,7 @@ export class WebviewEventRouter {
       }
       const wsRoot = this.opts.sessionStore.getSessionDirectory(sessionId ?? this.opts.sessionStore.activeId ?? "")
       if (!wsRoot) return
-      const uri = vscode.Uri.joinPath(vscode.Uri.file(wsRoot), filePath)
+      const uri = this.resolveWorkspaceUri(filePath, wsRoot)
       try {
         const doc = await vscode.workspace.openTextDocument(uri)
         const edit = new vscode.WorkspaceEdit()
@@ -840,7 +840,7 @@ export class WebviewEventRouter {
       if (!ba) return
       const wsRoot = this.opts.sessionStore.getSessionDirectory(sessionId ?? this.opts.sessionStore.activeId ?? "")
       if (!wsRoot) return
-      const uri = vscode.Uri.joinPath(vscode.Uri.file(wsRoot), filePath)
+      const uri = this.resolveWorkspaceUri(filePath, wsRoot)
       try {
         const doc = await vscode.workspace.openTextDocument(uri)
         const edit = new vscode.WorkspaceEdit()
@@ -998,9 +998,7 @@ export class WebviewEventRouter {
 
       // Read current file content as the "after" side
       let afterContent = ""
-      const workspaceUri = path.isAbsolute(filePath)
-        ? vscode.Uri.file(this.resolveRealPath(filePath))
-        : vscode.Uri.joinPath(vscode.Uri.file(wsRoot), filePath)
+      const workspaceUri = this.resolveWorkspaceUri(filePath, wsRoot)
       try {
         const doc = await vscode.workspace.openTextDocument(workspaceUri)
         afterContent = doc.getText()
@@ -1095,7 +1093,7 @@ export class WebviewEventRouter {
       if (!ba) return
       const wsRoot = this.opts.sessionStore.getSessionDirectory(sessionId ?? this.opts.sessionStore.activeId ?? "")
       if (!wsRoot) return
-      const uri = vscode.Uri.joinPath(vscode.Uri.file(wsRoot), filePath)
+      const uri = this.resolveWorkspaceUri(filePath, wsRoot)
       try {
         const doc = await vscode.workspace.openTextDocument(uri)
         const edit = new vscode.WorkspaceEdit()
@@ -1807,7 +1805,7 @@ export class WebviewEventRouter {
       if (!ba) return
       const wsRoot = this.opts.sessionStore.getSessionDirectory(sessionId ?? this.opts.sessionStore.activeId ?? "")
       if (!wsRoot) return
-      const uri = vscode.Uri.joinPath(vscode.Uri.file(wsRoot), filePath)
+      const uri = this.resolveWorkspaceUri(filePath, wsRoot)
       try {
         const doc = await vscode.workspace.openTextDocument(uri)
         const edit = new vscode.WorkspaceEdit()
@@ -1954,10 +1952,7 @@ export class WebviewEventRouter {
             // Read current file content
             let afterContent = ""
             try {
-              const isAbs = path.startsWith("/")
-              const afterUri = isAbs
-                ? vscode.Uri.file(this.resolveRealPath(path))
-                : vscode.Uri.joinPath(vscode.Uri.file(directory), path)
+              const afterUri = this.resolveWorkspaceUri(path, directory)
               const doc = await vscode.workspace.openTextDocument(afterUri)
               afterContent = doc.getText()
             } catch {
@@ -2049,11 +2044,15 @@ export class WebviewEventRouter {
         this.opts.showErrorMessage(`OpenCode: Could not open the file — ${(err as Error).message}`)
       }
     }],
-    ["open_folder", async (msg: Record<string, unknown>, _sessionId?: string) => {
+    ["open_folder", async (msg: Record<string, unknown>, sessionId?: string) => {
       const rawDir = msg.dir as string | undefined
       if (!rawDir) return
       try {
-        const uri = vscode.Uri.file(rawDir)
+        const sid = sessionId ?? this.opts.sessionStore.activeId ?? ""
+        const wsRoot = this.opts.sessionStore.getSessionDirectory(sid)
+        const uri = wsRoot && !path.isAbsolute(rawDir)
+          ? vscode.Uri.joinPath(vscode.Uri.file(wsRoot), rawDir)
+          : vscode.Uri.file(rawDir)
         await vscode.commands.executeCommand("vscode.openFolder", uri)
       } catch (err) {
         log.error(`Failed to open folder: ${rawDir}`, err)
@@ -2069,11 +2068,15 @@ export class WebviewEventRouter {
         log.error(`Failed to open URL: ${rawUrl}`, err)
       }
     }],
-    ["reveal_in_explorer", async (msg: Record<string, unknown>) => {
+    ["reveal_in_explorer", async (msg: Record<string, unknown>, sessionId?: string) => {
       const rawPath = msg.path as string | undefined
       if (!rawPath) return
       try {
-        const uri = vscode.Uri.file(rawPath)
+        const sid = sessionId ?? this.opts.sessionStore.activeId ?? ""
+        const wsRoot = this.opts.sessionStore.getSessionDirectory(sid)
+        const uri = wsRoot
+          ? this.resolveWorkspaceUri(rawPath, wsRoot)
+          : vscode.Uri.file(rawPath)
         await vscode.commands.executeCommand("revealInExplorer", uri)
       } catch (err) {
         log.error(`Failed to reveal in explorer: ${rawPath}`, err)
@@ -2806,7 +2809,7 @@ export class WebviewEventRouter {
 
     let after = ""
     try {
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(vscode.Uri.file(wsRoot), filePath))
+      const doc = await vscode.workspace.openTextDocument(this.resolveWorkspaceUri(filePath, wsRoot))
       after = doc.getText()
     } catch {
       // File deleted / unreadable — after stays "".
@@ -2937,6 +2940,20 @@ export class WebviewEventRouter {
     const realRoot = this.resolveRealPath(rootPath)
     const relative = path.relative(realRoot, realFile)
     return relative === "" || (!!relative && !relative.startsWith("..") && !path.isAbsolute(relative))
+  }
+
+  /**
+   * Resolve a file path (absolute or relative) to a VS Code Uri against the
+   * workspace root. Absolute paths are used directly (with realpath
+   * resolution); relative paths are joined with wsRoot. This fixes the bug
+   * where `vscode.Uri.joinPath(wsRoot, absolutePath)` creates a broken path
+   * like `/wsRoot//absolute/path`.
+   */
+  private resolveWorkspaceUri(filePath: string, wsRoot: string): vscode.Uri {
+    if (path.isAbsolute(filePath)) {
+      return vscode.Uri.file(this.resolveRealPath(filePath))
+    }
+    return vscode.Uri.joinPath(vscode.Uri.file(wsRoot), filePath)
   }
 
   private normalizeFsPath(filePath: string): string {
