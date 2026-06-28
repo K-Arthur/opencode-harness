@@ -2652,10 +2652,13 @@ export class WebviewEventRouter {
    * I7: Validate inbound attachment payloads. Caps total size and enforces a MIME allowlist
    * so an oversized or hostile attachment cannot exhaust memory or smuggle in script content.
    * Returns a sanitized list — invalid entries are dropped with a warning.
+   *
+   * NOTE: Only image MIME types are supported as base64 attachments. Document files
+   * (text/markdown, text/plain, etc.) are decoded and injected into the prompt text
+   * by the webview before sending, so they never reach this validation path.
    */
   private static readonly ATTACHMENT_MIME_ALLOWLIST = new Set([
     "image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp", "image/svg+xml",
-    "application/pdf", "text/plain", "text/markdown",
   ])
   private static readonly ATTACHMENT_MAX_BYTES_PER_ITEM = 8 * 1024 * 1024   // 8 MB per attachment
   private static readonly ATTACHMENT_MAX_TOTAL_BYTES = 24 * 1024 * 1024     // 24 MB aggregate

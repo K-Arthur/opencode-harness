@@ -66,16 +66,35 @@ export function sendSteerPrompt(
   const text = els.promptInput.value.trim()
   const attachments = attachmentManager.getAttachments()
   if (!text && attachments.length === 0) return
+
+  // Only image attachments are sent to the server as base64. Document
+  // attachments are decoded and injected into the prompt text to avoid
+  // "media type not supported" errors from the opencode server.
+  const imageAttachments = attachments.filter((a) => a.mimeType.startsWith("image/"))
+  const documentAttachments = attachments.filter((a) => !a.mimeType.startsWith("image/"))
+
+  let sendText = text
+  for (const doc of documentAttachments) {
+    try {
+      const decoded = atob(doc.data)
+      const filename = doc.filename || "document"
+      const langTag = filename.split(".").pop() || ""
+      sendText += `\n\n<file name="${filename}">\n\`\`\`${langTag}\n${decoded}\n\`\`\`\n</file>`
+    } catch {
+      // If base64 decoding fails, skip silently
+    }
+  }
+
   attachmentManager.clearAttachments()
   renderAttachmentChips()
   // modeOverride is a one-shot (Cmd/Ctrl+Enter → interrupt) and must NOT mutate the
   // tab's persisted send-mode default; only the toggle (setSteerMode) does that.
   vscode.postMessage({
     type: "send_steer_prompt",
-    text,
+    text: sendText,
     sessionId: active.id,
     mode: modeOverride ?? getCurrentSteerModeFn(),
-    ...(attachments.length > 0 ? { attachments } : {}),
+    ...(imageAttachments.length > 0 ? { attachments: imageAttachments } : {}),
   })
   els.promptInput.value = ""
   autoResizeTextarea()

@@ -194,6 +194,14 @@ export function sendMessage(deps: SendMessageDeps): void {
     (item: AttachedContextItem) => item.isActive && (item.type === "active_file" || item.type === "picked_file"),
   )
 
+  // Separate image attachments (sent as base64 to the server) from document
+  // attachments (decoded and injected into the prompt text). The opencode
+  // server only supports image/* media types as file attachments — sending
+  // text/markdown or text/plain as a file part produces
+  // "'media type: text/markdown' functionality not supported" errors.
+  const imageAttachments = attachments.filter((a) => a.mimeType.startsWith("image/"))
+  const documentAttachments = attachments.filter((a) => !a.mimeType.startsWith("image/"))
+
   // Inject active file @file: mention into the prompt text so the backend
   // knows which file to read. The contextItems array carries metadata but
   // the @file: token in the text is what triggers the backend file reader.
@@ -202,6 +210,21 @@ export function sendMessage(deps: SendMessageDeps): void {
   if (activeFilePath && !sendText.includes(`@file:${activeFilePath}`)) {
     const quotedPath = /\s/.test(activeFilePath) ? `"${activeFilePath}"` : activeFilePath
     sendText = `@file:${quotedPath}\n${sendText}`
+  }
+
+  // Decode document attachments and inject their content into the prompt text
+  // as fenced code blocks. This avoids the server's "media type not supported"
+  // error for non-image MIME types while still making the file content
+  // available to the model.
+  for (const doc of documentAttachments) {
+    try {
+      const decoded = atob(doc.data)
+      const filename = doc.filename || "document"
+      const langTag = filename.split(".").pop() || ""
+      sendText += `\n\n<file name="${filename}">\n\`\`\`${langTag}\n${decoded}\n\`\`\`\n</file>`
+    } catch {
+      // If base64 decoding fails, skip silently — the user can retry
+    }
   }
 
   els.promptInput.value = ""
@@ -215,7 +238,7 @@ export function sendMessage(deps: SendMessageDeps): void {
     id: generateUserMessageId(),
     blocks: [
       ...(sendText ? [{ type: "text" as const, text: sendText }] : []),
-      ...attachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
+      ...imageAttachments.map((a) => ({ type: "image" as const, data: a.data, mimeType: a.mimeType })),
     ],
     timestamp: Date.now(),
     sessionId: active.id,
@@ -247,7 +270,7 @@ export function sendMessage(deps: SendMessageDeps): void {
     model: sendModel,
     mode: active.mode,
     ...(sendVariant ? { variant: sendVariant } : {}),
-    ...(attachments.length > 0 ? { attachments } : {}),
+    ...(imageAttachments.length > 0 ? { attachments: imageAttachments } : {}),
     ...(contextItems.length > 0 ? { contextItems } : {}),
   })
 

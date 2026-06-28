@@ -24,7 +24,7 @@ export interface SendLogicDeps {
     postMessage: (msg: Record<string, unknown>) => void
   }
   attachmentManager: {
-    getAttachments: () => Array<{ data: string; mimeType: string }>
+    getAttachments: () => Array<{ data: string; mimeType: string; filename?: string }>
     clearAttachments: () => void
     isActiveFileIncluded: () => boolean
     getActiveFile: () => string | null

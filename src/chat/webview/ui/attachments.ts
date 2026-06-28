@@ -293,6 +293,10 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
         icon.className = "attachment-chip-icon"
         icon.innerHTML = getIconForFile(filename, att.mimeType)
         chip.appendChild(icon)
+        const label = document.createElement("span")
+        label.className = "attachment-chip-label"
+        label.textContent = filename
+        chip.appendChild(label)
       }
       const remove = document.createElement("button")
       remove.className = "attachment-chip-remove"

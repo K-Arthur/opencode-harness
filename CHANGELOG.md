@@ -24,6 +24,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      [Unreleased] — that creates documentation drift. See the release
      workflow in docs/development/rebuild-and-reinstall.md. -->
 
+### Fixed
+
+- **Document attachments not showing filename** — document attachment chips
+  only showed an icon, making it impossible to identify which file was which
+  when multiple were attached. Fix: add a filename label next to the icon in
+  `.attachment-chip--document` chips, with ellipsis truncation at 120px.
+- **`'media type: text/markdown' functionality not supported`** — the opencode
+  server only supports image/* media types as file attachments. Document files
+  (text/markdown, text/plain, application/pdf, etc.) were being sent as base64
+  file parts, which the server rejected. Fix: decode document attachments in the
+  webview and inject their content into the prompt text as fenced code blocks.
+  Only image attachments are now sent as base64 to the server. Updated the
+  host-side `ATTACHMENT_MIME_ALLOWLIST` to remove non-image MIME types.
+- **Question bar answers sent multiple times** — the `submitAllAnswers`
+  function had no re-entry guard, so duplicate click listeners (from webview
+  re-init) or rapid double-clicks could submit the same answer twice. Fix: add
+  a `_submitting` flag with try/finally to prevent re-entry.
+- **Question bar answers pasted into prompt input and auto-sent multiple times**
+  — the `expired_question_recovery_failed` handler pasted the answer text into
+  the main prompt input and auto-sent it, but the host could send this message
+  multiple times (expired path + resume-in-flight path + resume-failed path),
+  causing duplicate prompts and queued messages. Fix: add a
+  `recoverySendInFlight` Set to guard against duplicate recovery auto-sends.
+- **`initQuestionBar` accumulating duplicate event listeners** — calling
+  `initQuestionBar` multiple times (e.g., on webview re-init) added a new click
+  listener to the submit button each time without removing old ones. Fix:
+  clone the submit button on re-init to drop old listeners, and add an
+  `_initialized` flag guard.
+
 ## [0.4.26] - 2026-06-28
 
 ### Fixed

@@ -32,7 +32,7 @@ export interface ComposerDeps {
   }
   attachmentManager: {
     onPaste: (e: ClipboardEvent) => void
-    getAttachments: () => Array<{ data: string; mimeType: string }>
+    getAttachments: () => Array<{ data: string; mimeType: string; filename?: string }>
     clearAttachments: () => void
     updatePromptContextChips: () => void
     renderAttachmentChips: () => void

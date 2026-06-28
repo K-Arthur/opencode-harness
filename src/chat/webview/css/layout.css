@@ -2389,6 +2389,13 @@ button.modal-session-item:focus {
   height: 100%;
 }
 
+.attachment-chip-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
 .attachment-chip:hover {
   transform: scale(1.05);
   box-shadow: var(--shadow-md);

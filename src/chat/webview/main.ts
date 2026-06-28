@@ -353,6 +353,13 @@ function getVsCodeApi() {
   // Per-tab prompt queues — keyed by sessionId
   const promptQueues = new Map<string, PromptQueue>()
 
+  // Guard against duplicate expired_question_recovery_failed auto-sends.
+  // The host may send multiple recovery messages for the same session
+  // (expired + resume-in-flight + resume-failed); without this guard,
+  // each one pastes the answer into the prompt input and calls sendMessage(),
+  // producing duplicate prompts and queued messages.
+  const recoverySendInFlight = new Set<string>()
+
   // Per-session pending permission request — at most one per session. Lets
   // the permission bar survive tab switches (restored when its session
   // becomes active again) instead of bleeding into whichever tab is focused
@@ -4297,7 +4304,18 @@ function setupTodoSkillAndSubagentPanels(): void {
           : "unknown"
         const targetSessionId = sid ?? stateManager.getState().activeSessionId ?? undefined
         webviewLog(`[main] expired_question_recovery_failed (reason=${reason}); auto-forwarding answer text (${answerText.length} chars)`)
+
+        // Guard against duplicate recovery auto-sends. The host may send
+        // expired_question_recovery_failed multiple times (expired path +
+        // resume-in-flight path + resume-failed path). Without this guard,
+        // each message pastes the answer into the prompt input and calls
+        // sendMessage(), producing duplicate prompts and queued messages.
+        if (recoverySendInFlight.has(targetSessionId ?? "")) {
+          webviewLog(`[main] expired_question_recovery_failed: already handling recovery for ${targetSessionId}; skipping`)
+          return
+        }
         if (answerText.length > 0) {
+          recoverySendInFlight.add(targetSessionId ?? "")
           // Switch to the correct tab before sending.
           if (targetSessionId) switchTab(targetSessionId)
           els.promptInput.value = answerText
@@ -4307,6 +4325,7 @@ function setupTodoSkillAndSubagentPanels(): void {
           // Defer auto-send to let the stream_end handler clear streaming
           // state first, then auto-fire the send — no manual Enter needed.
           setTimeout(() => {
+            recoverySendInFlight.delete(targetSessionId ?? "")
             if (els.promptInput.value.trim().length > 0) {
               sendMessage()
             }

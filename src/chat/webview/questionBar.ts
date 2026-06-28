@@ -56,6 +56,16 @@ const state: QuestionBarState = {
 /** Per-question staleness timers. Cleared on answer/remove. */
 const staleTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
+/** Guard against duplicate submitAllAnswers calls — if the submit button
+ *  has multiple listeners (re-init) or the user double-clicks, only the
+ *  first call iterates; subsequent calls are no-ops. Reset when all items
+ *  are answered or removed. */
+let _submitting = false
+
+/** Guard against duplicate initQuestionBar — prevents accumulating click
+ *  listeners on the submit button across webview re-inits. */
+let _initialized = false
+
 /** B10: Staleness threshold — questions older than this are auto-flagged. */
 const STALE_THRESHOLD_MS = 5 * 60 * 1000 // 5 minutes
 
@@ -105,11 +115,20 @@ export function initQuestionBar(postMessage: (msg: Record<string, unknown>) => v
   state.postMessage = postMessage
   state.items.clear()
   _activeSessionId = ""
+  _submitting = false
   els.items.innerHTML = ""
   updateVisibility()
   updateSubmitState()
 
-  submitBtn.addEventListener("click", () => submitAllAnswers())
+  // Guard against duplicate listeners on re-init: replace the submit button
+  // with a clone to drop all old listeners, then attach the fresh one.
+  if (_initialized) {
+    const freshBtn = submitBtn.cloneNode(true) as HTMLButtonElement
+    submitBtn.replaceWith(freshBtn)
+    els.submitBtn = freshBtn
+  }
+  _initialized = true
+  els.submitBtn.addEventListener("click", () => submitAllAnswers())
   diag("initQuestionBar: initialized")
 }
 
@@ -910,9 +929,11 @@ function renderAnsweredItem(item: QuestionBarItem): HTMLElement {
 
 function submitAllAnswers(): void {
   if (!state.postMessage) return
-
-  for (const item of state.items.values()) {
-    if (item.answered || !isActiveItem(item)) continue
+  if (_submitting) return
+  _submitting = true
+  try {
+    for (const item of state.items.values()) {
+      if (item.answered || !isActiveItem(item)) continue
 
     const parts: string[] = []
     const structuredAnswers: string[][] = []
@@ -964,5 +985,8 @@ function submitAllAnswers(): void {
 
     diag(`submitAllAnswers: posting question_answer for ${item.toolCallId} source=${hasSelection ? "option" : "freetext"} valueLen=${value.length}`)
     markQuestionAnswered(item.toolCallId, value)
+  }
+  } finally {
+    _submitting = false
   }
 }
