@@ -576,7 +576,7 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
     contextItems.push(item)
   }
 
-  function addDocumentAttachment(data: string, mimeType: string, filename: string): void {
+  function addDocumentAttachment(data: string, mimeType: string, _filename: string): void {
     const sizeBytes = Math.ceil((data.length * 3) / 4)
     const item: AttachedContextItem = {
       id: `doc-${nextContextId++}`,

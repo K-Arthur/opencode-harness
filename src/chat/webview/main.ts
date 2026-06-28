@@ -1616,6 +1616,12 @@ function setupTodoSkillAndSubagentPanels(): void {
     const queueContainer = els.inputArea.querySelector(".prompt-queue")
     if (queueContainer) queueContainer.remove()
 
+    // Clear any pending recovery guards for this tab so they don't block
+    // future legitimate recoveries for a re-used session id.
+    for (const key of recoverySendInFlight) {
+      if (key.startsWith(`${tabId}:`)) recoverySendInFlight.delete(key)
+    }
+
     // Dispose scroll anchor for this tab
     const anchor = scrollAnchors.get(tabId)
     if (anchor) {
@@ -4307,15 +4313,18 @@ function setupTodoSkillAndSubagentPanels(): void {
 
         // Guard against duplicate recovery auto-sends. The host may send
         // expired_question_recovery_failed multiple times (expired path +
-        // resume-in-flight path + resume-failed path). Without this guard,
-        // each message pastes the answer into the prompt input and calls
-        // sendMessage(), producing duplicate prompts and queued messages.
-        if (recoverySendInFlight.has(targetSessionId ?? "")) {
-          webviewLog(`[main] expired_question_recovery_failed: already handling recovery for ${targetSessionId}; skipping`)
+        // resume-in-flight path + resume-failed path), arriving 400-900ms
+        // apart. Without this guard, each message pastes the answer into
+        // the prompt input and calls sendMessage(), producing duplicate
+        // prompts and queued messages. Track both the session ID and a
+        // hash of the answer text with a 5-second window to deduplicate.
+        const recoveryKey = `${targetSessionId ?? ""}:${answerText.length}:${answerText.slice(0, 32)}`
+        if (recoverySendInFlight.has(recoveryKey)) {
+          webviewLog(`[main] expired_question_recovery_failed: already handling recovery for ${targetSessionId} (key=${recoveryKey}); skipping`)
           return
         }
         if (answerText.length > 0) {
-          recoverySendInFlight.add(targetSessionId ?? "")
+          recoverySendInFlight.add(recoveryKey)
           // Switch to the correct tab before sending.
           if (targetSessionId) switchTab(targetSessionId)
           els.promptInput.value = answerText
@@ -4324,12 +4333,18 @@ function setupTodoSkillAndSubagentPanels(): void {
           els.promptInput.focus()
           // Defer auto-send to let the stream_end handler clear streaming
           // state first, then auto-fire the send — no manual Enter needed.
+          // Use a 5-second guard window: the host can send multiple
+          // recovery messages within this window, and we must deduplicate
+          // all of them. The guard is cleared after the window expires.
           setTimeout(() => {
-            recoverySendInFlight.delete(targetSessionId ?? "")
+            recoverySendInFlight.delete(recoveryKey)
             if (els.promptInput.value.trim().length > 0) {
               sendMessage()
             }
           }, 100)
+          // Secondary guard: clear the key after 5s even if the timeout
+          // above was somehow prevented from firing (tab switch, reload).
+          setTimeout(() => { recoverySendInFlight.delete(recoveryKey) }, 5000)
         }
       }],
       // PTY terminal vertical (audit §14.1/§14.2)
