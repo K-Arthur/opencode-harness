@@ -1,3 +1,5 @@
+import { CHEVRON_DOWN_SVG } from "../icons"
+
 export interface ScrollMarkerDeps {
   getMessageList: (sessionId: string) => HTMLElement | null
   getActiveMessageList: () => HTMLElement | null
@@ -49,7 +51,8 @@ export function setupJumpToBottom(deps: ScrollMarkerDeps, sessionId: string): vo
   const btn = document.createElement("button")
   btn.className = "jump-to-bottom"
   btn.dataset.tabId = sessionId
-  btn.textContent = "↓ Latest"
+  btn.innerHTML = CHEVRON_DOWN_SVG
+  btn.appendChild(document.createTextNode(" Latest"))
   btn.setAttribute("aria-label", "Jump to latest message")
   const onScroll = () => {
     const threshold = 300

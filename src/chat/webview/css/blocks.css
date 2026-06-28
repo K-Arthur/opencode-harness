@@ -931,10 +931,6 @@
   color: var(--color-accent);
 }
 
-.tool-live-indicator .codicon {
-  font-size: var(--text-2xs);
-}
-
 .tool-result-body {
   margin: 0;
   white-space: pre-wrap;

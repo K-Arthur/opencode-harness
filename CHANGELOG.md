@@ -26,6 +26,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Diff editor fails for out-of-workspace files** — `getBaselineContent` passed
+  absolute paths to `git show` without converting to workspace-relative, causing
+  diffs to fail for files outside the session workspace. Fix: convert absolute
+  paths to workspace-relative before `git show`; skip git strategies entirely for
+  out-of-workspace files (treat as new files with empty baseline).
+- **Drag-drop overlay persists after file added** — `stopPropagation()` on the
+  input area's dragover/dragleave/drop handlers prevented the global drop handler
+  from hiding the overlay. Fix: remove `stopPropagation()` from input area
+  handlers; add `inputArea.contains(e.target)` check in the global drop handler
+  to skip double-processing while still hiding the overlay.
+- **Question bar stacks all questions instead of one-by-one** — multiple
+  simultaneous questions rendered all at once instead of showing one at a time.
+  Fix: add `refreshQuestionVisibility()` that hides queued questions via
+  `.question-bar-item--queued { display: none }` and reveals the next one when
+  the current question is answered.
+- **Question bar free-text answers not submitted** — when the "Ready" button was
+  used, free-text answers were dropped because the `useReady` branch skipped the
+  free-text append. Fix: always append free-text as a final answer group when it
+  has content, regardless of `cardReady` state.
+- **Document attachments show as broken image thumbnails** — the CSS
+  `:not(:has(img))` selector for document chip styling was unreliable. Fix:
+  use explicit `.attachment-chip--image` / `.attachment-chip--document` classes
+  instead of `:has()`; also fix `attachFileBlob` to call
+  `addDocumentAttachment` instead of `addImageAttachment` so context items are
+  typed correctly.
+- **Attachment chip emoji and oversized layout** — the `📎` emoji in the
+  `::after` pseudo-element violated the zero-emoji policy and the 56px chip size
+  was too large. Fix: replace with SVG data-URI paperclip; reduce to 48px via
+  `--attachment-size` token; use token-driven styling throughout.
+
+### Added
+
+- **Copy file path button in changed files dropdown** — each file row now has a
+  copy-path button that copies the full file path to the clipboard via
+  `navigator.clipboard.writeText`, with a brief "Copied!" confirmation. Especially
+  useful for out-of-workspace files that aren't tied to the session.
+- **UI Methodology Standards codified** — `CONVENTIONS.md` now includes a
+  comprehensive "UI Methodology Standards" section covering design-system tokens
+  first, zero emoji policy, WCAG 2.2 AA minimum, icon usage standards, TDD-first,
+  and cascade review checkpoints. Cross-references added to `AGENTS.md`,
+  `CLAUDE.md`, `GEMINI.md`, and `.windsurfrules`.
+- **INFO_SVG icon** — new icon added to `icons.ts` for info-severity error tiers.
+
+### Changed
+
+- **Zero emoji policy enforced** — all Unicode glyphs and Codicon font references
+  replaced with inline SVG icons from `icons.ts`: `📎` → SVG paperclip data-URI,
+  `×`/`&times;` → `REMOVE_SVG`, `✗` → `STATE_FAILED_SVG`, `⏳` →
+  `STATE_TIMEOUT_SVG`, `✕` → `STATE_CANCELLED_SVG`, `✓` → `STATE_SUCCESS_SVG` /
+  `CHECK_SVG`, `◉` → `STATE_RUNNING_SVG`, `↓` → `CHEVRON_DOWN_SVG`, `★`/`☆` →
+  `PIN_FILLED_SVG` / `PIN_SVG`, `•` → CSS-drawn dot, `codicon-add` → inline SVG
+  plus, `codicon-sync` → `SPINNER_SVG`.
+- **Attachment chip tokens** — new `--attachment-size`, `--attachment-icon-size`,
+  and `--attachment-remove-size` tokens in `tokens.css` for consistent sizing.
+
 - **Scroll position lost after history condensation on long sessions** — when
   a session had > 140 messages, the chunked loader restored scroll position
   after 20 messages rendered, but `applyHistoryCondensation` then replaced

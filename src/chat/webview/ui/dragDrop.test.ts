@@ -373,4 +373,37 @@ describe("dragDrop module", () => {
       }, 3100)
     })
   })
+
+  it("hides overlay when drop lands on input area (no stopPropagation blocking)", () => {
+    setupDragDrop(makeDeps())
+
+    // Show overlay via dragenter
+    mockApp.dispatchEvent(new DragEvent("dragenter", { bubbles: true, cancelable: true }))
+    assert.ok(document.querySelector(".drop-overlay"), "overlay visible after dragenter")
+
+    // Simulate a drop on the input area — the event bubbles to app
+    const mockDataTransfer = {
+      types: ["text/uri-list"],
+      getData: mock.fn((type: string) => {
+        if (type === "text/uri-list") return "file:///path/to/file.ts"
+        return ""
+      }),
+      files: [],
+    }
+    const dropEvent = new DragEvent("drop", {
+      bubbles: true,
+      cancelable: true,
+      dataTransfer: mockDataTransfer as any,
+    })
+    // Set target to inputArea so contains() check returns true
+    Object.defineProperty(dropEvent, "target", { value: mockInputArea })
+    mockInputArea.dispatchEvent(dropEvent)
+
+    // Overlay must be hidden even though the drop was on the input area
+    assert.ok(!document.querySelector(".drop-overlay"), "overlay must be hidden after drop on input area")
+
+    // Files must NOT be double-processed (addPickedFile not called by dragDrop
+    // because inputArea handler already processed them)
+    assert.strictEqual(mockAddPickedFile.mock.calls.length, 0, "dragDrop must skip file processing for input area drops")
+  })
 })

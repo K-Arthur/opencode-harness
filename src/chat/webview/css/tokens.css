@@ -602,3 +602,10 @@ body.glass-bubbles {
   --oc-density-heading-h2: var(--oc-font-size-xl);   /* 17px */
   --oc-density-heading-h3: var(--oc-font-size-md);   /* 14px bold */
 }
+
+/* ─── Attachment Chip Tokens ─── */
+:root {
+  --attachment-size: 48px;
+  --attachment-icon-size: 14px;
+  --attachment-remove-size: 20px;
+}

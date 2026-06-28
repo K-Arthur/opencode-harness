@@ -7,8 +7,13 @@
  *   2. CheckpointManager snapshot content (fallback when SHA is lost)
  *   3. git show HEAD:<relPath> (current HEAD, legacy sessions)
  *   4. "" (empty, for untracked/new files)
+ *
+ * Files outside the session workspace (e.g. model-created files in a
+ * different directory) have no git baseline — they are treated as new
+ * files and return "".
  */
 
+import * as path from "path"
 import type { CheckpointManager } from "../checkpoint/CheckpointManager"
 import type { SessionStore } from "../session/SessionStore"
 
@@ -35,7 +40,19 @@ export async function getBaselineContent(
   }
 
   const baselineSha = deps.sessionStore.getBaselineSha(sessionId)
-  const relPath = filePath.trim().replace(/\\/g, "/")
+  const rawPath = filePath.trim().replace(/\\/g, "/")
+
+  // Convert absolute paths to workspace-relative for git show. If the file
+  // is outside the session workspace, there is no git baseline — treat it
+  // as a new file and return "".
+  const relPath = path.isAbsolute(rawPath)
+    ? path.relative(workspaceRoot, rawPath).replace(/\\/g, "/")
+    : rawPath
+
+  if (relPath.startsWith("..") || path.isAbsolute(relPath)) {
+    deps.log.info(`File "${rawPath}" is outside the session workspace — no git baseline, treating as new file`)
+    return ""
+  }
 
   // Strategy 1: git show <baselineSha>:<relPath>
   if (baselineSha) {
@@ -59,8 +76,6 @@ export async function getBaselineContent(
     const checkpoints = await deps.checkpointManager.listCheckpoints(sessionId)
     const baselineCheckpoint = checkpoints.find((c) => c.action === "baseline" && c.filesChanged.includes(filePath))
     if (baselineCheckpoint) {
-      // The snapshot stores file content as Uint8Array; we'd need to read it from the checkpoint manager
-      // For now, log that we found a checkpoint but can't easily extract content without extending CheckpointManager
       deps.log.debug(`Found baseline checkpoint ${baselineCheckpoint.id} for ${relPath}, but content extraction not yet implemented`)
     }
   } catch (err) {

@@ -8,6 +8,7 @@
  */
 import { buildPromptRail, type PromptEntry } from "../../prompts/recentPrompts"
 import type { ChatMessage } from "./types"
+import { PIN_SVG, PIN_FILLED_SVG } from "./icons"
 
 export interface RecentPromptsRailOptions {
   messages: readonly ChatMessage[]
@@ -60,14 +61,15 @@ export function renderRecentPromptsRail(container: HTMLElement, opts: RecentProm
 
   const cardTitle = document.createElement("span")
   cardTitle.className = "rp-card-title"
-  cardTitle.textContent = firstItem.pinned ? "★ Pinned Prompt" : "☆ Recent Prompt"
+  cardTitle.innerHTML = firstItem.pinned ? PIN_FILLED_SVG : PIN_SVG
+  cardTitle.appendChild(document.createTextNode(firstItem.pinned ? " Pinned Prompt" : " Recent Prompt"))
 
   const pinBtn = document.createElement("button")
   pinBtn.className = "rp-card-pin-btn"
   pinBtn.type = "button"
   pinBtn.setAttribute("aria-pressed", String(firstItem.pinned))
   pinBtn.title = firstItem.pinned ? "Unpin prompt" : "Pin prompt"
-  pinBtn.textContent = firstItem.pinned ? "★" : "☆"
+  pinBtn.innerHTML = firstItem.pinned ? PIN_FILLED_SVG : PIN_SVG
   pinBtn.addEventListener("click", (e) => {
     e.stopPropagation()
     opts.onPin(firstItem.id)
@@ -111,7 +113,7 @@ export function renderRecentPromptsRail(container: HTMLElement, opts: RecentProm
       pin.type = "button"
       pin.setAttribute("aria-pressed", String(item.pinned))
       pin.title = item.pinned ? "Unpin prompt" : "Pin prompt"
-      pin.textContent = item.pinned ? "★" : "☆"
+      pin.innerHTML = item.pinned ? PIN_FILLED_SVG : PIN_SVG
       pin.addEventListener("click", (e) => {
         e.stopPropagation()
         opts.onPin(item.id)

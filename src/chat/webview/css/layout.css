@@ -2206,9 +2206,15 @@ button.modal-session-item:focus {
 }
 
 .modal-session-meta span::after {
-  content: "•";
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
   margin-left: var(--space-2);
   opacity: 0.5;
+  vertical-align: middle;
 }
 
 .modal-session-meta span:last-child::after {
@@ -2342,36 +2348,40 @@ button.modal-session-item:focus {
 
 .attachment-chip {
   position: relative;
-  width: 56px;
-  height: 56px;
+  width: var(--attachment-size);
+  height: var(--attachment-size);
   border-radius: var(--radius-md);
   overflow: hidden;
   border: 1px solid var(--vscode-editorWidget-border, var(--oc-border, #555));
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-sm);
   transition: transform var(--duration-fast), box-shadow var(--duration-fast);
 }
 
-/* Pill-style layout for document attachments (non-image) */
-.attachment-chip:not(:has(img)) {
+/* Pill-style layout for document attachments (non-image).
+   Uses an explicit class instead of :not(:has(img)) for robustness —
+   :has() may not be available in all webview Chromium versions. */
+.attachment-chip--document {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
   width: auto;
   height: auto;
-  padding: var(--space-0-5) var(--space-2);
-  background: var(--vscode-badge-background, var(--oc-accent-subtle, rgba(0, 120, 212, 0.08)));
+  padding: var(--space-1) var(--space-2);
+  background: var(--vscode-badge-background, var(--oc-accent-subtle));
   color: var(--vscode-badge-foreground, var(--color-accent));
-  font-size: var(--text-xs);
-  font-weight: 600;
-  font-family: var(--font-mono);
+  font-size: var(--oc-font-size-xs);
+  font-weight: var(--oc-font-weight-semibold);
+  font-family: var(--oc-font-mono);
+  border-radius: var(--radius-full);
 }
 
 .attachment-chip-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: var(--attachment-icon-size);
+  height: var(--attachment-icon-size);
+  flex-shrink: 0;
 }
 
 .attachment-chip-icon svg {
@@ -2381,7 +2391,7 @@ button.modal-session-item:focus {
 
 .attachment-chip:hover {
   transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-md);
   border-color: var(--color-accent);
 }
 
@@ -2391,17 +2401,25 @@ button.modal-session-item:focus {
   object-fit: cover;
 }
 
-.attachment-chip::after {
-  content: "📎";
+/* SVG attachment indicator (replaces emoji ::after) — shown on image chips
+   on hover. Uses a data-URI paperclip icon matching the icons.ts style. */
+.attachment-chip--image::after {
+  content: "";
   position: absolute;
   top: var(--space-0-5);
   left: var(--space-0-5);
-  font-size: var(--text-2xs);
+  width: 12px;
+  height: 12px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
   opacity: 0;
   transition: opacity var(--duration-fast);
+  pointer-events: none;
 }
 
-.attachment-chip:hover::after {
+.attachment-chip--image:hover::after {
   opacity: 0.8;
 }
 
@@ -2409,8 +2427,8 @@ button.modal-session-item:focus {
   position: absolute;
   top: var(--space-0-5);
   right: var(--space-0-5);
-  width: 22px;
-  height: 22px;
+  width: var(--attachment-remove-size);
+  height: var(--attachment-remove-size);
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.75);
   color: #fff;
@@ -2432,7 +2450,7 @@ button.modal-session-item:focus {
 
 .attachment-chip-remove:hover {
   transform: scale(1.15);
-  background: rgba(200, 50, 50, 0.85);
+  background: var(--oc-error);
 }
 
 /* ─── Prompt Queue (pending prompts queued during streaming) ─── */

@@ -23,6 +23,7 @@
 
 import type { ErrorContext, ErrorAction } from "./errorTypes"
 import { isErrorClearedEnvelope, type NormalizedError, type ErrorTier } from "./errorWire"
+import { ERROR_SVG, WARNING_SVG, INFO_SVG, REMOVE_SVG } from "./icons"
 
 // ---------------------------------------------------------------------------
 // Dependency surfaces (injected for testability)
@@ -276,7 +277,7 @@ function buildBanner(ctx: ErrorContext, deps: ErrorTierDeps, className: string):
   const icon = document.createElement("span")
   icon.className = `${className}__icon`
   icon.setAttribute("aria-hidden", "true")
-  icon.textContent = severityGlyph(ctx.severity)
+  icon.innerHTML = severityGlyph(ctx.severity)
   el.appendChild(icon)
 
   const body = document.createElement("div")
@@ -355,13 +356,13 @@ function handleAction(action: ErrorAction, ctx: ErrorContext, deps: ErrorTierDep
 function severityGlyph(severity: ErrorContext["severity"]): string {
   switch (severity) {
     case "critical":
-      return "■"
+      return ERROR_SVG
     case "high":
-      return "✕"
+      return REMOVE_SVG
     case "medium":
-      return "!"
+      return WARNING_SVG
     case "low":
     default:
-      return "i"
+      return INFO_SVG
   }
 }

@@ -8,6 +8,12 @@ import {
   toolStateOverlayFor,
   CHECK_SVG,
   STATE_PENDING_SVG,
+  STATE_RUNNING_SVG,
+  STATE_SUCCESS_SVG,
+  STATE_FAILED_SVG,
+  STATE_CANCELLED_SVG,
+  STATE_TIMEOUT_SVG,
+  SPINNER_SVG,
 } from "./icons"
 import { sanitizeHtml } from "./syntaxHighlighter"
 import { escapeHtml } from "./htmlUtils"
@@ -748,7 +754,7 @@ export function createToolResultPanel(toolBlock: ToolCallBlock, opts?: RenderOpt
     live.className = "tool-live-indicator"
     live.title = "Streaming output"
     live.setAttribute("aria-label", "Streaming output")
-    live.innerHTML = '<span class="codicon codicon-sync"></span>'
+    live.innerHTML = SPINNER_SVG
     meta.appendChild(live)
   }
 
@@ -1150,22 +1156,28 @@ export function renderToolGroupBadge(blocks: Array<{ state?: string; error?: unk
   const badge = document.createElement("span")
   badge.className = "tool-status"
   if (hasError) {
-    badge.textContent = '\u2717 Error'
+    badge.innerHTML = STATE_FAILED_SVG
+    badge.appendChild(document.createTextNode(" Error"))
     badge.className += ' tool-status--error'
   } else if (timedOut > 0) {
-    badge.textContent = '\u23f3 Timed out'
+    badge.innerHTML = STATE_TIMEOUT_SVG
+    badge.appendChild(document.createTextNode(" Timed out"))
     badge.className += ' tool-status--timed_out'
   } else if (cancelled > 0) {
-    badge.textContent = '\u2715 Cancelled'
+    badge.innerHTML = STATE_CANCELLED_SVG
+    badge.appendChild(document.createTextNode(" Cancelled"))
     badge.className += ' tool-status--cancelled'
   } else if (completed === blocks.length) {
-    badge.textContent = '\u2713 Done'
+    badge.innerHTML = STATE_SUCCESS_SVG
+    badge.appendChild(document.createTextNode(" Done"))
     badge.className += ' tool-status--completed'
   } else if (completed > 0) {
-    badge.textContent = `\u25c9 ${completed}/${blocks.length}`
+    badge.innerHTML = STATE_RUNNING_SVG
+    badge.appendChild(document.createTextNode(` ${completed}/${blocks.length}`))
     badge.className += ' tool-status--running'
   } else {
-    badge.textContent = '\u25c9 Running'
+    badge.innerHTML = STATE_RUNNING_SVG
+    badge.appendChild(document.createTextNode(" Running"))
     badge.className += ' tool-status--running'
   }
   return badge

@@ -910,6 +910,32 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
         _postMessage?.({ type: "reject_file_changes", path: file.path, sessionId })
       })
 
+      // Copy-path button — copies the full file path to clipboard.
+      // Especially useful for out-of-workspace files that aren't tied to
+      // the session, so the user can locate them in the file explorer.
+      const copyPathBtn = document.createElement("button")
+      copyPathBtn.className = "cf-copy-path-btn"
+      copyPathBtn.type = "button"
+      copyPathBtn.setAttribute("aria-label", `Copy path for ${fileName}`)
+      copyPathBtn.title = "Copy file path"
+      copyPathBtn.tabIndex = -1
+      copyPathBtn.innerHTML = `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`
+      copyPathBtn.addEventListener("click", async (e) => {
+        e.stopPropagation()
+        try {
+          await navigator.clipboard.writeText(file.path)
+          copyPathBtn.title = "Copied!"
+          const originalLabel = copyPathBtn.getAttribute("aria-label")
+          copyPathBtn.setAttribute("aria-label", `Copied path for ${fileName}`)
+          setTimeout(() => {
+            copyPathBtn.title = "Copy file path"
+            if (originalLabel) copyPathBtn.setAttribute("aria-label", originalLabel)
+          }, 2000)
+        } catch {
+          // clipboard API may be unavailable in some contexts
+        }
+      })
+
       const preview = document.createElement("div")
       preview.className = `cf-hunk-preview${isExpanded ? " cf-hunk-preview--open" : ""}`
       preview.setAttribute("data-path", file.path)
@@ -921,7 +947,7 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
 
       row.addEventListener("click", (e) => {
         const target = e.target as HTMLElement
-        if (target.closest(".cf-expand-btn") || target.closest(".cf-open-btn") || target.closest(".cf-accept-btn") || target.closest(".cf-reject-btn")) return
+        if (target.closest(".cf-expand-btn") || target.closest(".cf-open-btn") || target.closest(".cf-accept-btn") || target.closest(".cf-reject-btn") || target.closest(".cf-copy-path-btn")) return
         _onOpenFile(file.path)
       })
 
@@ -963,6 +989,7 @@ function _renderTree(container: HTMLElement, files: FileChange[]): void {
       row.appendChild(undoBtn)
       row.appendChild(acceptBtn)
       row.appendChild(rejectBtn)
+      row.appendChild(copyPathBtn)
       filesContainer.appendChild(row)
       filesContainer.appendChild(preview)
     })

@@ -998,7 +998,9 @@ export class WebviewEventRouter {
 
       // Read current file content as the "after" side
       let afterContent = ""
-      const workspaceUri = vscode.Uri.joinPath(vscode.Uri.file(wsRoot), filePath)
+      const workspaceUri = path.isAbsolute(filePath)
+        ? vscode.Uri.file(this.resolveRealPath(filePath))
+        : vscode.Uri.joinPath(vscode.Uri.file(wsRoot), filePath)
       try {
         const doc = await vscode.workspace.openTextDocument(workspaceUri)
         afterContent = doc.getText()
@@ -1952,7 +1954,11 @@ export class WebviewEventRouter {
             // Read current file content
             let afterContent = ""
             try {
-              const doc = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(vscode.Uri.file(directory), path))
+              const isAbs = path.startsWith("/")
+              const afterUri = isAbs
+                ? vscode.Uri.file(this.resolveRealPath(path))
+                : vscode.Uri.joinPath(vscode.Uri.file(directory), path)
+              const doc = await vscode.workspace.openTextDocument(afterUri)
               afterContent = doc.getText()
             } catch {
               // File doesn't exist
@@ -2839,7 +2845,7 @@ export class WebviewEventRouter {
       const absolutePath = path.resolve(filePath)
       const realPath = this.resolveRealPath(absolutePath)
       if (roots.length > 0 && !roots.some(root => this.isPathInsideRoot(realPath, root))) {
-        throw new Error(`Refusing to open "${rawPath}" because it is outside the session workspace`)
+        log.warn(`Opening "${rawPath}" which is outside the session workspace`)
       }
       const uri = vscode.Uri.file(realPath)
       await this.assertOpenableFile(uri, rawPath)

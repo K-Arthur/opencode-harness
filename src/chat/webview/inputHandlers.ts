@@ -107,10 +107,10 @@ export function createInputHandlers(deps: InputHandlerDeps): InputHandlers {
     if (queueBtn) queueBtn.addEventListener("click", () => setSteerMode("queue"))
     els.sendBtn?.setAttribute("title", TOOLTIPS.chat.send)
     window.addEventListener("oc-input-changed", () => { autoResizeTextarea(); attachmentManager.updatePromptContextChips(); attachmentManager.syncContextItemsWithPrompt(); updateSendButton() })
-    els.inputArea.addEventListener("dragover", (e) => { e.preventDefault(); e.stopPropagation(); els.inputArea.classList.add("drag-over") })
-    els.inputArea.addEventListener("dragleave", (e) => { e.preventDefault(); e.stopPropagation(); els.inputArea.classList.remove("drag-over") })
+    els.inputArea.addEventListener("dragover", (e) => { e.preventDefault(); els.inputArea.classList.add("drag-over") })
+    els.inputArea.addEventListener("dragleave", (e) => { e.preventDefault(); els.inputArea.classList.remove("drag-over") })
     els.inputArea.addEventListener("drop", (e) => {
-      e.preventDefault(); e.stopPropagation(); els.inputArea.classList.remove("drag-over")
+      e.preventDefault(); els.inputArea.classList.remove("drag-over")
       const files = e.dataTransfer?.files
       if (files && files.length > 0) {
         const fileMentions: string[] = []

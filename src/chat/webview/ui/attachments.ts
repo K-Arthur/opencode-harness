@@ -188,14 +188,15 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
       deps.postMessage({ type: "show_error", message: `File attachment exceeds 10 MB limit.` })
       return
     }
+    const filename = (blob as File).name || "file"
     const reader = new FileReader()
     reader.onload = () => {
       const result = reader.result as string
       if (!result) return
       const base64Match = result.match(/^data:[\w./+-]+;base64,(.+)$/)
       if (base64Match && base64Match[1]) {
-        pendingAttachments.push({ data: base64Match[1], mimeType })
-        addImageAttachment(base64Match[1], mimeType)
+        pendingAttachments.push({ data: base64Match[1], mimeType, filename })
+        addDocumentAttachment(base64Match[1], mimeType, filename)
         renderAttachmentChips()
         updatePromptContextChips()
         deps.updateSendButton()
@@ -278,15 +279,18 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
     pendingAttachments.forEach((att, idx) => {
       const chip = document.createElement("div")
       chip.className = "attachment-chip"
+      const filename = att.filename || "file"
+      chip.title = filename
       if (att.mimeType.startsWith("image/")) {
+        chip.classList.add("attachment-chip--image")
         const thumbnail = document.createElement("img")
         thumbnail.src = `data:${att.mimeType};base64,${att.data}`
-        thumbnail.alt = "Attached image"
+        thumbnail.alt = `Attached image: ${filename}`
         chip.appendChild(thumbnail)
       } else {
+        chip.classList.add("attachment-chip--document")
         const icon = document.createElement("span")
         icon.className = "attachment-chip-icon"
-        const filename = att.filename || "file"
         icon.innerHTML = getIconForFile(filename, att.mimeType)
         chip.appendChild(icon)
       }
@@ -564,6 +568,20 @@ export function createAttachmentManager(deps: AttachmentDeps): AttachmentManager
       sizeBytes,
       isActive: true,
       tokenEstimate: 0, // Images are handled separately by the host
+    }
+    contextItems.push(item)
+  }
+
+  function addDocumentAttachment(data: string, mimeType: string, filename: string): void {
+    const sizeBytes = Math.ceil((data.length * 3) / 4)
+    const item: AttachedContextItem = {
+      id: `doc-${nextContextId++}`,
+      type: "document",
+      mimeType,
+      data,
+      sizeBytes,
+      isActive: true,
+      tokenEstimate: 0,
     }
     contextItems.push(item)
   }

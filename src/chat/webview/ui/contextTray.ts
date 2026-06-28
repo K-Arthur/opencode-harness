@@ -1,5 +1,5 @@
 import type { AttachedContextItem, ContextTraySummary, Attachment } from "../types"
-import { EYE_SVG, EYE_OFF_SVG, FILE_SVG, NEW_FILE_SVG } from "../icons"
+import { EYE_SVG, EYE_OFF_SVG, FILE_SVG, NEW_FILE_SVG, REMOVE_SVG } from "../icons"
 
 const IMAGE_TOKEN_ESTIMATE = 768
 const ACTIVE_FILE_ID = "__active_file__"
@@ -252,7 +252,7 @@ export function createContextTrayManager(deps: ContextTrayDeps) {
 
         const removeBtn = document.createElement("button")
         removeBtn.className = "context-tray-item-remove"
-        removeBtn.textContent = "\u00D7"
+        removeBtn.innerHTML = REMOVE_SVG
         removeBtn.setAttribute("aria-label", "Remove")
         removeBtn.addEventListener("click", () => removeItem(item.id))
         el.appendChild(removeBtn)

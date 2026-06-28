@@ -238,6 +238,11 @@ export function setupDragDrop(deps: DragDropDeps): void {
     e.stopPropagation()
     forceHideOverlay()
 
+    // If the drop happened inside the input area, the input area handler
+    // already processed the files (it has its own file-mention logic).
+    // Skip processing so we don't double-attach.
+    if (els.inputArea.contains(e.target as Node)) return
+
     const dataTransfer = e.dataTransfer
     if (!dataTransfer) return
 

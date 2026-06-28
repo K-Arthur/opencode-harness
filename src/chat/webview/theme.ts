@@ -1,7 +1,7 @@
 import type { ContextChip } from "./types"
 import type { ElementRefs } from "./dom"
 import { timers } from "./timerRegistry"
-import { EYE_SVG, EYE_OFF_SVG } from "./icons"
+import { EYE_SVG, EYE_OFF_SVG, REMOVE_SVG } from "./icons"
 
 const warnTheme = (...args: unknown[]) => console.warn("[opencode-harness]", ...args)
 const appliedThemeVarKeys = new Set<string>()
@@ -48,7 +48,7 @@ export function updateContextChips(els: ElementRefs, chips?: ContextChip[]) {
       const rem = document.createElement("button")
       rem.className = "context-chip-remove"
       rem.setAttribute("type", "button")
-      rem.textContent = "\u00D7"
+      rem.innerHTML = REMOVE_SVG
       rem.setAttribute("aria-label", "Remove context chip")
       rem.addEventListener("click", () => {
         el.remove()

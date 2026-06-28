@@ -67,4 +67,47 @@ describe("SessionBaselineResolver", () => {
     const result = await getBaselineContent("session-1", "src/file.ts", deps)
     assert.equal(result, "")
   })
+
+  it("converts absolute paths to workspace-relative for git show", async () => {
+    let capturedCmd = ""
+    const deps: import("./SessionBaselineResolver").BaselineResolverDeps = {
+      sessionStore: {
+        getSessionDirectory: () => "/fake/workspace",
+        getBaselineSha: () => "abc123",
+      } as unknown as import("./SessionBaselineResolver").BaselineResolverDeps["sessionStore"],
+      checkpointManager: {
+        listCheckpoints: () => Promise.resolve([]),
+      } as unknown as import("./SessionBaselineResolver").BaselineResolverDeps["checkpointManager"],
+      execSync: ((cmd: string, _opts: { cwd: string; encoding: string }) => {
+        capturedCmd = cmd
+        return "baseline content\n"
+      }) as unknown as import("./SessionBaselineResolver").BaselineResolverDeps["execSync"],
+      log: { debug: () => {}, warn: () => {}, info: () => {} },
+    }
+    const result = await getBaselineContent("session-1", "/fake/workspace/src/file.ts", deps)
+    assert.equal(result, "baseline content\n")
+    assert.ok(capturedCmd.includes("abc123:src/file.ts"), `git show must use relative path, got: ${capturedCmd}`)
+    assert.ok(!capturedCmd.includes("/fake/workspace/src/file.ts"), "git show must not contain absolute path")
+  })
+
+  it("returns empty string for out-of-workspace absolute paths", async () => {
+    let gitCalled = false
+    const deps: import("./SessionBaselineResolver").BaselineResolverDeps = {
+      sessionStore: {
+        getSessionDirectory: () => "/fake/workspace",
+        getBaselineSha: () => "abc123",
+      } as unknown as import("./SessionBaselineResolver").BaselineResolverDeps["sessionStore"],
+      checkpointManager: {
+        listCheckpoints: () => Promise.resolve([]),
+      } as unknown as import("./SessionBaselineResolver").BaselineResolverDeps["checkpointManager"],
+      execSync: ((_cmd: string, _opts: { cwd: string; encoding: string }) => {
+        gitCalled = true
+        return ""
+      }) as unknown as import("./SessionBaselineResolver").BaselineResolverDeps["execSync"],
+      log: { debug: () => {}, warn: () => {}, info: () => {} },
+    }
+    const result = await getBaselineContent("session-1", "/other/project/src/file.ts", deps)
+    assert.equal(result, "")
+    assert.equal(gitCalled, false, "git show must not be called for out-of-workspace files")
+  })
 })

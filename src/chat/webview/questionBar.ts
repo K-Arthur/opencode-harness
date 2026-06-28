@@ -1,4 +1,5 @@
 import type { QuestionBlock, QuestionGroup } from "./types"
+import { REMOVE_SVG, CHECK_SVG } from "./icons"
 
 const log = typeof console !== "undefined" ? console : null
 const diag = (msg: string) => log?.info(`[questionBar] ${msg}`)
@@ -166,6 +167,7 @@ export function addQuestion(block: QuestionBlock, messageId: string, envelopeSes
 
   state.items.set(toolCallId, item)
   renderBarItem(item)
+  refreshQuestionVisibility()
   updateVisibility()
   updateSubmitState()
 
@@ -263,6 +265,7 @@ export function markQuestionAnswered(toolCallId: string, submittedValue?: string
       el.replaceWith(renderAnsweredItem(item))
     }
   }
+  refreshQuestionVisibility()
   updateSubmitState()
   maybeScheduleDismiss(item?.sessionId)
   diag(`markQuestionAnswered: ${resolvedId} value=${submittedValue?.slice(0, 50)}`)
@@ -298,6 +301,7 @@ export function unmarkQuestionAnswered(toolCallId: string): void {
   } else {
     renderBarItem(item)
   }
+  refreshQuestionVisibility()
   updateSubmitState()
   updateVisibility()
 }
@@ -333,6 +337,7 @@ export function setActiveSession(sessionId: string): void {
       }
     }
   }
+  refreshQuestionVisibility()
   updateVisibility()
   updateSubmitState()
   diag(`setActiveSession: ${sessionId} items=${state.items.size} activeCount=${getActiveQuestionCount()}`)
@@ -662,7 +667,7 @@ function renderCarousel(wrapper: HTMLElement, item: QuestionBarItem): void {
 
   const updateProgress = () => {
     const answered = answeredCount()
-    progress.textContent = `Question ${item._carouselIdx + 1} of ${total} \u2022 ${answered}/${total} answered`
+    progress.textContent = `Question ${item._carouselIdx + 1} of ${total} | ${answered}/${total} answered`
     prevBtn.disabled = item._carouselIdx <= 0
     nextBtn.disabled = item._carouselIdx >= total - 1
   }
@@ -802,7 +807,8 @@ function buildCardElement(item: QuestionBarItem, gi: number, onAdvance?: () => v
   if (isReady) {
     const badge = document.createElement("span")
     badge.className = "qbar-card-ready-badge"
-    badge.textContent = "\u2713 Ready"
+    badge.innerHTML = CHECK_SVG
+    badge.appendChild(document.createTextNode(" Ready"))
     card.appendChild(badge)
   } else if (!item.answered) {
     const readyBtn = document.createElement("button")
@@ -841,6 +847,23 @@ function renderBarItem(item: QuestionBarItem): void {
 }
 
 /**
+ * Show only the first active unanswered question at a time. Answered items
+ * remain visible during their auto-dismiss window. Remaining unanswered items
+ * are queued; they surface automatically once the current question is answered.
+ */
+function refreshQuestionVisibility(): void {
+  if (!els) return
+  const activeUnanswered = Array.from(els.items.querySelectorAll(".question-bar-item:not(.question-bar-item--answered)"))
+  activeUnanswered.forEach((el, idx) => {
+    el.classList.toggle("question-bar-item--queued", idx > 0)
+  })
+  const first = activeUnanswered[0]
+  if (first) {
+    first.classList.remove("question-bar-item--queued")
+  }
+}
+
+/**
  * Render the answered state of a question item: a compact, read-only card
  * showing the submitted answer text plus a Dismiss button. This replaces
  * the interactive controls in the same DOM slot so the user can read what
@@ -857,7 +880,8 @@ function renderAnsweredItem(item: QuestionBarItem): HTMLElement {
 
   const status = document.createElement("span")
   status.className = "question-bar-answered-status"
-  status.textContent = "\u2713 Answered"
+  status.innerHTML = CHECK_SVG
+  status.appendChild(document.createTextNode(" Answered"))
   header.appendChild(status)
 
   const dismiss = document.createElement("button")
@@ -865,7 +889,7 @@ function renderAnsweredItem(item: QuestionBarItem): HTMLElement {
   dismiss.className = "question-bar-dismiss-btn"
   dismiss.setAttribute("aria-label", "Dismiss answered question")
   dismiss.title = "Dismiss"
-  dismiss.textContent = "\u00D7"
+  dismiss.innerHTML = REMOVE_SVG
   dismiss.addEventListener("click", (e) => {
     e.stopPropagation()
     removeQuestion(item.toolCallId)
@@ -914,15 +938,13 @@ function submitAllAnswers(): void {
       }
     })
 
-    if (useReady && item.cardReady.size > 0) {
-      // When card-ready is used, free-text is per-card and included in
-      // structuredAnswers per group. Don't append an extra free-text group.
-    } else {
-      const free = item.freeTextValue.trim()
-      if (free) {
-        parts.push(free)
-        structuredAnswers.push([free])
-      }
+    // Free-text is stored per item; append it as a final group whenever it
+    // has content. This is the user's custom/personal answer and must be
+    // captured even when Ready was used to advance.
+    const free = item.freeTextValue.trim()
+    if (free) {
+      parts.push(free)
+      structuredAnswers.push([free])
     }
 
     const value = parts.join("\n")

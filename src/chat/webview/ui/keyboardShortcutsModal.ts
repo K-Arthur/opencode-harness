@@ -1,3 +1,5 @@
+import { REMOVE_SVG } from "../icons"
+
 export interface ShortcutRow {
   keys: string
   action: string
@@ -144,7 +146,7 @@ export function setupKeyboardShortcutsModal(container: HTMLElement): void {
   closeBtnEl = document.createElement("button")
   closeBtnEl.className = "modal-close-btn"
   closeBtnEl.setAttribute("aria-label", "Close")
-  closeBtnEl.textContent = "\u00D7"
+  closeBtnEl.innerHTML = REMOVE_SVG
   closeBtnEl.addEventListener("click", () => closeKeyboardShortcutsModal())
   header.appendChild(closeBtnEl)
   inner.appendChild(header)

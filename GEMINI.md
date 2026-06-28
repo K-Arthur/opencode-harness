@@ -61,3 +61,11 @@ OpenCode follows a modular, event-driven Client-Server model:
 -   `tests/`: Unit, integration, and visual tests.
 -   `media/`: Icons, logos, and branded assets.
 -   `docs/`: Architecture specs and SRS documents.
+
+## UI Methodology Standards
+
+All webview UI work must follow the standards in
+[`CONVENTIONS.md` § UI Methodology Standards](CONVENTIONS.md#ui-methodology-standards):
+design-system tokens first, zero emoji policy (SVG icons only from `icons.ts`),
+WCAG 2.2 AA minimum, icon usage standards, TDD-first, and cascade review
+checkpoints.

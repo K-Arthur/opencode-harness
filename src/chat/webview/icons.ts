@@ -66,6 +66,7 @@ export const BRAIN_SVG = SVG(`<path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v0a2.5 2.5 0 0
 export const SUCCESS_SVG = SVG_FILL(`<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>`, 16)
 export const ERROR_SVG = SVG_FILL(`<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>`, 16)
 export const WARNING_SVG = SVG(`<path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4"/><path d="M12 17h.01"/>`, 16)
+export const INFO_SVG = SVG(`<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>`, 16)
 export const SPINNER_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="premium-spinner"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="32"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></circle><circle cx="12" cy="12" r="4" opacity="0.5"><animate attributeName="r" values="3;5;3" dur="2s" repeatCount="indefinite"/></circle></svg>`
 
 // ─── Expand / Collapse ───

@@ -1,4 +1,5 @@
 import type { ElementRefs } from "./dom"
+import { REMOVE_SVG } from "./icons"
 
 export interface TabCallbacks {
   onSwitch: (tabId: string) => void
@@ -112,7 +113,7 @@ export function createTabBar(els: ElementRefs, callbacks: TabCallbacks) {
       const close = document.createElement("span")
       close.className = "tab-close"
       close.setAttribute("aria-label", `Close ${displayName}`)
-      close.textContent = "\u00D7"
+      close.innerHTML = REMOVE_SVG
       btn.appendChild(close)
 
       tabContainer.appendChild(btn)

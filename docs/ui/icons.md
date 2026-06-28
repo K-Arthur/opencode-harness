@@ -99,8 +99,12 @@ emoji — they render the same in any font without color-emoji fallback):
 | cancelled  | ⊘     |
 | unknown    | •     |
 
-These are stable across terminals and font stacks; switching to SVG
-would add bundle size for no readability gain.
+> **Note:** The tasks panel status icons above are the only remaining Unicode
+> glyphs in the codebase. All other UI surfaces (tool call status badges,
+> close/remove buttons, error severity icons, scroll markers, pin buttons,
+> attachment indicators, modal close buttons) have been migrated to inline SVG
+> from `icons.ts`. See the Zero Emoji Policy in
+> [`CONVENTIONS.md` § UI Methodology Standards](../CONVENTIONS.md#ui-methodology-standards).
 
 ## Adding a new icon
 
@@ -109,10 +113,21 @@ would add bundle size for no readability gain.
 2. If the icon is per-tool-name, add the entry to `TOOL_NAME_ICONS`.
 3. Run `npx tsx --test src/chat/webview/icons.test.ts` to verify the
    structural test still passes (it checks all known exports).
-4. If the icon replaces a literal character (emoji, ASCII), update
-   the corresponding test that grep'd for the old character.
+4. If the icon replaces a literal character (emoji, ASCII, Unicode glyph),
+   update the corresponding test that grep'd for the old character.
 
-## Why no emoji
+## Zero Emoji Policy (Codified)
+
+All webview UI work must use inline SVG icons from `icons.ts`. The following
+are **prohibited** in webview source files:
+
+- **Emoji** (Unicode emoji codepoints) — render with system color-emoji font,
+  violating theme tokens and rendering inconsistently across light/dark/HC.
+- **Codicon font references** (`<span class="codicon ...">`) — the Codicon font
+  is not loaded in the webview; any such reference renders as an empty box.
+- **Unicode glyph substitutes** (✗ ✓ ✕ ✛ ⏳ ◉ ★ ☆ ↓ •) for icons — use SVG.
+
+### Why no emoji
 
 - Emoji render with the system color-emoji font, which violates
   theme tokens (`--color-muted`, `--color-success`, etc.) and renders
@@ -121,3 +136,21 @@ would add bundle size for no readability gain.
   in headless test environments.
 - Unicode geometric glyphs (○▷✓✗⊘) render in any monospace font
   without font fallback; SVG is the next step up.
+
+### Migration completed
+
+The following Unicode glyphs and codicon references have been replaced with
+SVG icons from `icons.ts`:
+
+- `📎` (attachment chip) → SVG paperclip data-URI in CSS
+- `×` / `&times;` (close/remove buttons) → `REMOVE_SVG`
+- `✗` (error badge) → `STATE_FAILED_SVG`
+- `⏳` (timeout badge) → `STATE_TIMEOUT_SVG`
+- `✕` (cancelled badge) → `STATE_CANCELLED_SVG`
+- `✓` (done badge, ready badge, answered status) → `STATE_SUCCESS_SVG` / `CHECK_SVG`
+- `◉` (running badge) → `STATE_RUNNING_SVG`
+- `↓` (scroll marker) → `CHEVRON_DOWN_SVG`
+- `★` / `☆` (pin buttons) → `PIN_FILLED_SVG` / `PIN_SVG`
+- `•` (CSS bullet separator) → CSS-drawn dot (`border-radius: 50%`)
+- `codicon codicon-add` (todo add button) → inline SVG plus icon
+- `codicon codicon-sync` (live output indicator) → `SPINNER_SVG`

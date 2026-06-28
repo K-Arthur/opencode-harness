@@ -1502,3 +1502,64 @@ The "Next" section is the primary quality measure of Status.md.
 - README with: install, quick start, API reference, examples.
 - Usage examples for every major feature.
 - Migration guide for every major version bump.
+
+## UI Methodology Standards
+
+These rules govern all webview UI work (HTML, CSS, TypeScript DOM manipulation).
+They are mandatory for every agent and human contributor.
+
+### Design System Tokens First
+- Every color, spacing, font-size, radius, shadow, and duration value must
+  trace to a CSS custom property defined in `src/chat/webview/css/tokens.css`.
+- No hardcoded hex colors, magic pixel values, or inline `style="..."` in
+  TypeScript unless the value is truly dynamic (e.g. computed width).
+- When a new token is needed, add it to `tokens.css` with a descriptive name
+  following the existing naming convention (`--oc-*`, `--space-*`, `--radius-*`).
+
+### Zero Emoji Policy
+- No emoji (Unicode emoji codepoints) in any webview source file, CSS file,
+  or HTML template. Emoji render with the system color-emoji font, violating
+  theme tokens and rendering inconsistently across light/dark/HC themes.
+- No Codicon font references (`<span class="codicon ...">`). The Codicon font
+  is not loaded in the webview; any such reference renders as an empty box.
+- No Unicode glyph substitutes (✗ ✓ ✕ ✛ ⏳ ◉ ★ ☆ ↓ •) for icons. Use SVG.
+- All icons must be SVG strings from `src/chat/webview/icons.ts` (1.5px stroke,
+  rounded caps/joins, 24x24 viewBox — Phosphor/Tabler-inspired style).
+- See `docs/ui/icons.md` for the full icon catalog and adding new icons.
+
+### WCAG 2.2 AA Minimum
+- Every interactive element must have an accessible name (`aria-label`, visible
+  text, or `title`), a valid role, and state attributes (`aria-pressed`,
+  `aria-expanded`, `aria-disabled` as applicable).
+- Keyboard navigation: every interactive element must be reachable via Tab,
+  operable via Enter/Space, and have a visible `:focus-visible` outline.
+- Color contrast: text must meet 4.5:1 (normal) or 3:1 (large) against
+  background. Use `--vscode-*` theme variables which are already AA-compliant.
+- Do not rely on color alone to convey state — pair with an icon or text.
+- Test with `npx tsx --test src/chat/webview/css/cssCoverage.test.ts` before
+  committing any UI change.
+
+### Icon Usage Standards
+- Toolbar buttons: 16-20px SVG, `aria-hidden="true"` on the SVG, label on the
+  button.
+- Panel headers: 14-16px SVG with visible text label.
+- Status badges: 12-14px SVG + text label (never icon-only for status).
+- Destructive actions: pair the icon with a warning color (`--oc-error`) and
+  a text label or `aria-label` that includes the action verb.
+- Inline text separators: use CSS-drawn dots (`border-radius: 50%`) or pipe
+  characters (`|`), never bullet glyphs (`•`).
+
+### TDD-First for UI Components
+- Write or update the test before implementing the UI change.
+- Structural tests (`src/**/*.test.ts`) verify DOM structure and CSS coverage.
+- Behavioral tests (`tests/unit/*.test.mjs`) verify event handling and state.
+- Never weaken or skip a test without explicit user direction.
+- Run the relevant test suite before committing: `npm run test:unit`.
+
+### Cascade Review Checkpoints
+1. **Self-review**: re-read the diff before committing. Check for hardcoded
+   values, missing aria attributes, emoji, and broken imports.
+2. **Automated check**: `npm run typecheck && npm run build && npm run test:unit`.
+3. **CSS coverage**: `npx tsx --test src/chat/webview/css/cssCoverage.test.ts`.
+4. **Commit**: only after all checks pass. Commit CSS in the same commit as
+   the renderer changes that use it (the ephemeral-tree rule in AGENTS.md).

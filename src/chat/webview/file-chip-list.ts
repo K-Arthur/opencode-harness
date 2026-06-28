@@ -144,7 +144,7 @@ export function renderFileChipListHtml(files: string[], opts: FileChipListOption
       `<button class="file-chip" data-path="${safePath}" tabindex="0" title="${safePath}">` +
         `<span class="file-chip__ext" data-lang="${escapeHtml(lang)}">${escapeHtml(badge)}</span>` +
         `<span class="file-chip__name">${safeName}</span>` +
-        `<span class="file-chip__remove" role="button" aria-label="${safeLabel}" tabindex="-1">&times;</span>` +
+        `<span class="file-chip__remove" role="button" aria-label="${safeLabel}" tabindex="-1"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg></span>` +
       `</button>`
     )
   }
