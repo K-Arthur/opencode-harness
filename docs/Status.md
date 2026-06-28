@@ -3,6 +3,55 @@
 **Last Updated:** 2026-06-28
 **Version:** v0.4.24
 
+## Highlights (2026-06-28) — UI methodology, icon migration, file handling fixes
+
+**Zero-emoji icon migration, question bar carousel restore, attachment chip overhaul, diff/drag-drop fixes.**
+
+- **Zero emoji policy enforced** — all Unicode glyphs and Codicon font references
+  replaced with inline SVG icons from `icons.ts`: `📎` → SVG paperclip data-URI,
+  `×`/`&times;` → `REMOVE_SVG` (7 close/remove buttons), `✗⏳✕✓◉` → `STATE_*_SVG`
+  (tool call status badges), `✓` → `CHECK_SVG` (question bar), `✕` → `REMOVE_SVG`
+  (error tiers), `↓` → `CHEVRON_DOWN_SVG` (scroll markers), `★`/`☆` →
+  `PIN_FILLED_SVG`/`PIN_SVG` (recent prompts), `•` → CSS-drawn dot, `codicon-add`
+  → inline SVG plus, `codicon-sync` → `SPINNER_SVG`. Added `INFO_SVG` to icons.ts.
+- **UI Methodology Standards codified** — `CONVENTIONS.md` now includes a
+  comprehensive section covering design-system tokens first, zero emoji policy,
+  WCAG 2.2 AA minimum, icon usage standards, TDD-first, and cascade review
+  checkpoints. Cross-references added to `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`,
+  `.windsurfrules`.
+- **Question bar carousel restored** — multiple simultaneous questions were
+  stacking instead of showing one at a time. Fix: `refreshQuestionVisibility()`
+  hides queued questions via `.question-bar-item--queued { display: none }` and
+  reveals the next one when the current question is answered.
+- **Question bar free-text submission fixed** — free-text answers were dropped
+  when the "Ready" button was used. Fix: always append free-text as a final
+  answer group when it has content, regardless of `cardReady` state.
+- **Document attachments show as broken image thumbnails** — the CSS
+  `:not(:has(img))` selector was unreliable; `attachFileBlob` was also calling
+  `addImageAttachment` for documents. Fix: use explicit
+  `.attachment-chip--image`/`.attachment-chip--document` classes; fix
+  `attachFileBlob` to call `addDocumentAttachment`.
+- **Attachment chip styling improved** — removed `📎` emoji, reduced chip size
+  from 56px to 48px via `--attachment-size` token, replaced `:has()` with
+  explicit classes.
+- **Diff editor fails for out-of-workspace files** — `getBaselineContent` passed
+  absolute paths to `git show` without converting to workspace-relative. Fix:
+  convert absolute paths to workspace-relative; skip git strategies for
+  out-of-workspace files.
+- **Drag-drop overlay persists after file added** — `stopPropagation()` on input
+  area handlers prevented the global drop handler from hiding the overlay. Fix:
+  remove `stopPropagation()`; add `inputArea.contains(e.target)` check.
+- **Copy file path button** — each file row in the changed files dropdown now
+  has a copy-path button using `navigator.clipboard.writeText`.
+
+Files: `src/chat/webview/{icons,index,questionBar,theme,tabs,file-chip-list,
+toolCallRenderer,errorTiers,recentPromptsRail,changed-files-dropdown}.ts`,
+`src/chat/webview/ui/{attachments,contextTray,keyboardShortcutsModal,
+scrollMarkers,dragDrop}.ts`, `src/chat/webview/css/{tokens,layout,blocks,
+components,question-bar}.css`, `src/chat/{SessionBaselineResolver,
+WebviewEventRouter}.ts`, `CONVENTIONS.md`, `AGENTS.md`, `CLAUDE.md`,
+`GEMINI.md`, `.windsurfrules`, `docs/ui/icons.md`, `CHANGELOG.md`.
+
 ## Highlights (2026-06-28) — Long-session scroll fixes
 
 **Scroll fix pass: condensation race, timer leak, prepend-during-streaming race.**
