@@ -24,6 +24,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      [Unreleased] — that creates documentation drift. See the release
      workflow in docs/development/rebuild-and-reinstall.md. -->
 
+## [0.4.28] - 2026-06-28
+
+### Fixed
+
+- **Recovery auto-send deduplication strengthened** — the
+  `expired_question_recovery_failed` handler's 100ms guard window was too
+  short: the host sends multiple recovery messages 400-900ms apart, each
+  pasting the answer into the prompt input and calling `sendMessage()`,
+  which routed to `sendSteerPrompt()` in queue mode, enqueuing dozens of
+  duplicate prompts. Fix: track both the session ID and a hash of the answer
+  text (`sessionId:answerLength:answerPrefix`) with a 5-second secondary
+  guard window to deduplicate all recovery messages for the same answer.
+- **Session close cleanup** — `closeTab` now clears `recoverySendInFlight`
+  entries for the closed tab to prevent stale recovery guards from blocking
+  future legitimate recoveries for a re-used session ID.
+- **Lint warning** — `addDocumentAttachment`'s unused `filename` parameter
+  prefixed with underscore to satisfy the `/^_/u` linter rule.
+
 ## [0.4.27] - 2026-06-28
 
 ### Fixed
