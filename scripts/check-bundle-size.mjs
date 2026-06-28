@@ -187,6 +187,14 @@
 // tab attention indicator (needsAttention set, markTabNeedsAttention,
 // clearTabNeedsAttention), file-edit-card diff preview fix (buildDiffPreview
 // line counting), v2ErrorDetail shared helper import. Webview measures 794.5KB.
+//
+// 2026-06-28 re-baseline (webview 796KB -> 798KB): zero-emoji icon migration
+// replaced all Unicode glyphs and codicon font references with inline SVG
+// strings from icons.ts (REMOVE_SVG, CHECK_SVG, STATE_*_SVG, CHEVRON_DOWN_SVG,
+// PIN_FILLED_SVG, PIN_SVG, SPINNER_SVG, INFO_SVG, plus paperclip data-URI in
+// CSS). The SVG strings are slightly larger than the single-character glyphs
+// they replaced, pushing the bundle from 796.0KB to 796.9KB. +2KB restores
+// headroom so the gate still trips on a real regression. Host limit unchanged.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -197,7 +205,7 @@ const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
   { path: "dist/extension.js", limitBytes: 748 * 1024, label: "extension host" },
-  { path: "dist/chat/webview/main.js", limitBytes: 796 * 1024, label: "chat webview" },
+  { path: "dist/chat/webview/main.js", limitBytes: 798 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
 
