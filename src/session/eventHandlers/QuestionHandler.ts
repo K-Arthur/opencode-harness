@@ -24,24 +24,46 @@ function toOptionLabels(raw: unknown): string[] {
     .filter((label) => label.length > 0)
 }
 
-function toGroups(raw: unknown): QuestionGroup[] {
-  if (!Array.isArray(raw)) return []
-  return raw
-    .map((entry): QuestionGroup | null => {
-      const rec = asRecord(entry)
-      const question = typeof rec.question === "string" ? rec.question : ""
-      const header = typeof rec.header === "string" ? rec.header : undefined
-      const options = toOptionLabels(rec.options)
-      if (!question && !header && options.length === 0) return null
-      const group: QuestionGroup = {
-        question,
-        options,
-        multiSelect: rec.multiple === true || rec.multiSelect === true,
-      }
-      if (header) group.header = header
-      return group
-    })
-    .filter((group): group is QuestionGroup => group !== null)
+const QUESTION_KEYS = ["question", "prompt", "message", "text"] as const
+
+function toGroups(raw: unknown, fallback?: Record<string, unknown>): QuestionGroup[] {
+  const fromArray = Array.isArray(raw)
+    ? raw
+      .map((entry): QuestionGroup | null => {
+        const rec = asRecord(entry)
+        const question = typeof rec.question === "string" ? rec.question : ""
+        const header = typeof rec.header === "string" ? rec.header : undefined
+        const options = toOptionLabels(rec.options)
+        if (!question && !header && options.length === 0) return null
+        const group: QuestionGroup = {
+          question,
+          options,
+          multiSelect: rec.multiple === true || rec.multiSelect === true,
+        }
+        if (header) group.header = header
+        return group
+      })
+      .filter((group): group is QuestionGroup => group !== null)
+    : []
+  if (fromArray.length > 0) return fromArray
+  if (!fallback) return []
+  const flatQuestion = firstString(fallback, QUESTION_KEYS)
+  if (flatQuestion) {
+    return [{
+      question: flatQuestion,
+      options: toOptionLabels(fallback.options),
+      multiSelect: fallback.multiSelect === true || fallback.multiple === true,
+    }]
+  }
+  return []
+}
+
+function firstString(obj: Record<string, unknown>, keys: readonly string[]): string {
+  for (const k of keys) {
+    const v = obj[k]
+    if (typeof v === "string" && v) return v
+  }
+  return ""
 }
 
 export class QuestionHandler implements EventHandler {
@@ -66,7 +88,7 @@ export class QuestionHandler implements EventHandler {
           : undefined
 
     if (event.type === "question.asked" || event.type === "question.v2.asked") {
-      const groups = toGroups(props.questions)
+      const groups = toGroups(props.questions, props)
       const tool = asRecord(props.tool)
       const toolCallId = typeof tool.callID === "string" ? tool.callID : requestID ?? "question"
       const messageId = typeof tool.messageID === "string" ? tool.messageID : undefined

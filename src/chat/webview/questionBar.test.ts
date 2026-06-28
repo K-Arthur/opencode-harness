@@ -59,6 +59,34 @@ describe("questionBar", () => {
     assert.equal(btns[1]!.textContent, "B")
   })
 
+  it("addQuestion renders a free-text question with empty groups without crashing", () => {
+    const posted: Array<Record<string, unknown>> = []
+    initQuestionBar((m) => posted.push(m))
+    const bar = document.getElementById("question-bar")!
+    addQuestion(makeBlock({
+      id: "q-empty",
+      toolCallId: "q-empty",
+      requestID: "req-empty",
+      groups: [],
+      text: "How should I treat bootstrap?",
+      options: [],
+      allowFreeText: true,
+    }), "msg-empty")
+    assert.ok(!bar.classList.contains("hidden"), "bar is visible after addQuestion")
+    const questionText = bar.querySelector(".question-bar-question")
+    assert.ok(questionText, "question text is rendered")
+    assert.equal(questionText!.textContent, "How should I treat bootstrap?", "question text matches block.text")
+    const freeText = bar.querySelector(".question-bar-freetext") as HTMLTextAreaElement
+    assert.ok(freeText, "free-text textarea is rendered")
+    freeText.value = "desktop (not WASM)"
+    freeText.dispatchEvent(new dom.window.Event("input", { bubbles: true }))
+    ;(document.getElementById("question-bar-submit") as HTMLButtonElement).click()
+    const answer = posted.find((m) => m.type === "question_answer")
+    assert.ok(answer, "question_answer was posted")
+    assert.equal(answer!.value, "desktop (not WASM)", "free-text answer is sent")
+    assert.equal(answer!.source, "freetext", "source is freetext")
+  })
+
   it("submitAllAnswers posts question_answer", () => {
     const posted: Array<Record<string, unknown>> = []
     initQuestionBar((m) => posted.push(m))
@@ -668,6 +696,31 @@ describe("questionBar", () => {
     }])
     const item = document.querySelector('[data-question-id="q-answered"]')
     assert.ok(item, "answered questions are repopulated as transcript record")
+    assert.ok(item!.classList.contains("question-bar-item--answered"), "rendered in answered state")
+  })
+
+  it("B10: repopulateFromMessages handles answered questions with empty groups (recovery crash)", () => {
+    initQuestionBar(() => {})
+    setActiveSession("sess-empty")
+    // This mirrors the transcript block created when a question tool starts with
+    // empty args and is later answered: groups is empty, but text is preserved.
+    assert.doesNotThrow(() => {
+      repopulateFromMessages("sess-empty", [{
+        id: "msg-empty-answered",
+        blocks: [{
+          type: "question",
+          toolCallId: "q-empty-answered",
+          requestID: "req-empty-answered",
+          answered: true,
+          answer: "desktop (not WASM)",
+          groups: [],
+          text: "How should I treat bootstrap?",
+          allowFreeText: true,
+        }],
+      }])
+    }, "repopulateFromMessages does not crash on empty groups")
+    const item = document.querySelector('[data-question-id="q-empty-answered"]')
+    assert.ok(item, "answered question with empty groups is repopulated")
     assert.ok(item!.classList.contains("question-bar-item--answered"), "rendered in answered state")
   })
 

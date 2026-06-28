@@ -12,6 +12,7 @@ export interface ProviderManagementServiceDeps {
   providerConfigManager: ProviderConfigManager
   postMessage: (msg: Record<string, unknown>) => void
   getV2Client: () => V2OpencodeClient | null
+  refreshModels: () => Promise<unknown>
 }
 
 export class ProviderManagementService {
@@ -29,6 +30,7 @@ export class ProviderManagementService {
         models: [],
       })
       this.deps.postMessage({ type: "provider_added", id, name })
+      await this.deps.refreshModels()
     } catch (err) {
       log.error("Add provider failed", err)
       this.deps.postMessage({ type: "provider_error", error: "Failed to add provider" })
@@ -171,6 +173,7 @@ export class ProviderManagementService {
       }
       this.deps.postMessage({ type: "provider_added", id: providerId, name: providerId })
       log.info(`API key set for provider ${providerId}`)
+      await this.deps.refreshModels()
     } catch (err) {
       log.error(`Connect provider key for ${providerId} failed`, err)
       this.deps.postMessage({ type: "provider_error", error: "Failed to set API key", providerId })
@@ -227,6 +230,7 @@ export class ProviderManagementService {
       }
       this.deps.postMessage({ type: "provider_oauth_completed", providerId, ok: true })
       log.info(`OAuth completed for provider ${providerId}`)
+      await this.deps.refreshModels()
     } catch (err) {
       log.error(`OAuth callback for ${providerId} failed`, err)
       this.deps.postMessage({

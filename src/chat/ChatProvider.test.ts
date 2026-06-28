@@ -13,6 +13,7 @@ const validatorSource = readFileSync(resolve(__dirname, "WebviewMessageValidator
 const backfillSource = readFileSync(resolve(__dirname, "BackfillService.ts"), "utf8")
 const modePolicySource = readFileSync(resolve(__dirname, "modePolicy.ts"), "utf8")
 const rateLimitMonitorSource = readFileSync(resolve(__dirname, "../monitor/RateLimitMonitor.ts"), "utf8")
+const providerManagementSource = readFileSync(resolve(__dirname, "ProviderManagementService.ts"), "utf8")
 
 void describe("ChatProvider.ts", () => {
   void it("exports ChatProvider class with correct interfaces", () => {
@@ -1021,5 +1022,39 @@ void describe("ChatProvider question.asked surfacing (B1)", () => {
       "question_asked payload must include messageId so the bar can bind to the right transcript bubble",
     )
     assert.ok(slice.includes("sessionId"), "question_asked payload must include sessionId")
+  })
+
+  void it("wires refreshModels callback to ProviderManagementService", () => {
+    assert.ok(
+      source.includes("refreshModels: () => this.modelManager.refreshModels"),
+      "ChatProvider must pass refreshModels callback to ProviderManagementService"
+    )
+  })
+
+  void it("ProviderManagementService calls refreshModels after handleConnectProviderKey success", () => {
+    const idx = providerManagementSource.indexOf("async handleConnectProviderKey")
+    const block = providerManagementSource.slice(idx, idx + 1000)
+    assert.ok(
+      block.includes("await this.deps.refreshModels()"),
+      "handleConnectProviderKey must call refreshModels after successful auth.set"
+    )
+  })
+
+  void it("ProviderManagementService calls refreshModels after handleAddProvider success", () => {
+    const idx = providerManagementSource.indexOf("async handleAddProvider")
+    const block = providerManagementSource.slice(idx, idx + 400)
+    assert.ok(
+      block.includes("await this.deps.refreshModels()"),
+      "handleAddProvider must call refreshModels after successful upsertConfig"
+    )
+  })
+
+  void it("ProviderManagementService calls refreshModels after handleCompleteProviderOAuth success", () => {
+    const idx = providerManagementSource.indexOf("async handleCompleteProviderOAuth")
+    const block = providerManagementSource.slice(idx, idx + 1000)
+    assert.ok(
+      block.includes("await this.deps.refreshModels()"),
+      "handleCompleteProviderOAuth must call refreshModels after successful callback"
+    )
   })
 })

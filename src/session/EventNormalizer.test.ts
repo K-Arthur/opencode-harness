@@ -275,6 +275,26 @@ describe("EventNormalizer — behavioral", () => {
     assert.equal(data.block?.allowFreeText, true)
   })
 
+  it("normalizes question.asked with a flat question string (no questions array)", () => {
+    const asked = normalizer.normalize({
+      type: "question.asked",
+      properties: {
+        id: "flat-question-1",
+        sessionID: "s-flat",
+        question: "How should I treat bootstrap?",
+        tool: { messageID: "m-flat", callID: "call-flat" },
+      },
+    })
+    assert.equal(asked.length, 1)
+    assert.equal(asked[0]!.type, "question_asked")
+    const data = asked[0]!.data as { block?: { text?: string; groups?: unknown[]; allowFreeText?: boolean } }
+    assert.equal(data.block?.text, "How should I treat bootstrap?")
+    assert.ok(Array.isArray(data.block?.groups))
+    assert.equal(data.block?.groups?.length, 1)
+    assert.equal((data.block?.groups?.[0] as { question?: string })?.question, "How should I treat bootstrap?")
+    assert.equal(data.block?.allowFreeText, true)
+  })
+
   it("normalizes v2 permission.asked to permission_request", () => {
     const events = normalizer.normalize({
       type: "permission.asked",

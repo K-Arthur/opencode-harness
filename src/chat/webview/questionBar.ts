@@ -9,6 +9,8 @@ export interface QuestionBarItem {
   sessionId: string
   messageId: string
   groups: QuestionGroup[]
+  /** The question text to display when the parsed groups are empty or lack a header. */
+  questionText: string
   allowFreeText: boolean
   selections: Map<number, Set<string>>
   freeTextValue: string
@@ -131,6 +133,9 @@ export function addQuestion(block: QuestionBlock, messageId: string, envelopeSes
     sessionId: block.sessionId || envelopeSessionId || _activeSessionId,
     messageId,
     groups: block.groups ?? [],
+    questionText: (block as Record<string, unknown>).text as string
+      || (block as Record<string, unknown>).question as string
+      || "",
     allowFreeText: block.allowFreeText !== false,
     selections: new Map(),
     freeTextValue: "",
@@ -167,6 +172,9 @@ export function updateQuestion(toolCallId: string, block: QuestionBlock): void {
 
   const oldGroupCount = item.groups.length
   item.groups = block.groups ?? []
+  item.questionText = (block as Record<string, unknown>).text as string
+    || (block as Record<string, unknown>).question as string
+    || item.questionText
   // A refreshed block copy may omit requestID (e.g. server echo without the
   // v2 field) — never wipe one we already hold, the reply path needs it.
   item.requestID = block.requestID ?? item.requestID
@@ -550,6 +558,15 @@ function buildBarItemElement(item: QuestionBarItem): HTMLElement {
   wrapper.setAttribute("data-question-id", item.toolCallId)
   if (item.answered) wrapper.classList.add("question-bar-item--answered")
 
+  // When groups are empty but the block carries question text, render it as
+  // the card header so the user knows what they are answering.
+  if (item.questionText && item.groups.length === 0) {
+    const questionText = document.createElement("div")
+    questionText.className = "question-bar-question"
+    questionText.textContent = item.questionText
+    wrapper.appendChild(questionText)
+  }
+
   const totalCards = item.groups.length
   const showCarousel = totalCards > 1
 
@@ -679,7 +696,7 @@ function renderSingleCard(wrapper: HTMLElement, item: QuestionBarItem, gi: numbe
 }
 
 function buildCardElement(item: QuestionBarItem, gi: number, onAdvance?: () => void): HTMLElement {
-  const group = item.groups[gi]!
+  const group = item.groups[gi] ?? { question: "", options: [], multiSelect: false }
   const isReady = item.cardReady.has(gi)
 
   const card = document.createElement("div")
@@ -807,7 +824,7 @@ function buildCardElement(item: QuestionBarItem, gi: number, onAdvance?: () => v
 
 function renderBarItem(item: QuestionBarItem): void {
   if (!els) return
-  els.items.appendChild(buildBarItemElement(item))
+  els.items.appendChild(item.answered ? renderAnsweredItem(item) : buildBarItemElement(item))
 }
 
 /**

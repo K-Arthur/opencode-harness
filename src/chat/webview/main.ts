@@ -3583,6 +3583,7 @@ function setupTodoSkillAndSubagentPanels(): void {
         const error = (msg as Record<string, unknown>).error as string | undefined
         if (providerId) handleOAuthCompleted(providerId, ok, error)
         if (ok) {
+          vscode.postMessage({ type: "get_models" })
           vscode.postMessage({ type: "discover_providers" })
           vscode.postMessage({ type: "list_provider_credentials" })
         }

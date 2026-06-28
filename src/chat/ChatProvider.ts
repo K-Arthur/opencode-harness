@@ -292,6 +292,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       providerConfigManager: this.providerConfigManager,
       postMessage: (msg) => this.postMessage(msg),
       getV2Client: () => this.sessionManager.getV2Client(),
+      refreshModels: () => this.modelManager.refreshModels(this.sessionManager.currentPort, this.sessionManager.authHeader),
     })
     this.modelManager.setProviderConfigManager(this.providerConfigManager)
     this.hostQueue = new HostPromptQueue(this.context.globalState, false)
