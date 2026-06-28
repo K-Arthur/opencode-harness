@@ -127,6 +127,19 @@ export function addQuestion(block: QuestionBlock, messageId: string, envelopeSes
     return
   }
 
+  // Do not create an empty question bar item. Empty tool-start payloads are
+  // common (the server sends the question tool before its args), and without
+  // this guard the bar would render a blank "Question from model" card that
+  // the user cannot answer and that never dismisses.
+  const hasContent = (block.groups ?? []).length > 0
+    || (block as Record<string, unknown>).text as string
+    || (block as Record<string, unknown>).question as string
+    || (block as Record<string, unknown>).options as string[]
+  if (!hasContent) {
+    diag(`addQuestion: skipped empty question ${toolCallId}; waiting for content update`)
+    return
+  }
+
   const item: QuestionBarItem = {
     toolCallId,
     requestID: block.requestID,

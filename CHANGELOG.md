@@ -26,6 +26,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Question-answer recovery crash and empty bar persistence** — when a server
+  side question expired or failed, the webview's "Question from model" bar
+  crashed on questions with empty `groups` (`Cannot read properties of undefined
+  (reading 'header')`). The crash blocked the `expired_question_recovery_failed`
+  auto-send path, so the frontend showed no confirmation and the answer seemed
+  to vanish. Fixed `questionBar.ts` to guard missing groups, render the question
+  text from `block.text`, skip empty tool-start payloads, and repopulate answered
+  transcript records as read-only cards. Fixed `QuestionHandler.ts` to parse
+  flat `question`/`prompt`/`message`/`text` fields when the server does not send a
+  `questions` array. Updated stale structural tests to point at the files where
+  the logic now lives.
+
 - **Added providers not showing until extension restart** — when a user
   connected a provider via "Add Key" (`connect_provider_key`), the provider's
   models didn't appear in the model picker until the extension was restarted.

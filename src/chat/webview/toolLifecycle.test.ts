@@ -284,8 +284,8 @@ describe("multi-tool concurrent lifecycle", () => {
 
 describe("postToolEnd fallback heuristic", () => {
   it("uses activity-based fallback instead of arbitrary Set.values().next()", () => {
-    const source = readFileSync(path.join(__dirname, "../handlers/StreamCoordinator.ts"), "utf8")
-    const fnStart = source.indexOf("private postToolEnd(")
+    const source = readFileSync(path.join(__dirname, "../handlers/ToolCallTracker.ts"), "utf8")
+    const fnStart = source.indexOf("postToolEnd(")
     const fnEnd = source.indexOf("return true", fnStart)
     const fnBody = source.slice(fnStart, fnEnd)
 
@@ -310,10 +310,10 @@ describe("postToolEnd fallback heuristic", () => {
 
 describe("reconcilePendingToolCallsFromServer — loop exit", () => {
   it("uses break (not return) to exit the reconciliation loop early", () => {
-    const source = readFileSync(path.join(__dirname, "../handlers/StreamCoordinator.ts"), "utf8")
-    const fnStart = source.indexOf("private async reconcilePendingToolCallsFromServer(")
+    const source = readFileSync(path.join(__dirname, "../handlers/ToolCallTracker.ts"), "utf8")
+    const fnStart = source.indexOf("async reconcilePendingToolCallsFromServer(")
     const fnEnd = source.indexOf("private stableToolPartId(", fnStart)
-    const fnBody = source.slice(fnStart, fnEnd)
+    const fnBody = source.slice(fnStart, fnEnd > fnStart ? fnEnd : fnStart + 4000)
 
     const earlyExitLine = fnBody.indexOf("currentPending.size === 0)")
     assert.ok(earlyExitLine > 0, "must find the early exit check in reconciliation loop")
@@ -391,10 +391,12 @@ describe("toolBadgeText — unresolved state badge", () => {
 
 describe("markUnresolvedPendingToolCalls — question tool exclusion (B6)", () => {
   it("skips tools whose persisted block is a question block", () => {
-    const source = readFileSync(path.join(__dirname, "../handlers/StreamCoordinator.ts"), "utf8")
-    const fnStart = source.indexOf("private async markUnresolvedPendingToolCalls(")
+    // The implementation lives in ToolCallTracker.ts; StreamCoordinator delegates
+    // to it. Inspect the real implementation so the test survives refactorings.
+    const source = readFileSync(path.join(__dirname, "../handlers/ToolCallTracker.ts"), "utf8")
+    const fnStart = source.indexOf("async markUnresolvedPendingToolCalls(")
     assert.ok(fnStart >= 0, "markUnresolvedPendingToolCalls must exist")
-    const fnEnd = source.indexOf("private ", fnStart + 1)
+    const fnEnd = source.indexOf("markUnresolvedActiveSubagents(", fnStart + 1)
     const fnBody = source.slice(fnStart, fnEnd > fnStart ? fnEnd : fnStart + 3000)
 
     // The loop must look up the block for the tool id and skip when the block

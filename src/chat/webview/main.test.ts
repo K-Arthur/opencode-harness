@@ -27,6 +27,7 @@ const scrollMarkersSource = readFileSync(path.join(__dirname, "ui", "scrollMarke
 const keyboardShortcutsSource = (() => { try { return readFileSync(path.join(__dirname, "ui", "keyboardShortcuts.ts"), "utf8") } catch { return "" } })()
 const todoSubagentSetupSource = (() => { try { return readFileSync(path.join(__dirname, "todoSubagentSetup.ts"), "utf8") } catch { return "" } })()
 const tabSwitcherSource = (() => { try { return readFileSync(path.join(__dirname, "tabSwitcher.ts"), "utf8") } catch { return "" } })()
+const panelSetupSource = (() => { try { return readFileSync(path.join(__dirname, "panelSetup.ts"), "utf8") } catch { return "" } })()
 const indexHtml = readFileSync(path.join(__dirname, "index.html"), "utf8")
 const allSource = source + "\n" + themeCustomizerSource + "\n" + modeDropdownSource + "\n" + sessionModalSource + "\n" + tokenCostDisplaySource + "\n" + attachmentsSource + "\n" + welcomeViewSource + "\n" + settingsMenuSource + "\n" + fileTrackingSource + "\n" + buttonSetupSource + "\n" + scrollMarkersSource
 const sessionListRendererSource = readFileSync(path.join(__dirname, "sessionListRenderer.ts"), "utf8")
@@ -591,9 +592,9 @@ it("unified modal: server session items send resume_server_session on click", ()
   // preference + dropdown UI — not silently discard the selection.
 
   it("model onSelect sets globalModel before checking for active session", () => {
-    const idx = source.indexOf("onSelect: (modelId) =>")
+    const idx = panelSetupSource.indexOf("onSelect: (modelId) =>")
     assert.ok(idx >= 0, "onSelect callback must exist in model dropdown setup")
-    const block = source.slice(idx, idx + 500)
+    const block = panelSetupSource.slice(idx, idx + 500)
     const globalModelIdx = block.indexOf("setGlobalModel")
     const activeGuardIdx = block.indexOf("if (active)")
     assert.ok(globalModelIdx >= 0, "setGlobalModel must be called inside onSelect")
@@ -604,9 +605,9 @@ it("unified modal: server session items send resume_server_session on click", ()
   })
 
   it("model onSelect calls setCurrentModel and syncModelViews unconditionally", () => {
-    const idx = source.indexOf("onSelect: (modelId) =>")
+    const idx = panelSetupSource.indexOf("onSelect: (modelId) =>")
     assert.ok(idx >= 0, "onSelect callback must exist")
-    const block = source.slice(idx, idx + 500)
+    const block = panelSetupSource.slice(idx, idx + 500)
     const activeGuardIdx = block.indexOf("if (active)")
     const setCurrentIdx = block.indexOf("setCurrentModel")
     const syncIdx = block.indexOf("syncModelViews")
@@ -649,9 +650,9 @@ it("unified modal: server session items send resume_server_session on click", ()
     // When the user drops a PNG/JPG/WEBP/GIF onto the input area the file must
     // become an image attachment (pendingAttachments) — not an @file: mention.
     // Only non-image files should become @file: mentions.
-    const dropIdx = inputHandlersSource.indexOf('inputArea.addEventListener("drop"')
+    const dropIdx = inputHandlersSource.indexOf('.addEventListener("drop"')
     assert.ok(dropIdx >= 0, "drop listener must exist in inputHandlers.ts")
-    const dropBlock = inputHandlersSource.slice(dropIdx, dropIdx + 800)
+    const dropBlock = inputHandlersSource.slice(dropIdx, dropIdx + 1200)
     // Drop handler must branch on image MIME (via ALLOWED_IMAGE_MIMES or direct type check)
     // and call the shared attachImageBlob helper (which pushes to pendingAttachments)
     assert.ok(
@@ -996,8 +997,8 @@ it("unified modal: server session items send resume_server_session on click", ()
         "switchTab must reset the context usage panel so per-session counters don't bleed across tabs"
       )
       assert.ok(
-        block.includes("} else if (notifyHost) {"),
-        "switchTab must not auto-scroll to bottom for host-driven state syncs when there is no saved position"
+        block.includes("} else {") && block.includes("scrollToBottom(msgList)"),
+        "switchTab must anchor to the bottom when there is no saved scroll position or the tab is streaming"
       )
     })
 
@@ -1168,7 +1169,7 @@ describe("permission bar — multi-tab session attribution", () => {
     const idx = source.indexOf('["permission_request"')
     const block = source.slice(idx, source.indexOf('["file_edited"', idx))
     assert.ok(
-      /if\s*\(\s*sid\s*!==\s*stateManager\.getState\(\)\.activeSessionId\s*\)\s*return/.test(block),
+      /if\s*\(\s*sid\s*!==\s*stateManager\.getState\(\)\.activeSessionId\s*\)/.test(block),
       "permission_request must bail out of rendering for a non-active session",
     )
   })

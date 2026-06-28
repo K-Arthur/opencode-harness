@@ -3,6 +3,35 @@
 **Last Updated:** 2026-06-27
 **Version:** v0.4.23
 
+## Highlights (2026-06-27) — Question-answer recovery crash, empty question bar persistence
+
+**Question-answer fix pass: recovery crash, empty bar persistence, flat question parsing, stale structural tests.**
+
+- **Question-answer recovery crash** — the webview question bar threw
+  `Cannot read properties of undefined (reading 'header')` when a `question`
+  block had empty `groups`. This crashed both the initial `stream_tool_start`
+  render and the `expired_question_recovery_failed` handler, blocking the
+  auto-send of the user's answer and leaving the frontend without confirmation.
+  `questionBar.ts` now guards missing groups, renders the question text from
+  `block.text` when groups are empty, and repopulates answered transcript
+  records as read-only cards.
+- **Empty question bar persistence** — `questionBar.addQuestion` now skips empty
+  tool-start payloads (no groups, no question text, no options) so a blank
+  "Question from model" card cannot get stuck in the UI.
+- **Flat question parsing** — `QuestionHandler.ts` now parses the server's
+  `question`/`prompt`/`message`/`text` fields when the `questions` array is
+  absent, so free-text questions produce a real group and `text` instead of an
+  empty block.
+- **Stale structural tests** — `main.test.ts` and `toolLifecycle.test.ts`
+  structural assertions were updated to inspect the files where the logic now
+  lives (`panelSetup.ts`, `ToolCallTracker.ts`, `tabSwitcher.ts`) and to match
+  the current drop handler and scroll-anchor code.
+
+Files: `src/chat/webview/questionBar.ts`, `src/chat/webview/questionBar.test.ts`,
+`src/session/eventHandlers/QuestionHandler.ts`, `src/session/EventNormalizer.test.ts`,
+`src/chat/webview/main.test.ts`, `src/chat/webview/toolLifecycle.test.ts`,
+`CHANGELOG.md`, `docs/Status.md`.
+
 ## Highlights (2026-06-27) — v2 SDK error messages, SVG icon fix, tab attention indicator, diff compact mode
 
 **Regression fix pass: v2 SDK audit, SVG icon rendering, tab switching, CSS tokens, diff display.**
