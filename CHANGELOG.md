@@ -24,6 +24,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      [Unreleased] — that creates documentation drift. See the release
      workflow in docs/development/rebuild-and-reinstall.md. -->
 
+## [0.4.29] - 2026-06-28
+
+### Fixed
+
+- **Tool card buttons broken for absolute paths** — 7 handlers used
+  `vscode.Uri.joinPath(vscode.Uri.file(wsRoot), filePath)` which assumes
+  `filePath` is relative. When `filePath` is absolute (common from opencode
+  tools), this creates a broken path like `/wsRoot//absolute/path`, causing
+  the following buttons to fail: Open file, Reveal in Explorer, Reject hunk,
+  Revert hunk, Undo file, Reject diff, Revert diff, and Get file diff. Fix:
+  add `resolveWorkspaceUri(filePath, wsRoot)` helper that uses absolute paths
+  directly (with realpath resolution) and joins relative paths with wsRoot.
+- **`reveal_in_explorer` and `open_folder` broken for relative paths** — these
+  handlers used `vscode.Uri.file(rawPath)` directly, which only works for
+  absolute paths. Fix: resolve relative paths against the workspace root.
+- **`get_file_diff` not cross-platform** — used `path.startsWith("/")` instead
+  of `path.isAbsolute()` to detect absolute paths. Fix: use `path.isAbsolute()`
+  via the new `resolveWorkspaceUri` helper.
+
 ## [0.4.28] - 2026-06-28
 
 ### Fixed
