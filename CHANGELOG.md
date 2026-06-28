@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      [Unreleased] — that creates documentation drift. See the release
      workflow in docs/development/rebuild-and-reinstall.md. -->
 
+## [0.4.26] - 2026-06-28
+
 ### Fixed
 
 - **Diff editor fails for out-of-workspace files** — `getBaselineContent` passed
@@ -55,6 +57,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `::after` pseudo-element violated the zero-emoji policy and the 56px chip size
   was too large. Fix: replace with SVG data-URI paperclip; reduce to 48px via
   `--attachment-size` token; use token-driven styling throughout.
+- **Scroll position lost after history condensation on long sessions** — when
+  a session had > 140 messages, the chunked loader restored scroll position
+  after 20 messages rendered, but `applyHistoryCondensation` then replaced
+  groups of 20 old messages with ~30px summary buttons, shrinking
+  `scrollHeight` by thousands of pixels. The browser clamped `scrollTop` to
+  the new (smaller) `scrollHeight`, dumping the user at the bottom. Fix:
+  re-restore scroll position in `onAllDone` after condensation, on both the
+  `resume_session` and `init_state` load paths.
+- **Scroll-save timer leak on tab close** — `closeTab` disposed the scroll
+  anchor and virtual list but did not clear the pending `scrollSaveTimers`
+  entry. The timer callback safely no-op'd (deleted session), but the `Map`
+  entry leaked one timer per closed tab. Fix: clear the timer in `closeTab`.
+- **"Load earlier" during streaming could yank scroll to bottom** — if a
+  streaming chunk's `scrollIfAnchored()` fired in the same frame as
+  `prependMessagesPreservingScroll`, it could undo the scroll compensation
+  and jump the user back to the bottom. Fix: call `pauseForReflow(200)` on
+  the scroll anchor before prepending, so `scrollIfAnchored` is a no-op
+  during the prepend window. The sentinel/scroll listeners correctly set
+  `anchored=false` after the prepend since the user is no longer at the
+  bottom.
 
 ### Added
 
@@ -80,27 +102,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plus, `codicon-sync` → `SPINNER_SVG`.
 - **Attachment chip tokens** — new `--attachment-size`, `--attachment-icon-size`,
   and `--attachment-remove-size` tokens in `tokens.css` for consistent sizing.
-
-- **Scroll position lost after history condensation on long sessions** — when
-  a session had > 140 messages, the chunked loader restored scroll position
-  after 20 messages rendered, but `applyHistoryCondensation` then replaced
-  groups of 20 old messages with ~30px summary buttons, shrinking
-  `scrollHeight` by thousands of pixels. The browser clamped `scrollTop` to
-  the new (smaller) `scrollHeight`, dumping the user at the bottom. Fix:
-  re-restore scroll position in `onAllDone` after condensation, on both the
-  `resume_session` and `init_state` load paths.
-- **Scroll-save timer leak on tab close** — `closeTab` disposed the scroll
-  anchor and virtual list but did not clear the pending `scrollSaveTimers`
-  entry. The timer callback safely no-op'd (deleted session), but the `Map`
-  entry leaked one timer per closed tab. Fix: clear the timer in `closeTab`.
-- **"Load earlier" during streaming could yank scroll to bottom** — if a
-  streaming chunk's `scrollIfAnchored()` fired in the same frame as
-  `prependMessagesPreservingScroll`, it could undo the scroll compensation
-  and jump the user back to the bottom. Fix: call `pauseForReflow(200)` on
-  the scroll anchor before prepending, so `scrollIfAnchored` is a no-op
-  during the prepend window. The sentinel/scroll listeners correctly set
-  `anchored=false` after the prepend since the user is no longer at the
-  bottom.
 
 ## [0.4.24] - 2026-06-27
 

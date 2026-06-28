@@ -1,7 +1,7 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-06-28
-**Version:** v0.4.24
+**Version:** v0.4.26
 
 ## Highlights (2026-06-28) — UI methodology, icon migration, file handling fixes
 
