@@ -3643,8 +3643,8 @@ button.modal-session-item:focus {
   top: calc(var(--header-h, 48px) - 4px);
   right: var(--space-2);
   z-index: var(--z-modal-backdrop);
-  background: var(--vscode-menu-background, var(--oc-bg));
-  border: 1px solid var(--vscode-menu-border, var(--color-border));
+  background: var(--oc-bg, var(--vscode-menu-background));
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-1);
   min-width: 180px;
@@ -3705,10 +3705,10 @@ button.modal-session-item:focus {
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-1) var(--space-3);
-  background: var(--vscode-statusBar-background, var(--oc-bg));
+  background: var(--oc-bg, var(--vscode-statusBar-background));
   border-bottom: 1px solid var(--color-border);
   font-size: var(--text-xs);
-  color: var(--vscode-statusBar-foreground, var(--color-muted));
+  color: var(--oc-muted);
   min-height: 24px;
   container-name: status-strip;
   container-type: inline-size;

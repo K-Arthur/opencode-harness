@@ -2426,9 +2426,9 @@
 /* ─── Plan Card ─── */
 
 .plan-card {
-  border: 1px solid var(--vscode-panel-border, #3c3c3c);
+  border: 1px solid var(--oc-border);
   border-radius: var(--radius-lg);
-  background: var(--vscode-sideBar-background, #1e1e1e);
+  background: var(--oc-bg);
   padding: var(--space-3) var(--space-4);
   margin: var(--space-2) 0;
 }
@@ -2588,8 +2588,8 @@
 .plan-card-footer {
   margin-top: var(--space-2);
   font-size: var(--text-xs);
-  color: var(--vscode-descriptionForeground, #999999);
-  border-top: 1px solid var(--vscode-panel-border, #3c3c3c);
+  color: var(--oc-muted);
+  border-top: 1px solid var(--oc-border);
   padding-top: var(--space-1-5);
 }
 

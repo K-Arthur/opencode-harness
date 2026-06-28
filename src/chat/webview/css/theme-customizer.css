@@ -18,9 +18,9 @@
 /* ─── Component Tokens ─── */
 :root {
   --theme-customizer-backdrop: color-mix(in srgb, #000 40%, transparent);
-  --theme-customizer-panel-bg: var(--vscode-panel-background, var(--oc-bg));
-  --theme-customizer-panel-fg: var(--vscode-panel-foreground, var(--oc-fg));
-  --theme-customizer-panel-border: var(--vscode-panel-border, var(--oc-border));
+  --theme-customizer-panel-bg: var(--oc-bg, var(--vscode-panel-background));
+  --theme-customizer-panel-fg: var(--oc-fg, var(--vscode-panel-foreground));
+  --theme-customizer-panel-border: var(--oc-border, var(--vscode-panel-border));
   --theme-customizer-section-header-bg: color-mix(in srgb, var(--oc-bg) 92%, var(--oc-fg));
   --theme-customizer-swatch-size: 28px;
   --theme-customizer-swatch-gap: 3px;

@@ -237,8 +237,8 @@
   --oc-tdd-refactor: var(--vscode-terminal-ansiMagenta, #8b5cf6);
   --oc-tdd-coverage: var(--vscode-terminal-ansiYellow, #f59e0b);
 
-  /* Subtle elevated surface — for tool cards in dark mode */
-  --oc-surface-elevated: color-mix(in srgb, var(--vscode-editor-background, #1e1e1e) 85%, white 15%);
+  /* Subtle elevated surface — derives from --oc-editor-bg so light/dark/HC presets adapt it */
+  --oc-surface-elevated: color-mix(in srgb, var(--oc-editor-bg) 90%, var(--oc-fg) 10%);
 
   /* ─── Tool Call Accent Colours ─── */
   --tool-read-color: var(--toolReadColor, #5b9fd7);
@@ -265,7 +265,7 @@
   /* Line-number gutter tint — darker than the content background. */
   --diff-added-line-number-bg: var(--oc-diff-added-line-number-bg, color-mix(in srgb, #4caf50 32%, transparent));
   --diff-removed-line-number-bg: var(--oc-diff-removed-line-number-bg, color-mix(in srgb, #f44336 32%, transparent));
-  --bg-code: var(--vscode-textCodeBlock-background, rgba(0,0,0,0.2));
+  --bg-code: var(--vscode-textCodeBlock-background, color-mix(in srgb, var(--oc-editor-bg) 95%, var(--oc-fg) 5%));
 
   /* ─── Markdown Colours (OpenCode CLI theme parity) ─── */
   --markdown-text: var(--oc-markdown-text, var(--color-fg));
@@ -302,13 +302,13 @@
   /* ─── Message Role Colours ─── */
   --assistant-message-bg: transparent;
   --assistant-message-fg: var(--oc-fg);
-  --user-message-bg: var(--vscode-input-background, rgba(128,128,128,0.1));
+  --user-message-bg: var(--oc-user-msg-bg);
   --user-message-fg: var(--oc-fg);
 
   /* ─── Message Role Colors (injected by ThemeManager) ─── */
   --oc-user-msg-bg: var(--vscode-input-background, rgba(128, 128, 128, 0.1));
   --oc-assistant-msg-bg: transparent;
-  --oc-tool-bg: var(--vscode-textBlockQuote-background, rgba(128, 128, 128, 0.05));
+  --oc-tool-bg: color-mix(in srgb, var(--oc-editor-bg) 80%, transparent);
 
   /* ─── Syntax Highlighting (injected by ThemeManager) ─── */
   --oc-syn-keyword: var(--vscode-symbolIcon-keywordForeground, #569cd6);
