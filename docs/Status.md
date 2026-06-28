@@ -1,7 +1,26 @@
 # opencode-harness — Status
 
-**Last Updated:** 2026-06-27
+**Last Updated:** 2026-06-28
 **Version:** v0.4.24
+
+## Highlights (2026-06-28) — Long-session scroll fixes
+
+**Scroll fix pass: condensation race, timer leak, prepend-during-streaming race.**
+
+- **Scroll position lost after history condensation** — on sessions with > 140
+  messages, the chunked loader restored scroll after 20 messages, but
+  `applyHistoryCondensation` then replaced groups of 20 old messages with
+  summary buttons, shrinking `scrollHeight` and causing the browser to clamp
+  `scrollTop` to the bottom. Fix: re-restore scroll position in `onAllDone`
+  after condensation, on both `resume_session` and `init_state` load paths.
+- **Scroll-save timer leak on tab close** — `closeTab` did not clear the
+  pending `scrollSaveTimers` entry. Fix: clear the timer in `closeTab`.
+- **"Load earlier" during streaming could yank scroll to bottom** — a
+  concurrent streaming chunk's `scrollIfAnchored()` could undo the scroll
+  compensation from `prependMessagesPreservingScroll`. Fix:
+  `pauseForReflow(200)` on the scroll anchor before prepending.
+
+Files: `src/chat/webview/main.ts`, `CHANGELOG.md`, `docs/Status.md`.
 
 ## Highlights (2026-06-27) — Question-answer recovery crash, empty question bar persistence
 

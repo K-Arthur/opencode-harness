@@ -1616,6 +1616,15 @@ function setupTodoSkillAndSubagentPanels(): void {
       scrollAnchors.delete(tabId)
     }
 
+    // Clear pending scroll-save timer for this tab. The callback safely
+    // no-ops (setScrollPosition returns false for deleted sessions) but the
+    // Map entry was never removed, leaking one timer per closed tab.
+    const pendingScrollSave = scrollSaveTimers.get(tabId)
+    if (pendingScrollSave) {
+      timers.clearTimeout(pendingScrollSave)
+      scrollSaveTimers.delete(tabId)
+    }
+
     // Dispose virtual list for this tab. The panel DOM is removed with the
     // tab, so skip restoreAll — re-rendering every detached message into a
     // container that is about to be discarded is pure wasted main-thread work.
@@ -2514,11 +2523,14 @@ function setupTodoSkillAndSubagentPanels(): void {
                 onAllDone: () => {
                   applyHistoryCondensation(session.id)
                   setupJumpToBottom(session.id)
-                  // C: only restore if onChunkDone didn't already (small sessions)
-                  if (!scrollRestored) {
-                    scrollRestored = true
-                    restoreScrollPosition(session.id, msgList, stateManager.getScrollPosition(session.id) === 0)
-                  }
+                  // Re-restore scroll position after condensation. Condensation
+                  // replaces groups of 20 old messages with ~30px summary buttons,
+                  // shrinking scrollHeight by thousands of pixels. Without this,
+                  // the position restored by onChunkDone is stale and the browser
+                  // clamps scrollTop to the new (smaller) scrollHeight, dumping
+                  // the user at the bottom.
+                  restoreScrollPosition(session.id, msgList, stateManager.getScrollPosition(session.id) === 0)
+                  scrollRestored = true
                   debouncedUpdateScrollMarkers(session.id)
                   refreshConversationTimeline(session.id)
                 },
@@ -2637,6 +2649,14 @@ function setupTodoSkillAndSubagentPanels(): void {
           const isConsecutive = index > 0 && moreMsgs[index - 1]?.role === m.role
           return renderMessage(m, { ...renderOpts, turnIndex: session?.messages.indexOf(m) }, isConsecutive)
         })
+
+        // Pause the scroll anchor during prepend so a concurrent streaming
+        // chunk's scrollIfAnchored() cannot yank the user back to the bottom
+        // before the scroll compensation has settled. After the reflow window,
+        // the sentinel/scroll listeners correctly set anchored=false because
+        // the user is no longer at the bottom (new content was added above).
+        const prependAnchor = scrollAnchors.get(sid)
+        if (prependAnchor) prependAnchor.pauseForReflow(200)
 
         prependMessagesPreservingScroll(msgList, elements)
 
@@ -3422,11 +3442,14 @@ function setupTodoSkillAndSubagentPanels(): void {
                    onAllDone: () => {
                     applyHistoryCondensation(s.id)
                     setupJumpToBottom(s.id)
-                    // C: only restore if onChunkDone didn't already (small sessions)
-                    if (!scrollRestored) {
-                      scrollRestored = true
-                      restoreScrollPosition(s.id, msgList, isFirstInit && stateManager.getScrollPosition(s.id) === 0)
-                    }
+                    // Re-restore scroll position after condensation. Condensation
+                    // replaces groups of 20 old messages with ~30px summary buttons,
+                    // shrinking scrollHeight by thousands of pixels. Without this,
+                    // the position restored by onChunkDone is stale and the browser
+                    // clamps scrollTop to the new (smaller) scrollHeight, dumping
+                    // the user at the bottom.
+                    restoreScrollPosition(s.id, msgList, isFirstInit && stateManager.getScrollPosition(s.id) === 0)
+                    scrollRestored = true
                     debouncedUpdateScrollMarkers(s.id)
                     refreshConversationTimeline(s.id)
                     refreshActivityAndTasks(s.id)
