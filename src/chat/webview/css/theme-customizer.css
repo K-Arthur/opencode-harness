@@ -34,6 +34,8 @@
 
 /* ─── Dialog / Backdrop ─── */
 .theme-customizer-dialog {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--theme-customizer-panel-border);
   border-radius: var(--theme-customizer-radius);
   background: var(--theme-customizer-panel-bg);
@@ -41,8 +43,9 @@
   box-shadow: var(--theme-customizer-shadow);
   padding: 0;
   max-width: min(720px, 94vw);
-  max-height: min(85vh, 700px);
   width: 100%;
+  height: auto;
+  max-height: min(85vh, 700px);
   overflow: hidden;
   font-family: var(--font-sans);
   font-size: var(--text-sm);
@@ -109,8 +112,10 @@
   flex-direction: column;
   gap: var(--space-4);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   padding: 0 var(--space-5) var(--space-3);
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
 }
 
@@ -606,6 +611,8 @@ details[open] .theme-accordion__chevron {
 @media (max-width: 640px) {
   .theme-customizer-dialog {
     max-width: 100vw;
+    width: 100vw;
+    height: 100vh;
     max-height: 100vh;
     border-radius: 0;
   }
