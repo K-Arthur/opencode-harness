@@ -1,5 +1,6 @@
 import type { SubagentActivity, SessionState, RunActivitySnapshot } from "./types"
-import { webviewLog } from "./streamHandlers"
+import { resolveSubagentActivityName } from "../handlers/toolClassifier"
+import { recomputeActivityLiveness } from "./subagentReconciler"
 
 export interface SubagentsModuleDeps {
   stateManager: {
@@ -119,7 +120,13 @@ export function createSubagentsModule(deps: SubagentsModuleDeps) {
       merged.set(existing.id, existing)
     }
     for (const activity of incoming) {
-      merged.set(activity.id, { ...merged.get(activity.id), ...activity })
+      // Merge then recompute liveness from the merged status so a stale
+      // isLive=true from the previous running state cannot survive a
+      // transition to completed/failed/cancelled. Host messages do not
+      // always include isLive, so the spread alone is insufficient.
+      const prev = merged.get(activity.id)
+      const combined = prev ? { ...prev, ...activity } : activity
+      merged.set(activity.id, recomputeActivityLiveness(combined))
     }
     const activities = [...merged.values()]
     deps.stateManager.setSubagentActivities(sessionId, activities)
@@ -134,11 +141,15 @@ export function createSubagentsModule(deps: SubagentsModuleDeps) {
     return (activity.subagents ?? []).map((subagent): SubagentActivity => {
       const rawStatus = typeof subagent.status === "string" ? subagent.status : "unknown"
       const status = normalizeSubagentStatus(rawStatus)
+      // Resolve a descriptive name: when agentName is the generic "subagent"
+      // fallback, prefer the currentActivity/description so the panel shows what
+      // the subagent is actually doing instead of the useless literal "subagent".
+      const name = resolveSubagentActivityName(subagent.agentName, subagent.currentActivity)
       return {
         id: subagent.childSessionId || subagent.id,
         sessionId: subagent.childSessionId,
         parentSessionId: activity.cliSessionId || activity.tabId,
-        name: subagent.agentName || "subagent",
+        name,
         status,
         currentActivity: subagent.currentActivity,
         isLive: rawStatus === "queued" || rawStatus === "running" || rawStatus === "waiting" || rawStatus === "unknown",

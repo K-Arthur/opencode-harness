@@ -45,8 +45,9 @@ region — never both at once.
 Escape **stops the active stream only when nothing is open**. The coordinator
 steps aside for combobox popups (mention/slash autocomplete, mode/model/variant
 menus), `aria-modal` dialogs it does not manage (instructions editor, model
-manager, MCP config, theme customizer, permission config, mode warning), and
-non-prompt text fields. `Ctrl+Shift+Esc` is the always-on, unambiguous stop.
+manager, MCP config, permission config, mode warning), the native `<dialog>`
+theme customizer (managed by `themeOrchestrator.ts`), and non-prompt text
+fields. `Ctrl+Shift+Esc` is the always-on, unambiguous stop.
 
 ## Accessibility guarantees
 

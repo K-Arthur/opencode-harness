@@ -55,7 +55,7 @@ import { setupSearch } from "./ui/messageSearch"
 import { ToolElapsedTracker } from "./ui/toolElapsed"
 import { setupDisplayToggles } from "./ui/displayToggles"
 import { toolPartialStore } from "./toolPartialStore"
-import { setupThemeCustomizer, openThemeCustomizer, populateCliList, applyThemeCustomizerConfig } from "./ui/themeCustomizer"
+import { createThemeOrchestrator } from "./ui/theme/themeOrchestrator"
 import { setupModeToggle, updateModeDropdown, updateModeSelectorState, syncModeUI as syncModeUIModule, cycleModeForward } from "./ui/modeDropdown"
 import { setupInstructionsEditor } from "./ui/instructionsEditor"
 import { setupSessionModal as setupSessionModalModule, openSessionModal as openSessionModalModule, closeSessionModal as closeSessionModalModule, trapModalFocus } from "./ui/sessionModal"
@@ -947,7 +947,7 @@ function getVsCodeApi() {
       postMessage: (msg) => vscode.postMessage(msg),
       closeSettingsMenu,
       openMcpConfig: () => mcpConfig.open(),
-      openThemeCustomizer: () => openThemeCustomizer(themeDeps),
+      openThemeCustomizer: () => themeOrchestrator.open(),
       openPermissionConfig: () => {
         const active = stateManager.getActiveSession()
         const sid = active?.id ?? stateManager.getState().activeSessionId
@@ -1911,17 +1911,10 @@ function setupTodoSkillAndSubagentPanels(): void {
     setupSettingsMenuKeyboardNavModule(els, closeSettingsMenu)
   }
 
-  type ThemeCustomizerConfig = {
-    preset?: string
-    overrides?: Record<string, string>
-  }
-
-  const themeDeps = {
-    els,
+  const themeOrchestrator = createThemeOrchestrator({
     postMessage: (msg: Record<string, unknown>) => vscode.postMessage(msg),
     pushUndo: (state: { themePreset: string; themeOverrides: Record<string, string> }) => undoRedoPush(state),
-  }
-  setupThemeCustomizer(themeDeps)
+  })
 
   /* ─── PROVIDER PANEL ─── */
 
@@ -3194,14 +3187,9 @@ function setupTodoSkillAndSubagentPanels(): void {
         }
       }],
       ["theme_vars", (msg) => { applyThemeVars(msg.vars as Record<string, string> | undefined) }],
-      ["theme_config", (msg) => { applyThemeCustomizerConfig(els, msg.theme as ThemeCustomizerConfig | undefined) }],
-      ["theme_config_error", (msg) => { 
-        const error = msg.error as string | undefined
-        console.error(`[opencode-harness] Theme config error: ${error || "Unknown error"}`)
-        // Show error to user - could add a toast notification here
-        alert(`Failed to save theme: ${error || "Unknown error"}`)
-      }],
-      ["cli_themes_list", (msg) => { populateCliList(els, msg.themes as Array<{ name: string; source: string }>, (m) => vscode.postMessage(m)) }],
+      ["theme_config", (msg) => { themeOrchestrator.handleHostMessage(msg as Record<string, unknown>) }],
+      ["theme_config_error", (msg) => { themeOrchestrator.handleHostMessage(msg as Record<string, unknown>) }],
+      ["cli_themes_list", (msg) => { themeOrchestrator.handleHostMessage(msg as Record<string, unknown>) }],
       ["rate_limit_state", (msg) => {
         const quotaState = msg.state as RateLimitWebviewState | null | undefined
         hasQuotaState = Boolean(quotaState)

@@ -78,7 +78,7 @@ describe("subagentCard — rendering", () => {
     assert.ok(el.classList.contains("subagent-card"))
     assert.ok(el.classList.contains("subagent-card--running"))
     assert.equal((el as HTMLDetailsElement).open, true, "running cards expand by default")
-    assert.match(el.querySelector(".subagent-card-title")?.textContent || "", /Subagent: explore/)
+    assert.match(el.querySelector(".subagent-card-title")?.textContent || "", /explore/)
     assert.equal(el.querySelector(".subagent-card-purpose")?.textContent, "Audit UI components")
     assert.equal(el.querySelector(".subagent-card-status")?.textContent, "Running")
     assert.equal(el.querySelector(".subagent-card-section"), null, "no result/error section while running")
@@ -145,7 +145,9 @@ describe("subagentCard — dynamic title resolution", () => {
   it("shows the real agentName in the title when a subagent_type is specified", async () => {
     const { renderSubagentTaskCard } = await import("./subagentCard")
     const el = renderSubagentTaskCard(taskBlock())
-    assert.match(el.querySelector(".subagent-card-title")?.textContent || "", /Subagent: explore/)
+    // Title is the agentName without the noisy "Subagent: " prefix — the icon
+    // and card context already signal "subagent".
+    assert.match(el.querySelector(".subagent-card-title")?.textContent || "", /explore/)
     // Purpose shows as subtitle when title came from agentName
     assert.equal(el.querySelector(".subagent-card-purpose")?.textContent, "Audit UI components")
   })
@@ -155,7 +157,8 @@ describe("subagentCard — dynamic title resolution", () => {
     const el = renderSubagentTaskCard(taskBlock({
       args: { description: "Refactor the auth module", prompt: "Do the refactor" },
     }))
-    assert.match(el.querySelector(".subagent-card-title")?.textContent || "", /Subagent: Refactor the auth module/)
+    // Title is the purpose-derived name, no "Subagent: " prefix
+    assert.match(el.querySelector(".subagent-card-title")?.textContent || "", /Refactor the auth module/)
     // Purpose subtitle is suppressed when title already came from purpose
     assert.equal(el.querySelector(".subagent-card-purpose"), null)
   })
@@ -163,7 +166,7 @@ describe("subagentCard — dynamic title resolution", () => {
   it("shows bare 'Subagent' when neither agentName nor purpose is available", async () => {
     const { renderSubagentTaskCard } = await import("./subagentCard")
     const el = renderSubagentTaskCard(taskBlock({ args: {} }))
-    assert.match(el.querySelector(".subagent-card-title")?.textContent || "", /Subagent: Subagent/)
+    assert.match(el.querySelector(".subagent-card-title")?.textContent || "", /^Subagent$/)
     assert.equal(el.querySelector(".subagent-card-purpose"), null)
   })
 

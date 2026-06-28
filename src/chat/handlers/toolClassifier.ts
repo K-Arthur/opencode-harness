@@ -58,6 +58,39 @@ function asString(v: unknown): string | undefined {
 }
 
 /**
+ * Resolve a human-readable display name for a subagent invocation.
+ *
+ * When the agentName is the generic "subagent" fallback (no subagent_type/name/
+ * agent was specified), prefer the task description (purpose) so cards and the
+ * activity panel show what the subagent is actually doing instead of the
+ * useless literal "subagent". Truncates long purposes to keep titles compact.
+ *
+ * @param inv - The parsed subagent invocation.
+ * @returns A display name suitable for card titles, panel rows, and tab names.
+ */
+export function resolveSubagentDisplayName(inv: SubagentInvocation): string {
+  if (inv.agentName && inv.agentName !== "subagent") return inv.agentName
+  if (inv.purpose) return inv.purpose.length > 80 ? `${inv.purpose.slice(0, 77)}...` : inv.purpose
+  return "Subagent"
+}
+
+/**
+ * Resolve a display name from raw activity fields that may carry an agentName
+ * and/or a currentActivity/description string. Used by the activity panel and
+ * subagentsModule where the data arrives as SubagentActivity rather than a
+ * parsed SubagentInvocation.
+ *
+ * @param agentName - The agent name from the activity (may be "subagent" or empty).
+ * @param description - A fallback description / current activity string.
+ * @returns A display name; falls back to "Subagent" when neither is useful.
+ */
+export function resolveSubagentActivityName(agentName: string | undefined, description: string | undefined): string {
+  if (agentName && agentName !== "subagent") return agentName
+  if (description) return description.length > 80 ? `${description.slice(0, 77)}...` : description
+  return "Subagent"
+}
+
+/**
  * Map an opencode tool name to a display class for icon/color treatment.
  *
  * Canonical tool names (per https://opencode.ai/docs/tools/):

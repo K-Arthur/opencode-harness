@@ -47,4 +47,19 @@ describe("tabs.ts", () => {
   it("createTabBar wires newTabBtn click listener", () => {
     assert.ok(source.includes("els.newTabBtn.addEventListener"))
   })
+
+  it("tab close uses closest() so SVG/path clicks inside .tab-close still fire", () => {
+    // Regression: clicks on the inner SVG <path> of the close button used to
+    // miss the classList.contains("tab-close") check and fall through to the
+    // switch handler (or no-op). The fix uses closest(".tab-close") so any
+    // descendant of .tab-close triggers the close callback.
+    assert.ok(
+      source.includes('target.closest(".tab-close")'),
+      "tab close handler must use closest(\".tab-close\") so SVG children trigger close",
+    )
+    assert.ok(
+      !source.includes('target.classList.contains("tab-close")'),
+      "tab close handler must NOT use classList.contains on the direct target (misses SVG clicks)",
+    )
+  })
 })

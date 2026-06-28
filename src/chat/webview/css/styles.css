@@ -31,3 +31,4 @@
 @import url("./cards.css")               layer(blocks);
 @import url("./animations.css")          layer(animations);
 @import url("./accessibility.css")       layer(accessibility);
+@import url("./theme-customizer.css")    layer(components);

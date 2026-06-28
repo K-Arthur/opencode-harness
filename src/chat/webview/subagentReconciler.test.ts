@@ -127,3 +127,73 @@ void describe("subagent auto-open policy", () => {
     assert.ok(completed[0]!.completedAt! >= completed[9]!.completedAt!, "must be newest-first")
   })
 })
+
+void describe("subagent isLive recompute (stale flag fix)", () => {
+  beforeEach(() => setupDom())
+
+  void it("computeIsLive returns true for running/pending/queued/waiting/unknown", async () => {
+    const mod = await import("./subagentReconciler")
+    assert.equal(mod.computeIsLive("running"), true)
+    assert.equal(mod.computeIsLive("pending"), true)
+    assert.equal(mod.computeIsLive("queued"), true)
+    assert.equal(mod.computeIsLive("waiting"), true)
+    assert.equal(mod.computeIsLive("unknown"), true)
+  })
+
+  void it("computeIsLive returns false for completed/failed/cancelled", async () => {
+    const mod = await import("./subagentReconciler")
+    assert.equal(mod.computeIsLive("completed"), false)
+    assert.equal(mod.computeIsLive("failed"), false)
+    assert.equal(mod.computeIsLive("cancelled"), false)
+  })
+
+  void it("recomputeActivityLiveness flips stale isLive=true to false on completed status", async () => {
+    const mod = await import("./subagentReconciler")
+    const stale = {
+      id: "s1", name: "Agent 1", status: "completed" as const,
+      isLive: true, unreadActivityCount: 0, // stale isLive=true despite completed
+    }
+    const result = mod.recomputeActivityLiveness(stale)
+    assert.equal(result.isLive, false, "isLive must be recomputed to false for completed status")
+    assert.equal(result.status, "completed", "status must be preserved")
+    assert.ok(result.completedAt, "completedAt must be set on terminal status")
+  })
+
+  void it("recomputeActivityLiveness preserves existing completedAt", async () => {
+    const mod = await import("./subagentReconciler")
+    const existing = {
+      id: "s1", name: "Agent 1", status: "failed" as const,
+      isLive: true, unreadActivityCount: 0, completedAt: 12345,
+    }
+    const result = mod.recomputeActivityLiveness(existing)
+    assert.equal(result.completedAt, 12345, "existing completedAt must not be overwritten")
+    assert.equal(result.isLive, false, "isLive must be false for failed status")
+  })
+
+  void it("reconcileSubagentStatuses recomputes isLive when incoming omits it", async () => {
+    const mod = await import("./subagentReconciler")
+    const prev = [
+      { id: "s1", name: "Agent 1", status: "running" as const, isLive: true, unreadActivityCount: 0 },
+    ]
+    // Incoming carries status=completed but NO isLive field — the spread merge
+    // alone would preserve the stale isLive=true from prev.
+    const incoming = [
+      { id: "s1", name: "Agent 1", status: "completed" as const, isLive: true, unreadActivityCount: 0 },
+    ]
+    const result = mod.reconcileSubagentStatuses(prev, incoming)
+    assert.equal(result[0]!.status, "completed")
+    assert.equal(result[0]!.isLive, false, "isLive must be recomputed to false despite stale prev value")
+  })
+
+  void it("reconcileSubagentStatuses recomputes isLive for already-terminal dropped subagents", async () => {
+    const mod = await import("./subagentReconciler")
+    // A completed subagent with a stale isLive=true that disappears from the
+    // snapshot must have isLive recomputed to false (not preserved as true).
+    const prev = [
+      { id: "s1", name: "Agent 1", status: "completed" as const, isLive: true, unreadActivityCount: 0, completedAt: 100 },
+    ]
+    const result = mod.reconcileSubagentStatuses(prev, [])
+    assert.equal(result[0]!.status, "completed", "already-terminal dropped subagent keeps its status")
+    assert.equal(result[0]!.isLive, false, "isLive must be recomputed to false even for previously-terminal entries")
+  })
+})

@@ -73,19 +73,20 @@
 
 ---
 
-### Theme Customizer (`themeCustomizer.ts`)
+### Theme Customizer (`ui/theme/` — modular)
 
 | Aspect | Implementation | Status |
 |--------|---------------|--------|
-| Focus trap | `mountModalFocus` (line 2, 77) | ✅ Implemented |
-| Focus return on close | Returns to trigger | ✅ Implemented |
-| Escape to close | Panel click on backdrop | ✅ Implemented |
-| Preset card navigation | Click handlers with `aria-pressed` | ✅ Implemented |
+| Focus trap | Native `<dialog>.showModal()` | ✅ Implemented |
+| Focus return on close | `themeModal.ts` restores to invoker | ✅ Implemented |
+| Escape to close | Native `<dialog>` ESC handling | ✅ Implemented |
+| Preset card navigation | `role="radiogroup"` with roving tabindex | ✅ Implemented |
+| Color override sections | Native `<details>` accordion with custom chevron | ✅ Implemented |
 
 **Verification:**
 - Focus trap on panel
 - Click on backdrop closes panel
-- Preset cards have proper `aria-pressed` state
+- Preset cards have proper `aria-checked` state
 
 ---
 
@@ -259,7 +260,7 @@ Collapsed/hidden regions must:
 | Session Modal | `.hidden` class | ✅ `display: none` | ✅ Returns to trigger | ✅ Verified |
 | Commands Modal | `.hidden` class | ✅ `display: none` | ✅ Returns to trigger | ✅ Verified |
 | Skills Modal | `.hidden` class | ✅ `display: none` | ✅ Returns to trigger | ✅ Verified |
-| Theme Customizer | `.hidden` class | ✅ `display: none` | ✅ Returns to trigger | ✅ Verified |
+| Theme Customizer | Native `<dialog>` | ✅ `showModal()` | ✅ Returns to invoker | ✅ Reworked |
 | Provider Panel | `.hidden` class | ✅ `display: none` | ✅ Returns to trigger | ✅ Verified |
 | Changed Files Dropdown | `.hidden` class | ✅ `display: none` | ✅ Returns to trigger | ✅ Verified |
 | Model Dropdown | `.hidden` class | ✅ `display: none` | ✅ Returns to trigger | ✅ Verified |

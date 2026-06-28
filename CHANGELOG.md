@@ -17,6 +17,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Theme customizer rework**: Complete redesign of the `Customize theme` modal
+  with a modular, accessible architecture. The modal now uses the native
+  `<dialog>` element for focus trapping, ESC handling, and backdrop; preset
+  cards are terminal-window thumbnails with slim swatch strips and
+  `role="radiogroup"` roving tabindex keyboard navigation; color override
+  sections use native `<details>` accordion (no CSS Grid animation); a live
+  preview strip shows message bubbles and a code block with the current overrides.
+  New modules: `themeOrchestrator`, `themeModal`, `presetGrid`, `cliSearch`,
+  `colorSections`, `previewStrip`, `themeState`, `themeUtils`, `themeBridge`,
+  `themeConstants`. All new modules have co-located tests (60+ new test cases).
+  `RESEARCH.md` documents findings from VS Code docs, WAI-ARIA APG, MDN, and
+  accessibility blogs.
+
+### Fixed
+
+- **Tab close not firing on SVG clicks**: `tabs.ts` used
+  `target.classList.contains("tab-close")` which missed clicks on the inner
+  SVG `<path>`. Fixed by using `target.closest(".tab-close")` so any descendant
+  of `.tab-close` triggers the close callback.
+- **Generic "subagent" titles ignoring task description**: When the agent name
+  was the generic "subagent" fallback, the activity panel and tool cards showed
+  the useless literal "subagent" instead of the task description. Added shared
+  `resolveSubagentDisplayName` / `resolveSubagentActivityName` helpers in
+  `toolClassifier.ts`; both `subagentCard.ts` and `subagentsModule.ts` now use
+  them. The card title also drops the noisy `Subagent: ` prefix when the name
+  is already descriptive.
+- **Stale `isLive` flag causing running/done status drift**: The
+  `{...existing, ...incoming}` merge preserved a stale `isLive=true` from the
+  previous running state when the incoming message omitted `isLive`. Added
+  `computeIsLive` and `recomputeActivityLiveness` helpers in
+  `subagentReconciler.ts`; both `reconcileSubagentStatuses` and
+  `mergeSubagentActivities` now recompute `isLive` from the normalized status
+  after every merge. `completedAt` is also set on terminal transitions.
+- **Theme customizer blinking**: Two causes were fixed. (1) The CSS used
+  `.theme-accordion--open` to animate the accordion, but the JavaScript only
+  toggled the native `<details>` `open` attribute, so the CSS Grid animation
+  (`grid-template-rows: 0fr → 1fr`) conflicted with the browser's native
+  `<details>` rendering. Fixed by switching the CSS selectors to `details[open]`
+  and then removing the CSS Grid animation entirely, letting the native
+  `<details>` element handle open/close. (2) `presetGrid.setSelected()` called
+  the same `selectPreset()` function used for user clicks, which fired
+  `onSelect` and sent `update_theme_config` back to the host. During hydration
+  the host responded with another `theme_config`, creating a webview-host
+  message loop. Fixed by splitting the selection into `updateSelection()`
+  (programmatic) and `selectPreset()` (user-initiated), so `setSelected()` no
+  longer fires the callback.
+
+### Changed
+
+- **Theme customizer modal is now built dynamically**: The static
+  `#theme-customizer-panel` markup in `index.html` has been removed. The
+  orchestrator builds the `<dialog>` DOM dynamically and appends it to
+  `document.body`. Old element refs in `dom.ts` have been removed. The legacy
+  `themeCustomizer.ts` is now a thin re-export shim.
+- **Theme customizer CSS**: New `theme-customizer.css` imported under
+  `@layer components` in `styles.css`. Uses `:focus-visible` only (never
+  `:focus`), dashed focus rings, `prefers-reduced-motion` overrides, and
+  44×44px minimum tap targets on touch devices.
+- **Theme customizer styling consistency**: The live preview strip now uses the
+  correct message role tokens (`--oc-user-msg-bg`, `--oc-user-msg-fg`,
+  `--oc-assistant-msg-bg`, `--oc-assistant-msg-fg`) instead of generic
+  foreground colors, and the fake code lines now use the real syntax color
+  tokens (`--oc-syn-keyword`, `--oc-syn-string`, `--oc-syn-function`). Removed
+  unused component tokens (`--theme-customizer-input-height`,
+  `--theme-customizer-header-border`) and switched the modal shadow to the
+  shared `var(--shadow-xl)` token. The native `<details>` marker is now hidden
+  so only the custom chevron is visible.
+
 <!-- MAINTENANCE NOTE: Keep this section empty unless it describes work that has
      NOT shipped in any version bump. When `npm version` / `npm run
      reinstall` bumps the version, move all accumulated entries below into a

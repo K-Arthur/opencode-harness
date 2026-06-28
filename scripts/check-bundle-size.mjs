@@ -4,8 +4,8 @@
 // Enforces repo-level bundle size limits for the two build outputs that
 // load synchronously into the host process or the chat webview:
 //
-//   dist/extension.js                  ≤ 545KB
-//   dist/chat/webview/main.js          ≤ 690KB  (paydown target: 600KB)
+//   dist/extension.js                  ≤ 748KB
+//   dist/chat/webview/main.js          ≤ 812KB  (paydown target: 600KB)
 //   dist/chat/webview/markdownWorker.js ≤ 500KB  (advisory)
 //
 // IMPORTANT: these limits describe the **production (minified) build**
@@ -195,6 +195,18 @@
 // CSS). The SVG strings are slightly larger than the single-character glyphs
 // they replaced, pushing the bundle from 796.0KB to 796.9KB. +2KB restores
 // headroom so the gate still trips on a real regression. Host limit unchanged.
+//
+// 2026-06-28 re-baseline (webview 798KB -> 812KB): theme customizer rework
+// replaced the monolithic themeCustomizer.ts with 10 new modular components
+// (themeOrchestrator, themeModal, presetGrid, cliSearch, colorSections,
+// previewStrip, themeState, themeUtils, themeBridge, themeConstants). The
+// new code adds a native <dialog> shell, radiogroup keyboard nav, CSS Grid
+// accordion animation, live preview strip, typed message contract, and
+// shared constants — all with co-located tests. The old themeCustomizer.ts
+// was gutted to a 28-line re-export shim, but the net increase is ~13KB
+// because the new modular code is more feature-rich. Production build
+// measures 809.9KB. +14KB keeps ~0.3% headroom so the gate still trips on
+// a real regression. Host limit unchanged.
 
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
@@ -205,7 +217,7 @@ const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
   { path: "dist/extension.js", limitBytes: 748 * 1024, label: "extension host" },
-  { path: "dist/chat/webview/main.js", limitBytes: 798 * 1024, label: "chat webview" },
+  { path: "dist/chat/webview/main.js", limitBytes: 812 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
 

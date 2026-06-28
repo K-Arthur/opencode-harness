@@ -145,15 +145,8 @@ export interface ElementRefs {
   // Settings overflow menu
   settingsMenu: HTMLElement
   themeCustomizerBtn: HTMLElement
-  themeCustomizerPanel: HTMLDivElement
-  themeCustomizerClose: HTMLButtonElement
-  themePresetCards: HTMLDivElement
-  themeCliSearch: HTMLInputElement
-  themeCliList: HTMLDivElement
-  themePreviewSwatch: HTMLDivElement
-  themeCustomizerReset: HTMLButtonElement
-  themeCustomizerSave: HTMLButtonElement
-  themeCustomizerCancel: HTMLButtonElement
+  // Theme customizer panel is built dynamically by themeOrchestrator.ts —
+  // no static element refs needed.
 
   // Status strip (below tab bar)
   statusStrip: HTMLElement
@@ -350,15 +343,6 @@ export function getElementRefs(): ElementRefs {
     // Settings overflow menu
     settingsMenu: requireElement("settings-menu"),
     themeCustomizerBtn: requireElement("theme-customizer-btn"),
-    themeCustomizerPanel: requireElement<HTMLDivElement>("theme-customizer-panel"),
-    themeCustomizerClose: requireElement<HTMLButtonElement>("theme-customizer-close"),
-    themePresetCards: requireElement<HTMLDivElement>("theme-preset-cards"),
-    themeCliSearch: requireElement<HTMLInputElement>("theme-cli-search"),
-    themeCliList: requireElement<HTMLDivElement>("theme-cli-list"),
-    themePreviewSwatch: requireElement<HTMLDivElement>("theme-preview-swatch"),
-    themeCustomizerReset: requireElement<HTMLButtonElement>("theme-customizer-reset"),
-    themeCustomizerSave: requireElement<HTMLButtonElement>("theme-customizer-save"),
-    themeCustomizerCancel: requireElement<HTMLButtonElement>("theme-customizer-cancel"),
 
     // Status strip (below tab bar)
     statusStrip: requireElement("status-strip"),

@@ -286,7 +286,7 @@ describe("main.ts", () => {
   })
 
   it("has a personalized theme customizer modal workflow", () => {
-    assert.ok(allSource.includes("setupThemeCustomizer"), "must initialize the theme customizer modal")
+    assert.ok(allSource.includes("createThemeOrchestrator"), "must initialize the theme customizer via createThemeOrchestrator")
     assert.ok(allSource.includes('"get_theme_config"'), "must request current theme config")
     assert.ok(allSource.includes('"update_theme_config"'), "must save personalized theme overrides")
     assert.ok(allSource.includes('"theme_config"'), "must handle theme config responses")

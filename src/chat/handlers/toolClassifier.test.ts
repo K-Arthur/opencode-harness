@@ -1,6 +1,6 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { classifyTool } from "./toolClassifier"
+import { classifyTool, resolveSubagentDisplayName, resolveSubagentActivityName } from "./toolClassifier"
 
 describe("classifyTool — canonical opencode tool names (Batch 3d)", () => {
   // ── Read class: safe inspection ──────────────────────────────────────────
@@ -39,4 +39,65 @@ describe("classifyTool — canonical opencode tool names (Batch 3d)", () => {
   })
   it("case-insensitive: BASH → 'exec'", () => assert.equal(classifyTool("BASH"), "exec"))
   it("case-insensitive: TodoWrite → 'meta'", () => assert.equal(classifyTool("TodoWrite"), "meta"))
+})
+
+describe("resolveSubagentDisplayName — shared title resolution", () => {
+  it("returns the real agentName when a subagent_type is specified", () => {
+    assert.equal(
+      resolveSubagentDisplayName({ agentName: "explore", purpose: "Audit UI", prompt: "x" }),
+      "explore",
+    )
+  })
+
+  it("falls back to purpose when agentName is the generic 'subagent'", () => {
+    assert.equal(
+      resolveSubagentDisplayName({ agentName: "subagent", purpose: "Refactor auth", prompt: "x" }),
+      "Refactor auth",
+    )
+  })
+
+  it("falls back to purpose when agentName is empty", () => {
+    assert.equal(
+      resolveSubagentDisplayName({ agentName: "", purpose: "Write tests", prompt: "x" }),
+      "Write tests",
+    )
+  })
+
+  it("returns bare 'Subagent' when neither agentName nor purpose is available", () => {
+    assert.equal(resolveSubagentDisplayName({ agentName: "subagent", purpose: "", prompt: "" }), "Subagent")
+    assert.equal(resolveSubagentDisplayName({ agentName: "", purpose: undefined, prompt: "" }), "Subagent")
+  })
+
+  it("truncates long purpose to 80 characters with ellipsis", () => {
+    const longPurpose = "A".repeat(120)
+    const result = resolveSubagentDisplayName({ agentName: "subagent", purpose: longPurpose, prompt: "" })
+    assert.ok(result.length < longPurpose.length + 20, "must be truncated")
+    assert.ok(result.endsWith("..."), "must end with ellipsis")
+  })
+})
+
+describe("resolveSubagentActivityName — activity-panel name resolution", () => {
+  it("returns the real agentName when provided", () => {
+    assert.equal(resolveSubagentActivityName("explore", "Audit UI"), "explore")
+  })
+
+  it("falls back to description when agentName is 'subagent'", () => {
+    assert.equal(resolveSubagentActivityName("subagent", "Refactor auth"), "Refactor auth")
+  })
+
+  it("falls back to description when agentName is undefined", () => {
+    assert.equal(resolveSubagentActivityName(undefined, "Write tests"), "Write tests")
+  })
+
+  it("returns bare 'Subagent' when neither is available", () => {
+    assert.equal(resolveSubagentActivityName("subagent", undefined), "Subagent")
+    assert.equal(resolveSubagentActivityName(undefined, ""), "Subagent")
+  })
+
+  it("truncates long description to 80 characters with ellipsis", () => {
+    const longDesc = "B".repeat(120)
+    const result = resolveSubagentActivityName("subagent", longDesc)
+    assert.ok(result.length < longDesc.length + 20, "must be truncated")
+    assert.ok(result.endsWith("..."), "must end with ellipsis")
+  })
 })

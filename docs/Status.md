@@ -1,9 +1,46 @@
 # opencode-harness — Status
 
 **Last Updated:** 2026-06-28
-**Version:** v0.4.26
+**Version:** v0.4.31
 
-## Highlights (2026-06-28) — UI methodology, icon migration, file handling fixes
+## Highlights (2026-06-28) — Theme customizer rework, subagent bug fixes
+
+**Complete redesign of the Customize theme modal with modular accessible architecture, plus three subagent UX regression fixes.**
+
+- **Theme customizer rework** — replaced the monolithic `themeCustomizer.ts`
+  with 10 new modular components under `src/chat/webview/ui/theme/`:
+  `themeOrchestrator` (wires everything together), `themeModal` (native
+  `<dialog>` shell with focus trapping/ESC/backdrop), `presetGrid` (terminal-
+  window thumbnail cards with `role="radiogroup"` roving tabindex), `cliSearch`
+  (debounced CLI theme search with listbox pattern), `colorSections` (native
+  `<details>` accordion), `previewStrip` (live preview), `themeState` (ephemeral
+  modal state with undo), `themeUtils` (pure utilities), `themeBridge` (typed
+  message contract), `themeConstants` (shared CSS var map). All modules have
+  co-located tests (60+ new test cases). `RESEARCH.md` documents findings from
+  VS Code docs, WAI-ARIA APG, MDN, and a11y blogs.
+- **Theme customizer blinking fixed** — removed the CSS Grid accordion animation
+  that conflicted with native `<details>` rendering, and split
+  `presetGrid.setSelected()` from `selectPreset()` so hydration no longer fires
+  the user-action callback that created a webview-host message loop.
+- **Theme customizer styling consistency** — preview strip now uses the correct
+  message and syntax color tokens; removed unused component tokens; modal shadow
+  uses the shared `--shadow-xl` token; native `<details>` marker is hidden.
+- **Tab close not firing on SVG clicks** — `tabs.ts` used
+  `classList.contains("tab-close")` which missed clicks on inner SVG elements.
+  Fixed with `closest(".tab-close")`.
+- **Generic "subagent" titles** — when the agent name was the generic fallback,
+  the activity panel showed "subagent" instead of the task description. Added
+  shared `resolveSubagentDisplayName`/`resolveSubagentActivityName` helpers.
+- **Stale `isLive` flag** — the spread merge preserved stale `isLive=true`
+  after status transitions. Added `computeIsLive`/`recomputeActivityLiveness`
+  helpers; `isLive` is now derived from status, never trusted from the wire.
+- **Bundle size re-baseline** — webview limit bumped from 798KB to 812KB to
+  accommodate the new theme modules. Production build measures 809.9KB.
+
+Files: `src/chat/webview/ui/theme/*`, `src/chat/webview/css/theme-customizer.css`,
+`src/chat/webview/{tabs,subagentsModule,subagentReconciler,subagentCard,main,dom}.ts`,
+`src/chat/handlers/toolClassifier.ts`, `src/chat/webview/index.html`,
+`scripts/check-bundle-size.mjs`, `RESEARCH.md`, `CHANGELOG.md`
 
 **Zero-emoji icon migration, question bar carousel restore, attachment chip overhaul, diff/drag-drop fixes.**
 

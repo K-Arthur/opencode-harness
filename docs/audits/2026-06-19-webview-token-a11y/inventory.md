@@ -198,17 +198,19 @@ The webview frontend is **highly mature** with a robust cascade-layer CSS archit
 ---
 
 ### 11. Theme Customizer
-**File:** `src/chat/webview/ui/themeCustomizer.ts` (283 lines)  
-**Purpose:** Override theme colors with preset selection  
+**File:** `src/chat/webview/ui/theme/` (modular — 10 files)  
+**Purpose:** Override theme colors with preset selection, CLI theme search, live preview  
+**Architecture:** Replaced monolithic `themeCustomizer.ts` with modular components: `themeOrchestrator`, `themeModal` (native `<dialog>`), `presetGrid` (radiogroup), `cliSearch` (listbox), `colorSections` (accordion), `previewStrip`, `themeState`, `themeUtils`, `themeBridge`, `themeConstants`.  
 **Deficiencies:**
 
 | Category | Issue | Location | Severity |
 |----------|-------|----------|----------|
-| ARIA/semantics | Preset cards have `data-preset` and `aria-pressed` — good pattern | Lines 93-95 | NONE |
-| Focus/keyboard | Has focus trap (`mountModalFocus`) — verify focus return | Line 2, 77 | LOW |
-| Color-token | Comprehensive token mapping already exists (lines 25-74) — no gaps | N/A | NONE |
+| ARIA/semantics | Preset cards use `role="radio"` with `aria-checked` and roving tabindex | presetGrid.ts | NONE |
+| Focus/keyboard | Native `<dialog>.showModal()` handles focus trap + ESC + focus restore | themeModal.ts | NONE |
+| Color-token | Shared `PREVIEW_CSS_VAR_MAP` in `themeConstants.ts` — single source of truth | themeConstants.ts | NONE |
+| Animation | Native `<details>` accordion with custom chevron; no CSS Grid animation to avoid browser conflicts | theme-customizer.css | NONE |
 
-**Recommendation:** No changes needed — this component is already well-structured.
+**Recommendation:** No changes needed — the rework addressed all prior deficiencies.
 
 ---
 

@@ -13,7 +13,7 @@
  * tool names here in sync with the backend bridge in StreamCoordinator.
  */
 import type { Block, ToolCallBlock } from "./types"
-import { isSubagentToolName, parseSubagentInvocation, type SubagentInvocation } from "../handlers/toolClassifier"
+import { isSubagentToolName, parseSubagentInvocation, resolveSubagentDisplayName, type SubagentInvocation } from "../handlers/toolClassifier"
 import { stripAnsi } from "./ansiUtils"
 
 /** Status the card derives from the underlying tool-call state. */
@@ -100,15 +100,15 @@ function buildTiming(block: ToolCallBlock, status: SubagentCardStatus): HTMLElem
 }
 
 /**
- * Resolve the display title for a subagent card. When the agentName is the
- * generic "subagent" fallback (no subagent_type/name/agent was specified),
- * prefer the task description (purpose) so the card shows what the subagent
- * is actually doing instead of the useless literal "subagent".
+ * Resolve the display title for a subagent card. Delegates to the shared
+ * `resolveSubagentDisplayName` helper so the card, the activity panel, and the
+ * subagentsModule all agree on the same name. When the agentName is the
+ * generic "subagent" fallback, the task description (purpose) is used so the
+ * card shows what the subagent is actually doing instead of the useless
+ * literal "subagent".
  */
 function resolveSubagentTitle(inv: TaskInvocation): string {
-  if (inv.agentName && inv.agentName !== "subagent") return inv.agentName
-  if (inv.purpose) return inv.purpose.length > 80 ? `${inv.purpose.slice(0, 77)}...` : inv.purpose
-  return "Subagent"
+  return resolveSubagentDisplayName(inv)
 }
 
 /** True when the title was derived from the purpose (so the subtitle would duplicate it). */
@@ -133,7 +133,13 @@ function buildSummary(inv: TaskInvocation, status: SubagentCardStatus, block: To
 
   const title = document.createElement("span")
   title.className = "subagent-card-title"
-  title.textContent = `Subagent: ${resolveSubagentTitle(inv)}`
+  // Drop the unconditional "Subagent: " prefix when the resolved name is
+  // already descriptive (a real agent type or a purpose-derived title). The
+  // icon + card context already signal "subagent"; prefixing every card with
+  // "Subagent: " adds noise without information. Keep the prefix only for the
+  // bare "Subagent" fallback so the card still has a recognizable label.
+  const displayName = resolveSubagentTitle(inv)
+  title.textContent = displayName === "Subagent" ? "Subagent" : displayName
   titleWrap.appendChild(title)
 
   // Show the purpose as a subtitle only when the title came from the agentName

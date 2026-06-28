@@ -511,7 +511,7 @@
       "format": "esm"
     },
     "src/session/eventHandlers/QuestionHandler.ts": {
-      "bytes": 3555,
+      "bytes": 4257,
       "imports": [
         {
           "path": "./types",
@@ -1283,8 +1283,14 @@
       "format": "esm"
     },
     "src/chat/SessionBaselineResolver.ts": {
-      "bytes": 3433,
-      "imports": [],
+      "bytes": 3912,
+      "imports": [
+        {
+          "path": "path",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
       "format": "esm"
     },
     "src/session/questionModel.ts": {
@@ -1420,7 +1426,7 @@
       "format": "esm"
     },
     "src/chat/handlers/toolClassifier.ts": {
-      "bytes": 3293,
+      "bytes": 4904,
       "imports": [],
       "format": "esm"
     },
@@ -1430,7 +1436,7 @@
       "format": "esm"
     },
     "src/chat/handlers/attachmentStorage.ts": {
-      "bytes": 10230,
+      "bytes": 10202,
       "imports": [
         {
           "path": "node:fs",
@@ -2252,7 +2258,7 @@
       "format": "esm"
     },
     "src/chat/WebviewEventRouter.ts": {
-      "bytes": 148136,
+      "bytes": 149346,
       "imports": [
         {
           "path": "vscode",
@@ -2536,7 +2542,7 @@
       "format": "esm"
     },
     "src/chat/ProviderManagementService.ts": {
-      "bytes": 10617,
+      "bytes": 10771,
       "imports": [
         {
           "path": "../model/ProviderConfigManager",
@@ -2703,7 +2709,7 @@
       "format": "esm"
     },
     "src/chat/ChatProvider.ts": {
-      "bytes": 141145,
+      "bytes": 141270,
       "imports": [
         {
           "path": "vscode",
@@ -4495,6 +4501,11 @@
           "external": true
         },
         {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
           "path": "node:fs",
           "kind": "require-call",
           "external": true
@@ -4981,7 +4992,7 @@
           "bytesInOutput": 167
         },
         "src/session/eventHandlers/QuestionHandler.ts": {
-          "bytesInOutput": 1629
+          "bytesInOutput": 1915
         },
         "src/session/eventHandlers/SessionNextHandler.ts": {
           "bytesInOutput": 4560
@@ -5089,7 +5100,7 @@
           "bytesInOutput": 2785
         },
         "src/chat/ChatProvider.ts": {
-          "bytesInOutput": 61596
+          "bytesInOutput": 61710
         },
         "src/monitor/UsageAnalytics.ts": {
           "bytesInOutput": 2956
@@ -5110,7 +5121,7 @@
           "bytesInOutput": 1891
         },
         "src/chat/SessionBaselineResolver.ts": {
-          "bytesInOutput": 1010
+          "bytesInOutput": 1247
         },
         "src/session/questionModel.ts": {
           "bytesInOutput": 1269
@@ -5149,7 +5160,7 @@
           "bytesInOutput": 75
         },
         "src/chat/handlers/attachmentStorage.ts": {
-          "bytesInOutput": 2706
+          "bytesInOutput": 2682
         },
         "src/chat/handlers/RunActivityTracker.ts": {
           "bytesInOutput": 6827
@@ -5281,7 +5292,7 @@
           "bytesInOutput": 3487
         },
         "src/chat/WebviewEventRouter.ts": {
-          "bytesInOutput": 66154
+          "bytesInOutput": 66455
         },
         "src/chat/diff/sdkFileContentToDiffLines.ts": {
           "bytesInOutput": 992
@@ -5341,7 +5352,7 @@
           "bytesInOutput": 1652
         },
         "src/chat/ProviderManagementService.ts": {
-          "bytesInOutput": 5363
+          "bytesInOutput": 5459
         },
         "src/chat/DiffAcceptService.ts": {
           "bytesInOutput": 498
@@ -5482,7 +5493,7 @@
           "bytesInOutput": 845
         }
       },
-      "bytes": 755418
+      "bytes": 756428
     }
   }
 }

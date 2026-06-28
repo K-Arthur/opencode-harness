@@ -10,23 +10,29 @@ export interface TabCallbacks {
 export function createTabBar(els: ElementRefs, callbacks: TabCallbacks) {
   els.newTabBtn.addEventListener("click", () => callbacks.onNew())
 
-  // Tab close via event delegation on tab bar
+  // Tab close via event delegation on tab bar.
+  // Use closest() so clicks on the SVG/path inside .tab-close still fire —
+  // classList.contains on the direct target misses SVG children (the click
+  // target is usually the inner <path>, not the .tab-close span itself).
   els.tabBar.addEventListener("click", (e) => {
     const target = e.target as HTMLElement
-    if (target.classList.contains("tab-close")) {
+    const closeEl = target.closest(".tab-close")
+    if (closeEl) {
       e.stopPropagation()
       e.preventDefault()
-      const tabBtn = target.closest(".tab-btn") as HTMLElement
+      const tabBtn = closeEl.closest(".tab-btn") as HTMLElement
       const tabId = tabBtn?.dataset.tabId
       if (tabId) callbacks.onClose(tabId)
     }
   })
 
-  // Tab switch via delegation on tab bar
+  // Tab switch via delegation on tab bar.
+  // Use closest() for the .tab-close guard too, so a click on the SVG inside
+  // .tab-close doesn't fall through to the switch handler.
   els.tabBar.addEventListener("click", (e) => {
     const target = e.target as HTMLElement
     const tabBtn = target.closest(".tab-btn") as HTMLElement
-    if (!tabBtn || target.classList.contains("tab-close")) return
+    if (!tabBtn || target.closest(".tab-close")) return
     const tabId = tabBtn.dataset.tabId
     if (tabId) callbacks.onSwitch(tabId)
   })
