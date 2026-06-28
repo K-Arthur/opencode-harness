@@ -1,7 +1,12 @@
 # Status.md
 
-## Last Updated: 2026-06-27
-## Project State: v0.4.23 — v2 SDK error messages + SVG icon fix + tab attention indicator + diff compact mode
+## Last Updated: 2026-06-28
+## Project State: v0.4.23 (unreleased fix pending) — provider refresh fix
+
+### Unreleased fix (2026-06-28): Provider add not refreshing models
+- **Added providers not showing until extension restart** — when a user connected a provider via "Add Key" (`connect_provider_key`), the provider's models didn't appear in the model picker until the extension was restarted. Root cause: `MessageRouter.getModelList` only read from the cached model list and only triggered `refreshModels()` if the cache was empty. Fix: added `refreshModels` callback to `ProviderManagementServiceDeps`, called after `handleConnectProviderKey`, `handleAddProvider`, and `handleCompleteProviderOAuth` success. The existing `onModelsRefreshed` listener in `ChatProvider` pushes the fresh model list to the webview. Also added missing `get_models` post to `provider_oauth_completed` webview handler.
+- **Files changed:** `src/chat/ProviderManagementService.ts`, `src/chat/ChatProvider.ts`, `src/chat/webview/main.ts`, `src/chat/ChatProvider.test.ts`
+- **Verification:** build green; 92/92 tests pass.
 
 ### v0.4.23 (2026-06-27): Regression fixes + v2 SDK audit
 - **SVG icons rendered as literal text** — `textContent` on SVG strings showed raw markup. Switched to `innerHTML` in `liveCommandCard.ts` (render + update) and `tasks-panel.ts`.

@@ -24,6 +24,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      [Unreleased] — that creates documentation drift. See the release
      workflow in docs/development/rebuild-and-reinstall.md. -->
 
+### Fixed
+
+- **Added providers not showing until extension restart** — when a user
+  connected a provider via "Add Key" (`connect_provider_key`), the provider's
+  models didn't appear in the model picker until the extension was restarted.
+  Root cause: the host's `get_models` handler (`MessageRouter.getModelList`)
+  only read from the cached model list and only triggered `refreshModels()`
+  if the cache was empty. Fix: added a `refreshModels` callback to
+  `ProviderManagementServiceDeps` and call it after successful provider
+  add/key-connect/OAuth-completion. The existing `onModelsRefreshed`
+  listener in `ChatProvider` then pushes the fresh model list to the webview
+  automatically. Also added the missing `get_models` post to the
+  `provider_oauth_completed` webview handler.
+
 ## [0.4.23] - 2026-06-27
 
 ### Fixed
