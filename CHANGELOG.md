@@ -65,6 +65,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   message loop. Fixed by splitting the selection into `updateSelection()`
   (programmatic) and `selectPreset()` (user-initiated), so `setSelected()` no
   longer fires the callback.
+- **CSS hardcoding audit and fixes**: Created
+  `scripts/check-css-hardcoding.mjs` to detect hardcoded hex colors, rgba/hsl
+  values, and px values outside design tokens. Fixed remaining hardcoded values
+  in theme customizer (close button size, color picker dimensions, touch target
+  sizes now use `--size-target-*` tokens), context usage bar (`min-width` now
+  derives from `--ctx-track-width`), and question bar (hardcoded
+  `rgba(0,120,212,...)` replaced with `--oc-accent-subtle` /
+  `--oc-accent-border` / `color-mix`).
+- **High-contrast mode visual noise**: Added `.vscode-high-contrast` /
+  `.vscode-high-contrast-light` overrides in theme customizer CSS to remove
+  decorative borders (preset card titlebar, preview strip, color picker) and
+  reduce border weight on structural elements (dialog, header, actions). This
+  eliminates the overstated yellow/red lines that appeared when `--oc-border`
+  became a high-contrast color.
 
 ### Changed
 

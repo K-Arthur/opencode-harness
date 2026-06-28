@@ -55,7 +55,7 @@
   border-radius: var(--radius-full);
   flex-shrink: 0;
   display: none;
-  background: var(--usage-good, #3fb950);
+  background: var(--usage-good);
   position: relative;
 }
 .context-usage-dot::before {
@@ -68,26 +68,26 @@
   line-height: 1;
   pointer-events: none;
 }
-.context-usage-bar--good .context-usage-dot { background: var(--usage-good, #3fb950); }
+.context-usage-bar--good .context-usage-dot { background: var(--usage-good); }
 .context-usage-bar--good .context-usage-dot::before { content: ""; }
 .context-usage-bar--caution .context-usage-dot {
-  background: var(--usage-caution, #d29922);
+  background: var(--usage-caution);
 }
 .context-usage-bar--caution .context-usage-dot::before { content: "◐"; }
 .context-usage-bar--warning .context-usage-dot {
-  background: var(--usage-warning, #e06c00);
+  background: var(--usage-warning);
 }
 .context-usage-bar--warning .context-usage-dot::before {
   content: "◆";
 }
 .context-usage-bar--critical .context-usage-dot {
-  background: var(--usage-critical, #f85149);
+  background: var(--usage-critical);
 }
 .context-usage-bar--critical .context-usage-dot::before {
   content: "■";
 }
 [data-state="over"] .context-usage-dot {
-  background: var(--usage-critical, #f85149);
+  background: var(--usage-critical);
 }
 [data-state="over"] .context-usage-dot::before {
   content: "▲";
@@ -102,11 +102,11 @@
 }
 
 /* Custom progress track + fill — ultra-thin progress tracker.
-   Width is the literal 80px default (see --ctx-track-width in tokens.css);
-   declared as a raw value so structural tests and theme overrides both work. */
+   Width is controlled by the --ctx-track-width token in tokens.css so it can
+   be adjusted centrally and scales with the rest of the UI. */
 .context-usage-track {
-  width: 80px;
-  min-width: 40px;
+  width: var(--ctx-track-width, 80px);
+  min-width: calc(var(--ctx-track-width, 80px) / 2);
   height: var(--ctx-track-height, var(--space-1));
   border-radius: var(--radius-full);
   background: var(--oc-editor-bg, rgba(128, 128, 128, 0.15));
@@ -118,7 +118,7 @@
   width: 100%;
   height: 100%;
   border-radius: inherit;
-  background: var(--usage-good, #3fb950);
+  background: var(--usage-good);
   transform-origin: left center;
   transform: scaleX(var(--usage-pct, 0));
   transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
@@ -128,13 +128,13 @@
 
 /* Bar-level color overrides for the fill */
 .context-usage-bar--caution .context-usage-fill {
-  background: var(--usage-caution, #d29922);
+  background: var(--usage-caution);
 }
 .context-usage-bar--warning .context-usage-fill {
-  background: var(--usage-warning, #e06c00);
+  background: var(--usage-warning);
 }
 .context-usage-bar--critical .context-usage-fill {
-  background: var(--usage-critical, #f85149);
+  background: var(--usage-critical);
 }
 
 .context-usage-detail {
@@ -148,13 +148,13 @@
 }
 
 .context-usage-bar--caution #context-label {
-  color: var(--usage-caution, #d29922);
+  color: var(--usage-caution);
 }
 .context-usage-bar--warning #context-label {
-  color: var(--usage-warning, #e06c00);
+  color: var(--usage-warning);
 }
 .context-usage-bar--critical #context-label {
-  color: var(--usage-critical, #f85149);
+  color: var(--usage-critical);
 }
 
 /* Cost: hidden in minimal mode */
@@ -253,11 +253,11 @@
 }
 
 /* COLOR states for per-tab monitor (tabs.ts) */
-.context-monitor--good .context-progress-fill    { background: var(--usage-good, #3fb950); }
-.context-monitor--caution .context-progress-fill { background: var(--usage-caution, #d29922); }
-.context-monitor--warning .context-progress-fill { background: var(--usage-warning, #e06c00); }
+.context-monitor--good .context-progress-fill    { background: var(--usage-good); }
+.context-monitor--caution .context-progress-fill { background: var(--usage-caution); }
+.context-monitor--warning .context-progress-fill { background: var(--usage-warning); }
 .context-monitor--critical .context-progress-fill {
-  background: var(--usage-critical, #f85149);
+  background: var(--usage-critical);
 }
 
 /* CONTEXT USAGE dropdown (.cup-*) */
@@ -536,7 +536,7 @@
 }
 .cup-source-pill--estimated {
   background: rgba(210, 153, 34, 0.15);
-  color: var(--usage-caution, #d29922);
+  color: var(--usage-caution);
 }
 
 /* Actions row */

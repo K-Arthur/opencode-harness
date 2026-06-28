@@ -25,6 +25,7 @@
   --theme-customizer-swatch-size: 28px;
   --theme-customizer-swatch-gap: 3px;
   --theme-customizer-preview-width: 240px;
+  --theme-customizer-picker-size: 40px;
   --theme-customizer-focus-ring: var(--vscode-focusBorder, var(--oc-focus));
   --theme-customizer-radius: var(--radius-md);
   --theme-customizer-shadow: var(--shadow-xl),
@@ -81,10 +82,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  min-height: 32px;
+  width: var(--size-target-comfortable);
+  height: var(--size-target-comfortable);
+  min-width: var(--size-target-comfortable);
+  min-height: var(--size-target-comfortable);
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -111,6 +112,13 @@
   padding: 0 var(--space-5) var(--space-3);
   flex: 1;
   min-height: 0;
+}
+
+@media (max-width: 640px) {
+  .theme-customizer-body {
+    padding: 0 var(--space-3) var(--space-3);
+    gap: var(--space-3);
+  }
 }
 
 /* ─── Section Label ─── */
@@ -163,7 +171,7 @@
   padding: 0;
   overflow: hidden;
   transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
-  min-height: 44px;
+  min-height: var(--size-target-comfortable);
 }
 
 .theme-preset-card:hover {
@@ -392,7 +400,7 @@ details[open] .theme-accordion__chevron {
 /* ─── Color Grid ─── */
 .theme-customizer-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--space-3);
 }
 
@@ -424,10 +432,10 @@ details[open] .theme-accordion__chevron {
 }
 
 .theme-color-picker {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  min-height: 40px;
+  width: var(--theme-customizer-picker-size);
+  height: var(--theme-customizer-picker-size);
+  min-width: var(--theme-customizer-picker-size);
+  min-height: var(--theme-customizer-picker-size);
   border: 1px solid var(--oc-border);
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -514,6 +522,7 @@ details[open] .theme-accordion__chevron {
 
 .theme-preview-strip__code {
   flex: 0 0 var(--theme-customizer-preview-width);
+  min-width: 0;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--oc-editor-bg) 92%, var(--oc-fg));
@@ -521,6 +530,17 @@ details[open] .theme-accordion__chevron {
   font-size: var(--text-xs);
   overflow: hidden;
   white-space: pre;
+}
+
+@media (max-width: 560px) {
+  .theme-preview-strip {
+    flex-direction: column;
+  }
+
+  .theme-preview-strip__code {
+    flex: 0 0 auto;
+    width: 100%;
+  }
 }
 
 .theme-preview-strip__code-line {
@@ -534,7 +554,7 @@ details[open] .theme-accordion__chevron {
   justify-content: flex-end;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-5) var(--space-4);
-  border-top: 1px solid var(--theme-customizer-header-border);
+  border-top: 1px solid var(--theme-customizer-panel-border);
 }
 
 .theme-customizer-actions button {
@@ -597,7 +617,7 @@ details[open] .theme-accordion__chevron {
 
   .theme-color-picker {
     width: 100%;
-    height: 44px;
+    height: var(--size-target-comfortable);
   }
 
   .theme-customizer-actions {
@@ -606,7 +626,7 @@ details[open] .theme-accordion__chevron {
 
   .theme-customizer-actions button {
     width: 100%;
-    min-height: 44px;
+    min-height: var(--size-target-comfortable);
   }
 }
 
@@ -619,22 +639,22 @@ details[open] .theme-accordion__chevron {
 /* ─── Touch targets ─── */
 @media (hover: none) and (pointer: coarse) {
   .theme-preset-card {
-    min-height: 44px;
-    min-width: 44px;
+    min-height: var(--size-target-comfortable);
+    min-width: var(--size-target-comfortable);
   }
 
   .theme-color-picker {
-    min-width: 44px;
-    min-height: 44px;
+    min-width: var(--size-target-comfortable);
+    min-height: var(--size-target-comfortable);
   }
 
   .theme-customizer-actions button {
-    min-height: 44px;
+    min-height: var(--size-target-comfortable);
   }
 
   .theme-customizer-close {
-    min-width: 44px;
-    min-height: 44px;
+    min-width: var(--size-target-comfortable);
+    min-height: var(--size-target-comfortable);
   }
 }
 
@@ -655,4 +675,59 @@ details[open] .theme-accordion__chevron {
   .theme-customizer-close {
     transition: none;
   }
+}
+
+/* ─── High Contrast: reduce visual noise ───
+   In high-contrast mode --oc-border becomes bright yellow (#ffff00) or red
+   (#cc0000). Every border declaration would become a loud line, creating
+   visual clutter. Remove decorative/redundant borders and keep only
+   structural ones (dialog outline, accordion, inputs). */
+.vscode-high-contrast .theme-preset-card__titlebar,
+.vscode-high-contrast-light .theme-preset-card__titlebar {
+  border-bottom: none;
+}
+
+.vscode-high-contrast .theme-preset-card,
+.vscode-high-contrast-light .theme-preset-card {
+  border: none;
+  outline: 1px solid var(--oc-border);
+}
+
+.vscode-high-contrast .theme-preset-card--selected,
+.vscode-high-contrast-light .theme-preset-card--selected {
+  outline: 2px solid var(--oc-accent);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+.vscode-high-contrast .theme-color-picker,
+.vscode-high-contrast-light .theme-color-picker {
+  border: none;
+  outline: 1px solid var(--oc-border);
+}
+
+.vscode-high-contrast .theme-preview-strip,
+.vscode-high-contrast-light .theme-preview-strip {
+  border: none;
+}
+
+.vscode-high-contrast .theme-customizer-header,
+.vscode-high-contrast-light .theme-customizer-header {
+  border-bottom: 2px solid var(--oc-border);
+}
+
+.vscode-high-contrast .theme-customizer-actions,
+.vscode-high-contrast-light .theme-customizer-actions {
+  border-top: 2px solid var(--oc-border);
+}
+
+.vscode-high-contrast .theme-customizer-actions button,
+.vscode-high-contrast-light .theme-customizer-actions button {
+  border: 1px solid var(--oc-border);
+}
+
+.vscode-high-contrast .theme-customizer-dialog,
+.vscode-high-contrast-light .theme-customizer-dialog {
+  border: 2px solid var(--oc-border);
+  box-shadow: none;
 }

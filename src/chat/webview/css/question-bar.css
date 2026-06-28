@@ -14,9 +14,9 @@
   flex-shrink: 0;
   margin: 0 var(--space-4) var(--space-2);
   padding: var(--space-2-5) var(--space-3);
-  background: linear-gradient(135deg, rgba(0, 120, 212, 0.10), rgba(0, 120, 212, 0.03));
-  border: 1px solid rgba(0, 120, 212, 0.28);
-  border-left: 3px solid var(--color-accent, var(--vscode-focusBorder, #0078d4));
+  background: linear-gradient(135deg, var(--oc-accent-subtle), color-mix(in srgb, var(--color-accent) 3%, transparent));
+  border: 1px solid var(--oc-accent-border);
+  border-left: 3px solid var(--color-accent, var(--vscode-focusBorder));
   border-radius: var(--radius-md);
   color: var(--oc-fg, var(--color-fg));
   font-size: var(--text-sm);

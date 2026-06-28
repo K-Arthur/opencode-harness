@@ -25,6 +25,15 @@
 - **Theme customizer styling consistency** — preview strip now uses the correct
   message and syntax color tokens; removed unused component tokens; modal shadow
   uses the shared `--shadow-xl` token; native `<details>` marker is hidden.
+- **CSS hardcoding audit** — created `scripts/check-css-hardcoding.mjs` to
+  detect hardcoded hex/rgba/hsl colors and px values outside design tokens.
+  Fixed remaining violations in theme customizer, context usage bar, and
+  question bar CSS. All target-file hardcoded px values now reference spacing
+  or size tokens.
+- **High-contrast visual noise** — added `.vscode-high-contrast` /
+  `.vscode-high-contrast-light` overrides in theme customizer CSS to remove
+  decorative borders and reduce border weight on structural elements,
+  eliminating overstated yellow/red lines in high-contrast mode.
 - **Tab close not firing on SVG clicks** — `tabs.ts` used
   `classList.contains("tab-close")` which missed clicks on inner SVG elements.
   Fixed with `closest(".tab-close")`.
@@ -38,9 +47,10 @@
   accommodate the new theme modules. Production build measures 809.9KB.
 
 Files: `src/chat/webview/ui/theme/*`, `src/chat/webview/css/theme-customizer.css`,
+`src/chat/webview/css/context-usage.css`, `src/chat/webview/css/question-bar.css`,
 `src/chat/webview/{tabs,subagentsModule,subagentReconciler,subagentCard,main,dom}.ts`,
 `src/chat/handlers/toolClassifier.ts`, `src/chat/webview/index.html`,
-`scripts/check-bundle-size.mjs`, `RESEARCH.md`, `CHANGELOG.md`
+`scripts/check-css-hardcoding.mjs`, `scripts/check-bundle-size.mjs`, `RESEARCH.md`, `CHANGELOG.md`
 
 **Zero-emoji icon migration, question bar carousel restore, attachment chip overhaul, diff/drag-drop fixes.**
 
