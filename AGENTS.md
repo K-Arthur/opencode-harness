@@ -11,6 +11,7 @@
 >
 > **Rules every agent/model MUST follow here (applies to Claude, Cursor, Cline,
 > Windsurf, Gemini, Codex, and any human):**
+>
 > 1. **Commit completed, verified work BEFORE ending your turn.** Never leave
 >    finished work uncommitted — it can be wiped between turns. Prefer small,
 >    frequent commits over one large uncommitted batch.
@@ -153,6 +154,7 @@ reliably ships a **stale build** (you install successfully but keep seeing the
 old UI). Full rationale + manual fallback: `docs/development/rebuild-and-reinstall.md`.
 
 `npm run reinstall` (→ `scripts/reinstall-extension.mjs`) does, in order:
+
 1. **Bump the patch version** (`npm version patch --no-git-tag-version`). VS Code's
    Extension Host keys cached code by version; an unchanged version is not
    guaranteed to swap in. This is the single most important step.
