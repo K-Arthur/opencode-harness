@@ -31,6 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `themeConstants`. All new modules have co-located tests (60+ new test cases).
   `RESEARCH.md` documents findings from VS Code docs, WAI-ARIA APG, MDN, and
   accessibility blogs.
+- **Hybrid workbench theme toggle**: New `opencode.theme.switchWorkbenchTheme`
+  setting (default `false`) controls whether switching the OpenCode chat preset
+  also switches the VS Code workbench color theme. When enabled,
+  `ThemeController` calls `themeManager.activateTheme()` to apply the matching
+  VS Code workbench theme. A checkbox toggle labeled "Also switch VS Code theme"
+  in the theme customizer modal sends `update_switch_workbench_theme` messages
+  to the host. When disabled, only the chat webview appearance changes.
 
 ### Fixed
 
@@ -79,6 +86,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reduce border weight on structural elements (dialog, header, actions). This
   eliminates the overstated yellow/red lines that appeared when `--oc-border`
   became a high-contrast color.
+- **Light-mode theme tokens staying dark**: All CSS files now use
+  `var(--oc-*, var(--vscode-*))` ordering — OpenCode tokens are primary, VS
+  Code native theme variables are fallbacks. Previously, many CSS rules used
+  `--vscode-*` as primary, causing the chat webview to stay dark when the
+  OpenCode preset was set to light. Flipped token priority across 11 CSS
+  files: `tokens.css`, `theme-customizer.css`, `blocks.css`, `layout.css`,
+  `components.css`, `messages.css`, `terminal.css`, `question-bar.css`,
+  `voice-input.css`, `dragDrop.css`. Also fixed `.vscode-light` overrides in
+  `tokens.css` to use OC tokens as primary for `--bg-code`, `--user-message-bg`,
+  and `--oc-tool-bg`.
+- **Missing theme tokens**: Expanded `OpencodeTheme` interface and
+  `CSS_VAR_MAP` with `listHoverBg`, `buttonSecondaryBg`, `buttonSecondaryHover`,
+  `buttonSecondaryFg`, `listActiveBg`, `listActiveFg`, and `userMessageBg`.
+  Updated all six built-in presets (`cli-default`, `light`, `dark`,
+  `high-contrast`, `high-contrast-dark`, `high-contrast-light`) with values
+  for the new tokens.
+- **Theme update timing bug**: `ThemeController.handleUpdateThemeConfig` now
+  calls `loadConfig()` and `emitUpdate()` after writing the theme config,
+  ensuring the webview receives the updated CSS variables immediately.
 
 ### Changed
 

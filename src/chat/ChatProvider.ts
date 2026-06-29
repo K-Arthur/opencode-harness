@@ -2289,6 +2289,9 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       workspaceName,
       maxConcurrentStreams,
       branch,
+      favoriteModels: Array.from(this.modelManager["_favoriteModels"] || []),
+      disabledModels: Array.from(this.modelManager["_disabledModels"] || []),
+      recentModels: this.modelManager["_recentModels"] || [],
     })
     this.pushToolOutputConfigToWebview()
     void this.pushTerminalCapabilityToWebview()

@@ -260,7 +260,7 @@ your OS's built-in dictation (macOS Dictation / Windows `Win+H`).
 
 ## Theme Customization
 
-OpenCode mirrors the [opencode CLI theme system](https://opencode.ai/docs/themes/) automatically, or you can pick a preset and override individual colors. Theme changes only affect the OpenCode chat panel — your VS Code editor theme is never touched.
+OpenCode mirrors the [opencode CLI theme system](https://opencode.ai/docs/themes/) automatically, or you can pick a preset and override individual colors. By default, theme changes only affect the OpenCode chat panel — your VS Code editor theme is never touched. Enable "Also switch VS Code theme" in the theme customizer to also switch the workbench.
 
 ### Built-in presets
 
@@ -270,6 +270,8 @@ OpenCode mirrors the [opencode CLI theme system](https://opencode.ai/docs/themes
 | `light` | Light theme optimized for readability |
 | `dark` | Dark theme optimized for code |
 | `high-contrast` | Maximum contrast for accessibility (WCAG AAA) |
+| `high-contrast-light` | High-contrast light variant |
+| `high-contrast-dark` | High-contrast dark variant |
 
 ### Configuration
 
@@ -295,9 +297,9 @@ OpenCode reads your `opencode` CLI's `tui.json` to find its active theme and loa
 ### Theme preview & customizer
 
 - **Theme preview button** (chat settings menu, or `OpenCode: Preview Theme` in the Command Palette) — browse built-in presets and CLI-discovered themes live.
-- **Settings → Customize theme** (chat header) — a modal for the most common overrides (preset, accent, panel colors, input border, heading color, diff-added background) that writes straight to `opencode.theme` and refreshes immediately.
+- **Settings → Customize theme** (chat header) — a modal for the most common overrides (preset, accent, panel colors, input border, heading color, diff-added background) that writes straight to `opencode.theme` and refreshes immediately. Includes a "Also switch VS Code theme" checkbox to optionally switch the VS Code workbench theme to match.
 
-Settings are saved globally, so themes work without a workspace folder open.
+Settings are saved globally, so themes work without a workspace folder open. Set `opencode.theme.switchWorkbenchTheme` to `true` to also switch the VS Code workbench color theme when changing presets.
 
 ## Chat Appearance
 

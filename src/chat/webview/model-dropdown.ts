@@ -368,9 +368,36 @@ export function setupModelDropdown(els: ElementRefs, callbacks: ModelDropdownCal
     els.modelDropdown.appendChild(searchContainer)
 
     const limitedModels = getDisplayModels()
-    const byProvider = groupByProvider(limitedModels)
+    
+    // Separate models into sections
+    const favoriteModels = limitedModels.filter((m) => m.favorite)
+    const recentModels = limitedModels.filter((m) => !m.favorite && typeof m.recentRank === "number")
+    const remainingModels = limitedModels.filter((m) => !m.favorite && typeof m.recentRank !== "number")
 
     let optionIndex = 0
+
+    // Render Favorites section
+    if (favoriteModels.length > 0) {
+      els.modelDropdown.appendChild(createProviderGroupLabel("Favorites"))
+      for (const model of favoriteModels) {
+        els.modelDropdown.appendChild(createModelOption(model, optionIndex, _currentModel, callbacks, close, () => els.modelSelectorBtn.focus()))
+        optionIndex++
+      }
+      els.modelDropdown.appendChild(createDivider())
+    }
+
+    // Render Recently used section
+    if (recentModels.length > 0) {
+      els.modelDropdown.appendChild(createProviderGroupLabel("Recently used"))
+      for (const model of recentModels) {
+        els.modelDropdown.appendChild(createModelOption(model, optionIndex, _currentModel, callbacks, close, () => els.modelSelectorBtn.focus()))
+        optionIndex++
+      }
+      els.modelDropdown.appendChild(createDivider())
+    }
+
+    // Render provider-grouped models
+    const byProvider = groupByProvider(remainingModels)
     for (const [provider, providerModels] of byProvider) {
       els.modelDropdown.appendChild(createProviderGroupLabel(provider))
       for (const model of providerModels) {

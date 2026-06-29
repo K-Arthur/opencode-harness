@@ -1,6 +1,6 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
 
 const source = readFileSync(path.join(__dirname, "main.ts"), "utf8")
@@ -15,6 +15,20 @@ const sendButtonSource = (() => { try { return readFileSync(path.join(__dirname,
 const sendMessageSource = (() => { try { return readFileSync(path.join(__dirname, "sendMessage.ts"), "utf8") } catch { return "" } })()
 const withComposer = source + "\n" + composerSource + "\n" + slashCommandsSource + "\n" + inputHandlersSource + "\n" + sendLogicSource + "\n" + sendButtonSource + "\n" + sendMessageSource
 const themeCustomizerSource = readFileSync(path.join(__dirname, "ui", "themeCustomizer.ts"), "utf8")
+// The theme customizer was split out of the monolithic themeCustomizer.ts into
+// ui/theme/* modules (themeBridge posts get_theme_config/update_theme_config,
+// themeOrchestrator wires it up). Concatenate the whole directory so the
+// message-contract assertions keep finding those strings no matter which
+// module owns them — this stays correct across future theme refactors.
+const themeModuleSource = (() => {
+  try {
+    const dir = path.join(__dirname, "ui", "theme")
+    return readdirSync(dir)
+      .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
+      .map((f) => readFileSync(path.join(dir, f), "utf8"))
+      .join("\n")
+  } catch { return "" }
+})()
 const modeDropdownSource = readFileSync(path.join(__dirname, "ui", "modeDropdown.ts"), "utf8")
 const sessionModalSource = readFileSync(path.join(__dirname, "ui", "sessionModal.ts"), "utf8")
 const tokenCostDisplaySource = readFileSync(path.join(__dirname, "ui", "tokenCostDisplay.ts"), "utf8")
@@ -29,7 +43,7 @@ const todoSubagentSetupSource = (() => { try { return readFileSync(path.join(__d
 const tabSwitcherSource = (() => { try { return readFileSync(path.join(__dirname, "tabSwitcher.ts"), "utf8") } catch { return "" } })()
 const panelSetupSource = (() => { try { return readFileSync(path.join(__dirname, "panelSetup.ts"), "utf8") } catch { return "" } })()
 const indexHtml = readFileSync(path.join(__dirname, "index.html"), "utf8")
-const allSource = source + "\n" + themeCustomizerSource + "\n" + modeDropdownSource + "\n" + sessionModalSource + "\n" + tokenCostDisplaySource + "\n" + attachmentsSource + "\n" + welcomeViewSource + "\n" + settingsMenuSource + "\n" + fileTrackingSource + "\n" + buttonSetupSource + "\n" + scrollMarkersSource
+const allSource = source + "\n" + themeCustomizerSource + "\n" + themeModuleSource + "\n" + modeDropdownSource + "\n" + sessionModalSource + "\n" + tokenCostDisplaySource + "\n" + attachmentsSource + "\n" + welcomeViewSource + "\n" + settingsMenuSource + "\n" + fileTrackingSource + "\n" + buttonSetupSource + "\n" + scrollMarkersSource
 const sessionListRendererSource = readFileSync(path.join(__dirname, "sessionListRenderer.ts"), "utf8")
 const messagesCss = readFileSync(path.join(__dirname, "css", "messages.css"), "utf8")
 

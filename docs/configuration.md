@@ -80,8 +80,8 @@ All settings are under the `opencode.*` namespace and can be configured in VS Co
 - **Scope**: `window`
 - **Description**: Theme configuration for the OpenCode chat panel.
 - **Properties**:
-  - `preset` (string): Base theme preset — one of `"cli-default"`, `"light"`, `"dark"`, `"high-contrast"`
-  - `overrides` (object): Individual CSS color overrides. The schema includes OpenCode CLI-style fields for primary/secondary/accent colors, panel/editor backgrounds, borders, semantic colors, syntax colors, diff colors, and Markdown colors.
+  - `preset` (string): Base theme preset — one of `"cli-default"`, `"light"`, `"dark"`, `"high-contrast"`, `"high-contrast-dark"`, `"high-contrast-light"`
+  - `overrides` (object): Individual CSS color overrides. The schema includes OpenCode CLI-style fields for primary/secondary/accent colors, panel/editor backgrounds, borders, semantic colors, syntax colors, diff colors, and Markdown colors. New override fields: `listHoverBg`, `buttonSecondaryBg`, `buttonSecondaryHover`, `buttonSecondaryFg`, `listActiveBg`, `listActiveFg`, `userMessageBg`.
 - **UI**: The chat header settings menu includes **Customize theme**, a webview modal for common overrides. The QuickPick preview remains available for presets and discovered CLI themes.
 - **Example**:
   ```json
@@ -95,6 +95,13 @@ All settings are under the `opencode.*` namespace and can be configured in VS Co
     }
   }
   ```
+
+### `opencode.theme.switchWorkbenchTheme`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Scope**: `window`
+- **Description**: When enabled, switching the OpenCode chat panel theme also switches the VS Code workbench color theme to a matching light/dark/high-contrast theme. When disabled (default), only the chat webview appearance changes — the VS Code workbench theme stays untouched.
+- **UI**: A checkbox toggle labeled "Also switch VS Code theme" appears in the theme customizer modal.
 
 ### `opencode.voice.*`
 - **Description**: Controls the microphone button in the chat composer. Recording

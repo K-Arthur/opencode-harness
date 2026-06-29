@@ -3373,6 +3373,21 @@ function setupTodoSkillAndSubagentPanels(): void {
                 tokenUsage: { prompt: 0, completion: 0, total: 0 },
               }]
             })
+        // Restore model preferences from host (favorites, disabled, recent)
+        // This ensures preferences survive extension restarts/updates
+        if (Array.isArray(msg.favoriteModels)) {
+          const currentState = stateManager.getState()
+          currentState.favoriteModels = msg.favoriteModels as string[]
+        }
+        if (Array.isArray(msg.disabledModels)) {
+          const currentState = stateManager.getState()
+          currentState.disabledModels = msg.disabledModels as string[]
+        }
+        if (Array.isArray(msg.recentModels)) {
+          const currentState = stateManager.getState()
+          currentState.recentModels = msg.recentModels as string[]
+        }
+
         stateManager.loadSessions(sessions, msg.activeSessionId as string | null, msg.globalModel as string)
 
         if (msg.globalModel) {
