@@ -423,6 +423,7 @@ const WEBVIEW_MESSAGE_VALIDATORS: Record<string, MessageValidator> = {
   request_more_messages: validateRequestMoreMessages,
   delete_session: requiredStringValidator("targetSessionId", (msgType) => `Invalid targetSessionId in ${msgType}`),
   archive_session: requiredStringValidator("targetSessionId", (msgType) => `Invalid targetSessionId in ${msgType}`),
+  unarchive_session: requiredStringValidator("targetSessionId", (msgType) => `Invalid targetSessionId in ${msgType}`),
   pin_session: validatePinSession,
   set_session_tags: validateSessionTags,
   open_terminal: validateOpenTerminal,

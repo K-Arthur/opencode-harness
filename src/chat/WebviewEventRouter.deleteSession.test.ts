@@ -290,4 +290,91 @@ describe("Session deletion — comprehensive", () => {
       )
     })
   })
+
+  // ── Edge cases: explicit closeTab, unarchive, archive cliId capture ──
+
+  describe("delete_session: explicitly closes tab before delete", () => {
+    const block = blockBetween(routerSource, '["delete_session"', '["archive_session"')
+
+    it("calls tabManager.closeTab before sessionStore.delete", () => {
+      const closeIdx = block.indexOf("this.opts.tabManager.closeTab(targetId)")
+      const deleteIdx = block.indexOf("this.opts.sessionStore.delete(targetId)")
+      assert.ok(closeIdx >= 0, "must call tabManager.closeTab")
+      assert.ok(deleteIdx >= 0, "must call sessionStore.delete")
+      assert.ok(
+        closeIdx < deleteIdx,
+        "must close tab BEFORE deleting from store — don't depend on onDidChangeSession registration order",
+      )
+    })
+  })
+
+  describe("archive_session: captures cliId before archive()", () => {
+    const block = blockBetween(routerSource, '["archive_session"', '["unarchive_session"')
+
+    it("reads cliSessionId before calling archive", () => {
+      const getCliIdx = block.indexOf("session?.cliSessionId")
+      const archiveIdx = block.indexOf("this.opts.sessionStore.archive(targetId)")
+      assert.ok(getCliIdx >= 0, "must read cliSessionId from session")
+      assert.ok(archiveIdx >= 0, "must call archive")
+      assert.ok(
+        getCliIdx < archiveIdx,
+        "must capture cliId BEFORE archive() — consistent with delete_session pattern",
+      )
+    })
+  })
+
+  describe("unarchive_session: handler exists and propagates to server", () => {
+    const block = blockBetween(routerSource, '["unarchive_session"', '["pin_session"')
+
+    it("calls sessionStore.unarchive", () => {
+      assert.ok(
+        block.includes("this.opts.sessionStore.unarchive(targetId)"),
+        "must call sessionStore.unarchive",
+      )
+    })
+
+    it("propagates to server via archiveSession(cliId, false)", () => {
+      assert.ok(
+        block.includes("this.opts.sessionManager.archiveSession(cliId, false)"),
+        "must propagate unarchive to server with archived=false",
+      )
+    })
+
+    it("captures cliId before unarchive", () => {
+      const getCliIdx = block.indexOf("session?.cliSessionId")
+      const unarchiveIdx = block.indexOf("this.opts.sessionStore.unarchive(targetId)")
+      assert.ok(getCliIdx >= 0 && unarchiveIdx >= 0)
+      assert.ok(getCliIdx < unarchiveIdx, "must capture cliId BEFORE unarchive()")
+    })
+
+    it("guards on sessionManager.isRunning", () => {
+      assert.ok(
+        block.includes("this.opts.sessionManager.isRunning"),
+        "must check isRunning before server call",
+      )
+    })
+  })
+
+  describe("unarchive_session: validator exists", () => {
+    const validatorSource = readFileSync(
+      path.join(__dirname, "WebviewMessageValidator.ts"),
+      "utf8",
+    )
+
+    it("has a validator for unarchive_session", () => {
+      assert.ok(
+        validatorSource.includes("unarchive_session:"),
+        "must have a validator for unarchive_session",
+      )
+    })
+  })
+
+  describe("unarchive_session: in known message types", () => {
+    it("is listed in the known message types array", () => {
+      assert.ok(
+        routerSource.includes('"unarchive_session"'),
+        "unarchive_session must be in the known message types list",
+      )
+    })
+  })
 })

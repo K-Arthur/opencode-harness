@@ -211,7 +211,7 @@ export class WebviewEventRouter {
     "toggle_active_file",
     "insert_at_cursor", "create_file_from_code", "compact_banner_action",
     "edit_message", "attach_image",
-    "delete_session", "archive_session", "pin_session", "set_session_tags", "revert_message", "unrevert",
+    "delete_session", "archive_session", "unarchive_session", "pin_session", "set_session_tags", "revert_message", "unrevert",
     "list_server_sessions", "delete_server_session", "resume_server_session",
     "add_mcp_server", "update_mcp_server", "remove_mcp_server", "toggle_mcp_server", "get_mcp_servers",
     "show_diff", "list_checkpoints", "restore_checkpoint", "list_restore_points", "restore_point",
@@ -1388,6 +1388,10 @@ export class WebviewEventRouter {
       // ChatProvider reads sessionStore.get() after deletion and gets undefined,
       // so the server-side delete silently never fires. Pass it explicitly.
       const cliId = session?.cliSessionId
+      // Close the tab BEFORE deleting so we don't depend on the
+      // onDidChangeSession handler's registration order. If the handler
+      // fires too, closeTab is idempotent (no-op on already-closed tabs).
+      this.opts.tabManager.closeTab(targetId)
       this.opts.sessionStore.delete(targetId)
       log.info(`Session deleted via webview: ${targetId}`)
       if (cliId && this.opts.sessionManager.isRunning) {
@@ -1399,14 +1403,27 @@ export class WebviewEventRouter {
     ["archive_session", (msg: Record<string, unknown>) => {
       const targetId = msg.targetSessionId as string | undefined
       if (!targetId) return
+      const session = this.opts.sessionStore.get(targetId)
+      const cliId = session?.cliSessionId
       this.opts.sessionStore.archive(targetId)
       log.info(`Session archived: ${targetId}`)
       // Propagate to server so archiving is consistent across CLI / sibling windows.
-      const session = this.opts.sessionStore.get(targetId)
-      const cliId = session?.cliSessionId
       if (cliId && this.opts.sessionManager.isRunning) {
         void this.opts.sessionManager.archiveSession(cliId, true).catch(err =>
           log.warn(`Server-side archive failed for ${cliId}`, err)
+        )
+      }
+    }],
+    ["unarchive_session", (msg: Record<string, unknown>) => {
+      const targetId = msg.targetSessionId as string | undefined
+      if (!targetId) return
+      const session = this.opts.sessionStore.get(targetId)
+      const cliId = session?.cliSessionId
+      this.opts.sessionStore.unarchive(targetId)
+      log.info(`Session unarchived: ${targetId}`)
+      if (cliId && this.opts.sessionManager.isRunning) {
+        void this.opts.sessionManager.archiveSession(cliId, false).catch(err =>
+          log.warn(`Server-side unarchive failed for ${cliId}`, err)
         )
       }
     }],

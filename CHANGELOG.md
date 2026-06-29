@@ -41,6 +41,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Session deletion: server-side delete never fired.** `delete_session`
+  captured `cliSessionId` AFTER `sessionStore.delete()`, so it was always
+  `undefined`. The server session was never deleted, only the local copy.
+  Fix: capture `cliId` before delete and call `sessionManager.deleteSession`
+  directly. Also explicitly close the tab before deleting so it doesn't
+  depend on `onDidChangeSession` handler registration order.
+- **Session deletion: orphaned tab after `delete_server_session`.** The
+  handler deleted the local store entry but never called `closeTab()`,
+  leaving an orphaned tab pointing at a non-existent session. Fix: close
+  the tab before deleting from the store.
+- **Session history: cross-workspace sessions silently pruned.**
+  `chooseHistorySession` filtered server sessions by workspace BEFORE
+  passing to `importServerSessions`. The prune step inside
+  `importServerSessions` deleted any `needsBackfill` session not in the
+  passed list, nuking sessions from other workspaces. Fix: pass ALL
+  non-subagent sessions to `importServerSessions`, filter for display only.
+- **Session history: prune on empty server list.** When the server returned
+  0 sessions (fresh server, different workspace, transient issue), the
+  prune step deleted all cached `needsBackfill` sessions. Fix: guard the
+  prune loop with `serverSessions.length > 0`.
+- **Session history: path normalization.** `isInCurrentWorkspace` used
+  exact string match. Symlinks, trailing slashes, and relative segments
+  caused sessions to be filtered out. Fix: use `path.resolve()` on both
+  paths. Applied to `list_server_sessions` `isCurrentWorkspace` flag and
+  the display filter in `chooseHistorySession`.
+- **Load more messages: wrong slicing in server fallback.** After
+  refreshing from server, `request_more_messages` sliced from `newStart`
+  to the end of the array instead of to `beforeIndex`, duplicating
+  messages the user already had. Fix: slice from `newStart` to
+  `min(beforeIndex, refreshed.messages.length)`.
+- **Archive: now syncs to server.** Archiving was local-only. The v2 SDK
+  supports server-side archiving via `session.update({ time: { archived } })`.
+  Added `SessionClient.archiveSession()`, wired `archive_session` and new
+  `unarchive_session` handlers to propagate to the server. The
+  `session.updated` SSE event now syncs archive state back locally.
+- **Duplicate fallback finalization log.** Both `session_status` and
+  `server_status` handlers logged "triggering fallback finalization"
+  before calling `maybeFinalizeStream`, which deduplicates via
+  `pendingStatusFinalizeTimers`. Moved the log inside
+  `maybeFinalizeStream` so it fires only once per tab.
+- **Missing webview message validators.** Added validators for 20 message
+  types that were logging "has no validator" warnings: `get_voice_settings`,
+  `request_queue_state`, `webview_ready`, `list_commands`, `get_models`,
+  `init_ack`, `list_providers`, `panel_visibility_state`,
+  `request_state_sync`, `get_theme_config`, `list_sessions`,
+  `list_server_sessions`, `get_todos`, `get_changed_files`,
+  `probe_run_status`, `resume_session`, `create_tab`, `switch_tab`,
+  `webview_log`, `unarchive_session`.
 - **Tab close not firing on SVG clicks**: `tabs.ts` used
   `target.classList.contains("tab-close")` which missed clicks on the inner
   SVG `<path>`. Fixed by using `target.closest(".tab-close")` so any descendant
