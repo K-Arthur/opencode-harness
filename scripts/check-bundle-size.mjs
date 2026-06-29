@@ -4,8 +4,8 @@
 // Enforces repo-level bundle size limits for the two build outputs that
 // load synchronously into the host process or the chat webview:
 //
-//   dist/extension.js                  ≤ 748KB
-//   dist/chat/webview/main.js          ≤ 812KB  (paydown target: 600KB)
+//   dist/extension.js                  ≤ 752KB
+//   dist/chat/webview/main.js          ≤ 816KB  (paydown target: 600KB)
 //   dist/chat/webview/markdownWorker.js ≤ 500KB  (advisory)
 //
 // IMPORTANT: these limits describe the **production (minified) build**
@@ -208,6 +208,15 @@
 // measures 809.9KB. +14KB keeps ~0.3% headroom so the gate still trips on
 // a real regression. Host limit unchanged.
 
+// 2026-06-29 re-baseline (host 748KB -> 752KB, webview 812KB -> 816KB):
+// session management fixes added 20 new webview message validators,
+// archive/unarchive server sync (SessionClient.archiveSession,
+// SessionManager.archiveSession, extension.ts session_updated handler),
+// unarchive_session handler, explicit closeTab in delete_session, and
+// path.resolve() normalization. Production build measures 749.8KB /
+// 812.6KB. +4KB each keeps ~0.5% headroom so the gate still trips on
+// a real regression.
+
 import { statSync, existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -216,8 +225,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(__dirname, "..")
 
 const LIMITS = [
-  { path: "dist/extension.js", limitBytes: 748 * 1024, label: "extension host" },
-  { path: "dist/chat/webview/main.js", limitBytes: 812 * 1024, label: "chat webview" },
+  { path: "dist/extension.js", limitBytes: 752 * 1024, label: "extension host" },
+  { path: "dist/chat/webview/main.js", limitBytes: 816 * 1024, label: "chat webview" },
   { path: "dist/chat/webview/markdownWorker.js", limitBytes: 500 * 1024, label: "markdown worker", advisory: true },
 ]
 

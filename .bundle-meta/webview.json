@@ -1231,7 +1231,7 @@
       "format": "esm"
     },
     "src/chat/webview/renderer.ts": {
-      "bytes": 100239,
+      "bytes": 101011,
       "imports": [
         {
           "path": "node_modules/markdown-it/index.mjs",
@@ -1845,7 +1845,7 @@
       "format": "esm"
     },
     "src/chat/webview/questionBar.ts": {
-      "bytes": 34644,
+      "bytes": 41301,
       "imports": [
         {
           "path": "src/chat/webview/icons.ts",
@@ -1908,7 +1908,7 @@
       "format": "esm"
     },
     "src/chat/webview/ui/theme/presetGrid.ts": {
-      "bytes": 5454,
+      "bytes": 5546,
       "imports": [],
       "format": "esm"
     },
@@ -1971,7 +1971,7 @@
       "format": "esm"
     },
     "src/chat/webview/ui/theme/previewStrip.ts": {
-      "bytes": 2485,
+      "bytes": 2780,
       "imports": [
         {
           "path": "src/chat/webview/ui/theme/themeUtils.ts",
@@ -1987,12 +1987,12 @@
       "format": "esm"
     },
     "src/chat/webview/ui/theme/themeBridge.ts": {
-      "bytes": 4514,
+      "bytes": 5026,
       "imports": [],
       "format": "esm"
     },
     "src/chat/webview/ui/theme/themeOrchestrator.ts": {
-      "bytes": 8602,
+      "bytes": 9575,
       "imports": [
         {
           "path": "src/chat/webview/ui/theme/themeState.ts",
@@ -2635,7 +2635,7 @@
       "format": "esm"
     },
     "src/chat/webview/model-dropdown.ts": {
-      "bytes": 15313,
+      "bytes": 16522,
       "imports": [
         {
           "path": "src/chat/webview/icons.ts",
@@ -2709,7 +2709,7 @@
       "format": "esm"
     },
     "src/chat/webview/main.ts": {
-      "bytes": 216704,
+      "bytes": 217652,
       "imports": [
         {
           "path": "src/chat/webview/timerRegistry.ts",
@@ -3377,7 +3377,7 @@
           "bytesInOutput": 0
         },
         "src/chat/webview/renderer.ts": {
-          "bytesInOutput": 46894
+          "bytesInOutput": 46983
         },
         "src/chat/webview/htmlUtils.ts": {
           "bytesInOutput": 155
@@ -3578,7 +3578,7 @@
           "bytesInOutput": 4499
         },
         "src/chat/webview/questionBar.ts": {
-          "bytesInOutput": 14019
+          "bytesInOutput": 15218
         },
         "src/chat/webview/subagentReconciler.ts": {
           "bytesInOutput": 784
@@ -3605,7 +3605,7 @@
           "bytesInOutput": 991
         },
         "src/chat/webview/ui/theme/presetGrid.ts": {
-          "bytesInOutput": 2667
+          "bytesInOutput": 2687
         },
         "src/utils/colorValidation.ts": {
           "bytesInOutput": 397
@@ -3623,13 +3623,13 @@
           "bytesInOutput": 4034
         },
         "src/chat/webview/ui/theme/previewStrip.ts": {
-          "bytesInOutput": 1168
+          "bytesInOutput": 1331
         },
         "src/chat/webview/ui/theme/themeBridge.ts": {
-          "bytesInOutput": 579
+          "bytesInOutput": 649
         },
         "src/chat/webview/ui/theme/themeOrchestrator.ts": {
-          "bytesInOutput": 3917
+          "bytesInOutput": 4422
         },
         "src/chat/modePolicy.ts": {
           "bytesInOutput": 245
@@ -3791,7 +3791,7 @@
           "bytesInOutput": 2809
         },
         "src/chat/webview/model-dropdown.ts": {
-          "bytesInOutput": 7384
+          "bytesInOutput": 7908
         },
         "src/chat/webview/model-manager.ts": {
           "bytesInOutput": 5531
@@ -3806,10 +3806,10 @@
           "bytesInOutput": 2109
         },
         "src/chat/webview/main.ts": {
-          "bytesInOutput": 76868
+          "bytesInOutput": 77122
         }
       },
-      "bytes": 829308
+      "bytes": 832132
     }
   }
 }

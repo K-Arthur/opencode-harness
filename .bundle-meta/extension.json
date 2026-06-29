@@ -747,7 +747,7 @@
       "format": "esm"
     },
     "src/session/SessionClient.ts": {
-      "bytes": 26090,
+      "bytes": 26466,
       "imports": [
         {
           "path": "@opencode-ai/sdk/v2",
@@ -819,7 +819,7 @@
       "format": "esm"
     },
     "src/session/SessionManager.ts": {
-      "bytes": 17808,
+      "bytes": 18265,
       "imports": [
         {
           "path": "vscode",
@@ -890,7 +890,7 @@
       "format": "esm"
     },
     "src/session/SessionStore.ts": {
-      "bytes": 55857,
+      "bytes": 56307,
       "imports": [
         {
           "path": "vscode",
@@ -1562,7 +1562,7 @@
       "format": "esm"
     },
     "src/chat/handlers/StreamCoordinator.ts": {
-      "bytes": 113676,
+      "bytes": 114038,
       "imports": [
         {
           "path": "vscode",
@@ -2092,7 +2092,7 @@
       "format": "esm"
     },
     "src/chat/ThemeController.ts": {
-      "bytes": 3545,
+      "bytes": 4596,
       "imports": [
         {
           "path": "vscode",
@@ -2237,7 +2237,7 @@
       "format": "esm"
     },
     "src/chat/WebviewMessageValidator.ts": {
-      "bytes": 21065,
+      "bytes": 22734,
       "imports": [
         {
           "path": "src/chat/modePolicy.ts",
@@ -2258,7 +2258,7 @@
       "format": "esm"
     },
     "src/chat/WebviewEventRouter.ts": {
-      "bytes": 149346,
+      "bytes": 151923,
       "imports": [
         {
           "path": "vscode",
@@ -2709,7 +2709,7 @@
       "format": "esm"
     },
     "src/chat/ChatProvider.ts": {
-      "bytes": 141270,
+      "bytes": 141277,
       "imports": [
         {
           "path": "vscode",
@@ -3077,7 +3077,7 @@
       "format": "esm"
     },
     "src/theme/ThemeManager.ts": {
-      "bytes": 41679,
+      "bytes": 44182,
       "imports": [
         {
           "path": "vscode",
@@ -3512,10 +3512,15 @@
       "format": "esm"
     },
     "src/commands/session.ts": {
-      "bytes": 25496,
+      "bytes": 25966,
       "imports": [
         {
           "path": "vscode",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "path",
           "kind": "import-statement",
           "external": true
         },
@@ -4086,7 +4091,7 @@
       "format": "esm"
     },
     "src/extension.ts": {
-      "bytes": 40522,
+      "bytes": 41055,
       "imports": [
         {
           "path": "vscode",
@@ -4816,6 +4821,11 @@
           "external": true
         },
         {
+          "path": "path",
+          "kind": "require-call",
+          "external": true
+        },
+        {
           "path": "fs",
           "kind": "require-call",
           "external": true
@@ -4914,10 +4924,10 @@
           "bytesInOutput": 3800
         },
         "src/extension.ts": {
-          "bytesInOutput": 15109
+          "bytesInOutput": 15269
         },
         "src/session/SessionManager.ts": {
-          "bytesInOutput": 7671
+          "bytesInOutput": 7767
         },
         "src/utils/outputChannel.ts": {
           "bytesInOutput": 2410
@@ -5016,7 +5026,7 @@
           "bytesInOutput": 8896
         },
         "src/session/SessionClient.ts": {
-          "bytesInOutput": 11408
+          "bytesInOutput": 11602
         },
         "src/session/v2ResponseMappers.ts": {
           "bytesInOutput": 861
@@ -5040,7 +5050,7 @@
           "bytesInOutput": 2933
         },
         "src/session/SessionStore.ts": {
-          "bytesInOutput": 20693
+          "bytesInOutput": 20707
         },
         "src/session/activityCoalesce.ts": {
           "bytesInOutput": 977
@@ -5100,7 +5110,7 @@
           "bytesInOutput": 2785
         },
         "src/chat/ChatProvider.ts": {
-          "bytesInOutput": 61710
+          "bytesInOutput": 61410
         },
         "src/monitor/UsageAnalytics.ts": {
           "bytesInOutput": 2956
@@ -5139,7 +5149,7 @@
           "bytesInOutput": 6839
         },
         "src/chat/handlers/StreamCoordinator.ts": {
-          "bytesInOutput": 44510
+          "bytesInOutput": 44610
         },
         "src/chat/handlers/StreamFinalizerService.ts": {
           "bytesInOutput": 1947
@@ -5274,7 +5284,7 @@
           "bytesInOutput": 1388
         },
         "src/chat/ThemeController.ts": {
-          "bytesInOutput": 1766
+          "bytesInOutput": 2461
         },
         "src/utils/colorValidation.ts": {
           "bytesInOutput": 397
@@ -5292,7 +5302,7 @@
           "bytesInOutput": 3487
         },
         "src/chat/WebviewEventRouter.ts": {
-          "bytesInOutput": 66455
+          "bytesInOutput": 67445
         },
         "src/chat/diff/sdkFileContentToDiffLines.ts": {
           "bytesInOutput": 992
@@ -5313,7 +5323,7 @@
           "bytesInOutput": 253
         },
         "src/chat/WebviewMessageValidator.ts": {
-          "bytesInOutput": 9514
+          "bytesInOutput": 10354
         },
         "src/chat/QuestionExpiryDetector.ts": {
           "bytesInOutput": 1540
@@ -5379,7 +5389,7 @@
           "bytesInOutput": 3803
         },
         "src/theme/ThemeManager.ts": {
-          "bytesInOutput": 25799
+          "bytesInOutput": 27874
         },
         "src/theme/ThemeAnalyzer.ts": {
           "bytesInOutput": 1513
@@ -5445,7 +5455,7 @@
           "bytesInOutput": 9661
         },
         "src/commands/session.ts": {
-          "bytesInOutput": 12041
+          "bytesInOutput": 12063
         },
         "src/session/SessionDbReader.ts": {
           "bytesInOutput": 3017
@@ -5493,7 +5503,7 @@
           "bytesInOutput": 845
         }
       },
-      "bytes": 756428
+      "bytes": 761314
     }
   }
 }
