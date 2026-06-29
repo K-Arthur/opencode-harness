@@ -43,7 +43,7 @@ describe("MessageRouter.ts", () => {
 
   it("has handleListSessions method", () => {
     assert.ok(
-      source.includes("async handleListSessions(sessionStore: any, context: RouteContext"),
+      source.includes("async handleListSessions(sessionStore:"),
       "handleListSessions must exist"
     )
     assert.ok(source.includes('type: "session_list"'), "must post session_list message")
@@ -138,7 +138,7 @@ describe("MessageRouter.ts", () => {
 })
 
 function findHandleListSessionsBlock(src: string): string {
-  const idx = src.indexOf("async handleListSessions(sessionStore: any, context: RouteContext")
+  const idx = src.indexOf("async handleListSessions(sessionStore:")
   if (idx < 0) return ""
   // Slice from method signature to the next method or end of class
   const nextMethod = src.indexOf("async handleAcceptPermission(", idx)

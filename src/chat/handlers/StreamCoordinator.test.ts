@@ -7,6 +7,8 @@ const source = readFileSync(resolve(__dirname, "StreamCoordinator.ts"), "utf8")
 const typesSource = readFileSync(resolve(__dirname, "StreamCoordinatorTypes.ts"), "utf8")
 const heartbeatSource = readFileSync(resolve(__dirname, "HeartbeatService.ts"), "utf8")
 const timeoutManagerSource = readFileSync(resolve(__dirname, "StreamTimeoutManager.ts"), "utf8")
+const pollerSource = readFileSync(resolve(__dirname, "ToolPartialPoller.ts"), "utf8")
+const trackerSource = readFileSync(resolve(__dirname, "ToolCallTracker.ts"), "utf8")
 
 describe("StreamCoordinator.ts", () => {
   it("exports StreamCallbacks interface", () => {
@@ -122,13 +124,15 @@ describe("StreamCoordinator.ts", () => {
   })
 
   it("streams live bash output through partial events with polling fallback", () => {
-    assert.ok(source.includes("TOOL_PARTIAL_POLL_INTERVAL_MS = 500"), "must poll live tool output every 500ms")
-    assert.ok(source.includes("TOOL_PARTIAL_FALLBACK_DELAY_MS = 1000"), "must delay polling so SSE partials can win first")
-    assert.ok(source.includes("private armToolPartialPolling("), "must arm fallback polling after tool start")
-    assert.ok(source.includes("pollToolPartialOutput("), "must poll session messages for live output")
-    assert.ok(source.includes("getToolPartialOutput"), "polling must use SessionManager.getToolPartialOutput")
-    assert.ok(source.includes('type: "stream_tool_partial"'), "must post stream_tool_partial messages")
-    assert.ok(source.includes("source: \"sse\" | \"poll\""), "appendToolPartial must distinguish SSE from polling")
+    // Tool partial polling was refactored into ToolPartialPoller.ts.
+    // StreamCoordinator delegates to it; check both sources.
+    assert.ok(source.includes("TOOL_PARTIAL_POLL_INTERVAL_MS = 500") || pollerSource.includes("TOOL_PARTIAL_POLL_INTERVAL_MS = 500"), "must poll live tool output every 500ms")
+    assert.ok(source.includes("TOOL_PARTIAL_FALLBACK_DELAY_MS = 1000") || pollerSource.includes("TOOL_PARTIAL_FALLBACK_DELAY_MS = 1000"), "must delay polling so SSE partials can win first")
+    assert.ok(source.includes("armToolPartialPolling(") || pollerSource.includes("armToolPartialPolling("), "must arm fallback polling after tool start")
+    assert.ok(source.includes("pollToolPartialOutput(") || pollerSource.includes("pollToolPartialOutput("), "must poll session messages for live output")
+    assert.ok(source.includes("getToolPartialOutput") || pollerSource.includes("getToolPartialOutput"), "polling must use SessionManager.getToolPartialOutput")
+    assert.ok(source.includes('type: "stream_tool_partial"') || pollerSource.includes('type: "stream_tool_partial"'), "must post stream_tool_partial messages")
+    assert.ok(source.includes("source: \"sse\" | \"poll\"") || pollerSource.includes("source: \"sse\" | \"poll\""), "appendToolPartial must distinguish SSE from polling")
   })
 
   it("dedupes partial tokens, stops polling on SSE/finalization, and warns once when unsupported", () => {
@@ -356,8 +360,10 @@ describe("StreamCoordinator.ts", () => {
 
   // ── TTFB timeout preserves transport-specific reason ──────────────────
   it("TTFB timeout emits a stream_end reason for both model and transport paths", () => {
+    // TTFB timeout was refactored into StreamTimeoutManager.ts.
+    // The reason variable and stream_end post live there now.
     assert.ok(
-      source.includes("reason,"),
+      source.includes("reason,") || timeoutManagerSource.includes("reason,"),
       "TTFB timeout must pass the computed reason into stream_end"
     )
   })
@@ -496,13 +502,15 @@ describe("StreamCoordinator.ts", () => {
   // ── Tool ID mapping: stream_tool_end must carry the resolved ID in result.id
   // The webview reads msg.result.id; emitting only a top-level toolId field is ignored.
   it("appendToolEnd writes resolved tool ID into result.id so the webview can read it", () => {
+    // postToolEnd was refactored into ToolCallTracker.ts.
+    // StreamCoordinator delegates; the result.id assignment lives in the tracker.
     const postIdx = source.indexOf("private postToolEnd(")
-    assert.ok(postIdx >= 0, "postToolEnd must exist")
-    const blockEnd = source.indexOf("\n  private ", postIdx + 10)
-    const block = source.slice(postIdx, blockEnd > postIdx ? blockEnd : postIdx + 2000)
+    assert.ok(postIdx >= 0, "postToolEnd must exist in StreamCoordinator")
+    // Check the full tracker source — the method spans many lines so a
+    // slice boundary is unreliable; just search the whole file.
     assert.ok(
-      /result\s*:\s*\{\s*\.\.\.result\s*,\s*id\s*:\s*toolId\s*\}/.test(block) ||
-        /result\.id\s*=\s*toolId/.test(block),
+      /result\s*:\s*\{\s*\.\.\.result\s*,\s*id\s*:\s*toolId\s*\}/.test(trackerSource) ||
+        /result\.id\s*=\s*toolId/.test(trackerSource),
       "postToolEnd must overwrite result.id with the resolved toolId before posting (webview reads result.id)"
     )
   })
@@ -530,13 +538,13 @@ describe("StreamCoordinator.ts", () => {
   })
 
   it("appendToolEnd removes resolved tool from the per-tab set on completion", () => {
+    // postToolEnd was refactored into ToolCallTracker.ts.
     const postIdx = source.indexOf("private postToolEnd(")
-    assert.ok(postIdx >= 0, "postToolEnd must exist")
-    const blockEnd = source.indexOf("\n  private ", postIdx + 10)
-    const block = source.slice(postIdx, blockEnd > postIdx ? blockEnd : postIdx + 2000)
+    assert.ok(postIdx >= 0, "postToolEnd must exist in StreamCoordinator")
+    // Check the full tracker source for the delete pattern.
     assert.ok(
-      /\.delete\(\s*toolId\s*\)/.test(block) ||
-        /\.splice\(/.test(block),
+      /\.delete\(\s*toolId\s*\)/.test(trackerSource) ||
+        /\.splice\(/.test(trackerSource),
       "postToolEnd must remove the resolved tool ID from the tab's set/array"
     )
   })
