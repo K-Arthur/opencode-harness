@@ -311,6 +311,10 @@ void describe("ChatProvider.ts", () => {
     assert.ok(block.includes("this.applyContextWindowFor()"), "visibility sync must refresh context window state")
     assert.ok(block.includes("this.pushContextUsageForSession(activeSessionId)"), "visibility sync must refresh current context usage")
     assert.ok(block.includes("this.replayLiveStreamsToWebview()"), "visibility sync must replay live streams")
+    assert.ok(
+      !block.includes("this.streamCoordinator.clearReplayDedup()"),
+      "visibility sync must NOT clear replay dedup — only webview_ready should do that"
+    )
     assert.ok(!block.includes("pushAllStateToWebview"), "visibility sync must not send a full init_state refresh")
     assert.ok(!block.includes("pushInitStateToWebview"), "visibility sync must not send a full init_state refresh")
   })
