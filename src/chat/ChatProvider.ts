@@ -2488,6 +2488,7 @@ private isSessionInCurrentWorkspace(session: import("../session/SessionStore").O
     const activeSessionId = this.sessionStore.activeId || this.tabManager.getActiveId()
     this.applyContextWindowFor()
     this.pushContextUsageForSession(activeSessionId)
+    this.streamCoordinator.clearReplayDedup()
     this.replayLiveStreamsToWebview()
   }
 
