@@ -622,12 +622,17 @@ void it("sessionless file_edited events are credited to streaming tab, with acti
   // session (the server-side run is still attached). We still refuse to credit
   // an idle tab that has no active CLI session, preserving the original guard
   // against external tools polluting the changed-files dropdown.
+  // When multiple sessions are streaming, we prefer the active tab if it's
+  // one of them; otherwise we DROP rather than guess (guessing causes
+  // cross-session contamination in the file changes dropdown).
   const idx = source.indexOf("private resolveSessionlessFileEditTab(")
   assert.ok(idx >= 0, "resolveSessionlessFileEditTab must exist")
-  const block = source.slice(idx, idx + 1600)
+  const block = source.slice(idx, idx + 2200)
   assert.ok(block.includes('event.type !== "file_edited"'), "guards to file_edited events")
   assert.ok(block.includes("getAllTabs().filter"), "must inspect streaming tabs")
   assert.ok(block.includes("liveTabs.length === 1"), "attribute uniquely streaming tab")
+  assert.ok(block.includes("liveTabs.length > 1"), "must handle multiple streaming tabs")
+  assert.ok(block.includes("liveTabs.includes(activeTab)"), "must prefer active tab among streaming")
   assert.ok(block.includes("getActiveTab()"), "must check active tab as fallback")
   assert.ok(block.includes("activeTab?.cliSessionId"), "active-tab fallback must require a CLI session")
   assert.ok(block.includes("Dropping sessionless file_edited"), "must log+drop ambiguous/idle sessionless edits")

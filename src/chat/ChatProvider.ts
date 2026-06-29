@@ -1887,6 +1887,23 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       return liveTab
     }
 
+    // Multiple streaming sessions: prefer the active tab if it's one of them.
+    // The user is most likely viewing the session that's making edits. If the
+    // active tab isn't streaming, DROP the event — attributing to a random
+    // streaming tab would contaminate the wrong session's file changes dropdown.
+    if (liveTabs.length > 1) {
+      const activeTab = this.tabManager.getActiveTab()
+      if (activeTab && liveTabs.includes(activeTab)) {
+        log.debug(`Attributed sessionless file_edited event to active streaming tab: ${activeTab.id}`)
+        return activeTab
+      }
+      // Active tab isn't streaming — can't determine which session made the
+      // edit. Dropping is safer than guessing; misattribution causes the file
+      // changes dropdown to show edits from session A in session B's tab.
+      log.warn(`Dropping sessionless file_edited event: active tab not streaming among ${liveTabs.length} live tabs`)
+      return undefined
+    }
+
     const activeTab = this.tabManager.getActiveTab()
     if (liveTabs.length === 0 && activeTab?.cliSessionId) {
       log.debug(`Attributed sessionless file_edited event to active tab: ${activeTab.id}`)

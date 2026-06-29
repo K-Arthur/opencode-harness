@@ -244,6 +244,10 @@ export class ToolCallTracker {
         toolCallId: toolId,
         message: "Tool did not emit a completion event before the server became idle.",
       })
+      pending.delete(toolId)
+    }
+    if (pending.size === 0) {
+      this.deps.activeToolCallIds.delete(tabId)
     }
   }
 
