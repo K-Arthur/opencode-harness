@@ -1374,18 +1374,26 @@ export class WebviewEventRouter {
     ["edit_message", (msg: Record<string, unknown>, sessionId?: string) => { if (sessionId && msg.messageId) this.opts.handleEditMessage(sessionId, msg.messageId as string, msg.text as string) }],
     ["delete_session", async (msg: Record<string, unknown>) => {
       const targetId = msg.targetSessionId as string | undefined
-      if (targetId) {
-        const session = this.opts.sessionStore.get(targetId)
-        if (session && session.messages.length > 0) {
-          const confirmed = await this.opts.showWarningMessage(
-            `Delete session "${session.name}"? This cannot be undone.`,
-            { modal: true },
-            "Delete"
-          )
-          if (confirmed !== "Delete") return
-        }
-        this.opts.sessionStore.delete(targetId)
-        log.info(`Session deleted via webview: ${targetId}`)
+      if (!targetId) return
+      const session = this.opts.sessionStore.get(targetId)
+      if (session && session.messages.length > 0) {
+        const confirmed = await this.opts.showWarningMessage(
+          `Delete session "${session.name}"? This cannot be undone.`,
+          { modal: true },
+          "Delete"
+        )
+        if (confirmed !== "Delete") return
+      }
+      // Capture cliSessionId BEFORE delete — the onDidChangeSession handler in
+      // ChatProvider reads sessionStore.get() after deletion and gets undefined,
+      // so the server-side delete silently never fires. Pass it explicitly.
+      const cliId = session?.cliSessionId
+      this.opts.sessionStore.delete(targetId)
+      log.info(`Session deleted via webview: ${targetId}`)
+      if (cliId && this.opts.sessionManager.isRunning) {
+        void this.opts.sessionManager.deleteSession(cliId).catch(err =>
+          log.warn(`Server-side session delete failed for ${cliId}`, err)
+        )
       }
     }],
     ["archive_session", (msg: Record<string, unknown>) => {
@@ -1728,6 +1736,11 @@ export class WebviewEventRouter {
 
         for (const local of this.opts.sessionStore.list(true)) {
           if (local.cliSessionId === serverId) {
+            // Close the tab BEFORE deleting from the store so the
+            // onDidChangeSession handler in ChatProvider doesn't double-fire
+            // the server delete (already done above) and so no orphaned tab
+            // remains pointing at a session that no longer exists.
+            this.opts.tabManager.closeTab(local.id)
             this.opts.sessionStore.delete(local.id)
             log.info(`Cleaned up extension session ${local.id} matching deleted server session ${serverId}`)
             break

@@ -21,6 +21,7 @@ const mainSource = readFileSync(path.join(__dirname, "main.ts"), "utf8")
 const htmlSource = readFileSync(path.join(__dirname, "index.html"), "utf8")
 const domSource = readFileSync(path.join(__dirname, "dom.ts"), "utf8")
 const routerSource = readFileSync(path.join(__dirname, "..", "WebviewEventRouter.ts"), "utf8")
+  + "\n" + readFileSync(path.join(__dirname, "..", "routers", "PtyRouter.ts"), "utf8")
 const providerSource = readFileSync(path.join(__dirname, "..", "ChatProvider.ts"), "utf8")
 const sessionTypesSource = readFileSync(path.join(__dirname, "..", "..", "session", "sessionTypes.ts"), "utf8")
 

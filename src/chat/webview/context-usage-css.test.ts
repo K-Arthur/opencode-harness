@@ -15,7 +15,7 @@ describe("context usage status strip CSS", () => {
   })
 
   it("uses a custom div track+fill bar instead of native progress element", () => {
-    assert.match(css, /\.context-usage-track\s*{[^}]*width:\s*80px/s)
+    assert.match(css, /\.context-usage-track\s*{[^}]*width:\s*var\(--ctx-track-width,\s*80px\)/s)
     assert.match(css, /\.context-usage-fill\s*{[^}]*transform:\s*scaleX/s)
   })
 

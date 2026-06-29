@@ -464,14 +464,11 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
         case "deleted":
           this.tabManager.closeTab(change.sessionId)
           this.postMessage({ type: "session_deleted", sessionId: change.sessionId })
-          // Also delete from server if there's a cliSessionId
-          const s = this.sessionStore.get(change.sessionId)
-          const cliId = this.tabManager.getTab(change.sessionId)?.cliSessionId || s?.cliSessionId
-          if (cliId && this.sessionManager.isRunning) {
-            void this.sessionManager.deleteSession(cliId).catch(err =>
-              log.warn(`Server-side session delete failed for ${cliId}`, err)
-            )
-          }
+          // Server-side delete is handled by the delete_session /
+          // delete_server_session handlers in WebviewEventRouter, which
+          // capture cliSessionId BEFORE calling sessionStore.delete. This
+          // handler runs AFTER the delete, so sessionStore.get() returns
+          // undefined and the server delete would silently no-op.
           break
         case "renamed":
           // Legacy path — kept for regression safety. The faster, race-free
