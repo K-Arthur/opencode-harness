@@ -19,6 +19,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Tab auto-switching disabled entirely**: `shouldForceFocusOnSend` and
+  `shouldHonorActiveSessionChange` no longer yank focus to a different tab
+  during sends or host-driven `active_session_changed` events. Users must
+  explicitly click tabs to switch. The only exceptions are no-ops (already
+  on the target) and safety cases (welcome screen, invalid current tab).
+- **Prompt character limit raised from 50,000 to 1,000,000**: The hardcoded
+  50k limit rejected legitimate long prompts with a generic "invalid payload"
+  error. The new limit accommodates large context windows, and the error
+  message now suggests using file attachments for very large content.
+- **Cold-start health timeout raised from 10s to 30s**: The OpenCode CLI
+  (v1.17.8) sometimes exceeded the 10-second health check window on slower
+  machines or large workspaces, leaving the extension in a broken state.
+  The timeout is now 30 seconds, giving the server ample time to start.
+- **Scroll auto-anchor race condition during streaming**: The
+  `IntersectionObserver` sentinel and `onScroll` handler both set
+  `anchored=false` when new content pushed the sentinel below the viewport
+  during streaming — before the programmatic scroll could catch up. This
+  caused auto-scroll to stop mid-stream ("scroll resets on new content")
+  and the view to jump when switching tabs. Both handlers now only set
+  `anchored=true` when at the bottom; the `onWheel`/`onTouchMove` handlers
+  remain responsible for detecting user-initiated scroll-up.
+
 - **Oversized `workspace_files` payload drop**: Large workspaces (>256KB file
   list) were silently dropped by the `HostMessageBatcher` size guard. Added
   `workspace_files` to `IMMEDIATE_TYPES` so it bypasses the guard — the webview

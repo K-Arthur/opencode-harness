@@ -67,7 +67,7 @@ describe("shouldHonorActiveSessionChange", () => {
     )
   })
 
-  it("follows a non-streaming host switch (e.g. command-palette open) from another tab", () => {
+  it("REFUSES to auto-switch even for a non-streaming host switch (auto-switch disabled)", () => {
     assert.equal(
       shouldHonorActiveSessionChange({
         welcomeVisible: false,
@@ -77,7 +77,7 @@ describe("shouldHonorActiveSessionChange", () => {
         targetIsStreaming: false,
         currentIsStreaming: false,
       }),
-      true,
+      false,
     )
   })
 
@@ -181,7 +181,7 @@ describe("shouldForceFocusOnSend", () => {
     )
   })
 
-  it("switches when the welcome view is showing (nothing valid to lose)", () => {
+  it("does NOT switch even when the welcome view is showing (auto-switch disabled)", () => {
     assert.equal(
       shouldForceFocusOnSend({
         welcomeVisible: true,
@@ -189,11 +189,11 @@ describe("shouldForceFocusOnSend", () => {
         currentActiveValid: false,
         targetId: "s1",
       }),
-      true,
+      false,
     )
   })
 
-  it("switches when the current tab no longer exists", () => {
+  it("does NOT switch even when the current tab no longer exists (auto-switch disabled)", () => {
     assert.equal(
       shouldForceFocusOnSend({
         welcomeVisible: false,
@@ -201,7 +201,7 @@ describe("shouldForceFocusOnSend", () => {
         currentActiveValid: false,
         targetId: "s1",
       }),
-      true,
+      false,
     )
   })
 

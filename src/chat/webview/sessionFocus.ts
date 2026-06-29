@@ -38,7 +38,7 @@ export interface ActiveSessionChangeContext {
  * focus from a task the user is deliberately viewing.
  */
 export function shouldHonorActiveSessionChange(ctx: ActiveSessionChangeContext): boolean {
-  const { welcomeVisible, currentActiveId, currentActiveValid, targetId, targetIsStreaming, currentIsStreaming } = ctx
+  const { welcomeVisible, currentActiveId, currentActiveValid, targetId } = ctx
 
   // No tab in focus (welcome screen, or the current tab no longer exists):
   // following the host is always safe and usually desirable.
@@ -47,20 +47,11 @@ export function shouldHonorActiveSessionChange(ctx: ActiveSessionChangeContext):
   // Already showing the requested session — honouring is a harmless no-op.
   if (currentActiveId === targetId) return true
 
-  // The user is viewing a streaming tab. Never yank focus away from a
-  // task they are deliberately watching — host-side housekeeping should
-  // not steal the user's active view.
-  if (currentIsStreaming) return false
-
-  // The user is viewing a different, valid tab. Never yank focus onto a
-  // session that is streaming — that is the "switches back to a session
-  // doing a task" bug. User-intended opens of a session arrive through
-  // `resume_session_data`, which switches explicitly.
-  if (targetIsStreaming) return false
-
-  // A non-streaming host-driven switch (command-palette open, deletion
-  // fallback to the next session) is allowed to follow the host.
-  return true
+  // Tab auto-switching disabled entirely. The user is viewing a different,
+  // valid tab — never yank focus away from what they are deliberately
+  // reading. User-intended opens arrive through explicit tab clicks or
+  // `resume_session_data` with userInitiated=true.
+  return false
 }
 
 export interface SendFocusContext {
@@ -86,7 +77,7 @@ export interface SendFocusContext {
  * current tab); otherwise we create the panel but leave the user where
  * they are.
  */
-export function shouldForceFocusOnSend(ctx: SendFocusContext): boolean {
+export function shouldForceFocusOnSend(_ctx: SendFocusContext): boolean {
   // Tab auto-switching disabled entirely. Users must explicitly click tabs to switch.
   return false
 }

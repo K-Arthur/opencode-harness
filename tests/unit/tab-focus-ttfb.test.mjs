@@ -24,17 +24,17 @@ void describe("tab-focus stability — user's current view not stolen during gen
     )
   })
 
-  void it("shouldHonorActiveSessionChange blocks switch when current tab is streaming", () => {
+  void it("shouldHonorActiveSessionChange blocks switch when user is on a different valid tab", () => {
     const idx = SESSION_FOCUS.indexOf("export function shouldHonorActiveSessionChange(")
     assert.ok(idx >= 0, "shouldHonorActiveSessionChange must exist")
     const block = SESSION_FOCUS.slice(idx, idx + 1500)
     assert.ok(
-      block.includes("currentIsStreaming") || block.includes("currentActiveValid && currentIsStreaming"),
-      "shouldHonorActiveSessionChange must check currentIsStreaming to block switch away from streaming tab",
-    )
-    assert.ok(
       block.indexOf("currentActiveId === targetId") > 0,
       "shouldHonorActiveSessionChange must check for same tab first",
+    )
+    assert.ok(
+      block.includes("return false"),
+      "shouldHonorActiveSessionChange must return false (auto-switch disabled) for different valid tabs",
     )
   })
 

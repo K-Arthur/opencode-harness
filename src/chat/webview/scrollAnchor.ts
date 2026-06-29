@@ -94,7 +94,12 @@ export function createScrollAnchor(container: HTMLElement, typingIndicator?: HTM
     // F: suppress anchor re-evaluation during programmatic scrolls to
     // prevent the RAF/scroll-event race from toggling anchored state.
     if (performance.now() - lastProgrammaticScrollAt < PROGRAMMATIC_SCROLL_GRACE_MS) return
-    anchored = isAtBottom()
+    // Only SET anchored=true when at the bottom — never set anchored=false
+    // here. Content growth during streaming triggers scroll events before
+    // the programmatic scroll catches up, which was incorrectly pausing
+    // auto-scroll. The onWheel and onTouchMove handlers handle the
+    // user-scrolls-up case by setting anchored=false explicitly.
+    if (isAtBottom()) anchored = true
   }
 
   function onWheel(e: WheelEvent) {
@@ -179,17 +184,15 @@ export function createScrollAnchor(container: HTMLElement, typingIndicator?: HTM
         (entries) => {
           const entry = entries[0]
           if (!entry) return
-          // Only UPDATE anchored state from the sentinel — never override a
-          // user's explicit pause(). If the user scrolled up and the
-          // sentinel left the viewport, we keep anchored=false; when they
-          // scroll back so the sentinel re-enters, we re-anchor.
+          // Only SET anchored=true from the sentinel — never set anchored=false.
+          // When new content arrives during streaming, the sentinel gets pushed
+          // below the viewport and the observer fires with isIntersecting=false.
+          // If we set anchored=false there, auto-scroll stops even though the
+          // user was at the bottom (the "scroll resets on new content" bug).
+          // The scroll/wheel/touch handlers already handle the user-scrolls-up
+          // case by setting anchored=false explicitly.
           if (entry.isIntersecting) {
-            // Sentinel visible → user is at bottom → safe to anchor.
             anchored = true
-          } else if (!isAtBottom()) {
-            // Sentinel not visible AND not within threshold → user scrolled
-            // up. Pause.
-            anchored = false
           }
         },
         {
