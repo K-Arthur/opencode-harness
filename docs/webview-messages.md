@@ -599,6 +599,10 @@ Import mints a fresh session id (imports are local copies, not server sessions).
 - `run_activity_update` snapshots carry subagent state. The `subagent_add` message
   includes `childSessionId` (linked OpenCode child session ID) and `error` (failure
   detail when status is `failed`) in the subtask data payload.
+  **Payload discipline:** `tool.input`, `tool.result` (full bash/file output), and
+  `subagent.inputPrompt` (full prompt text) are stripped before posting — the webview
+  never reads them, and without stripping the serialized payload can exceed the
+  `HostMessageBatcher`'s 256KB `maxPayloadBytes` limit and be silently dropped.
 - Tasks panel terminal actions post `open_terminal`: `{ type, command, cwd?, autorun? }`.
   The host validates the command, opens a VS Code terminal at `cwd` when provided, and sends
   the command with `autorun` controlling whether Enter is submitted.

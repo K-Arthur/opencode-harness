@@ -396,24 +396,6 @@ export class SessionManager {
 
   /* ---- session recovery ---- */
 
-  private currentWorkspaceDir(): string | undefined {
-    if (this.isRemote) return undefined
-    const folders = vscode.workspace.workspaceFolders
-    if (!folders || folders.length === 0) return undefined
-    return folders[0]!.uri.fsPath
-  }
-
-  isInCurrentWorkspace(dir?: string): boolean {
-    const workspace = this.currentWorkspaceDir()
-    if (!workspace) return true
-    if (!dir) return false
-    // Normalize both paths via path.resolve to handle trailing slashes,
-    // symlinks, and relative segments. Without this, a server that stores
-    // "/home/user/project" and a VS Code workspace at "/home/user/project/"
-    // would fail to match and sessions would be silently hidden.
-    return path.resolve(dir) === path.resolve(workspace)
-  }
-
   private async recoverSessions(): Promise<void> {
     if (!this.v2Client) return
     try {

@@ -45,7 +45,9 @@ Technical details stay behind the existing details disclosure.
 
 The host emits `run_activity_update` snapshots with stable run/message/session IDs,
 phase, status label, active tool/subagent counts, and compact tool/subagent state.
-The webview uses this to show grounded status copy such as:
+Large fields (`tool.input`, `tool.result`, `subagent.inputPrompt`) are stripped before
+posting to stay under the `HostMessageBatcher`'s 256KB payload limit — the webview
+never reads them. The webview uses this to show grounded status copy such as:
 
 - `Waiting for first model activity`
 - `Running tool: bash`

@@ -5,8 +5,6 @@
  *   - Bug 3: chooseHistorySession pre-filtered by workspace before
  *     importServerSessions, causing the prune step to delete
  *     cross-workspace sessions
- *   - Bug 4: isInCurrentWorkspace used exact string match, failing
- *     on trailing slashes and symlinks
  *   - Bug 5: request_more_messages server-fallback sliced to the end
  *     of the refreshed array instead of to beforeIndex, duplicating
  *     messages the user already had
@@ -20,7 +18,6 @@ import { fileURLToPath } from "node:url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const sessionCmdSource = readFileSync(path.join(__dirname, "..", "commands", "session.ts"), "utf8")
-const managerSource = readFileSync(path.join(__dirname, "..", "session", "SessionManager.ts"), "utf8")
 const routerSource = readFileSync(path.join(__dirname, "WebviewEventRouter.ts"), "utf8")
 const storeSource = readFileSync(path.join(__dirname, "..", "session", "SessionStore.ts"), "utf8")
 
@@ -71,37 +68,6 @@ describe("Session history listing — comprehensive", () => {
       const afterList = block.slice(listCall)
       const filterMatch = afterList.match(/\.filter\(\(s\)\s*=>\s*[^)]*workspacePath/)
       assert.ok(!filterMatch, "must NOT filter by workspacePath — all sessions should be shown")
-    })
-  })
-
-  // ── Bug 4: isInCurrentWorkspace path normalization ──
-
-  describe("isInCurrentWorkspace: normalizes paths (Bug 4)", () => {
-    const block = blockBetween(managerSource, "isInCurrentWorkspace", "recoverSessions")
-
-    it("uses path.resolve for both paths", () => {
-      assert.ok(
-        block.includes("path.resolve(dir)"),
-        "must resolve the server directory path",
-      )
-      assert.ok(
-        block.includes("path.resolve(workspace)"),
-        "must resolve the workspace path",
-      )
-    })
-
-    it("returns true when workspace is undefined (no workspace folder)", () => {
-      assert.ok(
-        block.includes("if (!workspace) return true"),
-        "must return true when no workspace is open — don't hide sessions",
-      )
-    })
-
-    it("returns false when dir is undefined but workspace is set", () => {
-      assert.ok(
-        block.includes("if (!dir) return false"),
-        "must return false when session has no directory but workspace is set",
-      )
     })
   })
 
