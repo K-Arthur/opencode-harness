@@ -19,6 +19,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Oversized `workspace_files` payload drop**: Large workspaces (>256KB file
+  list) were silently dropped by the `HostMessageBatcher` size guard. Added
+  `workspace_files` to `IMMEDIATE_TYPES` so it bypasses the guard — the webview
+  needs the full file list for `@file:` mentions.
+- **`PendingEventBuffer` repeated drops for child sessions**: Once a session's
+  TTL expired without a tab mapping, new events were re-buffered and re-dropped
+  on every event, producing repeated warnings. Added an `expiredSessions`
+  denylist — new events for expired sessions are silently discarded. `drain()`
+  clears the denylist so a later-discovered session can buffer again.
+- **`run_activity_update` duplicate drops**: Every heartbeat/tool/subagent
+  event triggered a redundant `postRunActivitySnapshot` with an identical
+  payload, flooding the `HostMessageBatcher`'s dedup guard. Added a JSON
+  fingerprint dirty-check to skip posting when the slim snapshot hasn't changed.
+- **Question bar resurrection on tab switch**: Answered questions were re-added
+  to the question bar by `repopulateFromMessages` on every tab switch, causing
+  the bar to pop back up when the user closed it and returned to the tab.
+  Answered questions are already visible in the chat transcript — the bar now
+  only shows interactive (unanswered) questions.
+- **Sessionless `file_edited` cross-session contamination**: When multiple
+  sessions were streaming, sessionless `file_edited` events were dropped
+  unconditionally. Now the active tab is preferred if it's one of the streaming
+  tabs. If the active tab isn't streaming, the event is dropped rather than
+  guessed — attributing to a random streaming tab causes file changes from
+  session A to appear in session B's dropdown.
+- **Stuck `maybeFinalizeStream` after grace timeout**: `markUnresolvedPendingToolCalls`
+  marked tools as "unresolved" in the tracker but didn't remove them from
+  `activeToolCallIds`, so `getFinalizeDeferReason` kept seeing them as "still
+  running" and the stream never finalized. Now unresolved tool IDs are removed
+  from `activeToolCallIds` after being marked.
+
+## [0.4.36] — 2026-06-29
+
+### Fixed
+
 - **Tab auto-switching disabled entirely**: `shouldForceFocusOnSend` and
   `shouldHonorActiveSessionChange` no longer yank focus to a different tab
   during sends or host-driven `active_session_changed` events. Users must
@@ -53,36 +87,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the placeholder's fixed height, causing the viewport to jump. The
   `restoreOne` method now measures the height difference and adjusts
   `scrollTop` to keep the user's viewport stable.
-
-- **Oversized `workspace_files` payload drop**: Large workspaces (>256KB file
-  list) were silently dropped by the `HostMessageBatcher` size guard. Added
-  `workspace_files` to `IMMEDIATE_TYPES` so it bypasses the guard — the webview
-  needs the full file list for `@file:` mentions.
-- **`PendingEventBuffer` repeated drops for child sessions**: Once a session's
-  TTL expired without a tab mapping, new events were re-buffered and re-dropped
-  on every event, producing repeated warnings. Added an `expiredSessions`
-  denylist — new events for expired sessions are silently discarded. `drain()`
-  clears the denylist so a later-discovered session can buffer again.
-- **`run_activity_update` duplicate drops**: Every heartbeat/tool/subagent
-  event triggered a redundant `postRunActivitySnapshot` with an identical
-  payload, flooding the `HostMessageBatcher`'s dedup guard. Added a JSON
-  fingerprint dirty-check to skip posting when the slim snapshot hasn't changed.
-- **Question bar resurrection on tab switch**: Answered questions were re-added
-  to the question bar by `repopulateFromMessages` on every tab switch, causing
-  the bar to pop back up when the user closed it and returned to the tab.
-  Answered questions are already visible in the chat transcript — the bar now
-  only shows interactive (unanswered) questions.
-- **Sessionless `file_edited` cross-session contamination**: When multiple
-  sessions were streaming, sessionless `file_edited` events were dropped
-  unconditionally. Now the active tab is preferred if it's one of the streaming
-  tabs. If the active tab isn't streaming, the event is dropped rather than
-  guessed — attributing to a random streaming tab causes file changes from
-  session A to appear in session B's dropdown.
-- **Stuck `maybeFinalizeStream` after grace timeout**: `markUnresolvedPendingToolCalls`
-  marked tools as "unresolved" in the tracker but didn't remove them from
-  `activeToolCallIds`, so `getFinalizeDeferReason` kept seeing them as "still
-  running" and the stream never finalized. Now unresolved tool IDs are removed
-  from `activeToolCallIds` after being marked.
 
 ## [0.4.34] — 2026-06-29
 
