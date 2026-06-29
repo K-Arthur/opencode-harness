@@ -403,7 +403,11 @@ export class SessionManager {
     const workspace = this.currentWorkspaceDir()
     if (!workspace) return true
     if (!dir) return false
-    return dir === workspace
+    // Normalize both paths via path.resolve to handle trailing slashes,
+    // symlinks, and relative segments. Without this, a server that stores
+    // "/home/user/project" and a VS Code workspace at "/home/user/project/"
+    // would fail to match and sessions would be silently hidden.
+    return path.resolve(dir) === path.resolve(workspace)
   }
 
   private async recoverSessions(): Promise<void> {

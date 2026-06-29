@@ -1507,7 +1507,7 @@ export class WebviewEventRouter {
               files: s.summary?.files ?? 0,
               additions: s.summary?.additions ?? 0,
               deletions: s.summary?.deletions ?? 0,
-              isCurrentWorkspace: !currentDir || !s.directory || s.directory === currentDir,
+              isCurrentWorkspace: !currentDir || !s.directory || path.resolve(s.directory) === path.resolve(currentDir),
             })),
         })
       } catch (err) {
@@ -1666,13 +1666,17 @@ export class WebviewEventRouter {
             this.opts.sessionStore.applyBackfilledMessages(session.id, serverMessages, summarizeOpencodeMessageUsage(rows))
             const refreshed = this.opts.sessionStore.get(sessionId)
             if (refreshed) {
-              const newStart = Math.max(0, refreshed.messages.length - limit)
-              // Hidden turns are those older than the slice we just sent.
+              // Slice from newStart to beforeIndex — only the older messages
+              // the user doesn't have yet. Slicing to the end would duplicate
+              // messages already in the webview.
+              const newStart = Math.max(0, beforeIndex - limit)
+              const endIdx = Math.min(beforeIndex, refreshed.messages.length)
+              const olderSlice = refreshed.messages.slice(newStart, endIdx)
               const stillHiddenTurns = computeMessageCounts(refreshed.messages.slice(0, newStart)).userTurns + computeMessageCounts(refreshed.messages.slice(0, newStart)).assistantTurns
               this.opts.postMessage({
                 type: "more_messages",
                 sessionId,
-                messages: refreshed.messages.slice(newStart),
+                messages: olderSlice,
                 hasMore: newStart > 0,
                 newBeforeIndex: newStart,
                 totalCount: refreshed.messages.length,

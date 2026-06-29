@@ -1,4 +1,5 @@
 import * as vscode from "vscode"
+import * as path from "path"
 import type { PromptSender } from "./types"
 import { SessionStore } from "../session/SessionStore"
 import { SessionManager } from "../session/SessionManager"
@@ -420,8 +421,12 @@ export function registerChooseHistorySessionCommand(
         if (sessionManager.isRunning) {
           try {
             const list = await sessionManager.listSessions()
-            serverSessions = list
-              .filter((s) => !s.parentID && sessionManager.isInCurrentWorkspace(s.directory))
+            // Pass ALL non-subagent sessions to importServerSessions — the
+            // prune step inside importServerSessions deletes any needsBackfill
+            // session not in the passed list, so pre-filtering by workspace
+            // would silently nuke cross-workspace sessions. Workspace scoping
+            // is applied for display only (filter below at line ~460).
+            serverSessions = list.filter((s) => !s.parentID)
           } catch (err) {
             log.warn("Could not list server sessions for history picker", err)
           }
@@ -457,10 +462,11 @@ export function registerChooseHistorySessionCommand(
         // came from (set during importServerSessions / first prompt).
         const folders = vscode.workspace.workspaceFolders
         const currentDir = folders && folders.length > 0 ? folders[0]!.uri.fsPath : undefined
+        const normalizedCurrentDir = currentDir ? path.resolve(currentDir) : undefined
         const all = sessionStore.list(true).filter((s) => {
-          if (!currentDir) return true
+          if (!normalizedCurrentDir) return true
           if (!s.workspacePath) return true // unknown workspace — keep, do not hide silently
-          return s.workspacePath === currentDir
+          return path.resolve(s.workspacePath) === normalizedCurrentDir
         })
         if (all.length === 0) {
           vscode.window.showInformationMessage("No saved sessions for this workspace. Start a new conversation.")
