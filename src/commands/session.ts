@@ -367,7 +367,7 @@ export function registerAddSelectionToSessionCommand(
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "opencode-harness.addSelectionToSession",
-      async (uri: vscode.Uri) => {
+      async (_uri: vscode.Uri) => {
         try {
           const editor = vscode.window.activeTextEditor
           if (!editor) {

@@ -442,6 +442,34 @@ const WEBVIEW_MESSAGE_VALIDATORS: Record<string, MessageValidator> = {
   voice_stop: validateVoiceRequest,
   voice_cancel: validateVoiceRequest,
   toggle_active_file: validateToggleActiveFile,
+  // Read-only / no-payload messages — always accepted, validator exists
+  // to suppress the "has no validator" warning and serve as a registry
+  // of all known webview message types.
+  get_voice_settings: () => true,
+  request_queue_state: () => true,
+  webview_ready: () => true,
+  list_commands: () => true,
+  get_models: () => true,
+  init_ack: () => true,
+  list_providers: () => true,
+  panel_visibility_state: () => true,
+  request_state_sync: () => true,
+  get_theme_config: () => true,
+  list_sessions: () => true,
+  list_server_sessions: () => true,
+  get_todos: () => true,
+  get_changed_files: () => true,
+  probe_run_status: () => true,
+  // Messages with optional string payload
+  resume_session: requiredStringValidator("sessionId", (msgType) => `Invalid sessionId in ${msgType}`),
+  create_tab: requiredStringValidator("sessionId", (msgType) => `Invalid sessionId in ${msgType}`),
+  switch_tab: requiredStringValidator("sessionId", (msgType) => `Invalid sessionId in ${msgType}`),
+  webview_log: (msg, _msgType, deps) => {
+    if (typeof msg.level !== "string" || !msg.level.trim()) {
+      return reject(deps, "Invalid level in webview_log")
+    }
+    return true
+  },
 }
 
 const _unvalidatedTypeWarnings = new Set<string>()

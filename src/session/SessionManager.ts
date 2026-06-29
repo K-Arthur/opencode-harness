@@ -242,6 +242,10 @@ export class SessionManager {
     return this.sessionClient.deleteSession(id)
   }
 
+  async archiveSession(id: string, archived: boolean): Promise<Session> {
+    return this.sessionClient.archiveSession(id, archived)
+  }
+
   async forkSession(sessionId: string, messageId: string): Promise<Session> {
     return this.sessionClient.forkSession(sessionId, messageId)
   }

@@ -200,44 +200,205 @@ describe("Session history listing — comprehensive", () => {
     })
   })
 
-  // ── handleResumeSession: initial load count ──
+  // ── Bug 6: prune on empty server list ──
 
-  describe("handleResumeSession: lazy-loads last 50 messages", () => {
-    const lifecycleSource = readFileSync(
-      path.join(__dirname, "SessionLifecycleService.ts"),
+  describe("importServerSessions: does not prune on empty server list (Bug 6)", () => {
+    it("guards the prune loop with serverSessions.length > 0", () => {
+      assert.ok(
+        storeSource.includes("if (serverSessions.length > 0)"),
+        "must skip pruning when the server returns an empty list — an empty list likely means fresh server, different workspace, or transient issue, not that all sessions were deleted",
+      )
+    })
+
+    it("prune condition still checks needsBackfill === true", () => {
+      assert.ok(
+        storeSource.includes("sess.needsBackfill === true && !visibleServerIds.has(id)"),
+        "must only prune sessions that are needsBackfill AND not in the server list",
+      )
+    })
+  })
+
+  // ── Archive server sync ──
+
+  describe("archive_session: propagates to server", () => {
+    const block = blockBetween(routerSource, '["archive_session"', '["pin_session"')
+
+    it("calls sessionManager.archiveSession after local archive", () => {
+      assert.ok(
+        block.includes("this.opts.sessionManager.archiveSession(cliId, true)"),
+        "must propagate archive to the server via sessionManager.archiveSession",
+      )
+    })
+
+    it("captures cliId from sessionStore.get AFTER archive (local state preserved)", () => {
+      // Unlike delete_session, archive doesn't remove the session from the
+      // store, so sessionStore.get() still works after archive().
+      assert.ok(
+        block.includes("this.opts.sessionStore.archive(targetId)"),
+        "must archive locally first",
+      )
+      assert.ok(
+        block.includes("session?.cliSessionId"),
+        "must read cliSessionId from the archived session",
+      )
+    })
+
+    it("guards on sessionManager.isRunning", () => {
+      assert.ok(
+        block.includes("this.opts.sessionManager.isRunning"),
+        "must check isRunning before server call",
+      )
+    })
+
+    it("catches server archive errors without blocking", () => {
+      assert.ok(
+        block.includes(".catch(err =>"),
+        "must catch server archive errors",
+      )
+    })
+  })
+
+  describe("SessionClient.archiveSession: v2 wire format", () => {
+    const clientSource = readFileSync(
+      path.join(__dirname, "..", "session", "SessionClient.ts"),
+      "utf8",
+    )
+    const archiveBlock = blockBetween(clientSource, "async archiveSession", "async getSessionMessages")
+
+    it("uses session.update with time.archived parameter", () => {
+      assert.ok(
+        archiveBlock.includes("sessionID: id"),
+        "must use flat { sessionID: id } parameter",
+      )
+      assert.ok(
+        archiveBlock.includes("time:"),
+        "must set time field for archive",
+      )
+      assert.ok(
+        archiveBlock.includes("archived:"),
+        "must set the archived timestamp",
+      )
+    })
+
+    it("uses Date.now() for archived timestamp", () => {
+      assert.ok(
+        archiveBlock.includes("Date.now()"),
+        "must use current timestamp when archiving",
+      )
+    })
+
+    it("uses 0 to unarchive", () => {
+      assert.ok(
+        archiveBlock.includes("archived: 0"),
+        "must use 0 to clear the archived state",
+      )
+    })
+  })
+
+  describe("extension.ts: session_updated syncs archive state from server", () => {
+    const extSource = readFileSync(
+      path.join(__dirname, "..", "extension.ts"),
+      "utf8",
+    )
+    const block = blockBetween(extSource, 'case "session_updated"', "break")
+
+    it("reads time.archived from the event data", () => {
+      assert.ok(
+        block.includes("time?.archived"),
+        "must read time.archived from the session.updated event",
+      )
+    })
+
+    it("archives locally when server says archived > 0", () => {
+      assert.ok(
+        block.includes("data.time.archived > 0"),
+        "must check if archived timestamp is positive",
+      )
+      assert.ok(
+        block.includes("sessionStore.archive"),
+        "must call sessionStore.archive when server says archived",
+      )
+    })
+
+    it("unarchives locally when server says archived === 0", () => {
+      assert.ok(
+        block.includes("sessionStore.unarchive"),
+        "must call sessionStore.unarchive when server clears archived",
+      )
+    })
+
+    it("only syncs when local state differs from server", () => {
+      assert.ok(
+        block.includes("local.archived !== isArchived"),
+        "must only sync when local and server archive states differ — avoid feedback loop",
+      )
+    })
+  })
+
+  // ── Webview message validators ──
+
+  describe("WebviewMessageValidator: covers all logged message types", () => {
+    const validatorSource = readFileSync(
+      path.join(__dirname, "WebviewMessageValidator.ts"),
       "utf8",
     )
 
-    it("sends only the last INITIAL_RESUME_COUNT messages to the webview", () => {
+    const missingTypes = [
+      "get_voice_settings",
+      "request_queue_state",
+      "webview_ready",
+      "list_commands",
+      "get_models",
+      "init_ack",
+      "list_providers",
+      "panel_visibility_state",
+      "request_state_sync",
+      "get_theme_config",
+      "list_sessions",
+      "list_server_sessions",
+      "get_todos",
+      "get_changed_files",
+      "probe_run_status",
+      "resume_session",
+      "create_tab",
+      "switch_tab",
+      "webview_log",
+    ]
+
+    for (const msgType of missingTypes) {
+      it(`has a validator for "${msgType}"`, () => {
+        assert.ok(
+          validatorSource.includes(`${msgType}:`),
+          `must have a validator for "${msgType}" to suppress the "has no validator" warning`,
+        )
+      })
+    }
+
+    it("resume_session validator requires sessionId", () => {
       assert.ok(
-        lifecycleSource.includes("INITIAL_RESUME_COUNT = 50"),
-        "must define INITIAL_RESUME_COUNT for lazy loading",
-      )
-      assert.ok(
-        lifecycleSource.includes("fresh.messages.slice(-INITIAL_RESUME_COUNT)"),
-        "must slice the last N messages for the initial load",
+        validatorSource.includes('resume_session: requiredStringValidator("sessionId"'),
+        "resume_session must validate sessionId is present",
       )
     })
 
-    it("reports totalMessages and initialHiddenTurns for the 'load more' banner", () => {
+    it("create_tab validator requires sessionId", () => {
       assert.ok(
-        lifecycleSource.includes("totalMessages"),
-        "must report totalMessages so the webview knows how many are hidden",
-      )
-      assert.ok(
-        lifecycleSource.includes("initialHiddenTurns"),
-        "must report initialHiddenTurns for the 'load N earlier items' banner",
+        validatorSource.includes('create_tab: requiredStringValidator("sessionId"'),
+        "create_tab must validate sessionId is present",
       )
     })
 
-    it("fetches from server before slicing if local is empty", () => {
+    it("switch_tab validator requires sessionId", () => {
       assert.ok(
-        lifecycleSource.includes("getSessionMessages(effectiveCliId)"),
-        "must fetch messages from the server on resume",
+        validatorSource.includes('switch_tab: requiredStringValidator("sessionId"'),
+        "switch_tab must validate sessionId is present",
       )
+    })
+
+    it("webview_log validator requires level", () => {
       assert.ok(
-        lifecycleSource.includes("applyBackfilledMessages"),
-        "must apply backfilled messages before slicing for the webview",
+        validatorSource.includes('typeof msg.level !== "string"'),
+        "webview_log must validate level is a non-empty string",
       )
     })
   })

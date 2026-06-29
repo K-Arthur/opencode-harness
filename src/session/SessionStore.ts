@@ -479,12 +479,20 @@ create(name?: string, opts?: CreateSessionOptions | string): OpenCodeSession {
     // top-level session list is either deleted server-side or was a subagent
     // session imported before the filter existed. Either way, it should not
     // linger in the picker.
+    //
+    // Guard: skip pruning when the server returns an empty list. An empty
+    // list likely means the server is fresh, running in a different workspace,
+    // or experiencing a transient issue — pruning cached sessions in that
+    // case is destructive and causes "history not showing." Only prune when
+    // the server returns a non-empty list and a session is genuinely missing.
     const visibleServerIds = new Set(serverSessions.map((s) => s.id))
     let pruned = 0
-    for (const [id, sess] of this.sessions) {
-      if (sess.needsBackfill === true && !visibleServerIds.has(id)) {
-        this.sessions.delete(id)
-        pruned++
+    if (serverSessions.length > 0) {
+      for (const [id, sess] of this.sessions) {
+        if (sess.needsBackfill === true && !visibleServerIds.has(id)) {
+          this.sessions.delete(id)
+          pruned++
+        }
       }
     }
 

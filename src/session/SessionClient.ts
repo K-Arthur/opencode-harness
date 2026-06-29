@@ -141,6 +141,16 @@ export class SessionClient {
     return mapV2Session(resp.data as Record<string, unknown>)
   }
 
+  async archiveSession(id: string, archived: boolean): Promise<Session> {
+    const client = this.guardV2()
+    const resp = await client.session.update({
+      sessionID: id,
+      time: archived ? { archived: Date.now() } : { archived: 0 },
+    })
+    this.throwOnV2Error(resp, "Failed to archive session")
+    return mapV2Session(resp.data as Record<string, unknown>)
+  }
+
   async getSessionMessages(id: string): Promise<Array<{ info: Message; parts: Part[] }>> {
     const client = this.guardV2()
     const resp = await client.session.messages({ sessionID: id })

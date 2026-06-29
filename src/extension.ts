@@ -493,9 +493,21 @@ function initConnectionStatusBar(
         break
       }
       case "session_updated": {
-        const data = event.data as { title?: string } | undefined
+        const data = event.data as { title?: string; time?: { archived?: number } } | undefined
         if (event.sessionId && data?.title) {
           sessionStore.applyServerTitle(event.sessionId, data.title)
+        }
+        // Sync archive state from server (e.g. session archived from CLI)
+        if (event.sessionId && data?.time?.archived !== undefined) {
+          const isArchived = data.time.archived > 0
+          const local = sessionStore.get(event.sessionId)
+          if (local && local.archived !== isArchived) {
+            if (isArchived) {
+              sessionStore.archive(event.sessionId)
+            } else {
+              sessionStore.unarchive(event.sessionId)
+            }
+          }
         }
         break
       }

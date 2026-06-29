@@ -1398,9 +1398,16 @@ export class WebviewEventRouter {
     }],
     ["archive_session", (msg: Record<string, unknown>) => {
       const targetId = msg.targetSessionId as string | undefined
-      if (targetId) {
-        this.opts.sessionStore.archive(targetId)
-        log.info(`Session archived: ${targetId}`)
+      if (!targetId) return
+      this.opts.sessionStore.archive(targetId)
+      log.info(`Session archived: ${targetId}`)
+      // Propagate to server so archiving is consistent across CLI / sibling windows.
+      const session = this.opts.sessionStore.get(targetId)
+      const cliId = session?.cliSessionId
+      if (cliId && this.opts.sessionManager.isRunning) {
+        void this.opts.sessionManager.archiveSession(cliId, true).catch(err =>
+          log.warn(`Server-side archive failed for ${cliId}`, err)
+        )
       }
     }],
     ["pin_session", (msg: Record<string, unknown>) => {
