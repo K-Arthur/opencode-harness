@@ -153,7 +153,7 @@ describe("resolveInitStateTarget", () => {
     )
   })
 
-  it("REFRESH falls back to host active when the prior tab was closed and welcome was not shown", () => {
+  it("REFRESH does NOT follow host active id when prior tab was closed — avoids host-driven auto-switch", () => {
     assert.equal(
       resolveInitStateTarget({
         isFirstInit: false,
@@ -163,7 +163,7 @@ describe("resolveInitStateTarget", () => {
         isKnownSession: knownSet(["a", "b"]),
         firstSessionId: "a",
       }),
-      "b",
+      "a",
     )
   })
 })

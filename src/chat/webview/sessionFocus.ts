@@ -151,6 +151,9 @@ export function resolveInitStateTarget(ctx: InitStateTargetContext): string | nu
   if (isKnownSession(priorActiveId)) return priorActiveId ?? null
   // The user was deliberately on the welcome screen — keep them there.
   if (welcomeVisibleBefore) return null
-  if (isKnownSession(hostActiveId)) return hostActiveId ?? null
+  // The prior tab no longer exists. Do NOT follow the host's active session
+  // on a refresh; that would yank the user to whatever the host is currently
+  // doing (background streams, id promotion, etc.). Fall back to the first
+  // known session in display order, which is at least deterministic and local.
   return firstSessionId
 }
