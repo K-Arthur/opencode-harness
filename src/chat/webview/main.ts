@@ -10,6 +10,7 @@ import { toCommandEntries, type RemoteCommandInfo } from "./slash-commands"
 import { createStreamHandlers, type StreamHandlers } from "./stream"
 import { upsertMessageById } from "./messageUpsert"
 import { isSwitchEventType, switchInsertIndex } from "../../session/activityCoalesce"
+import { generateUserMessageId } from "../../session/messageId"
 import { createTabBar, createTabContent, switchToTab, removeTabContent, patchTabLabel } from "./tabs"
 import { extractTitle, dedupeTitle } from "../../session/titleExtractor"
 import { setupModelDropdown } from "./model-dropdown"
@@ -4330,26 +4331,70 @@ function setupTodoSkillAndSubagentPanels(): void {
         }
         if (answerText.length > 0) {
           recoverySendInFlight.add(recoveryKey)
-          // Switch to the correct tab before sending.
-          if (targetSessionId) switchTab(targetSessionId)
-          els.promptInput.value = answerText
-          // Raise input event so autosize/character count update.
-          els.promptInput.dispatchEvent(new Event("input", { bubbles: true }))
-          els.promptInput.focus()
-          // Defer auto-send to let the stream_end handler clear streaming
-          // state first, then auto-fire the send — no manual Enter needed.
-          // The host fires expired_question_recovery_failed from several paths
-          // (expired fallback, resume-in-flight, resume-failed, hard
-          // watchdog), 400-900ms apart. The guard key must survive the WHOLE
-          // window so those duplicates are dropped — deleting it here (before
-          // the window closes) was the bug that let each one paste + auto-send
-          // again, queuing duplicate prompts. Keep the key until the 5s window
-          // expires; do NOT clear it in the send timer.
-          setTimeout(() => {
-            if (els.promptInput.value.trim().length > 0) {
-              sendMessage()
-            }
-          }, 100)
+          const currentActiveId = stateManager.getState().activeSessionId
+          const currentActiveValid = currentActiveId ? Boolean(stateManager.getSession(currentActiveId)) : false
+          const welcomeVisible = !els.welcomeView.classList.contains("hidden")
+          const onTarget = currentActiveId === targetSessionId
+          // Never yank the user away from a tab they are deliberately viewing.
+          // Only switch when the target is already the active session (no-op) or
+          // when the user has no valid tab to look at (welcome/invalid).
+          const shouldSwitch = targetSessionId
+            ? shouldHonorActiveSessionChange({
+                welcomeVisible,
+                currentActiveId,
+                currentActiveValid,
+                currentIsStreaming: false,
+                targetId: targetSessionId,
+                targetIsStreaming: false,
+              })
+            : false
+
+          if (targetSessionId && shouldSwitch && !onTarget) {
+            switchTab(targetSessionId)
+          }
+
+          if (onTarget) {
+            // Already on the target session — use the composer so local state,
+            // optimistic message, and typing indicator update consistently.
+            els.promptInput.value = answerText
+            // Raise input event so autosize/character count update.
+            els.promptInput.dispatchEvent(new Event("input", { bubbles: true }))
+            els.promptInput.focus()
+            // Defer auto-send to let the stream_end handler clear streaming
+            // state first, then auto-fire the send — no manual Enter needed.
+            // The host fires expired_question_recovery_failed from several paths
+            // (expired fallback, resume-in-flight, resume-failed, hard
+            // watchdog), 400-900ms apart. The guard key must survive the WHOLE
+            // window so those duplicates are dropped — deleting it here (before
+            // the window closes) was the bug that let each one paste + auto-send
+            // again, queuing duplicate prompts. Keep the key until the 5s window
+            // expires; do NOT clear it in the send timer.
+            setTimeout(() => {
+              if (els.promptInput.value.trim().length > 0) {
+                sendMessage()
+              }
+            }, 100)
+          } else if (targetSessionId) {
+            // User is deliberately viewing another valid tab. Send the recovery
+            // answer to the target session in the background without stealing
+            // focus. Clear the prompt input first since it belongs to the active
+            // session, not the target session.
+            els.promptInput.value = ""
+            autoResizeTextarea()
+            const targetSession = stateManager.getSession(targetSessionId)
+            const sendModel = targetSession?.model
+            const sendVariant = targetSession?.variant || stateManager.getState().globalVariant || undefined
+            vscode.postMessage({
+              type: "send_prompt",
+              sessionId: targetSessionId,
+              text: answerText,
+              messageId: generateUserMessageId(),
+              clientRequestId: createWebviewId("req"),
+              model: sendModel,
+              ...(sendVariant ? { variant: sendVariant } : {}),
+            })
+            markTabNeedsAttention(targetSessionId)
+          }
           // Single owner of key cleanup: release the guard only after the full
           // dedup window so no late duplicate slips through.
           setTimeout(() => { recoverySendInFlight.delete(recoveryKey) }, 5000)

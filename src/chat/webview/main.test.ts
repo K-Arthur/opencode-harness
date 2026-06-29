@@ -1279,10 +1279,29 @@ describe("permission bar — multi-tab session attribution", () => {
       )
     })
 
-    it("switches to the correct tab before sending", () => {
+    it("only switches when the user is already on target or has no valid tab", () => {
       assert.ok(
-        first.includes("switchTab(targetSessionId)"),
-        "B10-recovery: must switchTab to the correct session so the send targets the right tab",
+        first.includes("shouldHonorActiveSessionChange"),
+        "B10-recovery: must guard tab switch with shouldHonorActiveSessionChange so it never steals focus from another valid tab",
+      )
+      assert.ok(
+        first.includes("if (targetSessionId && shouldSwitch && !onTarget)"),
+        "B10-recovery: switchTab must be conditional on shouldSwitch and not-onTarget",
+      )
+      assert.ok(
+        !first.includes("if (targetSessionId) switchTab(targetSessionId)"),
+        "B10-recovery: must NOT unconditionally switchTab to target",
+      )
+    })
+
+    it("sends the recovery answer to the target session without switching when the user views another tab", () => {
+      assert.ok(
+        first.includes('type: "send_prompt"'),
+        "B10-recovery: must be able to send_prompt directly to the target session when not switching",
+      )
+      assert.ok(
+        first.includes("sessionId: targetSessionId"),
+        "B10-recovery: direct send must target the correct session",
       )
     })
 

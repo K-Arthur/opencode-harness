@@ -120,6 +120,28 @@ function isRetiredBlock(block: QuestionBlock): boolean {
 }
 
 /**
+ * Pick the authoritative session id for a newly-arrived question block.
+ * The envelope sid from the dispatcher is more trustworthy than a block-scoped
+ * sessionId because the block may be a stale/legacy copy, while the envelope
+ * reflects the tab the event was actually routed to. A conflict is logged so the
+ * source can be diagnosed.
+ */
+function resolveSessionId(block: QuestionBlock, envelopeSessionId?: string): string {
+  const blockSid = block.sessionId
+  const activeSid = _activeSessionId
+
+  if (blockSid && envelopeSessionId) {
+    if (blockSid === envelopeSessionId) return blockSid
+    diag(`sessionId conflict for ${block.toolCallId || block.id}: block.sessionId=${blockSid} envelope=${envelopeSessionId}; trusting envelope`)
+    return envelopeSessionId
+  }
+
+  if (blockSid) return blockSid
+  if (envelopeSessionId) return envelopeSessionId
+  return activeSid
+}
+
+/**
  * Resolve the existing bar item a freshly-arrived question block belongs to,
  * if any. Two independent feeds describe the SAME question with DIFFERENT ids:
  * the live-stream `tool_start` (part-scoped id, no requestID) and the
@@ -129,14 +151,14 @@ function isRetiredBlock(block: QuestionBlock): boolean {
  * side still lacks a requestID — adopts the single pending card for the
  * session so the two feeds collapse into one regardless of arrival order.
  */
-function findMergeTarget(block: QuestionBlock, envelopeSessionId?: string): QuestionBarItem | undefined {
+function findMergeTarget(block: QuestionBlock, resolvedSessionId?: string): QuestionBarItem | undefined {
   const ids = blockIds(block)
-  const sid = block.sessionId || envelopeSessionId || _activeSessionId
+  const sid = resolvedSessionId ?? resolveSessionId(block, undefined)
   // Merges are always within one session — a server requestID/callID is unique
-  // per session, and two distinct tabs must never collapse into one card. An
-  // empty item.sessionId is treated as a wildcard (legacy/streaming items that
-  // get their session repaired by a later block).
-  const inSession = (i: QuestionBarItem) => !sid || i.sessionId === sid || i.sessionId === ""
+  // per session, and two distinct tabs must never collapse into one card. Empty
+  // sessionIds are NOT wildcards; they represent an unresolved/legacy item and
+  // may only merge with another item for the same unresolved session.
+  const inSession = (i: QuestionBarItem) => !sid || i.sessionId === sid
   for (const item of state.items.values()) {
     if (!inSession(item)) continue
     if (ids.includes(item.toolCallId)) return item
@@ -235,11 +257,13 @@ export function addQuestion(block: QuestionBlock, messageId: string, envelopeSes
     diag(`addQuestion: skipped retired question ${toolCallId}`)
     return
   }
+  const resolvedSessionId = resolveSessionId(block, envelopeSessionId)
+
   // Merge into the existing card this block belongs to (handles the
   // tool_start ↔ question.asked id mismatch) instead of stacking a duplicate.
-  const mergeTarget = findMergeTarget(block, envelopeSessionId)
+  const mergeTarget = findMergeTarget(block, resolvedSessionId)
   if (mergeTarget) {
-    updateQuestion(mergeTarget.toolCallId, block)
+    updateQuestion(mergeTarget.toolCallId, block, resolvedSessionId)
     return
   }
 
@@ -259,7 +283,7 @@ export function addQuestion(block: QuestionBlock, messageId: string, envelopeSes
   const item: QuestionBarItem = {
     toolCallId,
     requestID: block.requestID,
-    sessionId: block.sessionId || envelopeSessionId || _activeSessionId,
+    sessionId: resolvedSessionId,
     messageId,
     groups: block.groups ?? [],
     questionText: (block as Record<string, unknown>).text as string
@@ -292,7 +316,7 @@ export function addQuestion(block: QuestionBlock, messageId: string, envelopeSes
   diag(`addQuestion: ${toolCallId} sessionId=${item.sessionId} groups=${item.groups.length}`)
 }
 
-export function updateQuestion(toolCallId: string, block: QuestionBlock): void {
+export function updateQuestion(toolCallId: string, block: QuestionBlock, resolvedSessionId?: string): void {
   if (!els) return
   const item = state.items.get(toolCallId)
   if (!item) {
@@ -319,7 +343,12 @@ export function updateQuestion(toolCallId: string, block: QuestionBlock): void {
   if (incomingGroups.length > 0) item.allowFreeText = block.allowFreeText !== false
   // If the second-arrival block (e.g. from streaming path) carries a
   // sessionId, repair the first write's empty value. Fixes RC-3/RC-4.
-  if (block.sessionId) item.sessionId = block.sessionId
+  // When a resolved sessionId is supplied (merge path), it is authoritative.
+  if (resolvedSessionId) {
+    item.sessionId = resolvedSessionId
+  } else if (block.sessionId) {
+    item.sessionId = block.sessionId
+  }
 
   while (item.selections.size < item.groups.length) {
     item.selections.set(item.selections.size, new Set())
