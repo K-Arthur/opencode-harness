@@ -425,6 +425,7 @@ export class ChatProvider implements vscode.WebviewViewProvider, vscode.Disposab
       handleConnectProvider: () => this.handleConnectProvider(),
       openOpenCodeConfigOrSettings: () => this.openOpenCodeConfigOrSettings(),
       replayLiveStreamsToWebview: () => this.replayLiveStreamsToWebview(),
+      clearReplayDedup: () => this.streamCoordinator.clearReplayDedup(),
       exportChat: () => { void vscode.commands.executeCommand("opencode-harness.exportConversation") },
       exportChatJson: () => { void vscode.commands.executeCommand("opencode-harness.exportConversationJson") },
       exportChatText: () => { void vscode.commands.executeCommand("opencode-harness.exportConversationText") },

@@ -829,6 +829,62 @@ describe("StreamCoordinator.ts", () => {
     )
   })
 
+  it("collapses concurrent maybeFinalizeStream calls into a single in-flight promise", () => {
+    assert.ok(
+      source.includes("private finalizePromises = new Map<string, Promise<boolean>>()"),
+      "must track in-flight finalize promises per tab"
+    )
+    const fnIdx = source.indexOf("async maybeFinalizeStream(tabId: string, callbacks: StreamCallbacks")
+    assert.ok(fnIdx >= 0, "maybeFinalizeStream must exist")
+    const blockEnd = source.indexOf("\n  private async runMaybeFinalizeStream", fnIdx)
+    const block = source.slice(fnIdx, blockEnd > fnIdx ? blockEnd : fnIdx + 800)
+    assert.ok(
+      block.includes("this.finalizePromises.get(tabId)"),
+      "maybeFinalizeStream must return an existing in-flight promise"
+    )
+    assert.ok(
+      block.includes("this.runMaybeFinalizeStream"),
+      "maybeFinalizeStream must delegate to a private implementation"
+    )
+  })
+
+  it("deduplicates live-stream replays for the same message id", () => {
+    assert.ok(
+      source.includes("private replayedMessageIds = new Map<string, string>()"),
+      "must track last replayed message id per tab"
+    )
+    const fnIdx = source.indexOf("replayLiveStreamToWebview(tabId: string, callbacks: StreamCallbacks)")
+    assert.ok(fnIdx >= 0, "replayLiveStreamToWebview must exist")
+    const blockEnd = source.indexOf("\n  clearReplayDedup()", fnIdx)
+    const block = source.slice(fnIdx, blockEnd > fnIdx ? blockEnd : fnIdx + 800)
+    assert.ok(
+      block.includes("this.replayedMessageIds.get(tabId) === messageId"),
+      "replayLiveStreamToWebview must skip duplicate replays for the same message id"
+    )
+    assert.ok(
+      block.includes("this.replayedMessageIds.set(tabId, messageId)"),
+      "replayLiveStreamToWebview must record the replayed message id"
+    )
+  })
+
+  it("exposes clearReplayDedup to reset live-stream replay dedup state", () => {
+    assert.ok(
+      source.includes("clearReplayDedup(): void"),
+      "StreamCoordinator must expose clearReplayDedup"
+    )
+    assert.ok(
+      source.includes("this.replayedMessageIds.clear()"),
+      "clearReplayDedup must clear the replayedMessageIds map"
+    )
+  })
+
+  it("clears replay dedup before reconnect replay so the webview catches up", () => {
+    assert.ok(
+      source.includes("this.replayedMessageIds.delete(tabId)"),
+      "reconcileAfterReconnect must clear the replay dedup before forcing a replay"
+    )
+  })
+
   it("increments messageCount on appendChunk and appendToolStart", () => {
     const chunkIdx = source.indexOf("appendChunk(tabId: string,")
     const chunkBlock = source.slice(chunkIdx, chunkIdx + 800)

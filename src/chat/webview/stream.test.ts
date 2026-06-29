@@ -350,6 +350,29 @@ describe("stream.ts", () => {
     }
   })
 
+  it("logs same-id duplicate stream_start at info level, not warn", async () => {
+    const restore = installDom()
+    try {
+      const { handleStreamStart, setVsCodeApi } = await import("./streamHandlers")
+      const harness = createHarness()
+      const logs: Array<{ level: string; message: string }> = []
+      setVsCodeApi({
+        postMessage: (msg: { type: string; level: string; message: string }) => {
+          if (msg.type === "webview_log") logs.push({ level: msg.level, message: msg.message })
+        },
+      })
+
+      handleStreamStart(harness.state, harness.els as any, harness.messages, "resp-same")
+      handleStreamStart(harness.state, harness.els as any, harness.messages, "resp-same")
+
+      const duplicateLogs = logs.filter((log) => String(log.message).includes("already streaming") && String(log.message).includes("resp-same"))
+      assert.equal(duplicateLogs.length, 1, "duplicate start must be logged once")
+      assert.equal(duplicateLogs[0]!.level, "info", "same-id duplicate must be info, not warn")
+    } finally {
+      restore()
+    }
+  })
+
   // Regression test for the dropped "stream_tool_unresolved" host message:
   // the webview had no handler for it (logged as "unknown host message
   // type"), so a tool call left running when the server went idle kept

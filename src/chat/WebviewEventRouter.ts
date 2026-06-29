@@ -116,6 +116,7 @@ export interface WebviewEventRouterOptions {
   handleConnectProvider: () => Promise<void>
   openOpenCodeConfigOrSettings: () => Promise<void>
   replayLiveStreamsToWebview: () => void
+  clearReplayDedup: () => void
   exportChat: () => void
   exportChatJson: () => void
   exportChatText: () => void
@@ -1182,6 +1183,7 @@ export class WebviewEventRouter {
           for (const q of queue) this.opts.postMessage(q)
         }, 0)
       }
+      this.opts.clearReplayDedup()
       this.opts.replayLiveStreamsToWebview()
       if (this.pendingOpenSessionId) {
         const sessionId = this.pendingOpenSessionId

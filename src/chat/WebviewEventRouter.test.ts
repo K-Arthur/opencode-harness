@@ -131,6 +131,10 @@ describe("WebviewEventRouter host state sync", () => {
       handler.includes("activeFileTracker?.repost()"),
       "webview_ready must re-post the active file so the context pill appears on first open (the eager post in start() races ahead of webview wiring)",
     )
+    assert.ok(
+      handler.includes("this.opts.clearReplayDedup()"),
+      "webview_ready must clear replay dedup state so a fresh webview gets the live stream replay",
+    )
   })
 
   it("request_state_sync asks ChatProvider to push visible host state directly", () => {

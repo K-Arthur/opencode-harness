@@ -474,7 +474,7 @@ export function handleStreamStart(
   if (state.isStreaming) {
     // Idempotent re-emit for the SAME id → ignore.
     if (messageId && state.streamingMessageId === messageId) {
-      webviewLog(`handleStreamStart: already streaming (msgId=${state.streamingMessageId}), skipping duplicate start`, "warn")
+      webviewLog(`handleStreamStart: already streaming (msgId=${state.streamingMessageId}), skipping duplicate start`, "info")
       return
     }
     // C2: a start for a DIFFERENT id is a genuine restart (e.g. error-recovered

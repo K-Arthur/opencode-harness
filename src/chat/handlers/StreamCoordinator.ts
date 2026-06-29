@@ -173,6 +173,14 @@ export class StreamCoordinator {
   private expiredRecoveryTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
   /** Tabs currently in the process of finalizing — guards against double-finalize */
   private finalizingTabs = new Set<string>()
+  /** Per-tab in-flight maybeFinalizeStream promise — collapses concurrent calls
+   *  so multiple status/question-answered events for the same transition share
+   *  one finalize attempt instead of producing duplicate "deferred"/"skipped" logs. */
+  private finalizePromises = new Map<string, Promise<boolean>>()
+  /** Per-tab last replayed stream message id — suppresses redundant live-stream
+   *  replays when the webview is already showing the same stream (e.g. panel
+   *  visibility toggles). Cleared when the stream ends or when the webview reloads. */
+  private replayedMessageIds = new Map<string, string>()
   /** G5: pending status-triggered finalizes, deferred until a quiet period
    *  confirms the run really ended. Cleared by any activity (chunk/tool/etc)
    *  via cancelPendingStatusFinalize, and on cleanupTab. */
@@ -1633,6 +1641,7 @@ export class StreamCoordinator {
     if (metrics) metrics.completeTime = performance.now()
     this.setActiveRunState(tabId, "finalizing", { finalizeReason: "normal" })
     await this.finalizerService.finalizeStream(tabId, callbacks)
+    this.replayedMessageIds.delete(tabId)
     if (metrics) {
       metrics.finalizeTime = performance.now()
       const firstMs = metrics.firstResponseTime != null ? (metrics.firstResponseTime - metrics.sendTime).toFixed(0) : "n/a"
@@ -1676,6 +1685,16 @@ export class StreamCoordinator {
   }
 
   async maybeFinalizeStream(tabId: string, callbacks: StreamCallbacks, trigger: "message_complete" | "status"): Promise<boolean> {
+    const existing = this.finalizePromises.get(tabId)
+    if (existing) return existing
+
+    const promise = this.runMaybeFinalizeStream(tabId, callbacks, trigger)
+      .finally(() => this.finalizePromises.delete(tabId))
+    this.finalizePromises.set(tabId, promise)
+    return promise
+  }
+
+  private async runMaybeFinalizeStream(tabId: string, callbacks: StreamCallbacks, trigger: "message_complete" | "status"): Promise<boolean> {
     const tab = this.tabManager.getTab(tabId)
     if (!tab || !tab.waitingForCompletion) return false
 
@@ -1882,6 +1901,12 @@ export class StreamCoordinator {
     if (!tab || !tab.isStreaming) return
 
     const messageId = this.ensureStreamMessageId(tabId, tab.cliSessionId || tabId)
+    if (this.replayedMessageIds.get(tabId) === messageId) {
+      log.info(`replayLiveStreamToWebview: skipping duplicate replay for ${tabId} (msgId=${messageId})`)
+      return
+    }
+    this.replayedMessageIds.set(tabId, messageId)
+
     log.info(`replayLiveStreamToWebview: replaying live state for ${tabId} (${tab.streamingBuffer.length} chars, ${tab.blocksBuffer.length} blocks)`)
 
     this.stuckStreamHandlers.set(tabId, callbacks)
@@ -1896,6 +1921,10 @@ export class StreamCoordinator {
       },
       seq: this.nextSeq(tabId),
     })
+  }
+
+  clearReplayDedup(): void {
+    this.replayedMessageIds.clear()
   }
 
   async reconcileAfterReconnect(tabId: string, callbacks: StreamCallbacks): Promise<void> {
@@ -1921,6 +1950,9 @@ export class StreamCoordinator {
 
         const info = lastAssistant.info as { id?: string }
         if (info.id && !this.activeMessageIds.has(tabId)) this.activeMessageIds.set(tabId, info.id)
+        // Reconnect may have lost SSE events; force the replay so the webview
+        // catches up even if the same messageId was already replayed.
+        this.replayedMessageIds.delete(tabId)
         this.replayLiveStreamToWebview(tabId, callbacks)
 
         // Gap G6: if the run already completed during the outage, the server
@@ -2451,6 +2483,8 @@ export class StreamCoordinator {
     this.activeMessageIds.delete(tabId)
     this.activeRuns.delete(tabId)
     this.activeRunMetrics.delete(tabId)
+    this.finalizePromises.delete(tabId)
+    this.replayedMessageIds.delete(tabId)
     // ADR-010: notify registry that this tab is no longer associated with its process
     if (this.sessionManagerRegistry) {
       this.sessionManagerRegistry.unassignTab(tabId)
@@ -2601,6 +2635,8 @@ export class StreamCoordinator {
     this.pendingToolGraceTimeouts.clear()
     this.subagentHeartbeat.stopAll()
     this.finalizingTabs.clear()
+    this.finalizePromises.clear()
+    this.replayedMessageIds.clear()
     this.abortedTabs.clear()
     this.abortRegistry.clear()
     this.streamStates.clear()
