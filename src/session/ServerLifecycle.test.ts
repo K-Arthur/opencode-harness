@@ -87,10 +87,10 @@ void describe("ServerLifecycle", () => {
   })
 
   void describe("waitForHealth()", () => {
-    void it("polls with AbortController timeout of 2s per attempt, 10s total", () => {
+    void it("polls with AbortController timeout of 2s per attempt, 30s total", () => {
       assert.ok(source.includes("setTimeout(() => controller.abort(), 2_000)"), "2s per-attempt abort timeout")
       assert.ok(source.includes("while (Date.now() - start < timeoutMs)"), "polls within total timeout")
-      assert.ok(source.includes("waitForHealth(timeoutMs = 10_000)"), "default 10s total timeout")
+      assert.ok(source.includes("waitForHealth(timeoutMs = 30_000)"), "default 30s total timeout")
     })
   })
 

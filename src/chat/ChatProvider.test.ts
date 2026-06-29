@@ -168,7 +168,7 @@ void describe("ChatProvider.ts", () => {
     assert.ok(source.includes('msg.type === "send_prompt"') || eventRouterSource.includes('"send_prompt"'), "must handle send_prompt")
     assert.ok(source.includes('msg.type === "mention_search"') || eventRouterSource.includes('"mention_search"'), "must handle mention_search")
     assert.ok(eventRouterSource.includes("validateWebviewMessage"), "WebviewEventRouter must delegate validation")
-    assert.ok(validatorSource.includes("text.length > 50000"), "must reject oversized prompts")
+    assert.ok(validatorSource.includes("text.length > 1_000_000"), "must reject oversized prompts")
     assert.ok(
       validatorSource.includes('invalidOptionalString(msg, "query", "Rejected oversized mention search query", deps, 500)'),
       "must reject oversized mention queries"

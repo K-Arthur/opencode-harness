@@ -205,7 +205,7 @@ export class ServerLifecycle {
     await onReady(this.port)
   }
 
-  private async waitForHealth(timeoutMs = 10_000): Promise<void> {
+  private async waitForHealth(timeoutMs = 30_000): Promise<void> {
     const start = Date.now()
     const healthHeaders = this.auth.buildHealthHeaders()
     while (Date.now() - start < timeoutMs) {
@@ -229,7 +229,7 @@ export class ServerLifecycle {
       }
       await new Promise((r) => setTimeout(r, 250))
     }
-    throw new Error("OpenCode server did not start within 10 seconds. Check the output channel for details.")
+    throw new Error("OpenCode server did not start within 30 seconds. Check the output channel for details.")
   }
 
   private async findOpencodeBinary(): Promise<string | null> {

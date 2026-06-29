@@ -87,12 +87,7 @@ export interface SendFocusContext {
  * they are.
  */
 export function shouldForceFocusOnSend(ctx: SendFocusContext): boolean {
-  const { welcomeVisible, currentActiveId, currentActiveValid, targetId } = ctx
-  // Already viewing the target — no switch needed.
-  if (currentActiveId === targetId) return false
-  // No valid tab being viewed — safe to focus the target.
-  if (welcomeVisible || !currentActiveId || !currentActiveValid) return true
-  // User is on a different valid tab — do NOT yank focus during a send.
+  // Tab auto-switching disabled entirely. Users must explicitly click tabs to switch.
   return false
 }
 

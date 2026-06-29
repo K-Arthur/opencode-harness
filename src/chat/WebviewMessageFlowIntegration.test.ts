@@ -26,7 +26,7 @@ void describe("Webview Message Flow Integration Tests", () => {
     void it("validates send_prompt text length", () => {
       assert.ok(eventRouterSource.includes("validateMessage"), "must call validateMessage")
       assert.ok(validatorSource.includes("send_prompt: validateSendPrompt"), "must validate send_prompt")
-      assert.ok(validatorSource.includes("text.length > 50000"), "must validate prompt length")
+      assert.ok(validatorSource.includes("text.length > 1_000_000"), "must validate prompt length")
     })
 
     void it("validates mention_search query length", () => {

@@ -102,8 +102,8 @@ function validateSendPrompt(msg: Record<string, unknown>, _msgType: string, deps
   if (text !== undefined && typeof text !== "string") {
     return reject(deps, `Rejected send_prompt: invalid text type (${typeof text})`)
   }
-  if (typeof text === "string" && text.length > 50000) {
-    return reject(deps, "Rejected oversized prompt")
+  if (typeof text === "string" && text.length > 1_000_000) {
+    return reject(deps, "Prompt text exceeds 1,000,000 characters. For large content, attach the file instead of pasting it inline.")
   }
   if (!deps.hasPromptContent(msg)) {
     const attachmentCount = Array.isArray(msg.attachments) ? msg.attachments.length : 0
