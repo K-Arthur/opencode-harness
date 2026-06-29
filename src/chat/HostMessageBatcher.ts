@@ -52,6 +52,7 @@ const IMMEDIATE_TYPES = new Set([
   "more_messages",
   "force_rerender",
   "command_list",
+  "workspace_files",
 ])
 
 function batchMessageReducer(existing: BatchableHostMessage[] | undefined, value: BatchableHostMessage): BatchableHostMessage[] {

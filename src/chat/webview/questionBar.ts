@@ -477,30 +477,23 @@ export function setActiveSession(sessionId: string): void {
 
 /**
  * Re-populate the question bar from a session's persisted message list.
- * Only answered questions are restored (they're part of the transcript).
  *
- * Unanswered questions are intentionally skipped. The server's question
- * registry is ephemeral (in-memory, workspace-scoped). On reconnect the
- * server does not have pending questions — so the extension should not
- * show them either. This prevents the "question exists in UI but server
- * returns NotFoundError" mismatch.
+ * Only UNANSWERED questions are restored — and only if they're not already
+ * retired (answered/dismissed). The server's question registry is ephemeral
+ * (in-memory, workspace-scoped), so on reconnect the server does not have
+ * pending questions — but if the bar still has an active item for this
+ * session, we keep it rather than silently dropping it.
+ *
+ * Answered questions are NOT re-added to the bar. They are already visible
+ * in the chat transcript as answered blocks. Re-adding them caused the bar
+ * to pop back up every time the user switched tabs and returned, because
+ * updateVisibility shows the bar when hasAnswered is true.
  */
-export function repopulateFromMessages(sessionId: string, messages: Array<{ id?: string; timestamp?: number; blocks: Array<{ type: string; toolCallId?: string; id?: string; requestID?: string; answered?: boolean; answer?: string; answerSource?: string; groups?: unknown[]; text?: string; allowFreeText?: boolean }> }>): void {
+export function repopulateFromMessages(sessionId: string, _messages: Array<{ id?: string; timestamp?: number; blocks: Array<{ type: string; toolCallId?: string; id?: string; requestID?: string; answered?: boolean; answer?: string; answerSource?: string; groups?: unknown[]; text?: string; allowFreeText?: boolean }> }>): void {
   if (!els) return
-  for (const msg of messages) {
-    if (!msg.blocks) continue
-    for (const block of msg.blocks) {
-      // Only repopulate answered questions (transcript record).
-      // Unanswered questions are ephemeral — the server won't have them
-      // after reconnect, so showing them would be broken UX.
-      if (block.type === "question" && block.answered) {
-        const toolCallId = block.toolCallId || block.id || ""
-        if (!state.items.has(toolCallId)) {
-          addQuestion(block as unknown as QuestionBlock, msg.id || "", sessionId)
-        }
-      }
-    }
-  }
+  // No re-population needed — answered questions are in the transcript,
+  // and unanswered questions are either still in state.items (active tab)
+  // or expired on the server (background tab reconnect).
   setActiveSession(sessionId)
 }
 

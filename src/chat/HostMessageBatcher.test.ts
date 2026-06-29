@@ -192,4 +192,16 @@ void describe("HostMessageBatcher", () => {
     assert.equal(posted[0]!.type, "command_list")
     batcher.dispose()
   })
+
+  void it("workspace_files bypasses the size guard (IMMEDIATE type)", () => {
+    const posted: Record<string, unknown>[] = []
+    const batcher = new HostMessageBatcher((msg) => { posted.push(msg) }, () => {}, { maxPayloadBytes: 256 })
+    // workspace_files is a one-shot IMMEDIATE type — large workspaces can
+    // produce >256KB file lists that must not be dropped by the size guard.
+    const huge = { type: "workspace_files", files: Array(5000).fill("src/very/long/path/to/a/file.ts") }
+    batcher.post(huge)
+    assert.equal(posted.length, 1, "workspace_files (IMMEDIATE) must bypass the size guard")
+    assert.equal(posted[0]!.type, "workspace_files")
+    batcher.dispose()
+  })
 })

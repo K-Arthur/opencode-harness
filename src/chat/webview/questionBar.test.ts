@@ -745,7 +745,7 @@ describe("questionBar", () => {
     assert.ok(!item, "unanswered questions are NOT repopulated (server won't have them)")
   })
 
-  it("B10: repopulateFromMessages restores answered questions (transcript record)", () => {
+  it("repopulateFromMessages does NOT re-add answered questions to the bar (fixes tab-switch resurrection)", () => {
     initQuestionBar(() => {})
     setActiveSession("sess-answered")
     repopulateFromMessages("sess-answered", [{
@@ -760,11 +760,10 @@ describe("questionBar", () => {
       }],
     }])
     const item = document.querySelector('[data-question-id="q-answered"]')
-    assert.ok(item, "answered questions are repopulated as transcript record")
-    assert.ok(item!.classList.contains("question-bar-item--answered"), "rendered in answered state")
+    assert.ok(!item, "answered questions must NOT be re-added to the bar on tab switch — they are in the transcript")
   })
 
-  it("B10: repopulateFromMessages handles answered questions with empty groups (recovery crash)", () => {
+  it("repopulateFromMessages does not crash on answered questions with empty groups", () => {
     initQuestionBar(() => {})
     setActiveSession("sess-empty")
     // This mirrors the transcript block created when a question tool starts with
@@ -785,8 +784,7 @@ describe("questionBar", () => {
       }])
     }, "repopulateFromMessages does not crash on empty groups")
     const item = document.querySelector('[data-question-id="q-empty-answered"]')
-    assert.ok(item, "answered question with empty groups is repopulated")
-    assert.ok(item!.classList.contains("question-bar-item--answered"), "rendered in answered state")
+    assert.ok(!item, "answered question with empty groups must NOT be re-added to the bar")
   })
 
   it("B10: markQuestionAnswered clears the staleness timer", () => {

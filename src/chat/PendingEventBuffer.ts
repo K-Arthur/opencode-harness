@@ -42,6 +42,12 @@ export class PendingEventBuffer {
   private readonly maxPerSession: number
   private readonly log: PendingBufferLogger
   private readonly byCli = new Map<string, Entry>()
+  /** Sessions whose TTL already expired without a tab mapping. New events for
+   *  these sessions are silently discarded — they are grandchild or orphan
+   *  sessions that will never get a tab mapping, and re-buffering them just
+   *  produces repeated drop warnings. Cleared on drain() in case the session
+   *  is later discovered by the heartbeat. */
+  private readonly expiredSessions = new Set<string>()
   private disposed = false
 
   constructor(opts: PendingEventBufferOptions = {}) {
@@ -53,6 +59,7 @@ export class PendingEventBuffer {
   add(cliSessionId: string, event: BufferedServerEvent): void {
     if (this.disposed) return
     if (!cliSessionId) return
+    if (this.expiredSessions.has(cliSessionId)) return
 
     let entry = this.byCli.get(cliSessionId)
     if (!entry) {
@@ -75,6 +82,10 @@ export class PendingEventBuffer {
 
   drain(cliSessionId: string): BufferedServerEvent[] {
     if (!cliSessionId) return []
+    // Always clear the expired denylist on drain — even if the entry was
+    // already deleted by the expiry timer, the caller is signaling that
+    // this session is now mapped and should be allowed to buffer again.
+    this.expiredSessions.delete(cliSessionId)
     const entry = this.byCli.get(cliSessionId)
     if (!entry) return []
     if (entry.timer) {
@@ -97,14 +108,16 @@ export class PendingEventBuffer {
       if (entry.timer) clearTimeout(entry.timer)
     }
     this.byCli.clear()
+    this.expiredSessions.clear()
   }
 
   private expire(cliSessionId: string): void {
     const entry = this.byCli.get(cliSessionId)
     if (!entry) return
     this.byCli.delete(cliSessionId)
+    this.expiredSessions.add(cliSessionId)
     this.log.warn(
-      `[PendingEventBuffer] Dropped ${entry.events.length} buffered event(s) for cliSessionId "${cliSessionId}" — TTL (${this.ttlMs}ms) expired before tab mapping was registered.`,
+      `[PendingEventBuffer] Dropped ${entry.events.length} buffered event(s) for cliSessionId "${cliSessionId}" — TTL (${this.ttlMs}ms) expired before tab mapping was registered. Future events for this session will be silently discarded.`,
     )
   }
 

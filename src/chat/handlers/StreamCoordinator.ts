@@ -225,6 +225,10 @@ export class StreamCoordinator {
   public onQueueDrain: ((tabId: string, reason?: string) => void) | null = null
   /** Per-tab message sequence counter — monotonically increasing, attached to every streaming message */
   private msgSeqs = new Map<string, number>()
+  /** Per-tab last posted run-activity snapshot fingerprint — skips redundant
+   *  posts when the slim snapshot hasn't changed, preventing the HostMessageBatcher's
+   *  dedup guard from firing on every heartbeat/tool/subagent event. */
+  private lastActivityFingerprint = new Map<string, string>()
   /** Per-tab chunk sequence counter — used for rendered-chunk ACK backpressure. */
   private postedChunkSeqs = new Map<string, number>()
   private deferredChunks = new Map<string, DeferredChunkEntry>()
@@ -590,6 +594,13 @@ export class StreamCoordinator {
         error: s.error,
       })),
     }
+    // Dirty-check: skip posting if the slim snapshot content hasn't changed
+    // since the last post for this tab. Without this, every heartbeat/tool/
+    // subagent event triggers a redundant post with an identical payload,
+    // flooding the HostMessageBatcher's dedup guard.
+    const fingerprint = JSON.stringify(slim)
+    if (fingerprint === this.lastActivityFingerprint.get(tabId)) return
+    this.lastActivityFingerprint.set(tabId, fingerprint)
     cbs.postMessage({
       type: "run_activity_update",
       sessionId: tabId,
@@ -2450,6 +2461,7 @@ export class StreamCoordinator {
     const cliSessionId = this.tabManager.getTab(tabId)?.cliSessionId
     if (cliSessionId) this.injectedInstructionsSessions.delete(cliSessionId)
     this.msgSeqs.delete(tabId)
+    this.lastActivityFingerprint.delete(tabId)
     this.postedChunkSeqs.delete(tabId)
     this.clearDeferredChunk(tabId)
     this.finalUsageBaselines.delete(tabId)

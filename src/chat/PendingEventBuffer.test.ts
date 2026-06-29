@@ -121,4 +121,26 @@ void describe("PendingEventBuffer", () => {
     assert.equal(defBuf.drain("ses_race").length, 1, "10s TTL must hold events for immediate drain")
     defBuf.dispose()
   })
+
+  void it("silently discards new events for a session whose TTL already expired", async () => {
+    buf.add("ses_orphan", evt("tool_start", "ses_orphan"))
+    await new Promise((r) => setTimeout(r, 250))
+    assert.equal(warnings.filter((w) => w.includes("ses_orphan")).length, 1, "first expiry must warn")
+    // New events for the expired session must be silently discarded — no
+    // new buffer entry, no repeated warning.
+    buf.add("ses_orphan", evt("text_chunk", "ses_orphan", { data: { text: "late" } }))
+    assert.equal(buf.size("ses_orphan"), 0, "expired session must not re-buffer")
+    await new Promise((r) => setTimeout(r, 250))
+    assert.equal(warnings.filter((w) => w.includes("ses_orphan")).length, 1, "no repeated warning for expired session")
+  })
+
+  void it("clears the expired denylist on drain so a later-discovered session can buffer again", async () => {
+    buf.add("ses_rediscovered", evt("tool_start", "ses_rediscovered"))
+    await new Promise((r) => setTimeout(r, 250))
+    // Session expired — drain returns empty but clears the denylist.
+    assert.deepEqual(buf.drain("ses_rediscovered"), [])
+    // Now new events should be accepted again (heartbeat discovered the child).
+    buf.add("ses_rediscovered", evt("text_chunk", "ses_rediscovered", { data: { text: "found" } }))
+    assert.equal(buf.size("ses_rediscovered"), 1, "drain must clear expired denylist")
+  })
 })

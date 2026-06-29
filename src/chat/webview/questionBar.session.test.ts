@@ -54,20 +54,17 @@ describe("question bar — session attribution (multi-tab)", () => {
   })
 
   // Regression: repopulateFromMessages(sessionId, messages) is called on tab
-  // switch (main.ts switchTab, BEFORE setActiveSession(tabId) runs for the new
-  // tab) and on init_state resume. It forwarded persisted blocks to addQuestion
-  // with no envelope sid, so a block saved with no sessionId of its own (e.g.
-  // one built by the live-stream path, which never stamps sessionId) fell back
-  // to _activeSessionId — at that moment still the PREVIOUS tab — attributing
-  // the repopulated session's own question to the tab being switched away from.
-  it("attributes a repopulated block with no sessionId to the session being repopulated, not the still-active previous tab", () => {
+  // switch. Previously it re-added answered questions to the bar, which caused
+  // the bar to pop back up every time the user switched tabs and returned.
+  // Answered questions are in the transcript — the bar should stay dismissed.
+  it("does NOT re-add answered questions to the bar on repopulate (fixes tab-switch resurrection)", () => {
     setActiveSession("A")
     const messages = [{ id: "mB", blocks: [{ type: "question", toolCallId: "qNoSid", answered: true, groups: [{ question: "Pick", options: ["A", "B"], multiSelect: false }] }] }]
     repopulateFromMessages("B", messages)
     
-    assert.ok(document.querySelector('[data-question-id="qNoSid"]'), "shows on session B, which repopulateFromMessages just made active")
+    assert.ok(!document.querySelector('[data-question-id="qNoSid"]'), "answered questions must NOT be re-added to the bar on repopulate")
 
     setActiveSession("A")
-    assert.ok(!document.querySelector('[data-question-id="qNoSid"]'), "must NOT be visible/present on session A")
+    assert.ok(!document.querySelector('[data-question-id="qNoSid"]'), "must NOT be visible on session A either")
   })
 })
