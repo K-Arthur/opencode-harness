@@ -1220,9 +1220,10 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       // Fallback finalization. If the server reports any non-busy terminal status
       // ("idle", "ready", "completed", "done") while we're still waiting for completion,
       // finalize. This catches cases where message_complete is missed AND the server
-      // emits a status name we didn't anticipate.
+      // emits a status name we didn't anticipate. The log is inside
+      // maybeFinalizeStream to avoid duplicate logs when both session.status and
+      // session.idle fire for the same transition.
       if (rawStatus !== "busy" && rawStatus !== "thinking" && rawStatus !== "unknown" && tab?.waitingForCompletion) {
-        log.info(`session_status: terminal status "${rawStatus}" while tab ${tabId} is waiting — triggering fallback finalization`)
         await this.streamCoordinator.maybeFinalizeStream(tab.id, {
           postMessage: (m) => this.postMessage(m),
           postRequestError: (m) => this.postRequestError(m)
@@ -1236,7 +1237,6 @@ this.tabManager.onStreamingStateChanged(({ tabId, isStreaming, source, cliSessio
       this.postMessage({ type: "server_status", sessionId: tabId, status, errorContext: data?.errorContext })
 
       if (rawStatus !== "busy" && rawStatus !== "thinking" && rawStatus !== "unknown" && tab?.waitingForCompletion) {
-        log.info(`server_status: terminal status "${rawStatus}" while tab ${tabId} is waiting — triggering fallback finalization`)
         await this.streamCoordinator.maybeFinalizeStream(tab.id, {
           postMessage: (m) => this.postMessage(m),
           postRequestError: (m) => this.postRequestError(m)

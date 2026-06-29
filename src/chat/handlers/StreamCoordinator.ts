@@ -1690,6 +1690,13 @@ export class StreamCoordinator {
       }
     }
 
+    // Log here (not in the caller) so duplicate status events for the same
+    // transition don't produce duplicate log lines — the pendingStatusFinalizeTimers
+    // guard above ensures only one call reaches this point.
+    if (trigger === "status") {
+      log.info(`maybeFinalizeStream: proceeding with status-triggered finalization for ${tabId}`)
+    }
+
     await this.finalizeStream(tabId, callbacks)
     return true
   }
